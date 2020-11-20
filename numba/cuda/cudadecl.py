@@ -1,162 +1,189 @@
-from __future__ import print_function, division, absolute_import
-from numba import types
-from numba.typing.npydecl import register_number_classes
-from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                    AbstractTemplate, MacroTemplate,
-                                    signature, Registry)
+from numba.core import types
+from numba.core.typing.npydecl import (parse_dtype, parse_shape,
+                                       register_number_classes)
+from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
+                                         AbstractTemplate, CallableTemplate,
+                                         signature, Registry)
+from numba.cuda.types import dim3, grid_group
 from numba import cuda
 
 
 registry = Registry()
-intrinsic = registry.register
-intrinsic_attr = registry.register_attr
-intrinsic_global = registry.register_global
+register = registry.register
+register_attr = registry.register_attr
+register_global = registry.register_global
 
-register_number_classes(intrinsic_global)
+register_number_classes(register_global)
 
 
-class Cuda_grid(MacroTemplate):
+class GridFunction(CallableTemplate):
+    def generic(self):
+        def typer(ndim):
+            val = ndim.literal_value
+            if val == 1:
+                restype = types.int32
+            elif val in (2, 3):
+                restype = types.UniTuple(types.int32, val)
+            else:
+                raise ValueError('argument can only be 1, 2, 3')
+            return signature(restype, types.int32)
+        return typer
+
+
+@register
+class Cuda_grid(GridFunction):
     key = cuda.grid
 
 
-class Cuda_gridsize(MacroTemplate):
+@register
+class Cuda_gridsize(GridFunction):
     key = cuda.gridsize
 
 
-class Cuda_threadIdx_x(MacroTemplate):
-    key = cuda.threadIdx.x
+class Cuda_array_decl(CallableTemplate):
+    def generic(self):
+        def typer(shape, dtype):
+
+            # Only integer literals and tuples of integer literals are valid
+            # shapes
+            if isinstance(shape, types.Integer):
+                if not isinstance(shape, types.IntegerLiteral):
+                    return None
+            elif isinstance(shape, (types.Tuple, types.UniTuple)):
+                if any([not isinstance(s, types.IntegerLiteral)
+                        for s in shape]):
+                    return None
+            else:
+                return None
+
+            ndim = parse_shape(shape)
+            nb_dtype = parse_dtype(dtype)
+            if nb_dtype is not None and ndim is not None:
+                return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
+
+        return typer
 
 
-class Cuda_threadIdx_y(MacroTemplate):
-    key = cuda.threadIdx.y
-
-
-class Cuda_threadIdx_z(MacroTemplate):
-    key = cuda.threadIdx.z
-
-
-class Cuda_blockIdx_x(MacroTemplate):
-    key = cuda.blockIdx.x
-
-
-class Cuda_blockIdx_y(MacroTemplate):
-    key = cuda.blockIdx.y
-
-
-class Cuda_blockIdx_z(MacroTemplate):
-    key = cuda.blockIdx.z
-
-
-class Cuda_blockDim_x(MacroTemplate):
-    key = cuda.blockDim.x
-
-
-class Cuda_blockDim_y(MacroTemplate):
-    key = cuda.blockDim.y
-
-
-class Cuda_blockDim_z(MacroTemplate):
-    key = cuda.blockDim.z
-
-
-class Cuda_gridDim_x(MacroTemplate):
-    key = cuda.gridDim.x
-
-
-class Cuda_gridDim_y(MacroTemplate):
-    key = cuda.gridDim.y
-
-
-class Cuda_gridDim_z(MacroTemplate):
-    key = cuda.gridDim.z
-
-
-class Cuda_warpsize(MacroTemplate):
-    key = cuda.warpsize
-
-
-class Cuda_laneid(MacroTemplate):
-    key = cuda.laneid
-
-
-class Cuda_shared_array(MacroTemplate):
+@register
+class Cuda_shared_array(Cuda_array_decl):
     key = cuda.shared.array
 
 
-class Cuda_local_array(MacroTemplate):
+@register
+class Cuda_local_array(Cuda_array_decl):
     key = cuda.local.array
 
 
-class Cuda_const_arraylike(MacroTemplate):
+@register
+class Cuda_const_array_like(CallableTemplate):
     key = cuda.const.array_like
 
+    def generic(self):
+        def typer(ndarray):
+            return ndarray
+        return typer
 
-@intrinsic
+
+@register
 class Cuda_syncthreads(ConcreteTemplate):
     key = cuda.syncthreads
     cases = [signature(types.none)]
 
 
-@intrinsic
+@register
 class Cuda_syncthreads_count(ConcreteTemplate):
     key = cuda.syncthreads_count
     cases = [signature(types.i4, types.i4)]
 
 
-@intrinsic
+@register
 class Cuda_syncthreads_and(ConcreteTemplate):
     key = cuda.syncthreads_and
     cases = [signature(types.i4, types.i4)]
 
 
-@intrinsic
+@register
 class Cuda_syncthreads_or(ConcreteTemplate):
     key = cuda.syncthreads_or
     cases = [signature(types.i4, types.i4)]
 
 
-@intrinsic
+@register
 class Cuda_threadfence_device(ConcreteTemplate):
     key = cuda.threadfence
     cases = [signature(types.none)]
 
 
-@intrinsic
+@register
 class Cuda_threadfence_block(ConcreteTemplate):
     key = cuda.threadfence_block
     cases = [signature(types.none)]
 
 
-@intrinsic
+@register
 class Cuda_threadfence_system(ConcreteTemplate):
     key = cuda.threadfence_system
     cases = [signature(types.none)]
 
 
-@intrinsic
+@register
 class Cuda_syncwarp(ConcreteTemplate):
     key = cuda.syncwarp
-    cases = [signature(types.none, types.i4)]
+    cases = [signature(types.none), signature(types.none, types.i4)]
 
 
-@intrinsic
+@register
+class Cuda_cg_this_grid(ConcreteTemplate):
+    key = cuda.cg.this_grid
+    cases = [signature(grid_group)]
+
+
+@register_attr
+class CudaCgModuleTemplate(AttributeTemplate):
+    key = types.Module(cuda.cg)
+
+    def resolve_this_grid(self, mod):
+        return types.Function(Cuda_cg_this_grid)
+
+
+class Cuda_grid_group_sync(AbstractTemplate):
+    key = "GridGroup.sync"
+
+    def generic(self, args, kws):
+        return signature(types.int32, recvr=self.this)
+
+
+@register_attr
+class GridGroup_attrs(AttributeTemplate):
+    key = grid_group
+
+    def resolve_sync(self, mod):
+        return types.BoundFunction(Cuda_grid_group_sync, grid_group)
+
+
+@register
 class Cuda_shfl_sync_intrinsic(ConcreteTemplate):
     key = cuda.shfl_sync_intrinsic
     cases = [
-        signature(types.Tuple((types.i4, types.b1)), types.i4, types.i4, types.i4, types.i4, types.i4),
-        signature(types.Tuple((types.i8, types.b1)), types.i4, types.i4, types.i8, types.i4, types.i4),
-        signature(types.Tuple((types.f4, types.b1)), types.i4, types.i4, types.f4, types.i4, types.i4),
-        signature(types.Tuple((types.f8, types.b1)), types.i4, types.i4, types.f8, types.i4, types.i4),
+        signature(types.Tuple((types.i4, types.b1)),
+                  types.i4, types.i4, types.i4, types.i4, types.i4),
+        signature(types.Tuple((types.i8, types.b1)),
+                  types.i4, types.i4, types.i8, types.i4, types.i4),
+        signature(types.Tuple((types.f4, types.b1)),
+                  types.i4, types.i4, types.f4, types.i4, types.i4),
+        signature(types.Tuple((types.f8, types.b1)),
+                  types.i4, types.i4, types.f8, types.i4, types.i4),
     ]
 
 
-@intrinsic
+@register
 class Cuda_vote_sync_intrinsic(ConcreteTemplate):
     key = cuda.vote_sync_intrinsic
-    cases = [signature(types.Tuple((types.i4, types.b1)), types.i4, types.i4, types.b1)]
+    cases = [signature(types.Tuple((types.i4, types.b1)),
+                       types.i4, types.i4, types.b1)]
 
 
-@intrinsic
+@register
 class Cuda_match_any_sync(ConcreteTemplate):
     key = cuda.match_any_sync
     cases = [
@@ -167,7 +194,7 @@ class Cuda_match_any_sync(ConcreteTemplate):
     ]
 
 
-@intrinsic
+@register
 class Cuda_match_all_sync(ConcreteTemplate):
     key = cuda.match_all_sync
     cases = [
@@ -178,7 +205,7 @@ class Cuda_match_all_sync(ConcreteTemplate):
     ]
 
 
-@intrinsic
+@register
 class Cuda_popc(ConcreteTemplate):
     """
     Supported types from `llvm.popc`
@@ -196,7 +223,8 @@ class Cuda_popc(ConcreteTemplate):
         signature(types.uint64, types.uint64),
     ]
 
-@intrinsic
+
+@register
 class Cuda_fma(ConcreteTemplate):
     """
     Supported types from `llvm.fma`
@@ -209,7 +237,7 @@ class Cuda_fma(ConcreteTemplate):
     ]
 
 
-@intrinsic
+@register
 class Cuda_brev(ConcreteTemplate):
     key = cuda.brev
     cases = [
@@ -218,7 +246,7 @@ class Cuda_brev(ConcreteTemplate):
     ]
 
 
-@intrinsic
+@register
 class Cuda_clz(ConcreteTemplate):
     """
     Supported types from `llvm.ctlz`
@@ -237,7 +265,7 @@ class Cuda_clz(ConcreteTemplate):
     ]
 
 
-@intrinsic
+@register
 class Cuda_ffs(ConcreteTemplate):
     """
     Supported types from `llvm.cttz`
@@ -256,14 +284,13 @@ class Cuda_ffs(ConcreteTemplate):
     ]
 
 
-@intrinsic
+@register
 class Cuda_selp(AbstractTemplate):
     key = cuda.selp
 
     def generic(self, args, kws):
         assert not kws
         test, a, b = args
-
 
         # per docs
         # http://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions-selp
@@ -278,50 +305,45 @@ class Cuda_selp(AbstractTemplate):
         return signature(a, test, a, a)
 
 
-@intrinsic
-class Cuda_atomic_add(AbstractTemplate):
-    key = cuda.atomic.add
+# generate atomic operations
+def _gen(l_key, supported_types):
+    @register
+    class Cuda_atomic(AbstractTemplate):
+        key = l_key
 
-    def generic(self, args, kws):
-        assert not kws
-        ary, idx, val = args
+        def generic(self, args, kws):
+            assert not kws
+            ary, idx, val = args
 
-        if ary.ndim == 1:
-            return signature(ary.dtype, ary, types.intp, ary.dtype)
-        elif ary.ndim > 1:
-            return signature(ary.dtype, ary, idx, ary.dtype)
+            if ary.dtype not in supported_types:
+                return
 
-
-class Cuda_atomic_maxmin(AbstractTemplate):
-    def generic(self, args, kws):
-        assert not kws
-        ary, idx, val = args
-        # Implementation presently supports:
-        # float64, float32, int32, int64, uint32, uint64 only,
-        # so fail typing otherwise
-        supported_types = (types.float64, types.float32,
-                           types.int32, types.uint32,
-                           types.int64, types.uint64)
-        if ary.dtype not in supported_types:
-            return
-
-        if ary.ndim == 1:
-            return signature(ary.dtype, ary, types.intp, ary.dtype)
-        elif ary.ndim > 1:
-            return signature(ary.dtype, ary, idx, ary.dtype)
+            if ary.ndim == 1:
+                return signature(ary.dtype, ary, types.intp, ary.dtype)
+            elif ary.ndim > 1:
+                return signature(ary.dtype, ary, idx, ary.dtype)
+    return Cuda_atomic
 
 
-@intrinsic
-class Cuda_atomic_max(Cuda_atomic_maxmin):
-    key = cuda.atomic.max
+all_numba_types = (types.float64, types.float32,
+                   types.int32, types.uint32,
+                   types.int64, types.uint64)
+
+integer_numba_types = (types.int32, types.uint32,
+                       types.int64, types.uint64)
+
+Cuda_atomic_add = _gen(cuda.atomic.add, all_numba_types)
+Cuda_atomic_sub = _gen(cuda.atomic.sub, all_numba_types)
+Cuda_atomic_max = _gen(cuda.atomic.max, all_numba_types)
+Cuda_atomic_min = _gen(cuda.atomic.min, all_numba_types)
+Cuda_atomic_nanmax = _gen(cuda.atomic.nanmax, all_numba_types)
+Cuda_atomic_nanmin = _gen(cuda.atomic.nanmin, all_numba_types)
+Cuda_atomic_and = _gen(cuda.atomic.and_, integer_numba_types)
+Cuda_atomic_or = _gen(cuda.atomic.or_, integer_numba_types)
+Cuda_atomic_xor = _gen(cuda.atomic.xor, integer_numba_types)
 
 
-@intrinsic
-class Cuda_atomic_min(Cuda_atomic_maxmin):
-    key = cuda.atomic.min
-
-
-@intrinsic
+@register
 class Cuda_atomic_compare_and_swap(AbstractTemplate):
     key = cuda.atomic.compare_and_swap
 
@@ -334,92 +356,62 @@ class Cuda_atomic_compare_and_swap(AbstractTemplate):
             return signature(dty, ary, dty, dty)
 
 
-@intrinsic_attr
-class Cuda_threadIdx(AttributeTemplate):
-    key = types.Module(cuda.threadIdx)
+@register_attr
+class Dim3_attrs(AttributeTemplate):
+    key = dim3
 
     def resolve_x(self, mod):
-        return types.Macro(Cuda_threadIdx_x)
+        return types.int32
 
     def resolve_y(self, mod):
-        return types.Macro(Cuda_threadIdx_y)
+        return types.int32
 
     def resolve_z(self, mod):
-        return types.Macro(Cuda_threadIdx_z)
+        return types.int32
 
 
-@intrinsic_attr
-class Cuda_blockIdx(AttributeTemplate):
-    key = types.Module(cuda.blockIdx)
-
-    def resolve_x(self, mod):
-        return types.Macro(Cuda_blockIdx_x)
-
-    def resolve_y(self, mod):
-        return types.Macro(Cuda_blockIdx_y)
-
-    def resolve_z(self, mod):
-        return types.Macro(Cuda_blockIdx_z)
-
-
-@intrinsic_attr
-class Cuda_blockDim(AttributeTemplate):
-    key = types.Module(cuda.blockDim)
-
-    def resolve_x(self, mod):
-        return types.Macro(Cuda_blockDim_x)
-
-    def resolve_y(self, mod):
-        return types.Macro(Cuda_blockDim_y)
-
-    def resolve_z(self, mod):
-        return types.Macro(Cuda_blockDim_z)
-
-
-@intrinsic_attr
-class Cuda_gridDim(AttributeTemplate):
-    key = types.Module(cuda.gridDim)
-
-    def resolve_x(self, mod):
-        return types.Macro(Cuda_gridDim_x)
-
-    def resolve_y(self, mod):
-        return types.Macro(Cuda_gridDim_y)
-
-    def resolve_z(self, mod):
-        return types.Macro(Cuda_gridDim_z)
-
-
-@intrinsic_attr
+@register_attr
 class CudaSharedModuleTemplate(AttributeTemplate):
     key = types.Module(cuda.shared)
 
     def resolve_array(self, mod):
-        return types.Macro(Cuda_shared_array)
+        return types.Function(Cuda_shared_array)
 
 
-@intrinsic_attr
+@register_attr
 class CudaConstModuleTemplate(AttributeTemplate):
     key = types.Module(cuda.const)
 
     def resolve_array_like(self, mod):
-        return types.Macro(Cuda_const_arraylike)
+        return types.Function(Cuda_const_array_like)
 
 
-@intrinsic_attr
+@register_attr
 class CudaLocalModuleTemplate(AttributeTemplate):
     key = types.Module(cuda.local)
 
     def resolve_array(self, mod):
-        return types.Macro(Cuda_local_array)
+        return types.Function(Cuda_local_array)
 
 
-@intrinsic_attr
+@register_attr
 class CudaAtomicTemplate(AttributeTemplate):
     key = types.Module(cuda.atomic)
 
     def resolve_add(self, mod):
         return types.Function(Cuda_atomic_add)
+
+    def resolve_sub(self, mod):
+        return types.Function(Cuda_atomic_sub)
+
+    def resolve_and_(self, mod):
+        return types.Function(Cuda_atomic_and)
+
+    def resolve_or_(self, mod):
+        return types.Function(Cuda_atomic_or)
+
+    def resolve_xor(self, mod):
+        return types.Function(Cuda_atomic_xor)
 
     def resolve_max(self, mod):
         return types.Function(Cuda_atomic_max)
@@ -427,37 +419,46 @@ class CudaAtomicTemplate(AttributeTemplate):
     def resolve_min(self, mod):
         return types.Function(Cuda_atomic_min)
 
+    def resolve_nanmin(self, mod):
+        return types.Function(Cuda_atomic_nanmin)
+
+    def resolve_nanmax(self, mod):
+        return types.Function(Cuda_atomic_nanmax)
+
     def resolve_compare_and_swap(self, mod):
         return types.Function(Cuda_atomic_compare_and_swap)
 
 
-@intrinsic_attr
+@register_attr
 class CudaModuleTemplate(AttributeTemplate):
     key = types.Module(cuda)
 
     def resolve_grid(self, mod):
-        return types.Macro(Cuda_grid)
+        return types.Function(Cuda_grid)
 
     def resolve_gridsize(self, mod):
-        return types.Macro(Cuda_gridsize)
+        return types.Function(Cuda_gridsize)
+
+    def resolve_cg(self, mod):
+        return types.Module(cuda.cg)
 
     def resolve_threadIdx(self, mod):
-        return types.Module(cuda.threadIdx)
+        return dim3
 
     def resolve_blockIdx(self, mod):
-        return types.Module(cuda.blockIdx)
+        return dim3
 
     def resolve_blockDim(self, mod):
-        return types.Module(cuda.blockDim)
+        return dim3
 
     def resolve_gridDim(self, mod):
-        return types.Module(cuda.gridDim)
+        return dim3
 
     def resolve_warpsize(self, mod):
-        return types.Macro(Cuda_warpsize)
+        return types.int32
 
     def resolve_laneid(self, mod):
-        return types.Macro(Cuda_laneid)
+        return types.int32
 
     def resolve_shared(self, mod):
         return types.Module(cuda.shared)
@@ -526,14 +527,4 @@ class CudaModuleTemplate(AttributeTemplate):
         return types.Module(cuda.local)
 
 
-intrinsic_global(cuda, types.Module(cuda))
-## Forces the use of the cuda namespace by not recognizing individual the
-## following as globals.
-# intrinsic_global(cuda.grid, types.Function(Cuda_grid))
-# intrinsic_global(cuda.gridsize, types.Function(Cuda_gridsize))
-# intrinsic_global(cuda.threadIdx, types.Module(cuda.threadIdx))
-# intrinsic_global(cuda.shared, types.Module(cuda.shared))
-# intrinsic_global(cuda.shared.array, types.Function(Cuda_shared_array))
-# intrinsic_global(cuda.syncthreads, types.Function(Cuda_syncthreads))
-# intrinsic_global(cuda.atomic, types.Module(cuda.atomic))
-
+register_global(cuda, types.Module(cuda))

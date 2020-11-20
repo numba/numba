@@ -48,21 +48,39 @@ Optimizations
 -------------
 
 The compiler is allowed to emit incref/decref operations naively.  It relies
-on an optimization pass that to remove the redundant reference count
-operations.
+on an optimization pass to remove redundant reference count operations.
 
-The optimization pass runs on block level to avoid control flow analysis.
+A new optimization pass is implemented in version 0.52.0 to remove reference
+count operations that fall into the following four categories of control-flow
+structure---per basic-block, diamond, fanout, fanout+raise. See the documentation
+for :envvar:`NUMBA_LLVM_REFPRUNE_FLAGS` for their descriptions.
+
+The old optimization pass runs at block level to avoid control flow analysis.
 It depends on LLVM function optimization pass to simplify the control flow,
 stack-to-register, and simplify instructions.  It works by matching and
-removing incref and decref pairs within each block.
+removing incref and decref pairs within each block.  The old pass can be
+enabled by setting :envvar:`NUMBA_LLVM_REFPRUNE_PASS` to `0`.
+
+Important assumptions
+---------------------
+
+Both the old (pre-0.52.0) and the new (post-0.52.0) optimization passes assume
+that the only function that can consume a reference is ``NRT_decref``.
+It is important that there are no other functions that will consume references.
+Since the passes operate on LLVM IR, the "functions" here are referring to any
+callee in a LLVM call instruction.
+
+To summarize, all functions exposed to the refcount optimization pass
+**must not** consume counted references unless done so via ``NRT_decref``.
 
 
-Quirks
-------
+Quirks of the old optimization pass
+-----------------------------------
 
-Since the `refcount optimization pass <nrt-refct-opt-pass_>`_ requires LLVM
-function optimization pass, the pass works on the LLVM IR as text.  The
-optimized IR is then materialized again as a new LLVM in-memory bitcode object.
+Since the pre-0.52.0 `refcount optimization pass <nrt-refct-opt-pass_>`_
+requires the LLVM function optimization pass, the pass works on the LLVM IR as
+text. The optimized IR is then materialized again as a new LLVM in-memory
+bitcode object.
 
 
 Debugging Leaks
@@ -123,23 +141,23 @@ Using the NRT from C code
 
 Externally compiled C code should use the ``NRT_api_functions`` struct as a
 function table to access the NRT API. The struct is defined in
-:ghfile:`numba/runtime/nrt_external.h`. Users can use the utility function
+:ghfile:`numba/core/runtime/nrt_external.h`. Users can use the utility function
 ``numba.extending.include_path()`` to determine the include directory for
 Numba provided C headers.
 
-.. literalinclude:: ../../../numba/runtime/nrt_external.h
+.. literalinclude:: ../../../numba/core/runtime/nrt_external.h
   :language: C
-  :caption: `numba/runtime/nrt_external.h`
+  :caption: `numba/core/runtime/nrt_external.h`
 
-Inside Numba compiled code, the ``numba.unsafe.nrt.NRT_get_api()`` intrinsic
-can be used to obtain a pointer to the ``NRT_api_functions``.
+Inside Numba compiled code, the ``numba.core.unsafe.nrt.NRT_get_api()``
+intrinsic can be used to obtain a pointer to the ``NRT_api_functions``.
 
 Here is an example that uses the ``nrt_external.h``:
 
 .. code-block:: C
 
   #include <stdio.h>
-  #include "numba/runtime/nrt_external.h"
+  #include "numba/core/runtime/nrt_external.h"
 
   void my_dtor(void *ptr) {
       free(ptr);

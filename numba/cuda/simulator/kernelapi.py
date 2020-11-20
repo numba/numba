@@ -10,7 +10,7 @@ import traceback
 
 import numpy as np
 
-from numba import numpy_support
+from numba.np import numpy_support
 
 
 class Dim3(object):
@@ -32,6 +32,26 @@ class Dim3(object):
         yield self.x
         yield self.y
         yield self.z
+
+
+class GridGroup:
+    '''
+    Used to implement the grid group.
+    '''
+
+    def sync(self):
+        # Synchronization of the grid group is equivalent to synchronization of
+        # the thread block, because we only support cooperative grids with one
+        # block.
+        threading.current_thread().syncthreads()
+
+
+class FakeCUDACg:
+    '''
+    CUDA Cooperative Groups
+    '''
+    def this_grid(self):
+        return GridGroup()
 
 
 class FakeCUDALocal(object):
@@ -96,7 +116,12 @@ class FakeCUDAShared(object):
             self._allocations[caller] = res
         return res
 
+
 addlock = threading.Lock()
+sublock = threading.Lock()
+andlock = threading.Lock()
+orlock = threading.Lock()
+xorlock = threading.Lock()
 maxlock = threading.Lock()
 minlock = threading.Lock()
 caslock = threading.Lock()
@@ -105,29 +130,57 @@ caslock = threading.Lock()
 class FakeCUDAAtomic(object):
     def add(self, array, index, val):
         with addlock:
+            old = array[index]
             array[index] += val
+        return old
+
+    def sub(self, array, index, val):
+        with sublock:
+            old = array[index]
+            array[index] -= val
+        return old
+
+    def and_(self, array, index, val):
+        with andlock:
+            old = array[index]
+            array[index] &= val
+        return old
+
+    def or_(self, array, index, val):
+        with orlock:
+            old = array[index]
+            array[index] |= val
+        return old
+
+    def xor(self, array, index, val):
+        with xorlock:
+            old = array[index]
+            array[index] ^= val
+        return old
 
     def max(self, array, index, val):
         with maxlock:
-            # CUDA Python's semantics for max differ from Numpy's Python's,
-            # so we have special handling here (CUDA Python treats NaN as
-            # missing data).
-            if np.isnan(array[index]):
-                array[index] = val
-            elif np.isnan(val):
-                return
-            array[index] = max(array[index], val)
+            old = array[index]
+            array[index] = max(old, val)
+        return old
 
     def min(self, array, index, val):
         with minlock:
-            # CUDA Python's semantics for min differ from Numpy's Python's,
-            # so we have special handling here (CUDA Python treats NaN as
-            # missing data).
-            if np.isnan(array[index]):
-                array[index] = val
-            elif np.isnan(val):
-                return
-            array[index] = min(array[index], val)
+            old = array[index]
+            array[index] = min(old, val)
+        return old
+
+    def nanmax(self, array, index, val):
+        with maxlock:
+            old = array[index]
+            array[index] = np.nanmax([array[index], val])
+        return old
+
+    def nanmin(self, array, index, val):
+        with minlock:
+            old = array[index]
+            array[index] = np.nanmin([array[index], val])
+        return old
 
     def compare_and_swap(self, array, old, val):
         with caslock:
@@ -152,10 +205,15 @@ class FakeCUDAModule(object):
     def __init__(self, grid_dim, block_dim, dynshared_size):
         self.gridDim = Dim3(*grid_dim)
         self.blockDim = Dim3(*block_dim)
+        self._cg = FakeCUDACg()
         self._local = FakeCUDALocal()
         self._shared = FakeCUDAShared(dynshared_size)
         self._const = FakeCUDAConst()
         self._atomic = FakeCUDAAtomic()
+
+    @property
+    def cg(self):
+        return self._cg
 
     @property
     def local(self):

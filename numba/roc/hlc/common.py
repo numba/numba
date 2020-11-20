@@ -2,10 +2,8 @@
 Shared code for the low level compiler tooling
 """
 
-from __future__ import print_function, division, absolute_import
 
 from abc import abstractmethod, ABCMeta
-from numba import six
 import re
 
 # These are for parsing labels and metadata
@@ -106,8 +104,7 @@ def alloca_addrspace_correction(llvmir):
     return '\n'.join(new_ir)
 
 
-@six.add_metaclass(ABCMeta)
-class _AMDGCNModule(object):
+class _AMDGCNModule(metaclass=ABCMeta):
     """
     The AMDCGN LLVM module contract
     """

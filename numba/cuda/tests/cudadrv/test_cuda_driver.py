@@ -1,9 +1,8 @@
-from __future__ import print_function, absolute_import
-
-from ctypes import c_int, sizeof
-from numba.cuda.cudadrv.driver import host_to_device, device_to_host
-from numba.cuda.cudadrv import devices
-from numba.cuda.testing import unittest, SerialMixin
+from ctypes import byref, c_int, sizeof
+from numba.cuda.cudadrv.driver import (host_to_device, device_to_host, driver,
+                                       launch_kernel)
+from numba.cuda.cudadrv import devices, drvapi
+from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import skip_on_cudasim
 
 ptx1 = '''
@@ -60,7 +59,7 @@ ptx2 = '''
 
 
 @skip_on_cudasim('CUDA Driver API unsupported in the simulator')
-class TestCudaDriver(SerialMixin, unittest.TestCase):
+class TestCudaDriver(CUDATestCase):
     def setUp(self):
         self.assertTrue(len(devices.gpus) > 0)
         self.context = devices.get_context()
@@ -84,8 +83,12 @@ class TestCudaDriver(SerialMixin, unittest.TestCase):
 
         host_to_device(memory, array, sizeof(array))
 
-        function = function.configure((1,), (100,))
-        function(memory)
+        launch_kernel(function.handle,  # Kernel
+                      1,   1, 1,        # gx, gy, gz
+                      100, 1, 1,        # bx, by, bz
+                      0,                # dynamic shared mem
+                      0,                # stream
+                      [memory])         # arguments
 
         device_to_host(array, memory, sizeof(array))
         for i, v in enumerate(array):
@@ -93,7 +96,7 @@ class TestCudaDriver(SerialMixin, unittest.TestCase):
 
         module.unload()
 
-    def test_cuda_driver_stream(self):
+    def test_cuda_driver_stream_operations(self):
         module = self.context.create_module_ptx(self.ptx)
         function = module.get_function('_Z10helloworldPi')
 
@@ -105,27 +108,87 @@ class TestCudaDriver(SerialMixin, unittest.TestCase):
             memory = self.context.memalloc(sizeof(array))
             host_to_device(memory, array, sizeof(array), stream=stream)
 
-            function = function.configure((1,), (100,), stream=stream)
-            function(memory)
+            launch_kernel(function.handle,  # Kernel
+                          1,   1, 1,        # gx, gy, gz
+                          100, 1, 1,        # bx, by, bz
+                          0,                # dynamic shared mem
+                          stream.handle,    # stream
+                          [memory])         # arguments
 
         device_to_host(array, memory, sizeof(array), stream=stream)
 
         for i, v in enumerate(array):
             self.assertEqual(i, v)
 
+    def test_cuda_driver_default_stream(self):
+        # Test properties of the default stream
+        ds = self.context.get_default_stream()
+        self.assertIn("Default CUDA stream", repr(ds))
+        self.assertEqual(0, int(ds))
+        # bool(stream) is the check that is done in memcpy to decide if async
+        # version should be used. So the default (0) stream should be true-ish
+        # even though 0 is usually false-ish in Python.
+        self.assertTrue(ds)
+        self.assertFalse(ds.external)
+
+    def test_cuda_driver_legacy_default_stream(self):
+        # Test properties of the legacy default stream
+        ds = self.context.get_legacy_default_stream()
+        self.assertIn("Legacy default CUDA stream", repr(ds))
+        self.assertEqual(1, int(ds))
+        self.assertTrue(ds)
+        self.assertFalse(ds.external)
+
+    def test_cuda_driver_per_thread_default_stream(self):
+        # Test properties of the per-thread default stream
+        ds = self.context.get_per_thread_default_stream()
+        self.assertIn("Per-thread default CUDA stream", repr(ds))
+        self.assertEqual(2, int(ds))
+        self.assertTrue(ds)
+        self.assertFalse(ds.external)
+
+    def test_cuda_driver_stream(self):
+        # Test properties of non-default streams
+        s = self.context.create_stream()
+        self.assertIn("CUDA stream", repr(s))
+        self.assertNotIn("Default", repr(s))
+        self.assertNotIn("External", repr(s))
+        self.assertNotEqual(0, int(s))
+        self.assertTrue(s)
+        self.assertFalse(s.external)
+
+    def test_cuda_driver_external_stream(self):
+        # Test properties of a stream created from an external stream object.
+        # We use the driver API directly to create a stream, to emulate an
+        # external library creating a stream
+        handle = drvapi.cu_stream()
+        driver.cuStreamCreate(byref(handle), 0)
+        ptr = handle.value
+        s = self.context.create_external_stream(ptr)
+
+        self.assertIn("External CUDA stream", repr(s))
+        # Ensure neither "Default" nor "default"
+        self.assertNotIn("efault", repr(s))
+        self.assertEqual(ptr, int(s))
+        self.assertTrue(s)
+        self.assertTrue(s.external)
+
     def test_cuda_driver_occupancy(self):
         module = self.context.create_module_ptx(self.ptx)
         function = module.get_function('_Z10helloworldPi')
 
-        value = self.context.get_active_blocks_per_multiprocessor(function, 128, 128)
-        print('active blocks:', value)
+        value = self.context.get_active_blocks_per_multiprocessor(function,
+                                                                  128, 128)
         self.assertTrue(value > 0)
-        def b2d(bs): return bs
-        grid, block = self.context.get_max_potential_block_size(function, b2d, 128, 128)
-        print('grid size:', grid, ', block size:', block)
+
+        def b2d(bs):
+            return bs
+
+        grid, block = self.context.get_max_potential_block_size(function, b2d,
+                                                                128, 128)
         self.assertTrue(grid > 0)
         self.assertTrue(block > 0)
 
+
 if __name__ == '__main__':
     unittest.main()
-

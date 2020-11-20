@@ -3,23 +3,24 @@
 The tests here should exercise everything within an `@njit` context.
 Importantly, the tests should not return a typed list from within such a
 context as this would require code from numba/typed/typedlist.py (this is
-tested seperately).  Tests in this file build on each other in the order of
+tested separately).  Tests in this file build on each other in the order of
 writing. For example, the first test, tests the creation, append and len of the
 list. These are the barebones to do anything useful with a list. The subsequent
 test for getitem assumes makes use of these three operations and therefore
 assumes that they work.
 
 """
-from __future__ import print_function, absolute_import, division
+
+from textwrap import dedent
 
 from numba import njit
-from numba import int32, types
-from numba.errors import TypingError
-from numba import listobject
-from numba.utils import IS_PY3
-from .support import TestCase, MemoryLeakMixin, unittest
-
-skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
+from numba import int32
+from numba.extending import register_jitable
+from numba.core import types
+from numba.core.errors import TypingError
+from numba.tests.support import (TestCase, MemoryLeakMixin, override_config,
+                                 forbid_codegen)
+from numba.typed import listobject
 
 
 class TestCreateAppendLength(MemoryLeakMixin, TestCase):
@@ -35,6 +36,59 @@ class TestCreateAppendLength(MemoryLeakMixin, TestCase):
 
         for i in (0, 1, 2, 100):
             self.assertEqual(foo(i), i)
+
+    def test_list_create_no_jit(self):
+        with override_config('DISABLE_JIT', True):
+            with forbid_codegen():
+                l = listobject.new_list(int32)
+                self.assertEqual(type(l), list)
+
+
+class TestBool(MemoryLeakMixin, TestCase):
+    """Test list bool."""
+
+    def test_list_bool(self):
+        @njit
+        def foo(n):
+            l = listobject.new_list(int32)
+            for i in range(n):
+                l.append(i)
+            return bool(l)
+
+        for i in (0, 1, 2, 100):
+            self.assertEqual(foo(i), i > 0)
+
+
+class TestAllocation(MemoryLeakMixin, TestCase):
+
+    def test_list_allocation(self):
+        @njit
+        def foo_kwarg(n):
+            l = listobject.new_list(int32, allocated=n)
+            return l._allocated()
+
+        for i in range(16):
+            self.assertEqual(foo_kwarg(i), i)
+
+        @njit
+        def foo_posarg(n):
+            l = listobject.new_list(int32, n)
+            return l._allocated()
+        for i in range(16):
+            self.assertEqual(foo_posarg(i), i)
+
+    def test_list_allocation_negative(self):
+        @njit
+        def foo():
+            l = listobject.new_list(int32, -1)
+            return l._allocated()
+
+        with self.assertRaises(RuntimeError) as raises:
+            self.assertEqual(foo(), -1)
+        self.assertIn(
+            "expecting *allocated* to be >= 0",
+            str(raises.exception),
+        )
 
 
 class TestToFromMeminfo(MemoryLeakMixin, TestCase):
@@ -160,6 +214,20 @@ class TestGetitem(MemoryLeakMixin, TestCase):
         for t in (types.signed_domain
                   ):
             self.assertEqual(foo((t(0))), 0)
+
+    def test_list_getitem_different_sized_int_index(self):
+        # Checks that the index type cast and ext/trunc to the
+        # type of the length is correct, both wraparound and
+        # direct index is tested via -1/0.
+
+        for ty in types.integer_domain:
+            @njit
+            def foo():
+                l = listobject.new_list(int32)
+                l.append(7)
+                return l[ty(0)], l[ty(-1)]
+
+            self.assertEqual(foo(), (7, 7))
 
 
 class TestGetitemSlice(MemoryLeakMixin, TestCase):
@@ -389,6 +457,7 @@ class TestGetitemSlice(MemoryLeakMixin, TestCase):
 
     def test_list_getitem_multiple_slice_zero_step_index_error(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = listobject.new_list(int32)
@@ -600,6 +669,7 @@ class TestPop(MemoryLeakMixin, TestCase):
 
     def test_list_pop_empty_index_error_with_index(self):
         self.disable_leak_check()
+
         @njit
         def foo(i):
             l = listobject.new_list(int32)
@@ -628,6 +698,7 @@ class TestPop(MemoryLeakMixin, TestCase):
 
     def test_list_pop_mutiple_index_error_with_index(self):
         self.disable_leak_check()
+
         @njit
         def foo(i):
             l = listobject.new_list(int32)
@@ -869,6 +940,7 @@ class TestExtend(MemoryLeakMixin, TestCase):
 
     def test_list_extend_typing_error_non_iterable(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = listobject.new_list(int32)
@@ -949,6 +1021,7 @@ class TestInsert(MemoryLeakMixin, TestCase):
 
     def test_list_insert_typing_error(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = listobject.new_list(int32)
@@ -967,6 +1040,7 @@ class TestRemove(MemoryLeakMixin, TestCase):
 
     def test_list_remove_empty(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = listobject.new_list(int32)
@@ -987,6 +1061,7 @@ class TestRemove(MemoryLeakMixin, TestCase):
 
     def test_list_remove_singleton_value_error(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = listobject.new_list(int32)
@@ -1010,6 +1085,7 @@ class TestRemove(MemoryLeakMixin, TestCase):
 
     def test_list_remove_multiple_value_error(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = listobject.new_list(int32)
@@ -1166,6 +1242,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
 
     def test_index_singleton_value_error(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = listobject.new_list(int32)
@@ -1181,6 +1258,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
 
     def test_index_multiple_value_error(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = listobject.new_list(int32)
@@ -1197,6 +1275,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
 
     def test_index_multiple_value_error_start(self):
         self.disable_leak_check()
+
         @njit
         def foo(start):
             l = listobject.new_list(int32)
@@ -1215,6 +1294,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
 
     def test_index_multiple_value_error_end(self):
         self.disable_leak_check()
+
         @njit
         def foo(end):
             l = listobject.new_list(int32)
@@ -1233,6 +1313,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
 
     def test_index_typing_error_start(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = listobject.new_list(int32)
@@ -1248,6 +1329,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
 
     def test_index_typing_error_end(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = listobject.new_list(int32)
@@ -1374,7 +1456,6 @@ class TestIter(MemoryLeakMixin, TestCase):
 class TestStringItem(MemoryLeakMixin, TestCase):
     """Test list can take strings as items. """
 
-    @skip_py2
     def test_string_item(self):
         @njit
         def foo():
@@ -1425,7 +1506,6 @@ class TestItemCasting(TestCase):
         self.check_good(types.boolean, types.float64)
         self.check_good(types.boolean, types.complex128)
 
-    @skip_py2
     def test_cast_fail_unicode_int(self):
 
         @njit
@@ -1440,7 +1520,6 @@ class TestItemCasting(TestCase):
             str(raises.exception),
         )
 
-    @skip_py2
     def test_cast_fail_int_unicode(self):
 
         @njit
@@ -1454,3 +1533,98 @@ class TestItemCasting(TestCase):
             'Cannot cast int32 to unicode_type',
             str(raises.exception),
         )
+
+
+@register_jitable
+def make_test_list():
+    l = listobject.new_list(int32)
+    l.append(int32(1))
+    return l
+
+
+class TestImmutable(MemoryLeakMixin, TestCase):
+
+    def test_is_immutable(self):
+        @njit
+        def foo():
+            l = make_test_list()
+            return l._is_mutable()
+        self.assertTrue(foo())
+
+    def test_make_immutable_is_immutable(self):
+        @njit
+        def foo():
+            l = make_test_list()
+            l._make_immutable()
+            return l._is_mutable()
+        self.assertFalse(foo())
+
+    def test_length_still_works_when_immutable(self):
+        @njit
+        def foo():
+            l = make_test_list()
+            l._make_immutable()
+            return len(l),l._is_mutable()
+        length, mutable = foo()
+        self.assertEqual(length, 1)
+        self.assertFalse(mutable)
+
+    def test_getitem_still_works_when_immutable(self):
+        @njit
+        def foo():
+            l = make_test_list()
+            l._make_immutable()
+            return l[0], l._is_mutable()
+        test_item, mutable = foo()
+        self.assertEqual(test_item, 1)
+        self.assertFalse(mutable)
+
+    def test_append_fails(self):
+        self.disable_leak_check()
+
+        @njit
+        def foo():
+            l = make_test_list()
+            l._make_immutable()
+            l.append(int32(1))
+        with self.assertRaises(ValueError) as raises:
+            foo()
+        self.assertIn(
+            'list is immutable',
+            str(raises.exception),
+        )
+
+    def test_mutation_fails(self):
+        """ Test that any attempt to mutate an immutable typed list fails. """
+        self.disable_leak_check()
+
+        def generate_function(line):
+            context = {}
+            exec(dedent("""
+                from numba.typed import listobject
+                from numba import int32
+                def bar():
+                    lst = listobject.new_list(int32)
+                    lst.append(int32(1))
+                    lst._make_immutable()
+                    zero = int32(0)
+                    {}
+                """.format(line)), context)
+            return njit(context["bar"])
+        for line in ("lst.append(zero)",
+                     "lst[0] = zero",
+                     "lst.pop()",
+                     "del lst[0]",
+                     "lst.extend((zero,))",
+                     "lst.insert(0, zero)",
+                     "lst.clear()",
+                     "lst.reverse()",
+                     "lst.sort()",
+                     ):
+            foo = generate_function(line)
+            with self.assertRaises(ValueError) as raises:
+                foo()
+            self.assertIn(
+                "list is immutable",
+                str(raises.exception),
+            )

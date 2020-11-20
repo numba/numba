@@ -3,7 +3,6 @@ A HSA dGPU backed ND Array is recognized by checking the __hsa_memory__
 attribute on the object.  If it exists and evaluate to True, it must define
 shape, strides, dtype and size attributes similar to a NumPy ndarray.
 """
-from __future__ import print_function, absolute_import, division
 import warnings
 import math
 import copy
@@ -11,14 +10,11 @@ import weakref
 from ctypes import c_void_p
 import numpy as np
 from numba.roc.hsadrv import driver as _driver
-from . import devices
-from numba import dummyarray, types, numpy_support
+from numba.roc.hsadrv import devices
+from numba.core import types
 from .error import HsaContextMismatchError
-
-try:
-    long
-except NameError:
-    long = int
+from numba.misc import dummyarray
+from numba.np import numpy_support
 
 
 def is_hsa_ndarray(obj):
@@ -39,7 +35,7 @@ def verify_hsa_ndarray_interface(obj):
     requires_attr('shape', tuple)
     requires_attr('strides', tuple)
     requires_attr('dtype', np.dtype)
-    requires_attr('size', (int, long))
+    requires_attr('size', int)
 
 
 def require_hsa_ndarray(obj):
@@ -68,9 +64,9 @@ class DeviceNDArrayBase(object):
         dgpu_data
             user provided device memory for the ndarray data buffer
         """
-        if isinstance(shape, (int, long)):
+        if isinstance(shape, int):
             shape = (shape,)
-        if isinstance(strides, (int, long)):
+        if isinstance(strides, int):
             strides = (strides,)
         self.ndim = len(shape)
         if len(strides) != self.ndim:

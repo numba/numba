@@ -1,4 +1,5 @@
-from numba.six.moves import reduce as pyreduce
+from functools import reduce as pyreduce
+
 
 def Reduce(func):
     def reduce_wrapper(seq, res=None, init=0):
@@ -9,5 +10,6 @@ def Reduce(func):
         else:
             return r
     return reduce_wrapper
+
 
 reduce = Reduce

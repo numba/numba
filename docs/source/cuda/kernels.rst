@@ -73,9 +73,15 @@ We notice two steps here:
   (here ``increment_by_one``) and indexing it with a tuple of integers.
 
 * Running the kernel, by passing it the input array (and any separate
-  output arrays if necessary).  By default, running a kernel is synchronous:
-  the function returns when the kernel has finished executing and the
-  data is synchronized back.
+  output arrays if necessary). Kernels run asynchronously: launches queue their
+  execution on the device and then return immediately.  You can use
+  :func:`cuda.synchronize() <numba.cuda.synchronize>` to wait for all previous
+  kernel launches to finish executing.
+
+.. note:: Passing an array that resides in host memory will implicitly cause a
+   copy back to the host, which will be synchronous. In this case, the kernel
+   launch will not return until the data is copied back, and therefore appears
+   to execute synchronously.
 
 Choosing the block size
 -----------------------
@@ -209,8 +215,6 @@ The same example for a 2D array and grid of threads would be::
 
 Note the grid computation when instantiating the kernel must still be
 done manually, for example::
-
-    from __future__ import division  # for Python 2
 
     threadsperblock = (16, 16)
     blockspergrid_x = math.ceil(an_array.shape[0] / threadsperblock[0])

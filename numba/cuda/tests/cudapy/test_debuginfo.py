@@ -1,14 +1,13 @@
-from __future__ import print_function, absolute_import
-
-from numba.tests.support import override_config, TestCase
+from numba.tests.support import override_config
 from numba.cuda.testing import skip_on_cudasim
-from numba import unittest_support as unittest
-from numba import cuda, types
-from numba.cuda.testing import SerialMixin
+from numba import cuda
+from numba.core import types
+from numba.cuda.testing import CUDATestCase
+import unittest
 
 
 @skip_on_cudasim('Simulator does not produce debug dumps')
-class TestCudaDebugInfo(SerialMixin, TestCase):
+class TestCudaDebugInfo(CUDATestCase):
     """
     These tests only checks the compiled PTX for debuginfo section
     """
@@ -50,6 +49,14 @@ class TestCudaDebugInfo(SerialMixin, TestCase):
                 x[0] = 1
 
             self._check(bar, sig=(types.int32[:],), expect=False)
+
+    def test_issue_5835(self):
+        # Invalid debug metadata would segfault NVVM when any function was
+        # compiled with debug turned on and optimization off. This eager
+        # compilation should not crash anything.
+        @cuda.jit((types.int32[::1],), debug=True, opt=False)
+        def f(x):
+            x[0] = 0
 
 
 if __name__ == '__main__':

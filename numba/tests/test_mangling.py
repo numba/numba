@@ -4,9 +4,9 @@ Test function name mangling.
 The mangling affects the ABI of numba compiled binaries.
 """
 
-from numba import types, utils
-from numba.funcdesc import default_mangler
-from .support import unittest, TestCase
+from numba.core import types, utils
+from numba.core.funcdesc import default_mangler
+from numba.tests.support import unittest, TestCase
 
 
 class TestMangling(TestCase):
@@ -29,7 +29,7 @@ class TestMangling(TestCase):
         self.assertIsInstance(name, str)
         # manually encode it
         unichar = fname[2]
-        enc = ''.join('${:02x}'.format(utils.asbyteint(c))
+        enc = ''.join('${:02x}'.format(c)
                       for c in unichar.encode('utf8'))
         text = 'fo' + enc
         expect = '_Z{}{}if'.format(len(text), text)

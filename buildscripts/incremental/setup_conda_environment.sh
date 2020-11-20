@@ -8,6 +8,7 @@ conda config --write-default
 conda config --set remote_connect_timeout_secs 30.15
 conda config --set remote_max_retries 10
 conda config --set remote_read_timeout_secs 120.2
+conda config --set show_channel_urls true
 if [[ $(uname) == Linux ]]; then
     if [[ "$CONDA_SUBDIR" != "linux-32" && "$BITS32" != "yes" ]] ; then
         conda config --set restore_free_channel true
@@ -47,10 +48,18 @@ set +v
 source activate $CONDA_ENV
 set -v
 
+# gitpython needed for CI testing
+$CONDA_INSTALL gitpython
+
 # Install optional packages into activated env
 if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # Scipy, CFFI, jinja2, IPython and pygments are optional dependencies, but exercised in the test suite
-    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi scipy jinja2 ipython pygments
+    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython pygments
+    if [[ "$PYTHON" == "3.8" &&  $(uname) == Darwin ]]; then
+        $PIP_INSTALL scipy
+    else
+        $CONDA_INSTALL ${EXTRA_CHANNELS}  scipy
+    fi
 fi
 
 # Install the compiler toolchain
@@ -68,26 +77,18 @@ fi
 
 # Install latest llvmlite build
 $CONDA_INSTALL -c numba llvmlite
-# Install enum34 and singledispatch for Python < 3.4
-if [ $PYTHON \< "3.4" ]; then $CONDA_INSTALL enum34; fi
-if [ $PYTHON \< "3.4" ]; then $PIP_INSTALL singledispatch; fi
-# Install funcsigs for Python < 3.3
-if [ $PYTHON \< "3.3" ]; then $CONDA_INSTALL -c numba funcsigs; fi
+
 # Install dependencies for building the documentation
-if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx pygments numpydoc; fi
-if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL sphinx_bootstrap_theme; fi
+if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx=2.4.4 sphinx_rtd_theme pygments numpydoc; fi
+if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL rstcheck; fi
 # Install dependencies for code coverage (codecov.io)
 if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi
 # Install SVML
 if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
 # Install Intel TBB parallel backend
 if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL tbb tbb-devel; fi
-# install the faulthandler for Python 2.x, but not on armv7l as it doesn't exist
-# in berryconda
-archstr=`uname -m`
-if [[ "$archstr" != 'armv7l' ]]; then
-    if [ $PYTHON \< "3.0" ]; then $CONDA_INSTALL faulthandler; fi
-fi
+# Install pickle5
+if [ "$TEST_PICKLE5" == "yes" ]; then $PIP_INSTALL pickle5; fi
 
 # environment dump for debug
 echo "DEBUG ENV:"

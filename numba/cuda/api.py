@@ -2,20 +2,13 @@
 API that are reported to numba.cuda
 """
 
-from __future__ import print_function, absolute_import
 
 import contextlib
 
 import numpy as np
 
 from .cudadrv import devicearray, devices, driver
-from .args import In, Out, InOut
 
-
-try:
-    long
-except NameError:
-    long = int
 
 # NDarray device helper
 
@@ -128,11 +121,41 @@ def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
 
 
 @require_context
+def managed_array(shape, dtype=np.float, strides=None, order='C', stream=0,
+                  attach_global=True):
+    """managed_array(shape, dtype=np.float, strides=None, order='C', stream=0,
+                     attach_global=True)
+
+    Allocate a np.ndarray with a buffer that is managed.
+    Similar to np.empty().
+
+    Managed memory is supported on Linux, and is considered experimental on
+    Windows.
+
+    :param attach_global: A flag indicating whether to attach globally. Global
+                          attachment implies that the memory is accessible from
+                          any stream on any device. If ``False``, attachment is
+                          *host*, and memory is only accessible by devices
+                          with Compute Capability 6.0 and later.
+    """
+    shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
+                                                         order)
+    bytesize = driver.memory_size_from_info(shape, strides, dtype.itemsize)
+    buffer = current_context().memallocmanaged(bytesize,
+                                               attach_global=attach_global)
+    npary = np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
+                       buffer=buffer)
+    managedview = np.ndarray.view(npary, type=devicearray.ManagedNDArray)
+    managedview.device_setup(buffer, stream=stream)
+    return managedview
+
+
+@require_context
 def pinned_array(shape, dtype=np.float, strides=None, order='C'):
     """pinned_array(shape, dtype=np.float, strides=None, order='C')
 
-    Allocate a np.ndarray with a buffer that is pinned (pagelocked).
-    Similar to np.empty().
+    Allocate an :class:`ndarray <numpy.ndarray>` with a buffer that is pinned
+    (pagelocked).  Similar to :func:`np.empty() <numpy.empty>`.
     """
     shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
                                                          order)
@@ -146,7 +169,8 @@ def pinned_array(shape, dtype=np.float, strides=None, order='C'):
 @require_context
 def mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0,
                  portable=False, wc=False):
-    """mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0, portable=False, wc=False)
+    """mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0,
+                    portable=False, wc=False)
 
     Allocate a mapped ndarray with a buffer that is pinned and mapped on
     to the device. Similar to np.empty()
@@ -201,9 +225,9 @@ def synchronize():
 
 def _prepare_shape_strides_dtype(shape, strides, dtype, order):
     dtype = np.dtype(dtype)
-    if isinstance(shape, (int, long)):
+    if isinstance(shape, int):
         shape = (shape,)
-    if isinstance(strides, (int, long)):
+    if isinstance(strides, int):
         strides = (strides,)
     else:
         if shape == ():
@@ -228,20 +252,121 @@ def _fill_stride_by_order(shape, dtype, order):
     return tuple(strides)
 
 
-def device_array_like(ary, stream=0):
-    """Call cuda.devicearray() with information from the array.
+def _contiguous_strides_like_array(ary):
     """
-    return device_array(shape=ary.shape, dtype=ary.dtype,
-                        strides=ary.strides, stream=stream)
+    Given an array, compute strides for a new contiguous array of the same
+    shape.
+    """
+    # Don't recompute strides if the default strides will be sufficient to
+    # create a contiguous array.
+    if ary.flags['C_CONTIGUOUS'] or ary.flags['F_CONTIGUOUS'] or ary.ndim <= 1:
+        return None
+
+    # Otherwise, we need to compute new strides using an algorithm adapted from
+    # NumPy v1.17.4's PyArray_NewLikeArrayWithShape in
+    # core/src/multiarray/ctors.c. We permute the strides in ascending order
+    # then compute the stride for the dimensions with the same permutation.
+
+    # Stride permutation. E.g. a stride array (4, -2, 12) becomes
+    # [(1, -2), (0, 4), (2, 12)]
+    strideperm = [ x for x in enumerate(ary.strides) ]
+    strideperm.sort(key=lambda x: x[1])
+
+    # Compute new strides using permutation
+    strides = [0] * len(ary.strides)
+    stride = ary.dtype.itemsize
+    for i_perm, _ in strideperm:
+        strides[i_perm] = stride
+        stride *= ary.shape[i_perm]
+    return tuple(strides)
+
+
+def _order_like_array(ary):
+    if ary.flags['F_CONTIGUOUS'] and not ary.flags['C_CONTIGUOUS']:
+        return 'F'
+    else:
+        return 'C'
+
+
+def device_array_like(ary, stream=0):
+    """
+    Call :func:`device_array() <numba.cuda.device_array>` with information from
+    the array.
+    """
+    strides = _contiguous_strides_like_array(ary)
+    order = _order_like_array(ary)
+    return device_array(shape=ary.shape, dtype=ary.dtype, strides=strides,
+                        order=order, stream=stream)
+
+
+def mapped_array_like(ary, stream=0, portable=False, wc=False):
+    """
+    Call :func:`mapped_array() <numba.cuda.mapped_array>` with the information
+    from the array.
+    """
+    strides = _contiguous_strides_like_array(ary)
+    order = _order_like_array(ary)
+    return mapped_array(shape=ary.shape, dtype=ary.dtype, strides=strides,
+                        order=order, stream=stream, portable=portable, wc=wc)
+
+
+def pinned_array_like(ary):
+    """
+    Call :func:`pinned_array() <numba.cuda.pinned_array>` with the information
+    from the array.
+    """
+    strides = _contiguous_strides_like_array(ary)
+    order = _order_like_array(ary)
+    return pinned_array(shape=ary.shape, dtype=ary.dtype, strides=strides,
+                        order=order)
+
 
 # Stream helper
 @require_context
 def stream():
-    """stream()
-
+    """
     Create a CUDA stream that represents a command queue for the device.
     """
     return current_context().create_stream()
+
+
+@require_context
+def default_stream():
+    """
+    Get the default CUDA stream. CUDA semantics in general are that the default
+    stream is either the legacy default stream or the per-thread default stream
+    depending on which CUDA APIs are in use. In Numba, the APIs for the legacy
+    default stream are always the ones in use, but an option to use APIs for
+    the per-thread default stream may be provided in future.
+    """
+    return current_context().get_default_stream()
+
+
+@require_context
+def legacy_default_stream():
+    """
+    Get the legacy default CUDA stream.
+    """
+    return current_context().get_legacy_default_stream()
+
+
+@require_context
+def per_thread_default_stream():
+    """
+    Get the per-thread default CUDA stream.
+    """
+    return current_context().get_per_thread_default_stream()
+
+
+@require_context
+def external_stream(ptr):
+    """Create a Numba stream object for a stream allocated outside Numba.
+
+    :param ptr: Pointer to the external stream to wrap in a Numba Stream
+    :type ptr: int
+    """
+    return current_context().create_external_stream(ptr)
+
 
 # Page lock
 @require_context
@@ -269,8 +394,8 @@ def mapped(*arylist, **kws):
     devarylist = []
     for ary in arylist:
         pm = current_context().mempin(ary, driver.host_pointer(ary),
-                                    driver.host_memory_size(ary),
-                                    mapped=True)
+                                      driver.host_memory_size(ary),
+                                      mapped=True)
         pmlist.append(pm)
         devary = devicearray.from_array_like(ary, gpu_data=pm, stream=stream)
         devarylist.append(devary)
@@ -295,7 +420,9 @@ def event(timing=True):
     evt = current_context().create_event(timing=timing)
     return evt
 
+
 event_elapsed_time = driver.event_elapsed_time
+
 
 # Device selection
 
@@ -378,8 +505,7 @@ def defer_cleanup():
 
     Note: this context manager can be nested.
     """
-    deallocs = current_context().deallocations
-    with deallocs.disable():
+    with current_context().defer_cleanup():
         yield
 
 

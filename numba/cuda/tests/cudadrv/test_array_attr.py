@@ -1,9 +1,9 @@
 import numpy as np
 from numba import cuda
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 
 
-class TestArrayAttr(SerialMixin, unittest.TestCase):
+class TestArrayAttr(CUDATestCase):
     def test_contigous_2d(self):
         ary = np.arange(10)
         cary = ary.reshape(2, 5)
@@ -43,22 +43,33 @@ class TestArrayAttr(SerialMixin, unittest.TestCase):
     def test_ravel_c(self):
         ary = np.arange(60)
         reshaped = ary.reshape(2, 5, 2, 3)
+
         expect = reshaped.ravel(order='C')
         dary = cuda.to_device(reshaped)
         dflat = dary.ravel()
         flat = dflat.copy_to_host()
-        self.assertTrue(flat.ndim == 1)
-        self.assertTrue(np.all(expect == flat))
+        self.assertEqual(flat.ndim, 1)
+        self.assertPreciseEqual(expect, flat)
+
+        # explicit order kwarg
+        for order in 'CA':
+            expect = reshaped.ravel(order=order)
+            dary = cuda.to_device(reshaped)
+            dflat = dary.ravel(order=order)
+            flat = dflat.copy_to_host()
+            self.assertEqual(flat.ndim, 1)
+            self.assertPreciseEqual(expect, flat)
 
     def test_ravel_f(self):
         ary = np.arange(60)
         reshaped = np.asfortranarray(ary.reshape(2, 5, 2, 3))
-        expect = reshaped.ravel(order='F')
-        dary = cuda.to_device(reshaped)
-        dflat = dary.ravel(order='F')
-        flat = dflat.copy_to_host()
-        self.assertTrue(flat.ndim == 1)
-        self.assertTrue(np.all(expect == flat))
+        for order in 'FA':
+            expect = reshaped.ravel(order=order)
+            dary = cuda.to_device(reshaped)
+            dflat = dary.ravel(order=order)
+            flat = dflat.copy_to_host()
+            self.assertEqual(flat.ndim, 1)
+            self.assertPreciseEqual(expect, flat)
 
     def test_reshape_c(self):
         ary = np.arange(10)
@@ -66,7 +77,7 @@ class TestArrayAttr(SerialMixin, unittest.TestCase):
         dary = cuda.to_device(ary)
         dary_reshaped = dary.reshape(2, 5)
         got = dary_reshaped.copy_to_host()
-        self.assertTrue(np.all(expect == got))
+        self.assertPreciseEqual(expect, got)
 
     def test_reshape_f(self):
         ary = np.arange(10)
@@ -74,7 +85,7 @@ class TestArrayAttr(SerialMixin, unittest.TestCase):
         dary = cuda.to_device(ary)
         dary_reshaped = dary.reshape(2, 5, order='F')
         got = dary_reshaped.copy_to_host()
-        self.assertTrue(np.all(expect == got))
+        self.assertPreciseEqual(expect, got)
 
 
 if __name__ == '__main__':

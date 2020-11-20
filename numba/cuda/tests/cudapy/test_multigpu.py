@@ -1,11 +1,11 @@
 from numba import cuda
 import numpy as np
-from numba import unittest_support as unittest
-from numba.cuda.testing import skip_on_cudasim, SerialMixin
+from numba.cuda.testing import skip_on_cudasim, CUDATestCase
 import threading
+import unittest
 
 
-class TestMultiGPUContext(SerialMixin, unittest.TestCase):
+class TestMultiGPUContext(CUDATestCase):
     @unittest.skipIf(len(cuda.gpus) < 2, "need more than 1 gpus")
     def test_multigpu_context(self):
         @cuda.jit("void(float64[:], float64[:])")
@@ -16,7 +16,6 @@ class TestMultiGPUContext(SerialMixin, unittest.TestCase):
 
         def check(inp, out):
             np.testing.assert_equal(inp + 1, out)
-
 
         N = 32
         A = np.arange(N, dtype=np.float64)
@@ -61,7 +60,6 @@ class TestMultiGPUContext(SerialMixin, unittest.TestCase):
             else:
                 results[ridx] = np.all(arr == np.arange(10))
 
-
         dA = cuda.to_device(np.arange(10))
 
         nthreads = 10
@@ -81,7 +79,6 @@ class TestMultiGPUContext(SerialMixin, unittest.TestCase):
             else:
                 self.assertTrue(r)
 
-
     @unittest.skipIf(len(cuda.gpus) < 2, "need more than 1 gpus")
     def test_with_context(self):
 
@@ -90,7 +87,6 @@ class TestMultiGPUContext(SerialMixin, unittest.TestCase):
             i = cuda.grid(1)
             if i < arr.size:
                 arr[i] += val
-
 
         hostarr = np.arange(10, dtype=np.float32)
         with cuda.gpus[0]:

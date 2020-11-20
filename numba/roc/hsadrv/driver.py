@@ -2,7 +2,7 @@
 HSA driver bridge implementation
 """
 
-from __future__ import absolute_import, print_function, division
+from collections.abc import Sequence
 
 import sys
 import atexit
@@ -15,14 +15,11 @@ import logging
 from contextlib import contextmanager
 
 from collections import defaultdict, deque
-from numba.utils import total_ordering
+from functools import total_ordering
 from numba import mviewbuf
-from numba import utils
-from numba import config
+from numba.core import utils, config
 from .error import HsaSupportError, HsaDriverError, HsaApiError
-from . import enums, enums_ext, drvapi
-from numba.utils import longint as long
-from numba.six import Sequence
+from numba.roc.hsadrv import enums, enums_ext, drvapi
 import numpy as np
 
 
@@ -862,7 +859,7 @@ class Queue(object):
 
         # synchronous if no signal was provided
         if signal is None:
-            _logger.info('wait for sychronous kernel to complete')
+            _logger.info('wait for synchronous kernel to complete')
             timeout = 10
             if not s.wait_until_ne_one(timeout=timeout):
                 msg = "Kernel timed out after {timeout} second"
@@ -892,7 +889,7 @@ class Signal(object):
     def __init__(self, signal_id):
         self._id = signal_id
         self._as_parameter_ = self._id
-        utils.finalize(self, hsa.hsa_signal_destroy, self._id)
+        weakref.finalize(self, hsa.hsa_signal_destroy, self._id)
 
     def load_relaxed(self):
         return hsa.hsa_signal_load_relaxed(self._id)
@@ -985,7 +982,7 @@ class Program(object):
         check_fptr_return(ret)
 
         self._as_parameter_ = self._id
-        utils.finalize(self, self._ftabl.hsa_ext_program_destroy,
+        weakref.finalize(self, self._ftabl.hsa_ext_program_destroy,
                        self._id)
 
     def add_module(self, module):
@@ -1013,7 +1010,7 @@ class CodeObject(object):
     def __init__(self, code_object):
         self._id = code_object
         self._as_parameter_ = self._id
-        utils.finalize(self, hsa.hsa_code_object_destroy, self._id)
+        weakref.finalize(self, hsa.hsa_code_object_destroy, self._id)
 
 
 class Executable(object):
@@ -1025,7 +1022,7 @@ class Executable(object):
                                   ctypes.byref(ex))
         self._id = ex
         self._as_parameter_ = self._id
-        utils.finalize(self, hsa.hsa_executable_destroy, self._id)
+        weakref.finalize(self, hsa.hsa_executable_destroy, self._id)
 
     def load(self, agent, code_object):
         hsa.hsa_executable_load_code_object(self._id, agent._id,
@@ -1458,7 +1455,7 @@ def host_pointer(obj):
     it should not be changed until the operation which can be asynchronous
     completes.
     """
-    if isinstance(obj, (int, long)):
+    if isinstance(obj, int):
         return obj
 
     forcewritable = isinstance(obj, np.void)

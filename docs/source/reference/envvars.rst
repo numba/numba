@@ -3,6 +3,10 @@
 Environment variables
 =====================
 
+.. note:: This section relates to environment variables that impact Numba's
+          runtime, for compile time environment variables see
+          :ref:`numba-source-install-env_vars`.
+
 Numba allows its behaviour to be changed through the use of environment
 variables. Unless otherwise mentioned, those variables have integer values and
 default to zero.
@@ -35,6 +39,23 @@ for permanent use by adding::
 
     color_scheme: dark_bg
 
+Jit flags
+---------
+
+These variables globally override flags to the :func:`~numba.jit` decorator.
+
+.. envvar:: NUMBA_BOUNDSCHECK
+
+   If set to 0 or 1, globally disable or enable bounds checking, respectively.
+   The default if the variable is not set or set to an empty string is to use
+   the ``boundscheck`` flag passed to the :func:`~numba.jit` decorator for a
+   given function. See the documentation of :ref:`@jit
+   <jit-decorator-boundscheck>` for more information.
+
+   Note, due to limitations in numba, the bounds checking currently produces
+   exception messages that do not match those from NumPy. If you set
+   ``NUMBA_FULL_TRACEBACKS=1``, the full exception message with the axis,
+   index, and shape information will be printed to the terminal.
 
 Debugging
 ---------
@@ -54,8 +75,7 @@ These variables influence what is printed out during compilation of
 
 .. envvar:: NUMBA_SHOW_HELP
 
-    If not set or set to zero, show user level help information.
-    Defaults to the negation of the value set by `NUMBA_DEVELOPER_MODE`.
+    If set to non-zero, show resources for getting help. Default is zero.
 
 .. envvar:: NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING
 
@@ -74,6 +94,11 @@ These variables influence what is printed out during compilation of
    - ``jupyter_nb`` Suitable for use in Jupyter Notebooks.
 
    *Default value:* ``no_color``. The type of the value is ``string``.
+
+.. envvar:: NUMBA_HIGHLIGHT_DUMPS
+
+   If set to non-zero and ``pygments`` is installed, syntax highlighting is
+   applied to Numba IR, LLVM IR and assembly dumps. Default is zero.
 
 .. envvar:: NUMBA_DISABLE_PERFORMANCE_WARNINGS
 
@@ -136,6 +161,12 @@ These variables influence what is printed out during compilation of
 
    If set to non-zero, print out the Numba Intermediate Representation
    of compiled functions.
+
+
+.. envvar:: NUMBA_DUMP_SSA
+
+   If set to non-zero, print out the Numba Intermediate Representation of
+   compiled functions after conversion to Static Single Assignment (SSA) form.
 
 .. envvar:: NUMBA_DEBUG_PRINT_AFTER
 
@@ -216,6 +247,12 @@ Compilation options
 
    *Default value:* 1 (except on 32-bit Windows)
 
+.. envvar:: NUMBA_SLP_VECTORIZE
+
+   If set to non-zero, enable LLVM superword-level parallelism vectorization.
+
+   *Default value:* 1
+
 .. envvar:: NUMBA_ENABLE_AVX
 
    If set to non-zero, enable AVX optimizations in LLVM.  This is disabled
@@ -226,14 +263,6 @@ Compilation options
 
     If set to non-zero and Intel SVML is available, the use of SVML will be
     disabled.
-
-.. envvar:: NUMBA_COMPATIBILITY_MODE
-
-   If set to non-zero, compilation of JIT functions will never entirely
-   fail, but instead generate a fallback that simply interprets the
-   function.  This is only to be used if you are migrating a large
-   codebase from an old Numba version (before 0.12), and want to avoid
-   breaking everything at once.  Otherwise, please don't use this.
 
 .. envvar:: NUMBA_DISABLE_JIT
 
@@ -280,6 +309,38 @@ Compilation options
 
     *Default value:* 128
 
+.. envvar:: NUMBA_LLVM_REFPRUNE_PASS
+
+    Turns on the LLVM pass level reference-count pruning pass and disables the
+    regex based implementation in Numba.
+
+    *Default value:* 1 (On)
+
+.. envvar:: NUMBA_LLVM_REFPRUNE_FLAGS
+
+    When ``NUMBA_LLVM_REFPRUNE_PASS`` is on, this allows configuration
+    of subpasses in the reference-count pruning LLVM pass.
+
+    Valid values are any combinations of the below separated by `,`
+    (case-insensitive):
+
+    - ``all``: enable all subpasses.
+    - ``per_bb``: enable per-basic-block level pruning, which is same as the
+      old regex based implementation.
+    - ``diamond``: enable inter-basic-block pruning that is a diamond shape
+      pattern, i.e. a single-entry single-exit CFG subgraph where has an incref
+      in the entry and a corresponding decref in the exit.
+    - ``fanout``: enable inter-basic-block pruning that has a fanout pattern,
+      i.e. a single-entry multiple-exit CFG subgraph where the entry has an
+      incref and every exit has a corresponding decref.
+    - ``fanout_raise``: same as ``fanout`` but allow subgraph exit nodes to be
+      raising an exception and not have a corresponding decref.
+
+    For example, ``all`` is the same as
+    ``per_bb, diamond, fanout, fanout_raise``
+
+    *Default value:* "all"
+
 
 .. _numba-envvars-caching:
 
@@ -314,6 +375,7 @@ Options for the compilation cache.
     :ref:`docs on cache clearing <cache-clearing>`
 
 
+.. _numba-envvars-gpu-support:
 
 GPU support
 -----------
@@ -326,6 +388,13 @@ GPU support
 
    If set, force the CUDA compute capability to the given version (a
    string of the type ``major.minor``), regardless of attached devices.
+
+.. envvar:: NUMBA_CUDA_DEFAULT_PTX_CC
+
+   The default compute capability (a string of the type ``major.minor``) to
+   target when compiling to PTX using ``cuda.compile_ptx``. The default is
+   5.2, which is the lowest non-deprecated compute capability in the most
+   recent version of the CUDA toolkit supported (10.2 at present).
 
 .. envvar:: NUMBA_ENABLE_CUDASIM
 
@@ -342,7 +411,10 @@ Threading Control
    of ``OMP_NUM_THREADS`` and ``MKL_NUM_THREADS``.
 
    *Default value:* The number of CPU cores on the system as determined at run
-   time, this can be accessed via ``numba.config.NUMBA_DEFAULT_NUM_THREADS``.
+   time. This can be accessed via :obj:`numba.config.NUMBA_DEFAULT_NUM_THREADS`.
+
+   See also the section on :ref:`setting_the_number_of_threads` for
+   information on how to set the number of threads at runtime.
 
 .. envvar:: NUMBA_THREADING_LAYER
 
@@ -363,4 +435,3 @@ Threading Control
    * ``tbb`` - A threading layer backed by Intel TBB.
    * ``omp`` - A threading layer backed by OpenMP.
    * ``workqueue`` - A simple built-in work-sharing task scheduler.
-

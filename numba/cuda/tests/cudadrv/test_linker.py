@@ -1,15 +1,14 @@
-from __future__ import print_function, absolute_import, division
 import os.path
 import numpy as np
 from numba.cuda.testing import unittest
 from numba.cuda.testing import skip_on_cudasim
-from numba.cuda.testing import SerialMixin
-from numba.cuda.cudadrv.driver import Linker
+from numba.cuda.testing import CUDATestCase
+from numba.cuda.cudadrv.driver import Linker, LinkerError
 from numba.cuda import require_context
-from numba import cuda
+from numba import cuda, void, float64, int64
 
 
-def function_with_lots_of_registers(x, a, b, c, d, e, f):
+def func_with_lots_of_registers(x, a, b, c, d, e, f):
     a1 = 1.0
     a2 = 1.0
     a3 = 1.0
@@ -58,7 +57,7 @@ def function_with_lots_of_registers(x, a, b, c, d, e, f):
 
 
 @skip_on_cudasim('Linking unsupported in the simulator')
-class TestLinker(SerialMixin, unittest.TestCase):
+class TestLinker(CUDATestCase):
 
     @require_context
     def test_linker_basic(self):
@@ -79,25 +78,48 @@ class TestLinker(SerialMixin, unittest.TestCase):
             i = cuda.grid(1)
             x[i] += bar(y[i])
 
-        A = np.array([123])
-        B = np.array([321])
+        A = np.array([123], dtype=np.int32)
+        B = np.array([321], dtype=np.int32)
 
-        foo(A, B)
+        foo[1, 1](A, B)
 
         self.assertTrue(A[0] == 123 + 2 * 321)
 
     @require_context
-    def test_set_registers_57(self):
-        compiled = cuda.jit(max_registers=57)(function_with_lots_of_registers)
+    def test_try_to_link_nonexistent(self):
+        with self.assertRaises(LinkerError) as e:
+            @cuda.jit('void(int32[::1])', link=['nonexistent.a'])
+            def f(x):
+                x[0] = 0
+        self.assertIn('nonexistent.a not found', e.exception.args)
+
+    @require_context
+    def test_set_registers_no_max(self):
+        """Ensure that the jitted kernel used in the test_set_registers_* tests
+        uses more than 57 registers - this ensures that test_set_registers_*
+        are really checking that they reduced the number of registers used from
+        something greater than the maximum."""
+        compiled = cuda.jit(func_with_lots_of_registers)
         compiled = compiled.specialize(np.empty(32), *range(6))
-        self.assertEquals(57, compiled._func.get().attrs.regs)
+        self.assertGreater(compiled._func.get().attrs.regs, 57)
+
+    @require_context
+    def test_set_registers_57(self):
+        compiled = cuda.jit(max_registers=57)(func_with_lots_of_registers)
+        compiled = compiled.specialize(np.empty(32), *range(6))
+        self.assertLessEqual(compiled._func.get().attrs.regs, 57)
 
     @require_context
     def test_set_registers_38(self):
-        compiled = cuda.jit(max_registers=38)(function_with_lots_of_registers)
+        compiled = cuda.jit(max_registers=38)(func_with_lots_of_registers)
         compiled = compiled.specialize(np.empty(32), *range(6))
-        self.assertEquals(38, compiled._func.get().attrs.regs)
+        self.assertLessEqual(compiled._func.get().attrs.regs, 38)
 
+    @require_context
+    def test_set_registers_eager(self):
+        sig = void(float64[::1], int64, int64, int64, int64, int64, int64)
+        compiled = cuda.jit(sig, max_registers=38)(func_with_lots_of_registers)
+        self.assertLessEqual(compiled._func.get().attrs.regs, 38)
 
 
 if __name__ == '__main__':

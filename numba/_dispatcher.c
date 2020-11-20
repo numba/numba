@@ -105,8 +105,8 @@ typedef struct DispatcherObject{
     char can_compile;        /* Can auto compile */
     char can_fallback;       /* Can fallback */
     char exact_match_required;
-    /* Borrowed references */
-    PyObject *firstdef, *fallbackdef, *interpdef;
+    /* Borrowed reference */
+    PyObject *fallbackdef;
     /* Whether to fold named arguments and default values (false for lifted loops)*/
     int fold_args;
     /* Whether the last positional argument is a stararg */
@@ -161,9 +161,7 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
     self->dispatcher = dispatcher_new(tmaddr, argct);
     self->can_compile = 1;
     self->can_fallback = can_fallback;
-    self->firstdef = NULL;
     self->fallbackdef = NULL;
-    self->interpdef = NULL;
     self->has_stararg = has_stararg;
     self->exact_match_required = exact_match_required;
     return 0;
@@ -184,14 +182,13 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
     int i, sigsz;
     int *sig;
     int objectmode = 0;
-    int interpmode = 0;
 
-    if (!PyArg_ParseTuple(args, "OO|ii", &sigtup,
-                          &cfunc, &objectmode, &interpmode)) {
+    if (!PyArg_ParseTuple(args, "OO|i", &sigtup,
+                          &cfunc, &objectmode)) {
         return NULL;
     }
 
-    if (!interpmode && !PyObject_TypeCheck(cfunc, &PyCFunction_Type) ) {
+    if (!PyObject_TypeCheck(cfunc, &PyCFunction_Type) ) {
         PyErr_SetString(PyExc_TypeError, "must be builtin_function_or_method");
         return NULL;
     }
@@ -203,23 +200,13 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
         sig[i] = PyLong_AsLong(PySequence_Fast_GET_ITEM(sigtup, i));
     }
 
-    if (!interpmode) {
-        /* The reference to cfunc is borrowed; this only works because the
-           derived Python class also stores an (owned) reference to cfunc. */
-        dispatcher_add_defn(self->dispatcher, sig, (void*) cfunc);
+    /* The reference to cfunc is borrowed; this only works because the
+       derived Python class also stores an (owned) reference to cfunc. */
+    dispatcher_add_defn(self->dispatcher, sig, (void*) cfunc);
 
-        /* Add first definition */
-        if (!self->firstdef) {
-            self->firstdef = cfunc;
-        }
-    }
     /* Add pure python fallback */
     if (!self->fallbackdef && objectmode){
         self->fallbackdef = cfunc;
-    }
-    /* Add interpeter fallback */
-    if (!self->interpdef && interpmode) {
-        self->interpdef = cfunc;
     }
 
     free(sig);
@@ -294,10 +281,12 @@ call_cfunc(DispatcherObject *self, PyObject *cfunc, PyObject *args, PyObject *kw
 {
     PyCFunctionWithKeywords fn;
     PyThreadState *tstate;
+
     assert(PyCFunction_Check(cfunc));
     assert(PyCFunction_GET_FLAGS(cfunc) == METH_VARARGS | METH_KEYWORDS);
     fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
     tstate = PyThreadState_GET();
+
     if (tstate->use_tracing && tstate->c_profilefunc)
     {
         /*
@@ -325,17 +314,20 @@ call_cfunc(DispatcherObject *self, PyObject *cfunc, PyObject *args, PyObject *kw
         if (PyDict_SetItemString(globals, "__builtins__", builtins)) {
             goto error;
         }
-        frame = PyFrame_New(tstate, code, globals, NULL);
+
+        /* unset the CO_OPTIMIZED flag, make the frame get a new locals dict */
+        code->co_flags &= 0xFFFE;
+
+        frame = PyFrame_New(tstate, code, globals, locals);
         if (frame == NULL) {
             goto error;
         }
         /* Populate the 'fast locals' in `frame` */
-        Py_XDECREF(frame->f_locals);
-        frame->f_locals = locals;
-        Py_XINCREF(frame->f_locals);
         PyFrame_LocalsToFast(frame, 0);
         tstate->frame = frame;
         C_TRACE(result, fn(PyCFunction_GET_SELF(cfunc), args, kws));
+        /* write changes back to locals? */
+        PyFrame_FastToLocals(frame);
         tstate->frame = frame->f_back;
 
     error:
@@ -496,7 +488,7 @@ static PyObject*
 Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
 {
     PyObject *tmptype, *retval = NULL;
-    int *tys;
+    int *tys = NULL;
     int argct;
     int i;
     int prealloc[24];
@@ -504,8 +496,12 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     PyObject *cfunc;
     PyThreadState *ts = PyThreadState_Get();
     PyObject *locals = NULL;
-    if (ts->use_tracing && ts->c_profilefunc)
+    if (ts->use_tracing && ts->c_profilefunc) {
         locals = PyEval_GetLocals();
+        if (locals == NULL) {
+            goto CLEANUP;
+        }
+    }
     if (self->fold_args) {
         if (find_named_args(self, &args, &kws))
             return NULL;
@@ -536,12 +532,12 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
 
     /* If compilation is enabled, ensure that an exact match is found and if
      * not compile one */
-    self->exact_match_required |= self->can_compile;
+    int exact_match_required = self->can_compile ? 1 : self->exact_match_required;
 
     /* We only allow unsafe conversions if compilation of new specializations
        has been disabled. */
     cfunc = dispatcher_resolve(self->dispatcher, tys, &matches,
-                               !self->can_compile, self->exact_match_required);
+                               !self->can_compile, exact_match_required);
 
     if (matches == 0 && !self->can_compile) {
         /*
@@ -558,7 +554,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
             /* Retry with the newly registered conversions */
             cfunc = dispatcher_resolve(self->dispatcher, tys, &matches,
                                        !self->can_compile,
-                                       self->exact_match_required);
+                                       exact_match_required);
         }
     }
 
@@ -602,18 +598,13 @@ static PyMethodDef Dispatcher_methods[] = {
 };
 
 static PyMemberDef Dispatcher_members[] = {
-    {"_can_compile", T_BOOL, offsetof(DispatcherObject, can_compile), 0},
+    {"_can_compile", T_BOOL, offsetof(DispatcherObject, can_compile), 0, NULL },
     {NULL}  /* Sentinel */
 };
 
 
 static PyTypeObject DispatcherType = {
-#if (PY_MAJOR_VERSION < 3)
-    PyObject_HEAD_INIT(NULL)
-    0,                                           /* ob_size */
-#else
     PyVarObject_HEAD_INIT(NULL, 0)
-#endif
     "_dispatcher.Dispatcher",                    /* tp_name */
     sizeof(DispatcherObject),                    /* tp_basicsize */
     0,                                           /* tp_itemsize */
@@ -651,6 +642,20 @@ static PyTypeObject DispatcherType = {
     (initproc)Dispatcher_init,                   /* tp_init */
     0,                                           /* tp_alloc */
     0,                                           /* tp_new */
+    0,                                           /* tp_free */
+    0,                                           /* tp_is_gc */
+    0,                                           /* tp_bases */
+    0,                                           /* tp_mro */
+    0,                                           /* tp_cache */
+    0,                                           /* tp_subclasses */
+    0,                                           /* tp_weaklist */
+    0,                                           /* tp_del */
+    0,                                           /* tp_version_tag */
+    0,                                           /* tp_finalize */
+#if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION > 7
+    0,                                           /* tp_vectorcall */
+    0,                                           /* tp_print */
+#endif
 };
 
 

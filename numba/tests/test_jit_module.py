@@ -1,4 +1,3 @@
-
 import os
 import sys
 import shutil
@@ -8,11 +7,11 @@ import contextlib
 import uuid
 import numpy as np
 import logging
+from io import StringIO
 
-import numba.unittest_support as unittest
-from numba import dispatcher
-from numba.utils import StringIO
+import unittest
 from numba.tests.support import temp_directory, SerialMixin
+from numba.core import dispatcher
 
 
 @contextlib.contextmanager
@@ -129,6 +128,7 @@ jit_module({jit_options})
         jit_options = {"nopython": True,
                        "nogil": False,
                        "error_model": "numpy",
+                       "boundscheck": False,
                        }
         with self.create_temp_jitted_module(**jit_options) as test_module:
             self.assertEqual(test_module.inc.targetoptions, jit_options)
@@ -148,16 +148,18 @@ jit_module({jit_options})
 """
         jit_options = {"nopython": True,
                        "error_model": "numpy",
+                       "boundscheck": False,
                        }
         with self.create_temp_jitted_module(source_lines=source_lines,
                                             **jit_options) as test_module:
             self.assertEqual(test_module.add.targetoptions, jit_options)
             # Test that manual jit-wrapping overrides jit_module options
             self.assertEqual(test_module.inc.targetoptions,
-                             {'nogil': True, 'forceobj': True})
+                             {'nogil': True, 'forceobj': True,
+                              'boundscheck': None})
 
     def test_jit_module_logging_output(self):
-        logger = logging.getLogger('numba.decorators')
+        logger = logging.getLogger('numba.core.decorators')
         logger.setLevel(logging.DEBUG)
         jit_options = {"nopython": True,
                        "error_model": "numpy",
@@ -171,7 +173,7 @@ jit_module({jit_options})
                 self.assertTrue(all(i in logs for i in expected))
 
     def test_jit_module_logging_level(self):
-        logger = logging.getLogger('numba.decorators')
+        logger = logging.getLogger('numba.core.decorators')
         # Test there's no logging for INFO level
         logger.setLevel(logging.INFO)
         with captured_logs(logger) as logs:

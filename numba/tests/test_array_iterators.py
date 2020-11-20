@@ -1,13 +1,12 @@
-from __future__ import division
-
 import itertools
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba import jit, typeof, types
-from numba.compiler import compile_isolated
-from .support import TestCase, CompilationCache, MemoryLeakMixin, tag
+from numba import jit, typeof
+from numba.core import types
+from numba.core.compiler import compile_isolated
+from numba.tests.support import TestCase, CompilationCache, MemoryLeakMixin, tag
+import unittest
 
 
 def array_iter(arr):
@@ -15,6 +14,9 @@ def array_iter(arr):
     for i, v in enumerate(arr):
         total += i * v
     return total
+
+def array_iter_items(arr):
+    return list(iter(arr))
 
 def array_view_iter(arr, idx):
     total = 0
@@ -125,8 +127,15 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         super(TestArrayIterators, self).setUp()
         self.ccache = CompilationCache()
 
-    def check_array_iter(self, arr):
+    def check_array_iter_1d(self, arr):
         pyfunc = array_iter
+        cres = compile_isolated(pyfunc, [typeof(arr)])
+        cfunc = cres.entry_point
+        expected = pyfunc(arr)
+        self.assertPreciseEqual(cfunc(arr), expected)
+
+    def check_array_iter_items(self, arr):
+        pyfunc = array_iter_items
         cres = compile_isolated(pyfunc, [typeof(arr)])
         cfunc = cres.entry_point
         expected = pyfunc(arr)
@@ -164,17 +173,75 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
     def check_array_ndenumerate_sum(self, arr, arrty):
         self.check_array_unary(arr, arrty, array_ndenumerate_sum)
 
-    @tag('important')
     def test_array_iter(self):
-        # Test iterating over a 1d array
+        # Test iterating over arrays
         arr = np.arange(6)
-        self.check_array_iter(arr)
+        self.check_array_iter_1d(arr)
+        self.check_array_iter_items(arr)
         arr = arr[::2]
         self.assertFalse(arr.flags.c_contiguous)
         self.assertFalse(arr.flags.f_contiguous)
-        self.check_array_iter(arr)
+        self.check_array_iter_1d(arr)
+        self.check_array_iter_items(arr)
         arr = np.bool_([1, 0, 0, 1])
-        self.check_array_iter(arr)
+        self.check_array_iter_1d(arr)
+        self.check_array_iter_items(arr)
+        arr = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+        self.check_array_iter_items(arr)
+        self.check_array_iter_items(arr.T)
+
+    def test_array_iter_yielded_order(self):
+        # See issue #5692
+        @jit(nopython=True)
+        def foo(arr):
+            t = []
+            for y1 in arr:
+                for y2 in y1:
+                    t.append(y2.ravel())
+            return t
+
+        # 'F' ordered
+        arr = np.arange(24).reshape((2, 3, 4), order='F')
+        expected = foo.py_func(arr)
+        got = foo(arr)
+        self.assertPreciseEqual(expected, got)
+
+        # 'A' ordered, outer strided
+        arr = np.arange(64).reshape((4, 8, 2), order='F')[::2, :, :]
+        expected = foo.py_func(arr)
+        got = foo(arr)
+        self.assertPreciseEqual(expected, got)
+
+        # 'A' ordered, middle strided
+        arr = np.arange(64).reshape((4, 8, 2), order='F')[:, ::2, :]
+        expected = foo.py_func(arr)
+        got = foo(arr)
+        self.assertPreciseEqual(expected, got)
+
+        # 'A' ordered, inner strided
+        arr = np.arange(64).reshape((4, 8, 2), order='F')[:, :, ::2]
+        expected = foo.py_func(arr)
+        got = foo(arr)
+        self.assertPreciseEqual(expected, got)
+
+        @jit(nopython=True)
+        def flag_check(arr):
+            out = []
+            for sub in arr:
+                out.append((sub, sub.flags.c_contiguous,
+                            sub.flags.f_contiguous))
+            return out
+
+        arr = np.arange(10).reshape((2, 5), order='F')
+        expected = flag_check.py_func(arr)
+        got = flag_check(arr)
+
+        self.assertEqual(len(expected), len(got))
+        ex_arr, e_flag_c, e_flag_f = expected[0]
+        go_arr, g_flag_c, g_flag_f = got[0]
+        np.testing.assert_allclose(ex_arr, go_arr)
+        self.assertEqual(e_flag_c, g_flag_c)
+        self.assertEqual(e_flag_f, g_flag_f)
 
     def test_array_view_iter(self):
         # Test iterating over a 1d view over a 2d array
@@ -186,7 +253,6 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         arr = np.bool_([1, 0, 0, 1]).reshape((2, 2))
         self.check_array_view_iter(arr, 1)
 
-    @tag('important')
     def test_array_flat_3d(self):
         arr = np.arange(24).reshape(4, 2, 3)
 
@@ -317,7 +383,6 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         self.assertTrue(got.sum())
         self.assertPreciseEqual(expect, got)
 
-    @tag('important')
     def test_array_ndenumerate_2d(self):
         arr = np.arange(12).reshape(4, 3)
         arrty = typeof(arr)
@@ -378,7 +443,6 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(cfunc(0, 3), func(0, 3))
         self.assertPreciseEqual(cfunc(0, 0), func(0, 0))
 
-    @tag('important')
     def test_np_ndindex_array(self):
         func = np_ndindex_array
         arr = np.arange(12, dtype=np.int32) + 10
@@ -394,7 +458,6 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         cfunc = cres.entry_point
         self.assertPreciseEqual(cfunc(), func())
 
-    @tag('important')
     def test_iter_next(self):
         # This also checks memory management with iter() and next()
         func = iter_next
@@ -445,7 +508,6 @@ class TestNdIter(MemoryLeakMixin, TestCase):
             got = cfunc(a)
             self.check_result(got, expected)
 
-    @tag('important')
     def test_nditer2(self):
         pyfunc = np_nditer2
         cfunc = jit(nopython=True)(pyfunc)

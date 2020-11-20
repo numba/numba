@@ -1,16 +1,14 @@
-from __future__ import print_function, absolute_import, division
-
 import contextlib
 import gc
 import pickle
 import subprocess
 import sys
 
-from numba import unittest_support as unittest
-from numba.errors import TypingError
-from numba.targets import registry
-from .support import TestCase, tag
+from numba.core.errors import TypingError
+from numba.tests.support import TestCase, tag
 from .serialize_usecases import *
+import unittest
+from numba.core import registry
 
 
 class TestDispatcherPickling(TestCase):
@@ -47,20 +45,17 @@ class TestDispatcherPickling(TestCase):
             new_func = pickle.loads(pickled)
             check_result(new_func)
 
-    @tag('important')
     def test_call_with_sig(self):
         self.run_with_protocols(self.check_call, add_with_sig, 5, (1, 4))
         # Compilation has been disabled => float inputs will be coerced to int
         self.run_with_protocols(self.check_call, add_with_sig, 5, (1.2, 4.2))
 
-    @tag('important')
     def test_call_without_sig(self):
         self.run_with_protocols(self.check_call, add_without_sig, 5, (1, 4))
         self.run_with_protocols(self.check_call, add_without_sig, 5.5, (1.2, 4.3))
         # Object mode is enabled
         self.run_with_protocols(self.check_call, add_without_sig, "abc", ("a", "bc"))
 
-    @tag('important')
     def test_call_nopython(self):
         self.run_with_protocols(self.check_call, add_nopython, 5.5, (1.2, 4.3))
         # Object mode is disabled
@@ -116,7 +111,6 @@ class TestDispatcherPickling(TestCase):
         self.run_with_protocols(self.check_call, generated_add,
                                 1j + 7, (1j, 2))
 
-    @tag('important')
     def test_other_process(self):
         """
         Check that reconstructing doesn't depend on resources already
@@ -134,7 +128,6 @@ class TestDispatcherPickling(TestCase):
             """.format(**locals())
         subprocess.check_call([sys.executable, "-c", code])
 
-    @tag('important')
     def test_reuse(self):
         """
         Check that deserializing the same function multiple times re-uses
@@ -192,6 +185,24 @@ class TestDispatcherPickling(TestCase):
                     assert "the imp module is deprecated" not in x.msg
         """
         subprocess.check_call([sys.executable, "-c", code])
+
+
+class TestSerializationMisc(TestCase):
+    def test_numba_unpickle(self):
+        # Test that _numba_unpickle is memorizing its output
+        from numba.core.serialize import _numba_unpickle
+
+        random_obj = object()
+        bytebuf = pickle.dumps(random_obj)
+        hashed = hash(random_obj)
+
+        got1 = _numba_unpickle(id(random_obj), bytebuf, hashed)
+        # not the original object
+        self.assertIsNot(got1, random_obj)
+        got2 = _numba_unpickle(id(random_obj), bytebuf, hashed)
+        # unpickled results are the same objects
+        self.assertIs(got1, got2)
+
 
 if __name__ == '__main__':
     unittest.main()

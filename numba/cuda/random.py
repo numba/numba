@@ -1,8 +1,7 @@
-from __future__ import print_function, absolute_import
 import math
 
-from numba import cuda, float32, float64, uint32, int64, uint64, from_dtype,\
-                  jit
+from numba import (cuda, float32, float64, uint32, int64, uint64, from_dtype,
+                   jit)
 
 import numpy as np
 
@@ -30,7 +29,8 @@ import numpy as np
 # using the CPU @jit decorator everywhere to create functions that work as
 # both CPU and CUDA device functions.
 
-xoroshiro128p_dtype = np.dtype([('s0', np.uint64), ('s1', np.uint64)], align=True)
+xoroshiro128p_dtype = np.dtype([('s0', np.uint64), ('s1', np.uint64)],
+                               align=True)
 xoroshiro128p_type = from_dtype(xoroshiro128p_dtype)
 
 
@@ -90,9 +90,6 @@ def xoroshiro128p_next(states, index):
     return result
 
 
-XOROSHIRO128P_JUMP = (uint64(0xbeac0467eba5facb), uint64(0xd86b048b86aa9922))
-
-
 @jit
 def xoroshiro128p_jump(states, index):
     '''Advance the RNG in ``states[index]`` by 2**64 steps.
@@ -104,12 +101,14 @@ def xoroshiro128p_jump(states, index):
     '''
     index = int64(index)
 
+    jump = (uint64(0xbeac0467eba5facb), uint64(0xd86b048b86aa9922))
+
     s0 = uint64(0)
     s1 = uint64(0)
 
     for i in range(2):
         for b in range(64):
-            if XOROSHIRO128P_JUMP[i] & (uint64(1) << uint32(b)):
+            if jump[i] & (uint64(1) << uint32(b)):
                 s0 ^= states[index]['s0']
                 s1 ^= states[index]['s1']
             xoroshiro128p_next(states, index)
@@ -184,7 +183,8 @@ def xoroshiro128p_normal_float32(states, index):
 
     z0 = math.sqrt(-float32(2.0) * math.log(u1)) * math.cos(TWO_PI_FLOAT32 * u2)
     # discarding second normal value
-    # z1 = math.sqrt(-float32(2.0) * math.log(u1)) * math.sin(TWO_PI_FLOAT32 * u2)
+    # z1 = math.sqrt(-float32(2.0) * math.log(u1))
+    #                * math.sin(TWO_PI_FLOAT32 * u2)
     return z0
 
 
@@ -208,7 +208,8 @@ def xoroshiro128p_normal_float64(states, index):
 
     z0 = math.sqrt(-float64(2.0) * math.log(u1)) * math.cos(TWO_PI_FLOAT64 * u2)
     # discarding second normal value
-    # z1 = math.sqrt(-float64(2.0) * math.log(u1)) * math.sin(TWO_PI_FLOAT64 * u2)
+    # z1 = math.sqrt(-float64(2.0) * math.log(u1))
+    #                * math.sin(TWO_PI_FLOAT64 * u2)
     return z0
 
 
@@ -234,7 +235,7 @@ def init_xoroshiro128p_states_cpu(states, seed, subsequence_start):
 def init_xoroshiro128p_states(states, seed, subsequence_start=0, stream=0):
     '''Initialize RNG states on the GPU for parallel generators.
 
-    This intializes the RNG states so that each state in the array corresponds
+    This initializes the RNG states so that each state in the array corresponds
     subsequences in the separated by 2**64 steps from each other in the main
     sequence.  Therefore, as long no CUDA thread requests more than 2**64
     random numbers, all of the RNG states produced by this function are
@@ -259,7 +260,7 @@ def init_xoroshiro128p_states(states, seed, subsequence_start=0, stream=0):
 def create_xoroshiro128p_states(n, seed, subsequence_start=0, stream=0):
     '''Returns a new device array initialized for n random number generators.
 
-    This intializes the RNG states so that each state in the array corresponds
+    This initializes the RNG states so that each state in the array corresponds
     subsequences in the separated by 2**64 steps from each other in the main
     sequence.  Therefore, as long no CUDA thread requests more than 2**64
     random numbers, all of the RNG states produced by this function are

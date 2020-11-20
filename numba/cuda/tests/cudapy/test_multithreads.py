@@ -3,8 +3,9 @@ import threading
 import multiprocessing
 import numpy as np
 from numba import cuda
-from numba import unittest_support as unittest
-from numba.cuda.testing import skip_on_cudasim, SerialMixin
+from numba.cuda.testing import (skip_on_cudasim, skip_under_cuda_memcheck,
+                                CUDATestCase)
+import unittest
 
 try:
     from concurrent.futures import ThreadPoolExecutor
@@ -23,7 +24,7 @@ def check_concurrent_compiling():
         x[0] += 1
 
     def use_foo(x):
-        foo(x)
+        foo[1, 1](x)
         return x
 
     arrays = [np.arange(10) for i in range(10)]
@@ -37,15 +38,17 @@ def check_concurrent_compiling():
 def spawn_process_entry(q):
     try:
         check_concurrent_compiling()
-    except:
+    # Catch anything that goes wrong in the threads
+    except:  # noqa: E722
         msg = traceback.format_exc()
         q.put('\n'.join(['', '=' * 80, msg]))
     else:
         q.put(None)
 
 
+@skip_under_cuda_memcheck('Hangs cuda-memcheck')
 @skip_on_cudasim('disabled for cudasim')
-class TestMultiThreadCompiling(SerialMixin, unittest.TestCase):
+class TestMultiThreadCompiling(CUDATestCase):
 
     @unittest.skipIf(not has_concurrent_futures, "no concurrent.futures")
     def test_concurrent_compiling(self):

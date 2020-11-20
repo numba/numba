@@ -1,5 +1,3 @@
-from __future__ import division, print_function
-
 import contextlib
 import gc
 from itertools import product, cycle
@@ -10,22 +8,12 @@ import platform
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba import jit, errors
-from numba.numpy_support import version as numpy_version
-from .support import TestCase, tag
-from .matmul_usecase import matmul_usecase, needs_matmul, needs_blas
-
-_is_armv7l = platform.machine() == 'armv7l'
-
-try:
-    import scipy.linalg.cython_lapack
-    has_lapack = True
-except ImportError:
-    has_lapack = False
-
-needs_lapack = unittest.skipUnless(has_lapack,
-                                   "LAPACK needs Scipy 0.16+")
+from numba import jit, njit, typeof
+from numba.core import errors
+from numba.tests.support import (TestCase, tag, needs_lapack, needs_blas,
+                                 _is_armv7l)
+from .matmul_usecase import matmul_usecase
+import unittest
 
 
 def dot2(a, b):
@@ -131,7 +119,6 @@ class TestProduct(TestCase):
                       % (func_name,),
                       str(raises.exception))
 
-    @needs_blas
     def check_dot_vv(self, pyfunc, func_name):
         n = 3
         cfunc = jit(nopython=True)(pyfunc)
@@ -151,21 +138,21 @@ class TestProduct(TestCase):
         b = self.sample_vector(n, np.float64)
         self.assert_mismatching_dtypes(cfunc, (a, b), func_name=func_name)
 
+    @needs_blas
     def test_dot_vv(self):
         """
         Test vector * vector np.dot()
         """
         self.check_dot_vv(dot2, "np.dot()")
 
+    @needs_blas
     def test_vdot(self):
         """
         Test np.vdot()
         """
         self.check_dot_vv(vdot, "np.vdot()")
 
-    @needs_blas
     def check_dot_vm(self, pyfunc2, pyfunc3, func_name):
-        m, n = 2, 3
 
         def samples(m, n):
             for order in 'CF':
@@ -182,16 +169,22 @@ class TestProduct(TestCase):
         cfunc2 = jit(nopython=True)(pyfunc2)
         if pyfunc3 is not None:
             cfunc3 = jit(nopython=True)(pyfunc3)
-        for a, b in samples(m, n):
-            self.check_func(pyfunc2, cfunc2, (a, b))
-            self.check_func(pyfunc2, cfunc2, (b, a.T))
-        if pyfunc3 is not None:
+
+        for m, n in [(2, 3),
+                     (3, 0),
+                     (0, 3)
+                     ]:
             for a, b in samples(m, n):
-                out = np.empty(m, dtype=a.dtype)
-                self.check_func_out(pyfunc3, cfunc3, (a, b), out)
-                self.check_func_out(pyfunc3, cfunc3, (b, a.T), out)
+                self.check_func(pyfunc2, cfunc2, (a, b))
+                self.check_func(pyfunc2, cfunc2, (b, a.T))
+            if pyfunc3 is not None:
+                for a, b in samples(m, n):
+                    out = np.empty(m, dtype=a.dtype)
+                    self.check_func_out(pyfunc3, cfunc3, (a, b), out)
+                    self.check_func_out(pyfunc3, cfunc3, (b, a.T), out)
 
         # Mismatching sizes
+        m, n = 2, 3
         a = self.sample_matrix(m, n - 1, np.float64)
         b = self.sample_vector(n, np.float64)
         self.assert_mismatching_sizes(cfunc2, (a, b))
@@ -215,13 +208,13 @@ class TestProduct(TestCase):
             out = np.empty(m, np.float32)
             self.assert_mismatching_dtypes(cfunc3, (a, b, out), func_name)
 
+    @needs_blas
     def test_dot_vm(self):
         """
         Test vector * matrix and matrix * vector np.dot()
         """
         self.check_dot_vm(dot2, dot3, "np.dot()")
 
-    @needs_blas
     def check_dot_mm(self, pyfunc2, pyfunc3, func_name):
 
         def samples(m, n, k):
@@ -242,10 +235,15 @@ class TestProduct(TestCase):
 
         # Test generic matrix * matrix as well as "degenerate" cases
         # where one of the outer dimensions is 1 (i.e. really represents
-        # a vector, which may select a different implementation)
+        # a vector, which may select a different implementation),
+        # one of the matrices is empty, or both matrices are empty.
         for m, n, k in [(2, 3, 4),  # Generic matrix * matrix
                         (1, 3, 4),  # 2d vector * matrix
                         (1, 1, 4),  # 2d vector * 2d vector
+                        (0, 3, 2),  # Empty matrix * matrix, empty output
+                        (3, 0, 2),  # Matrix * empty matrix, empty output
+                        (0, 0, 3),  # Both arguments empty, empty output
+                        (3, 2, 0),  # Both arguments empty, nonempty output
                         ]:
             for a, b in samples(m, n, k):
                 self.check_func(pyfunc2, cfunc2, (a, b))
@@ -279,28 +277,28 @@ class TestProduct(TestCase):
             out = np.empty((m, n), np.float32)
             self.assert_mismatching_dtypes(cfunc3, (a, b, out), func_name)
 
-    @tag('important')
+    @needs_blas
     def test_dot_mm(self):
         """
         Test matrix * matrix np.dot()
         """
         self.check_dot_mm(dot2, dot3, "np.dot()")
 
-    @needs_matmul
+    @needs_blas
     def test_matmul_vv(self):
         """
         Test vector @ vector
         """
         self.check_dot_vv(matmul_usecase, "'@'")
 
-    @needs_matmul
+    @needs_blas
     def test_matmul_vm(self):
         """
         Test vector @ matrix and matrix @ vector
         """
         self.check_dot_vm(matmul_usecase, None, "'@'")
 
-    @needs_matmul
+    @needs_blas
     def test_matmul_mm(self):
         """
         Test matrix @ matrix
@@ -408,12 +406,8 @@ def trace_matrix_no_offset(a):
     return np.trace(a)
 
 
-if numpy_version >= (1, 9):
-    def outer_matrix(a, b, out=None):
-        return np.outer(a, b, out=out)
-else:
-    def outer_matrix(a, b):
-        return np.outer(a, b)
+def outer_matrix(a, b, out=None):
+    return np.outer(a, b, out=out)
 
 
 def kron_matrix(a, b):
@@ -524,20 +518,6 @@ class TestLinalgBase(TestCase):
             Q = np.array(Q, dtype=dtype, order=order)  # sort out order/type
 
         return Q
-
-    def shape_with_0_input(self, *args):
-        """
-        returns True if an input argument has a dimension that is zero
-        and Numpy version is < 1.13, else False. This is due to behaviour
-        changes in handling dimension zero arrays:
-        https://github.com/numpy/numpy/issues/10573
-        """
-        if numpy_version < (1, 13):
-            for x in args:
-                if isinstance(x, np.ndarray):
-                    if 0 in x.shape:
-                        return True
-        return False
 
     def assert_error(self, cfunc, args, msg, err=ValueError):
         with self.assertRaises(err) as raises:
@@ -741,7 +721,6 @@ class TestLinalgInv(TestLinalgBase):
     Tests for np.linalg.inv.
     """
 
-    @tag('important')
     @needs_lapack
     def test_linalg_inv(self):
         """
@@ -793,6 +772,30 @@ class TestLinalgInv(TestLinalgBase):
         # Singular matrix
         self.assert_raise_on_singular(cfunc, (np.zeros((2, 2)),))
 
+    @needs_lapack
+    def test_no_input_mutation(self):
+        X = np.array([[1., 3, 2, 7,],
+                      [-5, 4, 2, 3,],
+                      [9, -3, 1, 1,],
+                      [2, -2, 2, 8,]], order='F')
+
+        X_orig = np.copy(X)
+
+        @jit(nopython=True)
+        def ainv(X, test):
+            if test:
+                # not executed, but necessary to trigger A ordering in X
+                X = X[1:2, :]
+            return np.linalg.inv(X)
+
+        expected = ainv.py_func(X, False)
+        np.testing.assert_allclose(X, X_orig)
+
+        got = ainv(X, False)
+        np.testing.assert_allclose(X, X_orig)
+
+        np.testing.assert_allclose(expected, got)
+
 
 class TestLinalgCholesky(TestLinalgBase):
     """
@@ -824,11 +827,6 @@ class TestLinalgCholesky(TestLinalgBase):
         cfunc = jit(nopython=True)(cholesky_matrix)
 
         def check(a):
-            if self.shape_with_0_input(a):
-                # has shape with 0 on input, numpy will fail,
-                # just make sure Numba runs without error
-                cfunc(a)
-                return
             expected = cholesky_matrix(a)
             got = cfunc(a)
             use_reconstruction = False
@@ -902,22 +900,12 @@ class TestLinalgEigenSystems(TestLinalgBase):
         msg = name + "() argument must not cause a domain change."
         self.assert_error(cfunc, args, msg)
 
-    def checker_for_linalg_eig(
-            self, name, func, expected_res_len, check_for_domain_change=None):
-        """
-        Test np.linalg.eig
-        """
-        n = 10
-        cfunc = jit(nopython=True)(func)
-
-        def check(a):
-            if self.shape_with_0_input(a):
-                # has shape with 0 on input, numpy will fail,
-                # just make sure Numba runs without error
-                cfunc(a)
-                return
-            expected = func(a)
-            got = cfunc(a)
+    def _check_worker(self, cfunc, name, expected_res_len,
+                      check_for_domain_change):
+        def check(*args):
+            expected = cfunc.py_func(*args)
+            got = cfunc(*args)
+            a = args[0]
             # check that the returned tuple is same length
             self.assertEqual(len(expected), len(got))
             # and that dimension is correct
@@ -965,7 +953,7 @@ class TestLinalgEigenSystems(TestLinalgBase):
                     if name[-1] == 'h':
                         idxl = np.nonzero(np.eye(a.shape[0], a.shape[1], -1))
                         idxu = np.nonzero(np.eye(a.shape[0], a.shape[1], 1))
-                        cfunc(a)
+                        cfunc(*args)
                         # upper idx must match lower for default uplo="L"
                         # if complex, conjugate
                         a[idxu] = np.conj(a[idxl])
@@ -1005,7 +993,19 @@ class TestLinalgEigenSystems(TestLinalgBase):
 
             # Ensure proper resource management
             with self.assertNoNRTLeak():
-                cfunc(a)
+                cfunc(*args)
+        return check
+
+    def checker_for_linalg_eig(
+            self, name, func, expected_res_len, check_for_domain_change=None):
+        """
+        Test np.linalg.eig
+        """
+        n = 10
+        cfunc = jit(nopython=True)(func)
+        check = self._check_worker(cfunc, name, expected_res_len,
+                                   check_for_domain_change)
+
 
         # The main test loop
         for dtype, order in product(self.dtypes, 'FC'):
@@ -1073,6 +1073,48 @@ class TestLinalgEigenSystems(TestLinalgBase):
     @needs_lapack
     def test_linalg_eigvalsh(self):
         self.checker_for_linalg_eig("eigvalsh", eigvalsh_matrix, 1, False)
+
+    @needs_lapack
+    def test_no_input_mutation(self):
+        # checks inputs are not mutated
+
+        for c in (('eig', 2, True),
+                  ('eigvals', 1, True),
+                  ('eigh', 2, False),
+                  ('eigvalsh', 1, False)):
+
+            m, nout, domain_change = c
+
+            meth = getattr(np.linalg, m)
+
+            @jit(nopython=True)
+            def func(X, test):
+                if test:
+                    # not executed, but necessary to trigger A ordering in X
+                    X = X[1:2, :]
+                return meth(X)
+
+            check = self._check_worker(func, m, nout, domain_change)
+
+            for dtype in (np.float64, np.complex128):
+                with self.subTest(meth=meth, dtype=dtype):
+                    # trivial system, doesn't matter, just checking if it gets
+                    # mutated
+                    X = np.array([[10., 1, 0, 1],
+                                [1, 9, 0, 0],
+                                [0, 0, 8, 0],
+                                [1, 0, 0, 7],
+                                ], order='F', dtype=dtype)
+
+                    X_orig = np.copy(X)
+
+                    expected = func.py_func(X, False)
+                    np.testing.assert_allclose(X, X_orig)
+
+                    got = func(X, False)
+                    np.testing.assert_allclose(X, X_orig)
+
+                    check(X, False)
 
 
 class TestLinalgSvd(TestLinalgBase):
@@ -1174,6 +1216,31 @@ class TestLinalgSvd(TestLinalgBase):
             args = (np.empty(sz), True)
             self.assert_raise_on_empty(cfunc, args)
 
+    @needs_lapack
+    def test_no_input_mutation(self):
+        X = np.array([[1., 3, 2, 7,],
+                      [-5, 4, 2, 3,],
+                      [9, -3, 1, 1,],
+                      [2, -2, 2, 8,]], order='F')
+
+        X_orig = np.copy(X)
+
+        @jit(nopython=True)
+        def func(X, test):
+            if test:
+                # not executed, but necessary to trigger A ordering in X
+                X = X[1:2, :]
+            return np.linalg.svd(X)
+
+        expected = func.py_func(X, False)
+        np.testing.assert_allclose(X, X_orig)
+
+        got = func(X, False)
+        np.testing.assert_allclose(X, X_orig)
+
+        for e_a, g_a in zip(expected, got):
+            np.testing.assert_allclose(e_a, g_a)
+
 
 class TestLinalgQr(TestLinalgBase):
     """
@@ -1268,6 +1335,31 @@ class TestLinalgQr(TestLinalgBase):
         # empty
         for sz in [(0, 1), (1, 0), (0, 0)]:
             self.assert_raise_on_empty(cfunc, (np.empty(sz),))
+
+    @needs_lapack
+    def test_no_input_mutation(self):
+        X = np.array([[1., 3, 2, 7,],
+                      [-5, 4, 2, 3,],
+                      [9, -3, 1, 1,],
+                      [2, -2, 2, 8,]], order='F')
+
+        X_orig = np.copy(X)
+
+        @jit(nopython=True)
+        def func(X, test):
+            if test:
+                # not executed, but necessary to trigger A ordering in X
+                X = X[1:2, :]
+            return np.linalg.qr(X)
+
+        expected = func.py_func(X, False)
+        np.testing.assert_allclose(X, X_orig)
+
+        got = func(X, False)
+        np.testing.assert_allclose(X, X_orig)
+
+        for e_a, g_a in zip(expected, got):
+            np.testing.assert_allclose(e_a, g_a)
 
 
 class TestLinalgSystems(TestLinalgBase):
@@ -1484,8 +1576,8 @@ class TestLinalgLstsq(TestLinalgSystems):
         empties = [
         [(0, 1), (1,)], # empty A, valid b
         [(1, 0), (1,)], # empty A, valid b
-        [(1, 1), (0,)], # valid A, empty 1D b 
-        [(1, 1), (1, 0)],  # valid A, empty 2D b 
+        [(1, 1), (0,)], # valid A, empty 1D b
+        [(1, 1), (1, 0)],  # valid A, empty 2D b
         ]
 
         for A, b in empties:
@@ -1533,6 +1625,28 @@ class TestLinalgLstsq(TestLinalgSystems):
         bad2D = np.array([[1.], [2.], [3.]], dtype=np.float64)
         self.assert_dimensionally_invalid(cfunc, (ok, bad1D))
         self.assert_dimensionally_invalid(cfunc, (ok, bad2D))
+
+    @needs_lapack
+    def test_issue3368(self):
+        X = np.array([[1., 7.54, 6.52],
+                      [1., 2.70, 4.00],
+                      [1., 2.50, 3.80],
+                      [1., 1.15, 5.64],
+                      [1., 4.22, 3.27],
+                      [1., 1.41, 5.70],], order='F')
+
+        X_orig = np.copy(X)
+        y = np.array([1., 2., 3., 4., 5., 6.])
+
+        @jit(nopython=True)
+        def f2(X, y, test):
+            if test:
+                # never executed, but necessary to trigger the bug
+                X = X[1:2, :]
+            return np.linalg.lstsq(X, y)
+
+        f2(X, y, False)
+        np.testing.assert_allclose(X, X_orig)
 
 
 class TestLinalgSolve(TestLinalgSystems):
@@ -1657,6 +1771,34 @@ class TestLinalgSolve(TestLinalgSystems):
         bad2D = self.specific_sample_matrix((2, 2), np.float64, 'C', rank=1)
         self.assert_raise_on_singular(cfunc, (bad2D, ok))
 
+    @needs_lapack
+    def test_no_input_mutation(self):
+        X = np.array([[1., 1, 1, 1],
+                      [0., 1, 1, 1],
+                      [0., 0, 1, 1],
+                      [1., 0, 0, 1],], order='F')
+
+        X_orig = np.copy(X)
+        y = np.array([1., 2., 3., 4])
+        y_orig = np.copy(y)
+
+        @jit(nopython=True)
+        def func(X, y, test):
+            if test:
+                # not executed, triggers A order in X
+                X = X[1:2, :]
+            return np.linalg.solve(X, y)
+
+        expected = func.py_func(X, y, False)
+        np.testing.assert_allclose(X, X_orig)
+        np.testing.assert_allclose(y, y_orig)
+
+        got = func(X, y, False)
+        np.testing.assert_allclose(X, X_orig)
+        np.testing.assert_allclose(y, y_orig)
+
+        np.testing.assert_allclose(expected, got)
+
 
 class TestLinalgPinv(TestLinalgBase):
     """
@@ -1671,11 +1813,6 @@ class TestLinalgPinv(TestLinalgBase):
         cfunc = jit(nopython=True)(pinv_matrix)
 
         def check(a, **kwargs):
-            if self.shape_with_0_input(a):
-                # has shape with 0 on input, numpy will fail,
-                # just make sure Numba runs without error
-                cfunc(a, **kwargs)
-                return
             expected = pinv_matrix(a, **kwargs)
             got = cfunc(a, **kwargs)
 
@@ -1784,6 +1921,29 @@ class TestLinalgPinv(TestLinalgBase):
                                   (np.array([[1., 2., ], [np.inf, np.nan]],
                                             dtype=np.float64),))
 
+    @needs_lapack
+    def test_issue5870(self):
+        # testing for mutation of input matrix
+        @jit(nopython=True)
+        def some_fn(v):
+            return np.linalg.pinv(v[0])
+
+        v_data = np.array([[1., 3, 2, 7,],
+                           [-5, 4, 2, 3,],
+                           [9, -3, 1, 1,],
+                           [2, -2, 2, 8,]], order='F')
+
+        v_orig = np.copy(v_data)
+        reshaped_v = v_data.reshape((1, 4, 4))
+
+        expected = some_fn.py_func(reshaped_v)
+        np.testing.assert_allclose(v_data, v_orig)
+
+        got = some_fn(reshaped_v)
+        np.testing.assert_allclose(v_data, v_orig)
+
+        np.testing.assert_allclose(expected, got)
+
 
 class TestLinalgDetAndSlogdet(TestLinalgBase):
     """
@@ -1794,11 +1954,6 @@ class TestLinalgDetAndSlogdet(TestLinalgBase):
     """
 
     def check_det(self, cfunc, a, **kwargs):
-        if self.shape_with_0_input(a):
-            # has shape with 0 on input, numpy will fail,
-            # just make sure Numba runs without error
-            cfunc(a, **kwargs)
-            return
         expected = det_matrix(a, **kwargs)
         got = cfunc(a, **kwargs)
 
@@ -1812,11 +1967,6 @@ class TestLinalgDetAndSlogdet(TestLinalgBase):
             cfunc(a, **kwargs)
 
     def check_slogdet(self, cfunc, a, **kwargs):
-        if self.shape_with_0_input(a):
-            # has shape with 0 on input, numpy will fail,
-            # just make sure Numba runs without error
-            cfunc(a, **kwargs)
-            return
         expected = slogdet_matrix(a, **kwargs)
         got = cfunc(a, **kwargs)
 
@@ -1893,6 +2043,30 @@ class TestLinalgDetAndSlogdet(TestLinalgBase):
     def test_linalg_slogdet(self):
         cfunc = jit(nopython=True)(slogdet_matrix)
         self.do_test("slogdet", self.check_slogdet, cfunc)
+
+    @needs_lapack
+    def test_no_input_mutation(self):
+        X = np.array([[1., 3, 2, 7,],
+                      [-5, 4, 2, 3,],
+                      [9, -3, 1, 1,],
+                      [2, -2, 2, 8,]], order='F')
+
+        X_orig = np.copy(X)
+
+        @jit(nopython=True)
+        def func(X, test):
+            if test:
+                # not executed, but necessary to trigger A ordering in X
+                X = X[1:2, :]
+            return np.linalg.slogdet(X)
+
+        expected = func.py_func(X, False)
+        np.testing.assert_allclose(X, X_orig)
+
+        got = func(X, False)
+        np.testing.assert_allclose(X, X_orig)
+
+        np.testing.assert_allclose(expected, got)
 
 # Use TestLinalgSystems as a base to get access to additional
 # testing for 1 and 2D inputs.
@@ -2053,26 +2227,17 @@ class TestLinalgCond(TestLinalgBase):
             self.assert_raise_on_empty(cfunc, (np.empty(sz),))
 
         # singular systems to trip divide-by-zero
-        # only for np > 1.14, before this norm was computed via inversion which
-        # will fail with numpy.linalg.linalg.LinAlgError: Singular matrix
-        if numpy_version > (1, 14):
-            x = np.array([[1, 0], [0, 0]], dtype=np.float64)
-            check(x)
-            check(x, p=2)
-            x = np.array([[0, 0], [0, 0]], dtype=np.float64)
-            check(x, p=-2)
+        x = np.array([[1, 0], [0, 0]], dtype=np.float64)
+        check(x)
+        check(x, p=2)
+        x = np.array([[0, 0], [0, 0]], dtype=np.float64)
+        check(x, p=-2)
 
         # try an ill-conditioned system with 2-norm, make sure np raises an
         # overflow warning as the result is `+inf` and that the result from
         # numba matches.
         with warnings.catch_warnings():
             a = np.array([[1.e308, 0], [0, 0.1]], dtype=np.float64)
-            if numpy_version < (1, 15):
-                # overflow warning is silenced in np >= 1.15
-                warnings.simplefilter("error", RuntimeWarning)
-                self.assertRaisesRegexp(RuntimeWarning,
-                                        'overflow encountered in.*',
-                                        check, a)
             warnings.simplefilter("ignore", RuntimeWarning)
             check(a)
 
@@ -2201,6 +2366,34 @@ class TestLinalgMatrixRank(TestLinalgSystems):
         self.assert_no_nan_or_inf(cfunc,
                                   (np.array([[1., 2., ], [np.inf, np.nan]],
                                             dtype=np.float64),))
+
+    @needs_lapack
+    def test_no_input_mutation(self):
+        # this is here to test no input mutation by
+        # numba.np.linalg._compute_singular_values
+        # which is the workhorse for norm with 2d input, rank and cond.
+
+        X = np.array([[1., 3, 2, 7,],
+                      [-5, 4, 2, 3,],
+                      [9, -3, 1, 1,],
+                      [2, -2, 2, 8,]], order='F')
+
+        X_orig = np.copy(X)
+
+        @jit(nopython=True)
+        def func(X, test):
+            if test:
+                # not executed, but necessary to trigger A ordering in X
+                X = X[1:2, :]
+            return np.linalg.matrix_rank(X)
+
+        expected = func.py_func(X, False)
+        np.testing.assert_allclose(X, X_orig)
+
+        got = func(X, False)
+        np.testing.assert_allclose(X, X_orig)
+
+        np.testing.assert_allclose(expected, got)
 
 
 class TestLinalgMatrixPower(TestLinalgBase):
@@ -2415,14 +2608,14 @@ class TestBasics(TestLinalgSystems):  # TestLinalgSystems for 1d test
             with self.assertNoNRTLeak():
                 cfunc(a, b, **kwargs)
 
-        for size1, size2, dtype in \
-                product(self.sizes, self.sizes, self.dtypes):
+        dts = cycle(self.dtypes)
+        for size1, size2 in product(self.sizes, self.sizes):
+            dtype = next(dts)
             (a, b) = self._get_input(size1, size2, dtype)
             check(a, b)
-            if numpy_version >= (1, 9):
-                c = np.empty((np.asarray(a).size, np.asarray(b).size),
-                             dtype=np.asarray(a).dtype)
-                check(a, b, out=c)
+            c = np.empty((np.asarray(a).size, np.asarray(b).size),
+                            dtype=np.asarray(a).dtype)
+            check(a, b, out=c)
 
         self._assert_wrong_dim("outer", cfunc)
 
@@ -2452,6 +2645,47 @@ class TestBasics(TestLinalgSystems):  # TestLinalgSystems for 1d test
         msg = "only supports 'C' or 'F' layout"
         self.assert_error(cfunc, args, msg, err=errors.TypingError)
 
+
+class TestHelpers(TestCase):
+    def test_copy_to_fortran_order(self):
+        from numba.np.linalg import _copy_to_fortran_order
+
+        def check(udt, expectfn, shapes, dtypes, orders):
+            for shape, dtype, order in product(shapes, dtypes, orders):
+                a = np.arange(np.prod(shape)).reshape(shape, order=order)
+
+                r = udt(a)
+                # check correct operation
+                self.assertPreciseEqual(expectfn(a), r)
+                # check new copy has made
+                self.assertNotEqual(a.ctypes.data, r.ctypes.data)
+
+        @njit
+        def direct_call(a):
+            return _copy_to_fortran_order(a)
+
+        shapes = [(3, 4), (3, 2, 5)]
+        dtypes = [np.intp]
+        orders = ['C', 'F']
+        check(direct_call, np.asfortranarray, shapes, dtypes, orders)
+
+
+        @njit
+        def slice_to_any(a):
+            # make a 'any' layout slice
+            sliced = a[::2][0]
+            return _copy_to_fortran_order(sliced)
+
+        shapes = [(3, 3, 4), (3, 3, 2, 5)]
+        dtypes = [np.intp]
+        orders = ['C', 'F']
+
+        def expected_slice_to_any(a):
+            # make a 'any' layout slice
+            sliced = a[::2][0]
+            return np.asfortranarray(sliced)
+
+        check(slice_to_any, expected_slice_to_any, shapes, dtypes, orders)
 
 if __name__ == '__main__':
     unittest.main()

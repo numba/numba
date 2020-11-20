@@ -13,39 +13,29 @@
 #define NUMBA_EXPORT_FUNC(_rettype) VISIBILITY_HIDDEN _rettype
 #define NUMBA_EXPORT_DATA(_vartype) VISIBILITY_HIDDEN _vartype
 
+#define PYCC_COMPILING
+
 #include "../_helperlib.c"
 #include "../_dynfunc.c"
 
 #if PYCC_USE_NRT
-#include "../runtime/_nrt_python.c"
-#include "../runtime/nrt.h"
+#include "../core/runtime/_nrt_python.c"
+#include "../core/runtime/nrt.h"
 #endif
 
 
 /* NOTE: import_array() is macro, not a function.  It returns NULL on
-   failure on py3, but nothing on py2. */
-#if PY_MAJOR_VERSION >= 3
-    static void *
-    wrap_import_array(void) {
-        import_array();
-        return (void *) 1;
-    }
-#else
-    static void
-    wrap_import_array(void) {
-        import_array();
-    }
-#endif
+   failure */
+static void *
+wrap_import_array(void) {
+    import_array();
+    return (void *) 1;
+}
 
 
 static int
 init_numpy(void) {
-    #if PY_MAJOR_VERSION >= 3
-        return wrap_import_array() != NULL;
-    #else
-        wrap_import_array();
-        return 1;   /* always succeed */
-    #endif
+    return wrap_import_array() != NULL;
 }
 
 
@@ -71,6 +61,7 @@ extern void *nrt_atomic_add, *nrt_atomic_sub;
 typedef struct {
     const char *data;
     int len;
+    const char *hashbuf;
 } env_def_t;
 
 /* Environment GlobalVariable address type */
@@ -85,7 +76,7 @@ recreate_environment(PyObject *module, env_def_t env)
     EnvironmentObject *envobj;
     PyObject *env_consts;
 
-    env_consts = numba_unpickle(env.data, env.len);
+    env_consts = numba_unpickle(env.data, env.len, env.hashbuf);
     if (env_consts == NULL)
         return NULL;
     if (!PyList_Check(env_consts)) {

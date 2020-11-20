@@ -1,10 +1,8 @@
-from __future__ import print_function, absolute_import, division
-
+import itertools
 import numpy as np
 import re
-from numba import cuda, int32, float32
-from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
-from numba.utils import IS_PY3
+from numba import cuda
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 
 
 def simple_threadidx(ary):
@@ -85,6 +83,10 @@ def simple_round(ary, c):
     ary[0] = round(c)
 
 
+def simple_round_to(ary, c, ndigits):
+    ary[0] = round(c, ndigits)
+
+
 def branching_with_ifs(a, b, c):
     i = cuda.grid(1)
 
@@ -113,11 +115,11 @@ def simple_warpsize(ary):
     ary[0] = cuda.warpsize
 
 
-class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
+class TestCudaIntrinsic(CUDATestCase):
     def test_simple_threadidx(self):
         compiled = cuda.jit("void(int32[:])")(simple_threadidx)
         ary = np.ones(1, dtype=np.int32)
-        compiled(ary)
+        compiled[1, 1](ary)
         self.assertTrue(ary[0] == 0)
 
     def test_fill_threadidx(self):
@@ -179,8 +181,9 @@ class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
 
     @skip_on_cudasim('Tests PTX emission')
     def test_selp(self):
-        cu_branching_with_ifs = cuda.jit('void(i8[:], i8, i8[:])')(branching_with_ifs)
-        cu_branching_with_selps = cuda.jit('void(i8[:], i8, i8[:])')(branching_with_selps)
+        sig = 'void(i8[:], i8, i8[:])'
+        cu_branching_with_ifs = cuda.jit(sig)(branching_with_ifs)
+        cu_branching_with_selps = cuda.jit(sig)(branching_with_selps)
 
         n = 32
         b = 6
@@ -212,7 +215,7 @@ class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
         self.assertEqual(ary[1], nctaid[1] * ntid[1])
 
     def test_intrinsic_forloop_step(self):
-        compiled = cuda.jit("void(float32[:,::1])")(intrinsic_forloop_step)
+        compiled = cuda.jit("void(int32[:,::1])")(intrinsic_forloop_step)
         ntid = (4, 3)
         nctaid = (5, 6)
         shape = (ntid[0] * nctaid[0], ntid[1] * nctaid[1])
@@ -264,140 +267,236 @@ class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
     def test_popc_u4(self):
         compiled = cuda.jit("void(int32[:], uint32)")(simple_popc)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary, 0xF0)
+        compiled[1, 1](ary, 0xF0)
         self.assertEquals(ary[0], 4)
 
     def test_popc_u8(self):
         compiled = cuda.jit("void(int32[:], uint64)")(simple_popc)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary, 0xF00000000000)
+        compiled[1, 1](ary, 0xF00000000000)
         self.assertEquals(ary[0], 4)
 
     def test_fma_f4(self):
         compiled = cuda.jit("void(f4[:], f4, f4, f4)")(simple_fma)
         ary = np.zeros(1, dtype=np.float32)
-        compiled(ary, 2., 3., 4.)
+        compiled[1, 1](ary, 2., 3., 4.)
         np.testing.assert_allclose(ary[0], 2 * 3 + 4)
 
     def test_fma_f8(self):
         compiled = cuda.jit("void(f8[:], f8, f8, f8)")(simple_fma)
         ary = np.zeros(1, dtype=np.float64)
-        compiled(ary, 2., 3., 4.)
+        compiled[1, 1](ary, 2., 3., 4.)
         np.testing.assert_allclose(ary[0], 2 * 3 + 4)
 
     def test_brev_u4(self):
         compiled = cuda.jit("void(uint32[:], uint32)")(simple_brev)
         ary = np.zeros(1, dtype=np.uint32)
-        compiled(ary, 0x000030F0)
+        compiled[1, 1](ary, 0x000030F0)
         self.assertEquals(ary[0], 0x0F0C0000)
 
     @skip_on_cudasim('only get given a Python "int", assumes 32 bits')
     def test_brev_u8(self):
         compiled = cuda.jit("void(uint64[:], uint64)")(simple_brev)
         ary = np.zeros(1, dtype=np.uint64)
-        compiled(ary, 0x000030F0000030F0)
+        compiled[1, 1](ary, 0x000030F0000030F0)
         self.assertEquals(ary[0], 0x0F0C00000F0C0000)
 
     def test_clz_i4(self):
         compiled = cuda.jit("void(int32[:], int32)")(simple_clz)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary, 0x00100000)
+        compiled[1, 1](ary, 0x00100000)
         self.assertEquals(ary[0], 11)
 
     def test_clz_u4(self):
         """
-        Although the CUDA Math API (http://docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__INTRINSIC__INT.html)
+        Although the CUDA Math API
+        (http://docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__INTRINSIC__INT.html)
         only says int32 & int64 arguments are supported in C code, the LLVM
         IR input supports i8, i16, i32 & i64 (LLVM doesn't have a concept of
         unsigned integers, just unsigned operations on integers).
         http://docs.nvidia.com/cuda/nvvm-ir-spec/index.html#bit-manipulations-intrinics
         """
         compiled = cuda.jit("void(int32[:], uint32)")(simple_clz)
-        ary = np.zeros(1, dtype=np.uint32)
-        compiled(ary, 0x00100000)
+        ary = np.zeros(1, dtype=np.int32)
+        compiled[1, 1](ary, 0x00100000)
         self.assertEquals(ary[0], 11)
 
     def test_clz_i4_1s(self):
         compiled = cuda.jit("void(int32[:], int32)")(simple_clz)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary, 0xFFFFFFFF)
+        compiled[1, 1](ary, 0xFFFFFFFF)
         self.assertEquals(ary[0], 0)
 
     def test_clz_i4_0s(self):
         compiled = cuda.jit("void(int32[:], int32)")(simple_clz)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary, 0x0)
+        compiled[1, 1](ary, 0x0)
         self.assertEquals(ary[0], 32, "CUDA semantics")
 
     @skip_on_cudasim('only get given a Python "int", assumes 32 bits')
     def test_clz_i8(self):
         compiled = cuda.jit("void(int32[:], int64)")(simple_clz)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary, 0x000000000010000)
+        compiled[1, 1](ary, 0x000000000010000)
         self.assertEquals(ary[0], 47)
 
     def test_ffs_i4(self):
         compiled = cuda.jit("void(int32[:], int32)")(simple_ffs)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary, 0x00100000)
+        compiled[1, 1](ary, 0x00100000)
         self.assertEquals(ary[0], 20)
 
     def test_ffs_u4(self):
         compiled = cuda.jit("void(int32[:], uint32)")(simple_ffs)
-        ary = np.zeros(1, dtype=np.uint32)
-        compiled(ary, 0x00100000)
+        ary = np.zeros(1, dtype=np.int32)
+        compiled[1, 1](ary, 0x00100000)
         self.assertEquals(ary[0], 20)
 
     def test_ffs_i4_1s(self):
         compiled = cuda.jit("void(int32[:], int32)")(simple_ffs)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary, 0xFFFFFFFF)
+        compiled[1, 1](ary, 0xFFFFFFFF)
         self.assertEquals(ary[0], 0)
 
     def test_ffs_i4_0s(self):
         compiled = cuda.jit("void(int32[:], int32)")(simple_ffs)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary, 0x0)
+        compiled[1, 1](ary, 0x0)
         self.assertEquals(ary[0], 32, "CUDA semantics")
 
     @skip_on_cudasim('only get given a Python "int", assumes 32 bits')
     def test_ffs_i8(self):
         compiled = cuda.jit("void(int32[:], int64)")(simple_ffs)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary, 0x000000000010000)
+        compiled[1, 1](ary, 0x000000000010000)
         self.assertEquals(ary[0], 16)
 
     def test_simple_laneid(self):
         compiled = cuda.jit("void(int32[:])")(simple_laneid)
         count = 2
-        ary = np.zeros(count*32, dtype=np.int32)
+        ary = np.zeros(count * 32, dtype=np.int32)
         exp = np.tile(np.arange(32, dtype=np.int32), count)
-        compiled[1, count*32](ary)
+        compiled[1, count * 32](ary)
         self.assertTrue(np.all(ary == exp))
 
     def test_simple_warpsize(self):
         compiled = cuda.jit("void(int32[:])")(simple_warpsize)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary)
+        compiled[1, 1](ary)
         self.assertEquals(ary[0], 32, "CUDA semantics")
 
-    @unittest.skipUnless(IS_PY3, "round() returns float on Py2")
     def test_round_f4(self):
         compiled = cuda.jit("void(int64[:], float32)")(simple_round)
-        ary = np.zeros(1, dtype=np.int32)
+        ary = np.zeros(1, dtype=np.int64)
 
         for i in [-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75]:
-            compiled(ary, i)
+            compiled[1, 1](ary, i)
             self.assertEquals(ary[0], round(i))
 
-    @unittest.skipUnless(IS_PY3, "round() returns float on Py2")
     def test_round_f8(self):
         compiled = cuda.jit("void(int64[:], float64)")(simple_round)
-        ary = np.zeros(1, dtype=np.int32)
+        ary = np.zeros(1, dtype=np.int64)
 
         for i in [-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75]:
-            compiled(ary, i)
+            compiled[1, 1](ary, i)
             self.assertEquals(ary[0], round(i))
+
+    def test_round_to_f4(self):
+        compiled = cuda.jit("void(float32[:], float32, int32)")(simple_round_to)
+        ary = np.zeros(1, dtype=np.float32)
+        np.random.seed(123)
+        vals = np.random.random(32).astype(np.float32)
+        np.concatenate((vals, np.array([np.inf, -np.inf, np.nan])))
+        digits = (
+            # Common case branch of round_to_impl
+            -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5,
+            # The algorithm currently implemented can only round to 13 digits
+            # with single precision. Note that this doesn't trigger the
+            # "overflow safe" branch of the implementation, which can only be
+            # hit when using double precision.
+            13
+        )
+        for val, ndigits in itertools.product(vals, digits):
+            with self.subTest(val=val, ndigits=ndigits):
+                compiled[1, 1](ary, val, ndigits)
+                self.assertPreciseEqual(ary[0], round(val, ndigits),
+                                        prec='single')
+
+    # CPython on most platforms uses rounding based on dtoa.c, whereas the CUDA
+    # round-to implementation uses CPython's fallback implementation, which has
+    # slightly different behavior at the edges of the domain. Since the CUDA
+    # simulator executes using CPython, we need to skip this test when the
+    # simulator is active.
+    @skip_on_cudasim('Overflow behavior differs on CPython')
+    def test_round_to_f4_overflow(self):
+        # Test that the input value is returned when y in round_ndigits
+        # overflows.
+        compiled = cuda.jit("void(float32[:], float32, int32)")(simple_round_to)
+        ary = np.zeros(1, dtype=np.float32)
+        val = np.finfo(np.float32).max
+        # An unusually large number of digits is required to hit the "y
+        # overflows" branch of the implementation because the typing results in
+        # the computation of y as float64.
+        ndigits = 300
+        compiled[1, 1](ary, val, ndigits)
+        self.assertEqual(ary[0], val)
+
+    def test_round_to_f4_halfway(self):
+        compiled = cuda.jit("void(float32[:], float32, int32)")(simple_round_to)
+        ary = np.zeros(1, dtype=np.float32)
+        # Value chosen to trigger the "round to even" branch of the
+        # implementation
+        val = 0.3425
+        ndigits = 3
+        compiled[1, 1](ary, val, ndigits)
+        self.assertPreciseEqual(ary[0], round(val, ndigits), prec='single')
+
+    def test_round_to_f8(self):
+        compiled = cuda.jit("void(float64[:], float64, int32)")(simple_round_to)
+        ary = np.zeros(1, dtype=np.float64)
+        np.random.seed(123)
+        vals = np.random.random(32)
+        np.concatenate((vals, np.array([np.inf, -np.inf, np.nan])))
+        digits = (-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5)
+
+        for val, ndigits in itertools.product(vals, digits):
+            with self.subTest(val=val, ndigits=ndigits):
+                compiled[1, 1](ary, val, ndigits)
+                self.assertPreciseEqual(ary[0], round(val, ndigits),
+                                        prec='exact')
+
+        # Trigger the "overflow safe" branch of the implementation
+        val = 0.12345678987654321 * 10e-15
+        ndigits = 23
+        with self.subTest(val=val, ndigits=ndigits):
+            compiled[1, 1](ary, val, ndigits)
+            self.assertPreciseEqual(ary[0], round(val, ndigits),
+                                    prec='double')
+
+    # Skipped on cudasim for the same reasons as test_round_to_f4 above.
+    @skip_on_cudasim('Overflow behavior differs on CPython')
+    def test_round_to_f8_overflow(self):
+        # Test that the input value is returned when y in round_ndigits
+        # overflows.
+        compiled = cuda.jit("void(float64[:], float64, int32)")(simple_round_to)
+        ary = np.zeros(1, dtype=np.float64)
+        val = np.finfo(np.float64).max
+        # Unlike test_round_to_f4_overflow, a reasonable number of digits can
+        # be used for this test to overflow y in round_ndigits.
+        ndigits = 12
+        compiled[1, 1](ary, val, ndigits)
+        self.assertEqual(ary[0], val)
+
+    def test_round_to_f8_halfway(self):
+        compiled = cuda.jit("void(float64[:], float64, int32)")(simple_round_to)
+        ary = np.zeros(1, dtype=np.float64)
+        # Value chosen to trigger the "round to even" branch of the
+        # implementation, with a value that is not exactly representable with a
+        # float32, but only a float64.
+        val = 0.5425
+        ndigits = 3
+        compiled[1, 1](ary, val, ndigits)
+        self.assertPreciseEqual(ary[0], round(val, ndigits), prec='double')
 
 
 if __name__ == '__main__':

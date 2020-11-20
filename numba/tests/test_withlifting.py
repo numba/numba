@@ -1,31 +1,20 @@
-from __future__ import print_function, division, absolute_import
-
 import copy
 import warnings
 import numpy as np
 
 import numba
-from numba import unittest_support as unittest
-from numba.transforms import find_setupwiths, with_lifting
-from numba.withcontexts import bypass_context, call_context, objmode_context
-from numba.bytecode import FunctionIdentity, ByteCode
-from numba.interpreter import Interpreter
-from numba import typing, errors
-from numba.targets.registry import cpu_target
-from numba.targets import cpu
-from numba.compiler import compile_ir, DEFAULT_FLAGS
+from numba.core.transforms import find_setupwiths, with_lifting
+from numba.core.withcontexts import bypass_context, call_context, objmode_context
+from numba.core.bytecode import FunctionIdentity, ByteCode
+from numba.core.interpreter import Interpreter
+from numba.core import typing, errors, cpu
+from numba.core.registry import cpu_target
+from numba.core.compiler import compile_ir, DEFAULT_FLAGS
 from numba import njit, typeof, objmode, types
-from numba.extending import overload
-from .support import MemoryLeak, TestCase, captured_stdout
-
-
-try:
-    import scipy
-except ImportError:
-    scipy = None
-
-_msg = "SciPy needed for test"
-skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
+from numba.core.extending import overload
+from numba.tests.support import (MemoryLeak, TestCase, captured_stdout,
+                                 skip_unless_scipy)
+import unittest
 
 
 def get_func_ir(func):
@@ -536,15 +525,21 @@ class TestLiftObj(MemoryLeak, TestCase):
         def foo(x):
             with objmode_context():
                 t = {'a': x}
-            return x, t
+                u = 3
+            return x, t, u
         x = np.array([1, 2, 3])
         cfoo = njit(foo)
+
         with self.assertRaises(errors.TypingError) as raises:
             cfoo(x)
-        self.assertIn(
-            "missing type annotation on outgoing variables",
-            str(raises.exception),
-            )
+
+        exstr = str(raises.exception)
+        self.assertIn("Missing type annotation on outgoing variable(s): "
+                      "['t', 'u']",
+                      exstr)
+        self.assertIn("Example code: with objmode"
+                      "(t='<add_type_as_string_here>')",
+                      exstr)
 
     def test_case08_raise_from_external(self):
         # this segfaults, expect its because the dict needs to raise as '2' is
@@ -609,7 +604,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         self.assert_equal_return_and_stdout(foo, x)
 
     def test_case11_define_function_in_context(self):
-        # should this work? no, `make_function` opcode not supported
+        # should this work? no, global name 'bar' is not defined
         def foo(x):
             with objmode_context():
                 def bar(y):
@@ -618,10 +613,10 @@ class TestLiftObj(MemoryLeak, TestCase):
 
         x = np.array([1, 2, 3])
         cfoo = njit(foo)
-        with self.assertRaises(errors.TypingError) as raises:
+        with self.assertRaises(NameError) as raises:
             cfoo(x)
         self.assertIn(
-            'op code: make_function',
+            "global name 'bar' is not defined",
             str(raises.exception),
         )
 
@@ -830,6 +825,63 @@ class TestLiftObj(MemoryLeak, TestCase):
             return foo()
 
         self.assertPreciseEqual(bar(), np.ones(10).astype(np.float64))
+
+    @staticmethod
+    def case_objmode_cache(x):
+        with objmode(output='float64'):
+            output = x / 10
+        return output
+
+
+def case_inner_pyfunc(x):
+    return x / 10
+
+
+def case_objmode_cache(x):
+    with objmode(output='float64'):
+        output = case_inner_pyfunc(x)
+    return output
+
+
+class TestLiftObjCaching(MemoryLeak, TestCase):
+    # Warnings in this test class are converted to errors
+
+    def setUp(self):
+        warnings.simplefilter("error", errors.NumbaWarning)
+
+    def tearDown(self):
+        warnings.resetwarnings()
+
+    def check(self, py_func):
+        first = njit(cache=True)(py_func)
+        self.assertEqual(first(123), 12.3)
+
+        second = njit(cache=True)(py_func)
+        self.assertFalse(second._cache_hits)
+        self.assertEqual(second(123), 12.3)
+        self.assertTrue(second._cache_hits)
+
+    def test_objmode_caching_basic(self):
+        def pyfunc(x):
+            with objmode(output='float64'):
+                output = x / 10
+            return output
+
+        self.check(pyfunc)
+
+    def test_objmode_caching_call_closure_bad(self):
+        def other_pyfunc(x):
+            return x / 10
+
+        def pyfunc(x):
+            with objmode(output='float64'):
+                output = other_pyfunc(x)
+            return output
+
+        self.check(pyfunc)
+
+    def test_objmode_caching_call_closure_good(self):
+        self.check(case_objmode_cache)
 
 
 class TestBogusContext(BaseTestWithLifting):

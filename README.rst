@@ -6,6 +6,10 @@ Numba
    :target: https://gitter.im/numba/numba?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge
    :alt: Gitter
 
+.. image:: https://img.shields.io/badge/discuss-on%20discourse-blue
+   :target: https://numba.discourse.group/
+   :alt: Discourse
+
 A Just-In-Time Compiler for Numerical Functions in Python
 #########################################################
 
@@ -18,15 +22,8 @@ NumPy functions.  Additionally, Numba has support for automatic
 parallelization of loops, generation of GPU-accelerated code, and creation of
 ufuncs and C callbacks.
 
-For more information about Numba, see the Numba homepage: 
-http://numba.pydata.org
-
-Dependencies
-============
-
-* llvmlite (version 0.30.0 or higher)
-* NumPy (version 1.9 or higher)
-* funcsigs (for Python 2)
+For more information about Numba, see the Numba homepage:
+https://numba.pydata.org
 
 Supported Platforms
 ===================
@@ -37,13 +34,24 @@ Supported Platforms
     ARMv8 (64-bit)
   - Windows: x86, x86_64
   - macOS: x86_64
-  
-* Python versions: 2.7, 3.5-3.7
-* NumPy: >= 1.11
-* NVIDIA GPUs (Kepler architecture or later) via CUDA driver on Linux, Windows,
-  macOS (< 10.14)
-* AMD GPUs via ROCm driver on Linux
-* llvmlite: >= 0.30.0
+  - \*BSD: (unofficial support only)
+
+* (Optional) Accelerators and GPUs:
+
+  * NVIDIA GPUs (Kepler architecture or later) via CUDA driver on Linux, Windows,
+    macOS (< 10.14)
+  * AMD GPUs via ROCm driver on Linux
+
+Dependencies
+============
+
+* Python versions: 3.6-3.8
+* llvmlite 0.35.*
+* NumPy >=1.15 (can build with 1.11 for ABI compatibility)
+
+Optionally:
+
+* Scipy >=1.0.0 (for ``numpy.linalg`` support)
 
 
 Installing
@@ -56,12 +64,12 @@ Distribution: https://www.anaconda.com/download
 
    $ conda install numba
 
-For more options, see the Installation Guide: http://numba.pydata.org/numba-doc/latest/user/installing.html
+For more options, see the Installation Guide: https://numba.readthedocs.io/en/stable/user/installing.html
 
 Documentation
 =============
 
-http://numba.pydata.org/numba-doc/latest/index.html
+https://numba.readthedocs.io/en/stable/index.html
 
 
 Mailing Lists
@@ -75,10 +83,6 @@ Some old archives are at: http://librelist.com/browser/numba/
 
 Continuous Integration
 ======================
-
-.. image:: https://travis-ci.org/numba/numba.svg?branch=master
-    :target: https://travis-ci.org/numba/numba
-    :alt: Travis CI
 
 .. image:: https://dev.azure.com/numba/numba/_apis/build/status/numba.numba?branchName=master
     :target: https://dev.azure.com/numba/numba/_build/latest?definitionId=1?branchName=master

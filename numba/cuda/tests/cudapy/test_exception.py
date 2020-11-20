@@ -1,11 +1,11 @@
-from __future__ import print_function, absolute_import, division
-
 import numpy as np
 
-from numba import config, cuda, jit
-from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
+from numba import cuda
+from numba.cuda.testing import unittest, CUDATestCase
+from numba.core import config
 
-class TestException(SerialMixin, unittest.TestCase):
+
+class TestException(CUDATestCase):
     def test_exception(self):
         def foo(ary):
             x = cuda.threadIdx.x
@@ -90,15 +90,6 @@ class TestException(SerialMixin, unittest.TestCase):
         """Test case for issue #2655.
         """
         self.case_raise_causing_warp_diverge(with_debug_mode=False)
-
-    @skip_on_cudasim("failing case doesn't happen in CUDASIM")
-    @unittest.expectedFailure
-    def test_raise_causing_warp_diverge_failing(self):
-        """Test case for issue #2655.
-
-        This test that the issue still exists in debug mode.
-        """
-        self.case_raise_causing_warp_diverge(with_debug_mode=True)
 
 
 if __name__ == '__main__':

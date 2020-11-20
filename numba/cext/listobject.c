@@ -32,8 +32,8 @@
  * - Appending to the list    numba_list_append
  * - Getting an item          numba_list_setitem
  * - Setting an item          numba_list_getitem
- * - Poping an item           numba_list_pop
  * - Resizing the list        numba_list_resize
+ * - Deleting an item         numba_list_delitem
  * - Deleting a slice         numba_list_delete_slice
  *
  * As you can see, only a single function for slices is implemented. The rest
@@ -45,6 +45,7 @@
  * The following additional functions are implemented for the list, these are
  * needed to make the list work within Numba.
  *
+ * - Accessing the allocation numba_list_allocated
  * - Copying an item          copy_item
  * - Calling incref on item   list_incref_item
  * - Calling decref on item   list_decref_item
@@ -55,6 +56,11 @@
  * - Size of the iterator     numba_list_iter_size
  * - Initialization of iter   numba_list_iter
  * - Get next item from iter  numba_list_iter_next
+ *
+ * Two methods are provided to query and set the 'is_mutable':
+ *
+ * - Query                    numba_list_is_mutable
+ * - Set                      numba_list_set_is_mutable
  *
  * Lastly a set of pure C level tests are provided which come in handy when
  * needing to use valgrind and friends.
@@ -70,6 +76,7 @@ typedef enum {
     LIST_ERR_NO_MEMORY = -2,
     LIST_ERR_MUTATED = -3,
     LIST_ERR_ITER_EXHAUSTED = -4,
+    LIST_ERR_IMMUTABLE = -5,
 } ListStatus;
 
 /* Copy an item from a list.
@@ -165,6 +172,7 @@ numba_list_new(NB_List **out, Py_ssize_t item_size, Py_ssize_t allocated){
     lp->size = 0;
     lp->item_size = item_size;
     lp->allocated = allocated;
+    lp->is_mutable = 1;
     // set method table to zero */
     memset(&lp->methods, 0x00, sizeof(list_type_based_methods_table));
     // allocate memory to hold items, if requested
@@ -208,6 +216,23 @@ numba_list_free(NB_List *lp) {
     free(lp);
 }
 
+/* Return the base pointer of the list items.
+ */
+char *
+numba_list_base_ptr(NB_List *lp)
+{
+    return lp->items;
+}
+
+/* Return the address of the list size.
+ */
+Py_ssize_t
+numba_list_size_address(NB_List *lp)
+{
+    return (Py_ssize_t)&lp->size;
+}
+
+
 /* Return the length of a list.
  *
  * lp: a list
@@ -217,10 +242,40 @@ numba_list_length(NB_List *lp) {
     return lp->size;
 }
 
+/* Return the current allocation of a list.
+ *
+ * lp: a list
+ */
+Py_ssize_t
+numba_list_allocated(NB_List *lp) {
+    return lp->allocated;
+}
+
+/* Return the mutability status of the list
+ *
+ * lp: a list
+ *
+ */
+int
+numba_list_is_mutable(NB_List *lp){
+    return lp->is_mutable;
+}
+
+/* Set the is_mutable attribute
+ *
+ * lp: a list
+ * is_mutable: an int, 0(False) or 1(True)
+ *
+ */
+void
+numba_list_set_is_mutable(NB_List *lp, int is_mutable){
+    lp->is_mutable = is_mutable;
+}
+
 /* Set an item in a list.
  *
  * lp: a list
- * index: the index of the item to set
+ * index: the index of the item to set (must be in range 0 <= index < len(list))
  * item: the item to set
  *
  * This assume there is already an element at the given index that will be
@@ -230,6 +285,10 @@ numba_list_length(NB_List *lp) {
 int
 numba_list_setitem(NB_List *lp, Py_ssize_t index, const char *item) {
     char *loc;
+    // check for mutability
+    if (!lp->is_mutable) {
+        return LIST_ERR_IMMUTABLE;
+    }
     // check index is valid
     // FIXME: this can be (and probably is) checked at the compiler level
     if (!valid_index(index, lp->size)) {
@@ -246,7 +305,7 @@ numba_list_setitem(NB_List *lp, Py_ssize_t index, const char *item) {
 /* Get an item from a list.
  *
  * lp: a list
- * index: the index of the item to get
+ * index: the index of the item to get (must be in range 0 <= index < len(list))
  * out: a pointer to hold the item
  */
 int
@@ -271,6 +330,10 @@ numba_list_getitem(NB_List *lp, Py_ssize_t index, char *out) {
 int
 numba_list_append(NB_List *lp, const char *item) {
     char *loc;
+    // check for mutability
+    if (!lp->is_mutable) {
+        return LIST_ERR_IMMUTABLE;
+    }
     // resize by one, will change list size
     int result = numba_list_resize(lp, lp->size + 1);
     if(result < LIST_OK) {
@@ -283,44 +346,6 @@ numba_list_append(NB_List *lp, const char *item) {
     return LIST_OK;
 }
 
-/* Pop (get and delete) an item from a list at a given location.
- *
- * lp: a list
- * index: the index of the item to pop
- * out: a pointer to hold the item
- */
-int
-numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
-    char *loc, *new_loc;
-    int result;
-    Py_ssize_t leftover_bytes;
-    // check index is valid
-    // FIXME: this can be (and probably is) checked at the compiler level
-    if (!valid_index(index, lp->size)) {
-        return LIST_ERR_INDEX;
-    }
-    // obtain item and decref if needed
-    loc = lp->items + lp->item_size * index;
-    copy_item(lp, out, loc);
-    list_decref_item(lp, loc);
-    if (index != lp->size - 1) {
-        // pop from somewhere other than the end, incur the dreaded memory copy
-        leftover_bytes = (lp->size - 1 - index) * lp->item_size;
-        new_loc = lp->items + (lp->item_size * (index + 1));
-        // use memmove instead of memcpy since we may be dealing with
-        // overlapping regions of memory and the behaviour of memcpy is
-        // undefined in such situation (C99).
-        memmove(loc, new_loc, leftover_bytes);
-    }
-    // finally, shrink list by one
-    result = numba_list_resize(lp, lp->size - 1);
-    if(result < LIST_OK) {
-         // Since we are decreasing the size, this should never happen
-        return result;
-    }
-    return LIST_OK;
-
-}
 /* Resize a list.
  *
  * lp: a list
@@ -349,6 +374,10 @@ numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
 int
 numba_list_resize(NB_List *lp, Py_ssize_t newsize) {
     char * items;
+    // check for mutability
+    if (!lp->is_mutable) {
+        return LIST_ERR_IMMUTABLE;
+    }
     size_t new_allocated, num_allocated_bytes;
     /* Bypass realloc() when a previous overallocation is large enough
        to accommodate the newsize.  If the newsize falls lower than half
@@ -387,6 +416,49 @@ numba_list_resize(NB_List *lp, Py_ssize_t newsize) {
     return LIST_OK;
 }
 
+/* Delete a single item.
+ *
+ * lp: a list
+ * index: the index of the item to delete
+ *        (must be in range 0 <= index < len(list))
+ *
+ * */
+int
+numba_list_delitem(NB_List *lp, Py_ssize_t index) {
+    int result;
+    char *loc, *new_loc;
+    Py_ssize_t leftover_bytes;
+    // check for mutability
+    if (!lp->is_mutable) {
+        return LIST_ERR_IMMUTABLE;
+    }
+    // check index is valid
+    // FIXME: this can be (and probably is) checked at the compiler level
+    if (!valid_index(index, lp->size)) {
+        return LIST_ERR_INDEX;
+    }
+    // obtain item and decref if needed
+    loc = lp->items + lp->item_size * index;
+    list_decref_item(lp, loc);
+    if (index != lp->size - 1) {
+        // delitem from somewhere other than the end, incur the memory copy
+        leftover_bytes = (lp->size - 1 - index) * lp->item_size;
+        new_loc = lp->items + (lp->item_size * (index + 1));
+        // use memmove instead of memcpy since we may be dealing with
+        // overlapping regions of memory and the behaviour of memcpy is
+        // undefined in such situation (C99).
+        memmove(loc, new_loc, leftover_bytes);
+    }
+    // finally, shrink list by one
+    result = numba_list_resize(lp, lp->size - 1);
+    if(result < LIST_OK) {
+         // Since we are decreasing the size, this should never happen
+        return result;
+    }
+    return LIST_OK;
+
+}
+
 /* Delete a slice
  *
  * start: the start index of ths slice
@@ -408,6 +480,10 @@ numba_list_delete_slice(NB_List *lp,
     int result, i, slicelength, new_length;
     char *loc, *new_loc;
     Py_ssize_t leftover_bytes, cur, lim;
+    // check for mutability
+    if (!lp->is_mutable) {
+        return LIST_ERR_IMMUTABLE;
+    }
     // calculate the slicelength, taken from PySlice_AdjustIndices, see the top
     // of this file for the exact source
     if (step > 0) {
@@ -558,6 +634,14 @@ numba_test_list(void) {
     CHECK(lp->item_size == 4);
     CHECK(lp->size == 0);
     CHECK(lp->allocated == 0);
+    CHECK(lp->is_mutable == 1);
+
+    // flip and check the is_mutable bit
+    CHECK(numba_list_is_mutable(lp) == 1);
+    numba_list_set_is_mutable(lp, 0);
+    CHECK(numba_list_is_mutable(lp) == 0);
+    numba_list_set_is_mutable(lp, 1);
+    CHECK(numba_list_is_mutable(lp) == 1);
 
     // append 1st item, this will cause a realloc
     status = numba_list_append(lp, "abc");
@@ -613,22 +697,45 @@ numba_test_list(void) {
     CHECK(status == LIST_OK);
     CHECK(memcmp(got_item, "pqr", 4) == 0);
 
-    // pop 1st item, check item shift
-    status = numba_list_pop(lp, 0, got_item);
+    // get and del 1st item, check item shift
+    status = numba_list_getitem(lp, 0, got_item);
+    status = numba_list_delitem(lp, 0);
     CHECK(status == LIST_OK);
     CHECK(lp->size == 4);
     CHECK(lp->allocated == 8);
     CHECK(memcmp(got_item, "pqr", 4) == 0);
     CHECK(memcmp(lp->items, "def\x00ghi\x00jkl\x00mno\x00", 16) == 0);
 
-    // pop last (4th) item, no shift since only last item affected
-    status = numba_list_pop(lp, 3, got_item);
+    // get and del last (4th) item, no shift since only last item affected
+    status = numba_list_getitem(lp, 3, got_item);
+    status = numba_list_delitem(lp, 3);
     CHECK(status == LIST_OK);
     CHECK(lp->size == 3);
     CHECK(lp->allocated == 6);  // this also shrinks the allocation
     CHECK(memcmp(got_item, "mno", 4) == 0);
     CHECK(memcmp(lp->items, "def\x00ghi\x00jkl\x00", 12) == 0);
 
+    // flip and check the is_mutable member
+    CHECK(numba_list_is_mutable(lp) == 1);
+    numba_list_set_is_mutable(lp, 0);
+    CHECK(numba_list_is_mutable(lp) == 0);
+
+    // ensure that any attempts to mutate an immutable list fail
+    CHECK(numba_list_setitem(lp, 0, "zzz") == LIST_ERR_IMMUTABLE);
+    CHECK(numba_list_append(lp, "zzz") == LIST_ERR_IMMUTABLE);
+    CHECK(numba_list_delitem(lp, 0) == LIST_ERR_IMMUTABLE);
+    CHECK(numba_list_resize(lp, 23) == LIST_ERR_IMMUTABLE);
+    CHECK(numba_list_delete_slice(lp, 0, 3, 1) == LIST_ERR_IMMUTABLE);
+
+    // ensure that all attempts to query/read from and immutable list succeed
+    CHECK(numba_list_length(lp) == 3);
+    status = numba_list_getitem(lp, 0, got_item);
+    CHECK(status == LIST_OK);
+    CHECK(memcmp(got_item, "def", 4) == 0);
+
+    // flip the is_mutable member back  and check
+    numba_list_set_is_mutable(lp, 1);
+    CHECK(numba_list_is_mutable(lp) == 1);
 
     // test iterator
     CHECK(lp->size > 0);
@@ -653,7 +760,7 @@ numba_test_list(void) {
     // free existing list
     numba_list_free(lp);
 
-    // test growth upon append and shrink during pop
+    // test growth upon append and shrink during delitem
     status = numba_list_new(&lp, 1, 0);
     CHECK(status == LIST_OK);
     CHECK(lp->item_size == 1);
@@ -687,10 +794,10 @@ numba_test_list(void) {
     test_items_2  = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10";
     CHECK(memcmp(lp->items, test_items_2, 17) == 0);
 
-    // Now, pop them again and check that list shrinks
+    // Now, delete them again and check that list shrinks
     for (i = 17; i > 0 ; i--) {
         switch(i) {
-             // Check the allocation before pop
+             // Check the allocation before delitem
              case 17:  CHECK(lp->allocated == 25); break;
              case 12:  CHECK(lp->allocated == 25); break;
              case 9:   CHECK(lp->allocated == 18); break;
@@ -700,7 +807,8 @@ numba_test_list(void) {
              case 2:   CHECK(lp->allocated == 5); break;
              case 1:   CHECK(lp->allocated == 4); break;
         }
-        status = numba_list_pop(lp, i-1, got_item);
+        status = numba_list_getitem(lp, i-1, got_item);
+        status = numba_list_delitem(lp, i-1);
         CHECK(status == LIST_OK);
         switch(i) {
              // Check that the shrink happened accordingly

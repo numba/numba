@@ -1,8 +1,7 @@
-from __future__ import print_function, absolute_import, division
 import math
-from numba import types, utils
-from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                    signature, Registry)
+from numba.core import types, utils
+from numba.core.typing.templates import ConcreteTemplate, signature, Registry
+
 
 registry = Registry()
 infer_global = registry.register_global
@@ -27,6 +26,7 @@ infer_global = registry.register_global
 @infer_global(math.gamma)
 @infer_global(math.lgamma)
 @infer_global(math.log)
+@infer_global(math.log2)
 @infer_global(math.log10)
 @infer_global(math.log1p)
 @infer_global(math.radians)
@@ -76,6 +76,15 @@ class Math_binary(ConcreteTemplate):
     ]
 
 
+if utils.PYVERSION >= (3, 7):
+    @infer_global(math.remainder)
+    class Math_remainder(ConcreteTemplate):
+        cases = [
+            signature(types.float32, types.float32, types.float32),
+            signature(types.float64, types.float64, types.float64),
+        ]
+
+
 @infer_global(math.pow)
 class Math_pow(ConcreteTemplate):
     cases = [
@@ -86,12 +95,37 @@ class Math_pow(ConcreteTemplate):
     ]
 
 
+@infer_global(math.frexp)
+class Math_frexp(ConcreteTemplate):
+    cases = [
+        signature(types.Tuple([types.float32, types.int32]), types.float32),
+        signature(types.Tuple([types.float64, types.int32]), types.float64),
+    ]
+
+
+@infer_global(math.ldexp)
+class Math_ldexp(ConcreteTemplate):
+    cases = [
+        signature(types.float32, types.float32, types.int32),
+        signature(types.float64, types.float64, types.int32),
+    ]
+
+
 @infer_global(math.isinf)
 @infer_global(math.isnan)
+@infer_global(math.isfinite)
 class Math_isnan(ConcreteTemplate):
     cases = [
         signature(types.boolean, types.int64),
         signature(types.boolean, types.uint64),
         signature(types.boolean, types.float32),
         signature(types.boolean, types.float64),
+    ]
+
+
+@infer_global(math.modf)
+class Math_modf(ConcreteTemplate):
+    cases = [
+        signature(types.UniTuple(types.float64, 2), types.float64),
+        signature(types.UniTuple(types.float32, 2), types.float32)
     ]

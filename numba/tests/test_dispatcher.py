@@ -1,6 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
-import errno
 import multiprocessing
 import os
 import platform
@@ -13,6 +10,31 @@ import inspect
 import pickle
 import weakref
 from itertools import chain
+from io import StringIO
+
+import numpy as np
+
+from numba import njit, jit, generated_jit, typeof
+from numba.core import types, errors, codegen
+from numba import _dispatcher
+from numba.core.compiler import compile_isolated
+from numba.core.errors import NumbaWarning
+from numba.tests.support import (TestCase, temp_directory, import_dynamic,
+                                 override_env_config, capture_cache_log,
+                                 captured_stdout)
+from numba.np.numpy_support import as_dtype
+from numba.core.caching import _UserWideCacheLocator
+from numba.core.dispatcher import Dispatcher
+from numba.tests.support import (skip_parfors_unsupported, needs_lapack,
+                                 SerialMixin)
+from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
+import llvmlite.binding as ll
+import unittest
+from numba.parfors import parfor
+
+
+_TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
+
 
 try:
     import jinja2
@@ -23,25 +45,6 @@ try:
     import pygments
 except ImportError:
     pygments = None
-
-import numpy as np
-
-from numba import unittest_support as unittest
-from numba import utils, jit, generated_jit, types, typeof, errors
-from numba import _dispatcher
-from numba.compiler import compile_isolated
-from numba.errors import NumbaWarning
-from .support import (TestCase, tag, temp_directory, import_dynamic,
-                      override_env_config, capture_cache_log, captured_stdout)
-from numba.numpy_support import as_dtype
-from numba.targets import codegen
-from numba.caching import _UserWideCacheLocator
-from numba.dispatcher import Dispatcher
-from numba import parfor
-from .test_linalg import needs_lapack
-from .support import skip_parfors_unsupported
-
-import llvmlite.binding as ll
 
 _is_armv7l = platform.machine() == 'armv7l'
 
@@ -123,8 +126,6 @@ def check_access_is_preventable():
     tempdir = temp_directory('test_cache')
     test_dir = (os.path.join(tempdir, 'writable_test'))
     os.mkdir(test_dir)
-    # assume access prevention is not possible
-    ret = False
     # check a write is possible
     with open(os.path.join(test_dir, 'write_ok'), 'wt') as f:
         f.write('check1')
@@ -133,19 +134,18 @@ def check_access_is_preventable():
     try:
         with open(os.path.join(test_dir, 'write_forbidden'), 'wt') as f:
             f.write('check2')
-    except (OSError, IOError) as e:
+        # access prevention is not possible
+        return False
+    except PermissionError:
         # Check that the cause of the exception is due to access/permission
         # as per
         # https://github.com/conda/conda/blob/4.5.0/conda/gateways/disk/permissions.py#L35-L37  # noqa: E501
-        eno = getattr(e, 'errno', None)
-        if eno in (errno.EACCES, errno.EPERM):
-            # errno reports access/perm fail so access prevention via
-            # `chmod 500` works for this user.
-            ret = True
+        # errno reports access/perm fail so access prevention via
+        # `chmod 500` works for this user.
+        return True
     finally:
         os.chmod(test_dir, 0o775)
         shutil.rmtree(test_dir)
-    return ret
 
 
 _access_preventable = check_access_is_preventable()
@@ -154,6 +154,22 @@ skip_bad_access = unittest.skipUnless(_access_preventable, _access_msg)
 
 
 class TestDispatcher(BaseTest):
+
+    def test_equality(self):
+        @jit
+        def foo(x):
+            return x
+
+        @jit
+        def bar(x):
+            return x
+
+        # Written this way to verify `==` returns a bool (gh-5838). Using
+        # `assertTrue(foo == foo)` or `assertEqual(foo, foo)` would defeat the
+        # purpose of this test.
+        self.assertEqual(foo == foo, True)
+        self.assertEqual(foo == bar, False)
+        self.assertEqual(foo == None, False)  # noqa: E711
 
     def test_dyn_pyfunc(self):
         @jit
@@ -400,7 +416,7 @@ class TestDispatcher(BaseTest):
 
         self.assertIs(foo, foo_rebuilt)
 
-        # do we get the same object even if we delete all the explict
+        # do we get the same object even if we delete all the explicit
         # references?
         id_orig = id(foo_rebuilt)
         del foo
@@ -579,13 +595,33 @@ class TestDispatcher(BaseTest):
         expected_sigs = [(types.complex128,)]
         self.assertEqual(jitfoo.signatures, expected_sigs)
 
+    def test_dispatcher_raises_for_invalid_decoration(self):
+        # For context see https://github.com/numba/numba/issues/4750.
+
+        @jit(nopython=True)
+        def foo(x):
+            return x
+
+        with self.assertRaises(TypeError) as raises:
+            jit(foo)
+        err_msg = str(raises.exception)
+        self.assertIn(
+            "A jit decorator was called on an already jitted function", err_msg)
+        self.assertIn("foo", err_msg)
+        self.assertIn(".py_func", err_msg)
+
+        with self.assertRaises(TypeError) as raises:
+            jit(BaseTest)
+        err_msg = str(raises.exception)
+        self.assertIn("The decorated object is not a function", err_msg)
+        self.assertIn(f"{type(BaseTest)}", err_msg)
+
 
 class TestSignatureHandling(BaseTest):
     """
     Test support for various parameter passing styles.
     """
 
-    @tag('important')
     def test_named_args(self):
         """
         Test passing named arguments to a dispatcher.
@@ -673,7 +709,6 @@ class TestGeneratedDispatcher(TestCase):
     Tests for @generated_jit.
     """
 
-    @tag('important')
     def test_generated(self):
         f = generated_jit(nopython=True)(generated_usecase)
         self.assertEqual(f(8), 8 - 5)
@@ -683,7 +718,6 @@ class TestGeneratedDispatcher(TestCase):
         self.assertEqual(f(1j, 42), 42 + 1j)
         self.assertEqual(f(x=1j, y=7), 7 + 1j)
 
-    @tag('important')
     def test_generated_dtype(self):
         f = generated_jit(nopython=True)(dtype_generated_usecase)
         a = np.ones((10,), dtype=np.float32)
@@ -748,7 +782,6 @@ class TestDispatcherMethods(TestCase):
         self.assertPreciseEqual(foo(1), 3)
         self.assertPreciseEqual(foo(1.5), 3)
 
-    @tag('important')
     def test_inspect_llvm(self):
         # Create a jited function
         @jit
@@ -869,7 +902,7 @@ class TestDispatcherMethods(TestCase):
 
         foo(1, 2)
         # Exercise the method
-        foo.inspect_types(utils.StringIO())
+        foo.inspect_types(StringIO())
 
         # Test output
         expected = str(foo.overloads[foo.signatures[0]].type_annotation)
@@ -919,7 +952,7 @@ class TestDispatcherMethods(TestCase):
 
         # check that file+pretty kwarg combo raises
         with self.assertRaises(ValueError) as raises:
-            foo.inspect_types(file=utils.StringIO(), pretty=True)
+            foo.inspect_types(file=StringIO(), pretty=True)
 
         self.assertIn("`file` must be None if `pretty=True`",
                       str(raises.exception))
@@ -992,19 +1025,12 @@ class BaseCacheTest(TestCase):
         old = sys.modules.pop(self.modname, None)
         if old is not None:
             # Make sure cached bytecode is removed
-            if sys.version_info >= (3,):
-                cached = [old.__cached__]
-            else:
-                if old.__file__.endswith(('.pyc', '.pyo')):
-                    cached = [old.__file__]
-                else:
-                    cached = [old.__file__ + 'c', old.__file__ + 'o']
+            cached = [old.__cached__]
             for fn in cached:
                 try:
                     os.unlink(fn)
-                except OSError as e:
-                    if e.errno != errno.ENOENT:
-                        raise
+                except FileNotFoundError:
+                    pass
         mod = import_dynamic(self.modname)
         self.assertEqual(mod.__file__.rstrip('co'), self.modfile)
         return mod
@@ -1013,9 +1039,7 @@ class BaseCacheTest(TestCase):
         try:
             return [fn for fn in os.listdir(self.cache_dir)
                     if not fn.endswith(('.pyc', ".pyo"))]
-        except OSError as e:
-            if e.errno != errno.ENOENT:
-                raise
+        except FileNotFoundError:
             return []
 
     def get_cache_mtimes(self):
@@ -1051,9 +1075,12 @@ class BaseCacheUsecasesTest(BaseCacheTest):
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = popen.communicate()
         if popen.returncode != 0:
-            raise AssertionError("process failed with code %s: "
-                                 "stderr follows\n%s\n"
-                                 % (popen.returncode, err.decode()))
+            raise AssertionError(
+                "process failed with code %s: \n"
+                "stdout follows\n%s\n"
+                "stderr follows\n%s\n"
+                % (popen.returncode, out.decode(), err.decode()),
+            )
 
     def check_module(self, mod):
         self.check_pycache(0)
@@ -1081,7 +1108,6 @@ class BaseCacheUsecasesTest(BaseCacheTest):
 
 class TestCache(BaseCacheUsecasesTest):
 
-    @tag('important')
     def test_caching(self):
         self.check_pycache(0)
         mod = self.import_module()
@@ -1116,7 +1142,6 @@ class TestCache(BaseCacheUsecasesTest):
         # Check the code runs ok from another process
         self.run_in_separate_process()
 
-    @tag('important')
     def test_caching_nrt_pruned(self):
         self.check_pycache(0)
         mod = self.import_module()
@@ -1184,7 +1209,7 @@ class TestCache(BaseCacheUsecasesTest):
 
         self.assertEqual(len(w), 1)
         self.assertIn('Cannot cache compiled function "looplifted" '
-                      'as it uses lifted loops', str(w[0].message))
+                      'as it uses lifted code', str(w[0].message))
 
     def test_big_array(self):
         # Code references big array globals cannot be cached
@@ -1221,19 +1246,29 @@ class TestCache(BaseCacheUsecasesTest):
     def test_closure(self):
         mod = self.import_module()
 
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', NumbaWarning)
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', NumbaWarning)
 
             f = mod.closure1
-            self.assertPreciseEqual(f(3), 6)
+            self.assertPreciseEqual(f(3), 6) # 3 + 3 = 6
             f = mod.closure2
-            self.assertPreciseEqual(f(3), 8)
-            self.check_pycache(0)
+            self.assertPreciseEqual(f(3), 8) # 3 + 5 = 8
+            f = mod.closure3
+            self.assertPreciseEqual(f(3), 10) # 3 + 7 = 8
+            f = mod.closure4
+            self.assertPreciseEqual(f(3), 12) # 3 + 9 = 12
+            self.check_pycache(5) # 1 nbi, 4 nbc
 
-        self.assertEqual(len(w), 2)
-        for item in w:
-            self.assertIn('Cannot cache compiled function "closure"',
-                          str(item.message))
+    def test_first_class_function(self):
+        mod = self.import_module()
+        f = mod.first_class_function_usecase
+        self.assertEqual(f(mod.first_class_function_mul, 1), 1)
+        self.assertEqual(f(mod.first_class_function_mul, 10), 100)
+        self.assertEqual(f(mod.first_class_function_add, 1), 2)
+        self.assertEqual(f(mod.first_class_function_add, 10), 20)
+        # 1 + 1 + 1 nbi, 1 + 1 + 2 nbc - a separate cache for each call to `f`
+        # with a different callback.
+        self.check_pycache(7)
 
     def test_cache_reuse(self):
         mod = self.import_module()
@@ -1338,7 +1373,7 @@ class TestCache(BaseCacheUsecasesTest):
         mod = self.import_module()
         f = mod.add_usecase
         # Remove this function's cache files at the end, to avoid accumulation
-        # accross test calls.
+        # across test calls.
         self.addCleanup(shutil.rmtree, f.stats.cache_path, ignore_errors=True)
 
         self.assertPreciseEqual(f(2, 3), 6)
@@ -1733,14 +1768,16 @@ def function2(x):
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE)
         out, err = popen.communicate()
-        self.assertEqual(popen.returncode, 0)
+        msg = f"stdout:\n{out.decode()}\n\nstderr:\n{err.decode()}"
+        self.assertEqual(popen.returncode, 0, msg=msg)
 
         # Execute file2.py
         popen = subprocess.Popen([sys.executable, self.file2],
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE)
         out, err = popen.communicate()
-        self.assertEqual(popen.returncode, 0)
+        msg = f"stdout:\n{out.decode()}\n\nstderr:\n{err.decode()}"
+        self.assertEqual(popen.returncode, 0, msg)
 
 
 class TestDispatcherFunctionBoundaries(TestCase):
@@ -1788,17 +1825,14 @@ class TestDispatcherFunctionBoundaries(TestCase):
                       cmpfn=jit(lambda x, y: x[1] - y[1]))
         self.assertEqual(got, (0, 4))
 
-    def test_dispatcher_cannot_return_to_python(self):
+    def test_dispatcher_can_return_to_python(self):
         @jit(nopython=True)
         def foo(fn):
             return fn
 
         fn = jit(lambda x: x)
 
-        with self.assertRaises(TypeError) as raises:
-            foo(fn)
-        self.assertRegexpMatches(str(raises.exception),
-                                 "cannot convert native .* to Python object")
+        self.assertEqual(foo(fn), fn)
 
     def test_dispatcher_in_sequence_arg(self):
         @jit(nopython=True)
@@ -1942,6 +1976,64 @@ class TestNoRetryFailedSignature(unittest.TestCase):
         # compilation.
         self.assertEqual(ct_ok, 1)
         self.assertEqual(ct_bad, 1)
+
+
+@njit
+def add_y1(x, y=1):
+    return x + y
+
+
+@njit
+def add_ynone(x, y=None):
+    return x + (1 if y else 2)
+
+
+@njit
+def mult(x, y):
+    return x * y
+
+
+@njit
+def add_func(x, func=mult):
+    return x + func(x, x)
+
+
+def _checker(f1, arg):
+    assert f1(arg) == f1.py_func(arg)
+
+
+class TestMultiprocessingDefaultParameters(SerialMixin, unittest.TestCase):
+    def run_fc_multiproc(self, fc):
+        try:
+            ctx = multiprocessing.get_context('spawn')
+        except AttributeError:
+            ctx = multiprocessing
+
+        # RE: issue #5973, this doesn't use multiprocessing.Pool.map as doing so
+        # causes the TBB library to segfault under certain conditions. It's not
+        # clear whether the cause is something in the complexity of the Pool
+        # itself, e.g. watcher threads etc, or if it's a problem synonymous with
+        # a "timing attack".
+        for a in [1, 2, 3]:
+            p = ctx.Process(target=_checker, args=(fc, a,))
+            p.start()
+            p.join(_TEST_TIMEOUT)
+            self.assertEqual(p.exitcode, 0)
+
+    def test_int_def_param(self):
+        """ Tests issue #4888"""
+
+        self.run_fc_multiproc(add_y1)
+
+    def test_none_def_param(self):
+        """ Tests None as a default parameter"""
+
+        self.run_fc_multiproc(add_func)
+
+    def test_function_def_param(self):
+        """ Tests a function as a default parameter"""
+
+        self.run_fc_multiproc(add_func)
 
 
 if __name__ == '__main__':

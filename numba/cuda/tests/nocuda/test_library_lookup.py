@@ -1,12 +1,10 @@
-from __future__ import absolute_import
-
 import sys
 import os
 import multiprocessing as mp
 import warnings
 
-from numba.config import IS_WIN32, IS_OSX
-from numba.errors import NumbaWarning
+from numba.core.config import IS_WIN32, IS_OSX
+from numba.core.errors import NumbaWarning
 from numba.cuda.cudadrv import nvvm
 from numba.cuda.testing import (
     unittest,
@@ -101,7 +99,7 @@ class TestLibDeviceLookUp(LibraryLookupBase):
         if has_cuda:
             self.assertEqual(by, 'Conda environment')
         else:
-            self.assertEqual(by, "<unavailable>")
+            self.assertEqual(by, "<unknown>")
             self.assertIsNone(info)
         self.assertFalse(warns)
         # Check that CUDA_HOME works by removing conda-env
@@ -119,7 +117,7 @@ class TestLibDeviceLookUp(LibraryLookupBase):
         if get_system_ctk() is None:
             # Fake remove conda environment so no cudatoolkit is available
             by, info, warns = self.remote_do(self.do_clear_envs)
-            self.assertEqual(by, '<unavailable>')
+            self.assertEqual(by, '<unknown>')
             self.assertIsNone(info)
             self.assertFalse(warns)
         else:
@@ -131,6 +129,7 @@ class TestLibDeviceLookUp(LibraryLookupBase):
     @staticmethod
     def do_clear_envs():
         remove_env('CUDA_HOME')
+        remove_env('CUDA_PATH')
         remove_env('NUMBAPRO_CUDALIB')
         remove_env('NUMBAPRO_LIBDEVICE')
         return True, _get_libdevice_path_decision()
@@ -157,7 +156,7 @@ class TestNvvmLookUp(LibraryLookupBase):
         if has_cuda:
             self.assertEqual(by, 'Conda environment')
         else:
-            self.assertEqual(by, "<unavailable>")
+            self.assertEqual(by, "<unknown>")
             self.assertIsNone(info)
         self.assertFalse(warns)
         # Check that CUDA_HOME works by removing conda-env
@@ -184,7 +183,7 @@ class TestNvvmLookUp(LibraryLookupBase):
         if get_system_ctk() is None:
             # Fake remove conda environment so no cudatoolkit is available
             by, info, warns = self.remote_do(self.do_clear_envs)
-            self.assertEqual(by, '<unavailable>')
+            self.assertEqual(by, '<unknown>')
             self.assertIsNone(info)
             self.assertFalse(warns)
         else:
@@ -196,6 +195,7 @@ class TestNvvmLookUp(LibraryLookupBase):
     @staticmethod
     def do_clear_envs():
         remove_env('CUDA_HOME')
+        remove_env('CUDA_PATH')
         remove_env('NUMBAPRO_CUDALIB')
         remove_env('NUMBAPRO_NVVM')
         return True, _get_nvvm_path_decision()
@@ -227,7 +227,7 @@ class TestCudaLibLookUp(LibraryLookupBase):
         if has_cuda:
             self.assertEqual(by, 'Conda environment')
         else:
-            self.assertEqual(by, "<unavailable>")
+            self.assertEqual(by, "<unknown>")
             self.assertIsNone(info)
         self.assertFalse(warns)
 
@@ -249,7 +249,7 @@ class TestCudaLibLookUp(LibraryLookupBase):
         if get_system_ctk() is None:
             # Fake remove conda environment so no cudatoolkit is available
             by, info, warns = self.remote_do(self.do_clear_envs)
-            self.assertEqual(by, "<unavailable>")
+            self.assertEqual(by, "<unknown>")
             self.assertIsNone(info)
             self.assertFalse(warns)
         else:
@@ -261,6 +261,7 @@ class TestCudaLibLookUp(LibraryLookupBase):
     @staticmethod
     def do_clear_envs():
         remove_env('CUDA_HOME')
+        remove_env('CUDA_PATH')
         remove_env('NUMBAPRO_CUDALIB')
         return True, _get_cudalib_dir_path_decision()
 

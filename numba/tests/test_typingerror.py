@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import math
 import re
 import textwrap
@@ -7,11 +5,13 @@ import operator
 
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated
-from numba import jit, types
-from numba.errors import TypingError
-from .support import TestCase
+import unittest
+from numba.core.compiler import compile_isolated
+from numba import jit
+from numba.core import types
+from numba.core.errors import TypingError
+from numba.core.types.functions import _header_lead
+from numba.tests.support import TestCase
 
 
 def what():
@@ -82,7 +82,7 @@ class TestTypingError(unittest.TestCase):
         # This used to print "'object' object has no attribute 'int32'"
         with self.assertRaises(TypingError) as raises:
             compile_isolated(unknown_module, ())
-        self.assertIn("Untyped global name 'numpyz'", str(raises.exception))
+        self.assertIn("name 'numpyz' is not defined", str(raises.exception))
 
     def test_issue_868(self):
         '''
@@ -93,17 +93,18 @@ class TestTypingError(unittest.TestCase):
         with self.assertRaises(TypingError) as raises:
             compile_isolated(issue_868, (types.Array(types.int32, 1, 'C'),))
 
-        expected = (
-            "Invalid use of Function(<built-in function mul>) with argument(s) of type(s): (tuple({0} x 1), {1})"
+        expected = ((_header_lead + " Function(<built-in function mul>) found "
+                     "for signature:\n \n >>> mul(UniTuple({} x 1), {})")
             .format(str(types.intp), types.IntegerLiteral(2)))
         self.assertIn(expected, str(raises.exception))
-        self.assertIn("[1] During: typing of", str(raises.exception))
+        self.assertIn("During: typing of", str(raises.exception))
 
     def test_return_type_unification(self):
         with self.assertRaises(TypingError) as raises:
             compile_isolated(impossible_return_type, (types.int32,))
-        self.assertIn("Can't unify return type from the following types: (), complex128",
-                      str(raises.exception))
+        msg = ("Can't unify return type from the following types: Tuple(), "
+               "complex128")
+        self.assertIn(msg, str(raises.exception))
 
     def test_bad_hypot_usage(self):
         with self.assertRaises(TypingError) as raises:
@@ -115,11 +116,11 @@ class TestTypingError(unittest.TestCase):
         self.assertIn(" * (float64, float64) -> float64", errmsg)
 
         # find the context lines
-        ctx_lines = [x for x in errmsg.splitlines() if "] During" in x ]
+        ctx_lines = [x for x in errmsg.splitlines() if "During:" in x ]
 
         # Check contextual msg
-        self.assertTrue(re.search(r'\[1\] During: resolving callee type: Function.*hypot', ctx_lines[0]))
-        self.assertTrue(re.search(r'\[2\] During: typing of call .*test_typingerror.py', ctx_lines[1]))
+        self.assertTrue(re.search(r'.*During: resolving callee type: Function.*hypot', ctx_lines[0]))
+        self.assertTrue(re.search(r'.*During: typing of call .*test_typingerror.py', ctx_lines[1]))
 
 
     def test_imprecise_list(self):
@@ -146,7 +147,7 @@ class TestTypingError(unittest.TestCase):
             compile_isolated(using_imprecise_list, ())
 
         errmsg = str(raises.exception)
-        self.assertIn("Undecided type $0.6 := <undecided>", errmsg)
+        self.assertIn("Undecided type", errmsg)
 
     def test_array_setitem_invalid_cast(self):
         with self.assertRaises(TypingError) as raises:
@@ -154,7 +155,7 @@ class TestTypingError(unittest.TestCase):
 
         errmsg = str(raises.exception)
         self.assertIn(
-            "Invalid use of Function({})".format(operator.setitem),
+            _header_lead + " Function({})".format(operator.setitem),
             errmsg,
         )
         self.assertIn(
@@ -174,13 +175,12 @@ class TestTypingError(unittest.TestCase):
         with self.assertRaises(TypingError) as raises:
             foo()
         errmsg = str(raises.exception)
-        expected = "All templates rejected with%s literals."
-        for x in ['', 'out']:
-            self.assertIn(expected % x, errmsg)
+        expected = "No match."
+        self.assertIn(expected, errmsg)
 
-        ctx_lines = [x for x in errmsg.splitlines() if "] During" in x ]
-        search = [r'\[1\] During: resolving callee type: Function.*enumerate',
-                  r'\[2\] During: typing of call .*test_typingerror.py']
+        ctx_lines = [x for x in errmsg.splitlines() if "During:" in x ]
+        search = [r'.*During: resolving callee type: Function.*enumerate',
+                  r'.*During: typing of call .*test_typingerror.py']
         for i, x in enumerate(search):
             self.assertTrue(re.search(x, ctx_lines[i]))
 
@@ -211,7 +211,7 @@ class TestArgumentTypingError(unittest.TestCase):
             cfunc(1, foo, 1)
 
         expected=re.compile(("This error may have been caused by the following "
-                             "argument\(s\):\\n- argument 1:.*cannot determine "
+                             "argument\(s\):\\n- argument 1:.*Cannot determine "
                              "Numba type of "
                              "<class \'numba.tests.test_typingerror.Foo\'>"))
         self.assertTrue(expected.search(str(raises.exception)) is not None)

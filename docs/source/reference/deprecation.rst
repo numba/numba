@@ -17,7 +17,7 @@ All Numba deprecations are issued via ``NumbaDeprecationWarning`` or
 ``NumbaPendingDeprecationWarning`` s, to suppress the reporting of
 these the following code snippet can be used::
 
-    from numba.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
+    from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
     import warnings
 
     warnings.simplefilter('ignore', category=NumbaDeprecationWarning)
@@ -53,7 +53,7 @@ efficiently and consistently. After a number of years of experience with this
 problem, it is clear that providing this behaviour is both fraught with
 difficulty and often leads to code which does not have good performance (all
 reflected data has to go through special APIs to convert the data to native
-formats at call time and and then back to CPython formats at return time). As a
+formats at call time and then back to CPython formats at return time). As a
 result of this, the sheer number of reported problems in the issue tracker, and
 how well a new approach that was taken with ``typed.Dict`` (typed dictionaries)
 has gone, the core developers have decided to deprecate the noted ``reflection``
@@ -92,7 +92,7 @@ above is::
     foo(typed_a)
 
 For more information about ``typed.List`` see :ref:`feature-typed-list`. Further
-usability enhancements for this feature are scheduled for the 0.47.0 release
+usability enhancements for this feature were made in the 0.47.0 release
 cycle.
 
 Schedule
@@ -100,8 +100,8 @@ Schedule
 This feature will be removed with respect to this schedule:
 
 * Pending-deprecation warnings will be issued in version 0.44.0
-* Deprecation warnings and replacements will be issued in version 0.47.0
-* Support will be removed in version 0.48.0
+* Deprecation warnings and replacements will be issued in version 0.53.0
+* Support will be removed in version 0.54.0
 
 Recommendations
 ---------------
@@ -205,7 +205,7 @@ Schedule
 This feature will be removed with respect to this schedule:
 
 * Deprecation warnings will be issued in version 0.44.0
-* Support will be removed in version 0.47.0
+* Support will be removed in version 0.54.0
 
 Recommendations
 ---------------
@@ -223,28 +223,21 @@ supply the keyword argument ``forceobj=True`` to ensure the function is always
 compiled in :term:`object mode`.
 
 
-Deprecation of ``numba.autojit``
-================================
-The decorator ``numba.autojit`` was inherited from the time of ``NumbaPro`` and
-has not been recommended for use for some time.
-
-Reason for deprecation
-----------------------
-It is functionally no different to ``numba.jit`` and in fact just calls out to
-this function. It has not been in active use or recommended for use for a
-significant period of time.
-
-Schedule
---------
-This feature will be removed with respect to this schedule:
-
-* Deprecation warnings will be issued in version 0.44.0
-* Support will be removed in version 0.47.0
+Deprecation of the target kwarg
+===============================
+There have been a number of users attempting to use the ``target`` keyword
+argument that's meant for internal use only. We are deprecating this argument,
+as alternative solutions are available to achieve the same behaviour.
 
 Recommendations
 ---------------
-Projects that need/rely on the deprecated behaviour should pin their dependency
-on Numba to a version prior to removal of this behaviour. The recommended method
-for accommodating the deprecation of ``numba.autojit`` is to simply replace it
-with the semantically and functionally equivalent ``numba.jit`` decorator.
+Update the ``jit`` decorator as follows:
 
+* Change ``@numba.jit(..., target='cuda')`` to ``numba.cuda.jit(...)``.
+
+Schedule
+--------
+This feature will be moved with respect to this schedule:
+
+* Deprecation warnings will be issued in 0.51.0.
+* The target kwarg will be removed in version 0.53.0.

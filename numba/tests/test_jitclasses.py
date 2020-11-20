@@ -1,26 +1,39 @@
-from __future__ import absolute_import, print_function, division
+import ctypes
+import pickle
+import random
+import typing as pt
+import unittest
 
 from collections import OrderedDict
-import ctypes
-import random
-import sys
-import pickle
 
 import numpy as np
+from numba import (boolean, deferred_type, float32, float64, int16, int32,
+                   njit, optional, typeof)
+from numba.core import errors, types
+from numba.core.dispatcher import Dispatcher
+from numba.core.errors import LoweringError
+from numba.core.runtime.nrt import MemInfo
+from numba.experimental import jitclass
+from numba.experimental.jitclass import _box
+from numba.experimental.jitclass.base import JitClassType
+from numba.tests.support import MemoryLeakMixin, TestCase
 
-from numba import (float32, float64, int16, int32, boolean, deferred_type,
-                   optional)
-from numba import njit, typeof, types, errors
-from numba import unittest_support as unittest
-from numba import jitclass
-from .support import TestCase, MemoryLeakMixin, tag
-from numba.jitclass import _box
-from numba.runtime.nrt import MemInfo
-from numba.errors import LoweringError
 
-# there are some python 3 specific syntax tests
-if sys.version_info >= (3,):
-    from .jitclass_usecases import TestClass1, TestClass2
+class TestClass1(object):
+    def __init__(self, x, y, z=1, *, a=5):
+        self.x = x
+        self.y = y
+        self.z = z
+        self.a = a
+
+
+class TestClass2(object):
+    def __init__(self, x, y, z=1, *args, a=5):
+        self.x = x
+        self.y = y
+        self.z = z
+        self.args = args
+        self.a = a
 
 
 def _get_meminfo(box):
@@ -32,35 +45,76 @@ def _get_meminfo(box):
 
 class TestJitClass(TestCase, MemoryLeakMixin):
 
-    def _check_spec(self, spec):
-        @jitclass(spec)
-        class Test(object):
+    def _check_spec(self, spec=None, test_cls=None, all_expected=None):
+        if test_cls is None:
+            @jitclass(spec)
+            class Test(object):
 
-            def __init__(self):
-                pass
+                def __init__(self):
+                    pass
+            test_cls = Test
 
-        clsty = Test.class_type.instance_type
+        clsty = test_cls.class_type.instance_type
         names = list(clsty.struct.keys())
         values = list(clsty.struct.values())
-        self.assertEqual(names[0], 'x')
-        self.assertEqual(names[1], 'y')
-        self.assertEqual(values[0], int32)
-        self.assertEqual(values[1], float32)
+
+        if all_expected is None:
+            if isinstance(spec, OrderedDict):
+                all_expected = spec.items()
+            else:
+                all_expected = spec
+
+        assert all_expected is not None
+
+        self.assertEqual(len(names), len(all_expected))
+        for got, expected in zip(zip(names, values), all_expected):
+            self.assertEqual(got[0], expected[0])
+            self.assertEqual(got[1], expected[1])
 
     def test_ordereddict_spec(self):
         spec = OrderedDict()
-        spec['x'] = int32
-        spec['y'] = float32
+        spec["x"] = int32
+        spec["y"] = float32
         self._check_spec(spec)
 
     def test_list_spec(self):
-        spec = [('x', int32),
-                ('y', float32)]
+        spec = [("x", int32),
+                ("y", float32)]
         self._check_spec(spec)
 
+    def test_type_annotations(self):
+        spec = [("x", int32)]
+
+        @jitclass(spec)
+        class Test1(object):
+            x: int
+            y: pt.List[float]
+
+            def __init__(self):
+                pass
+
+        self._check_spec(spec, Test1, spec + [("y", types.ListType(float64))])
+
+    def test_type_annotation_inheritance(self):
+
+        class Foo:
+            x: int
+
+        @jitclass
+        class Bar(Foo):
+            y: float
+
+            def __init__(self, value: float) -> None:
+                self.x = int(value)
+                self.y = value
+
+        self._check_spec(
+            test_cls=Bar, all_expected=[("x", typeof(0)), ("y", typeof(0.0))]
+        )
+
     def test_spec_errors(self):
-        spec1 = [('x', int), ('y', float32[:])]
-        spec2 = [(1, int32), ('y', float32[:])]
+        spec1 = [("x", int), ("y", float32[:])]
+        spec2 = [(1, int32), ("y", float32[:])]
 
         class Test(object):
 
@@ -68,19 +122,32 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 pass
 
         with self.assertRaises(TypeError) as raises:
-            jitclass(spec1)(Test)
+            jitclass(Test, spec1)
         self.assertIn("spec values should be Numba type instances",
                       str(raises.exception))
         with self.assertRaises(TypeError) as raises:
-            jitclass(spec2)(Test)
+            jitclass(Test, spec2)
         self.assertEqual(str(raises.exception),
                          "spec keys should be strings, got 1")
 
+    def test_init_errors(self):
+
+        @jitclass([])
+        class Test:
+            def __init__(self):
+                return 7
+
+        with self.assertRaises(errors.TypingError) as raises:
+            Test()
+
+        self.assertIn("__init__() should return None, not",
+                      str(raises.exception))
+
     def _make_Float2AndArray(self):
         spec = OrderedDict()
-        spec['x'] = float32
-        spec['y'] = float32
-        spec['arr'] = float32[:]
+        spec["x"] = float32
+        spec["y"] = float32
+        spec["arr"] = float32[:]
 
         @jitclass(spec)
         class Float2AndArray(object):
@@ -99,8 +166,8 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
     def _make_Vector2(self):
         spec = OrderedDict()
-        spec['x'] = int32
-        spec['y'] = int32
+        spec["x"] = int32
+        spec["y"] = int32
 
         @jitclass(spec)
         class Vector2(object):
@@ -111,7 +178,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
         return Vector2
 
-    @tag('important')
     def test_jit_class_1(self):
         Float2AndArray = self._make_Float2AndArray()
         Vector2 = self._make_Vector2()
@@ -134,7 +200,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(b, 3 + 4)
         self.assertPreciseEqual(c, inp)
 
-    @tag('important')
     def test_jitclass_usage_from_python(self):
         Float2AndArray = self._make_Float2AndArray()
 
@@ -192,7 +257,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
     def test_jitclass_datalayout(self):
         spec = OrderedDict()
         # Boolean has different layout as value vs data
-        spec['val'] = boolean
+        spec["val"] = boolean
 
         @jitclass(spec)
         class Foo(object):
@@ -203,13 +268,12 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertTrue(Foo(True).val)
         self.assertFalse(Foo(False).val)
 
-    @tag('important')
     def test_deferred_type(self):
         node_type = deferred_type()
 
         spec = OrderedDict()
-        spec['data'] = float32
-        spec['next'] = optional(node_type)
+        spec["data"] = float32
+        spec["next"] = optional(node_type)
 
         @njit
         def get_data(node):
@@ -268,9 +332,9 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
     def test_c_structure(self):
         spec = OrderedDict()
-        spec['a'] = int32
-        spec['b'] = int16
-        spec['c'] = float64
+        spec["a"] = int32
+        spec["b"] = int16
+        spec["c"] = float64
 
         @jitclass(spec)
         class Struct(object):
@@ -284,9 +348,9 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
         class CStruct(ctypes.Structure):
             _fields_ = [
-                ('a', ctypes.c_int32),
-                ('b', ctypes.c_int16),
-                ('c', ctypes.c_double),
+                ("a", ctypes.c_int32),
+                ("b", ctypes.c_int16),
+                ("c", ctypes.c_double),
             ]
 
         ptr = ctypes.c_void_p(_box.box_get_dataptr(st))
@@ -306,7 +370,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         with self.assertRaises(LoweringError) as raises:
             # trigger compilation
             do_is(vec_a, vec_a)
-        self.assertIn('no default `is` implementation', str(raises.exception))
+        self.assertIn("no default `is` implementation", str(raises.exception))
 
     def test_isinstance(self):
         Vector2 = self._make_Vector2()
@@ -327,7 +391,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             def what(self):
                 return self.attr
 
-        @jitclass([('attr', int32)])
+        @jitclass([("attr", int32)])
         class Test(Base):
 
             def __init__(self, attr):
@@ -345,14 +409,13 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 pass
 
         with self.assertRaises(TypeError) as raises:
-            jitclass(())(Mine)
+            jitclass(Mine)
 
         self.assertEqual(str(raises.exception),
                          "class members are not yet supported: constant")
 
-    @tag('important')
     def test_user_getter_setter(self):
-        @jitclass([('attr', int32)])
+        @jitclass([("attr", int32)])
         class Foo(object):
 
             def __init__(self, attr):
@@ -404,7 +467,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 pass
 
         with self.assertRaises(TypeError) as raises:
-            jitclass([])(Foo)
+            jitclass(Foo)
         self.assertEqual(str(raises.exception),
                          "deleter is not supported: value")
 
@@ -422,16 +485,16 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 pass
 
         with self.assertRaises(NameError) as raises:
-            jitclass([('my_property', int32)])(Foo)
-        self.assertEqual(str(raises.exception), 'name shadowing: my_property')
+            jitclass(Foo, [("my_property", int32)])
+        self.assertEqual(str(raises.exception), "name shadowing: my_property")
 
         with self.assertRaises(NameError) as raises:
-            jitclass([('my_method', int32)])(Foo)
-        self.assertEqual(str(raises.exception), 'name shadowing: my_method')
+            jitclass(Foo, [("my_method", int32)])
+        self.assertEqual(str(raises.exception), "name shadowing: my_method")
 
     def test_distinct_classes(self):
         # Different classes with the same names shouldn't confuse the compiler
-        @jitclass([('x', int32)])
+        @jitclass([("x", int32)])
         class Foo(object):
 
             def __init__(self, x):
@@ -442,7 +505,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
         FirstFoo = Foo
 
-        @jitclass([('x', int32)])
+        @jitclass([("x", int32)])
         class Foo(object):
 
             def __init__(self, x):
@@ -466,7 +529,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 self.value = value
 
         def create_my_class(value):
-            cls = jitclass([('value', typeof(value))])(MyClass)
+            cls = jitclass(MyClass, [("value", typeof(value))])
             return cls(value)
 
         a = create_my_class(123)
@@ -481,13 +544,12 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         d = create_my_class(np.array([12.3]))
         np.testing.assert_equal(d.value, [12.3])
 
-    @tag('important')
     def test_protected_attrs(self):
         spec = {
-            'value': int32,
-            '_value': float32,
-            '__value': int32,
-            '__value__': int32,
+            "value": int32,
+            "_value": float32,
+            "__value": int32,
+            "__value__": int32,
         }
 
         @jitclass(spec)
@@ -563,22 +625,21 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         with self.assertRaises(errors.TypingError) as raises:
             access_dunder(inst)
         # It will appear as "_TestJitClass__value" because the `access_dunder`
-        # is under the scope of 'TestJitClass'.
-        self.assertIn('_TestJitClass__value', str(raises.exception))
+        # is under the scope of "TestJitClass".
+        self.assertIn("_TestJitClass__value", str(raises.exception))
 
         with self.assertRaises(AttributeError) as raises:
             access_dunder.py_func(inst)
-        self.assertIn('_TestJitClass__value', str(raises.exception))
+        self.assertIn("_TestJitClass__value", str(raises.exception))
 
-    @unittest.skipIf(sys.version_info < (3,), "Python 3-specific test")
     def test_annotations(self):
         """
         Methods with annotations should compile fine (issue #1911).
         """
         from .annotation_usecases import AnnotatedClass
 
-        spec = {'x': int32}
-        cls = jitclass(spec)(AnnotatedClass)
+        spec = {"x": int32}
+        cls = jitclass(AnnotatedClass, spec)
 
         obj = cls(5)
         self.assertEqual(obj.x, 5)
@@ -586,9 +647,10 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
     def test_docstring(self):
 
-        @jitclass([])
+        @jitclass
         class Apple(object):
             "Class docstring"
+
             def __init__(self):
                 "init docstring"
 
@@ -599,14 +661,14 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             def aval(self):
                 "aval property docstring"
 
-        self.assertEqual(Apple.__doc__, 'Class docstring')
-        self.assertEqual(Apple.__init__.__doc__, 'init docstring')
-        self.assertEqual(Apple.foo.__doc__, 'foo method docstring')
-        self.assertEqual(Apple.aval.__doc__, 'aval property docstring')
+        self.assertEqual(Apple.__doc__, "Class docstring")
+        self.assertEqual(Apple.__init__.__doc__, "init docstring")
+        self.assertEqual(Apple.foo.__doc__, "foo method docstring")
+        self.assertEqual(Apple.aval.__doc__, "aval property docstring")
 
     def test_kwargs(self):
-        spec = [('a', int32),
-                ('b', float64)]
+        spec = [("a", int32),
+                ("b", float64)]
 
         @jitclass(spec)
         class TestClass(object):
@@ -617,15 +679,15 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         x = 2
         y = 2
         z = 1.1
-        kwargs = {'y': y, 'z': z}
+        kwargs = {"y": y, "z": z}
         tc = TestClass(x=2, **kwargs)
         self.assertEqual(tc.a, x * y)
         self.assertEqual(tc.b, z)
 
     def test_default_args(self):
-        spec = [('x', int32),
-                ('y', int32),
-                ('z', int32)]
+        spec = [("x", int32),
+                ("y", int32),
+                ("z", int32)]
 
         @jitclass(spec)
         class TestClass(object):
@@ -649,14 +711,13 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(tc.y, 2)
         self.assertEqual(tc.z, 5)
 
-    @unittest.skipIf(sys.version_info < (3,), "Python 3-specific test")
     def test_default_args_keyonly(self):
-        spec = [('x', int32),
-                ('y', int32),
-                ('z', int32),
-                ('a', int32)]
+        spec = [("x", int32),
+                ("y", int32),
+                ("z", int32),
+                ("a", int32)]
 
-        TestClass = jitclass(spec)(TestClass1)
+        TestClass = jitclass(TestClass1, spec)
 
         tc = TestClass(2, 3)
         self.assertEqual(tc.x, 2)
@@ -682,16 +743,15 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(tc.z, 1)
         self.assertEqual(tc.a, 5)
 
-    @unittest.skipIf(sys.version_info < (3,), "Python 3-specific test")
     def test_default_args_starargs_and_keyonly(self):
-        spec = [('x', int32),
-                ('y', int32),
-                ('z', int32),
-                ('args', types.UniTuple(int32, 2)),
-                ('a', int32)]
+        spec = [("x", int32),
+                ("y", int32),
+                ("z", int32),
+                ("args", types.UniTuple(int32, 2)),
+                ("a", int32)]
 
         with self.assertRaises(errors.UnsupportedError) as raises:
-            jitclass(spec)(TestClass2)
+            jitclass(TestClass2, spec)
 
         msg = "VAR_POSITIONAL argument type unsupported"
         self.assertIn(msg, str(raises.exception))
@@ -717,7 +777,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 self.assertPreciseEqual(expect, got)
 
     def test_getitem(self):
-        spec = [('data', int32[:])]
+        spec = [("data", int32[:])]
 
         @jitclass(spec)
         class TestClass(object):
@@ -748,7 +808,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(get_index(t, 3), 3)
 
     def test_getitem_unbox(self):
-        spec = [('data', int32[:])]
+        spec = [("data", int32[:])]
 
         @jitclass(spec)
         class TestClass(object):
@@ -774,7 +834,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(t[2], 20)
 
     def test_getitem_complex_key(self):
-        spec = [('data', int32[:, :])]
+        spec = [("data", int32[:, :])]
 
         @jitclass(spec)
         class TestClass(object):
@@ -804,7 +864,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(t[complex(2, 2)], 4)
 
     def test_getitem_tuple_key(self):
-        spec = [('data', int32[:, :])]
+        spec = [("data", int32[:, :])]
 
         @jitclass(spec)
         class TestClass(object):
@@ -833,7 +893,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(t[2, 2], 22)
 
     def test_getitem_slice_key(self):
-        spec = [('data', int32[:])]
+        spec = [("data", int32[:])]
 
         @jitclass(spec)
         class TestClass(object):
@@ -873,7 +933,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         # See issue #3872, llvm 7 introduced a max label length of 1024 chars
         # Numba ships patched llvm 7.1 (ppc64le) and patched llvm 8 to undo this
         # change, this test is here to make sure long labels are ok:
-        alphabet = [chr(ord('a') + x) for x in range(26)]
+        alphabet = [chr(ord("a") + x) for x in range(26)]
 
         spec = [(letter * 10, float64) for letter in alphabet]
         spec.extend([(letter.upper() * 10, float64) for letter in alphabet])
@@ -893,7 +953,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         TruncatedLabel().meth2()
 
     def test_pickling(self):
-        @jitclass(spec=[])
+        @jitclass
         class PickleTestSubject(object):
             def __init__(self):
                 pass
@@ -904,6 +964,152 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         pickled = pickle.dumps(ty)
         self.assertIs(pickle.loads(pickled), ty)
 
+    def test_static_methods(self):
+        @jitclass([("x", int32)])
+        class Test1:
+            def __init__(self, x):
+                self.x = x
 
-if __name__ == '__main__':
+            def increase(self, y):
+                self.x = self.add(self.x, y)
+                return self.x
+
+            @staticmethod
+            def add(a, b):
+                return a + b
+
+            @staticmethod
+            def sub(a, b):
+                return a - b
+
+        @jitclass([("x", int32)])
+        class Test2:
+            def __init__(self, x):
+                self.x = x
+
+            def increase(self, y):
+                self.x = self.add(self.x, y)
+                return self.x
+
+            @staticmethod
+            def add(a, b):
+                return a - b
+
+        self.assertIsInstance(Test1.add, Dispatcher)
+        self.assertIsInstance(Test1.sub, Dispatcher)
+        self.assertIsInstance(Test2.add, Dispatcher)
+        self.assertNotEqual(Test1.add, Test2.add)
+
+        self.assertEqual(3, Test1.add(1, 2))
+        self.assertEqual(-1, Test2.add(1, 2))
+        self.assertEqual(4, Test1.sub(6, 2))
+
+        t1 = Test1(0)
+        t2 = Test2(0)
+        self.assertEqual(1, t1.increase(1))
+        self.assertEqual(-1, t2.increase(1))
+        self.assertEqual(2, t1.add(1, 1))
+        self.assertEqual(0, t1.sub(1, 1))
+        self.assertEqual(0, t2.add(1, 1))
+        self.assertEqual(2j, t1.add(1j, 1j))
+        self.assertEqual(1j, t1.sub(2j, 1j))
+        self.assertEqual("foobar", t1.add("foo", "bar"))
+
+        with self.assertRaises(AttributeError) as raises:
+            Test2.sub(3, 1)
+        self.assertIn("has no attribute 'sub'",
+                      str(raises.exception))
+
+        with self.assertRaises(TypeError) as raises:
+            Test1.add(3)
+        self.assertIn("not enough arguments: expected 2, got 1",
+                      str(raises.exception))
+
+        # Check error message for calling a static method as a class attr from
+        # another method (currently unsupported).
+
+        @jitclass([])
+        class Test3:
+            def __init__(self):
+                pass
+
+            @staticmethod
+            def a_static_method(a, b):
+                pass
+
+            def call_static(self):
+                return Test3.a_static_method(1, 2)
+
+        invalid = Test3()
+        with self.assertRaises(errors.TypingError) as raises:
+            invalid.call_static()
+
+        self.assertIn("Unknown attribute 'a_static_method'",
+                      str(raises.exception))
+
+    def test_jitclass_decorator_usecases(self):
+        spec = OrderedDict(x=float64)
+
+        @jitclass()
+        class Test1:
+            x: float
+
+            def __init__(self):
+                self.x = 0
+
+        self.assertIsInstance(Test1, JitClassType)
+        self.assertDictEqual(Test1.class_type.struct, spec)
+
+        @jitclass(spec=spec)
+        class Test2:
+
+            def __init__(self):
+                self.x = 0
+
+        self.assertIsInstance(Test2, JitClassType)
+        self.assertDictEqual(Test2.class_type.struct, spec)
+
+        @jitclass
+        class Test3:
+            x: float
+
+            def __init__(self):
+                self.x = 0
+
+        self.assertIsInstance(Test3, JitClassType)
+        self.assertDictEqual(Test3.class_type.struct, spec)
+
+        @jitclass(spec)
+        class Test4:
+
+            def __init__(self):
+                self.x = 0
+
+        self.assertIsInstance(Test4, JitClassType)
+        self.assertDictEqual(Test4.class_type.struct, spec)
+
+    def test_jitclass_function_usecases(self):
+        spec = OrderedDict(x=float64)
+
+        class AnnotatedTest:
+            x: float
+
+            def __init__(self):
+                self.x = 0
+
+        JitTest1 = jitclass(AnnotatedTest)
+        self.assertIsInstance(JitTest1, JitClassType)
+        self.assertDictEqual(JitTest1.class_type.struct, spec)
+
+        class UnannotatedTest:
+
+            def __init__(self):
+                self.x = 0
+
+        JitTest2 = jitclass(UnannotatedTest, spec)
+        self.assertIsInstance(JitTest2, JitClassType)
+        self.assertDictEqual(JitTest2.class_type.struct, spec)
+
+
+if __name__ == "__main__":
     unittest.main()

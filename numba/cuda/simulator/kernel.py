@@ -1,14 +1,11 @@
-from __future__ import print_function
-
 from contextlib import contextmanager
+from functools import reduce
 import sys
 import threading
 
 import numpy as np
 
-from numba import six
-from numba.six import reraise
-from .cudadrv.devicearray import to_device, auto_device
+from .cudadrv.devicearray import FakeCUDAArray, FakeWithinKernelCUDAArray
 from .kernelapi import Dim3, FakeCUDAModule, swapped_cuda_module
 from ..errors import normalize_kernel_dimensions
 from ..args import wrap_arg, ArgHint
@@ -43,6 +40,16 @@ def _get_kernel_context():
     return _kernel_context
 
 
+class FakeDefinition:
+    '''
+    Used only to provide the max_cooperative_grid_blocks method
+    '''
+    def max_cooperative_grid_blocks(self, blockdim):
+        # We can only run one block in a cooperative grid because we have no
+        # mechanism for synchronization between different blocks
+        return 1
+
+
 class FakeCUDAKernel(object):
     '''
     Wraps a @cuda.jit-ed function.
@@ -53,16 +60,23 @@ class FakeCUDAKernel(object):
         self._device = device
         self._fastmath = fastmath
         self.extensions = list(extensions) # defensive copy
-        # Initial configuration: 1 block, 1 thread, stream 0, no dynamic shared
+        # Initial configuration: grid unconfigured, stream 0, no dynamic shared
         # memory.
-        self[1, 1, 0, 0]
+        self.grid_dim = None
+        self.block_dim = None
+        self.stream = 0
+        self.dynshared_size = 0
 
     def __call__(self, *args):
         if self._device:
             with swapped_cuda_module(self.fn, _get_kernel_context()):
                 return self.fn(*args)
 
-        fake_cuda_module = FakeCUDAModule(self.grid_dim, self.block_dim,
+        # Ensure we've been given a valid grid configuration
+        grid_dim, block_dim = normalize_kernel_dimensions(self.grid_dim,
+                                                          self.block_dim)
+
+        fake_cuda_module = FakeCUDAModule(grid_dim, block_dim,
                                           self.dynshared_size)
         with _push_kernel_context(fake_cuda_module):
             # fake_args substitutes all numpy arrays for FakeCUDAArrays
@@ -71,7 +85,7 @@ class FakeCUDAKernel(object):
 
             def fake_arg(arg):
                 # map the arguments using any extension you've registered
-                _, arg = six.moves.reduce(
+                _, arg = reduce(
                     lambda ty_val, extension: extension.prepare_args(
                         *ty_val,
                         stream=0,
@@ -81,22 +95,26 @@ class FakeCUDAKernel(object):
                 )
 
                 if isinstance(arg, np.ndarray) and arg.ndim > 0:
-                    return wrap_arg(arg).to_device(retr)
+                    ret = wrap_arg(arg).to_device(retr)
                 elif isinstance(arg, ArgHint):
-                    return arg.to_device(retr)
+                    ret = arg.to_device(retr)
+                elif isinstance(arg, np.void):
+                    ret = FakeCUDAArray(arg)  # In case a np record comes in.
                 else:
-                    return arg
+                    ret = arg
+                if isinstance(ret, FakeCUDAArray):
+                    return FakeWithinKernelCUDAArray(ret)
+                return ret
 
             fake_args = [fake_arg(arg) for arg in args]
             with swapped_cuda_module(self.fn, fake_cuda_module):
                 # Execute one block at a time
-                for grid_point in np.ndindex(*self.grid_dim):
-                    bm = BlockManager(self.fn, self.grid_dim, self.block_dim)
+                for grid_point in np.ndindex(*grid_dim):
+                    bm = BlockManager(self.fn, grid_dim, block_dim)
                     bm.run(grid_point, *fake_args)
 
             for wb in retr:
                 wb()
-
 
     def __getitem__(self, configuration):
         self.grid_dim, self.block_dim = \
@@ -110,18 +128,29 @@ class FakeCUDAKernel(object):
     def bind(self):
         pass
 
-
     def specialize(self, *args):
         return self
 
     def forall(self, ntasks, tpb=0, stream=0, sharedmem=0):
+        if ntasks < 0:
+            raise ValueError("Can't create ForAll with negative task count: %s"
+                             % ntasks)
         return self[ntasks, 1, stream, sharedmem]
+
+    @property
+    def definition(self):
+        return FakeDefinition()
+
+    @property
+    def definitions(self):
+        msg = 'Multiple definitions are unsupported in the simulator'
+        raise NotImplementedError(msg)
 
     @property
     def ptx(self):
         '''
-        Required in order to proceed through some tests, but serves no functional
-        purpose.
+        Required in order to proceed through some tests, but serves no
+        functional purpose.
         '''
         res = '.const'
         res += '\n.local'
@@ -130,10 +159,7 @@ class FakeCUDAKernel(object):
         return res
 
 
-
-
 # Thread emulation
-
 
 class BlockThread(threading.Thread):
     '''
@@ -150,7 +176,9 @@ class BlockThread(threading.Thread):
         self.daemon = True
         self.abort = False
         blockDim = Dim3(*self._manager._block_dim)
-        self.thread_id = self.threadIdx.x + blockDim.x * (self.threadIdx.y + blockDim.y * self.threadIdx.z)
+        self.thread_id = self.threadIdx.x + (blockDim.x * (self.threadIdx.y +
+                                                           blockDim.y *
+                                                           self.threadIdx.z))
 
     def run(self):
         try:
@@ -163,7 +191,9 @@ class BlockThread(threading.Thread):
             else:
                 msg = '%s %s: %s' % (tid, ctaid, e)
             tb = sys.exc_info()[2]
-            self.exception = (type(e), type(e)(msg), tb)
+            # Using `with_traceback` here would cause it to be mutated by
+            # future raise statements, which may or may not matter.
+            self.exception = (type(e)(msg), tb)
 
     def syncthreads(self):
 
@@ -178,21 +208,24 @@ class BlockThread(threading.Thread):
             raise RuntimeError("abort flag set on syncthreads clear")
 
     def syncthreads_count(self, value):
-        self._manager.block_state[self.threadIdx.x, self.threadIdx.y, self.threadIdx.z] = value
+        idx = self.threadIdx.x, self.threadIdx.y, self.threadIdx.z
+        self._manager.block_state[idx] = value
         self.syncthreads()
         count = np.count_nonzero(self._manager.block_state)
         self.syncthreads()
         return count
 
     def syncthreads_and(self, value):
-        self._manager.block_state[self.threadIdx.x, self.threadIdx.y, self.threadIdx.z] = value
+        idx = self.threadIdx.x, self.threadIdx.y, self.threadIdx.z
+        self._manager.block_state[idx] = value
         self.syncthreads()
         test = np.all(self._manager.block_state)
         self.syncthreads()
         return 1 if test else 0
 
     def syncthreads_or(self, value):
-        self._manager.block_state[self.threadIdx.x, self.threadIdx.y, self.threadIdx.z] = value
+        idx = self.threadIdx.x, self.threadIdx.y, self.threadIdx.z
+        self._manager.block_state[idx] = value
         self.syncthreads()
         test = np.any(self._manager.block_state)
         self.syncthreads()
@@ -255,7 +288,7 @@ class BlockManager(object):
                         t_other.syncthreads_blocked = False
                         t_other.syncthreads_event.set()
 
-                    reraise(*(t.exception))
+                    raise t.exception[0].with_traceback(t.exception[1])
             if livethreads == blockedthreads:
                 for t in blockedthreads:
                     t.syncthreads_blocked = False
@@ -266,4 +299,4 @@ class BlockManager(object):
         # finishing, before we could check it
         for t in threads:
             if t.exception:
-                reraise(*(t.exception))
+                raise t.exception[0].with_traceback(t.exception[1])

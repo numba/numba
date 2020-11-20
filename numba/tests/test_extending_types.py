@@ -1,19 +1,19 @@
 """
 Test extending types via the numba.extending.* API.
 """
+import operator
 
-from numba import njit
-from numba import types
-from numba import cgutils
-from numba.errors import TypingError
-from numba.extending import lower_builtin
-from numba.extending import models, register_model
-from numba.extending import make_attribute_wrapper
-from numba.extending import type_callable
-from numba.extending import overload
-from numba.extending import typeof_impl
+from numba import njit, literally
+from numba.core import types, cgutils
+from numba.core.errors import TypingError
+from numba.core.extending import lower_builtin
+from numba.core.extending import models, register_model
+from numba.core.extending import make_attribute_wrapper
+from numba.core.extending import type_callable
+from numba.core.extending import overload
+from numba.core.extending import typeof_impl
 
-from numba import unittest_support as unittest
+import unittest
 
 
 class TestExtTypDummy(unittest.TestCase):
@@ -34,7 +34,7 @@ class TestExtTypDummy(unittest.TestCase):
             def __init__(self, dmm, fe_type):
                 members = [
                     ('value', types.intp),
-                    ]
+                ]
                 models.StructModel.__init__(self, dmm, fe_type, members)
 
         make_attribute_wrapper(DummyType, 'value', 'value')
@@ -129,3 +129,34 @@ class TestExtTypDummy(unittest.TestCase):
             foo(123)
         self.assertIn("cannot convert native Dummy to Python object",
                       str(raises.exception))
+
+    def test_issue5565_literal_getitem(self):
+        # the following test is adapted from
+        # https://github.com/numba/numba/issues/5565
+        Dummy, DummyType = self.Dummy, self.DummyType
+
+        MAGIC_NUMBER = 12321
+
+        @overload(operator.getitem)
+        def dummy_getitem_ovld(self, idx):
+            if not isinstance(self, DummyType):
+                return None
+            # suppose we can only support idx as literal argument
+            if isinstance(idx, types.StringLiteral):
+                def dummy_getitem_impl(self, idx):
+                    return MAGIC_NUMBER
+                return dummy_getitem_impl
+
+            if isinstance(idx, types.UnicodeType):
+                def dummy_getitem_impl(self, idx):
+                    return literally(idx)
+                return dummy_getitem_impl
+
+            return None
+
+        @njit
+        def test_impl(x, y):
+            return Dummy(x)[y]
+
+        var = 'abc'
+        self.assertEqual(test_impl(1, var), MAGIC_NUMBER)

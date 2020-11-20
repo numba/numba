@@ -52,11 +52,49 @@ Pinned memory
    :noindex:
 .. autofunction:: numba.cuda.pinned_array
    :noindex:
+.. autofunction:: numba.cuda.pinned_array_like
+   :noindex:
+
+
+Mapped memory
+=============
+
+.. autofunction:: numba.cuda.mapped
+   :noindex:
+.. autofunction:: numba.cuda.mapped_array
+   :noindex:
+.. autofunction:: numba.cuda.mapped_array_like
+   :noindex:
+
+
+
+Managed memory
+==============
+
+.. autofunction:: numba.cuda.managed_array
+   :noindex:
+
 
 Streams
 =======
 
+Streams can be passed to functions that accept them (e.g. copies between the
+host and device) and into kernel launch configurations so that the operations
+are executed asynchronously.
+
 .. autofunction:: numba.cuda.stream
+   :noindex:
+
+.. autofunction:: numba.cuda.default_stream
+   :noindex:
+
+.. autofunction:: numba.cuda.legacy_default_stream
+   :noindex:
+
+.. autofunction:: numba.cuda.per_thread_default_stream
+   :noindex:
+
+.. autofunction:: numba.cuda.external_stream
    :noindex:
 
 CUDA streams have the following methods:
@@ -143,8 +181,16 @@ creating an array in constant memory is through the use of:
    Allocate and make accessible an array in constant memory based on array-like
    *arr*.
 
+
+.. _deallocation-behavior:
+
 Deallocation Behavior
 =====================
+
+This section describes the deallocation behaviour of Numba's internal memory
+management. If an External Memory Management Plugin is in use (see
+:ref:`cuda-emm-plugin`), then deallocation behaviour may differ; you may refer to the
+documentation for the EMM Plugin to understand its deallocation behaviour.
 
 Deallocation of all CUDA resources are tracked on a per-context basis.
 When the last reference to a device memory is dropped, the underlying memory

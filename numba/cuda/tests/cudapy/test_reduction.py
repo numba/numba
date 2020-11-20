@@ -1,15 +1,14 @@
-from __future__ import print_function
 import numpy as np
 from numba import cuda
-from numba import unittest_support as unittest
-from numba.config import ENABLE_CUDASIM
-from numba.cuda.testing import SerialMixin
+from numba.core.config import ENABLE_CUDASIM
+from numba.cuda.testing import CUDATestCase
+import unittest
 
 # Avoid recompilation of the sum_reduce function by keeping it at global scope
 sum_reduce = cuda.Reduce(lambda a, b: a + b)
 
 
-class TestReduction(SerialMixin, unittest.TestCase):
+class TestReduction(CUDATestCase):
     def _sum_reduce(self, n):
         A = (np.arange(n, dtype=np.float64) + 1)
         expect = A.sum()
@@ -48,7 +47,7 @@ class TestReduction(SerialMixin, unittest.TestCase):
         A = (np.arange(64, dtype=np.float64) + 1)
         expect = A.prod()
         got = prod_reduce(A, init=1)
-        self.assertTrue(np.allclose(expect, got))
+        np.testing.assert_allclose(expect, got)
 
     def test_max_reduce(self):
         max_reduce = cuda.Reduce(lambda a, b: max(a, b))

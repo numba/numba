@@ -1,12 +1,9 @@
-from __future__ import division
-
-import numba.unittest_support as unittest
+import unittest
 from contextlib import contextmanager
 
 import llvmlite.llvmpy.core as lc
 
-from numba import types, typing
-from numba.targets import callconv, cpu
+from numba.core import types, typing, callconv, cpu
 
 
 class TestCompileCache(unittest.TestCase):

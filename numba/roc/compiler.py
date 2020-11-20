@@ -1,22 +1,20 @@
-from __future__ import print_function, absolute_import
 import copy
 from collections import namedtuple
+import ctypes
 import re
 
 import numpy as np
 
-from numba.typing.templates import ConcreteTemplate
-from numba import types, compiler
+from numba.core.typing.templates import ConcreteTemplate
+from numba.core import types, config, compiler
 from .hlc import hlc
 from .hsadrv import devices, driver, enums, drvapi
 from .hsadrv.error import HsaKernelLaunchError
-from . import gcn_occupancy
+from numba.roc import gcn_occupancy
 from numba.roc.hsadrv.driver import hsa, dgpu_present
 from .hsadrv import devicearray
-from numba.typing.templates import AbstractTemplate
-from numba import ctypes_support as ctypes
-from numba import config
-from numba.compiler_lock import global_compiler_lock
+from numba.core.typing.templates import AbstractTemplate
+from numba.core.compiler_lock import global_compiler_lock
 
 @global_compiler_lock
 def compile_hsa(pyfunc, return_type, args, debug):
@@ -30,6 +28,7 @@ def compile_hsa(pyfunc, return_type, args, debug):
     # Do not compile (generate native code), just lower (to LLVM)
     flags.set('no_compile')
     flags.set('no_cpython_wrapper')
+    flags.set('no_cfunc_wrapper')
     flags.unset('nrt')
     # Run compilation pipeline
     cres = compiler.compile_extra(typingctx=typingctx,
@@ -329,7 +328,7 @@ class HSAKernel(HSAKernelBase):
         # Insert kernel arguments
         base = 0
         for av in expanded_values:
-            # Adjust for alignemnt
+            # Adjust for alignment
             align = ctypes.sizeof(av)
             pad = _calc_padding_for_alignment(align, base)
             base += pad

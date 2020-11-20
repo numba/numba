@@ -96,7 +96,54 @@ Whereas the following will not work:
         print(i.view(np.uint64))
 
 Structured scalars support attribute getting and setting, as well as
-member lookup using constant strings.
+member lookup using constant strings. Strings stored in a local or global tuple
+are considered constant strings and can be used for member lookup.
+
+
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_rec_array.py
+   :language: python
+   :start-after: magictoken.ex_rec_arr_const_index.begin
+   :end-before: magictoken.ex_rec_arr_const_index.end
+   :dedent: 8
+
+It is also possible to use local or global tuples together with ``literal_unroll``:
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_rec_array.py
+   :language: python
+   :start-after: magictoken.ex_rec_arr_lit_unroll_index.begin
+   :end-before: magictoken.ex_rec_arr_lit_unroll_index.end
+   :dedent: 8
+
+
+Record subtyping
+----------------
+.. warning::
+   This is an experimental feature.
+
+Numba allows `width subtyping <https://en.wikipedia.org/wiki/Subtyping#Record_types>`_ of structured scalars.
+For example, ``dtype([('a', 'f8'), ('b', 'i8')])`` will be considered a subtype of ``dtype([('a', 'f8')]``, because
+the second is a strict subset of the first, i.e. field ``a`` is of the same type and is in the same position in both
+types. The subtyping relationship will matter in cases where compilation for a certain input is not allowed, but the
+input is a subtype of another, allowed type.
+
+.. code-block:: python
+
+    import numpy as np
+    from numba import njit, typeof
+    from numba.core import types
+    record1 = np.array([1], dtype=[('a', 'f8')])[0]
+    record2 = np.array([(2,3)], dtype=[('a', 'f8'), ('b', 'f8')])[0]
+
+    @njit(types.float64(typeof(record1)))
+    def foo(rec):
+        return rec['a']
+
+    foo(record1)
+    foo(record2)
+
+Without subtyping the last line would fail. With subtyping, no new compilation will be triggered, but the
+compiled function for ``record1`` will be used for ``record2``.
 
 .. seealso::
    `Numpy scalars <http://docs.scipy.org/doc/numpy/reference/arrays.scalars.html>`_
@@ -121,6 +168,58 @@ advanced index is allowed, and it has to be a one-dimensional array
 .. seealso::
    `Numpy indexing <http://docs.scipy.org/doc/numpy/reference/arrays.indexing.html>`_
    reference.
+
+
+.. _structured-array-access:
+
+Structured array access
+-----------------------
+
+Numba presently supports accessing fields of individual elements in structured
+arrays by attribute as well as by getting and setting. This goes slightly
+beyond the NumPy API, which only allows accessing fields by getting and
+setting. For example:
+
+.. code:: python
+
+   from numba import njit
+   import numpy as np
+
+   record_type = np.dtype([("ival", np.int32), ("fval", np.float64)], align=True)
+
+   def f(rec):
+       value = 2.5
+       rec[0].ival = int(value)
+       rec[0].fval = value
+       return rec
+
+   arr = np.ones(1, dtype=record_type)
+
+   cfunc = njit(f)
+
+   # Works
+   print(cfunc(arr))
+
+   # Does not work
+   print(f(arr))
+
+The above code results in the output:
+
+.. code:: none
+
+   [(2, 2.5)]
+   Traceback (most recent call last):
+     File "repro.py", line 22, in <module>
+       print(f(arr))
+     File "repro.py", line 9, in f
+       rec[0].ival = int(value)
+   AttributeError: 'numpy.void' object has no attribute 'ival'
+
+The Numba-compiled version of the function executes, but the pure Python
+version raises an error because of the unsupported use of attribute access.
+
+.. note::
+   This behavior will eventually be deprecated and removed.
 
 Attributes
 ----------
@@ -206,6 +305,7 @@ The following methods of Numpy arrays are supported:
 * :meth:`~numpy.ndarray.flatten` (no order argument; 'C' order only)
 * :meth:`~numpy.ndarray.item` (without arguments)
 * :meth:`~numpy.ndarray.itemset` (only the 1-argument form)
+* :meth:`~numpy.ndarray.ptp` (without arguments)
 * :meth:`~numpy.ndarray.ravel` (no order argument; 'C' order only)
 * :meth:`~numpy.ndarray.repeat` (no axis argument)
 * :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
@@ -233,6 +333,7 @@ The following methods of Numpy arrays are supported:
 
 * :meth:`~numpy.ndarray.transpose`
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
+* :meth:`~numpy.ndarray.__contains__` 
 
 
 .. warning::
@@ -279,7 +380,7 @@ floating-point and complex numbers:
 * :func:`numpy.linalg.svd` (only the 2 first arguments).
 
 .. note::
-   The implementation of these functions needs Scipy 0.16+ to be installed.
+   The implementation of these functions needs SciPy to be installed.
 
 Reductions
 ----------
@@ -316,30 +417,33 @@ The following top-level functions are supported:
 * :func:`numpy.arange`
 * :func:`numpy.argsort` (``kind`` key word argument supported for values
   ``'quicksort'`` and ``'mergesort'``)
+* :func:`numpy.argwhere`
 * :func:`numpy.array` (only the 2 first arguments)
 * :func:`numpy.array_equal`
+* :func:`numpy.array_split`
 * :func:`numpy.asarray` (only the 2 first arguments)
+* :func:`numpy.asarray_chkfinite` (only the 2 first arguments)
+* :func:`numpy.asfarray` 
 * :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.atleast_1d`
 * :func:`numpy.atleast_2d`
 * :func:`numpy.atleast_3d`
 * :func:`numpy.bartlett`
-* :func:`numpy.bincount` (only the 2 first arguments)
+* :func:`numpy.bincount`
 * :func:`numpy.blackman`
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate`
 * :func:`numpy.convolve` (only the 2 first arguments)
 * :func:`numpy.copy` (only the first argument)
-* :func:`numpy.corrcoef` (only the 3 first arguments, requires NumPy >= 1.10 and
-  SciPy >= 0.16; extreme value handling per NumPy 1.11+)
+* :func:`numpy.corrcoef` (only the 3 first arguments, requires SciPy)
 * :func:`numpy.correlate` (only the 2 first arguments)
 * :func:`numpy.count_nonzero` (axis only supports scalar values)
-* :func:`numpy.cov` (only the 5 first arguments, requires NumPy >= 1.10 and SciPy >= 0.16)
+* :func:`numpy.cov` (only the 5 first arguments)
 * :func:`numpy.cross` (only the 2 first arguments; at least one of the input
   arrays should have ``shape[-1] == 3``)
 
   * If ``shape[-1] == 2`` for both inputs, please replace your
-    :func:`numpy.cross` call with :func:`numba.numpy_extensions.cross2d`.
+    :func:`numpy.cross` call with :func:`numba.np.extensions.cross2d`.
 
 * :func:`numpy.delete` (only the 2 first arguments)
 * :func:`numpy.diag`
@@ -355,6 +459,9 @@ The following top-level functions are supported:
 * :func:`numpy.fill_diagonal`
 * :func:`numpy.flatten` (no order argument; 'C' order only)
 * :func:`numpy.flatnonzero`
+* :func:`numpy.flip` (no axis argument)
+* :func:`numpy.fliplr`
+* :func:`numpy.flipud`
 * :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full` (only the 3 first arguments)
 * :func:`numpy.full_like` (only the 3 first arguments)
@@ -387,6 +494,7 @@ The following top-level functions are supported:
 * :func:`numpy.shape`
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
+* :func:`numpy.split`
 * :func:`numpy.stack`
 * :func:`numpy.take` (only the 2 first arguments)
 * :func:`numpy.transpose`
@@ -587,6 +695,7 @@ Math operations
  remainder           Yes          Yes
  mod                 Yes          Yes
  fmod                Yes          Yes
+ divmod (*)          Yes          Yes
  abs                 Yes          Yes
  absolute            Yes          Yes
  fabs                Yes          Yes
@@ -604,8 +713,11 @@ Math operations
  square              Yes          Yes
  reciprocal          Yes          Yes
  conjugate           Yes          Yes
+ gcd                 Yes          Yes
+ lcm                 Yes          Yes
 ==============  =============  ===============
 
+(\*) not supported on timedelta types
 
 Trigonometric functions
 -----------------------
@@ -703,3 +815,15 @@ Floating functions
 ==============  =============  ===============
 
 (\*) not supported on windows 32 bit
+
+
+Datetime functions
+------------------
+
+==============  =============  ===============
+    UFUNC                  MODE
+--------------  ------------------------------
+    name         object mode    nopython mode
+==============  =============  ===============
+ isnat            Yes          Yes
+==============  =============  ===============

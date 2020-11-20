@@ -1,146 +1,142 @@
-from __future__ import print_function, absolute_import, division
-
 from functools import reduce
 import operator
 import math
 
-from llvmlite.llvmpy.core import Type
+from llvmlite.llvmpy.core import Type, InlineAsm
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
-from numba.targets.imputils import Registry
-from numba import cgutils
-from numba import six
-from numba import types
-from numba.utils import IS_PY3
+from numba.core.imputils import Registry
+from numba.core.typing.npydecl import parse_dtype, signature
+from numba.core import types, cgutils
 from .cudadrv import nvvm
-from . import nvvmutils, stubs
+from numba import cuda
+from numba.cuda import nvvmutils, stubs
+from numba.cuda.types import dim3, grid_group
+
 
 registry = Registry()
 lower = registry.lower
+lower_attr = registry.lower_getattr
 
 
-@lower('ptx.grid.1d', types.intp)
-def ptx_grid1d(context, builder, sig, args):
-    assert len(args) == 1
-    return nvvmutils.get_global_id(builder, dim=1)
+def initialize_dim3(builder, prefix):
+    x = nvvmutils.call_sreg(builder, "%s.x" % prefix)
+    y = nvvmutils.call_sreg(builder, "%s.y" % prefix)
+    z = nvvmutils.call_sreg(builder, "%s.z" % prefix)
+    return cgutils.pack_struct(builder, (x, y, z))
 
 
-@lower('ptx.grid.2d', types.intp)
-def ptx_grid2d(context, builder, sig, args):
-    assert len(args) == 1
-    r1, r2 = nvvmutils.get_global_id(builder, dim=2)
-    return cgutils.pack_array(builder, [r1, r2])
+@lower_attr(types.Module(cuda), 'threadIdx')
+def cuda_threadIdx(context, builder, sig, args):
+    return initialize_dim3(builder, 'tid')
 
 
-@lower('ptx.grid.3d', types.intp)
-def ptx_grid3d(context, builder, sig, args):
-    assert len(args) == 1
-    r1, r2, r3 = nvvmutils.get_global_id(builder, dim=3)
-    return cgutils.pack_array(builder, [r1, r2, r3])
+@lower_attr(types.Module(cuda), 'blockDim')
+def cuda_blockDim(context, builder, sig, args):
+    return initialize_dim3(builder, 'ntid')
 
 
-@lower('ptx.gridsize.1d', types.intp)
-def ptx_gridsize1d(context, builder, sig, args):
-    assert len(args) == 1
-    ntidx = nvvmutils.call_sreg(builder, "ntid.x")
-    nctaidx = nvvmutils.call_sreg(builder, "nctaid.x")
-
-    res = builder.mul(ntidx, nctaidx)
-    return res
+@lower_attr(types.Module(cuda), 'blockIdx')
+def cuda_blockIdx(context, builder, sig, args):
+    return initialize_dim3(builder, 'ctaid')
 
 
-@lower('ptx.gridsize.2d', types.intp)
-def ptx_gridsize2d(context, builder, sig, args):
-    assert len(args) == 1
-    ntidx = nvvmutils.call_sreg(builder, "ntid.x")
-    nctaidx = nvvmutils.call_sreg(builder, "nctaid.x")
-
-    ntidy = nvvmutils.call_sreg(builder, "ntid.y")
-    nctaidy = nvvmutils.call_sreg(builder, "nctaid.y")
-
-    r1 = builder.mul(ntidx, nctaidx)
-    r2 = builder.mul(ntidy, nctaidy)
-    return cgutils.pack_array(builder, [r1, r2])
+@lower_attr(types.Module(cuda), 'gridDim')
+def cuda_gridDim(context, builder, sig, args):
+    return initialize_dim3(builder, 'nctaid')
 
 
-@lower('ptx.gridsize.3d', types.intp)
-def ptx_gridsize3d(context, builder, sig, args):
-    assert len(args) == 1
-    ntidx = nvvmutils.call_sreg(builder, "ntid.x")
-    nctaidx = nvvmutils.call_sreg(builder, "nctaid.x")
-
-    ntidy = nvvmutils.call_sreg(builder, "ntid.y")
-    nctaidy = nvvmutils.call_sreg(builder, "nctaid.y")
-
-    ntidz = nvvmutils.call_sreg(builder, "ntid.z")
-    nctaidz = nvvmutils.call_sreg(builder, "nctaid.z")
-
-    r1 = builder.mul(ntidx, nctaidx)
-    r2 = builder.mul(ntidy, nctaidy)
-    r3 = builder.mul(ntidz, nctaidz)
-    return cgutils.pack_array(builder, [r1, r2, r3])
+@lower_attr(types.Module(cuda), 'laneid')
+def cuda_laneid(context, builder, sig, args):
+    return nvvmutils.call_sreg(builder, 'laneid')
 
 
-# -----------------------------------------------------------------------------
-
-def ptx_sreg_template(sreg):
-    def ptx_sreg_impl(context, builder, sig, args):
-        assert not args
-        return nvvmutils.call_sreg(builder, sreg)
-
-    return ptx_sreg_impl
+@lower_attr(types.Module(cuda), 'warpsize')
+def cuda_warpsize(context, builder, sig, args):
+    return nvvmutils.call_sreg(builder, 'warpsize')
 
 
-# Dynamic create all special register
-for sreg in nvvmutils.SREG_MAPPING.keys():
-    lower(sreg)(ptx_sreg_template(sreg))
+@lower_attr(dim3, 'x')
+def dim3_x(context, builder, sig, args):
+    return builder.extract_value(args, 0)
 
 
-# -----------------------------------------------------------------------------
+@lower_attr(dim3, 'y')
+def dim3_y(context, builder, sig, args):
+    return builder.extract_value(args, 1)
 
-@lower('ptx.cmem.arylike', types.Array)
-def ptx_cmem_arylike(context, builder, sig, args):
+
+@lower_attr(dim3, 'z')
+def dim3_z(context, builder, sig, args):
+    return builder.extract_value(args, 2)
+
+
+@lower(cuda.cg.this_grid)
+def cg_this_grid(context, builder, sig, args):
+    one = context.get_constant(types.int32, 1)
     lmod = builder.module
-    [arr] = args
-    aryty = sig.return_type
+    return builder.call(
+        nvvmutils.declare_cudaCGGetIntrinsicHandle(lmod),
+        (one,))
 
-    constvals = [
-        context.get_constant(types.byte, i)
-        for i in six.iterbytes(arr.tobytes(order='A'))
-    ]
-    constary = lc.Constant.array(Type.int(8), constvals)
 
-    addrspace = nvvm.ADDRSPACE_CONSTANT
-    gv = lmod.add_global_variable(constary.type, name="_cudapy_cmem",
-                                  addrspace=addrspace)
-    gv.linkage = lc.LINKAGE_INTERNAL
-    gv.global_constant = True
-    gv.initializer = constary
+@lower('GridGroup.sync', grid_group)
+def ptx_sync_group(context, builder, sig, args):
+    flags = context.get_constant(types.int32, 0)
+    lmod = builder.module
+    return builder.call(
+        nvvmutils.declare_cudaCGSynchronize(lmod),
+        (*args, flags))
 
-    # Preserve the underlying alignment
-    lldtype = context.get_data_type(aryty.dtype)
-    align = context.get_abi_sizeof(lldtype)
-    gv.align = 2 ** (align - 1).bit_length()
 
-    # Convert to generic address-space
-    conv = nvvmutils.insert_addrspace_conv(lmod, Type.int(8), addrspace)
-    addrspaceptr = gv.bitcast(Type.pointer(Type.int(8), addrspace))
-    genptr = builder.call(conv, [addrspaceptr])
+# -----------------------------------------------------------------------------
 
-    # Create array object
-    ary = context.make_array(aryty)(context, builder)
-    kshape = [context.get_constant(types.intp, s) for s in arr.shape]
-    kstrides = [context.get_constant(types.intp, s) for s in arr.strides]
-    context.populate_array(ary,
-                           data=builder.bitcast(genptr, ary.data.type),
-                           shape=cgutils.pack_array(builder, kshape),
-                           strides=cgutils.pack_array(builder, kstrides),
-                           itemsize=ary.itemsize,
-                           parent=ary.parent,
-                           meminfo=None)
+@lower(cuda.grid, types.int32)
+def cuda_grid(context, builder, sig, args):
+    restype = sig.return_type
+    if restype == types.int32:
+        return nvvmutils.get_global_id(builder, dim=1)
+    elif isinstance(restype, types.UniTuple):
+        ids = nvvmutils.get_global_id(builder, dim=restype.count)
+        return cgutils.pack_array(builder, ids)
+    else:
+        raise ValueError('Unexpected return type %s from cuda.grid' % restype)
 
-    return ary._getvalue()
+
+def _nthreads_for_dim(builder, dim):
+    ntid = nvvmutils.call_sreg(builder, f"ntid.{dim}")
+    nctaid = nvvmutils.call_sreg(builder, f"nctaid.{dim}")
+    return builder.mul(ntid, nctaid)
+
+
+@lower(cuda.gridsize, types.int32)
+def cuda_gridsize(context, builder, sig, args):
+    restype = sig.return_type
+    nx = _nthreads_for_dim(builder, 'x')
+
+    if restype == types.int32:
+        return nx
+    elif isinstance(restype, types.UniTuple):
+        ny = _nthreads_for_dim(builder, 'y')
+
+        if restype.count == 2:
+            return cgutils.pack_array(builder, (nx, ny))
+        elif restype.count == 3:
+            nz = _nthreads_for_dim(builder, 'z')
+            return cgutils.pack_array(builder, (nx, ny, nz))
+
+    # Fallthrough to here indicates unexpected return type or tuple length
+    raise ValueError('Unexpected return type %s of cuda.gridsize' % restype)
+
+
+# -----------------------------------------------------------------------------
+
+@lower(cuda.const.array_like, types.Array)
+def cuda_const_array_like(context, builder, sig, args):
+    # This is a no-op because CUDATargetContext.make_constant_array already
+    # created the constant array.
+    return args[0]
 
 
 _unique_smem_id = 0
@@ -156,36 +152,42 @@ def _get_unique_smem_id(name):
     return "{0}_{1}".format(name, _unique_smem_id)
 
 
-@lower('ptx.smem.alloc', types.intp, types.Any)
-def ptx_smem_alloc_intp(context, builder, sig, args):
-    length, dtype = args
+@lower(cuda.shared.array, types.IntegerLiteral, types.Any)
+def cuda_shared_array_integer(context, builder, sig, args):
+    length = sig.args[0].literal_value
+    dtype = parse_dtype(sig.args[1])
     return _generic_array(context, builder, shape=(length,), dtype=dtype,
                           symbol_name=_get_unique_smem_id('_cudapy_smem'),
                           addrspace=nvvm.ADDRSPACE_SHARED,
                           can_dynsized=True)
 
 
-@lower('ptx.smem.alloc', types.UniTuple, types.Any)
-def ptx_smem_alloc_array(context, builder, sig, args):
-    shape, dtype = args
+@lower(cuda.shared.array, types.Tuple, types.Any)
+@lower(cuda.shared.array, types.UniTuple, types.Any)
+def cuda_shared_array_tuple(context, builder, sig, args):
+    shape = [ s.literal_value for s in sig.args[0] ]
+    dtype = parse_dtype(sig.args[1])
     return _generic_array(context, builder, shape=shape, dtype=dtype,
                           symbol_name=_get_unique_smem_id('_cudapy_smem'),
                           addrspace=nvvm.ADDRSPACE_SHARED,
                           can_dynsized=True)
 
 
-@lower('ptx.lmem.alloc', types.intp, types.Any)
-def ptx_lmem_alloc_intp(context, builder, sig, args):
-    length, dtype = args
+@lower(cuda.local.array, types.IntegerLiteral, types.Any)
+def cuda_local_array_integer(context, builder, sig, args):
+    length = sig.args[0].literal_value
+    dtype = parse_dtype(sig.args[1])
     return _generic_array(context, builder, shape=(length,), dtype=dtype,
                           symbol_name='_cudapy_lmem',
                           addrspace=nvvm.ADDRSPACE_LOCAL,
                           can_dynsized=False)
 
 
-@lower('ptx.lmem.alloc', types.UniTuple, types.Any)
+@lower(cuda.local.array, types.Tuple, types.Any)
+@lower(cuda.local.array, types.UniTuple, types.Any)
 def ptx_lmem_alloc_array(context, builder, sig, args):
-    shape, dtype = args
+    shape = [ s.literal_value for s in sig.args[0] ]
+    dtype = parse_dtype(sig.args[1])
     return _generic_array(context, builder, shape=shape, dtype=dtype,
                           symbol_name='_cudapy_lmem',
                           addrspace=nvvm.ADDRSPACE_LOCAL,
@@ -263,8 +265,15 @@ def ptx_threadfence_device(context, builder, sig, args):
     return context.get_dummy_value()
 
 
+@lower(stubs.syncwarp)
+def ptx_syncwarp(context, builder, sig, args):
+    mask = context.get_constant(types.int32, 0xFFFFFFFF)
+    mask_sig = signature(types.none, types.int32)
+    return ptx_syncwarp_mask(context, builder, mask_sig, [mask])
+
+
 @lower(stubs.syncwarp, types.i4)
-def ptx_warp_sync(context, builder, sig, args):
+def ptx_syncwarp_mask(context, builder, sig, args):
     fname = 'llvm.nvvm.bar.warp.sync'
     lmod = builder.module
     fnty = Type.function(Type.void(), (Type.int(32),))
@@ -476,9 +485,6 @@ def ptx_min_f8(context, builder, sig, args):
 @lower(round, types.f4)
 @lower(round, types.f8)
 def ptx_round(context, builder, sig, args):
-    if not IS_PY3:
-        raise NotImplementedError(
-            "round returns a float on Python 2.x")
     fn = builder.module.get_or_insert_function(
         lc.Type.function(
             lc.Type.int(64),
@@ -487,6 +493,49 @@ def ptx_round(context, builder, sig, args):
     return builder.call(fn, [
         context.cast(builder, args[0], sig.args[0], types.double),
     ])
+
+
+# This rounding implementation follows the algorithm used in the "fallback
+# version" of double_round in CPython.
+# https://github.com/python/cpython/blob/a755410e054e1e2390de5830befc08fe80706c66/Objects/floatobject.c#L964-L1007
+
+@lower(round, types.f4, types.Integer)
+@lower(round, types.f8, types.Integer)
+def round_to_impl(context, builder, sig, args):
+    def round_ndigits(x, ndigits):
+        if math.isinf(x) or math.isnan(x):
+            return x
+
+        if ndigits >= 0:
+            if ndigits > 22:
+                # pow1 and pow2 are each safe from overflow, but
+                # pow1*pow2 ~= pow(10.0, ndigits) might overflow.
+                pow1 = 10.0 ** (ndigits - 22)
+                pow2 = 1e22
+            else:
+                pow1 = 10.0 ** ndigits
+                pow2 = 1.0
+            y = (x * pow1) * pow2
+            if math.isinf(y):
+                return x
+
+        else:
+            pow1 = 10.0 ** (-ndigits)
+            y = x / pow1
+
+        z = round(y)
+        if (math.fabs(y - z) == 0.5):
+            # halfway between two integers; use round-half-even
+            z = 2.0 * round(y / 2.0)
+
+        if ndigits >= 0:
+            z = (z / pow2) / pow1
+        else:
+            z *= pow1
+
+        return z
+
+    return context.compile_internal(builder, round_ndigits, sig, args, )
 
 
 def gen_deg_rad(const):
@@ -536,7 +585,7 @@ def _atomic_dispatcher(dispatch_fn):
                             (aryty.ndim, len(indty)))
 
         lary = context.make_array(aryty)(context, builder, ary)
-        ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
+        ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices)
         # dispatcher to implementation base on dtype
         return dispatch_fn(context, builder, dtype, ptr, val)
     return imp
@@ -557,6 +606,40 @@ def ptx_atomic_add_tuple(context, builder, dtype, ptr, val):
                             (ptr, val))
     else:
         return builder.atomic_rmw('add', ptr, val, 'monotonic')
+
+
+@lower(stubs.atomic.sub, types.Array, types.intp, types.Any)
+@lower(stubs.atomic.sub, types.Array, types.UniTuple, types.Any)
+@lower(stubs.atomic.sub, types.Array, types.Tuple, types.Any)
+@_atomic_dispatcher
+def ptx_atomic_sub(context, builder, dtype, ptr, val):
+    if dtype == types.float32:
+        lmod = builder.module
+        return builder.call(nvvmutils.declare_atomic_sub_float32(lmod),
+                            (ptr, val))
+    elif dtype == types.float64:
+        lmod = builder.module
+        return builder.call(nvvmutils.declare_atomic_sub_float64(lmod),
+                            (ptr, val))
+    else:
+        return builder.atomic_rmw('sub', ptr, val, 'monotonic')
+
+
+def ptx_atomic_bitwise(stub, op):
+    @_atomic_dispatcher
+    def impl_ptx_atomic(context, builder, dtype, ptr, val):
+        if dtype in (cuda.cudadecl.integer_numba_types):
+            return builder.atomic_rmw(op, ptr, val, 'monotonic')
+        else:
+            raise TypeError(f'Unimplemented atomic {op} with {dtype} array')
+
+    for ty in (types.intp, types.UniTuple, types.Tuple):
+        lower(stub, types.Array, ty, types.Any)(impl_ptx_atomic)
+
+
+ptx_atomic_bitwise(stubs.atomic.and_, 'and')
+ptx_atomic_bitwise(stubs.atomic.or_, 'or')
+ptx_atomic_bitwise(stubs.atomic.xor, 'xor')
 
 
 @lower(stubs.atomic.max, types.Array, types.intp, types.Any)
@@ -599,6 +682,46 @@ def ptx_atomic_min(context, builder, dtype, ptr, val):
         raise TypeError('Unimplemented atomic min with %s array' % dtype)
 
 
+@lower(stubs.atomic.nanmax, types.Array, types.intp, types.Any)
+@lower(stubs.atomic.nanmax, types.Array, types.Tuple, types.Any)
+@lower(stubs.atomic.nanmax, types.Array, types.UniTuple, types.Any)
+@_atomic_dispatcher
+def ptx_atomic_nanmax(context, builder, dtype, ptr, val):
+    lmod = builder.module
+    if dtype == types.float64:
+        return builder.call(nvvmutils.declare_atomic_nanmax_float64(lmod),
+                            (ptr, val))
+    elif dtype == types.float32:
+        return builder.call(nvvmutils.declare_atomic_nanmax_float32(lmod),
+                            (ptr, val))
+    elif dtype in (types.int32, types.int64):
+        return builder.atomic_rmw('max', ptr, val, ordering='monotonic')
+    elif dtype in (types.uint32, types.uint64):
+        return builder.atomic_rmw('umax', ptr, val, ordering='monotonic')
+    else:
+        raise TypeError('Unimplemented atomic max with %s array' % dtype)
+
+
+@lower(stubs.atomic.nanmin, types.Array, types.intp, types.Any)
+@lower(stubs.atomic.nanmin, types.Array, types.Tuple, types.Any)
+@lower(stubs.atomic.nanmin, types.Array, types.UniTuple, types.Any)
+@_atomic_dispatcher
+def ptx_atomic_nanmin(context, builder, dtype, ptr, val):
+    lmod = builder.module
+    if dtype == types.float64:
+        return builder.call(nvvmutils.declare_atomic_nanmin_float64(lmod),
+                            (ptr, val))
+    elif dtype == types.float32:
+        return builder.call(nvvmutils.declare_atomic_nanmin_float32(lmod),
+                            (ptr, val))
+    elif dtype in (types.int32, types.int64):
+        return builder.atomic_rmw('min', ptr, val, ordering='monotonic')
+    elif dtype in (types.uint32, types.uint64):
+        return builder.atomic_rmw('umin', ptr, val, ordering='monotonic')
+    else:
+        raise TypeError('Unimplemented atomic min with %s array' % dtype)
+
+
 @lower(stubs.atomic.compare_and_swap, types.Array, types.Any, types.Any)
 def ptx_atomic_cas_tuple(context, builder, sig, args):
     aryty, oldty, valty = sig.args
@@ -607,7 +730,7 @@ def ptx_atomic_cas_tuple(context, builder, sig, args):
 
     lary = context.make_array(aryty)(context, builder, ary)
     zero = context.get_constant(types.intp, 0)
-    ptr = cgutils.get_item_pointer(builder, aryty, lary, (zero,))
+    ptr = cgutils.get_item_pointer(context, builder, aryty, lary, (zero,))
     if aryty.dtype == types.int32:
         lmod = builder.module
         return builder.call(nvvmutils.declare_atomic_cas_int32(lmod),
@@ -626,28 +749,40 @@ def _get_target_data(context):
 
 def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
                    can_dynsized=False):
-    elemcount = reduce(operator.mul, shape)
+    elemcount = reduce(operator.mul, shape, 1)
+
+    # Check for valid shape for this type of allocation.
+    # Only 1d arrays can be dynamic.
+    dynamic_smem = elemcount <= 0 and can_dynsized and len(shape) == 1
+    if elemcount <= 0 and not dynamic_smem:
+        raise ValueError("array length <= 0")
+
+    # Check that we support the requested dtype
+    other_supported_type = isinstance(dtype, (types.Record, types.Boolean))
+    if dtype not in types.number_domain and not other_supported_type:
+        raise TypeError("unsupported type: %s" % dtype)
+
     lldtype = context.get_data_type(dtype)
     laryty = Type.array(lldtype, elemcount)
 
     if addrspace == nvvm.ADDRSPACE_LOCAL:
-        # Special case local addrespace allocation to use alloca
+        # Special case local address space allocation to use alloca
         # NVVM is smart enough to only use local memory if no register is
         # available
         dataptr = cgutils.alloca_once(builder, laryty, name=symbol_name)
     else:
         lmod = builder.module
 
-        # Create global variable in the requested address-space
+        # Create global variable in the requested address space
         gvmem = lmod.add_global_variable(laryty, symbol_name, addrspace)
         # Specify alignment to avoid misalignment bug
-        gvmem.align = context.get_abi_sizeof(lldtype)
+        align = context.get_abi_sizeof(lldtype)
+        # Alignment is required to be a power of 2 for shared memory. If it is
+        # not a power of 2 (e.g. for a Record array) then round up accordingly.
+        gvmem.align = 1 << (align - 1 ).bit_length()
 
-        if elemcount <= 0:
-            if can_dynsized:    # dynamic shared memory
-                gvmem.linkage = lc.LINKAGE_EXTERNAL
-            else:
-                raise ValueError("array length <= 0")
+        if dynamic_smem:
+            gvmem.linkage = lc.LINKAGE_EXTERNAL
         else:
             ## Comment out the following line to workaround a NVVM bug
             ## which generates a invalid symbol name when the linkage
@@ -657,39 +792,51 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
 
             gvmem.initializer = lc.Constant.undef(laryty)
 
-        if dtype not in types.number_domain:
-            raise TypeError("unsupported type: %s" % dtype)
-
         # Convert to generic address-space
         conv = nvvmutils.insert_addrspace_conv(lmod, Type.int(8), addrspace)
         addrspaceptr = gvmem.bitcast(Type.pointer(Type.int(8), addrspace))
         dataptr = builder.call(conv, [addrspaceptr])
 
-    return _make_array(context, builder, dataptr, dtype, shape)
-
-
-def _make_array(context, builder, dataptr, dtype, shape, layout='C'):
-    ndim = len(shape)
-    # Create array object
-    aryty = types.Array(dtype=dtype, ndim=ndim, layout='C')
-    ary = context.make_array(aryty)(context, builder)
-
     targetdata = _get_target_data(context)
     lldtype = context.get_data_type(dtype)
     itemsize = lldtype.get_abi_size(targetdata)
-    # Compute strides
-    rstrides = [itemsize]
-    for i, lastsize in enumerate(reversed(shape[1:])):
-        rstrides.append(lastsize * rstrides[-1])
-    strides = [s for s in reversed(rstrides)]
 
-    kshape = [context.get_constant(types.intp, s) for s in shape]
+    # Compute strides
+    laststride = itemsize
+    rstrides = []
+    for i, lastsize in enumerate(reversed(shape)):
+        rstrides.append(laststride)
+        laststride *= lastsize
+    strides = [s for s in reversed(rstrides)]
     kstrides = [context.get_constant(types.intp, s) for s in strides]
+
+    # Compute shape
+    if dynamic_smem:
+        # Compute the shape based on the dynamic shared memory configuration.
+        # Unfortunately NVVM does not provide an intrinsic for the
+        # %dynamic_smem_size register, so we must read it using inline
+        # assembly.
+        get_dynshared_size = InlineAsm.get(Type.function(Type.int(), []),
+                                           "mov.u32 $0, %dynamic_smem_size;",
+                                           '=r', side_effect=True)
+        dynsmem_size = builder.zext(builder.call(get_dynshared_size, []),
+                                    Type.int(width=64))
+        # Only 1-D dynamic shared memory is supported so the following is a
+        # sufficient construction of the shape
+        kitemsize = context.get_constant(types.intp, itemsize)
+        kshape = [builder.udiv(dynsmem_size, kitemsize)]
+    else:
+        kshape = [context.get_constant(types.intp, s) for s in shape]
+
+    # Create array object
+    ndim = len(shape)
+    aryty = types.Array(dtype=dtype, ndim=ndim, layout='C')
+    ary = context.make_array(aryty)(context, builder)
 
     context.populate_array(ary,
                            data=builder.bitcast(dataptr, ary.data.type),
-                           shape=cgutils.pack_array(builder, kshape),
-                           strides=cgutils.pack_array(builder, kstrides),
+                           shape=kshape,
+                           strides=kstrides,
                            itemsize=context.get_constant(types.intp, itemsize),
                            meminfo=None)
     return ary._getvalue()

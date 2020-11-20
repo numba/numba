@@ -1,19 +1,20 @@
-from __future__ import division
-
 from contextlib import contextmanager
 
 import numpy as np
 
-from numba import cuda, config
-from numba.cuda.testing import unittest, skip_on_cudasim, SerialMixin
+from numba import cuda
+from numba.cuda.testing import (unittest, skip_on_cudasim,
+                                skip_if_external_memmgr, CUDATestCase)
 from numba.tests.support import captured_stderr
+from numba.core import config
 
 
 @skip_on_cudasim('not supported on CUDASIM')
-class TestDeallocation(SerialMixin, unittest.TestCase):
+@skip_if_external_memmgr('Deallocation specific to Numba memory management')
+class TestDeallocation(CUDATestCase):
     def test_max_pending_count(self):
         # get deallocation manager and flush it
-        deallocs = cuda.current_context().deallocations
+        deallocs = cuda.current_context().memory_manager.deallocations
         deallocs.clear()
         self.assertEqual(len(deallocs), 0)
         # deallocate to maximum count
@@ -27,7 +28,7 @@ class TestDeallocation(SerialMixin, unittest.TestCase):
     def test_max_pending_bytes(self):
         # get deallocation manager and flush it
         ctx = cuda.current_context()
-        deallocs = ctx.deallocations
+        deallocs = ctx.memory_manager.deallocations
         deallocs.clear()
         self.assertEqual(len(deallocs), 0)
 
@@ -38,9 +39,10 @@ class TestDeallocation(SerialMixin, unittest.TestCase):
         try:
             # change to a smaller ratio
             config.CUDA_DEALLOCS_RATIO = max_pending / mi.total
-            # due to round off error (floor is used in calculating _max_pending_bytes)
-            # it can be off by 1.
-            self.assertAlmostEqual(deallocs._max_pending_bytes, max_pending, delta=1)
+            # due to round off error (floor is used in calculating
+            # _max_pending_bytes) it can be off by 1.
+            self.assertAlmostEqual(deallocs._max_pending_bytes, max_pending,
+                                   delta=1)
 
             # allocate half the max size
             # this will not trigger deallocation
@@ -49,7 +51,8 @@ class TestDeallocation(SerialMixin, unittest.TestCase):
 
             # allocate another remaining
             # this will not trigger deallocation
-            cuda.to_device(np.ones(deallocs._max_pending_bytes - deallocs._size, dtype=np.int8))
+            cuda.to_device(np.ones(deallocs._max_pending_bytes -
+                                   deallocs._size, dtype=np.int8))
             self.assertEqual(len(deallocs), 2)
 
             # another byte to trigger .clear()
@@ -61,11 +64,12 @@ class TestDeallocation(SerialMixin, unittest.TestCase):
 
 
 @skip_on_cudasim("defer_cleanup has no effect in CUDASIM")
-class TestDeferCleanup(SerialMixin, unittest.TestCase):
+@skip_if_external_memmgr('Deallocation specific to Numba memory management')
+class TestDeferCleanup(CUDATestCase):
     def test_basic(self):
         harr = np.arange(5)
         darr1 = cuda.to_device(harr)
-        deallocs = cuda.current_context().deallocations
+        deallocs = cuda.current_context().memory_manager.deallocations
         deallocs.clear()
         self.assertEqual(len(deallocs), 0)
         with cuda.defer_cleanup():
@@ -83,7 +87,7 @@ class TestDeferCleanup(SerialMixin, unittest.TestCase):
     def test_nested(self):
         harr = np.arange(5)
         darr1 = cuda.to_device(harr)
-        deallocs = cuda.current_context().deallocations
+        deallocs = cuda.current_context().memory_manager.deallocations
         deallocs.clear()
         self.assertEqual(len(deallocs), 0)
         with cuda.defer_cleanup():
@@ -104,7 +108,7 @@ class TestDeferCleanup(SerialMixin, unittest.TestCase):
     def test_exception(self):
         harr = np.arange(5)
         darr1 = cuda.to_device(harr)
-        deallocs = cuda.current_context().deallocations
+        deallocs = cuda.current_context().memory_manager.deallocations
         deallocs.clear()
         self.assertEqual(len(deallocs), 0)
 
@@ -127,7 +131,7 @@ class TestDeferCleanup(SerialMixin, unittest.TestCase):
         self.assertEqual(len(deallocs), 0)
 
 
-class TestDeferCleanupAvail(SerialMixin, unittest.TestCase):
+class TestDeferCleanupAvail(CUDATestCase):
     def test_context_manager(self):
         # just make sure the API is available
         with cuda.defer_cleanup():
@@ -135,7 +139,7 @@ class TestDeferCleanupAvail(SerialMixin, unittest.TestCase):
 
 
 @skip_on_cudasim('not supported on CUDASIM')
-class TestDel(SerialMixin, unittest.TestCase):
+class TestDel(CUDATestCase):
     """
     Ensure resources are deleted properly without ignored exception.
     """
@@ -176,6 +180,12 @@ class TestDel(SerialMixin, unittest.TestCase):
         with self.check_ignored_exception(ctx):
             del mem
 
+    def test_managed_memory(self):
+        ctx = cuda.current_context()
+        mem = ctx.memallocmanaged(32)
+        with self.check_ignored_exception(ctx):
+            del mem
+
     def test_pinned_contextmanager(self):
         # Check that temporarily pinned memory is unregistered immediately,
         # such that it can be re-pinned at any time
@@ -196,7 +206,8 @@ class TestDel(SerialMixin, unittest.TestCase):
                     pass
                 with cuda.pinned(arr):
                     pass
-            # Should also work when breaking out of the block due to an exception
+            # Should also work when breaking out of the block due to an
+            # exception
             try:
                 with cuda.pinned(arr):
                     raise PinnedException
@@ -214,23 +225,25 @@ class TestDel(SerialMixin, unittest.TestCase):
         ctx = cuda.current_context()
         ctx.deallocations.clear()
         with self.check_ignored_exception(ctx):
-            with cuda.mapped(arr) as marr:
+            with cuda.mapped(arr):
                 pass
-            with cuda.mapped(arr) as marr:
+            with cuda.mapped(arr):
                 pass
             # Should also work inside a `defer_cleanup` block
             with cuda.defer_cleanup():
-                with cuda.mapped(arr) as marr:
+                with cuda.mapped(arr):
                     pass
-                with cuda.mapped(arr) as marr:
+                with cuda.mapped(arr):
                     pass
-            # Should also work when breaking out of the block due to an exception
+            # Should also work when breaking out of the block due to an
+            # exception
             try:
-                with cuda.mapped(arr) as marr:
+                with cuda.mapped(arr):
                     raise MappedException
             except MappedException:
-                with cuda.mapped(arr) as marr:
+                with cuda.mapped(arr):
                     pass
+
 
 if __name__ == '__main__':
     unittest.main()

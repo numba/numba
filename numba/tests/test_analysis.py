@@ -1,13 +1,14 @@
 # Tests numba.analysis functions
-from __future__ import print_function, absolute_import, division
 import collections
+import types as pytypes
 
 import numpy as np
-from numba.compiler import compile_isolated, run_frontend, Flags, StateDict
-from numba import types, rewrites, ir, jit, ir_utils, errors, njit
-from .support import TestCase, MemoryLeakMixin, SerialMixin
+from numba.core.compiler import compile_isolated, run_frontend, Flags, StateDict
+from numba import jit, njit
+from numba.core import types, errors, ir, rewrites, ir_utils, utils
+from numba.tests.support import TestCase, MemoryLeakMixin, SerialMixin
 
-from numba.analysis import dead_branch_prune, rewrite_semantic_constants
+from numba.core.analysis import dead_branch_prune, rewrite_semantic_constants
 
 _GLOBAL = 123
 
@@ -350,9 +351,12 @@ class TestBranchPrune(TestBranchPruneBase, SerialMixin):
             self.assertEqual(len(before_branches), 1)
 
             # check the condition in the branch is a binop
-            condition_var = before_branches[0].cond
-            condition_defn = ir_utils.get_definition(func_ir, condition_var)
-            self.assertEqual(condition_defn.op, 'binop')
+            pred_var = before_branches[0].cond
+            pred_defn = ir_utils.get_definition(func_ir, pred_var)
+            self.assertEqual(pred_defn.op, 'call')
+            condition_var = pred_defn.args[0]
+            condition_op = ir_utils.get_definition(func_ir, condition_var)
+            self.assertEqual(condition_op.op, 'binop')
 
             # do the prune, this should kill the dead branch and rewrite the
             #'condition to a true/false const bit
@@ -563,6 +567,251 @@ class TestBranchPrune(TestBranchPruneBase, SerialMixin):
                           np.zeros((2, 3)), 1.2, None)
 
 
+class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
+    # Really important thing to remember... the branch on predicates end up as
+    # POP_JUMP_IF_<bool> and the targets are backwards compared to normal, i.e.
+    # the true condition is far jump and the false the near i.e. `if x` would
+    # end up in Numba IR as e.g. `branch x 10, 6`.
+
+    _TRUTHY = (1, "String", True, 7.4, 3j)
+    _FALSEY = (0, "", False, 0.0, 0j, None)
+
+    def _literal_const_sample_generator(self, pyfunc, consts):
+        """
+        This takes a python function, pyfunc, and manipulates its co_const
+        __code__ member to create a new function with different co_consts as
+        supplied in argument consts.
+
+        consts is a dict {index: value} of co_const tuple index to constant
+        value used to update a pyfunc clone's co_const.
+        """
+        pyfunc_code = pyfunc.__code__
+
+        # translate consts spec to update the constants
+        co_consts = {k: v for k, v in enumerate(pyfunc_code.co_consts)}
+        for k, v in consts.items():
+            co_consts[k] = v
+        new_consts = tuple([v for _, v in sorted(co_consts.items())])
+
+        # create new code parts
+        co_args = [pyfunc_code.co_argcount]
+
+        if utils.PYVERSION >= (3, 8):
+            co_args.append(pyfunc_code.co_posonlyargcount)
+        co_args.append(pyfunc_code.co_kwonlyargcount)
+        co_args.extend([pyfunc_code.co_nlocals,
+                        pyfunc_code.co_stacksize,
+                        pyfunc_code.co_flags,
+                        pyfunc_code.co_code,
+                        new_consts,
+                        pyfunc_code.co_names,
+                        pyfunc_code.co_varnames,
+                        pyfunc_code.co_filename,
+                        pyfunc_code.co_name,
+                        pyfunc_code.co_firstlineno,
+                        pyfunc_code.co_lnotab,
+                        pyfunc_code.co_freevars,
+                        pyfunc_code.co_cellvars
+                        ])
+
+        # create code object with mutation
+        new_code = pytypes.CodeType(*co_args)
+
+        # get function
+        return pytypes.FunctionType(new_code, globals())
+
+    def test_literal_const_code_gen(self):
+        def impl(x):
+            _CONST1 = "PLACEHOLDER1"
+            if _CONST1:
+                return 3.14159
+            else:
+                _CONST2 = "PLACEHOLDER2"
+            return _CONST2 + 4
+
+        new = self._literal_const_sample_generator(impl, {1:0, 3:20})
+        iconst = impl.__code__.co_consts
+        nconst = new.__code__.co_consts
+        self.assertEqual(iconst, (None, "PLACEHOLDER1", 3.14159,
+                                  "PLACEHOLDER2", 4))
+        self.assertEqual(nconst, (None, 0, 3.14159,  20, 4))
+        self.assertEqual(impl(None), 3.14159)
+        self.assertEqual(new(None), 24)
+
+    def test_single_if_const(self):
+
+        def impl(x):
+            _CONST1 = "PLACEHOLDER1"
+            if _CONST1:
+                return 3.14159
+
+        for c_inp, prune in (self._TRUTHY, False), (self._FALSEY, True):
+            for const in c_inp:
+                func = self._literal_const_sample_generator(impl, {1: const})
+                self.assert_prune(func, (types.NoneType('none'),), [prune],
+                                  None)
+
+    def test_single_if_negate_const(self):
+
+        def impl(x):
+            _CONST1 = "PLACEHOLDER1"
+            if not _CONST1:
+                return 3.14159
+
+        for c_inp, prune in (self._TRUTHY, False), (self._FALSEY, True):
+            for const in c_inp:
+                func = self._literal_const_sample_generator(impl, {1: const})
+                self.assert_prune(func, (types.NoneType('none'),), [prune],
+                                  None)
+
+    def test_single_if_else_const(self):
+
+        def impl(x):
+            _CONST1 = "PLACEHOLDER1"
+            if _CONST1:
+                return 3.14159
+            else:
+                return 1.61803
+
+        for c_inp, prune in (self._TRUTHY, False), (self._FALSEY, True):
+            for const in c_inp:
+                func = self._literal_const_sample_generator(impl, {1: const})
+                self.assert_prune(func, (types.NoneType('none'),), [prune],
+                                  None)
+
+    def test_single_if_else_negate_const(self):
+
+        def impl(x):
+            _CONST1 = "PLACEHOLDER1"
+            if not _CONST1:
+                return 3.14159
+            else:
+                return 1.61803
+
+        for c_inp, prune in (self._TRUTHY, False), (self._FALSEY, True):
+            for const in c_inp:
+                func = self._literal_const_sample_generator(impl, {1: const})
+                self.assert_prune(func, (types.NoneType('none'),), [prune],
+                                  None)
+
+    def test_single_if_freevar(self):
+        for c_inp, prune in (self._TRUTHY, False), (self._FALSEY, True):
+            for const in c_inp:
+
+                def func(x):
+                    if const:
+                        return 3.14159, const
+                self.assert_prune(func, (types.NoneType('none'),), [prune],
+                                  None)
+
+    def test_single_if_negate_freevar(self):
+        for c_inp, prune in (self._TRUTHY, False), (self._FALSEY, True):
+            for const in c_inp:
+
+                def func(x):
+                    if not const:
+                        return 3.14159, const
+                self.assert_prune(func, (types.NoneType('none'),), [prune],
+                                  None)
+
+    def test_single_if_else_freevar(self):
+        for c_inp, prune in (self._TRUTHY, False), (self._FALSEY, True):
+            for const in c_inp:
+
+                def func(x):
+                    if const:
+                        return 3.14159, const
+                    else:
+                        return 1.61803, const
+                self.assert_prune(func, (types.NoneType('none'),), [prune],
+                                  None)
+
+    def test_single_if_else_negate_freevar(self):
+        for c_inp, prune in (self._TRUTHY, False), (self._FALSEY, True):
+            for const in c_inp:
+
+                def func(x):
+                    if not const:
+                        return 3.14159, const
+                    else:
+                        return 1.61803, const
+                self.assert_prune(func, (types.NoneType('none'),), [prune],
+                                  None)
+
+    # globals in this section have absurd names after their test usecase names
+    # so as to prevent collisions and permit tests to run in parallel
+    def test_single_if_global(self):
+        global c_test_single_if_global
+
+        for c_inp, prune in (self._TRUTHY, False), (self._FALSEY, True):
+            for c in c_inp:
+                c_test_single_if_global = c
+
+                def func(x):
+                    if c_test_single_if_global:
+                        return 3.14159, c_test_single_if_global
+
+                self.assert_prune(func, (types.NoneType('none'),), [prune],
+                                  None)
+
+    def test_single_if_negate_global(self):
+        global c_test_single_if_negate_global
+
+        for c_inp, prune in (self._TRUTHY, False), (self._FALSEY, True):
+            for c in c_inp:
+                c_test_single_if_negate_global = c
+
+                def func(x):
+                    if c_test_single_if_negate_global:
+                        return 3.14159, c_test_single_if_negate_global
+
+                self.assert_prune(func, (types.NoneType('none'),), [prune],
+                                  None)
+
+    def test_single_if_else_global(self):
+        global c_test_single_if_else_global
+
+        for c_inp, prune in (self._TRUTHY, False), (self._FALSEY, True):
+            for c in c_inp:
+                c_test_single_if_else_global = c
+
+                def func(x):
+                    if c_test_single_if_else_global:
+                        return 3.14159, c_test_single_if_else_global
+                    else:
+                        return 1.61803, c_test_single_if_else_global
+                self.assert_prune(func, (types.NoneType('none'),), [prune],
+                                  None)
+
+    def test_single_if_else_negate_global(self):
+        global c_test_single_if_else_negate_global
+
+        for c_inp, prune in (self._TRUTHY, False), (self._FALSEY, True):
+            for c in c_inp:
+                c_test_single_if_else_negate_global = c
+
+                def func(x):
+                    if not c_test_single_if_else_negate_global:
+                        return 3.14159, c_test_single_if_else_negate_global
+                    else:
+                        return 1.61803, c_test_single_if_else_negate_global
+                self.assert_prune(func, (types.NoneType('none'),), [prune],
+                                  None)
+
+    def test_issue_5618(self):
+
+        @njit
+        def foo():
+            values = np.zeros(1)
+            tmp = 666
+            if tmp:
+                values[0] = tmp
+            return values
+
+        self.assertPreciseEqual(foo.py_func()[0], 666.)
+        self.assertPreciseEqual(foo()[0], 666.)
+
+
 class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
     # Tests that semantic constants rewriting works by virtue of branch pruning
 
@@ -633,3 +882,14 @@ class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
         FakeArrayType = types.NamedUniTuple(types.int64, 1, FakeArray)
         self.assert_prune(impl, (FakeArrayType,), [None], fa,
                           flags=enable_pyobj_flags)
+
+    def test_semantic_const_propagates_before_static_rewrites(self):
+        # see issue #5015, the ndim needs writing in as a const before
+        # the rewrite passes run to make e.g. getitems static where possible
+        @njit
+        def impl(a, b):
+            return a.shape[:b.ndim]
+
+        args = (np.zeros((5, 4, 3, 2)), np.zeros((1, 1)))
+
+        self.assertPreciseEqual(impl(*args), impl.py_func(*args))

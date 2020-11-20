@@ -26,10 +26,7 @@ static int get_readonly_buffer(PyObject* obj, Py_buffer *buf)
 {
     int flags = PyBUF_ND|PyBUF_STRIDES|PyBUF_FORMAT;
 
-    if (!PyObject_GetBuffer(obj, buf, flags))
-        return 0;
-
-    return -1;
+    return PyObject_GetBuffer(obj, buf, flags);
 }
 
 
@@ -51,41 +48,21 @@ memoryview_get_buffer(PyObject *self, PyObject *args){
     int force = 0;
     int readonly = 0;
     PyObject *ret = NULL;
-    void * ptr = NULL;
-    const void* roptr = NULL;
-    Py_ssize_t buflen;
     Py_buffer buf;
 
     if (!PyArg_ParseTuple(args, "O|ii", &obj, &force, &readonly))
         return NULL;
 
     if (readonly) {
-        if (!get_readonly_buffer(obj, &buf)) { /* new buffer api */
-            ret = PyLong_FromVoidPtr(buf.buf);
-            free_buffer(&buf);
-        } else {  /* old buffer api */
-            PyErr_Clear();
-            if(-1 == PyObject_AsReadBuffer(obj, &roptr, &buflen))
-                return NULL;
-        }
+        if (get_readonly_buffer(obj, &buf))
+            return NULL;
     } else {
-        if (!get_writable_buffer(obj, &buf, force)) { /* new buffer api */
-            ret = PyLong_FromVoidPtr(buf.buf);
-            free_buffer(&buf);
-        } else { /* old buffer api */
-            PyErr_Clear();
-            if (-1 == PyObject_AsWriteBuffer(obj, &ptr, &buflen)) {
-                if (!force)
-                    return NULL;
-                /* Force writeable by getting a read-only buffer */
-                PyErr_Clear();
-                if(-1 == PyObject_AsReadBuffer(obj, &roptr, &buflen))
-                    return NULL;
-                ptr = (void*) roptr;
-            }
-            ret = PyLong_FromVoidPtr(ptr);
-        }
+        if (get_writable_buffer(obj, &buf, force))
+            return NULL;
     }
+
+    ret = PyLong_FromVoidPtr(buf.buf);
+    free_buffer(&buf);
     return ret;
 }
 
@@ -160,21 +137,15 @@ memoryview_get_extents(PyObject *self, PyObject *args)
     PyObject *obj = NULL;
     PyObject *ret = NULL;
     Py_buffer b;
-    const void * ptr = NULL;
-    Py_ssize_t bufptr, buflen;
     if (!PyArg_ParseTuple(args, "O", &obj))
         return NULL;
 
-    if (!get_readonly_buffer(obj, &b)) { /* new buffer api */
-        ret = get_extents(b.shape, b.strides, b.ndim, b.itemsize,
-                          (Py_ssize_t)b.buf);
-        free_buffer(&b);
-    } else { /* old buffer api */
-        PyErr_Clear();
-        if (-1 == PyObject_AsReadBuffer(obj, &ptr, &buflen)) return NULL;
-        bufptr = (Py_ssize_t)ptr;
-        ret = Py_BuildValue("nn", bufptr, bufptr + buflen);
-    }
+    if (get_readonly_buffer(obj, &b))
+        return NULL;
+
+    ret = get_extents(b.shape, b.strides, b.ndim, b.itemsize,
+                      (Py_ssize_t)b.buf);
+    free_buffer(&b);
     return ret;
 }
 
@@ -282,116 +253,39 @@ cleanup:
 }
 
 
-#if PY_MAJOR_VERSION >= 3
+static int
+MemAllocObject_getbuffer(PyObject *self, Py_buffer *view, int flags)
+{
+    Py_ssize_t size = 0;
+    void *ptr = 0;
+    int readonly;
 
+    if(-1 == get_bufinfo(self, &size, &ptr))
+        return -1;
 
-    static int
-    MemAllocObject_getbuffer(PyObject *self, Py_buffer *view, int flags)
-    {
-        Py_ssize_t size = 0;
-        void *ptr = 0;
-        int readonly;
+    readonly = (PyBUF_WRITABLE & flags) != PyBUF_WRITABLE;
 
-        if(-1 == get_bufinfo(self, &size, &ptr))
-            return -1;
+    /* fill buffer */
+    if (-1 == PyBuffer_FillInfo(view, self, (void*)ptr, size, readonly, flags))
+        return -1;
 
-        readonly = (PyBUF_WRITABLE & flags) != PyBUF_WRITABLE;
+    return 0;
+}
 
-        /* fill buffer */
-        if (-1 == PyBuffer_FillInfo(view, self, (void*)ptr, size, readonly, flags))
-            return -1;
+static void
+MemAllocObject_releasebuffer(PyObject *self, Py_buffer *view)
+{
+    /* Do nothing */
+}
 
-        return 0;
-    }
+static PyBufferProcs MemAlloc_as_buffer = {
+    MemAllocObject_getbuffer,
+    MemAllocObject_releasebuffer,
+};
 
-    static void
-    MemAllocObject_releasebuffer(PyObject *self, Py_buffer *view)
-    {
-        /* Do nothing */
-    }
-
-    static PyBufferProcs MemAlloc_as_buffer = {
-        MemAllocObject_getbuffer,
-        MemAllocObject_releasebuffer,
-    };
-#else
-    static int
-    MemAllocObject_getbufferproc(PyObject *self, Py_buffer *view, int flags)
-    {
-        Py_ssize_t size = 0;
-        void *ptr = 0;
-        int readonly;
-
-        if(-1 == get_bufinfo(self, &size, &ptr))
-            return -1;
-
-        readonly = (PyBUF_WRITABLE & flags) != PyBUF_WRITABLE;
-
-        /* fill buffer */
-        if (-1 == PyBuffer_FillInfo(view, self, (void*)ptr, size, readonly, flags))
-            return -1;
-
-        return 0;
-    }
-
-    static Py_ssize_t
-    MemAllocObject_writebufferproc(PyObject *self, Py_ssize_t segment,
-                                   void **ptrptr)
-    {
-        Py_ssize_t size = 0;
-        if (segment != 0) {
-            PyErr_SetString(PyExc_ValueError, "invalid segment");
-            return -1;
-        }
-
-        if(-1 == get_bufinfo(self, &size, ptrptr))
-            return -1;
-        return size;
-    }
-
-    static Py_ssize_t
-    MemAllocObject_readbufferproc(PyObject *self, Py_ssize_t segment,
-                                  void **ptrptr)
-    {
-        return MemAllocObject_writebufferproc(self, segment, ptrptr);
-    }
-
-
-    static Py_ssize_t
-    MemAllocObject_segcountproc(PyObject *self, Py_ssize_t *lenp)
-    {
-        void *ptr = 0;
-        if (lenp){
-            if(-1 == get_bufinfo(self, lenp, &ptr)) return 0;
-        }
-        return 1;
-    }
-
-    static Py_ssize_t
-    MemAllocObject_charbufferproc(PyObject *self, Py_ssize_t segment,
-                                  char **ptrptr)
-    {
-        return MemAllocObject_writebufferproc(self, segment, (void*)ptrptr);
-    }
-
-    static PyBufferProcs MemAlloc_as_buffer = {
-        MemAllocObject_readbufferproc,      /*bf_getreadbuffer*/
-        MemAllocObject_writebufferproc,     /*bf_getwritebuffer*/
-        MemAllocObject_segcountproc,        /*bf_getsegcount*/
-        MemAllocObject_charbufferproc,      /*bf_getcharbuffer*/
-        /* new buffer protocol */
-        MemAllocObject_getbufferproc,       /*bf_getbuffer*/
-        NULL,                               /*bf_releasebuffer*/
-    };
-#endif
 
 static PyTypeObject MemAllocType = {
-#if PY_MAJOR_VERSION >= 3
     PyVarObject_HEAD_INIT(NULL, 0)
-#else
-    PyObject_HEAD_INIT(NULL)
-    0,                                          /* ob_size */
-#endif
     "mviewbuf.MemAlloc",                            /* tp_name */
     sizeof(MemAllocObject),                   /* tp_basicsize */
     0,                                          /* tp_itemsize */
@@ -415,14 +309,7 @@ static PyTypeObject MemAllocType = {
     0,                         /*tp_getattro*/
     0,                         /*tp_setattro*/
     &MemAlloc_as_buffer,        /*tp_as_buffer*/
-    (Py_TPFLAGS_DEFAULT
-#if PY_MAJOR_VERSION < 3
-     | Py_TPFLAGS_CHECKTYPES
-#endif
-#if (PY_VERSION_HEX >= 0x02060000) && (PY_VERSION_HEX < 0x03000000)
-     | Py_TPFLAGS_HAVE_NEWBUFFER
-#endif
-     | Py_TPFLAGS_BASETYPE),                    /* tp_flags */
+    (Py_TPFLAGS_DEFAULT| Py_TPFLAGS_BASETYPE),                    /* tp_flags */
     0,                                          /* tp_doc */
 
     0,                                          /* tp_traverse */
@@ -450,9 +337,7 @@ static PyTypeObject MemAllocType = {
     0,                                          /* tp_subclasses */
     0,                                          /* tp_weaklist */
     0,                                          /* tp_del */
-#if PY_VERSION_HEX >= 0x02060000
     0,                                          /* tp_version_tag */
-#endif
 };
 
 

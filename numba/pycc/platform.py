@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 from distutils.ccompiler import CCompiler, new_compiler
 from distutils.command.build_ext import build_ext
 from distutils.sysconfig import customize_compiler
@@ -236,7 +234,7 @@ def _exec_command(command, use_shell=None, use_tee=None, **env):
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE,
                                 universal_newlines=True)
-    except EnvironmentError:
+    except OSError:
         # Return 127, as os.spawn*() and /bin/sh do
         return '', 127
     text, err = proc.communicate()

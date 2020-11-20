@@ -1,7 +1,6 @@
 """
 Expose top-level symbols that are safe for import *
 """
-from __future__ import print_function, division, absolute_import
 
 import platform
 import re
@@ -9,75 +8,80 @@ import sys
 import warnings
 
 from ._version import get_versions
-__version__ = get_versions()['version']
-del get_versions
+from numba.misc.init_utils import generate_version_info
 
-from . import config, errors, _runtests as runtests, types
+__version__ = get_versions()['version']
+version_info = generate_version_info(__version__)
+del get_versions
+del generate_version_info
+
+
+from numba.core import config
+from numba.testing import _runtests as runtests
+from numba.core import types, errors
 
 # Re-export typeof
-from .special import (
+from numba.misc.special import (
     typeof, prange, pndindex, gdb, gdb_breakpoint, gdb_init,
-    literally
+    literally, literal_unroll,
 )
 
 # Re-export error classes
-from .errors import *
+from numba.core.errors import *
+
+# Re-export types itself
+import numba.core.types as types
 
 # Re-export all type names
-from .types import *
+from numba.core.types import *
 
 # Re-export decorators
-from .decorators import (autojit, cfunc, generated_jit, jit, njit, stencil,
-                         jit_module)
+from numba.core.decorators import (cfunc, generated_jit, jit, njit, stencil,
+                                   jit_module)
 
 # Re-export vectorize decorators and the thread layer querying function
-from .npyufunc import vectorize, guvectorize, threading_layer
+from numba.np.ufunc import (vectorize, guvectorize, threading_layer,
+                            get_num_threads, set_num_threads)
 
 # Re-export Numpy helpers
-from .numpy_support import carray, farray, from_dtype
+from numba.np.numpy_support import carray, farray, from_dtype
 
-# Re-export jitclass
-from .jitclass import jitclass
+# Re-export experimental
+from numba import experimental
 
 # Initialize withcontexts
-import numba.withcontexts
-from numba.withcontexts import objmode_context as objmode
-
-# Initialize typed containers
-import numba.typed
-
-# Enable bytes/unicode array support (Python 3.x only)
-from .utils import IS_PY3
-if IS_PY3:
-    import numba.charseq
+import numba.core.withcontexts
+from numba.core.withcontexts import objmode_context as objmode
 
 # Keep this for backward compatibility.
 test = runtests.main
 
 
 __all__ = """
-    autojit
     cfunc
     from_dtype
     guvectorize
     jit
-    jitclass
+    experimental
     njit
     stencil
     jit_module
+    jitclass
     typeof
     prange
     gdb
     gdb_breakpoint
     gdb_init
-    stencil
     vectorize
     objmode
+    literal_unroll
+    get_num_threads
+    set_num_threads
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 30, 0)
-_min_llvm_version = (7, 0, 0)
+_min_llvmlite_version = (0, 33, 0)
+_min_llvm_version = (9, 0, 0)
 
 def _ensure_llvm():
     """
@@ -113,20 +117,28 @@ def _ensure_llvm():
 
     check_jit_execution()
 
-def _ensure_pynumpy():
+def _ensure_critical_deps():
     """
-    Make sure Python and Numpy have supported versions.
+    Make sure Python, NumPy and SciPy have supported versions.
     """
-    import warnings
-    from . import numpy_support
+    from numba.np.numpy_support import numpy_version
+    from numba.core.utils import PYVERSION
 
-    pyver = sys.version_info[:2]
-    if pyver < (2, 7) or ((3,) <= pyver < (3, 4)):
-        raise ImportError("Numba needs Python 2.7 or greater, or 3.4 or greater")
+    if PYVERSION < (3, 6):
+        raise ImportError("Numba needs Python 3.6 or greater")
 
-    np_version = numpy_support.version[:2]
-    if np_version < (1, 7):
-        raise ImportError("Numba needs Numpy 1.7 or greater")
+    if numpy_version < (1, 15):
+        raise ImportError("Numba needs NumPy 1.15 or greater")
+
+    try:
+        import scipy
+    except ImportError:
+        pass
+    else:
+        sp_version = tuple(map(int, scipy.__version__.split('.')[:2]))
+        if sp_version < (1, 0):
+            raise ImportError("Numba requires SciPy version 1.0 or greater")
+
 
 def _try_enable_svml():
     """
@@ -176,7 +188,7 @@ def _try_enable_svml():
     return False
 
 _ensure_llvm()
-_ensure_pynumpy()
+_ensure_critical_deps()
 
 # we know llvmlite is working as the above tests passed, import it now as SVML
 # needs to mutate runtime options (sets the `-vector-library`).
@@ -186,3 +198,15 @@ import llvmlite
 Is set to True if Intel SVML is in use.
 """
 config.USING_SVML = _try_enable_svml()
+
+
+# ---------------------- WARNING WARNING WARNING ----------------------------
+# The following imports occur below here (SVML init) because somewhere in their
+# import sequence they have a `@njit` wrapped function. This triggers too early
+# a bind to the underlying LLVM libraries which then irretrievably sets the LLVM
+# SVML state to "no SVML". See https://github.com/numba/numba/issues/4689 for
+# context.
+# ---------------------- WARNING WARNING WARNING ----------------------------
+
+# Initialize typed containers
+import numba.typed

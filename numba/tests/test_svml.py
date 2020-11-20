@@ -1,5 +1,3 @@
-from __future__ import division, print_function
-
 import math
 import numpy as np
 import subprocess
@@ -10,17 +8,20 @@ import re
 from itertools import chain, combinations
 
 import numba
-from numba import prange, unittest_support as unittest
-from numba.targets import cpu
-from numba.compiler import compile_isolated, Flags
-from numba.six import exec_
-from .support import TestCase, tag, override_env_config
+from numba.core import config, cpu
+from numba import prange, njit
+from numba.core.compiler import compile_isolated, Flags
+from numba.tests.support import TestCase, tag, override_env_config
+import unittest
 
-needs_svml = unittest.skipUnless(numba.config.USING_SVML,
+needs_svml = unittest.skipUnless(config.USING_SVML,
                                  "SVML tests need SVML to be present")
 
 # a map of float64 vector lenghs with corresponding CPU architecture
 vlen2cpu = {2: 'nehalem', 4: 'haswell', 8: 'skylake-avx512'}
+# force LLVM to use AVX512 registers for vectorization
+# https://reviews.llvm.org/D67259
+vlen2cpu_features = {2: '', 4: '', 8: '-prefer-256-bit'}
 
 # K: SVML functions, V: python functions which are expected to be SIMD-vectorized
 # using SVML, explicit references to Python functions here are mostly for sake of
@@ -116,7 +117,7 @@ def func_patterns(func, args, res, dtype, mode, vlen, flags, pad=' '*8):
     v = vlen*2 if is_f32 else vlen
     # general expectations
     prec_suff = '' if getattr(flags, 'fastmath', False) else '_ha'
-    scalar_func = '$_'+f if numba.config.IS_OSX else '$'+f
+    scalar_func = '$_'+f if config.IS_OSX else '$'+f
     svml_func = '__svml_%s%d%s,' % (f, v, prec_suff)
     if mode == "scalar":
         contains = [scalar_func]
@@ -166,7 +167,7 @@ def combo_svml_usecase(dtype, mode, vlen, flags):
     body += " "*8 + "return ret"
     # now compile and return it along with its body in __doc__  and patterns
     ldict = {}
-    exec_(body, globals(), ldict)
+    exec(body, globals(), ldict)
     ldict[name].__doc__ = body
     return ldict[name], contains, avoids
 
@@ -184,7 +185,7 @@ class TestSVMLGeneration(TestCase):
     def _inject_test(cls, dtype, mode, vlen, flags):
         # unsupported combinations
         if dtype.startswith('complex') and mode != 'numpy':
-            return 
+            return
         # TODO: address skipped tests below
         skipped = dtype.startswith('int') and vlen == 2
         args = (dtype, mode, vlen, flags)
@@ -194,7 +195,7 @@ class TestSVMLGeneration(TestCase):
             fn, contains, avoids = combo_svml_usecase(*args)
             # look for specific patters in the asm for a given target
             with override_env_config('NUMBA_CPU_NAME', vlen2cpu[vlen]), \
-                 override_env_config('NUMBA_CPU_FEATURES', ''):
+                 override_env_config('NUMBA_CPU_FEATURES', vlen2cpu_features[vlen]):
                 # recompile for overridden CPU
                 try:
                     jit = compile_isolated(fn, (numba.int64, ), flags=flags)
@@ -237,10 +238,9 @@ class TestSVMLGeneration(TestCase):
                     for mode in "scalar", "range", "prange", "numpy":
                         cls._inject_test(dtype, mode, vlen, flags)
         # mark important
-        if sys.version_info[0] > 2:
-            for n in ( "test_int32_range4_usecase",  # issue #3016
-                      ):
-                setattr(cls, n, tag("important")(getattr(cls, n)))
+        for n in ( "test_int32_range4_usecase",  # issue #3016
+                    ):
+            setattr(cls, n, tag("important")(getattr(cls, n)))
 
 
 TestSVMLGeneration.autogenerate()
@@ -305,6 +305,9 @@ class TestSVML(TestCase):
         std_pattern = kwargs.pop('std_pattern', None)
         fast_pattern = kwargs.pop('fast_pattern', None)
         cpu_name = kwargs.pop('cpu_name', 'skylake-avx512')
+        # force LLVM to use AVX512 registers for vectorization
+        # https://reviews.llvm.org/D67259
+        cpu_features = kwargs.pop('cpu_features', '-prefer-256-bit')
 
         # python result
         py_expected = pyfunc(*self.copy_args(*args))
@@ -321,7 +324,7 @@ class TestSVML(TestCase):
 
         # look for specific patters in the asm for a given target
         with override_env_config('NUMBA_CPU_NAME', cpu_name), \
-             override_env_config('NUMBA_CPU_FEATURES', ''):
+             override_env_config('NUMBA_CPU_FEATURES', cpu_features):
             # recompile for overridden CPU
             jitstd, jitfast = self.compile(pyfunc, *args)
             if std_pattern:
@@ -335,11 +338,10 @@ class TestSVML(TestCase):
 
     def test_scalar_context(self):
         # SVML will not be used.
-        pat = '$_sin' if numba.config.IS_OSX else '$sin'
+        pat = '$_sin' if config.IS_OSX else '$sin'
         self.check(math_sin_scalar, 7., std_pattern=pat)
         self.check(math_sin_scalar, 7., fast_pattern=pat)
 
-    @tag('important')
     def test_svml(self):
         # loops both with and without fastmath should use SVML.
         # The high accuracy routines are dropped if `fastmath` is set
@@ -369,9 +371,9 @@ class TestSVML(TestCase):
                     # then to override using `numba.config`
                     import numba
                     from numba import config
-                    from numba.targets import cpu
+                    from numba.core import cpu
                     from numba.tests.support import override_env_config
-                    from numba.compiler import compile_isolated, Flags
+                    from numba.core.compiler import compile_isolated, Flags
 
                     # compile for overridden CPU, with and without fastmath
                     with override_env_config('NUMBA_CPU_NAME', 'skylake-avx512'), \
@@ -402,6 +404,17 @@ class TestSVML(TestCase):
             raise AssertionError(
                 "process failed with code %s: stderr follows\n%s\n" %
                 (popen.returncode, err.decode()))
+
+    def test_svml_working_in_non_isolated_context(self):
+        @njit(fastmath={'fast'}, error_model="numpy")
+        def impl(n):
+            x   = np.empty(n * 8, dtype=np.float64)
+            ret = np.empty_like(x)
+            for i in range(ret.size):
+                    ret[i] += math.cosh(x[i])
+            return ret
+        impl(1)
+        self.assertTrue('intel_svmlcc' in impl.inspect_llvm(impl.signatures[0]))
 
 
 if __name__ == '__main__':

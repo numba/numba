@@ -1,9 +1,7 @@
-from __future__ import print_function, absolute_import
-
 import numpy as np
 
 from numba import roc
-import numba.unittest_support as unittest
+import unittest
 from numba.roc.hsadrv.driver import dgpu_present
 
 

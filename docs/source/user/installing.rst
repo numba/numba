@@ -5,8 +5,7 @@ Installation
 Compatibility
 -------------
 
-Numba is compatible with Python 2.7 and 3.5 or later, and Numpy versions 1.7 to
-1.16.
+Numba is compatible with Python 3.6 or later, and Numpy versions 1.15 or later.
 
 Our supported platforms are:
 
@@ -14,13 +13,13 @@ Our supported platforms are:
 * Linux ppcle64 (POWER8)
 * Windows 7 and later (32-bit and 64-bit)
 * OS X 10.9 and later (64-bit)
+* \*BSD (unofficial support only)
 * NVIDIA GPUs of compute capability 2.0 and later
 * AMD ROC dGPUs (linux only and not for AMD Carrizo or Kaveri APU)
 * ARMv7 (32-bit little-endian, such as Raspberry Pi 2 and 3)
 * ARMv8 (64-bit little-endian, such as the NVIDIA Jetson)
 
-:ref:`numba-parallel` is only available on 64-bit platforms,
-and is not supported in Python 2.7 on Windows.
+:ref:`numba-parallel` is only available on 64-bit platforms.
 
 Installing using conda on x86/x86_64/POWER Platforms
 ----------------------------------------------------
@@ -172,6 +171,37 @@ Then you can build and install Numba from the top level of the source tree::
 
     $ python setup.py install
 
+.. _numba-source-install-env_vars:
+
+Build time environment variables and configuration of optional components
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Below are environment variables that are applicable to altering how Numba would
+otherwise build by default along with information on configuration options.
+
+.. envvar:: NUMBA_DISABLE_OPENMP (default: not set)
+
+  To disable compilation of the OpenMP threading backend set this environment
+  variable to a non-empty string when building. If not set (default):
+
+  * For Linux and Windows it is necessary to provide OpenMP C headers and
+    runtime  libraries compatible with the compiler tool chain mentioned above,
+    and for these to be accessible to the compiler via standard flags.
+  * For OSX the conda packages ``llvm-openmp`` and ``intel-openmp`` provide
+    suitable C headers and libraries. If the compilation requirements are not
+    met the OpenMP threading backend will not be compiled
+
+.. envvar:: NUMBA_DISABLE_TBB (default: not set)
+
+  To disable the compilation of the TBB threading backend set this environment
+  variable to a non-empty string when building. If not set (default) the TBB C
+  headers and libraries must be available at compile time. If building with
+  ``conda build`` this requirement can be met by installing the ``tbb-devel``
+  package. If not building with ``conda build`` the requirement can be met via a
+  system installation of TBB or through the use of the ``TBBROOT`` environment
+  variable to provide the location of the TBB installation. For more
+  information about setting ``TBBROOT`` see the `Intel documentation <https://software.intel.com/content/www/us/en/develop/documentation/advisor-user-guide/top/appendix/adding-parallelism-to-your-program/adding-the-parallel-framework-to-your-build-environment/defining-the-tbbroot-environment-variable.html>`_.
+
 .. _numba-source-install-check:
 
 Dependency List
@@ -179,18 +209,25 @@ Dependency List
 
 Numba has numerous required and optional dependencies which additionally may
 vary with target operating system and hardware. The following lists them all
-(as of September 2019).
+(as of July 2020).
 
 * Required build time:
 
   * ``setuptools``
   * ``numpy``
   * ``llvmlite``
-  * ``funcsigs`` (Python 2)
-  * ``singledispatch`` (Python 2)
   * Compiler toolchain mentioned above
 
+* Required run time:
+
+  * ``setuptools``
+  * ``numpy``
+  * ``llvmlite``
+
 * Optional build time:
+
+  See :ref:`numba-source-install-env_vars` for more details about additional
+  options for the configuration and specification of these optional components.
 
   * ``llvm-openmp`` (OSX) - provides headers for compiling OpenMP support into
     Numba's threading backend
@@ -198,13 +235,6 @@ vary with target operating system and hardware. The following lists them all
     threading backend.
   * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support
     into Numba's threading backend
-
-* Required run time:
-
-  * ``numpy``
-  * ``llvmlite``
-  * ``funcsigs`` (Python 2)
-  * ``singledispatch`` (Python 2)
 
 * Optional runtime are:
 
@@ -229,12 +259,19 @@ vary with target operating system and hardware. The following lists them all
     support
   * Compiler toolchain mentioned above, if you would like to use ``pycc`` for
     Ahead-of-Time (AOT) compilation
+  * ``r2pipe`` - required for assembly CFG inspection.
+  * ``radare2`` as an executable on the ``$PATH`` - required for assembly CFG
+    inspection. `See here <https://github.com/radareorg/radare2>`_ for
+    information on obtaining and installing.
+  * ``graphviz`` - for some CFG inspection functionality.
+  * ``pickle5`` - provides Python 3.8 pickling features for faster pickling in
+    Python 3.6 and 3.7.
 
 * To build the documentation:
 
   * ``sphinx``
   * ``pygments``
-  * ``sphinx-bootstrap``
+  * ``sphinx_rtd_theme``
   * ``numpydoc``
   * ``make`` as an executable on the ``$PATH``
 
@@ -244,12 +281,12 @@ Checking your installation
 You should be able to import Numba from the Python prompt::
 
     $ python
-    Python 2.7.15 |Anaconda custom (x86_64)| (default, May  1 2018, 18:37:05)
-    [GCC 4.2.1 Compatible Clang 4.0.1 (tags/RELEASE_401/final)] on darwin
+    Python 3.8.1 (default, Jan 8  2020, 16:15:59)
+    [Clang 4.0.1 (tags/RELEASE_401/final)] :: Anaconda, Inc. on darwin
     Type "help", "copyright", "credits" or "license" for more information.
     >>> import numba
     >>> numba.__version__
-    '0.39.0+0.g4e49566.dirty'
+    '0.48.0'
 
 You can also try executing the ``numba --sysinfo`` (or ``numba -s`` for short)
 command to report information about your system capabilities. See :ref:`cli` for
@@ -294,5 +331,3 @@ further information.
                                   pci bus id: 1
 
 (output truncated due to length)
-
-

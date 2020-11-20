@@ -378,6 +378,8 @@ still result in compilation of a ufunc, as there is no straightforward pure
 Python implementation of these functions.
 
 
+.. _debugging-jit-compiled-code:
+
 Debugging JIT compiled code with GDB
 ====================================
 
@@ -647,7 +649,10 @@ by example, debugging a 'segfault' (memory access violation signalling
     from numba import njit, gdb_init
     import numpy as np
 
-    @njit(debug=True)
+    # NOTE debug=True switches bounds-checking on, but for the purposes of this
+    # example it is explicitly turned off so that the out of bounds index is
+    # not caught!
+    @njit(debug=True, boundscheck=False)
     def foo(a, index):
         gdb_init() # instruct Numba to attach gdb at this location, but not to pause execution
         b = a + 1

@@ -1,17 +1,14 @@
-from __future__ import print_function, absolute_import, division
-
-
 import re
 import types
 
 import numpy as np
 
-from numba.cuda.testing import unittest, skip_on_cudasim, SerialMixin
+from numba.cuda.testing import unittest, skip_on_cudasim, CUDATestCase
 from numba import cuda, jit, int32
-from numba.errors import TypingError
+from numba.core.errors import TypingError
 
 
-class TestDeviceFunc(SerialMixin, unittest.TestCase):
+class TestDeviceFunc(CUDATestCase):
 
     def test_use_add2f(self):
 

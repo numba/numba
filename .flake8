@@ -21,185 +21,83 @@ exclude =
     *.h
     __init__.py
     # Grandfather in existing failing files.  This list should shrink over time
-    numba/dispatcher.py
-    numba/serialize.py
-    numba/funcdesc.py
-    numba/postproc.py
-    numba/stencil.py
-    numba/smartarray.py
-    numba/transforms.py
-    numba/tracing.py
-    numba/ctypes_support.py
-    numba/withcontexts.py
+    numba/core/dispatcher.py
+    numba/core/funcdesc.py
+    numba/core/postproc.py
+    numba/stencils/stencil.py
+    numba/core/transforms.py
+    numba/core/tracing.py
+    numba/core/withcontexts.py
     numba/_version.py
-    numba/inline_closurecall.py
-    numba/ir_utils.py
-    numba/pylowering.py
-    numba/io_support.py
-    numba/parfor.py
-    numba/numba_entry.py
-    numba/stencilparfor.py
-    numba/ir.py
-    numba/itanium_mangler.py
-    numba/unittest_support.py
-    numba/array_analysis.py
-    numba/generators.py
-    numba/appdirs.py
-    numba/cffi_support.py
-    numba/interpreter.py
-    numba/caching.py
-    numba/utils.py
-    numba/debuginfo.py
-    numba/pretty_annotate.py
-    numba/six.py
-    numba/dummyarray.py
-    numba/dataflow.py
-    numba/macro.py
-    numba/runtests.py
-    numba/pythonapi.py
-    numba/extending.py
-    numba/decorators.py
-    numba/typeconv/typeconv.py
-    numba/typeconv/rules.py
-    numba/typeconv/castgraph.py
-    numba/rewrites/registry.py
-    numba/rewrites/macros.py
-    numba/rewrites/static_binop.py
-    numba/rewrites/ir_print.py
-    numba/types/abstract.py
-    numba/types/functions.py
-    numba/types/misc.py
-    numba/types/containers.py
-    numba/types/npytypes.py
-    numba/types/common.py
-    numba/types/iterators.py
-    numba/types/scalars.py
-    numba/targets/fastmathpass.py
-    numba/targets/setobj.py
-    numba/targets/options.py
-    numba/targets/printimpl.py
-    numba/targets/smartarray.py
-    numba/targets/cmathimpl.py
-    numba/targets/tupleobj.py
-    numba/targets/mathimpl.py
-    numba/targets/registry.py
-    numba/targets/imputils.py
-    numba/targets/builtins.py
-    numba/targets/cpu.py
-    numba/targets/quicksort.py
-    numba/targets/callconv.py
-    numba/targets/randomimpl.py
-    numba/targets/npyimpl.py
-    numba/targets/slicing.py
-    numba/targets/numbers.py
-    numba/targets/listobj.py
-    numba/targets/removerefctpass.py
-    numba/targets/boxing.py
-    numba/targets/cffiimpl.py
-    numba/targets/linalg.py
-    numba/targets/rangeobj.py
-    numba/targets/npyfuncs.py
-    numba/targets/iterators.py
-    numba/targets/codegen.py
-    numba/targets/polynomial.py
-    numba/targets/mergesort.py
-    numba/targets/base.py
-    numba/targets/npdatetime.py
-    numba/cuda/dispatcher.py
-    numba/cuda/printimpl.py
-    numba/cuda/libdevice.py
-    numba/cuda/device_init.py
-    numba/cuda/compiler.py
-    numba/cuda/initialize.py
-    numba/cuda/simulator_init.py
-    numba/cuda/random.py
-    numba/cuda/api.py
-    numba/cuda/stubs.py
-    numba/cuda/target.py
-    numba/cuda/cudamath.py
-    numba/cuda/nvvmutils.py
-    numba/cuda/cudadecl.py
-    numba/cuda/codegen.py
-    numba/cuda/decorators.py
-    numba/cuda/kernels/transpose.py
-    numba/cuda/tests/cudasim/test_cudasim_issues.py
-    numba/cuda/tests/cudapy/test_deprecation.py
-    numba/cuda/tests/cudapy/test_ipc.py
-    numba/cuda/tests/cudapy/test_vectorize.py
-    numba/cuda/tests/cudapy/test_smart_array.py
-    numba/cuda/tests/cudapy/test_atomics.py
-    numba/cuda/tests/cudapy/test_py2_div_issue.py
-    numba/cuda/tests/cudapy/test_freevar.py
-    numba/cuda/tests/cudapy/test_const_string.py
-    numba/cuda/tests/cudapy/test_print.py
-    numba/cuda/tests/cudapy/test_laplace.py
-    numba/cuda/tests/cudapy/test_powi.py
-    numba/cuda/tests/cudapy/test_nondet.py
-    numba/cuda/tests/cudapy/test_sync.py
-    numba/cuda/tests/cudapy/test_lang.py
-    numba/cuda/tests/cudapy/test_multithreads.py
-    numba/cuda/tests/cudapy/test_errors.py
-    numba/cuda/tests/cudapy/test_autojit.py
-    numba/cuda/tests/cudapy/test_slicing.py
-    numba/cuda/tests/cudapy/test_montecarlo.py
-    numba/cuda/tests/cudapy/test_array.py
-    numba/cuda/tests/cudapy/test_sm.py
-    numba/cuda/tests/cudapy/test_intrinsics.py
-    numba/cuda/tests/cudapy/test_mandel.py
-    numba/cuda/tests/cudapy/test_idiv.py
-    numba/cuda/tests/cudapy/test_constmem.py
-    numba/cuda/tests/cudapy/test_alignment.py
-    numba/cuda/tests/cudapy/test_vectorize_scalar_arg.py
-    numba/cuda/tests/cudapy/test_multigpu.py
-    numba/cuda/tests/cudapy/test_complex_kernel.py
-    numba/cuda/tests/cudapy/test_casting.py
-    numba/cuda/tests/cudapy/test_blackscholes.py
-    numba/cuda/tests/cudapy/test_exception.py
-    numba/cuda/tests/cudapy/test_fastmath.py
-    numba/cuda/tests/cudapy/test_userexc.py
-    numba/cuda/tests/cudapy/test_cuda_autojit.py
-    numba/cuda/tests/cudapy/test_warp_ops.py
-    numba/cuda/tests/cudapy/test_complex.py
-    numba/cuda/tests/cudapy/test_array_args.py
-    numba/cuda/tests/cudapy/test_math.py
-    numba/cuda/tests/cudapy/test_record_dtype.py
-    numba/cuda/tests/cudapy/test_gufunc.py
-    numba/cuda/tests/cudapy/test_random.py
-    numba/cuda/tests/cudadrv/test_reset_device.py
-    numba/cuda/tests/cudadrv/test_linker.py
-    numba/cuda/tests/cudadrv/test_cuda_driver.py
-    numba/cuda/tests/cudadrv/test_cuda_ndarray.py
-    numba/cuda/tests/cudadrv/test_inline_ptx.py
-    numba/cuda/tests/cudadrv/test_profiler.py
-    numba/cuda/tests/cudadrv/test_deallocations.py
-    numba/cuda/tests/cudadrv/test_cuda_devicerecord.py
-    numba/cuda/tests/cudadrv/test_nvvm_driver.py
-    numba/cuda/tests/cudadrv/test_pinned.py
-    numba/cuda/tests/cudadrv/test_cuda_auto_context.py
-    numba/cuda/tests/cudadrv/test_select_device.py
-    numba/cuda/tests/cudadrv/test_events.py
-    numba/cuda/tests/cudadrv/test_cuda_memory.py
-    numba/cuda/simulator/kernel.py
-    numba/cuda/simulator/reduction.py
-    numba/cuda/simulator/api.py
-    numba/cuda/simulator/kernelapi.py
-    numba/cuda/simulator/cudadrv/nvvm.py
-    numba/cuda/simulator/cudadrv/driver.py
-    numba/cuda/simulator/cudadrv/devices.py
-    numba/cuda/simulator/cudadrv/devicearray.py
-    numba/cuda/cudadrv/enums.py
-    numba/cuda/cudadrv/nvvm.py
-    numba/cuda/cudadrv/drvapi.py
-    numba/cuda/cudadrv/driver.py
-    numba/cuda/cudadrv/autotune.py
-    numba/cuda/cudadrv/devicearray.py
+    numba/core/inline_closurecall.py
+    numba/core/ir_utils.py
+    numba/core/pylowering.py
+    numba/python_utils.py
+    numba/parfors/parfor.py
+    numba/misc/numba_entry.py
+    numba/stencils/stencilparfor.py
+    numba/core/ir.py
+    numba/core/itanium_mangler.py
+    numba/core/generators.py
+    numba/misc/appdirs.py
+    numba/core/interpreter.py
+    numba/core/caching.py
+    numba/core/debuginfo.py
+    numba/core/annotations/pretty_annotate.py
+    numba/misc/dummyarray.py
+    numba/core/dataflow.py
+    numba/core/pythonapi.py
+    numba/core/decorators.py
+    numba/core/typeconv/typeconv.py
+    numba/core/typeconv/rules.py
+    numba/core/typeconv/castgraph.py
+    numba/core/rewrites/registry.py
+    numba/core/rewrites/macros.py
+    numba/core/rewrites/static_binop.py
+    numba/core/rewrites/ir_print.py
+    numba/core/types/abstract.py
+    numba/core/types/misc.py
+    numba/core/types/npytypes.py
+    numba/core/types/common.py
+    numba/core/types/iterators.py
+    numba/core/types/scalars.py
+    numba/core/fastmathpass.py
+    numba/cpython/setobj.py
+    numba/core/options.py
+    numba/cpython/printimpl.py
+    numba/cpython/cmathimpl.py
+    numba/cpython/tupleobj.py
+    numba/cpython/mathimpl.py
+    numba/core/registry.py
+    numba/core/imputils.py
+    numba/cpython/builtins.py
+    numba/core/cpu.py
+    numba/misc/quicksort.py
+    numba/core/callconv.py
+    numba/cpython/randomimpl.py
+    numba/np/npyimpl.py
+    numba/cpython/slicing.py
+    numba/cpython/numbers.py
+    numba/cpython/listobj.py
+    numba/core/removerefctpass.py
+    numba/core/boxing.py
+    numba/misc/cffiimpl.py
+    numba/np/linalg.py
+    numba/cpython/rangeobj.py
+    numba/np/npyfuncs.py
+    numba/cpython/iterators.py
+    numba/core/codegen.py
+    numba/np/polynomial.py
+    numba/misc/mergesort.py
+    numba/core/base.py
+    numba/np/npdatetime.py
     numba/pycc/cc.py
     numba/pycc/compiler.py
     numba/pycc/llvm_types.py
     numba/pycc/platform.py
     numba/pycc/decorators.py
-    numba/runtime/nrtdynmod.py
-    numba/runtime/context.py
+    numba/core/runtime/nrtdynmod.py
+    numba/core/runtime/context.py
     numba/tests/test_support.py
     numba/tests/test_llvm_version_check.py
     numba/tests/test_builtins.py
@@ -234,7 +132,6 @@ exclude =
     numba/tests/test_wrapper.py
     numba/tests/test_obj_lifetime.py
     numba/tests/test_intwidth.py
-    numba/tests/test_extending.py
     numba/tests/test_remove_dead.py
     numba/tests/serialize_usecases.py
     numba/tests/test_del.py
@@ -243,14 +140,12 @@ exclude =
     numba/tests/test_slices.py
     numba/tests/test_mandelbrot.py
     numba/tests/compile_with_pycc.py
-    numba/tests/test_ir.py
     numba/tests/test_deprecations.py
     numba/tests/test_looplifting.py
     numba/tests/test_storeslice.py
     numba/tests/recursion_usecases.py
     numba/tests/dummy_module.py
     numba/tests/test_operators.py
-    numba/tests/test_exceptions.py
     numba/tests/test_comprehension.py
     numba/tests/ctypes_usecases.py
     numba/tests/test_locals.py
@@ -276,8 +171,6 @@ exclude =
     numba/tests/test_extended_arg.py
     numba/tests/test_alignment.py
     numba/tests/test_multi3.py
-    numba/tests/test_extending_types.py
-    numba/tests/test_import.py
     numba/tests/test_overlap.py
     numba/tests/test_array_attr.py
     numba/tests/test_array_methods.py
@@ -315,17 +208,14 @@ exclude =
     numba/tests/pdlike_usecase.py
     numba/tests/test_range.py
     numba/tests/test_nrt_refct.py
-    numba/tests/timsort.py
+    numba/misc/timsort.py
     numba/tests/test_nested_calls.py
     numba/tests/test_chained_assign.py
     numba/tests/test_withlifting.py
-    numba/tests/test_errorhandling.py
     numba/tests/test_parfors.py
-    numba/tests/test_pipeline.py
     numba/tests/test_sets.py
     numba/tests/test_dyn_array.py
     numba/tests/test_objects.py
-    numba/tests/test_types.py
     numba/tests/test_random.py
     numba/tests/test_nan.py
     numba/tests/pycc_distutils_usecase/source_module.py
@@ -335,22 +225,21 @@ exclude =
     numba/tests/npyufunc/test_parallel_ufunc_issues.py
     numba/tests/npyufunc/test_parallel_env_variable.py
     numba/tests/npyufunc/test_gufunc.py
-    numba/typing/cmathdecl.py
-    numba/typing/bufproto.py
-    numba/typing/mathdecl.py
-    numba/typing/listdecl.py
-    numba/typing/builtins.py
-    numba/typing/randomdecl.py
-    numba/typing/setdecl.py
-    numba/typing/npydecl.py
-    numba/typing/arraydecl.py
-    numba/typing/collections.py
-    numba/typing/ctypes_utils.py
-    numba/typing/enumdecl.py
-    numba/typing/cffi_utils.py
-    numba/typing/typeof.py
-    numba/typing/npdatetime.py
-    numba/annotations/type_annotations.py
+    numba/core/typing/cmathdecl.py
+    numba/core/typing/bufproto.py
+    numba/core/typing/mathdecl.py
+    numba/core/typing/listdecl.py
+    numba/core/typing/builtins.py
+    numba/core/typing/randomdecl.py
+    numba/core/typing/setdecl.py
+    numba/core/typing/npydecl.py
+    numba/core/typing/arraydecl.py
+    numba/core/typing/collections.py
+    numba/core/typing/ctypes_utils.py
+    numba/core/typing/enumdecl.py
+    numba/core/typing/cffi_utils.py
+    numba/core/typing/npdatetime.py
+    numba/core/annotations/type_annotations.py
     numba/roc/mathdecl.py
     numba/roc/compiler.py
     numba/roc/hsadecl.py
@@ -391,14 +280,29 @@ exclude =
     numba/testing/loader.py
     numba/testing/notebook.py
     numba/testing/main.py
-    numba/unsafe/ndarray.py
-    numba/npyufunc/deviceufunc.py
-    numba/npyufunc/sigparse.py
-    numba/npyufunc/parfor.py
-    numba/npyufunc/array_exprs.py
-    numba/npyufunc/decorators.py
-    numba/servicelib/service.py
-    numba/datamodel/models.py
-    numba/datamodel/packer.py
-    numba/datamodel/testing.py
-    numba/datamodel/manager.py
+    numba/np/unsafe/ndarray.py
+    numba/np/ufunc/deviceufunc.py
+    numba/np/ufunc/sigparse.py
+    numba/parfors/parfor_lowering.py
+    numba/np/ufunc/array_exprs.py
+    numba/np/ufunc/decorators.py
+    numba/roc/servicelib/service.py
+    numba/core/datamodel/models.py
+    numba/core/datamodel/packer.py
+    numba/core/datamodel/testing.py
+    numba/core/datamodel/manager.py
+
+per-file-ignores =
+    # Ignore star imports, unused imports, and "may be defined by star imports"
+    # errors in device_init because its purpose is to bring together a lot of
+    # the public API to be star-imported in numba.cuda.__init__
+    numba/cuda/device_init.py:F401,F403,F405
+    # libdevice.py is an autogenerated file containing stubs for all the device
+    # functions. Some of the lines in docstrings are a little over-long, as they
+    # contain the URLs of the reference pages in the online libdevice
+    # documentation.
+    numba/cuda/libdevice.py:E501
+    # Ignore too-long lines in the CUDA doc examples, prioritising readability
+    # in the docs over line length in the example source (especially given that
+    # the test code is already indented by 8 spaces)
+    numba/cuda/tests/doc_examples/test_cg.py:E501

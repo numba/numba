@@ -1,8 +1,7 @@
-from __future__ import print_function, division, absolute_import
 import numpy as np
-from numba import jit
-from numba import unittest_support as unittest
+from numba import jit, njit
 from numba.tests import usecases
+import unittest
 
 X = np.arange(10)
 
@@ -71,6 +70,34 @@ def global_record_func(x):
 @jit(nopython=True)
 def global_module_func(x, y):
     return usecases.andornopython(x, y)
+
+# Test a global tuple
+tup_int = (1, 2)
+tup_str = ('a', 'b')
+tup_mixed = (1, 'a')
+tup_float = (1.2, 3.5)
+tup_npy_ints = (np.uint64(12), np.int8(3))
+
+def global_int_tuple():
+    return tup_int[0] + tup_int[1]
+
+
+def global_str_tuple():
+    return tup_str[0] + tup_str[1]
+
+
+def global_mixed_tuple():
+    idx = tup_mixed[0]
+    field = tup_mixed[1]
+    return rec_X[idx][field]
+
+
+def global_float_tuple():
+    return tup_float[0] + tup_float[1]
+
+
+def global_npy_int_tuple():
+    return tup_npy_ints[0] + tup_npy_ints[1]
 
 
 class TestGlobals(unittest.TestCase):
@@ -166,6 +193,32 @@ class TestGlobals(unittest.TestCase):
         x.a = 2
         res = global_record_func(x)
         self.assertEqual(False, res)
+
+    def test_global_int_tuple(self):
+        pyfunc = global_int_tuple
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(), jitfunc())
+
+    def test_global_str_tuple(self):
+        pyfunc = global_str_tuple
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(), jitfunc())
+
+    def test_global_mixed_tuple(self):
+        pyfunc = global_mixed_tuple
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(), jitfunc())
+
+    def test_global_float_tuple(self):
+        pyfunc = global_float_tuple
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(), jitfunc())
+
+    def test_global_npy_int_tuple(self):
+        pyfunc = global_npy_int_tuple
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(), jitfunc())
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,14 +1,12 @@
-from __future__ import print_function
-
 import sys
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import jit, njit, types
-from .support import TestCase, MemoryLeakMixin, tag
-from numba import testing
-from numba.datamodel.testing import test_factory
+import unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba import jit, njit
+from numba.core import types
+from numba.tests.support import TestCase, MemoryLeakMixin
+from numba.core.datamodel.testing import test_factory
 
 
 enable_pyobj_flags = Flags()
@@ -148,7 +146,6 @@ class TestGenerators(MemoryLeakMixin, TestCase):
         cgen = cr.entry_point(8)
         self.check_generator(pygen, cgen)
 
-    @tag('important')
     def test_gen1(self):
         self.check_gen1()
 
@@ -162,7 +159,6 @@ class TestGenerators(MemoryLeakMixin, TestCase):
         cgen = cr.entry_point(8)
         self.check_generator(pygen, cgen)
 
-    @tag('important')
     def test_gen2(self):
         self.check_gen2()
 
@@ -176,7 +172,6 @@ class TestGenerators(MemoryLeakMixin, TestCase):
         cgen = cr.entry_point(8)
         self.check_generator(pygen, cgen)
 
-    @tag('important')
     def test_gen3(self):
         self.check_gen3()
 
@@ -190,7 +185,6 @@ class TestGenerators(MemoryLeakMixin, TestCase):
         cgen = cr.entry_point(5, 6, 7)
         self.check_generator(pygen, cgen)
 
-    @tag('important')
     def test_gen4(self):
         self.check_gen4()
 
@@ -219,7 +213,6 @@ class TestGenerators(MemoryLeakMixin, TestCase):
             l.append(next(cgen))
         self.assertEqual(l, [14] * 3)
 
-    @tag('important')
     def test_gen6(self):
         self.check_gen6()
 
@@ -235,7 +228,6 @@ class TestGenerators(MemoryLeakMixin, TestCase):
         cgen = cr.entry_point(arr)
         self.check_generator(pygen, cgen)
 
-    @tag('important')
     def test_gen7(self):
         self.check_gen7()
 
@@ -255,7 +247,6 @@ class TestGenerators(MemoryLeakMixin, TestCase):
         check(y=5)
         check(x=6, b=True)
 
-    @tag('important')
     def test_gen8(self):
         self.check_gen8(nopython=True)
 
@@ -269,7 +260,6 @@ class TestGenerators(MemoryLeakMixin, TestCase):
         cgen = cr.entry_point()
         self.check_generator(pygen, cgen)
 
-    @tag('important')
     def test_gen9(self):
         self.check_gen9(flags=no_pyobj_flags)
 
@@ -290,7 +280,6 @@ class TestGenerators(MemoryLeakMixin, TestCase):
     def test_consume_gen2(self):
         self.check_consume_generator(gen2)
 
-    @tag('important')
     def test_consume_gen3(self):
         self.check_consume_generator(gen3)
 
@@ -350,15 +339,6 @@ class TestGenerators(MemoryLeakMixin, TestCase):
         msg = ("Can't unify yield type from the following types: complex128, "
                "int%s, none")
         self.assertIn(msg % types.intp.bitwidth, str(e.exception))
-
-
-class TestGenExprs(MemoryLeakMixin, TestCase):
-    @testing.allow_interpreter_mode
-    def test_return_generator_expr(self):
-        pyfunc = return_generator_expr
-        cr = compile_isolated(pyfunc, ())
-        cfunc = cr.entry_point
-        self.assertEqual(sum(cfunc([1, 2, 3])), sum(pyfunc([1, 2, 3])))
 
 
 def nrt_gen0(ary):

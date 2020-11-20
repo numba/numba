@@ -1,46 +1,44 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function, absolute_import
 
 """
 Tests the parallel backend
 """
-import threading
+import faulthandler
 import multiprocessing
-import random
 import os
-import sys
+import random
 import subprocess
+import sys
+import threading
+import unittest
 
 import numpy as np
 
-from numba import config, utils
+from numba import jit, vectorize, guvectorize, set_num_threads
+from numba.tests.support import (temp_directory, override_config, TestCase, tag,
+                                 skip_parfors_unsupported, linux_only)
 
-from numba import unittest_support as unittest
-from numba import jit, vectorize, guvectorize
-
-from .support import temp_directory, override_config, TestCase, tag
-
-from .test_parfors import skip_unsupported as parfors_skip_unsupported
-from .test_parfors import linux_only
-
-from numba.six.moves import queue as t_queue
+import queue as t_queue
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
+from numba.core import config
+
 
 _TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
 
-if utils.PYVERSION >= (3, 0):
-    import faulthandler
 
 # Check which backends are available
 # TODO: Put this in a subprocess so the address space is kept clean
 try:
-    from numba.npyufunc import tbbpool    # noqa: F401
+    # Check it's a compatible TBB before loading it
+    from numba.np.ufunc.parallel import _check_tbb_version_compatible
+    _check_tbb_version_compatible()
+    from numba.np.ufunc import tbbpool    # noqa: F401
     _HAVE_TBB_POOL = True
 except ImportError:
     _HAVE_TBB_POOL = False
 
 try:
-    from numba.npyufunc import omppool
+    from numba.np.ufunc import omppool
     _HAVE_OMP_POOL = True
 except ImportError:
     _HAVE_OMP_POOL = False
@@ -58,15 +56,10 @@ skip_no_tbb = unittest.skipUnless(_HAVE_TBB_POOL, "TBB threadpool required")
 _gnuomp = _HAVE_OMP_POOL and omppool.openmp_vendor == "GNU"
 skip_unless_gnu_omp = unittest.skipUnless(_gnuomp, "GNU OpenMP only tests")
 
-skip_unless_py3 = unittest.skipUnless(utils.PYVERSION >= (3, 0),
-                                      "Test runs on Python 3 only")
-
 _windows = sys.platform.startswith('win')
 _osx = sys.platform.startswith('darwin')
-_windows_py27 = (sys.platform.startswith('win32') and
-                 sys.version_info[:2] == (2, 7))
 _32bit = sys.maxsize <= 2 ** 32
-_parfors_unsupported = _32bit or _windows_py27
+_parfors_unsupported = _32bit
 
 _HAVE_OS_FORK = not _windows
 
@@ -111,6 +104,19 @@ class jit_runner(runnable):
         np.testing.assert_allclose(expected, got)
 
 
+class mask_runner(object):
+    def __init__(self, runner, mask, **options):
+        self.runner = runner
+        self.mask = mask
+
+    def __call__(self):
+        if self.mask:
+            # Tests are all run in isolated subprocesses, so we
+            # don't have to worry about this affecting other tests
+            set_num_threads(self.mask)
+        self.runner()
+
+
 class linalg_runner(runnable):
 
     def __call__(self):
@@ -146,8 +152,7 @@ class guvectorize_runner(runnable):
 def chooser(fnlist, **kwargs):
     q = kwargs.get('queue')
     try:
-        if utils.PYVERSION >= (3, 0):
-            faulthandler.enable()
+        faulthandler.enable()
         for _ in range(int(len(fnlist) * 1.5)):
             fn = random.choice(fnlist)
             fn()
@@ -184,23 +189,16 @@ class _proc_class_impl(object):
         self._method = method
 
     def __call__(self, *args, **kwargs):
-        if utils.PYVERSION < (3, 0):
-            return multiprocessing.Process(*args, **kwargs)
-        else:
-            ctx = multiprocessing.get_context(self._method)
-            return ctx.Process(*args, **kwargs)
+        ctx = multiprocessing.get_context(self._method)
+        return ctx.Process(*args, **kwargs)
 
 
 def _get_mp_classes(method):
-    if utils.PYVERSION < (3, 0):
-        proc = _proc_class_impl(method)
-        queue = multiprocessing.Queue
-    else:
-        if method == 'default':
-            method = None
-        ctx = multiprocessing.get_context(method)
-        proc = _proc_class_impl(method)
-        queue = ctx.Queue
+    if method == 'default':
+        method = None
+    ctx = multiprocessing.get_context(method)
+    proc = _proc_class_impl(method)
+    queue = ctx.Queue
     return proc, queue
 
 
@@ -243,14 +241,22 @@ class TestParallelBackendBase(TestCase):
         ]
         all_impls.extend(parfor_impls)
 
-    parallelism = ['threading', 'random']
-    if utils.PYVERSION > (3, 0):
-        parallelism.append('multiprocessing_spawn')
-        if _HAVE_OS_FORK:
-            parallelism.append('multiprocessing_fork')
-            parallelism.append('multiprocessing_forkserver')
+    if config.NUMBA_NUM_THREADS < 2:
+        # Not enough cores
+        masks = []
     else:
-        parallelism.append('multiprocessing_default')
+        masks = [1, 2]
+
+    mask_impls = []
+    for impl in all_impls:
+        for mask in masks:
+            mask_impls.append(mask_runner(impl, mask))
+
+    parallelism = ['threading', 'random']
+    parallelism.append('multiprocessing_spawn')
+    if _HAVE_OS_FORK:
+        parallelism.append('multiprocessing_fork')
+        parallelism.append('multiprocessing_forkserver')
 
     runners = {
         'concurrent_jit': [
@@ -263,6 +269,7 @@ class TestParallelBackendBase(TestCase):
             guvectorize_runner(nopython=True, target='parallel'),
         ],
         'concurrent_mix_use': all_impls,
+        'concurrent_mix_use_masks': mask_impls,
     }
 
     safe_backends = {'omp', 'tbb'}
@@ -281,13 +288,10 @@ class TestParallelBackendBase(TestCase):
             elif parallelism == 'multiprocessing_default':
                 default_proc_impl(fnlist)
             elif parallelism == 'random':
-                if utils.PYVERSION < (3, 0):
-                    ps = [thread_impl, default_proc_impl]
-                else:
-                    ps = [thread_impl, spawn_proc_impl]
-                    if _HAVE_OS_FORK:
-                        ps.append(fork_proc_impl)
-                        ps.append(forkserver_proc_impl)
+                ps = [thread_impl, spawn_proc_impl]
+                if _HAVE_OS_FORK:
+                    ps.append(fork_proc_impl)
+                    ps.append(forkserver_proc_impl)
 
                 random.shuffle(ps)
                 for impl in ps:
@@ -337,17 +341,7 @@ class TestParallelBackend(TestParallelBackendBase):
 TestParallelBackend.generate()
 
 
-class TestSpecificBackend(TestParallelBackendBase):
-    """
-    This is quite contrived, for each test in the TestParallelBackend tests it
-    generates a test that will run the TestParallelBackend test in a new python
-    process with an environment modified to ensure a specific threadsafe backend
-    is used. This is with view of testing the backends independently and in an
-    isolated manner such that if they hang/crash/have issues, it doesn't kill
-    the test suite.
-    """
-    _DEBUG = False
-
+class TestInSubprocess(object):
     backends = {'tbb': skip_no_tbb,
                 'omp': skip_no_omp,
                 'workqueue': unittest.skipIf(False, '')}
@@ -376,6 +370,18 @@ class TestSpecificBackend(TestParallelBackendBase):
         env_copy['NUMBA_THREADING_LAYER'] = str(threading_layer)
         cmdline = [sys.executable, "-m", "numba.runtests", test]
         return self.run_cmd(cmdline, env_copy)
+
+
+class TestSpecificBackend(TestInSubprocess, TestParallelBackendBase):
+    """
+    This is quite contrived, for each test in the TestParallelBackend tests it
+    generates a test that will run the TestParallelBackend test in a new python
+    process with an environment modified to ensure a specific threadsafe backend
+    is used. This is with view of testing the backends independently and in an
+    isolated manner such that if they hang/crash/have issues, it doesn't kill
+    the test suite.
+    """
+    _DEBUG = False
 
     @classmethod
     def _inject(cls, p, name, backend, backend_guard):
@@ -474,7 +480,7 @@ class ThreadLayerTestHelper(TestCase):
         return out.decode(), err.decode()
 
 
-@parfors_skip_unsupported
+@skip_parfors_unsupported
 class TestThreadingLayerSelection(ThreadLayerTestHelper):
     """
     Checks that numba.threading_layer() reports correctly.
@@ -515,8 +521,7 @@ class TestThreadingLayerSelection(ThreadLayerTestHelper):
 TestThreadingLayerSelection.generate()
 
 
-@parfors_skip_unsupported
-@skip_unless_py3
+@skip_parfors_unsupported
 class TestMiscBackendIssues(ThreadLayerTestHelper):
     """
     Checks fixes for the issues with threading backends implementation
@@ -577,9 +582,49 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
             print(out, err)
         self.assertIn("@tbb@", out)
 
+    def test_workqueue_aborts_on_nested_parallelism(self):
+        """
+        Tests workqueue raises sigabrt if a nested parallel call is performed
+        """
+        runme = """if 1:
+            from numba import njit, prange
+            import numpy as np
+
+            @njit(parallel=True)
+            def nested(x):
+                for i in prange(len(x)):
+                    x[i] += 1
+
+
+            @njit(parallel=True)
+            def main():
+                Z = np.zeros((5, 10))
+                for i in prange(Z.shape[0]):
+                    nested(Z[i])
+                return Z
+
+            main()
+        """
+        cmdline = [sys.executable, '-c', runme]
+        env = os.environ.copy()
+        env['NUMBA_THREADING_LAYER'] = "workqueue"
+        env['NUMBA_NUM_THREADS'] = "4"
+
+        try:
+            out, err = self.run_cmd(cmdline, env=env)
+        except AssertionError as e:
+            if self._DEBUG:
+                print(out, err)
+            e_msg = str(e)
+            self.assertIn("failed with code", e_msg)
+            # raised a SIGABRT, but the value is platform specific so just check
+            # the error message
+            self.assertIn("Terminating: Nested parallel kernel launch detected",
+                          e_msg)
+
 
 # 32bit or windows py27 (not that this runs on windows)
-@parfors_skip_unsupported
+@skip_parfors_unsupported
 @skip_unless_gnu_omp
 class TestForkSafetyIssues(ThreadLayerTestHelper):
     """
@@ -589,7 +634,7 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
 
     def test_check_threading_layer_is_gnu(self):
         runme = """if 1:
-            from numba.npyufunc import omppool
+            from numba.np.ufunc import omppool
             assert omppool.openmp_vendor == 'GNU'
             """
         cmdline = [sys.executable, '-c', runme]
@@ -629,15 +674,16 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
            pattern for GNU OpenMP
         """
         body = """if 1:
+            mp = multiprocessing.get_context('fork')
             X = np.arange(1000000.)
             Y = np.arange(1000000.)
-            q = multiprocessing.Queue()
+            q = mp.Queue()
 
             # Start OpenMP runtime on parent via parallel function
             Z = busy_func(X, Y, q)
 
             # fork() underneath with no exec, will abort
-            proc = multiprocessing.Process(target = busy_func, args=(X, Y, q))
+            proc = mp.Process(target = busy_func, args=(X, Y, q))
             proc.start()
 
             err = q.get()
@@ -650,7 +696,6 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
             print(out, err)
 
     @linux_only
-    @skip_unless_py3
     def test_par_parent_explicit_mp_fork_par_child(self):
         """
         Explicit use of multiprocessing fork context.
@@ -685,7 +730,6 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
         if self._DEBUG:
             print(out, err)
 
-    @skip_unless_py3
     def test_par_parent_mp_spawn_par_child_par_parent(self):
         """
         Explicit use of multiprocessing spawn, this is safe.
@@ -772,7 +816,6 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
             print(out, err)
 
     @linux_only
-    @skip_unless_py3
     def test_serial_parent_explicit_mp_fork_par_child_then_par_parent(self):
         """
         Explicit use of multiprocessing 'fork'.
@@ -814,39 +857,105 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
             print(out, err)
 
 
-@parfors_skip_unsupported
+@skip_parfors_unsupported
+@skip_no_tbb
+class TestTBBSpecificIssues(ThreadLayerTestHelper):
+
+    _DEBUG = False
+
+    @linux_only # os.fork required.
+    def test_fork_from_non_main_thread(self):
+        # See issue #5973 and PR #6208 for context.
+        runme = """if 1:
+            import threading
+            import numba
+            numba.config.THREADING_LAYER='tbb'
+            from numba import njit, prange, objmode
+            import os
+
+            e_running = threading.Event()
+            e_proceed = threading.Event()
+
+            def indirect():
+                e_running.set()
+                # wait for forker() to have forked
+                while not e_proceed.isSet():
+                    pass
+
+            def runner():
+                @njit(parallel=True, nogil=True)
+                def work():
+                    acc = 0
+                    for x in prange(10):
+                        acc += x
+                    with objmode():
+                        indirect()
+
+                    return acc
+
+                work()
+
+            def forker():
+                # wait for the jit function to say it's running
+                while not e_running.isSet():
+                    pass
+                # then fork
+                os.fork()
+                # now fork is done signal the runner to proceed to exit
+                e_proceed.set()
+
+            numba_runner = threading.Thread(target=runner,)
+            fork_runner =  threading.Thread(target=forker,)
+
+            threads = (numba_runner, fork_runner)
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+        """
+
+        cmdline = [sys.executable, '-c', runme]
+        out, err = self.run_cmd(cmdline)
+        # assert error message printed on stderr
+        msg_head = "Attempted to fork from a non-main thread, the TBB library"
+        self.assertIn(msg_head, err)
+
+        if self._DEBUG:
+            print("OUT:", out)
+            print("ERR:", err)
+
+
+@skip_parfors_unsupported
 class TestInitSafetyIssues(TestCase):
 
     _DEBUG = False
 
+    def run_cmd(self, cmdline):
+        popen = subprocess.Popen(cmdline,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE,)
+        # finish in _TEST_TIMEOUT seconds or kill it
+        timeout = threading.Timer(_TEST_TIMEOUT, popen.kill)
+        try:
+            timeout.start()
+            out, err = popen.communicate()
+            if popen.returncode != 0:
+                raise AssertionError(
+                    "process failed with code %s: stderr follows\n%s\n" %
+                    (popen.returncode, err.decode()))
+        finally:
+            timeout.cancel()
+        return out.decode(), err.decode()
+
     @linux_only # only linux can leak semaphores
-    @skip_unless_py3 # need multiprocessing.get_context to obtain spawn on linux
     def test_orphaned_semaphore(self):
         # sys path injection and separate usecase module to make sure everything
         # is importable by children of multiprocessing
 
-        def run_cmd(cmdline):
-            popen = subprocess.Popen(cmdline,
-                                     stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE,)
-            # finish in _TEST_TIMEOUT seconds or kill it
-            timeout = threading.Timer(_TEST_TIMEOUT, popen.kill)
-            try:
-                timeout.start()
-                out, err = popen.communicate()
-                if popen.returncode != 0:
-                    raise AssertionError(
-                        "process failed with code %s: stderr follows\n%s\n" %
-                        (popen.returncode, err.decode()))
-            finally:
-                timeout.cancel()
-            return out.decode(), err.decode()
-
         test_file = os.path.join(os.path.dirname(__file__),
                                  "orphaned_semaphore_usecase.py")
-
         cmdline = [sys.executable, test_file]
-        out, err = run_cmd(cmdline)
+        out, err = self.run_cmd(cmdline)
 
         # assert no semaphore leaks reported on stderr
         self.assertNotIn("leaked semaphore", err)
@@ -854,6 +963,47 @@ class TestInitSafetyIssues(TestCase):
         if self._DEBUG:
             print("OUT:", out)
             print("ERR:", err)
+
+    def test_lazy_lock_init(self):
+        # checks based on https://github.com/numba/numba/pull/5724
+        # looking for "lazy" process lock initialisation so as to avoid setting
+        # a multiprocessing context as part of import.
+        for meth in ('fork', 'spawn', 'forkserver'):
+            # if a context is available on the host check it can be set as the
+            # start method in a separate process
+            try:
+                multiprocessing.get_context(meth)
+            except ValueError:
+                continue
+            cmd = ("import numba; import multiprocessing;"
+                   "multiprocessing.set_start_method('{}');"
+                   "print(multiprocessing.get_context().get_start_method())")
+            cmdline = [sys.executable, "-c", cmd.format(meth)]
+            out, err = self.run_cmd(cmdline)
+            if self._DEBUG:
+                print("OUT:", out)
+                print("ERR:", err)
+            self.assertIn(meth, out)
+
+
+@skip_parfors_unsupported
+@skip_no_omp
+class TestOpenMPVendors(TestCase):
+
+    def test_vendors(self):
+        """
+        Checks the OpenMP vendor strings are correct
+        """
+        expected = dict()
+        expected['win32'] = "MS"
+        expected['darwin'] = "Intel"
+        expected['linux'] = "GNU"
+
+        # only check OS that are supported, custom toolchains may well work as
+        # may other OS
+        for k in expected.keys():
+            if sys.platform.startswith(k):
+                self.assertEqual(expected[k], omppool.openmp_vendor)
 
 
 if __name__ == '__main__':

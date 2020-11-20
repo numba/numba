@@ -33,8 +33,20 @@ The following Python constructs are not supported:
 * Comprehensions (either list, dict, set or generator comprehensions)
 * Generator (any ``yield`` statements)
 
-The ``raise`` and ``assert`` statements are supported.
-See :ref:`nopython language support <pysupported-language>`.
+The ``raise`` statement is supported.
+
+The ``assert`` statement is supported, but only has an effect when
+``debug=True`` is passed to the :func:`numba.cuda.jit` decorator. This is
+similar to the behavior of the ``assert`` keyword in CUDA C/C++, which is
+ignored unless compiling with device debug turned on.
+
+
+Printing of strings, integers, and floats is supported, but printing is an
+asynchronous operation - in order to ensure that all output is printed after a
+kernel launch, it is necessary to call :func:`numba.cuda.synchronize`. Eliding
+the call to ``synchronize`` is acceptable, but output from a kernel may appear
+during other later driver operations (e.g. subsequent kernel launches, memory
+transfers, etc.), or fail to appear before the program execution completes.
 
 Built-in types
 ===============
@@ -65,8 +77,8 @@ The following built-in functions are supported:
 * :func:`len`
 * :func:`min`: only the multiple-argument form
 * :func:`max`: only the multiple-argument form
-* :class:`range`: semantics are similar to those of Python 3 even in Python 2:
-  a range object is returned instead of an array of values.
+* :func:`pow`
+* :class:`range`
 * :func:`round`
 * :func:`zip`
 
@@ -111,7 +123,6 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.acos`
 * :func:`math.asin`
 * :func:`math.atan`
-* :func:`math.arctan`
 * :func:`math.acosh`
 * :func:`math.asinh`
 * :func:`math.atanh`
@@ -128,19 +139,25 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.exp`
 * :func:`math.expm1`
 * :func:`math.fabs`
+* :func:`math.frexp`
+* :func:`math.ldexp`
 * :func:`math.gamma`
 * :func:`math.lgamma`
 * :func:`math.log`
+* :func:`math.log2`
 * :func:`math.log10`
 * :func:`math.log1p`
 * :func:`math.sqrt`
+* :func:`math.remainder`: Python 3.7+
 * :func:`math.pow`
 * :func:`math.ceil`
 * :func:`math.floor`
 * :func:`math.copysign`
 * :func:`math.fmod`
+* :func:`math.modf`
 * :func:`math.isnan`
 * :func:`math.isinf`
+* :func:`math.isfinite`
 
 
 ``operator``
@@ -150,14 +167,12 @@ The following functions from the :mod:`operator` module are supported:
 
 * :func:`operator.add`
 * :func:`operator.and_`
-* :func:`operator.div` (Python 2 only)
 * :func:`operator.eq`
 * :func:`operator.floordiv`
 * :func:`operator.ge`
 * :func:`operator.gt`
 * :func:`operator.iadd`
 * :func:`operator.iand`
-* :func:`operator.idiv` (Python 2 only)
 * :func:`operator.ifloordiv`
 * :func:`operator.ilshift`
 * :func:`operator.imod`

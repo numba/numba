@@ -1,15 +1,13 @@
-from __future__ import print_function, division, absolute_import
-
 import os
 import sys
 import functools
+import unittest
 import traceback
 from fnmatch import fnmatch
 from os.path import join, isfile, relpath, normpath, splitext
 
 from .main import NumbaTestProgram, SerialSuite, make_tag_decorator
-from numba import config
-import numba.unittest_support as unittest
+from numba.core import config
 
 
 def load_testsuite(loader, dir):
@@ -33,19 +31,6 @@ def load_testsuite(loader, dir):
     except Exception:
         traceback.print_exc(file=sys.stderr)
         sys.exit(-1)
-
-
-def allow_interpreter_mode(fn):
-    """Temporarily re-enable intepreter mode
-    """
-    @functools.wraps(fn)
-    def _core(*args, **kws):
-        config.COMPATIBILITY_MODE = True
-        try:
-            fn(*args, **kws)
-        finally:
-            config.COMPATIBILITY_MODE = False
-    return _core
 
 
 def run_tests(argv=None, defaultTest=None, topleveldir=None,
