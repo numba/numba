@@ -807,6 +807,15 @@ class TestLiftObj(MemoryLeak, TestCase):
 
         self.assertEqual(global_name(), 123)
 
+    def test_objmode_gv_variable(self):
+        @njit
+        def global_var():
+            with objmode(val=gv_type):
+                val = 123
+            return val
+
+        self.assertEqual(global_var(), 123)
+
     def test_objmode_closure_type_in_overload(self):
         def foo():
             pass

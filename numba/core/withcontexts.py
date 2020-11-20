@@ -170,7 +170,7 @@ class _ObjModeContextType(WithContext):
     """
     is_callable = True
 
-    def _legalize_args(self, extra, loc, additional_ns, freevars):
+    def _legalize_args(self, extra, loc, additional_ns, func_globals, func_freevars):
         """
         Legalize arguments to the context-manager
         """
@@ -189,7 +189,9 @@ class _ObjModeContextType(WithContext):
                     v.value, additional_ns=additional_ns,
                 )
             elif isinstance(v, ir.FreeVar):
-                typeanns[k] = freevars[v.name]
+                typeanns[k] = func_freevars[v.name]
+            elif isinstance(v, ir.Global):
+                typeanns[k] = func_globals[v.name]
             else:
                 raise errors.CompilerError(
                     "objectmode context requires constants string for "
@@ -204,13 +206,17 @@ class _ObjModeContextType(WithContext):
 
         cellnames = func_ir.func_id.func.__code__.co_freevars
         closures = func_ir.func_id.func.__closure__
+        func_globals = func_ir.func_id.func.__globals__
         if closures is not None:
-            freevars = {cellname: closure.cell_contents
+            func_freevars = {cellname: closure.cell_contents
                         for cellname, closure in zip(cellnames, closures)}
         else:
-            freevars = {}
-        typeanns = self._legalize_args(extra, loc=blocks[blk_start].loc,
-                                       additional_ns=ns, freevars=freevars)
+            func_freevars = {}
+        typeanns = self._legalize_args(extra,
+                                       loc=blocks[blk_start].loc,
+                                       additional_ns=ns,
+                                       func_globals=func_globals,
+                                       func_freevars=func_freevars)
         vlt = func_ir.variable_lifetime
 
         inputs, outputs = find_region_inout_vars(
