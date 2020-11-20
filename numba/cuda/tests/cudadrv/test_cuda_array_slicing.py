@@ -356,6 +356,19 @@ class CudaArraySetting(CUDATestCase):
 
             mock_sync.assert_not_called()
 
+    @unittest.skip('Requires PR #6367')
+    def test_issue_6505(self):
+        # On Windows, the writes to ary_v would not be visible prior to the
+        # assertion, due to the assignment being done with a kernel launch that
+        # returns asynchronously - there should now be a sync after the kernel
+        # launch to ensure that the writes are always visible.
+        ary = cuda.mapped_array(2, dtype=np.int32)
+        ary[:] = 0
+
+        ary_v = ary.view('u1')
+        ary_v[1] = 1
+        ary_v[5] = 1
+        assert sum(ary) == 512
 
 if __name__ == '__main__':
     unittest.main()
