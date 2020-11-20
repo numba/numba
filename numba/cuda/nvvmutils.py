@@ -53,7 +53,8 @@ def declare_atomic_sub_float64(lmod):
 
 
 def declare_atomic_inc_int32(lmod):
-    fname = '___numba_atomic_i32_inc'
+    #name = '___numba_atomic_i32_inc'
+    fname = 'llvm.nvvm.atomic.load.inc.32.p0i32'
     fnty = lc.Type.function(lc.Type.int(32), (lc.Type.pointer(lc.Type.int(32)),
                                               lc.Type.int(32)))
     return lmod.get_or_insert_function(fnty, fname)
@@ -67,7 +68,7 @@ def declare_atomic_inc_int64(lmod):
 
 
 def declare_atomic_dec_int32(lmod):
-    fname = '___numba_atomic_i32_dec'
+    fname = 'llvm.nvvm.atomic.load.dec.32.p0i32'
     fnty = lc.Type.function(lc.Type.int(32), (lc.Type.pointer(lc.Type.int(32)),
                                               lc.Type.int(32)))
     return lmod.get_or_insert_function(fnty, fname)

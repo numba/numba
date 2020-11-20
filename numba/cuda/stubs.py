@@ -432,7 +432,7 @@ class atomic(Stub):
     class inc(Stub):
         """inc(ary, idx, val)
 
-        Perform atomic ary[idx] += 1 up to value, then reset to 0. Supported
+        Perform atomic ary[idx] += 1 up to val, then reset to 0. Supported
         on uint32, and uint64 operands only.
 
         Returns the old value at the index location as if it is loaded
@@ -442,8 +442,9 @@ class atomic(Stub):
     class dec(Stub):
         """dec(ary, idx, val)
 
-        Perform atomic ary[idx] -= 1 down to val (unless ary[idx] > val),
-        then return val. Supported on uint32, and uint64 operands only.
+        Perform ary[idx] = (value if (array[idx] == 0) or
+                            (array[idx] > value) else array[idx] - 1).
+        Supported on uint32, and uint64 operands only.
 
         Returns the old value at the index location as if it is loaded
         atomically.
@@ -453,7 +454,7 @@ class atomic(Stub):
         """exch(ary, idx, val)
 
         Perform atomic ary[idx] = val. Supported on int32, int64, uint32 and
-        uint64 and float32 operands only.
+        uint64 operands only.
 
         Returns the old value at the index location as if it is loaded
         atomically.

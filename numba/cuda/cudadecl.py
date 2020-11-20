@@ -316,7 +316,7 @@ Cuda_atomic_or = _gen(cuda.atomic.or_, integer_numba_types)
 Cuda_atomic_xor = _gen(cuda.atomic.xor, integer_numba_types)
 Cuda_atomic_inc = _gen(cuda.atomic.inc, unsigned_int_numba_types)
 Cuda_atomic_dec = _gen(cuda.atomic.dec, unsigned_int_numba_types)
-Cuda_atomic_exch = _gen(cuda.atomic.exch, all_numba_types)
+Cuda_atomic_exch = _gen(cuda.atomic.exch, integer_numba_types)
 
 
 @register
