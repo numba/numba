@@ -4,7 +4,7 @@ import numpy as np
 
 from numba import cuda
 from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
-from unittest.mock import patch, call
+from unittest.mock import patch
 
 
 class CudaArrayIndexing(CUDATestCase):
@@ -315,7 +315,7 @@ class CudaArraySetting(CUDATestCase):
         darr = cuda.to_device(np.arange(5))
 
         with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
-                          return_value = None) as mock_sync:
+                          return_value=None) as mock_sync:
             darr[0] = 10
 
         mock_sync.assert_called_once()
@@ -333,7 +333,7 @@ class CudaArraySetting(CUDATestCase):
             darr = cuda.to_device(np.arange(5), stream=stream)
 
             with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
-                            return_value = None) as mock_sync:
+                              return_value=None) as mock_sync:
                 darr[0] = 10
 
             mock_sync.assert_not_called()
@@ -351,7 +351,7 @@ class CudaArraySetting(CUDATestCase):
             darr = cuda.to_device(np.arange(5))
 
             with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
-                            return_value = None) as mock_sync:
+                              return_value=None) as mock_sync:
                 darr.setitem(0, 10, stream=stream)
 
             mock_sync.assert_not_called()
@@ -369,6 +369,7 @@ class CudaArraySetting(CUDATestCase):
         ary_v[1] = 1
         ary_v[5] = 1
         assert sum(ary) == 512
+
 
 if __name__ == '__main__':
     unittest.main()

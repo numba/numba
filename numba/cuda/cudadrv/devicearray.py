@@ -639,7 +639,6 @@ class DeviceNDArray(DeviceNDArrayBase):
             stream.synchronize()
 
 
-
 class IpcArrayHandle(object):
     """
     An IPC array handle that can be serialized and transfer to another process
