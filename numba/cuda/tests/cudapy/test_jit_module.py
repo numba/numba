@@ -1,31 +1,14 @@
 import os
-import sys
-import shutil
 import inspect
-import importlib
-import contextlib
-import uuid
 import numpy as np
 import logging
-from io import StringIO
 
 from numba.cuda.testing import unittest, CUDATestCase
-from numba.tests.support import temp_directory
+from numba.tests.test_jit_module import BaseJitModuleTest, captured_logs
 from numba.cuda.compiler import DeviceFunctionTemplate, Dispatcher
 
 
-@contextlib.contextmanager
-def captured_logs(l):
-    try:
-        buffer = StringIO()
-        handler = logging.StreamHandler(buffer)
-        l.addHandler(handler)
-        yield buffer
-    finally:
-        l.removeHandler(handler)
-
-
-class TestJitModule(CUDATestCase):
+class TestJitModule(BaseJitModuleTest, CUDATestCase):
 
     source_lines = """
 from numba import cuda
@@ -48,64 +31,6 @@ class Foo(object):
 
 cuda.jit_module({jit_options})
 """
-
-    def _format_jit_options(self, **jit_options):
-        if not jit_options:
-            return ''
-        out = []
-        for key, value in jit_options.items():
-            if isinstance(value, str):
-                value = '"{}"'.format(value)
-            out.append('{}={}'.format(key, value))
-        return ', '.join(out)
-
-    @contextlib.contextmanager
-    def create_temp_jitted_module(self, source_lines=None, **jit_options):
-        # Use try/finally so cleanup happens even when an exception is raised
-        try:
-            if source_lines is None:
-                source_lines = self.source_lines
-            tempdir = temp_directory('test_jit_module')
-            # Generate random module name
-            temp_module_name = 'test_module_{}'.format(
-                str(uuid.uuid4()).replace('-', '_'))
-            temp_module_path = os.path.join(tempdir, temp_module_name + '.py')
-
-            jit_options = self._format_jit_options(**jit_options)
-            with open(temp_module_path, 'w') as f:
-                lines = source_lines.format(jit_options=jit_options)
-                f.write(lines)
-            # Add test_module to sys.path so it can be imported
-            sys.path.insert(0, tempdir)
-            test_module = importlib.import_module(temp_module_name)
-            yield test_module
-        finally:
-            sys.modules.pop(temp_module_name, None)
-            sys.path.remove(tempdir)
-            shutil.rmtree(tempdir)
-
-    def test_create_temp_jitted_module(self):
-        sys_path_original = list(sys.path)
-        sys_modules_original = dict(sys.modules)
-        with self.create_temp_jitted_module() as test_module:
-            temp_module_dir = os.path.dirname(test_module.__file__)
-            self.assertEqual(temp_module_dir, sys.path[0])
-            self.assertEqual(sys.path[1:], sys_path_original)
-            self.assertTrue(test_module.__name__ in sys.modules)
-        # Test that modifications to sys.path / sys.modules are reverted
-        self.assertEqual(sys.path, sys_path_original)
-        self.assertEqual(sys.modules, sys_modules_original)
-
-    def test_create_temp_jitted_module_with_exception(self):
-        try:
-            sys_path_original = list(sys.path)
-            sys_modules_original = dict(sys.modules)
-            with self.create_temp_jitted_module():
-                raise ValueError("Something went wrong!")
-        except ValueError:
-            # Test that modifications to sys.path / sys.modules are reverted
-            self.assertEqual(sys.path, sys_path_original)
-            self.assertEqual(sys.modules, sys_modules_original)
 
     def test_jit_module_device(self):
         test_dir = os.path.dirname(os.path.realpath(__file__))

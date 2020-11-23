@@ -25,30 +25,7 @@ def captured_logs(l):
         l.removeHandler(handler)
 
 
-class TestJitModule(SerialMixin, unittest.TestCase):
-
-    source_lines = """
-from numba import jit_module
-
-def inc(x):
-    return x + 1
-
-def add(x, y):
-    return x + y
-
-def inc_add(x):
-    y = inc(x)
-    return add(x, y)
-
-import numpy as np
-mean = np.mean
-
-class Foo(object):
-    pass
-
-jit_module({jit_options})
-"""
-
+class BaseJitModuleTest:
     def _format_jit_options(self, **jit_options):
         if not jit_options:
             return ''
@@ -106,6 +83,31 @@ jit_module({jit_options})
             # Test that modifications to sys.path / sys.modules are reverted
             self.assertEqual(sys.path, sys_path_original)
             self.assertEqual(sys.modules, sys_modules_original)
+
+
+class TestJitModule(BaseJitModuleTest, SerialMixin, unittest.TestCase):
+
+    source_lines = """
+from numba import jit_module
+
+def inc(x):
+    return x + 1
+
+def add(x, y):
+    return x + y
+
+def inc_add(x):
+    y = inc(x)
+    return add(x, y)
+
+import numpy as np
+mean = np.mean
+
+class Foo(object):
+    pass
+
+jit_module({jit_options})
+"""
 
     def test_jit_module(self):
         with self.create_temp_jitted_module() as test_module:
