@@ -190,6 +190,27 @@ class const(Stub):
 
 
 #-------------------------------------------------------------------------------
+# Cooperative groups
+
+class cg(Stub):
+    '''
+    Cooperative groups
+    '''
+
+    @stub_function
+    def this_grid():
+        '''
+        Get the current grid group.
+        '''
+
+    class GridGroup(Stub):
+        def sync():
+            '''
+            Synchronize the current grid group.
+            '''
+
+
+#-------------------------------------------------------------------------------
 # syncthreads
 
 class syncthreads(Stub):
@@ -394,6 +415,36 @@ class atomic(Stub):
 
         Perform atomic ary[idx] -= val. Supported on int32, float32, and
         float64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """
+
+    class and_(Stub):
+        """and_(ary, idx, val)
+
+        Perform atomic ary[idx] &= val. Supported on int32, int64, uint32 and
+        uint64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """
+
+    class or_(Stub):
+        """or_(ary, idx, val)
+
+        Perform atomic ary[idx] \|= val. Supported on int32, int64, uint32 and
+        uint64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """  # noqa: W605
+
+    class xor(Stub):
+        """xor(ary, idx, val)
+
+        Perform atomic ary[idx] ^= val. Supported on int32, int64, uint32 and
+        uint64 operands only.
 
         Returns the old value at the index location as if it is loaded
         atomically.

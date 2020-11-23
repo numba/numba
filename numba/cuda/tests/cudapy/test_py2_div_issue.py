@@ -1,11 +1,11 @@
 import numpy as np
-from numba import cuda, float32, int32
+from numba import cuda, float32, int32, void
 from numba.cuda.testing import unittest, CUDATestCase
 
 
 class TestCudaPy2Div(CUDATestCase):
     def test_py2_div_issue(self):
-        @cuda.jit(argtypes=[float32[:], float32[:], float32[:], int32])
+        @cuda.jit(void(float32[:], float32[:], float32[:], int32))
         def preCalc(y, yA, yB, numDataPoints):
             i = cuda.grid(1)
             # k is unused, but may be part of the trigger for the bug this

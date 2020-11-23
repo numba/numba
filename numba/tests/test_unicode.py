@@ -1295,6 +1295,18 @@ class TestUnicode(BaseTest):
                                          cfunc(s, sl),
                                          "'%s'[%d:%d:%d]?" % (s, i, j, k))
 
+    def test_slice_ascii_flag(self):
+        """
+        Make sure ascii flag is False when ascii and non-ascii characters are
+        mixed in output of Unicode slicing.
+        """
+        @njit
+        def f(s):
+            return s[::2]._is_ascii, s[1::2]._is_ascii
+
+        s = "¿abc¡Y tú, quién te cre\t\tes?"
+        self.assertEqual(f(s), (0, 1))
+
     def test_zfill(self):
         pyfunc = zfill_usecase
         cfunc = njit(pyfunc)

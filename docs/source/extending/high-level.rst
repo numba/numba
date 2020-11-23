@@ -238,3 +238,10 @@ method for instances of ``MyStructType``:
 
 .. automodule:: numba.experimental.structref
     :members:
+
+Determining if a function is already wrapped by a ``jit`` family decorator
+--------------------------------------------------------------------------
+
+The following function is provided for this purpose.
+
+.. automethod:: numba.extending.is_jitted
