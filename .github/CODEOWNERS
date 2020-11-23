@@ -77,7 +77,7 @@
 # * Integration testing (https://github.com/numba/numba-integration-testing)
 #   (@esc)
 # * ASV profiling (@esc)
-# * Type Annotations (Needs first contact/owner)
+# * Type Annotations (@luk-f-a and @EPronovost)
 # * Ufunc/GUfunc (Needs first contact/owner)
 # * Profiling (Needs first contact/owner (and code!))
 # * Debugging:
