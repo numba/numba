@@ -683,8 +683,6 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         try:
             impl, args = self._impl_cache[cache_key]
         except KeyError:
-            #import pdb; pdb.set_trace()
-            #pass
             impl, args = self._build_impl(cache_key, args, kws)
         return impl, args
 
@@ -880,8 +878,13 @@ class _IntrinsicTemplate(AbstractTemplate):
         Type the intrinsic by the arguments.
         """
         from numba.core.imputils import lower_builtin
-
         cache_key = self.context, args, tuple(kws.items())
+        from numba.core.registry import dispatcher_registry
+        hwstr = self.metadata.get('hardware', 'cpu')
+        disp = dispatcher_registry[hwstr]
+        tgtctx = disp.targetdescr.target_context
+        reg = next(iter(tgtctx._registries))
+        lower_builtin = reg.lower
         try:
             return self._impl_cache[cache_key]
         except KeyError:
