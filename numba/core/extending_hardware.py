@@ -8,7 +8,8 @@ _active_context.default ='cpu'
 
 class hardware_target(object):
     def __init__(self, name):
-        self._orig_target = getattr(_active_context, 'target', 'default')
+        self._orig_target = getattr(_active_context, 'target',
+                                    _active_context.default)
         self.target = name
 
     def __enter__(self):
@@ -18,7 +19,7 @@ class hardware_target(object):
         _active_context = self._orig_target
 
 def current_target():
-    return _active_context.target
+    return getattr(_active_context, 'target', _active_context.default)
 
 hardware_registry = TargetRegistry()
 

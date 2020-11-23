@@ -190,6 +190,7 @@ def func_jit(signature_or_function=None, locals={}, cache=False,
 
 
 class jit(JitDecorator):
+    # TODO: Fix this, it's wrong in multiple ways!
     def __init__(self, *args, **kwargs):
         self._args = args
         self._kwargs = kwargs
@@ -213,8 +214,8 @@ class jit(JitDecorator):
     def dispatcher_wrapper(self):
         return func_jit(self.py_func, **self._kwargs)
 
-
-jit_registry[hardware_registry['cpu']] = jit
+# Register the cpu token as using `jit` as the jitter
+jit_registry['cpu'] = jit
 
 def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
     dispatcher = registry.dispatcher_registry[hardware_registry[target]]
