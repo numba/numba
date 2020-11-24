@@ -1530,6 +1530,8 @@ class ParforPassStates:
         ir_utils._max_label = max(func_ir.blocks.keys())
         self.flags = flags
         self.metadata = metadata
+        if "parfors" not in metadata:
+            metadata["parfors"] = {}
 
 
 class ConvertInplaceBinop:
@@ -2741,11 +2743,11 @@ class ParforPass(ParforPassStates):
         # jumps can be created with prange conversion
         simplify_parfor_body_CFG(self.func_ir.blocks)
         # simplify before fusion
-        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata)
+        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
         # need two rounds of copy propagation to enable fusion of long sequences
         # of parfors like test_fuse_argmin (some PYTHONHASHSEED values since
         # apply_copies_parfor depends on set order for creating dummy assigns)
-        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata)
+        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
 
         if self.options.fusion:
             self.func_ir._definitions = build_definitions(self.func_ir.blocks)
@@ -2765,13 +2767,13 @@ class ParforPass(ParforPassStates):
             self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
             dprint_func_ir(self.func_ir, "after fusion")
         # simplify again
-        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata)
+        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
         # push function call variables inside parfors so gufunc function
         # wouldn't need function variables as argument
         push_call_vars(self.func_ir.blocks, {}, {}, self.typemap)
         dprint_func_ir(self.func_ir, "after push call vars")
         # simplify again
-        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata)
+        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
         dprint_func_ir(self.func_ir, "after optimization")
         if config.DEBUG_ARRAY_OPT >= 1:
             print("variable types: ", sorted(self.typemap.items()))
@@ -2873,7 +2875,8 @@ class ParforPass(ParforPassStates):
                         equiv_set = array_analysis.get_equiv_set(label)
                         stmt.equiv_set = equiv_set
                         next_stmt.equiv_set = equiv_set
-                        fused_node, fuse_report = try_fuse(equiv_set, stmt, next_stmt, self.metadata)
+                        fused_node, fuse_report = try_fuse(equiv_set, stmt, next_stmt,
+                            self.metadata["parfors"])
                         # accumulate fusion reports
                         self.diagnostics.fusion_reports.append(fuse_report)
                         if fused_node is not None:
@@ -3195,7 +3198,7 @@ def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes, metadata):
     if parfor_found:
         func_ir.blocks = rename_labels(func_ir.blocks)
     dprint_func_ir(func_ir, "after parfor sequential lowering")
-    simplify(func_ir, typemap, calltypes, metadata)
+    simplify(func_ir, typemap, calltypes, metadata["parfors"])
     dprint_func_ir(func_ir, "after parfor sequential simplify")
     # add dels since simplify removes dels
     post_proc = postproc.PostProcessor(func_ir)
