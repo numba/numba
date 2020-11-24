@@ -65,20 +65,20 @@ Here is a sample program that uses the random number generator::
     compute_pi[blocks, threads_per_block](rng_states, 10000, out)
     print('pi:', out.mean())
 
-An example managing RNG state size and using a 3D grid
-''''''''''''''''''''''''''''''''''''''''''''''''''''''
+An example of managing RNG state size and using a 3D grid
+'''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 
-The size of the RNG states scales with the number of threads using the RNG, so
-it is often better to use strided loops in conjunction with the RNG in order to
+The number of RNG states scales with the number of threads using the RNG, so it
+is often better to use strided loops in conjunction with the RNG in order to
 keep the state size manageable.
 
-In the following example that initializes a large 3D array with random numbers,
-using one thread per output element would result in 453,617,100 RNG states.
-This would take a long time to initialize and poorly utilize the GPU. Instead,
-it uses a fixed size 3D grid with a total of 2,097,152 (``(16 ** 3) * (8 **
-3)``) threads striding over the output array. The 3D thread indices ``startx``,
-``starty``, and ``startz``  are linearized into a 1D index, ``tid``, to index
-into the RNG states.
+In the following example, which initializes a large 3D array with random
+numbers, using one thread per output element would result in 453,617,100 RNG
+states.  This would take a long time to initialize and poorly utilize the GPU.
+Instead, it uses a fixed size 3D grid with a total of 2,097,152 (``(16 ** 3) *
+(8 ** 3)``) threads striding over the output array. The 3D thread indices
+``startx``, ``starty``, and ``startz``  are linearized into a 1D index,
+``tid``, to index into the 2,097,152 RNG states.
 
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_random.py
