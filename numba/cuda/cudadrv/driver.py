@@ -1880,7 +1880,7 @@ class Stream(object):
         callback will block later work in the stream and may block other
         callbacks from being executed.
 
-        Note: This driver function underlying this method is marked for
+        Note: The driver function underlying this method is marked for
         eventual deprecation and may be replaced in a future CUDA release.
 
         :param callback: Callback function with arguments (stream, status, arg).
