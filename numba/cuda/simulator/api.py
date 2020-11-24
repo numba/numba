@@ -108,11 +108,15 @@ def jit_module(**kwargs):
     default, wrapped functions are treated as device functions rather than
     kernels - pass ``device=False`` to treat functions as kernels.
 
-    Note that ``jit_module`` should only be called at the end of the module to
-    be jitted. In addition, only functions which are defined in the module
-    ``jit_module`` is called from are considered for automatic jit-wrapping.
-    See the Numba documentation for more information about what can/cannot be
-    jitted.
+    Note that ``jit_module`` should be called following the declaration of all
+    functions to be jitted. This function may be called multiple times within
+    a module with different options, and any new function declarations since
+    the previous ``jit_module`` call will be wrapped with the options provided
+    to the current call to ``jit_module``.
+
+    Note that only functions which are defined in the module ``jit_module`` is
+    called from are considered for automatic jit-wrapping.  See the Numba
+    documentation for more information about what can/cannot be jitted.
 
     :param kwargs: Keyword arguments to pass to ``jit`` such as ``device``
                    or ``opt``.

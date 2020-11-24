@@ -306,3 +306,4 @@ per-file-ignores =
     # in the docs over line length in the example source (especially given that
     # the test code is already indented by 8 spaces)
     numba/cuda/tests/doc_examples/test_cg.py:E501
+    numba/cuda/tests/doc_examples/test_jit_module.py:E501
