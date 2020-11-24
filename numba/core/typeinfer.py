@@ -1459,7 +1459,37 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
         try:
             return self.context.resolve_value_type(val)
         except ValueError as e:
-            msg = str(e)
+            if issubclass(val, types.Type):
+                from numba.core.errors import termcolor
+                code = termcolor().indicate
+                highlight = termcolor().errmsg
+                buf = []
+                ap = buf.append
+                ap("This happens if you use a Numba container type in a "
+                   "JIT compiled function. To get this to work, assign the "
+                   "Numba type in use to a variable at module level and "
+                   "then use that variable in the JIT code.\n")
+                ap("Example...")
+                ap("Change this:")
+                ap(highlight("-" * 80))
+                i1 = code("from numba import njit, typed")
+                i2 = code("from numba.types import Tuple, float64\n")
+                i3 = code("@njit")
+                i4 = code("def foo():")
+                ap(i1), ap(i2), ap(i3), ap(i4)
+                ap(code("    x = typed.List.empty_list(Tuple((float64,)))"))
+                ap(highlight("-" * 80 + "\n"))
+                ap(highlight("To this:"))
+                ap(highlight("-" * 80))
+                ap(i1), ap(i2)
+                ap(code("my_type = Tuple((float64,))\n"))
+                ap(i3), ap(i4)
+                ap(code("    x = typed.List.empty_list(my_type)"))
+                ap(highlight("-" * 80 + "\n"))
+                ap("")
+                msg = '\n'.join(buf)
+            else:
+                msg = str(e)
         raise TypingError(msg, loc=inst.loc)
 
     def typeof_arg(self, inst, target, arg):
