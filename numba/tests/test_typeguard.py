@@ -1,8 +1,8 @@
 """
 Tests to ensure that typeguard is working as expected.
-Mostly this contains negative test to proof that typeguard can catch errors.
+This mostly contains negative tests as proof that typeguard can catch errors.
 """
-
+import unittest
 from numba.tests.support import TestCase, skip_unless_typeguard
 
 
@@ -29,3 +29,6 @@ class TestTypeGuard(TestCase):
             return
 
         guard(float(1.2))
+
+if __name__ == '__main__':
+    unittest.main()

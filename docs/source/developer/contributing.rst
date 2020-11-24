@@ -207,8 +207,8 @@ in the test runner, there is a ``--log`` flag for convenience::
 
     $ python -m numba.runtests --log
 
-To enable :ref:`runtime type-checking <type_anno_check>`, set environment
-variable ``NUMBA_USE_TYPEGUARD=1`` and use the `runtests.py` from the source root
+To enable :ref:`runtime type-checking <type_anno_check>`, set the environment
+variable ``NUMBA_USE_TYPEGUARD=1`` and use `runtests.py` from the source root
 instead. For example::
 
     $ NUMBA_USE_TYPEGUARD=1 python runtests.py
@@ -349,11 +349,11 @@ Type annotation and runtime type checking
 '''''''''''''''''''''''''''''''''''''''''
 
 Numba is slowly gaining type annotations. To facilitate the review of pull
-requests that adds typing annotations incrementally, the test suite uses
-`typeguard`_ to perform runtime type checking, which helps verify the validity
+requests that are incrementally adding type annotations, the test suite uses
+`typeguard`_ to perform runtime type checking. This helps verify the validity
 of type annotations.
 
-To enable runtime type checking in the test suite, users can use the
+To enable runtime type checking in the test suite, users can use
 `runtests.py`_ in the source root as the test runner and set environment
 variable ``NUMBA_USE_TYPEGUARD=1``. For example::
 
