@@ -349,6 +349,27 @@ this and it makes it very hard for reviewers to see what has changed.
 
 The core developers thank everyone for their cooperation with the above!
 
+Why is my pull request/issue seemingly being ignored?
+'''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+Numba is an open source project and like many similar projects it has limited
+resources. As a result, it is unfortunately necessary for the core developers to
+associate a priority with issues/pull requests (PR). A great way to move your
+issue/PR up the priority queue is to help out somewhere else in the project so
+as to free up core developer time. Examples of ways to help:
+
+* Perform an initial review on a PR. This often doesn't require compiler
+  engineering knowledge and just involves checking that the proposed patch is of
+  good quality, fixes the problem/implements the feature, is well tested and
+  documented.
+* Debug an issue, there are numerous issues which `"need triage" <https://github.com/numba/numba/issues?q=is%3Aissue+is%3Aopen+label%3Aneedtriage>`_
+  which essentially involves debugging the reported problem. Even if you cannot
+  get right to the bottom of a problem, leaving notes about what was discovered
+  for someone else is also helpful.
+* Answer questions/provide help for users on `discourse <https://numba.discourse.group/>`_
+  and/or `gitter.im <https://gitter.im/numba/numba>`_.
+
+The core developers thank everyone for their understanding with the above!
 
 Documentation
 -------------
