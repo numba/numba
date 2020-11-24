@@ -759,7 +759,9 @@ def ptx_atomic_cas_tuple(context, builder, sig, args):
 
     if aryty.dtype in (cuda.cudadecl.integer_numba_types):
         lmod = builder.module
-        return builder.call(nvvmutils.declare_atomic_cas_int(lmod, aryty.dtype.bitwidth),
+        bitwidth = aryty.dtype.bitwidth
+        return builder.call(nvvmutils.declare_atomic_cas_int(lmod,
+                                                             bitwidth),
                             (ptr, old, val))
     else:
         raise TypeError('Unimplemented atomic compare_and_swap '
