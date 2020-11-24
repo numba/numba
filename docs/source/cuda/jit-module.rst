@@ -8,6 +8,7 @@ The :ref:`jit_module function <jit-module>` is supported by the CUDA target, as
 :func:`numba.cuda.jit_module`.
 
 .. autofunction:: numba.cuda.jit_module
+   :noindex:
 
 
 Example Usage
