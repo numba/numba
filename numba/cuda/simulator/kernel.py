@@ -2,6 +2,7 @@ from contextlib import contextmanager
 from functools import reduce
 import sys
 import threading
+import warnings
 
 import numpy as np
 
@@ -9,6 +10,7 @@ from .cudadrv.devicearray import FakeCUDAArray, FakeWithinKernelCUDAArray
 from .kernelapi import Dim3, FakeCUDAModule, swapped_cuda_module
 from ..errors import normalize_kernel_dimensions
 from ..args import wrap_arg, ArgHint
+from numba.core.errors import NumbaDeprecationWarning
 
 
 """
@@ -55,8 +57,8 @@ class FakeCUDAKernel(object):
     Wraps a @cuda.jit-ed function.
     '''
 
-    def __init__(self, fn, device, fastmath=False, extensions=[]):
-        self.fn = fn
+    def __init__(self, py_func, device, fastmath=False, extensions=[]):
+        self.py_func = py_func
         self._device = device
         self._fastmath = fastmath
         self.extensions = list(extensions) # defensive copy
@@ -67,10 +69,19 @@ class FakeCUDAKernel(object):
         self.stream = 0
         self.dynshared_size = 0
 
+    # py_func was originally named fn in the FakeCUDAKernel, which is a
+    # historical oversight. This property provides backwards compatibility for
+    # the time being.
+    @property
+    def fn(self):
+        warnings.warn('fn is deprecated - use py_func instead',
+                      category=NumbaDeprecationWarning)
+        return self.py_func
+
     def __call__(self, *args):
         if self._device:
-            with swapped_cuda_module(self.fn, _get_kernel_context()):
-                return self.fn(*args)
+            with swapped_cuda_module(self.py_func, _get_kernel_context()):
+                return self.py_func(*args)
 
         # Ensure we've been given a valid grid configuration
         grid_dim, block_dim = normalize_kernel_dimensions(self.grid_dim,
@@ -107,10 +118,10 @@ class FakeCUDAKernel(object):
                 return ret
 
             fake_args = [fake_arg(arg) for arg in args]
-            with swapped_cuda_module(self.fn, fake_cuda_module):
+            with swapped_cuda_module(self.py_func, fake_cuda_module):
                 # Execute one block at a time
                 for grid_point in np.ndindex(*grid_dim):
-                    bm = BlockManager(self.fn, grid_dim, block_dim)
+                    bm = BlockManager(self.py_func, grid_dim, block_dim)
                     bm.run(grid_point, *fake_args)
 
             for wb in retr:
