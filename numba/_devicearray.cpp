@@ -90,7 +90,7 @@ MOD_INIT(_devicearray) {
         return MOD_ERROR_VAL;
 
     PyObject *c_api;
-    c_api = PyCapsule_New((void *)_DeviceArray_API, NULL, NULL);
+    c_api = PyCapsule_New((void *)_DeviceArray_API,"_devicearray.c_api", NULL);
     if (c_api == NULL) {
         return MOD_ERROR_VAL;
     }

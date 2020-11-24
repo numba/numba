@@ -807,7 +807,7 @@ import_devicearray(void)
         return -1;
     }
 
-    DeviceArray_API = (void**)PyCapsule_GetPointer(c_api, NULL);
+    DeviceArray_API = (void**)PyCapsule_GetPointer(c_api, "_devicearray.c_api");
     Py_DECREF(c_api);
     if (DeviceArray_API == NULL) {
         PyErr_SetString(PyExc_RuntimeError, "_DEVICEARRAY_API is NULL pointer");
