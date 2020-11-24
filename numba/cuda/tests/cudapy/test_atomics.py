@@ -2,7 +2,7 @@ import numpy as np
 from textwrap import dedent
 
 from numba import cuda, uint32, uint64, float32, float64
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 from numba.core import config
 
 
@@ -275,16 +275,6 @@ def atomic_xor_global(idx, ary, op2):
 def atomic_xor_global_2(ary, op2):
     atomic_binary_2dim_global(ary, op2, cuda.atomic.xor,
                               atomic_cast_none)
-
-
-def atomic_inc_gen(ary, idx, op2, dtype):
-    atomic_binary_1dim_shared2(ary, idx, op2, dtype, 32,
-                               cuda.atomic.inc, atomic_cast_none)
-
-
-def atomic_inc(ary, idx, op2):
-    atomic_binary_1dim_shared2(ary, idx, op2, uint32, 32,
-                               cuda.atomic.inc, atomic_cast_none)
 
 
 def atomic_inc32(ary, idx, op2):
@@ -824,15 +814,15 @@ class TestCudaAtomics(CUDATestCase):
         cuda_func[1, (4, 8)](ary, rand_const)
         np.testing.assert_equal(ary, orig ^ rand_const)
 
-    def inc_dec_1dim_setup(self, atype):
-        rconst = np.random.randint(32,  dtype=atype)
-        rary = np.random.randint(0, 32, size=32).astype(atype)
-        ary_idx = np.arange(32, dtype=atype)
+    def inc_dec_1dim_setup(self, dtype):
+        rconst = np.random.randint(32,  dtype=dtype)
+        rary = np.random.randint(0, 32, size=32).astype(dtype)
+        ary_idx = np.arange(32, dtype=dtype)
         return rconst, rary, ary_idx
 
-    def inc_dec_2dim_setup(self, atype):
-        rconst = np.random.randint(32, dtype=atype)
-        rary = np.random.randint(0, 32, size=32).astype(atype).reshape(4, 8)
+    def inc_dec_2dim_setup(self, dtype):
+        rconst = np.random.randint(32, dtype=dtype)
+        rary = np.random.randint(0, 32, size=32).astype(dtype).reshape(4, 8)
         return rconst, rary
 
     def check_inc_index(self, ary, idx, rconst, sig, nblocks, blksize, func):
@@ -854,17 +844,13 @@ class TestCudaAtomics(CUDATestCase):
         np.testing.assert_equal(ary, np.where(orig >= rconst, 0, orig + 1))
 
     def test_atomic_inc_32(self):
-        rand_const, ary, idx = self.inc_dec_1dim_setup(atype=np.uint32)
+        rand_const, ary, idx = self.inc_dec_1dim_setup(dtype=np.uint32)
         sig = 'void(uint32[:], uint32[:], uint32)'
         self.check_inc_index(ary, idx, rand_const, sig, 1, 32, atomic_inc32)
 
+    @skip_on_cudasim('Cannot utilize 64-bit indexes when simulating')
     def test_atomic_inc_64(self):
-        #Cannot utilize 64-bit indexes when simulating
-
-        if config.ENABLE_CUDASIM:
-            return
-
-        rand_const, ary, idx = self.inc_dec_1dim_setup(atype=np.uint64)
+        rand_const, ary, idx = self.inc_dec_1dim_setup(dtype=np.uint64)
         sig = 'void(uint64[:], uint64[:], uint64)'
         self.check_inc_index(ary, idx, rand_const, sig, 1, 32, atomic_inc64)
 
@@ -884,17 +870,14 @@ class TestCudaAtomics(CUDATestCase):
         self.check_inc(ary, rand_const, sig, 1, (4,8), atomic_inc3)
 
     def test_atomic_inc_global_32(self):
-        rand_const, ary, idx = self.inc_dec_1dim_setup(atype=np.uint32)
+        rand_const, ary, idx = self.inc_dec_1dim_setup(dtype=np.uint32)
         sig = 'void(uint32[:], uint32[:], uint32)'
         self.check_inc_index2(ary, idx, rand_const, sig, 1, 32,
                               atomic_inc_global)
 
+    @skip_on_cudasim('Cannot utilize 64-bit indexes when simulating')
     def test_atomic_inc_global_64(self):
-        #Cannot utilize 64-bit indexes when simulating
-        if config.ENABLE_CUDASIM:
-            return
-
-        rand_const, ary, idx = self.inc_dec_1dim_setup(atype=np.uint64)
+        rand_const, ary, idx = self.inc_dec_1dim_setup(dtype=np.uint64)
         sig = 'void(uint64[:], uint64[:], uint64)'
         self.check_inc_index2(ary, idx, rand_const, sig, 1, 32,
                               atomic_inc_global)
@@ -937,16 +920,13 @@ class TestCudaAtomics(CUDATestCase):
                                                        orig - 1)))
 
     def test_atomic_dec_32(self):
-        rand_const, ary, idx = self.inc_dec_1dim_setup(atype=np.uint32)
+        rand_const, ary, idx = self.inc_dec_1dim_setup(dtype=np.uint32)
         sig = 'void(uint32[:], uint32[:], uint32)'
         self.check_dec_index(ary, idx, rand_const, sig, 1, 32, atomic_dec32)
 
+    @skip_on_cudasim('Cannot utilize 64-bit indexes when simulating')
     def test_atomic_dec_64(self):
-        #Cannot utilize 64-bit indexes when simulating
-        if config.ENABLE_CUDASIM:
-            return
-
-        rand_const, ary, idx = self.inc_dec_1dim_setup(atype=np.uint64)
+        rand_const, ary, idx = self.inc_dec_1dim_setup(dtype=np.uint64)
         sig = 'void(uint64[:], uint64[:], uint64)'
         self.check_dec_index(ary, idx, rand_const, sig, 1, 32, atomic_dec64)
 
@@ -966,17 +946,15 @@ class TestCudaAtomics(CUDATestCase):
         self.check_dec(ary, rand_const, sig, 1, (4,8), atomic_dec3)
 
     def test_atomic_dec_global_32(self):
-        rand_const, ary, idx = self.inc_dec_1dim_setup(atype=np.uint32)
+        rand_const, ary, idx = self.inc_dec_1dim_setup(dtype=np.uint32)
         sig = 'void(uint32[:], uint32[:], uint32)'
         self.check_dec_index2(ary, idx, rand_const, sig, 1, 32,
                               atomic_dec_global)
 
+    @skip_on_cudasim('Cannot utilize 64-bit indexes when simulating')
     def test_atomic_dec_global_64(self):
-        #Cannot utilize 64-bit indexes when simulating
-        if config.ENABLE_CUDASIM:
-            return
 
-        rand_const, ary, idx = self.inc_dec_1dim_setup(atype=np.uint64)
+        rand_const, ary, idx = self.inc_dec_1dim_setup(dtype=np.uint64)
         sig = 'void(uint64[:], uint64[:], uint64)'
         self.check_dec_index2(ary, idx, rand_const, sig, 1, 32,
                               atomic_dec_global)
@@ -1186,10 +1164,10 @@ class TestCudaAtomics(CUDATestCase):
         gold = np.min(vals)
         np.testing.assert_equal(res, gold)
 
-    def check_compare_and_swap(self, n, fill, unfill, atype):
+    def check_compare_and_swap(self, n, fill, unfill, dtype):
         res = [fill] * (n // 2) + [unfill] * (n // 2)
         np.random.shuffle(res)
-        res = np.asarray(res, dtype=atype)
+        res = np.asarray(res, dtype=dtype)
         out = np.zeros_like(res)
         ary = np.random.randint(1, 10, size=res.size).astype(res.dtype)
 
@@ -1211,22 +1189,22 @@ class TestCudaAtomics(CUDATestCase):
         np.testing.assert_array_equal(expect_out, out)
 
     def test_atomic_compare_and_swap(self):
-        self.check_compare_and_swap(n=100, fill=-99, unfill=-1, atype=np.int32)
+        self.check_compare_and_swap(n=100, fill=-99, unfill=-1, dtype=np.int32)
 
     def test_atomic_compare_and_swap2(self):
-        self.check_compare_and_swap(n=100, fill=-45, unfill=-1, atype=np.int64)
+        self.check_compare_and_swap(n=100, fill=-45, unfill=-1, dtype=np.int64)
 
     def test_atomic_compare_and_swap3(self):
         rfill = np.random.randint(50, 500, dtype=np.uint32)
         runfill = np.random.randint(1, 25, dtype=np.uint32)
         self.check_compare_and_swap(n=100, fill=rfill, unfill=runfill,
-                                    atype=np.uint32)
+                                    dtype=np.uint32)
 
     def test_atomic_compare_and_swap4(self):
         rfill = np.random.randint(50, 500, dtype=np.uint64)
         runfill = np.random.randint(1, 25, dtype=np.uint64)
         self.check_compare_and_swap(n=100, fill=rfill, unfill=runfill,
-                                    atype=np.uint64)
+                                    dtype=np.uint64)
 
     # Tests that the atomic add, min, and max operations return the old value -
     # in the simulator, they did not (see Issue #5458). The max and min have
