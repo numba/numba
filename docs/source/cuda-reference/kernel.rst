@@ -10,6 +10,12 @@ be configured and launched:
 .. autofunction:: numba.cuda.jit
 
 
+The ``cuda.jit_module`` function applies the ``@cuda.jit`` decorator to all
+undecorated functions preceding it in the current module:
+
+.. autofunction:: numba.cuda.jit_module
+
+
 Dispatcher objects
 ------------------
 
