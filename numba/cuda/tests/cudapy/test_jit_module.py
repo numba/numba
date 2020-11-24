@@ -53,6 +53,7 @@ cuda.jit_module({jit_options})
                 self.assertIsInstance(test_module.add, DeviceFunctionTemplate)
                 self.assertIsInstance(test_module.inc_add,
                                       DeviceFunctionTemplate)
+
             self.assertTrue(test_module.mean is np.mean)
             self.assertTrue(inspect.isclass(test_module.Foo))
 
@@ -90,6 +91,7 @@ cuda.jit_module({jit_options})
                 self.assertIsInstance(test_module.inc, Dispatcher)
                 self.assertIsInstance(test_module.add, Dispatcher)
                 self.assertIsInstance(test_module.inc_add, Dispatcher)
+
             self.assertTrue(test_module.mean is np.mean)
             self.assertTrue(inspect.isclass(test_module.Foo))
 
@@ -103,6 +105,39 @@ cuda.jit_module({jit_options})
                              test_module.Callers.py_add(x, y))
             self.assertEqual(test_module.Callers.inc_add(x),
                              test_module.Callers.py_inc_add(x))
+
+    def test_jit_module_both(self):
+        test_dir = os.path.dirname(os.path.realpath(__file__))
+        source_path = os.path.join(test_dir, 'jit_module_both.py')
+        with open(source_path) as f:
+            source = f.read()
+
+        with self.create_temp_jitted_module(source_lines=source) as test_module:
+            if config.ENABLE_CUDASIM:
+                self.assertIsInstance(test_module.inc, FakeCUDAKernel)
+                self.assertTrue(test_module.inc._device)
+                self.assertIsInstance(test_module.add, FakeCUDAKernel)
+                self.assertTrue(test_module.add._device)
+                self.assertIsInstance(test_module.inc_add, FakeCUDAKernel)
+                self.assertFalse(test_module.inc_add._device)
+            else:
+                self.assertIsInstance(test_module.inc, DeviceFunctionTemplate)
+                self.assertIsInstance(test_module.add, DeviceFunctionTemplate)
+                self.assertIsInstance(test_module.inc_add, Dispatcher)
+
+            self.assertTrue(test_module.mean is np.mean)
+            self.assertTrue(inspect.isclass(test_module.Foo))
+
+            # Test output of jitted functions is as expected. Here we use some
+            # helper functions from the module for calling the Python versions
+            # of the functions as well as the jitted ones.
+            x, y = 1.7, 2.3
+            self.assertEqual(test_module.call_inc(x),
+                             test_module.inc.py_func(x))
+            self.assertEqual(test_module.call_add(x, y),
+                             test_module.add.py_func(x, y))
+            self.assertEqual(test_module.call_inc_add(x),
+                             test_module.call_py_inc_add(x))
 
     @skip_on_cudasim('options ignored by cudasim')
     def test_jit_module_jit_options(self):
