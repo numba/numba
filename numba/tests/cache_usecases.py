@@ -138,6 +138,13 @@ aligned_arr = np.array(packed_arr, dtype=aligned_record_type)
 def record_return(ary, i):
     return ary[i]
 
+# String Source Functions
+str_add_usecase_txt = """
+@jit(cache=True, nopython=True)
+def str_add_usecase(x, y):
+    return x + y + Z
+"""
+exec(str_add_usecase_txt)
 
 class _TestModule(TestCase):
     """

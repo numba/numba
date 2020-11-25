@@ -1464,6 +1464,18 @@ class TestCache(BaseCacheUsecasesTest):
         err = execute_with_input()
         self.assertIn("cache hits = 1", err.strip())
 
+    def test_string_source(self):
+        self.check_pycache(0)
+        mod = self.import_module()
+        self.check_pycache(0)
+
+        f = mod.str_add_usecase
+        self.assertPreciseEqual(f(2, 3), 6)
+        self.check_pycache(2)  # 1 index, 1 data
+        self.assertPreciseEqual(f(2.5, 3), 6.5)
+        self.check_pycache(3)  # 1 index, 2 data
+        self.check_hits(f, 0, 2)
+
 
 @skip_parfors_unsupported
 class TestSequentialParForsCache(BaseCacheUsecasesTest):
