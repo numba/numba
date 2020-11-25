@@ -6,7 +6,7 @@ See test_dispatcher.py.
 """
 
 import sys
-
+import inspect
 import numpy as np
 
 from numba import jit, generated_jit, prange
@@ -139,12 +139,9 @@ def record_return(ary, i):
     return ary[i]
 
 # String Source Functions
-str_add_usecase_txt = """
-@jit(cache=True, nopython=True)
-def str_add_usecase(x, y):
-    return x + y + Z
-"""
+str_add_usecase_txt = inspect.getsource(add_usecase).replace("def ", "def str_")
 exec(str_add_usecase_txt)
+
 
 class _TestModule(TestCase):
     """
