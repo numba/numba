@@ -1,4 +1,5 @@
 import ctypes
+import functools
 import inspect
 import os
 import subprocess
@@ -13,6 +14,7 @@ from numba.core import (types, typing, utils, funcdesc, serialize, config,
 from numba.core.compiler_lock import global_compiler_lock
 import numba
 from .cudadrv.devices import get_context
+from .cudadrv.libs import get_cudalib
 from .cudadrv import nvvm, driver
 from .errors import missing_launch_config_msg, normalize_kernel_dimensions
 from .api import get_current_device
@@ -505,7 +507,7 @@ class _Kernel(serialize.ReduceMixin):
     object launches the kernel on the device.
     '''
     def __init__(self, llvm_module, name, pretty_name, argtypes, call_helper,
-                 link=(), debug=False, fastmath=False, type_annotation=None,
+                 link=None, debug=False, fastmath=False, type_annotation=None,
                  extensions=[], max_registers=None, opt=True):
         super().__init__()
         # initialize CUfunction
@@ -515,8 +517,18 @@ class _Kernel(serialize.ReduceMixin):
             'opt': 3 if opt else 0
         }
 
+        if not link:
+            link = []
+
         ptx = CachedPTX(pretty_name, str(llvm_module), options=options)
+
+        # A kernel needs cooperative launch if grid_sync is being used.
+        self.cooperative = 'cudaCGGetIntrinsicHandle' in ptx.llvmir
+        # We need to link against cudadevrt if grid sync is being used.
+        if self.cooperative:
+            link.append(get_cudalib('cudadevrt', static=True))
         cufunc = CachedCUFunction(name, ptx, link, max_registers)
+
         # populate members
         self.entry_name = name
         self.argument_types = tuple(argtypes)
@@ -528,8 +540,8 @@ class _Kernel(serialize.ReduceMixin):
         self.extensions = list(extensions)
 
     @classmethod
-    def _rebuild(cls, name, argtypes, cufunc, link, debug, call_helper,
-                 extensions):
+    def _rebuild(cls, cooperative, name, argtypes, cufunc, link, debug,
+                 call_helper, extensions):
         """
         Rebuild an instance.
         """
@@ -537,6 +549,7 @@ class _Kernel(serialize.ReduceMixin):
         # invoke parent constructor
         super(cls, instance).__init__()
         # populate members
+        instance.cooperative = cooperative
         instance.entry_name = name
         instance.argument_types = tuple(argtypes)
         instance.linking = tuple(link)
@@ -555,8 +568,9 @@ class _Kernel(serialize.ReduceMixin):
         Thread, block and shared memory configuration are serialized.
         Stream information is discarded.
         """
-        return dict(name=self.entry_name, argtypes=self.argument_types,
-                    cufunc=self._func, link=self.linking, debug=self.debug,
+        return dict(cooperative=self.cooperative, name=self.entry_name,
+                    argtypes=self.argument_types, cufunc=self._func,
+                    link=self.linking, debug=self.debug,
                     call_helper=self.call_helper, extensions=self.extensions)
 
     def bind(self):
@@ -616,6 +630,28 @@ class _Kernel(serialize.ReduceMixin):
         print(self._type_annotation, file=file)
         print('=' * 80, file=file)
 
+    def max_cooperative_grid_blocks(self, blockdim, dynsmemsize=0):
+        '''
+        Calculates the maximum number of blocks that can be launched for this
+        kernel in a cooperative grid in the current context, for the given block
+        and dynamic shared memory sizes.
+
+        :param blockdim: Block dimensions, either as a scalar for a 1D block, or
+                         a tuple for 2D or 3D blocks.
+        :param dynsmemsize: Dynamic shared memory size in bytes.
+        :return: The maximum number of blocks in the grid.
+        '''
+        ctx = get_context()
+        cufunc = self._func.get()
+
+        if isinstance(blockdim, tuple):
+            blockdim = functools.reduce(lambda x, y: x * y, blockdim)
+        active_per_sm = ctx.get_active_blocks_per_multiprocessor(cufunc,
+                                                                 blockdim,
+                                                                 dynsmemsize)
+        sm_count = ctx.device.MULTIPROCESSOR_COUNT
+        return active_per_sm * sm_count
+
     def launch(self, args, griddim, blockdim, stream=0, sharedmem=0):
         # Prepare kernel
         cufunc = self._func.get()
@@ -642,7 +678,8 @@ class _Kernel(serialize.ReduceMixin):
                              *blockdim,
                              sharedmem,
                              stream_handle,
-                             kernelargs)
+                             kernelargs,
+                             cooperative=self.cooperative)
 
         if self.debug:
             driver.device_to_host(ctypes.addressof(excval), excmem, excsz)
@@ -773,11 +810,10 @@ class Dispatcher(serialize.ReduceMixin):
     Dispatcher objects are not to be constructed by the user, but instead are
     created using the :func:`numba.cuda.jit` decorator.
     '''
-    def __init__(self, func, sigs, bind, targetoptions):
+    def __init__(self, func, sigs, targetoptions):
         super().__init__()
         self.py_func = func
         self.sigs = []
-        self._bind = bind
         self.link = targetoptions.pop('link', (),)
         self._can_compile = True
 
@@ -886,7 +922,7 @@ class Dispatcher(serialize.ReduceMixin):
         targetoptions = self.targetoptions
         targetoptions['link'] = self.link
         specialization = Dispatcher(self.py_func, [types.void(*argtypes)],
-                                    self._bind, targetoptions)
+                                    targetoptions)
         self.specializations[cc, argtypes] = specialization
         return specialization
 
@@ -938,8 +974,7 @@ class Dispatcher(serialize.ReduceMixin):
                                     link=self.link,
                                     **self.targetoptions)
             self.definitions[(cc, argtypes)] = kernel
-            if self._bind:
-                kernel.bind()
+            kernel.bind()
             self.sigs.append(sig)
         return kernel
 
@@ -1020,11 +1055,11 @@ class Dispatcher(serialize.ReduceMixin):
             defn.bind()
 
     @classmethod
-    def _rebuild(cls, py_func, sigs, bind, targetoptions):
+    def _rebuild(cls, py_func, sigs, targetoptions):
         """
         Rebuild an instance.
         """
-        instance = cls(py_func, sigs, bind, targetoptions)
+        instance = cls(py_func, sigs, targetoptions)
         return instance
 
     def _reduce_states(self):
@@ -1032,5 +1067,5 @@ class Dispatcher(serialize.ReduceMixin):
         Reduce the instance for serialization.
         Compiled definitions are discarded.
         """
-        return dict(py_func=self.py_func, sigs=self.sigs, bind=self._bind,
+        return dict(py_func=self.py_func, sigs=self.sigs,
                     targetoptions=self.targetoptions)

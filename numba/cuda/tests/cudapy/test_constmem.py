@@ -104,8 +104,8 @@ class TestCudaConstantMemory(CUDATestCase):
                 "as we're adding to it, load as a double")
 
     def test_const_empty(self):
-        jcuconstEmpty = cuda.jit('void(float64[:])')(cuconstEmpty)
-        A = np.full(1, fill_value=-1, dtype=int)
+        jcuconstEmpty = cuda.jit('void(int64[:])')(cuconstEmpty)
+        A = np.full(1, fill_value=-1, dtype=np.int64)
         jcuconstEmpty[1, 1](A)
         self.assertTrue(np.all(A == 0))
 
@@ -144,8 +144,8 @@ class TestCudaConstantMemory(CUDATestCase):
             self.assertIn(complex_load, jcuconst3d.ptx, description)
 
     def test_const_record_empty(self):
-        jcuconstRecEmpty = cuda.jit('void(float64[:])')(cuconstRecEmpty)
-        A = np.full(1, fill_value=-1, dtype=int)
+        jcuconstRecEmpty = cuda.jit('void(int64[:])')(cuconstRecEmpty)
+        A = np.full(1, fill_value=-1, dtype=np.int64)
         jcuconstRecEmpty[1, 1](A)
         self.assertTrue(np.all(A == 0))
 

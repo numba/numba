@@ -74,6 +74,9 @@ GPU as possible - in particular, the following are supported:
   This context can be closed and reset as the real one would.
 * The :func:`.detect` function is supported, and reports one device called
   `SIMULATOR`.
+* Cooperative grids: A cooperative kernel can be launched, but with only one
+  block - the simulator always returns ``1`` from a kernel definition's
+  :meth:`~numba.cuda.compiler._Kernel.max_cooperative_grid_blocks` method.
 
 Some limitations of the simulator include:
 

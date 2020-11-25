@@ -3,7 +3,6 @@ The Device Array API is not implemented in the simulator. This module provides
 stubs to allow tests to import correctly.
 '''
 from contextlib import contextmanager
-from warnings import warn
 
 import numpy as np
 
@@ -147,10 +146,6 @@ class FakeCUDAArray(object):
                 copy=False)
             check_array_compatibility(self_core, ary_core)
         np.copyto(self_core._ary, ary_core)
-
-    def to_host(self):
-        warn('to_host() is deprecated and will be removed')
-        raise NotImplementedError
 
     @property
     def shape(self):
