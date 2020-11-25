@@ -16,7 +16,7 @@ from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                                  check_and_legalize_ir, guard,
                                  dead_code_elimination, simplify_CFG,
-                                 get_definition, remove_dels,
+                                 get_definition,
                                  build_definitions, compute_cfg_from_blocks,
                                  is_operator_or_getitem)
 from numba.core import postproc
