@@ -2802,9 +2802,6 @@ class ParforPass(ParforPassStates):
                             new_block.append(ir_print)
                 block.body = new_block
 
-        # run post processor again to generate Del nodes
-        post_proc = postproc.PostProcessor(self.func_ir)
-        post_proc.run(True)
         if self.func_ir.is_generator:
             fix_generator_types(self.func_ir.generator_info, self.return_type,
                                 self.typemap)
@@ -3196,10 +3193,6 @@ def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes):
     dprint_func_ir(func_ir, "after parfor sequential lowering")
     simplify(func_ir, typemap, calltypes)
     dprint_func_ir(func_ir, "after parfor sequential simplify")
-    # add dels since simplify removes dels
-    post_proc = postproc.PostProcessor(func_ir)
-    post_proc.run(True)
-    return
 
 
 def _lower_parfor_sequential_block(

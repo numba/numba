@@ -289,8 +289,6 @@ class ParforPass(FunctionPass):
                                          state.parfor_diagnostics)
         parfor_pass.run()
 
-        remove_dels(state.func_ir.blocks)
-
         # check the parfor pass worked and warn if it didn't
         has_parfor = False
         for blk in state.func_ir.blocks.values():
