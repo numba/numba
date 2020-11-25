@@ -3,7 +3,8 @@ from textwrap import dedent
 
 from numba import cuda, uint32, uint64, float32, float64
 from numba.cuda.testing import (unittest, CUDATestCase, skip_unless_cc_32,
-                                skip_unless_cc_50, cc_X_or_above, skip_on_cudasim)
+                                skip_unless_cc_50, cc_X_or_above,
+                                skip_on_cudasim)
 from numba.core import config
 
 
