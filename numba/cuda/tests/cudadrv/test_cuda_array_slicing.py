@@ -322,7 +322,7 @@ class CudaArraySetting(CUDATestCase):
 
     @skip_on_cudasim('cudasim does not use streams and operates synchronously')
     def test_no_sync_default_stream(self):
-        # There should not be a synchronization when a the array has a default
+        # There should not be a synchronization when the array has a default
         # stream, whether it is the default stream, the legacy default stream,
         # the per-thread default stream, or another stream.
         streams = (cuda.stream(), cuda.default_stream(),
@@ -368,7 +368,7 @@ class CudaArraySetting(CUDATestCase):
         ary_v = ary.view('u1')
         ary_v[1] = 1
         ary_v[5] = 1
-        assert sum(ary) == 512
+        self.assertEqual(sum(ary), 512)
 
 
 if __name__ == '__main__':
