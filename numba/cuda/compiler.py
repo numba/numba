@@ -581,6 +581,9 @@ class _Kernel(serialize.ReduceMixin):
 
     @property
     def regs_per_thread(self):
+        '''
+        The number of registers used by each thread for this kernel.
+        '''
         return self._func.get().attrs.regs
 
     def inspect_llvm(self):
@@ -928,8 +931,9 @@ class Dispatcher(serialize.ReduceMixin):
         Returns the number of registers used by each thread in this kernel for
         the device in the current context.
 
-        :param sig: The signature of the compiled kernel to get register usage
-                    for. This may be omitted for a specialized kernel.
+        :param signature: The signature of the compiled kernel to get register
+                          usage for. This may be omitted for a specialized
+                          kernel.
         :return: The number of registers used by the compiled variant of the
                  kernel for the given signature and current device.
         '''
