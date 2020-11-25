@@ -3,8 +3,7 @@ from textwrap import dedent
 
 from numba import cuda, uint32, uint64, float32, float64
 from numba.cuda.testing import (unittest, CUDATestCase, skip_unless_cc_32,
-                                skip_unless_cc_50, cc_X_or_above,
-                                skip_on_cudasim)
+                                skip_unless_cc_50, cc_X_or_above)
 from numba.core import config
 
 
@@ -72,7 +71,7 @@ def atomic_binary_2dim_global(ary, op2, binop_func, y_cast_func):
 @cuda.jit(device=True)
 def atomic_binary_1dim_global(ary, idx, ary_nelements, op2, binop_func):
     tid = cuda.threadIdx.x
-    bin = idx[tid] % ary_nelements
+    bin = int(idx[tid] % ary_nelements)
     binop_func(ary, bin, op2)
 
 
@@ -270,7 +269,7 @@ def atomic_inc32(ary, idx, op2):
 
 def atomic_inc64(ary, idx, op2):
     atomic_binary_1dim_shared2(ary, idx, op2, uint64, 32,
-                               cuda.atomic.inc, atomic_cast_none)
+                               cuda.atomic.inc, atomic_cast_to_int)
 
 
 def atomic_inc2_32(ary, op2):
@@ -304,7 +303,7 @@ def atomic_dec32(ary, idx, op2):
 
 def atomic_dec64(ary, idx, op2):
     atomic_binary_1dim_shared2(ary, idx, op2, uint64, 32,
-                               cuda.atomic.dec, atomic_cast_none)
+                               cuda.atomic.dec, atomic_cast_to_int)
 
 
 def atomic_dec2_32(ary, op2):
@@ -834,7 +833,6 @@ class TestCudaAtomics(CUDATestCase):
         sig = 'void(uint32[:], uint32[:], uint32)'
         self.check_inc_index(ary, idx, rand_const, sig, 1, 32, atomic_inc32)
 
-    @skip_on_cudasim('Cannot utilize 64-bit indexes when simulating')
     def test_atomic_inc_64(self):
         rand_const, ary, idx = self.inc_dec_1dim_setup(dtype=np.uint64)
         sig = 'void(uint64[:], uint64[:], uint64)'
@@ -861,7 +859,6 @@ class TestCudaAtomics(CUDATestCase):
         self.check_inc_index2(ary, idx, rand_const, sig, 1, 32,
                               atomic_inc_global)
 
-    @skip_on_cudasim('Cannot utilize 64-bit indexes when simulating')
     def test_atomic_inc_global_64(self):
         rand_const, ary, idx = self.inc_dec_1dim_setup(dtype=np.uint64)
         sig = 'void(uint64[:], uint64[:], uint64)'
@@ -910,7 +907,6 @@ class TestCudaAtomics(CUDATestCase):
         sig = 'void(uint32[:], uint32[:], uint32)'
         self.check_dec_index(ary, idx, rand_const, sig, 1, 32, atomic_dec32)
 
-    @skip_on_cudasim('Cannot utilize 64-bit indexes when simulating')
     def test_atomic_dec_64(self):
         rand_const, ary, idx = self.inc_dec_1dim_setup(dtype=np.uint64)
         sig = 'void(uint64[:], uint64[:], uint64)'
@@ -937,9 +933,7 @@ class TestCudaAtomics(CUDATestCase):
         self.check_dec_index2(ary, idx, rand_const, sig, 1, 32,
                               atomic_dec_global)
 
-    @skip_on_cudasim('Cannot utilize 64-bit indexes when simulating')
     def test_atomic_dec_global_64(self):
-
         rand_const, ary, idx = self.inc_dec_1dim_setup(dtype=np.uint64)
         sig = 'void(uint64[:], uint64[:], uint64)'
         self.check_dec_index2(ary, idx, rand_const, sig, 1, 32,
