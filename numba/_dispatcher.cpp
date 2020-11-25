@@ -102,15 +102,31 @@ else                                                            \
 typedef std::vector<Type> TypeTable;
 typedef std::vector<PyObject*> Functions;
 
+/* The Dispatcher class is the base class of all dispatchers in the CPU and
+   CUDA targets. Its main responsibilities are:
+
+   - Resolving the best overload to call for a given set of arguments, and
+   - Calling the resolved overload.
+
+   This logic is implemented within this class for efficiency (lookup of the
+   appropriate overload needs to be fast) and ease of implementation (calling
+   directly into a compiled function using a function pointer is easier within
+   the C++ code where the overload has been resolved). */
 class Dispatcher {
 public:
     PyObject_HEAD
-    char can_compile;        /* Can auto compile */
-    char can_fallback;       /* Can fallback */
+    /* Whether compilation of new overloads is permitted */
+    char can_compile;
+    /* Whether fallback to object mode is permitted */
+    char can_fallback;
+    /* Whether types must match exactly when resolving overloads.
+       If not, conversions (e.g. float32 -> float64) are permitted when
+       searching for a match. */
     char exact_match_required;
     /* Borrowed reference */
     PyObject *fallbackdef;
-    /* Whether to fold named arguments and default values (false for lifted loops)*/
+    /* Whether to fold named arguments and default values
+      (false for lifted loops) */
     int fold_args;
     /* Whether the last positional argument is a stararg */
     int has_stararg;
@@ -128,6 +144,10 @@ public:
      * (invariant: sizeof(overloads) == argct * sizeof(functions)) */
     TypeTable overloads;
 
+    /* Add a new overload. Parameters:
+
+       - args: An array of Type objects, one for each parameter
+       - callable: The callable implementing this overload. */
     void addDefinition(Type args[], PyObject *callable) {
         overloads.reserve(argct + overloads.size());
         for (int i=0; i<argct; ++i) {
@@ -136,6 +156,19 @@ public:
         functions.push_back(callable);
     }
 
+    /* Given a list of types, find the overloads that have a matching signature.
+       Returns the best match, as well as the number of matches found.
+
+       Parameters:
+
+       - sig: an array of Type objects, one for each parameter.
+       - matches: the number of matches found (mutated by this function).
+       - allow_unsafe: whether to match overloads that would require an unsafe
+                       cast.
+       - exact_match_required: Whether all arguments types must match the
+                               overload's types exactly. When false,
+                               overloads that would require a type conversion
+                               can also be matched. */
     PyObject* resolve(Type sig[], int &matches, bool allow_unsafe,
                       bool exact_match_required) const {
         const int ovct = functions.size();
@@ -161,6 +194,7 @@ public:
         return NULL;
     }
 
+    /* Remove all overloads */
     void clear() {
         functions.clear();
         overloads.clear();
@@ -612,7 +646,10 @@ Dispatcher_call(Dispatcher *self, PyObject *args, PyObject *kws)
     }
 
     /* We only allow unsafe conversions if compilation of new specializations
-       has been disabled. */
+       has been disabled.
+
+       Note that the number of matches is returned in matches by resolve, which
+       accepts it as a reference. */
     cfunc = self->resolve(tys, matches, !self->can_compile,
                           exact_match_required);
 
