@@ -272,7 +272,7 @@ class TypeAnnotation(object):
         return self.annotate()
 
 
-re_longest_white_prefix = re.compile('^\s*')
+re_longest_white_prefix = re.compile(r'^\s*')
 
 
 def _getindent(text):

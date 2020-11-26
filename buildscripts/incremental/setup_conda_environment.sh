@@ -89,6 +89,8 @@ if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
 if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL tbb tbb-devel; fi
 # Install pickle5
 if [ "$TEST_PICKLE5" == "yes" ]; then $PIP_INSTALL pickle5; fi
+# Install typeguard
+if [ "$RUN_TYPEGUARD" == "yes" ]; then $CONDA_INSTALL conda-forge::typeguard; fi
 
 # environment dump for debug
 echo "DEBUG ENV:"

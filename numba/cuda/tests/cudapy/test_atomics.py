@@ -1,26 +1,10 @@
-import random
 import numpy as np
 from textwrap import dedent
 
 from numba import cuda, uint32, uint64, float32, float64
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import (unittest, CUDATestCase, skip_unless_cc_32,
+                                skip_unless_cc_50, cc_X_or_above)
 from numba.core import config
-
-
-def cc_X_or_above(major, minor):
-    if not config.ENABLE_CUDASIM:
-        ctx = cuda.current_context()
-        return ctx.device.compute_capability >= (major, minor)
-    else:
-        return True
-
-
-def skip_unless_cc_32(fn):
-    return unittest.skipUnless(cc_X_or_above(3, 2), "require cc >= 3.2")(fn)
-
-
-def skip_unless_cc_50(fn):
-    return unittest.skipUnless(cc_X_or_above(5, 0), "require cc >= 5.0")(fn)
 
 
 @cuda.jit(device=True)
@@ -877,7 +861,7 @@ class TestCudaAtomics(CUDATestCase):
     def test_atomic_compare_and_swap(self):
         n = 100
         res = [-99] * (n // 2) + [-1] * (n // 2)
-        random.shuffle(res)
+        np.random.shuffle(res)
         res = np.asarray(res, dtype=np.int32)
         out = np.zeros_like(res)
         ary = np.random.randint(1, 10, size=res.size).astype(res.dtype)

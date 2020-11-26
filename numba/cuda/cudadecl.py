@@ -4,7 +4,7 @@ from numba.core.typing.npydecl import (parse_dtype, parse_shape,
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          AbstractTemplate, CallableTemplate,
                                          signature, Registry)
-from numba.cuda.types import dim3
+from numba.cuda.types import dim3, grid_group
 from numba import cuda
 
 
@@ -130,6 +130,35 @@ class Cuda_threadfence_system(ConcreteTemplate):
 class Cuda_syncwarp(ConcreteTemplate):
     key = cuda.syncwarp
     cases = [signature(types.none), signature(types.none, types.i4)]
+
+
+@register
+class Cuda_cg_this_grid(ConcreteTemplate):
+    key = cuda.cg.this_grid
+    cases = [signature(grid_group)]
+
+
+@register_attr
+class CudaCgModuleTemplate(AttributeTemplate):
+    key = types.Module(cuda.cg)
+
+    def resolve_this_grid(self, mod):
+        return types.Function(Cuda_cg_this_grid)
+
+
+class Cuda_grid_group_sync(AbstractTemplate):
+    key = "GridGroup.sync"
+
+    def generic(self, args, kws):
+        return signature(types.int32, recvr=self.this)
+
+
+@register_attr
+class GridGroup_attrs(AttributeTemplate):
+    key = grid_group
+
+    def resolve_sync(self, mod):
+        return types.BoundFunction(Cuda_grid_group_sync, grid_group)
 
 
 @register
@@ -409,6 +438,9 @@ class CudaModuleTemplate(AttributeTemplate):
 
     def resolve_gridsize(self, mod):
         return types.Function(Cuda_gridsize)
+
+    def resolve_cg(self, mod):
+        return types.Module(cuda.cg)
 
     def resolve_threadIdx(self, mod):
         return dim3

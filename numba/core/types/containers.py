@@ -627,6 +627,10 @@ class ListType(IterableType):
         name = "{}[{}]".format(self.__class__.__name__, itemty,)
         super(ListType, self).__init__(name)
 
+    @property
+    def key(self):
+        return self.item_type
+
     def is_precise(self):
         return not isinstance(self.item_type, Undefined)
 

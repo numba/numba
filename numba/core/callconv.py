@@ -3,6 +3,7 @@ Calling conventions for Numba-compiled functions.
 """
 
 from collections import namedtuple
+from collections.abc import Iterable
 import itertools
 
 from llvmlite import ir
@@ -543,9 +544,16 @@ class CPUCallConv(BaseCallConv):
     def _get_excinfo_argument(self, func):
         return func.args[1]
 
-    def call_function(self, builder, callee, resty, argtys, args):
+    def call_function(self, builder, callee, resty, argtys, args,
+                      attrs=None):
         """
         Call the Numba-compiled *callee*.
+        Parameters:
+        -----------
+        attrs: LLVM style string or iterable of individual attributes, default
+               is None which specifies no attributes. Examples:
+               LLVM style string: "noinline fast"
+               Equivalent iterable: ("noinline", "fast")
         """
         # XXX better fix for callees that are not function values
         #     (pointers to function; thus have no `.args` attribute)
@@ -561,7 +569,16 @@ class CPUCallConv(BaseCallConv):
         arginfo = self._get_arg_packer(argtys)
         args = list(arginfo.as_arguments(builder, args))
         realargs = [retvaltmp, excinfoptr] + args
-        code = builder.call(callee, realargs)
+        # deal with attrs, it's fine to specify a load in a string like
+        # "noinline fast" as per LLVM or equally as an iterable of individual
+        # attributes.
+        if attrs is None:
+            _attrs = ()
+        elif isinstance(attrs, Iterable) and not isinstance(attrs, str):
+            _attrs = tuple(attrs)
+        else:
+            raise TypeError("attrs must be an iterable of strings or None")
+        code = builder.call(callee, realargs, attrs=_attrs)
         status = self._get_return_status(builder, code,
                                          builder.load(excinfoptr))
         retval = builder.load(retvaltmp)

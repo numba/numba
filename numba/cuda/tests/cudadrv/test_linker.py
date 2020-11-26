@@ -3,7 +3,7 @@ import numpy as np
 from numba.cuda.testing import unittest
 from numba.cuda.testing import skip_on_cudasim
 from numba.cuda.testing import CUDATestCase
-from numba.cuda.cudadrv.driver import Linker
+from numba.cuda.cudadrv.driver import Linker, LinkerError
 from numba.cuda import require_context
 from numba import cuda, void, float64, int64
 
@@ -78,12 +78,20 @@ class TestLinker(CUDATestCase):
             i = cuda.grid(1)
             x[i] += bar(y[i])
 
-        A = np.array([123])
-        B = np.array([321])
+        A = np.array([123], dtype=np.int32)
+        B = np.array([321], dtype=np.int32)
 
         foo[1, 1](A, B)
 
         self.assertTrue(A[0] == 123 + 2 * 321)
+
+    @require_context
+    def test_try_to_link_nonexistent(self):
+        with self.assertRaises(LinkerError) as e:
+            @cuda.jit('void(int32[::1])', link=['nonexistent.a'])
+            def f(x):
+                x[0] = 0
+        self.assertIn('nonexistent.a not found', e.exception.args)
 
     @require_context
     def test_set_registers_no_max(self):
