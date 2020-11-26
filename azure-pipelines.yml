@@ -105,10 +105,11 @@ jobs:
         NUMPY: '1.18'
         CONDA_ENV: travisci
         TEST_START_INDEX: 14
-      py38_np118:
+      py38_np118_typeguard:
         PYTHON: '3.8'
         NUMPY: '1.18'
         CONDA_ENV: travisci
+        RUN_TYPEGUARD: yes
         TEST_START_INDEX: 15
       py37_np119:
         PYTHON: '3.7'

@@ -157,13 +157,11 @@ def get_ext_modules():
                                      'numba/_dynfunc.c'])
 
     ext_dispatcher = Extension(name="numba._dispatcher",
-                               sources=['numba/_dispatcher.c',
+                               sources=['numba/_dispatcher.cpp',
                                         'numba/_typeof.c',
                                         'numba/_hashtable.c',
-                                        'numba/_dispatcherimpl.cpp',
                                         'numba/core/typeconv/typeconv.cpp'],
                                depends=["numba/_pymodule.h",
-                                        "numba/_dispatcher.h",
                                         "numba/_typeof.h",
                                         "numba/_hashtable.h"],
                                **np_compile_args)
