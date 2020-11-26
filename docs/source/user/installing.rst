@@ -266,6 +266,8 @@ vary with target operating system and hardware. The following lists them all
   * ``graphviz`` - for some CFG inspection functionality.
   * ``pickle5`` - provides Python 3.8 pickling features for faster pickling in
     Python 3.6 and 3.7.
+  * ``typeguard`` - used by ``runtests.py`` for
+    :ref:`runtime type-checking <type_anno_check>`.
 
 * To build the documentation:
 
