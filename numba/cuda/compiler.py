@@ -810,11 +810,10 @@ class Dispatcher(serialize.ReduceMixin):
     Dispatcher objects are not to be constructed by the user, but instead are
     created using the :func:`numba.cuda.jit` decorator.
     '''
-    def __init__(self, func, sigs, bind, targetoptions):
+    def __init__(self, func, sigs, targetoptions):
         super().__init__()
         self.py_func = func
         self.sigs = []
-        self._bind = bind
         self.link = targetoptions.pop('link', (),)
         self._can_compile = True
 
@@ -923,7 +922,7 @@ class Dispatcher(serialize.ReduceMixin):
         targetoptions = self.targetoptions
         targetoptions['link'] = self.link
         specialization = Dispatcher(self.py_func, [types.void(*argtypes)],
-                                    self._bind, targetoptions)
+                                    targetoptions)
         self.specializations[cc, argtypes] = specialization
         return specialization
 
@@ -975,8 +974,7 @@ class Dispatcher(serialize.ReduceMixin):
                                     link=self.link,
                                     **self.targetoptions)
             self.definitions[(cc, argtypes)] = kernel
-            if self._bind:
-                kernel.bind()
+            kernel.bind()
             self.sigs.append(sig)
         return kernel
 
@@ -1057,11 +1055,11 @@ class Dispatcher(serialize.ReduceMixin):
             defn.bind()
 
     @classmethod
-    def _rebuild(cls, py_func, sigs, bind, targetoptions):
+    def _rebuild(cls, py_func, sigs, targetoptions):
         """
         Rebuild an instance.
         """
-        instance = cls(py_func, sigs, bind, targetoptions)
+        instance = cls(py_func, sigs, targetoptions)
         return instance
 
     def _reduce_states(self):
@@ -1069,5 +1067,5 @@ class Dispatcher(serialize.ReduceMixin):
         Reduce the instance for serialization.
         Compiled definitions are discarded.
         """
-        return dict(py_func=self.py_func, sigs=self.sigs, bind=self._bind,
+        return dict(py_func=self.py_func, sigs=self.sigs,
                     targetoptions=self.targetoptions)
