@@ -5,7 +5,7 @@ CUDA Array Interface (Version 3)
 ================================
 
 The *CUDA Array Interface* (or CAI) is created for interoperability between
-different implementations of GPU array-like objects in various projects. The
+different implementations of CUDA array-like objects in various projects. The
 idea is borrowed from the `NumPy array interface`_.
 
 
@@ -90,7 +90,7 @@ The following are optional entries:
   - ``2``: The per-thread default stream.
   - Any other integer: a ``cudaStream_t`` represented as a Python integer.
 
-  See the
+  When ``None``, no synchronization is required. See the
   :ref:`cuda-array-interface-synchronization` section below for further details.
 
   In a future revision of the interface, this entry may be expanded (or another
@@ -116,7 +116,7 @@ When discussing synchronization, the following definitions are used:
   the CAI.
 - *User*: The person writing or maintaining the User Code. The User may
   implement User Code without knowledge of the CAI, since the CAI accesses can
-  be  hidden from their view.
+  be hidden from their view.
 
 In the following example:
 
@@ -249,7 +249,7 @@ When exporting an array through the CAI, Producers must ensure that:
 * If there is no work enqueued on the data, then the ``stream`` entry may be
   either ``None``, or not provided.
 
-Optionally, to facilitate the User to relax the conformance to synchronization
+Optionally, to facilitate the User relaxing conformance to synchronization
 semantics:
 
 * Producers may provide a configuration option to always set ``stream`` to
@@ -260,9 +260,9 @@ semantics:
   than that provided by the Producer.
 
 These options should not be set by default in either a Producer or a Consumer.
-The exact mechanism by which these options are set, and related options that
-Producers or Consumers might provide to allow the user further control over
-synchronization behavior are not prescribed by the CAI specification.
+The CAI specification does not prescribe the exact mechanism by which these
+options are set, or related options that Producers or Consumers might provide
+to allow the user further control over synchronization behavior.
 
 
 Synchronization in Numba
@@ -275,19 +275,20 @@ synchronization of the interface:
 
 - When Numba acts as a Consumer (for example when an array-like object is passed
   to a kernel launch): If ``stream`` is an integer, then Numba will immediately
-  synchronize on the provided ``stream``. A Numba Device Array created from an
-  array-like object has its *default stream* set to the provided stream.
+  synchronize on the provided ``stream``. A Numba :class:`Device Array
+  <numba.cuda.cudadrv.devicearray.DeviceNDArray>` created from an array-like
+  object has its *default stream* set to the provided stream.
 
 - When Numba acts as a Producer (when the ``__cuda_array_interface__`` property
-  of a Numba Device Array is accessed): If the exported Device Array has a
+  of a Numba CUDA Array is accessed): If the exported CUDA Array has a
   *default stream*, then it is given as the ``stream`` entry. Otherwise,
   ``stream`` is set to ``None``.
 
-.. note:: In Numba's terminology, the *default stream* for a Device Array is a
-          property of the Device Array specifying the stream in which Numba will
-          enqueue asynchronous transfers if no other stream is provided as an
-          argument to the function invoking the transfer. It is not the same as
-          the `Default Stream
+.. note:: In Numba's terminology, an array's *default stream* is a property
+          specifying the stream that Numba will enqueue asynchronous
+          transfers in if no other stream is provided as an argument to the
+          function invoking the transfer. It is not the same as the `Default
+          Stream
           <https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#default-stream>`_
           in normal CUDA terminology.
 
@@ -307,14 +308,14 @@ consequences:
     the parameter. For an example of this, :ref:`see below
     <example-multi-streams>`.
 
-The User may override synchronization behavior in Numba by setting the
+The User may override Numba's synchronization behavior by setting the
 environment variable ``NUMBA_CUDA_ARRAY_INTERFACE_SYNC`` or the config variable
 ``CUDA_ARRAY_INTERFACE_SYNC`` to ``0`` (see :ref:`GPU Support Environment
 Variables <numba-envvars-gpu-support>`).  When set, Numba will not synchronize
 on the streams of imported arrays, and it is the responsibility of the user to
 ensure correctness with respect to stream synchronization. Synchronization when
-creating a Numba Device Array from an object exporting the CUDA Array Interface
-may also be elided by passing ``sync=False`` when creating the Numba Device
+creating a Numba CUDA Array from an object exporting the CUDA Array Interface
+may also be elided by passing ``sync=False`` when creating the Numba CUDA
 Array with :func:`numba.cuda.as_cuda_array` or
 :func:`numba.cuda.from_cuda_array_interface`.
 
@@ -407,7 +408,7 @@ has no effect on the lifetime of the object from which it was created. In
 particular, note that the interface has no slot for the owner of the data.
 
 The User code must preserve the lifetime of the object owning the data for as
-long as the Consumer might user it.
+long as the Consumer might use it.
 
 
 Streams
