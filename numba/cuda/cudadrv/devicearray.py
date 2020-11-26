@@ -120,7 +120,8 @@ class DeviceNDArrayBase(object):
             'strides': None if is_contiguous(self) else tuple(self.strides),
             'data': (ptr, False),
             'typestr': self.dtype.str,
-            'version': 2,
+            'stream': int(self.stream) if self.stream != 0 else None,
+            'version': 3,
         }
 
     def bind(self, stream=0):
