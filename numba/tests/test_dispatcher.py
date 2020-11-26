@@ -1464,6 +1464,10 @@ class TestCache(BaseCacheUsecasesTest):
         err = execute_with_input()
         self.assertIn("cache hits = 1", err.strip())
 
+
+class TestCacheStringSource(BaseCacheUsecasesTest):
+    """Test cache for String source functions
+    """
     def test_string_source(self):
         self.check_pycache(0)
         mod = self.import_module()
@@ -1476,6 +1480,94 @@ class TestCache(BaseCacheUsecasesTest):
         self.check_pycache(3)  # 1 index, 2 data
         self.check_hits(f, 0, 2)
 
+        f = mod.generated_usecase
+        self.assertPreciseEqual(f(3, 2), 1)
+        self.assertPreciseEqual(f(3j, 2), 2 + 3j)
+
+        # Check the code runs ok from another process
+        self.run_in_separate_process()
+
+    def test_inner_then_outer(self):
+        # Caching inner then outer function is ok
+        mod = self.import_module()
+        self.assertPreciseEqual(mod.str_inner(3, 2), 6)
+        self.check_pycache(2)  # 1 index, 1 data
+        # Uncached outer function shouldn't fail (issue #1603)
+        f = mod.str_outer_uncached
+        self.assertPreciseEqual(f(3, 2), 2)
+        self.check_pycache(2)  # 1 index, 1 data
+        mod = self.import_module()
+        f = mod.str_outer_uncached
+        self.assertPreciseEqual(f(3, 2), 2)
+        self.check_pycache(2)  # 1 index, 1 data
+        # Cached outer will create new cache entries
+        f = mod.str_outer
+        self.assertPreciseEqual(f(3, 2), 2)
+        self.check_pycache(4)  # 2 index, 2 data
+        self.assertPreciseEqual(f(3.5, 2), 2.5)
+        self.check_pycache(6)  # 2 index, 4 data
+
+    def test_outer_then_inner(self):
+        # Caching outer then inner function is ok
+        mod = self.import_module()
+        self.assertPreciseEqual(mod.str_outer(3, 2), 2)
+        self.check_pycache(4)  # 2 index, 2 data
+        self.assertPreciseEqual(mod.str_outer_uncached(3, 2), 2)
+        self.check_pycache(4)  # same
+        mod = self.import_module()
+        f = mod.str_inner
+        self.assertPreciseEqual(f(3, 2), 6)
+        self.check_pycache(4)  # same
+        self.assertPreciseEqual(f(3.5, 2), 6.5)
+        self.check_pycache(5)  # 2 index, 3 data
+
+    def test_ctypes(self):
+        # Functions using a ctypes pointer can't be cached and raise
+        # a warning.
+        mod = self.import_module()
+
+        for f in [mod.str_use_c_sin, mod.str_use_c_sin_nest1, mod.str_use_c_sin_nest2]:
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter('always', NumbaWarning)
+
+                self.assertPreciseEqual(f(0.0), 0.0)
+                self.check_pycache(0)
+
+            self.assertEqual(len(w), 1)
+            self.assertIn(
+                'Cannot cache compiled function "{}"'.format(f.__name__),
+                str(w[0].message),
+            )
+
+    def test_big_array(self):
+        # Code references big array globals cannot be cached
+        mod = self.import_module()
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaWarning)
+
+            f = mod.str_use_big_array
+            np.testing.assert_equal(f(), mod.biggie)
+            self.check_pycache(0)
+
+        self.assertEqual(len(w), 1)
+        self.assertIn('Cannot cache compiled function "str_use_big_array" '
+                      'as it uses dynamic globals', str(w[0].message))
+
+    def test_closure(self):
+        mod = self.import_module()
+
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', NumbaWarning)
+
+            f = mod.str_closure1
+            self.assertPreciseEqual(f(3), 6) # 3 + 3 = 6
+            f = mod.str_closure2
+            self.assertPreciseEqual(f(3), 8) # 3 + 5 = 8
+            f = mod.str_closure3
+            self.assertPreciseEqual(f(3), 10) # 3 + 7 = 8
+            f = mod.str_closure4
+            self.assertPreciseEqual(f(3), 12) # 3 + 9 = 12
+            self.check_pycache(5) # 1 nbi, 4 nbc
 
 @skip_parfors_unsupported
 class TestSequentialParForsCache(BaseCacheUsecasesTest):
