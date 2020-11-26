@@ -121,7 +121,8 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
             'strides': None if is_contiguous(self) else tuple(self.strides),
             'data': (ptr, False),
             'typestr': self.dtype.str,
-            'version': 2,
+            'stream': int(self.stream) if self.stream != 0 else None,
+            'version': 3,
         }
 
     def bind(self, stream=0):
@@ -568,11 +569,19 @@ class DeviceNDArray(DeviceNDArrayBase):
     def setitem(self, key, value, stream=0):
         """Do `__setitem__(key, value)` with CUDA stream
         """
-        return self._so_getitem(key, value, stream)
+        return self._do_setitem(key, value, stream=stream)
 
     def _do_setitem(self, key, value, stream=0):
 
         stream = self._default_stream(stream)
+
+        # If the array didn't have a default stream, and the user didn't provide
+        # a stream, then we will use the default stream for the assignment
+        # kernel and synchronize on it.
+        synchronous = not stream
+        if synchronous:
+            ctx = devices.get_context()
+            stream = ctx.get_default_stream()
 
         # (1) prepare LHS
 
@@ -614,6 +623,8 @@ class DeviceNDArray(DeviceNDArrayBase):
 
         n_elements = functools.reduce(operator.mul, lhs.shape, 1)
         _assign_kernel(lhs.ndim).forall(n_elements, stream=stream)(lhs, rhs)
+        if synchronous:
+            stream.synchronize()
 
 
 class IpcArrayHandle(object):
