@@ -46,8 +46,10 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
        disables precise division and square root. This parameter has no effect
        on device function, whose fastmath setting depends on the kernel function
        from which they are called.
-    :param max_registers: Limit the kernel to using at most this number of
-       registers per thread. Useful for increasing occupancy.
+    :param max_registers: Request that the kernel is limited to using at most
+       this number of registers per thread. The limit may not be respected if
+       the ABI requires a greater number of registers than that requested.
+       Useful for increasing occupancy.
     :param opt: Whether to compile from LLVM IR to PTX with optimization
                 enabled. When ``True``, ``-opt=3`` is passed to NVVM. When
                 ``False``, ``-opt=0`` is passed to NVVM. Defaults to ``True``.
