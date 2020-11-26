@@ -465,6 +465,7 @@ class atomic(Stub):
 
         Perform ary[idx] = (value if (array[idx] == 0) or
                             (array[idx] > value) else array[idx] - 1).
+
         Supported on uint32, and uint64 operands only.
 
         Returns the old value at the index location as if it is loaded
