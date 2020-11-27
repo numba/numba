@@ -338,8 +338,8 @@ class List(MutableSequence, pt.Generic[T]):
     @pt.overload
     def __getitem__(self, i: slice) -> 'List': ... # noqa: F811, E704
 
-    def __getitem__(self, i: pt.Union[int, slice]
-                    ) -> pt.Union[T, 'List']: # noqa: F811
+    def __getitem__(self, i: pt.Union[int, slice] # noqa: F811
+                    ) -> pt.Union[T, 'List']:
         if not self._typed:
             raise IndexError
         else:
