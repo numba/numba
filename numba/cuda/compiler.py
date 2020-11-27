@@ -525,9 +525,9 @@ class _Kernel(serialize.ReduceMixin):
             'opt': 3 if opt else 0
         }
 
-        llvm_module = str(lib._final_module)
+        llvm_ir = str(lib._final_module)
         pretty_name = cres.fndesc.qualname
-        ptx = CachedPTX(pretty_name, llvm_module, options=options)
+        ptx = CachedPTX(pretty_name, llvm_ir, options=options)
 
         if not link:
             link = []
