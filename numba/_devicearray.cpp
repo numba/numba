@@ -1,4 +1,9 @@
+/* This file contains the base class implementation for all device arrays. The
+ * base class is implemented in C so that computing typecodes for device arrays
+ * can be implemented efficiently. */
+
 #include "_pymodule.h"
+
 
 /* Include _devicearray., but make sure we don't get the definitions intended
  * for consumers of the Device Array API.
@@ -6,22 +11,30 @@
 #define NUMBA_IN_DEVICEARRAY_CPP_
 #include "_devicearray.h"
 
+/* DeviceArray PyObject implementation. Note that adding more members here is
+ * presently prohibited because mapped and managed arrays derive from both
+ * DeviceArray and NumPy's ndarray, which is also a C extension class - the
+ * layout of the object cannot be resolved if this class also has members beyond
+ * PyObject_HEAD. */
 class DeviceArray {
     PyObject_HEAD
 };
 
+/* Trivial traversal - DeviceArray instances own nothing. */
 static int
 DeviceArray_traverse(DeviceArray *self, visitproc visit, void *arg)
 {
     return 0;
 }
 
+/* Trivial clear of all references - DeviceArray instances own nothing. */
 static int
 DeviceArray_clear(DeviceArray *self)
 {
     return 0;
 }
 
+/* The _devicearray.DeviceArray type */
 PyTypeObject DeviceArrayType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     "_devicearray.DeviceArray",                  /* tp_name */
@@ -78,40 +91,50 @@ PyTypeObject DeviceArrayType = {
 #endif
 };
 
-/* CUDA device array API */
+/* CUDA device array C API */
 static void *_DeviceArray_API[1] = {
     (void*)&DeviceArrayType
 };
 
 MOD_INIT(_devicearray) {
-    PyObject *m, *d;
+    PyObject *m = nullptr;
+    PyObject *d = nullptr;
+    PyObject *c_api = nullptr;
+    int error = 0;
+
     MOD_DEF(m, "_devicearray", "No docs", NULL)
     if (m == NULL)
-        return MOD_ERROR_VAL;
+        goto error_occurred;
 
-    PyObject *c_api;
-    c_api = PyCapsule_New((void *)_DeviceArray_API,"_devicearray.c_api", NULL);
-    if (c_api == NULL) {
-        return MOD_ERROR_VAL;
-    }
+    c_api = PyCapsule_New((void *)_DeviceArray_API, "_devicearray.c_api", NULL);
+    if (c_api == NULL)
+        goto error_occurred;
 
     DeviceArrayType.tp_new = PyType_GenericNew;
-    if (PyType_Ready(&DeviceArrayType) < 0) {
-        return MOD_ERROR_VAL;
-    }
+    if (PyType_Ready(&DeviceArrayType) < 0)
+        goto error_occurred;
+
     Py_INCREF(&DeviceArrayType);
-    PyModule_AddObject(m, "DeviceArray", (PyObject*)(&DeviceArrayType));
+    error = PyModule_AddObject(m, "DeviceArray", (PyObject*)(&DeviceArrayType));
+    if (error)
+        goto error_occurred;
 
     d = PyModule_GetDict(m);
-    if (d == NULL) {
-        return MOD_ERROR_VAL;
-    }
+    if (d == NULL)
+        goto error_occurred;
 
-    PyDict_SetItemString(d, "_DEVICEARRAY_API", c_api);
+    error = PyDict_SetItemString(d, "_DEVICEARRAY_API", c_api);
     Py_DECREF(c_api);
-    if (PyErr_Occurred()) {
-        return MOD_ERROR_VAL;
-    }
+
+    if (error)
+        goto error_occurred;
 
     return MOD_SUCCESS_VAL(m);
+
+error_occurred:
+    Py_XDECREF(m);
+    Py_XDECREF(c_api);
+    Py_XDECREF((PyObject*)&DeviceArrayType);
+
+    return MOD_ERROR_VAL;
 }
