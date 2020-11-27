@@ -1106,10 +1106,16 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
 
     def inspect_llvm(self, signature=None, compute_capability=None):
         '''
-        Return the LLVM IR for all signatures encountered thus far, or the LLVM
-        IR for a specific signature and compute_capability if given. If the
-        dispatcher is specialized, the IR for the single specialization is
-        returned.
+        Return the LLVM IR for this kernel.
+
+        :param signature: A tuple of argument types.
+        :param compute_capability: Deprecated: accepted but ignored, provided
+                                   only for backwards compatibility.
+        :return: The LLVM IR for the given signature, or a dict of LLVM IR
+                 for all previously-encountered signatures. If the dispatcher
+                 is specialized, the IR for the single specialization is
+                 returned even if no signature was provided.
+
         '''
         if compute_capability is not None:
             warn('passing compute_capability has no effect on the LLVM IR',
@@ -1126,10 +1132,16 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
 
     def inspect_asm(self, signature=None, compute_capability=None):
         '''
-        Return the generated PTX assembly code for all signatures encountered
-        thus far, or the PTX assembly code for a specific signature and
-        compute_capability if given. If the dispatcher is specialized, the
-        assembly code for the single specialization is returned.
+        Return this kernel's PTX assembly code for for the device in the
+        current context.
+
+        :param signature: A tuple of argument types.
+        :param compute_capability: Deprecated: accepted but ignored, provided
+                                   only for backwards compatibility.
+        :return: The PTX code for the given signature, or a dict of PTX codes
+                 for all previously-encountered signatures. If the dispatcher
+                 is specialized, the PTX code for the single specialization is
+                 returned even if no signature was provided.
         '''
         if compute_capability is not None:
             msg = 'The compute_capability kwarg is deprecated'
@@ -1148,9 +1160,16 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
 
     def inspect_sass(self, signature=None, compute_capability=None):
         '''
-        Return the generated SASS code for all signatures encountered thus
-        far, or the SASS code for a specific signature and compute_capability
-        if given.
+        Return this kernel's SASS assembly code for for the device in the
+        current context.
+
+        :param signature: A tuple of argument types.
+        :param compute_capability: Deprecated: accepted but ignored, provided
+                                   only for backwards compatibility.
+        :return: The SASS code for the given signature, or a dict of SASS codes
+                 for all previously-encountered signatures. If the dispatcher
+                 is specialized, the SASS code for the single specialization is
+                 returned even if no signature was provided.
 
         SASS for the device in the current context is returned.
 
