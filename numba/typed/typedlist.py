@@ -331,10 +331,12 @@ class List(MutableSequence, pt.Generic[T]):
             self._initialise_list(item)
         _setitem(self, i, item)
 
+    # noqa F811 comments required due to github.com/PyCQA/pyflakes/issues/592
+    # noqa E704 required to follow overload style of using ... in the same line
     @pt.overload
-    def __getitem__(self, i: int) -> T: ...
+    def __getitem__(self, i: int) -> T: ... # noqa: F811, E704
     @pt.overload
-    def __getitem__(self, i: slice) -> 'List':...
+    def __getitem__(self, i: slice) -> 'List':... # noqa: F811, E704
 
     def __getitem__(self, i: pt.Union[int, slice]) -> pt.Union[T, 'List']:
         if not self._typed:
