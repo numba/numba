@@ -26,7 +26,7 @@ from numba.core.extending import (
 from numba.typed import listobject
 from numba.core.errors import TypingError, LoweringError
 from numba.core.typing.templates import Signature
-from typing import TypeVar, Generic, Iterator
+import typing as pt
 
 DEFAULT_ALLOCATED = listobject.DEFAULT_ALLOCATED
 
@@ -171,10 +171,10 @@ def _from_meminfo_ptr(ptr, listtype):
     return List(meminfo=ptr, lsttype=listtype)
 
 
-T = TypeVar('T')
+T = pt.TypeVar('T')
 
 
-class List(MutableSequence, Generic[T]):
+class List(MutableSequence, pt.Generic[T]):
     """A typed-list usable in Numba compiled functions.
 
     Implements the MutableSequence interface.
@@ -321,30 +321,35 @@ class List(MutableSequence, Generic[T]):
     def __ge__(self, other):
         return _ge(self, other)
 
-    def append(self, item: T):
+    def append(self, item: T) -> None:
         if not self._typed:
             self._initialise_list(item)
         _append(self, item)
 
-    def __setitem__(self, i, item: T):
+    def __setitem__(self, i, item: T) -> None:
         if not self._typed:
             self._initialise_list(item)
         _setitem(self, i, item)
 
-    def __getitem__(self, i) -> T:
+    @overload
+    def __getitem__(self, i: int) -> T: ...
+    @overload
+    def __getitem__(self, i: slice) -> 'List':...
+
+    def __getitem__(self, i: pt.Union[int, slice]) -> pt.Union[T, 'List']:
         if not self._typed:
             raise IndexError
         else:
             return _getitem(self, i)
 
-    def __iter__(self) -> Iterator[T]:
+    def __iter__(self) -> pt.Iterator[T]:
         for i in range(len(self)):
             yield self[i]
 
     def __contains__(self, item: T) -> bool:
         return _contains(self, item)
 
-    def __delitem__(self, i):
+    def __delitem__(self, i: pt.Union[int, slice]) -> None:
         _delitem(self, i)
 
     def insert(self, i, item: T):
@@ -355,7 +360,7 @@ class List(MutableSequence, Generic[T]):
     def count(self, item: T):
         return _count(self, item)
 
-    def pop(self, i=-1) -> T:
+    def pop(self, i: int = -1) -> T:
         return _pop(self, i)
 
     def extend(self, iterable):
@@ -381,7 +386,7 @@ class List(MutableSequence, Generic[T]):
     def copy(self):
         return _copy(self)
 
-    def index(self, item: T, start=None, stop=None):
+    def index(self, item: T, start: int = None, stop: int = None):
         return _index(self, item, start, stop)
 
     def sort(self, key=None, reverse=False):
