@@ -264,6 +264,9 @@ static
 PyObject*
 Dispatcher_Insert(Dispatcher *self, PyObject *args, PyObject *kwds)
 {
+    /* The cuda kwarg is a temporary addition until CUDA overloads are compiled
+     * functions. Once they are compiled functions, kwargs can be removed from
+     * this function. */
     static char *keywords[] = {
         (char*)"sig",
         (char*)"func",
@@ -464,9 +467,13 @@ compile_and_invoke(Dispatcher *self, PyObject *args, PyObject *kws, PyObject *lo
     return retval;
 }
 
+/* A copy of compile_and_invoke, that only compiles. This is needed for CUDA
+ * kernels, because its overloads are Python instances of the _Kernel class,
+ * rather than compiled functions. Once CUDA overloads are compiled functions,
+ * cuda_compile_only can be removed. */
 static
 PyObject*
-compile_only(Dispatcher *self, PyObject *args, PyObject *kws, PyObject *locals)
+cuda_compile_only(Dispatcher *self, PyObject *args, PyObject *kws, PyObject *locals)
 {
     /* Compile a new one */
     PyObject *cfa, *cfunc;
@@ -787,14 +794,10 @@ Dispatcher_cuda_call(Dispatcher *self, PyObject *args, PyObject *kws)
         /* Definition is found */
         retval = cfunc;
         Py_INCREF(retval);
-        goto CLEANUP;
     } else if (matches == 0) {
         /* No matching definition */
         if (self->can_compile) {
-            retval = compile_only(self, args, kws, locals);
-            if (retval) {
-              Py_INCREF(retval);
-            }
+            retval = cuda_compile_only(self, args, kws, locals);
         } else if (self->fallbackdef) {
             /* Have object fallback */
             retval = call_cfunc(self, self->fallbackdef, args, kws, locals);
@@ -805,8 +808,7 @@ Dispatcher_cuda_call(Dispatcher *self, PyObject *args, PyObject *kws)
         }
     } else if (self->can_compile) {
         /* Ambiguous, but are allowed to compile */
-        retval = compile_only(self, args, kws, locals);
-        Py_INCREF(retval);
+        retval = cuda_compile_only(self, args, kws, locals);
     } else {
         /* Ambiguous */
         explain_ambiguous((PyObject *) self, args, kws);
