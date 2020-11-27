@@ -8,6 +8,7 @@
 #include "_typeof.h"
 #include "_hashtable.h"
 #include "_devicearray.h"
+#include "pyerrors.h"
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/ndarrayobject.h>
@@ -843,24 +844,72 @@ int typecode_devicendarray(PyObject *dispatcher, PyObject *ary)
     int layout = 0;
 
     PyObject* flags = PyObject_GetAttrString(ary, "flags");
+    if (flags == NULL)
+        goto FALLBACK;
+
     if (PyDict_GetItemString(flags, "C_CONTIGUOUS") == Py_True) {
         layout = 1;
     } else if (PyDict_GetItemString(flags, "F_CONTIGUOUS") == Py_True) {
         layout = 2;
     }
 
-    ndim = PyLong_AsLong(PyObject_GetAttrString(ary, "ndim"));
+    Py_DECREF(flags);
 
-    if (ndim <= 0 || ndim > N_NDIM) goto FALLBACK;
+    PyObject *ndim_obj = PyObject_GetAttrString(ary, "ndim");
+    if (ndim_obj == NULL) {
+        /* If there's no ndim, try to proceed by clearing the error and using the
+         * fallback. */
+        PyErr_Clear();
+        goto FALLBACK;
+    }
+
+    ndim = PyLong_AsLong(ndim_obj);
+    Py_DECREF(ndim_obj);
+
+    if (PyErr_Occurred()) {
+        /* ndim wasn't an integer for some reason - unlikely to happen, but try
+         * the fallback. */
+        PyErr_Clear();
+        goto FALLBACK;
+    }
+
+    if (ndim <= 0 || ndim > N_NDIM)
+        goto FALLBACK;
 
     PyObject* dtype_obj = PyObject_GetAttrString(ary, "dtype");
-    int dtype_num = PyLong_AsLong(PyObject_GetAttrString(dtype_obj, "num"));
+    if (dtype_obj == NULL) {
+        /* No dtype: try the fallback. */
+        goto FALLBACK;
+    }
+
+    PyObject* num_obj = PyObject_GetAttrString(dtype_obj, "num");
+    Py_DECREF(dtype_obj);
+
+    if (num_obj == NULL) {
+        /* This strange dtype has no num - try the fallback. */
+        goto FALLBACK;
+    }
+
+    int dtype_num = PyLong_AsLong(num_obj);
+    Py_DECREF(num_obj);
+
+    if (PyErr_Occurred()) {
+        /* num wasn't an integer for some reason - unlikely to happen, but try
+         * the fallback. */
+        PyErr_Clear();
+        goto FALLBACK;
+    }
+
     dtype = dtype_num_to_typecode(dtype_num);
-    if (dtype == -1) goto FALLBACK;
+    if (dtype == -1) {
+        /* Not a dtype we have in the global lookup table. */
+        goto FALLBACK;
+    }
 
     /* Fast path, using direct table lookup */
     assert(layout < N_LAYOUT);
     assert(ndim <= N_NDIM);
+    assert(dtype < N_DTYPES);
     typecode = cached_arycode[ndim - 1][layout][dtype];
 
     if (typecode == -1) {
