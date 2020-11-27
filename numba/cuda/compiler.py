@@ -1068,9 +1068,8 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         :return: The number of registers used by the compiled variant of the
                  kernel for the given signature and current device.
         '''
-        cc = get_current_device().compute_capability
         if signature is not None:
-            return self.definitions[(cc, signature.args)].regs_per_thread
+            return self.definitions[signature.args].regs_per_thread
         if self.specialized:
             return self.definition.regs_per_thread
         else:

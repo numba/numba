@@ -246,14 +246,11 @@ class TestDispatcher(CUDATestCase):
 
         # Check that getting the registers per thread for all signatures
         # provides the same values as getting the registers per thread for
-        # individual signatures. Note that the returned dict is indexed by
-        # (cc, argtypes) pairs (in keeping with definitions, ptx, LLVM IR,
-        # etc.)
+        # individual signatures.
         regs_per_thread_all = pi_sin_array.get_regs_per_thread()
-        cc = cuda.current_context().device.compute_capability
-        self.assertEqual(regs_per_thread_all[cc, sig_f32.args],
+        self.assertEqual(regs_per_thread_all[sig_f32.args],
                          regs_per_thread_f32)
-        self.assertEqual(regs_per_thread_all[cc, sig_f64.args],
+        self.assertEqual(regs_per_thread_all[sig_f64.args],
                          regs_per_thread_f64)
 
         if regs_per_thread_f32 == regs_per_thread_f64:
