@@ -317,6 +317,15 @@ class TestCC(BasePYCCTest):
             self.assertPreciseEqual(res, hash("A"))
             res = lib.hash_str("A")
             self.assertPreciseEqual(res, hash("A"))
+            
+            code = """if 1:
+                from numpy.testing import assert_equal
+                res = lib.hash_literal_str_A()
+                assert_equal(res, hash("A"))
+                res = lib.hash_str("A")
+                assert_equal(res, hash("A"))
+                """
+            self.check_cc_compiled_in_subprocess(lib, code)
 
     def test_c_extension_usecase(self):
         # Test C-extensions
