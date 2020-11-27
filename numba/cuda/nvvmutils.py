@@ -60,7 +60,7 @@ def declare_atomic_inc_int32(lmod):
 
 
 def declare_atomic_inc_int64(lmod):
-    fname = '___numba_atomic_i64_inc'
+    fname = '___numba_atomic_u64_inc'
     fnty = lc.Type.function(lc.Type.int(64), (lc.Type.pointer(lc.Type.int(64)),
                                               lc.Type.int(64)))
     return lmod.get_or_insert_function(fnty, fname)
@@ -74,7 +74,7 @@ def declare_atomic_dec_int32(lmod):
 
 
 def declare_atomic_dec_int64(lmod):
-    fname = '___numba_atomic_i64_dec'
+    fname = '___numba_atomic_u64_dec'
     fnty = lc.Type.function(lc.Type.int(64), (lc.Type.pointer(lc.Type.int(64)),
                                               lc.Type.int(64)))
     return lmod.get_or_insert_function(fnty, fname)

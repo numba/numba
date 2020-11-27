@@ -630,14 +630,11 @@ def ptx_atomic_sub(context, builder, dtype, ptr, val):
 @lower(stubs.atomic.inc, types.Array, types.Tuple, types.Any)
 @_atomic_dispatcher
 def ptx_atomic_inc(context, builder, dtype, ptr, val):
-    if dtype == types.uint32:
+    if dtype in cuda.cudadecl.unsigned_int_numba_types:
+        bw = dtype.bitwidth
         lmod = builder.module
-        return builder.call(nvvmutils.declare_atomic_inc_int32(lmod),
-                            (ptr, val))
-    elif dtype == types.uint64:
-        lmod = builder.module
-        return builder.call(nvvmutils.declare_atomic_inc_int64(lmod),
-                            (ptr, val))
+        fn = getattr(nvvmutils, f'declare_atomic_inc_int{bw}')
+        return builder.call(fn(lmod), (ptr, val))
     else:
         raise TypeError(f'Unimplemented atomic inc with {dtype} array')
 
@@ -647,14 +644,11 @@ def ptx_atomic_inc(context, builder, dtype, ptr, val):
 @lower(stubs.atomic.dec, types.Array, types.Tuple, types.Any)
 @_atomic_dispatcher
 def ptx_atomic_dec(context, builder, dtype, ptr, val):
-    if dtype == types.uint32:
+    if dtype in cuda.cudadecl.unsigned_int_numba_types:
+        bw = dtype.bitwidth
         lmod = builder.module
-        return builder.call(nvvmutils.declare_atomic_dec_int32(lmod),
-                            (ptr, val))
-    elif dtype == types.uint64:
-        lmod = builder.module
-        return builder.call(nvvmutils.declare_atomic_dec_int64(lmod),
-                            (ptr, val))
+        fn = getattr(nvvmutils, f'declare_atomic_dec_int{bw}')
+        return builder.call(fn(lmod), (ptr, val))
     else:
         raise TypeError(f'Unimplemented atomic dec with {dtype} array')
 
