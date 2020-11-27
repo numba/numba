@@ -1131,6 +1131,10 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         compute_capability if given. If the dispatcher is specialized, the
         assembly code for the single specialization is returned.
         '''
+        if compute_capability is not None:
+            msg = 'The compute_capability kwarg is deprecated'
+            warn(msg, category=NumbaDeprecationWarning)
+
         cc = compute_capability or get_current_device().compute_capability
         if signature is not None:
             return self.overloads[signature].inspect_asm(cc)

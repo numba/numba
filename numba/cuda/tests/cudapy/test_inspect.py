@@ -145,6 +145,64 @@ class TestInspect(CUDATestCase):
 
         self.assertIn('nvdisasm is required', str(raises.exception))
 
+    def test_inspect_llvm_deprecations(self):
+        @cuda.jit((float32[::1],))
+        def f(x):
+            x[0] = 0
+
+        with self.assertWarns(NumbaDeprecationWarning) as warns:
+            f.inspect_llvm(compute_capability=self.cc)
+
+        self.assertEqual(len(warns.warnings), 2)
+
+        msg = 'compute_capability has no effect on the LLVM IR'
+        self.assertIn(msg, str(warns.warnings[0]))
+        msg = 'inspect_llvm will always return a dict in future'
+        self.assertIn(msg, str(warns.warnings[1]))
+
+    def test_inspect_asm_deprecations(self):
+        @cuda.jit((float32[::1],))
+        def f(x):
+            x[0] = 0
+
+        with self.assertWarns(NumbaDeprecationWarning) as warns:
+            f.inspect_asm(compute_capability=self.cc)
+
+        self.assertEqual(len(warns.warnings), 2)
+
+        msg = 'The compute_capability kwarg is deprecated'
+        self.assertIn(msg, str(warns.warnings[0]))
+        msg = 'inspect_asm will always return a dict in future'
+        self.assertIn(msg, str(warns.warnings[1]))
+
+    def test_inspect_sass_deprecations(self):
+        @cuda.jit((float32[::1],))
+        def f(x):
+            x[0] = 0
+
+        with self.assertWarns(NumbaDeprecationWarning) as warns:
+            f.inspect_sass(compute_capability=self.cc)
+
+        self.assertEqual(len(warns.warnings), 2)
+
+        msg = 'passing compute_capability has no effect on the SASS code'
+        self.assertIn(msg, str(warns.warnings[0]))
+        msg = 'inspect_sass will always return a dict in future'
+        self.assertIn(msg, str(warns.warnings[1]))
+
+    def test_ptx_deprecations(self):
+        @cuda.jit((float32[::1],))
+        def f(x):
+            x[0] = 0
+
+        with self.assertWarns(NumbaDeprecationWarning) as warns:
+            f.ptx
+
+        self.assertEqual(len(warns.warnings), 1)
+
+        msg = 'ptx will always return a dict in future'
+        self.assertIn(msg, str(warns.warnings[0]))
+
 
 if __name__ == '__main__':
     unittest.main()
