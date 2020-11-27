@@ -352,18 +352,18 @@ class List(MutableSequence, pt.Generic[T]):
     def __delitem__(self, i: pt.Union[int, slice]) -> None:
         _delitem(self, i)
 
-    def insert(self, i, item: T):
+    def insert(self, i: int, item: T) -> None:
         if not self._typed:
             self._initialise_list(item)
         _insert(self, i, item)
 
-    def count(self, item: T):
+    def count(self, item: T) -> int:
         return _count(self, item)
 
     def pop(self, i: int = -1) -> T:
         return _pop(self, i)
 
-    def extend(self, iterable):
+    def extend(self, iterable: pt.Iterable[T]) -> None:
         # Empty iterable, do nothing
         if len(iterable) == 0:
             return self
@@ -374,7 +374,7 @@ class List(MutableSequence, pt.Generic[T]):
             self._initialise_list(iterable[0])
         return _extend(self, iterable)
 
-    def remove(self, item: T):
+    def remove(self, item: T) -> None:
         return _remove(self, item)
 
     def clear(self):
@@ -386,7 +386,7 @@ class List(MutableSequence, pt.Generic[T]):
     def copy(self):
         return _copy(self)
 
-    def index(self, item: T, start: int = None, stop: int = None):
+    def index(self, item: T, start: int = None, stop: int = None) -> int:
         return _index(self, item, start, stop)
 
     def sort(self, key=None, reverse=False):
