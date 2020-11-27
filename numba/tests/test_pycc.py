@@ -311,6 +311,13 @@ class TestCC(BasePYCCTest):
                 """ % dict(has_blas=has_blas)
             self.check_cc_compiled_in_subprocess(lib, code)
 
+    def test_hashing(self):
+        with self.check_cc_compiled(self._test_module.cc_nrt) as lib:
+            res = lib.hash_literal_str_A()
+            self.assertPreciseEqual(res, hash("A"))
+            res = lib.hash_str("A")
+            self.assertPreciseEqual(res, hash("A"))
+
     def test_c_extension_usecase(self):
         # Test C-extensions
         with self.check_cc_compiled(self._test_module.cc_nrt) as lib:

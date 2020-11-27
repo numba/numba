@@ -116,6 +116,10 @@ PYCC(pycc_init_) (PyObject *module, PyMethodDef *defs,
                                     env_def_t *envs,
                                     env_gv_t *envgvs)
 {
+    /* Aligns hashsecret with values in current python process so that
+     * hashes computed inside pycc module are the same as in the importing
+     * python process.
+     */
     _numba_hashsecret_siphash_k0 = _Py_HashSecret.siphash.k0;
     _numba_hashsecret_siphash_k1 = _Py_HashSecret.siphash.k1;
     _numba_hashsecret_djbx33a_suffix = _Py_HashSecret.djbx33a.suffix;
