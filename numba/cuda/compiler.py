@@ -992,7 +992,10 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
             return typeof(val, Purpose.argument)
         except ValueError:
             if numba.cuda.is_cuda_array(val):
-                return typeof(numba.cuda.as_cuda_array(val), Purpose.argument)
+                # When typing, we don't need to synchronize on the array's
+                # stream - this is done when the kernel is launched.
+                return typeof(numba.cuda.as_cuda_array(val, sync=False),
+                              Purpose.argument)
             else:
                 raise
 
