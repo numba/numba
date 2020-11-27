@@ -350,10 +350,10 @@ def get_ext_modules():
                                 depends=['numba/_pymodule.h'],
                                 include_dirs=["numba"])
 
-    ext_modules = [ext_devicearray, ext_dynfunc, ext_dispatcher, ext_helperlib,
+    ext_modules = [ext_dynfunc, ext_dispatcher, ext_helperlib,
                    ext_typeconv, ext_np_ufunc, ext_npyufunc_num_threads,
                    ext_mviewbuf, ext_nrt_python, ext_jitclass_box,
-                   ext_cuda_extras]
+                   ext_cuda_extras, ext_devicearray]
 
     ext_modules += ext_np_ufunc_backends
 
