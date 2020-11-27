@@ -20,7 +20,6 @@ from numba import mviewbuf
 from numba.core import utils, config
 from .error import HsaSupportError, HsaDriverError, HsaApiError
 from numba.roc.hsadrv import enums, enums_ext, drvapi
-from numba.core.utils import longint as long
 import numpy as np
 
 
@@ -1456,7 +1455,7 @@ def host_pointer(obj):
     it should not be changed until the operation which can be asynchronous
     completes.
     """
-    if isinstance(obj, (int, long)):
+    if isinstance(obj, int):
         return obj
 
     forcewritable = isinstance(obj, np.void)

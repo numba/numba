@@ -163,6 +163,13 @@ system level libraries, some additional things to note:
   program that is using the ``omp`` threading layer, a detection mechanism is
   present that will try and gracefully terminate the forked child and print an
   error message to ``STDERR``.
+* On systems with the ``fork(2)`` system call available, if the TBB backed
+  threading layer is in use and a ``fork`` call is made from a thread other than
+  the thread that launched TBB (typically the main thread) then this results in
+  undefined behaviour and a warning will be displayed on ``STDERR``. As
+  ``spawn`` is essentially ``fork`` followed by ``exec`` it is safe to ``spawn``
+  from a non-main thread, but as this cannot be differentiated from just a
+  ``fork`` call the warning message will still be displayed.
 * On OSX, the ``intel-openmp`` package is required to enable the OpenMP based
   threading layer.
 

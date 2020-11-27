@@ -7,6 +7,7 @@ import math
 from collections import namedtuple
 from enum import IntEnum
 from functools import partial
+import operator
 
 import numpy as np
 
@@ -1106,6 +1107,7 @@ def _early_return(val):
     return impl
 
 
+@overload_method(types.Array, 'ptp')
 @overload(np.ptp)
 def np_ptp(a):
 
@@ -3303,6 +3305,20 @@ def np_imag(a):
 #----------------------------------------------------------------------------
 # Misc functions
 
+@overload(operator.contains)
+def np_contains(arr, key):
+    if not isinstance(arr, types.Array):
+        return
+
+    def np_contains_impl(arr, key):
+        for x in np.nditer(arr):
+            if x == key:
+                return True
+        return False
+
+    return np_contains_impl
+
+
 @overload(np.count_nonzero)
 def np_count_nonzero(arr, axis=None):
     if not type_can_asarray(arr):
@@ -4061,7 +4077,27 @@ def np_asarray(a, dtype=None):
             for i, v in enumerate(a):
                 ret[i] = v
             return ret
+    elif isinstance(a, types.StringLiteral):
+        arr = np.asarray(a.literal_value)
 
+        def impl(a, dtype=None):
+            return arr.copy()
+
+    return impl
+
+
+@overload(np.asfarray)
+def np_asfarray(a, dtype=np.float64):
+    # convert numba dtype types into NumPy dtype
+    if isinstance(dtype, types.Type):
+        dtype = as_dtype(dtype)
+    if not np.issubdtype(dtype, np.inexact):
+        dx = types.float64
+    else:
+        dx = dtype
+
+    def impl(a, dtype=np.float64):
+        return np.asarray(a, dx)
     return impl
 
 
@@ -4140,6 +4176,31 @@ def np_select(condlist, choicelist, default=0):
         raise TypeError('condlist arrays must be of at least dimension 1')
 
     return np_select_arr_impl
+
+
+@overload(np.asarray_chkfinite)
+def np_asarray_chkfinite(a, dtype=None):
+
+    msg = "The argument to np.asarray_chkfinite must be array-like"
+    if not isinstance(a, (types.Array, types.Sequence, types.Tuple)):
+        raise TypingError(msg)
+
+    if is_nonelike(dtype):
+        dt = a.dtype
+    else:
+        try:
+            dt = as_dtype(dtype)
+        except NotImplementedError:
+            raise TypingError('dtype must be a valid Numpy dtype')
+
+    def impl(a, dtype=None):
+        a = np.asarray(a, dtype=dt)
+        for i in np.nditer(a):
+            if not np.isfinite(i):
+                raise ValueError("array must not contain infs or NaNs")
+        return a
+
+    return impl
 
 #----------------------------------------------------------------------------
 # Windowing functions
@@ -4376,7 +4437,7 @@ def np_cross(a, b):
             raise ValueError((
                 "Dimensions for both inputs is 2.\n"
                 "Please replace your numpy.cross(a, b) call with "
-                "numba.numpy_extensions.cross2d(a, b)."
+                "a call to `cross2d(a, b)` from `numba.np.extensions`."
             ))
     return impl
 

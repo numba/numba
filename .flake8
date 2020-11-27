@@ -22,7 +22,6 @@ exclude =
     __init__.py
     # Grandfather in existing failing files.  This list should shrink over time
     numba/core/dispatcher.py
-    numba/core/serialize.py
     numba/core/funcdesc.py
     numba/core/postproc.py
     numba/stencils/stencil.py
@@ -47,7 +46,6 @@ exclude =
     numba/core/annotations/pretty_annotate.py
     numba/misc/dummyarray.py
     numba/core/dataflow.py
-    numba/runtests.py
     numba/core/pythonapi.py
     numba/core/decorators.py
     numba/core/typeconv/typeconv.py
@@ -58,9 +56,7 @@ exclude =
     numba/core/rewrites/static_binop.py
     numba/core/rewrites/ir_print.py
     numba/core/types/abstract.py
-    numba/core/types/functions.py
     numba/core/types/misc.py
-    numba/core/types/containers.py
     numba/core/types/npytypes.py
     numba/core/types/common.py
     numba/core/types/iterators.py
@@ -95,93 +91,6 @@ exclude =
     numba/misc/mergesort.py
     numba/core/base.py
     numba/np/npdatetime.py
-    numba/cuda/dispatcher.py
-    numba/cuda/printimpl.py
-    numba/cuda/libdevice.py
-    numba/cuda/device_init.py
-    numba/cuda/initialize.py
-    numba/cuda/simulator_init.py
-    numba/cuda/random.py
-    numba/cuda/api.py
-    numba/cuda/stubs.py
-    numba/cuda/target.py
-    numba/cuda/cudamath.py
-    numba/cuda/nvvmutils.py
-    numba/cuda/cudadecl.py
-    numba/cuda/codegen.py
-    numba/cuda/decorators.py
-    numba/cuda/kernels/transpose.py
-    numba/cuda/tests/cudasim/test_cudasim_issues.py
-    numba/cuda/tests/cudapy/test_deprecation.py
-    numba/cuda/tests/cudapy/test_ipc.py
-    numba/cuda/tests/cudapy/test_vectorize.py
-    numba/cuda/tests/cudapy/test_smart_array.py
-    numba/cuda/tests/cudapy/test_atomics.py
-    numba/cuda/tests/cudapy/test_py2_div_issue.py
-    numba/cuda/tests/cudapy/test_freevar.py
-    numba/cuda/tests/cudapy/test_const_string.py
-    numba/cuda/tests/cudapy/test_print.py
-    numba/cuda/tests/cudapy/test_laplace.py
-    numba/cuda/tests/cudapy/test_powi.py
-    numba/cuda/tests/cudapy/test_nondet.py
-    numba/cuda/tests/cudapy/test_sync.py
-    numba/cuda/tests/cudapy/test_lang.py
-    numba/cuda/tests/cudapy/test_multithreads.py
-    numba/cuda/tests/cudapy/test_errors.py
-    numba/cuda/tests/cudapy/test_autojit.py
-    numba/cuda/tests/cudapy/test_slicing.py
-    numba/cuda/tests/cudapy/test_montecarlo.py
-    numba/cuda/tests/cudapy/test_array.py
-    numba/cuda/tests/cudapy/test_sm.py
-    numba/cuda/tests/cudapy/test_intrinsics.py
-    numba/cuda/tests/cudapy/test_mandel.py
-    numba/cuda/tests/cudapy/test_idiv.py
-    numba/cuda/tests/cudapy/test_constmem.py
-    numba/cuda/tests/cudapy/test_alignment.py
-    numba/cuda/tests/cudapy/test_vectorize_scalar_arg.py
-    numba/cuda/tests/cudapy/test_multigpu.py
-    numba/cuda/tests/cudapy/test_complex_kernel.py
-    numba/cuda/tests/cudapy/test_casting.py
-    numba/cuda/tests/cudapy/test_blackscholes.py
-    numba/cuda/tests/cudapy/test_exception.py
-    numba/cuda/tests/cudapy/test_fastmath.py
-    numba/cuda/tests/cudapy/test_userexc.py
-    numba/cuda/tests/cudapy/test_cuda_autojit.py
-    numba/cuda/tests/cudapy/test_warp_ops.py
-    numba/cuda/tests/cudapy/test_complex.py
-    numba/cuda/tests/cudapy/test_array_args.py
-    numba/cuda/tests/cudapy/test_math.py
-    numba/cuda/tests/cudapy/test_record_dtype.py
-    numba/cuda/tests/cudapy/test_gufunc.py
-    numba/cuda/tests/cudapy/test_random.py
-    numba/cuda/tests/cudadrv/test_reset_device.py
-    numba/cuda/tests/cudadrv/test_linker.py
-    numba/cuda/tests/cudadrv/test_cuda_driver.py
-    numba/cuda/tests/cudadrv/test_cuda_ndarray.py
-    numba/cuda/tests/cudadrv/test_inline_ptx.py
-    numba/cuda/tests/cudadrv/test_profiler.py
-    numba/cuda/tests/cudadrv/test_deallocations.py
-    numba/cuda/tests/cudadrv/test_cuda_devicerecord.py
-    numba/cuda/tests/cudadrv/test_nvvm_driver.py
-    numba/cuda/tests/cudadrv/test_pinned.py
-    numba/cuda/tests/cudadrv/test_cuda_auto_context.py
-    numba/cuda/tests/cudadrv/test_select_device.py
-    numba/cuda/tests/cudadrv/test_events.py
-    numba/cuda/tests/cudadrv/test_cuda_memory.py
-    numba/cuda/simulator/kernel.py
-    numba/cuda/simulator/reduction.py
-    numba/cuda/simulator/api.py
-    numba/cuda/simulator/kernelapi.py
-    numba/cuda/simulator/cudadrv/nvvm.py
-    numba/cuda/simulator/cudadrv/driver.py
-    numba/cuda/simulator/cudadrv/devices.py
-    numba/cuda/simulator/cudadrv/devicearray.py
-    numba/cuda/cudadrv/enums.py
-    numba/cuda/cudadrv/nvvm.py
-    numba/cuda/cudadrv/drvapi.py
-    numba/cuda/cudadrv/driver.py
-    numba/cuda/cudadrv/autotune.py
-    numba/cuda/cudadrv/devicearray.py
     numba/pycc/cc.py
     numba/pycc/compiler.py
     numba/pycc/llvm_types.py
@@ -223,7 +132,6 @@ exclude =
     numba/tests/test_wrapper.py
     numba/tests/test_obj_lifetime.py
     numba/tests/test_intwidth.py
-    numba/tests/test_extending.py
     numba/tests/test_remove_dead.py
     numba/tests/serialize_usecases.py
     numba/tests/test_del.py
@@ -263,7 +171,6 @@ exclude =
     numba/tests/test_extended_arg.py
     numba/tests/test_alignment.py
     numba/tests/test_multi3.py
-    numba/tests/test_import.py
     numba/tests/test_overlap.py
     numba/tests/test_array_attr.py
     numba/tests/test_array_methods.py
@@ -331,7 +238,6 @@ exclude =
     numba/core/typing/ctypes_utils.py
     numba/core/typing/enumdecl.py
     numba/core/typing/cffi_utils.py
-    numba/core/typing/typeof.py
     numba/core/typing/npdatetime.py
     numba/core/annotations/type_annotations.py
     numba/roc/mathdecl.py
@@ -385,3 +291,19 @@ exclude =
     numba/core/datamodel/packer.py
     numba/core/datamodel/testing.py
     numba/core/datamodel/manager.py
+
+per-file-ignores =
+    # Ignore star imports, unused imports, and "may be defined by star imports"
+    # errors in device_init because its purpose is to bring together a lot of
+    # the public API to be star-imported in numba.cuda.__init__
+    numba/cuda/device_init.py:F401,F403,F405
+    # libdevice.py is an autogenerated file containing stubs for all the device
+    # functions. Some of the lines in docstrings are a little over-long, as they
+    # contain the URLs of the reference pages in the online libdevice
+    # documentation.
+    numba/cuda/libdevice.py:E501
+    # Ignore too-long lines in the CUDA doc examples, prioritising readability
+    # in the docs over line length in the example source (especially given that
+    # the test code is already indented by 8 spaces)
+    numba/cuda/tests/doc_examples/test_random.py:E501
+    numba/cuda/tests/doc_examples/test_cg.py:E501

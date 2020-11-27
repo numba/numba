@@ -2,6 +2,7 @@ import contextlib
 import sys
 import numpy as np
 import random
+import re
 import threading
 import gc
 
@@ -613,6 +614,33 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
             return pyfunc(n, _dtype)
         self.check_1d(func)
 
+    def test_1d_dtype_str(self):
+        pyfunc = self.pyfunc
+        _dtype = 'int32'
+        def func(n):
+            return pyfunc(n, _dtype)
+        self.check_1d(func)
+
+        def func(n):
+            return pyfunc(n, 'complex128')
+        self.check_1d(func)
+
+    def test_1d_dtype_non_const_str(self):
+        pyfunc = self.pyfunc
+
+        @njit
+        def func(n, dt):
+            return pyfunc(n, dt)
+
+        with self.assertRaises(TypingError) as raises:
+            func(5, 'int32')
+
+        excstr = str(raises.exception)
+        self.assertIn('No match', excstr)
+        restr = r'\b{}\(int.*?, unicode_type\)\B'
+        regex = re.compile(restr.format(pyfunc.__name__))
+        self.assertRegex(excstr, regex)
+
     def test_2d(self):
         pyfunc = self.pyfunc
         def func(m, n):
@@ -639,6 +667,12 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
         pyfunc = self.pyfunc
         def func(m, n):
             return pyfunc((m, n), dtype=np.complex64)
+        self.check_2d(func)
+
+    def test_2d_dtype_str_kwarg(self):
+        pyfunc = self.pyfunc
+        def func(m, n):
+            return pyfunc((m, n), dtype='complex64')
         self.check_2d(func)
 
     def test_alloc_size(self):
@@ -683,6 +717,26 @@ class TestNdFull(ConstructorBaseTest, TestCase):
         def func(n):
             return np.full(n, 4.5, dtype)
         self.check_1d(func)
+
+    def test_1d_dtype_str(self):
+        def func(n):
+            return np.full(n, 4.5, 'bool_')
+        self.check_1d(func)
+
+    def test_1d_dtype_non_const_str(self):
+
+        @njit
+        def func(n, fv, dt):
+            return np.full(n, fv, dt)
+
+        with self.assertRaises(TypingError) as raises:
+            func((5,), 4.5, 'int32')
+
+        excstr = str(raises.exception)
+        self.assertIn('No match', excstr)
+        restr = r'\bfull\(UniTuple\(int.*? x 1\), float64, unicode_type\)\B'
+        regex = re.compile(restr)
+        self.assertRegex(excstr, regex)
 
     def test_2d(self):
         def func(m, n):
@@ -828,6 +882,35 @@ class TestNdEmptyLike(ConstructorLikeBaseTest, TestCase):
             return pyfunc(arr, dtype=np.int32)
         self.check_like(func, np.float64)
 
+    def test_like_dtype_str_kwarg(self):
+        pyfunc = self.pyfunc
+        def func(arr):
+            return pyfunc(arr, dtype='int32')
+        self.check_like(func, np.float64)
+
+    def test_like_dtype_str_kwarg(self):
+        pyfunc = self.pyfunc
+        def func(arr):
+            return pyfunc(arr, dtype='int32')
+        self.check_like(func, np.float64)
+
+    def test_like_dtype_non_const_str(self):
+        pyfunc = self.pyfunc
+
+        @njit
+        def func(n, dt):
+            return pyfunc(n, dt)
+
+        with self.assertRaises(TypingError) as raises:
+            func(np.ones(4), 'int32')
+
+        excstr = str(raises.exception)
+
+        self.assertIn('No match', excstr)
+        self.assertIn(
+            '{}(array(float64, 1d, C), unicode_type)'.format(pyfunc.__name__),
+            excstr)
+
 
 class TestNdZerosLike(TestNdEmptyLike):
 
@@ -897,6 +980,25 @@ class TestNdFullLike(ConstructorLikeBaseTest, TestCase):
             return np.full_like(arr, 4.5, dtype=np.bool_)
         self.check_like(func, np.float64)
 
+    def test_like_dtype_str_kwarg(self):
+        def func(arr):
+            return np.full_like(arr, 4.5, 'bool_')
+        self.check_like(func, np.float64)
+
+    def test_like_dtype_non_const_str_kwarg(self):
+
+        @njit
+        def func(arr, fv, dt):
+            return np.full_like(arr, fv, dt)
+
+        with self.assertRaises(TypingError) as raises:
+            func(np.ones(3,), 4.5, 'int32')
+
+        excstr = str(raises.exception)
+        self.assertIn('No match', excstr)
+        self.assertIn('full_like(array(float64, 1d, C), float64, unicode_type)',
+                      excstr)
+
 
 class TestNdIdentity(BaseTest):
 
@@ -909,10 +1011,25 @@ class TestNdIdentity(BaseTest):
         self.check_identity(func)
 
     def test_identity_dtype(self):
-        for dtype in (np.complex64, np.int16, np.bool_, np.dtype('bool')):
+        for dtype in (np.complex64, np.int16, np.bool_, np.dtype('bool'),
+                      'bool_'):
             def func(n):
                 return np.identity(n, dtype)
             self.check_identity(func)
+
+    def test_like_dtype_non_const_str_kwarg(self):
+
+        @njit
+        def func(n, dt):
+            return np.identity(n, dt)
+
+        with self.assertRaises(TypingError) as raises:
+            func(4, 'int32')
+
+        excstr = str(raises.exception)
+        self.assertIn('No match', excstr)
+        regex = re.compile(r'\bidentity\(int.*?, unicode_type\)\B')
+        self.assertRegex(excstr, regex)
 
 
 class TestNdEye(BaseTest):
@@ -1136,6 +1253,32 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
                             ((),),
                             ])
 
+    def test_1d_with_str_dtype(self):
+        def pyfunc(arg):
+            return np.array(arg, dtype='float32')
+
+        self.check_outputs(pyfunc,
+                           [([2, 42],),
+                            ([3.5, 1.0],),
+                            ((1, 3.5, 42),),
+                            ((),),
+                            ])
+
+    def test_1d_with_non_const_str_dtype(self):
+
+        @njit
+        def func(arg, dt):
+            return np.array(arg, dtype=dt)
+
+        with self.assertRaises(TypingError) as raises:
+            func((5, 3), 'int32')
+
+        excstr = str(raises.exception)
+        self.assertIn('No match', excstr)
+        restr = r'\barray\(UniTuple\(int.*? x 2\), dtype=unicode_type\)\B'
+        regex = re.compile(restr)
+        self.assertRegex(excstr, regex)
+
     def test_2d(self):
         def pyfunc(arg):
             return np.array(arg)
@@ -1182,8 +1325,8 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
                            'homogeneous sequence')):
             cfunc(np.array([1.]))
 
-        with check_raises(('type Tuple(int64, reflected list(int64)) does '
-                          'not have a regular shape')):
+        with check_raises(('type Tuple(int64, reflected list(int64)<iv=None>) '
+                          'does not have a regular shape')):
             cfunc((np.int64(1), [np.int64(2)]))
 
         with check_raises(
