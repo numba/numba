@@ -162,32 +162,30 @@ class TestDispatcher(CUDATestCase):
     def test_ambiguous_new_version(self):
         """Test compiling new version in an ambiguous case
         """
-        @cuda.jit
-        def foo(r, a, b):
-            r[0] = a + b
+        c_add = cuda.jit(add_kernel)
 
         r = np.zeros(1, dtype=np.float64)
         INT = 1
         FLT = 1.5
 
-        foo[1, 1](r, INT, FLT)
+        c_add[1, 1](r, INT, FLT)
         self.assertAlmostEqual(r[0], INT + FLT)
-        self.assertEqual(len(foo.overloads), 1)
+        self.assertEqual(len(c_add.overloads), 1)
 
-        foo[1, 1](r, FLT, INT)
+        c_add[1, 1](r, FLT, INT)
         self.assertAlmostEqual(r[0], FLT + INT)
-        self.assertEqual(len(foo.overloads), 2)
+        self.assertEqual(len(c_add.overloads), 2)
 
-        foo[1, 1](r, FLT, FLT)
+        c_add[1, 1](r, FLT, FLT)
         self.assertAlmostEqual(r[0], FLT + FLT)
-        self.assertEqual(len(foo.overloads), 3)
+        self.assertEqual(len(c_add.overloads), 3)
 
         # The following call is ambiguous because (int, int) can resolve
         # to (float, int) or (int, float) with equal weight.
-        foo[1, 1](r, 1, 1)
+        c_add[1, 1](r, 1, 1)
         self.assertAlmostEqual(r[0], INT + INT)
-        self.assertEqual(len(foo.overloads), 4, "didn't compile a new "
-                                                "version")
+        self.assertEqual(len(c_add.overloads), 4, "didn't compile a new "
+                                                  "version")
 
     def test_lock(self):
         """
