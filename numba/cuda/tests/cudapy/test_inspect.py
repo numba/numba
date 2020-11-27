@@ -2,6 +2,7 @@ import numpy as np
 
 from io import StringIO
 from numba import cuda, float32, float64, int32, intp
+from numba.core.errors import NumbaDeprecationWarning
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import (skip_on_cudasim, skip_with_nvdisasm,
                                 skip_without_nvdisasm)
@@ -62,16 +63,36 @@ class TestInspect(CUDATestCase):
         self.assertIn("foo", llvmirs[intp, intp])
         self.assertIn("foo", llvmirs[float64, float64])
 
+        # Function name in LLVM using deprecated (cc, argtypes) pair for lookup
+        with self.assertWarns(NumbaDeprecationWarning) as warns:
+            self.assertIn("foo", llvmirs[self.cc, (intp, intp)])
+            self.assertIn("foo", llvmirs[self.cc, (float64, float64)])
+
+        self.assertEqual(len(warns.warnings), 2)
+        argtypes_only = "dicts returned by inspect functions should be keyed " \
+                        "on argument types only"
+        self.assertIn(argtypes_only, str(warns.warnings[0].message))
+        self.assertIn(argtypes_only, str(warns.warnings[1].message))
+
         asmdict = foo.inspect_asm()
 
-        # Signature in LLVM dict
+        # Signature in assembly dict
         self.assertEqual(2, len(asmdict), )
         self.assertIn((intp, intp), asmdict)
         self.assertIn((float64, float64), asmdict)
 
-        # NNVM inserted in PTX
+        # NVVM inserted in PTX
         self.assertIn("foo", asmdict[intp, intp])
         self.assertIn("foo", asmdict[float64, float64])
+
+        # NVVM inserted in PTX using deprecated (cc, argtypes) pair for lookup
+        with self.assertWarns(NumbaDeprecationWarning) as warns:
+            self.assertIn("foo", asmdict[self.cc, (intp, intp)])
+            self.assertIn("foo", asmdict[self.cc, (float64, float64)])
+
+        self.assertEqual(len(warns.warnings), 2)
+        self.assertIn(argtypes_only, str(warns.warnings[0].message))
+        self.assertIn(argtypes_only, str(warns.warnings[1].message))
 
     def _test_inspect_sass(self, kernel, name, sass):
         # Ensure function appears in output

@@ -825,6 +825,16 @@ class _KernelConfiguration:
                                     self.stream, self.sharedmem)
 
 
+class StopUsingCCDict(dict):
+    def __getitem__(self, key):
+        if len(key) > 1 and isinstance(key[0], tuple):
+            msg = "dicts returned by inspect functions should be keyed on " \
+                  "argument types only"
+            warn(msg, category=NumbaDeprecationWarning)
+            return super().__getitem__(key[1])
+        return super().__getitem__(key)
+
+
 class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
     '''
     CUDA Dispatcher object. When configured and called, the dispatcher will
@@ -1111,8 +1121,8 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
                  category=NumbaDeprecationWarning)
             return next(iter(self.overloads.values())).inspect_llvm()
         else:
-            return dict((sig, defn.inspect_llvm())
-                        for sig, defn in self.overloads.items())
+            return StopUsingCCDict((sig, defn.inspect_llvm())
+                                   for sig, defn in self.overloads.items())
 
     def inspect_asm(self, signature=None, compute_capability=None):
         '''
@@ -1129,8 +1139,8 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
                  category=NumbaDeprecationWarning)
             return next(iter(self.overloads.values())).inspect_asm(cc)
         else:
-            return dict((sig, defn.inspect_asm(cc))
-                        for sig, defn in self.overloads.items())
+            return StopUsingCCDict((sig, defn.inspect_asm(cc))
+                                   for sig, defn in self.overloads.items())
 
     def inspect_sass(self, signature=None, compute_capability=None):
         '''
@@ -1152,8 +1162,8 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
                  category=NumbaDeprecationWarning)
             return next(iter(self.overloads.values())).inspect_sass()
         else:
-            return dict((sig, defn.inspect_sass())
-                        for sig, defn in self.overloads.items())
+            return StopUsingCCDict((sig, defn.inspect_sass())
+                                   for sig, defn in self.overloads.items())
 
     def inspect_types(self, file=None):
         '''
@@ -1174,8 +1184,8 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
                  category=NumbaDeprecationWarning)
             return next(iter(self.overloads.values())).ptx
         else:
-            return dict((sig, defn.ptx)
-                        for sig, defn in self.overloads.items())
+            return StopUsingCCDict((sig, defn.ptx)
+                                   for sig, defn in self.overloads.items())
 
     def bind(self):
         for defn in self.overloads.values():
