@@ -331,9 +331,9 @@ class List(MutableSequence, pt.Generic[T]):
             self._initialise_list(item)
         _setitem(self, i, item)
 
-    @overload
+    @pt.overload
     def __getitem__(self, i: int) -> T: ...
-    @overload
+    @pt.overload
     def __getitem__(self, i: slice) -> 'List':...
 
     def __getitem__(self, i: pt.Union[int, slice]) -> pt.Union[T, 'List']:
