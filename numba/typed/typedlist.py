@@ -28,6 +28,8 @@ from numba.core.errors import TypingError, LoweringError
 from numba.core.typing.templates import Signature
 import typing as pt
 
+Int_or_Slice = pt.Union[int, slice]
+
 DEFAULT_ALLOCATED = listobject.DEFAULT_ALLOCATED
 
 
@@ -172,7 +174,7 @@ def _from_meminfo_ptr(ptr, listtype):
 
 
 T = pt.TypeVar('T')
-
+T_or_ListT = pt.Union[T, 'List[T]']
 
 class List(MutableSequence, pt.Generic[T]):
     """A typed-list usable in Numba compiled functions.
@@ -326,7 +328,14 @@ class List(MutableSequence, pt.Generic[T]):
             self._initialise_list(item)
         _append(self, item)
 
-    def __setitem__(self, i, item: T) -> None:
+    # noqa F811 comments required due to github.com/PyCQA/pyflakes/issues/592
+    # noqa E704 required to follow overload style of using ... in the same line
+    @pt.overload # type: ignore[override]
+    def __setitem__(self, i: int, o: T) -> None: ...  # noqa: F811, E704
+    @pt.overload
+    def __setitem__(self, s: slice, o: 'List[T]') -> None: ...  # noqa: F811, E704, E501
+
+    def __setitem__(self, i: Int_or_Slice, item: T_or_ListT) -> None:  # noqa: F811, E501
         if not self._typed:
             self._initialise_list(item)
         _setitem(self, i, item)
@@ -334,12 +343,11 @@ class List(MutableSequence, pt.Generic[T]):
     # noqa F811 comments required due to github.com/PyCQA/pyflakes/issues/592
     # noqa E704 required to follow overload style of using ... in the same line
     @pt.overload
-    def __getitem__(self, i: int) -> T: ... # noqa: F811, E704
+    def __getitem__(self, i: int) -> T: ...  # noqa: F811, E704
     @pt.overload
-    def __getitem__(self, i: slice) -> 'List': ... # noqa: F811, E704
+    def __getitem__(self, i: slice) -> 'List[T]': ...  # noqa: F811, E704
 
-    def __getitem__(self, i: pt.Union[int, slice] # noqa: F811
-                    ) -> pt.Union[T, 'List']:
+    def __getitem__(self, i: Int_or_Slice) -> T_or_ListT:  # noqa: F811
         if not self._typed:
             raise IndexError
         else:
@@ -349,7 +357,7 @@ class List(MutableSequence, pt.Generic[T]):
         for i in range(len(self)):
             yield self[i]
 
-    def __contains__(self, item: T) -> bool:
+    def __contains__(self, item: T) -> bool:  # type: ignore[override]
         return _contains(self, item)
 
     def __delitem__(self, i: pt.Union[int, slice]) -> None:
@@ -366,7 +374,7 @@ class List(MutableSequence, pt.Generic[T]):
     def pop(self, i: int = -1) -> T:
         return _pop(self, i)
 
-    def extend(self, iterable: pt.Iterable[T]) -> None:
+    def extend(self, iterable: pt.Sequence[T]) -> None: #type: ignore[override]
         # Empty iterable, do nothing
         if len(iterable) == 0:
             return self
