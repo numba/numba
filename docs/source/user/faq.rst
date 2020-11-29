@@ -264,6 +264,13 @@ value, for example::
    import locale
    locale.setlocale(locale.LC_NUMERIC, 'C')
 
+How do I get Numba development builds?
+--------------------------------------
+
+Pre-release versions of Numba can be installed with conda::
+
+    $ conda install -c numba/label/dev numba
+
 
 Miscellaneous
 =============
@@ -285,7 +292,37 @@ LLVM-based Python JIT compiler.
 you don't have access to the ACM site but would like to read the paper.
 
 Other related papers
---------------------
+~~~~~~~~~~~~~~~~~~~~
 A paper describing ParallelAccelerator technology, that is activated when the
 ``parallel=True`` jit option is used, can be found `here
 <http://drops.dagstuhl.de/opus/volltexte/2017/7269/pdf/LIPIcs-ECOOP-2017-4.pdf>`_.
+
+How do I write a minimal working reproducer for a problem with Numba?
+---------------------------------------------------------------------
+
+A minimal working reproducer for Numba should include:
+
+1. The source code of the function(s) that reproduce the problem.
+2. Some example data and a demonstration of calling the reproducing code with
+   that data. As Numba compiles based on type information, unless your problem
+   is numerical, it's fine to just provide dummy data of the right type, e.g.
+   use ``numpy.ones`` of the correct ``dtype``/size/shape for arrays.
+3. Ideally put 1. and 2. into a script with all the correct imports. Make sure
+   your script actually executes and reproduces the problem before submitting
+   it! The target is to make it so that the script can just be copied directly
+   from the `issue tracker <https://github.com/numba/numba/issues>`_ and run by
+   someone else such that they can see the same problem as you are having.
+
+Having made a reproducer, now remove every part of the code that does not
+contribute directly to reproducing the problem to create a "minimal" reproducer.
+This means removing imports that aren't used, removing variables that aren't
+used or have no effect, removing lines of code which have no effect, reducing
+the complexity of expressions, and shrinking input data to the minimal amount
+required to trigger the problem.
+
+Doing the above really helps out the Numba issue triage process and will enable
+a faster response to your problem!
+
+`Suggested further reading
+<http://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports>`_ on
+writing minimal working reproducers.

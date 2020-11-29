@@ -12,7 +12,7 @@ from numba.core import types, cgutils
 from .cudadrv import nvvm
 from numba import cuda
 from numba.cuda import nvvmutils, stubs
-from numba.cuda.types import dim3
+from numba.cuda.types import dim3, grid_group
 
 
 registry = Registry()
@@ -71,6 +71,26 @@ def dim3_y(context, builder, sig, args):
 def dim3_z(context, builder, sig, args):
     return builder.extract_value(args, 2)
 
+
+@lower(cuda.cg.this_grid)
+def cg_this_grid(context, builder, sig, args):
+    one = context.get_constant(types.int32, 1)
+    lmod = builder.module
+    return builder.call(
+        nvvmutils.declare_cudaCGGetIntrinsicHandle(lmod),
+        (one,))
+
+
+@lower('GridGroup.sync', grid_group)
+def ptx_sync_group(context, builder, sig, args):
+    flags = context.get_constant(types.int32, 0)
+    lmod = builder.module
+    return builder.call(
+        nvvmutils.declare_cudaCGSynchronize(lmod),
+        (*args, flags))
+
+
+# -----------------------------------------------------------------------------
 
 @lower(cuda.grid, types.int32)
 def cuda_grid(context, builder, sig, args):
@@ -603,6 +623,23 @@ def ptx_atomic_sub(context, builder, dtype, ptr, val):
                             (ptr, val))
     else:
         return builder.atomic_rmw('sub', ptr, val, 'monotonic')
+
+
+def ptx_atomic_bitwise(stub, op):
+    @_atomic_dispatcher
+    def impl_ptx_atomic(context, builder, dtype, ptr, val):
+        if dtype in (cuda.cudadecl.integer_numba_types):
+            return builder.atomic_rmw(op, ptr, val, 'monotonic')
+        else:
+            raise TypeError(f'Unimplemented atomic {op} with {dtype} array')
+
+    for ty in (types.intp, types.UniTuple, types.Tuple):
+        lower(stub, types.Array, ty, types.Any)(impl_ptx_atomic)
+
+
+ptx_atomic_bitwise(stubs.atomic.and_, 'and')
+ptx_atomic_bitwise(stubs.atomic.or_, 'or')
+ptx_atomic_bitwise(stubs.atomic.xor, 'xor')
 
 
 @lower(stubs.atomic.max, types.Array, types.intp, types.Any)

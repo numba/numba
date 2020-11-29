@@ -2,6 +2,10 @@ from numba.cuda.compiler import compile_kernel
 from numba.cuda.cudadrv import nvvm
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
 from numba.core import types, utils
+
+from llvmlite import ir
+from llvmlite import binding as llvm
+
 import unittest
 
 
@@ -57,6 +61,34 @@ class TestNvvmWithoutCuda(SerialMixin, unittest.TestCase):
 
         self.assertIn(str(e.exception),
                       "No alignment attribute found on memset dest")
+
+    def test_nvvm_accepts_encoding(self):
+        # Test that NVVM will accept a constant containing all possible 8-bit
+        # characters. Taken from the test case added in llvmlite PR #53:
+        #
+        #     https://github.com/numba/llvmlite/pull/53
+        #
+        # This test case is included in Numba to ensure that the encoding used
+        # by llvmlite (e.g. utf-8, latin1, etc.) does not result in an input to
+        # NVVM that it cannot parse correctly
+
+        # Create a module with a constant containing all 8-bit characters
+        c = ir.Constant(ir.ArrayType(ir.IntType(8), 256),
+                        bytearray(range(256)))
+        m = ir.Module()
+        gv = ir.GlobalVariable(m, c.type, "myconstant")
+        gv.global_constant = True
+        gv.initializer = c
+        nvvm.fix_data_layout(m)
+
+        # Parse with LLVM then dump the parsed module into NVVM
+        parsed = llvm.parse_assembly(str(m))
+        ptx = nvvm.llvm_to_ptx(str(parsed))
+
+        # Ensure all characters appear in the generated constant array.
+        elements = ", ".join([str(i) for i in range(256)])
+        myconstant = f"myconstant[256] = {{{elements}}}".encode('utf-8')
+        self.assertIn(myconstant, ptx)
 
 
 if __name__ == '__main__':
