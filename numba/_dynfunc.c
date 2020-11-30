@@ -135,9 +135,11 @@ static PyTypeObject EnvironmentType = {
     0,                         /* tp_del */
     0,                         /* tp_version_tag */
     0,                         /* tp_finalize */
-#if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION > 7
+#if PY_MAJOR_VERSION == 3
     0,                         /* tp_vectorcall */
-    0,                         /* tp_print */
+#if PY_MINOR_VERSION > 7 && PY_MINOR_VERSION < 9 /* 3.7.x or 3.8.x */
+    0,                                           /* tp_print */
+#endif /* 3.7.x or 3.8.x */
 #endif
 };
 
@@ -240,9 +242,11 @@ static PyTypeObject ClosureType = {
     0,                         /* tp_del */
     0,                         /* tp_version_tag */
     0,                         /* tp_finalize */
-#if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION > 7
+#if PY_MAJOR_VERSION == 3
     0,                         /* tp_vectorcall */
-    0,                         /* tp_print */
+#if PY_MINOR_VERSION > 7 && PY_MINOR_VERSION < 9 /* 3.7.x or 3.8.x */
+    0,                                           /* tp_print */
+#endif /* 3.7.x or 3.8.x */
 #endif
 };
 
@@ -452,9 +456,11 @@ static PyTypeObject GeneratorType = {
     0,                                        /* tp_del */
     0,                                        /* tp_version_tag */
     0,                                        /* tp_finalize */
-#if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION > 7
+#if PY_MAJOR_VERSION == 3
     0,                                        /* tp_vectorcall */
-    0,                                        /* tp_print */
+#if PY_MINOR_VERSION > 7 && PY_MINOR_VERSION < 9 /* 3.7.x or 3.8.x */
+    0,                                           /* tp_print */
+#endif /* 3.7.x or 3.8.x */
 #endif
 };
 

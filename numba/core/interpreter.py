@@ -133,14 +133,11 @@ class Interpreter(object):
         self.syntax_blocks = []
         self.dfainfo = None
 
-        firstblk = min(self.cfa.blocks.keys())
         self.scopes.append(ir.Scope(parent=self.current_scope, loc=self.loc))
         # Interpret loop
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
-
         self._legalize_exception_vars()
-
         # Prepare FunctionIR
         fir = ir.FunctionIR(self.blocks, self.is_generator, self.func_id,
                              self.first_loc, self.definitions,
@@ -736,6 +733,14 @@ class Interpreter(object):
                 target = self.store(val_const, name=nm, redefine=True)
                 st.append(target)
             const = ir.Expr.build_tuple(st, loc=self.loc)
+        elif isinstance(value, frozenset):
+            st = []
+            for x in value:
+                nm = '$const_%s' % str(x)
+                val_const = ir.Const(x, loc=self.loc)
+                target = self.store(val_const, name=nm, redefine=True)
+                st.append(target)
+            const = ir.Expr.build_set(st, loc=self.loc)
         else:
             const = ir.Const(value, loc=self.loc)
         self.store(const, res)
@@ -892,6 +897,114 @@ class Interpreter(object):
     def op_BUILD_TUPLE_UNPACK(self, inst, tuples, temps):
         self._build_tuple_unpack(inst, tuples, temps)
 
+    def op_LIST_TO_TUPLE(self, inst, const_list, res):
+        # This is not ideal...
+        # Switch the const_list reference to a `build_list` for a `build_tuple`
+        # then look between the current instruction and the const_list
+        # instruction for use of `list_append` or `list_extend` and turn them
+        # into `build_tuple` + `binary_add` and `binary_add` respectively.
+        count = 0
+        init = None
+        for stmt in reversed(self.current_block.body):
+            if isinstance(stmt, ir.Assign):
+                if stmt.target.name == const_list:
+                    init = stmt
+                    break
+            count += 1
+        assert init
+
+        # analyse the peep hole
+        peephole_slice = slice(-count - 1, None, 1)
+        peep_hole = self.current_block.body[peephole_slice]
+        appends = []
+        extends = []
+        dead = []
+        for x in peep_hole:
+            if isinstance(x, ir.Assign):
+                if isinstance(x.value, ir.Expr):
+                    expr = x.value
+                    if expr.op == 'getattr' and expr.value.name == const_list:
+                        if expr.attr == 'extend':
+                            extends.append(x.target.name)
+                            dead.append(x)
+                        elif expr.attr == 'append':
+                            appends.append(x.target.name)
+                            dead.append(x)
+                        else:
+                            assert 0
+        # go back through the peep hole build new IR based on it.
+        new_hole = []
+        the_build_list = init.target
+
+        # like store but writes into new_hole
+        def local_store(statement):
+            new_hole.append(statement)
+            if statement.value not in self.definitions[statement.target.name]:
+                self.definitions[statement.target.name].append(statement.value)
+
+        # Do the transform on the peep hole
+        # create a new "build_list" assignment, assigning to res
+        # the rest of the bytecode refers to the build_list var so the result
+        # of actually building this list and making it into a tuple needs to go
+        # into that var, which means the original one needs to be something
+        # else!
+        new_build_list = self.store(init.target, res)
+        acc = new_build_list
+        for x in peep_hole:
+            if isinstance(x, ir.Assign):
+                if isinstance(x.value, ir.Expr):
+                    expr = x.value
+                    if expr.op == 'getattr':
+                        if expr.attr in ('extend', 'append'):
+                            # don't want these
+                            continue
+                    elif expr.op == 'call':
+                        fname = expr.func.name
+                        if fname in extends or fname in appends:
+                            arg = expr.args[0]
+                            if isinstance(arg, ir.Var):
+                                tmp_name = "%s_var_%s" % (fname, arg.name)
+                                if fname in appends:
+                                    bt = ir.Expr.build_tuple(items=[arg,], loc=expr.loc)
+                                else:
+                                    bt = arg
+                                var = ir.Var(arg.scope, tmp_name, expr.loc)
+                                asgn = ir.Assign(bt, var, expr.loc)
+                                local_store(asgn)
+                                arg = var
+
+                            # this needs to be a binary add
+                            new = ir.Expr.binop(fn=operator.add,
+                                                lhs=acc,
+                                                rhs=arg,
+                                                loc=x.loc)
+                            asgn = ir.Assign(new, x.target, expr.loc)
+                            local_store(asgn)
+                            acc = asgn.target
+                    elif expr.op == 'build_list':
+                        new = ir.Expr.build_tuple(expr.items, expr.loc)
+                        asgn = ir.Assign(new, new_build_list, expr.loc)
+                        # Not a temporary any more
+                        self.assigner.unused_dests.remove(new_build_list.name)
+                        local_store(asgn)
+                        del self.definitions[x.target.name]
+                    else:
+                        local_store(x)
+                else:
+                    local_store(x)
+
+            else:
+                # stick everything else in as-is
+                local_store(x)
+        # write the result back into the original build list as everything
+        # refers to it.
+        local_store(ir.Assign(acc, the_build_list, the_build_list.loc))
+
+        cpy = self.current_block.body[:]
+        tmp = cpy[:len(cpy) -count -2]
+        tmp.extend(new_hole)
+        self.current_block.body = tmp
+
     def op_BUILD_CONST_KEY_MAP(self, inst, keys, keytmps, values, res):
         # Unpack the constant key-tuple and reused build_map which takes
         # a sequence of (key, value) pair.
@@ -1021,6 +1134,15 @@ class Interpreter(object):
         expr = ir.Expr.build_set(items=[self.get(x) for x in items],
                                  loc=self.loc)
         self.store(expr, res)
+
+    def op_SET_UPDATE(self, inst, target, value, updatevar, res):
+        target = self.get(target)
+        value = self.get(value)
+        updateattr = ir.Expr.getattr(target, 'update', loc=self.loc)
+        self.store(value=updateattr, name=updatevar)
+        updateinst = ir.Expr.call(self.get(updatevar), (value,), (),
+                                  loc=self.loc)
+        self.store(value=updateinst, name=res)
 
     def op_BUILD_MAP(self, inst, items, size, res):
         got_items = [(self.get(k), self.get(v)) for k, v in items]
@@ -1236,6 +1358,24 @@ class Interpreter(object):
         else:
             self._binop(op, lhs, rhs, res)
 
+    def op_IS_OP(self, inst, lhs, rhs, res):
+        self._binop('is', lhs, rhs, res)
+        # invert if op case is 1
+        if inst.arg == 1:
+            tmp = self.get(res)
+            out = ir.Expr.unary('not', value=tmp, loc=self.loc)
+            self.store(out, res)
+
+
+    def op_CONTAINS_OP(self, inst, lhs, rhs, res):
+        lhs, rhs = rhs, lhs
+        self._binop('in', lhs, rhs, res)
+        # invert if op case is 1
+        if inst.arg == 1:
+            tmp = self.get(res)
+            out = ir.Expr.unary('not', value=tmp, loc=self.loc)
+            self.store(out, res)
+
     def op_BREAK_LOOP(self, inst, end=None):
         if end is None:
             loop = self.syntax_blocks[-1]
@@ -1282,6 +1422,29 @@ class Interpreter(object):
 
     def op_JUMP_IF_TRUE_OR_POP(self, inst, pred):
         self._op_JUMP_IF(inst, pred=pred, iftrue=True)
+
+    def op_JUMP_IF_NOT_EXC_MATCH(self, inst, pred, tos, tos1):
+        truebr = inst.next
+        falsebr = inst.get_jump_target()
+        gv_fn = ir.Global(
+            "exception_match", eh.exception_match, loc=self.loc,
+        )
+        exc_match_name = '$exc_match'
+        self.store(value=gv_fn, name=exc_match_name, redefine=True)
+        # not wholly convinced by this as tos is seemingly None?!
+        lhs = self.get(tos1)
+        rhs = self.get(tos)
+        exc = ir.Expr.call(
+            self.get(exc_match_name), args=(lhs, rhs), kws=(), loc=self.loc,
+        )
+        predicate = self.store(exc, pred)
+        bra = ir.Branch(cond=predicate, truebr=truebr, falsebr=falsebr,
+                        loc=self.loc)
+        self.current_block.append(bra)
+
+    def op_RERAISE(self, inst, exc):
+        # Do nothing, Numba can't handle this case and it's caught else where
+        pass
 
     def op_RAISE_VARARGS(self, inst, exc):
         if exc is not None:
@@ -1356,6 +1519,60 @@ class Interpreter(object):
         self.store(value=appendattr, name=appendvar)
         appendinst = ir.Expr.call(self.get(appendvar), (value,), (), loc=self.loc)
         self.store(value=appendinst, name=res)
+
+    def op_LIST_EXTEND(self, inst, target, value, extendvar, res):
+        target = self.get(target)
+        value = self.get(value)
+        # If the statements between the current instruction and the target
+        # are N * consts followed by build_tuple, it's a situation where a
+        # list is being statically initialised, rewrite the build_tuple as a
+        # build_list, drop the extend, and wire up the target as the result from
+        # the build_tuple that's been rewritten.
+
+        # is last emitted statment a build_tuple?
+        stmt = self.current_block.body[-1]
+        ok = isinstance(stmt.value, ir.Expr) and stmt.value.op == "build_tuple"
+        # check statements from self.current_block.body[-1] through to target,
+        # make sure they are consts
+        build_empty_list = None
+        if ok:
+            for stmt in reversed(self.current_block.body[:-1]):
+                if not isinstance(stmt, ir.Assign):
+                    ok = False
+                    break
+                # if its not a const, it needs to be the `build_list` for the
+                # target, else it's something else we don't know about so just
+                # bail
+                if isinstance(stmt.value, ir.Const):
+                    continue
+
+                # it's not a const, check for target
+                elif isinstance(stmt.value, ir.Expr) and stmt.target == target:
+                    build_empty_list = stmt
+                    ok = True
+                    break
+                else:
+                    ok = False
+                    break
+        if ok:
+            stmts = self.current_block.body
+            build_tuple_asgn = self.current_block.body[-1]
+            # move build list to last issued statement
+            stmts.append(stmts.pop(stmts.index(build_empty_list)))
+            # fix the build list
+            build_tuple = build_tuple_asgn.value
+            build_list = build_empty_list.value
+            build_list.items = build_tuple.items
+        else:
+            # it's just a list extend with no static init, let it be
+            extendattr = ir.Expr.getattr(target, 'extend', loc=self.loc)
+            self.store(value=extendattr, name=extendvar)
+            extendinst = ir.Expr.call(self.get(extendvar), (value,), (), loc=self.loc)
+            self.store(value=extendinst, name=res)
+
+    def op_LOAD_ASSERTION_ERROR(self, inst, res):
+        gv_fn = ir.Global("AssertionError", AssertionError, loc=self.loc)
+        self.store(value=gv_fn, name=res)
 
     # NOTE: The LOAD_METHOD opcode is implemented as a LOAD_ATTR for ease,
     # however this means a new object (the bound-method instance) could be
