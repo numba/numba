@@ -37,6 +37,12 @@ def iter_usecase(buf):
     return res
 
 
+
+@jit(nopython=True)
+def box_usecase(buf):
+    return buf
+
+
 def attrgetter(attr):
     code = """def func(x):
         return x.%(attr)s
@@ -120,6 +126,9 @@ class TestBufferProtocol(MemoryLeakMixin, TestCase):
     def _check_unary(self, jitfunc, *args):
         pyfunc = jitfunc.py_func
         self.assertPreciseEqual(jitfunc(*args), pyfunc(*args))
+
+    def check_box(self, obj):
+        self._check_unary(box_usecase, obj)
 
     def check_len(self, obj):
         self._check_unary(len_usecase, obj)
@@ -217,6 +226,10 @@ class TestBufferProtocol(MemoryLeakMixin, TestCase):
             self.check_iter(arr)
         for buf in self._readonlies():
             self.check_getitem(buf)
+
+    def test_box(self):
+        self.check_box(bytearray(b"abc"))
+        #self.check_box(b"xyz")
 
 
 class TestMemoryView(MemoryLeakMixin, TestCase):
