@@ -262,13 +262,17 @@ def unbox_unicodecharseq(typ, obj, c):
 @box(types.Bytes)
 def box_bytes(typ, val, c):
     obj = c.context.make_helper(c.builder, typ, val)
-    return c.pyapi.bytes_from_string_and_size(obj.data, obj.nitems)
+    ret = c.pyapi.bytes_from_string_and_size(obj.data, obj.nitems)
+    c.context.nrt.decref(c.builder, typ, val)
+    return ret
 
 
 @box(types.ByteArray)
 def box_bytearray(typ, val, c):
     obj = c.context.make_helper(c.builder, typ, val)
-    return c.pyapi.bytearray_from_string_and_size(obj.data, obj.nitems)
+    ret = c.pyapi.bytearray_from_string_and_size(obj.data, obj.nitems)
+    c.context.nrt.decref(c.builder, typ, val)
+    return ret
 
 
 @box(types.CharSeq)

@@ -229,7 +229,7 @@ class TestBufferProtocol(MemoryLeakMixin, TestCase):
 
     def test_box(self):
         self.check_box(bytearray(b"abc"))
-        #self.check_box(b"xyz")
+        self.check_box(b"xyz")
 
 
 class TestMemoryView(MemoryLeakMixin, TestCase):
