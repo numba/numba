@@ -593,6 +593,13 @@ class _Kernel(serialize.ReduceMixin):
         """
         return get_current_device()
 
+    @property
+    def regs_per_thread(self):
+        '''
+        The number of registers used by each thread for this kernel.
+        '''
+        return self._func.get().attrs.regs
+
     def inspect_llvm(self):
         '''
         Returns the LLVM IR for this kernel.
@@ -783,6 +790,11 @@ class _Kernel(serialize.ReduceMixin):
             devrec = wrap_arg(val).to_device(retr, stream)
             kernelargs.append(devrec)
 
+        elif isinstance(ty, types.BaseTuple):
+            assert len(ty) == len(val)
+            for t, v in zip(ty, val):
+                self._prepare_args(t, v, stream, retr, kernelargs)
+
         else:
             raise NotImplementedError(ty, val)
 
@@ -810,11 +822,10 @@ class Dispatcher(serialize.ReduceMixin):
     Dispatcher objects are not to be constructed by the user, but instead are
     created using the :func:`numba.cuda.jit` decorator.
     '''
-    def __init__(self, func, sigs, bind, targetoptions):
+    def __init__(self, func, sigs, targetoptions):
         super().__init__()
         self.py_func = func
         self.sigs = []
-        self._bind = bind
         self.link = targetoptions.pop('link', (),)
         self._can_compile = True
 
@@ -923,7 +934,7 @@ class Dispatcher(serialize.ReduceMixin):
         targetoptions = self.targetoptions
         targetoptions['link'] = self.link
         specialization = Dispatcher(self.py_func, [types.void(*argtypes)],
-                                    self._bind, targetoptions)
+                                    targetoptions)
         self.specializations[cc, argtypes] = specialization
         return specialization
 
@@ -956,6 +967,26 @@ class Dispatcher(serialize.ReduceMixin):
         else:
             return {sig: defn._func for sig, defn in self.definitions.items()}
 
+    def get_regs_per_thread(self, signature=None):
+        '''
+        Returns the number of registers used by each thread in this kernel for
+        the device in the current context.
+
+        :param signature: The signature of the compiled kernel to get register
+                          usage for. This may be omitted for a specialized
+                          kernel.
+        :return: The number of registers used by the compiled variant of the
+                 kernel for the given signature and current device.
+        '''
+        cc = get_current_device().compute_capability
+        if signature is not None:
+            return self.definitions[(cc, signature.args)].regs_per_thread
+        if self.specialized:
+            return self.definition.regs_per_thread
+        else:
+            return {sig: defn.regs_per_thread
+                    for sig, defn in self.definitions.items()}
+
     def compile(self, sig):
         '''
         Compile and bind to the current context a version of this kernel
@@ -975,8 +1006,7 @@ class Dispatcher(serialize.ReduceMixin):
                                     link=self.link,
                                     **self.targetoptions)
             self.definitions[(cc, argtypes)] = kernel
-            if self._bind:
-                kernel.bind()
+            kernel.bind()
             self.sigs.append(sig)
         return kernel
 
@@ -1057,11 +1087,11 @@ class Dispatcher(serialize.ReduceMixin):
             defn.bind()
 
     @classmethod
-    def _rebuild(cls, py_func, sigs, bind, targetoptions):
+    def _rebuild(cls, py_func, sigs, targetoptions):
         """
         Rebuild an instance.
         """
-        instance = cls(py_func, sigs, bind, targetoptions)
+        instance = cls(py_func, sigs, targetoptions)
         return instance
 
     def _reduce_states(self):
@@ -1069,5 +1099,5 @@ class Dispatcher(serialize.ReduceMixin):
         Reduce the instance for serialization.
         Compiled definitions are discarded.
         """
-        return dict(py_func=self.py_func, sigs=self.sigs, bind=self._bind,
+        return dict(py_func=self.py_func, sigs=self.sigs,
                     targetoptions=self.targetoptions)

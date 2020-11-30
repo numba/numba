@@ -207,6 +207,12 @@ in the test runner, there is a ``--log`` flag for convenience::
 
     $ python -m numba.runtests --log
 
+To enable :ref:`runtime type-checking <type_anno_check>`, set the environment
+variable ``NUMBA_USE_TYPEGUARD=1`` and use `runtests.py` from the source root
+instead. For example::
+
+    $ NUMBA_USE_TYPEGUARD=1 python runtests.py
+
 
 Development rules
 -----------------
@@ -336,6 +342,23 @@ to make sure. The Numba project's private build and test farm will actually
 exercise all the applicable tests on all the combinations noted above on real
 hardware!
 
+
+.. _type_anno_check:
+
+Type annotation and runtime type checking
+'''''''''''''''''''''''''''''''''''''''''
+
+Numba is slowly gaining type annotations. To facilitate the review of pull
+requests that are incrementally adding type annotations, the test suite uses
+`typeguard`_ to perform runtime type checking. This helps verify the validity
+of type annotations.
+
+To enable runtime type checking in the test suite, users can use
+`runtests.py`_ in the source root as the test runner and set environment
+variable ``NUMBA_USE_TYPEGUARD=1``. For example::
+
+    $ NUMBA_USE_TYPEGUARD=1 python runtests.py numba.tests
+
 Things that help with pull requests
 '''''''''''''''''''''''''''''''''''
 
@@ -434,3 +457,7 @@ and check out ``_build/html/index.html``.  To push updates to the Web site::
 then verify the repository under the ``gh-pages`` directory.  Make sure the
 ``CNAME`` file is present and contains a single line for ``numba.pydata.org``.
 Finally, use ``git push`` to update the website.
+
+
+.. _typeguard: https://typeguard.readthedocs.io/en/latest/
+.. _runtests.py: https://github.com/numba/numba/blob/master/runtests.py

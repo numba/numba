@@ -1,6 +1,5 @@
-from warnings import warn
 from numba.core import types, config, sigutils
-from numba.core.errors import NumbaDeprecationWarning
+from numba.core.errors import DeprecationError
 from .compiler import (compile_device, declare_device_function, Dispatcher,
                        compile_device_template)
 from .simulator.kernel import FakeCUDAKernel
@@ -20,8 +19,8 @@ def jitdevice(func, link=[], debug=None, inline=False, opt=True):
     return compile_device_template(func, debug=debug, inline=inline, opt=opt)
 
 
-def jit(func_or_sig=None, argtypes=None, device=False, inline=False,
-        link=[], debug=None, opt=True, **kws):
+def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
+        opt=True, **kws):
     """
     JIT compile a python function conforming to the CUDA Python specification.
     If a signature is supplied, then a function is returned that takes a
@@ -37,8 +36,6 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False,
        .. note:: A kernel cannot have any return value.
     :param device: Indicates whether this is a device function.
     :type device: bool
-    :param bind: (Deprecated) Force binding to CUDA context immediately
-    :type bind: bool
     :param link: A list of files containing PTX source to link with the function
     :type link: list
     :param debug: If True, check for exceptions thrown when executing the
@@ -49,8 +46,10 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False,
        disables precise division and square root. This parameter has no effect
        on device function, whose fastmath setting depends on the kernel function
        from which they are called.
-    :param max_registers: Limit the kernel to using at most this number of
-       registers per thread. Useful for increasing occupancy.
+    :param max_registers: Request that the kernel is limited to using at most
+       this number of registers per thread. The limit may not be respected if
+       the ABI requires a greater number of registers than that requested.
+       Useful for increasing occupancy.
     :param opt: Whether to compile from LLVM IR to PTX with optimization
                 enabled. When ``True``, ``-opt=3`` is passed to NVVM. When
                 ``False``, ``-opt=0`` is passed to NVVM. Defaults to ``True``.
@@ -64,18 +63,18 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False,
     if kws.get('boundscheck'):
         raise NotImplementedError("bounds checking is not supported for CUDA")
 
-    if argtypes is not None:
+    if kws.get('argtypes') is not None:
         msg = _msg_deprecated_signature_arg.format('argtypes')
-        warn(msg, category=NumbaDeprecationWarning)
-
-    if 'bind' in kws:
+        raise DeprecationError(msg)
+    if kws.get('restype') is not None:
+        msg = _msg_deprecated_signature_arg.format('restype')
+        raise DeprecationError(msg)
+    if kws.get('bind') is not None:
         msg = _msg_deprecated_signature_arg.format('bind')
-        warn(msg, category=NumbaDeprecationWarning)
-    else:
-        bind = True
+        raise DeprecationError(msg)
 
     fastmath = kws.get('fastmath', False)
-    if argtypes is None and not sigutils.is_signature(func_or_sig):
+    if not sigutils.is_signature(func_or_sig):
         if func_or_sig is None:
             if config.ENABLE_CUDASIM:
                 def autojitwrapper(func):
@@ -99,7 +98,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False,
                 targetoptions['opt'] = opt
                 targetoptions['link'] = link
                 sigs = None
-                return Dispatcher(func_or_sig, sigs, bind=bind,
+                return Dispatcher(func_or_sig, sigs,
                                   targetoptions=targetoptions)
 
     else:
@@ -114,15 +113,11 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False,
             raise ValueError(msg)
         elif sigutils.is_signature(func_or_sig):
             sigs = [func_or_sig]
-        elif func_or_sig is None:
-            # Handle the deprecated argtypes / restype specification
-            restype = kws.get('restype', types.void)
-            sigs = [restype(*argtypes)]
         else:
             raise ValueError("Expecting signature or list of signatures")
 
         for sig in sigs:
-            restype, argtypes = convert_types(sig, argtypes)
+            argtypes, restype = sigutils.normalize_signature(sig)
 
             if restype and not device and restype != types.void:
                 raise TypeError("CUDA kernel must have void return type.")
@@ -132,8 +127,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False,
             targetoptions['debug'] = debug
             targetoptions['link'] = link
             targetoptions['opt'] = opt
-            return Dispatcher(func, sigs, bind=bind,
-                              targetoptions=targetoptions)
+            return Dispatcher(func, sigs, targetoptions=targetoptions)
 
         def device_jit(func):
             return compile_device(func, restype, argtypes, inline=inline,
@@ -145,14 +139,6 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False,
             return kernel_jit
 
 
-def declare_device(name, restype=None, argtypes=None):
-    restype, argtypes = convert_types(restype, argtypes)
+def declare_device(name, sig):
+    argtypes, restype = sigutils.normalize_signature(sig)
     return declare_device_function(name, restype, argtypes)
-
-
-def convert_types(restype, argtypes):
-    # eval type string
-    if sigutils.is_signature(restype):
-        argtypes, restype = sigutils.normalize_signature(restype)
-
-    return restype, argtypes
