@@ -1,6 +1,8 @@
 ---
 name: Feature Request
-about: Tell us about something in the Python language/NumPy you'd like Numba to support.
+about: Tell us about something in the Python language/NumPy you'd like Numba to support. Not for asking general questions - see below.
+
+---
 
 ---
 

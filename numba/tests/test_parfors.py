@@ -2344,6 +2344,32 @@ class TestPrange(TestPrangeBase):
                'operators.')
         self.assertIn(msg, str(raises.exception))
 
+    @skip_parfors_unsupported
+    def test_prange_two_conditional_reductions(self):
+        # issue6414
+        def test_impl():
+            A = B = 0
+            for k in range(1):
+                if k == 2:
+                    A += 1
+                else:
+                    x = np.zeros((1, 1))
+                    if x[0, 0]:
+                        B += 1
+            return A, B
+        self.prange_tester(test_impl)
+
+    @skip_parfors_unsupported
+    def test_prange_nested_reduction1(self):
+        def test_impl():
+            A = 0
+            for k in range(1):
+                for i in range(1):
+                    if i == 0:
+                        A += 1
+            return A
+        self.prange_tester(test_impl)
+
 #    @skip_parfors_unsupported
     @disabled_test
     def test_check_error_model(self):

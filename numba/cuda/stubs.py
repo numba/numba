@@ -190,6 +190,27 @@ class const(Stub):
 
 
 #-------------------------------------------------------------------------------
+# Cooperative groups
+
+class cg(Stub):
+    '''
+    Cooperative groups
+    '''
+
+    @stub_function
+    def this_grid():
+        '''
+        Get the current grid group.
+        '''
+
+    class GridGroup(Stub):
+        def sync():
+            '''
+            Synchronize the current grid group.
+            '''
+
+
+#-------------------------------------------------------------------------------
 # syncthreads
 
 class syncthreads(Stub):

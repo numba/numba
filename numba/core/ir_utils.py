@@ -1420,7 +1420,6 @@ def restore_copy_var_names(blocks, save_copies, typemap):
 
 
 def simplify(func_ir, typemap, calltypes, metadata):
-    remove_dels(func_ir.blocks)
     # get copies in to blocks and out from blocks
     in_cps, _ = copy_propagate(func_ir.blocks, typemap)
     # table mapping variable names to ir.Var objects to help replacement

@@ -171,7 +171,6 @@ exclude =
     numba/tests/test_extended_arg.py
     numba/tests/test_alignment.py
     numba/tests/test_multi3.py
-    numba/tests/test_import.py
     numba/tests/test_overlap.py
     numba/tests/test_array_attr.py
     numba/tests/test_array_methods.py
@@ -303,3 +302,8 @@ per-file-ignores =
     # contain the URLs of the reference pages in the online libdevice
     # documentation.
     numba/cuda/libdevice.py:E501
+    # Ignore too-long lines in the CUDA doc examples, prioritising readability
+    # in the docs over line length in the example source (especially given that
+    # the test code is already indented by 8 spaces)
+    numba/cuda/tests/doc_examples/test_random.py:E501
+    numba/cuda/tests/doc_examples/test_cg.py:E501

@@ -1189,7 +1189,7 @@ class PythonAPI(object):
         intty = ir.IntType(32)
         fnty = Type.function(self.pyobj,
                              [self.voidptr, intty, intty, self.pyobj])
-        fn = self._get_function(fnty, name="NRT_adapt_ndarray_to_python")
+        fn = self._get_function(fnty, name="NRT_adapt_ndarray_to_python_acqref")
         fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
 
         ndim = self.context.get_constant(types.int32, aryty.ndim)

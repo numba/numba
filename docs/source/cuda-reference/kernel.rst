@@ -58,7 +58,7 @@ creating a specialized instance:
 
 .. autoclass:: numba.cuda.compiler.Dispatcher
    :members: inspect_asm, inspect_llvm, inspect_sass, inspect_types,
-             specialize, specialized, extensions, forall
+             get_regs_per_thread, specialize, specialized, extensions, forall
 
 
 Intrinsic Attributes and Functions
@@ -252,6 +252,27 @@ Synchronization and Atomic Operations
     .. warning:: All syncthreads functions must be called by every thread in the
                  thread-block. Falling to do so may result in undefined behavior.
 
+
+Cooperative Groups
+~~~~~~~~~~~~~~~~~~
+
+.. function:: numba.cuda.cg.this_grid()
+
+   Get the current grid group.
+
+   :return: The current grid group
+   :rtype: numba.cuda.cg.GridGroup
+
+.. class:: numba.cuda.cg.GridGroup
+
+   A grid group. Users should not construct a GridGroup directly - instead, get
+   the current grid group using :func:`cg.this_grid() <numba.cuda.cg.this_grid>`.
+
+   .. method:: sync()
+
+      Synchronize the current grid group.
+
+
 Memory Fences
 ~~~~~~~~~~~~~
 
@@ -279,7 +300,7 @@ are guaranteed to not move across the memory fences by optimization passes.
    A memory fence at system level (across GPUs).
 
 Warp Intrinsics
-~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~
 
 The argument ``membermask`` is a 32 bit integer mask with each bit
 corresponding to a thread in the warp, with 1 meaning the thread is in the

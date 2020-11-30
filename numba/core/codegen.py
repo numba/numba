@@ -233,7 +233,7 @@ class _CFG(object):
         nrt_meminfo = re.compile("@NRT_MemInfo")
         ll_intrin_calls = re.compile(r".*call.*@llvm\..*")
         ll_function_call = re.compile(r".*call.*@.*")
-        ll_raise = re.compile("ret i32.*\!ret_is_raise.*")
+        ll_raise = re.compile(r"ret i32.*\!ret_is_raise.*")
         ll_return = re.compile("ret i32 [^1],?.*")
 
         # wrapper function for line wrapping LLVM lines
@@ -525,7 +525,7 @@ class CodeLibrary(object):
     _object_caching_enabled = False
     _disable_inspection = False
 
-    def __init__(self, codegen, name):
+    def __init__(self, codegen: "BaseCPUCodegen", name: str):
         self._codegen = codegen
         self._name = name
         self._linking_libraries = []   # maintain insertion order
@@ -690,7 +690,7 @@ class CodeLibrary(object):
         self._final_module.verify()
         self._finalize_final_module()
 
-    def _finalize_dyanmic_globals(self):
+    def _finalize_dynamic_globals(self):
         # Scan for dynamic globals
         for gv in self._final_module.global_variables:
             if gv.name.startswith('numba.dynamic.globals'):
@@ -708,7 +708,7 @@ class CodeLibrary(object):
         """
         Make the underlying LLVM module ready to use.
         """
-        self._finalize_dyanmic_globals()
+        self._finalize_dynamic_globals()
         self._verify_declare_only_symbols()
 
         # Remember this on the module, for the object cache hooks
@@ -1104,7 +1104,8 @@ class BaseCPUCodegen(object):
         self._data_layout = str(self._target_data)
         self._mpm_cheap = self._module_pass_manager(loop_vectorize=False,
                                                     slp_vectorize=False,
-                                                    opt=0)
+                                                    opt=0,
+                                                    cost="cheap")
         self._mpm_full = self._module_pass_manager()
 
         self._engine.set_object_cache(self._library_class._object_compiled_hook,
@@ -1137,8 +1138,19 @@ class BaseCPUCodegen(object):
     def _module_pass_manager(self, **kwargs):
         pm = ll.create_module_pass_manager()
         self._tm.add_analysis_passes(pm)
+        cost = kwargs.pop("cost", None)
         with self._pass_manager_builder(**kwargs) as pmb:
             pmb.populate(pm)
+        if cost is not None and cost == "cheap":
+            # This knocks loops into rotated form early to reduce the likelihood
+            # of vectorization failing due to unknown PHI nodes.
+            pm.add_loop_rotate_pass()
+            # This helps the refprune pass which can only deal with arguments to
+            # NRT function pairs that are literally the same i.e. it doesn't
+            # attempt to resolve arguments by tracing through the IR etc.
+            # Instcombine resolves a lot of this, it only runs as part of the
+            # cheap pass as the full opt pass will likely include it anyway.
+            pm.add_instruction_combining_pass()
         if config.LLVM_REFPRUNE_PASS:
             pm.add_refprune_pass(_parse_refprune_flags())
         return pm

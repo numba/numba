@@ -64,12 +64,12 @@ Distribution: https://www.anaconda.com/download
 
    $ conda install numba
 
-For more options, see the Installation Guide: https://numba.pydata.org/numba-doc/latest/user/installing.html
+For more options, see the Installation Guide: https://numba.readthedocs.io/en/stable/user/installing.html
 
 Documentation
 =============
 
-https://numba.pydata.org/numba-doc/latest/index.html
+https://numba.readthedocs.io/en/stable/index.html
 
 
 Mailing Lists

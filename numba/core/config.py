@@ -331,6 +331,9 @@ class _EnvReloader(object):
         CUDA_DEALLOCS_RATIO = _readenv("NUMBA_CUDA_MAX_PENDING_DEALLOCS_RATIO",
                                        float, 0.2)
 
+        CUDA_ARRAY_INTERFACE_SYNC = _readenv("NUMBA_CUDA_ARRAY_INTERFACE_SYNC",
+                                             int, 1)
+
         # HSA Configs
 
         # Disable HSA support

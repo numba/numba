@@ -2805,9 +2805,6 @@ class ParforPass(ParforPassStates):
                             new_block.append(ir_print)
                 block.body = new_block
 
-        # run post processor again to generate Del nodes
-        post_proc = postproc.PostProcessor(self.func_ir)
-        post_proc.run(True)
         if self.func_ir.is_generator:
             fix_generator_types(self.func_ir.generator_info, self.return_type,
                                 self.typemap)
@@ -3200,10 +3197,6 @@ def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes, metadata):
     dprint_func_ir(func_ir, "after parfor sequential lowering")
     simplify(func_ir, typemap, calltypes, metadata["parfors"])
     dprint_func_ir(func_ir, "after parfor sequential simplify")
-    # add dels since simplify removes dels
-    post_proc = postproc.PostProcessor(func_ir)
-    post_proc.run(True)
-    return
 
 
 def _lower_parfor_sequential_block(
@@ -3440,7 +3433,7 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
             if isinstance(stmt, Parfor):
                 # recursive parfors can have reductions like test_prange8
                 get_parfor_reductions(func_ir, stmt, parfor_params, calltypes,
-                    reductions, reduce_varnames, param_uses, param_nodes, var_to_param)
+                    reductions, reduce_varnames, None, param_nodes, var_to_param)
 
     for param, used_vars in param_uses.items():
         # a parameter is a reduction variable if its value is used to update it

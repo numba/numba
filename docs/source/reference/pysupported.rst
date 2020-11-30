@@ -644,7 +644,7 @@ Important things to note about these kinds of lists:
    supported e.g. ``len()``.
 #. Dynamic access of items is not possible, e.g. ``some_list[x]``, for a
    value ``x`` which is not a compile time constant. This is because it's
-   impossible statically determine the type of the item being accessed.
+   impossible to statically determine the type of the item being accessed.
 #. Inside the compiler, these lists are actually just tuples with some extra
    things added to make them look like they are lists.
 #. They cannot be returned to the interpreter from a compiled function.

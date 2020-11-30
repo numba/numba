@@ -189,6 +189,18 @@ API_PROTOTYPES = {
                        c_uint, c_uint, c_uint, c_uint, cu_stream,
                        POINTER(c_void_p), POINTER(c_void_p)),
 
+    # CUresult cuLaunchCooperativeKernel(CUfunction f, unsigned int gridDimX,
+    #                                   unsigned int gridDimY,
+    #                                   unsigned int gridDimZ,
+    #                                   unsigned int blockDimX,
+    #                                   unsigned int blockDimY,
+    #                                   unsigned int blockDimZ,
+    #                                   unsigned int sharedMemBytes,
+    #                                   CUstream hStream, void **kernelParams)
+    'cuLaunchCooperativeKernel': (c_int, cu_function, c_uint, c_uint, c_uint,
+                                  c_uint, c_uint, c_uint, c_uint, cu_stream,
+                                  POINTER(c_void_p)),
+
     #  CUresult cuMemHostAlloc (	void ** 	pp,
     #                               size_t 	bytesize,
     #                               unsigned int 	Flags
