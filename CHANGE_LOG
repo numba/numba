@@ -1,5 +1,5 @@
-Version 0.52.0 (14 October, 2020)
----------------------------------
+Version 0.52.0 (30 November, 2020)
+----------------------------------
 
 This release focuses on performance improvements, but also adds some new
 features and contains numerous bug fixes and stability improvements.
@@ -158,6 +158,7 @@ Fixes:
 * PR #6450: Fix asfarray kwarg default handling. (Stuart Archibald)
 * PR #6486: fix abstract base class import (Valentin Haenel)
 * PR #6487: Restrict maximum version of python (Siu Kwan Lam)
+* PR #6527: setup.py: fix py version guard (Chris Barnes)
 
 CUDA Enhancements/Fixes:
 
@@ -233,6 +234,7 @@ Authors:
 * Amos Bird
 * Andreas Sodeur
 * Arthur Peters
+* Chris Barnes
 * Ehsan Totoni (core dev)
 * Eric Wieser
 * Ethan Pronovost
