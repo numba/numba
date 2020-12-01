@@ -170,7 +170,7 @@ class _ObjModeContextType(WithContext):
     """
     is_callable = True
 
-    def _legalize_args(self, extra, loc, additional_ns, func_globals, func_freevars):
+    def _legalize_args(self, extra, loc, func_globals, func_freevars):
         """
         Legalize arguments to the context-manager
         """
@@ -185,9 +185,7 @@ class _ObjModeContextType(WithContext):
         typeanns = {}
         for k, v in callkwargs.items():
             if isinstance(v, ir.Const) and isinstance(v.value, str):
-                typeanns[k] = sigutils._parse_signature_string(
-                    v.value, additional_ns=additional_ns,
-                )
+                typeanns[k] = sigutils._parse_signature_string(v.value)
             elif isinstance(v, ir.FreeVar):
                 typeanns[k] = func_freevars[v.name]
             elif isinstance(v, ir.Global):
@@ -202,19 +200,16 @@ class _ObjModeContextType(WithContext):
 
     def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
                          body_blocks, dispatcher_factory, extra):
-        ns = func_ir.func_id.func.__globals__
-
         cellnames = func_ir.func_id.func.__code__.co_freevars
         closures = func_ir.func_id.func.__closure__
         func_globals = func_ir.func_id.func.__globals__
         if closures is not None:
             func_freevars = {cellname: closure.cell_contents
-                        for cellname, closure in zip(cellnames, closures)}
+                             for cellname, closure in zip(cellnames, closures)}
         else:
             func_freevars = {}
         typeanns = self._legalize_args(extra,
                                        loc=blocks[blk_start].loc,
-                                       additional_ns=ns,
                                        func_globals=func_globals,
                                        func_freevars=func_freevars)
         vlt = func_ir.variable_lifetime

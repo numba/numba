@@ -9,21 +9,14 @@ def is_signature(sig):
     return isinstance(sig, (str, tuple, typing.Signature))
 
 
-def _parse_signature_string(signature_str, additional_ns={}):
+def _parse_signature_string(signature_str):
     """
     Parameters
     ----------
     signature_str : str
-    additional_ns : dict; optional
-        Additional globals dictionary to lookup symbols.
-        Defaults to empty dict (`{}`).
     """
-    # Note: switch to collections.ChainMap once py2 is dropped.
-    glbs = {}
-    glbs.update(types.__dict__)
-    glbs.update(additional_ns)
     # Just eval signature_str using the types submodules as globals
-    return eval(signature_str, {}, glbs)
+    return eval(signature_str, {}, types.__dict__)
 
 
 def normalize_signature(sig):
