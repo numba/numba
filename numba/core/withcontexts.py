@@ -226,8 +226,16 @@ class _ObjModeContextType(WithContext):
         func_globals = func_ir.func_id.func.__globals__
         if closures is not None:
             # Resolve free variables
-            func_closures = {cellname: closure.cell_contents
-                             for cellname, closure in zip(cellnames, closures)}
+            func_closures = {}
+            for cellname, closure in zip(cellnames, closures):
+                try:
+                    cellval = closure.cell_contents
+                except ValueError as e:
+                    # empty cell will raise
+                    if str(e) != "Cell is empty":
+                        raise
+                else:
+                    func_closures[cellname] = cellval
         else:
             # Missing closure object
             func_closures = {}

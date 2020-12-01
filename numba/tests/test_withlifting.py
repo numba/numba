@@ -805,7 +805,17 @@ class TestLiftObj(MemoryLeak, TestCase):
                 val = 123
             return val
 
-        self.assertEqual(global_var(), 123)
+    def test_objmode_gv_variable_error(self):
+        @njit
+        def global_var():
+            with objmode(val=gv_type2):
+                val = 123
+            return val
+
+        with self.assertRaisesRegex(
+            errors.CompilerError, "Global 'gv_type2' is not defined",
+        ):
+            global_var()
 
     def test_objmode_closure_type_in_overload(self):
         def foo():
@@ -824,7 +834,30 @@ class TestLiftObj(MemoryLeak, TestCase):
         def bar():
             return foo()
 
-        self.assertPreciseEqual(bar(), np.ones(10).astype(np.float64))
+    def test_objmode_closure_type_in_overload_error(self):
+        def foo():
+            pass
+
+        @overload(foo)
+        def foo_overload():
+            shrubbery = types.float64[:]
+            def impl():
+                with objmode(out=shrubbery):
+                    out = np.ones(10).astype(np.float64)
+                return out
+            # Remove closure var.
+            # Otherwise, it will "shrubbery" will be a global
+            del shrubbery
+            return impl
+
+        @njit
+        def bar():
+            return foo()
+
+        with self.assertRaisesRegex(
+            errors.TypingError, "Freevar 'shrubbery' is not defined",
+        ):
+            bar()
 
     def test_objmode_multi_type_args(self):
         array_ty = types.int32[:]
