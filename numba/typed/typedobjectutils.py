@@ -128,7 +128,7 @@ def _get_incref_decref(context, module, datamodel, container_element_type):
     refct_fnty = ir.FunctionType(ir.VoidType(), [data_ptr_ty])
     incref_fn = module.get_or_insert_function(
         refct_fnty,
-        name='{}.{}_incref'.format(
+        name='.numba_{}.{}_incref'.format(
             context.fndesc.mangled_name, container_element_type),
     )
 

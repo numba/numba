@@ -236,14 +236,14 @@ def dict_vs_cache_vs_parametrized(v):
 
 
 def dict_vs_cache_vs_parametrized_worker():
-    """crashes when run more than once
-    (ie when compiled function is loaded from cache)"""
+    """Has had tendency to segfault when run more than once
+    (i.e. when compiled function is loaded from cache)"""
     @jit(nopython=True, cache=True)
     def get_unit_system_data(x, y):
         dict_vs_cache_vs_parametrized(x)
         dict_vs_cache_vs_parametrized(y)
 
-    x, y = Parametrized(('horst', 'hanz')), Parametrized(('horst',))
+    x, y = Parametrized(('a', 'b')), Parametrized(('a',))
 
     for ii in range(50):  # <- somtimes works a few times
         assert get_unit_system_data(x, y) is None
