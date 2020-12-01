@@ -170,26 +170,47 @@ class _ObjModeContextType(WithContext):
     """
     is_callable = True
 
-    def _legalize_args(self, extra, loc, func_globals, func_freevars):
+    def _legalize_args(self, args, kwargs, loc, func_globals, func_closures):
         """
         Legalize arguments to the context-manager
-        """
-        if extra is None:
-            return {}
 
-        if len(extra['args']) != 0:
+        Parameters
+        ----------
+        args: tuple
+            Positional arguments to the with-context call as IR nodes.
+        kwargs: dict
+            Keyword arguments to the with-context call as IR nodes.
+        loc: numba.core.ir.Loc
+            Source location of the with-context call.
+        func_globals: dict
+            The global dictionary of the calling function.
+        func_closures: dict
+            The resolved closure variables of the calling function.
+        """
+        if args:
             raise errors.CompilerError(
                 "objectmode context doesn't take any positional arguments",
                 )
-        callkwargs = extra['kwargs']
         typeanns = {}
-        for k, v in callkwargs.items():
+        for k, v in kwargs.items():
             if isinstance(v, ir.Const) and isinstance(v.value, str):
                 typeanns[k] = sigutils._parse_signature_string(v.value)
             elif isinstance(v, ir.FreeVar):
-                typeanns[k] = func_freevars[v.name]
+                try:
+                    v = func_closures[v.name]
+                except KeyError:
+                    raise errors.CompilerError(
+                        f"Freevar {v.name!r} is not defined"
+                    )
+                typeanns[k] = v
             elif isinstance(v, ir.Global):
-                typeanns[k] = func_globals[v.name]
+                try:
+                    v = func_globals[v.name]
+                except KeyError:
+                    raise errors.CompilerError(
+                        f"Global {v.name!r} is not defined"
+                    )
+                typeanns[k] = v
             else:
                 raise errors.CompilerError(
                     "objectmode context requires constants string for "
@@ -204,14 +225,19 @@ class _ObjModeContextType(WithContext):
         closures = func_ir.func_id.func.__closure__
         func_globals = func_ir.func_id.func.__globals__
         if closures is not None:
-            func_freevars = {cellname: closure.cell_contents
+            # Resolve free variables
+            func_closures = {cellname: closure.cell_contents
                              for cellname, closure in zip(cellnames, closures)}
         else:
-            func_freevars = {}
-        typeanns = self._legalize_args(extra,
+            # Missing closure object
+            func_closures = {}
+        args = extra['args'] if extra else ()
+        kwargs = extra['kwargs'] if extra else {}
+        typeanns = self._legalize_args(args=args,
+                                       kwargs=kwargs,
                                        loc=blocks[blk_start].loc,
                                        func_globals=func_globals,
-                                       func_freevars=func_freevars)
+                                       func_closures=func_closures)
         vlt = func_ir.variable_lifetime
 
         inputs, outputs = find_region_inout_vars(
