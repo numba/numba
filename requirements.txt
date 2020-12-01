@@ -1,4 +1,1 @@
-setuptools
-numpy>=1.10
-llvmlite>=0.36.0dev0,<0.37
-argparse
+-e .

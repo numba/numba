@@ -42,7 +42,7 @@ def _guard_py_ver():
     cur_py = parse('.'.join(map(str, sys.version_info[:3])))
 
     if not min_py <= cur_py < max_py:
-        msg = ('Cannot install on Python version {}; only versions >={},<{} ',
+        msg = ('Cannot install on Python version {}; only versions >={},<{} '
                'are supported.')
         raise RuntimeError(msg.format(cur_py, min_py, max_py))
 
@@ -157,13 +157,11 @@ def get_ext_modules():
                                      'numba/_dynfunc.c'])
 
     ext_dispatcher = Extension(name="numba._dispatcher",
-                               sources=['numba/_dispatcher.c',
+                               sources=['numba/_dispatcher.cpp',
                                         'numba/_typeof.c',
                                         'numba/_hashtable.c',
-                                        'numba/_dispatcherimpl.cpp',
                                         'numba/core/typeconv/typeconv.cpp'],
                                depends=["numba/_pymodule.h",
-                                        "numba/_dispatcher.h",
                                         "numba/_typeof.h",
                                         "numba/_hashtable.h"],
                                **np_compile_args)

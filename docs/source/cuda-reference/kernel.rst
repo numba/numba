@@ -58,7 +58,7 @@ creating a specialized instance:
 
 .. autoclass:: numba.cuda.compiler.Dispatcher
    :members: inspect_asm, inspect_llvm, inspect_sass, inspect_types,
-             specialize, specialized, extensions, forall
+             get_regs_per_thread, specialize, specialized, extensions, forall
 
 
 Intrinsic Attributes and Functions
@@ -211,6 +211,39 @@ Synchronization and Atomic Operations
     and uint64 only. The ``idx`` argument can be an integer or a tuple of
     integer indices for indexing into multi-dimensional arrays. The number
     of elements in ``idx`` must match the number of dimensions of ``array``.
+
+    Returns the value of ``array[idx]`` before the storing the new value.
+    Behaves like an atomic load.
+
+.. function:: numba.cuda.atomic.exch(array, idx, value)
+
+    Perform ``array[idx] = value``. Supports int32, uint32, int64,
+    and uint64 only. The ``idx`` argument can be an integer or a tuple of
+    integer indices for indexing into multi-dimensional arrays. The number
+    of elements in ``idx`` must match the number of dimensions of ``array``.
+
+    Returns the value of ``array[idx]`` before the storing the new value.
+    Behaves like an atomic load.
+
+.. function:: numba.cuda.atomic.inc(array, idx, value)
+
+    Perform ``array[idx] = (0 if array[idx] >= value else array[idx] + 1)``.
+    Supports uint32, and uint64 only. The ``idx`` argument can be an integer
+    or a tuple of integer indices for indexing into multi-dimensional arrays.
+    The number of elements in ``idx`` must match the number of dimensions of
+    ``array``.
+
+    Returns the value of ``array[idx]`` before the storing the new value.
+    Behaves like an atomic load.
+
+.. function:: numba.cuda.atomic.dec(array, idx, value)
+
+    Perform ``array[idx] =
+    (value if (array[idx] == 0) or (array[idx] > value) else array[idx] - 1)``.
+    Supports uint32, and uint64 only. The ``idx`` argument can be an integer
+    or a tuple of integer indices for indexing into multi-dimensional arrays.
+    The number of elements in ``idx`` must match the number of dimensions of
+    ``array``.
 
     Returns the value of ``array[idx]`` before the storing the new value.
     Behaves like an atomic load.
