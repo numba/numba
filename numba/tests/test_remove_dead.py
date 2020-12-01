@@ -248,6 +248,7 @@ class TestRemoveDead(unittest.TestCase):
                     state.typingctx,
                     state.flags.auto_parallel,
                     state.flags,
+                    state.metadata,
                     state.parfor_diagnostics
                 )
                 remove_dels(state.func_ir.blocks)
