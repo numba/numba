@@ -159,7 +159,7 @@ compiled code. When these containers are used from the CPython interpreter, the
 data involved has to be converted from/to the container format. This process is
 relatively costly and as a result impacts performance. In JIT compiled code no
 such penalty exists and so operations on the containers are much quicker and
-often faster than the pure python equivalent.
+often faster than the pure Python equivalent.
 
 Does Numba automatically parallelize code?
 ------------------------------------------
