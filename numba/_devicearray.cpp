@@ -106,7 +106,7 @@ MOD_INIT(_devicearray) {
     if (m == NULL)
         goto error_occurred;
 
-    c_api = PyCapsule_New((void *)_DeviceArray_API, "_devicearray.c_api", NULL);
+    c_api = PyCapsule_New((void *)_DeviceArray_API, "numba._devicearray._DEVICEARRAY_API", NULL);
     if (c_api == NULL)
         goto error_occurred;
 

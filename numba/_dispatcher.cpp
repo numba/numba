@@ -827,29 +827,13 @@ static int
 import_devicearray(void)
 {
     PyObject *devicearray = PyImport_ImportModule("numba._devicearray");
-    PyObject *c_api = NULL;
-
     if (devicearray == NULL) {
         return -1;
     }
-
-    c_api = PyObject_GetAttrString(devicearray, "_DEVICEARRAY_API");
     Py_DECREF(devicearray);
-    if (c_api == NULL) {
-        PyErr_SetString(PyExc_AttributeError, "_DEVICEARRAY_API not found");
-        return -1;
-    }
 
-    if (!PyCapsule_CheckExact(c_api)) {
-        PyErr_SetString(PyExc_RuntimeError, "_DEVICEARRAY_API is not PyCapsule object");
-        Py_DECREF(c_api);
-        return -1;
-    }
-
-    DeviceArray_API = (void**)PyCapsule_GetPointer(c_api, "_devicearray.c_api");
-    Py_DECREF(c_api);
+    DeviceArray_API = (void**)PyCapsule_Import("numba._devicearray._DEVICEARRAY_API", 0);
     if (DeviceArray_API == NULL) {
-        PyErr_SetString(PyExc_RuntimeError, "_DEVICEARRAY_API is NULL pointer");
         return -1;
     }
 
