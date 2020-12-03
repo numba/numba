@@ -93,7 +93,8 @@ class GUFunc(object):
 
     def _get_signature(self, *args):
         parsed_sig = parse_signature(self.gufunc_builder.signature)
-        ewise_types = self._get_ewise_dtypes(args)  # [int32, int32, int32, ...]  # noqa: E501
+        # ewise_types is a list of [int32, int32, int32, ...]
+        ewise_types = self._get_ewise_dtypes(args)
 
         # first time calling the gufunc
         # generate a signature based on input arguments
@@ -113,17 +114,20 @@ class GUFunc(object):
         return types.none(*l)
 
     def __call__(self, *args):
-        # If compilation is disabled OR it is NOT a dynamic gufunc, call the underlying gufunc  # noqa: E501
+        # If compilation is disabled OR it is NOT a dynamic gufunc
+        # call the underlying gufunc
         if self._frozen or not self.is_dynamic:
             return self.ufunc(*args)
 
         if self._num_args_match(*args) is False:
-            # It is not allowed to call a dynamic gufunc without providing all the arguments  # noqa: E501
+            # It is not allowed to call a dynamic gufunc without
+            # providing all the arguments
             # see: https://github.com/numba/numba/pull/5938#discussion_r506429392  # noqa: E501
             msg = (
                 f"Too few arguments for function '{self.__name__}'. "
                 "Note that the pattern `out = gufunc(Arg1, Arg2, ..., ArgN)` "
-                "is not allowed. Use `gufunc(Arg1, Arg2, ..., ArgN, out) instead.")  # noqa: E501
+                "is not allowed. Use `gufunc(Arg1, Arg2, ..., ArgN, out) "
+                "instead.")
             raise TypeError(msg)
 
         # at this point we know the gufunc is a dynamic one
