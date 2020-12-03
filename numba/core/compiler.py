@@ -338,6 +338,7 @@ class CompilerBase(object):
         self.state.parfor_diagnostics = ParforDiagnostics()
         self.state.metadata['parfor_diagnostics'] = \
             self.state.parfor_diagnostics
+        self.state.metadata['parfors'] = {}
 
         self.state.status = _CompileStatus(
             can_fallback=self.state.flags.enable_pyobject
