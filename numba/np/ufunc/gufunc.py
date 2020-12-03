@@ -24,7 +24,7 @@ class GUFunc(object):
         # object here
         self.gufunc_builder = GUFuncBuilder(
             py_func, signature, identity, cache, targetoptions)
-    
+
     def __repr__(self):
         return f"<numba._GUFunc '{self.__name__}'>"
 
