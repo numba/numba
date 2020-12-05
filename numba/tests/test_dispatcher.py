@@ -1467,6 +1467,11 @@ class TestCache(BaseCacheUsecasesTest):
 
 class TestCacheStringSource(BaseCacheUsecasesTest):
     """Test cache for String source functions
+
+    It mirrors the tests done on caching of normal functions, except:
+     - it does not test object mode
+     - it does not test generated jit
+
     """
     def test_string_source(self):
         self.check_pycache(0)
@@ -1568,6 +1573,47 @@ class TestCacheStringSource(BaseCacheUsecasesTest):
             f = mod.str_closure4
             self.assertPreciseEqual(f(3), 12) # 3 + 9 = 12
             self.check_pycache(5) # 1 nbi, 4 nbc
+
+    def test_cache_reuse(self):
+        mod = self.import_module()
+        mod.str_add_usecase(2, 3)
+        mod.str_add_usecase(2.5, 3.5)
+        mod.str_outer_uncached(2, 3)
+        mod.str_outer(2, 3)
+        mod.str_record_return(mod.packed_arr, 0)
+        mod.str_record_return(mod.aligned_arr, 1)
+        # mod.generated_usecase(2, 3)
+        mtimes = self.get_cache_mtimes()
+        # Two signatures compiled
+        self.check_hits(mod.str_add_usecase, 0, 2)
+
+        mod2 = self.import_module()
+        self.assertIsNot(mod, mod2)
+        f = mod2.str_add_usecase
+        f(2, 3)
+        self.check_hits(f, 1, 0)
+        f(2.5, 3.5)
+        self.check_hits(f, 2, 0)
+
+        # The files haven't changed
+        self.assertEqual(self.get_cache_mtimes(), mtimes)
+
+        self.run_in_separate_process()
+        self.assertEqual(self.get_cache_mtimes(), mtimes)
+
+    def test_cache_invalidate(self):
+        mod = self.import_module()
+        f = mod.str_add_usecase
+        self.assertPreciseEqual(f(2, 3), 6)
+
+        # This should change the functions' results
+        with open(self.modfile, "a") as f:
+            f.write("\nZ = 10\n")
+
+        mod = self.import_module()
+        f = mod.str_add_usecase
+        self.assertPreciseEqual(f(2, 3), 15)
+
 
 @skip_parfors_unsupported
 class TestSequentialParForsCache(BaseCacheUsecasesTest):

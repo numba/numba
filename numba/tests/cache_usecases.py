@@ -145,10 +145,10 @@ def record_return(ary, i):
 # test the ability to cache this type of functions. The original name is
 # prepended with "str"
 for fc in [add_usecase, generated_usecase, inner, outer_uncached,
-           use_c_sin, use_c_sin_nest1, use_c_sin_nest2, use_big_array]:
+           use_c_sin, use_c_sin_nest1, use_c_sin_nest2, use_big_array,
+           record_return]:
     fc_txt = inspect.getsource(fc).replace("def ", "def str_")
     exec(fc_txt)
-
 
 
 def make_str_closure(x):
