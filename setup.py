@@ -391,6 +391,7 @@ metadata = dict(
         "numba.cext": ["*.c", "*.h"],
         # numba gdb hook init command language file
         "numba.misc": ["cmdlang.gdb"],
+        "numba.typed": ["py.typed"],
     },
     scripts=["numba/pycc/pycc", "bin/numba"],
     author="Anaconda, Inc.",
