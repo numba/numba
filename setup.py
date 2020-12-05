@@ -42,7 +42,7 @@ def _guard_py_ver():
     cur_py = parse('.'.join(map(str, sys.version_info[:3])))
 
     if not min_py <= cur_py < max_py:
-        msg = ('Cannot install on Python version {}; only versions >={},<{} ',
+        msg = ('Cannot install on Python version {}; only versions >={},<{} '
                'are supported.')
         raise RuntimeError(msg.format(cur_py, min_py, max_py))
 

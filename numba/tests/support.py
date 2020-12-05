@@ -92,6 +92,10 @@ skip_unless_typeguard = unittest.skipUnless(
     has_typeguard, "Typeguard is not enabled",
 )
 
+skip_if_typeguard = unittest.skipIf(
+    has_typeguard, "Broken if Typeguard is enabled",
+)
+
 # See issue #6465, PPC64LE LLVM bug
 skip_ppc64le_issue6465 = unittest.skipIf(platform.machine() == 'ppc64le',
                                          ("Hits: 'mismatch in size of "

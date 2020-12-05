@@ -378,7 +378,7 @@ class List(MutableSequence, pt.Generic[T]):
     def extend(self, iterable: pt.Sequence[T]) -> None: #type: ignore[override]
         # Empty iterable, do nothing
         if len(iterable) == 0:
-            return self
+            return None
         if not self._typed:
             # Need to get the first element of the iterable to initialise the
             # type of the list. FIXME: this may be a problem if the iterable
