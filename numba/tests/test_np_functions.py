@@ -3960,6 +3960,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         values = [
             # test single values
             (-2, 0.5), (0., 0.), (0., 0.5), (0., 1.), (2, 0.5),
+            # test infinite values
+            (-np.inf, 0.), (np.inf, 1.),
             # test arrays as input
             (np.arange(-1, 2), 0.5), (np.arange(-1, 2), np.arange(2, 5)),
         ]

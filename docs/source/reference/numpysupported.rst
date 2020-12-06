@@ -467,7 +467,7 @@ The following top-level functions are supported:
 * :func:`numpy.full_like` (only the 3 first arguments)
 * :func:`numpy.hamming`
 * :func:`numpy.hanning`
-* :func:`numpy.heaviside`
+* :func:`numpy.heaviside` (only the 2 first arguments)
 * :func:`numpy.histogram` (only the 3 first arguments)
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
