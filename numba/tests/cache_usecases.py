@@ -173,6 +173,23 @@ def str_outer(x, y):
 """
 exec(fc_txt)
 
+fc_txt = """@jit(cache=True, nopython=True)
+def ambiguous_function(x):
+    return x + 2
+"""
+ns = {'jit': jit}
+exec(fc_txt, ns, ns)
+str_renamed_function1 = ns['ambiguous_function']
+
+fc_txt = """@jit(cache=True, nopython=True)
+def ambiguous_function(x):
+    return x + 6
+"""
+ns = {'jit': jit}
+exec(fc_txt, ns, ns)
+str_renamed_function2 = ns['ambiguous_function']
+
+
 class _TestModule(TestCase):
     """
     Tests for functionality of this module's functions.

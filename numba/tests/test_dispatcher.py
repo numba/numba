@@ -1614,6 +1614,13 @@ class TestCacheStringSource(BaseCacheUsecasesTest):
         f = mod.str_add_usecase
         self.assertPreciseEqual(f(2, 3), 15)
 
+    def test_same_names(self):
+        # Function with the same names should still disambiguate
+        mod = self.import_module()
+        f = mod.str_renamed_function1
+        self.assertPreciseEqual(f(2), 4)
+        f = mod.str_renamed_function2
+        self.assertPreciseEqual(f(2), 8)
 
 @skip_parfors_unsupported
 class TestSequentialParForsCache(BaseCacheUsecasesTest):
