@@ -341,6 +341,10 @@ def array_contains(a, key):
     return key in a
 
 
+def heaviside(x1, x2):
+    return np.heaviside(x1, x2)
+
+
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
@@ -3951,6 +3955,28 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as e:
             cfunc(np.array([1, 2, 3, 4]), 'float32')
         self.assertIn("dtype must be a valid Numpy dtype", str(e.exception))
+
+    def test_heaviside(self):
+        values = [
+            # test single values
+            (-2, 0.5), (0., 0.), (0., 0.5), (0., 1.), (2, 0.5),
+            # test arrays as input
+            (np.arange(-1, 2), 0.5), (np.arange(-1, 2), np.arange(2, 5)),
+        ]
+
+        pyfunc = heaviside
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for x in values:
+            expected = pyfunc(*x)
+            got = cfunc(*x)
+            if isinstance(x[0], np.ndarray):
+                self.assertPreciseEqual(expected, got, msg=(x,))
+            else:
+                self.assertEqual(expected, got, x)
+
+        # test for NaNs
+        self.assertTrue(np.isnan(cfunc(np.nan, 0.5)))
 
 
 class TestNPMachineParameters(TestCase):

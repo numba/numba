@@ -13,7 +13,7 @@ import numpy as np
 
 import llvmlite.llvmpy.core as lc
 
-from numba import generated_jit
+from numba import generated_jit, vectorize
 from numba.core import types, cgutils
 from numba.core.extending import overload, overload_method, register_jitable
 from numba.np.numpy_support import as_dtype, type_can_asarray
@@ -4478,3 +4478,26 @@ def cross2d(a, b):
         return _cross2d_operation(a_, b_)
 
     return impl
+
+
+@vectorize
+def _heaviside(x1, x2):
+    """ vectorized implementation of the heaviside function """
+    if np.isnan(x1):
+        return np.nan
+    elif x1 == 0:
+        return x2
+    elif x1 < 0:
+        return 0.0
+    else:
+        return 1.0
+
+
+@overload(np.heaviside)
+def np_heaviside(x1, x2):
+
+    def heaviside_impl(x1, x2):
+        """ numba implementation of the heaviside function """
+        return _heaviside(x1, x2)
+
+    return heaviside_impl
