@@ -141,7 +141,7 @@ def _get_incref_decref(context, module, datamodel, container_element_type):
 
     decref_fn = module.get_or_insert_function(
         refct_fnty,
-        name='{}.{}_decref'.format(
+        name='.numba_{}.{}_decref'.format(
             context.fndesc.mangled_name, container_element_type),
     )
     builder = ir.IRBuilder(decref_fn.append_basic_block())
@@ -179,7 +179,7 @@ def _get_equal(context, module, datamodel, container_element_type):
 
     wrapfn = module.get_or_insert_function(
         wrapfnty,
-        name='{}.{}_equal.wrap'.format(
+        name='.numba_{}.{}_equal.wrap'.format(
             context.fndesc.mangled_name, container_element_type)
     )
     build_wrapper(wrapfn)
@@ -187,7 +187,7 @@ def _get_equal(context, module, datamodel, container_element_type):
     equal_fnty = ir.FunctionType(ir.IntType(32), [data_ptr_ty, data_ptr_ty])
     equal_fn = module.get_or_insert_function(
         equal_fnty,
-        name='{}.{}_equal'.format(
+        name='.numba_{}.{}_equal'.format(
             context.fndesc.mangled_name, container_element_type),
     )
     builder = Builder(equal_fn.append_basic_block())

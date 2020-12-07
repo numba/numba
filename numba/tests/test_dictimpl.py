@@ -186,19 +186,19 @@ class DictIter(object):
     next = __next__    # needed for py2 only
 
 
-############################################################
-# Supporting code for TestDictImpl.test_parametrized_types
-############################################################
 class Parametrized(tuple):
+    """supporting type for TestDictImpl.test_parametrized_types
+    needs to be global to be cacheable"""
     def __init__(self, tup):
         assert all(isinstance(v, str) for v in tup)
 
 
-class ParametrisedType(types.Type):
+class ParametrizedType(types.Type):
     """this is essentially UniTuple(unicode_type, n)
     BUT type name is the same for all n"""
+
     def __init__(self, value):
-        super(ParametrisedType, self).__init__('ParametrisedType')
+        super(ParametrizedType, self).__init__('ParametrizedType')
         self.dtype = types.unicode_type
         self.n = len(value)
 
@@ -208,56 +208,6 @@ class ParametrisedType(types.Type):
 
     def __len__(self):
         return self.n
-
-
-register_model(ParametrisedType)(UniTupleModel)
-
-
-@typeof_impl.register(Parametrized)
-def typeof_unit(val, c):
-    return ParametrisedType(val)
-
-
-@unbox(ParametrisedType)
-def unbox_parametrized(typ, obj, context):
-    return context.unbox(types.UniTuple(typ.dtype, len(typ)), obj)
-
-
-@generated_jit
-def dict_vs_cache_vs_parametrized(v):
-    typ = v
-
-    def objmode_vs_cache_vs_parametrized_impl(v):
-        # typed.List shows same behaviour after fix for #6397
-        d = typed.Dict.empty(types.unicode_type, typ)
-        d['data'] = v
-
-    return objmode_vs_cache_vs_parametrized_impl
-
-
-def dict_vs_cache_vs_parametrized_worker():
-    """Has had tendency to segfault when run more than once
-    (i.e. when compiled function is loaded from cache)"""
-    @jit(nopython=True, cache=True)
-    def get_unit_system_data(x, y):
-        dict_vs_cache_vs_parametrized(x)
-        dict_vs_cache_vs_parametrized(y)
-
-    x, y = Parametrized(('a', 'b')), Parametrized(('a',))
-
-    for ii in range(50):  # <- somtimes works a few times
-        assert get_unit_system_data(x, y) is None
-
-
-def run_test_parametrized_types_in_subprocess():
-    env = os.environ.copy()
-    subproc = subprocess.Popen(
-        [sys.executable, '-c',
-         'import numba.tests.test_dictimpl as test_mod\n' +
-         'test_mod.dict_vs_cache_vs_parametrized_worker()'],
-        env=env)
-    subproc.wait()
-    return subproc.returncode
 
 
 class TestDictImpl(TestCase):
@@ -659,11 +609,45 @@ class TestDictImpl(TestCase):
 
     def test_parametrized_types(self):
         """https://github.com/numba/numba/issues/6401"""
-        self.assertEqual(
-            run_test_parametrized_types_in_subprocess(),
-            0,
-            'Child process died')
-        self.assertEqual(
-            run_test_parametrized_types_in_subprocess(),
-            0,
-            'Child process died')
+
+        register_model(ParametrizedType)(UniTupleModel)
+
+        @typeof_impl.register(Parametrized)
+        def typeof_unit(val, c):
+            return ParametrizedType(val)
+
+        @unbox(ParametrizedType)
+        def unbox_parametrized(typ, obj, context):
+            return context.unbox(types.UniTuple(typ.dtype, len(typ)), obj)
+
+        @generated_jit
+        def dict_vs_cache_vs_parametrized(v):
+            typ = v
+
+            def objmode_vs_cache_vs_parametrized_impl(v):
+                # typed.List shows same behaviour after fix for #6397
+                d = typed.Dict.empty(types.unicode_type, typ)
+                d['data'] = v
+
+            return objmode_vs_cache_vs_parametrized_impl
+
+        @jit(nopython=True, cache=True)
+        def set_parametrized_data(x, y):
+            # Has had a tendency to segfault when the compiled function
+            # was loaded from cache in a different process than the one
+            # it was originally compiled in.
+            # The new process is simulated below by resetting the dispatchers
+            # and the target context
+            dict_vs_cache_vs_parametrized(x)
+            dict_vs_cache_vs_parametrized(y)
+
+        x, y = Parametrized(('a', 'b')), Parametrized(('a',))
+        set_parametrized_data(x, y)
+
+        # reset dispatchers and targetctx to force re-load from cache as a new process would jit
+        set_parametrized_data._make_finalizer()()
+        set_parametrized_data._reset_overloads()
+        set_parametrized_data.targetctx.init()
+
+        for ii in range(50):  # <- somtimes works a few times
+            assert set_parametrized_data(x, y) is None
