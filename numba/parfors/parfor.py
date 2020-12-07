@@ -1511,7 +1511,7 @@ class ParforPassStates:
     """
 
     def __init__(self, func_ir, typemap, calltypes, return_type, typingctx,
-                 options, flags, diagnostics=ParforDiagnostics()):
+                 options, flags, metadata, diagnostics=ParforDiagnostics()):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
@@ -1529,6 +1529,9 @@ class ParforPassStates:
 
         ir_utils._max_label = max(func_ir.blocks.keys())
         self.flags = flags
+        self.metadata = metadata
+        if "parfors" not in metadata:
+            metadata["parfors"] = {}
 
 
 class ConvertInplaceBinop:
@@ -2740,11 +2743,11 @@ class ParforPass(ParforPassStates):
         # jumps can be created with prange conversion
         simplify_parfor_body_CFG(self.func_ir.blocks)
         # simplify before fusion
-        simplify(self.func_ir, self.typemap, self.calltypes)
+        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
         # need two rounds of copy propagation to enable fusion of long sequences
         # of parfors like test_fuse_argmin (some PYTHONHASHSEED values since
         # apply_copies_parfor depends on set order for creating dummy assigns)
-        simplify(self.func_ir, self.typemap, self.calltypes)
+        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
 
         if self.options.fusion:
             self.func_ir._definitions = build_definitions(self.func_ir.blocks)
@@ -2764,13 +2767,13 @@ class ParforPass(ParforPassStates):
             self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
             dprint_func_ir(self.func_ir, "after fusion")
         # simplify again
-        simplify(self.func_ir, self.typemap, self.calltypes)
+        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
         # push function call variables inside parfors so gufunc function
         # wouldn't need function variables as argument
         push_call_vars(self.func_ir.blocks, {}, {}, self.typemap)
         dprint_func_ir(self.func_ir, "after push call vars")
         # simplify again
-        simplify(self.func_ir, self.typemap, self.calltypes)
+        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
         dprint_func_ir(self.func_ir, "after optimization")
         if config.DEBUG_ARRAY_OPT >= 1:
             print("variable types: ", sorted(self.typemap.items()))
@@ -2807,7 +2810,7 @@ class ParforPass(ParforPassStates):
                                 self.typemap)
         if sequential_parfor_lowering:
             lower_parfor_sequential(
-                self.typingctx, self.func_ir, self.typemap, self.calltypes)
+                self.typingctx, self.func_ir, self.typemap, self.calltypes, self.metadata)
         else:
             # prepare for parallel lowering
             # add parfor params to parfors here since lowering is destructive
@@ -2869,7 +2872,8 @@ class ParforPass(ParforPassStates):
                         equiv_set = array_analysis.get_equiv_set(label)
                         stmt.equiv_set = equiv_set
                         next_stmt.equiv_set = equiv_set
-                        fused_node, fuse_report = try_fuse(equiv_set, stmt, next_stmt)
+                        fused_node, fuse_report = try_fuse(equiv_set, stmt, next_stmt,
+                            self.metadata["parfors"])
                         # accumulate fusion reports
                         self.diagnostics.fusion_reports.append(fuse_report)
                         if fused_node is not None:
@@ -3176,7 +3180,7 @@ def _find_func_var(typemap, func, avail_vars, loc):
     raise errors.UnsupportedRewriteError("ufunc call variable not found", loc=loc)
 
 
-def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes):
+def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes, metadata):
     ir_utils._max_label = max(ir_utils._max_label,
                               ir_utils.find_max_label(func_ir.blocks))
     parfor_found = False
@@ -3191,7 +3195,7 @@ def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes):
     if parfor_found:
         func_ir.blocks = rename_labels(func_ir.blocks)
     dprint_func_ir(func_ir, "after parfor sequential lowering")
-    simplify(func_ir, typemap, calltypes)
+    simplify(func_ir, typemap, calltypes, metadata["parfors"])
     dprint_func_ir(func_ir, "after parfor sequential simplify")
 
 
@@ -3807,7 +3811,7 @@ def get_parfor_writes(parfor):
 
 FusionReport = namedtuple('FusionReport', ['first', 'second', 'message'])
 
-def try_fuse(equiv_set, parfor1, parfor2):
+def try_fuse(equiv_set, parfor1, parfor2, metadata):
     """try to fuse parfors and return a fused parfor, otherwise return None
     """
     dprint("try_fuse: trying to fuse \n", parfor1, "\n", parfor2)
@@ -3831,6 +3835,16 @@ def try_fuse(equiv_set, parfor1, parfor2):
     def is_equiv(x, y):
         return x == y or equiv_set.is_equiv(x, y)
 
+    def get_user_varname(v):
+        """get original variable name by user if possible"""
+        if not isinstance(v, ir.Var):
+            return v
+        v = v.name
+        if "var_rename_map" in metadata and v in metadata["var_rename_map"]:
+            user_varname = metadata["var_rename_map"][v]
+            return user_varname
+        return v
+
     for i in range(ndims):
         nest1 = parfor1.loop_nests[i]
         nest2 = parfor2.loop_nests[i]
@@ -3839,8 +3853,10 @@ def try_fuse(equiv_set, parfor1, parfor2):
                 is_equiv(nest1.step, nest2.step)):
             dprint("try_fuse: parfor dimension correlation mismatch", i)
             msg = "- fusion failed: loop dimension mismatched in axis %s. "
-            msg += "slice(%s, %s, %s) != " % (nest1.start, nest1.stop, nest1.step)
-            msg += "slice(%s, %s, %s)" % (nest2.start, nest2.stop, nest2.step)
+            msg += "slice(%s, %s, %s) != " % (get_user_varname(nest1.start),
+                get_user_varname(nest1.stop), get_user_varname(nest1.step))
+            msg += "slice(%s, %s, %s)" % (get_user_varname(nest2.start),
+                get_user_varname(nest2.stop), get_user_varname(nest2.step))
             report = FusionReport(parfor1.id, parfor2.id, msg % i)
             return None, report
 

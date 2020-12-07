@@ -332,6 +332,8 @@ all_numba_types = (types.float64, types.float32,
 integer_numba_types = (types.int32, types.uint32,
                        types.int64, types.uint64)
 
+unsigned_int_numba_types = (types.uint32, types.uint64)
+
 Cuda_atomic_add = _gen(cuda.atomic.add, all_numba_types)
 Cuda_atomic_sub = _gen(cuda.atomic.sub, all_numba_types)
 Cuda_atomic_max = _gen(cuda.atomic.max, all_numba_types)
@@ -341,6 +343,9 @@ Cuda_atomic_nanmin = _gen(cuda.atomic.nanmin, all_numba_types)
 Cuda_atomic_and = _gen(cuda.atomic.and_, integer_numba_types)
 Cuda_atomic_or = _gen(cuda.atomic.or_, integer_numba_types)
 Cuda_atomic_xor = _gen(cuda.atomic.xor, integer_numba_types)
+Cuda_atomic_inc = _gen(cuda.atomic.inc, unsigned_int_numba_types)
+Cuda_atomic_dec = _gen(cuda.atomic.dec, unsigned_int_numba_types)
+Cuda_atomic_exch = _gen(cuda.atomic.exch, integer_numba_types)
 
 
 @register
@@ -351,8 +356,8 @@ class Cuda_atomic_compare_and_swap(AbstractTemplate):
         assert not kws
         ary, old, val = args
         dty = ary.dtype
-        # only support int32
-        if dty == types.int32 and ary.ndim == 1:
+
+        if dty in integer_numba_types and ary.ndim == 1:
             return signature(dty, ary, dty, dty)
 
 
@@ -412,6 +417,15 @@ class CudaAtomicTemplate(AttributeTemplate):
 
     def resolve_xor(self, mod):
         return types.Function(Cuda_atomic_xor)
+
+    def resolve_inc(self, mod):
+        return types.Function(Cuda_atomic_inc)
+
+    def resolve_dec(self, mod):
+        return types.Function(Cuda_atomic_dec)
+
+    def resolve_exch(self, mod):
+        return types.Function(Cuda_atomic_exch)
 
     def resolve_max(self, mod):
         return types.Function(Cuda_atomic_max)

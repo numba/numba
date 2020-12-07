@@ -125,6 +125,9 @@ xorlock = threading.Lock()
 maxlock = threading.Lock()
 minlock = threading.Lock()
 caslock = threading.Lock()
+inclock = threading.Lock()
+declock = threading.Lock()
+exchlock = threading.Lock()
 
 
 class FakeCUDAAtomic(object):
@@ -156,6 +159,30 @@ class FakeCUDAAtomic(object):
         with xorlock:
             old = array[index]
             array[index] ^= val
+        return old
+
+    def inc(self, array, index, val):
+        with inclock:
+            old = array[index]
+            if old >= val:
+                array[index] = 0
+            else:
+                array[index] += 1
+        return old
+
+    def dec(self, array, index, val):
+        with declock:
+            old = array[index]
+            if (old == 0) or (old > val):
+                array[index] = val
+            else:
+                array[index] -= 1
+        return old
+
+    def exch(self, array, index, val):
+        with exchlock:
+            old = array[index]
+            array[index] = val
         return old
 
     def max(self, array, index, val):
