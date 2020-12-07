@@ -889,7 +889,7 @@ class ParforDiagnostics(object):
             if print_loop_search:
                 print_wrapped(fmt % (pf.id, loc, r_pattern))
             parfors_simple[pf.id] = (pf, loc, r_pattern)
-            return parfors_simple
+        return parfors_simple
 
     def get_all_lines(self, parfors_simple):
         # ensure adjacency lists are the same size for both sets of info
@@ -983,6 +983,17 @@ class ParforDiagnostics(object):
         # This prints the unoptimised parfors state
         sword = '+--'
         fac = len(sword)
+        fadj, froots = self.compute_graph_info(self.fusion_info)
+        nadj, _nroots = self.compute_graph_info(self.nested_fusion_info)
+
+        if len(fadj) > len(nadj):
+            lim = len(fadj)
+            tmp = nadj
+        else:
+            lim = len(nadj)
+            tmp = fadj
+        for x in range(len(tmp), lim):
+            tmp.append([])
 
         def print_nest(fadj_, nadj_, theroot, reported, region_id):
             def print_g(fadj_, nadj_, nroot, depth):
@@ -1038,6 +1049,17 @@ class ParforDiagnostics(object):
         # occurred during loop fusion and rewriting of loop nests
         sword = '+--'
         fac = len(sword)
+        fadj, froots = self.compute_graph_info(self.fusion_info)
+        nadj, _nroots = self.compute_graph_info(self.nested_fusion_info)
+
+        if len(fadj) > len(nadj):
+            lim = len(fadj)
+            tmp = nadj
+        else:
+            lim = len(nadj)
+            tmp = fadj
+        for x in range(len(tmp), lim):
+            tmp.append([])
 
         summary = dict()
         # region : {fused, serialized}
