@@ -2,7 +2,7 @@ import enum
 import typing as pt
 from collections import defaultdict
 
-from numba.core.types.abstract import NumbaTypeInst
+from numba.core.types.abstract import NumbaTypeInst, Type  # noqa: F401
 
 
 class Conversion(enum.IntEnum):

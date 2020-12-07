@@ -2,8 +2,9 @@ import typing as pt
 
 from numba.core.errors import LiteralTypingError, TypingError
 from numba.core.typeconv import Conversion
-from numba.core.types.abstract import (
-    Callable, Literal, NumbaTypeInst, Type, Hashable,
+from numba.core.types.abstract import (  # noqa: F401
+    Callable, Literal, NumbaTypeInst,
+    NumbaTypeInstOrClass, Type, Hashable,
 )
 from numba.core.types.common import (Dummy, IterableType, Opaque,
                                      SimpleIteratorType)
@@ -107,7 +108,7 @@ class VarArg(Type):
     not for actual values.
     """
 
-    def __init__(self, dtype: NumbaTypeInst):
+    def __init__(self, dtype: NumbaTypeInstOrClass):
         self.dtype = dtype
         super(VarArg, self).__init__("*%s" % dtype)
 

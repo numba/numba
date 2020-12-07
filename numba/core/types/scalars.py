@@ -7,7 +7,9 @@ from numba.core import utils
 from numba.core.typeconv import Conversion
 from numba.np import npdatetime_helpers
 
-from .abstract import Dummy, Hashable, Literal, NumbaTypeInst, Number, Type
+from numba.core.types.abstract import (
+    Dummy, Hashable, Literal, NumbaTypeInst, Number, Type
+)
 
 
 class Boolean(Hashable):
@@ -55,8 +57,8 @@ class Integer(Number):
         name = ('int%d' if signed else 'uint%d') % bitwidth
         return cls(name)
 
-    def cast_python_value(self, value: pt.Any) -> int:
-        return getattr(np, self.name)(value)  # type: ignore[no-any-return]
+    def cast_python_value(self, value: pt.Any) -> np.integer:
+        return getattr(np, self.name)(value)
 
     def __lt__(self, other: pt.Any) -> bool:
         if self.__class__ is not other.__class__:

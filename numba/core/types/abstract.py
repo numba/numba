@@ -36,6 +36,8 @@ NumbaTypeClass = pt.Type["Type"]
 # An instance of a Type (i.e. something which satisfies isinstance(x, Type)).
 NumbaTypeInst = pt.Union["Type"]
 
+NumbaTypeInstOrClass = pt.Union[NumbaTypeInst, NumbaTypeClass]
+
 
 class _TypeMetaclass(ABCMeta):
     """
@@ -134,10 +136,10 @@ class Type(metaclass=_TypeMetaclass):
     def __hash__(self) -> int:
         return hash(self.key)
 
-    def __eq__(self, other: NumbaTypeInst) -> bool:  # type: ignore[override]
+    def __eq__(self, other: pt.Any) -> bool:
         return self.__class__ is other.__class__ and self.key == other.key
 
-    def __ne__(self, other: NumbaTypeInst) -> bool:  # type: ignore[override]
+    def __ne__(self, other: pt.Any) -> bool:
         return not (self == other)
 
     def __reduce__(self):

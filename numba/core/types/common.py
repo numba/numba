@@ -6,8 +6,13 @@ import typing as pt
 
 import typing_extensions as pt_ext
 
-from .abstract import (
-    ArrayCompatible, Dummy, IterableType, IteratorType, NumbaTypeInst
+from .abstract import (  # noqa: F401
+    ArrayCompatible,
+    Dummy,
+    IterableType,
+    IteratorType,
+    NumbaTypeInst,
+    Type,
 )
 
 

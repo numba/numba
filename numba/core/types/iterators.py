@@ -1,6 +1,6 @@
 import typing as pt
 
-from .abstract import IterableType, NumbaTypeInst
+from .abstract import IterableType, NumbaTypeInst, Type  # noqa: F401
 from .common import Buffer, SimpleIterableType, SimpleIteratorType
 from ..errors import TypingError
 
