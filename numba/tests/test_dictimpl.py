@@ -3,10 +3,7 @@ Testing C implementation of the numba dictionary
 """
 
 import ctypes
-import os
 import random
-import subprocess
-import sys
 
 from numba.tests.support import TestCase
 from numba import generated_jit, _helperlib, jit, typed, types
@@ -644,7 +641,8 @@ class TestDictImpl(TestCase):
         x, y = Parametrized(('a', 'b')), Parametrized(('a',))
         set_parametrized_data(x, y)
 
-        # reset dispatchers and targetctx to force re-load from cache as a new process would jit
+        # reset dispatchers and targetctx to force re-load from cache as if a
+        # new process would jit the function
         set_parametrized_data._make_finalizer()()
         set_parametrized_data._reset_overloads()
         set_parametrized_data.targetctx.init()
