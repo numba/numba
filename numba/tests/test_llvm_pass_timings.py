@@ -27,10 +27,10 @@ class TestLLVMPassTimings(TestCase):
         self.assertGreater(len(timings), 0)
         # Check: __getitem__
         last = timings[-1]
-        self.assertIsInstance(last, lpt._NamedTimings)
-        # Check: _NamedTimings
+        self.assertIsInstance(last, lpt.NamedTimings)
+        # Check: NamedTimings
         self.assertIsInstance(last.name, str)
-        self.assertIsInstance(last.timings, lpt._ProcessedPassTimings)
+        self.assertIsInstance(last.timings, lpt.ProcessedPassTimings)
 
     def test_analyze(self):
         @njit

@@ -34,13 +34,13 @@ class RecordLLVMPassTimings:
 
         Returns
         -------
-        timings : _ProcessedPassTimings
+        timings : ProcessedPassTimings
         """
-        return _ProcessedPassTimings(self._data)
+        return ProcessedPassTimings(self._data)
 
 
-_PassTimingRecord = namedtuple(
-    "_PassTimingRecord",
+PassTimingRecord = namedtuple(
+    "PassTimingRecord",
     [
         "user_time",
         "user_percent",
@@ -63,7 +63,7 @@ def _adjust_timings(records):
 
     Returns
     -------
-    res : List[_PassTimingRecord]
+    res : List[PassTimingRecord]
     """
     total_rec = records[-1]
     assert total_rec.pass_name == "Total"  # guard for implementation error
@@ -95,12 +95,12 @@ def _adjust_timings(records):
         for fn in adj_fns:
             d = fn(d)
         # Reconstruct the namedtuple
-        return _PassTimingRecord(**d)
+        return PassTimingRecord(**d)
 
     return list(map(chained, dicts))
 
 
-class _ProcessedPassTimings:
+class ProcessedPassTimings:
     """A class for processing raw timing report from LLVM.
 
     The processing is done lazily so we don't waste time processing unused
@@ -115,11 +115,19 @@ class _ProcessedPassTimings:
 
     def get_raw_data(self):
         """Returns the raw string data.
+
+        Returns
+        -------
+        res : str
         """
         return self._raw_data
 
     def get_total_time(self):
         """Compute the total time spend in all passes.
+
+        Returns
+        -------
+        res : float
         """
         return self.list_records()[-1].wall_time
 
@@ -128,7 +136,7 @@ class _ProcessedPassTimings:
 
         Returns
         -------
-        res : List[_PassTimingRecord]
+        res : List[PassTimingRecord]
         """
         return self._processed
 
@@ -143,7 +151,7 @@ class _ProcessedPassTimings:
 
         Returns
         -------
-        res : List[_PassTimingRecord]
+        res : List[PassTimingRecord]
             Returns the top(n) most time-consuming passes in descending order.
         """
         records = self.list_records()
@@ -204,7 +212,7 @@ class _ProcessedPassTimings:
                 m = re.match(pat, ln)
                 if m is not None:
                     raw_data = m.groups()
-                    rec = _PassTimingRecord(
+                    rec = PassTimingRecord(
                         *map(float, raw_data[:-1]), *raw_data[-1:]
                     )
                     yield rec
@@ -223,11 +231,14 @@ class _ProcessedPassTimings:
         return _adjust_timings(records)
 
 
-_NamedTimings = namedtuple("_NamedTimings", ["name", "timings"])
+NamedTimings = namedtuple("NamedTimings", ["name", "timings"])
 
 
 class PassTimingsCollection(Sequence):
     """A collection of pass timings.
+
+    This class implements the ``Sequence`` protocol for accessing the
+    individual timing records.
     """
 
     def __init__(self, name):
@@ -236,7 +247,9 @@ class PassTimingsCollection(Sequence):
 
     @contextmanager
     def record(self, name):
-        """Record timings
+        """Record new timings and append to this collection.
+
+        Note: this is mainly for internal use inside the compiler pipeline.
 
         See also ``RecordLLVMPassTimings``
 
@@ -250,19 +263,19 @@ class PassTimingsCollection(Sequence):
         rec = timings.get()
         # Only keep non-empty records
         if rec:
-            self.append(name, rec)
+            self._append(name, rec)
 
-    def append(self, name, timings):
+    def _append(self, name, timings):
         """Append timing records
 
         Parameters
         ----------
         name : str
             Name for the records.
-        timings : _ProcessedPassTimings
+        timings : ProcessedPassTimings
             the timing records.
         """
-        self._records.append(_NamedTimings(name, timings))
+        self._records.append(NamedTimings(name, timings))
 
     def get_total_time(self):
         """Computes the sum of the total time across all contained timings.
@@ -271,6 +284,10 @@ class PassTimingsCollection(Sequence):
 
     def list_longest_first(self):
         """Returns the timings in descending order of total time duration.
+
+        Returns
+        -------
+        res : List[ProcessedPassTimings]
         """
         return sorted(self._records,
                       key=lambda x: x.timings.get_total_time(),
@@ -296,7 +313,11 @@ class PassTimingsCollection(Sequence):
 
         Returns
         -------
-        res : _NamedTimings
+        res : (name, timings)
+            A named tuple with two fields:
+
+            - name: str
+            - timings: ProcessedPassTimings
         """
         return self._records[i]
 
