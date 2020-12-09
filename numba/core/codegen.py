@@ -17,7 +17,7 @@ from numba.core.runtime import rtsys
 from numba.core.compiler_lock import require_global_compiler_lock
 from numba.core.errors import NumbaInvalidConfigWarning
 from numba.misc.inspection import disassemble_elf_to_cfg
-from numba.misc.llvm_pass_timings import PassTimingCollection
+from numba.misc.llvm_pass_timings import PassTimingsCollection
 
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
@@ -537,7 +537,7 @@ class CodeLibrary(object):
         # Track names of the dynamic globals
         self._dynamic_globals = []
         ptc_name = f"{self.__class__.__name__}({self._name!r})"
-        self._recorded_timings = PassTimingCollection(ptc_name)
+        self._recorded_timings = PassTimingsCollection(ptc_name)
 
     @property
     def has_dynamic_globals(self):

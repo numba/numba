@@ -19,7 +19,7 @@ class TestLLVMPassTimings(TestCase):
         md = foo.get_metadata(foo.signatures[0])
         timings = md['llvm_pass_timings']
         # Check: timing is of correct type
-        self.assertIsInstance(timings, lpt.PassTimingCollection)
+        self.assertIsInstance(timings, lpt.PassTimingsCollection)
         # Check: basic for __str__
         text = str(timings)
         self.assertIn("== Module passes (full)", text)

@@ -1,5 +1,4 @@
 import re
-import itertools
 import operator
 import heapq
 from collections import namedtuple
@@ -20,13 +19,14 @@ class RecordLLVMPassTimings:
     def __enter__(self):
         """Enables the pass timing in LLVM.
         """
-        llvm.enable_time_passes()
+        llvm.set_time_passes(True)
         return self
 
     def __exit__(self, exc_val, exc_type, exc_tb):
         """Reset timings and save report internally.
         """
         self._data = llvm.report_and_reset_timings()
+        llvm.set_time_passes(False)
         return
 
     def get(self):
@@ -101,13 +101,10 @@ def _adjust_timings(records):
 
 
 class _ProcessedPassTimings:
-    """A class for processing and grouping raw timing data from LLVM.
+    """A class for processing raw timing report from LLVM.
 
     The processing is done lazily so we don't waste time processing unused
     timing information.
-
-    The per-pass timings are grouped because LLVM may sometime print multiple
-    timing report.
     """
 
     def __init__(self, raw_data):
@@ -117,27 +114,26 @@ class _ProcessedPassTimings:
         return bool(self._raw_data)
 
     def get_raw_data(self):
-        """Returns the raw string data
+        """Returns the raw string data.
         """
         return self._raw_data
 
     def get_total_time(self):
-        """Compute the total time spend in all pass-groups.
+        """Compute the total time spend in all passes.
         """
-        return sum(grp[-1].wall_time for grp in self.list_pass_groups())
+        return self.list_records()[-1].wall_time
 
-    def list_pass_groups(self):
-        """Get the processed data for all pass-groups.
+    def list_records(self):
+        """Get the processed data for the timing report.
 
         Returns
         -------
-        res : List[List[_PassTimingRecord]]
+        res : List[_PassTimingRecord]
         """
         return self._processed
 
-    def list_tops(self, n):
-        """Returns the top(n) most time-consuming (by wall-time) passes for
-        each group.
+    def list_top(self, n):
+        """Returns the top(n) most time-consuming (by wall-time) passes.
 
         Parameters
         ----------
@@ -147,14 +143,12 @@ class _ProcessedPassTimings:
 
         Returns
         -------
-        res : List[List[_PassTimingRecord]]
-            Returns the top(n) most time-consuming passes in descending order
-            for each pass-group.
+        res : List[_PassTimingRecord]
+            Returns the top(n) most time-consuming passes in descending order.
         """
+        records = self.list_records()
         key = operator.attrgetter("wall_time")
-        return [
-            heapq.nlargest(n, grp[:-1], key) for grp in self.list_pass_groups()
-        ]
+        return heapq.nlargest(n, records[:-1], key)
 
     def summary(self, topn=5):
         """Return a string summarizing the timing information.
@@ -162,7 +156,7 @@ class _ProcessedPassTimings:
         Parameters
         ----------
         topn : int
-            This limits the maximum number of items to show per pass group.
+            This limits the maximum number of items to show.
             This function will show the ``topn`` most time-consuming passes.
 
         Returns
@@ -171,11 +165,10 @@ class _ProcessedPassTimings:
         """
         buf = []
         ap = buf.append
-        for i, top in enumerate(self.list_tops(topn), 1):
-            ap(f"Pass group #{i} took {self.get_total_time():.4f}s")
-            ap("  Top timings:")
-            for p in top:
-                ap(f"  {p.wall_time:.4f}s ({p.wall_percent:5}%) {p.pass_name}")
+        ap(f"Total {self.get_total_time():.4f}s")
+        ap("Top timings:")
+        for p in self.list_top(topn):
+            ap(f"  {p.wall_time:.4f}s ({p.wall_percent:5}%) {p.pass_name}")
         return "\n".join(buf)
 
     @cached_property
@@ -200,7 +193,8 @@ class _ProcessedPassTimings:
             n = r"\s*((?:[0-9]+\.)?[0-9]+)"
             pat = f"\\s+{n}\\s*\\({n}%\\)" * 4 + r"\s*(.*)"
 
-            for ln in lines:
+            line_iter = iter(lines)
+            for ln in line_iter:
                 m = re.match(pat, ln)
                 if m is not None:
                     raw_data = m.groups()
@@ -209,33 +203,24 @@ class _ProcessedPassTimings:
                     )
                     yield rec
                     if rec.pass_name == "Total":
-                        # "Total" means a pass group has completed
-                        yield None
+                        # "Total" means the report has ended
+                        break
+            # Check that we have reach the end of the report
+            remaining = '\n'.join(line_iter)
+            if remaining:
+                raise ValueError(
+                    f"unexpected text after parser finished:\n{remaining}"
+                )
 
-        # Parse iterator
-        parse_iter = iter(parse(self._raw_data))
-        runs = []
-
-        def not_none(x):
-            return x is not None
-
-        while True:
-            # Group the timings by pass group
-            grouped = list(itertools.takewhile(not_none, parse_iter))
-            if grouped:
-                # Save the pass group
-                runs.append(_adjust_timings(grouped))
-            else:
-                # Nothing yielded, parsing is done
-                break
-
-        return runs
+        # Parse raw data
+        records = list(parse(self._raw_data))
+        return _adjust_timings(records)
 
 
 _NamedTimings = namedtuple("_NamedTimings", ["name", "timings"])
 
 
-class PassTimingCollection(Sequence):
+class PassTimingsCollection(Sequence):
     """A collection of pass timings.
     """
 
