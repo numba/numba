@@ -406,6 +406,9 @@ class NativeLowering(LoweringPass):
             # capture pruning stats
             post_stats = llvm.passmanagers.dump_refprune_stats()
             metadata['prune_stats'] = post_stats - pre_stats
+
+            # Save the LLVM pass timings
+            metadata['llvm_pass_timings'] = library.recorded_timings
         return True
 
 
