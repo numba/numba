@@ -150,21 +150,27 @@ class _ProcessedPassTimings:
         key = operator.attrgetter("wall_time")
         return heapq.nlargest(n, records[:-1], key)
 
-    def summary(self, topn=5):
+    def summary(self, topn=5, indent=0):
         """Return a string summarizing the timing information.
 
         Parameters
         ----------
-        topn : int
+        topn : int; optional
             This limits the maximum number of items to show.
             This function will show the ``topn`` most time-consuming passes.
+        indent : int; optional
+            Set the indentation level. Defaults to 0 for no indentation.
 
         Returns
         -------
         res : str
         """
         buf = []
-        ap = buf.append
+        prefix = " " * indent
+
+        def ap(arg):
+            buf.append(f"{prefix}{arg}")
+
         ap(f"Total {self.get_total_time():.4f}s")
         ap("Top timings:")
         for p in self.list_top(topn):
@@ -258,6 +264,33 @@ class PassTimingsCollection(Sequence):
         """
         self._records.append(_NamedTimings(name, timings))
 
+    def get_total_time(self):
+        """Computes the sum of the total time across all contained timings.
+        """
+        return sum(r.timings.get_total_time() for r in self._records)
+
+    def list_longest_first(self):
+        """Returns the timings in descending order of total time duration.
+        """
+        return sorted(self._records,
+                      key=lambda x: x.timings.get_total_time(),
+                      reverse=True)
+
+    def summary(self):
+        """Returns a string representing the summary of the timings.
+        """
+        buf = []
+        ap = buf.append
+        ap(f"Printing pass timings for {self._name}")
+        overall_time = self.get_total_time()
+        ap(f"Total time: {overall_time:.4f}")
+        for i, r in enumerate(self._records):
+            ap(f"== #{i} {r.name}")
+            percent = r.timings.get_total_time() / overall_time * 100
+            ap(f" Percent: {percent:.1f}%")
+            ap(r.timings.summary(indent=1))
+        return "\n".join(buf)
+
     def __getitem__(self, i):
         """Get the i-th timing record.
 
@@ -273,10 +306,4 @@ class PassTimingsCollection(Sequence):
         return len(self._records)
 
     def __str__(self):
-        buf = []
-        ap = buf.append
-        ap(f"Printing pass timings for {self._name}")
-        for r in self._records:
-            ap(f"== {r.name}")
-            ap(r.timings.summary())
-        return "\n".join(buf)
+        return self.summary()

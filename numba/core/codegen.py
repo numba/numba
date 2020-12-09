@@ -577,7 +577,7 @@ class CodeLibrary(object):
             # Run function-level optimizations to reduce memory usage and improve
             # module-level optimization.
             for func in ll_module.functions:
-                k = f"function passes {func.name!r}"
+                k = f"Function passes {func.name!r}"
                 with self._recorded_timings.record(k):
                     fpm.initialize()
                     fpm.run(func)
@@ -967,7 +967,8 @@ class JITCodeLibrary(CodeLibrary):
 
     def _finalize_specific(self):
         self._codegen._scan_and_fix_unresolved_refs(self._final_module)
-        self._codegen._engine.finalize_object()
+        with self._recorded_timings.record("Finalize object"):
+            self._codegen._engine.finalize_object()
 
 
 class RuntimeLinker(object):
