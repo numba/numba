@@ -514,19 +514,10 @@ def _replace_datalayout(llvmir):
     return '\n'.join(lines)
 
 
-def llvm_to_ptx(llvmir, **opts):
-    if opts.pop('fastmath', False):
-        opts.update({
-            'ftz': True,
-            'fma': True,
-            'prec_div': False,
-            'prec_sqrt': False,
-        })
-
-    cu = CompilationUnit()
-    libdevice = LibDevice(arch=opts.get('arch', 'compute_20'))
-    # New LLVM generate a shorthand for datalayout that NVVM does not know
+def llvm_replace(llvmir):
+    #New LLVM generate a shorthand for datalayout that NVVM does not know
     llvmir = _replace_datalayout(llvmir)
+
     # Replace with our cmpxchg and atomic implementations because LLVM 3.5 has
     # a new semantic for cmpxchg.
     replacements = [
@@ -588,6 +579,23 @@ def llvm_to_ptx(llvmir, **opts):
     llvmir = llvmir.replace('llvm.numba_nvvm.atomic', 'llvm.nvvm.atomic')
 
     llvmir = llvm39_to_34_ir(llvmir)
+
+    return llvmir
+
+
+def llvm_to_ptx(llvmir, **opts):
+    if opts.pop('fastmath', False):
+        opts.update({
+            'ftz': True,
+            'fma': True,
+            'prec_div': False,
+            'prec_sqrt': False,
+        })
+
+    cu = CompilationUnit()
+    libdevice = LibDevice(arch=opts.get('arch', 'compute_20'))
+
+    llvmir = llvm_replace(llvmir)
     cu.add_module(llvmir.encode('utf8'))
     cu.add_module(libdevice.get())
 
