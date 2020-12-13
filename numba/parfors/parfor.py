@@ -2741,7 +2741,7 @@ class ParforPass(ParforPassStates):
 
         # simplify CFG of parfor body loops since nested parfors with extra
         # jumps can be created with prange conversion
-        simplify_parfor_body_CFG(self.func_ir.blocks)
+        n_parfors = simplify_parfor_body_CFG(self.func_ir.blocks)
         # simplify before fusion
         simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
         # need two rounds of copy propagation to enable fusion of long sequences
@@ -2749,7 +2749,7 @@ class ParforPass(ParforPassStates):
         # apply_copies_parfor depends on set order for creating dummy assigns)
         simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
 
-        if self.options.fusion:
+        if self.options.fusion and n_parfors >= 2:
             self.func_ir._definitions = build_definitions(self.func_ir.blocks)
             self.array_analysis.equiv_sets = dict()
             self.array_analysis.run(self.func_ir.blocks)
@@ -2766,15 +2766,13 @@ class ParforPass(ParforPassStates):
             # try fuse again after maximize
             self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
             dprint_func_ir(self.func_ir, "after fusion")
-        # simplify again
-        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
+            # remove dead code after fusion to remove extra arrays and variables
+            simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
+
         # push function call variables inside parfors so gufunc function
         # wouldn't need function variables as argument
         push_call_vars(self.func_ir.blocks, {}, {}, self.typemap)
         dprint_func_ir(self.func_ir, "after push call vars")
-        # simplify again
-        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
-        dprint_func_ir(self.func_ir, "after optimization")
         if config.DEBUG_ARRAY_OPT >= 1:
             print("variable types: ", sorted(self.typemap.items()))
             print("call types: ", self.calltypes)
@@ -4209,9 +4207,11 @@ ir_utils.alias_analysis_extensions[Parfor] = find_potential_aliases_parfor
 
 def simplify_parfor_body_CFG(blocks):
     """simplify CFG of body loops in parfors"""
+    n_parfors = 0
     for block in blocks.values():
         for stmt in block.body:
             if isinstance(stmt, Parfor):
+                n_parfors += 1
                 parfor = stmt
                 # add dummy return to enable CFG creation
                 # can't use dummy_return_in_loop_body since body changes
@@ -4226,6 +4226,7 @@ def simplify_parfor_body_CFG(blocks):
                 last_block.body.pop()
                 # call on body recursively
                 simplify_parfor_body_CFG(parfor.loop_body)
+    return n_parfors
 
 
 def wrap_parfor_blocks(parfor, entry_label = None):
