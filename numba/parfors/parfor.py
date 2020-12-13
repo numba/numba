@@ -2773,6 +2773,9 @@ class ParforPass(ParforPassStates):
         # wouldn't need function variables as argument
         push_call_vars(self.func_ir.blocks, {}, {}, self.typemap)
         dprint_func_ir(self.func_ir, "after push call vars")
+        # simplify again
+        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
+        dprint_func_ir(self.func_ir, "after optimization")
         if config.DEBUG_ARRAY_OPT >= 1:
             print("variable types: ", sorted(self.typemap.items()))
             print("call types: ", self.calltypes)
