@@ -298,10 +298,22 @@ class Interpreter(object):
         """
         new_body = []
         for inst in self.current_block.body:
-            if (isinstance(inst, ir.Assign)
-                and inst.target.is_temp
-                and inst.target.name in self.assigner.unused_dests):
-                continue
+            if isinstance(inst, ir.Assign):
+                if (inst.target.is_temp
+                    and inst.target.name in self.assigner.unused_dests):
+                    continue
+                # eliminate temporary variables that are assigned to user variables
+                # right after creation. E.g.:
+                # $1 = f(); a = $1 -> a = f()
+                # the temporary variable is not reused elsewhere since CPython bytecode
+                # is stack-based and this pattern corresponds to a pop()
+                if (isinstance(inst.value, ir.Var) and inst.value.is_temp and new_body
+                        and isinstance(new_body[-1], ir.Assign)):
+                    prev_assign = new_body[-1]
+                    if prev_assign.target.name == inst.value.name:
+                        prev_assign.target = inst.target
+                        continue
+
             new_body.append(inst)
         self.current_block.body = new_body
 
