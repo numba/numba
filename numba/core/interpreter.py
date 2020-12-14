@@ -312,6 +312,11 @@ class Interpreter(object):
                     prev_assign = new_body[-1]
                     if prev_assign.target.name == inst.value.name:
                         prev_assign.target = inst.target
+                        # replace temp var definition in target var with proper defs
+                        self.definitions[inst.target.name].remove(inst.value)
+                        self.definitions[inst.target.name].extend(
+                            self.definitions.pop(inst.value.name)
+                        )
                         continue
 
             new_body.append(inst)
