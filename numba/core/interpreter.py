@@ -133,7 +133,6 @@ class Interpreter(object):
         self.syntax_blocks = []
         self.dfainfo = None
 
-        firstblk = min(self.cfa.blocks.keys())
         self.scopes.append(ir.Scope(parent=self.current_scope, loc=self.loc))
         # Interpret loop
         for inst, kws in self._iter_inst():

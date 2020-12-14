@@ -1601,7 +1601,14 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
         # Setting literal_value for globals because they are handled
         # like const value in numba
         lit = types.maybe_literal(gvar.value)
-        self.lock_type(target.name, lit or typ, loc=inst.loc)
+        # The user may have provided the type for this variable already.
+        # In this case, call add_type() to make sure the value type is consistent.
+        # See numba.tests.test_array_reductions for examples.
+        tv = self.typevars[target.name]
+        if tv.locked:
+            tv.add_type(lit or typ, loc=inst.loc)
+        else:
+            self.lock_type(target.name, lit or typ, loc=inst.loc)
         self.assumed_immutables.add(inst)
 
     def typeof_expr(self, inst, target, expr):
