@@ -531,10 +531,6 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         self.assertEqual(expected, repr(l))
 
     def test_repr_for_ipython_shells(self):
-        l_short = List(range(3))
-        expected = "ListType[int64]([0, 1, 2])"
-        self.assertEqual(expected, repr(l_short))
-
         try:
             get_ipython
             l_long = List(range(1005))
