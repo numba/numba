@@ -741,10 +741,13 @@ static PyTypeObject DispatcherType = {
     0,                                           /* tp_version_tag */
     0,                                           /* tp_finalize */
 #if PY_MAJOR_VERSION == 3
+/* Python 3.8 has two slots, 3.9 has one. */
+#if PY_MINOR_VERSION > 7
     0,                                           /* tp_vectorcall */
-#if PY_MINOR_VERSION > 7 && PY_MINOR_VERSION < 9 /* 3.7.x or 3.8.x */
+#if PY_MINOR_VERSION == 8
     0,                                           /* tp_print */
-#endif /* 3.7.x or 3.8.x */
+#endif
+#endif
 #endif
 };
 
