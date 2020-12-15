@@ -544,7 +544,7 @@ class TestLowLevelExtending(TestCase):
         test_ir = compiler.run_frontend(mk_func_test_impl)
         typingctx = cpu_target.typing_context
         typingctx.refresh()
-        typemap, _, _ = type_inference_stage(typingctx, test_ir, (), None)
+        typemap, _, _, _ = type_inference_stage(typingctx, test_ir, (), None)
         self.assertTrue(
             any(
                 isinstance(a, types.MakeFunctionLiteral)

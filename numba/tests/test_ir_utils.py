@@ -36,7 +36,7 @@ class TestIrUtils(TestCase):
 
         test_ir = compiler.run_frontend(test_func)
         typingctx = cpu_target.typing_context
-        typemap, _, _ = type_inference_stage(
+        typemap, _, _, _ = type_inference_stage(
             typingctx, test_ir, (), None)
         matched_call = ir_utils.find_callname(
             test_ir, test_ir.blocks[0].body[8].value, typemap)
