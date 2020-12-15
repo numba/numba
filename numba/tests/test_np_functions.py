@@ -41,6 +41,10 @@ def array_equal(a, b):
     return np.array_equal(a, b)
 
 
+def intersect1d(a, b):
+    return np.intersect1d(a, b)
+
+
 def append(arr, values, axis):
     return np.append(arr, values, axis=axis)
 
@@ -587,6 +591,18 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             'Both arguments to "array_equals" must be array-like',
             str(raises.exception)
         )
+
+    def test_intersect1d(self):
+        pyfunc = intersect1d
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def arrays():
+            yield [1], [1]
+            yield [1, 2], [1]
+            yield [1, 2, 2], [2, 2]
+
+        for a, b in arrays():
+            np.testing.assert_array_equal(pyfunc(a, b), cfunc(a, b))
 
     def test_count_nonzero(self):
 

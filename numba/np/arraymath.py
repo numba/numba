@@ -3448,6 +3448,31 @@ def np_array_equal(a, b):
     return impl
 
 
+@overload(np.intersect1d)
+def jit_np_intersect1d(a, b):
+    # Not implemented to support assume_unique or return_indices
+    # return sorted, unique values in both arrays
+    if not (type_can_asarray(a) or type_can_asarray(b)):
+        raise TypingError('intersect1d: both inputs must be array-like')
+
+    def np_intersects1d_impl(a, b):
+        a = np.asarray(a)
+        b = np.asarray(b)
+        intersect = []
+        a_map = {}
+        for v in a:
+            if v not in a_map:
+                a_map[v] = ''
+        for v in b:
+            if v in a_map:
+                if a_map[v] != '.':
+                    # Don't want duplicates
+                    a_map[v] = '.'
+                    intersect.append(v)
+        return sorted(intersect)
+    return np_intersects1d_impl
+
+
 def validate_1d_array_like(func_name, seq):
     if isinstance(seq, types.Array):
         if seq.ndim != 1:
