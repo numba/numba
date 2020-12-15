@@ -123,7 +123,7 @@ jobs:
         TEST_START_INDEX: 17
       py39_np115:
         PYTHON: '3.9'
-        NUMPY: '1.15'
+        NUMPY: '1.16'
         CONDA_ENV: travisci
         TEST_START_INDEX: 18
       py39_np119:
