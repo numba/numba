@@ -2064,6 +2064,18 @@ class ArrayAnalysis(object):
         )
 
     def _analyze_op_build_tuple(self, scope, equiv_set, expr):
+        # For the moment, we can't do anything with tuples that
+        # contain multi-dimensional arrays, compared to array dimensions.
+        # Return None to say we won't track this tuple if a part of it
+        # is an array.
+        for x in expr.items:
+            if (
+                isinstance(x, ir.Var)
+                and isinstance(self.typemap[x.name], types.ArrayCompatible)
+                and self.typemap[x.name].ndim > 1
+            ):
+                return None
+
         consts = []
         for var in expr.items:
             x = guard(find_const, self.func_ir, var)

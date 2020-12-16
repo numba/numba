@@ -5,7 +5,6 @@ Assorted utilities for use in tests.
 import cmath
 import contextlib
 import enum
-import errno
 import gc
 import math
 import platform
@@ -85,6 +84,27 @@ disabled_test = unittest.skipIf(True, 'Test disabled')
 skip_ppc64le_issue4563 = unittest.skipIf(platform.machine() == 'ppc64le',
                                          ("Hits: 'Parameter area must exist "
                                           "to pass an argument in memory'"))
+
+# Typeguard
+has_typeguard = bool(os.environ.get('NUMBA_USE_TYPEGUARD', 0))
+
+skip_unless_typeguard = unittest.skipUnless(
+    has_typeguard, "Typeguard is not enabled",
+)
+
+skip_if_typeguard = unittest.skipIf(
+    has_typeguard, "Broken if Typeguard is enabled",
+)
+
+# See issue #6465, PPC64LE LLVM bug
+skip_ppc64le_issue6465 = unittest.skipIf(platform.machine() == 'ppc64le',
+                                         ("Hits: 'mismatch in size of "
+                                          "parameter area' in "
+                                          "LowerCall_64SVR4"))
+
+skip_unless_py37_or_later = lambda reason: \
+    unittest.skipIf(utils.PYVERSION < (3, 7),
+    reason)
 
 try:
     import scipy.linalg.cython_lapack
@@ -581,9 +601,8 @@ _trashcan_timeout = 24 * 3600  # 1 day
 def _create_trashcan_dir():
     try:
         os.mkdir(_trashcan_dir)
-    except OSError as e:
-        if e.errno != errno.EEXIST:
-            raise
+    except FileExistsError:
+        pass
 
 def _purge_trashcan_dir():
     freshness_threshold = time.time() - _trashcan_timeout

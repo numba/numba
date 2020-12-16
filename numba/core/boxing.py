@@ -396,8 +396,9 @@ def box_array(typ, val, c):
     if c.context.enable_nrt:
         np_dtype = numpy_support.as_dtype(typ.dtype)
         dtypeptr = c.env_manager.read_const(c.env_manager.add_const(np_dtype))
-        # Steals NRT ref
         newary = c.pyapi.nrt_adapt_ndarray_to_python(typ, val, dtypeptr)
+        # Steals NRT ref
+        c.context.nrt.decref(c.builder, typ, val)
         return newary
     else:
         parent = nativeary.parent

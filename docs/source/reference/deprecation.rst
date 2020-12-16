@@ -53,7 +53,7 @@ efficiently and consistently. After a number of years of experience with this
 problem, it is clear that providing this behaviour is both fraught with
 difficulty and often leads to code which does not have good performance (all
 reflected data has to go through special APIs to convert the data to native
-formats at call time and and then back to CPython formats at return time). As a
+formats at call time and then back to CPython formats at return time). As a
 result of this, the sheer number of reported problems in the issue tracker, and
 how well a new approach that was taken with ``typed.Dict`` (typed dictionaries)
 has gone, the core developers have decided to deprecate the noted ``reflection``

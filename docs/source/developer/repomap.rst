@@ -101,10 +101,8 @@ Dispatching
 - :ghfile:`numba/core/dispatcher.py` - Dispatcher objects are compiled functions
   produced by ``@jit``.  A dispatcher has different implementations
   for different type signatures.
-- :ghfile:`numba/_dispatcher.{h,c}` - C interface to C++ dispatcher
-  implementation
-- :ghfile:`numba/_dispatcherimpl.cpp` - C++ dispatcher implementation (for
-  speed on common data types)
+- :ghfile:`numba/_dispatcher.cpp` - C++ dispatcher implementation (for speed on
+  common data types)
 
 
 Compiler Pipeline
