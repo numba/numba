@@ -183,7 +183,7 @@ class _ObjModeContextType(WithContext):
         loc: numba.core.ir.Loc
             Source location of the with-context call.
         func_globals: dict
-            The global dictionary of the calling function.
+            The globals dictionary of the calling function.
         func_closures: dict
             The resolved closure variables of the calling function.
         """
@@ -390,4 +390,3 @@ def _mutate_with_block_callee(blocks, blk_start, blk_end, inputs, outputs):
         block=ir.Block(scope=scope, loc=loc),
         outputs=outputs,
     )
-
