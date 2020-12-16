@@ -127,8 +127,13 @@ class _ObjModeContextType(WithContext):
 
     Use this as a function that takes keyword arguments only.
     The argument names must correspond to the output variables from the
-    with-block.  Their respective values are strings representing the expected
-    types.  When exiting the with-context, the output variables are cast
+    with-block.  Their respective values can be:
+
+    1. strings representing the expected types; i.e. ``"float32"``.
+    2. global or closure variables referring to the expected type.
+       The variables are read at compile time.
+
+    When exiting the with-context, the output variables are casted
     to the expected nopython types according to the annotation.  This process
     is the same as passing Python objects into arguments of a nopython
     function.
@@ -136,20 +141,24 @@ class _ObjModeContextType(WithContext):
     Example::
 
         import numpy as np
-        from numba import njit, objmode
+        from numba import njit, objmode, types
 
         def bar(x):
             # This code is executed by the interpreter.
             return np.asarray(list(reversed(x.tolist())))
 
+        # Output type as global variable
+        out_ty = types.intp[:]
+
         @njit
         def foo():
             x = np.arange(5)
             y = np.zeros_like(x)
-            with objmode(y='intp[:]'):  # annotate return type
+            with objmode(y='intp[:]', z=out_ty):  # annotate return type
                 # this region is executed by object-mode.
                 y += bar(x)
-            return y
+                z = y
+            return y, z
 
     .. note:: Known limitations:
 
