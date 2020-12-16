@@ -373,20 +373,28 @@ def alloca_once(builder, ty, size=None, name='', zfill=False):
     with builder.goto_entry_block():
         ptr = builder.alloca(ty, size=size, name=name)
         # Always zero-fill at init-site.  This is safe.
-        builder.store(ty(None), ptr)
+        memset(builder, ptr, sizeof(builder, ptr.type), int8_t(0))
     # Also zero-fill at the use-site
     if zfill:
-        builder.store(ty(None), ptr)
+        memset(builder, ptr, sizeof(builder, ptr.type), int8_t(0))
     return ptr
 
 
-def alloca_once_value(builder, value, name=''):
+def sizeof(builder, ptr_type):
+    """Compute sizeof using GEP
+    """
+    null = ptr_type(None)
+    offset = null.gep([int32_t(1)])
+    return builder.ptrtoint(offset, intp_t)
+
+
+def alloca_once_value(builder, value, name='', zfill=True):
     """
     Like alloca_once(), but passing a *value* instead of a type.  The
     type is inferred and the allocated slot is also initialized with the
     given value.
     """
-    storage = alloca_once(builder, value.type)
+    storage = alloca_once(builder, value.type, zfill=zfill)
     builder.store(value, storage)
     return storage
 
