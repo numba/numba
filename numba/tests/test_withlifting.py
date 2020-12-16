@@ -14,6 +14,7 @@ from numba import njit, typeof, objmode, types
 from numba.core.extending import overload
 from numba.tests.support import (MemoryLeak, TestCase, captured_stdout,
                                  skip_unless_scipy)
+from numba.experimental import jitclass
 import unittest
 
 
@@ -802,8 +803,13 @@ class TestLiftObj(MemoryLeak, TestCase):
         @njit
         def global_var():
             with objmode(val=gv_type):
-                val = 123
+                val = 12.3
             return val
+
+        ret = global_var()
+        # the result is truncated because of the intp return-type
+        self.assertIsInstance(ret, int)
+        self.assertEqual(ret, 12)
 
     def test_objmode_gv_variable_error(self):
         @njit
@@ -826,13 +832,15 @@ class TestLiftObj(MemoryLeak, TestCase):
             shrubbery = types.float64[:]
             def impl():
                 with objmode(out=shrubbery):
-                    out = np.ones(10).astype(np.float64)
+                    out = np.arange(10).astype(np.float64)
                 return out
             return impl
 
         @njit
         def bar():
             return foo()
+
+        self.assertPreciseEqual(bar(), np.arange(10).astype(np.float64))
 
     def test_objmode_closure_type_in_overload_error(self):
         def foo():
@@ -843,7 +851,7 @@ class TestLiftObj(MemoryLeak, TestCase):
             shrubbery = types.float64[:]
             def impl():
                 with objmode(out=shrubbery):
-                    out = np.ones(10).astype(np.float64)
+                    out = np.arange(10).astype(np.float64)
                 return out
             # Remove closure var.
             # Otherwise, it will "shrubbery" will be a global
@@ -876,6 +884,58 @@ class TestLiftObj(MemoryLeak, TestCase):
         self.assertPreciseEqual(t1, 793856.5)
         self.assertPreciseEqual(t2, 793856)
         self.assertPreciseEqual(t3, np.arange(5).astype(np.int32))
+
+    def test_objmode_jitclass(self):
+        spec = [
+            ('value', types.int32),               # a simple scalar field
+            ('array', types.float32[:]),          # an array field
+        ]
+
+        @jitclass(spec)
+        class Bag(object):
+            def __init__(self, value):
+                self.value = value
+                self.array = np.zeros(value, dtype=np.float32)
+
+            @property
+            def size(self):
+                return self.array.size
+
+            def increment(self, val):
+                for i in range(self.size):
+                    self.array[i] += val
+                return self.array
+
+            @staticmethod
+            def add(x, y):
+                return x + y
+
+        n = 21
+        mybag = Bag(n)
+
+        def foo():
+            pass
+
+        @overload(foo)
+        def foo_overload():
+            shrubbery = mybag._numba_type_
+            def impl():
+                with objmode(out=shrubbery):
+                    out = Bag(123)
+                    out.increment(3)
+                return out
+            return impl
+
+        @njit
+        def bar():
+            return foo()
+
+        z = bar()
+        self.assertIsInstance(z, Bag)
+        self.assertEqual(z.add(2, 3), 2 + 3)
+        exp_array = np.zeros(123, dtype=np.float32) + 3
+        self.assertPreciseEqual(z.array, exp_array)
+
 
     @staticmethod
     def case_objmode_cache(x):
