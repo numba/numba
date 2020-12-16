@@ -6,7 +6,8 @@ See test_dispatcher.py.
 """
 
 import sys
-
+import inspect
+import textwrap
 import numpy as np
 
 from numba import jit, generated_jit, prange
@@ -137,6 +138,56 @@ aligned_arr = np.array(packed_arr, dtype=aligned_record_type)
 @jit(cache=True, nopython=True)
 def record_return(ary, i):
     return ary[i]
+
+
+# String Source Functions
+# Many functions above will be reconstructed as string-source function to
+# test the ability to cache this type of functions. The original name is
+# prepended with "str"
+for fc in [add_usecase, generated_usecase, inner, outer_uncached,
+           use_c_sin, use_c_sin_nest1, use_c_sin_nest2, use_big_array,
+           record_return]:
+    fc_txt = inspect.getsource(fc).replace("def ", "def str_")
+    exec(fc_txt)
+
+
+def make_str_closure(x):
+    ns = {'jit': jit, 'x': x}
+    fc_txt = """
+    @jit(cache=True, nopython=True)
+    def closure(y):
+        return x + y
+    """
+    fc_txt = textwrap.dedent(fc_txt)
+    exec(fc_txt, ns, ns)
+    return ns['closure']
+
+str_closure1 = make_str_closure(3)
+str_closure2 = make_str_closure(5)
+str_closure3 = make_str_closure(7)
+str_closure4 = make_str_closure(9)
+
+fc_txt = """@jit(cache=True, nopython=True)
+def str_outer(x, y):
+    return str_inner(-y, x)
+"""
+exec(fc_txt)
+
+fc_txt = """@jit(cache=True, nopython=True)
+def ambiguous_function(x):
+    return x + 2
+"""
+ns = {'jit': jit}
+exec(fc_txt, ns, ns)
+str_renamed_function1 = ns['ambiguous_function']
+
+fc_txt = """@jit(cache=True, nopython=True)
+def ambiguous_function(x):
+    return x + 6
+"""
+ns = {'jit': jit}
+exec(fc_txt, ns, ns)
+str_renamed_function2 = ns['ambiguous_function']
 
 
 class _TestModule(TestCase):
