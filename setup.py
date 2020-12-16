@@ -23,7 +23,7 @@ min_python_version = "3.6"
 max_python_version = "3.10"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.15"
-min_llvmlite_version = "0.36.0.dev0"
+min_llvmlite_version = "0.35.0"
 max_llvmlite_version = "0.37"
 
 if sys.platform.startswith('linux'):
