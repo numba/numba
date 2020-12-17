@@ -1081,7 +1081,7 @@ class TestArrayAnalysisInterface(TestCase):
                 for i in prange(n):
                     S = np.arange(i)
                     A[i] = S.sum()
-                return A
+                return A + 1
 
             got = njit(parallel=True)(f)(10)
             executed_count = shared['counter']
