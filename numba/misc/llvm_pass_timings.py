@@ -204,16 +204,50 @@ class ProcessedPassTimings:
             timing information for each pass.
             """
             lines = raw_data.splitlines()
-            n = r"\s*((?:[0-9]+\.)?[0-9]+)"
-            pat = f"\\s+{n}\\s*\\({n}%\\)" * 4 + r"\s*(.*)"
+            colheader = r"[a-zA-Z+ ]+"
+            # Take at least one column header.
+            multicolheaders = fr"(?:\s*-+{colheader}-+)+"
 
             line_iter = iter(lines)
+            # find column headers
+            header_map = {
+                "User Time": "user",
+                "System Time": "system",
+                "User+System": "user_system",
+                "Wall Time": "wall",
+                "Name": "pass_name",
+            }
+            for ln in line_iter:
+                m = re.match(multicolheaders, ln)
+                if m:
+                    # Get all the column headers
+                    raw_headers = re.findall(r"[a-zA-Z][a-zA-Z+ ]+", ln)
+                    headers = [header_map[k.strip()] for k in raw_headers]
+                    break
+
+            assert headers[-1] == 'pass_name'
+            # compute the list of available attributes from the column headers
+            attrs = []
+            for k in headers[:-1]:
+                attrs.append(f"{k}_time")
+                attrs.append(f"{k}_percent")
+            # put default value 0.0 to all missing attributes
+            missing = {}
+            for k in PassTimingRecord._fields:
+                if k not in attrs and k != 'pass_name':
+                    missing[k] = 0.0
+            # parse timings
+            n = r"\s*((?:[0-9]+\.)?[0-9]+)"
+            pat = f"\\s+{n}\\s*\\({n}%\\)" * (len(headers) - 1) + r"\s*(.*)"
             for ln in line_iter:
                 m = re.match(pat, ln)
                 if m is not None:
-                    raw_data = m.groups()
+                    raw_data = list(m.groups())
+                    data = {k: float(v) for k, v in zip(attrs, raw_data)}
+                    data.update(missing)
+                    pass_name = raw_data[-1]
                     rec = PassTimingRecord(
-                        *map(float, raw_data[:-1]), *raw_data[-1:]
+                        pass_name=pass_name, **data,
                     )
                     yield rec
                     if rec.pass_name == "Total":
