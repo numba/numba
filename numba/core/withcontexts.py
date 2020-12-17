@@ -130,7 +130,7 @@ class _ObjModeContextType(WithContext):
     with-block.  Their respective values can be:
 
     1. strings representing the expected types; i.e. ``"float32"``.
-    2. compile-time bounded global or nonlocal variables referring to the
+    2. compile-time bound global or nonlocal variables referring to the
        expected type. The variables are read at compile time.
 
     When exiting the with-context, the output variables are converted
