@@ -130,10 +130,10 @@ class _ObjModeContextType(WithContext):
     with-block.  Their respective values can be:
 
     1. strings representing the expected types; i.e. ``"float32"``.
-    2. global or closure variables referring to the expected type.
-       The variables are read at compile time.
+    2. compile-time bounded global or nonlocal variables referring to the
+       expected type. The variables are read at compile time.
 
-    When exiting the with-context, the output variables are casted
+    When exiting the with-context, the output variables are converted
     to the expected nopython types according to the annotation.  This process
     is the same as passing Python objects into arguments of a nopython
     function.
