@@ -66,7 +66,6 @@ __all__ = """
     njit
     stencil
     jit_module
-    jitclass
     typeof
     prange
     gdb
