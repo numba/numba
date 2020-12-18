@@ -936,6 +936,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         # If the 4-byte padding is not zero-filled, it will have garbage data
         # that affects key matching in the lookup.
         keyty = types.Tuple([types.uint64, types.float32])
+
         @njit
         def foo():
             d = dictobject.new_dict(keyty, float64)
