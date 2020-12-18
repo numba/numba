@@ -915,6 +915,18 @@ def memset(builder, ptr, size, value):
     builder.call(fn, [ptr, value, size, bool_t(0)])
 
 
+def memset_padding(builder, ptr):
+    """
+    Fill padding bytes of the pointee with zeros.
+    """
+    # Load existing value
+    val = builder.load(ptr)
+    # Fill pointee with zeros
+    memset(builder, ptr, sizeof(builder, ptr.type), 0)
+    # Store value back
+    builder.store(val, ptr)
+
+
 def global_constant(builder_or_module, name, value, linkage='internal'):
     """
     Get or create a (LLVM module-)global constant with *name* or *value*.
