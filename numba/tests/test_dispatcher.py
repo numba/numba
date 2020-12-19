@@ -1469,7 +1469,7 @@ class TestCache(BaseCacheUsecasesTest):
         err = execute_with_input()
         self.assertIn("cache hits = 1", err.strip())
 
-    def test_long_list_repr_ipython(self)
+    def test_long_list_repr_ipython(self):
         # Create test input for long list repr in ipython
         inputfn = os.path.join(self.tempdir, "ipython_long_list_repr.txt")
         with open(inputfn, "w") as f:
