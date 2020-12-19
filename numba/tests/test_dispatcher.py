@@ -1497,7 +1497,7 @@ class TestCache(BaseCacheUsecasesTest):
 
         def execute_repr_long_list_in_ipython():
             # Feed the test input as stdin, to execute it in REPL context
-            with open(inputfn2, "rb") as stdin:
+            with open(inputfn, "rb") as stdin:
                 p = subprocess.Popen(base_cmd, stdin=stdin,
                                      stdout=subprocess.PIPE,
                                      stderr=subprocess.PIPE,
