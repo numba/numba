@@ -31,6 +31,7 @@ from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
 import llvmlite.binding as ll
 import unittest
 from numba.parfors import parfor
+from numba.typed import List
 
 
 _TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
@@ -1467,6 +1468,50 @@ class TestCache(BaseCacheUsecasesTest):
         # Run a second time and check caching
         err = execute_with_input()
         self.assertIn("cache hits = 1", err.strip())
+
+    def test_long_list_repr_ipython(self)
+        # Create test input for long list repr in ipython
+        inputfn = os.path.join(self.tempdir, "ipython_long_list_repr.txt")
+        with open(inputfn, "w") as f:
+            f.write(r"""
+                import os
+                import sys
+
+                from numba.typed import List
+
+                l_long = List(range(1005))
+
+                # IPython 5 does not support multiline input if stdin isn't
+                # a tty (https://github.com/ipython/ipython/issues/9752)
+
+                res = repr(l_long)
+
+                # IPython writes on stdout, so use stderr instead
+                sys.stderr.write(res)
+
+                # IPython hijacks sys.exit(), bypass it
+                sys.stdout.flush()
+                sys.stderr.flush()
+                os._exit(1)
+                """)
+
+        def execute_repr_long_list_in_ipython():
+            # Feed the test input as stdin, to execute it in REPL context
+            with open(inputfn2, "rb") as stdin:
+                p = subprocess.Popen(base_cmd, stdin=stdin,
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE,
+                                     universal_newlines=True)
+                out, err = p.communicate()
+            return err
+
+        out = execute_repr_long_list_in_ipython()
+
+        l_long = List(range(1005))
+        l_long_str = [str(item) for item in l_long]
+        # Assert that the long list is concatenated
+        expected = f"ListType[int64]([{', '.join(l_long_str[:1000])}, ...])"
+        self.assertEqual(expected, out)
 
 
 @skip_parfors_unsupported
