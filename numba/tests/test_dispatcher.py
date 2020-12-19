@@ -1470,6 +1470,16 @@ class TestCache(BaseCacheUsecasesTest):
         self.assertIn("cache hits = 1", err.strip())
 
     def test_long_list_repr_ipython(self):
+        # Test repr of long typed Lists in an IPython session
+        base_cmd = [sys.executable, '-m', 'IPython']
+        base_cmd += ['--quiet', '--quick', '--no-banner', '--colors=NoColor']
+        try:
+            ver = subprocess.check_output(base_cmd + ['--version'])
+        except subprocess.CalledProcessError as e:
+            self.skipTest("ipython not available: return code %d"
+                          % e.returncode)
+        ver = ver.strip().decode()
+        print("ipython version:", ver)
         # Create test input for long list repr in ipython
         inputfn = os.path.join(self.tempdir, "ipython_long_list_repr.txt")
         with open(inputfn, "w") as f:
