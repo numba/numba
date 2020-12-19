@@ -530,16 +530,6 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         expected = "ListType[int32]([1, 2, 3])"
         self.assertEqual(expected, repr(l))
 
-    def test_repr_for_ipython_shells(self):
-        try:
-            get_ipython
-            l_long = List(range(1005))
-            l_long_str = [str(item) for item in l_long]
-            expected = f"ListType[int64]([{', '.join(l_long_str[:1000])}, ...])"
-            self.assertEqual(expected, repr(l_long))
-        except NameError:
-            pass
-
     def test_iter_mutates_self(self):
         self.disable_leak_check()
 
