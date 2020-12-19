@@ -32,6 +32,7 @@ import llvmlite.binding as ll
 import unittest
 from numba.parfors import parfor
 from numba.typed import List
+from numba import typeof
 
 
 _TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
@@ -1520,7 +1521,7 @@ class TestCache(BaseCacheUsecasesTest):
         l_long = List(range(1005))
         l_long_str = [str(item) for item in l_long]
         # Assert that the long list is concatenated
-        expected = f"ListType[int64]([{', '.join(l_long_str[:1000])}, ...])"
+        expected = f"{typeof(l_long)}([{', '.join(l_long_str[:1000])}, ...])"
         self.assertEqual(expected, out)
 
 
