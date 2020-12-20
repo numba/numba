@@ -871,11 +871,35 @@ class Interpreter(object):
             expr = ir.Expr.call(func, posvals, keyvalues, loc=self.loc)
             self.store(expr, res)
 
-        def op_CALL_FUNCTION_EX(self, inst, func, vararg, res):
+        def op_CALL_FUNCTION_EX(self, inst, func, vararg, kwargs, res):
             func = self.get(func)
-            vararg = self.get(vararg)
-            expr = ir.Expr.call(func, [], [], loc=self.loc, vararg=vararg)
+            posvals = []
+            vararg = self.get(vararg) if vararg else None
+
+            if not kwargs:
+                posvals = []
+                keyvalues = []
+            else:
+                kwargs = self.get(kwargs)
+                for inst in self.current_block.body:
+                    if isinstance(inst, ir.Assign) and inst.target is kwargs:
+                        self.current_block.remove(inst)
+                        # scan up the block looking for the values, remove them
+                        # and find their name strings
+
+                        keyvalues = []
+                        for key, val in inst.value.items:
+                            for y in self.current_block.body:
+                                if key == y.target:
+                                    self.current_block.remove(y)
+                                    key_element = y.value.value
+                                    break
+                            keyvalues.append((key_element, val))
+                        break
+
+            expr = ir.Expr.call(func, posvals, keyvalues, loc=self.loc, vararg=vararg)
             self.store(expr, res)
+
 
     def _build_tuple_unpack(self, inst, tuples, temps):
         first = self.get(tuples[0])
