@@ -539,7 +539,7 @@ br i1 %.294, label %B42, label %B160
                                   (arg_0, arg_1), name="asm_mul",
                                   side_effect=False)
                 return impl_ret_untracked(cgctx, builder, sig.return_type, mul)
-            return signature(x, x, x), codegen
+            return signature(types.int32, types.int32, types.int32), codegen
 
         @njit(['int32(int32)'])
         def foo(x):
