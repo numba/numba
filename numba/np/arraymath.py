@@ -4478,3 +4478,14 @@ def cross2d(a, b):
         return _cross2d_operation(a_, b_)
 
     return impl
+
+
+@overload(np.iscomplexobj)
+def np_iscomplexobj(x):
+    if type_can_asarray(x):
+        for i in np.asarray(x).flatten():
+            if type(i) == complex:
+                return True
+        return False
+    else:
+        return type(x) == complex

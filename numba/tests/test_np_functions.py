@@ -325,6 +325,10 @@ def np_cross(a, b):
     return np.cross(a, b)
 
 
+def np_iscomplexobj(x):
+    return np.iscomplexobj(x)
+
+
 def flip_lr(a):
     return np.fliplr(a)
 
@@ -3882,6 +3886,24 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             'Inputs must be array-like.',
             str(raises.exception)
         )
+
+    def test_np_iscomplexobj(self):
+        test_objects = [
+            1,
+            1 + 0j,
+            [3, 1 + 0j, True],
+            [3, False, 0.3, True],
+            np.zeros((3, 3, 3))
+        ]
+
+        pyfunc = np_iscomplexobj
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for item in test_objects:
+            expected = pyfunc(item)
+            received = cfunc(item)
+
+            self.assertEqual(expected, received)
 
     def test_asarray_chkfinite(self):
         pyfunc = np_asarray_chkfinite
