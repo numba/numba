@@ -12,7 +12,7 @@ Numba
 
 .. image:: https://zenodo.org/badge/3659275.svg
    :target: https://zenodo.org/badge/latestdoi/3659275
-   :alt: Zenodo
+   :alt: Zenodo DOI
 
 A Just-In-Time Compiler for Numerical Functions in Python
 #########################################################
