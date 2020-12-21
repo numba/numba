@@ -1,3 +1,5 @@
+import os
+import subprocess
 from itertools import product
 from textwrap import dedent
 
@@ -529,6 +531,60 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         l = List([int32(i) for i in (1, 2, 3)])
         expected = "ListType[int32]([1, 2, 3])"
         self.assertEqual(expected, repr(l))
+
+    def test_repr_long_list_ipython(self):
+        # Test repr of long typed Lists in an IPython session
+        base_cmd = [sys.executable, '-m', 'IPython']
+        base_cmd += ['--quiet', '--quick', '--no-banner', '--colors=NoColor']
+        try:
+            ver = subprocess.check_output(base_cmd + ['--version'])
+        except subprocess.CalledProcessError as e:
+            self.skipTest("ipython not available: return code %d"
+                          % e.returncode)
+        ver = ver.strip().decode()
+        print("ipython version:", ver)
+        # Create test input for long list repr in ipython
+        inputfn = os.path.join("ipython_long_list_repr.txt")
+        with open(inputfn, "w") as f:
+            f.write(r"""
+                import os
+                import sys
+
+                from numba.typed import List
+
+                l_long = List(range(1005))
+
+                # IPython 5 does not support multiline input if stdin isn't
+                # a tty (https://github.com/ipython/ipython/issues/9752)
+
+                res = repr(l_long)
+
+                # IPython writes on stdout, so use stderr instead
+                sys.stderr.write(res)
+
+                # IPython hijacks sys.exit(), bypass it
+                sys.stdout.flush()
+                sys.stderr.flush()
+                os._exit(1)
+                """)
+
+        def execute_repr_long_list_in_ipython():
+            # Feed the test input as stdin, to execute it in REPL context
+            with open(inputfn, "rb") as stdin:
+                p = subprocess.Popen(base_cmd, stdin=stdin,
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE,
+                                     universal_newlines=True)
+                out, err = p.communicate()
+            return err
+
+        out = execute_repr_long_list_in_ipython()
+
+        l_long = List(range(1005))
+        l_long_str = [str(item) for item in l_long]
+        # Assert that the long list is concatenated
+        expected = f"{typeof(l_long)}([{', '.join(l_long_str[:1000])}, ...])"
+        self.assertEqual(expected, out)
 
     def test_iter_mutates_self(self):
         self.disable_leak_check()
