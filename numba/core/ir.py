@@ -266,8 +266,6 @@ class VarMap(object):
         try:
             return self._con[name]
         except KeyError:
-            #import pdb; pdb.set_trace()
-            #pass
             raise NotDefinedError(name)
 
     def __contains__(self, name):

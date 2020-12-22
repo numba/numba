@@ -160,6 +160,7 @@ def peep_hole_list_to_tuple(func_ir):
                                     assert 0
                 # go back through the peep hole build new IR based on it.
                 new_hole = []
+
                 def append_and_fix(x):
                     """ Adds to the new_hole and fixes up definitions"""
                     new_hole.append(x)
