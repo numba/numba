@@ -418,6 +418,6 @@ One can also verify that Numpy ufunc casting rules are working as expected::
    >>> g(x, y, res)
    >>> res
 
-If you need support for varios type signatures, you should not rely on dynamic
+If you need precise support for various type signatures, you should not rely on dynamic
 compilation and instead, specify the types them as first
 argument in the :func:`~numba.guvectorize` decorator.
