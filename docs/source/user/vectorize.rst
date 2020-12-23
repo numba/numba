@@ -356,7 +356,7 @@ on dynamic compilation.
 Dynamic generalized universal functions
 =======================================
 
-Similar to a dynamic universal function, if you do not specif any types to
+Similar to a dynamic universal function, if you do not specify any types to
 the :func:`~numba.guvectorize` decorator, your Python function will be used
 to build a dynamic generalized universal function, or :class:`~numba.GUFunc`.
 For example::
