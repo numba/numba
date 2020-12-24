@@ -31,8 +31,6 @@ from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
 import llvmlite.binding as ll
 import unittest
 from numba.parfors import parfor
-from numba.typed import List
-from numba import typeof
 
 
 _TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
