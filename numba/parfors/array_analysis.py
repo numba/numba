@@ -1103,7 +1103,6 @@ class ArrayAnalysis(object):
                                                 types.ArrayCompatible) and
                                  len(v) > 1
                          ]
-
         if equiv_set is None:
             init_equiv_set = SymbolicEquivSet(self.typemap)
         else:
@@ -1113,6 +1112,7 @@ class ArrayAnalysis(object):
         ArrayAnalysis.aa_count += 1
         if config.DEBUG_ARRAY_OPT >= 1:
             print("Starting ArrayAnalysis:", aa_count_save)
+            print("multi_def:", self.multi_def)
         dprint_func_ir(self.func_ir, "before array analysis", blocks)
 
         if config.DEBUG_ARRAY_OPT >= 1:
@@ -1283,7 +1283,10 @@ class ArrayAnalysis(object):
             elif isinstance(shape, ir.Var) and isinstance(
                 self.typemap[shape.name], types.Integer
             ):
-                shape = (shape,)
+                if shape.name in self.multi_def:
+                    shape = None
+                else:
+                    shape = (shape,)
             elif isinstance(shape, WrapIndexMeta):
                 """ Here we've got the special WrapIndexMeta object
                     back from analyzing a wrap_index call.  We define
