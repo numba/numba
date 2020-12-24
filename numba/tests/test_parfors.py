@@ -2694,7 +2694,8 @@ class TestPrange(TestPrangeBase):
             for x in range(1):
                 i_row = 0
                 for _ in range(n_rows):
-                    c[0] = a[i_row, 0]
+                    bi = b[i_row]
+                    c[:] = a[i_row, :bi]
                     i_row += 1
                     if i_row >= n_rows:
                         i_row -= n_rows
