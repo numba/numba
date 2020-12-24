@@ -1099,8 +1099,10 @@ class ArrayAnalysis(object):
         # Calculate the non-arrays defined more than once and exclude them
         # from ever entering the shape data structures.
         self.multi_def = [k for k,v in self.func_ir._definitions.items()
-            if not isinstance(self.typemap[k], types.ArrayCompatible) and
-            len(v) > 1]
+                              if not isinstance(self.typemap[k],
+                                                types.ArrayCompatible) and
+                                 len(v) > 1
+                         ]
 
         if equiv_set is None:
             init_equiv_set = SymbolicEquivSet(self.typemap)
