@@ -1096,6 +1096,11 @@ class ArrayAnalysis(object):
             blocks = self.func_ir.blocks
 
         self.func_ir._definitions = build_definitions(self.func_ir.blocks)
+        # Calculate the non-arrays defined more than once and exclude them
+        # from ever entering the shape data structures.
+        self.multi_def = [k for k,v in self.func_ir._definitions.items()
+            if not isinstance(self.typemap[k], types.ArrayCompatible) and
+            len(v) > 1]
 
         if equiv_set is None:
             init_equiv_set = SymbolicEquivSet(self.typemap)
@@ -1334,10 +1339,12 @@ class ArrayAnalysis(object):
                 no invalidation is needed and we don't call define().
             """
             needs_define = True
-            if shape is not None:
-                needs_define = equiv_set.insert_equiv(lhs, shape)
-            if needs_define:
-                equiv_set.define(lhs, redefined, self.func_ir, typ)
+            # Don't add this variable if it is multiply defined.
+            if lhs.name not in self.multi_def:
+                if shape is not None:
+                    needs_define = equiv_set.insert_equiv(lhs, shape)
+                if needs_define:
+                    equiv_set.define(lhs, redefined, self.func_ir, typ)
         elif isinstance(inst, ir.StaticSetItem) or isinstance(
             inst, ir.SetItem
         ):
@@ -2869,8 +2876,9 @@ class ArrayAnalysis(object):
             sizes = []
             size_names = []
             for name, shape in zip(names, shapes):
-                if i < len(shape):
-                    size = shape[len(shape) - 1 - i]
+                slen = len(shape)
+                if i < slen:
+                    size = shape[slen - 1 - i]
                     const_size = equiv_set.get_equiv_const(size)
                     if const_size == 1:
                         const_size_one = size

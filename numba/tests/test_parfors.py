@@ -2686,6 +2686,25 @@ class TestPrange(TestPrangeBase):
 
         self.prange_tester(test_impl)
 
+    @skip_parfors_unsupported
+    def test_multi_defined_array_index(self):
+        # issue6597
+        def test_impl(a, b, c):
+            n_rows = b.shape[0]
+            for x in range(1):
+                i_row = 0
+                for _ in range(n_rows):
+                    c[0] = a[i_row, 0]
+                    i_row += 1
+                    if i_row >= n_rows:
+                        i_row -= n_rows
+            return c
+
+        a = np.arange(10).reshape((10, 1))
+        b = np.ones(10, dtype=np.int)
+        c = np.ones(1, dtype=np.int)
+        self.prange_tester(test_impl, a, b, c, patch_instance=[0])
+
 
 @skip_parfors_unsupported
 @x86_only
