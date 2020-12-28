@@ -3996,7 +3996,7 @@ def remove_duplicate_definitions(blocks, nameset):
 
 
 def has_cross_iter_dep(parfor):
-    # we consevatively assume there is cross iteration dependency when
+    # we conservatively assume there is cross iteration dependency when
     # the parfor index is used in any expression since the expression could
     # be used for indexing arrays
     # TODO: make it more accurate using ud-chains
