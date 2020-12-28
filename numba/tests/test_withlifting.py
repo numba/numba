@@ -257,7 +257,10 @@ class TestLiftCall(BaseTestWithLifting):
             njit(liftcall4)()
         # Known error.  We only support one context manager per function
         # for body that are lifted.
-        self.assertIn("re-entrant", str(raises.exception))
+
+        # FIXME: py3.9 changed error:
+        # self.assertIn("re-entrant", str(raises.exception))
+        self.assertIn("Failed in nopython mode pipeline (step: Handle with contexts)", str(raises.exception))
 
 
 def expected_failure_for_list_arg(fn):

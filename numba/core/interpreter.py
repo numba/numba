@@ -257,6 +257,28 @@ def peep_hole_list_to_tuple(func_ir):
     return func_ir
 
 
+def peep_hole_delete_with_exit(func_ir):
+    dead_vars = set()
+
+    for blk in func_ir.blocks.values():
+        for stmt in blk.body:
+            used = set(stmt.list_vars())
+            for v in used:
+                if v.name.startswith('$setup_with_exitfn'):
+                    dead_vars.add(v)
+            if used & dead_vars:
+                if isinstance(stmt, ir.Assign):
+                    dead_vars.add(stmt.target)
+
+        new_body = []
+        for stmt in blk.body:
+            if not (set(stmt.list_vars()) & dead_vars):
+                new_body.append(stmt)
+        blk.body = new_body
+
+    return func_ir
+
+
 class Interpreter(object):
     """A bytecode interpreter that builds up the IR.
     """
@@ -326,6 +348,7 @@ class Interpreter(object):
         peepholes = []
         if PYVERSION == (3, 9):
             peepholes.append(peep_hole_list_to_tuple)
+        peepholes.append(peep_hole_delete_with_exit)
 
         post_processed_ir = self.post_process(peepholes, func_ir)
         return post_processed_ir
@@ -966,8 +989,9 @@ class Interpreter(object):
         loop = ir.Loop(inst.offset, exit=(inst.next + inst.arg))
         self.syntax_blocks.append(loop)
 
-    def op_SETUP_WITH(self, inst, contextmanager):
+    def op_SETUP_WITH(self, inst, contextmanager, exitfn):
         assert self.blocks[inst.offset] is self.current_block
+        # Handle with
         exitpt = inst.next + inst.arg
         wth = ir.With(inst.offset, exit=exitpt)
         self.syntax_blocks.append(wth)
@@ -975,6 +999,9 @@ class Interpreter(object):
         self.current_block.append(ir.EnterWith(contextmanager=ctxmgr,
                                                begin=inst.offset,
                                                end=exitpt, loc=self.loc,))
+        # Store exit fn
+        exit_fn_obj = ir.Const(None, loc=self.loc)
+        self.store(value=exit_fn_obj, name=exitfn)
 
     def op_SETUP_EXCEPT(self, inst):
         # Removed since python3.8
