@@ -9,6 +9,7 @@ import logging
 from numba.core.analysis import compute_cfg_from_blocks, find_top_level_loops
 from numba.core import errors, ir, ir_utils
 from numba.core.analysis import compute_use_defs
+from numba.core.utils import PYVERSION
 
 
 _logger = logging.getLogger(__name__)
@@ -503,7 +504,22 @@ def find_setupwiths(blocks):
     def find_ranges(blocks):
         for blk in blocks.values():
             for ew in blk.find_insts(ir.EnterWith):
-                yield ew.begin, ew.end
+                if PYVERSION < (3, 9):
+                    end = ew.end
+                    for offset in blocks:
+                        if ew.end <= offset:
+                            end = offset
+                            break
+
+                else:
+                    end = ew.end
+                    last_offset = None
+                    for offset in blocks:
+                        if ew.end < offset:
+                            end = last_offset
+                            break
+                        last_offset = offset
+                yield ew.begin, end
 
     def previously_occurred(start, known_ranges):
         for a, b in known_ranges:

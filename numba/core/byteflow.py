@@ -657,16 +657,19 @@ class TraceRunner(object):
         cm = state.pop()    # the context-manager
 
         yielded = state.make_temp()
-        state.append(inst, contextmanager=cm)
+        exitfn = state.make_temp(prefix='setup_with_exitfn')
+        state.append(inst, contextmanager=cm, exitfn=exitfn)
 
-        state.push_block(
-            state.make_block(
-                kind='WITH_FINALLY',
-                end=inst.get_jump_target(),
+        # py39 doesn't have with-finally
+        if PYVERSION < (3, 9):
+            state.push_block(
+                state.make_block(
+                    kind='WITH_FINALLY',
+                    end=inst.get_jump_target(),
+                )
             )
-        )
 
-        state.push(cm)
+        state.push(exitfn)
         state.push(yielded)
 
         state.push_block(
