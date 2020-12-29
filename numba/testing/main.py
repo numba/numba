@@ -693,8 +693,9 @@ def _split_nonparallel_tests(test, sliced=slice(None)):
 
     return ptests, stests
 
-# A test can't run longer than 10 minutes
-_TIMEOUT = 600
+# Normally a test can't run longer than 10 minutes.
+# Typeguard takes longer to run.
+_TIMEOUT = 1200 if bool(os.environ.get('NUMBA_USE_TYPEGUARD', 0)) else 600
 
 class ParallelTestRunner(runner.TextTestRunner):
     """
