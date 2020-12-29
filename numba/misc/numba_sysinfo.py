@@ -593,7 +593,7 @@ def display_sysinfo(info=None, sep_pos=45):
         ("CUDA Driver Version", info.get(_cu_drv_ver, '?')),
         ("CUDA Detect Output:",),
         (info.get(_cu_detect_out, "None"),),
-        ("CUDA Librairies Test Output:",),
+        ("CUDA Libraries Test Output:",),
         (info.get(_cu_lib_test, "None"),),
         ("",),
         ("__ROC information__",),
