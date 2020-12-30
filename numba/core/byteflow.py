@@ -271,6 +271,37 @@ class TraceRunner(object):
     def op_NOP(self, state, inst):
         state.append(inst)
 
+    def op_FORMAT_VALUE(self, state, inst):
+        """
+        FORMAT_VALUE(flags): flags argument specifies format spec which is not supported
+        yet. Currently, we just call str() on the value.
+        Pops a value from stack and pushes results back.
+        Required for supporting f-strings.
+        https://docs.python.org/3/library/dis.html#opcode-FORMAT_VALUE
+        """
+        if inst.arg != 0:
+            msg = "format spec in f-strings not supported yet"
+            raise UnsupportedError(msg, loc=self.get_debug_loc(inst.lineno))
+        value = state.pop()
+        strvar = state.make_temp()
+        res = state.make_temp()
+        state.append(inst, value=value, res=res, strvar=strvar)
+        state.push(res)
+
+    def op_BUILD_STRING(self, state, inst):
+        """
+        BUILD_STRING(count): Concatenates count strings from the stack and pushes the
+        resulting string onto the stack.
+        Required for supporting f-strings.
+        https://docs.python.org/3/library/dis.html#opcode-BUILD_STRING
+        """
+        count = inst.arg
+        assert count > 0, "invalid BUILD_STRING count"
+        strings = list(reversed([state.pop() for _ in range(count)]))
+        tmps = [state.make_temp() for _ in range(count-1)]
+        state.append(inst, strings=strings, tmps=tmps)
+        state.push(tmps[-1])
+
     def op_POP_TOP(self, state, inst):
         state.pop()
 

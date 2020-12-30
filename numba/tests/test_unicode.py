@@ -2549,6 +2549,20 @@ class TestUnicodeAuxillary(BaseTest):
         self.assertEqual(foo.py_func(inst), foo(inst))
         self.assertIn(types.Hashable, types.unicode_type.__class__.__mro__)
 
+    def test_f_strings(self):
+        """test f-string support, which requires bytecode handling
+        """
+        # requires formatting (FORMAT_VALUE) and concatenation (BUILD_STRINGS)
+        def impl1(a):
+            return f"AA_{a+3}_B"
+
+        # does not require concatenation
+        def impl2(a):
+            return f"{a+2}"
+
+        self.assertEqual(impl1(3), njit(impl1)(3))
+        self.assertEqual(impl2(2), njit(impl2)(2))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -467,6 +467,33 @@ class Interpreter(object):
                                           loc=self.loc)
             self.store(expr, st)
 
+    def op_FORMAT_VALUE(self, inst, value, res, strvar):
+        """
+        FORMAT_VALUE(flags): flags argument specifies format spec which is not supported
+        yet. Currently, we just call str() on the value.
+        https://docs.python.org/3/library/dis.html#opcode-FORMAT_VALUE
+        """
+        value = self.get(value)
+        strgv = ir.Global("str", str, loc=self.loc)
+        self.store(value=strgv, name=strvar)
+        call = ir.Expr.call(self.get(strvar), (value,), (), loc=self.loc)
+        self.store(value=call, name=res)
+
+    def op_BUILD_STRING(self, inst, strings, tmps):
+        """
+        BUILD_STRING(count): Concatenates count strings.
+        Required for supporting f-strings.
+        https://docs.python.org/3/library/dis.html#opcode-BUILD_STRING
+        """
+        count = inst.arg
+        assert count > 0, "invalid BUILD_STRING count"
+        prev = self.get(strings[0])
+        for other, tmp in zip(strings[1:], tmps):
+            other = self.get(other)
+            expr = ir.Expr.binop(operator.add, lhs=prev, rhs=other, loc=self.loc)
+            self.store(expr, tmp)
+            prev = self.get(tmp)
+
     def op_BUILD_SLICE(self, inst, start, stop, step, res, slicevar):
         start = self.get(start)
         stop = self.get(stop)
