@@ -312,6 +312,9 @@ supported:
 * ``.upper()``
 * ``.zfill()``
 
+Regular string literals (e.g. ``"ABC"``) as well as f-strings without format specs
+(e.g. ``"ABC_{a+1}"``) are supported in :term:`nopython mode`.
+
 Additional operations as well as support for Python 2 strings / Python 3 bytes
 will be added in a future version of Numba.  Python 2 Unicode objects will
 likely never be supported.
