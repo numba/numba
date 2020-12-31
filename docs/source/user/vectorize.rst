@@ -157,6 +157,11 @@ argument, which must be filled in by the function.  This is because the
 array is actually allocated by NumPy's dispatch mechanism, which calls into
 the Numba-generated code.
 
+Similar to :func:`~numba.vectorize` decorator, :func:`~numba.guvectorize`
+also has two modes of operation: Eager, or decoration-time compilation and
+lazy, or call-time compilation.
+
+
 Here is a very simple example::
 
    @guvectorize([(int64[:], int64, int64[:])], '(n),()->(n)')
@@ -347,3 +352,72 @@ floating-point values.  For example::
 If you require precise support for various type signatures, you should
 specify them in the :func:`~numba.vectorize` decorator, and not rely
 on dynamic compilation.
+
+Dynamic generalized universal functions
+=======================================
+
+Similar to a dynamic universal function, if you do not specify any types to
+the :func:`~numba.guvectorize` decorator, your Python function will be used
+to build a dynamic generalized universal function, or :class:`~numba.GUFunc`.
+For example::
+
+   from numba import guvectorize
+
+   @guvectorize('(n),()->(n)')
+   def g(x, y, res):
+       for i in range(x.shape[0]):
+           res[i] = x[i] + y
+
+We can verify the resulting function :func:`g` is a :class:`~numba.GUFunc`
+instance that starts with no supported input types. For instance::
+
+   >>> g
+   <numba._GUFunc 'g'>
+   >>> g.ufunc
+   <ufunc 'g'>
+   >>> g.ufunc.types
+   []
+
+Similar to a :class:`~numba.DUFunc`, as one make calls to :func:`g()`,
+numba generates new kernels for previously unsupported input types. The
+following set of interpreter interactions will illustrate how dynamic
+compilation works for a :class:`~numba.GUFunc`::
+
+   >>> x = np.arange(5, dtype=np.int64)
+   >>> y = 10
+   >>> res = np.zeros_like(x)
+   >>> g(x, y, res)
+   >>> res
+   array([5, 6, 7, 8, 9])
+   >>> g.types
+   ['ll->l']
+
+If this was a normal :func:`guvectorize` function, we would have seen an
+exception complaining that the ufunc could not handle the given input types.
+When we call :func:`g()` with the input arguments, numba creates a new loop
+for the input types.
+
+We can add additional loops by calling :func:`g` with new arguments::
+
+   >>> x = np.arange(5, dtype=np.double)
+   >>> y = 2.2
+   >>> res = np.zeros_like(x)
+   >>> g(x, y, res)
+
+We can now verify that Numba added a second loop for dealing with
+floating-point inputs, :code:`"dd->d"`.
+
+   >>> g.types  # shorthand for g.ufunc.types
+   ['ll->l', 'dd->d']
+
+One can also verify that Numpy ufunc casting rules are working as expected::
+
+   >>> x = np.arange(5, dtype=np.int64)
+   >>> y = 2.2
+   >>> res = np.zeros_like(x)
+   >>> g(x, y, res)
+   >>> res
+
+If you need precise support for various type signatures, you should not rely on dynamic
+compilation and instead, specify the types them as first
+argument in the :func:`~numba.guvectorize` decorator.
