@@ -595,20 +595,21 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_intersect1d(self):
 
         def arrays():
-            yield np.array([]), np.array([])  # two empty arrays
-            yield np.array([1]), np.array([])  # empty right
-            yield np.array([]), np.array([1])  # empty left
-            yield np.array([1]), np.array([2])  # singletons no intersection
-            yield np.array([1]), np.array([1])  # singletons one intersection
-            yield np.array([1, 2]), np.array([1])
-            yield np.array([1, 2, 2]), np.array([2, 2])
-            yield np.array([1, 2]), np.array([2, 1])
-            yield np.array([1, 2, 3]), np.array([1, 2, 3])
+            yield [], []  # two empty arrays
+            yield [1], []  # empty right
+            yield [], [1]  # empty left
+            yield [1], [2]  # singletons no intersection
+            yield [1], [1]  # singletons one intersection
+            yield [1, 2], [1]
+            yield [1, 2, 2], [2, 2]
+            yield [1, 2], [2, 1]
+            yield [1, 2, 3], [1, 2, 3]
 
         pyfunc = intersect1d
         cfunc = jit(nopython=True)(pyfunc)
 
         for a, b in arrays():
+            a, b = np.array(a), np.array(b)
             expected = pyfunc(a, b)
             got = cfunc(a, b)
             self.assertPreciseEqual(expected, got)
