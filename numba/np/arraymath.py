@@ -3449,27 +3449,25 @@ def np_array_equal(a, b):
 
 
 @overload(np.intersect1d)
-def jit_np_intersect1d(a, b):
+def jit_np_intersect1d(ar1, ar2):
     # Not implemented to support assume_unique or return_indices
-    # return sorted, unique values in both arrays
-    if not (type_can_asarray(a) or type_can_asarray(b)):
-        raise TypingError('intersect1d: both inputs must be array-like')
+    # return numpy array of sorted, unique values in both input arrays
+    if not (type_can_asarray(ar1) or type_can_asarray(ar2)):
+        raise TypingError('intersect1d: first two args must be array-like')
 
-    def np_intersects1d_impl(a, b):
-        a = np.asarray(a)
-        b = np.asarray(b)
-        intersect = []
-        a_map = {}
-        for v in a:
-            if v not in a_map:
-                a_map[v] = ''
-        for v in b:
-            if v in a_map:
-                if a_map[v] != '.':
-                    # Don't want duplicates
-                    a_map[v] = '.'
-                    intersect.append(v)
-        return sorted(intersect)
+    def np_intersects1d_impl(ar1, ar2):
+        # Mirrored from: https://github.com/numpy/numpy/blob/v1.19.0/numpy/lib/arraysetops.py#L347-L441
+        ar1 = np.asarray(ar1)
+        ar2 = np.asarray(ar2)
+
+        ar1 = np.unique(ar1)
+        ar2 = np.unique(ar2)
+
+        aux = np.concatenate((ar1, ar2))
+        aux.sort()
+        mask = aux[1:] == aux[:-1]
+        int1d = aux[:-1][mask]
+        return int1d
     return np_intersects1d_impl
 
 
