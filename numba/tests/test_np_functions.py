@@ -609,7 +609,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         for a, b in arrays():
-            a, b = np.array(a), np.array(b)
+            a = np.array(a)
+            b = np.array(b)
             expected = pyfunc(a, b)
             got = cfunc(a, b)
             self.assertPreciseEqual(expected, got)
