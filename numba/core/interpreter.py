@@ -258,23 +258,33 @@ def peep_hole_list_to_tuple(func_ir):
 
 
 def peep_hole_delete_with_exit(func_ir):
+    """
+    This rewrite removes variables used to store the `__exit__` function
+    loaded by SETUP_WITH.
+    """
     dead_vars = set()
 
     for blk in func_ir.blocks.values():
         for stmt in blk.body:
+            # Any statement that uses a variable with the '$setup_with_exitfn'
+            # prefix is considered dead.
             used = set(stmt.list_vars())
             for v in used:
                 if v.name.startswith('$setup_with_exitfn'):
                     dead_vars.add(v)
+            # Any assignment that uses any of the dead variable is considered
+            # dead.
             if used & dead_vars:
                 if isinstance(stmt, ir.Assign):
                     dead_vars.add(stmt.target)
 
         new_body = []
         for stmt in blk.body:
+            # Skip any statements that uses anyone of the dead variable.
             if not (set(stmt.list_vars()) & dead_vars):
                 new_body.append(stmt)
-        blk.body = new_body
+        blk.body.clear()
+        blk.body.extend(new_body)
 
     return func_ir
 

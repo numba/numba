@@ -510,8 +510,12 @@ def find_setupwiths(blocks):
                         if ew.end <= offset:
                             end = offset
                             break
-
                 else:
+                    # Since py3.9, the `with finally` handling is injected into
+                    # caller function. However, the numba byteflow doesn't
+                    # account for that block, which is where `ew.end` is
+                    # pointing to. We need to point to the block before
+                    # `ew.end`.
                     end = ew.end
                     last_offset = None
                     for offset in blocks:
