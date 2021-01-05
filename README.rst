@@ -10,6 +10,10 @@ Numba
    :target: https://numba.discourse.group/
    :alt: Discourse
 
+.. image:: https://zenodo.org/badge/3659275.svg
+   :target: https://zenodo.org/badge/latestdoi/3659275
+   :alt: Zenodo DOI
+
 A Just-In-Time Compiler for Numerical Functions in Python
 #########################################################
 
@@ -23,7 +27,7 @@ parallelization of loops, generation of GPU-accelerated code, and creation of
 ufuncs and C callbacks.
 
 For more information about Numba, see the Numba homepage:
-http://numba.pydata.org
+https://numba.pydata.org
 
 Supported Platforms
 ===================
@@ -64,12 +68,12 @@ Distribution: https://www.anaconda.com/download
 
    $ conda install numba
 
-For more options, see the Installation Guide: http://numba.pydata.org/numba-doc/latest/user/installing.html
+For more options, see the Installation Guide: https://numba.readthedocs.io/en/stable/user/installing.html
 
 Documentation
 =============
 
-http://numba.pydata.org/numba-doc/latest/index.html
+https://numba.readthedocs.io/en/stable/index.html
 
 
 Mailing Lists

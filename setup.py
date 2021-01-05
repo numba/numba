@@ -7,18 +7,47 @@ from distutils.command.build_ext import build_ext
 from distutils.spawn import spawn
 
 from setuptools import Extension, find_packages, setup
-
 import versioneer
 
+_version_module = None
+try:
+    from packaging import version as _version_module
+except ImportError:
+    try:
+        from setuptools._vendor.packaging import version as _version_module
+    except ImportError:
+        pass
+
+
 min_python_version = "3.6"
+max_python_version = "3.9"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.15"
-min_llvmlite_version = "0.35.0.dev0"
-max_llvmlite_version = "0.36"
+min_llvmlite_version = "0.36.0.dev0"
+max_llvmlite_version = "0.37"
 
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
     sysconfig.get_config_vars()['Py_ENABLE_SHARED'] = 0
+
+
+def _guard_py_ver():
+    if _version_module is None:
+        return
+
+    parse = _version_module.parse
+
+    min_py = parse(min_python_version)
+    max_py = parse(max_python_version)
+    cur_py = parse('.'.join(map(str, sys.version_info[:3])))
+
+    if not min_py <= cur_py < max_py:
+        msg = ('Cannot install on Python version {}; only versions >={},<{} '
+               'are supported.')
+        raise RuntimeError(msg.format(cur_py, min_py, max_py))
+
+
+_guard_py_ver()
 
 
 class build_doc(build.build):
@@ -128,13 +157,11 @@ def get_ext_modules():
                                      'numba/_dynfunc.c'])
 
     ext_dispatcher = Extension(name="numba._dispatcher",
-                               sources=['numba/_dispatcher.c',
+                               sources=['numba/_dispatcher.cpp',
                                         'numba/_typeof.c',
                                         'numba/_hashtable.c',
-                                        'numba/_dispatcherimpl.cpp',
                                         'numba/core/typeconv/typeconv.cpp'],
                                depends=["numba/_pymodule.h",
-                                        "numba/_dispatcher.h",
                                         "numba/_typeof.h",
                                         "numba/_hashtable.h"],
                                **np_compile_args)
@@ -368,11 +395,11 @@ metadata = dict(
     scripts=["numba/pycc/pycc", "bin/numba"],
     author="Anaconda, Inc.",
     author_email="numba-users@continuum.io",
-    url="https://numba.github.com",
+    url="https://numba.pydata.org",
     packages=packages,
     setup_requires=build_requires,
     install_requires=install_requires,
-    python_requires=">={}".format(min_python_version),
+    python_requires=">={},<{}".format(min_python_version, max_python_version),
     license="BSD",
     cmdclass=cmdclass,
 )

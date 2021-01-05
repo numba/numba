@@ -379,8 +379,8 @@ def get_optimized_numba_ir(test_func, args, **kws):
         flags = compiler.Flags()
         parfor_pass = numba.parfors.parfor.ParforPass(
             tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
-            tp.state.return_type, tp.state.typingctx, options, flags,
-            diagnostics=diagnostics)
+            tp.state.return_type, tp.state.typingctx, options,
+            flags, tp.state.metadata, diagnostics=diagnostics)
         parfor_pass.run()
         test_ir._definitions = build_definitions(test_ir.blocks)
 
@@ -514,6 +514,7 @@ class TestPipeline(object):
         self.state.typemap = None
         self.state.return_type = None
         self.state.calltypes = None
+        self.state.metadata = {}
 
 
 class TestParfors(TestParforsBase):
@@ -1722,6 +1723,16 @@ class TestParfors(TestParforsBase):
         x = np.array([1, 1])
         self.check(test_impl, x)
 
+    @skip_parfors_unsupported
+    def test_array_tuple_concat(self):
+        # issue6399
+        def test_impl(a):
+            S = (a,) + (a, a)
+            return S[0].sum()
+
+        x = np.ones((3,3))
+        self.check(test_impl, x)
+
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
@@ -2332,6 +2343,32 @@ class TestPrange(TestPrangeBase):
         msg = ('Reduction variable c has multiple conflicting reduction '
                'operators.')
         self.assertIn(msg, str(raises.exception))
+
+    @skip_parfors_unsupported
+    def test_prange_two_conditional_reductions(self):
+        # issue6414
+        def test_impl():
+            A = B = 0
+            for k in range(1):
+                if k == 2:
+                    A += 1
+                else:
+                    x = np.zeros((1, 1))
+                    if x[0, 0]:
+                        B += 1
+            return A, B
+        self.prange_tester(test_impl)
+
+    @skip_parfors_unsupported
+    def test_prange_nested_reduction1(self):
+        def test_impl():
+            A = 0
+            for k in range(1):
+                for i in range(1):
+                    if i == 0:
+                        A += 1
+            return A
+        self.prange_tester(test_impl)
 
 #    @skip_parfors_unsupported
     @disabled_test
@@ -3783,6 +3820,28 @@ class TestParforsDiagnostics(TestParforsBase):
         cpfunc = self.compile_parallel(test_impl, ())
         diagnostics = cpfunc.metadata['parfor_diagnostics']
         self.assert_diagnostics(diagnostics, parfors_count=1)
+
+    def test_user_varname(self):
+        """make sure original user variable name is used in fusion info
+        """
+        def test_impl():
+            n = 10
+            x = np.ones(n)
+            a = np.sin(x)
+            b = np.cos(a * a)
+            acc = 0
+            for i in prange(n - 2):
+                for j in prange(n - 1):
+                    acc += b[i] + b[j + 1]
+            return acc
+
+        self.check(test_impl,)
+        cpfunc = self.compile_parallel(test_impl, ())
+        diagnostics = cpfunc.metadata['parfor_diagnostics']
+        # make sure original 'n' variable name is used in fusion report for loop
+        # dimension mismatch
+        self.assertTrue(
+            any("slice(0, n, 1)" in r.message for r in diagnostics.fusion_reports))
 
     def test_nested_prange(self):
         def test_impl():

@@ -533,15 +533,15 @@ br i1 %.294, label %B42, label %B160
         def bar(tyctx, x, y):
             def codegen(cgctx, builder, sig, args):
                 (arg_0, arg_1) = args
-                fty = ir.FunctionType(ir.IntType(64), [ir.IntType(64),
-                                                       ir.IntType(64)])
-                mul = builder.asm(fty, "mov $2, $0; imul $1, $0", "=r,r,r",
+                fty = ir.FunctionType(ir.IntType(32), [ir.IntType(32),
+                                                       ir.IntType(32)])
+                mul = builder.asm(fty, "mov $2, $0; imul $1, $0", "=&r,r,r",
                                   (arg_0, arg_1), name="asm_mul",
                                   side_effect=False)
                 return impl_ret_untracked(cgctx, builder, sig.return_type, mul)
-            return signature(x, x, x), codegen
+            return signature(types.int32, types.int32, types.int32), codegen
 
-        @njit(['int64(int64)'])
+        @njit(['int32(int32)'])
         def foo(x):
             x += 1
             z = bar(x, 2)

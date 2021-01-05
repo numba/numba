@@ -11,7 +11,7 @@ from numba.core.errors import TypingError
 from numba.np.numpy_support import numpy_version
 import unittest
 from numba.np import numpy_support
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, skip_ppc64le_issue6465
 
 _FS = ('e', 'f')
 
@@ -917,6 +917,7 @@ class TestRecordDtypeWithStructArraysAndDispatcher(TestRecordDtypeWithStructArra
         return _get_cfunc_nopython(pyfunc, argspec)
 
 
+@skip_ppc64le_issue6465
 class TestRecordDtypeWithCharSeq(unittest.TestCase):
 
     def _createSampleaArray(self):
@@ -1300,6 +1301,25 @@ class TestSubtyping(TestCase):
         self.assertEqual(len(foo.nopython_signatures), 2)
         self.assertEqual(foo(self.a_rec1) + 1, foo(self.ab_rec1))
         self.assertEqual(foo(self.ab_rec1, flag=1), self.ab_rec1[0] + k + 20)
+
+
+class TestRecordArrayExceptions(TestCase):
+
+    def test_nested_array_in_buffer_raises(self):
+        # see issue #6473
+        @njit()
+        def foo(x):
+            x["y"][0] = 1
+
+        dt = np.dtype([("y", (np.uint64, 5)),])
+        x = np.ones(1, dtype=dt)
+        with self.assertRaises(TypingError) as e:
+            foo(x)
+        ex1 = "The dtype of a Buffer type cannot itself be a Buffer type"
+        ex2 = "unsupported Buffer was: nestedarray(uint64, (5,))"
+        excstr = str(e.exception)
+        self.assertIn(ex1, excstr)
+        self.assertIn(ex2, excstr)
 
 
 if __name__ == '__main__':

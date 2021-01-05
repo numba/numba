@@ -4,7 +4,7 @@ from numba.core.typing.npydecl import (parse_dtype, parse_shape,
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          AbstractTemplate, CallableTemplate,
                                          signature, Registry)
-from numba.cuda.types import dim3
+from numba.cuda.types import dim3, grid_group
 from numba import cuda
 
 
@@ -130,6 +130,35 @@ class Cuda_threadfence_system(ConcreteTemplate):
 class Cuda_syncwarp(ConcreteTemplate):
     key = cuda.syncwarp
     cases = [signature(types.none), signature(types.none, types.i4)]
+
+
+@register
+class Cuda_cg_this_grid(ConcreteTemplate):
+    key = cuda.cg.this_grid
+    cases = [signature(grid_group)]
+
+
+@register_attr
+class CudaCgModuleTemplate(AttributeTemplate):
+    key = types.Module(cuda.cg)
+
+    def resolve_this_grid(self, mod):
+        return types.Function(Cuda_cg_this_grid)
+
+
+class Cuda_grid_group_sync(AbstractTemplate):
+    key = "GridGroup.sync"
+
+    def generic(self, args, kws):
+        return signature(types.int32, recvr=self.this)
+
+
+@register_attr
+class GridGroup_attrs(AttributeTemplate):
+    key = grid_group
+
+    def resolve_sync(self, mod):
+        return types.BoundFunction(Cuda_grid_group_sync, grid_group)
 
 
 @register
@@ -300,12 +329,23 @@ all_numba_types = (types.float64, types.float32,
                    types.int32, types.uint32,
                    types.int64, types.uint64)
 
+integer_numba_types = (types.int32, types.uint32,
+                       types.int64, types.uint64)
+
+unsigned_int_numba_types = (types.uint32, types.uint64)
+
 Cuda_atomic_add = _gen(cuda.atomic.add, all_numba_types)
 Cuda_atomic_sub = _gen(cuda.atomic.sub, all_numba_types)
 Cuda_atomic_max = _gen(cuda.atomic.max, all_numba_types)
 Cuda_atomic_min = _gen(cuda.atomic.min, all_numba_types)
 Cuda_atomic_nanmax = _gen(cuda.atomic.nanmax, all_numba_types)
 Cuda_atomic_nanmin = _gen(cuda.atomic.nanmin, all_numba_types)
+Cuda_atomic_and = _gen(cuda.atomic.and_, integer_numba_types)
+Cuda_atomic_or = _gen(cuda.atomic.or_, integer_numba_types)
+Cuda_atomic_xor = _gen(cuda.atomic.xor, integer_numba_types)
+Cuda_atomic_inc = _gen(cuda.atomic.inc, unsigned_int_numba_types)
+Cuda_atomic_dec = _gen(cuda.atomic.dec, unsigned_int_numba_types)
+Cuda_atomic_exch = _gen(cuda.atomic.exch, integer_numba_types)
 
 
 @register
@@ -316,8 +356,8 @@ class Cuda_atomic_compare_and_swap(AbstractTemplate):
         assert not kws
         ary, old, val = args
         dty = ary.dtype
-        # only support int32
-        if dty == types.int32 and ary.ndim == 1:
+
+        if dty in integer_numba_types and ary.ndim == 1:
             return signature(dty, ary, dty, dty)
 
 
@@ -369,6 +409,24 @@ class CudaAtomicTemplate(AttributeTemplate):
     def resolve_sub(self, mod):
         return types.Function(Cuda_atomic_sub)
 
+    def resolve_and_(self, mod):
+        return types.Function(Cuda_atomic_and)
+
+    def resolve_or_(self, mod):
+        return types.Function(Cuda_atomic_or)
+
+    def resolve_xor(self, mod):
+        return types.Function(Cuda_atomic_xor)
+
+    def resolve_inc(self, mod):
+        return types.Function(Cuda_atomic_inc)
+
+    def resolve_dec(self, mod):
+        return types.Function(Cuda_atomic_dec)
+
+    def resolve_exch(self, mod):
+        return types.Function(Cuda_atomic_exch)
+
     def resolve_max(self, mod):
         return types.Function(Cuda_atomic_max)
 
@@ -394,6 +452,9 @@ class CudaModuleTemplate(AttributeTemplate):
 
     def resolve_gridsize(self, mod):
         return types.Function(Cuda_gridsize)
+
+    def resolve_cg(self, mod):
+        return types.Module(cuda.cg)
 
     def resolve_threadIdx(self, mod):
         return dim3

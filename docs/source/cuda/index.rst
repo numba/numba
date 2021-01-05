@@ -12,6 +12,7 @@ Numba for CUDA GPUs
    device-functions.rst
    cudapysupported.rst
    intrinsics.rst
+   cooperative_groups.rst
    random.rst
    device-management.rst
    examples.rst

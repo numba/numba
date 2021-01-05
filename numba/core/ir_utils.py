@@ -1393,11 +1393,16 @@ def merge_adjacent_blocks(blocks):
             removed.add(next_label)
             label = next_label
 
+
 def restore_copy_var_names(blocks, save_copies, typemap):
     """
     restores variable names of user variables after applying copy propagation
     """
+    if not save_copies:
+        return {}
+
     rename_dict = {}
+    var_rename_map = {}
     for (a, b) in save_copies:
         # a is string name, b is variable
         # if a is user variable and b is generated temporary and b is not
@@ -1406,15 +1411,17 @@ def restore_copy_var_names(blocks, save_copies, typemap):
                                                 and b.name not in rename_dict):
             new_name = mk_unique_var('${}'.format(a));
             rename_dict[b.name] = new_name
+            var_rename_map[new_name] = a
             typ = typemap.pop(b.name)
             typemap[new_name] = typ
 
     replace_var_names(blocks, rename_dict)
+    return var_rename_map
 
-def simplify(func_ir, typemap, calltypes):
-    remove_dels(func_ir.blocks)
+
+def simplify(func_ir, typemap, calltypes, metadata):
     # get copies in to blocks and out from blocks
-    in_cps, out_cps = copy_propagate(func_ir.blocks, typemap)
+    in_cps, _ = copy_propagate(func_ir.blocks, typemap)
     # table mapping variable names to ir.Var objects to help replacement
     name_var_table = get_name_var_table(func_ir.blocks)
     save_copies = apply_copy_propagate(
@@ -1423,7 +1430,10 @@ def simplify(func_ir, typemap, calltypes):
         name_var_table,
         typemap,
         calltypes)
-    restore_copy_var_names(func_ir.blocks, save_copies, typemap)
+    var_rename_map = restore_copy_var_names(func_ir.blocks, save_copies, typemap)
+    if "var_rename_map" not in metadata:
+            metadata["var_rename_map"] = {}
+    metadata["var_rename_map"].update(var_rename_map)
     # remove dead code to enable fusion
     if config.DEBUG_ARRAY_OPT >= 1:
         dprint_func_ir(func_ir, "after copy prop")
@@ -1432,8 +1442,10 @@ def simplify(func_ir, typemap, calltypes):
     if config.DEBUG_ARRAY_OPT >= 1:
         dprint_func_ir(func_ir, "after simplify")
 
+
 class GuardException(Exception):
     pass
+
 
 def require(cond):
     """

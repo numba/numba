@@ -338,6 +338,7 @@ class CompilerBase(object):
         self.state.parfor_diagnostics = ParforDiagnostics()
         self.state.metadata['parfor_diagnostics'] = \
             self.state.parfor_diagnostics
+        self.state.metadata['parfors'] = {}
 
         self.state.status = _CompileStatus(
             can_fallback=self.state.flags.enable_pyobject
@@ -513,14 +514,17 @@ class DefaultPassBuilder(object):
         pm.add_pass(IRProcessing, "processing IR")
         pm.add_pass(WithLifting, "Handle with contexts")
 
+        # inline closures early in case they are using nonlocal's
+        # see issue #6585.
+        pm.add_pass(InlineClosureLikes,
+                    "inline calls to locally defined closures")
+
         # pre typing
         if not state.flags.no_rewrites:
             pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
             pm.add_pass(DeadBranchPrune, "dead branch pruning")
             pm.add_pass(GenericRewrites, "nopython rewrites")
 
-        pm.add_pass(InlineClosureLikes,
-                    "inline calls to locally defined closures")
         # convert any remaining closures into functions
         pm.add_pass(MakeFunctionToJitFunction,
                     "convert make_function into JIT functions")

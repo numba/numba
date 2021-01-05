@@ -401,6 +401,14 @@ GPU support
    If set, don't compile and execute code for the GPU, but use the CUDA
    Simulator instead. For debugging purposes.
 
+
+.. envvar:: NUMBA_CUDA_ARRAY_INTERFACE_SYNC
+
+   Whether to synchronize on streams provided by objects imported using the CUDA
+   Array Interface. This defaults to 1. If set to 0, then no synchronization
+   takes place, and the user of Numba (and other CUDA libraries) is responsible
+   for ensuring correctness with respect to synchronization on streams.
+
 Threading Control
 -----------------
 

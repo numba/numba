@@ -4,18 +4,19 @@ from .cudadrv import nvvm
 from .api import current_context
 
 
-def declare_atomic_cas_int32(lmod):
-    fname = '___numba_cas_hack'
-    fnty = lc.Type.function(lc.Type.int(32), (lc.Type.pointer(lc.Type.int(32)),
-                                              lc.Type.int(32),
-                                              lc.Type.int(32)))
+def declare_atomic_cas_int(lmod, isize):
+    fname = '___numba_atomic_i' + str(isize) + '_cas_hack'
+    fnty = lc.Type.function(lc.Type.int(isize),
+                            (lc.Type.pointer(lc.Type.int(isize)),
+                             lc.Type.int(isize),
+                             lc.Type.int(isize)))
     return lmod.get_or_insert_function(fnty, fname)
-
 
 # For atomic intrinsics, "numba_nvvm" prevents LLVM 9 onwards auto-upgrading
 # them into atomicrmw instructions that are not recognized by NVVM. It is
 # replaced with "nvvm" in llvm_to_ptx later, after the module has been parsed
 # and dumped by LLVM.
+
 
 def declare_atomic_add_float32(lmod):
     fname = 'llvm.numba_nvvm.atomic.load.add.f32.p0f32'
@@ -48,6 +49,34 @@ def declare_atomic_sub_float64(lmod):
     fnty = lc.Type.function(lc.Type.double(),
                             (lc.Type.pointer(lc.Type.double()),
                              lc.Type.double()))
+    return lmod.get_or_insert_function(fnty, fname)
+
+
+def declare_atomic_inc_int32(lmod):
+    fname = 'llvm.nvvm.atomic.load.inc.32.p0i32'
+    fnty = lc.Type.function(lc.Type.int(32), (lc.Type.pointer(lc.Type.int(32)),
+                                              lc.Type.int(32)))
+    return lmod.get_or_insert_function(fnty, fname)
+
+
+def declare_atomic_inc_int64(lmod):
+    fname = '___numba_atomic_u64_inc'
+    fnty = lc.Type.function(lc.Type.int(64), (lc.Type.pointer(lc.Type.int(64)),
+                                              lc.Type.int(64)))
+    return lmod.get_or_insert_function(fnty, fname)
+
+
+def declare_atomic_dec_int32(lmod):
+    fname = 'llvm.nvvm.atomic.load.dec.32.p0i32'
+    fnty = lc.Type.function(lc.Type.int(32), (lc.Type.pointer(lc.Type.int(32)),
+                                              lc.Type.int(32)))
+    return lmod.get_or_insert_function(fnty, fname)
+
+
+def declare_atomic_dec_int64(lmod):
+    fname = '___numba_atomic_u64_dec'
+    fnty = lc.Type.function(lc.Type.int(64), (lc.Type.pointer(lc.Type.int(64)),
+                                              lc.Type.int(64)))
     return lmod.get_or_insert_function(fnty, fname)
 
 
@@ -108,6 +137,20 @@ def declare_atomic_nanmin_float64(lmod):
     fnty = lc.Type.function(lc.Type.double(),
                             (lc.Type.pointer(lc.Type.double()),
                              lc.Type.double()))
+    return lmod.get_or_insert_function(fnty, fname)
+
+
+def declare_cudaCGGetIntrinsicHandle(lmod):
+    fname = 'cudaCGGetIntrinsicHandle'
+    fnty = lc.Type.function(lc.Type.int(64),
+                            (lc.Type.int(32),))
+    return lmod.get_or_insert_function(fnty, fname)
+
+
+def declare_cudaCGSynchronize(lmod):
+    fname = 'cudaCGSynchronize'
+    fnty = lc.Type.function(lc.Type.int(32),
+                            (lc.Type.int(64), lc.Type.int(32)))
     return lmod.get_or_insert_function(fnty, fname)
 
 
