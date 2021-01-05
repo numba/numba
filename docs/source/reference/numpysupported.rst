@@ -472,7 +472,7 @@ The following top-level functions are supported:
 * :func:`numpy.identity`
 * :func:`numpy.kaiser`
 * :func:`numpy.interp` (only the 3 first arguments; requires NumPy >= 1.10)
-* :func:`numpy.intersect1d` (only first 2 arguments, ar1 and ar1)
+* :func:`numpy.intersect1d` (only first 2 arguments, ar1 and ar2)
 * :func:`numpy.linspace` (only the 3-argument form)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
