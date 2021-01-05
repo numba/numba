@@ -10,10 +10,11 @@ from numba.core.interpreter import Interpreter
 from numba.core import typing, errors, cpu
 from numba.core.registry import cpu_target
 from numba.core.compiler import compile_ir, DEFAULT_FLAGS
-from numba import njit, typeof, objmode
+from numba import njit, typeof, objmode, types
 from numba.core.extending import overload
 from numba.tests.support import (MemoryLeak, TestCase, captured_stdout,
                                  skip_unless_scipy)
+from numba.experimental import jitclass
 import unittest
 
 
@@ -145,6 +146,9 @@ bogus_contextmanager = object()
 def lift_invalid():
     with bogus_contextmanager:
         pass
+
+
+gv_type = types.intp
 
 
 class TestWithFinding(TestCase):
@@ -794,6 +798,144 @@ class TestLiftObj(MemoryLeak, TestCase):
             return foo(1)
 
         self.assertEqual(f(), 1 + 3)
+
+    def test_objmode_gv_variable(self):
+        @njit
+        def global_var():
+            with objmode(val=gv_type):
+                val = 12.3
+            return val
+
+        ret = global_var()
+        # the result is truncated because of the intp return-type
+        self.assertIsInstance(ret, int)
+        self.assertEqual(ret, 12)
+
+    def test_objmode_gv_variable_error(self):
+        @njit
+        def global_var():
+            with objmode(val=gv_type2):
+                val = 123
+            return val
+
+        with self.assertRaisesRegex(
+            errors.CompilerError, "Global 'gv_type2' is not defined",
+        ):
+            global_var()
+
+    def test_objmode_closure_type_in_overload(self):
+        def foo():
+            pass
+
+        @overload(foo)
+        def foo_overload():
+            shrubbery = types.float64[:]
+            def impl():
+                with objmode(out=shrubbery):
+                    out = np.arange(10).astype(np.float64)
+                return out
+            return impl
+
+        @njit
+        def bar():
+            return foo()
+
+        self.assertPreciseEqual(bar(), np.arange(10).astype(np.float64))
+
+    def test_objmode_closure_type_in_overload_error(self):
+        def foo():
+            pass
+
+        @overload(foo)
+        def foo_overload():
+            shrubbery = types.float64[:]
+            def impl():
+                with objmode(out=shrubbery):
+                    out = np.arange(10).astype(np.float64)
+                return out
+            # Remove closure var.
+            # Otherwise, it will "shrubbery" will be a global
+            del shrubbery
+            return impl
+
+        @njit
+        def bar():
+            return foo()
+
+        with self.assertRaisesRegex(
+            errors.TypingError, "Freevar 'shrubbery' is not defined",
+        ):
+            bar()
+
+    def test_objmode_multi_type_args(self):
+        array_ty = types.int32[:]
+        @njit
+        def foo():
+            # t1 is a string
+            # t2 is a global type
+            # t3 is a non-local/freevar
+            with objmode(t1="float64", t2=gv_type, t3=array_ty):
+                t1 = 793856.5
+                t2 = t1         # to observe truncation
+                t3 = np.arange(5).astype(np.int32)
+            return t1, t2, t3
+
+        t1, t2, t3 = foo()
+        self.assertPreciseEqual(t1, 793856.5)
+        self.assertPreciseEqual(t2, 793856)
+        self.assertPreciseEqual(t3, np.arange(5).astype(np.int32))
+
+    def test_objmode_jitclass(self):
+        spec = [
+            ('value', types.int32),               # a simple scalar field
+            ('array', types.float32[:]),          # an array field
+        ]
+
+        @jitclass(spec)
+        class Bag(object):
+            def __init__(self, value):
+                self.value = value
+                self.array = np.zeros(value, dtype=np.float32)
+
+            @property
+            def size(self):
+                return self.array.size
+
+            def increment(self, val):
+                for i in range(self.size):
+                    self.array[i] += val
+                return self.array
+
+            @staticmethod
+            def add(x, y):
+                return x + y
+
+        n = 21
+        mybag = Bag(n)
+
+        def foo():
+            pass
+
+        @overload(foo)
+        def foo_overload():
+            shrubbery = mybag._numba_type_
+            def impl():
+                with objmode(out=shrubbery):
+                    out = Bag(123)
+                    out.increment(3)
+                return out
+            return impl
+
+        @njit
+        def bar():
+            return foo()
+
+        z = bar()
+        self.assertIsInstance(z, Bag)
+        self.assertEqual(z.add(2, 3), 2 + 3)
+        exp_array = np.zeros(123, dtype=np.float32) + 3
+        self.assertPreciseEqual(z.array, exp_array)
+
 
     @staticmethod
     def case_objmode_cache(x):
