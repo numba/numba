@@ -577,7 +577,7 @@ class CodeLibrary(object):
             # Run function-level optimizations to reduce memory usage and improve
             # module-level optimization.
             for func in ll_module.functions:
-                k = f"Function passes {func.name!r}"
+                k = f"Function passes on {func.name!r}"
                 with self._recorded_timings.record(k):
                     fpm.initialize()
                     fpm.run(func)
@@ -587,7 +587,8 @@ class CodeLibrary(object):
         """
         Internal: optimize this library's final module.
         """
-        with self._recorded_timings.record("Module passes (cheap)"):
+        cheap_name = "Module passes (cheap optimization for refprune)"
+        with self._recorded_timings.record(cheap_name):
             # A cheaper optimisation pass is run first to try and get as many
             # refops into the same function as possible via inlining
             self._codegen._mpm_cheap.run(self._final_module)
@@ -597,7 +598,8 @@ class CodeLibrary(object):
                 self._final_module = remove_redundant_nrt_refct(
                     self._final_module,
                 )
-        with self._recorded_timings.record("Module passes (full)"):
+        full_name = "Module passes (full optimization)"
+        with self._recorded_timings.record(full_name):
             # The full optimisation suite is then run on the refop pruned IR
             self._codegen._mpm_full.run(self._final_module)
 
