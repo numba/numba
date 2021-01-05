@@ -594,10 +594,7 @@ class CodeLibrary(object):
             self._codegen._mpm_cheap.run(self._final_module)
         # Refop pruning is then run on the heavily inlined function
         if not config.LLVM_REFPRUNE_PASS:
-            with self._recorded_timings.record("Legacy refprune"):
-                self._final_module = remove_redundant_nrt_refct(
-                    self._final_module,
-                )
+            self._final_module = remove_redundant_nrt_refct(self._final_module)
         full_name = "Module passes (full optimization)"
         with self._recorded_timings.record(full_name):
             # The full optimisation suite is then run on the refop pruned IR

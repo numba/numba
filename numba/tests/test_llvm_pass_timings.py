@@ -22,7 +22,7 @@ class TestLLVMPassTimings(TestCase):
         self.assertIsInstance(timings, lpt.PassTimingsCollection)
         # Check: basic for __str__
         text = str(timings)
-        self.assertIn("Module passes (full)", text)
+        self.assertIn("Module passes (full optimization)", text)
         # Check: there must be more than one record
         self.assertGreater(len(timings), 0)
         # Check: __getitem__
