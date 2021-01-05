@@ -327,8 +327,20 @@ class PassTimingsCollection(Sequence):
                       key=lambda x: x.timings.get_total_time(),
                       reverse=True)
 
-    def summary(self):
-        """Returns a string representing the summary of the timings.
+    def summary(self, topn=5):
+        """Return a string representing the summary of the timings.
+
+        Parameters
+        ----------
+        topn : int; optional
+            This limits the maximum number of items to show.
+            This function will show the ``topn`` most time-consuming passes.
+
+        Returns
+        -------
+        res : str
+
+        See also ``ProcessedPassTimings.summary()``
         """
         buf = []
         ap = buf.append
@@ -339,7 +351,7 @@ class PassTimingsCollection(Sequence):
             ap(f"== #{i} {r.name}")
             percent = r.timings.get_total_time() / overall_time * 100
             ap(f" Percent: {percent:.1f}%")
-            ap(r.timings.summary(indent=1))
+            ap(r.timings.summary(topn=topn, indent=1))
         return "\n".join(buf)
 
     def __getitem__(self, i):
