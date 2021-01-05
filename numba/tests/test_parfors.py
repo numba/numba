@@ -1733,6 +1733,27 @@ class TestParfors(TestParforsBase):
         x = np.ones((3,3))
         self.check(test_impl, x)
 
+    @skip_parfors_unsupported
+    def test_multi_defined_array(self):
+        # Make sure that different conflicting definitions of e
+        # prevent fusion.
+        def test_impl(a, b):
+            d = a * 2
+            e = a
+            for j in range(2):
+                e = e * 3
+                d = d * 2
+                if j < 1:
+                    if e[0] > 0:
+                        e = b
+                    else:
+                        e = a
+            return e
+
+        a = np.ones(7, dtype=np.int)
+        b = np.ones(10, dtype=np.int)
+        self.check(test_impl, a, b)
+
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
