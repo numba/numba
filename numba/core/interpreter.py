@@ -1482,12 +1482,9 @@ class Interpreter(object):
             self._binop(op, lhs, rhs, res)
 
     def op_IS_OP(self, inst, lhs, rhs, res):
-        self._binop('is', lhs, rhs, res)
         # invert if op case is 1
-        if inst.arg == 1:
-            tmp = self.get(res)
-            out = ir.Expr.unary('not', value=tmp, loc=self.loc)
-            self.store(out, res)
+        op = 'is not' if inst.arg == 1 else 'is'
+        self._binop(op, lhs, rhs, res)
 
     def op_CONTAINS_OP(self, inst, lhs, rhs, res):
         lhs, rhs = rhs, lhs
