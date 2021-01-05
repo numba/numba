@@ -1,6 +1,6 @@
 from numba import cuda, float32
 from math import cos, sin, tan, exp, log, log10, log2, pow
-from numba.cuda.testing import CUDATestCase
+from numba.cuda.testing import CUDATestCase, skip_on_cudasim
 import unittest
 
 
@@ -18,6 +18,7 @@ class TestFastMathOption(CUDATestCase):
         self.assertIn('div.full.ftz.f32', fastver.ptx)
         self.assertNotIn('div.full.ftz.f32', precver.ptx)
 
+    @skip_on_cudasim('fast cos not available in CUDASIM')
     def test_cosf(self):
         def f1(r, x):
             r[0] = cos(x)
@@ -27,6 +28,7 @@ class TestFastMathOption(CUDATestCase):
         self.assertIn('cos.approx.ftz.f32 ', fastver.ptx)
         self.assertNotIn('cos.approx.ftz.f32 ', slowver.ptx)
 
+    @skip_on_cudasim('fast sin not available in CUDASIM')
     def test_sinf(self):
         def f2(r, x):
             r[0] = sin(x)
@@ -36,6 +38,7 @@ class TestFastMathOption(CUDATestCase):
         self.assertIn('sin.approx.ftz.f32 ', fastver.ptx)
         self.assertNotIn('sin.approx.ftz.f32 ', slowver.ptx)
 
+    @skip_on_cudasim('fast tan not available in CUDASIM')
     def test_tanf(self):
         def f3(r, x):
             r[0] = tan(x)
@@ -47,6 +50,7 @@ class TestFastMathOption(CUDATestCase):
         self.assertIn('div.approx.ftz.f32 ', fastver.ptx)
         self.assertNotIn('sin.approx.ftz.f32 ', slowver.ptx)
 
+    @skip_on_cudasim('fast exp not available in CUDASIM')
     def test_expf(self):
         def f4(r, x):
             r[0] = exp(x)
@@ -56,6 +60,7 @@ class TestFastMathOption(CUDATestCase):
         self.assertNotIn('fma.rn.f32 ', fastver.ptx)
         self.assertIn('fma.rn.f32 ', slowver.ptx)
 
+    @skip_on_cudasim('fast log not available in CUDASIM')
     def test_logf(self):
         def f5(r, x):
             r[0] = log(x)
@@ -67,6 +72,7 @@ class TestFastMathOption(CUDATestCase):
         self.assertIn('0f3F317218', fastver.ptx)
         self.assertNotIn('lg2.approx.ftz.f32 ', slowver.ptx)
 
+    @skip_on_cudasim('fast log10 not available in CUDASIM')
     def test_log10f(self):
         def f6(r, x):
             r[0] = log10(x)
@@ -78,6 +84,7 @@ class TestFastMathOption(CUDATestCase):
         self.assertIn('0f3E9A209B', fastver.ptx)
         self.assertNotIn('lg2.approx.ftz.f32 ', slowver.ptx)
 
+    @skip_on_cudasim('fast log2 not available in CUDASIM')
     def test_log2f(self):
         def f7(r, x):
             r[0] = log2(x)
@@ -87,6 +94,7 @@ class TestFastMathOption(CUDATestCase):
         self.assertIn('lg2.approx.ftz.f32 ', fastver.ptx)
         self.assertNotIn('lg2.approx.ftz.f32 ', slowver.ptx)
 
+    @skip_on_cudasim('fast pow not available in CUDASIM')
     def test_powf(self):
         def f8(r, x, y):
             r[0] = pow(x, y)
