@@ -678,9 +678,8 @@ class ShapeEquivSet(EquivSet):
                 # equivalences. Believe it is a rare case, and only happens to
                 # scalar accumuators.
                 if one_name in self.obj_to_ind:
-                    redefined.add(
-                        one_name
-                    )  # remove this var from all equiv sets
+                    # remove this var from all equiv sets
+                    redefined.add(one_name)
                     i = self.obj_to_ind[one_name]
                     del self.obj_to_ind[one_name]
                     self.ind_to_obj[i].remove(one_name)
@@ -961,6 +960,8 @@ class SymbolicEquivSet(ShapeEquivSet):
         if len(uniqs) <= 1:
             return False
         uniqs = list(uniqs)
+        # Move lhs to front of list in case later code needs to know.
+        uniqs.insert(0, uniqs.pop(uniqs.index(objs[0])))
         super(SymbolicEquivSet, self)._insert(uniqs)
         objs = self.ind_to_obj[self._get_ind(uniqs[0])]
 
@@ -1061,7 +1062,9 @@ class ArrayAnalysis(object):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
+        self._prepare()
 
+    def _prepare(self):
         # EquivSet of variables, indexed by block number
         self.equiv_sets = {}
         # keep attr calls to arrays like t=A.sum() as {t:('sum',A)}
@@ -1070,6 +1073,8 @@ class ArrayAnalysis(object):
         self.prepends = {}
         # keep track of pruned precessors when branch degenerates to jump
         self.pruned_predecessors = {}
+        # keep track of size variables to always use for multidef vars
+        self.multi_def_size_vars = {}
 
     def get_equiv_set(self, block_label):
         """Return the equiv_set object of an block given its label.
@@ -1084,6 +1089,8 @@ class ArrayAnalysis(object):
         """
         unused = set()
         for r in redefineds:
+            if config.DEBUG_ARRAY_OPT >= 2:
+                print("Removing definitions of", r)
             for eslabel in self.equiv_sets:
                 es = self.equiv_sets[eslabel]
                 es.define(r, unused)
@@ -1102,6 +1109,9 @@ class ArrayAnalysis(object):
                           if not isinstance(self.typemap[k],
                                             types.ArrayCompatible) and
                           len(v) > 1]
+        # Remember the length to see if anything got added later.
+        num_multi = len(self.multi_def)
+
         if equiv_set is None:
             init_equiv_set = SymbolicEquivSet(self.typemap)
         else:
@@ -1124,6 +1134,22 @@ class ArrayAnalysis(object):
         topo_order = find_topo_order(blocks, cfg=cfg)
         # Traverse blocks in topological order
         self._run_on_blocks(topo_order, blocks, cfg, init_equiv_set)
+        # If the first run added array entries to the multiply defined set
+        # then run it again with the new multiply defined set so that
+        # data flow dependencies on those multiply defined don't carry over
+        # from the first assignment to those multiply defined vars.
+        if len(self.multi_def) != num_multi:
+            if config.DEBUG_ARRAY_OPT >= 1:
+                print("Additional multiple defined variable identified.")
+                print("Running analyzis again to exclude those variables.")
+                print("Updated multi_def:", self.multi_def, equiv_set is None)
+            if equiv_set is None:
+                init_equiv_set = SymbolicEquivSet(self.typemap)
+            else:
+                init_equiv_set = equiv_set
+
+            self._prepare()
+            self._run_on_blocks(topo_order, blocks, cfg, init_equiv_set)
 
         if config.DEBUG_ARRAY_OPT >= 1:
             self.dump()
@@ -1176,7 +1202,7 @@ class ArrayAnalysis(object):
         # calculate beginning equiv_set of current block as an intersection
         # of incoming ones.
         if config.DEBUG_ARRAY_OPT >= 2:
-            print("preds:", preds)
+            print("_determine_transform preds:", list(preds))
         for (p, q) in preds:
             if config.DEBUG_ARRAY_OPT >= 2:
                 print("p, q:", p, q)
@@ -1241,8 +1267,10 @@ class ArrayAnalysis(object):
         print("Array Analysis: ", self.equiv_sets)
 
     def _define(self, equiv_set, var, typ, value):
-        self.typemap[var.name] = typ
-        self.func_ir._definitions[var.name] = [value]
+        if var.name not in self.typemap:
+            self.typemap[var.name] = typ
+        if var.name not in self.func_ir._definitions:
+            self.func_ir._definitions[var.name] = [value]
         redefineds = set()
         # Propagate the success or failure of define.
         return equiv_set.define(var, redefineds, self.func_ir, typ)
@@ -1251,7 +1279,7 @@ class ArrayAnalysis(object):
         pre = []
         post = []
         if config.DEBUG_ARRAY_OPT >= 2:
-            print("analyze_inst:", inst)
+            print("analyze_inst:", inst, type(equiv_set))
         if isinstance(inst, ir.Assign):
             lhs = inst.target
             typ = self.typemap[lhs.name]
@@ -1346,9 +1374,31 @@ class ArrayAnalysis(object):
             # Don't add this variable if it is multiply defined.
             if lhs.name not in self.multi_def:
                 if shape is not None:
-                    needs_define = equiv_set.insert_equiv(lhs, shape)
+                    # If first time we've seen this var then simply insert.
+                    if lhs.name not in equiv_set.defs:
+                        needs_define = equiv_set.insert_equiv(lhs, shape)
+                    else:
+                        # If we've seen it before and the definitions are
+                        # equivalent then add to this block.
+                        if equiv_set.is_equiv(lhs, shape):
+                            needs_define = equiv_set.insert_equiv(lhs, shape)
+                        else:
+                            if config.DEBUG_ARRAY_OPT >= 2:
+                                print("Adding", lhs, "to multi_def")
+                            # This is a multiply defined var with
+                            # non-equivalent definitions so add to
+                            # multiply defined set.
+                            self.multi_def.append(lhs.name)
+                            self.remove_redefineds([lhs.name])
                 if needs_define:
                     equiv_set.define(lhs, redefined, self.func_ir, typ)
+            else:
+                if isinstance(typ, types.ArrayCompatible):
+                    (shape, multi_post) = self._gen_shape_call(
+                        equiv_set, lhs, typ.ndim, None, True
+                    )
+                    post.extend(multi_post)
+                    equiv_set.insert_equiv(lhs, shape)
         elif isinstance(inst, ir.StaticSetItem) or isinstance(
             inst, ir.SetItem
         ):
@@ -1423,53 +1473,54 @@ class ArrayAnalysis(object):
                     ]
 
             cond_var = inst.cond
-            cond_def = guard(get_definition, self.func_ir, cond_var)
-            if not cond_def:  # phi variable has no single definition
-                # We'll use equiv_set to try to find a cond_def instead
-                equivs = equiv_set.get_equiv_set(cond_var)
-                defs = []
-                for name in equivs:
-                    if isinstance(name, str) and name in self.typemap:
-                        var_def = guard(
-                            get_definition, self.func_ir, name, lhs_only=True
+            if isinstance(self.typemap[cond_var.name], types.ArrayCompatible):
+                cond_def = guard(get_definition, self.func_ir, cond_var)
+                if not cond_def:  # phi variable has no single definition
+                    # We'll use equiv_set to try to find a cond_def instead
+                    equivs = equiv_set.get_equiv_set(cond_var)
+                    defs = []
+                    for name in equivs:
+                        if isinstance(name, str) and name in self.typemap:
+                            var_def = guard(
+                                get_definition, self.func_ir, name, lhs_only=True
+                            )
+                            if isinstance(var_def, ir.Var):
+                                var_def = var_def.name
+                            if var_def:
+                                defs.append(var_def)
+                        else:
+                            defs.append(name)
+                    defvars = set(filter(lambda x: isinstance(x, str), defs))
+                    defconsts = set(defs).difference(defvars)
+                    if len(defconsts) == 1:
+                        cond_def = list(defconsts)[0]
+                    elif len(defvars) == 1:
+                        cond_def = guard(
+                            get_definition, self.func_ir, list(defvars)[0]
                         )
-                        if isinstance(var_def, ir.Var):
-                            var_def = var_def.name
-                        if var_def:
-                            defs.append(var_def)
-                    else:
-                        defs.append(name)
-                defvars = set(filter(lambda x: isinstance(x, str), defs))
-                defconsts = set(defs).difference(defvars)
-                if len(defconsts) == 1:
-                    cond_def = list(defconsts)[0]
-                elif len(defvars) == 1:
-                    cond_def = guard(
-                        get_definition, self.func_ir, list(defvars)[0]
-                    )
-            if isinstance(cond_def, ir.Expr) and cond_def.op == 'binop':
-                handle_call_binop(cond_def)
-            elif isinstance(cond_def, ir.Expr) and cond_def.op == 'call':
-                # this handles bool(predicate)
-                glbl_bool = guard(get_definition, self.func_ir, cond_def.func)
-                if glbl_bool is not None and glbl_bool.value is bool:
-                    if len(cond_def.args) == 1:
-                        condition = guard(get_definition, self.func_ir,
-                                          cond_def.args[0])
-                        if (condition is not None and
-                            isinstance(condition, ir.Expr) and
-                                condition.op == 'binop'):
-                            handle_call_binop(condition)
-            else:
-                if isinstance(cond_def, ir.Const):
-                    cond_def = cond_def.value
-                if isinstance(cond_def, int) or isinstance(cond_def, bool):
-                    # condition is always true/false, prune the outgoing edge
-                    pruned_br = inst.falsebr if cond_def else inst.truebr
-                    if pruned_br in self.pruned_predecessors:
-                        self.pruned_predecessors[pruned_br].append(label)
-                    else:
-                        self.pruned_predecessors[pruned_br] = [label]
+                if isinstance(cond_def, ir.Expr) and cond_def.op == 'binop':
+                    handle_call_binop(cond_def)
+                elif isinstance(cond_def, ir.Expr) and cond_def.op == 'call':
+                    # this handles bool(predicate)
+                    glbl_bool = guard(get_definition, self.func_ir, cond_def.func)
+                    if glbl_bool is not None and glbl_bool.value is bool:
+                        if len(cond_def.args) == 1:
+                            condition = guard(get_definition, self.func_ir,
+                                              cond_def.args[0])
+                            if (condition is not None and
+                                isinstance(condition, ir.Expr) and
+                                    condition.op == 'binop'):
+                                handle_call_binop(condition)
+                else:
+                    if isinstance(cond_def, ir.Const):
+                        cond_def = cond_def.value
+                    if isinstance(cond_def, int) or isinstance(cond_def, bool):
+                        # condition is always true/false, prune the outgoing edge
+                        pruned_br = inst.falsebr if cond_def else inst.truebr
+                        if pruned_br in self.pruned_predecessors:
+                            self.pruned_predecessors[pruned_br].append(label)
+                        else:
+                            self.pruned_predecessors[pruned_br] = [label]
 
         elif type(inst) in array_analysis_extensions:
             # let external calls handle stmt if type matches
@@ -2864,9 +2915,12 @@ class ArrayAnalysis(object):
                 arrs[0],
                 self._call_assert_equiv(scope, loc, equiv_set, arrs),
             )
-        return self._broadcast_assert_shapes(
-            scope, equiv_set, loc, shapes, names
-        )
+        if None in shapes:
+            return None
+        else:
+            return self._broadcast_assert_shapes(
+                scope, equiv_set, loc, shapes, names
+            )
 
     def _broadcast_assert_shapes(self, scope, equiv_set, loc, shapes, names):
         """Produce assert_equiv for sizes in each dimension, taking into
@@ -2874,6 +2928,8 @@ class ArrayAnalysis(object):
         """
         asserts = []
         new_shape = []
+        if config.DEBUG_ARRAY_OPT >= 2:
+            print("_broadcast_assert_shapes:", shapes, names)
         max_dim = max([len(shape) for shape in shapes])
         const_size_one = None
         for i in range(max_dim):
@@ -2971,7 +3027,7 @@ class ArrayAnalysis(object):
             ir.Assign(value=value, target=var, loc=loc),
         ]
 
-    def _gen_shape_call(self, equiv_set, var, ndims, shape):
+    def _gen_shape_call(self, equiv_set, var, ndims, shape, for_multidef=False):
         out = []
         # attr call: A_sh_attr = getattr(A, shape)
         if isinstance(shape, ir.Var):
@@ -3028,8 +3084,21 @@ class ArrayAnalysis(object):
                 getitem = ir.Expr.static_getitem(attr_var, i, None, var.loc)
                 use_attr_var = True
                 self.calltypes[getitem] = None
-                out.append(ir.Assign(getitem, size_var, var.loc))
+
+                if for_multidef:
+                    # If an array variable is multiply defined when we will
+                    # always generate size vars after each such assignment.
+                    # That way if a multiply defined var is a source for a
+                    # parfor we have a size variable to use for the loop size.
+                    # By re-using the same size var at each assignment we
+                    # know what the size var is at any point in the function.
+                    size_var = self.multi_def_size_vars.get(
+                        (var.name, i),
+                        size_var
+                    )
+                    self.multi_def_size_vars[(var.name, i)] = size_var
                 self._define(equiv_set, size_var, types.intp, getitem)
+                out.append(ir.Assign(getitem, size_var, var.loc))
             size_vars.append(size_var)
         if use_attr_var and shape_attr_call:
             # only insert shape call if there is any getitem call
