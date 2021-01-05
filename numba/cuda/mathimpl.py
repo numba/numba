@@ -43,6 +43,15 @@ unarys += [('atanh', 'atanhf', math.atanh)]
 unarys += [('tan', 'tanf', math.tan)]
 unarys += [('tanh', 'tanhf', math.tanh)]
 
+unarys_fastmath = {}
+unarys_fastmath['cosf'] = 'fast_cosf'
+unarys_fastmath['sinf'] = 'fast_sinf'
+unarys_fastmath['tanf'] = 'fast_tanf'
+unarys_fastmath['expf'] = 'fast_expf'
+unarys_fastmath['log2f'] = 'fast_log2f'
+unarys_fastmath['log10f'] = 'fast_log10f'
+unarys_fastmath['logf'] = 'fast_logf'
+
 binarys = []
 binarys += [('copysign', 'copysignf', math.copysign)]
 binarys += [('atan2', 'atan2f', math.atan2)]
@@ -51,6 +60,9 @@ binarys += [('fmod', 'fmodf', math.fmod)]
 binarys += [('hypot', 'hypotf', math.hypot)]
 if utils.PYVERSION >= (3, 7):
     binarys += [('remainder', 'remainderf', math.remainder)]
+
+binarys_fastmath = {}
+binarys_fastmath['powf'] = 'fast_powf'
 
 
 @lower(math.isinf, types.Integer)
@@ -76,8 +88,20 @@ def impl_boolean(key, ty, libfunc):
 
 def impl_unary(key, ty, libfunc):
     def lower_unary_impl(context, builder, sig, args):
-        libfunc_impl = context.get_function(libfunc, typing.signature(ty, ty))
-        return libfunc_impl(builder, args)
+        if ty == float32 and context.fastmath is True:
+            fast_replacement = unarys_fastmath.get(libfunc.__name__)
+            if fast_replacement is None:
+                libfunc_impl = context.get_function(libfunc,
+                                                    typing.signature(ty, ty))
+            else:
+                new_libfunc = getattr(libdevice, fast_replacement)
+                libfunc_impl = context.get_function(new_libfunc,
+                                                    typing.signature(ty, ty))
+            return libfunc_impl(builder, args)
+        else:
+            libfunc_impl = context.get_function(libfunc,
+                                                typing.signature(ty, ty))
+            return libfunc_impl(builder, args)
 
     lower(key, ty)(lower_unary_impl)
 
@@ -102,9 +126,22 @@ def impl_unary_int(key, ty, libfunc):
 
 def impl_binary(key, ty, libfunc):
     def lower_binary_impl(context, builder, sig, args):
-        libfunc_impl = context.get_function(libfunc,
-                                            typing.signature(ty, ty, ty))
-        return libfunc_impl(builder, args)
+        if ty == float32 and context.fastmath is True:
+            fast_replacement = binarys_fastmath.get(libfunc.__name__)
+            if fast_replacement is None:
+                libfunc_impl = context.get_function(libfunc,
+                                                    typing.signature(ty,
+                                                                     ty, ty))
+            else:
+                new_libfunc = getattr(libdevice, fast_replacement)
+                libfunc_impl = context.get_function(new_libfunc,
+                                                    typing.signature(ty,
+                                                                     ty, ty))
+            return libfunc_impl(builder, args)
+        else:
+            libfunc_impl = context.get_function(libfunc,
+                                                typing.signature(ty, ty, ty))
+            return libfunc_impl(builder, args)
 
     lower(key, ty, ty)(lower_binary_impl)
 

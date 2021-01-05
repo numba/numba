@@ -22,7 +22,8 @@ from .args import wrap_arg
 
 
 @global_compiler_lock
-def compile_cuda(pyfunc, return_type, args, debug=False, inline=False):
+def compile_cuda(pyfunc, return_type, args, debug=False, inline=False,
+                 fastmath=False):
     # First compilation will trigger the initialization of the CUDA backend.
     from .descriptor import CUDATargetDesc
 
@@ -38,6 +39,8 @@ def compile_cuda(pyfunc, return_type, args, debug=False, inline=False):
         flags.set('debuginfo')
     if inline:
         flags.set('forceinline')
+    if fastmath:
+        flags.set('fastmath')
     # Run compilation pipeline
     cres = compiler.compile_extra(typingctx=typingctx,
                                   targetctx=targetctx,
@@ -56,7 +59,8 @@ def compile_cuda(pyfunc, return_type, args, debug=False, inline=False):
 @global_compiler_lock
 def compile_kernel(pyfunc, args, link, debug=False, inline=False,
                    fastmath=False, extensions=[], max_registers=None, opt=True):
-    cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=inline)
+    cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=inline,
+                        fastmath=fastmath)
     fname = cres.fndesc.llvm_func_name
     lib, kernel = cres.target_context.prepare_cuda_kernel(cres.library, fname,
                                                           cres.signature.args,

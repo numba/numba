@@ -97,6 +97,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                 targetoptions['debug'] = debug
                 targetoptions['opt'] = opt
                 targetoptions['link'] = link
+                targetoptions['fastmath'] = fastmath
                 sigs = None
                 return Dispatcher(func_or_sig, sigs,
                                   targetoptions=targetoptions)
@@ -127,6 +128,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             targetoptions['debug'] = debug
             targetoptions['link'] = link
             targetoptions['opt'] = opt
+            targetoptions['fastmath'] = fastmath
             return Dispatcher(func, sigs, targetoptions=targetoptions)
 
         def device_jit(func):
