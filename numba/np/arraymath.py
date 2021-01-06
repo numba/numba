@@ -3451,12 +3451,12 @@ def np_array_equal(a, b):
 @overload(np.intersect1d)
 def jit_np_intersect1d(ar1, ar2):
     # Not implemented to support assume_unique or return_indices
-    # return numpy array of sorted, unique values in both input arrays
+    # https://github.com/numpy/numpy/blob/v1.19.0/numpy/lib
+    # /arraysetops.py#L347-L441
     if not (type_can_asarray(ar1) or type_can_asarray(ar2)):
         raise TypingError('intersect1d: first two args must be array-like')
 
     def np_intersects1d_impl(ar1, ar2):
-        # Mirrored from: https://github.com/numpy/numpy/blob/v1.19.0/numpy/lib/arraysetops.py#L347-L441
         ar1 = np.asarray(ar1)
         ar2 = np.asarray(ar2)
 
