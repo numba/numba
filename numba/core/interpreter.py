@@ -1654,7 +1654,17 @@ class Interpreter(object):
         # build_list, drop the extend, and wire up the target as the result from
         # the build_tuple that's been rewritten.
 
-        # is last emitted statment a build_tuple?
+        # See if this is the first statement in a block, if so its probably from
+        # control flow in a tuple unpack like:
+        # `(*(1, (2,) if predicate else (3,)))`
+        # this cannot be handled as present so raise
+        if not self.current_block.body:
+            msg = ("An unsupported bytecode sequence has been encountered: "
+                   "op_LIST_EXTEND at the start of a block.\n\nThis could be "
+                   "due to the use of a branch in a tuple unpacking statement.")
+            raise errors.UnsupportedError(msg)
+
+        # is last emitted statement a build_tuple?
         stmt = self.current_block.body[-1]
         ok = isinstance(stmt.value, ir.Expr) and stmt.value.op == "build_tuple"
         # check statements from self.current_block.body[-1] through to target,

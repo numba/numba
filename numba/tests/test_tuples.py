@@ -698,6 +698,21 @@ class TestTupleBuild(TestCase):
         # Heterogeneous
         check(lambda a: tuple(a), (4, 5.5))
 
+    @unittest.skipIf(utils.PYVERSION < (3, 9), "needs Python 3.9+")
+    def test_unpack_with_predicate_fails(self):
+        # this fails as the list_to_tuple/list_extend peephole bytecode
+        # rewriting needed for Python 3.9+ cannot yet traverse the CFG.
+        @njit
+        def foo():
+            a = (1,)
+            b = (3,2,  4)
+            return (*(b if a[0] else (5, 6)),)
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            foo()
+
+        msg = "op_LIST_EXTEND at the start of a block"
+        self.assertIn(msg, str(raises.exception))
 
 
 if __name__ == '__main__':
