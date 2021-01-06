@@ -1482,7 +1482,10 @@ class ArrayAnalysis(object):
                     for name in equivs:
                         if isinstance(name, str) and name in self.typemap:
                             var_def = guard(
-                                get_definition, self.func_ir, name, lhs_only=True
+                                get_definition,
+                                self.func_ir,
+                                name,
+                                lhs_only=True
                             )
                             if isinstance(var_def, ir.Var):
                                 var_def = var_def.name
@@ -1502,7 +1505,10 @@ class ArrayAnalysis(object):
                     handle_call_binop(cond_def)
                 elif isinstance(cond_def, ir.Expr) and cond_def.op == 'call':
                     # this handles bool(predicate)
-                    glbl_bool = guard(get_definition, self.func_ir, cond_def.func)
+                    glbl_bool = guard(get_definition,
+                        self.func_ir,
+                        cond_def.func
+                    )
                     if glbl_bool is not None and glbl_bool.value is bool:
                         if len(cond_def.args) == 1:
                             condition = guard(get_definition, self.func_ir,
@@ -1515,7 +1521,8 @@ class ArrayAnalysis(object):
                     if isinstance(cond_def, ir.Const):
                         cond_def = cond_def.value
                     if isinstance(cond_def, int) or isinstance(cond_def, bool):
-                        # condition is always true/false, prune the outgoing edge
+                        # condition is always true/false
+                        # prune the outgoing edge
                         pruned_br = inst.falsebr if cond_def else inst.truebr
                         if pruned_br in self.pruned_predecessors:
                             self.pruned_predecessors[pruned_br].append(label)
