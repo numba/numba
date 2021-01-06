@@ -112,11 +112,15 @@ def peep_hole_list_to_tuple(func_ir):
     """
     _DEBUG = False
 
+    # For all blocks
     for offset, blk in func_ir.blocks.items():
         target_list = None
+        # keep doing the peephole rewrite until nothing is left that matches
         while True:
             found = False
             region = None
+            # first try and find a matching region
+            # i.e. BUILD_LIST...<stuff>...LIST_TO_TUPLE
             for idx, stmt in enumerate(reversed(blk.body)):
                 if isinstance(stmt, ir.Assign):
                     value = stmt.value
@@ -143,6 +147,8 @@ def peep_hole_list_to_tuple(func_ir):
                 extends = []
                 init = region[1][1]
                 const_list = init.target.name
+                # Walk through the peep_hole and find things that are being
+                # "extend"ed and "append"ed to the BUILD_LIST
                 for x in peep_hole:
                     if isinstance(x, ir.Assign):
                         if isinstance(x.value, ir.Expr):
@@ -179,6 +185,11 @@ def peep_hole_list_to_tuple(func_ir):
                     print("\nBLOCK:")
                     blk.dump()
 
+                # This section basically accumulates list appends and extends
+                # as binop(+) on tuples, it drops all the getattr() for extend
+                # and append as they are now dead and replaced with binop(+).
+                # It also switches out the build_list for a build_tuple and then
+                # ensures everything is wired up and defined ok.
                 t2l_agn = region[0][1]
                 acc = the_build_list
                 for x in peep_hole:
@@ -230,7 +241,7 @@ def peep_hole_list_to_tuple(func_ir):
                     else:
                         # stick everything else in as-is
                         new_hole.append(x)
-                # write the result back into the original build list as
+                # Finally write the result back into the original build list as
                 # everything refers to it.
                 new_hole.append(ir.Assign(acc, t2l_agn.target,
                                           the_build_list.loc))
@@ -239,6 +250,7 @@ def peep_hole_list_to_tuple(func_ir):
                     for x in new_hole:
                         print(x)
 
+                # and then update the block body with the modified region
                 cpy = blk.body[:]
                 head = cpy[:-region[1][0] - 1]
                 tail = blk.body[-region[0][0]:]
