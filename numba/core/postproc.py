@@ -197,6 +197,8 @@ class PostProcessor(object):
             # rewrite body and insert dels
             body = []
             lastloc = ir_block.loc
+            # for storing dels
+            del_store = []
             for stmt, delete_set in reversed(delete_pts):
                 lastloc = stmt.loc
                 # Ignore dels (assuming no user inserted deletes)
@@ -205,7 +207,11 @@ class PostProcessor(object):
                 # note: the reverse sort is not necessary for correctness
                 #       it is just to minimize changes to test for now
                 for var_name in sorted(delete_set, reverse=True):
-                    body.append(ir.Del(var_name, loc=lastloc))
+                    del_store.append(ir.Del(var_name, loc=lastloc))
+            # add all the dels at the end of the block, this prevents lifetime
+            # issues occurring in cases where e.g. C function calls are made on
+            # e.g. `array_inst.ctypes.data`.
+            body.extend(del_store)
             body.append(ir_block.body[-1])  # terminator
             ir_block.body = body
 
