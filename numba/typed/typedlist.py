@@ -398,7 +398,8 @@ class List(MutableSequence, pt.Generic[T]):
     def copy(self):
         return _copy(self)
 
-    def index(self, item: T, start: int = None, stop: int = None) -> int:
+    def index(self, item: T, start: pt.Optional[int] = None,
+              stop: pt.Optional[int] = None) -> int:
         return _index(self, item, start, stop)
 
     def sort(self, key=None, reverse=False):
