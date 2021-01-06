@@ -114,29 +114,31 @@ def peep_hole_list_to_tuple(func_ir):
 
     # For all blocks
     for offset, blk in func_ir.blocks.items():
-        target_list = None
         # keep doing the peephole rewrite until nothing is left that matches
         while True:
-            found = False
-            region = None
             # first try and find a matching region
             # i.e. BUILD_LIST...<stuff>...LIST_TO_TUPLE
-            for idx, stmt in enumerate(reversed(blk.body)):
-                if isinstance(stmt, ir.Assign):
-                    value = stmt.value
-                    if (isinstance(value, ir.Expr) and
-                            value.op == 'list_to_tuple'):
-                        target_list = value.info[0]
-                        found = True
-                        bt = (idx, stmt)
-                if found:
+            def find_postive_region():
+                found = False
+                for idx in reversed(range(len(blk.body))):
+                    stmt = blk.body[idx]
                     if isinstance(stmt, ir.Assign):
-                        if stmt.target.name == target_list:
-                            region = (bt, (idx, stmt))
-                            break
+                        value = stmt.value
+                        if (isinstance(value, ir.Expr) and
+                                value.op == 'list_to_tuple'):
+                            target_list = value.info[0]
+                            found = True
+                            bt = (idx, stmt)
+                    if found:
+                        if isinstance(stmt, ir.Assign):
+                            if stmt.target.name == target_list:
+                                region = (bt, (idx, stmt))
+                                return region
+
+            region = find_postive_region()
             # if there's a peep hole region then do something with it
             if region is not None:
-                peep_hole = blk.body[-region[1][0] - 1 : -region[0][0] - 1]
+                peep_hole = blk.body[region[1][0] : region[0][0]]
                 if _DEBUG:
                     print("\nWINDOW:")
                     for x in peep_hole:
@@ -254,8 +256,8 @@ def peep_hole_list_to_tuple(func_ir):
 
                 # and then update the block body with the modified region
                 cpy = blk.body[:]
-                head = cpy[:-region[1][0] - 1]
-                tail = blk.body[-region[0][0]:]
+                head = cpy[:region[1][0]]
+                tail = blk.body[region[0][0] + 1:]
                 tmp = head + new_hole + tail
                 blk.body.clear()
                 blk.body.extend(tmp)
