@@ -1318,7 +1318,10 @@ def set_update(context, builder, sig, args):
         inst.upsize(new_size)
 
     with for_iter(context, builder, items_type, items) as loop:
-        inst.add(loop.value)
+        # make sure that the items being added are of the same dtype as the
+        # set instance
+        casted = context.cast(builder, loop.value, items_type.dtype, inst.dtype)
+        inst.add(casted)
 
     if n is not None:
         # If we pre-grew the set, downsize in case there were many collisions
