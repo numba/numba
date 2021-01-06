@@ -1,17 +1,21 @@
 import threading
 import functools
+import numba.core.event as ev
 
 
 # Lock for the preventing multiple compiler execution
 class _CompilerLock(object):
     def __init__(self):
         self._lock = threading.RLock()
+        self._duration = 0
 
     def acquire(self):
+        ev.start_event("COMPILER_LOCK")
         self._lock.acquire()
 
     def release(self):
         self._lock.release()
+        ev.stop_event("COMPILER_LOCK")
 
     def __enter__(self):
         self.acquire()
