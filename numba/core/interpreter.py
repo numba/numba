@@ -1550,7 +1550,6 @@ class Interpreter(object):
         )
         exc_match_name = '$exc_match'
         self.store(value=gv_fn, name=exc_match_name, redefine=True)
-        # not wholly convinced by this as tos is seemingly None?!
         lhs = self.get(tos1)
         rhs = self.get(tos)
         exc = ir.Expr.call(
