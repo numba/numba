@@ -877,20 +877,23 @@ class Interpreter(object):
             expr = ir.Expr.call(func, [], [], loc=self.loc, vararg=vararg)
             self.store(expr, res)
 
-    def _build_tuple_unpack(self, inst, tuples, temps):
+    def _build_tuple_unpack(self, inst, tuples, temps, is_assign):
         first = self.get(tuples[0])
-        for other, tmp in zip(map(self.get, tuples[1:]), temps):
-            out = ir.Expr.binop(fn=operator.add, lhs=first, rhs=other,
-                                loc=self.loc)
-            self.store(out, tmp)
-            first = self.get(tmp)
+        if is_assign: # it's assign-like, just store through
+            self.store(first, temps[0])
+        else:
+            for other, tmp in zip(map(self.get, tuples[1:]), temps):
+                out = ir.Expr.binop(fn=operator.add, lhs=first, rhs=other,
+                                    loc=self.loc)
+                self.store(out, tmp)
+                first = self.get(tmp)
 
-    def op_BUILD_TUPLE_UNPACK_WITH_CALL(self, inst, tuples, temps):
+    def op_BUILD_TUPLE_UNPACK_WITH_CALL(self, inst, tuples, temps, is_assign):
         # just unpack the input tuple, call inst will be handled afterwards
-        self._build_tuple_unpack(inst, tuples, temps)
+        self._build_tuple_unpack(inst, tuples, temps, is_assign)
 
-    def op_BUILD_TUPLE_UNPACK(self, inst, tuples, temps):
-        self._build_tuple_unpack(inst, tuples, temps)
+    def op_BUILD_TUPLE_UNPACK(self, inst, tuples, temps, is_assign):
+        self._build_tuple_unpack(inst, tuples, temps, is_assign)
 
     def op_BUILD_CONST_KEY_MAP(self, inst, keys, keytmps, values, res):
         # Unpack the constant key-tuple and reused build_map which takes

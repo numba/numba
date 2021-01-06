@@ -633,8 +633,19 @@ class TestTupleBuild(TestCase):
 
     def test_build_unpack(self):
         def check(p):
-            # using eval here since Python 2 doesn't even support the syntax
-            pyfunc = eval("lambda a: (1, *a)")
+            pyfunc = lambda a: (1, *a)
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        # Homogeneous
+        check((4, 5))
+        # Heterogeneous
+        check((4, 5.5))
+
+    def test_build_unpack_assign_like(self):
+        # see #6534
+        def check(p):
+            pyfunc = lambda a: (*a,)
             cfunc = jit(nopython=True)(pyfunc)
             self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
@@ -645,8 +656,7 @@ class TestTupleBuild(TestCase):
 
     def test_build_unpack_more(self):
         def check(p):
-            # using eval here since Python 2 doesn't even support the syntax
-            pyfunc = eval("lambda a: (1, *a, (1, 2), *a)")
+            pyfunc = lambda a: (1, *a, (1, 2), *a)
             cfunc = jit(nopython=True)(pyfunc)
             self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
@@ -657,11 +667,10 @@ class TestTupleBuild(TestCase):
 
     def test_build_unpack_call(self):
         def check(p):
-            # using eval here since Python 2 doesn't even support the syntax
             @jit
             def inner(*args):
                 return args
-            pyfunc = eval("lambda a: inner(1, *a)", locals())
+            pyfunc = lambda a: inner(1, *a)
             cfunc = jit(nopython=True)(pyfunc)
             self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
@@ -670,14 +679,12 @@ class TestTupleBuild(TestCase):
         # Heterogeneous
         check((4, 5.5))
 
-    @unittest.skipIf(utils.PYVERSION < (3, 6), "needs Python 3.6+")
     def test_build_unpack_call_more(self):
         def check(p):
-            # using eval here since Python 2 doesn't even support the syntax
             @jit
             def inner(*args):
                 return args
-            pyfunc = eval("lambda a: inner(1, *a, *(1, 2), *a)", locals())
+            pyfunc = lambda a: inner(1, *a, *(1, 2), *a)
             cfunc = jit(nopython=True)(pyfunc)
             self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
