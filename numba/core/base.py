@@ -1080,7 +1080,7 @@ class BaseContext(object):
         the usage of dynamic addresses.  Caching will be disabled.
         """
         assert self.allow_dynamic_globals, "dyn globals disabled in this target"
-        assert isinstance(intaddr, utils.INT_TYPES), 'dyn addr not of int type'
+        assert isinstance(intaddr, int), 'dyn addr not of int type'
         mod = builder.module
         llvoidptr = self.get_value_type(types.voidptr)
         addr = self.get_constant(types.uintp, intaddr).inttoptr(llvoidptr)

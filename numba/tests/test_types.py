@@ -855,6 +855,46 @@ class TestIssues(TestCase):
         self.assertEqual(f(), 2)
         self.assertEqual(g(), 101)
 
+    def test_issue_typeref_key(self):
+        # issue https://github.com/numba/numba/issues/6336
+        class NoUniqueNameType(types.Dummy):
+            def __init__(self, param):
+                super(NoUniqueNameType, self).__init__('NoUniqueNameType')
+                self.param = param
+
+            @property
+            def key(self):
+                return self.param
+
+        no_unique_name_type_1 = NoUniqueNameType(1)
+        no_unique_name_type_2 = NoUniqueNameType(2)
+
+        for ty1 in (no_unique_name_type_1, no_unique_name_type_2):
+            for ty2 in (no_unique_name_type_1, no_unique_name_type_2):
+                self.assertIs(
+                    types.TypeRef(ty1) == types.TypeRef(ty2), ty1 == ty2)
+
+    def test_issue_list_type_key(self):
+        # https://github.com/numba/numba/issues/6397
+        class NoUniqueNameType(types.Dummy):
+            def __init__(self, param):
+                super(NoUniqueNameType, self).__init__('NoUniqueNameType')
+                self.param = param
+
+            @property
+            def key(self):
+                return self.param
+
+        no_unique_name_type_1 = NoUniqueNameType(1)
+        no_unique_name_type_2 = NoUniqueNameType(2)
+
+        for ty1 in (no_unique_name_type_1, no_unique_name_type_2):
+            for ty2 in (no_unique_name_type_1, no_unique_name_type_2):
+                self.assertIs(
+                    types.ListType(ty1) == types.ListType(ty2),  # noqa: E721
+                    ty1 == ty2
+                )
+
 
 if __name__ == '__main__':
     unittest.main()

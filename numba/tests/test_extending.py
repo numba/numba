@@ -4,35 +4,53 @@ import sys
 import pickle
 import multiprocessing
 import ctypes
+import warnings
 from distutils.version import LooseVersion
 import re
 
 import numpy as np
 
-from numba import njit, jit, vectorize, guvectorize
+from numba import njit, jit, vectorize, guvectorize, objmode
 from numba.core import types, errors, typing, compiler, cgutils
 from numba.core.typed_passes import type_inference_stage
 from numba.core.registry import cpu_target
 from numba.core.compiler import compile_isolated
-from numba.tests.support import (TestCase, captured_stdout, tag, temp_directory,
-                      override_config)
+from numba.tests.support import (
+    TestCase,
+    captured_stdout,
+    temp_directory,
+    override_config,
+    run_in_new_process_in_cache_dir,
+)
 from numba.core.errors import LoweringError
 import unittest
 
-from numba.extending import (typeof_impl, type_callable,
-                             lower_builtin, lower_cast,
-                             overload, overload_attribute,
-                             overload_method,
-                             models, register_model,
-                             box, unbox, NativeValue,
-                             make_attribute_wrapper,
-                             intrinsic, _Intrinsic,
-                             register_jitable,
-                             get_cython_function_address,
-                             is_jitted,
-                             )
+from numba.extending import (
+    typeof_impl,
+    type_callable,
+    lower_builtin,
+    lower_cast,
+    overload,
+    overload_attribute,
+    overload_method,
+    models,
+    register_model,
+    box,
+    unbox,
+    NativeValue,
+    intrinsic,
+    _Intrinsic,
+    register_jitable,
+    get_cython_function_address,
+    is_jitted,
+)
 from numba.core.typing.templates import (
-    ConcreteTemplate, signature, infer, infer_global, AbstractTemplate)
+    ConcreteTemplate,
+    signature,
+    infer,
+    infer_global,
+    AbstractTemplate,
+)
 
 
 # Pandas-like API implementation
@@ -41,7 +59,8 @@ from .pdlike_usecase import Index, Series
 
 try:
     import scipy
-    if LooseVersion(scipy.__version__) < '0.19':
+
+    if LooseVersion(scipy.__version__) < "0.19":
         sc = None
     else:
         import scipy.special.cython_special as sc
@@ -52,21 +71,27 @@ except ImportError:
 # -----------------------------------------------------------------------
 # Define a custom type and an implicit cast on it
 
+
 class MyDummy(object):
     pass
+
 
 class MyDummyType(types.Opaque):
     def can_convert_to(self, context, toty):
         if isinstance(toty, types.Number):
             from numba.core.typeconv import Conversion
+
             return Conversion.safe
 
-mydummy_type = MyDummyType('mydummy')
+
+mydummy_type = MyDummyType("mydummy")
 mydummy = MyDummy()
+
 
 @typeof_impl.register(MyDummy)
 def typeof_mydummy(val, c):
     return mydummy_type
+
 
 @lower_cast(MyDummyType, types.Number)
 def mydummy_to_number(context, builder, fromty, toty, val):
@@ -75,10 +100,13 @@ def mydummy_to_number(context, builder, fromty, toty, val):
     """
     return context.get_constant(toty, 42)
 
+
 def get_dummy():
     return mydummy
 
+
 register_model(MyDummyType)(models.OpaqueModel)
+
 
 @unbox(MyDummyType)
 def unbox_index(typ, obj, c):
@@ -87,6 +115,7 @@ def unbox_index(typ, obj, c):
 
 # -----------------------------------------------------------------------
 # Define a second custom type but w/o implicit cast to Number
+
 
 def base_dummy_type_factory(name):
     class DynType(object):
@@ -105,11 +134,11 @@ def base_dummy_type_factory(name):
     return DynTypeType, DynType, dyn_type_type
 
 
-MyDummyType2, MyDummy2, mydummy_type_2 = base_dummy_type_factory('mydummy2')
+MyDummyType2, MyDummy2, mydummy_type_2 = base_dummy_type_factory("mydummy2")
 
 
 @unbox(MyDummyType2)
-def unbox_index(typ, obj, c):
+def unbox_index2(typ, obj, c):
     return NativeValue(c.context.get_dummy_value())
 
 
@@ -117,8 +146,10 @@ def unbox_index(typ, obj, c):
 # Define a function's typing and implementation using the classical
 # two-step API
 
+
 def func1(x=None):
     raise NotImplementedError
+
 
 def type_func1_(context):
     def typer(x=None):
@@ -140,19 +171,24 @@ type_func1 = type_callable(func1)(type_func1_)
 def func1_nullary(context, builder, sig, args):
     return context.get_constant(sig.return_type, 42)
 
+
 @lower_builtin(func1, types.Float)
 def func1_unary(context, builder, sig, args):
     def func1_impl(x):
         return math.sqrt(2 * x)
+
     return context.compile_internal(builder, func1_impl, sig, args)
+
 
 # We can do the same for a known internal operation, here "print_item"
 # which we extend to support MyDummyType.
+
 
 @infer
 class PrintDummy(ConcreteTemplate):
     key = "print_item"
     cases = [signature(types.none, mydummy_type)]
+
 
 @lower_builtin("print_item", MyDummyType)
 def print_dummy(context, builder, sig, args):
@@ -167,14 +203,17 @@ def print_dummy(context, builder, sig, args):
 # -----------------------------------------------------------------------
 # Define an overloaded function (combined API)
 
+
 def where(cond, x, y):
     raise NotImplementedError
+
 
 def np_where(cond, x, y):
     """
     Wrap np.where() to allow for keyword arguments
     """
     return np.where(cond, x, y)
+
 
 def call_where(cond, x, y):
     return where(cond, y=y, x=x)
@@ -191,7 +230,8 @@ def overload_where_arrays(cond, x, y):
             raise errors.TypingError("x and y should have the same dtype")
 
         # Array where() => return an array of the same shape
-        if all(ty.layout == 'C' for ty in (cond, x, y)):
+        if all(ty.layout == "C" for ty in (cond, x, y)):
+
             def where_impl(cond, x, y):
                 """
                 Fast implementation for C-contiguous arrays
@@ -207,7 +247,9 @@ def overload_where_arrays(cond, x, y):
                 for i in range(cond.size):
                     rf[i] = xf[i] if cf[i] else yf[i]
                 return res
+
         else:
+
             def where_impl(cond, x, y):
                 """
                 Generic implementation for other arrays
@@ -222,8 +264,10 @@ def overload_where_arrays(cond, x, y):
 
         return where_impl
 
+
 # We can define another overload function for the same function, they
 # will be tried in turn until one succeeds.
+
 
 @overload(where)
 def overload_where_scalars(cond, x, y):
@@ -246,12 +290,15 @@ def overload_where_scalars(cond, x, y):
 
         return where_impl
 
+
 # -----------------------------------------------------------------------
 # Overload an already defined built-in function, extending it for new types.
+
 
 @overload(len)
 def overload_len_dummy(arg):
     if isinstance(arg, MyDummyType):
+
         def len_impl(arg):
             return 13
 
@@ -260,7 +307,10 @@ def overload_len_dummy(arg):
 
 @overload(operator.add)
 def overload_add_dummy(arg1, arg2):
-    if isinstance(arg1, (MyDummyType, MyDummyType2)) and isinstance(arg2, (MyDummyType, MyDummyType2)):
+    if isinstance(arg1, (MyDummyType, MyDummyType2)) and isinstance(
+        arg2, (MyDummyType, MyDummyType2)
+    ):
+
         def dummy_add_impl(arg1, arg2):
             return 42
 
@@ -270,28 +320,36 @@ def overload_add_dummy(arg1, arg2):
 @overload(operator.delitem)
 def overload_dummy_delitem(obj, idx):
     if isinstance(obj, MyDummyType) and isinstance(idx, types.Integer):
+
         def dummy_delitem_impl(obj, idx):
-            print('del', obj, idx)
+            print("del", obj, idx)
+
         return dummy_delitem_impl
 
 
 @overload(operator.getitem)
 def overload_dummy_getitem(obj, idx):
     if isinstance(obj, MyDummyType) and isinstance(idx, types.Integer):
+
         def dummy_getitem_impl(obj, idx):
             return idx + 123
+
         return dummy_getitem_impl
 
 
 @overload(operator.setitem)
 def overload_dummy_setitem(obj, idx, val):
-    if all([
-        isinstance(obj, MyDummyType),
-        isinstance(idx, types.Integer),
-        isinstance(val, types.Integer)
-    ]):
+    if all(
+        [
+            isinstance(obj, MyDummyType),
+            isinstance(idx, types.Integer),
+            isinstance(val, types.Integer),
+        ]
+    ):
+
         def dummy_setitem_impl(obj, idx, val):
             print(idx, val)
+
         return dummy_setitem_impl
 
 
@@ -305,7 +363,10 @@ def call_add_binop(arg1, arg2):
 
 @overload(operator.iadd)
 def overload_iadd_dummy(arg1, arg2):
-    if isinstance(arg1, (MyDummyType, MyDummyType2)) and isinstance(arg2, (MyDummyType, MyDummyType2)):
+    if isinstance(arg1, (MyDummyType, MyDummyType2)) and isinstance(
+        arg2, (MyDummyType, MyDummyType2)
+    ):
+
         def dummy_iadd_impl(arg1, arg2):
             return 42
 
@@ -334,10 +395,11 @@ def call_setitem(obj, idx, val):
     obj[idx] = val
 
 
-@overload_method(MyDummyType, 'length')
+@overload_method(MyDummyType, "length")
 def overload_method_length(arg):
     def imp(arg):
         return len(arg)
+
     return imp
 
 
@@ -348,38 +410,49 @@ def cache_overload_method_usecase(x):
 def call_func1_nullary():
     return func1()
 
+
 def call_func1_unary(x):
     return func1(x)
+
 
 def len_usecase(x):
     return len(x)
 
+
 def print_usecase(x):
     print(x)
+
 
 def getitem_usecase(x, key):
     return x[key]
 
+
 def npyufunc_usecase(x):
     return np.cos(np.sin(x))
+
 
 def get_data_usecase(x):
     return x._data
 
+
 def get_index_usecase(x):
     return x._index
+
 
 def is_monotonic_usecase(x):
     return x.is_monotonic_increasing
 
+
 def make_series_usecase(data, index):
     return Series(data, index)
+
 
 def clip_usecase(x, lo, hi):
     return x.clip(lo, hi)
 
 
 # -----------------------------------------------------------------------
+
 
 def return_non_boxable():
     return np
@@ -389,6 +462,7 @@ def return_non_boxable():
 def overload_return_non_boxable():
     def imp():
         return np
+
     return imp
 
 
@@ -422,9 +496,11 @@ def mk_func_test_impl():
 @overload(np.exp)
 def overload_np_exp(obj):
     if isinstance(obj, MyDummyType):
+
         def imp(obj):
             # Returns a constant if a MyDummyType is seen
-            return 0xdeadbeef
+            return 0xDEADBEEF
+
         return imp
 
 
@@ -468,10 +544,13 @@ class TestLowLevelExtending(TestCase):
         test_ir = compiler.run_frontend(mk_func_test_impl)
         typingctx = cpu_target.typing_context
         typingctx.refresh()
-        typemap, _, _ = type_inference_stage(
-            typingctx, test_ir, (), None)
-        self.assertTrue(any(isinstance(a, types.MakeFunctionLiteral)
-                            for a in typemap.values()))
+        typemap, _, _ = type_inference_stage(typingctx, test_ir, (), None)
+        self.assertTrue(
+            any(
+                isinstance(a, types.MakeFunctionLiteral)
+                for a in typemap.values()
+            )
+        )
 
 
 class TestPandasLike(TestCase):
@@ -514,9 +593,11 @@ class TestPandasLike(TestCase):
         # The is_monotonic_increasing attribute is exposed with
         # overload_attribute()
         cfunc = jit(nopython=True)(is_monotonic_usecase)
-        for values, expected in [([8, 42, 5], False),
-                                 ([5, 8, 42], True),
-                                 ([], True)]:
+        for values, expected in [
+            ([8, 42, 5], False),
+            ([5, 8, 42], True),
+            ([], True),
+        ]:
             i = Index(np.int32(values))
             got = cfunc(i)
             self.assertEqual(got, expected)
@@ -584,18 +665,22 @@ class TestHighLevelExtending(TestCase):
         def check(*args, **kwargs):
             expected = np_where(*args, **kwargs)
             got = cfunc(*args, **kwargs)
-            self.assertPreciseEqual
+            self.assertPreciseEqual(expected, got)
 
         check(x=3, cond=True, y=8)
         check(True, 3, 8)
-        check(np.bool_([True, False, True]), np.int32([1, 2, 3]),
-              np.int32([4, 5, 5]))
+        check(
+            np.bool_([True, False, True]),
+            np.int32([1, 2, 3]),
+            np.int32([4, 5, 5]),
+        )
 
         # The typing error is propagated
         with self.assertRaises(errors.TypingError) as raises:
             cfunc(np.bool_([]), np.int32([]), np.int64([]))
-        self.assertIn("x and y should have the same dtype",
-                      str(raises.exception))
+        self.assertIn(
+            "x and y should have the same dtype", str(raises.exception)
+        )
 
     def test_len(self):
         """
@@ -624,7 +709,8 @@ class TestHighLevelExtending(TestCase):
         self.assertPreciseEqual(cfunc(1, 2), 3)
         self.assertPreciseEqual(cfunc(MyDummy2(), MyDummy2()), 42)
 
-        # this will call add(Number, Number) as MyDummy implicitly casts to Number
+        # this will call add(Number, Number) as MyDummy implicitly casts to
+        # Number
         self.assertPreciseEqual(cfunc(MyDummy(), MyDummy()), 84)
 
     def test_add_binop(self):
@@ -637,7 +723,8 @@ class TestHighLevelExtending(TestCase):
         self.assertPreciseEqual(cfunc(1, 2), 3)
         self.assertPreciseEqual(cfunc(MyDummy2(), MyDummy2()), 42)
 
-        # this will call add(Number, Number) as MyDummy implicitly casts to Number
+        # this will call add(Number, Number) as MyDummy implicitly casts to
+        # Number
         self.assertPreciseEqual(cfunc(MyDummy(), MyDummy()), 84)
 
     def test_iadd_operator(self):
@@ -650,7 +737,8 @@ class TestHighLevelExtending(TestCase):
         self.assertPreciseEqual(cfunc(1, 2), 3)
         self.assertPreciseEqual(cfunc(MyDummy2(), MyDummy2()), 42)
 
-        # this will call add(Number, Number) as MyDummy implicitly casts to Number
+        # this will call add(Number, Number) as MyDummy implicitly casts to
+        # Number
         self.assertPreciseEqual(cfunc(MyDummy(), MyDummy()), 84)
 
     def test_iadd_binop(self):
@@ -663,7 +751,8 @@ class TestHighLevelExtending(TestCase):
         self.assertPreciseEqual(cfunc(1, 2), 3)
         self.assertPreciseEqual(cfunc(MyDummy2(), MyDummy2()), 42)
 
-        # this will call add(Number, Number) as MyDummy implicitly casts to Number
+        # this will call add(Number, Number) as MyDummy implicitly casts to
+        # Number
         self.assertPreciseEqual(cfunc(MyDummy(), MyDummy()), 84)
 
     def test_delitem(self):
@@ -680,7 +769,7 @@ class TestHighLevelExtending(TestCase):
 
         if e is not None:
             raise e
-        self.assertEqual(out.getvalue(), 'del hello! 321\n')
+        self.assertEqual(out.getvalue(), "del hello! 321\n")
 
     def test_getitem(self):
         pyfunc = call_getitem
@@ -701,7 +790,7 @@ class TestHighLevelExtending(TestCase):
 
         if e is not None:
             raise e
-        self.assertEqual(out.getvalue(), '321 123\n')
+        self.assertEqual(out.getvalue(), "321 123\n")
 
     def test_no_cpython_wrapper(self):
         """
@@ -727,8 +816,8 @@ class TestHighLevelExtending(TestCase):
         Tests that an overload which has a differing typing and implementing
         signature raises an exception.
         """
-        def gen_ol(impl=None):
 
+        def gen_ol(impl=None):
             def myoverload(a, b, c, kw=None):
                 pass
 
@@ -776,7 +865,7 @@ class TestHighLevelExtending(TestCase):
 
         # arg name is different
         def impl3(z, b, c, kw=None):
-            if a > 10:
+            if a > 10:      # noqa: F821
                 return 1
             else:
                 return -1
@@ -791,6 +880,7 @@ class TestHighLevelExtending(TestCase):
         self.assertIn('<Parameter "z">', msg)
 
         from .overload_usecases import impl4, impl5
+
         with self.assertRaises(errors.TypingError) as e:
             gen_ol(impl4)(1, 2, 3, 4)
         msg = str(e.exception)
@@ -872,12 +962,13 @@ class TestHighLevelExtending(TestCase):
         Tests that an overload which has a differing typing and implementing
         signature raises an exception and uses VAR_POSITIONAL (*args) in typing
         """
+
         def myoverload(a, kw=None):
             pass
 
         from .overload_usecases import var_positional_impl
-        overload(myoverload)(var_positional_impl)
 
+        overload(myoverload)(var_positional_impl)
 
         @jit(nopython=True)
         def foo(a, b):
@@ -895,7 +986,6 @@ class TestHighLevelExtending(TestCase):
         """
 
         def gen_ol(impl, strict=True):
-
             def myoverload(a, kw=None):
                 pass
 
@@ -911,9 +1001,10 @@ class TestHighLevelExtending(TestCase):
         def ol1(a, **kws):
             def impl(a, kw=10):
                 return a
+
             return impl
 
-        gen_ol(ol1, False)(1, 2) # no error if strictness not enforced
+        gen_ol(ol1, False)(1, 2)  # no error if strictness not enforced
         with self.assertRaises(errors.TypingError) as e:
             gen_ol(ol1)(1, 2)
         msg = str(e.exception)
@@ -924,6 +1015,7 @@ class TestHighLevelExtending(TestCase):
         def ol2(a, kw=0):
             def impl(a, **kws):
                 return a
+
             return impl
 
         with self.assertRaises(errors.TypingError) as e:
@@ -934,10 +1026,11 @@ class TestHighLevelExtending(TestCase):
 
     def test_overload_method_kwargs(self):
         # Issue #3489
-        @overload_method(types.Array, 'foo')
+        @overload_method(types.Array, "foo")
         def fooimpl(arr, a_kwarg=10):
             def impl(arr, a_kwarg=10):
                 return a_kwarg
+
             return impl
 
         @njit
@@ -950,23 +1043,25 @@ class TestHighLevelExtending(TestCase):
 
     def test_overload_method_literal_unpack(self):
         # Issue #3683
-        @overload_method(types.Array, 'litfoo')
+        @overload_method(types.Array, "litfoo")
         def litfoo(arr, val):
             # Must be an integer
             if isinstance(val, types.Integer):
                 # Must not be literal
                 if not isinstance(val, types.Literal):
+
                     def impl(arr, val):
                         return val
+
                     return impl
 
         @njit
         def bar(A):
-            return A.litfoo(0xcafe)
+            return A.litfoo(0xCAFE)
 
         A = np.zeros(1)
         bar(A)
-        self.assertEqual(bar(A), 0xcafe)
+        self.assertEqual(bar(A), 0xCAFE)
 
     def test_overload_ufunc(self):
         # Issue #4133.
@@ -976,7 +1071,7 @@ class TestHighLevelExtending(TestCase):
         def test():
             return np.exp(mydummy)
 
-        self.assertEqual(test(), 0xdeadbeef)
+        self.assertEqual(test(), 0xDEADBEEF)
 
     def test_overload_method_stararg(self):
         @overload_method(MyDummyType, "method_stararg")
@@ -1006,37 +1101,29 @@ class TestHighLevelExtending(TestCase):
             )
 
         self.assertEqual(
-            bar(obj),
-            (
-                (1, 2, ()),
-                (1, 2, (3,)),
-                (1, 2, (3, 4))
-            ),
+            bar(obj), ((1, 2, ()), (1, 2, (3,)), (1, 2, (3, 4))),
         )
 
         # Check cases that put tuple type into stararg
         # NOTE: the expected result has an extra tuple because of stararg.
         self.assertEqual(
-            foo(obj, 1, 2, (3,)),
-            (1, 2, ((3,),)),
+            foo(obj, 1, 2, (3,)), (1, 2, ((3,),)),
         )
         self.assertEqual(
-            foo(obj, 1, 2, (3, 4)),
-            (1, 2, ((3, 4),)),
+            foo(obj, 1, 2, (3, 4)), (1, 2, ((3, 4),)),
         )
         self.assertEqual(
-            foo(obj, 1, 2, (3, (4, 5))),
-            (1, 2, ((3, (4, 5)),)),
+            foo(obj, 1, 2, (3, (4, 5))), (1, 2, ((3, (4, 5)),)),
         )
 
 
 def _assert_cache_stats(cfunc, expect_hit, expect_misses):
     hit = cfunc._cache_hits[cfunc.signatures[0]]
     if hit != expect_hit:
-        raise AssertionError('cache not used')
+        raise AssertionError("cache not used")
     miss = cfunc._cache_misses[cfunc.signatures[0]]
     if miss != expect_misses:
-        raise AssertionError('cache not used')
+        raise AssertionError("cache not used")
 
 
 class TestOverloadMethodCaching(TestCase):
@@ -1046,7 +1133,7 @@ class TestOverloadMethodCaching(TestCase):
 
     def test_caching_overload_method(self):
         self._cache_dir = temp_directory(self.__class__.__name__)
-        with override_config('CACHE_DIR', self._cache_dir):
+        with override_config("CACHE_DIR", self._cache_dir):
             self.run_caching_overload_method()
 
     def run_caching_overload_method(self):
@@ -1055,17 +1142,21 @@ class TestOverloadMethodCaching(TestCase):
         _assert_cache_stats(cfunc, 0, 1)
         llvmir = cfunc.inspect_llvm((mydummy_type,))
         # Ensure the inner method is not a declaration
-        decls = [ln for ln in llvmir.splitlines()
-                 if ln.startswith('declare') and 'overload_method_length' in ln]
+        decls = [
+            ln
+            for ln in llvmir.splitlines()
+            if ln.startswith("declare") and "overload_method_length" in ln
+        ]
         self.assertEqual(len(decls), 0)
         # Test in a separate process
         try:
-            ctx = multiprocessing.get_context('spawn')
+            ctx = multiprocessing.get_context("spawn")
         except AttributeError:
             ctx = multiprocessing
         q = ctx.Queue()
-        p = ctx.Process(target=run_caching_overload_method,
-                        args=(q, self._cache_dir))
+        p = ctx.Process(
+            target=run_caching_overload_method, args=(q, self._cache_dir)
+        )
         p.start()
         q.put(MyDummy())
         p.join()
@@ -1079,13 +1170,14 @@ def run_caching_overload_method(q, cache_dir):
     """
     Used by TestOverloadMethodCaching.test_caching_overload_method
     """
-    with override_config('CACHE_DIR', cache_dir):
+    with override_config("CACHE_DIR", cache_dir):
         arg = q.get()
         cfunc = jit(nopython=True, cache=True)(cache_overload_method_usecase)
         res = cfunc(arg)
         q.put(res)
         # Check cache stat
         _assert_cache_stats(cfunc, 1, 0)
+
 
 class TestIntrinsic(TestCase):
     def test_void_return(self):
@@ -1097,17 +1189,20 @@ class TestIntrinsic(TestCase):
         @intrinsic
         def void_func(typingctx, a):
             sig = types.void(types.int32)
+
             def codegen(context, builder, signature, args):
                 pass  # do nothing, return None, should be turned into
-                      # dummy value
+                # dummy value
 
             return sig, codegen
 
         @intrinsic
         def non_void_func(typingctx, a):
             sig = types.int32(types.int32)
+
             def codegen(context, builder, signature, args):
-                pass # oops, should be returning a value here, raise exception
+                pass  # oops, should be returning a value here, raise exception
+
             return sig, codegen
 
         @jit(nopython=True)
@@ -1125,7 +1220,7 @@ class TestIntrinsic(TestCase):
         # not void function should raise exception
         with self.assertRaises(LoweringError) as e:
             call_non_void_func()
-        self.assertIn('non-void function returns None', e.exception.msg)
+        self.assertIn("non-void function returns None", e.exception.msg)
 
     def test_ll_pointer_cast(self):
         """
@@ -1166,6 +1261,7 @@ class TestIntrinsic(TestCase):
 
                 def array_impl(arr):
                     return unsafe_cast(src=arr.ctypes.data)
+
                 return array_impl
 
         # the ctype wrapped function for use in nopython mode
@@ -1242,6 +1338,7 @@ class TestIntrinsic(TestCase):
         """
         Test deserialization of intrinsic
         """
+
         def defn(context, x):
             def codegen(context, builder, signature, args):
                 return args[0]
@@ -1252,7 +1349,7 @@ class TestIntrinsic(TestCase):
         memo_size = len(memo)
         # invoke _Intrinsic indirectly to avoid registration which keeps an
         # internal reference inside the compiler
-        original = _Intrinsic('foo', defn)
+        original = _Intrinsic("foo", defn)
         self.assertIs(original._defn, defn)
         pickled = pickle.dumps(original)
         # by pickling, a new memo entry is created
@@ -1306,14 +1403,19 @@ class TestRegisterJitable(unittest.TestCase):
         cbar = jit(nopython=True)(bar)
         with self.assertRaises(errors.TypingError) as raises:
             cbar(2)
-        msg = "Only accept returning of array passed into the function as argument"
+        msg = (
+            "Only accept returning of array passed into the function as "
+            "argument"
+        )
         self.assertIn(msg, str(raises.exception))
 
 
 class TestImportCythonFunction(unittest.TestCase):
     @unittest.skipIf(sc is None, "Only run if SciPy >= 0.19 is installed")
     def test_getting_function(self):
-        addr = get_cython_function_address("scipy.special.cython_special", "j0")
+        addr = get_cython_function_address(
+            "scipy.special.cython_special", "j0"
+        )
         functype = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.c_double)
         _j0 = functype(addr)
         j0 = jit(nopython=True)(lambda x: _j0(x))
@@ -1321,7 +1423,7 @@ class TestImportCythonFunction(unittest.TestCase):
 
     def test_missing_module(self):
         with self.assertRaises(ImportError) as raises:
-            addr = get_cython_function_address("fakemodule", "fakefunction")
+            get_cython_function_address("fakemodule", "fakefunction")
         # The quotes are not there in Python 2
         msg = "No module named '?fakemodule'?"
         match = re.match(msg, str(raises.exception))
@@ -1330,41 +1432,53 @@ class TestImportCythonFunction(unittest.TestCase):
     @unittest.skipIf(sc is None, "Only run if SciPy >= 0.19 is installed")
     def test_missing_function(self):
         with self.assertRaises(ValueError) as raises:
-            addr = get_cython_function_address("scipy.special.cython_special", "foo")
-        msg = "No function 'foo' found in __pyx_capi__ of 'scipy.special.cython_special'"
+            get_cython_function_address(
+                "scipy.special.cython_special", "foo"
+            )
+        msg = (
+            "No function 'foo' found in __pyx_capi__ of "
+            "'scipy.special.cython_special'"
+        )
         self.assertEqual(msg, str(raises.exception))
 
 
-@overload_method(MyDummyType, 'method_jit_option_check_nrt',
-                 jit_options={'_nrt': True})
+@overload_method(
+    MyDummyType, "method_jit_option_check_nrt", jit_options={"_nrt": True}
+)
 def ov_method_jit_option_check_nrt(obj):
     def imp(obj):
         return np.arange(10)
+
     return imp
 
 
-@overload_method(MyDummyType, 'method_jit_option_check_no_nrt',
-                 jit_options={'_nrt': False})
+@overload_method(
+    MyDummyType, "method_jit_option_check_no_nrt", jit_options={"_nrt": False}
+)
 def ov_method_jit_option_check_no_nrt(obj):
     def imp(obj):
         return np.arange(10)
+
     return imp
 
 
-
-@overload_attribute(MyDummyType, 'attr_jit_option_check_nrt',
-                    jit_options={'_nrt': True})
+@overload_attribute(
+    MyDummyType, "attr_jit_option_check_nrt", jit_options={"_nrt": True}
+)
 def ov_attr_jit_option_check_nrt(obj):
     def imp(obj):
         return np.arange(10)
+
     return imp
 
 
-@overload_attribute(MyDummyType, 'attr_jit_option_check_no_nrt',
-                    jit_options={'_nrt': False})
+@overload_attribute(
+    MyDummyType, "attr_jit_option_check_no_nrt", jit_options={"_nrt": False}
+)
 def ov_attr_jit_option_check_no_nrt(obj):
     def imp(obj):
         return np.arange(10)
+
     return imp
 
 
@@ -1373,8 +1487,10 @@ class TestJitOptionsNoNRT(TestCase):
 
     def check_error_no_nrt(self, func, *args, **kwargs):
         # Check that the compilation fails with a complaint about dynamic array
-        msg = ("Only accept returning of array passed into "
-               "the function as argument")
+        msg = (
+            "Only accept returning of array passed into "
+            "the function as argument"
+        )
         with self.assertRaises(errors.TypingError) as raises:
             func(*args, **kwargs)
         self.assertIn(msg, str(raises.exception))
@@ -1383,10 +1499,11 @@ class TestJitOptionsNoNRT(TestCase):
         def dummy():
             return np.arange(10)
 
-        @overload(dummy, jit_options={'_nrt': flag})
+        @overload(dummy, jit_options={"_nrt": flag})
         def ov_dummy():
             def dummy():
                 return np.arange(10)
+
             return dummy
 
         @njit
@@ -1432,14 +1549,14 @@ class TestJitOptionsNoNRT(TestCase):
 class TestBoxingCallingJIT(TestCase):
     def setUp(self):
         super().setUp()
-        many = base_dummy_type_factory('mydummy2')
+        many = base_dummy_type_factory("mydummy2")
         self.DynTypeType, self.DynType, self.dyn_type_type = many
         self.dyn_type = self.DynType()
 
     def test_unboxer_basic(self):
         # Implements an unboxer on DynType that calls an intrinsic into the
         # unboxer code.
-        magic_token = 0xcafe
+        magic_token = 0xCAFE
         magic_offset = 123
 
         @intrinsic
@@ -1448,9 +1565,9 @@ class TestBoxingCallingJIT(TestCase):
             def impl(context, builder, sig, args):
                 [val] = args
                 return builder.add(val, val.type(magic_offset))
+
             sig = signature(val, val)
             return sig, impl
-
 
         @unbox(self.DynTypeType)
         def unboxer(typ, obj, c):
@@ -1485,7 +1602,7 @@ class TestBoxingCallingJIT(TestCase):
             # The unboxer that calls some jitcode
             def bridge(x):
                 if x > 0:
-                    raise ValueError('cannot be x > 0')
+                    raise ValueError("cannot be x > 0")
                 return x
 
             args = [c.context.get_constant(types.intp, 1)]
@@ -1504,15 +1621,14 @@ class TestBoxingCallingJIT(TestCase):
             return x
 
         with self.assertRaises(ValueError) as raises:
-            out = passthru(self.dyn_type)
+            passthru(self.dyn_type)
         self.assertIn(
-            "cannot be x > 0",
-            str(raises.exception),
+            "cannot be x > 0", str(raises.exception),
         )
 
     def test_boxer(self):
         # Call jitcode inside the boxer
-        magic_token = 0xcafe
+        magic_token = 0xCAFE
         magic_offset = 312
 
         @intrinsic
@@ -1521,6 +1637,7 @@ class TestBoxingCallingJIT(TestCase):
             def impl(context, builder, sig, args):
                 [val] = args
                 return builder.add(val, val.type(magic_offset))
+
             sig = signature(val, val)
             return sig, impl
 
@@ -1576,13 +1693,115 @@ class TestBoxingCallingJIT(TestCase):
         with self.assertRaises(ValueError) as raises:
             passthru(self.dyn_type)
         self.assertIn(
-            "cannot do x > 0",
-            str(raises.exception),
+            "cannot do x > 0", str(raises.exception),
         )
 
 
-class TestMisc(TestCase):
+def with_objmode_cache_ov_example(x):
+    # This is the function stub for overloading inside
+    # TestCachingOverloadObjmode.test_caching_overload_objmode
+    pass
 
+
+class TestCachingOverloadObjmode(TestCase):
+    """Test caching of the use of overload implementations that use
+    `with objmode`
+    """
+    _numba_parallel_test_ = False
+
+    def setUp(self):
+        warnings.simplefilter("error", errors.NumbaWarning)
+
+    def tearDown(self):
+        warnings.resetwarnings()
+
+    def test_caching_overload_objmode(self):
+        cache_dir = temp_directory(self.__class__.__name__)
+        with override_config("CACHE_DIR", cache_dir):
+
+            def realwork(x):
+                # uses numpy code
+                arr = np.arange(x) / x
+                return np.linalg.norm(arr)
+
+            def python_code(x):
+                # create indirections
+                return realwork(x)
+
+            @overload(with_objmode_cache_ov_example)
+            def _ov_with_objmode_cache_ov_example(x):
+                def impl(x):
+                    with objmode(y="float64"):
+                        y = python_code(x)
+                    return y
+
+                return impl
+
+            @njit(cache=True)
+            def testcase(x):
+                return with_objmode_cache_ov_example(x)
+
+            expect = realwork(123)
+            got = testcase(123)
+            self.assertEqual(got, expect)
+
+            testcase_cached = njit(cache=True)(testcase.py_func)
+            got = testcase_cached(123)
+            self.assertEqual(got, expect)
+
+    @classmethod
+    def check_objmode_cache_ndarray(cls):
+        def do_this(a, b):
+            return np.sum(a + b)
+
+        def do_something(a, b):
+            return np.sum(a + b)
+
+        @overload(do_something)
+        def overload_do_something(a, b):
+            def _do_something_impl(a, b):
+                with objmode(y='float64'):
+                    y = do_this(a, b)
+                return y
+            return _do_something_impl
+
+        @njit(cache=True)
+        def test_caching():
+            a = np.arange(20)
+            b = np.arange(20)
+            return do_something(a, b)
+
+        got = test_caching()
+        expect = test_caching.py_func()
+
+        # Check result
+        if got != expect:
+            raise AssertionError("incorrect result")
+        return test_caching
+
+    @classmethod
+    def check_objmode_cache_ndarray_check_cache(cls):
+        disp = cls.check_objmode_cache_ndarray()
+        if len(disp.stats.cache_misses) != 0:
+            raise AssertionError('unexpected cache miss')
+        if len(disp.stats.cache_hits) <= 0:
+            raise AssertionError("unexpected missing cache hit")
+
+    def test_check_objmode_cache_ndarray(self):
+        # See issue #6130.
+        # Env is missing after cache load.
+        cache_dir = temp_directory(self.__class__.__name__)
+        with override_config("CACHE_DIR", cache_dir):
+            # Test in local process to populate the cache.
+            self.check_objmode_cache_ndarray()
+            # Run in new process to use the cache in a fresh process.
+            res = run_in_new_process_in_cache_dir(
+                self.check_objmode_cache_ndarray_check_cache, cache_dir
+            )
+        self.assertEqual(res['exitcode'], 0)
+
+
+class TestMisc(TestCase):
     def test_is_jitted(self):
         def foo(x):
             pass
@@ -1591,8 +1810,105 @@ class TestMisc(TestCase):
         self.assertTrue(is_jitted(njit(foo)))
         self.assertFalse(is_jitted(vectorize(foo)))
         self.assertFalse(is_jitted(vectorize(parallel=True)(foo)))
-        self.assertFalse(is_jitted(guvectorize('void(float64[:])', '(m)')(foo)))
+        self.assertFalse(
+            is_jitted(guvectorize("void(float64[:])", "(m)")(foo))
+        )
 
 
-if __name__ == '__main__':
+class TestOverloadPreferLiteral(TestCase):
+    def test_overload(self):
+        def prefer_lit(x):
+            pass
+
+        def non_lit(x):
+            pass
+
+        def ov(x):
+            if isinstance(x, types.IntegerLiteral):
+                # With prefer_literal=False, this branch will not be reached.
+                if x.literal_value == 1:
+                    def impl(x):
+                        return 0xcafe
+                    return impl
+                else:
+                    raise errors.TypingError('literal value')
+            else:
+                def impl(x):
+                    return x * 100
+                return impl
+
+        overload(prefer_lit, prefer_literal=True)(ov)
+        overload(non_lit)(ov)
+
+        @njit
+        def check_prefer_lit(x):
+            return prefer_lit(1), prefer_lit(2), prefer_lit(x)
+
+        a, b, c = check_prefer_lit(3)
+        self.assertEqual(a, 0xcafe)
+        self.assertEqual(b, 200)
+        self.assertEqual(c, 300)
+
+        @njit
+        def check_non_lit(x):
+            return non_lit(1), non_lit(2), non_lit(x)
+
+        a, b, c = check_non_lit(3)
+        self.assertEqual(a, 100)
+        self.assertEqual(b, 200)
+        self.assertEqual(c, 300)
+
+    def test_overload_method(self):
+        def ov(self, x):
+            if isinstance(x, types.IntegerLiteral):
+                # With prefer_literal=False, this branch will not be reached.
+                if x.literal_value == 1:
+                    def impl(self, x):
+                        return 0xcafe
+                    return impl
+                else:
+                    raise errors.TypingError('literal value')
+            else:
+                def impl(self, x):
+                    return x * 100
+                return impl
+
+        overload_method(
+            MyDummyType, "method_prefer_literal",
+            prefer_literal=True,
+        )(ov)
+
+        overload_method(
+            MyDummyType, "method_non_literal",
+            prefer_literal=False,
+        )(ov)
+
+        @njit
+        def check_prefer_lit(dummy, x):
+            return (
+                dummy.method_prefer_literal(1),
+                dummy.method_prefer_literal(2),
+                dummy.method_prefer_literal(x),
+            )
+
+        a, b, c = check_prefer_lit(MyDummy(), 3)
+        self.assertEqual(a, 0xcafe)
+        self.assertEqual(b, 200)
+        self.assertEqual(c, 300)
+
+        @njit
+        def check_non_lit(dummy, x):
+            return (
+                dummy.method_non_literal(1),
+                dummy.method_non_literal(2),
+                dummy.method_non_literal(x),
+            )
+
+        a, b, c = check_non_lit(MyDummy(), 3)
+        self.assertEqual(a, 100)
+        self.assertEqual(b, 200)
+        self.assertEqual(c, 300)
+
+
+if __name__ == "__main__":
     unittest.main()

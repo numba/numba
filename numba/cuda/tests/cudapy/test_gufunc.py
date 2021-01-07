@@ -8,26 +8,31 @@ from numba.cuda.testing import skip_on_cudasim, CUDATestCase
 import unittest
 
 
+def _get_matmulcore_gufunc(dtype=float32, max_blocksize=None):
+    @guvectorize([void(dtype[:, :], dtype[:, :], dtype[:, :])],
+                 '(m,n),(n,p)->(m,p)',
+                 target='cuda')
+    def matmulcore(A, B, C):
+        m, n = A.shape
+        n, p = B.shape
+        for i in range(m):
+            for j in range(p):
+                C[i, j] = 0
+                for k in range(n):
+                    C[i, j] += A[i, k] * B[k, j]
+
+    gufunc = matmulcore
+    if max_blocksize:
+        gufunc.max_blocksize = max_blocksize
+    return gufunc
+
+
 @skip_on_cudasim('ufunc API unsupported in the simulator')
 class TestCUDAGufunc(CUDATestCase):
 
     def test_gufunc_small(self):
 
-        @guvectorize([void(float32[:, :], float32[:, :], float32[:, :])],
-                     '(m,n),(n,p)->(m,p)',
-                     target='cuda')
-        def matmulcore(A, B, C):
-            m, n = A.shape
-            n, p = B.shape
-            for i in range(m):
-                for j in range(p):
-                    C[i, j] = 0
-                    for k in range(n):
-                        C[i, j] += A[i, k] * B[k, j]
-
-
-        gufunc = matmulcore
-        gufunc.max_blocksize = 512
+        gufunc = _get_matmulcore_gufunc(max_blocksize=512)
 
         matrix_ct = 2
         A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2,
@@ -41,20 +46,7 @@ class TestCUDAGufunc(CUDATestCase):
 
     def test_gufunc_auto_transfer(self):
 
-        @guvectorize([void(float32[:, :], float32[:, :], float32[:, :])],
-                     '(m,n),(n,p)->(m,p)',
-                     target='cuda')
-        def matmulcore(A, B, C):
-            m, n = A.shape
-            n, p = B.shape
-            for i in range(m):
-                for j in range(p):
-                    C[i, j] = 0
-                    for k in range(n):
-                        C[i, j] += A[i, k] * B[k, j]
-
-        gufunc = matmulcore
-        gufunc.max_blocksize = 512
+        gufunc = _get_matmulcore_gufunc(max_blocksize=512)
 
         matrix_ct = 2
         A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2,
@@ -70,20 +62,7 @@ class TestCUDAGufunc(CUDATestCase):
 
     def test_gufunc(self):
 
-        @guvectorize([void(float32[:, :], float32[:, :], float32[:, :])],
-                     '(m,n),(n,p)->(m,p)',
-                     target='cuda')
-        def matmulcore(A, B, C):
-            m, n = A.shape
-            n, p = B.shape
-            for i in range(m):
-                for j in range(p):
-                    C[i, j] = 0
-                    for k in range(n):
-                        C[i, j] += A[i, k] * B[k, j]
-
-        gufunc = matmulcore
-        gufunc.max_blocksize = 512
+        gufunc = _get_matmulcore_gufunc(max_blocksize=512)
 
         matrix_ct = 1001 # an odd number to test thread/block division in CUDA
         A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2,
@@ -97,20 +76,7 @@ class TestCUDAGufunc(CUDATestCase):
 
     def test_gufunc_hidim(self):
 
-        @guvectorize([void(float32[:, :], float32[:, :], float32[:, :])],
-                     '(m,n),(n,p)->(m,p)',
-                     target='cuda')
-        def matmulcore(A, B, C):
-            m, n = A.shape
-            n, p = B.shape
-            for i in range(m):
-                for j in range(p):
-                    C[i, j] = 0
-                    for k in range(n):
-                        C[i, j] += A[i, k] * B[k, j]
-
-        gufunc = matmulcore
-        gufunc.max_blocksize = 512
+        gufunc = _get_matmulcore_gufunc(max_blocksize=512)
 
         matrix_ct = 100 # an odd number to test thread/block division in CUDA
         A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(4, 25, 2, 4)
@@ -122,19 +88,7 @@ class TestCUDAGufunc(CUDATestCase):
 
     def test_gufunc_new_axis(self):
 
-        @guvectorize([void(float64[:, :], float64[:, :], float64[:, :])],
-                     '(m,n),(n,p)->(m,p)',
-                     target='cuda')
-        def matmulcore(A, B, C):
-            m, n = A.shape
-            n, p = B.shape
-            for i in range(m):
-                for j in range(p):
-                    C[i, j] = 0
-                    for k in range(n):
-                        C[i, j] += A[i, k] * B[k, j]
-
-        gufunc = matmulcore
+        gufunc = _get_matmulcore_gufunc(dtype=float64)
 
         X = np.random.randn(10, 3, 3)
         Y = np.random.randn(3, 3)
@@ -149,20 +103,7 @@ class TestCUDAGufunc(CUDATestCase):
 
     def test_gufunc_adjust_blocksize(self):
 
-        @guvectorize([void(float32[:, :], float32[:, :], float32[:, :])],
-                     '(m,n),(n,p)->(m,p)',
-                     target='cuda')
-        def matmulcore(A, B, C):
-            m, n = A.shape
-            n, p = B.shape
-            for i in range(m):
-                for j in range(p):
-                    C[i, j] = 0
-                    for k in range(n):
-                        C[i, j] += A[i, k] * B[k, j]
-
-        gufunc = matmulcore
-        gufunc.max_blocksize = 512
+        gufunc = _get_matmulcore_gufunc(max_blocksize=512)
 
         matrix_ct = 1001 # an odd number to test thread/block division in CUDA
         A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2,
@@ -177,20 +118,7 @@ class TestCUDAGufunc(CUDATestCase):
 
     def test_gufunc_stream(self):
 
-        @guvectorize([void(float32[:, :], float32[:, :], float32[:, :])],
-                     '(m,n),(n,p)->(m,p)',
-                     target='cuda')
-        def matmulcore(A, B, C):
-            m, n = A.shape
-            n, p = B.shape
-            for i in range(m):
-                for j in range(p):
-                    C[i, j] = 0
-                    for k in range(n):
-                        C[i, j] += A[i, k] * B[k, j]
-
-        gufunc = matmulcore
-        gufunc.max_blocksize = 512
+        gufunc = _get_matmulcore_gufunc(max_blocksize=512)
 
         #cuda.driver.flush_pending_free()
         matrix_ct = 1001 # an odd number to test thread/block division in CUDA
@@ -293,8 +221,9 @@ class TestCUDAGufunc(CUDATestCase):
         inp = out = np.zeros(10, dtype=np.float32)
         with self.assertRaises(ValueError) as raises:
             foo(inp, out, out=out)
-        self.assertEqual(str(raises.exception),
-            "cannot specify 'out' as both a positional and keyword argument")
+
+        msg = "cannot specify 'out' as both a positional and keyword argument"
+        self.assertEqual(str(raises.exception), msg)
 
 
 if __name__ == '__main__':

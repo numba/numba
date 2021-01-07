@@ -3,6 +3,10 @@
 Environment variables
 =====================
 
+.. note:: This section relates to environment variables that impact Numba's
+          runtime, for compile time environment variables see
+          :ref:`numba-source-install-env_vars`.
+
 Numba allows its behaviour to be changed through the use of environment
 variables. Unless otherwise mentioned, those variables have integer values and
 default to zero.
@@ -243,6 +247,12 @@ Compilation options
 
    *Default value:* 1 (except on 32-bit Windows)
 
+.. envvar:: NUMBA_SLP_VECTORIZE
+
+   If set to non-zero, enable LLVM superword-level parallelism vectorization.
+
+   *Default value:* 1
+
 .. envvar:: NUMBA_ENABLE_AVX
 
    If set to non-zero, enable AVX optimizations in LLVM.  This is disabled
@@ -253,14 +263,6 @@ Compilation options
 
     If set to non-zero and Intel SVML is available, the use of SVML will be
     disabled.
-
-.. envvar:: NUMBA_COMPATIBILITY_MODE
-
-   If set to non-zero, compilation of JIT functions will never entirely
-   fail, but instead generate a fallback that simply interprets the
-   function.  This is only to be used if you are migrating a large
-   codebase from an old Numba version (before 0.12), and want to avoid
-   breaking everything at once.  Otherwise, please don't use this.
 
 .. envvar:: NUMBA_DISABLE_JIT
 
@@ -306,6 +308,38 @@ Compilation options
     Note: this is unrelated to the compilation cache.
 
     *Default value:* 128
+
+.. envvar:: NUMBA_LLVM_REFPRUNE_PASS
+
+    Turns on the LLVM pass level reference-count pruning pass and disables the
+    regex based implementation in Numba.
+
+    *Default value:* 1 (On)
+
+.. envvar:: NUMBA_LLVM_REFPRUNE_FLAGS
+
+    When ``NUMBA_LLVM_REFPRUNE_PASS`` is on, this allows configuration
+    of subpasses in the reference-count pruning LLVM pass.
+
+    Valid values are any combinations of the below separated by `,`
+    (case-insensitive):
+
+    - ``all``: enable all subpasses.
+    - ``per_bb``: enable per-basic-block level pruning, which is same as the
+      old regex based implementation.
+    - ``diamond``: enable inter-basic-block pruning that is a diamond shape
+      pattern, i.e. a single-entry single-exit CFG subgraph where has an incref
+      in the entry and a corresponding decref in the exit.
+    - ``fanout``: enable inter-basic-block pruning that has a fanout pattern,
+      i.e. a single-entry multiple-exit CFG subgraph where the entry has an
+      incref and every exit has a corresponding decref.
+    - ``fanout_raise``: same as ``fanout`` but allow subgraph exit nodes to be
+      raising an exception and not have a corresponding decref.
+
+    For example, ``all`` is the same as
+    ``per_bb, diamond, fanout, fanout_raise``
+
+    *Default value:* "all"
 
 
 .. _numba-envvars-caching:
@@ -366,6 +400,14 @@ GPU support
 
    If set, don't compile and execute code for the GPU, but use the CUDA
    Simulator instead. For debugging purposes.
+
+
+.. envvar:: NUMBA_CUDA_ARRAY_INTERFACE_SYNC
+
+   Whether to synchronize on streams provided by objects imported using the CUDA
+   Array Interface. This defaults to 1. If set to 0, then no synchronization
+   takes place, and the user of Numba (and other CUDA libraries) is responsible
+   for ensuring correctness with respect to synchronization on streams.
 
 Threading Control
 -----------------

@@ -22,7 +22,7 @@ def _confirm_gdb():
     if not (os.path.exists(gdbloc) and os.path.isfile(gdbloc)):
         msg = ('Is gdb present? Location specified (%s) does not exist. The gdb'
                ' binary location can be set using Numba configuration, see: '
-               'http://numba.pydata.org/numba-doc/latest/reference/envvars.html'
+               'https://numba.pydata.org/numba-doc/latest/reference/envvars.html'  # noqa: E501
                )
         raise RuntimeError(msg % config.GDB_BINARY)
     # Is Yama being used as a kernel security module and if so is ptrace_scope

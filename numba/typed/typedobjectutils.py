@@ -50,6 +50,7 @@ def _sentry_safe_cast(fromty, toty):
     isint = lambda x: isinstance(x, types.Integer)
     isflt = lambda x: isinstance(x, types.Float)
     iscmplx = lambda x: isinstance(x, types.Complex)
+    isdict = lambda x: isinstance(x, types.DictType)
     # Only check against numeric types.
     if by is None or by > Conversion.safe:
         if isint(fromty) and isint(toty):
@@ -64,6 +65,8 @@ def _sentry_safe_cast(fromty, toty):
         elif iscmplx(fromty) and iscmplx(toty):
             # Accept if complex to complex
             warn()
+        elif isdict(fromty) and isdict(toty):
+            pass # it's complaining about initial values being different
         elif not isinstance(toty, types.Number):
             # Non-numbers
             warn()

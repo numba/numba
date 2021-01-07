@@ -7,12 +7,12 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
 from numba.core.imputils import Registry
-from numba.core.typing.npydecl import parse_dtype
+from numba.core.typing.npydecl import parse_dtype, signature
 from numba.core import types, cgutils
 from .cudadrv import nvvm
 from numba import cuda
 from numba.cuda import nvvmutils, stubs
-from numba.cuda.types import dim3
+from numba.cuda.types import dim3, grid_group
 
 
 registry = Registry()
@@ -71,6 +71,26 @@ def dim3_y(context, builder, sig, args):
 def dim3_z(context, builder, sig, args):
     return builder.extract_value(args, 2)
 
+
+@lower(cuda.cg.this_grid)
+def cg_this_grid(context, builder, sig, args):
+    one = context.get_constant(types.int32, 1)
+    lmod = builder.module
+    return builder.call(
+        nvvmutils.declare_cudaCGGetIntrinsicHandle(lmod),
+        (one,))
+
+
+@lower('GridGroup.sync', grid_group)
+def ptx_sync_group(context, builder, sig, args):
+    flags = context.get_constant(types.int32, 0)
+    lmod = builder.module
+    return builder.call(
+        nvvmutils.declare_cudaCGSynchronize(lmod),
+        (*args, flags))
+
+
+# -----------------------------------------------------------------------------
 
 @lower(cuda.grid, types.int32)
 def cuda_grid(context, builder, sig, args):
@@ -245,8 +265,15 @@ def ptx_threadfence_device(context, builder, sig, args):
     return context.get_dummy_value()
 
 
+@lower(stubs.syncwarp)
+def ptx_syncwarp(context, builder, sig, args):
+    mask = context.get_constant(types.int32, 0xFFFFFFFF)
+    mask_sig = signature(types.none, types.int32)
+    return ptx_syncwarp_mask(context, builder, mask_sig, [mask])
+
+
 @lower(stubs.syncwarp, types.i4)
-def ptx_warp_sync(context, builder, sig, args):
+def ptx_syncwarp_mask(context, builder, sig, args):
     fname = 'llvm.nvvm.bar.warp.sync'
     lmod = builder.module
     fnty = Type.function(Type.void(), (Type.int(32),))
@@ -468,6 +495,49 @@ def ptx_round(context, builder, sig, args):
     ])
 
 
+# This rounding implementation follows the algorithm used in the "fallback
+# version" of double_round in CPython.
+# https://github.com/python/cpython/blob/a755410e054e1e2390de5830befc08fe80706c66/Objects/floatobject.c#L964-L1007
+
+@lower(round, types.f4, types.Integer)
+@lower(round, types.f8, types.Integer)
+def round_to_impl(context, builder, sig, args):
+    def round_ndigits(x, ndigits):
+        if math.isinf(x) or math.isnan(x):
+            return x
+
+        if ndigits >= 0:
+            if ndigits > 22:
+                # pow1 and pow2 are each safe from overflow, but
+                # pow1*pow2 ~= pow(10.0, ndigits) might overflow.
+                pow1 = 10.0 ** (ndigits - 22)
+                pow2 = 1e22
+            else:
+                pow1 = 10.0 ** ndigits
+                pow2 = 1.0
+            y = (x * pow1) * pow2
+            if math.isinf(y):
+                return x
+
+        else:
+            pow1 = 10.0 ** (-ndigits)
+            y = x / pow1
+
+        z = round(y)
+        if (math.fabs(y - z) == 0.5):
+            # halfway between two integers; use round-half-even
+            z = 2.0 * round(y / 2.0)
+
+        if ndigits >= 0:
+            z = (z / pow2) / pow1
+        else:
+            z *= pow1
+
+        return z
+
+    return context.compile_internal(builder, round_ndigits, sig, args, )
+
+
 def gen_deg_rad(const):
     def impl(context, builder, sig, args):
         argty, = sig.args
@@ -538,6 +608,79 @@ def ptx_atomic_add_tuple(context, builder, dtype, ptr, val):
         return builder.atomic_rmw('add', ptr, val, 'monotonic')
 
 
+@lower(stubs.atomic.sub, types.Array, types.intp, types.Any)
+@lower(stubs.atomic.sub, types.Array, types.UniTuple, types.Any)
+@lower(stubs.atomic.sub, types.Array, types.Tuple, types.Any)
+@_atomic_dispatcher
+def ptx_atomic_sub(context, builder, dtype, ptr, val):
+    if dtype == types.float32:
+        lmod = builder.module
+        return builder.call(nvvmutils.declare_atomic_sub_float32(lmod),
+                            (ptr, val))
+    elif dtype == types.float64:
+        lmod = builder.module
+        return builder.call(nvvmutils.declare_atomic_sub_float64(lmod),
+                            (ptr, val))
+    else:
+        return builder.atomic_rmw('sub', ptr, val, 'monotonic')
+
+
+@lower(stubs.atomic.inc, types.Array, types.intp, types.Any)
+@lower(stubs.atomic.inc, types.Array, types.UniTuple, types.Any)
+@lower(stubs.atomic.inc, types.Array, types.Tuple, types.Any)
+@_atomic_dispatcher
+def ptx_atomic_inc(context, builder, dtype, ptr, val):
+    if dtype in cuda.cudadecl.unsigned_int_numba_types:
+        bw = dtype.bitwidth
+        lmod = builder.module
+        fn = getattr(nvvmutils, f'declare_atomic_inc_int{bw}')
+        return builder.call(fn(lmod), (ptr, val))
+    else:
+        raise TypeError(f'Unimplemented atomic inc with {dtype} array')
+
+
+@lower(stubs.atomic.dec, types.Array, types.intp, types.Any)
+@lower(stubs.atomic.dec, types.Array, types.UniTuple, types.Any)
+@lower(stubs.atomic.dec, types.Array, types.Tuple, types.Any)
+@_atomic_dispatcher
+def ptx_atomic_dec(context, builder, dtype, ptr, val):
+    if dtype in cuda.cudadecl.unsigned_int_numba_types:
+        bw = dtype.bitwidth
+        lmod = builder.module
+        fn = getattr(nvvmutils, f'declare_atomic_dec_int{bw}')
+        return builder.call(fn(lmod), (ptr, val))
+    else:
+        raise TypeError(f'Unimplemented atomic dec with {dtype} array')
+
+
+def ptx_atomic_bitwise(stub, op):
+    @_atomic_dispatcher
+    def impl_ptx_atomic(context, builder, dtype, ptr, val):
+        if dtype in (cuda.cudadecl.integer_numba_types):
+            return builder.atomic_rmw(op, ptr, val, 'monotonic')
+        else:
+            raise TypeError(f'Unimplemented atomic {op} with {dtype} array')
+
+    for ty in (types.intp, types.UniTuple, types.Tuple):
+        lower(stub, types.Array, ty, types.Any)(impl_ptx_atomic)
+
+
+ptx_atomic_bitwise(stubs.atomic.and_, 'and')
+ptx_atomic_bitwise(stubs.atomic.or_, 'or')
+ptx_atomic_bitwise(stubs.atomic.xor, 'xor')
+
+
+@lower(stubs.atomic.exch, types.Array, types.intp, types.Any)
+@lower(stubs.atomic.exch, types.Array, types.UniTuple, types.Any)
+@lower(stubs.atomic.exch, types.Array, types.Tuple, types.Any)
+@_atomic_dispatcher
+def ptx_atomic_exch(context, builder, dtype, ptr, val):
+    if dtype in (cuda.cudadecl.integer_numba_types):
+        return builder.atomic_rmw('xchg', ptr, val, 'monotonic')
+    else:
+        raise TypeError(f'Unimplemented atomic exch with {dtype} array')
+
+
 @lower(stubs.atomic.max, types.Array, types.intp, types.Any)
 @lower(stubs.atomic.max, types.Array, types.Tuple, types.Any)
 @lower(stubs.atomic.max, types.Array, types.UniTuple, types.Any)
@@ -578,6 +721,46 @@ def ptx_atomic_min(context, builder, dtype, ptr, val):
         raise TypeError('Unimplemented atomic min with %s array' % dtype)
 
 
+@lower(stubs.atomic.nanmax, types.Array, types.intp, types.Any)
+@lower(stubs.atomic.nanmax, types.Array, types.Tuple, types.Any)
+@lower(stubs.atomic.nanmax, types.Array, types.UniTuple, types.Any)
+@_atomic_dispatcher
+def ptx_atomic_nanmax(context, builder, dtype, ptr, val):
+    lmod = builder.module
+    if dtype == types.float64:
+        return builder.call(nvvmutils.declare_atomic_nanmax_float64(lmod),
+                            (ptr, val))
+    elif dtype == types.float32:
+        return builder.call(nvvmutils.declare_atomic_nanmax_float32(lmod),
+                            (ptr, val))
+    elif dtype in (types.int32, types.int64):
+        return builder.atomic_rmw('max', ptr, val, ordering='monotonic')
+    elif dtype in (types.uint32, types.uint64):
+        return builder.atomic_rmw('umax', ptr, val, ordering='monotonic')
+    else:
+        raise TypeError('Unimplemented atomic max with %s array' % dtype)
+
+
+@lower(stubs.atomic.nanmin, types.Array, types.intp, types.Any)
+@lower(stubs.atomic.nanmin, types.Array, types.Tuple, types.Any)
+@lower(stubs.atomic.nanmin, types.Array, types.UniTuple, types.Any)
+@_atomic_dispatcher
+def ptx_atomic_nanmin(context, builder, dtype, ptr, val):
+    lmod = builder.module
+    if dtype == types.float64:
+        return builder.call(nvvmutils.declare_atomic_nanmin_float64(lmod),
+                            (ptr, val))
+    elif dtype == types.float32:
+        return builder.call(nvvmutils.declare_atomic_nanmin_float32(lmod),
+                            (ptr, val))
+    elif dtype in (types.int32, types.int64):
+        return builder.atomic_rmw('min', ptr, val, ordering='monotonic')
+    elif dtype in (types.uint32, types.uint64):
+        return builder.atomic_rmw('umin', ptr, val, ordering='monotonic')
+    else:
+        raise TypeError('Unimplemented atomic min with %s array' % dtype)
+
+
 @lower(stubs.atomic.compare_and_swap, types.Array, types.Any, types.Any)
 def ptx_atomic_cas_tuple(context, builder, sig, args):
     aryty, oldty, valty = sig.args
@@ -587,9 +770,12 @@ def ptx_atomic_cas_tuple(context, builder, sig, args):
     lary = context.make_array(aryty)(context, builder, ary)
     zero = context.get_constant(types.intp, 0)
     ptr = cgutils.get_item_pointer(context, builder, aryty, lary, (zero,))
-    if aryty.dtype == types.int32:
+
+    if aryty.dtype in (cuda.cudadecl.integer_numba_types):
         lmod = builder.module
-        return builder.call(nvvmutils.declare_atomic_cas_int32(lmod),
+        bitwidth = aryty.dtype.bitwidth
+        return builder.call(nvvmutils.declare_atomic_cas_int(lmod,
+                                                             bitwidth),
                             (ptr, old, val))
     else:
         raise TypeError('Unimplemented atomic compare_and_swap '
@@ -605,10 +791,11 @@ def _get_target_data(context):
 
 def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
                    can_dynsized=False):
-    elemcount = reduce(operator.mul, shape)
+    elemcount = reduce(operator.mul, shape, 1)
 
-    # Check for valid shape for this type of allocation
-    dynamic_smem = elemcount <= 0 and can_dynsized
+    # Check for valid shape for this type of allocation.
+    # Only 1d arrays can be dynamic.
+    dynamic_smem = elemcount <= 0 and can_dynsized and len(shape) == 1
     if elemcount <= 0 and not dynamic_smem:
         raise ValueError("array length <= 0")
 
@@ -657,9 +844,11 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
     itemsize = lldtype.get_abi_size(targetdata)
 
     # Compute strides
-    rstrides = [itemsize]
-    for i, lastsize in enumerate(reversed(shape[1:])):
-        rstrides.append(lastsize * rstrides[-1])
+    laststride = itemsize
+    rstrides = []
+    for i, lastsize in enumerate(reversed(shape)):
+        rstrides.append(laststride)
+        laststride *= lastsize
     strides = [s for s in reversed(rstrides)]
     kstrides = [context.get_constant(types.intp, s) for s in strides]
 
@@ -688,8 +877,8 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
 
     context.populate_array(ary,
                            data=builder.bitcast(dataptr, ary.data.type),
-                           shape=cgutils.pack_array(builder, kshape),
-                           strides=cgutils.pack_array(builder, kstrides),
+                           shape=kshape,
+                           strides=kstrides,
                            itemsize=context.get_constant(types.intp, itemsize),
                            meminfo=None)
     return ary._getvalue()
