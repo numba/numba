@@ -202,7 +202,7 @@ class Listener(abc.ABC):
             raise AssertionError("unreachable")
 
 
-class TimedListener(Listener):
+class TimingListener(Listener):
     """A listener that measures the duration between *START* and *END* events.
     """
     def __init__(self):
@@ -244,7 +244,7 @@ class RecordingListener(Listener):
 
 @contextmanager
 def install_timer(kind, callback):
-    """Install a TimedListener temporarily to measure the duration for
+    """Install a TimingListener temporarily to measure the duration for
     an event.
 
     If the context completes successfully, the *callback* function is executed.
@@ -253,9 +253,9 @@ def install_timer(kind, callback):
 
     Returns
     -------
-    res : TimedListener
+    res : TimingListener
     """
-    listener = TimedListener()
+    listener = TimingListener()
     register(kind, listener)
     try:
         yield listener
