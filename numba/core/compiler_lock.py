@@ -10,12 +10,12 @@ class _CompilerLock(object):
         self._duration = 0
 
     def acquire(self):
-        ev.start_event("COMPILER_LOCK")
+        ev.start_event("numba:compiler_lock")
         self._lock.acquire()
 
     def release(self):
         self._lock.release()
-        ev.stop_event("COMPILER_LOCK")
+        ev.end_event("numba:compiler_lock")
 
     def __enter__(self):
         self.acquire()

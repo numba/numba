@@ -840,9 +840,9 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                 if cres is not None:
                     self._callback_add_compiler_timer(dur, cres)
 
-            scope.enter_context(ev.install_timer("COMPILER_LOCK", cb))
-
+            scope.enter_context(ev.install_timer("numba:compiler_lock", cb))
             scope.enter_context(global_compiler_lock)
+
             if not self._can_compile:
                 raise RuntimeError("compilation disabled")
             # Use counter to track recursion compilation depth
@@ -869,7 +869,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                     args=args,
                     return_type=return_type,
                 )
-                with ev.mark_event("COMPILE", data=ev_details):
+                with ev.mark_event("numba:compile", data=ev_details):
                     try:
                         cres = self._compiler.compile(args, return_type)
                     except errors.ForceLiteralArg as e:
@@ -1037,7 +1037,16 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         pass
 
     def compile(self, sig):
-        with global_compiler_lock as lock_ctx:
+        with ExitStack() as scope:
+            cres = None
+
+            def cb(dur):
+                if cres is not None:
+                    self._callback_add_compiler_timer(dur, cres)
+
+            scope.enter_context(ev.install_timer("numba:compiler_lock", cb))
+            scope.enter_context(global_compiler_lock)
+
             # Use counter to track recursion compilation depth
             with self._compiling_counter:
                 # XXX this is mostly duplicated from Dispatcher.
@@ -1062,11 +1071,6 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                                         lifted=(),
                                         lifted_from=self.lifted_from,
                                         is_lifted_loop=True,)
-                cb_bound = functools.partial(
-                    self._callback_add_compiler_timer,
-                    cres=cres,
-                )
-                lock_ctx.on_exit(cb_bound)
 
                 # Check typing error if object mode is used
                 if cres.typing_error is not None and not flags.enable_pyobject:
