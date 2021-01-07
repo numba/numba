@@ -3,6 +3,7 @@ from textwrap import dedent
 
 import numpy as np
 
+from numba import config
 from numba import njit
 from numba import int32, float32, prange
 from numba.core import types
@@ -529,6 +530,27 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         expected = "ListType[int32]([1, 2, 3])"
         self.assertEqual(expected, repr(l))
 
+    def test_iter_mutates_self(self):
+        self.disable_leak_check()
+
+        @njit
+        def foo(x):
+            count = 0
+            for i in x:
+                if count > 1:
+                    x.append(2.)
+                count += 1
+
+        l = List()
+        l.append(1.)
+        l.append(1.)
+        l.append(1.)
+        with self.assertRaises(RuntimeError) as raises:
+            foo(l)
+
+        msg = "list was mutated during iteration"
+        self.assertIn(msg, str(raises.exception))
+
 
 class TestNoneType(MemoryLeakMixin, TestCase):
 
@@ -754,7 +776,8 @@ class TestExtend(MemoryLeakMixin, TestCase):
         # Extending an unrefined list with an empty iterable doesn't work in a
         # jit compiled function as the list remains untyped.
         l = List()
-        l.extend(tuple())
+        ret = l.extend(tuple())
+        self.assertIsNone(ret)
         self.assertEqual(len(l), 0)
         self.assertFalse(l._typed)
 
@@ -985,7 +1008,11 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             return get_refcount(d)
 
         c = foo()
-        self.assertEqual(2, c)
+        if config.LLVM_REFPRUNE_PASS:
+            # Because the pruner cleared all other increfs
+            self.assertEqual(1, c)
+        else:
+            self.assertEqual(2, c)
 
     def test_dict_as_item_in_list_multi_refcount(self):
         @njit
@@ -999,7 +1026,11 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             return get_refcount(d)
 
         c = foo()
-        self.assertEqual(3, c)
+        if config.LLVM_REFPRUNE_PASS:
+            # Because the pruner cleared all other increfs
+            self.assertEqual(1, c)
+        else:
+            self.assertEqual(3, c)
 
     def test_list_as_value_in_dict(self):
         @njit
@@ -1012,7 +1043,11 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             return get_refcount(l)
 
         c = foo()
-        self.assertEqual(2, c)
+        if config.LLVM_REFPRUNE_PASS:
+            # Because the pruner cleared all other increfs
+            self.assertEqual(1, c)
+        else:
+            self.assertEqual(2, c)
 
     def test_list_as_item_in_list(self):
         nested_type = types.ListType(types.int32)

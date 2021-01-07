@@ -31,10 +31,6 @@ from .enums import (
 from .hsadrv.driver import hsa as _hsadrv
 from .hsadrv import devicearray
 
-try:
-    long
-except NameError:
-    long = int
 
 class _AutoDeregister(object):
     def __init__(self, args):
@@ -144,9 +140,9 @@ def _fill_stride_by_order(shape, dtype, order):
 
 def _prepare_shape_strides_dtype(shape, strides, dtype, order):
     dtype = np.dtype(dtype)
-    if isinstance(shape, (int, long)):
+    if isinstance(shape, int):
         shape = (shape,)
-    if isinstance(strides, (int, long)):
+    if isinstance(strides, int):
         strides = (strides,)
     else:
         if shape == ():

@@ -122,7 +122,7 @@ html_theme = 'sphinx_rtd_theme'
 # All sphinx_rtd_theme options. Default values commented out; uncomment to
 # change.
 html_theme_options = {
-    'canonical_url': 'http://numba.pydata.org/numba-doc/latest/index.html',
+    'canonical_url': 'https://numba.readthedocs.io/en/stable/',
     # 'logo_only': False,
     # 'display_version': True,
     # 'prev_next_buttons_location': 'bottom',

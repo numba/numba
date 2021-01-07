@@ -38,7 +38,7 @@ class TestCudaLocalMem(CUDATestCase):
         self.assertTrue(np.all(A == B))
 
     def test_local_array_1_tuple(self):
-        """Ensure that the macro can be use with 1-tuple
+        """Ensure that local arrays can be constructed with 1-tuple shape
         """
         jculocal = cuda.jit('void(int32[:], int32[:])')(culocal1tuple)
         # Don't check if .local is in the ptx because the optimizer

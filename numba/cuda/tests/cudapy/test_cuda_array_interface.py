@@ -4,6 +4,8 @@ from numba import vectorize, guvectorize
 from numba import cuda
 from numba.cuda.testing import unittest, ContextResettingTestCase, ForeignArray
 from numba.cuda.testing import skip_on_cudasim, skip_if_external_memmgr
+from numba.tests.support import override_config
+from unittest.mock import call, patch
 
 
 @skip_on_cudasim('CUDA Array Interface is not supported in the simulator')
@@ -254,6 +256,141 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         got = cuda.from_cuda_array_interface(face).copy_to_host()
         np.testing.assert_array_equal(got, hostarray)
         self.assertTrue(got.flags['C_CONTIGUOUS'])
+
+    def test_produce_no_stream(self):
+        c_arr = cuda.device_array(10)
+        self.assertIsNone(c_arr.__cuda_array_interface__['stream'])
+
+    def test_produce_stream(self):
+        s = cuda.stream()
+        c_arr = cuda.device_array(10, stream=s)
+        cai_stream = c_arr.__cuda_array_interface__['stream']
+        self.assertEqual(s.handle.value, cai_stream)
+
+    def test_consume_no_stream(self):
+        # Create a foreign array with no stream
+        f_arr = ForeignArray(cuda.device_array(10))
+
+        # Ensure that the imported array has no default stream
+        c_arr = cuda.as_cuda_array(f_arr)
+        self.assertEqual(c_arr.stream, 0)
+
+    def test_consume_stream(self):
+        # Create a foreign array with a stream
+        s = cuda.stream()
+        f_arr = ForeignArray(cuda.device_array(10, stream=s))
+
+        # Ensure that an imported array has the stream as its default stream
+        c_arr = cuda.as_cuda_array(f_arr)
+        self.assertTrue(c_arr.stream.external)
+        self.assertEqual(c_arr.stream.handle.value, s.handle.value)
+
+    def test_consume_no_sync(self):
+        # Create a foreign array with no stream
+        f_arr = ForeignArray(cuda.device_array(10))
+
+        with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
+                          return_value=None) as mock_sync:
+            cuda.as_cuda_array(f_arr)
+
+        # Ensure the synchronize method of a stream was not called
+        mock_sync.assert_not_called()
+
+    def test_consume_sync(self):
+        # Create a foreign array with a stream
+        s = cuda.stream()
+        f_arr = ForeignArray(cuda.device_array(10, stream=s))
+
+        with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
+                          return_value=None) as mock_sync:
+            cuda.as_cuda_array(f_arr)
+
+        # Ensure the synchronize method of a stream was called
+        mock_sync.assert_called_once_with()
+
+    def test_consume_sync_disabled(self):
+        # Create a foreign array with a stream
+        s = cuda.stream()
+        f_arr = ForeignArray(cuda.device_array(10, stream=s))
+
+        # Set sync to false before testing. The test suite should generally be
+        # run with sync enabled, but stash the old value just in case it is
+        # not.
+        with override_config('CUDA_ARRAY_INTERFACE_SYNC', False):
+            with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
+                              return_value=None) as mock_sync:
+                cuda.as_cuda_array(f_arr)
+
+            # Ensure the synchronize method of a stream was not called
+            mock_sync.assert_not_called()
+
+    def test_launch_no_sync(self):
+        # Create a foreign array with no stream
+        f_arr = ForeignArray(cuda.device_array(10))
+
+        @cuda.jit
+        def f(x):
+            pass
+
+        with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
+                          return_value=None) as mock_sync:
+            f[1, 1](f_arr)
+
+        # Ensure the synchronize method of a stream was not called
+        mock_sync.assert_not_called()
+
+    def test_launch_sync(self):
+        # Create a foreign array with a stream
+        s = cuda.stream()
+        f_arr = ForeignArray(cuda.device_array(10, stream=s))
+
+        @cuda.jit
+        def f(x):
+            pass
+
+        with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
+                          return_value=None) as mock_sync:
+            f[1, 1](f_arr)
+
+        # Ensure the synchronize method of a stream was called
+        mock_sync.assert_called_once_with()
+
+    def test_launch_sync_two_streams(self):
+        # Create two foreign arrays with streams
+        s1 = cuda.stream()
+        s2 = cuda.stream()
+        f_arr1 = ForeignArray(cuda.device_array(10, stream=s1))
+        f_arr2 = ForeignArray(cuda.device_array(10, stream=s2))
+
+        @cuda.jit
+        def f(x, y):
+            pass
+
+        with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
+                          return_value=None) as mock_sync:
+            f[1, 1](f_arr1, f_arr2)
+
+        # Ensure that synchronize was called twice
+        mock_sync.assert_has_calls([call(), call()])
+
+    def test_launch_sync_disabled(self):
+        # Create two foreign arrays with streams
+        s1 = cuda.stream()
+        s2 = cuda.stream()
+        f_arr1 = ForeignArray(cuda.device_array(10, stream=s1))
+        f_arr2 = ForeignArray(cuda.device_array(10, stream=s2))
+
+        with override_config('CUDA_ARRAY_INTERFACE_SYNC', False):
+            @cuda.jit
+            def f(x, y):
+                pass
+
+            with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
+                              return_value=None) as mock_sync:
+                f[1, 1](f_arr1, f_arr2)
+
+            # Ensure that synchronize was not called
+            mock_sync.assert_not_called()
 
 
 if __name__ == "__main__":

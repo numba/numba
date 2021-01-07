@@ -252,6 +252,9 @@ class _EnvReloader(object):
         LOOP_VECTORIZE = _readenv("NUMBA_LOOP_VECTORIZE", int,
                                   not (IS_WIN32 and IS_32BITS))
 
+        # Switch on  superword-level parallelism vectorization, default is on.
+        SLP_VECTORIZE = _readenv("NUMBA_SLP_VECTORIZE", int, 1)
+
         # Force dump of generated assembly
         DUMP_ASSEMBLY = _readenv("NUMBA_DUMP_ASSEMBLY", int, DEBUG)
 
@@ -269,11 +272,6 @@ class _EnvReloader(object):
                 return os.path.abspath(path)
 
         HTML = _readenv("NUMBA_DUMP_HTML", fmt_html_path, None)
-
-        # Allow interpreter fallback so that Numba @jit decorator will never
-        # fail. Use for migrating from old numba (<0.12) which supported
-        # closure, and other yet-to-be-supported features.
-        COMPATIBILITY_MODE = _readenv("NUMBA_COMPATIBILITY_MODE", int, 0)
 
         # x86-64 specific
         # Enable AVX on supported platforms where it won't degrade performance.
@@ -333,6 +331,9 @@ class _EnvReloader(object):
         CUDA_DEALLOCS_RATIO = _readenv("NUMBA_CUDA_MAX_PENDING_DEALLOCS_RATIO",
                                        float, 0.2)
 
+        CUDA_ARRAY_INTERFACE_SYNC = _readenv("NUMBA_CUDA_ARRAY_INTERFACE_SYNC",
+                                             int, 1)
+
         # HSA Configs
 
         # Disable HSA support
@@ -380,6 +381,15 @@ class _EnvReloader(object):
         # CUDA Memory management
         CUDA_MEMORY_MANAGER = _readenv("NUMBA_CUDA_MEMORY_MANAGER", str,
                                        'default')
+
+        # Experimental refprune pass
+        LLVM_REFPRUNE_PASS = _readenv(
+            "NUMBA_LLVM_REFPRUNE_PASS", int, 1,
+        )
+        LLVM_REFPRUNE_FLAGS = _readenv(
+            "NUMBA_LLVM_REFPRUNE_FLAGS", str,
+            "all" if LLVM_REFPRUNE_PASS else "",
+        )
 
         # Inject the configuration values into the module globals
         for name, value in locals().copy().items():

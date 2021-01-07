@@ -403,12 +403,12 @@ def get_sysinfo():
         sys_info[_hsa_agents_count] = len(hsa.agents)
         agents = []
         for i, agent in enumerate(hsa.agents):
-            agents += {
+            agents.append({
                 'Agent id': i,
                 'Vendor': decode(agent.vendor_name),
                 'Name': decode(agent.name),
                 'Type': agent.device,
-            }
+            })
         sys_info[_hsa_agents] = agents
 
         _dgpus = []
@@ -593,7 +593,7 @@ def display_sysinfo(info=None, sep_pos=45):
         ("CUDA Driver Version", info.get(_cu_drv_ver, '?')),
         ("CUDA Detect Output:",),
         (info.get(_cu_detect_out, "None"),),
-        ("CUDA Librairies Test Output:",),
+        ("CUDA Libraries Test Output:",),
         (info.get(_cu_lib_test, "None"),),
         ("",),
         ("__ROC information__",),

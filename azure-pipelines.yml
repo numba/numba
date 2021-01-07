@@ -3,7 +3,7 @@ trigger:
 
 variables:
   # Change the following along with adding new TEST_START_INDEX.
-  TEST_COUNT: 18
+  TEST_COUNT: 20
 
 jobs:
 # Mac and Linux use the same template with different matrixes
@@ -34,17 +34,19 @@ jobs:
         CONDA_ENV: travisci
         TEST_THREADING: 'tbb'
         TEST_START_INDEX: 2
-      py37_np117:
+      py37_np117_pickle5:
         PYTHON: '3.7'
         NUMPY: '1.17'
         CONDA_ENV: travisci
         TEST_START_INDEX: 3
+        TEST_PICKLE5: yes
       py36_np115_cov:
         PYTHON: '3.6'
         NUMPY: '1.15'
         CONDA_ENV: travisci
         RUN_COVERAGE: yes
         RUN_FLAKE8: yes
+        RUN_MYPY: yes
         TEST_START_INDEX: 4
       py36_np117_doc:
         PYTHON: '3.6'
@@ -103,11 +105,22 @@ jobs:
         NUMPY: '1.18'
         CONDA_ENV: travisci
         TEST_START_INDEX: 14
-      py38_np118:
+      py38_np118_typeguard:
         PYTHON: '3.8'
         NUMPY: '1.18'
         CONDA_ENV: travisci
+        RUN_TYPEGUARD: yes
         TEST_START_INDEX: 15
+      py37_np119:
+        PYTHON: '3.7'
+        NUMPY: '1.19'
+        CONDA_ENV: travisci
+        TEST_START_INDEX: 16
+      py38_np119:
+        PYTHON: '3.8'
+        NUMPY: '1.19'
+        CONDA_ENV: travisci
+        TEST_START_INDEX: 17
 
 - template: buildscripts/azure/azure-windows.yml
   parameters:

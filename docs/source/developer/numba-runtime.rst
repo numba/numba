@@ -48,21 +48,39 @@ Optimizations
 -------------
 
 The compiler is allowed to emit incref/decref operations naively.  It relies
-on an optimization pass that to remove the redundant reference count
-operations.
+on an optimization pass to remove redundant reference count operations.
 
-The optimization pass runs on block level to avoid control flow analysis.
+A new optimization pass is implemented in version 0.52.0 to remove reference
+count operations that fall into the following four categories of control-flow
+structure---per basic-block, diamond, fanout, fanout+raise. See the documentation
+for :envvar:`NUMBA_LLVM_REFPRUNE_FLAGS` for their descriptions.
+
+The old optimization pass runs at block level to avoid control flow analysis.
 It depends on LLVM function optimization pass to simplify the control flow,
 stack-to-register, and simplify instructions.  It works by matching and
-removing incref and decref pairs within each block.
+removing incref and decref pairs within each block.  The old pass can be
+enabled by setting :envvar:`NUMBA_LLVM_REFPRUNE_PASS` to `0`.
+
+Important assumptions
+---------------------
+
+Both the old (pre-0.52.0) and the new (post-0.52.0) optimization passes assume
+that the only function that can consume a reference is ``NRT_decref``.
+It is important that there are no other functions that will consume references.
+Since the passes operate on LLVM IR, the "functions" here are referring to any
+callee in a LLVM call instruction.
+
+To summarize, all functions exposed to the refcount optimization pass
+**must not** consume counted references unless done so via ``NRT_decref``.
 
 
-Quirks
-------
+Quirks of the old optimization pass
+-----------------------------------
 
-Since the `refcount optimization pass <nrt-refct-opt-pass_>`_ requires LLVM
-function optimization pass, the pass works on the LLVM IR as text.  The
-optimized IR is then materialized again as a new LLVM in-memory bitcode object.
+Since the pre-0.52.0 `refcount optimization pass <nrt-refct-opt-pass_>`_
+requires the LLVM function optimization pass, the pass works on the LLVM IR as
+text. The optimized IR is then materialized again as a new LLVM in-memory
+bitcode object.
 
 
 Debugging Leaks

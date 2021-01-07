@@ -2,12 +2,14 @@
 Contains CUDA API functions
 '''
 
+# Imports here bring together parts of the API from other modules, so some of
+# them appear unused.
 from contextlib import contextmanager
-from .cudadrv.devices import require_context, reset, gpus
+from .cudadrv.devices import require_context, reset, gpus  # noqa: F401
 from .kernel import FakeCUDAKernel
 from numba.core.typing import Signature
 from warnings import warn
-from ..args import In, Out, InOut
+from ..args import In, Out, InOut  # noqa: F401
 
 
 def select_device(dev=0):
@@ -29,6 +31,7 @@ class stream(object):
 
 def synchronize():
     pass
+
 
 def close():
     gpus.closed = True
@@ -68,6 +71,7 @@ class Event(object):
         warn('Simulator timings are bogus')
         return 0.0
 
+
 event = Event
 
 
@@ -76,7 +80,7 @@ def jit(func_or_sig=None, device=False, debug=False, argtypes=None,
         boundscheck=None,
         ):
     # Here for API compatibility
-    if boundscheck == True:
+    if boundscheck:
         raise NotImplementedError("bounds checking is not supported for CUDA")
 
     if link is not None:
