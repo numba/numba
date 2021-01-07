@@ -2962,11 +2962,11 @@ class ArrayAnalysis(object):
             tup0typ = self.typemap[tups[0].name]
             tup1typ = self.typemap[tups[1].name]
             if tup0typ.count == 0:
-                return Arrayanalysis.AnalyzeResult(
+                return ArrayAnalysis.AnalyzeResult(
                     shape=equiv_set.get_shape(tups[1])
                 )
             if tup1typ.count == 0:
-                return Arrayanalysis.AnalyzeResult(
+                return ArrayAnalysis.AnalyzeResult(
                     shape=equiv_set.get_shape(tups[0])
                 )
 
