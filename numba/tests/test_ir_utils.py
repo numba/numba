@@ -36,10 +36,10 @@ class TestIrUtils(TestCase):
 
         test_ir = compiler.run_frontend(test_func)
         typingctx = cpu_target.typing_context
-        typemap, _, _ = type_inference_stage(
+        typing_res = type_inference_stage(
             typingctx, test_ir, (), None)
         matched_call = ir_utils.find_callname(
-            test_ir, test_ir.blocks[0].body[8].value, typemap)
+            test_ir, test_ir.blocks[0].body[8].value, typing_res.typemap)
         self.assertTrue(isinstance(matched_call, tuple) and
                         len(matched_call) == 2 and
                         matched_call[0] == 'append')

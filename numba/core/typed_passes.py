@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from copy import copy
 import warnings
 
@@ -21,6 +21,15 @@ from numba.core.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                                  is_operator_or_getitem)
 from numba.core import postproc
 from llvmlite import binding as llvm
+
+
+# Outputs of type inference pass
+_TypingResults = namedtuple("_TypingResults", [
+    "typemap",
+    "return_type",
+    "calltypes",
+    "typing_errors",
+])
 
 
 @contextmanager
@@ -69,13 +78,14 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={},
             infer.seed_type(k, v)
 
         infer.build_constraint()
-        infer.propagate(raise_errors=raise_errors)
+        # return errors in case of partial typing
+        errs = infer.propagate(raise_errors=raise_errors)
         typemap, restype, calltypes = infer.unify(raise_errors=raise_errors)
 
     # Output all Numba warnings
     warnings.flush()
 
-    return typemap, restype, calltypes
+    return _TypingResults(typemap, restype, calltypes, errs)
 
 
 class BaseTypeInference(FunctionPass):
@@ -91,7 +101,7 @@ class BaseTypeInference(FunctionPass):
         with fallback_context(state, 'Function "%s" failed type inference'
                               % (state.func_id.func_name,)):
             # Type inference
-            typemap, return_type, calltypes = type_inference_stage(
+            typemap, return_type, calltypes, errs = type_inference_stage(
                 state.typingctx,
                 state.func_ir,
                 state.args,
@@ -99,6 +109,8 @@ class BaseTypeInference(FunctionPass):
                 state.locals,
                 raise_errors=self._raise_errors)
             state.typemap = typemap
+            # save errors in case of partial typing
+            state.typing_errors = errs
             if self._raise_errors:
                 state.return_type = return_type
             state.calltypes = calltypes

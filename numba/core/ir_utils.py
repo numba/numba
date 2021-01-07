@@ -1636,7 +1636,7 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
     # perform type inference if typingctx is available and update type
     # data structures typemap and calltypes
     if typingctx:
-        f_typemap, f_return_type, f_calltypes = typed_passes.type_inference_stage(
+        f_typemap, f_return_type, f_calltypes, _ = typed_passes.type_inference_stage(
                 typingctx, f_ir, arg_typs, None)
         # remove argument entries like arg.a from typemap
         arg_names = [vname for vname in f_typemap if vname.startswith("arg.")]
