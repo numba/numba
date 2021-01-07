@@ -537,15 +537,23 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         # Test repr of long typed Lists in an IPython session
         base_cmd = [
             sys.executable,
-            *'-m IPython --quiet --quick --no-banner --colors=NoColor -c'.split()
+            *"-m IPython --quiet --quick --no-banner --colors=NoColor -c".split(),
         ]
         try:
-            ver = subprocess.check_output(base_cmd + ['--version'])
+            ver = subprocess.check_output(base_cmd + ["--version"])
         except subprocess.CalledProcessError as e:
-            self.skipTest("ipython not available: return code %d"
-                          % e.returncode)
-        cmd = base_cmd + ["from numba.typed import List; res = repr(List(range(1005))); import sys; sys.stderr.write(res)"]
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+            self.skipTest("ipython not available: return code %d" % e.returncode)
+        cmd = base_cmd + [
+            "from numba.typed import List;"
+            + "res = repr(List(range(1005)));"
+            + "import sys; sys.stderr.write(res)"
+        ]
+        p = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+        )
         out, err = p.communicate()
 
         l = List(range(1005))
