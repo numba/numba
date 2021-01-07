@@ -391,6 +391,13 @@ class _EnvReloader(object):
             "all" if LLVM_REFPRUNE_PASS else "",
         )
 
+        # Timing support.
+
+        # LLVM_PASS_TIMINGS enables LLVM recording of pass timings.
+        LLVM_PASS_TIMINGS = _readenv(
+            "NUMBA_LLVM_PASS_TIMINGS", int, 0,
+        )
+
         # Inject the configuration values into the module globals
         for name, value in locals().copy().items():
             if name.isupper():

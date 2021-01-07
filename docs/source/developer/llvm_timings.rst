@@ -8,8 +8,10 @@ Notes on timing LLVM
 Getting LLVM Pass Timings
 -------------------------
 
-The dispatcher stores LLVM pass timings in the dispatcher object metadata under the
-``llvm_pass_timings`` key. The timings information contains details on how much time
+The dispatcher stores LLVM pass timings in the dispatcher object metadata under
+the ``llvm_pass_timings`` key when :envvar:`NUMBA_LLVM_PASS_TIMINGS` is
+enabled or ``numba.config.LLVM_PASS_TIMINGS`` is set to truthy.
+The timings information contains details on how much time
 has been spent in each pass. The pass timings are also grouped by their purpose.
 For example, there will be pass timings for function-level pre-optimizations,
 module-level optimizations, and object code generation.

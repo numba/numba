@@ -1,11 +1,19 @@
 import unittest
 
 from numba import njit
+from numba.core import config
 from numba.tests.support import TestCase
 from numba.misc import llvm_pass_timings as lpt
 
 
 class TestLLVMPassTimings(TestCase):
+    def setUp(self):
+        self.__old_LLVM_PASS_TIMINGS = config.LLVM_PASS_TIMINGS
+        config.LLVM_PASS_TIMINGS = 1
+
+    def tearDown(self):
+        config.LLVM_PASS_TIMINGS = self.__old_LLVM_PASS_TIMINGS
+
     def test_usage(self):
         @njit
         def foo(n):
@@ -56,6 +64,27 @@ class TestLLVMPassTimings(TestCase):
             cur = rec.timings.get_total_time()
             self.assertGreaterEqual(last, cur)
             cur = last
+
+
+class TestLLVMPassTimingsDisabled(TestCase):
+    def test_disabled_behavior(self):
+        @njit
+        def foo(n):
+            c = 0
+            for i in range(n):
+                c += i
+            return c
+
+        foo(10)
+
+        md = foo.get_metadata(foo.signatures[0])
+        timings = md['llvm_pass_timings']
+        # Check that the right message is returned
+        self.assertEqual(timings.summary(), "No pass timings were recorded")
+        # Check that None is returned
+        self.assertIsNone(timings.get_total_time())
+        # Check that empty list is returned
+        self.assertEqual(timings.list_longest_first(), [])
 
 
 if __name__ == "__main__":

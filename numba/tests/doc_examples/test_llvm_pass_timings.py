@@ -1,10 +1,18 @@
 # "magictoken" is used for markers as beginning and ending of example text.
 
 import unittest
+
+from numba.core import config
 from numba.tests.support import captured_stdout
 
 
 class DocsLLVMPassTimings(unittest.TestCase):
+    def setUp(self):
+        self.__old_LLVM_PASS_TIMINGS = config.LLVM_PASS_TIMINGS
+        config.LLVM_PASS_TIMINGS = 1
+
+    def tearDown(self):
+        config.LLVM_PASS_TIMINGS = self.__old_LLVM_PASS_TIMINGS
 
     def test_pass_timings(self):
         with captured_stdout() as stdout:
