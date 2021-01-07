@@ -243,6 +243,22 @@ class RecordingListener(Listener):
 
 
 @contextmanager
+def install_listener(kind, listener):
+    """Install a listener temporarily within the duration of the context.
+
+    Returns
+    -------
+    res : Listener
+        The *listener* provided.
+    """
+    register(kind, listener)
+    try:
+        yield listener
+    finally:
+        unregister(kind, listener)
+
+
+@contextmanager
 def install_timer(kind, callback):
     """Install a TimingListener temporarily to measure the duration for
     an event.
@@ -255,13 +271,10 @@ def install_timer(kind, callback):
     -------
     res : TimingListener
     """
-    listener = TimingListener()
-    register(kind, listener)
-    try:
-        yield listener
-    finally:
-        unregister(kind, listener)
-    callback(listener.duration)
+    tl = TimingListener()
+    with install_listener(kind, tl):
+        yield tl
+    callback(tl.duration)
 
 
 @contextmanager
@@ -275,11 +288,8 @@ def install_recorder(kind):
     res : RecordingListener
     """
     rl = RecordingListener()
-    register(kind, rl)
-    try:
+    with install_listener(kind, rl):
         yield rl
-    finally:
-        unregister(kind, rl)
 
 
 def start_event(kind, data=None):

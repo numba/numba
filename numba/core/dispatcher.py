@@ -683,6 +683,12 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 tp = types.pyobject
         return tp
 
+    def _callback_add_compiler_timer(self, duration, cres):
+        md = cres.metadata
+        md.setdefault("timers", {})
+        md["timers"]["compiler_lock"] = duration
+
+
 
 class _MemoMixin:
     __uuid = None
@@ -876,14 +882,9 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                         def folded(args, kws):
                             return self._compiler.fold_argument_types(args, kws)[1]
                         raise e.bind_fold_arguments(folded)
-                self.add_overload(cres)
+                    self.add_overload(cres)
                 self._cache.save_overload(sig, cres)
                 return cres.entry_point
-
-    def _callback_add_compiler_timer(self, duration, cres):
-        md = cres.metadata
-        md.setdefault("timers", {})
-        md["timers"]["compiler_lock"] = duration
 
     def get_compile_result(self, sig):
         """Compile (if needed) and return the compilation result with the
@@ -1063,19 +1064,27 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
 
                 # Clone IR to avoid (some of the) mutation in the rewrite pass
                 cloned_func_ir = self.func_ir.copy()
-                cres = compiler.compile_ir(typingctx=self.typingctx,
-                                        targetctx=self.targetctx,
-                                        func_ir=cloned_func_ir,
-                                        args=args, return_type=return_type,
-                                        flags=flags, locals=self.locals,
-                                        lifted=(),
-                                        lifted_from=self.lifted_from,
-                                        is_lifted_loop=True,)
 
-                # Check typing error if object mode is used
-                if cres.typing_error is not None and not flags.enable_pyobject:
-                    raise cres.typing_error
-                self.add_overload(cres)
+                ev_details = dict(
+                    dispatcher=self,
+                    args=args,
+                    return_type=return_type,
+                )
+                with ev.mark_event("numba:compile", data=ev_details):
+                    cres = compiler.compile_ir(typingctx=self.typingctx,
+                                            targetctx=self.targetctx,
+                                            func_ir=cloned_func_ir,
+                                            args=args, return_type=return_type,
+                                            flags=flags, locals=self.locals,
+                                            lifted=(),
+                                            lifted_from=self.lifted_from,
+                                            is_lifted_loop=True,)
+
+                    # Check typing error if object mode is used
+                    if (cres.typing_error is not None and
+                            not flags.enable_pyobject):
+                        raise cres.typing_error
+                    self.add_overload(cres)
                 return cres.entry_point
 
 
