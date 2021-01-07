@@ -332,7 +332,7 @@ class PassTimingsCollection(Sequence):
 
         Parameters
         ----------
-        topn : int; optional
+        topn : int; optional, default=5.
             This limits the maximum number of items to show.
             This function will show the ``topn`` most time-consuming passes.
 
