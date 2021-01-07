@@ -197,7 +197,8 @@ def peep_hole_list_to_tuple(func_ir):
                         if isinstance(x.value, ir.Expr):
                             expr = x.value
                             if expr.op == 'getattr':
-                                if expr.attr in ('extend', 'append'):
+                                if (x.target.name in extends or
+                                        x.target.name in appends):
                                     # drop definition, it's being wholesale
                                     # replaced.
                                     func_ir._definitions.pop(x.target.name)
@@ -228,7 +229,8 @@ def peep_hole_list_to_tuple(func_ir):
                                     asgn = ir.Assign(new, x.target, expr.loc)
                                     append_and_fix(asgn)
                                     acc = asgn.target
-                            elif expr.op == 'build_list':
+                            elif (expr.op == 'build_list' and
+                                    x.target.name == const_list):
                                 new = ir.Expr.build_tuple(expr.items, expr.loc)
                                 asgn = ir.Assign(new, x.target, expr.loc)
                                 # Not a temporary any more
