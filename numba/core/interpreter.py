@@ -205,6 +205,10 @@ def peep_hole_list_to_tuple(func_ir):
                                     # replaced.
                                     func_ir._definitions.pop(x.target.name)
                                     continue
+                                else:
+                                    # a getattr on something we're not
+                                    # interested in
+                                    new_hole.append(x)
                             elif expr.op == 'call':
                                 fname = expr.func.name
                                 if fname in extends or fname in appends:
@@ -231,6 +235,10 @@ def peep_hole_list_to_tuple(func_ir):
                                     asgn = ir.Assign(new, x.target, expr.loc)
                                     append_and_fix(asgn)
                                     acc = asgn.target
+                                else:
+                                    # there could be a call in the unpack, like
+                                    # *(a, x.append(y))
+                                    new_hole.append(x)
                             elif (expr.op == 'build_list' and
                                     x.target.name == const_list):
                                 new = ir.Expr.build_tuple(expr.items, expr.loc)

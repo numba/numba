@@ -714,6 +714,16 @@ class TestTupleBuild(TestCase):
         msg = "op_LIST_EXTEND at the start of a block"
         self.assertIn(msg, str(raises.exception))
 
+    def test_build_unpack_with_calls_in_unpack(self):
+        def check(p):
+            def pyfunc(a):
+                z = [1, 2]
+                return (*a, z.append(3), z.extend(a), np.ones(3)), z
+
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        check((4, 5))
 
 if __name__ == '__main__':
     unittest.main()
