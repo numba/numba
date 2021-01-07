@@ -1505,7 +1505,8 @@ class ArrayAnalysis(object):
                     handle_call_binop(cond_def)
                 elif isinstance(cond_def, ir.Expr) and cond_def.op == 'call':
                     # this handles bool(predicate)
-                    glbl_bool = guard(get_definition,
+                    glbl_bool = guard(
+                        get_definition,
                         self.func_ir,
                         cond_def.func
                     )
