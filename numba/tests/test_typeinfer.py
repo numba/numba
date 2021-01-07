@@ -828,8 +828,8 @@ class TestPartialTypingErrors(unittest.TestCase):
             return a
 
         typing_errs = get_func_typing_errs(impl, (types.bool_,))
-        self.assert_(isinstance(typing_errs, list) and len(typing_errs) == 1)
-        self.assert_(isinstance(typing_errs[0], errors.TypingError)
+        self.assertTrue(isinstance(typing_errs, list) and len(typing_errs) == 1)
+        self.assertTrue(isinstance(typing_errs[0], errors.TypingError)
             and "Cannot unify" in typing_errs[0].msg)
 
 
