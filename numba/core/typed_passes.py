@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from copy import copy
 import warnings
 
@@ -21,6 +21,15 @@ from numba.core.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                                  is_operator_or_getitem)
 from numba.core import postproc
 from llvmlite import binding as llvm
+
+
+# Outputs of type inference pass
+_TypingResults = namedtuple("_TypingResults", [
+    "typemap",
+    "return_type",
+    "calltypes",
+    "typing_errors",
+])
 
 
 @contextmanager
@@ -76,7 +85,7 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={},
     # Output all Numba warnings
     warnings.flush()
 
-    return typemap, restype, calltypes, errs
+    return _TypingResults(typemap, restype, calltypes, errs)
 
 
 class BaseTypeInference(FunctionPass):
