@@ -931,7 +931,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(), foo.py_func())
 
     def test_issue6570_alignment_padding(self):
-        # Create a key type that is 12-byte long on a 8-byte aligned system
+        # Create a key type that is 12-bytes long on a 8-byte aligned system
         # so that the a 4-byte padding is needed.
         # If the 4-byte padding is not zero-filled, it will have garbage data
         # that affects key matching in the lookup.
