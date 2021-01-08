@@ -203,14 +203,14 @@ class Listener(abc.ABC):
 
 
 class TimingListener(Listener):
-    """A listener that measures the duration between *START* and *END* events.
+    """A listener that measures the duration between a *START* event and
+    its matching *END* event.
     """
     def __init__(self):
-        self._ts = None
         self._depth = 0
 
     def on_start(self, event):
-        if self._ts is None:
+        if self._depth == 0:
             self._ts = timer()
         self._depth += 1
 
@@ -220,8 +220,20 @@ class TimingListener(Listener):
             self._duration = timer() - self._ts
 
     @property
+    def done(self):
+        """Returns a ``bool`` indicating a measurement is made.
+
+        When this returns ``False``, the matching event has never fired.
+        Iff this returns ``True``, ``.duration`` can be read without error.
+        """
+        return hasattr(self, "_duration")
+
+    @property
     def duration(self):
         """Returns the measured duration.
+
+        This may raise ``AttributeError``. Users can use ``.done`` to check
+        that a measurement has been made.
         """
         return self._duration
 
@@ -274,7 +286,9 @@ def install_timer(kind, callback):
     tl = TimingListener()
     with install_listener(kind, tl):
         yield tl
-    callback(tl.duration)
+
+    if tl.done:
+        callback(tl.duration)
 
 
 @contextmanager
