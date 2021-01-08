@@ -35,7 +35,7 @@ class RecordLLVMPassTimings:
 
         Returns
         -------
-        timings : ProcessedPassTimings
+        timings: ProcessedPassTimings
         """
         return ProcessedPassTimings(self._data)
 
@@ -64,7 +64,7 @@ def _adjust_timings(records):
 
     Returns
     -------
-    res : List[PassTimingRecord]
+    res: List[PassTimingRecord]
     """
     total_rec = records[-1]
     assert total_rec.pass_name == "Total"  # guard for implementation error
@@ -119,7 +119,7 @@ class ProcessedPassTimings:
 
         Returns
         -------
-        res : str
+        res: str
         """
         return self._raw_data
 
@@ -128,7 +128,7 @@ class ProcessedPassTimings:
 
         Returns
         -------
-        res : float
+        res: float
         """
         return self.list_records()[-1].wall_time
 
@@ -137,7 +137,7 @@ class ProcessedPassTimings:
 
         Returns
         -------
-        res : List[PassTimingRecord]
+        res: List[PassTimingRecord]
         """
         return self._processed
 
@@ -146,13 +146,13 @@ class ProcessedPassTimings:
 
         Parameters
         ----------
-        n : int
+        n: int
             This limits the maximum number of items to show.
             This function will show the ``n`` most time-consuming passes.
 
         Returns
         -------
-        res : List[PassTimingRecord]
+        res: List[PassTimingRecord]
             Returns the top(n) most time-consuming passes in descending order.
         """
         records = self.list_records()
@@ -164,15 +164,15 @@ class ProcessedPassTimings:
 
         Parameters
         ----------
-        topn : int; optional
+        topn: int; optional
             This limits the maximum number of items to show.
             This function will show the ``topn`` most time-consuming passes.
-        indent : int; optional
+        indent: int; optional
             Set the indentation level. Defaults to 0 for no indentation.
 
         Returns
         -------
-        res : str
+        res: str
         """
         buf = []
         prefix = " " * indent
@@ -290,7 +290,7 @@ class PassTimingsCollection(Sequence):
 
         Parameters
         ----------
-        name : str
+        name: str
             Name for the records.
         """
         if config.LLVM_PASS_TIMINGS:
@@ -310,9 +310,9 @@ class PassTimingsCollection(Sequence):
 
         Parameters
         ----------
-        name : str
+        name: str
             Name for the records.
-        timings : ProcessedPassTimings
+        timings: ProcessedPassTimings
             the timing records.
         """
         self._records.append(NamedTimings(name, timings))
@@ -322,7 +322,7 @@ class PassTimingsCollection(Sequence):
 
         Returns
         -------
-        res : float or None
+        res: float or None
             Returns the total number of seconds or None if no timings were
             recorded
         """
@@ -336,7 +336,7 @@ class PassTimingsCollection(Sequence):
 
         Returns
         -------
-        res : List[ProcessedPassTimings]
+        res: List[ProcessedPassTimings]
         """
         return sorted(self._records,
                       key=lambda x: x.timings.get_total_time(),
@@ -353,13 +353,13 @@ class PassTimingsCollection(Sequence):
 
         Parameters
         ----------
-        topn : int; optional, default=5.
+        topn: int; optional, default=5.
             This limits the maximum number of items to show.
             This function will show the ``topn`` most time-consuming passes.
 
         Returns
         -------
-        res : str
+        res: str
 
         See also ``ProcessedPassTimings.summary()``
         """
@@ -383,7 +383,7 @@ class PassTimingsCollection(Sequence):
 
         Returns
         -------
-        res : (name, timings)
+        res: (name, timings)
             A named tuple with two fields:
 
             - name: str

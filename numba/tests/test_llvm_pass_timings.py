@@ -1,18 +1,11 @@
 import unittest
 
 from numba import njit
-from numba.core import config
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, override_config
 from numba.misc import llvm_pass_timings as lpt
 
 
 class TestLLVMPassTimings(TestCase):
-    def setUp(self):
-        self.__old_LLVM_PASS_TIMINGS = config.LLVM_PASS_TIMINGS
-        config.LLVM_PASS_TIMINGS = 1
-
-    def tearDown(self):
-        config.LLVM_PASS_TIMINGS = self.__old_LLVM_PASS_TIMINGS
 
     def test_usage(self):
         @njit
@@ -22,7 +15,8 @@ class TestLLVMPassTimings(TestCase):
                 c += i
             return c
 
-        foo(10)
+        with override_config('LLVM_PASS_TIMINGS', True):
+            foo(10)
 
         md = foo.get_metadata(foo.signatures[0])
         timings = md['llvm_pass_timings']
@@ -49,7 +43,9 @@ class TestLLVMPassTimings(TestCase):
                     c += j
             return c
 
-        foo(10)
+        with override_config('LLVM_PASS_TIMINGS', True):
+            foo(10)
+
         md = foo.get_metadata(foo.signatures[0])
         timings_collection = md['llvm_pass_timings']
         # Check: get_total_time()
@@ -75,7 +71,8 @@ class TestLLVMPassTimingsDisabled(TestCase):
                 c += i
             return c
 
-        foo(10)
+        with override_config('LLVM_PASS_TIMINGS', False):
+            foo(10)
 
         md = foo.get_metadata(foo.signatures[0])
         timings = md['llvm_pass_timings']

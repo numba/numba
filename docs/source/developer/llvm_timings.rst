@@ -25,7 +25,7 @@ Code Example
    :caption: from ``test_pass_timings`` of ``numba/tests/doc_examples/test_llvm_pass_timings.py``
    :start-after: magictoken.ex_llvm_pass_timings.begin
    :end-before: magictoken.ex_llvm_pass_timings.end
-   :dedent: 12
+   :dedent: 16
    :linenos:
 
 Example output:
