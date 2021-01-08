@@ -5,7 +5,7 @@ import operator
 import logging
 
 from numba.core import errors, dataflow, controlflow, ir, config
-from numba.core.errors import NotDefinedError
+from numba.core.errors import NotDefinedError, error_extras
 from numba.core.utils import (PYVERSION, BINOPS_TO_OPERATORS,
                               INPLACE_BINOPS_TO_OPERATORS,)
 from numba.core.byteflow import Flow, AdaptDFA, AdaptCFA
@@ -1585,8 +1585,12 @@ class Interpreter(object):
         self.current_block.append(bra)
 
     def op_RERAISE(self, inst, exc):
-        # Do nothing, Numba can't handle this case and it's caught else where
-        pass
+        # Numba can't handle this case and it's caught else where, this is a
+        # runtime guard in case this is reached by unknown means.
+        msg = (f"Unreachable condition reached (op code RERAISE executed)"
+               f"{error_extras['reportable']}")
+        stmt = ir.StaticRaise(AssertionError, (msg,), self.loc)
+        self.current_block.append(stmt)
 
     def op_RAISE_VARARGS(self, inst, exc):
         if exc is not None:
