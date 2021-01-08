@@ -542,14 +542,15 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             subprocess.check_output(base_cmd + ["--version"])
         except subprocess.CalledProcessError as e:
             self.skipTest("ipython not found: return code %d" % e.returncode)
-        cmd = base_cmd + " ".join(
+        repr_cmd = [" ".join(
             [
                 "import sys;",
                 "from numba.typed import List;",
                 "res = repr(List(range(1005)));",
-                "import sys; sys.stderr.write(res);"
+                "sys.stderr.write(res);"
             ]
-        )
+        )]
+        cmd = base_cmd + repr_cmd
         p = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
