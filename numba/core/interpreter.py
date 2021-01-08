@@ -1673,10 +1673,10 @@ class Interpreter(object):
         target = self.get(target)
         value = self.get(value)
         # If the statements between the current instruction and the target
-        # are N * consts followed by build_tuple, it's a situation where a
-        # list is being statically initialised, rewrite the build_tuple as a
-        # build_list, drop the extend, and wire up the target as the result from
-        # the build_tuple that's been rewritten.
+        # are N * consts followed by build_tuple AND the target has no items,
+        # it's a situation where a list is being statically initialised, rewrite
+        # the build_tuple as a build_list, drop the extend, and wire up the
+        # target as the result from the build_tuple that's been rewritten.
 
         # See if this is the first statement in a block, if so its probably from
         # control flow in a tuple unpack like:
@@ -1708,7 +1708,9 @@ class Interpreter(object):
                 # it's not a const, check for target
                 elif isinstance(stmt.value, ir.Expr) and stmt.target == target:
                     build_empty_list = stmt
-                    ok = True
+                    # it's only ok to do this if the target has no initializer
+                    # already
+                    ok = not stmt.value.items
                     break
                 else:
                     ok = False

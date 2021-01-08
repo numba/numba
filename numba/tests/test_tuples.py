@@ -725,5 +725,19 @@ class TestTupleBuild(TestCase):
 
         check((4, 5))
 
+    def test_build_unpack_complicated(self):
+        def check(p):
+            def pyfunc(a):
+                z = [1, 2]
+                return (*a, *(*a, a), *(a, (*(a, (1, 2), *(3,), *a),
+                        (a, 1, (2, 3), *a, 1), (1,))),
+                        *(z.append(4), z.extend(a))), z
+
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        check((10, 20))
+
+
 if __name__ == '__main__':
     unittest.main()
