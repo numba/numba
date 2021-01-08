@@ -685,10 +685,12 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
     def _callback_add_compiler_timer(self, duration, cres):
         md = cres.metadata
-        timers = md.setdefault("timers", {})
-        if "compiler_lock" not in timers:
-            # Only write if the metadata does not exist
-            timers["compiler_lock"] = duration
+        # md can be None when code is loaded from cache
+        if md is not None:
+            timers = md.setdefault("timers", {})
+            if "compiler_lock" not in timers:
+                # Only write if the metadata does not exist
+                timers["compiler_lock"] = duration
 
 
 class _MemoMixin:
