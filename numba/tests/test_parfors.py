@@ -2723,8 +2723,8 @@ class TestPrange(TestPrangeBase):
             return c
 
         a = np.arange(10).reshape((10, 1))
-        b = np.ones(10, dtype=np.int)
-        c = np.ones(1, dtype=np.int)
+        b = np.ones(10, dtype=np.int64)
+        c = np.ones(1, dtype=np.int64)
         self.prange_tester(test_impl, a, b, c, patch_instance=[0])
 
 
