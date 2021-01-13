@@ -1450,8 +1450,9 @@ class ArrayAnalysis(object):
                     equiv_set.define(lhs, redefined, self.func_ir, typ)
             else:
                 if isinstance(typ, types.ArrayCompatible):
-                    (shape, multi_post) = self._gen_shape_call(
-                        equiv_set, lhs, typ.ndim, None, post, True
+                    multi_post = []
+                    shape = self._gen_shape_call(
+                        equiv_set, lhs, typ.ndim, None, multi_post, True
                     )
                     post.extend(multi_post)
                     equiv_set.insert_equiv(lhs, shape)
