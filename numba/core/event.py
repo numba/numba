@@ -294,6 +294,9 @@ def install_timer(kind, callback):
     -------
     res : TimingListener
 
+    Examples
+    --------
+
     This is equivalent to:
 
     >>> with install_listener(kind, TimingListener()) as res:
@@ -317,11 +320,13 @@ def install_recorder(kind):
     -------
     res : RecordingListener
 
+    Examples
+    --------
+
     This is equivalent to:
 
     >>> with install_listener(kind, RecordingListener()) as res:
     >>>    ...
-
     """
     rl = RecordingListener()
     with install_listener(kind, rl):

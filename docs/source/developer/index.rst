@@ -25,4 +25,5 @@ Developer Manual
    threading_implementation.rst
    literal.rst
    debugging.rst
+   event_api.rst
    roadmap.rst

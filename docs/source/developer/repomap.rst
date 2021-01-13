@@ -93,6 +93,8 @@ These define aspects of the public Numba interface.
   Numba IR
 - :ghfile:`numba/core/annotations/pretty_annotate.py` - Code highlighting of
   Numba functions and types (both ANSI terminal and HTML)
+- :ghfile:`numba/core/event.py` - A simple event system for applications to
+  listen to specific compiler events.
 
 
 Dispatching
