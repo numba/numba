@@ -1,24 +1,24 @@
 """
-The ``numba.core.event`` module provides a simple event system for application
-to register callbacks to listen to specific compiler event.
+The ``numba.core.event`` module provides a simple event system for applications
+to register callbacks to listen to specific compiler events.
 
-Here are the builtin events:
+The following events are built in:
 
-- ``"numba:compile"`` is broadcasted when a dispatcher is compiling. Events of
-  this kind has ``data`` defined to be a ``dict`` with the following
+- ``"numba:compile"`` is broadcast when a dispatcher is compiling. Events of
+  this kind have ``data`` defined to be a ``dict`` with the following
   key-values:
 
   - ``"dispatcher"``: the dispatcher object that is compiling.
   - ``"args"``: the argument types.
   - ``"return_type"``: the return type.
 
-- ``"numba:compiler_lock"`` is broadcasted when the internal compiler-lock is
-  acquired. This is mostly used internally to measure time spend with the lock
+- ``"numba:compiler_lock"`` is broadcast when the internal compiler-lock is
+  acquired. This is mostly used internally to measure time spent with the lock
   acquired.
 
-Applications can register callbacks that are listening on specific events using
+Applications can register callbacks that are listening for specific events using
 ``register(kind: str, listener: Listener)``, where ``listener`` is an instance
-of ``Listener`` that defines custom actions on the specific event.
+of ``Listener`` that defines custom actions on occurrence of the specific event.
 """
 
 import abc
@@ -44,21 +44,21 @@ _builtin_kinds = frozenset([
 
 
 def _guard_kind(kind):
-    """Guard that event kind is valid.
+    """Guard to ensure that an event kind is valid.
 
-    All event kind with a "numba:" prefix must be defined in pre-defined.
-    Custom event kind is allowed by not using the above prefix.
+    All event kinds with a "numba:" prefix must be defined in the pre-defined numba.core.event._builtin_kinds.
+    Custom event kinds are allowed by not using the above prefix.
 
     Parameters
     ----------
-    kind : str
+    kind: str
 
     Return
     ------
-    res : str
+    res: str
     """
     if kind.startswith("numba:") and kind not in _builtin_kinds:
-        raise ValueError(f"{kind} is not a valid event kind")
+        raise ValueError(f"{kind} is not a valid event kind, it starts with the reserved prefix 'numba:'")
     return kind
 
 
@@ -69,11 +69,11 @@ class Event:
         """
         Parameters
         ----------
-        kind : str
-        status : EventStatus
-        data : any; optional
+        kind: str
+        status: EventStatus
+        data: any; optional
             Additional data for the event.
-        exc_details : 3-tuple; optional
+        exc_details: 3-tuple; optional
             Same 3-tuple for ``__exit__``.
         """
         self._kind = _guard_kind(kind)
@@ -87,7 +87,7 @@ class Event:
 
         Returns
         -------
-        res : str
+        res: str
         """
         return self._kind
 
@@ -97,7 +97,7 @@ class Event:
 
         Returns
         -------
-        res : EventStatus
+        res: EventStatus
         """
         return self._status
 
@@ -107,7 +107,7 @@ class Event:
 
         Returns
         -------
-        res : object
+        res: object
         """
         return self._data
 
@@ -117,7 +117,7 @@ class Event:
 
         Returns
         -------
-        res : bool
+        res: bool
         """
         return self._status == EventStatus.START
 
@@ -127,20 +127,20 @@ class Event:
 
         Returns
         -------
-        res : bool
+        res: bool
         """
         return self._status == EventStatus.END
 
     @property
     def is_failed(self):
-        """Does the event carrying an exception?
+        """Is the event carrying an exception?
 
         This is used for *END* event. This method will never return ``True``
         in a *START* event.
 
         Returns
         -------
-        res : bool
+        res: bool
         """
         return self._exc_details[0] is None
 
@@ -160,8 +160,8 @@ def register(kind, listener):
 
     Parameters
     ----------
-    kind : str
-    listener : Listener
+    kind: str
+    listener: Listener
     """
     assert isinstance(listener, Listener)
     kind = _guard_kind(kind)
@@ -173,8 +173,8 @@ def unregister(kind, listener):
 
     Parameters
     ----------
-    kind : str
-    listener : Listener
+    kind: str
+    listener: Listener
     """
     assert isinstance(listener, Listener)
     kind = _guard_kind(kind)
@@ -187,7 +187,7 @@ def broadcast(event):
 
     Parameters
     ----------
-    event : Event
+    event: Event
     """
     for listener in _registered[event.kind]:
         listener.notify(event)
@@ -202,7 +202,7 @@ class Listener(abc.ABC):
 
         Parameters
         ----------
-        event : Event
+        event: Event
         """
         pass
 
@@ -212,12 +212,12 @@ class Listener(abc.ABC):
 
         Parameters
         ----------
-        event : Event
+        event: Event
         """
         pass
 
     def notify(self, event):
-        """Notify this Listener with the given Event.
+        """Notify this Listener of the given Event.
         """
         if event.is_start:
             self.on_start(event)
@@ -246,7 +246,7 @@ class TimingListener(Listener):
 
     @property
     def done(self):
-        """Returns a ``bool`` indicating a measurement is made.
+        """Returns a ``bool`` indicating whether a measurement has been made.
 
         When this returns ``False``, the matching event has never fired.
         If and only if this returns ``True``, ``.duration`` can be read without
@@ -265,9 +265,9 @@ class TimingListener(Listener):
 
 
 class RecordingListener(Listener):
-    """A listener that records all event and store it in the ``.buffer``
+    """A listener that records all events and stores them in the ``.buffer``
     attribute as a list of 2-tuple ``(float, Event)``, where the first element
-    is the time of the event as returned by ``time.time()`` and the second
+    is the time the event occurred as returned by ``time.time()`` and the second
     element is the event.
     """
     def __init__(self):
@@ -282,11 +282,11 @@ class RecordingListener(Listener):
 
 @contextmanager
 def install_listener(kind, listener):
-    """Install a listener temporarily within the duration of the context.
+    """Install a listener for event "kind" temporarily within the duration of the context.
 
     Returns
     -------
-    res : Listener
+    res: Listener
         The *listener* provided.
 
     Examples
@@ -306,7 +306,7 @@ def install_listener(kind, listener):
 
 @contextmanager
 def install_timer(kind, callback):
-    """Install a TimingListener temporarily to measure the duration for
+    """Install a TimingListener temporarily to measure the duration of
     an event.
 
     If the context completes successfully, the *callback* function is executed.
@@ -315,7 +315,7 @@ def install_timer(kind, callback):
 
     Returns
     -------
-    res : TimingListener
+    res: TimingListener
 
     Examples
     --------
@@ -341,7 +341,7 @@ def install_recorder(kind):
 
     Returns
     -------
-    res : RecordingListener
+    res: RecordingListener
 
     Examples
     --------
@@ -361,9 +361,9 @@ def start_event(kind, data=None):
 
     Parameters
     ----------
-    kind : str
+    kind: str
         Event kind.
-    data : any; optional
+    data: any; optional
         Extra event data.
     """
     evt = Event(kind=kind, status=EventStatus.START, data=data)
@@ -375,9 +375,9 @@ def end_event(kind, data=None, exc_details=None):
 
     Parameters
     ----------
-    kind : str
+    kind: str
         Event kind.
-    data : any; optional
+    data: any; optional
         Extra event data.
     """
     evt = Event(
@@ -393,9 +393,9 @@ def enter_event(kind, data=None):
 
     Parameters
     ----------
-    kind : str
+    kind: str
         Event kind.
-    data : any; optional
+    data: any; optional
         Extra event data.
     """
     with ExitStack() as scope:

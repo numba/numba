@@ -15,7 +15,7 @@ class TestEvent(TestCase):
             foo(1)
 
         self.assertIsInstance(rec, ev.RecordingListener)
-        # Check there must be at least two event.
+        # Check there must be at least two events.
         # Because there must be a START and END for the compilation of foo()
         self.assertGreaterEqual(len(rec.buffer), 2)
 
