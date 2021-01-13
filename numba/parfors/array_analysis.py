@@ -3192,7 +3192,9 @@ class ArrayAnalysis(object):
             ir.Assign(value=value, target=var, loc=loc),
         ]
 
-    def _gen_shape_call(self, equiv_set, var, ndims, shape, post, for_multidef=False):
+    def _gen_shape_call(
+        self, equiv_set, var, ndims, shape, post, for_multidef=False
+    ):
         out = []
         # attr call: A_sh_attr = getattr(A, shape)
         if isinstance(shape, ir.Var):
