@@ -1201,8 +1201,9 @@ class ArrayAnalysis(object):
         # Go through each incoming edge, process prepended instructions and
         # calculate beginning equiv_set of current block as an intersection
         # of incoming ones.
+        preds = list(preds)
         if config.DEBUG_ARRAY_OPT >= 2:
-            print("_determine_transform preds:", list(preds))
+            print("_determine_transform preds:", preds)
         for (p, q) in preds:
             if config.DEBUG_ARRAY_OPT >= 2:
                 print("p, q:", p, q)
