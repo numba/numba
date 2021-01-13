@@ -1750,8 +1750,8 @@ class TestParfors(TestParforsBase):
                         e = a
             return e
 
-        a = np.ones(7, dtype=np.int)
-        b = np.ones(10, dtype=np.int)
+        a = np.ones(7, dtype=np.int64)
+        b = np.ones(10, dtype=np.int64)
         self.check(test_impl, a, b)
 
 
