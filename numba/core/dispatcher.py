@@ -878,7 +878,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                     args=args,
                     return_type=return_type,
                 )
-                with ev.enter_event("numba:compile", data=ev_details):
+                with ev.trigger_event("numba:compile", data=ev_details):
                     try:
                         cres = self._compiler.compile(args, return_type)
                     except errors.ForceLiteralArg as e:
@@ -1073,7 +1073,7 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                     args=args,
                     return_type=return_type,
                 )
-                with ev.enter_event("numba:compile", data=ev_details):
+                with ev.trigger_event("numba:compile", data=ev_details):
                     cres = compiler.compile_ir(typingctx=self.typingctx,
                                             targetctx=self.targetctx,
                                             func_ir=cloned_func_ir,

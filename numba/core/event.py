@@ -357,7 +357,7 @@ def install_recorder(kind):
 
 
 def start_event(kind, data=None):
-    """Signal the start of an event of *kind* with *data*.
+    """Trigger the start of an event of *kind* with *data*.
 
     Parameters
     ----------
@@ -371,7 +371,7 @@ def start_event(kind, data=None):
 
 
 def end_event(kind, data=None, exc_details=None):
-    """Signal the end of an event of *kind*, *exc_details*.
+    """Trigger the end of an event of *kind*, *exc_details*.
 
     Parameters
     ----------
@@ -387,9 +387,10 @@ def end_event(kind, data=None, exc_details=None):
 
 
 @contextmanager
-def enter_event(kind, data=None):
-    """A context manager to signal the start and end events of *kind* with
-    *data*.
+def trigger_event(kind, data=None):
+    """A context manager to trigger the start and end events of *kind* with
+    *data*. The start event is triggered when entering the context.
+    The end event is triggered when exiting the context.
 
     Parameters
     ----------
