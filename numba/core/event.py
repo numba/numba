@@ -346,7 +346,8 @@ def install_timer(kind, callback):
 def install_recorder(kind):
     """Install a RecordingListener temporarily to record all events.
 
-    The buffer is filled from the context is closed.
+    Once the context is closed, users can use ``RecordingListener.buffer``
+    to acccess the recorded events.
 
     Returns
     -------
