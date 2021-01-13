@@ -46,7 +46,8 @@ _builtin_kinds = frozenset([
 def _guard_kind(kind):
     """Guard to ensure that an event kind is valid.
 
-    All event kinds with a "numba:" prefix must be defined in the pre-defined numba.core.event._builtin_kinds.
+    All event kinds with a "numba:" prefix must be defined in the pre-defined
+    ``numba.core.event._builtin_kinds``.
     Custom event kinds are allowed by not using the above prefix.
 
     Parameters
@@ -58,7 +59,9 @@ def _guard_kind(kind):
     res: str
     """
     if kind.startswith("numba:") and kind not in _builtin_kinds:
-        raise ValueError(f"{kind} is not a valid event kind, it starts with the reserved prefix 'numba:'")
+        msg = (f"{kind} is not a valid event kind, "
+               "it starts with the reserved prefix 'numba:'")
+        raise ValueError(msg)
     return kind
 
 
@@ -287,7 +290,8 @@ class RecordingListener(Listener):
 
 @contextmanager
 def install_listener(kind, listener):
-    """Install a listener for event "kind" temporarily within the duration of the context.
+    """Install a listener for event "kind" temporarily within the duration of
+    the context.
 
     Returns
     -------
