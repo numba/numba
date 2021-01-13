@@ -7,7 +7,6 @@ import numba.core.event as ev
 class _CompilerLock(object):
     def __init__(self):
         self._lock = threading.RLock()
-        self._duration = 0
 
     def acquire(self):
         ev.start_event("numba:compiler_lock")

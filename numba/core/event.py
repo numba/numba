@@ -64,22 +64,23 @@ def _guard_kind(kind):
 
 class Event:
     """An event.
+
+    Parameters
+    ----------
+    kind : str
+    status : EventStatus
+    data : any; optional
+        Additional data for the event.
+    exc_details : 3-tuple; optional
+        Same 3-tuple for ``__exit__``.
     """
     def __init__(self, kind, status, data=None, exc_details=None):
-        """
-        Parameters
-        ----------
-        kind: str
-        status: EventStatus
-        data: any; optional
-            Additional data for the event.
-        exc_details: 3-tuple; optional
-            Same 3-tuple for ``__exit__``.
-        """
         self._kind = _guard_kind(kind)
         self._status = status
         self._data = data
-        self._exc_details = exc_details
+        self._exc_details = (None
+                             if exc_details is None or exc_details[0] is None
+                             else exc_details)
 
     @property
     def kind(self):
@@ -142,7 +143,7 @@ class Event:
         -------
         res: bool
         """
-        return self._exc_details[0] is None
+        return self._exc_details is None
 
     def __str__(self):
         data = (f"{type(self.data).__qualname__}"
@@ -217,7 +218,11 @@ class Listener(abc.ABC):
         pass
 
     def notify(self, event):
-        """Notify this Listener of the given Event.
+        """Notify this Listener with the given Event.
+
+        Parameters
+        ----------
+        event : Event
         """
         if event.is_start:
             self.on_start(event)
@@ -379,6 +384,8 @@ def end_event(kind, data=None, exc_details=None):
         Event kind.
     data: any; optional
         Extra event data.
+    exc_details : 3-tuple; optional
+        Same 3-tuple for ``__exit__``. Or, ``None`` if no error.
     """
     evt = Event(
         kind=kind, status=EventStatus.END, data=data, exc_details=exc_details,

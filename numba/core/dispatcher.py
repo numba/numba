@@ -691,7 +691,9 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             if "compiler_lock" not in timers:
                 # Only write if the metadata does not exist
                 timers["compiler_lock"] = duration
-
+            else:
+                msg = "'compiler_lock' metadata is already defined."
+                raise AssertionError(msg)
 
 class _MemoMixin:
     __uuid = None
