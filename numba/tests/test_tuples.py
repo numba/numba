@@ -698,6 +698,45 @@ class TestTupleBuild(TestCase):
         # Heterogeneous
         check(lambda a: tuple(a), (4, 5.5))
 
+    @unittest.skipIf(utils.PYVERSION < (3, 9), "needs Python 3.9+")
+    def test_unpack_with_predicate_fails(self):
+        # this fails as the list_to_tuple/list_extend peephole bytecode
+        # rewriting needed for Python 3.9+ cannot yet traverse the CFG.
+        @njit
+        def foo():
+            a = (1,)
+            b = (3,2,  4)
+            return (*(b if a[0] else (5, 6)),)
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            foo()
+
+        msg = "op_LIST_EXTEND at the start of a block"
+        self.assertIn(msg, str(raises.exception))
+
+    def test_build_unpack_with_calls_in_unpack(self):
+        def check(p):
+            def pyfunc(a):
+                z = [1, 2]
+                return (*a, z.append(3), z.extend(a), np.ones(3)), z
+
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        check((4, 5))
+
+    def test_build_unpack_complicated(self):
+        def check(p):
+            def pyfunc(a):
+                z = [1, 2]
+                return (*a, *(*a, a), *(a, (*(a, (1, 2), *(3,), *a),
+                        (a, 1, (2, 3), *a, 1), (1,))),
+                        *(z.append(4), z.extend(a))), z
+
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        check((10, 20))
 
 
 if __name__ == '__main__':

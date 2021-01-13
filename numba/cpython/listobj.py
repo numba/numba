@@ -673,6 +673,14 @@ def sequence_bool(context, builder, sig, args):
     return context.compile_internal(builder, sequence_bool_impl, sig, args)
 
 
+@overload(operator.truth)
+def sequence_truth(seq):
+    if isinstance(seq, types.Sequence):
+        def impl(seq):
+            return len(seq) != 0
+        return impl
+
+
 @lower_builtin(operator.add, types.List, types.List)
 def list_add(context, builder, sig, args):
     a = ListInstance(context, builder, sig.args[0], args[0])

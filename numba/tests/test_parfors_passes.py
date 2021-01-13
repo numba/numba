@@ -66,6 +66,7 @@ class BaseTest(TestCase):
                 tp.state.typemap,
                 tp.state.return_type,
                 tp.state.calltypes,
+                _
             ) = typed_passes.type_inference_stage(
                 tp.state.typingctx, tp.state.func_ir, tp.state.args, None
             )

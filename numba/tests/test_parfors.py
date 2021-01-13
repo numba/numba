@@ -352,7 +352,7 @@ def get_optimized_numba_ir(test_func, args, **kws):
 
         rewrites.rewrite_registry.apply('before-inference', tp.state)
 
-        tp.state.typemap, tp.state.return_type, tp.state.calltypes = \
+        tp.state.typemap, tp.state.return_type, tp.state.calltypes, _ = \
         typed_passes.type_inference_stage(tp.state.typingctx, tp.state.func_ir,
             tp.state.args, None)
 
