@@ -387,7 +387,7 @@ def end_event(kind, data=None, exc_details=None):
 
 
 @contextmanager
-def mark_event(kind, data=None):
+def enter_event(kind, data=None):
     """A context manager to signal the start and end events of *kind* with
     *data*.
 
