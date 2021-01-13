@@ -1,3 +1,26 @@
+"""
+The ``numba.core.event`` module provides a simple event system for application
+to register callbacks to listen to specific compiler event.
+
+Here are the builtin events:
+
+- ``"numba:compile"`` is broadcasted when a dispatcher is compiling. Events of
+  this kind has ``data`` defined to be a ``dict`` with the following
+  key-values:
+
+  - ``"dispatcher"``: the dispatcher object that is compiling.
+  - ``"args"``: the argument types.
+  - ``"return_type"``: the return type.
+
+- ``"numba:compiler_lock"`` is broadcasted when the internal compiler-lock is
+  acquired. This is mostly used internally to measure time spend with the lock
+  acquired.
+
+Applications can register callbacks that are listening on specific events using
+``register(kind: str, listener: Listener)``, where ``listener`` is an instance
+of ``Listener`` that defines custom actions on the specific event.
+"""
+
 import abc
 import enum
 import time
