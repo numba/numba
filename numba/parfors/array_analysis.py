@@ -1079,6 +1079,15 @@ class ArrayAnalysis(object):
     def get_equiv_set(self, block_label):
         """Return the equiv_set object of an block given its label.
         """
+        # If there are no derivable equivalencies in a basic block then
+        # ArrayAnalysis won't create an entry in equiv_sets for that block.
+        # Users of ArrayAnalysis may still ask for equivalence information
+        # for this block though so here we check if there isn't an equiv_set
+        # for this block and if not then add it.  We don't use equiv_sets.get
+        # but instead cache the empty SymbolicEquivSet to make it faster
+        # when users ask for information about this block again.
+        if block_label not in self.equiv_sets:
+            self.equiv_sets[block_label] = SymbolicEquivSet(self.typemap)
         return self.equiv_sets[block_label]
 
     def remove_redefineds(self, redefineds):
@@ -1474,62 +1483,61 @@ class ArrayAnalysis(object):
                     ]
 
             cond_var = inst.cond
-            if isinstance(self.typemap[cond_var.name], types.ArrayCompatible):
-                cond_def = guard(get_definition, self.func_ir, cond_var)
-                if not cond_def:  # phi variable has no single definition
-                    # We'll use equiv_set to try to find a cond_def instead
-                    equivs = equiv_set.get_equiv_set(cond_var)
-                    defs = []
-                    for name in equivs:
-                        if isinstance(name, str) and name in self.typemap:
-                            var_def = guard(
-                                get_definition,
-                                self.func_ir,
-                                name,
-                                lhs_only=True
-                            )
-                            if isinstance(var_def, ir.Var):
-                                var_def = var_def.name
-                            if var_def:
-                                defs.append(var_def)
-                        else:
-                            defs.append(name)
-                    defvars = set(filter(lambda x: isinstance(x, str), defs))
-                    defconsts = set(defs).difference(defvars)
-                    if len(defconsts) == 1:
-                        cond_def = list(defconsts)[0]
-                    elif len(defvars) == 1:
-                        cond_def = guard(
-                            get_definition, self.func_ir, list(defvars)[0]
+            cond_def = guard(get_definition, self.func_ir, cond_var)
+            if not cond_def:  # phi variable has no single definition
+                # We'll use equiv_set to try to find a cond_def instead
+                equivs = equiv_set.get_equiv_set(cond_var)
+                defs = []
+                for name in equivs:
+                    if isinstance(name, str) and name in self.typemap:
+                        var_def = guard(
+                            get_definition,
+                            self.func_ir,
+                            name,
+                            lhs_only=True
                         )
-                if isinstance(cond_def, ir.Expr) and cond_def.op == 'binop':
-                    handle_call_binop(cond_def)
-                elif isinstance(cond_def, ir.Expr) and cond_def.op == 'call':
-                    # this handles bool(predicate)
-                    glbl_bool = guard(
-                        get_definition,
-                        self.func_ir,
-                        cond_def.func
+                        if isinstance(var_def, ir.Var):
+                            var_def = var_def.name
+                        if var_def:
+                            defs.append(var_def)
+                    else:
+                        defs.append(name)
+                defvars = set(filter(lambda x: isinstance(x, str), defs))
+                defconsts = set(defs).difference(defvars)
+                if len(defconsts) == 1:
+                    cond_def = list(defconsts)[0]
+                elif len(defvars) == 1:
+                    cond_def = guard(
+                        get_definition, self.func_ir, list(defvars)[0]
                     )
-                    if glbl_bool is not None and glbl_bool.value is bool:
-                        if len(cond_def.args) == 1:
-                            condition = guard(get_definition, self.func_ir,
-                                              cond_def.args[0])
-                            if (condition is not None and
-                                isinstance(condition, ir.Expr) and
-                                    condition.op == 'binop'):
-                                handle_call_binop(condition)
-                else:
-                    if isinstance(cond_def, ir.Const):
-                        cond_def = cond_def.value
-                    if isinstance(cond_def, int) or isinstance(cond_def, bool):
-                        # condition is always true/false
-                        # prune the outgoing edge
-                        pruned_br = inst.falsebr if cond_def else inst.truebr
-                        if pruned_br in self.pruned_predecessors:
-                            self.pruned_predecessors[pruned_br].append(label)
-                        else:
-                            self.pruned_predecessors[pruned_br] = [label]
+            if isinstance(cond_def, ir.Expr) and cond_def.op == 'binop':
+                handle_call_binop(cond_def)
+            elif isinstance(cond_def, ir.Expr) and cond_def.op == 'call':
+                # this handles bool(predicate)
+                glbl_bool = guard(
+                    get_definition,
+                    self.func_ir,
+                    cond_def.func
+                )
+                if glbl_bool is not None and glbl_bool.value is bool:
+                    if len(cond_def.args) == 1:
+                        condition = guard(get_definition, self.func_ir,
+                                          cond_def.args[0])
+                        if (condition is not None and
+                            isinstance(condition, ir.Expr) and
+                                condition.op == 'binop'):
+                            handle_call_binop(condition)
+            else:
+                if isinstance(cond_def, ir.Const):
+                    cond_def = cond_def.value
+                if isinstance(cond_def, int) or isinstance(cond_def, bool):
+                    # condition is always true/false
+                    # prune the outgoing edge
+                    pruned_br = inst.falsebr if cond_def else inst.truebr
+                    if pruned_br in self.pruned_predecessors:
+                        self.pruned_predecessors[pruned_br].append(label)
+                    else:
+                        self.pruned_predecessors[pruned_br] = [label]
 
         elif type(inst) in array_analysis_extensions:
             # let external calls handle stmt if type matches
