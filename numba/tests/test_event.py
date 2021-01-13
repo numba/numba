@@ -30,6 +30,17 @@ class TestEvent(TestCase):
         self.assertIsInstance(lock_duration, float)
         self.assertGreater(lock_duration, 0)
 
+    def test_llvm_lock_event(self):
+        @njit
+        def foo(x):
+            return x + x
+
+        foo(1)
+        md = foo.get_metadata(foo.signatures[0])
+        lock_duration = md['timers']['llvm_lock']
+        self.assertIsInstance(lock_duration, float)
+        self.assertGreater(lock_duration, 0)
+
     def test_install_listener(self):
         ut = self
 
@@ -115,6 +126,10 @@ class TestEvent(TestCase):
         lifted_cres = ldisp.overloads[ldisp.signatures[0]]
         self.assertIsInstance(
             lifted_cres.metadata["timers"]["compiler_lock"],
+            float,
+        )
+        self.assertIsInstance(
+            lifted_cres.metadata["timers"]["llvm_lock"],
             float,
         )
 

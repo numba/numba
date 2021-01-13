@@ -16,6 +16,9 @@ The following events are built in:
   acquired. This is mostly used internally to measure time spent with the lock
   acquired.
 
+- ``"numba:llvm_lock"`` is broadcast when the internal LLVM-lock is acquired.
+  This is used internally to measure time spent with the lock acquired.
+
 Applications can register callbacks that are listening for specific events using
 ``register(kind: str, listener: Listener)``, where ``listener`` is an instance
 of ``Listener`` that defines custom actions on occurrence of the specific event.
@@ -40,6 +43,7 @@ class EventStatus(enum.Enum):
 _builtin_kinds = frozenset([
     "numba:compiler_lock",
     "numba:compile",
+    "numba:llvm_lock",
 ])
 
 
