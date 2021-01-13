@@ -126,6 +126,8 @@ class Event:
                 if self.data is not None else "None")
         return f"Event({self._kind}, {self._status}, data: {data})"
 
+    __repr__ = __str__
+
 
 _registered = defaultdict(list)
 
@@ -224,7 +226,8 @@ class TimingListener(Listener):
         """Returns a ``bool`` indicating a measurement is made.
 
         When this returns ``False``, the matching event has never fired.
-        Iff this returns ``True``, ``.duration`` can be read without error.
+        If and only if this returns ``True``, ``.duration`` can be read without
+        error.
         """
         return hasattr(self, "_duration")
 
@@ -262,6 +265,14 @@ def install_listener(kind, listener):
     -------
     res : Listener
         The *listener* provided.
+
+    Examples
+    --------
+
+    >>> with install_listener("numba:compile", listener):
+    >>>     some_code()  # listener will be active here.
+    >>> other_code()     # listener will be unregistered by this point.
+
     """
     register(kind, listener)
     try:
@@ -282,6 +293,11 @@ def install_timer(kind, callback):
     Returns
     -------
     res : TimingListener
+
+    This is equivalent to:
+
+    >>> with install_listener(kind, TimingListener()) as res:
+    >>>    ...
     """
     tl = TimingListener()
     with install_listener(kind, tl):
@@ -300,6 +316,12 @@ def install_recorder(kind):
     Returns
     -------
     res : RecordingListener
+
+    This is equivalent to:
+
+    >>> with install_listener(kind, RecordingListener()) as res:
+    >>>    ...
+
     """
     rl = RecordingListener()
     with install_listener(kind, rl):
