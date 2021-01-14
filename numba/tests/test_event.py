@@ -9,6 +9,16 @@ from numba.tests.support import TestCase
 
 
 class TestEvent(TestCase):
+
+    def setUp(self):
+        # Trigger compilation to ensure all listeners are initialized
+        njit(lambda: None)()
+        self.__registered_listeners = len(ev._registered)
+
+    def tearDown(self):
+        # Check there is no lingering listeners
+        self.assertEqual(len(ev._registered), self.__registered_listeners)
+
     def test_recording_listener(self):
         @njit
         def foo(x):
