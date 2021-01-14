@@ -56,11 +56,11 @@ def _guard_kind(kind):
 
     Parameters
     ----------
-    kind: str
+    kind : str
 
     Return
     ------
-    res: str
+    res : str
     """
     if kind.startswith("numba:") and kind not in _builtin_kinds:
         msg = (f"{kind} is not a valid event kind, "
@@ -95,7 +95,7 @@ class Event:
 
         Returns
         -------
-        res: str
+        res : str
         """
         return self._kind
 
@@ -105,7 +105,7 @@ class Event:
 
         Returns
         -------
-        res: EventStatus
+        res : EventStatus
         """
         return self._status
 
@@ -115,7 +115,7 @@ class Event:
 
         Returns
         -------
-        res: object
+        res : object
         """
         return self._data
 
@@ -125,7 +125,7 @@ class Event:
 
         Returns
         -------
-        res: bool
+        res : bool
         """
         return self._status == EventStatus.START
 
@@ -135,7 +135,7 @@ class Event:
 
         Returns
         -------
-        res: bool
+        res : bool
         """
         return self._status == EventStatus.END
 
@@ -148,7 +148,7 @@ class Event:
 
         Returns
         -------
-        res: bool
+        res : bool
         """
         return self._exc_details is None
 
@@ -168,8 +168,8 @@ def register(kind, listener):
 
     Parameters
     ----------
-    kind: str
-    listener: Listener
+    kind : str
+    listener : Listener
     """
     assert isinstance(listener, Listener)
     kind = _guard_kind(kind)
@@ -181,8 +181,8 @@ def unregister(kind, listener):
 
     Parameters
     ----------
-    kind: str
-    listener: Listener
+    kind : str
+    listener : Listener
     """
     assert isinstance(listener, Listener)
     kind = _guard_kind(kind)
@@ -195,7 +195,7 @@ def broadcast(event):
 
     Parameters
     ----------
-    event: Event
+    event : Event
     """
     for listener in _registered[event.kind]:
         listener.notify(event)
@@ -210,7 +210,7 @@ class Listener(abc.ABC):
 
         Parameters
         ----------
-        event: Event
+        event : Event
         """
         pass
 
@@ -220,7 +220,7 @@ class Listener(abc.ABC):
 
         Parameters
         ----------
-        event: Event
+        event : Event
         """
         pass
 
@@ -300,7 +300,7 @@ def install_listener(kind, listener):
 
     Returns
     -------
-    res: Listener
+    res : Listener
         The *listener* provided.
 
     Examples
@@ -329,7 +329,7 @@ def install_timer(kind, callback):
 
     Returns
     -------
-    res: TimingListener
+    res : TimingListener
 
     Examples
     --------
@@ -352,11 +352,11 @@ def install_recorder(kind):
     """Install a RecordingListener temporarily to record all events.
 
     Once the context is closed, users can use ``RecordingListener.buffer``
-    to acccess the recorded events.
+    to access the recorded events.
 
     Returns
     -------
-    res: RecordingListener
+    res : RecordingListener
 
     Examples
     --------
@@ -376,9 +376,9 @@ def start_event(kind, data=None):
 
     Parameters
     ----------
-    kind: str
+    kind : str
         Event kind.
-    data: any; optional
+    data : any; optional
         Extra event data.
     """
     evt = Event(kind=kind, status=EventStatus.START, data=data)
@@ -390,9 +390,9 @@ def end_event(kind, data=None, exc_details=None):
 
     Parameters
     ----------
-    kind: str
+    kind : str
         Event kind.
-    data: any; optional
+    data : any; optional
         Extra event data.
     exc_details : 3-tuple; optional
         Same 3-tuple for ``__exit__``. Or, ``None`` if no error.
@@ -411,9 +411,9 @@ def trigger_event(kind, data=None):
 
     Parameters
     ----------
-    kind: str
+    kind : str
         Event kind.
-    data: any; optional
+    data : any; optional
         Extra event data.
     """
     with ExitStack() as scope:

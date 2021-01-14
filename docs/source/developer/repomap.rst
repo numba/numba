@@ -257,7 +257,8 @@ Misc Support
 - :ghfile:`numba/core/caching.py` - Disk cache for compiled functions
 - :ghfile:`numba/np/npdatetime.py` - Helper functions for implementing NumPy
   datetime64 support
-
+- :ghfile:`numba/misc/llvm_pass_timings.py` - Helper to record timings of
+  LLVM passes.
 
 Core Python Data Types
 ''''''''''''''''''''''

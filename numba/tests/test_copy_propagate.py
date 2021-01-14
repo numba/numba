@@ -60,7 +60,7 @@ class TestCopyPropagate(unittest.TestCase):
             typingctx.refresh()
             targetctx.refresh()
             args = (types.int64, types.int64, types.int64)
-            typemap, return_type, calltypes = type_inference_stage(typingctx, test_ir, args, None)
+            typemap, return_type, calltypes, _ = type_inference_stage(typingctx, test_ir, args, None)
             #print("typemap = ", typemap)
             #print("return_type = ", return_type)
             type_annotation = type_annotations.TypeAnnotation(
@@ -87,7 +87,7 @@ class TestCopyPropagate(unittest.TestCase):
             typingctx.refresh()
             targetctx.refresh()
             args = (types.int64, types.int64, types.int64)
-            typemap, return_type, calltypes = type_inference_stage(typingctx, test_ir, args, None)
+            typemap, return_type, calltypes, _ = type_inference_stage(typingctx, test_ir, args, None)
             type_annotation = type_annotations.TypeAnnotation(
                 func_ir=test_ir,
                 typemap=typemap,
