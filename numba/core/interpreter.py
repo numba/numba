@@ -540,10 +540,17 @@ class Interpreter(object):
         current block.
         """
         new_body = []
+        replaced_var = {}
         for inst in self.current_block.body:
             if isinstance(inst, ir.Assign):
                 if (inst.target.is_temp
                     and inst.target.name in self.assigner.unused_dests):
+                    continue
+                # the same temporary is assigned to multiple variables in cases like
+                # a = b = 1, so need to handle replaced temporaries in later assignments
+                if isinstance(inst.value, ir.Var) and inst.value.name in replaced_var:
+                    inst.value = replaced_var[inst.value.name]
+                    new_body.append(inst)
                     continue
                 # eliminate temporary variables that are assigned to user variables
                 # right after creation. E.g.:
@@ -554,6 +561,7 @@ class Interpreter(object):
                         and isinstance(new_body[-1], ir.Assign)):
                     prev_assign = new_body[-1]
                     if prev_assign.target.name == inst.value.name:
+                        replaced_var[inst.value.name] = inst.target
                         prev_assign.target = inst.target
                         # replace temp var definition in target var with proper defs
                         self.definitions[inst.target.name].remove(inst.value)
