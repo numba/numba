@@ -27,6 +27,14 @@ except ImportError:
     sys.path.insert(0, os.path.abspath('../..'))
     import numba
 
+
+on_rtd = os.environ.get('READTHEDOCS') == 'True'
+
+if on_rtd:
+    from conda.cli.python_api import run_command as conda_cmd
+
+    conda_cmd("install", "-c", "conda-forge", "sphinx_rtd_theme>=0.5.1", "-y")
+
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
