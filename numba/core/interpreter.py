@@ -544,26 +544,36 @@ class Interpreter(object):
         for inst in self.current_block.body:
             if isinstance(inst, ir.Assign):
                 if (inst.target.is_temp
-                    and inst.target.name in self.assigner.unused_dests):
+                        and inst.target.name in self.assigner.unused_dests):
                     continue
-                # the same temporary is assigned to multiple variables in cases like
-                # a = b = 1, so need to handle replaced temporaries in later assignments
-                if isinstance(inst.value, ir.Var) and inst.value.name in replaced_var:
+                # the same temporary is assigned to multiple variables in cases
+                # like a = b = 1, so need to handle replaced temporaries in
+                # later assignments
+                if (isinstance(inst.value, ir.Var)
+                        and inst.value.name in replaced_var):
                     inst.value = replaced_var[inst.value.name]
                     new_body.append(inst)
                     continue
-                # eliminate temporary variables that are assigned to user variables
-                # right after creation. E.g.:
+                # chained unpack cases may reuse temporary
+                # e.g. a = (b, c) = (x, y)
+                if (isinstance(inst.value, ir.Expr)
+                        and inst.value.op == "exhaust_iter"
+                        and inst.value.value.name in replaced_var):
+                    inst.value.value = replaced_var[inst.value.value.name]
+                    new_body.append(inst)
+                    continue
+                # eliminate temporary variables that are assigned to user
+                # variables right after creation. E.g.:
                 # $1 = f(); a = $1 -> a = f()
-                # the temporary variable is not reused elsewhere since CPython bytecode
-                # is stack-based and this pattern corresponds to a pop()
-                if (isinstance(inst.value, ir.Var) and inst.value.is_temp and new_body
-                        and isinstance(new_body[-1], ir.Assign)):
+                # the temporary variable is not reused elsewhere since CPython
+                # bytecode is stack-based and this pattern corresponds to a pop
+                if (isinstance(inst.value, ir.Var) and inst.value.is_temp
+                        and new_body and isinstance(new_body[-1], ir.Assign)):
                     prev_assign = new_body[-1]
                     if prev_assign.target.name == inst.value.name:
                         replaced_var[inst.value.name] = inst.target
                         prev_assign.target = inst.target
-                        # replace temp var definition in target var with proper defs
+                        # replace temp var definition in target with proper defs
                         self.definitions[inst.target.name].remove(inst.value)
                         self.definitions[inst.target.name].extend(
                             self.definitions.pop(inst.value.name)
