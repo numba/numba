@@ -254,7 +254,8 @@ class TimingListener(Listener):
     def on_end(self, event):
         self._depth -= 1
         if self._depth == 0:
-            self._duration = timer() - self._ts
+            last = getattr(self, "_duration", 0)
+            self._duration = (timer() - self._ts) + last
 
     @property
     def done(self):

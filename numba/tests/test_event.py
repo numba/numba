@@ -1,6 +1,9 @@
 import unittest
+import string
 
-from numba import njit, jit
+import numpy as np
+
+from numba import njit, jit, literal_unroll
 from numba.core import event as ev
 from numba.tests.support import TestCase
 
@@ -132,6 +135,44 @@ class TestEvent(TestCase):
             lifted_cres.metadata["timers"]["llvm_lock"],
             float,
         )
+
+    def test_timing_property(self):
+        a = tuple(string.ascii_lowercase)
+
+        @njit
+        def bar(x):
+            acc = 0
+            for i in literal_unroll(a):
+                if i in {'1': x}:
+                    acc += 1
+                else:
+                    acc += np.sqrt(x[0, 0])
+            return np.linalg.svd(x), acc
+
+        @njit
+        def foo(x):
+            return bar(np.zeros((x, x)))
+
+        foo(1)
+
+        def get_timers(fn):
+            md = fn.get_metadata(fn.signatures[0])
+            return md['timers']
+
+        foo_timers = get_timers(foo)
+        bar_timers = get_timers(bar)
+
+        # Check: time spent in bar() must be longer than in foo()
+        self.assertLess(bar_timers['llvm_lock'],
+                        foo_timers['llvm_lock'])
+        self.assertLess(bar_timers['compiler_lock'],
+                        foo_timers['compiler_lock'])
+
+        # Check: time spent in LLVM lock must be less than in compiler
+        self.assertLess(foo_timers['llvm_lock'],
+                        foo_timers['compiler_lock'])
+        self.assertLess(bar_timers['llvm_lock'],
+                        bar_timers['compiler_lock'])
 
 
 if __name__ == "__main__":
