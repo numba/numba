@@ -157,7 +157,7 @@ class TestEvent(TestCase):
                     acc += 1
                 else:
                     acc += np.sqrt(x[0, 0])
-            return np.linalg.svd(x), acc
+            return np.sin(x), acc
 
         @njit
         def foo(x):
