@@ -10,3 +10,4 @@ dependencies:
   - numpy
   - numpydoc
   - setuptools
+  - sphinx_rtd_theme=0.5.1
