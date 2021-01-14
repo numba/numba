@@ -1103,6 +1103,26 @@ class TestRecordArrayGetItem(unittest.TestCase):
         self.assertIn("Field 'f' was not found in record with fields "
                       "('first', 'second')", str(raises.exception))
 
+    def test_literal_unroll_dynamic_to_static_getitem_transform(self):
+        # See issue #6634
+        keys = ('a', 'b', 'c')
+        n = 5
+
+        def pyfunc(rec):
+            x = np.zeros((n,))
+            for o in literal_unroll(keys):
+                x += rec[o]
+            return x
+
+        dt = np.float64
+        ldd = [np.arange(dt(n)) for x in keys]
+        ldk = [(x, np.float64,) for x in keys]
+        rec = np.rec.fromarrays(ldd, dtype=ldk)
+
+        expected = pyfunc(rec)
+        got = njit(pyfunc)(rec)
+        np.testing.assert_allclose(expected, got)
+
 
 class TestRecordArraySetItem(unittest.TestCase):
     """
