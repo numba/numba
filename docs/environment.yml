@@ -10,4 +10,5 @@ dependencies:
   - numpy
   - numpydoc
   - setuptools
+  # To fix RTD numpydoc missing colon
   - sphinx_rtd_theme=0.5.1
