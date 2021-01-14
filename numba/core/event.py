@@ -347,7 +347,7 @@ def install_recorder(kind):
     """Install a RecordingListener temporarily to record all events.
 
     Once the context is closed, users can use ``RecordingListener.buffer``
-    to acccess the recorded events.
+    to access the recorded events.
 
     Returns
     -------
