@@ -570,7 +570,12 @@ class Interpreter(object):
                 if (isinstance(inst.value, ir.Var) and inst.value.is_temp
                         and new_body and isinstance(new_body[-1], ir.Assign)):
                     prev_assign = new_body[-1]
-                    if prev_assign.target.name == inst.value.name:
+                    # _var_used_in_binop check makes sure we don't create a new
+                    # inplace binop operation which can fail
+                    # (see TestFunctionType.test_in_iter_func_call)
+                    if (prev_assign.target.name == inst.value.name
+                            and not self._var_used_in_binop(
+                                inst.target.name, prev_assign.value)):
                         replaced_var[inst.value.name] = inst.target
                         prev_assign.target = inst.target
                         # replace temp var definition in target with proper defs
@@ -583,6 +588,14 @@ class Interpreter(object):
             new_body.append(inst)
 
         self.current_block.body = new_body
+
+    def _var_used_in_binop(self, varname, expr):
+        """return True if 'expr' is a binary expression and 'varname' is used
+        in it as an argument
+        """
+        return isinstance(expr, ir.Expr) and expr.op == "binop" and (
+            varname == expr.lhs.name or varname == expr.rhs.name
+        )
 
     def _insert_outgoing_phis(self):
         """

@@ -1,3 +1,4 @@
+import unittest
 import types as pytypes
 from numba import jit, njit, cfunc, types, int64, float64, float32, errors
 from numba import literal_unroll
@@ -1123,3 +1124,7 @@ class TestMiscIssues(TestCase):
 
         self.assertEqual(bar(((foo1, foo2),)), 4)
         self.assertEqual(bar(((foo1, foo2), (foo1, foo3))), 9)  # reproducer
+
+
+if __name__ == '__main__':
+    unittest.main()
