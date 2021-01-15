@@ -13,11 +13,12 @@ import unittest
 
 def test_will_propagate(b, z, w):
     x = 3
+    x1 = x
     if b > 0:
         y = z + w
     else:
         y = 0
-    a = 2 * x
+    a = 2 * x1
     return a < b
 
 def test_wont_propagate(b, z, w):
@@ -54,15 +55,11 @@ class TestCopyPropagate(unittest.TestCase):
         typingctx = typing.Context()
         targetctx = cpu.CPUContext(typingctx)
         test_ir = compiler.run_frontend(test_will_propagate)
-        #print("Num blocks = ", len(test_ir.blocks))
-        #print(test_ir.dump())
         with cpu_target.nested_context(typingctx, targetctx):
             typingctx.refresh()
             targetctx.refresh()
             args = (types.int64, types.int64, types.int64)
             typemap, return_type, calltypes, _ = type_inference_stage(typingctx, test_ir, args, None)
-            #print("typemap = ", typemap)
-            #print("return_type = ", return_type)
             type_annotation = type_annotations.TypeAnnotation(
                 func_ir=test_ir,
                 typemap=typemap,
@@ -75,14 +72,12 @@ class TestCopyPropagate(unittest.TestCase):
             in_cps, out_cps = copy_propagate(test_ir.blocks, typemap)
             apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(test_ir.blocks), typemap, calltypes)
 
-            self.assertFalse(findAssign(test_ir, "x"))
+            self.assertFalse(findAssign(test_ir, "x1"))
 
     def test2(self):
         typingctx = typing.Context()
         targetctx = cpu.CPUContext(typingctx)
         test_ir = compiler.run_frontend(test_wont_propagate)
-        #print("Num blocks = ", len(test_ir.blocks))
-        #print(test_ir.dump())
         with cpu_target.nested_context(typingctx, targetctx):
             typingctx.refresh()
             targetctx.refresh()
@@ -101,6 +96,7 @@ class TestCopyPropagate(unittest.TestCase):
             apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(test_ir.blocks), typemap, calltypes)
 
             self.assertTrue(findAssign(test_ir, "x"))
+
 
 if __name__ == "__main__":
     unittest.main()
