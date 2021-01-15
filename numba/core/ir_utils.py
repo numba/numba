@@ -1755,12 +1755,7 @@ def replace_returns(blocks, target, return_label):
             assert (isinstance(cast_stmt, ir.Assign)
                 and isinstance(cast_stmt.value, ir.Expr)
                 and cast_stmt.value.op == 'cast'), "invalid return cast"
-            # reuse previous node if it assigns to return value
-            if (block.body and isinstance(block.body[-1], ir.Assign)
-                    and block.body[-1].target.name == cast_stmt.value.value.name):
-                block.body[-1].target = target
-            else:
-                block.body.append(ir.Assign(cast_stmt.value.value, target, stmt.loc))
+            block.body.append(ir.Assign(cast_stmt.value.value, target, stmt.loc))
             block.body.append(ir.Jump(return_label, stmt.loc))
 
 
