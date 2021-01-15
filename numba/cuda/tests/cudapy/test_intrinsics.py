@@ -67,6 +67,10 @@ def simple_fma(ary, a, b, c):
     ary[0] = cuda.fma(a, b, c)
 
 
+def simple_cbrt(ary, a):
+    ary[0] = cuda.cbrt(a)
+
+
 def simple_brev(ary, c):
     ary[0] = cuda.brev(c)
 
@@ -287,6 +291,20 @@ class TestCudaIntrinsic(CUDATestCase):
         ary = np.zeros(1, dtype=np.float64)
         compiled[1, 1](ary, 2., 3., 4.)
         np.testing.assert_allclose(ary[0], 2 * 3 + 4)
+
+    def test_cbrt_f32(self):
+        compiled = cuda.jit("void(float32[:], float32)")(simple_cbrt)
+        ary = np.zeros(1, dtype=np.float32)
+        cbrt_arg = 2.
+        compiled[1, 1](ary, cbrt_arg)
+        np.testing.assert_allclose(ary[0], cbrt_arg ** (1 / 3))
+
+    def test_cbrt_f64(self):
+        compiled = cuda.jit("void(float64[:], float64)")(simple_cbrt)
+        ary = np.zeros(1, dtype=np.float64)
+        cbrt_arg = 6.
+        compiled[1, 1](ary, cbrt_arg)
+        np.testing.assert_allclose(ary[0], cbrt_arg ** (1 / 3))
 
     def test_brev_u4(self):
         compiled = cuda.jit("void(uint32[:], uint32)")(simple_brev)

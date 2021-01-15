@@ -387,6 +387,28 @@ def ptx_popc(context, builder, sig, args):
 def ptx_fma(context, builder, sig, args):
     return builder.fma(*args)
 
+# See:
+# https://docs.nvidia.com/cuda/libdevice-users-guide/__nv_cbrt.html#__nv_cbrt
+# https://docs.nvidia.com/cuda/libdevice-users-guide/__nv_cbrtf.html#__nv_cbrtf
+
+
+cbrt_funcs = {
+    types.float32: '__nv_cbrtf',
+    types.float64: '__nv_cbrt',
+}
+
+
+@lower(stubs.cbrt, types.float32)
+@lower(stubs.cbrt, types.float64)
+def ptx_cbrt(context, builder, sig, args):
+    ty = sig.return_type
+    fname = cbrt_funcs[ty]
+    fty = context.get_value_type(ty)
+    lmod = builder.module
+    fnty = Type.function(fty, [fty])
+    fn = lmod.get_or_insert_function(fnty, name=fname)
+    return builder.call(fn, args)
+
 
 @lower(stubs.brev, types.u4)
 def ptx_brev_u4(context, builder, sig, args):
