@@ -683,17 +683,26 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 tp = types.pyobject
         return tp
 
-    def _callback_add_compiler_timer(self, duration, cres):
+    def _callback_add_timer(self, duration, cres, lock_name):
         md = cres.metadata
         # md can be None when code is loaded from cache
         if md is not None:
             timers = md.setdefault("timers", {})
-            if "compiler_lock" not in timers:
+            if lock_name not in timers:
                 # Only write if the metadata does not exist
-                timers["compiler_lock"] = duration
+                timers[lock_name] = duration
             else:
-                msg = "'compiler_lock' metadata is already defined."
+                msg = f"'{lock_name} metadata is already defined."
                 raise AssertionError(msg)
+
+    def _callback_add_compiler_timer(self, duration, cres):
+        return self._callback_add_timer(duration, cres,
+                                        lock_name="compiler_lock")
+
+    def _callback_add_llvm_timer(self, duration, cres):
+        return self._callback_add_timer(duration, cres,
+                                        lock_name="llvm_lock")
+
 
 class _MemoMixin:
     __uuid = None
@@ -847,11 +856,17 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         with ExitStack() as scope:
             cres = None
 
-            def cb(dur):
+            def cb_compiler(dur):
                 if cres is not None:
                     self._callback_add_compiler_timer(dur, cres)
 
-            scope.enter_context(ev.install_timer("numba:compiler_lock", cb))
+            def cb_llvm(dur):
+                if cres is not None:
+                    self._callback_add_llvm_timer(dur, cres)
+
+            scope.enter_context(ev.install_timer("numba:compiler_lock",
+                                                 cb_compiler))
+            scope.enter_context(ev.install_timer("numba:llvm_lock", cb_llvm))
             scope.enter_context(global_compiler_lock)
 
             if not self._can_compile:
@@ -1046,11 +1061,17 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         with ExitStack() as scope:
             cres = None
 
-            def cb(dur):
+            def cb_compiler(dur):
                 if cres is not None:
                     self._callback_add_compiler_timer(dur, cres)
 
-            scope.enter_context(ev.install_timer("numba:compiler_lock", cb))
+            def cb_llvm(dur):
+                if cres is not None:
+                    self._callback_add_llvm_timer(dur, cres)
+
+            scope.enter_context(ev.install_timer("numba:compiler_lock",
+                                                 cb_compiler))
+            scope.enter_context(ev.install_timer("numba:llvm_lock", cb_llvm))
             scope.enter_context(global_compiler_lock)
 
             # Use counter to track recursion compilation depth

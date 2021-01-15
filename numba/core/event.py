@@ -16,6 +16,9 @@ The following events are built in:
   acquired. This is mostly used internally to measure time spent with the lock
   acquired.
 
+- ``"numba:llvm_lock"`` is broadcast when the internal LLVM-lock is acquired.
+  This is used internally to measure time spent with the lock acquired.
+
 Applications can register callbacks that are listening for specific events using
 ``register(kind: str, listener: Listener)``, where ``listener`` is an instance
 of ``Listener`` that defines custom actions on occurrence of the specific event.
@@ -40,6 +43,7 @@ class EventStatus(enum.Enum):
 _builtin_kinds = frozenset([
     "numba:compiler_lock",
     "numba:compile",
+    "numba:llvm_lock",
 ])
 
 
@@ -236,8 +240,8 @@ class Listener(abc.ABC):
 
 
 class TimingListener(Listener):
-    """A listener that measures the duration between a *START* event and
-    its matching *END* event.
+    """A listener that measures the total time spent between *START* and
+    *END* events during the time this listener is active.
     """
     def __init__(self):
         self._depth = 0
@@ -250,7 +254,8 @@ class TimingListener(Listener):
     def on_end(self, event):
         self._depth -= 1
         if self._depth == 0:
-            self._duration = timer() - self._ts
+            last = getattr(self, "_duration", 0)
+            self._duration = (timer() - self._ts) + last
 
     @property
     def done(self):

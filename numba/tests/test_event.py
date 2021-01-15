@@ -1,11 +1,24 @@
 import unittest
+import string
 
-from numba import njit, jit
+import numpy as np
+
+from numba import njit, jit, literal_unroll
 from numba.core import event as ev
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, override_config
 
 
 class TestEvent(TestCase):
+
+    def setUp(self):
+        # Trigger compilation to ensure all listeners are initialized
+        njit(lambda: None)()
+        self.__registered_listeners = len(ev._registered)
+
+    def tearDown(self):
+        # Check there is no lingering listeners
+        self.assertEqual(len(ev._registered), self.__registered_listeners)
+
     def test_recording_listener(self):
         @njit
         def foo(x):
@@ -27,6 +40,17 @@ class TestEvent(TestCase):
         foo(1)
         md = foo.get_metadata(foo.signatures[0])
         lock_duration = md['timers']['compiler_lock']
+        self.assertIsInstance(lock_duration, float)
+        self.assertGreater(lock_duration, 0)
+
+    def test_llvm_lock_event(self):
+        @njit
+        def foo(x):
+            return x + x
+
+        foo(1)
+        md = foo.get_metadata(foo.signatures[0])
+        lock_duration = md['timers']['llvm_lock']
         self.assertIsInstance(lock_duration, float)
         self.assertGreater(lock_duration, 0)
 
@@ -117,6 +141,57 @@ class TestEvent(TestCase):
             lifted_cres.metadata["timers"]["compiler_lock"],
             float,
         )
+        self.assertIsInstance(
+            lifted_cres.metadata["timers"]["llvm_lock"],
+            float,
+        )
+
+    def test_timing_properties(self):
+        a = tuple(string.ascii_lowercase)
+
+        @njit
+        def bar(x):
+            acc = 0
+            for i in literal_unroll(a):
+                if i in {'1': x}:
+                    acc += 1
+                else:
+                    acc += np.sqrt(x[0, 0])
+            return np.sin(x), acc
+
+        @njit
+        def foo(x):
+            return bar(np.zeros((x, x)))
+
+        with override_config('LLVM_PASS_TIMINGS', True):
+            foo(1)
+
+        def get_timers(fn, prop):
+            md = fn.get_metadata(fn.signatures[0])
+            return md[prop]
+
+        foo_timers = get_timers(foo, 'timers')
+        bar_timers = get_timers(bar, 'timers')
+        foo_llvm_timer = get_timers(foo, 'llvm_pass_timings')
+        bar_llvm_timer = get_timers(bar, 'llvm_pass_timings')
+
+        # Check: time spent in bar() must be longer than in foo()
+        self.assertLess(bar_timers['llvm_lock'],
+                        foo_timers['llvm_lock'])
+        self.assertLess(bar_timers['compiler_lock'],
+                        foo_timers['compiler_lock'])
+
+        # Check: time spent in LLVM itself must be less than in the LLVM lock
+        self.assertLess(foo_llvm_timer.get_total_time(),
+                        foo_timers['llvm_lock'])
+        self.assertLess(bar_llvm_timer.get_total_time(),
+                        bar_timers['llvm_lock'])
+
+        # Check: time spent in LLVM lock must be less than in compiler
+        self.assertLess(foo_timers['llvm_lock'],
+                        foo_timers['compiler_lock'])
+        self.assertLess(bar_timers['llvm_lock'],
+                        bar_timers['compiler_lock'])
 
 
 if __name__ == "__main__":
