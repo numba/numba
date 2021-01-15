@@ -30,7 +30,8 @@ import unittest
 
 
 def test_will_propagate(b, z, w):
-    x = 3
+    x1 = 3
+    x = x1
     if b > 0:
         y = z + w
     else:
