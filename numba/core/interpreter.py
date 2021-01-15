@@ -593,9 +593,9 @@ class Interpreter(object):
         """return True if 'expr' is a binary expression and 'varname' is used
         in it as an argument
         """
-        return isinstance(expr, ir.Expr) and expr.op == "binop" and (
-            varname == expr.lhs.name or varname == expr.rhs.name
-        )
+        return (isinstance(expr, ir.Expr)
+                and expr.op in ("binop", "inplace_binop")
+                and (varname == expr.lhs.name or varname == expr.rhs.name))
 
     def _insert_outgoing_phis(self):
         """
