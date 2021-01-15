@@ -5,7 +5,7 @@ import numpy as np
 
 from numba import njit, jit, literal_unroll
 from numba.core import event as ev
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, override_config
 
 
 class TestEvent(TestCase):
@@ -163,20 +163,29 @@ class TestEvent(TestCase):
         def foo(x):
             return bar(np.zeros((x, x)))
 
-        foo(1)
+        with override_config('LLVM_PASS_TIMINGS', True):
+            foo(1)
 
-        def get_timers(fn):
+        def get_timers(fn, prop):
             md = fn.get_metadata(fn.signatures[0])
-            return md['timers']
+            return md[prop]
 
-        foo_timers = get_timers(foo)
-        bar_timers = get_timers(bar)
+        foo_timers = get_timers(foo, 'timers')
+        bar_timers = get_timers(bar, 'timers')
+        foo_llvm_timer = get_timers(foo, 'llvm_pass_timings')
+        bar_llvm_timer = get_timers(bar, 'llvm_pass_timings')
 
         # Check: time spent in bar() must be longer than in foo()
         self.assertLess(bar_timers['llvm_lock'],
                         foo_timers['llvm_lock'])
         self.assertLess(bar_timers['compiler_lock'],
                         foo_timers['compiler_lock'])
+
+        # Check: time spent in LLVM itself must be less than in the LLVM lock
+        self.assertLess(foo_llvm_timer.get_total_time(),
+                        foo_timers['llvm_lock'])
+        self.assertLess(bar_llvm_timer.get_total_time(),
+                        bar_timers['llvm_lock'])
 
         # Check: time spent in LLVM lock must be less than in compiler
         self.assertLess(foo_timers['llvm_lock'],
