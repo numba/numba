@@ -3577,18 +3577,13 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
         if isinstance(rhs, ir.Expr):
             in_vars = set(lookup(v, True).name for v in rhs.list_vars())
             if name in in_vars:
+                # reductions like sum have an assignment afterwards
+                # e.g. $2 = a + $1; a = $2
                 # reductions that are functions calls like max() don't have an
                 # extra assignment afterwards
-                if isinstance(nodes[i].value, ir.Expr) and nodes[i].value.op == "call":
-                    target_name = lhs.unversioned_name
-                    cond = (target_name == unversioned_name)
-                else:
-                    # reductions like sum have an assignment afterwards
-                    # e.g. $2 = a + $1; a = $2
-                    next_node = nodes[i+1]
-                    target_name = next_node.target.unversioned_name
-                    cond = (isinstance(next_node, ir.Assign) and target_name == unversioned_name)
-                if not cond:
+                if (not (i+1 < len(nodes) and isinstance(nodes[i+1], ir.Assign)
+                        and nodes[i+1].target.unversioned_name == unversioned_name)
+                        and lhs.unversioned_name != unversioned_name):
                     raise ValueError(
                         f"Use of reduction variable {unversioned_name!r} other "
                         "than in a supported reduction function is not "

@@ -1602,8 +1602,8 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
         # like const value in numba
         lit = types.maybe_literal(gvar.value)
         # The user may have provided the type for this variable already.
-        # In this case, call add_type() to make sure the value type is consistent.
-        # See numba.tests.test_array_reductions for examples.
+        # In this case, call add_type() to make sure the value type is
+        # consistent. See numba.tests.test_array_reductions for examples.
         tv = self.typevars[target.name]
         if tv.locked:
             tv.add_type(lit or typ, loc=inst.loc)
