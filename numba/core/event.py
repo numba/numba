@@ -240,8 +240,8 @@ class Listener(abc.ABC):
 
 
 class TimingListener(Listener):
-    """A listener that measures the duration between a *START* event and
-    its matching *END* event.
+    """A listener that measures the total time spent on between *START* and
+    *END* events during the time this listener is active.
     """
     def __init__(self):
         self._depth = 0

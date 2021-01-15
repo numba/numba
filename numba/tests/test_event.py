@@ -146,7 +146,7 @@ class TestEvent(TestCase):
             float,
         )
 
-    def test_timing_property(self):
+    def test_timing_properties(self):
         a = tuple(string.ascii_lowercase)
 
         @njit
