@@ -542,7 +542,13 @@ class Interpreter(object):
         new_body = []
         replaced_var = {}
         for inst in self.current_block.body:
-            if isinstance(inst, ir.Assign):
+            # the same temporary is assigned to multiple variables in cases
+            # like a = b[i] = 1, so need to handle replaced temporaries in
+            # later setitem/setattr nodes
+            if (isinstance(inst, (ir.SetItem, ir.SetItem))
+                    and inst.value.name in replaced_var):
+                inst.value = replaced_var[inst.value.name]
+            elif isinstance(inst, ir.Assign):
                 if (inst.target.is_temp
                         and inst.target.name in self.assigner.unused_dests):
                     continue
