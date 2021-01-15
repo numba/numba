@@ -127,8 +127,13 @@ class _ObjModeContextType(WithContext):
 
     Use this as a function that takes keyword arguments only.
     The argument names must correspond to the output variables from the
-    with-block.  Their respective values are strings representing the expected
-    types.  When exiting the with-context, the output variables are cast
+    with-block.  Their respective values can be:
+
+    1. strings representing the expected types; i.e. ``"float32"``.
+    2. compile-time bound global or nonlocal variables referring to the
+       expected type. The variables are read at compile time.
+
+    When exiting the with-context, the output variables are converted
     to the expected nopython types according to the annotation.  This process
     is the same as passing Python objects into arguments of a nopython
     function.
@@ -136,20 +141,24 @@ class _ObjModeContextType(WithContext):
     Example::
 
         import numpy as np
-        from numba import njit, objmode
+        from numba import njit, objmode, types
 
         def bar(x):
             # This code is executed by the interpreter.
             return np.asarray(list(reversed(x.tolist())))
 
+        # Output type as global variable
+        out_ty = types.intp[:]
+
         @njit
         def foo():
             x = np.arange(5)
             y = np.zeros_like(x)
-            with objmode(y='intp[:]'):  # annotate return type
+            with objmode(y='intp[:]', z=out_ty):  # annotate return type
                 # this region is executed by object-mode.
                 y += bar(x)
-            return y
+                z = y
+            return y, z
 
     .. note:: Known limitations:
 
@@ -170,33 +179,82 @@ class _ObjModeContextType(WithContext):
     """
     is_callable = True
 
-    def _legalize_args(self, extra, loc):
+    def _legalize_args(self, args, kwargs, loc, func_globals, func_closures):
         """
         Legalize arguments to the context-manager
-        """
-        if extra is None:
-            return {}
 
-        if len(extra['args']) != 0:
+        Parameters
+        ----------
+        args: tuple
+            Positional arguments to the with-context call as IR nodes.
+        kwargs: dict
+            Keyword arguments to the with-context call as IR nodes.
+        loc: numba.core.ir.Loc
+            Source location of the with-context call.
+        func_globals: dict
+            The globals dictionary of the calling function.
+        func_closures: dict
+            The resolved closure variables of the calling function.
+        """
+        if args:
             raise errors.CompilerError(
                 "objectmode context doesn't take any positional arguments",
                 )
-        callkwargs = extra['kwargs']
         typeanns = {}
-        for k, v in callkwargs.items():
-            if not isinstance(v, ir.Const) or not isinstance(v.value, str):
+        for k, v in kwargs.items():
+            if isinstance(v, ir.Const) and isinstance(v.value, str):
+                typeanns[k] = sigutils._parse_signature_string(v.value)
+            elif isinstance(v, ir.FreeVar):
+                try:
+                    v = func_closures[v.name]
+                except KeyError:
+                    raise errors.CompilerError(
+                        f"Freevar {v.name!r} is not defined"
+                    )
+                typeanns[k] = v
+            elif isinstance(v, ir.Global):
+                try:
+                    v = func_globals[v.name]
+                except KeyError:
+                    raise errors.CompilerError(
+                        f"Global {v.name!r} is not defined"
+                    )
+                typeanns[k] = v
+            else:
                 raise errors.CompilerError(
                     "objectmode context requires constants string for "
                     "type annotation",
                 )
 
-            typeanns[k] = sigutils._parse_signature_string(v.value)
-
         return typeanns
 
     def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
                          body_blocks, dispatcher_factory, extra):
-        typeanns = self._legalize_args(extra, loc=blocks[blk_start].loc)
+        cellnames = func_ir.func_id.func.__code__.co_freevars
+        closures = func_ir.func_id.func.__closure__
+        func_globals = func_ir.func_id.func.__globals__
+        if closures is not None:
+            # Resolve free variables
+            func_closures = {}
+            for cellname, closure in zip(cellnames, closures):
+                try:
+                    cellval = closure.cell_contents
+                except ValueError as e:
+                    # empty cell will raise
+                    if str(e) != "Cell is empty":
+                        raise
+                else:
+                    func_closures[cellname] = cellval
+        else:
+            # Missing closure object
+            func_closures = {}
+        args = extra['args'] if extra else ()
+        kwargs = extra['kwargs'] if extra else {}
+        typeanns = self._legalize_args(args=args,
+                                       kwargs=kwargs,
+                                       loc=blocks[blk_start].loc,
+                                       func_globals=func_globals,
+                                       func_closures=func_closures)
         vlt = func_ir.variable_lifetime
 
         inputs, outputs = find_region_inout_vars(
@@ -341,4 +399,3 @@ def _mutate_with_block_callee(blocks, blk_start, blk_end, inputs, outputs):
         block=ir.Block(scope=scope, loc=loc),
         outputs=outputs,
     )
-
