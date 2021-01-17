@@ -1910,5 +1910,44 @@ class TestOverloadPreferLiteral(TestCase):
         self.assertEqual(c, 300)
 
 
+class TestIntrinsicPreferLiteral(TestCase):
+    def test_intrinsic(self):
+        def intrin(context, tup):
+            if isinstance(tup[0], types.IntegerLiteral):
+                # With prefer_literal=False, this branch will not be reached.
+                if tup[0].literal_value == 1:
+                    idx = 0
+                else:
+                    raise errors.TypingError('literal value')
+            else:
+                idx = 1
+
+            def codegen(context, builder, signature, args):
+                old_data = args[0]
+                return builder.extract_value(
+                    old_data,
+                    types.intp(idx)
+                )
+            sig = signature(tup[idx], tup)
+            return sig, codegen
+
+        prefer_lit = intrinsic(prefer_literal=True)(intrin)
+        non_lit = intrinsic(prefer_literal=False)(intrin)
+
+        @njit
+        def check_prefer_lit(x):
+            return prefer_lit((1,x))
+
+        a = check_prefer_lit(2)
+        self.assertEqual(a, 1)
+
+        @njit
+        def check_non_lit(x):
+            return non_lit((1, x))
+
+        a = check_non_lit(3)
+        self.assertEqual(a, 3)
+
+
 if __name__ == "__main__":
     unittest.main()
