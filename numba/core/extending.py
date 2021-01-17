@@ -277,9 +277,10 @@ class _Intrinsic(ReduceMixin):
 
     __uuid = None
 
-    def __init__(self, name, defn):
+    def __init__(self, name, defn, prefer_literal=False):
         self._name = name
         self._defn = defn
+        self._prefer_literal = prefer_literal
 
     @property
     def _uuid(self):
@@ -305,7 +306,7 @@ class _Intrinsic(ReduceMixin):
         from numba.core.typing.templates import (make_intrinsic_template,
                                                  infer_global)
 
-        template = make_intrinsic_template(self, self._defn, self._name)
+        template = make_intrinsic_template(self, self._defn, self._name, self._prefer_literal)
         infer(template)
         infer_global(self, types.Function(template))
 

@@ -873,7 +873,7 @@ class _IntrinsicTemplate(AbstractTemplate):
         return info
 
 
-def make_intrinsic_template(handle, defn, name):
+def make_intrinsic_template(handle, defn, name, prefer_literal=False):
     """
     Make a template class for a intrinsic handle *handle* defined by the
     function *defn*.  The *name* is used for naming the new template class.
@@ -881,7 +881,7 @@ def make_intrinsic_template(handle, defn, name):
     base = _IntrinsicTemplate
     name = "_IntrinsicTemplate_%s" % (name)
     dct = dict(key=handle, _definition_func=staticmethod(defn),
-               _impl_cache={}, _overload_cache={})
+               _impl_cache={}, _overload_cache={}, prefer_literal=prefer_literal)
     return type(base)(name, (base,), dct)
 
 
