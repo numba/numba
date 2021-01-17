@@ -881,7 +881,8 @@ def make_intrinsic_template(handle, defn, name, prefer_literal=False):
     base = _IntrinsicTemplate
     name = "_IntrinsicTemplate_%s" % (name)
     dct = dict(key=handle, _definition_func=staticmethod(defn),
-               _impl_cache={}, _overload_cache={}, prefer_literal=prefer_literal)
+               _impl_cache={}, _overload_cache={},
+               prefer_literal=prefer_literal)
     return type(base)(name, (base,), dct)
 
 

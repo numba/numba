@@ -306,7 +306,8 @@ class _Intrinsic(ReduceMixin):
         from numba.core.typing.templates import (make_intrinsic_template,
                                                  infer_global)
 
-        template = make_intrinsic_template(self, self._defn, self._name, self._prefer_literal)
+        template = make_intrinsic_template(self, self._defn, self._name,
+                                           self._prefer_literal)
         infer(template)
         infer_global(self, types.Function(template))
 
