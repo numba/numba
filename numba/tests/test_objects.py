@@ -8,7 +8,6 @@ from numba.core.compiler import compile_isolated, Flags
 from numba.core import types
 from numba.tests.support import TestCase
 
-
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
 
@@ -30,6 +29,12 @@ def delattr_usecase(o):
 
 
 class TestAttributes(TestCase):
+    def test_getattr(self, flags=enable_pyobj_flags):
+        import numba.tests.test_analysis as test_analysis
+
+        def f():
+            return test_analysis._GLOBAL
+        self.assertEquals(f(), 123)
 
     def test_setattr(self, flags=enable_pyobj_flags):
         pyfunc = setattr_usecase
