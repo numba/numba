@@ -318,7 +318,7 @@ class StencilPass(object):
                 # Handle the border at the start of the index range.
                 # ---- Generate call to slice func.
                 sig = self.typingctx.resolve_function_type(slice_fn_ty,
-                                                           (types.intp,types.intp),
+                                                           (types.intp,) * 2,
                                                            {})
                 si = start_inds[dim]
                 assert(isinstance(si, (int, ir.Var)))
