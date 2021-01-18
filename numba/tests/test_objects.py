@@ -31,7 +31,6 @@ def delattr_usecase(o):
 class TestAttributes(TestCase):
     def test_getattr(self, flags=enable_pyobj_flags):
         import numba.tests.test_analysis as test_analysis
-
         def f():
             return test_analysis._GLOBAL
         self.assertEquals(f(), 123)
