@@ -30,10 +30,10 @@ def delattr_usecase(o):
 
 class TestAttributes(TestCase):
     def test_getattr(self, flags=enable_pyobj_flags):
-        import numba.tests.test_analysis as test_analysis
+        import numba.tests.usecases as uc
         def f():
-            return test_analysis._GLOBAL
-        self.assertEquals(f(), 123)
+            return uc._GLOBAL_STR
+        self.assertEquals(f(), "abc")
 
     def test_setattr(self, flags=enable_pyobj_flags):
         pyfunc = setattr_usecase
