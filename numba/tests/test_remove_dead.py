@@ -75,7 +75,7 @@ class TestRemoveDead(unittest.TestCase):
             typingctx.refresh()
             targetctx.refresh()
             args = (types.int64, types.int64, types.int64)
-            typemap, return_type, calltypes = type_inference_stage(typingctx, test_ir, args, None)
+            typemap, return_type, calltypes, _ = type_inference_stage(typingctx, test_ir, args, None)
             type_annotation = type_annotations.TypeAnnotation(
                 func_ir=test_ir,
                 typemap=typemap,
@@ -248,6 +248,7 @@ class TestRemoveDead(unittest.TestCase):
                     state.typingctx,
                     state.flags.auto_parallel,
                     state.flags,
+                    state.metadata,
                     state.parfor_diagnostics
                 )
                 remove_dels(state.func_ir.blocks)

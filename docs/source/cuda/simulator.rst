@@ -24,11 +24,11 @@ Using the simulator
 ===================
 
 The simulator is enabled by setting the environment variable
-:envvar:`NUMBA_ENABLE_CUDASIM` to 1. CUDA Python code may then be executed as
-normal. The easiest way to use the debugger inside a kernel is to only stop a
-single thread, otherwise the interaction with the debugger is difficult to
-handle. For example, the kernel below will  stop in the thread ``<<<(3,0,0), (1,
-0, 0)>>>``::
+:envvar:`NUMBA_ENABLE_CUDASIM` to 1 prior to importing Numba. CUDA Python code 
+may then be executed as normal. The easiest way to use the debugger inside a
+kernel is to only stop a single thread, otherwise the interaction with the
+debugger is difficult to handle. For example, the kernel below will stop in
+the thread ``<<<(3,0,0), (1, 0, 0)>>>``::
 
     @cuda.jit
     def vec_add(A, B, out):
@@ -74,6 +74,9 @@ GPU as possible - in particular, the following are supported:
   This context can be closed and reset as the real one would.
 * The :func:`.detect` function is supported, and reports one device called
   `SIMULATOR`.
+* Cooperative grids: A cooperative kernel can be launched, but with only one
+  block - the simulator always returns ``1`` from a kernel definition's
+  :meth:`~numba.cuda.compiler._Kernel.max_cooperative_grid_blocks` method.
 
 Some limitations of the simulator include:
 

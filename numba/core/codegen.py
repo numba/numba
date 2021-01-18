@@ -15,7 +15,9 @@ from numba.core import utils, config, cgutils
 from numba.core.runtime.nrtopt import remove_redundant_nrt_refct
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import require_global_compiler_lock
+from numba.core.errors import NumbaInvalidConfigWarning
 from numba.misc.inspection import disassemble_elf_to_cfg
+from numba.misc.llvm_pass_timings import PassTimingsCollection
 
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
@@ -25,6 +27,30 @@ _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
 def _is_x86(triple):
     arch = triple.split('-')[0]
     return arch in _x86arch
+
+
+def _parse_refprune_flags():
+    """Parse refprune flags from the `config`.
+
+    Invalid values are ignored an warn via a `NumbaInvalidConfigWarning`
+    category.
+
+    Returns
+    -------
+    flags : llvmlite.binding.RefPruneSubpasses
+    """
+    flags = config.LLVM_REFPRUNE_FLAGS.split(',')
+    if not flags:
+        return 0
+    val = 0
+    for item in flags:
+        item = item.strip()
+        try:
+            val |= getattr(ll.RefPruneSubpasses, item.upper())
+        except AttributeError:
+            warnings.warn(f"invalid refprune flags {item!r}",
+                          NumbaInvalidConfigWarning)
+    return val
 
 
 def dump(header, body, lang):
@@ -70,9 +96,10 @@ class _CFG(object):
         self.dot = ll.get_function_cfg(fn)
         self.kwargs = kwargs
 
-    def pretty_printer(self, filename=None, view=None, highlight=True,
-                      interleave=False, strip_ir=False, show_key=True,
-                      fontsize=10):
+    def pretty_printer(self, filename=None, view=None, render_format=None,
+                       highlight=True,
+                       interleave=False, strip_ir=False, show_key=True,
+                       fontsize=10):
         """
         "Pretty" prints the DOT graph of the CFG.
         For explanation of the parameters see the docstring for
@@ -93,7 +120,9 @@ class _CFG(object):
                                     returns=_default,
                                     raises=_default,
                                     meminfo=_default,
-                                    branches=_default)
+                                    branches=_default,
+                                    llvm_intrin_calls=_default,
+                                    function_calls=_default,)
         _interleave = SimpleNamespace(python=_default, lineinfo=_default)
 
         def parse_config(_config, kwarg):
@@ -138,6 +167,8 @@ class _CFG(object):
         cs['raise'] = 'lightpink'
         cs['meminfo'] = 'lightseagreen'
         cs['return'] = 'purple'
+        cs['llvm_intrin_calls'] = 'rosybrown'
+        cs['function_calls'] = 'tomato'
 
         # Get the raw dot format information from LLVM and the LLVM IR
         fn = self.cres.get_function(self.name)
@@ -166,7 +197,16 @@ class _CFG(object):
             # name and fname are arbitrary graph and file names, they appear in
             # some rendering formats, the fontsize determines the output
             # fontsize.
-            f = gv.Digraph(name, fname)
+
+            # truncate massive mangled names as file names as it causes OSError
+            # when trying to render to pdf
+            cmax = 200
+            if len(fname) > cmax:
+                wstr = (f'CFG output filname "{fname}" exceeds maximum '
+                        f'supported length, it will be truncated.')
+                warnings.warn(wstr, NumbaInvalidConfigWarning)
+                fname = fname[:cmax]
+            f = gv.Digraph(name, filename=fname)
             f.attr(rankdir='TB')
             f.attr('node', shape='none', fontsize='%s' % str(fontsize))
             return f
@@ -192,8 +232,10 @@ class _CFG(object):
         nrt_incref = re.compile(r"@NRT_incref\b")
         nrt_decref = re.compile(r"@NRT_decref\b")
         nrt_meminfo = re.compile("@NRT_MemInfo")
-        ll_raise = re.compile("ret i32 1,")
-        ll_return = re.compile("ret i32 [^1],")
+        ll_intrin_calls = re.compile(r".*call.*@llvm\..*")
+        ll_function_call = re.compile(r".*call.*@.*")
+        ll_raise = re.compile(r"ret i32.*\!ret_is_raise.*")
+        ll_return = re.compile("ret i32 [^1],?.*")
 
         # wrapper function for line wrapping LLVM lines
         def wrap(s):
@@ -202,12 +244,23 @@ class _CFG(object):
         # function to fix (sometimes escaped for DOT!) LLVM IR etc that needs to
         # be HTML escaped
         def clean(s):
+            # Grab first 300 chars only, 1. this should be enough to identify
+            # the token and it keeps names short. 2. graphviz/dot has a maximum
+            # buffer size near 585?!, with additional transforms it's hard to
+            # know if this would be exceeded. 3. hash of the token string is
+            # written into the rendering to permit exact identification against
+            # e.g. LLVM IR dump if necessary.
+            n = 300
+            if len(s) > n:
+                hs = str(hash(s))
+                s = '{}...<hash={}>'.format(s[:n], hs)
             s = html.escape(s) # deals with  &, < and >
             s = s.replace('\\{', "&#123;")
             s = s.replace('\\}', "&#125;")
             s = s.replace('\\', "&#92;")
             s = s.replace('%', "&#37;")
-            return s.replace('!', "&#33;")
+            s = s.replace('!', "&#33;")
+            return s
 
         # These hold the node and edge ids from the raw dot information. They
         # are used later to wire up a new DiGraph that has the same structure
@@ -374,6 +427,10 @@ class _CFG(object):
                     colour = cs['raise']
                 elif _highlight.returns and ll_return.search(l):
                     colour = cs['return']
+                elif _highlight.llvm_intrin_calls and ll_intrin_calls.search(l):
+                    colour = cs['llvm_intrin_calls']
+                elif _highlight.function_calls and ll_function_call.search(l):
+                    colour = cs['function_calls']
                 else:
                     colour = cs['default']
 
@@ -432,21 +489,23 @@ class _CFG(object):
 
         # Render if required
         if filename is not None or view is not None:
-            f.render(filename=filename, view=view, format='pdf')
+            f.render(filename=filename, view=view, format=render_format)
 
         # Else pipe out a SVG
         return f.pipe(format='svg')
 
-    def display(self, filename=None, view=False):
+    def display(self, filename=None, format='pdf', view=False):
         """
         Plot the CFG.  In IPython notebook, the return image object can be
         inlined.
 
         The *filename* option can be set to a specific path for the rendered
         output to write to.  If *view* option is True, the plot is opened by
-        the system default application for the image format (PDF).
+        the system default application for the image format (PDF). *format* can
+        be any valid format string accepted by graphviz, default is 'pdf'.
         """
-        rawbyt = self.pretty_printer(filename=filename, view=view, **self.kwargs)
+        rawbyt = self.pretty_printer(filename=filename, view=view,
+                                     render_format=format, **self.kwargs)
         return rawbyt.decode('utf-8')
 
     def _repr_svg_(self):
@@ -467,7 +526,7 @@ class CodeLibrary(object):
     _object_caching_enabled = False
     _disable_inspection = False
 
-    def __init__(self, codegen, name):
+    def __init__(self, codegen: "BaseCPUCodegen", name: str):
         self._codegen = codegen
         self._name = name
         self._linking_libraries = []   # maintain insertion order
@@ -477,11 +536,17 @@ class CodeLibrary(object):
         self._shared_module = None
         # Track names of the dynamic globals
         self._dynamic_globals = []
+        ptc_name = f"{self.__class__.__name__}({self._name!r})"
+        self._recorded_timings = PassTimingsCollection(ptc_name)
 
     @property
     def has_dynamic_globals(self):
         self._ensure_finalized()
         return len(self._dynamic_globals) > 0
+
+    @property
+    def recorded_timings(self):
+        return self._recorded_timings
 
     @property
     def codegen(self):
@@ -512,16 +577,28 @@ class CodeLibrary(object):
             # Run function-level optimizations to reduce memory usage and improve
             # module-level optimization.
             for func in ll_module.functions:
-                fpm.initialize()
-                fpm.run(func)
-                fpm.finalize()
+                k = f"Function passes on {func.name!r}"
+                with self._recorded_timings.record(k):
+                    fpm.initialize()
+                    fpm.run(func)
+                    fpm.finalize()
 
     def _optimize_final_module(self):
         """
         Internal: optimize this library's final module.
         """
-        self._codegen._mpm.run(self._final_module)
-        self._final_module = remove_redundant_nrt_refct(self._final_module)
+        cheap_name = "Module passes (cheap optimization for refprune)"
+        with self._recorded_timings.record(cheap_name):
+            # A cheaper optimisation pass is run first to try and get as many
+            # refops into the same function as possible via inlining
+            self._codegen._mpm_cheap.run(self._final_module)
+        # Refop pruning is then run on the heavily inlined function
+        if not config.LLVM_REFPRUNE_PASS:
+            self._final_module = remove_redundant_nrt_refct(self._final_module)
+        full_name = "Module passes (full optimization)"
+        with self._recorded_timings.record(full_name):
+            # The full optimisation suite is then run on the refop pruned IR
+            self._codegen._mpm_full.run(self._final_module)
 
     def _get_module_for_linking(self):
         """
@@ -589,7 +666,8 @@ class CodeLibrary(object):
     def add_llvm_module(self, ll_module):
         self._optimize_functions(ll_module)
         # TODO: we shouldn't need to recreate the LLVM module object
-        ll_module = remove_redundant_nrt_refct(ll_module)
+        if not config.LLVM_REFPRUNE_PASS:
+            ll_module = remove_redundant_nrt_refct(ll_module)
         self._final_module.link_in(ll_module)
 
     def finalize(self):
@@ -625,7 +703,7 @@ class CodeLibrary(object):
         self._final_module.verify()
         self._finalize_final_module()
 
-    def _finalize_dyanmic_globals(self):
+    def _finalize_dynamic_globals(self):
         # Scan for dynamic globals
         for gv in self._final_module.global_variables:
             if gv.name.startswith('numba.dynamic.globals'):
@@ -643,7 +721,7 @@ class CodeLibrary(object):
         """
         Make the underlying LLVM module ready to use.
         """
-        self._finalize_dyanmic_globals()
+        self._finalize_dynamic_globals()
         self._verify_declare_only_symbols()
 
         # Remember this on the module, for the object cache hooks
@@ -888,7 +966,8 @@ class JITCodeLibrary(CodeLibrary):
 
     def _finalize_specific(self):
         self._codegen._scan_and_fix_unresolved_refs(self._final_module)
-        self._codegen._engine.finalize_object()
+        with self._recorded_timings.record("Finalize object"):
+            self._codegen._engine.finalize_object()
 
 
 class RuntimeLinker(object):
@@ -1037,7 +1116,11 @@ class BaseCPUCodegen(object):
         self._engine = JitEngine(engine)
         self._target_data = engine.target_data
         self._data_layout = str(self._target_data)
-        self._mpm = self._module_pass_manager()
+        self._mpm_cheap = self._module_pass_manager(loop_vectorize=False,
+                                                    slp_vectorize=False,
+                                                    opt=0,
+                                                    cost="cheap")
+        self._mpm_full = self._module_pass_manager()
 
         self._engine.set_object_cache(self._library_class._object_compiled_hook,
                                       self._library_class._object_getbuffer_hook)
@@ -1066,21 +1149,36 @@ class BaseCPUCodegen(object):
     def unserialize_library(self, serialized):
         return self._library_class._unserialize(self, serialized)
 
-    def _module_pass_manager(self):
+    def _module_pass_manager(self, **kwargs):
         pm = ll.create_module_pass_manager()
         self._tm.add_analysis_passes(pm)
-        with self._pass_manager_builder() as pmb:
+        cost = kwargs.pop("cost", None)
+        with self._pass_manager_builder(**kwargs) as pmb:
             pmb.populate(pm)
+        if cost is not None and cost == "cheap":
+            # This knocks loops into rotated form early to reduce the likelihood
+            # of vectorization failing due to unknown PHI nodes.
+            pm.add_loop_rotate_pass()
+            # This helps the refprune pass which can only deal with arguments to
+            # NRT function pairs that are literally the same i.e. it doesn't
+            # attempt to resolve arguments by tracing through the IR etc.
+            # Instcombine resolves a lot of this, it only runs as part of the
+            # cheap pass as the full opt pass will likely include it anyway.
+            pm.add_instruction_combining_pass()
+        if config.LLVM_REFPRUNE_PASS:
+            pm.add_refprune_pass(_parse_refprune_flags())
         return pm
 
-    def _function_pass_manager(self, llvm_module):
+    def _function_pass_manager(self, llvm_module, **kwargs):
         pm = ll.create_function_pass_manager(llvm_module)
         self._tm.add_analysis_passes(pm)
-        with self._pass_manager_builder() as pmb:
+        with self._pass_manager_builder(**kwargs) as pmb:
             pmb.populate(pm)
+        if config.LLVM_REFPRUNE_PASS:
+            pm.add_refprune_pass(_parse_refprune_flags())
         return pm
 
-    def _pass_manager_builder(self):
+    def _pass_manager_builder(self, **kwargs):
         """
         Create a PassManagerBuilder.
 
@@ -1089,8 +1187,15 @@ class BaseCPUCodegen(object):
         or function pass manager.  Otherwise some optimizations will be
         missed...
         """
-        pmb = lp.create_pass_manager_builder(
-            opt=config.OPT, loop_vectorize=config.LOOP_VECTORIZE)
+        opt_level = kwargs.pop('opt', config.OPT)
+        loop_vectorize = kwargs.pop('loop_vectorize', config.LOOP_VECTORIZE)
+        slp_vectorize = kwargs.pop('slp_vectorize', config.SLP_VECTORIZE)
+
+        pmb = lp.create_pass_manager_builder(opt=opt_level,
+                                             loop_vectorize=loop_vectorize,
+                                             slp_vectorize=slp_vectorize,
+                                             **kwargs)
+
         return pmb
 
     def _check_llvm_bugs(self):

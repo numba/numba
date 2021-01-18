@@ -41,6 +41,10 @@ def array_equal(a, b):
     return np.array_equal(a, b)
 
 
+def intersect1d(a, b):
+    return np.intersect1d(a, b)
+
+
 def append(arr, values, axis):
     return np.append(arr, values, axis=axis)
 
@@ -257,6 +261,10 @@ def asfarray(a, dtype=np.float64):
     return np.asfarray(a, dtype=dtype)
 
 
+def asfarray_default_kwarg(a):
+    return np.asfarray(a)
+
+
 def extract(condition, arr):
     return np.extract(condition, arr)
 
@@ -327,6 +335,10 @@ def flip_lr(a):
 
 def flip_ud(a):
     return np.flipud(a)
+
+
+def np_asarray_chkfinite(a, dtype=None):
+    return np.asarray_chkfinite(a, dtype)
 
 
 def array_contains(a, key):
@@ -579,6 +591,29 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             'Both arguments to "array_equals" must be array-like',
             str(raises.exception)
         )
+
+    def test_intersect1d(self):
+
+        def arrays():
+            yield [], []  # two empty arrays
+            yield [1], []  # empty right
+            yield [], [1]  # empty left
+            yield [1], [2]  # singletons no intersection
+            yield [1], [1]  # singletons one intersection
+            yield [1, 2], [1]
+            yield [1, 2, 2], [2, 2]
+            yield [1, 2], [2, 1]
+            yield [1, 2, 3], [1, 2, 3]
+
+        pyfunc = intersect1d
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for a, b in arrays():
+            a = np.array(a)
+            b = np.array(b)
+            expected = pyfunc(a, b)
+            got = cfunc(a, b)
+            self.assertPreciseEqual(expected, got)
 
     def test_count_nonzero(self):
 
@@ -3388,6 +3423,15 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(expected, got)
             self.assertTrue(np.issubdtype(got.dtype, np.inexact), got.dtype)
 
+        # test default kwarg variant
+        pyfunc = asfarray_default_kwarg
+        cfunc = jit(nopython=True)(pyfunc)
+        arr = np.array([1, 2, 3])
+        expected = pyfunc(arr)
+        got = cfunc(arr)
+        self.assertPreciseEqual(expected, got)
+        self.assertTrue(np.issubdtype(got.dtype, np.inexact), got.dtype)
+
     def test_repeat(self):
         # np.repeat(a, repeats)
         np_pyfunc = np_repeat
@@ -3865,6 +3909,75 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             'Inputs must be array-like.',
             str(raises.exception)
         )
+
+    def test_asarray_chkfinite(self):
+        pyfunc = np_asarray_chkfinite
+        cfunc = jit(nopython=True)(pyfunc)
+        self.disable_leak_check()
+
+        pairs = [
+            #1D array with all args
+            (
+                np.array([1, 2, 3]),
+                np.float32,
+            ),
+            #1D array
+            (
+                np.array([1, 2, 3]),
+            ),
+            #1D array-like
+            (
+                [1, 2, 3, 4],
+            ),
+            # 2x2 (n-dims)
+            (
+                np.array([[1, 2], [3, 4]]),
+                np.float32,
+            ),
+            # 2x2 array-like (n-dims)
+            (
+                ((1, 2), (3, 4)),
+                np.int64
+            ),
+            # 2x2 (1-dim) with type promotion
+            (
+                np.array([1, 2], dtype=np.int64),
+            ),
+            # 3x2 (with higher order broadcasting)
+            (
+                np.arange(36).reshape(6, 2, 3),
+            ),
+        ]
+
+        for pair in pairs:
+            expected = pyfunc(*pair)
+            got = cfunc(*pair)
+            self.assertPreciseEqual(expected, got)
+
+    def test_asarray_chkfinite_exceptions(self):
+        cfunc = jit(nopython=True)(np_asarray_chkfinite)
+        self.disable_leak_check()
+
+        #test for single value
+        with self.assertRaises(TypingError) as e:
+            cfunc(2)
+        msg = "The argument to np.asarray_chkfinite must be array-like"
+        self.assertIn(msg, str(e.exception))
+
+        #test for NaNs
+        with self.assertRaises(ValueError) as e:
+            cfunc(np.array([2, 4, np.nan, 5]))
+        self.assertIn("array must not contain infs or NaNs", str(e.exception))
+
+        #test for infs
+        with self.assertRaises(ValueError) as e:
+            cfunc(np.array([1, 2, np.inf, 4]))
+        self.assertIn("array must not contain infs or NaNs", str(e.exception))
+
+        #test for dtype
+        with self.assertRaises(TypingError) as e:
+            cfunc(np.array([1, 2, 3, 4]), 'float32')
+        self.assertIn("dtype must be a valid Numpy dtype", str(e.exception))
 
 
 class TestNPMachineParameters(TestCase):

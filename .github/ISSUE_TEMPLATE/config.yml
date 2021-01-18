@@ -2,7 +2,7 @@ blank_issues_enabled: false
 contact_links:
   - name: General Question
     url: https://numba.discourse.group/c/numba/community-support/
-    about: "If you have a question like *How do I speed up X?* then please ask on Numba's discourse instance."
+    about: "If you have a general question (not a bug report or feature request) then please ask on Numba's discourse instance."
   - name: Quick Question/Just want to say Hi!
     url: https://gitter.im/numba/numba
     about: "If you have a quick question or want chat to users/developers in real time then please use gitter.im/numba/numba"

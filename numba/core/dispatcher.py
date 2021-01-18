@@ -10,6 +10,7 @@ import types as pytypes
 import uuid
 import weakref
 from copy import deepcopy
+from contextlib import ExitStack
 
 from numba import _dispatcher
 from numba.core import utils, types, errors, typing, serialize, config, compiler, sigutils
@@ -20,6 +21,7 @@ from numba.core.typing.typeof import Purpose, typeof
 from numba.core.bytecode import get_code_object
 from numba.core.caching import NullCache, FunctionCache
 from numba.core import entrypoints
+import numba.core.event as ev
 
 
 class OmittedArg(object):
@@ -681,6 +683,26 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 tp = types.pyobject
         return tp
 
+    def _callback_add_timer(self, duration, cres, lock_name):
+        md = cres.metadata
+        # md can be None when code is loaded from cache
+        if md is not None:
+            timers = md.setdefault("timers", {})
+            if lock_name not in timers:
+                # Only write if the metadata does not exist
+                timers[lock_name] = duration
+            else:
+                msg = f"'{lock_name} metadata is already defined."
+                raise AssertionError(msg)
+
+    def _callback_add_compiler_timer(self, duration, cres):
+        return self._callback_add_timer(duration, cres,
+                                        lock_name="compiler_lock")
+
+    def _callback_add_llvm_timer(self, duration, cres):
+        return self._callback_add_timer(duration, cres,
+                                        lock_name="llvm_lock")
+
 
 class _MemoMixin:
     __uuid = None
@@ -830,38 +852,59 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         self._can_compile = can_compile
         return self
 
-    @global_compiler_lock
     def compile(self, sig):
-        if not self._can_compile:
-            raise RuntimeError("compilation disabled")
-        # Use counter to track recursion compilation depth
-        with self._compiling_counter:
-            args, return_type = sigutils.normalize_signature(sig)
-            # Don't recompile if signature already exists
-            existing = self.overloads.get(tuple(args))
-            if existing is not None:
-                return existing.entry_point
-            # Try to load from disk cache
-            cres = self._cache.load_overload(sig, self.targetctx)
-            if cres is not None:
-                self._cache_hits[sig] += 1
-                # XXX fold this in add_overload()? (also see compiler.py)
-                if not cres.objectmode:
-                    self.targetctx.insert_user_function(cres.entry_point,
-                                                        cres.fndesc, [cres.library])
-                self.add_overload(cres)
-                return cres.entry_point
+        with ExitStack() as scope:
+            cres = None
 
-            self._cache_misses[sig] += 1
-            try:
-                cres = self._compiler.compile(args, return_type)
-            except errors.ForceLiteralArg as e:
-                def folded(args, kws):
-                    return self._compiler.fold_argument_types(args, kws)[1]
-                raise e.bind_fold_arguments(folded)
-            self.add_overload(cres)
-            self._cache.save_overload(sig, cres)
-            return cres.entry_point
+            def cb_compiler(dur):
+                if cres is not None:
+                    self._callback_add_compiler_timer(dur, cres)
+
+            def cb_llvm(dur):
+                if cres is not None:
+                    self._callback_add_llvm_timer(dur, cres)
+
+            scope.enter_context(ev.install_timer("numba:compiler_lock",
+                                                 cb_compiler))
+            scope.enter_context(ev.install_timer("numba:llvm_lock", cb_llvm))
+            scope.enter_context(global_compiler_lock)
+
+            if not self._can_compile:
+                raise RuntimeError("compilation disabled")
+            # Use counter to track recursion compilation depth
+            with self._compiling_counter:
+                args, return_type = sigutils.normalize_signature(sig)
+                # Don't recompile if signature already exists
+                existing = self.overloads.get(tuple(args))
+                if existing is not None:
+                    return existing.entry_point
+                # Try to load from disk cache
+                cres = self._cache.load_overload(sig, self.targetctx)
+                if cres is not None:
+                    self._cache_hits[sig] += 1
+                    # XXX fold this in add_overload()? (also see compiler.py)
+                    if not cres.objectmode:
+                        self.targetctx.insert_user_function(cres.entry_point,
+                                                            cres.fndesc, [cres.library])
+                    self.add_overload(cres)
+                    return cres.entry_point
+
+                self._cache_misses[sig] += 1
+                ev_details = dict(
+                    dispatcher=self,
+                    args=args,
+                    return_type=return_type,
+                )
+                with ev.trigger_event("numba:compile", data=ev_details):
+                    try:
+                        cres = self._compiler.compile(args, return_type)
+                    except errors.ForceLiteralArg as e:
+                        def folded(args, kws):
+                            return self._compiler.fold_argument_types(args, kws)[1]
+                        raise e.bind_fold_arguments(folded)
+                    self.add_overload(cres)
+                self._cache.save_overload(sig, cres)
+                return cres.entry_point
 
     def get_compile_result(self, sig):
         """Compile (if needed) and return the compilation result with the
@@ -1014,38 +1057,61 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         """
         pass
 
-    @global_compiler_lock
     def compile(self, sig):
-        # Use counter to track recursion compilation depth
-        with self._compiling_counter:
-            # XXX this is mostly duplicated from Dispatcher.
-            flags = self.flags
-            args, return_type = sigutils.normalize_signature(sig)
+        with ExitStack() as scope:
+            cres = None
 
-            # Don't recompile if signature already exists
-            # (e.g. if another thread compiled it before we got the lock)
-            existing = self.overloads.get(tuple(args))
-            if existing is not None:
-                return existing.entry_point
+            def cb_compiler(dur):
+                if cres is not None:
+                    self._callback_add_compiler_timer(dur, cres)
 
-            self._pre_compile(args, return_type, flags)
+            def cb_llvm(dur):
+                if cres is not None:
+                    self._callback_add_llvm_timer(dur, cres)
 
-            # Clone IR to avoid (some of the) mutation in the rewrite pass
-            cloned_func_ir = self.func_ir.copy()
-            cres = compiler.compile_ir(typingctx=self.typingctx,
-                                       targetctx=self.targetctx,
-                                       func_ir=cloned_func_ir,
-                                       args=args, return_type=return_type,
-                                       flags=flags, locals=self.locals,
-                                       lifted=(),
-                                       lifted_from=self.lifted_from,
-                                       is_lifted_loop=True,)
+            scope.enter_context(ev.install_timer("numba:compiler_lock",
+                                                 cb_compiler))
+            scope.enter_context(ev.install_timer("numba:llvm_lock", cb_llvm))
+            scope.enter_context(global_compiler_lock)
 
-            # Check typing error if object mode is used
-            if cres.typing_error is not None and not flags.enable_pyobject:
-                raise cres.typing_error
-            self.add_overload(cres)
-            return cres.entry_point
+            # Use counter to track recursion compilation depth
+            with self._compiling_counter:
+                # XXX this is mostly duplicated from Dispatcher.
+                flags = self.flags
+                args, return_type = sigutils.normalize_signature(sig)
+
+                # Don't recompile if signature already exists
+                # (e.g. if another thread compiled it before we got the lock)
+                existing = self.overloads.get(tuple(args))
+                if existing is not None:
+                    return existing.entry_point
+
+                self._pre_compile(args, return_type, flags)
+
+                # Clone IR to avoid (some of the) mutation in the rewrite pass
+                cloned_func_ir = self.func_ir.copy()
+
+                ev_details = dict(
+                    dispatcher=self,
+                    args=args,
+                    return_type=return_type,
+                )
+                with ev.trigger_event("numba:compile", data=ev_details):
+                    cres = compiler.compile_ir(typingctx=self.typingctx,
+                                            targetctx=self.targetctx,
+                                            func_ir=cloned_func_ir,
+                                            args=args, return_type=return_type,
+                                            flags=flags, locals=self.locals,
+                                            lifted=(),
+                                            lifted_from=self.lifted_from,
+                                            is_lifted_loop=True,)
+
+                    # Check typing error if object mode is used
+                    if (cres.typing_error is not None and
+                            not flags.enable_pyobject):
+                        raise cres.typing_error
+                    self.add_overload(cres)
+                return cres.entry_point
 
 
 class LiftedLoop(LiftedCode):
@@ -1095,6 +1161,8 @@ class ObjModeLiftedWith(LiftedWith):
             raise ValueError("expecting `flags.force_pyobject`")
         if self.output_types is None:
             raise TypeError('`output_types` must be provided')
+        # switch off rewrites, they have no effect
+        self.flags.no_rewrites = True
 
     @property
     def _numba_type_(self):
@@ -1138,6 +1206,12 @@ class ObjModeLiftedWith(LiftedWith):
                     'with-context for arg {}'
                 )
                 raise errors.TypingError(msg.format(i))
+
+    @global_compiler_lock
+    def compile(self, sig):
+        args, _ = sigutils.normalize_signature(sig)
+        sig = (types.ffi_forced_object,) * len(args)
+        return super().compile(sig)
 
 
 # Initialize typeof machinery

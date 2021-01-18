@@ -23,7 +23,7 @@ from numba.core import types, errors
 # Re-export typeof
 from numba.misc.special import (
     typeof, prange, pndindex, gdb, gdb_breakpoint, gdb_init,
-    literally, literal_unroll
+    literally, literal_unroll,
 )
 
 # Re-export error classes
@@ -66,7 +66,6 @@ __all__ = """
     njit
     stencil
     jit_module
-    jitclass
     typeof
     prange
     gdb

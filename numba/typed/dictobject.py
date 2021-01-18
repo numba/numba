@@ -343,6 +343,8 @@ def _dict_insert(typingctx, d, key, hashval, val):
         data_val = dm_val.as_data(builder, val)
 
         ptr_key = cgutils.alloca_once_value(builder, data_key)
+        cgutils.memset_padding(builder, ptr_key)
+
         ptr_val = cgutils.alloca_once_value(builder, data_val)
         # TODO: the ptr_oldval is not used.  needed for refct
         ptr_oldval = cgutils.alloca_once(builder, data_val.type)
@@ -435,6 +437,7 @@ def _dict_lookup(typingctx, d, key, hashval):
 
         data_key = dm_key.as_data(builder, key)
         ptr_key = cgutils.alloca_once_value(builder, data_key)
+        cgutils.memset_padding(builder, ptr_key)
 
         ll_val = context.get_data_type(td.value_type)
         ptr_val = cgutils.alloca_once(builder, ll_val)

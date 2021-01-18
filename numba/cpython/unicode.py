@@ -1358,7 +1358,7 @@ def unicode_join(sep, parts):
     elif isinstance(parts, types.IterableType):
         def join_iter_impl(sep, parts):
             parts_list = [p for p in parts]
-            return join_list(sep, parts_list)
+            return sep.join(parts_list)
         return join_iter_impl
     elif isinstance(parts, types.UnicodeType):
         # Temporary workaround until UnicodeType is iterable
@@ -1664,7 +1664,7 @@ def unicode_getitem(s, idx):
                 for i in range(slice_idx.start + slice_idx.step,
                                slice_idx.stop, slice_idx.step):
                     cp = _get_code_point(s, i)
-                    is_ascii |= _codepoint_is_ascii(cp)
+                    is_ascii &= _codepoint_is_ascii(cp)
                     new_kind = _codepoint_to_kind(cp)
                     if kind != new_kind:
                         kind = _pick_kind(kind, new_kind)

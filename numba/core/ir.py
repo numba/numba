@@ -26,7 +26,7 @@ class Loc(object):
     """Source location
 
     """
-    _defmatcher = re.compile('def\s+(\w+)\(.*')
+    _defmatcher = re.compile(r'def\s+(\w+)\(.*')
 
     def __init__(self, filename, line, col=None, maybe_decorator=False):
         """ Arguments:
@@ -554,8 +554,23 @@ class Expr(Inst):
         This node is not handled by type inference. It is only added by
         post-typing passes.
         """
+        assert isinstance(loc, Loc)
         op = 'null'
         return cls(op=op, loc=loc)
+
+    @classmethod
+    def dummy(cls, op, info, loc):
+        """
+        A node for a dummy value.
+
+        This node is a place holder for carrying information through to a point
+        where it is rewritten into something valid. This node is not handled
+        by type inference or lowering. It's presence outside of the interpreter
+        renders IR as illegal.
+        """
+        assert isinstance(loc, Loc)
+        assert isinstance(op, str)
+        return cls(op=op, info=info, loc=loc)
 
     def __repr__(self):
         if self.op == 'call':
@@ -1570,12 +1585,12 @@ class FunctionIR(object):
                 label = sb.getvalue()
             if include_ir:
                 label = ''.join(
-                    ['  {}\l'.format(x) for x in label.splitlines()],
+                    [r'  {}\l'.format(x) for x in label.splitlines()],
                 )
-                label = "block {}\l".format(k) + label
+                label = r"block {}\l".format(k) + label
                 g.node(str(k), label=label, shape='rect')
             else:
-                label = "{}\l".format(k)
+                label = r"{}\l".format(k)
                 g.node(str(k), label=label, shape='circle')
         # Populate the edges
         for src, blk in self.blocks.items():

@@ -40,6 +40,16 @@ def _get_kernel_context():
     return _kernel_context
 
 
+class FakeDefinition:
+    '''
+    Used only to provide the max_cooperative_grid_blocks method
+    '''
+    def max_cooperative_grid_blocks(self, blockdim):
+        # We can only run one block in a cooperative grid because we have no
+        # mechanism for synchronization between different blocks
+        return 1
+
+
 class FakeCUDAKernel(object):
     '''
     Wraps a @cuda.jit-ed function.
@@ -126,6 +136,15 @@ class FakeCUDAKernel(object):
             raise ValueError("Can't create ForAll with negative task count: %s"
                              % ntasks)
         return self[ntasks, 1, stream, sharedmem]
+
+    @property
+    def definition(self):
+        return FakeDefinition()
+
+    @property
+    def definitions(self):
+        msg = 'Multiple definitions are unsupported in the simulator'
+        raise NotImplementedError(msg)
 
     @property
     def ptx(self):

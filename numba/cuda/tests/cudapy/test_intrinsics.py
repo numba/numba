@@ -215,7 +215,7 @@ class TestCudaIntrinsic(CUDATestCase):
         self.assertEqual(ary[1], nctaid[1] * ntid[1])
 
     def test_intrinsic_forloop_step(self):
-        compiled = cuda.jit("void(float32[:,::1])")(intrinsic_forloop_step)
+        compiled = cuda.jit("void(int32[:,::1])")(intrinsic_forloop_step)
         ntid = (4, 3)
         nctaid = (5, 6)
         shape = (ntid[0] * nctaid[0], ntid[1] * nctaid[1])
@@ -317,7 +317,7 @@ class TestCudaIntrinsic(CUDATestCase):
         http://docs.nvidia.com/cuda/nvvm-ir-spec/index.html#bit-manipulations-intrinics
         """
         compiled = cuda.jit("void(int32[:], uint32)")(simple_clz)
-        ary = np.zeros(1, dtype=np.uint32)
+        ary = np.zeros(1, dtype=np.int32)
         compiled[1, 1](ary, 0x00100000)
         self.assertEquals(ary[0], 11)
 
@@ -348,7 +348,7 @@ class TestCudaIntrinsic(CUDATestCase):
 
     def test_ffs_u4(self):
         compiled = cuda.jit("void(int32[:], uint32)")(simple_ffs)
-        ary = np.zeros(1, dtype=np.uint32)
+        ary = np.zeros(1, dtype=np.int32)
         compiled[1, 1](ary, 0x00100000)
         self.assertEquals(ary[0], 20)
 

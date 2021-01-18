@@ -13,6 +13,7 @@ from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
 from numba.core import types, utils, typing, datamodel, debuginfo, funcdesc, config, cgutils, imputils
+from numba.core import event
 from numba import _dynfunc, _helperlib
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.pythonapi import PythonAPI
@@ -1211,3 +1212,19 @@ class _wrap_missing_loc(object):
 
     def __repr__(self):
         return "<wrapped %s>" % self.func
+
+
+@utils.runonce
+def _initialize_llvm_lock_event():
+    """Initial event triggers for LLVM lock
+    """
+    def enter_fn():
+        event.start_event("numba:llvm_lock")
+
+    def exit_fn():
+        event.end_event("numba:llvm_lock")
+
+    ll.ffi.register_lock_callback(enter_fn, exit_fn)
+
+
+_initialize_llvm_lock_event()
