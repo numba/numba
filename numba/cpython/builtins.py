@@ -141,7 +141,7 @@ def deferred_getattr(context, builder, typ, value, attr):
     """
     inner_type = typ.get()
     val = context.cast(builder, value, typ, inner_type)
-    imp = context.get_getattr(inner_type, attr)
+    imp = context.get_getattr(builder, inner_type, attr)
     return imp(context, builder, inner_type, val, attr)
 
 @lower_cast(types.Any, types.DeferredType)
