@@ -116,13 +116,8 @@ Raspberry Pi CPU is 64-bit, Raspbian runs it in 32-bit mode, so look at
 Conda-forge support for AArch64 is still quite experimental and packages are limited,
 but it does work enough for Numba to build and pass tests.  To set up the environment:
 
-* Install `conda4aarch64 <https://github.com/jjhelmus/conda4aarch64/releases>`_.
+* Install `miniforge <https://github.com/conda-forge/miniforge>`_.
   This will create a minimal conda environment.
-* Add the ``c4aarch64`` and ``conda-forge`` channels to your conda
-  configuration::
-
-    $ conda config --add channels c4aarch64
-    $ conda config --add channels conda-forge
 
 * Then you can install Numba from the ``numba`` channel::
 

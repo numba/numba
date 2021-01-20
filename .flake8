@@ -40,7 +40,6 @@ exclude =
     numba/core/itanium_mangler.py
     numba/core/generators.py
     numba/misc/appdirs.py
-    numba/core/interpreter.py
     numba/core/caching.py
     numba/core/debuginfo.py
     numba/core/annotations/pretty_annotate.py
