@@ -635,7 +635,12 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             template, pysig, folded_args, kws = resolve(new_args, kws)
             ir = inline_worker.run_untyped_passes(disp_type.dispatcher.py_func)
 
-            typemap, return_type, calltypes = typed_passes.type_inference_stage(
+            (
+                typemap,
+                return_type,
+                calltypes,
+                _
+            ) = typed_passes.type_inference_stage(
                 self.context, ir, folded_args, None)
             sig = Signature(return_type, folded_args, None)
             # this stores a load of info for the cost model function if supplied

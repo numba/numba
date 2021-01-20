@@ -373,20 +373,28 @@ def alloca_once(builder, ty, size=None, name='', zfill=False):
     with builder.goto_entry_block():
         ptr = builder.alloca(ty, size=size, name=name)
         # Always zero-fill at init-site.  This is safe.
-        builder.store(ty(None), ptr)
+        builder.store(ptr.type.pointee(None), ptr)
     # Also zero-fill at the use-site
     if zfill:
-        builder.store(ty(None), ptr)
+        builder.store(ptr.type.pointee(None), ptr)
     return ptr
 
 
-def alloca_once_value(builder, value, name=''):
+def sizeof(builder, ptr_type):
+    """Compute sizeof using GEP
+    """
+    null = ptr_type(None)
+    offset = null.gep([int32_t(1)])
+    return builder.ptrtoint(offset, intp_t)
+
+
+def alloca_once_value(builder, value, name='', zfill=False):
     """
     Like alloca_once(), but passing a *value* instead of a type.  The
     type is inferred and the allocated slot is also initialized with the
     given value.
     """
-    storage = alloca_once(builder, value.type)
+    storage = alloca_once(builder, value.type, zfill=zfill)
     builder.store(value, storage)
     return storage
 
@@ -905,6 +913,18 @@ def memset(builder, ptr, size, value):
     if isinstance(value, int):
         value = int8_t(value)
     builder.call(fn, [ptr, value, size, bool_t(0)])
+
+
+def memset_padding(builder, ptr):
+    """
+    Fill padding bytes of the pointee with zeros.
+    """
+    # Load existing value
+    val = builder.load(ptr)
+    # Fill pointee with zeros
+    memset(builder, ptr, sizeof(builder, ptr.type), 0)
+    # Store value back
+    builder.store(val, ptr)
 
 
 def global_constant(builder_or_module, name, value, linkage='internal'):

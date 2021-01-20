@@ -1464,6 +1464,9 @@ class LiteralUnroll(FunctionPass):
         pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
         # do the unroll
         pm.add_pass(MixedContainerUnroller, "performs mixed container unroll")
+        # rewrite dynamic getitem to static getitem as it's possible some more
+        # getitems will now be statically resolvable
+        pm.add_pass(GenericRewrites, "Generic Rewrites")
         pm.finalize()
         pm.run(state)
         return True
