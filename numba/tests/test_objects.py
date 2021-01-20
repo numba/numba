@@ -4,10 +4,10 @@ Test generic manipulation of objects.
 
 
 import unittest
+from numba import njit
 from numba.core.compiler import compile_isolated, Flags
 from numba.core import types
 from numba.tests.support import TestCase
-
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -30,6 +30,12 @@ def delattr_usecase(o):
 
 
 class TestAttributes(TestCase):
+    def test_getattr(self, flags=enable_pyobj_flags):
+        import numba.tests.usecases as uc
+        @njit
+        def f():
+            return uc._GLOBAL_STR
+        self.assertEquals(f(), "abc")
 
     def test_setattr(self, flags=enable_pyobj_flags):
         pyfunc = setattr_usecase
