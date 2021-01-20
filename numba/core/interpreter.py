@@ -15,6 +15,7 @@ from numba.core.utils import (
     )
 from numba.core.byteflow import Flow, AdaptDFA, AdaptCFA
 from numba.core.unsafe import eh
+from numba.cpython.unsafe.tuple import unpack_single_tuple
 
 class _UNKNOWN_VALUE(object):
     """Represents an unknown value, this is for ease of debugging purposes only.
@@ -879,8 +880,15 @@ class Interpreter(object):
 
     def _build_tuple_unpack(self, inst, tuples, temps, is_assign):
         first = self.get(tuples[0])
-        if is_assign: # it's assign-like, just store through
-            self.store(first, temps[0])
+        if is_assign:
+            # it's assign-like, defer handling to an intrinsic that will have
+            # type information.
+            # Can deal with tuples only, i.e. y = (*x,). where x = <tuple>
+            gv_name = "unpack_single_tuple"
+            gv_fn = ir.Global(gv_name, unpack_single_tuple, loc=self.loc,)
+            self.store(value=gv_fn, name=gv_name, redefine=True)
+            exc = ir.Expr.call(self.get(gv_name), args=(first,), kws=(), loc=self.loc,)
+            self.store(exc, temps[0])
         else:
             for other, tmp in zip(map(self.get, tuples[1:]), temps):
                 out = ir.Expr.binop(fn=operator.add, lhs=first, rhs=other,

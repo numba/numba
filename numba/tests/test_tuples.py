@@ -654,6 +654,19 @@ class TestTupleBuild(TestCase):
         # Heterogeneous
         check((4, 5.5))
 
+    def test_build_unpack_fail_on_list_assign_like(self):
+        # see #6534
+        def check(p):
+            pyfunc = lambda a: (*a,)
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        with self.assertRaises(errors.TypingError) as raises:
+            check([4, 5])
+
+        msg = "Only tuples are supported when unpacking a single item"
+        self.assertIn(msg, str(raises.exception))
+
     def test_build_unpack_more(self):
         def check(p):
             pyfunc = lambda a: (1, *a, (1, 2), *a)
