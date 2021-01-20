@@ -645,7 +645,6 @@ Dispatcher_call(Dispatcher *self, PyObject *args, PyObject *kws)
                                   exact_match_required);
         }
     }
-
     if (matches == 1) {
         /* Definition is found */
         retval = call_cfunc(self, cfunc, args, kws, locals);
