@@ -206,7 +206,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         # but newer python uses a different name
         self.__code__ = self.func_code
         # a place to keep an active reference to the types of the active call
-        self._types_active_call = None
+        self._types_active_call = []
 
         argnames = tuple(pysig.parameters)
         default_values = self.py_func.__defaults__ or ()
@@ -421,8 +421,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             error_rewrite(e, 'unsupported_error')
         except (errors.NotDefinedError, errors.RedefinedError,
                 errors.VerificationError) as e:
-            # These errors are probably from an issue with either the code supplied
-            # being syntactically or otherwise invalid
+            # These errors are probably from an issue with either the code
+            # supplied being syntactically or otherwise invalid
             error_rewrite(e, 'interpreter')
         except errors.ConstantInferenceError as e:
             # this is from trying to infer something as constant when it isn't
@@ -435,8 +435,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                     e.patch_message('\n'.join((str(e).rstrip(), help_msg)))
             # ignore the FULL_TRACEBACKS config, this needs reporting!
             raise e
-
-        self._types_active_call = None
+        finally:
+            self._types_active_call = []
         return return_val
 
 
@@ -687,7 +687,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         else:
             if tp is None:
                 tp = types.pyobject
-        self._types_active_call = tp
+        self._types_active_call.append(tp)
         return tp
 
 
@@ -779,7 +779,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
     def dump(self, tab=''):
         print(f'{tab}DUMP {type(self).__name__}[{self.py_func.__name__}, type code={self._type._code}]')
         for cres in self.overloads.values():
-            cres.dump(tab = tab + '  ')
+            cres.dump(tab=tab + '  ')
         print(f'{tab}END DUMP {type(self).__name__}[{self.py_func.__name__}]')
 
     @property
@@ -1065,7 +1065,6 @@ class LiftedLoop(LiftedCode):
 class LiftedWith(LiftedCode):
 
     can_cache = True
-
 
     def _reduce_extras(self):
         return dict(output_types=self.output_types)
