@@ -33,9 +33,8 @@ class TestAutoConstants(unittest.TestCase):
         @njit
         def f():
             return uc._GLOBAL_STR
-        self.assertEquals(f(), "abc")
+        self.assertEquals(f(), f.py_func())
 
 
 if __name__ == '__main__':
     unittest.main()
-
