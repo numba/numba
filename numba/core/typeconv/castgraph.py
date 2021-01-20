@@ -1,6 +1,8 @@
-from collections import defaultdict
-from functools import total_ordering
 import enum
+import typing as pt
+from collections import defaultdict
+
+from numba.core.types.abstract import NumbaTypeInst, Type  # noqa: F401
 
 
 class Conversion(enum.IntEnum):
@@ -33,36 +35,36 @@ class CastSet(object):
     There is at most one rule per target type.
     """
 
-    def __init__(self):
-        self._rels = {}
+    def __init__(self) -> None:
+        self._rels: pt.Dict[NumbaTypeInst, Conversion] = {}
 
-    def insert(self, to, rel):
+    def insert(self, to: NumbaTypeInst, rel: Conversion) -> bool:
         old = self.get(to)
         setrel = min(rel, old)
         self._rels[to] = setrel
         return old != setrel
 
-    def items(self):
+    def items(self) -> pt.Iterable[pt.Tuple[NumbaTypeInst, Conversion]]:
         return self._rels.items()
 
-    def get(self, item):
+    def get(self, item: NumbaTypeInst) -> Conversion:
         return self._rels.get(item, Conversion.nil)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._rels)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         body = ["{rel}({ty})".format(rel=rel, ty=ty)
                 for ty, rel in self._rels.items()]
         return "{" + ', '.join(body) + "}"
 
-    def __contains__(self, item):
+    def __contains__(self, item: NumbaTypeInst) -> bool:
         return item in self._rels
 
-    def __iter__(self):
+    def __iter__(self) -> pt.Iterator[NumbaTypeInst]:
         return iter(self._rels.keys())
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: NumbaTypeInst) -> Conversion:
         return self._rels[item]
 
 
@@ -73,23 +75,28 @@ class TypeGraph(object):
     propagating the rules.
     """
 
-    def __init__(self, callback=None):
+    def __init__(
+        self,
+        callback: pt.Callable[[NumbaTypeInst, NumbaTypeInst, Conversion], None],
+    ):
         """
         Args
         ----
-        - callback: callable or None
+        - callback: callable
             It is called for each new casting rule with
             (from_type, to_type, castrel).
         """
-        assert callback is None or callable(callback)
-        self._forwards = defaultdict(CastSet)
-        self._backwards = defaultdict(set)
+        assert callable(callback)
+        self._forwards: pt.DefaultDict[NumbaTypeInst, CastSet] = defaultdict(CastSet)  # noqa: E501
+        self._backwards: pt.DefaultDict[NumbaTypeInst, pt.Set[NumbaTypeInst]] = defaultdict(set)  # noqa: E501
         self._callback = callback
 
-    def get(self, ty):
+    def get(self, ty: NumbaTypeInst) -> CastSet:
         return self._forwards[ty]
 
-    def propagate(self, a, b, baserel):
+    def propagate(
+        self, a: NumbaTypeInst, b: NumbaTypeInst, baserel: Conversion,
+    ) -> None:
         backset = self._backwards[a]
 
         # Forward propagate the relationship to all nodes that b leads to
@@ -116,18 +123,19 @@ class TypeGraph(object):
                     self._callback(child, b, rel)
                 self._backwards[b].add(child)
 
-    def insert_rule(self, a, b, rel):
+    def insert_rule(
+        self, a: NumbaTypeInst, b: NumbaTypeInst, rel: Conversion,
+    ) -> None:
         self._forwards[a].insert(b, rel)
         self._callback(a, b, rel)
         self._backwards[b].add(a)
         self.propagate(a, b, rel)
 
-    def promote(self, a, b):
+    def promote(self, a: NumbaTypeInst, b: NumbaTypeInst) -> None:
         self.insert_rule(a, b, Conversion.promote)
 
-    def safe(self, a, b):
+    def safe(self, a: NumbaTypeInst, b: NumbaTypeInst) -> None:
         self.insert_rule(a, b, Conversion.safe)
 
-    def unsafe(self, a, b):
+    def unsafe(self, a: NumbaTypeInst, b: NumbaTypeInst) -> None:
         self.insert_rule(a, b, Conversion.unsafe)
-

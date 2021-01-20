@@ -1,6 +1,6 @@
-from abc import ABCMeta, abstractmethod, abstractproperty
-from typing import Dict as ptDict, Type as ptType
+from abc import ABCMeta, abstractmethod
 import itertools
+import typing as pt
 import weakref
 
 import numpy as np
@@ -16,16 +16,27 @@ from numba.core.utils import cached_property
 # in _dispatcher.c's internal caches).
 _typecodes = itertools.count()
 
+
 def _autoincr():
     n = next(_typecodes)
     # 4 billion types should be enough, right?
     assert n < 2 ** 32, "Limited to 4 billion types"
     return n
 
-_typecache: ptDict[weakref.ref, weakref.ref] = {}
+
+_typecache: pt.Dict[weakref.ref, weakref.ref] = {}
+
 
 def _on_type_disposal(wr, _pop=_typecache.pop):
     _pop(wr, None)
+
+
+# A subclass of Type (i.e. something which satisfies issubclass(x, Type)).
+NumbaTypeClass = pt.Type["Type"]
+# An instance of a Type (i.e. something which satisfies isinstance(x, Type)).
+NumbaTypeInst = pt.Union["Type"]
+
+NumbaTypeInstOrClass = pt.Union[NumbaTypeInst, NumbaTypeClass]
 
 
 class _TypeMetaclass(ABCMeta):
@@ -36,7 +47,12 @@ class _TypeMetaclass(ABCMeta):
     and hashing), then looking it up in the _typecache registry.
     """
 
-    def __init__(cls, name, bases, orig_vars):
+    def __init__(
+        cls,
+        name: str,
+        bases: pt.Tuple[pt.Type, ...],
+        orig_vars: pt.Dict[str, pt.Any],
+    ):
         # __init__ is hooked to mark whether a Type class being defined is a
         # Numba internal type (one which is defined somewhere under the `numba`
         # module) or an external type (one which is defined elsewhere, for
@@ -45,7 +61,7 @@ class _TypeMetaclass(ABCMeta):
         root = (cls.__module__.split('.'))[0]
         cls._is_internal = root == "numba"
 
-    def _intern(cls, inst):
+    def _intern(cls, inst: pt.Any) -> pt.Any:
         # Try to intern the created instance
         wr = weakref.ref(inst, _on_type_disposal)
         orig = _typecache.get(wr)
@@ -57,14 +73,14 @@ class _TypeMetaclass(ABCMeta):
             _typecache[wr] = wr
             return inst
 
-    def __call__(cls, *args, **kwargs):
+    def __call__(cls, *args: pt.Any, **kwargs: pt.Any) -> NumbaTypeInst:
         """
         Instantiate *cls* (a Type subclass, presumably) and intern it.
         If an interned instance already exists, it is returned, otherwise
         the new instance is returned.
         """
         inst = type.__call__(cls, *args, **kwargs)
-        return cls._intern(inst)
+        return cls._intern(inst)  # type: ignore[no-any-return]
 
 
 def _type_reconstructor(reconstructor, reconstructor_args, state):
@@ -89,11 +105,14 @@ class Type(metaclass=_TypeMetaclass):
     # Rather the type is reflected at the python<->nopython boundary
     reflected = False
 
-    def __init__(self, name):
+    # Set in _TypeMetaclass call method.
+    _code: int
+
+    def __init__(self, name: str):
         self.name = name
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         """
         A property used for __eq__, __ne__ and __hash__.  Can be overridden
         in subclasses.
@@ -101,7 +120,7 @@ class Type(metaclass=_TypeMetaclass):
         return self.name
 
     @property
-    def mangling_args(self):
+    def mangling_args(self) -> pt.Tuple[str, pt.Sequence[pt.Any]]:
         """
         Returns `(basename, args)` where `basename` is the name of the type
         and `args` is a sequence of parameters of the type.
@@ -111,16 +130,16 @@ class Type(metaclass=_TypeMetaclass):
         """
         return self.name, ()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.name
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.key)
 
-    def __eq__(self, other):
+    def __eq__(self, other: pt.Any) -> bool:
         return self.__class__ is other.__class__ and self.key == other.key
 
-    def __ne__(self, other):
+    def __ne__(self, other: pt.Any) -> bool:
         return not (self == other)
 
     def __reduce__(self):
@@ -151,14 +170,14 @@ class Type(metaclass=_TypeMetaclass):
         """
         return None
 
-    def is_precise(self):
+    def is_precise(self) -> bool:
         """
         Whether this type is precise, i.e. can be part of a successful
         type inference.  Default implementation returns True.
         """
         return True
 
-    def augment(self, other):
+    def augment(self, other: NumbaTypeInst) -> pt.Optional[NumbaTypeInst]:
         """
         Augment this type with the *other*.  Return the augmented type,
         or None if not supported.
@@ -206,14 +225,17 @@ class Type(metaclass=_TypeMetaclass):
             else:
                 layout = 'A'
         else:
-            # Raise a KeyError to not be handled by collection constructors (e.g. list).
-            raise KeyError(f"Can only index numba types with slices with no start or stop, got {args}.")
+            # Raise a KeyError to not be handled by collection constructors
+            # (e.g. list).
+            raise KeyError(
+                "Can only index numba types with slices with no start or stop, "
+                f"got {args}."
+            )
 
         return ndim, layout
 
     def cast_python_value(self, args):
         raise NotImplementedError
-
 
     @property
     def is_internal(self):
@@ -222,11 +244,15 @@ class Type(metaclass=_TypeMetaclass):
         return self._is_internal
 
     def dump(self, tab=''):
-        print(f'{tab}DUMP {type(self).__name__}[code={self._code}, name={self.name}]')
+        print(
+            f"{tab}DUMP {type(self).__name__}"
+            f"[code={self._code}, name={self.name}]"
+        )
 
 # XXX we should distinguish between Dummy (no meaningful
 # representation, e.g. None or a builtin function) and Opaque (has a
 # meaningful representation, e.g. ExternalFunctionPointer)
+
 
 class Dummy(Type):
     """
@@ -245,6 +271,8 @@ class Number(Hashable):
     """
     Base class for number types.
     """
+
+    bitwidth: int
 
     def unify(self, typingctx, other):
         """
@@ -285,7 +313,8 @@ class DTypeSpec(Type):
     (e.g. np.empty()).
     """
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def dtype(self):
         """
         The actual dtype denoted by this dtype spec (a Type instance).
@@ -297,10 +326,12 @@ class IterableType(Type):
     Base class for iterable types.
     """
 
-    @abstractproperty
-    def iterator_type(self):
+    @property
+    @abstractmethod
+    def iterator_type(self) -> "IteratorType":
         """
-        The iterator type obtained when calling iter() (explicitly or implicitly).
+        The iterator type obtained when calling iter() (explicitly or
+        implicitly).
         """
 
 
@@ -328,8 +359,9 @@ class IteratorType(IterableType):
     def __init__(self, name, **kwargs):
         super(IteratorType, self).__init__(name, **kwargs)
 
-    @abstractproperty
-    def yield_type(self):
+    @property
+    @abstractmethod
+    def yield_type(self) -> NumbaTypeInst:
         """
         The type of values yielded by the iterator.
         """
@@ -337,7 +369,7 @@ class IteratorType(IterableType):
     # This is a property to avoid recursivity (for pickling)
 
     @property
-    def iterator_type(self):
+    def iterator_type(self) -> "IteratorType":
         return self
 
 
@@ -352,6 +384,7 @@ class Sequence(Container):
     Base class for 1d sequence types.  Instances should have the *dtype*
     attribute.
     """
+    dtype: NumbaTypeInst
 
 
 class MutableSequence(Sequence):
@@ -359,6 +392,7 @@ class MutableSequence(Sequence):
     Base class for 1d mutable sequence types.  Instances should have the
     *dtype* attribute.
     """
+    dtype: NumbaTypeInst
 
 
 class ArrayCompatible(Type):
@@ -371,8 +405,9 @@ class ArrayCompatible(Type):
     # for '__array_wrap__' with arguments (input, formal result).
     array_priority = 0.0
 
-    @abstractproperty
-    def as_array(self):
+    @property
+    @abstractmethod
+    def as_array(self) -> "ArrayCompatible":
         """
         The equivalent array type, for operations supporting array-compatible
         objects (such as ufuncs).
@@ -381,7 +416,7 @@ class ArrayCompatible(Type):
     # For compatibility with types.Array
 
     @cached_property
-    def ndim(self):
+    def ndim(self) -> int:
         return self.as_array.ndim
 
     @cached_property
@@ -389,7 +424,7 @@ class ArrayCompatible(Type):
         return self.as_array.layout
 
     @cached_property
-    def dtype(self):
+    def dtype(self) -> NumbaTypeInst:
         return self.as_array.dtype
 
 
@@ -405,12 +440,12 @@ class Literal(Type):
     # for constructing a numba type for a given Python type.
     # It is used in `literal(val)` function.
     # To add new Literal subclass, register a new mapping to this dict.
-    ctor_map: ptDict[type, ptType['Literal']] = {}
+    ctor_map: pt.Dict[type, pt.Type['Literal']] = {}
 
     # *_literal_type_cache* is used to cache the numba type of the given value.
     _literal_type_cache = None
 
-    def __init__(self, value):
+    def __init__(self, value: pt.Any):
         if type(self) is Literal:
             raise TypeError(
                 "Cannot be constructed directly. "
@@ -432,7 +467,7 @@ class Literal(Type):
             self._key = value
 
     @property
-    def literal_value(self):
+    def literal_value(self) -> pt.Any:
         return self._literal_value
 
     @property
@@ -452,7 +487,6 @@ class Literal(Type):
             self._literal_type_cache = res
 
         return self._literal_type_cache
-
 
 
 class TypeRef(Dummy):

@@ -1,8 +1,13 @@
-from numba.core.types.abstract import Callable, Literal, Type, Hashable
+import typing as pt
+
+from numba.core.errors import LiteralTypingError, TypingError
+from numba.core.typeconv import Conversion
+from numba.core.types.abstract import (  # noqa: F401
+    Callable, Literal, NumbaTypeInst,
+    NumbaTypeInstOrClass, Type, Hashable,
+)
 from numba.core.types.common import (Dummy, IterableType, Opaque,
                                      SimpleIteratorType)
-from numba.core.typeconv import Conversion
-from numba.core.errors import TypingError, LiteralTypingError
 
 
 class PyObject(Dummy):
@@ -10,7 +15,7 @@ class PyObject(Dummy):
     A generic CPython object.
     """
 
-    def is_precise(self):
+    def is_precise(self) -> bool:
         return False
 
 
@@ -44,16 +49,17 @@ class StringLiteral(Literal, Dummy):
 Literal.ctor_map[str] = StringLiteral
 
 
-def unliteral(lit_type):
+def unliteral(lit_type: NumbaTypeInst) -> NumbaTypeInst:
     """
     Get base type from Literal type.
     """
     if hasattr(lit_type, '__unliteral__'):
-        return lit_type.__unliteral__()
-    return getattr(lit_type, 'literal_type', lit_type)
+        return lit_type.__unliteral__()  # type: ignore[no-any-return, attr-defined]  # noqa: E501
+
+    return getattr(lit_type, 'literal_type', lit_type)  # type: ignore[no-any-return]  # noqa: E501
 
 
-def literal(value):
+def literal(value: pt.Any) -> Literal:
     """Returns a Literal instance or raise LiteralTypingError
     """
     ty = type(value)
@@ -68,13 +74,13 @@ def literal(value):
         return ctor(value)
 
 
-def maybe_literal(value):
+def maybe_literal(value: pt.Any) -> pt.Optional[Literal]:
     """Get a Literal type for the value or None.
     """
     try:
         return literal(value)
     except LiteralTypingError:
-        return
+        return None
 
 
 class Omitted(Opaque):
@@ -82,16 +88,16 @@ class Omitted(Opaque):
     An omitted function argument with a default value.
     """
 
-    def __init__(self, value):
+    def __init__(self, value: pt.Any):
         self._value = value
         super(Omitted, self).__init__("omitted(default=%r)" % (value,))
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return type(self._value), id(self._value)
 
     @property
-    def value(self):
+    def value(self) -> pt.Any:
         return self._value
 
 
@@ -102,12 +108,12 @@ class VarArg(Type):
     not for actual values.
     """
 
-    def __init__(self, dtype):
+    def __init__(self, dtype: NumbaTypeInstOrClass):
         self.dtype = dtype
         super(VarArg, self).__init__("*%s" % dtype)
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.dtype
 
 
@@ -128,13 +134,13 @@ class MemInfoPointer(Type):
     """
     mutable = True
 
-    def __init__(self, dtype):
+    def __init__(self, dtype: NumbaTypeInst):
         self.dtype = dtype
         name = "memory-managed *%s" % dtype
         super(MemInfoPointer, self).__init__(name)
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.dtype
 
 
@@ -144,13 +150,13 @@ class CPointer(Type):
     """
     mutable = True
 
-    def __init__(self, dtype):
+    def __init__(self, dtype: NumbaTypeInst):
         self.dtype = dtype
         name = "%s*" % dtype
         super(CPointer, self).__init__(name)
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.dtype
 
 
@@ -168,14 +174,14 @@ class EphemeralArray(Type):
     rather than a single one.  The array size must be known at compile-time.
     """
 
-    def __init__(self, dtype, count):
+    def __init__(self, dtype: NumbaTypeInst, count: int):
         self.dtype = dtype
         self.count = count
         name = "*%s[%d]" % (dtype, count)
         super(EphemeralArray, self).__init__(name)
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.dtype, self.count
 
 
@@ -183,13 +189,13 @@ class Object(Type):
     # XXX unused?
     mutable = True
 
-    def __init__(self, clsobj):
+    def __init__(self, clsobj: type):
         self.cls = clsobj
         name = "Object(%s)" % clsobj.__name__
         super(Object, self).__init__(name)
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.cls
 
 
@@ -198,18 +204,18 @@ class Optional(Type):
     Type class for optional types, i.e. union { some type, None }
     """
 
-    def __init__(self, typ):
+    def __init__(self, typ: NumbaTypeInst):
         assert not isinstance(typ, (Optional, NoneType))
         typ = unliteral(typ)
         self.type = typ
         name = "OptionalType(%s)" % self.type
         super(Optional, self).__init__(name)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "%s i.e. the type '%s or None'" % (self.name, self.type)
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.type
 
     def can_convert_to(self, typingctx, other):
@@ -268,7 +274,7 @@ class ExceptionClass(Callable, Phantom):
     The type of exception classes (not instances).
     """
 
-    def __init__(self, exc_class):
+    def __init__(self, exc_class: pt.Type[BaseException]):
         assert issubclass(exc_class, BaseException)
         name = "%s" % (exc_class.__name__)
         self.exc_class = exc_class
@@ -283,7 +289,7 @@ class ExceptionClass(Callable, Phantom):
         return [typing.signature(return_type)], False
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.exc_class
 
 
@@ -293,32 +299,32 @@ class ExceptionInstance(Phantom):
     exception class.
     """
 
-    def __init__(self, exc_class):
+    def __init__(self, exc_class: pt.Type[BaseException]):
         assert issubclass(exc_class, BaseException)
         name = "%s(...)" % (exc_class.__name__,)
         self.exc_class = exc_class
         super(ExceptionInstance, self).__init__(name)
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.exc_class
 
 
 class SliceType(Type):
 
-    def __init__(self, name, members):
+    def __init__(self, name: str, members: int):
         assert members in (2, 3)
         self.members = members
         self.has_step = members >= 3
         super(SliceType, self).__init__(name)
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.members
 
 
 class SliceLiteral(Literal, SliceType):
-    def __init__(self, value):
+    def __init__(self, value: slice):
         self._literal_init(value)
         name = 'Literal[slice]({})'.format(value)
         members = 2 if value.step is None else 3
@@ -336,15 +342,15 @@ class ClassInstanceType(Type):
     mutable = True
     name_prefix = "instance"
 
-    def __init__(self, class_type):
+    def __init__(self, class_type: "ClassType"):
         self.class_type = class_type
         name = "{0}.{1}".format(self.name_prefix, self.class_type.name)
         super(ClassInstanceType, self).__init__(name)
 
-    def get_data_type(self):
+    def get_data_type(self) -> "ClassDataType":
         return ClassDataType(self)
 
-    def get_reference_type(self):
+    def get_reference_type(self) -> "ClassInstanceType":
         return self
 
     @property

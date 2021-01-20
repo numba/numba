@@ -1,18 +1,19 @@
 import itertools
-from .typeconv import TypeManager, TypeCastingRules
+
 from numba.core import types
 
+from .typeconv import TypeCastingRules, TypeManager
 
 default_type_manager = TypeManager()
 
 
-def dump_number_rules():
+def dump_number_rules() -> None:
     tm = default_type_manager
     for a, b in itertools.product(types.number_domain, types.number_domain):
         print(a, '->', b, tm.check_compatible(a, b))
 
 
-def _init_casting_rules(tm):
+def _init_casting_rules(tm: TypeManager) -> TypeCastingRules:
     tcr = TypeCastingRules(tm)
     tcr.safe_unsafe(types.boolean, types.int8)
     tcr.safe_unsafe(types.boolean, types.uint8)
@@ -55,4 +56,3 @@ def _init_casting_rules(tm):
 
 
 default_casting_rules = _init_casting_rules(default_type_manager)
-

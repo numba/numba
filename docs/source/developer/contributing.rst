@@ -98,7 +98,7 @@ of the llvmlite library::
 
 Then create an environment with the right dependencies::
 
-   $ conda create -n numbaenv python=3.6 llvmlite numpy scipy jinja2 cffi
+   $ conda create -n numbaenv python=3.6 llvmlite numpy scipy jinja2 cffi typeguard mypy
 
 .. note::
    This installs an environment based on Python 3.6, but you can of course
@@ -269,13 +269,15 @@ circumstances should ``type: ignore`` comments be used.
 
 If you are contributing a new feature, we encourage you to use type hints, even if the file is not currently in the
 checklist. If you want to contribute type hints to enable a new file to be in the checklist, please add the file to the
-``files`` variable in ``mypy.ini``, and decide what level of compliance you are targetting. Level 3 is basic static
-checks, while levels 2 and 1 represent stricter checking. The levels are described in details in ``mypy.ini``.
+appropriate level in ``mypy.ini``. Level 3 is basic static checks, while levels 2 and 1 represent stricter checking.
+The levels are described in details in ``mypy.ini``.
 
 There is potential for confusion between the Numba module ``typing`` and Python built-in module ``typing`` used for type
 hints, as well as between Numba types---such as ``Dict`` or ``Literal``---and ``typing`` types of the same name.
-To mitigate the risk of confusion we use a naming convention by which objects of the built-in ``typing`` module are
-imported with an ``pt`` prefix. For example, ``typing.Dict`` is imported as ``from typing import Dict as ptDict``.
+To mitigate the risk of confusion we use a naming convention by which the built-in ``typing`` module is imported
+as ``import typing as pt``, and all objects from this module are referenced as ``pt.*``. To avoid confusion with the
+overloaded term ``Type``, ``NumbaTypeClass`` and ``NumbaTypeInst`` should be used in place of ``numba.core.types.Type``
+in type annotations.
 
 Stability
 '''''''''

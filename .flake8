@@ -47,19 +47,10 @@ exclude =
     numba/core/dataflow.py
     numba/core/pythonapi.py
     numba/core/decorators.py
-    numba/core/typeconv/typeconv.py
-    numba/core/typeconv/rules.py
-    numba/core/typeconv/castgraph.py
     numba/core/rewrites/registry.py
     numba/core/rewrites/macros.py
     numba/core/rewrites/static_binop.py
     numba/core/rewrites/ir_print.py
-    numba/core/types/abstract.py
-    numba/core/types/misc.py
-    numba/core/types/npytypes.py
-    numba/core/types/common.py
-    numba/core/types/iterators.py
-    numba/core/types/scalars.py
     numba/core/fastmathpass.py
     numba/cpython/setobj.py
     numba/core/options.py
