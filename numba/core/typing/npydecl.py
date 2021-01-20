@@ -439,7 +439,12 @@ def parse_dtype(dtype):
     elif isinstance(dtype, types.TypeRef):
         return dtype.instance_type
     elif isinstance(dtype, types.StringLiteral):
-        dt = getattr(np, dtype.literal_value, None)
+        try:
+            dtstr = dtype.literal_value
+            dt = np.dtype(dtstr).type
+        except TypeError:
+            msg = f"Invalid NumPy dtype specified: '{dtstr}'"
+            raise TypingError(msg)
         if dt is not None:
             return from_dtype(dt)
 
