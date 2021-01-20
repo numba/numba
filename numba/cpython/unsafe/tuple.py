@@ -73,7 +73,9 @@ def unpack_single_tuple(tyctx, tup):
         msg = (f"Only tuples are supported when unpacking a single item, "
                f"got type: {tup}")
         raise errors.UnsupportedError(msg)
+
     sig = tup(tup)
+
     def codegen(context, builder, signature, args):
         return args[0] # there's only one tuple and it's a simple pass through
     return sig, codegen

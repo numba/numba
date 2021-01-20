@@ -887,7 +887,8 @@ class Interpreter(object):
             gv_name = "unpack_single_tuple"
             gv_fn = ir.Global(gv_name, unpack_single_tuple, loc=self.loc,)
             self.store(value=gv_fn, name=gv_name, redefine=True)
-            exc = ir.Expr.call(self.get(gv_name), args=(first,), kws=(), loc=self.loc,)
+            exc = ir.Expr.call(self.get(gv_name), args=(first,), kws=(),
+                               loc=self.loc,)
             self.store(exc, temps[0])
         else:
             for other, tmp in zip(map(self.get, tuples[1:]), temps):
