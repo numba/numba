@@ -664,8 +664,20 @@ class TestTupleBuild(TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             check([4, 5])
 
-        msg = "Only tuples are supported when unpacking a single item"
-        self.assertIn(msg, str(raises.exception))
+        if utils.PYVERSION > (3, 8):
+            # Python 3.9 has a peephole rewrite due to large changes in tuple
+            # unpacking. It results in a tuple + list situation from the above
+            # so the error message reflects that. Catching this specific and
+            # seemingly rare sequence in the peephole rewrite is prohibitively
+            # hard. Should it be reported numerous times, revisit then.
+            msg1 = "No implementation of function"
+            self.assertIn(msg1, str(raises.exception))
+            msg2 = "add(Tuple()," # ignore the reflected list part, it's repr
+                                  # is quite volatile.
+            self.assertIn(msg2, str(raises.exception))
+        else:
+            msg = "Only tuples are supported when unpacking a single item"
+            self.assertIn(msg, str(raises.exception))
 
     def test_build_unpack_more(self):
         def check(p):
