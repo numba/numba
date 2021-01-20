@@ -18,6 +18,8 @@ from numba.cuda.cuda_paths import (
     _get_cudalib_dir_path_decision,
     get_system_ctk,
 )
+from numba.cuda import envvars
+from numba.tests.support import override_env_config
 
 
 has_cuda = nvvm.is_available()
@@ -282,3 +284,24 @@ def _fake_non_conda_env():
     Monkeypatch sys.prefix to hide the fact we are in a conda-env
     """
     sys.prefix = ''
+
+
+class TestMisc(SerialMixin, unittest.TestCase):
+    """Test basic envvars lookup related functions
+    """
+    def test_get_numba_envvar(self):
+        # Make up an env-var that is not already defined.
+        # This makes a string with the following regex pattern "NUMBA_0+"
+        env = "0"
+        while f"NUMBA_{env}" in os.environ:
+            env += "0"
+        default = "the default"
+
+        # Check that we are getting the default
+        got = envvars.get_numba_envvar(env, default=default)
+        self.assertIs(got, default)
+
+        # Check that we are reading the env-var correctly
+        with override_env_config(f"NUMBA_{env}", "my value"):
+            got = envvars.get_numba_envvar(env, default=default)
+            self.assertEqual(got, "my value")
