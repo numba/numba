@@ -413,7 +413,7 @@ class _Kernel(object):
             # attempt conversion of the real part to the specified type.
             # note that NumPy issues a warning in this kind of conversions
             newty = fromty.underlying_float
-            attr = self.context.get_getattr(self.builder, fromty, 'real')
+            attr = self.context.get_getattr(fromty, 'real')
             val = attr(self.context, self.builder, fromty, val, 'real')
             fromty = newty
             # let the regular cast do the rest...

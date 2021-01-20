@@ -2421,7 +2421,7 @@ def record_getitem(context, builder, sig, args):
     """
     Record.__getitem__ redirects to getattr()
     """
-    impl = context.get_getattr(builder, sig.args[0], args[1])
+    impl = context.get_getattr(sig.args[0], args[1])
     return impl(context, builder, sig.args[0], args[0], args[1])
 
 

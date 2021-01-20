@@ -50,7 +50,7 @@ def optional_getattr(context, builder, typ, value, attr):
     """
     inner_type = typ.type
     val = context.cast(builder, value, typ, inner_type)
-    imp = context.get_getattr(builder, inner_type, attr)
+    imp = context.get_getattr(inner_type, attr)
     return imp(context, builder, inner_type, val, attr)
 
 

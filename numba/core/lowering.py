@@ -1110,7 +1110,7 @@ class Lower(BaseLower):
                 self.incref(resty, res)
                 return res
             else:
-                impl = self.context.get_getattr(self.builder, ty, expr.attr)
+                impl = self.context.get_getattr(ty, expr.attr)
                 attrty = self.context.typing_context.resolve_getattr(ty,
                                                                      expr.attr)
 
