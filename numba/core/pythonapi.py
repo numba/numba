@@ -2,6 +2,7 @@ from collections import namedtuple
 import contextlib
 import pickle
 import hashlib
+import sys
 
 from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant
@@ -118,7 +119,7 @@ class EnvironmentManager(object):
         """
         # All constants are frozen inside the environment
         if isinstance(const, str):
-            const = utils.intern(const)
+            const = sys.intern(const)
         for index, val in enumerate(self.env.consts):
             if val is const:
                 break
@@ -1188,7 +1189,7 @@ class PythonAPI(object):
         intty = ir.IntType(32)
         fnty = Type.function(self.pyobj,
                              [self.voidptr, intty, intty, self.pyobj])
-        fn = self._get_function(fnty, name="NRT_adapt_ndarray_to_python")
+        fn = self._get_function(fnty, name="NRT_adapt_ndarray_to_python_acqref")
         fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
 
         ndim = self.context.get_constant(types.int32, aryty.ndim)

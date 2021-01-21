@@ -391,6 +391,15 @@ class TestArrayAnalysis(TestCase):
         self._compile_and_test(test_tup_arg,
             (types.Tuple((int_arr_typ, int_arr_typ)),), asserts=None)
 
+        def test_arr_in_tup(m):
+            A = np.ones(m)
+            S = (A,)
+            B = np.ones(len(S[0]))
+            return B
+
+        self._compile_and_test(test_arr_in_tup, (types.intp,),
+                               equivs=[self.with_equiv("A", "B")])
+
         T = namedtuple("T", ['a','b'])
         def test_namedtuple(n):
             r = T(n, n)
@@ -1072,7 +1081,7 @@ class TestArrayAnalysisInterface(TestCase):
                 for i in prange(n):
                     S = np.arange(i)
                     A[i] = S.sum()
-                return A
+                return A + 1
 
             got = njit(parallel=True)(f)(10)
             executed_count = shared['counter']

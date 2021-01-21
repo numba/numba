@@ -41,6 +41,10 @@ class TestCudaMemory(ContextResettingTestCase):
                                      mapped=True)
         self._template(devmem)
 
+    def test_managed_memory(self):
+        devmem = self.context.memallocmanaged(1024)
+        self._template(devmem)
+
     def test_derived_pointer(self):
         # Use MemoryPointer.view to create derived pointer
         def check(m, offset):
@@ -91,7 +95,6 @@ class TestCudaMemory(ContextResettingTestCase):
         self.assertEqual(dtor_invoked[0], 2)
 
 
-@skip_on_cudasim('CUDA Memory API unsupported in the simulator')
 class TestCudaMemoryFunctions(ContextResettingTestCase):
     def setUp(self):
         self.context = devices.get_context()

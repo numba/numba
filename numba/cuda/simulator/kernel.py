@@ -5,8 +5,7 @@ import threading
 
 import numpy as np
 
-from .cudadrv.devicearray import to_device, auto_device, \
-    FakeCUDAArray, FakeWithinKernelCUDAArray
+from .cudadrv.devicearray import FakeCUDAArray, FakeWithinKernelCUDAArray
 from .kernelapi import Dim3, FakeCUDAModule, swapped_cuda_module
 from ..errors import normalize_kernel_dimensions
 from ..args import wrap_arg, ArgHint
@@ -39,6 +38,16 @@ def _get_kernel_context():
     Get the current kernel context. This is usually done by a device function.
     """
     return _kernel_context
+
+
+class FakeDefinition:
+    '''
+    Used only to provide the max_cooperative_grid_blocks method
+    '''
+    def max_cooperative_grid_blocks(self, blockdim):
+        # We can only run one block in a cooperative grid because we have no
+        # mechanism for synchronization between different blocks
+        return 1
 
 
 class FakeCUDAKernel(object):
@@ -119,7 +128,6 @@ class FakeCUDAKernel(object):
     def bind(self):
         pass
 
-
     def specialize(self, *args):
         return self
 
@@ -130,10 +138,19 @@ class FakeCUDAKernel(object):
         return self[ntasks, 1, stream, sharedmem]
 
     @property
+    def definition(self):
+        return FakeDefinition()
+
+    @property
+    def definitions(self):
+        msg = 'Multiple definitions are unsupported in the simulator'
+        raise NotImplementedError(msg)
+
+    @property
     def ptx(self):
         '''
-        Required in order to proceed through some tests, but serves no functional
-        purpose.
+        Required in order to proceed through some tests, but serves no
+        functional purpose.
         '''
         res = '.const'
         res += '\n.local'
@@ -142,10 +159,7 @@ class FakeCUDAKernel(object):
         return res
 
 
-
-
 # Thread emulation
-
 
 class BlockThread(threading.Thread):
     '''
@@ -162,7 +176,9 @@ class BlockThread(threading.Thread):
         self.daemon = True
         self.abort = False
         blockDim = Dim3(*self._manager._block_dim)
-        self.thread_id = self.threadIdx.x + blockDim.x * (self.threadIdx.y + blockDim.y * self.threadIdx.z)
+        self.thread_id = self.threadIdx.x + (blockDim.x * (self.threadIdx.y +
+                                                           blockDim.y *
+                                                           self.threadIdx.z))
 
     def run(self):
         try:
@@ -192,21 +208,24 @@ class BlockThread(threading.Thread):
             raise RuntimeError("abort flag set on syncthreads clear")
 
     def syncthreads_count(self, value):
-        self._manager.block_state[self.threadIdx.x, self.threadIdx.y, self.threadIdx.z] = value
+        idx = self.threadIdx.x, self.threadIdx.y, self.threadIdx.z
+        self._manager.block_state[idx] = value
         self.syncthreads()
         count = np.count_nonzero(self._manager.block_state)
         self.syncthreads()
         return count
 
     def syncthreads_and(self, value):
-        self._manager.block_state[self.threadIdx.x, self.threadIdx.y, self.threadIdx.z] = value
+        idx = self.threadIdx.x, self.threadIdx.y, self.threadIdx.z
+        self._manager.block_state[idx] = value
         self.syncthreads()
         test = np.all(self._manager.block_state)
         self.syncthreads()
         return 1 if test else 0
 
     def syncthreads_or(self, value):
-        self._manager.block_state[self.threadIdx.x, self.threadIdx.y, self.threadIdx.z] = value
+        idx = self.threadIdx.x, self.threadIdx.y, self.threadIdx.z
+        self._manager.block_state[idx] = value
         self.syncthreads()
         test = np.any(self._manager.block_state)
         self.syncthreads()

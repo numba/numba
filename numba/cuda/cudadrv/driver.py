@@ -16,7 +16,6 @@ import os
 import ctypes
 import weakref
 import functools
-import copy
 import warnings
 import logging
 import threading
@@ -24,14 +23,14 @@ import asyncio
 from itertools import product
 from abc import ABCMeta, abstractmethod
 from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
-                    c_void_p, c_float)
+                    c_void_p, c_float, c_uint)
 import contextlib
 import importlib
 import numpy as np
 from collections import namedtuple, deque
 
 from numba import mviewbuf
-from numba.core import utils, errors, serialize, config
+from numba.core import utils, serialize, config
 from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
 from .drvapi import cu_occupancy_b2d_size, cu_stream_callback_pyobj
@@ -192,7 +191,7 @@ def _getpid():
 ERROR_MAP = _build_reverse_error_map()
 
 MISSING_FUNCTION_ERRMSG = """driver missing function: %s.
-Requires CUDA 8.0 or above.
+Requires CUDA 9.0 or above.
 """
 
 
@@ -483,15 +482,6 @@ class Device(object):
             'pci_device_id': self.PCI_DEVICE_ID,
         }
 
-    @property
-    def COMPUTE_CAPABILITY(self):
-        """
-        For backward compatibility
-        """
-        warnings.warn("Deprecated attribute 'COMPUTE_CAPABILITY'; use lower "
-                      "case version", DeprecationWarning)
-        return self.compute_capability
-
     def __repr__(self):
         return "<CUDA device %d '%s'>" % (self.id, self.name)
 
@@ -588,8 +578,8 @@ class BaseCUDAMemoryManager(object, metaclass=ABCMeta):
 
         :param size: Size of the allocation in bytes
         :type size: int
-        :param mapped: Whether the allocated memory should be mapped into the CUDA
-                       address space.
+        :param mapped: Whether the allocated memory should be mapped into the
+                       CUDA address space.
         :type mapped: bool
         :param portable: Whether the memory will be considered pinned by all
                          contexts, and not just the calling context.
@@ -612,7 +602,8 @@ class BaseCUDAMemoryManager(object, metaclass=ABCMeta):
         :type pointer: int
         :param size: The size of the region in bytes.
         :type size: int
-        :param mapped: Whether the region should also be mapped into device memory.
+        :param mapped: Whether the region should also be mapped into device
+                       memory.
         :type mapped: bool
         :return: A memory pointer instance that refers to the allocated
                  memory.
@@ -789,6 +780,26 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
             return PinnedMemory(ctx, pointer, size, owner=owner,
                                 finalizer=finalizer)
 
+    def memallocmanaged(self, size, attach_global):
+        ptr = drvapi.cu_device_ptr()
+
+        def allocator():
+            flags = c_uint()
+            if attach_global:
+                flags = enums.CU_MEM_ATTACH_GLOBAL
+            else:
+                flags = enums.CU_MEM_ATTACH_HOST
+
+            driver.cuMemAllocManaged(byref(ptr), size, flags)
+
+        self._attempt_allocation(allocator)
+
+        finalizer = _alloc_finalizer(self, ptr, size)
+        ctx = weakref.proxy(self.context)
+        mem = ManagedMemory(ctx, ptr, size, finalizer=finalizer)
+        self.allocations[ptr.value] = mem
+        return mem.own()
+
     def reset(self):
         """Clears up all host memory (mapped and/or pinned) in the current
         context.
@@ -870,6 +881,7 @@ _SUPPORTED_EMM_INTERFACE_VERSION = 1
 
 _memory_manager = None
 
+
 def _ensure_memory_manager():
     global _memory_manager
 
@@ -886,6 +898,7 @@ def _ensure_memory_manager():
     except Exception:
         raise RuntimeError("Failed to use memory manager from %s" %
                            config.CUDA_MEMORY_MANAGER)
+
 
 def set_memory_manager(mm_plugin):
     """Configure Numba to use an External Memory Management (EMM) Plugin. If
@@ -1004,6 +1017,7 @@ MemoryInfo = namedtuple("MemoryInfo", "free,total")
     Total device memory in bytes.
 """
 
+
 class Context(object):
     """
     This object wraps a CUDA Context resource.
@@ -1038,20 +1052,27 @@ class Context(object):
         """
         return self.memory_manager.get_memory_info()
 
-    def get_active_blocks_per_multiprocessor(self, func, blocksize, memsize, flags=None):
+    def get_active_blocks_per_multiprocessor(self, func, blocksize, memsize,
+                                             flags=None):
         """Return occupancy of a function.
         :param func: kernel for which occupancy is calculated
         :param blocksize: block size the kernel is intended to be launched with
-        :param memsize: per-block dynamic shared memory usage intended, in bytes"""
+        :param memsize: per-block dynamic shared memory usage intended, in bytes
+        """
 
         retval = c_int()
         if not flags:
-            driver.cuOccupancyMaxActiveBlocksPerMultiprocessor(byref(retval), func.handle, blocksize, memsize)
+            driver.cuOccupancyMaxActiveBlocksPerMultiprocessor(byref(retval),
+                                                               func.handle,
+                                                               blocksize,
+                                                               memsize)
         else:
-            driver.cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(byref(retval), func.handle, blocksize, memsize, flags)
+            driver.cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
+                byref(retval), func.handle, blocksize, memsize, flags)
         return retval.value
 
-    def get_max_potential_block_size(self, func, b2d_func, memsize, blocksizelimit, flags=None):
+    def get_max_potential_block_size(self, func, b2d_func, memsize,
+                                     blocksizelimit, flags=None):
         """Suggest a launch configuration with reasonable occupancy.
         :param func: kernel for which occupancy is calculated
         :param b2d_func: function that calculates how much per-block dynamic
@@ -1059,20 +1080,25 @@ class Context(object):
                          Can also be the address of a C function.
                          Use `0` to pass `NULL` to the underlying CUDA API.
         :param memsize: per-block dynamic shared memory usage intended, in bytes
-        :param blocksizelimit: maximum block size the kernel is designed to handle"""
+        :param blocksizelimit: maximum block size the kernel is designed to
+                               handle
+        """
 
         gridsize = c_int()
         blocksize = c_int()
         b2d_cb = cu_occupancy_b2d_size(b2d_func)
         if not flags:
-            driver.cuOccupancyMaxPotentialBlockSize(byref(gridsize), byref(blocksize),
-                                                    func.handle,
-                                                    b2d_cb,
+            driver.cuOccupancyMaxPotentialBlockSize(byref(gridsize),
+                                                    byref(blocksize),
+                                                    func.handle, b2d_cb,
                                                     memsize, blocksizelimit)
         else:
-            driver.cuOccupancyMaxPotentialBlockSizeWithFlags(byref(gridsize), byref(blocksize),
-                                                             func.handle, b2d_cb,
-                                                             memsize, blocksizelimit, flags)
+            driver.cuOccupancyMaxPotentialBlockSizeWithFlags(byref(gridsize),
+                                                             byref(blocksize),
+                                                             func.handle,
+                                                             b2d_cb, memsize,
+                                                             blocksizelimit,
+                                                             flags)
         return (gridsize.value, blocksize.value)
 
     def prepare_for_use(self):
@@ -1090,14 +1116,17 @@ class Context(object):
 
     def pop(self):
         """
-        Pops this context off the current CPU thread. Note that this context must
-        be at the top of the context stack, otherwise an error will occur.
+        Pops this context off the current CPU thread. Note that this context
+        must be at the top of the context stack, otherwise an error will occur.
         """
         popped = driver.pop_active_context()
         assert popped.value == self.handle.value
 
     def memalloc(self, bytesize):
         return self.memory_manager.memalloc(bytesize)
+
+    def memallocmanaged(self, bytesize, attach_global=True):
+        return self.memory_manager.memallocmanaged(bytesize, attach_global)
 
     def memhostalloc(self, bytesize, mapped=False, portable=False, wc=False):
         return self.memory_manager.memhostalloc(bytesize, mapped, portable, wc)
@@ -1139,7 +1168,7 @@ class Context(object):
             byref(can_access_peer),
             self.device.id,
             peer_device,
-            )
+        )
         return bool(can_access_peer)
 
     def create_module_ptx(self, ptx):
@@ -1515,7 +1544,7 @@ class IpcHandle(object):
             self.size,
             self.source_info,
             self.offset,
-            )
+        )
         return (serialize._rebuild_reduction, args)
 
     @classmethod
@@ -1547,11 +1576,11 @@ class MemoryPointer(object):
     :type pointer: ctypes.c_void_p
     :param size: The size of the allocation in bytes.
     :type size: int
-    :param owner: The owner is sometimes set by the internals of this class, or used for
-                  Numba's internal memory management. It should not be provided
-                  by an external user of the ``MemoryPointer`` class (e.g. from
-                  within an EMM Plugin); the default of `None` should always
-                  suffice.
+    :param owner: The owner is sometimes set by the internals of this class, or
+                  used for Numba's internal memory management. It should not be
+                  provided by an external user of the ``MemoryPointer`` class
+                  (e.g. from within an EMM Plugin); the default of `None`
+                  should always suffice.
     :type owner: NoneType
     :param finalizer: A function that is called when the buffer is to be freed.
     :type finalizer: function
@@ -1643,7 +1672,7 @@ class AutoFreePointer(MemoryPointer):
 
 
 class MappedMemory(AutoFreePointer):
-    """A memory pointer that owns a buffer on the host that is mapped into
+    """A memory pointer that refers to a buffer on the host that is mapped into
     device memory.
 
     :param context: The context in which the pointer was mapped.
@@ -1652,11 +1681,11 @@ class MappedMemory(AutoFreePointer):
     :type pointer: ctypes.c_void_p
     :param size: The size of the buffer in bytes.
     :type size: int
-    :param owner: The owner is sometimes set by the internals of this class, or used for
-                  Numba's internal memory management. It should not be provided
-                  by an external user of the ``MappedMemory`` class (e.g. from
-                  within an EMM Plugin); the default of `None` should always
-                  suffice.
+    :param owner: The owner is sometimes set by the internals of this class, or
+                  used for Numba's internal memory management. It should not be
+                  provided by an external user of the ``MappedMemory`` class
+                  (e.g. from within an EMM Plugin); the default of `None`
+                  should always suffice.
     :type owner: NoneType
     :param finalizer: A function that is called when the buffer is to be freed.
     :type finalizer: function
@@ -1720,6 +1749,41 @@ class PinnedMemory(mviewbuf.MemAlloc):
         return self
 
 
+class ManagedMemory(AutoFreePointer):
+    """A memory pointer that refers to a managed memory buffer (can be accessed
+    on both host and device).
+
+    :param context: The context in which the pointer was mapped.
+    :type context: Context
+    :param pointer: The address of the buffer.
+    :type pointer: ctypes.c_void_p
+    :param size: The size of the buffer in bytes.
+    :type size: int
+    :param owner: The owner is sometimes set by the internals of this class, or
+                  used for Numba's internal memory management. It should not be
+                  provided by an external user of the ``ManagedMemory`` class
+                  (e.g. from within an EMM Plugin); the default of `None`
+                  should always suffice.
+    :type owner: NoneType
+    :param finalizer: A function that is called when the buffer is to be freed.
+    :type finalizer: function
+    """
+
+    __cuda_memory__ = True
+
+    def __init__(self, context, pointer, size, owner=None, finalizer=None):
+        self.owned = owner
+        devptr = pointer
+        super().__init__(context, devptr, size, finalizer=finalizer)
+
+        # For buffer interface
+        self._buflen_ = self.size
+        self._bufptr_ = self.device_pointer.value
+
+    def own(self):
+        return ManagedOwnedPointer(weakref.proxy(self))
+
+
 class OwnedPointer(object):
     def __init__(self, memptr, view=None):
         self._mem = memptr
@@ -1755,6 +1819,10 @@ class MappedOwnedPointer(OwnedPointer, mviewbuf.MemAlloc):
     pass
 
 
+class ManagedOwnedPointer(OwnedPointer, mviewbuf.MemAlloc):
+    pass
+
+
 class Stream(object):
     def __init__(self, context, handle, finalizer, external=False):
         self.context = context
@@ -1771,7 +1839,8 @@ class Stream(object):
         default_streams = {
             drvapi.CU_STREAM_DEFAULT: "<Default CUDA stream on %s>",
             drvapi.CU_STREAM_LEGACY: "<Legacy default CUDA stream on %s>",
-            drvapi.CU_STREAM_PER_THREAD: "<Per-thread default CUDA stream on %s>",
+            drvapi.CU_STREAM_PER_THREAD:
+                "<Per-thread default CUDA stream on %s>",
         }
         ptr = self.handle.value or drvapi.CU_STREAM_DEFAULT
         if ptr in default_streams:
@@ -1811,8 +1880,8 @@ class Stream(object):
         callback will block later work in the stream and may block other
         callbacks from being executed.
 
-        Note: This function is marked as deprecated and may be replaced in a
-        future CUDA release.
+        Note: The driver function underlying this method is marked for
+        eventual deprecation and may be replaced in a future CUDA release.
 
         :param callback: Callback function with arguments (stream, status, arg).
         :param arg: User data to be passed to the callback function.
@@ -1974,35 +2043,6 @@ class Function(object):
             flag = enums.CU_FUNC_CACHE_PREFER_NONE
         driver.cuFuncSetCacheConfig(self.handle, flag)
 
-    def configure(self, griddim, blockdim, sharedmem=0, stream=0):
-        while len(griddim) < 3:
-            griddim += (1,)
-
-        while len(blockdim) < 3:
-            blockdim += (1,)
-
-        inst = copy.copy(self)  # shallow clone the object
-        inst.griddim = griddim
-        inst.blockdim = blockdim
-        inst.sharedmem = sharedmem
-        if stream:
-            inst.stream = stream
-        else:
-            inst.stream = 0
-        return inst
-
-    def __call__(self, *args):
-        '''
-        *args -- Must be either ctype objects of DevicePointer instances.
-        '''
-        if self.stream:
-            streamhandle = self.stream.handle
-        else:
-            streamhandle = None
-
-        launch_kernel(self.handle, self.griddim, self.blockdim,
-                      self.sharedmem, streamhandle, args)
-
     @property
     def device(self):
         return self.module.context.device
@@ -2026,9 +2066,13 @@ class Function(object):
                         maxthreads=maxtpb)
 
 
-def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args):
-    gx, gy, gz = griddim
-    bx, by, bz = blockdim
+def launch_kernel(cufunc_handle,
+                  gx, gy, gz,
+                  bx, by, bz,
+                  sharedmem,
+                  hstream,
+                  args,
+                  cooperative=False):
 
     param_vals = []
     for arg in args:
@@ -2039,19 +2083,28 @@ def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args):
 
     params = (c_void_p * len(param_vals))(*param_vals)
 
-    driver.cuLaunchKernel(cufunc_handle,
-                          gx, gy, gz,
-                          bx, by, bz,
-                          sharedmem,
-                          hstream,
-                          params,
-                          None)
+    if cooperative:
+        driver.cuLaunchCooperativeKernel(cufunc_handle,
+                                         gx, gy, gz,
+                                         bx, by, bz,
+                                         sharedmem,
+                                         hstream,
+                                         params)
+    else:
+        driver.cuLaunchKernel(cufunc_handle,
+                              gx, gy, gz,
+                              bx, by, bz,
+                              sharedmem,
+                              hstream,
+                              params,
+                              None)
 
 
 FILE_EXTENSION_MAP = {
     'o': enums.CU_JIT_INPUT_OBJECT,
     'ptx': enums.CU_JIT_INPUT_PTX,
     'a': enums.CU_JIT_INPUT_LIBRARY,
+    'lib': enums.CU_JIT_INPUT_LIBRARY,
     'cubin': enums.CU_JIT_INPUT_CUBIN,
     'fatbin': enums.CU_JIT_INPUT_FATBINAR,
 }
@@ -2116,7 +2169,11 @@ class Linker(object):
         try:
             driver.cuLinkAddFile(self.handle, kind, pathbuf, 0, None, None)
         except CudaAPIError as e:
-            raise LinkerError("%s\n%s" % (e, self.error_log))
+            if e.code == enums.CUDA_ERROR_FILE_NOT_FOUND:
+                msg = f'{path} not found'
+            else:
+                msg = "%s\n%s" % (e, self.error_log)
+            raise LinkerError(msg)
 
     def add_file_guess_ext(self, path):
         ext = path.rsplit('.', 1)[1]
@@ -2225,6 +2282,7 @@ def _workaround_for_datetime(obj):
         obj = obj.view(np.int64)
     return obj
 
+
 def host_pointer(obj, readonly=False):
     """Get host pointer from an obj.
 
@@ -2243,6 +2301,7 @@ def host_pointer(obj, readonly=False):
 
     obj = _workaround_for_datetime(obj)
     return mviewbuf.memoryview_get_buffer(obj, forcewritable, readonly)
+
 
 def host_memory_extents(obj):
     "Returns (start, end) the start and end pointer of the array (half open)."

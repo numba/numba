@@ -26,7 +26,7 @@ class Loc(object):
     """Source location
 
     """
-    _defmatcher = re.compile('def\s+(\w+)\(.*')
+    _defmatcher = re.compile(r'def\s+(\w+)\(.*')
 
     def __init__(self, filename, line, col=None, maybe_decorator=False):
         """ Arguments:
@@ -419,7 +419,7 @@ class Expr(Inst):
 
     @classmethod
     def call(cls, func, args, kws, loc, vararg=None):
-        assert isinstance(func, (Var, Intrinsic))
+        assert isinstance(func, Var)
         assert isinstance(loc, Loc)
         op = 'call'
         return cls(op=op, loc=loc, func=func, args=args, kws=kws,
@@ -499,7 +499,8 @@ class Expr(Inst):
         assert isinstance(index, Var)
         assert isinstance(loc, Loc)
         op = 'getitem'
-        return cls(op=op, loc=loc, value=value, index=index)
+        fn = operator.getitem
+        return cls(op=op, loc=loc, value=value, index=index, fn=fn)
 
     @classmethod
     def typed_getitem(cls, value, dtype, index, loc):
@@ -515,8 +516,9 @@ class Expr(Inst):
         assert index_var is None or isinstance(index_var, Var)
         assert isinstance(loc, Loc)
         op = 'static_getitem'
+        fn = operator.getitem
         return cls(op=op, loc=loc, value=value, index=index,
-                   index_var=index_var)
+                   index_var=index_var, fn=fn)
 
     @classmethod
     def cast(cls, value, loc):
@@ -552,8 +554,23 @@ class Expr(Inst):
         This node is not handled by type inference. It is only added by
         post-typing passes.
         """
+        assert isinstance(loc, Loc)
         op = 'null'
         return cls(op=op, loc=loc)
+
+    @classmethod
+    def dummy(cls, op, info, loc):
+        """
+        A node for a dummy value.
+
+        This node is a place holder for carrying information through to a point
+        where it is rewritten into something valid. This node is not handled
+        by type inference or lowering. It's presence outside of the interpreter
+        renders IR as illegal.
+        """
+        assert isinstance(loc, Loc)
+        assert isinstance(op, str)
+        return cls(op=op, info=info, loc=loc)
 
     def __repr__(self):
         if self.op == 'call':
@@ -1046,28 +1063,6 @@ class Var(EqualityCheckMixin, AbstractRHS):
         """All known versioned and unversioned names for this variable
         """
         return self.versioned_names | {self.unversioned_name,}
-
-class Intrinsic(EqualityCheckMixin):
-    """
-    A low-level "intrinsic" function.  Suitable as the callable of a "call"
-    expression.
-
-    The given *name* is backend-defined and will be inserted as-is
-    in the generated low-level IR.
-    The *type* is the equivalent Numba signature of calling the intrinsic.
-    """
-
-    def __init__(self, name, type, args, loc=None):
-        self.name = name
-        self.type = type
-        self.loc = loc
-        self.args = args
-
-    def __repr__(self):
-        return 'Intrinsic(%s, %s, %s)' % (self.name, self.type, self.loc)
-
-    def __str__(self):
-        return self.name
 
 
 class Scope(EqualityCheckMixin):
@@ -1590,12 +1585,12 @@ class FunctionIR(object):
                 label = sb.getvalue()
             if include_ir:
                 label = ''.join(
-                    ['  {}\l'.format(x) for x in label.splitlines()],
+                    [r'  {}\l'.format(x) for x in label.splitlines()],
                 )
-                label = "block {}\l".format(k) + label
+                label = r"block {}\l".format(k) + label
                 g.node(str(k), label=label, shape='rect')
             else:
-                label = "{}\l".format(k)
+                label = r"{}\l".format(k)
                 g.node(str(k), label=label, shape='circle')
         # Populate the edges
         for src, blk in self.blocks.items():

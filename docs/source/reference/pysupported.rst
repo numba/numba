@@ -644,7 +644,7 @@ Important things to note about these kinds of lists:
    supported e.g. ``len()``.
 #. Dynamic access of items is not possible, e.g. ``some_list[x]``, for a
    value ``x`` which is not a compile time constant. This is because it's
-   impossible statically determine the type of the item being accessed.
+   impossible to statically determine the type of the item being accessed.
 #. Inside the compiler, these lists are actually just tuples with some extra
    things added to make them look like they are lists.
 #. They cannot be returned to the interpreter from a compiled function.
@@ -700,6 +700,7 @@ All methods and operations on sets are supported in JIT-compiled functions.
 Sets must be strictly homogeneous: Numba will reject any set containing
 objects of different types, even if the types are compatible (for example,
 ``{1, 2.5}`` is rejected as it contains a :class:`int` and a :class:`float`).
+The use of reference counted types, e.g. strings, in sets is unsupported.
 
 .. note::
    When passing a set into a JIT-compiled function, any modifications

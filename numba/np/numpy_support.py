@@ -4,7 +4,7 @@ import re
 
 import numpy as np
 
-from numba.core import errors, types, utils
+from numba.core import errors, types
 from numba.core.typing.templates import signature
 
 
@@ -448,7 +448,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
 
     for candidate in ufunc.types:
         ufunc_inputs = candidate[:ufunc.nin]
-        ufunc_outputs = candidate[-ufunc.nout:]
+        ufunc_outputs = candidate[-ufunc.nout:] if ufunc.nout else []
         if 'O' in ufunc_inputs:
             # Skip object arrays
             continue
@@ -587,7 +587,7 @@ def farray(ptr, shape, dtype=None):
     given *shape*, in Fortran order.  If *dtype* is given, it is used as the
     array's dtype, otherwise the array's dtype is inferred from *ptr*'s type.
     """
-    if not isinstance(shape, utils.INT_TYPES):
+    if not isinstance(shape, int):
         shape = shape[::-1]
     return carray(ptr, shape, dtype).T
 

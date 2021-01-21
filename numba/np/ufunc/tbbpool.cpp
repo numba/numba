@@ -15,6 +15,7 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 #include <tbb/tbb.h>
 #include <string.h>
 #include <stdio.h>
+#include <thread>
 #include "workqueue.h"
 
 #include "gufunc_scheduler.h"
@@ -29,9 +30,6 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 #if TBB_INTERFACE_VERSION < 11006
 #error "TBB version is too old, 2019 update 5, i.e. TBB_INTERFACE_VERSION >= 11005 required"
 #endif
-
-#define TSI_INIT(count) tbb::task_scheduler_init(count)
-#define TSI_TERMINATE(tsi) tsi->blocking_terminate(std::nothrow)
 
 #define _DEBUG 0
 #define _TRACE_SPLIT 0
@@ -202,12 +200,25 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     });
 }
 
-void ignore_blocking_terminate_assertion( const char*, int, const char*, const char * )
+static std::thread::id init_thread_id;
+static THREAD_LOCAL(bool) need_reinit_after_fork = false;
+
+static void set_main_thread()
+{
+    init_thread_id = std::this_thread::get_id();
+}
+
+static bool is_main_thread()
+{
+    return std::this_thread::get_id() == init_thread_id;
+}
+
+static void ignore_blocking_terminate_assertion( const char*, int, const char*, const char * )
 {
     tbb::internal::runtime_warning("Unable to wait for threads to shut down before fork(). It can break multithreading in child process\n");
 }
 
-void ignore_assertion( const char*, int, const char*, const char * ) {}
+static void ignore_assertion( const char*, int, const char*, const char * ) {}
 
 static void prepare_fork(void)
 {
@@ -217,9 +228,20 @@ static void prepare_fork(void)
     }
     if(tsi)
     {
-        assertion_handler_type orig = tbb::set_assertion_handler(ignore_blocking_terminate_assertion);
-        TSI_TERMINATE(tsi);
-        tbb::set_assertion_handler(orig);
+        if(is_main_thread())
+        {
+            // TBB thread termination must always be called from same thread that called initialize
+            assertion_handler_type orig = tbb::set_assertion_handler(ignore_blocking_terminate_assertion);
+            tsi->blocking_terminate(std::nothrow);
+            tbb::set_assertion_handler(orig);
+            need_reinit_after_fork = true;
+        }
+        else
+        {
+            fprintf(stderr, "Numba: Attempted to fork from a non-main thread, "
+                            "the TBB library may be in an invalid state in the "
+                            "child process.\n");
+        }
     }
 }
 
@@ -229,8 +251,12 @@ static void reset_after_fork(void)
     {
         puts("Resuming TBB: after fork");
     }
-    if(tsi)
+    if(tsi && need_reinit_after_fork)
+    {
         tsi->initialize(tsi_count);
+        set_main_thread();
+        need_reinit_after_fork = false;
+    }
 }
 
 #if PY_MAJOR_VERSION >= 3
@@ -262,11 +288,14 @@ static void launch_threads(int count)
         puts("Using TBB");
     if(count < 1)
         count = tbb::task_scheduler_init::automatic;
-    tsi = new TSI_INIT(tsi_count = count);
+    tsi_count = count;
+    tsi = new tbb::task_scheduler_init(count);
     tg = new tbb::task_group;
     tg->run([] {}); // start creating threads asynchronously
 
     _INIT_NUM_THREADS = count;
+
+    set_main_thread();
 
 #ifndef _MSC_VER
     pthread_atfork(prepare_fork, reset_after_fork, reset_after_fork);

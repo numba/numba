@@ -88,8 +88,8 @@ class TestCudaNDArray(CUDATestCase):
 
         self.assertTrue(np.all(array == 0))
 
-        right.copy_to_host(array[N//2:])
-        left.copy_to_host(array[:N//2])
+        right.copy_to_host(array[N // 2:])
+        left.copy_to_host(array[:N // 2])
 
         self.assertTrue(np.all(array == original))
 
@@ -116,7 +116,8 @@ class TestCudaNDArray(CUDATestCase):
     def test_devicearray_transpose_identity(self):
         # any-shape identities should work
         original = np.array(np.arange(24)).reshape(3, 4, 2)
-        array = np.transpose(cuda.to_device(original), axes=(0, 1, 2)).copy_to_host()
+        array = np.transpose(cuda.to_device(original),
+                             axes=(0, 1, 2)).copy_to_host()
         self.assertTrue(np.all(array == original))
 
     def test_devicearray_transpose_duplicatedaxis(self):
