@@ -14,7 +14,6 @@ import os
 import sys
 import warnings
 from threading import RLock as threadRLock
-import multiprocessing
 from ctypes import CFUNCTYPE, c_int, CDLL, POINTER, c_uint
 
 import numpy as np
