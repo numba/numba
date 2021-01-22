@@ -28,6 +28,7 @@ else:
     else:
         pickle = pickle38
 
+import cloudpickle
 
 #
 # Pickle support
@@ -162,7 +163,9 @@ def _numba_unpickle(address, bytedata, hashed):
 def dumps(obj):
     """Similar to `pickle.dumps()`. Returns the serialized object in bytes.
     """
-    pickler = NumbaPickler
+    pickler = cloudpickle.Pickler
+    #pickler = NumbaPickler
+    print("dumps:", obj, type(obj), pickler, type(pickler))
     with io.BytesIO() as buf:
         p = pickler(buf)
         p.dump(obj)
@@ -353,11 +356,12 @@ class SlowNumbaPickler(pickle._Pickler):
     dispatch[_CustomPickled] = _save_custom_pickled
 
 
-class FastNumbaPickler(pickle.Pickler):
+class FastNumbaPickler(cloudpickle.Pickler):
     """Faster version of the NumbaPickler through use of Python3.8+ features from
     the C Pickler, install `pickle5` for similar on older Python versions.
     """
     def reducer_override(self, obj):
+        print("reducer_override:", obj, type(obj))
         if isinstance(obj, FunctionType):
             return self._custom_reduce_func(obj)
         elif isinstance(obj, ModuleType):
