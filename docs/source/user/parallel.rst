@@ -585,7 +585,7 @@ invoked by this thread.
 The current value of the parallel chunk size can be obtained from
 :func:`numba.get_parallel_chunksize`.
 Both of these functions can be used from standard Python and from Numba jitted functions
-as shown below.  Both invocations of func1 would be executed with a chunk size of 4 whereas
+as shown below.  Both invocations of ``func1`` would be executed with a chunk size of 4 whereas
 func2 would use a chunk size of 8.
 
 .. code:: python
