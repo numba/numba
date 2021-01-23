@@ -3819,6 +3819,28 @@ class TestParforChunksizing(TestCase):
         self.assertTrue(np.all(res == 13))
         self.assertTrue(np.all(inner_cs == 0))
 
+    @skip_parfors_unsupported
+    def test_python_parallel_chunksize_negative(self):
+        # Test negative set_parallel_chunksize outside njit.
+        with self.assertRaises(ValueError) as raised:
+            @njit
+            def neg_test():
+                set_parallel_chunksize(-1)
+
+            neg_test()
+
+        msg = "chunksize must be greather than or equal to zero"
+        self.assertIn(msg, str(raised.exception))
+
+    @skip_parfors_unsupported
+    def test_njit_parallel_chunksize_negative(self):
+        # Test negative set_parallel_chunksize outside njit.
+        with self.assertRaises(ValueError) as raised:
+            set_parallel_chunksize(-1)
+
+        msg = "chunksize must be greather than or equal to zero"
+        self.assertIn(msg, str(raised.exception))
+
 
 @skip_parfors_unsupported
 class TestParforsDiagnostics(TestParforsBase):
