@@ -359,7 +359,7 @@ class Structure(object):
     # __iter__ is derived by Python from __len__ and __getitem__
 
 
-def alloca_once(builder, ty, size=None, name='', zfill=False, entry_block=True):
+def alloca_once(builder, ty, size=None, name='', zfill=False):
     """Allocate stack memory at the entry block of the current function
     pointed by ``builder`` withe llvm type ``ty``.  The optional ``size`` arg
     set the number of element to allocate.  The default is 1.  The optional
@@ -370,15 +370,10 @@ def alloca_once(builder, ty, size=None, name='', zfill=False, entry_block=True):
     """
     if isinstance(size, int):
         size = ir.Constant(intp_t, size)
-    if entry_block:
-        with builder.goto_entry_block():
-            ptr = builder.alloca(ty, size=size, name=name)
-            # Always zero-fill at init-site.  This is safe.
-            builder.store(ty(None), ptr)
-    else:
+    with builder.goto_entry_block():
         ptr = builder.alloca(ty, size=size, name=name)
         # Always zero-fill at init-site.  This is safe.
-        builder.store(ptr.type.pointee(None), ptr)
+        builder.store(ty(None), ptr)
     # Also zero-fill at the use-site
     if zfill:
         builder.store(ptr.type.pointee(None), ptr)

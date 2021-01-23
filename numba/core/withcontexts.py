@@ -404,8 +404,10 @@ def _mutate_with_block_callee(blocks, blk_start, blk_end, inputs, outputs):
 class _ParallelChunksize(WithContext):
     is_callable = True
 
-    """A simple context-manager that tells the compiler to bypass the body
-    of the with-block.
+    """A context-manager that remembers and saves away the current
+    chunksize for executing parfors and then changes that chunksize
+    to the programmer specified value.  At the end of the region,
+    the original chunksize is restored.
     """
     def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
                          body_blocks, dispatcher_factory, extra):
@@ -425,26 +427,19 @@ class _ParallelChunksize(WithContext):
         # global for Numba itself
         gvar = ir.Var(scope, ir_utils.mk_unique_var("$ngvar"), loc)
         set_state.append(ir.Assign(ir.Global('numba', numba, loc), gvar, loc))
-        # getattr for get/set chunksize function in Numba
-        gpcattr = ir.Expr.getattr(gvar, 'get_parallel_chunksize', loc)
+        # getattr for set chunksize function in Numba
         spcattr = ir.Expr.getattr(gvar, 'set_parallel_chunksize', loc)
-        gpcvar = ir.Var(scope, ir_utils.mk_unique_var("$gpc"), loc)
         spcvar = ir.Var(scope, ir_utils.mk_unique_var("$spc"), loc)
-        set_state.append(ir.Assign(gpcattr, gpcvar, loc))
         set_state.append(ir.Assign(spcattr, spcvar, loc))
-        # call get_parallel_chunksize and save result to orig_pc_var
-        orig_pc_var = ir.Var(scope, ir_utils.mk_unique_var("$save_pc"), loc)
-        gpc_call = ir.Expr.call(gpcvar, [], (), loc)
-        set_state.append(ir.Assign(gpc_call, orig_pc_var, loc))
         # call set_parallel_chunksize
-        unused_var = ir.Var(scope, ir_utils.mk_unique_var("$unused"), loc)
+        orig_pc_var = ir.Var(scope, ir_utils.mk_unique_var("$save_pc"), loc)
         cs_var = ir.Var(scope, ir_utils.mk_unique_var("$cs_var"), loc)
         set_state.append(ir.Assign(arg, cs_var, loc))
         spc_call = ir.Expr.call(spcvar, [cs_var], (), loc)
-        set_state.append(ir.Assign(spc_call, unused_var, loc))
+        set_state.append(ir.Assign(spc_call, orig_pc_var, loc))
 
         restore_spc_call = ir.Expr.call(spcvar, [orig_pc_var], (), loc)
-        restore_state.append(ir.Assign(restore_spc_call, unused_var, loc))
+        restore_state.append(ir.Assign(restore_spc_call, orig_pc_var, loc))
 
         blocks[blk_start].body = (blocks[blk_start].body[1:-1] + 
                                   set_state + 
@@ -454,6 +449,7 @@ class _ParallelChunksize(WithContext):
 
     def __call__(self, *args, **kwargs):
         assert len(args) == 1
+        assert not kwargs
         self.chunksize = args[0]
         return self
 

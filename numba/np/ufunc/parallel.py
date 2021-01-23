@@ -504,8 +504,7 @@ def _launch_threads():
             launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
             launch_threads(NUM_THREADS)
 
-            _load_num_threads_funcs(lib)  # load late
-            parfor_load_late(lib)
+            _load_threading_functions(lib)  # load late
 
             # set library name so it can be queried
             global _threading_layer
@@ -513,7 +512,7 @@ def _launch_threads():
             _is_initialized = True
 
 
-def _load_num_threads_funcs(lib):
+def _load_threading_functions(lib):
 
     ll.add_symbol('get_num_threads', lib.get_num_threads)
     ll.add_symbol('set_num_threads', lib.set_num_threads)
@@ -528,6 +527,21 @@ def _load_num_threads_funcs(lib):
 
     global _get_thread_id
     _get_thread_id = CFUNCTYPE(c_int)(lib.get_thread_id)
+
+    ll.add_symbol('set_parallel_chunksize', lib.set_parallel_chunksize)
+    ll.add_symbol('get_parallel_chunksize', lib.get_parallel_chunksize)
+    ll.add_symbol('get_sched_size', lib.get_sched_size)
+    global _set_parallel_chunksize
+    _set_parallel_chunksize = CFUNCTYPE(c_uint,
+                                        c_uint)(lib.set_parallel_chunksize)
+    global _get_parallel_chunksize
+    _get_parallel_chunksize = CFUNCTYPE(c_uint)(lib.get_parallel_chunksize)
+    global _get_sched_size
+    _get_sched_size = CFUNCTYPE(c_uint,
+                                c_uint,
+                                c_uint,
+                                POINTER(c_int),
+                                POINTER(c_int))(lib.get_sched_size)
 
 
 # Some helpers to make set_num_threads jittable
@@ -666,29 +680,14 @@ if _DYLD_WORKAROUND_SET and _DYLD_WORKAROUND_VAL:
     _launch_threads()
 
 
-def parfor_load_late(lib):
-    ll.add_symbol('set_parallel_chunksize', lib.set_parallel_chunksize)
-    ll.add_symbol('get_parallel_chunksize', lib.get_parallel_chunksize)
-    ll.add_symbol('get_sched_size', lib.get_sched_size)
-    global _set_parallel_chunksize
-    _set_parallel_chunksize = CFUNCTYPE(None,
-                                        c_uint)(lib.set_parallel_chunksize)
-    global _get_parallel_chunksize
-    _get_parallel_chunksize = CFUNCTYPE(c_uint)(lib.get_parallel_chunksize)
-    global _get_sched_size
-    _get_sched_size = CFUNCTYPE(c_uint,
-                                c_uint,
-                                c_uint,
-                                POINTER(c_int),
-                                POINTER(c_int))(lib.get_sched_size)
-
-
 def set_parallel_chunksize(n):
     _launch_threads()
     if not isinstance(n, (int, np.integer)):
         raise TypeError("The parallel chunkize must be an integer")
     global _set_parallel_chunksize
-    _set_parallel_chunksize(n)
+    if n < 0:
+        raise ValueError("chunksize must be greather than or equal to zero")
+    return _set_parallel_chunksize(n)
 
 
 def get_parallel_chunksize():
@@ -705,7 +704,9 @@ def ol_set_parallel_chunksize(n):
         raise errors.TypingError(msg)
 
     def impl(n):
-        _set_parallel_chunksize(n)
+        if n < 0:
+            raise ValueError("chunksize must be greather than or equal to zero")
+        return _set_parallel_chunksize(n)
     return impl
 
 

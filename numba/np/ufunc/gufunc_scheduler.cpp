@@ -89,8 +89,10 @@ public:
     }
 };
 
-extern "C" void set_parallel_chunksize(uintp n) {
+extern "C" uintp set_parallel_chunksize(uintp n) {
+    uintp orig = parallel_chunksize;
     parallel_chunksize = n;
+    return orig;
 }
 
 extern "C" uintp get_parallel_chunksize() {

@@ -1552,7 +1552,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
 
     multiplier = context.get_constant(types.uintp, num_dim * 2)
     sched_size = builder.mul(num_divisions, multiplier)
-    sched = cgutils.alloca_once(builder, sched_type, size=sched_size, name="sched", entry_block=False)
+    sched = builder.alloca(sched_type, size=sched_size, name="sched")
 
     debug_flag = 1 if config.DEBUG_ARRAY_OPT else 0
     scheduling_fnty = lc.Type.function(

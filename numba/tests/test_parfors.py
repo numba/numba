@@ -3740,6 +3740,13 @@ class TestParforsMisc(TestParforsBase):
             find_maxima_3D_jit.py_func(args),
         )
 
+
+class TestParforChunksizing(TestCase):
+    """
+    Tests miscellaneous parts of ParallelAccelerator use.
+    """
+    _numba_parallel_test_ = False
+
     @skip_parfors_unsupported
     def test_python_parallel_chunksize_basic(self):
         # Test basic chunksize operations outside njit.

@@ -1928,7 +1928,7 @@ def find_global_value(func_ir, var):
     or raise GuardException otherwise.
     """
     dfn = get_definition(func_ir, var)
-    if isinstance(dfn, ir.Global):
+    if isinstance(dfn, (ir.Global, ir.FreeVar)):
         return dfn.value
 
     if isinstance(dfn, ir.Expr) and dfn.op == 'getattr':

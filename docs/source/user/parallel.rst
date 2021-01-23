@@ -564,14 +564,31 @@ chunk size and is appropriate when the work required for each iteration is nearl
 
 Conversely, if the work required per iteration varies significantly then this static
 scheduling approach can lead to load imbalances and longer execution times.  In such cases,
-Numba provides a mechanism to control how many iterations of a parallel region go into
-each chunk.  The number of chunks will then be approximately equal to the number of
-iterations divided by the chunk size.  Numba then gives one such chunk to each configured
+Numba provides a mechanism to control how many iterations of a parallel region
+(i.e., the chunk size) go into each chunk.
+Numba then computes the number of required chunks which is
+equal to the number of iterations divided by the chunk size, truncated to the nearest
+integer.  All of these chunks are then approximately, equally sized.
+Numba then gives one such chunk to each configured
 thread as above and when a thread finishes a chunk, Numba gives that thread the next
-available chunk.  This scheduling approach is the equivalent of OpenMP's dynamic scheduling
-option with the specified chunk size.  To minimize execution time, the programmer must pick
-a chunk size that strikes a balance between greater load balancing with smaller chunk
-sizes and less scheduling overhead with larger chunk sizes.
+available chunk.  This scheduling approach is similar to OpenMP's dynamic scheduling
+option with the specified chunk size.  To minimize execution time, the programmer must
+pick a chunk size that strikes a balance between greater load balancing with smaller
+chunk sizes and less scheduling overhead with larger chunk sizes.
+
+There are some cases in which the actual chunk sizes may differ from the requested
+chunk size.  First, if the number of required chunks based on the specified chunk size
+is less than the number of configured threads then Numba will use all of the configured
+threads to execute the parallel region.  In this case, the actual chunk size will be
+less than the requested chunk size.  Second, due to truncation, in cases where the
+iteration count is slightly less than a multiple of the chunk size
+(e.g., 14 iterations and a specified chunk size of 5), the actual chunk size will be
+larger than the specified chunk size.  As in the given example, the number of chunks
+would be 2 and the actual chunk size would be 7 (i.e., 14 / 2).  Lastly, since Numba
+divides an N-dimensional iteration space into N-dimensional (hyper)rectangular chunks,
+it may be the case there are not N integer factors whose product is equal to the chunk
+size.  In this case, some chunks will have an area/volume larger than the chunk size
+whereas others will be less than the specified chunk size.
 
 The number of iterations of a parallel region in a chunk is stored as a thread-local
 variable and can be set using
@@ -582,59 +599,39 @@ static scheduling approach above.  Values greater than 0 instruct Numba to use t
 as the chunk size in the dynamic scheduling approach described above.
 The current value of this thread local variable is used by all subsequent parallel regions
 invoked by this thread.
+:func:`numba.set_parallel_chunksize` returns the previous value of the chunksize.
 The current value of the parallel chunk size can be obtained from
 :func:`numba.get_parallel_chunksize`.
 Both of these functions can be used from standard Python and from Numba jitted functions
 as shown below.  Both invocations of ``func1`` would be executed with a chunk size of 4 whereas
 ``func2`` would use a chunk size of 8.
 
-.. code:: python
-
-    from numba import njit, prange, set_parallel_chunksize, get_parallel_chunksize
-
-    @njit(parallel=True)
-    def func1():
-        for i in prange(n):
-            ...
-
-    @njit(parallel=True)
-    def func2():
-        old_chunksize = get_parallel_chunksize()
-        set_parallel_chunksize(8)
-        for i in prange(n):
-            ...
-        set_parallel_chunksize(old_chunksize)
-
-    old_chunksize = get_parallel_chunksize()
-    set_parallel_chunksize(4)
-    func1()
-    func2()
-    func1()
-    set_parallel_chunksize(old_chunksize)
+.. literalinclude:: ../../../numba/tests/doc_examples/test_parallel_chunksize.py
+   :language: python
+   :caption: from ``test_chunksize_manual`` of ``numba/tests/doc_examples/test_parallel_chunksize.py``
+   :start-after: magictoken.ex_chunksize_manual.begin
+   :end-before: magictoken.ex_chunksize_manual.end
+   :dedent: 12
+   :linenos:
 
 Since this idiom of saving and restoring is so common, Numba provides the
-:func:`parallel_chunksize` with clause to simplify the idiom.  As shown below,
-this with clause can be invoked from both standard Python and within Numba
-jitted functions.
+:func:`parallel_chunksize` with clause context-manager to simplify the idiom.
+As shown below, this with clause can be invoked from both standard Python and
+within Numba jitted functions.  As with other Numba context-managers, be
+aware that returns and raises are not supported from within a context managed
+block that is part of a Numba jitted function.
 
-.. code:: python
+.. literalinclude:: ../../../numba/tests/doc_examples/test_parallel_chunksize.py
+   :language: python
+   :caption: from ``test_chunksize_with`` of ``numba/tests/doc_examples/test_parallel_chunksize.py``
+   :start-after: magictoken.ex_chunksize_with.begin
+   :end-before: magictoken.ex_chunksize_with.end
+   :dedent: 12
+   :linenos:
 
-    from numba import njit, prange, parallel_chunksize
-
-    @njit(parallel=True)
-    def func1():
-        for i in prange(n):
-            ...
-
-    @njit(parallel=True)
-    def func2():
-        with parallel_chunksize(8):
-            for i in prange(n):
-                ...
-
-    with parallel_chunksize(4):
-        func1()
-        func2()
-        func1()
+Note that these functions to set the chunk size only have an effect on
+Numba automatic parallelization with the :ref:`parallel_jit_option` option.
+Chunk size specification has no effect on the :func:`~numba.vectorize` decorator
+or the :func:`~numba.guvectorize` decorator.
 
 .. seealso:: :ref:`parallel_jit_option`, :ref:`Parallel FAQs <parallel_FAQs>`

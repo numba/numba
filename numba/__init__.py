@@ -41,7 +41,8 @@ from numba.core.decorators import (cfunc, generated_jit, jit, njit, stencil,
 
 # Re-export vectorize decorators and the thread layer querying function
 from numba.np.ufunc import (vectorize, guvectorize, threading_layer,
-                            get_num_threads, set_num_threads)
+                            get_num_threads, set_num_threads,
+                            set_parallel_chunksize, get_parallel_chunksize)
 
 # Re-export Numpy helpers
 from numba.np.numpy_support import carray, farray, from_dtype
@@ -53,10 +54,6 @@ from numba import experimental
 import numba.core.withcontexts
 from numba.core.withcontexts import objmode_context as objmode
 from numba.core.withcontexts import parallel_chunksize
-
-# Re-export ParallelAccelerator runtime controls
-from numba.np.ufunc.parallel import (set_parallel_chunksize,
-                                     get_parallel_chunksize)
 
 # Keep this for backward compatibility.
 test = runtests.main
