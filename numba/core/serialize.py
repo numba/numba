@@ -160,12 +160,80 @@ def _numba_unpickle(address, bytedata, hashed):
     return obj
 
 
-def dumps(obj):
+from collections import Mapping, Set, Sequence
+
+try:
+    from six import string_types, iteritems
+except ImportError:
+    string_types = (str, unicode) if str is bytes else (str, bytes)
+    iteritems = lambda mapping: getattr(mapping, 'iteritems', mapping.items)()
+
+def objwalk(obj, path=(), memo=None):
+    from numba.stencils.stencil import StencilFunc
+    from numba.core.typing.context import Context
+
+    if memo is None:
+        memo = set()
+
+    if id(obj) not in memo:
+        print("objwalk:", type(obj), path, obj)
+        memo.add(id(obj))
+    else:
+        return
+
+    if isinstance(obj, Mapping):
+        for key, value in iteritems(obj):
+            objwalk(value, path + (key,), memo)
+    elif isinstance(obj, (Sequence, Set)) and not isinstance(obj, string_types):
+        for index, value in enumerate(obj):
+            objwalk(value, path + (index,), memo)
+    elif isinstance(obj, FunctionType):
+        print("FunctionType:", type(obj), path, dir(obj))
+        if not _is_importable(obj):
+            print("not is-importable")
+            gls = _get_function_globals_for_reduction(obj)
+            args = _reduce_function(obj, gls)
+            args2, cells = _reduce_function_no_cells(obj, gls)
+            states = {'cells': cells}
+            print("gls:", gls, type(gls))
+            print("args:", args, type(args))
+            nt = (_rebuild_function, args)
+            objwalk(nt, path + ("FunctionType",), memo)
+            nt2 = (_rebuild_function, args2, states, None, None, _function_setstate)
+            objwalk(nt2, path + ("FunctionType",), memo)
+#            objwalk(args, path + ("FunctionType",), memo)
+#            print("cells:", cells, type(cells))
+#            return (_rebuild_function, args, states, None, None,
+#                    _function_setstate)
+#    elif hasattr(obj, "__dict__"):
+    elif isinstance(obj, StencilFunc):
+        print("iterating through stencilfunc")
+        for key, value in obj.__dict__.items():
+            objwalk(value, path + (key,), memo)
+        print("done iterating through stencilfunc")
+    elif isinstance(obj, Context):
+        print("iterating through Context")
+        for key, value in obj.__dict__.items():
+            objwalk(value, path + (key,), memo)
+        print("done iterating through Context")
+    else:
+        if not isinstance(obj, (str, type(None), int)):
+            print("end-of-line:", type(obj), path, dir(obj))
+        dumps(obj, walk=False)
+
+
+def todd_walk(obj):
+    objwalk(obj)
+    print("Done todd_walk")
+
+def dumps(obj, walk=True):
     """Similar to `pickle.dumps()`. Returns the serialized object in bytes.
     """
     pickler = cloudpickle.Pickler
     #pickler = NumbaPickler
-    print("dumps:", obj, type(obj), pickler, type(pickler))
+#    print("dumps:", obj, type(obj))
+#    if walk:
+#        todd_walk(obj)
     with io.BytesIO() as buf:
         p = pickler(buf)
         p.dump(obj)
