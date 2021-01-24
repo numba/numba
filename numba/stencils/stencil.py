@@ -67,11 +67,9 @@ class StencilFunc(object):
         self.kws = []       # remember original kws arguments
 
         # stencils only supported for CPU context currently
-        self._typingctx = registry.cpu_target.typing_context
-        self._targetctx = registry.cpu_target.target_context
-        self._typingctx.refresh()
-        self._targetctx.refresh()
-        self._install_type(self._typingctx)
+        typingctx = registry.cpu_target.typing_context
+        typingctx.refresh()
+        self._install_type(typingctx)
         self.neighborhood = self.options.get("neighborhood")
         self._type_cache = {}
         self._lower_me = StencilFuncLowerer(self)
@@ -120,7 +118,8 @@ class StencilFunc(object):
         return ret_blocks
 
     def add_indices_to_kernel(self, kernel, index_names, ndim,
-                              neighborhood, standard_indexed, typemap, calltypes):
+                              neighborhood, standard_indexed, typemap, calltypes,
+                              typingctx):
         """
         Transforms the stencil kernel as specified by the user into one
         that includes each dimension's index variable as part of the getitem
@@ -213,7 +212,7 @@ class StencilFunc(object):
                             g_sa = ir.Global("slice_addition", sa_func, loc)
                             new_body.append(ir.Assign(g_sa, sa_var, loc))
                             slice_addition_call = ir.Expr.call(sa_var, [stmt_index_var, index_var], (), loc)
-                            calltypes[slice_addition_call] = sa_func_typ.get_call_type(self._typingctx, [stmt_index_var_typ, types.intp], {})
+                            calltypes[slice_addition_call] = sa_func_typ.get_call_type(typingctx, [stmt_index_var_typ, types.intp], {})
                             new_body.append(ir.Assign(slice_addition_call, tmpvar, loc))
                             new_body.append(ir.Assign(
                                            ir.Expr.getitem(stmt.value.value, tmpvar, loc),
@@ -272,7 +271,7 @@ class StencilFunc(object):
                                 g_sa = ir.Global("slice_addition", sa_func, loc)
                                 new_body.append(ir.Assign(g_sa, sa_var, loc))
                                 slice_addition_call = ir.Expr.call(sa_var, [getitemvar, index_vars[dim]], (), loc)
-                                calltypes[slice_addition_call] = sa_func_typ.get_call_type(self._typingctx, [one_index_typ, types.intp], {})
+                                calltypes[slice_addition_call] = sa_func_typ.get_call_type(typingctx, [one_index_typ, types.intp], {})
                                 new_body.append(ir.Assign(slice_addition_call, tmpvar, loc))
                             else:
                                 acc_call = ir.Expr.binop(operator.add, getitemvar,
@@ -325,6 +324,8 @@ class StencilFunc(object):
 
 
     def get_return_type(self, argtys):
+        typingctx = registry.cpu_target.typing_context
+        typingctx.refresh()
         if config.DEBUG_ARRAY_OPT >= 1:
             print("get_return_type", argtys)
             ir_utils.dump_blocks(self.kernel_ir.blocks)
@@ -335,7 +336,7 @@ class StencilFunc(object):
 
         from numba.core import typed_passes
         typemap, return_type, calltypes, _ = typed_passes.type_inference_stage(
-                self._typingctx,
+                typingctx,
                 self.kernel_ir,
                 argtys,
                 None,
@@ -371,6 +372,9 @@ class StencilFunc(object):
         built by StencilFunc._install_type().
         Return the call-site signature.
         """
+        targetctx = registry.cpu_target.target_context
+        targetctx.refresh()
+
         if (self.neighborhood is not None and
             len(self.neighborhood) != argtys[0].ndim):
             raise ValueError("%d dimensional neighborhood specified "
@@ -401,7 +405,7 @@ class StencilFunc(object):
         exec(dummy_text) in globals(), locals()
         dummy_func = eval("__numba_dummy_stencil")
         sig = sig.replace(pysig=utils.pysignature(dummy_func))
-        self._targetctx.insert_func_defn([(self._lower_me, self, argtys_extra)])
+        targetctx.insert_func_defn([(self._lower_me, self, argtys_extra)])
         self._type_cache[argtys_extra] = (sig, result, typemap, calltypes)
         return sig
 
@@ -448,6 +452,11 @@ class StencilFunc(object):
         #    after label and variable renaming of the stencil kernel IR to prevent
         #    conflicts with the stencil function IR.
         # 5) Compile the combined stencil function IR + stencil kernel IR into existence.
+
+        typingctx = registry.cpu_target.typing_context
+        targetctx = registry.cpu_target.target_context
+        typingctx.refresh()
+        targetctx.refresh()
 
         # Copy the kernel so that our changes for this callsite
         # won't effect other callsites.
@@ -522,7 +531,8 @@ class StencilFunc(object):
         # arrays.
         kernel_size, relatively_indexed = self.add_indices_to_kernel(
                 kernel_copy, index_vars, the_array.ndim,
-                self.neighborhood, standard_indexed, typemap, copy_calltypes)
+                self.neighborhood, standard_indexed, typemap, copy_calltypes,
+                typingctx)
         if self.neighborhood is None:
             self.neighborhood = kernel_size
 
@@ -592,7 +602,7 @@ class StencilFunc(object):
             if "cval" in self.options:
                 cval = self.options["cval"]
                 cval_ty = typing.typeof.typeof(cval)
-                if not self._typingctx.can_convert(cval_ty, return_type.dtype):
+                if not typingctx.can_convert(cval_ty, return_type.dtype):
                     msg = "cval type does not match stencil return type."
                     raise ValueError(msg)
                 out_init = "{}[:] = {}\n".format(out_name, cval)
@@ -726,8 +736,8 @@ class StencilFunc(object):
         # Compile the combined stencil function with the replaced loop
         # body in it.
         new_func = compiler.compile_ir(
-            self._typingctx,
-            self._targetctx,
+            typingctx,
+            targetctx,
             stencil_ir,
             new_stencil_param_types,
             None,
