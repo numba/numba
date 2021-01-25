@@ -394,7 +394,12 @@ class List(MutableSequence):
         buf = []
         for x in self:
             buf.append("{}".format(x))
-        return '[{0}]'.format(', '.join(buf))
+        # Check whether the code was invoked from IPython shell
+        try:
+            get_ipython
+            return '[{0}, ...]'.format(', '.join(buf[:1000]))
+        except (NameError, IndexError):
+            return '[{0}]'.format(', '.join(buf))
 
     def __repr__(self):
         body = str(self)

@@ -384,6 +384,8 @@ class DataFlowAnalysis(object):
         info.push(res)
 
     op_COMPARE_OP = _binaryop
+    op_IS_OP = _binaryop
+    op_CONTAINS_OP = _binaryop
 
     op_INPLACE_ADD = _binaryop
     op_INPLACE_SUBTRACT = _binaryop

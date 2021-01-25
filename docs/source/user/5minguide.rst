@@ -6,7 +6,7 @@ A ~5 minute guide to Numba
 Numba is a just-in-time compiler for Python that works best on code that uses
 NumPy arrays and functions, and loops. The most common way to use Numba is
 through its collection of decorators that can be applied to your functions to
-instruct Numba to compile them. When a call is made to a Numba decorated
+instruct Numba to compile them. When a call is made to a Numba-decorated
 function it is compiled to machine code "just-in-time" for execution and all or
 part of your code can subsequently run at native machine code speed!
 
@@ -93,7 +93,7 @@ What is ``nopython`` mode?
 --------------------------
 The Numba ``@jit`` decorator fundamentally operates in two compilation modes,
 ``nopython`` mode and ``object`` mode. In the ``go_fast`` example above,
-``nopython=True`` is set in the ``@jit`` decorator, this is instructing Numba to
+``nopython=True`` is set in the ``@jit`` decorator; this is instructing Numba to
 operate in ``nopython`` mode. The behaviour of the ``nopython`` compilation mode
 is to essentially compile the decorated function so that it will run entirely
 without the involvement of the Python interpreter. This is the recommended and
@@ -101,7 +101,7 @@ best-practice way to use the Numba ``jit`` decorator as it leads to the best
 performance.
 
 Should the compilation in ``nopython`` mode fail, Numba can compile using
-``object mode``, this is a fall back mode for the ``@jit`` decorator if
+``object mode``. This is a fall back mode for the ``@jit`` decorator if
 ``nopython=True`` is not set (as seen in the ``use_pandas`` example above). In
 this mode Numba will identify loops that it can compile and compile those into
 functions that run in machine code, and it will run the rest of the code in the
@@ -110,10 +110,10 @@ interpreter. For best performance avoid using this mode!
 How to measure the performance of Numba?
 ----------------------------------------
 First, recall that Numba has to compile your function for the argument types
-given before it executes the machine code version of your function, this takes
+given before it executes the machine code version of your function. This takes
 time. However, once the compilation has taken place Numba caches the machine
 code version of your function for the particular types of arguments presented.
-If it is called again the with same types, it can reuse the cached version
+If it is called again with the same types, it can reuse the cached version
 instead of having to compile again.
 
 A really common mistake when measuring performance is to not account for the
@@ -154,7 +154,7 @@ This, for example prints::
 
 A good way to measure the impact Numba JIT has on your code is to time execution
 using the `timeit <https://docs.python.org/3/library/timeit.html>`_ module
-functions, these measure multiple iterations of execution and, as a result,
+functions; these measure multiple iterations of execution and, as a result,
 can be made to accommodate for the compilation time in the first execution.
 
 As a side note, if compilation time is an issue, Numba JIT supports
@@ -210,7 +210,6 @@ ctypes/cffi/cython interoperability:
   in ``nopython`` mode.
 * ``ctypes`` - The calling of :ref:`ctypes  <ctypes-support>` wrapped
   functions is supported in ``nopython`` mode.
-  .
 * Cython exported functions :ref:`are callable <cython-support>`.
 
 GPU targets:

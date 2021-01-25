@@ -14,7 +14,6 @@ import os
 import sys
 import warnings
 from threading import RLock as threadRLock
-import multiprocessing
 from ctypes import CFUNCTYPE, c_int, CDLL
 
 import numpy as np
@@ -297,10 +296,13 @@ def _set_init_process_lock():
         # process and thereby the init sequence, some of the threading backend
         # init sequences are not fork safe. Also, windows global mp locks seem
         # to be fine.
-        if "fork" in multiprocessing.get_start_method() or _windows:
-            _backend_init_process_lock = multiprocessing.get_context().RLock()
-        else:
-            _backend_init_process_lock = _nop()
+        with _backend_init_thread_lock: # protect part-initialized module access
+            import multiprocessing
+            if "fork" in multiprocessing.get_start_method() or _windows:
+                ctx = multiprocessing.get_context()
+                _backend_init_process_lock = ctx.RLock()
+            else:
+                _backend_init_process_lock = _nop()
 
     except OSError as e:
 
