@@ -305,3 +305,7 @@ class TestMisc(SerialMixin, unittest.TestCase):
         with override_env_config(f"NUMBA_{env}", "my value"):
             got = envvars.get_numba_envvar(env, default=default)
             self.assertEqual(got, "my value")
+
+
+if __name__ == '__main__':
+    unittest.main()
