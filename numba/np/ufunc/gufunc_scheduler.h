@@ -42,7 +42,12 @@ void do_scheduling_signed(uintp num_dim, intp *starts, intp *ends, uintp num_thr
 void do_scheduling_unsigned(uintp num_dim, intp *starts, intp *ends, uintp num_threads, uintp *sched, intp debug);
 uintp set_parallel_chunksize(uintp);
 uintp get_parallel_chunksize(void);
-uintp get_sched_size(uintp num_threads, uintp num_dim, intp *starts, intp *ends);
+uintp compute_sched_size(uintp num_threads, uintp num_dim, intp *starts, intp *ends);
+uintp get_sched_size(void);
+void set_sched_size(uintp);
+void * get_sched(void);
+void set_sched(void*);
+
 
 #ifdef __cplusplus
 }

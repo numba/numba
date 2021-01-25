@@ -82,7 +82,8 @@ get_thread_id(void)
 }
 
 static void
-add_task(void *fn, void *args, void *dims, void *steps, void *data)
+add_task(void *fn, void *args, void *dims, void *steps, void *data,
+         bool broadcast)
 {
     puts("Running add_task() with omppool sequentially");
     typedef void (*func_ptr_t)(void *args, void *dims, void *steps, void *data);
@@ -152,16 +153,24 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
         printf("\n");
     }
 
+    // Fetch the schedule data from the main thread, this will be broadcast
+    // in the parallel region.
+    uintp sched_size = get_sched_size();
+    void * schedule = get_sched();
+
     // Set the thread mask on the pragma such that the state is scope limited
     // and passed via a register on the OMP region call site, this limiting
     // global state and racing
-    #pragma omp parallel num_threads(num_threads), shared(agreed_nthreads)
+    #pragma omp parallel num_threads(num_threads), shared(agreed_nthreads, sched_size, schedule)
     {
         size_t * count_space = (size_t *)alloca(sizeof(size_t) * arg_len);
         char ** array_arg_space = (char**)alloca(sizeof(char*) * array_count);
 
-        // tell the active thread team about the number of threads
+        // tell the active thread team about the number of threads, schedule
+        // size and the schedule pointer
         set_num_threads(agreed_nthreads);
+        set_sched_size(sched_size);
+        set_sched(schedule);
 
         #pragma omp for
         for(ptrdiff_t r = 0; r < size; r++)
@@ -269,7 +278,11 @@ MOD_INIT(omppool)
                            PyLong_FromVoidPtr((void*)&set_parallel_chunksize));
     PyObject_SetAttrString(m, "get_parallel_chunksize",
                            PyLong_FromVoidPtr((void*)&get_parallel_chunksize));
+    PyObject_SetAttrString(m, "compute_sched_size",
+                           PyLong_FromVoidPtr((void*)&compute_sched_size));
     PyObject_SetAttrString(m, "get_sched_size",
                            PyLong_FromVoidPtr((void*)&get_sched_size));
+    PyObject_SetAttrString(m, "get_sched",
+                           PyLong_FromVoidPtr((void*)&get_sched));
     return MOD_SUCCESS_VAL(m);
 }

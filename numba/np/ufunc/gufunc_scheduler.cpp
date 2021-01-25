@@ -20,6 +20,10 @@
 
 // Default 0 value means one evenly-sized chunk of work per worker thread.
 static THREAD_LOCAL(uintp) parallel_chunksize = 0;
+#define _NO_SCHEDULE_SET_SIZE uintp(-1)
+// Default -1 value means schedule size has not been computed.
+static THREAD_LOCAL(uintp) _TLS_schedule_size = _NO_SCHEDULE_SET_SIZE;
+THREAD_LOCAL(void *) _TLS_schedule = NULL;
 
 // round not available on VS2010.
 double guround (double number) {
@@ -89,6 +93,7 @@ public:
     }
 };
 
+
 extern "C" uintp set_parallel_chunksize(uintp n) {
     uintp orig = parallel_chunksize;
     parallel_chunksize = n;
@@ -99,14 +104,32 @@ extern "C" uintp get_parallel_chunksize() {
     return parallel_chunksize;
 }
 
-extern "C" uintp get_sched_size(uintp num_threads, uintp num_dim, intp *starts, intp *ends) {
+extern "C" uintp compute_sched_size(uintp num_threads, uintp num_dim, intp *starts, intp *ends) {
     if (parallel_chunksize == 0) {
         return num_threads;
     }
     RangeActual ra(num_dim, starts, ends);
     uintp total_work_size = ra.total_size();
     uintp num_divisions = total_work_size / parallel_chunksize;
-    return num_divisions < num_threads ? num_threads : num_divisions;
+    uintp ret = num_divisions < num_threads ? num_threads : num_divisions;
+//     printf("total_work_size=%zd num_divisions=%zd return=%zd\n", total_work_size, num_divisions, ret);
+    return ret;
+}
+
+extern "C" uintp get_sched_size(void) {
+    return _TLS_schedule_size;
+}
+
+extern "C" void set_sched_size(uintp size) {
+    _TLS_schedule_size = size;
+}
+
+extern "C" void * get_sched(void) {
+    return _TLS_schedule;
+}
+
+extern "C" void set_sched(void * sched) {
+    _TLS_schedule = sched;
 }
 
 class dimlength {
@@ -387,6 +410,14 @@ extern "C" void do_scheduling_signed(uintp num_dim, intp *starts, intp *ends, ui
     RangeActual full_space(num_dim, starts, ends);
     std::vector<RangeActual> ret = create_schedule(full_space, num_threads);
     flatten_schedule(ret, sched);
+    // This isn't ideal, but the schedule and its size need to be accessible
+    // somewhere so that they can be sanity checked in testing.
+    _TLS_schedule_size = compute_sched_size(num_threads, num_dim, starts, ends);
+    if (_TLS_schedule_size != _NO_SCHEDULE_SET_SIZE) {
+        _TLS_schedule = (void *)sched;
+    } else {
+        _TLS_schedule = NULL; // in case stale schedule pointer
+    }
 }
 
 extern "C" void do_scheduling_unsigned(uintp num_dim, intp *starts, intp *ends, uintp num_threads, uintp *sched, intp debug) {
@@ -406,4 +437,12 @@ extern "C" void do_scheduling_unsigned(uintp num_dim, intp *starts, intp *ends, 
     RangeActual full_space(num_dim, starts, ends);
     std::vector<RangeActual> ret = create_schedule(full_space, num_threads);
     flatten_schedule(ret, sched);
+    // This isn't ideal, but the schedule and its size need to be accessible
+    // somewhere so that they can be sanity checked in testing.
+    _TLS_schedule_size = compute_sched_size(num_threads, num_dim, starts, ends);
+    if (_TLS_schedule_size != _NO_SCHEDULE_SET_SIZE) {
+        _TLS_schedule = (void *)sched;
+    } else {
+        _TLS_schedule = NULL; // in case stale schedule pointer
+    }
 }

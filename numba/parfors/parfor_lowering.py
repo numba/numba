@@ -1542,9 +1542,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                                                   ("Invalid number of threads. "
                                                    "This likely indicates a bug in Numba.",))
 
-    get_sched_size_fnty = lc.Type.function(uintp_t, [uintp_t, uintp_t, intp_ptr_t, intp_ptr_t])
-    get_sched_size = builder.module.get_or_insert_function(get_sched_size_fnty, name="get_sched_size")
-    num_divisions = builder.call(get_sched_size, [num_threads,
+    compute_sched_size_fnty = lc.Type.function(uintp_t, [uintp_t, uintp_t, intp_ptr_t, intp_ptr_t])
+    compute_sched_size = builder.module.get_or_insert_function(compute_sched_size_fnty, name="compute_sched_size")
+    num_divisions = builder.call(compute_sched_size, [num_threads,
                                                   context.get_constant(types.uintp, num_dim),
                                                   dim_starts,
                                                   dim_stops])

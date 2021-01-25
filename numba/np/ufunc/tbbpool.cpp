@@ -82,9 +82,11 @@ get_thread_id(void)
 // arena then make sure they get the right thread count
 class fix_tls_observer: public tbb::task_scheduler_observer {
     int mask_val;
+    uintp sched_size_val;
+    void * sched_val;
     void on_scheduler_entry( bool is_worker ) override;
 public:
-    fix_tls_observer(tbb::task_arena &arena, int mask) : tbb::task_scheduler_observer(arena), mask_val(mask)
+    fix_tls_observer(tbb::task_arena &arena, int mask, uintp sched_size, void * schedule) : tbb::task_scheduler_observer(arena), mask_val(mask), sched_size_val(sched_size), sched_val(schedule)
     {
         observe(true);
     }
@@ -92,10 +94,13 @@ public:
 
 void fix_tls_observer::on_scheduler_entry(bool worker) {
     set_num_threads(mask_val);
+    set_sched_size(sched_size_val);
+    set_sched(sched_val);
 }
 
 static void
-add_task(void *fn, void *args, void *dims, void *steps, void *data)
+add_task(void *fn, void *args, void *dims, void *steps, void *data,
+         bool broadcast)
 {
     tg->run([=]
     {
@@ -150,8 +155,11 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     // doing any work. Any further call to query the TLS slot value made by any
     // thread in the arena is then safe and were any thread to create a nested
     // parallel region the same logic applies as per program start/reinit.
+    // Also, under the same assumptions, the schedule data is broadcast.
     tbb::task_arena limited(num_threads);
-    fix_tls_observer observer(limited, num_threads);
+    uintp sched_size = get_sched_size();
+    void * schedule = get_sched();
+    fix_tls_observer observer(limited, num_threads, sched_size, schedule);
 
     limited.execute([&]{
         using range_t = tbb::blocked_range<size_t>;
@@ -350,7 +358,11 @@ MOD_INIT(tbbpool)
                            PyLong_FromVoidPtr((void*)&set_parallel_chunksize));
     PyObject_SetAttrString(m, "get_parallel_chunksize",
                            PyLong_FromVoidPtr((void*)&get_parallel_chunksize));
+    PyObject_SetAttrString(m, "compute_sched_size",
+                           PyLong_FromVoidPtr((void*)&compute_sched_size));
     PyObject_SetAttrString(m, "get_sched_size",
                            PyLong_FromVoidPtr((void*)&get_sched_size));
+    PyObject_SetAttrString(m, "get_sched",
+                           PyLong_FromVoidPtr((void*)&get_sched));
     return MOD_SUCCESS_VAL(m);
 }

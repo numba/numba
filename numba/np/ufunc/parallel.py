@@ -14,7 +14,7 @@ import os
 import sys
 import warnings
 from threading import RLock as threadRLock
-from ctypes import CFUNCTYPE, c_int, CDLL, POINTER, c_uint
+from ctypes import CFUNCTYPE, c_int, CDLL, POINTER, c_uint, c_void_p
 
 import numpy as np
 
@@ -25,7 +25,7 @@ from numba.np.numpy_support import as_dtype
 from numba.core import types, config, errors
 from numba.np.ufunc.wrappers import _wrapper_info
 from numba.np.ufunc import ufuncbuilder
-from numba.extending import overload
+from numba.extending import overload, intrinsic
 
 _IS_OSX = sys.platform.startswith('darwin')
 _IS_LINUX = sys.platform.startswith('linux')
@@ -530,19 +530,18 @@ def _load_threading_functions(lib):
 
     ll.add_symbol('set_parallel_chunksize', lib.set_parallel_chunksize)
     ll.add_symbol('get_parallel_chunksize', lib.get_parallel_chunksize)
+    ll.add_symbol('compute_sched_size', lib.compute_sched_size)
     ll.add_symbol('get_sched_size', lib.get_sched_size)
+    ll.add_symbol('get_sched', lib.get_sched)
     global _set_parallel_chunksize
     _set_parallel_chunksize = CFUNCTYPE(c_uint,
                                         c_uint)(lib.set_parallel_chunksize)
     global _get_parallel_chunksize
     _get_parallel_chunksize = CFUNCTYPE(c_uint)(lib.get_parallel_chunksize)
     global _get_sched_size
-    _get_sched_size = CFUNCTYPE(c_uint,
-                                c_uint,
-                                c_uint,
-                                POINTER(c_int),
-                                POINTER(c_int))(lib.get_sched_size)
-
+    _get_sched_size = CFUNCTYPE(c_uint,)(lib.get_sched_size)
+    global _get_sched
+    _get_sched = CFUNCTYPE(c_void_p,)(lib.get_sched)
 
 # Some helpers to make set_num_threads jittable
 
@@ -673,13 +672,6 @@ def ol_get_thread_id():
     return impl
 
 
-_DYLD_WORKAROUND_SET = 'NUMBA_DYLD_WORKAROUND' in os.environ
-_DYLD_WORKAROUND_VAL = int(os.environ.get('NUMBA_DYLD_WORKAROUND', 0))
-
-if _DYLD_WORKAROUND_SET and _DYLD_WORKAROUND_VAL:
-    _launch_threads()
-
-
 def set_parallel_chunksize(n):
     _launch_threads()
     if not isinstance(n, (int, np.integer)):
@@ -717,3 +709,44 @@ def ol_get_parallel_chunksize():
     def impl():
         return _get_parallel_chunksize()
     return impl
+
+
+def _get_schedule():
+    raise RuntimeError("This can only be used in a JIT compiled function")
+
+
+@intrinsic
+def _get_sched_item(tyctx, addr, index):
+    sig = types.uint64(addr, index)
+    def codegen(cgctx, builder, sig, llargs):
+        ll_addr, ll_index = llargs
+        ll_item_ty = cgctx.get_value_type(sig.args[1])
+        base_ptr = builder.inttoptr(ll_addr, ll_item_ty.as_pointer())
+        return builder.load(builder.gep(base_ptr, (ll_index,)))
+    return sig, codegen
+
+
+@overload(_get_schedule)
+def ol_get_schedule():
+    _launch_threads()
+
+    def impl():
+        NOT_SET = np.uint32(-1) # this is probably machine specific, uintp!?
+        slots = _get_sched_size()
+        schedule = np.empty(((0,)), np.uint64)
+        if slots != NOT_SET:
+            sz = slots * 2
+            schedule = np.full((sz,), -1, np.uint64)
+            addr = _get_sched()
+            for x in range(sz):
+                schedule[x] = _get_sched_item(addr, x)
+        tmp = schedule.reshape((-1, 2))
+        return tmp
+    return impl
+
+
+_DYLD_WORKAROUND_SET = 'NUMBA_DYLD_WORKAROUND' in os.environ
+_DYLD_WORKAROUND_VAL = int(os.environ.get('NUMBA_DYLD_WORKAROUND', 0))
+
+if _DYLD_WORKAROUND_SET and _DYLD_WORKAROUND_VAL:
+    _launch_threads()

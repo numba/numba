@@ -134,12 +134,6 @@ numba_new_thread(void *worker, void *arg)
     return (thread_pointer)th;
 }
 
-static int
-get_thread_id(void)
-{
-    return (int)pthread_self();
-}
-
 #endif
 
 /* Win Thread */
@@ -237,6 +231,7 @@ typedef struct Task
 {
     void (*func)(void *args, void *dims, void *steps, void *data);
     void *args, *dims, *steps, *data;
+    bool broadcast;
 } Task;
 
 typedef struct
@@ -244,6 +239,7 @@ typedef struct
     queue_condition_t cond;
     int state;
     Task task;
+    size_t thread_id; // This is a "synthetic" thread id
 } Queue;
 
 
@@ -282,9 +278,13 @@ void debug_marker() {};
 // This is the number of threads that is default, it is set on initialisation of
 // the threading backend via the launch_threads() call
 static int _INIT_NUM_THREADS = -1;
+static int _INIT_THREAD_ID = 0;
 
 // This is the per-thread thread mask, each thread can carry its own mask.
 static THREAD_LOCAL(int) _TLS_num_threads = 0;
+
+// This is the per-thread id
+static THREAD_LOCAL(int) _TLS_thread_id = -1;
 
 static void
 set_num_threads(int count)
@@ -308,6 +308,16 @@ get_num_threads(void)
     return _TLS_num_threads;
 }
 
+static int
+get_thread_id(void)
+{
+    if (_TLS_thread_id == -1)
+    {
+        _TLS_thread_id = _INIT_THREAD_ID;
+    }
+    return (int)_TLS_thread_id;
+}
+
 
 // this complies to a launchable function from `add_task` like:
 // add_task(nopfn, NULL, NULL, NULL, NULL)
@@ -316,11 +326,28 @@ get_num_threads(void)
 
 
 // synchronize the TLS num_threads slot to value args[0]
-static void sync_tls(void *args, void *dims, void *steps, void *data) {
+static void sync_num_threads_tls(void *args, void *dims, void *steps, void *data) {
     int nthreads = *((int *)(args));
     _TLS_num_threads = nthreads;
 };
 
+// assign a thread_id value based on the queue pivot to the TLS slot thread_id
+static void assign_thread_id_tls(void *args, void *dims, void *steps, void *data) {
+    int idx = *((int *)(args));
+    Queue *queue = &queues[idx];
+    _TLS_thread_id = queue->thread_id;
+};
+
+// synchronize the TLS sched slot to value args[0]
+static void sync_sched_tls(void *args, void *dims, void *steps, void *data) {
+    set_sched(args);
+};
+
+// synchronize the TLS sched_size slot to value args[0]
+static void sync_sched_size(void *args, void *dims, void *steps, void *data) {
+    int sz = *((int *)(args));
+    set_sched_size(sz);
+};
 
 static void
 parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *data,
@@ -396,7 +423,34 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     // threads will end up running.
     for (i = 0; i < NUM_THREADS; i++)
     {
-        add_task(sync_tls, (void *)(&num_threads), NULL, NULL, NULL);
+        add_task(sync_num_threads_tls, (void *)(&num_threads), NULL, NULL,
+                 NULL, true);
+    }
+    ready();
+    synchronize();
+    // sync the thread ids
+    for (i = 0; i < NUM_THREADS; i++)
+    {
+        int * buf = (int *)alloca(sizeof(int));
+        *buf = i;
+        add_task(assign_thread_id_tls, (void *)(buf), NULL, NULL, NULL, true);
+    }
+    ready();
+    synchronize();
+    // sync the schedule pointer
+    void * sched_ptr = get_sched();
+    for (i = 0; i < NUM_THREADS; i++)
+    {
+        add_task(sync_sched_tls, sched_ptr, NULL, NULL, NULL, true);
+    }
+    ready();
+    synchronize();
+    // sync the schedule size
+    int sched_size = get_sched_size();
+    for (i = 0; i < NUM_THREADS; i++)
+    {
+        add_task(sync_sched_size, (void *)(&sched_size), NULL, NULL, NULL,
+                 true);
     }
     ready();
     synchronize();
@@ -458,7 +512,8 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
                 printf("%p, ", (void *)array_arg_space[j]);
             }
         }
-        add_task(fn, (void *)array_arg_space, (void *)count_space, steps, data);
+        add_task(fn, (void *)array_arg_space, (void *)count_space, steps, data,
+                 false);
     }
 
     ready();
@@ -470,7 +525,8 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 }
 
 static void
-add_task(void *fn, void *args, void *dims, void *steps, void *data)
+add_task(void *fn, void *args, void *dims, void *steps, void *data,
+         bool broadcast)
 {
     void (*func)(void *args, void *dims, void *steps, void *data) = fn;
 
@@ -482,6 +538,7 @@ add_task(void *fn, void *args, void *dims, void *steps, void *data)
     task->dims = dims;
     task->steps = steps;
     task->data = data;
+    task->broadcast = broadcast;
 
     /* Move pivot */
     if ( ++queue_pivot == queue_count )
@@ -503,8 +560,13 @@ void thread_worker(void *arg)
          */
         queue_state_wait(queue, READY, RUNNING);
 
+        // Only run the task if your thread ID is within the mask or it's a
+        // broadcast, this is to ensure that max(thread id) < mask in an
+        // executing region.
         task = &queue->task;
-        task->func(task->args, task->dims, task->steps, task->data);
+        if (task->broadcast || (_TLS_thread_id < _TLS_num_threads)) {
+            task->func(task->args, task->dims, task->steps, task->data);
+        }
 
         /* Task is done. */
         queue_state_wait(queue, RUNNING, DONE);
@@ -517,7 +579,7 @@ static void launch_threads(int count)
     {
         /* If queues are not yet allocated,
            create them, one for each thread. */
-        int i;
+        size_t i;
         size_t sz = sizeof(Queue) * count;
 
         /* set for use in parallel_for */
@@ -527,10 +589,11 @@ static void launch_threads(int count)
         memset(queues, 0, sz);
         queue_count = count;
 
-        for (i = 0; i < count; ++i)
+        for (i = 0; i < (size_t)count; ++i)
         {
             queue_condition_init(&queues[i].cond);
             numba_new_thread(thread_worker, &queues[i]);
+            queues[i].thread_id = i; // id is just queue index
         }
 
         _INIT_NUM_THREADS = count;
@@ -595,7 +658,11 @@ MOD_INIT(workqueue)
                            PyLong_FromVoidPtr((void*)&set_parallel_chunksize));
     PyObject_SetAttrString(m, "get_parallel_chunksize",
                            PyLong_FromVoidPtr((void*)&get_parallel_chunksize));
+    PyObject_SetAttrString(m, "compute_sched_size",
+                           PyLong_FromVoidPtr((void*)&compute_sched_size));
     PyObject_SetAttrString(m, "get_sched_size",
                            PyLong_FromVoidPtr((void*)&get_sched_size));
+    PyObject_SetAttrString(m, "get_sched",
+                           PyLong_FromVoidPtr((void*)&get_sched));
     return MOD_SUCCESS_VAL(m);
 }

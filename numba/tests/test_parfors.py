@@ -3841,6 +3841,92 @@ class TestParforChunksizing(TestCase):
         msg = "chunksize must be greather than or equal to zero"
         self.assertIn(msg, str(raised.exception))
 
+    @skip_parfors_unsupported
+    def test_threads_all_see_same_chunksize(self):
+        cs = 2
+        n = 8
+        @njit
+        def test_impl(x):
+            cs1 = get_parallel_chunksize()
+            out = np.full((x,), -1, dtype=np.intp)
+            with parallel_chunksize(cs):
+                for i in prange(x):
+                    out[i] = get_parallel_chunksize()
+            cs3 = get_parallel_chunksize()
+            return cs1, out, cs3
+
+        cs1, cs2, cs3 = test_impl(n)
+        self.assertEqual(cs1, 0)
+        self.assertPreciseEqual(cs2, np.full((n,), cs, dtype=np.intp))
+        self.assertEqual(cs3, 0)
+
+    @skip_parfors_unsupported
+    def test_switch_chunksize_inside_parallel_region(self):
+        cs = 2
+        cs_inner = 3
+        n = 8
+        @njit(parallel=True)
+        def test_impl(x):
+            cs1 = get_parallel_chunksize()
+            out1 = np.full((x,), -1, dtype=np.intp)
+            out2 = np.full((x,), -1, dtype=np.intp)
+            with parallel_chunksize(cs):
+                for i in prange(x):
+                    out1[i] = get_parallel_chunksize()
+                    # this compiles, but seems to break something in the
+                    # ctx manager?
+                    set_parallel_chunksize(cs_inner)
+                    out2[i] = get_parallel_chunksize()
+            cs3 = get_parallel_chunksize()
+            return cs1, out1, out2, cs3
+
+        cs1, cs2, cs3, cs4 = test_impl(n)
+        self.assertEqual(cs1, 0)
+        self.assertPreciseEqual(cs2, np.full((n,), cs, dtype=np.intp))
+        self.assertPreciseEqual(cs3, np.full((n,), cs_inner, dtype=np.intp))
+        self.assertEqual(cs4, 0)
+
+    @skip_parfors_unsupported
+    def test_switch_chunksize_inside_nested_prange(self):
+        # Does this make sense? Can it be explained. The inner prange will be
+        # serialised and the chunksize ignored.
+        cs = 2
+        cs_inner = 3
+        n = 8
+        @njit(parallel=True)
+        def test_impl(x):
+            cs1 = get_parallel_chunksize()
+            out1 = np.full((x,), -1, dtype=np.intp)
+            out2 = np.full((x,), -1, dtype=np.intp)
+            with parallel_chunksize(cs):
+                for i in prange(x):
+                    out1[i] = get_parallel_chunksize()
+                    # What should happen here?!
+                    with parallel_chunksize(cs_inner):
+                        for j in prange(x):
+                            out2[j] = get_parallel_chunksize()
+            cs3 = get_parallel_chunksize()
+            return cs1, out1, out2, cs3
+
+        cs1, cs2, cs3, cs4 = test_impl(n)
+        # something needs asserting
+
+        # diagnostics have the wrong lines noted for their loops
+        print(test_impl.parallel_diagnostics(test_impl.signatures[0], level=4))
+
+    @skip_parfors_unsupported
+    def test_guvectorize(self):
+        @guvectorize(['void(int64[:])'], '(n)', target='parallel')
+        def foo(x):
+            # seems like this is picking up the chunksize on the main thread
+            # correctly, but all other threads have it as 0.
+            x[:] = get_parallel_chunksize()
+
+        with parallel_chunksize(3): # should have no effect on scheduling.
+            z = np.full((50, 40, 30), -1, np.int64)
+            foo(z)
+            print(z)
+
 
 @skip_parfors_unsupported
 class TestParforsDiagnostics(TestParforsBase):
