@@ -304,6 +304,9 @@ class FakeCUDAModule(object):
     def fma(self, a, b, c):
         return a * b + c
 
+    def cbrt(self, a):
+        return a ** (1 / 3)
+
     def brev(self, val):
         return int('{:032b}'.format(val)[::-1], 2)
 
