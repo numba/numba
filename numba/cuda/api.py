@@ -121,9 +121,9 @@ def device_array(shape, dtype=np.float_, strides=None, order='C', stream=0):
 
 
 @require_context
-def managed_array(shape, dtype=np.float, strides=None, order='C', stream=0,
+def managed_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
                   attach_global=True):
-    """managed_array(shape, dtype=np.float, strides=None, order='C', stream=0,
+    """managed_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
                      attach_global=True)
 
     Allocate a np.ndarray with a buffer that is managed.
