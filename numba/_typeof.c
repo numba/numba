@@ -845,7 +845,10 @@ int typecode_devicendarray(PyObject *dispatcher, PyObject *ary)
 
     PyObject* flags = PyObject_GetAttrString(ary, "flags");
     if (flags == NULL)
+    {
+        PyErr_Clear();
         goto FALLBACK;
+    }
 
     if (PyDict_GetItemString(flags, "C_CONTIGUOUS") == Py_True) {
         layout = 1;
@@ -879,6 +882,7 @@ int typecode_devicendarray(PyObject *dispatcher, PyObject *ary)
     PyObject* dtype_obj = PyObject_GetAttrString(ary, "dtype");
     if (dtype_obj == NULL) {
         /* No dtype: try the fallback. */
+        PyErr_Clear();
         goto FALLBACK;
     }
 
@@ -887,6 +891,7 @@ int typecode_devicendarray(PyObject *dispatcher, PyObject *ary)
 
     if (num_obj == NULL) {
         /* This strange dtype has no num - try the fallback. */
+        PyErr_Clear();
         goto FALLBACK;
     }
 
