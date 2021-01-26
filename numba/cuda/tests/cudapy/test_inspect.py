@@ -175,6 +175,7 @@ class TestInspect(CUDATestCase):
         msg = 'inspect_asm will always return a dict in future'
         self.assertIn(msg, str(warns.warnings[1]))
 
+    @skip_without_nvdisasm('nvdisasm needed for inspect_sass()')
     def test_inspect_sass_deprecations(self):
         @cuda.jit((float32[::1],))
         def f(x):
