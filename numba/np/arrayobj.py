@@ -3830,9 +3830,8 @@ def _arange_dtype(*args):
     elif any(isinstance(a, types.Float) for a in bounds):
         dtype = types.float64
     else:
-        # numerous attempts were made at guessing this type from the NumPy
-        # source but it turns out on running `np.arange(10).dtype` on pretty
-        # much all platform and python combinations that it matched np.int_?!
+        # `np.arange(10).dtype` is always `np.dtype(int)`, aka `np.int_`, which
+        # in all released versions of numpy corresponds to the C `long` type.
         # Windows 64 is broken by default here because Numba (as of 0.47) does
         # not differentiate between Python and NumPy integers, so a `typeof(1)`
         # on w64 is `int64`, i.e. `intp`. This means an arange(<some int>) will
