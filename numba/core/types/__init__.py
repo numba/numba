@@ -106,7 +106,7 @@ uint = _make_unsigned(np.int_)
 intc = _make_signed(np.intc) # C-compat int
 uintc = _make_unsigned(np.uintc) # C-compat uint
 long_ = _make_signed(np.int_)  # C-compat long
-ulong = _make_unsigned(np.uint)  # C-compat ulong
+ulong = _make_unsigned(np.int_)  # C-compat ulong
 longlong = _make_signed(np.longlong)
 ulonglong = _make_unsigned(np.longlong)
 
