@@ -441,12 +441,11 @@ def parse_dtype(dtype):
     elif isinstance(dtype, types.StringLiteral):
         dtstr = dtype.literal_value
         try:
-            dt = np.dtype(dtstr).type
+            dt = np.dtype(dtstr)
         except TypeError:
             msg = f"Invalid NumPy dtype specified: '{dtstr}'"
             raise TypingError(msg)
-        if dt is not None:
-            return from_dtype(dt)
+        return from_dtype(dt)
 
 def _parse_nested_sequence(context, typ):
     """

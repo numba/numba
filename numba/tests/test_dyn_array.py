@@ -637,6 +637,14 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
             return pyfunc(n, 'c8')
         self.check_1d(func)
 
+    def test_1d_dtype_str_structured_dtype(self):
+        # test_1d_dtype_str but using a structured dtype
+        pyfunc = self.pyfunc
+        _dtype = "i4, (2,3)f8"
+        def func(n):
+            return pyfunc(n, _dtype)
+        self.check_1d(func)
+
     def test_1d_dtype_non_const_str(self):
         pyfunc = self.pyfunc
 
@@ -722,6 +730,10 @@ class TestNdOnes(TestNdZeros):
     def setUp(self):
         super(TestNdOnes, self).setUp()
         self.pyfunc = np.ones
+
+    @unittest.expectedFailure
+    def test_1d_dtype_str_structured_dtype(self):
+        super().test_1d_dtype_str_structured_dtype()
 
 
 class TestNdFull(ConstructorBaseTest, TestCase):
