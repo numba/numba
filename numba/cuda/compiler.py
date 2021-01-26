@@ -846,7 +846,7 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
     created using the :func:`numba.cuda.jit` decorator.
     '''
 
-    # Whether to fold named arguments and default values. default values are
+    # Whether to fold named arguments and default values. Default values are
     # presently unsupported on CUDA, so we can leave this as False in all
     # cases.
     _fold_args = False

@@ -280,8 +280,8 @@ Recommendations
 
 Update calls to these methods such that:
 
-- They are always called when device for which their output is required is in
-  the current CUDA context.
+- They are always called when the device for which their output is required is
+  in the current CUDA context.
 - The ``compute_capability`` kwarg is not passed to them.
 - Any use of their results indexes into them using only a tuple of argument
   types.
