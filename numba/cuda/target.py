@@ -61,10 +61,13 @@ VALID_CHARS = re.compile(r'[^a-z0-9]', re.I)
 class CUDATargetContext(BaseContext):
     implement_powi_as_math_call = True
     strict_alignment = True
-    if nvvm.NVVM().is_nvvm70:
-        DIBuilder = debuginfo.DIBuilder
-    else:
-        DIBuilder = debuginfo.NvvmDIBuilder
+
+    @property
+    def DIBuilder(self):
+        if nvvm.NVVM().is_nvvm70:
+            return debuginfo.DIBuilder
+        else:
+            return debuginfo.NvvmDIBuilder
 
     @property
     def enable_boundscheck(self):
