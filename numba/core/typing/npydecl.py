@@ -439,8 +439,8 @@ def parse_dtype(dtype):
     elif isinstance(dtype, types.TypeRef):
         return dtype.instance_type
     elif isinstance(dtype, types.StringLiteral):
+        dtstr = dtype.literal_value
         try:
-            dtstr = dtype.literal_value
             dt = np.dtype(dtstr).type
         except TypeError:
             msg = f"Invalid NumPy dtype specified: '{dtstr}'"
