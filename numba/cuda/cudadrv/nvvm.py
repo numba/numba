@@ -141,7 +141,7 @@ class NVVM(object):
 
     @property
     def is_nvvm70(self):
-        # NVVM70 uses IR version 1.6. See the documentation for
+        # NVVM70 uses NVVM IR version 1.6. See the documentation for
         # nvvmAddModuleToProgram in
         # https://docs.nvidia.com/cuda/libnvvm-api/group__compilation.html
         return (self._majorIR, self._minorIR) >= (1, 6)
@@ -907,10 +907,10 @@ def set_cuda_kernel(lfunc):
     # Set NVVM IR version
     i32 = ir.IntType(32)
     if NVVM().is_nvvm70:
-        # NNVM IR 1.6, DWARF 3.0
+        # NVVM IR 1.6, DWARF 3.0
         ir_versions = [i32(1), i32(6), i32(3), i32(0)]
     else:
-        # NNVM IR 1.1, DWARF 2.0
+        # NVVM IR 1.1, DWARF 2.0
         ir_versions = [i32(1), i32(2), i32(2), i32(0)]
 
     md_ver = m.add_metadata(ir_versions)
