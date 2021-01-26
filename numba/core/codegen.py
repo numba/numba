@@ -17,6 +17,7 @@ from numba.core.runtime import rtsys
 from numba.core.compiler_lock import require_global_compiler_lock
 from numba.core.errors import NumbaInvalidConfigWarning
 from numba.misc.inspection import disassemble_elf_to_cfg
+from numba.misc.llvm_pass_timings import PassTimingsCollection
 
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
@@ -535,11 +536,17 @@ class CodeLibrary(object):
         self._shared_module = None
         # Track names of the dynamic globals
         self._dynamic_globals = []
+        ptc_name = f"{self.__class__.__name__}({self._name!r})"
+        self._recorded_timings = PassTimingsCollection(ptc_name)
 
     @property
     def has_dynamic_globals(self):
         self._ensure_finalized()
         return len(self._dynamic_globals) > 0
+
+    @property
+    def recorded_timings(self):
+        return self._recorded_timings
 
     @property
     def codegen(self):
@@ -570,22 +577,28 @@ class CodeLibrary(object):
             # Run function-level optimizations to reduce memory usage and improve
             # module-level optimization.
             for func in ll_module.functions:
-                fpm.initialize()
-                fpm.run(func)
-                fpm.finalize()
+                k = f"Function passes on {func.name!r}"
+                with self._recorded_timings.record(k):
+                    fpm.initialize()
+                    fpm.run(func)
+                    fpm.finalize()
 
     def _optimize_final_module(self):
         """
         Internal: optimize this library's final module.
         """
-        # A cheaper optimisation pass is run first to try and get as many
-        # refops into the same function as possible via inlining
-        self._codegen._mpm_cheap.run(self._final_module)
+        cheap_name = "Module passes (cheap optimization for refprune)"
+        with self._recorded_timings.record(cheap_name):
+            # A cheaper optimisation pass is run first to try and get as many
+            # refops into the same function as possible via inlining
+            self._codegen._mpm_cheap.run(self._final_module)
         # Refop pruning is then run on the heavily inlined function
         if not config.LLVM_REFPRUNE_PASS:
             self._final_module = remove_redundant_nrt_refct(self._final_module)
-        # The full optimisation suite is then run on the refop pruned IR
-        self._codegen._mpm_full.run(self._final_module)
+        full_name = "Module passes (full optimization)"
+        with self._recorded_timings.record(full_name):
+            # The full optimisation suite is then run on the refop pruned IR
+            self._codegen._mpm_full.run(self._final_module)
 
     def _get_module_for_linking(self):
         """
@@ -953,7 +966,8 @@ class JITCodeLibrary(CodeLibrary):
 
     def _finalize_specific(self):
         self._codegen._scan_and_fix_unresolved_refs(self._final_module)
-        self._codegen._engine.finalize_object()
+        with self._recorded_timings.record("Finalize object"):
+            self._codegen._engine.finalize_object()
 
 
 class RuntimeLinker(object):

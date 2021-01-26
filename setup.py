@@ -20,7 +20,7 @@ except ImportError:
 
 
 min_python_version = "3.6"
-max_python_version = "3.9"  # exclusive
+max_python_version = "3.10"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.15"
 min_llvmlite_version = "0.36.0.dev0"
@@ -42,7 +42,7 @@ def _guard_py_ver():
     cur_py = parse('.'.join(map(str, sys.version_info[:3])))
 
     if not min_py <= cur_py < max_py:
-        msg = ('Cannot install on Python version {}; only versions >={},<{} ',
+        msg = ('Cannot install on Python version {}; only versions >={},<{} '
                'are supported.')
         raise RuntimeError(msg.format(cur_py, min_py, max_py))
 

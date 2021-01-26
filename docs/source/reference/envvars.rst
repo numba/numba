@@ -228,6 +228,14 @@ These variables influence what is printed out during compilation of
 
    Dump the native assembly code of compiled functions.
 
+.. envvar:: NUMBA_LLVM_PASS_TIMINGS
+
+    Set to ``1`` to enable recording of pass timings in LLVM;
+    e.g. ``NUMBA_LLVM_PASS_TIMINGS=1``.
+    See :ref:`developer-llvm-timings`.
+
+    *Default value*: ``0`` (Off)
+
 .. seealso::
    :ref:`numba-troubleshooting` and :ref:`architecture`.
 
@@ -400,6 +408,14 @@ GPU support
 
    If set, don't compile and execute code for the GPU, but use the CUDA
    Simulator instead. For debugging purposes.
+
+
+.. envvar:: NUMBA_CUDA_ARRAY_INTERFACE_SYNC
+
+   Whether to synchronize on streams provided by objects imported using the CUDA
+   Array Interface. This defaults to 1. If set to 0, then no synchronization
+   takes place, and the user of Numba (and other CUDA libraries) is responsible
+   for ensuring correctness with respect to synchronization on streams.
 
 Threading Control
 -----------------

@@ -331,6 +331,9 @@ class _EnvReloader(object):
         CUDA_DEALLOCS_RATIO = _readenv("NUMBA_CUDA_MAX_PENDING_DEALLOCS_RATIO",
                                        float, 0.2)
 
+        CUDA_ARRAY_INTERFACE_SYNC = _readenv("NUMBA_CUDA_ARRAY_INTERFACE_SYNC",
+                                             int, 1)
+
         # HSA Configs
 
         # Disable HSA support
@@ -386,6 +389,13 @@ class _EnvReloader(object):
         LLVM_REFPRUNE_FLAGS = _readenv(
             "NUMBA_LLVM_REFPRUNE_FLAGS", str,
             "all" if LLVM_REFPRUNE_PASS else "",
+        )
+
+        # Timing support.
+
+        # LLVM_PASS_TIMINGS enables LLVM recording of pass timings.
+        LLVM_PASS_TIMINGS = _readenv(
+            "NUMBA_LLVM_PASS_TIMINGS", int, 0,
         )
 
         # Inject the configuration values into the module globals
