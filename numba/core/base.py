@@ -13,6 +13,7 @@ from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
 from numba.core import types, utils, typing, datamodel, debuginfo, funcdesc, config, cgutils, imputils
+from numba.core import event
 from numba import _dynfunc, _helperlib
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.pythonapi import PythonAPI
@@ -336,6 +337,13 @@ class BaseContext(object):
         raise NotImplementedError
 
     @utils.cached_property
+    def nonconst_module_attrs(self):
+        """
+        All module attrs are constant for targets using BaseContext.
+        """
+        return tuple()
+
+    @utils.cached_property
     def nrt(self):
         from numba.core.runtime.context import NRTContext
         return NRTContext(self, self.enable_nrt)
@@ -586,9 +594,11 @@ class BaseContext(object):
         The return value is a callable with the signature
         (context, builder, typ, val, attr).
         """
-        if isinstance(typ, types.Module):
-            # Implement getattr for module-level globals.
-            # We are treating them as constants.
+        const_attr = (typ, attr) not in self.nonconst_module_attrs
+        is_module = isinstance(typ, types.Module)
+        if is_module and const_attr:
+            # Implement getattr for module-level globals that we treat as
+            # constants.
             # XXX We shouldn't have to retype this
             attrty = self.typing_context.resolve_module_constants(typ, attr)
             if attrty is None or isinstance(attrty, types.Dummy):
@@ -597,8 +607,8 @@ class BaseContext(object):
                 return None
             else:
                 pyval = getattr(typ.pymod, attr)
-                llval = self.get_constant(attrty, pyval)
                 def imp(context, builder, typ, val, attr):
+                    llval = self.get_constant_generic(builder, attrty, pyval)
                     return impl_ret_borrowed(context, builder, attrty, llval)
                 return imp
 
@@ -1071,7 +1081,7 @@ class BaseContext(object):
         the usage of dynamic addresses.  Caching will be disabled.
         """
         assert self.allow_dynamic_globals, "dyn globals disabled in this target"
-        assert isinstance(intaddr, utils.INT_TYPES), 'dyn addr not of int type'
+        assert isinstance(intaddr, int), 'dyn addr not of int type'
         mod = builder.module
         llvoidptr = self.get_value_type(types.voidptr)
         addr = self.get_constant(types.uintp, intaddr).inttoptr(llvoidptr)
@@ -1202,3 +1212,19 @@ class _wrap_missing_loc(object):
 
     def __repr__(self):
         return "<wrapped %s>" % self.func
+
+
+@utils.runonce
+def _initialize_llvm_lock_event():
+    """Initial event triggers for LLVM lock
+    """
+    def enter_fn():
+        event.start_event("numba:llvm_lock")
+
+    def exit_fn():
+        event.end_event("numba:llvm_lock")
+
+    ll.ffi.register_lock_callback(enter_fn, exit_fn)
+
+
+_initialize_llvm_lock_event()

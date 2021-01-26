@@ -35,7 +35,7 @@ def _parse_cc(text):
     else:
         m = re.match(r'(\d+)\.(\d+)', text)
         if not m:
-            raise ValueError("NUMBA_FORCE_CUDA_CC must be specified as a "
+            raise ValueError("Compute capability must be specified as a "
                              "string of \"major.minor\" where major "
                              "and minor are decimals")
         grp = m.groups()
@@ -216,7 +216,11 @@ class _EnvReloader(object):
 
         # Force dump of Numba IR
         DUMP_IR = _readenv("NUMBA_DUMP_IR", int,
-                           DEBUG_FRONTEND or DEBUG_TYPEINFER)
+                           DEBUG_FRONTEND)
+
+        # Force dump of Numba IR in SSA form
+        DUMP_SSA = _readenv("NUMBA_DUMP_SSA", int,
+                            DEBUG_FRONTEND or DEBUG_TYPEINFER)
 
         # print debug info of analysis and optimization on array operations
         DEBUG_ARRAY_OPT = _readenv("NUMBA_DEBUG_ARRAY_OPT", int, 0)
@@ -248,6 +252,9 @@ class _EnvReloader(object):
         LOOP_VECTORIZE = _readenv("NUMBA_LOOP_VECTORIZE", int,
                                   not (IS_WIN32 and IS_32BITS))
 
+        # Switch on  superword-level parallelism vectorization, default is on.
+        SLP_VECTORIZE = _readenv("NUMBA_SLP_VECTORIZE", int, 1)
+
         # Force dump of generated assembly
         DUMP_ASSEMBLY = _readenv("NUMBA_DUMP_ASSEMBLY", int, DEBUG)
 
@@ -265,11 +272,6 @@ class _EnvReloader(object):
                 return os.path.abspath(path)
 
         HTML = _readenv("NUMBA_DUMP_HTML", fmt_html_path, None)
-
-        # Allow interpreter fallback so that Numba @jit decorator will never
-        # fail. Use for migrating from old numba (<0.12) which supported
-        # closure, and other yet-to-be-supported features.
-        COMPATIBILITY_MODE = _readenv("NUMBA_COMPATIBILITY_MODE", int, 0)
 
         # x86-64 specific
         # Enable AVX on supported platforms where it won't degrade performance.
@@ -303,6 +305,10 @@ class _EnvReloader(object):
         # Force CUDA compute capability to a specific version
         FORCE_CUDA_CC = _readenv("NUMBA_FORCE_CUDA_CC", _parse_cc, None)
 
+        # The default compute capability to target when compiling to PTX.
+        CUDA_DEFAULT_PTX_CC = _readenv("NUMBA_CUDA_DEFAULT_PTX_CC", _parse_cc,
+                                       (5, 2))
+
         # Disable CUDA support
         DISABLE_CUDA = _readenv("NUMBA_DISABLE_CUDA",
                                 int, int(MACHINE_BITS == 32))
@@ -324,6 +330,9 @@ class _EnvReloader(object):
         # Maximum ratio of pending CUDA deallocations to capacity (default: 0.2)
         CUDA_DEALLOCS_RATIO = _readenv("NUMBA_CUDA_MAX_PENDING_DEALLOCS_RATIO",
                                        float, 0.2)
+
+        CUDA_ARRAY_INTERFACE_SYNC = _readenv("NUMBA_CUDA_ARRAY_INTERFACE_SYNC",
+                                             int, 1)
 
         # HSA Configs
 
@@ -372,6 +381,22 @@ class _EnvReloader(object):
         # CUDA Memory management
         CUDA_MEMORY_MANAGER = _readenv("NUMBA_CUDA_MEMORY_MANAGER", str,
                                        'default')
+
+        # Experimental refprune pass
+        LLVM_REFPRUNE_PASS = _readenv(
+            "NUMBA_LLVM_REFPRUNE_PASS", int, 1,
+        )
+        LLVM_REFPRUNE_FLAGS = _readenv(
+            "NUMBA_LLVM_REFPRUNE_FLAGS", str,
+            "all" if LLVM_REFPRUNE_PASS else "",
+        )
+
+        # Timing support.
+
+        # LLVM_PASS_TIMINGS enables LLVM recording of pass timings.
+        LLVM_PASS_TIMINGS = _readenv(
+            "NUMBA_LLVM_PASS_TIMINGS", int, 0,
+        )
 
         # Inject the configuration values into the module globals
         for name, value in locals().copy().items():

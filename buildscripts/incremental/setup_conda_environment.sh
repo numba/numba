@@ -8,6 +8,7 @@ conda config --write-default
 conda config --set remote_connect_timeout_secs 30.15
 conda config --set remote_max_retries 10
 conda config --set remote_read_timeout_secs 120.2
+conda config --set show_channel_urls true
 if [[ $(uname) == Linux ]]; then
     if [[ "$CONDA_SUBDIR" != "linux-32" && "$BITS32" != "yes" ]] ; then
         conda config --set restore_free_channel true
@@ -86,6 +87,10 @@ if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi
 if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
 # Install Intel TBB parallel backend
 if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL tbb tbb-devel; fi
+# Install pickle5
+if [ "$TEST_PICKLE5" == "yes" ]; then $PIP_INSTALL pickle5; fi
+# Install typeguard
+if [ "$RUN_TYPEGUARD" == "yes" ]; then $CONDA_INSTALL conda-forge::typeguard; fi
 
 # environment dump for debug
 echo "DEBUG ENV:"

@@ -10,16 +10,6 @@ questions, don't hesitate to ask them (see below).
 Communication
 -------------
 
-Mailing-list
-''''''''''''
-
-We have a public mailing-list that you can e-mail at numba-users@anaconda.com.
-If you have any questions about contributing to Numba, it is ok to ask them
-on this mailing-list.  You can subscribe and read the archives on
-`Google Groups <https://groups.google.com/a/continuum.io/forum/#!forum/numba-users>`_,
-and there is also a `Gmane mirror <http://news.gmane.org/gmane.comp.python.numba.user>`_
-allowing NNTP access.
-
 Real-time Chat
 ''''''''''''''
 
@@ -37,6 +27,20 @@ developers to keep up with.
 
 Note that the Github issue tracker is the best place to report bugs.  Bug
 reports in chat are difficult to track and likely to be lost.
+
+Forum
+.....
+
+Numba uses Discourse as a forum for longer running threads such as design
+discussions and roadmap planning. There are various categories available and it
+can be reached at: `numba.discourse.group <https://numba.discourse.group/>`_.
+
+Mailing-list
+''''''''''''
+
+We have a public mailing-list that you can e-mail at numba-users@anaconda.com.
+You can subscribe and read the archives on
+`Google Groups <https://groups.google.com/a/continuum.io/forum/#!forum/numba-users>`_.
 
 Weekly Meetings
 '''''''''''''''
@@ -72,8 +76,8 @@ request from the Github interface.
 
 If you want, you can submit a pull request even when you haven't finished
 working.  This can be useful to gather feedback, or to stress your changes
-against the :ref:`continuous integration <travis_ci>` platform.  In this
-case, please prepend ``[WIP]`` to your pull request's title.
+against the :ref:`continuous integration <continuous_integration_testing>`
+platform.  In this case, please prepend ``[WIP]`` to your pull request's title.
 
 .. _buildenv:
 
@@ -136,6 +140,19 @@ This assumes you have a working C compiler and runtime on your development
 system.  You will have to run this command again whenever you modify
 C files inside the Numba source tree.
 
+The ``build_ext`` command in Numba's setup also accepts the following
+arguments:
+
+- ``--noopt``: This disables optimization when compiling Numba's CPython
+  extensions, which makes debugging them much easier. Recommended in
+  conjunction with the standard ``build_ext`` option ``--debug``.
+- ``--werror``: Compiles Numba's CPython extensions with the ``-Werror`` flag.
+- ``--wall``: Compiles Numba's CPython extensions with the ``-Wall`` flag.
+
+Note that Numba's CI and the conda recipe for Linux build with the ``--werror``
+and ``--wall`` flags, so any contributions that change the CPython extensions
+should be tested with these flags too.
+
 Running tests
 '''''''''''''
 
@@ -190,6 +207,12 @@ in the test runner, there is a ``--log`` flag for convenience::
 
     $ python -m numba.runtests --log
 
+To enable :ref:`runtime type-checking <type_anno_check>`, set the environment
+variable ``NUMBA_USE_TYPEGUARD=1`` and use `runtests.py` from the source root
+instead. For example::
+
+    $ NUMBA_USE_TYPEGUARD=1 python runtests.py
+
 
 Development rules
 -----------------
@@ -236,6 +259,24 @@ and then running::
 from the root of the Numba repository. Now ``flake8`` will be run each time
 you commit changes. You can skip this check with ``git commit --no-verify``.
 
+Numba has started the process of using `type hints <https://www.python.org/dev/peps/pep-0484/>`_ in its code base. This
+will be a gradual process of extending the number of files that use type hints, as well as going from voluntary to
+mandatory type hints for new features. `Mypy <http://mypy-lang.org/>`_ is used for automated static checking.
+
+At the moment, only certain files are checked by mypy. The list can be found in ``mypy.ini``. When making changes to
+those files, it is necessary to add the required type hints such that mypy tests will pass. Only in exceptional
+circumstances should ``type: ignore`` comments be used.
+
+If you are contributing a new feature, we encourage you to use type hints, even if the file is not currently in the
+checklist. If you want to contribute type hints to enable a new file to be in the checklist, please add the file to the
+``files`` variable in ``mypy.ini``, and decide what level of compliance you are targetting. Level 3 is basic static
+checks, while levels 2 and 1 represent stricter checking. The levels are described in details in ``mypy.ini``.
+
+There is potential for confusion between the Numba module ``typing`` and Python built-in module ``typing`` used for type
+hints, as well as between Numba types---such as ``Dict`` or ``Literal``---and ``typing`` types of the same name.
+To mitigate the risk of confusion we use a naming convention by which objects of the built-in ``typing`` module are
+imported with an ``pt`` prefix. For example, ``typing.Dict`` is imported as ``from typing import Dict as ptDict``.
+
 Stability
 '''''''''
 
@@ -244,23 +285,114 @@ This translates into the fact that the test suite passes without errors
 on all supported platforms (see below).  This also means that a pull request
 also needs to pass the test suite before it is merged in.
 
-.. _travis_ci:
+.. _platform_support:
 
 Platform support
 ''''''''''''''''
 
 Every commit to the master branch is automatically tested on all of the
-platforms Numba supports.  This includes ARMv7, ARMv8, POWER8, as well as both
+platforms Numba supports. This includes ARMv7, ARMv8, POWER8, as well as both
 AMD and NVIDIA GPUs.  The build system however is internal to Anaconda, so we
-also use `Travis CI <https://travis-ci.org/numba/numba>`_ and
-`Azure <https://dev.azure.com/numba/numba/_build>`_ to provide public continuous
-integration information for as many combinations as can be supported by the
-service.  Travis CI automatically tests all pull requests on OS X and Linux, as
-well as a sampling of different Python and NumPy versions, Azure does the same
-but also includes Windows.  If you see problems on platforms you are unfamiliar
-with, feel free to ask for help in your pull request.  The Numba core developers
-can help diagnose cross-platform compatibility issues.
+also use `Azure <https://dev.azure.com/numba/numba/_build>`_ to provide public
+continuous integration information for as many combinations as can be supported
+by the service.  Azure CI automatically tests all pull requests on Windows, OS X
+and Linux, as well as a sampling of different Python and NumPy versions. If you
+see problems on platforms you are unfamiliar with, feel free to ask for help in
+your pull request. The Numba core developers can help diagnose cross-platform
+compatibility issues. Also see the :ref:`continuous integration
+<continuous_integration_testing>` section on how public CI is implemented.
 
+.. _continuous_integration_testing:
+
+Continuous integration testing
+''''''''''''''''''''''''''''''
+
+The Numba test suite causes CI systems a lot of grief:
+
+#. It's huge, 9000+ tests.
+#. In part because of 1. and that compilers are pretty involved, the test suite
+   takes a long time to run.
+#. There's sections of the test suite that are deliberately designed to stress
+   systems almost to the point of failure (tests which concurrently compile and
+   execute with threads and fork processes etc).
+#. The combination of things that Numba has to test well exceeds the capacity of
+   any public CI system, (Python versions x NumPy versions x Operating systems
+   x Architectures x feature libraries (e.g. SVML) x threading backends
+   (e.g. OpenMP, TBB)) and then there's CUDA and ROCm too and all their version
+   variants.
+
+As a result of the above, public CI is implemented as follows:
+
+#. The combination of OS x Python x NumPy x Various Features in the testing
+   matrix is designed to give a good indicative result for whether "this pull
+   request is probably ok".
+#. When public CI runs it:
+
+   #. Looks for files that contain tests that have been altered by the proposed
+      change and runs these on the whole testing matrix.
+   #. Runs a subset of the test suite on each part of the testing matrix. i.e.
+      slice the test suite up by the number of combinations in the testing
+      matrix and each combination runs one chunk. This is done for speed,
+      because public CI cannot cope with the load else.
+
+If a pull request is changing CUDA or ROCm code (which cannot be tested on
+Public CI as there's no hardware) or it is making changes to something that the
+core developers consider risky, then it will also be run on the Numba farm just
+to make sure. The Numba project's private build and test farm will actually
+exercise all the applicable tests on all the combinations noted above on real
+hardware!
+
+
+.. _type_anno_check:
+
+Type annotation and runtime type checking
+'''''''''''''''''''''''''''''''''''''''''
+
+Numba is slowly gaining type annotations. To facilitate the review of pull
+requests that are incrementally adding type annotations, the test suite uses
+`typeguard`_ to perform runtime type checking. This helps verify the validity
+of type annotations.
+
+To enable runtime type checking in the test suite, users can use
+`runtests.py`_ in the source root as the test runner and set environment
+variable ``NUMBA_USE_TYPEGUARD=1``. For example::
+
+    $ NUMBA_USE_TYPEGUARD=1 python runtests.py numba.tests
+
+Things that help with pull requests
+'''''''''''''''''''''''''''''''''''
+
+Even with the mitigating design above public CI can get overloaded which causes
+a backlog of builds. It's therefore really helpful when opening pull requests if
+you can limit the frequency of pushing changes. Ideally, please squash commits
+to reduce the number of patches and/or push as infrequently as possible. Also,
+once a pull request review has started, please don't rebase/force push/squash
+or do anything that rewrites history of the reviewed code as GitHub cannot track
+this and it makes it very hard for reviewers to see what has changed.
+
+The core developers thank everyone for their cooperation with the above!
+
+Why is my pull request/issue seemingly being ignored?
+'''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+Numba is an open source project and like many similar projects it has limited
+resources. As a result, it is unfortunately necessary for the core developers to
+associate a priority with issues/pull requests (PR). A great way to move your
+issue/PR up the priority queue is to help out somewhere else in the project so
+as to free up core developer time. Examples of ways to help:
+
+* Perform an initial review on a PR. This often doesn't require compiler
+  engineering knowledge and just involves checking that the proposed patch is of
+  good quality, fixes the problem/implements the feature, is well tested and
+  documented.
+* Debug an issue, there are numerous issues which `"need triage" <https://github.com/numba/numba/issues?q=is%3Aissue+is%3Aopen+label%3Aneedtriage>`_
+  which essentially involves debugging the reported problem. Even if you cannot
+  get right to the bottom of a problem, leaving notes about what was discovered
+  for someone else is also helpful.
+* Answer questions/provide help for users on `discourse <https://numba.discourse.group/>`_
+  and/or `gitter.im <https://gitter.im/numba/numba>`_.
+
+The core developers thank everyone for their understanding with the above!
 
 Documentation
 -------------
@@ -270,7 +402,7 @@ The Numba documentation is split over two repositories:
 * This documentation is in the ``docs`` directory inside the
   `Numba repository <https://github.com/numba/numba>`_.
 
-* The `Numba homepage <http://numba.pydata.org>`_ has its sources in a
+* The `Numba homepage <https://numba.pydata.org>`_ has its sources in a
   separate repository at https://github.com/numba/numba-webpage
 
 
@@ -293,7 +425,7 @@ build and check the documentation::
    $ open _build/html/index.html
 
 Core developers can upload this documentation to the Numba website
-at http://numba.pydata.org by using the ``gh-pages.py`` script under ``docs``::
+at https://numba.pydata.org by using the ``gh-pages.py`` script under ``docs``::
 
    $ python gh-pages.py version  # version can be 'dev' or '0.16' etc
 
@@ -303,7 +435,7 @@ then verify the repository under the ``gh-pages`` directory and use
 Web site homepage
 '''''''''''''''''
 
-The Numba homepage on http://numba.pydata.org can be fetched from here:
+The Numba homepage on https://numba.pydata.org can be fetched from here:
 https://github.com/numba/numba-webpage
 
 After pushing documentation to a new version, core developers will want to
@@ -325,3 +457,7 @@ and check out ``_build/html/index.html``.  To push updates to the Web site::
 then verify the repository under the ``gh-pages`` directory.  Make sure the
 ``CNAME`` file is present and contains a single line for ``numba.pydata.org``.
 Finally, use ``git push`` to update the website.
+
+
+.. _typeguard: https://typeguard.readthedocs.io/en/latest/
+.. _runtests.py: https://github.com/numba/numba/blob/master/runtests.py

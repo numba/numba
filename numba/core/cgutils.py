@@ -368,25 +368,33 @@ def alloca_once(builder, ty, size=None, name='', zfill=False):
     use-site location.  Note that the memory is always zero-filled after the
     ``alloca`` at init-site (the entry block).
     """
-    if isinstance(size, utils.INT_TYPES):
+    if isinstance(size, int):
         size = ir.Constant(intp_t, size)
     with builder.goto_entry_block():
         ptr = builder.alloca(ty, size=size, name=name)
         # Always zero-fill at init-site.  This is safe.
-        builder.store(ty(None), ptr)
+        builder.store(ptr.type.pointee(None), ptr)
     # Also zero-fill at the use-site
     if zfill:
-        builder.store(ty(None), ptr)
+        builder.store(ptr.type.pointee(None), ptr)
     return ptr
 
 
-def alloca_once_value(builder, value, name=''):
+def sizeof(builder, ptr_type):
+    """Compute sizeof using GEP
+    """
+    null = ptr_type(None)
+    offset = null.gep([int32_t(1)])
+    return builder.ptrtoint(offset, intp_t)
+
+
+def alloca_once_value(builder, value, name='', zfill=False):
     """
     Like alloca_once(), but passing a *value* instead of a type.  The
     type is inferred and the allocated slot is also initialized with the
     given value.
     """
-    storage = alloca_once(builder, value.type)
+    storage = alloca_once(builder, value.type, zfill=zfill)
     builder.store(value, storage)
     return storage
 
@@ -678,7 +686,7 @@ def do_boundscheck(context, builder, ind, dimlen, axis=None):
                        "for axis {} with size %d\n".format(axis), ind, dimlen)
             else:
                 printf(builder, "debug: IndexError: index %d is out of bounds "
-                       "for axis %d with size %d\n".format(axis), ind, axis,
+                       "for axis %d with size %d\n", ind, axis,
                        dimlen)
         else:
             printf(builder,
@@ -872,7 +880,7 @@ def gep(builder, ptr, *inds, **kws):
     assert not kws
     idx = []
     for i in inds:
-        if isinstance(i, utils.INT_TYPES):
+        if isinstance(i, int):
             # NOTE: llvm only accepts int32 inside structs, not int64
             ind = int32_t(i)
         else:
@@ -890,7 +898,7 @@ def pointer_add(builder, ptr, offset, return_type=None):
     the pointed item type.
     """
     intptr = builder.ptrtoint(ptr, intp_t)
-    if isinstance(offset, utils.INT_TYPES):
+    if isinstance(offset, int):
         offset = intp_t(offset)
     intptr = builder.add(intptr, offset)
     return builder.inttoptr(intptr, return_type or ptr.type)
@@ -905,6 +913,18 @@ def memset(builder, ptr, size, value):
     if isinstance(value, int):
         value = int8_t(value)
     builder.call(fn, [ptr, value, size, bool_t(0)])
+
+
+def memset_padding(builder, ptr):
+    """
+    Fill padding bytes of the pointee with zeros.
+    """
+    # Load existing value
+    val = builder.load(ptr)
+    # Fill pointee with zeros
+    memset(builder, ptr, sizeof(builder, ptr.type), 0)
+    # Store value back
+    builder.store(val, ptr)
 
 
 def global_constant(builder_or_module, name, value, linkage='internal'):
@@ -989,7 +1009,7 @@ def memcpy(builder, dst, src, count):
 
 def _raw_memcpy(builder, func_name, dst, src, count, itemsize, align):
     size_t = count.type
-    if isinstance(itemsize, utils.INT_TYPES):
+    if isinstance(itemsize, int):
         itemsize = ir.Constant(size_t, itemsize)
 
     memcpy = builder.module.declare_intrinsic(func_name,

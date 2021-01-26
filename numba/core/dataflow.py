@@ -3,7 +3,6 @@ from pprint import pprint
 import sys
 import warnings
 
-from numba.core import utils
 from numba.core.errors import UnsupportedError
 from numba.core.ir import Loc
 
@@ -79,7 +78,7 @@ class DataFlowAnalysis(object):
         return info
 
     def dump(self):
-        for blk in utils.itervalues(self.infos):
+        for blk in self.infos.values():
             blk.dump()
 
     def dispatch(self, info, inst):
@@ -385,6 +384,8 @@ class DataFlowAnalysis(object):
         info.push(res)
 
     op_COMPARE_OP = _binaryop
+    op_IS_OP = _binaryop
+    op_CONTAINS_OP = _binaryop
 
     op_INPLACE_ADD = _binaryop
     op_INPLACE_SUBTRACT = _binaryop

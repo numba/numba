@@ -4,7 +4,7 @@ import itertools
 import numpy as np
 
 from numba.core.compiler import compile_isolated
-from numba import njit, jit, typeof
+from numba import njit, jit, typeof, literally
 from numba.core import types, errors, utils
 from numba.tests.support import TestCase, MemoryLeakMixin, tag
 import unittest
@@ -218,6 +218,17 @@ class TestOperations(TestCase):
                               [types.UniTuple(types.int64, 3)])
         self.assertPreciseEqual(cr.entry_point((4, 5, 6)), 3)
 
+    def test_index_literal(self):
+        # issue #6023, test non-static getitem with IntegerLiteral index
+        def pyfunc(tup, idx):
+            idx = literally(idx)
+            return tup[idx]
+        cfunc = njit(pyfunc)
+
+        tup = (4, 3.1, 'sss')
+        for i in range(len(tup)):
+            self.assertPreciseEqual(cfunc(tup, i), tup[i])
+
     def test_index(self):
         pyfunc = tuple_index
         cr = compile_isolated(pyfunc,
@@ -268,7 +279,7 @@ class TestOperations(TestCase):
         with self.assertTypingError() as raises:
             cr = compile_isolated(pyfunc, ())
         msg = ("Cannot infer the type of variable 'c', have imprecise type: "
-               "list(undefined).")
+               "list(undefined)<iv=None>.")
         self.assertIn(msg, str(raises.exception))
 
 
@@ -687,6 +698,45 @@ class TestTupleBuild(TestCase):
         # Heterogeneous
         check(lambda a: tuple(a), (4, 5.5))
 
+    @unittest.skipIf(utils.PYVERSION < (3, 9), "needs Python 3.9+")
+    def test_unpack_with_predicate_fails(self):
+        # this fails as the list_to_tuple/list_extend peephole bytecode
+        # rewriting needed for Python 3.9+ cannot yet traverse the CFG.
+        @njit
+        def foo():
+            a = (1,)
+            b = (3,2,  4)
+            return (*(b if a[0] else (5, 6)),)
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            foo()
+
+        msg = "op_LIST_EXTEND at the start of a block"
+        self.assertIn(msg, str(raises.exception))
+
+    def test_build_unpack_with_calls_in_unpack(self):
+        def check(p):
+            def pyfunc(a):
+                z = [1, 2]
+                return (*a, z.append(3), z.extend(a), np.ones(3)), z
+
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        check((4, 5))
+
+    def test_build_unpack_complicated(self):
+        def check(p):
+            def pyfunc(a):
+                z = [1, 2]
+                return (*a, *(*a, a), *(a, (*(a, (1, 2), *(3,), *a),
+                        (a, 1, (2, 3), *a, 1), (1,))),
+                        *(z.append(4), z.extend(a))), z
+
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        check((10, 20))
 
 
 if __name__ == '__main__':

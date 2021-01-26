@@ -58,6 +58,7 @@ class CPUContext(BaseContext):
 
         # Initialize additional implementations
         import numba.cpython.unicode
+        import numba.cpython.charseq
         import numba.typed.dictimpl
         import numba.experimental.function_type
 
@@ -106,7 +107,9 @@ class CPUContext(BaseContext):
                                         self.get_env_name(self.fndesc))
         envarg = builder.load(envgv)
         pyapi = self.get_python_api(builder)
-        pyapi.emit_environment_sentry(envarg)
+        pyapi.emit_environment_sentry(
+            envarg, debug_msg=self.fndesc.env_name,
+        )
         env_body = self.get_env_body(builder, envarg)
         return pyapi.get_env_manager(self.environment, env_body, envarg)
 
@@ -173,7 +176,8 @@ class CPUContext(BaseContext):
         builder = ir.IRBuilder(wrapfn.append_basic_block('entry'))
 
         status, out = self.call_conv.call_function(
-            builder, wrapper_callee, fndesc.restype, fndesc.argtypes, wrapfn.args)
+            builder, wrapper_callee, fndesc.restype, fndesc.argtypes,
+            wrapfn.args, attrs=('noinline',))
 
         with builder.if_then(status.is_error, likely=False):
             # If (and only if) an error occurred, acquire the GIL
@@ -236,7 +240,7 @@ class CPUTargetOptions(TargetOptions):
         "nogil": bool,
         "forceobj": bool,
         "looplift": bool,
-        "boundscheck": bool,
+        "boundscheck": lambda X: bool(X) if X is not None else None,
         "debug": bool,
         "_nrt": bool,
         "no_rewrites": bool,

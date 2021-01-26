@@ -251,6 +251,7 @@ if _py38_or_later:
         _PyHASH_XXPRIME_1 = _Py_uhash_t(11400714785074694791)
         _PyHASH_XXPRIME_2 = _Py_uhash_t(14029467366897019727)
         _PyHASH_XXPRIME_5 = _Py_uhash_t(2870177450012600261)
+
         @register_jitable(locals={'x': types.uint64})
         def _PyHASH_XXROTATE(x):
             # Rotate left 31 bits
@@ -259,10 +260,11 @@ if _py38_or_later:
         _PyHASH_XXPRIME_1 = _Py_uhash_t(2654435761)
         _PyHASH_XXPRIME_2 = _Py_uhash_t(2246822519)
         _PyHASH_XXPRIME_5 = _Py_uhash_t(374761393)
+
         @register_jitable(locals={'x': types.uint64})
         def _PyHASH_XXROTATE(x):
             # Rotate left 13 bits
-            return ((x << types.uint64(13)) | (x >> types.uint64(16)))
+            return ((x << types.uint64(13)) | (x >> types.uint64(19)))
 
     # Python 3.7+ has literal_unroll, this means any homogeneous and
     # heterogeneous tuples can use the same alg and just be unrolled.

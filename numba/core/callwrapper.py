@@ -158,9 +158,20 @@ class PyCallWrapper(object):
         if self.release_gil:
             cleanup_manager = _GilManager(builder, api, cleanup_manager)
 
+        # We elect to not inline the top level user function into the call
+        # wrapper, this incurs an overhead of a function call, however, it
+        # increases optimisation stability in that the optimised user function
+        # is what will actually be run and it is this function that all the
+        # inspection tools "see". Further, this makes optimisation "stable" in
+        # that calling the user function from e.g. C or from this wrapper will
+        # result in the same code executing, were inlining permitted this may
+        # not be the case as the inline could trigger additional optimisation
+        # as the function goes into the wrapper, this resulting in the executing
+        # instruction stream being different from that of the instruction stream
+        # present in the user function.
         status, retval = self.context.call_conv.call_function(
             builder, self.func, self.fndesc.restype, self.fndesc.argtypes,
-            innerargs)
+            innerargs, attrs=('noinline',))
         # Do clean up
         self.debug_print(builder, "# callwrapper: emit_cleanup")
         cleanup_manager.emit_cleanup()
@@ -190,7 +201,8 @@ class PyCallWrapper(object):
 
         env_body = self.context.get_env_body(builder, envptr)
 
-        api.emit_environment_sentry(envptr, return_pyobject=True)
+        api.emit_environment_sentry(envptr, return_pyobject=True,
+                                    debug_msg=self.fndesc.env_name)
         env_manager = api.get_env_manager(self.env, env_body, envptr)
         return env_manager
 

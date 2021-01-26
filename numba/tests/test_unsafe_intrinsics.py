@@ -2,9 +2,9 @@ import random
 import numpy as np
 
 from numba.tests.support import TestCase, captured_stdout
-from numba import njit
+from numba import njit, literally
 from numba.core import types
-from numba.cpython.unsafe.tuple import tuple_setitem
+from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
 from numba.np.unsafe.ndarray import to_fixed_tuple, empty_inferred
 from numba.core.unsafe.bytes import memcpy_region
 from numba.core.unsafe.refcount import dump_refcount
@@ -41,6 +41,20 @@ class TestTupleIntrinsic(TestCase):
             # Check
             self.assertEqual(got_tup, expect_tup)
             self.assertEqual(got_out, tuple(expect_out))
+
+    def test_slice_tuple(self):
+        @njit
+        def full_slice_array(a, n):
+            # Since numba slices can't be boxed at the moment
+            return a[build_full_slice_tuple(literally(n))]
+
+        for n in range(1, 3):
+            a = np.random.random(np.arange(n) + 1)
+            for i in range(1, n + 1):
+                np.testing.assert_array_equal(a, full_slice_array(a, i))
+            with self.assertRaises(TypingError):
+                # numpy would throw an IndexError here
+                full_slice_array(a, n + 1)
 
 
 class TestNdarrayIntrinsic(TestCase):
@@ -188,7 +202,7 @@ class TestZeroCounts(TestCase):
         unsupported_types = filter(
             lambda x: not isinstance(x, types.Integer), types.number_domain
         )
-        for typ in unsupported_types:
+        for typ in sorted(unsupported_types, key=str):
             with self.assertRaises(TypingError) as e:
                 cfunc(typ(2))
             self.assertIn(
@@ -197,15 +211,17 @@ class TestZeroCounts(TestCase):
                 str(e.exception),
             )
 
-        # Testing w/ too many arguments
-        arg_cases = [(1, 2), ()]
-        for args in arg_cases:
+        # Testing w/ too many/few arguments
+        def check(args, string):
             with self.assertRaises(TypingError) as e:
                 cfunc(*args)
             self.assertIn(
-                "Invalid use of Function({})".format(str(func)),
+                "{}() ".format(func_name),
                 str(e.exception)
             )
+
+        check((1, 2), "takes 2 positional arguments but 3 were given")
+        check((), "missing 1 required positional argument")
 
     def test_trailing_zeros_error(self):
         self.check_error_msg(trailing_zeros)

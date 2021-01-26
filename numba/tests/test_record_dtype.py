@@ -2,7 +2,7 @@ import sys
 
 import numpy as np
 import ctypes
-from numba import jit, literal_unroll, njit
+from numba import jit, literal_unroll, njit, typeof
 from numba.core import types
 from numba.core.compiler import compile_isolated
 from numba.core.itanium_mangler import mangle_type
@@ -11,7 +11,7 @@ from numba.core.errors import TypingError
 from numba.np.numpy_support import numpy_version
 import unittest
 from numba.np import numpy_support
-
+from numba.tests.support import TestCase, skip_ppc64le_issue6465
 
 _FS = ('e', 'f')
 
@@ -279,6 +279,32 @@ def get_field4(rec):
     for f in literal_unroll(_FS):
         out += rec[f]
     return out
+
+
+def set_field1(rec):
+    fs = ('e', 'f')
+    f = fs[1]
+    rec[f] = 10
+    return rec
+
+
+def set_field2(rec):
+    fs = ('e', 'f')
+    for f in literal_unroll(fs):
+        rec[f] = 10
+    return rec
+
+
+def set_field3(rec):
+    f = _FS[1]
+    rec[f] = 10
+    return rec
+
+
+def set_field4(rec):
+    for f in literal_unroll(_FS):
+        rec[f] = 10
+    return rec
 
 
 recordtype = np.dtype([('a', np.float64),
@@ -891,6 +917,7 @@ class TestRecordDtypeWithStructArraysAndDispatcher(TestRecordDtypeWithStructArra
         return _get_cfunc_nopython(pyfunc, argspec)
 
 
+@skip_ppc64le_issue6465
 class TestRecordDtypeWithCharSeq(unittest.TestCase):
 
     def _createSampleaArray(self):
@@ -1075,6 +1102,244 @@ class TestRecordArrayGetItem(unittest.TestCase):
             jitfunc(arr[0])
         self.assertIn("Field 'f' was not found in record with fields "
                       "('first', 'second')", str(raises.exception))
+
+    def test_literal_unroll_dynamic_to_static_getitem_transform(self):
+        # See issue #6634
+        keys = ('a', 'b', 'c')
+        n = 5
+
+        def pyfunc(rec):
+            x = np.zeros((n,))
+            for o in literal_unroll(keys):
+                x += rec[o]
+            return x
+
+        dt = np.float64
+        ldd = [np.arange(dt(n)) for x in keys]
+        ldk = [(x, np.float64,) for x in keys]
+        rec = np.rec.fromarrays(ldd, dtype=ldk)
+
+        expected = pyfunc(rec)
+        got = njit(pyfunc)(rec)
+        np.testing.assert_allclose(expected, got)
+
+
+class TestRecordArraySetItem(unittest.TestCase):
+    """
+    Test setitem when index is Literal[str]
+    """
+    def test_literal_variable(self):
+        arr = np.array([1, 2], dtype=recordtype2)
+        pyfunc = set_field1
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(arr[0].copy()), jitfunc(arr[0].copy()))
+
+    def test_literal_unroll(self):
+        arr = np.array([1, 2], dtype=recordtype2)
+        pyfunc = set_field2
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(arr[0].copy()), jitfunc(arr[0].copy()))
+
+    def test_literal_variable_global_tuple(self):
+        """
+        This tests the setitem of record array when the indexes come from a
+        global tuple. It tests getitem behaviour but also tests that a global
+        tuple is being typed as a tuple of constants.
+        """
+        arr = np.array([1, 2], dtype=recordtype2)
+        pyfunc = set_field3
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(arr[0].copy()), jitfunc(arr[0].copy()))
+
+    def test_literal_unroll_global_tuple(self):
+        """
+        This tests the setitem of record array when the indexes come from a
+        global tuple and are being unrolled.
+        It tests setitem behaviour but also tests that literal_unroll accepts
+        a global tuple as argument
+        """
+        arr = np.array([1, 2], dtype=recordtype2)
+        pyfunc = set_field4
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(arr[0].copy()), jitfunc(arr[0].copy()))
+
+    def test_literal_unroll_free_var_tuple(self):
+        """
+        This tests the setitem of record array when the indexes come from a
+        free variable tuple (not local, not global) and are being unrolled.
+        It tests setitem behaviour but also tests that literal_unroll accepts
+        a free variable tuple as argument
+        """
+
+        arr = np.array([1, 2], dtype=recordtype2)
+        fs = arr.dtype.names
+
+        def set_field(rec):
+            for f in literal_unroll(fs):
+                rec[f] = 10
+            return rec
+
+        jitfunc = njit(set_field)
+        self.assertEqual(set_field(arr[0].copy()), jitfunc(arr[0].copy()))
+
+    def test_error_w_invalid_field(self):
+        arr = np.array([1, 2], dtype=recordtype3)
+        jitfunc = njit(set_field1)
+        with self.assertRaises(TypingError) as raises:
+            jitfunc(arr[0])
+        self.assertIn("Field 'f' was not found in record with fields "
+                      "('first', 'second')", str(raises.exception))
+
+
+class TestSubtyping(TestCase):
+    def setUp(self):
+        self.value = 2
+        a_dtype = np.dtype([('a', 'f8')])
+        ab_dtype = np.dtype([('a', 'f8'), ('b', 'f8')])
+        self.a_rec1 = np.array([1], dtype=a_dtype)[0]
+        self.a_rec2 = np.array([2], dtype=a_dtype)[0]
+        self.ab_rec1 = np.array([(self.value, 3)], dtype=ab_dtype)[0]
+        self.ab_rec2 = np.array([(self.value + 1, 3)], dtype=ab_dtype)[0]
+        self.func = lambda rec: rec['a']
+
+    def test_common_field(self):
+        """
+        Test that subtypes do not require new compilations
+        """
+        njit_sig = njit(types.float64(typeof(self.a_rec1)))
+        functions = [
+            njit(self.func),  # jitted function with open njit
+            njit_sig(self.func)  # jitted fc with closed signature
+        ]
+
+        for fc in functions:
+            fc(self.a_rec1)
+            fc.disable_compile()
+            y = fc(self.ab_rec1)
+            self.assertEqual(self.value, y)
+
+    def test_tuple_of_records(self):
+
+        @njit
+        def foo(rec_tup):
+            x = 0
+            for i in range(len(rec_tup)):
+                x += rec_tup[i]['a']
+            return x
+
+        foo((self.a_rec1, self.a_rec2))
+        foo.disable_compile()
+        y = foo((self.ab_rec1, self.ab_rec2))
+        self.assertEqual(2 * self.value + 1, y)
+
+    def test_array_field(self):
+        """
+        Tests subtyping with array fields
+        """
+        rec1 = np.empty(1, dtype=[('a', 'f8', (4,))])[0]
+        rec1['a'][0] = 1
+        rec2 = np.empty(1, dtype=[('a', 'f8', (4,)), ('b', 'f8')])[0]
+        rec2['a'][0] = self.value
+
+        @njit
+        def foo(rec):
+            return rec['a'][0]
+
+        foo(rec1)
+        foo.disable_compile()
+        y = foo(rec2)
+        self.assertEqual(self.value, y)
+
+    def test_no_subtyping1(self):
+        """
+        test that conversion rules don't allow subtypes with different field
+        names
+        """
+        c_dtype = np.dtype([('c', 'f8')])
+        c_rec1 = np.array([1], dtype=c_dtype)[0]
+
+        @njit
+        def foo(rec):
+            return rec['c']
+
+        foo(c_rec1)
+        foo.disable_compile()
+        with self.assertRaises(TypeError) as err:
+            foo(self.a_rec1)
+            self.assertIn("No matching definition for argument type(s) Record",
+                          str(err.exception))
+
+    def test_no_subtyping2(self):
+        """
+        test that conversion rules don't allow smaller records as subtypes
+        """
+        jit_fc = njit(self.func)
+        jit_fc(self.ab_rec1)
+        jit_fc.disable_compile()
+        with self.assertRaises(TypeError) as err:
+            jit_fc(self.a_rec1)
+            self.assertIn("No matching definition for argument type(s) Record",
+                          str(err.exception))
+
+    def test_no_subtyping3(self):
+        """
+        test that conversion rules don't allow records with fields with same
+        name but incompatible type
+        """
+        other_a_rec = np.array(['a'], dtype=np.dtype([('a', 'U25')]))[0]
+        jit_fc = njit(self.func)
+        jit_fc(self.a_rec1)
+        jit_fc.disable_compile()
+        with self.assertRaises(TypeError) as err:
+            jit_fc(other_a_rec)
+            self.assertIn("No matching definition for argument type(s) Record",
+                          str(err.exception))
+
+    def test_branch_pruning(self):
+        """
+        test subtyping behaviour in a case with a dead branch
+        """
+
+        @njit
+        def foo(rec, flag=None):
+            n = 0
+            n += rec['a']
+            if flag is not None:
+                # Dead branch pruning will hide this branch
+                n += rec['b']
+                rec['b'] += 20
+            return n
+
+        self.assertEqual(foo(self.a_rec1), self.a_rec1[0])
+
+        # storing value because it will be mutated
+        k = self.ab_rec1[1]
+        self.assertEqual(foo(self.ab_rec1, flag=1), self.ab_rec1[0] + k)
+        self.assertEqual(self.ab_rec1[1], k + 20)
+
+        foo.disable_compile()
+        self.assertEqual(len(foo.nopython_signatures), 2)
+        self.assertEqual(foo(self.a_rec1) + 1, foo(self.ab_rec1))
+        self.assertEqual(foo(self.ab_rec1, flag=1), self.ab_rec1[0] + k + 20)
+
+
+class TestRecordArrayExceptions(TestCase):
+
+    def test_nested_array_in_buffer_raises(self):
+        # see issue #6473
+        @njit()
+        def foo(x):
+            x["y"][0] = 1
+
+        dt = np.dtype([("y", (np.uint64, 5)),])
+        x = np.ones(1, dtype=dt)
+        with self.assertRaises(TypingError) as e:
+            foo(x)
+        ex1 = "The dtype of a Buffer type cannot itself be a Buffer type"
+        ex2 = "unsupported Buffer was: nestedarray(uint64, (5,))"
+        excstr = str(e.exception)
+        self.assertIn(ex1, excstr)
+        self.assertIn(ex2, excstr)
 
 
 if __name__ == '__main__':

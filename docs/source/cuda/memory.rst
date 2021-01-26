@@ -52,6 +52,28 @@ Pinned memory
    :noindex:
 .. autofunction:: numba.cuda.pinned_array
    :noindex:
+.. autofunction:: numba.cuda.pinned_array_like
+   :noindex:
+
+
+Mapped memory
+=============
+
+.. autofunction:: numba.cuda.mapped
+   :noindex:
+.. autofunction:: numba.cuda.mapped_array
+   :noindex:
+.. autofunction:: numba.cuda.mapped_array_like
+   :noindex:
+
+
+
+Managed memory
+==============
+
+.. autofunction:: numba.cuda.managed_array
+   :noindex:
+
 
 Streams
 =======
@@ -64,6 +86,15 @@ are executed asynchronously.
    :noindex:
 
 .. autofunction:: numba.cuda.default_stream
+   :noindex:
+
+.. autofunction:: numba.cuda.legacy_default_stream
+   :noindex:
+
+.. autofunction:: numba.cuda.per_thread_default_stream
+   :noindex:
+
+.. autofunction:: numba.cuda.external_stream
    :noindex:
 
 CUDA streams have the following methods:
