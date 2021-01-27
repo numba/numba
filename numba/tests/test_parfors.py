@@ -575,7 +575,8 @@ class TestParfors(TestParforsBase):
         for args in arg_gen():
             with self.subTest(list(map(typeof, args))):
                 argtys = tuple(map(typeof, args))
-                self.assertEqual(countParfors(impl, argtys), 1)
+                # At least one parfors
+                self.assertGreaterEqual(countParfors(impl, argtys), 1)
 
     @skip_parfors_unsupported
     def test_arraymap(self):
