@@ -541,7 +541,7 @@ class TestParfors(TestParforsBase):
         src = cycle(gen())
         return [next(src) for i in range(ct)]
 
-    def gen_linespace_variants(self, ct):
+    def gen_linspace_variants(self, ct):
         """Make 1D, 2D, 3D variants of the data in C and F orders
         """
         # 1D
@@ -583,7 +583,7 @@ class TestParfors(TestParforsBase):
         def test_impl(a, x, y):
             return a * x + y
 
-        self.check_variants(test_impl, lambda: self.gen_linespace_variants(3))
+        self.check_variants(test_impl, lambda: self.gen_linspace_variants(3))
 
     @skip_parfors_unsupported
     @needs_blas
@@ -621,7 +621,7 @@ class TestParfors(TestParforsBase):
             Y = np.zeros((10, 12))
             yield (X, Y)
 
-        data_gen = lambda: chain(case1(), self.gen_linespace_variants(2))
+        data_gen = lambda: chain(case1(), self.gen_linspace_variants(2))
 
         def test_impl(X, Y):
             return np.sum(X + Y)
@@ -946,7 +946,7 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )), 1)
 
         # Test variants
-        data_gen = lambda: self.gen_linespace_variants(1)
+        data_gen = lambda: self.gen_linspace_variants(1)
         self.check_variants(test_impl, data_gen)
         self.count_parfors_variants(test_impl, data_gen)
 
@@ -965,7 +965,7 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )), 2)
 
         # Test variants
-        data_gen = lambda: self.gen_linespace_variants(1)
+        data_gen = lambda: self.gen_linspace_variants(1)
         self.check_variants(test_impl, data_gen)
         self.count_parfors_variants(test_impl, data_gen)
 
@@ -985,7 +985,7 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countParfors(test_impl, argty), 2)
 
         # Test variants
-        data_gen = lambda: self.gen_linespace_variants(1)
+        data_gen = lambda: self.gen_linspace_variants(1)
         self.check_variants(test_impl, data_gen)
         self.count_parfors_variants(test_impl, data_gen)
 
@@ -1144,7 +1144,7 @@ class TestParfors(TestParforsBase):
             self.assertIn(msg, str(e.exception))
 
         # Test variants
-        data_gen = lambda: self.gen_linespace_variants(1)
+        data_gen = lambda: self.gen_linspace_variants(1)
         self.check_variants(test_impl1, data_gen)
         self.count_parfors_variants(test_impl1, data_gen)
         self.check_variants(test_impl2, data_gen)
@@ -1182,7 +1182,7 @@ class TestParfors(TestParforsBase):
             self.assertIn(msg, str(e.exception))
 
         # Test variants
-        data_gen = lambda: self.gen_linespace_variants(1)
+        data_gen = lambda: self.gen_linspace_variants(1)
         self.check_variants(test_impl1, data_gen)
         self.count_parfors_variants(test_impl1, data_gen)
         self.check_variants(test_impl2, data_gen)
@@ -1230,7 +1230,7 @@ class TestParfors(TestParforsBase):
             self.assertIn(msg, str(e.exception))
 
         # Test variants
-        data_gen = lambda: self.gen_linespace_variants(1)
+        data_gen = lambda: self.gen_linspace_variants(1)
         self.check_variants(test_impl1, data_gen)
         self.count_parfors_variants(test_impl1, data_gen)
         self.check_variants(test_impl2, data_gen)
@@ -1264,7 +1264,7 @@ class TestParfors(TestParforsBase):
             self.assertIn(msg, str(e.exception))
 
         # Test variants
-        data_gen = lambda: self.gen_linespace_variants(1)
+        data_gen = lambda: self.gen_linspace_variants(1)
         self.check_variants(test_impl1, data_gen)
         self.count_parfors_variants(test_impl1, data_gen)
         self.check_variants(test_impl2, data_gen)
