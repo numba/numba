@@ -26,4 +26,5 @@ Developer Manual
    literal.rst
    llvm_timings.rst
    debugging.rst
+   event_api.rst
    roadmap.rst

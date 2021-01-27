@@ -238,6 +238,16 @@ class Cuda_fma(ConcreteTemplate):
 
 
 @register
+class Cuda_cbrt(ConcreteTemplate):
+
+    key = cuda.cbrt
+    cases = [
+        signature(types.float32, types.float32),
+        signature(types.float64, types.float64),
+    ]
+
+
+@register
 class Cuda_brev(ConcreteTemplate):
     key = cuda.brev
     cases = [
@@ -491,6 +501,9 @@ class CudaModuleTemplate(AttributeTemplate):
 
     def resolve_fma(self, mod):
         return types.Function(Cuda_fma)
+
+    def resolve_cbrt(self, mod):
+        return types.Function(Cuda_cbrt)
 
     def resolve_syncthreads(self, mod):
         return types.Function(Cuda_syncthreads)
