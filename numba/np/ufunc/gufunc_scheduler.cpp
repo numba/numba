@@ -87,6 +87,16 @@ public:
         }
         return res;
     }
+
+    void print() const {
+        unsigned i;
+        for(i = 0; i < start.size(); ++i) {
+            printf("%ld ", start[i]);
+        }
+        for(i = 0; i < end.size(); ++i) {
+            printf("%ld ", end[i]);
+        }
+    }
 };
 
 extern "C" uintp set_parallel_chunksize(uintp n) {
@@ -363,6 +373,18 @@ std::vector<RangeActual> create_schedule(const RangeActual &full_space, uintp nu
 }
 
 /*
+ *   Print the calculated schedule when in debug mode.
+ */
+void print_schedule(const std::vector<RangeActual> &vra) {
+    unsigned i;
+    for (i = 0; i < vra.size(); ++i) {
+        printf("sched[%d] = ", i);
+        vra[i].print();
+        printf("\n");
+    }
+}
+
+/*
     num_dim (D) is the number of dimensions of the iteration space.
     starts is the range-start of each of those dimensions, inclusive.
     ends is the range-end of each of those dimensions, inclusive.
@@ -386,6 +408,9 @@ extern "C" void do_scheduling_signed(uintp num_dim, intp *starts, intp *ends, ui
 
     RangeActual full_space(num_dim, starts, ends);
     std::vector<RangeActual> ret = create_schedule(full_space, num_threads);
+    if (debug) {
+        print_schedule(ret);
+    }
     flatten_schedule(ret, sched);
 }
 
@@ -405,5 +430,8 @@ extern "C" void do_scheduling_unsigned(uintp num_dim, intp *starts, intp *ends, 
 
     RangeActual full_space(num_dim, starts, ends);
     std::vector<RangeActual> ret = create_schedule(full_space, num_threads);
+    if (debug) {
+        print_schedule(ret);
+    }
     flatten_schedule(ret, sched);
 }
