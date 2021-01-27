@@ -1346,6 +1346,10 @@ class ArrayAnalysis(object):
                         post.extend(result.kwargs['post'])
                     if 'rhs' in result.kwargs:
                         inst.value = result.kwargs['rhs']
+            elif isinstance(inst.value, ir.Arg):
+                if (isinstance(typ, types.UniTuple) and
+                    isinstance(typ.dtype, types.Integer)):
+                    shape = inst.value
             elif isinstance(inst.value, (ir.Var, ir.Const)):
                 shape = inst.value
             elif isinstance(inst.value, ir.Global):
@@ -3199,6 +3203,8 @@ class ArrayAnalysis(object):
         # attr call: A_sh_attr = getattr(A, shape)
         if isinstance(shape, ir.Var):
             shape = equiv_set.get_shape(shape)
+        elif isinstance(shape, ir.Arg):
+            shape = var
         # already a tuple variable that contains size
         if isinstance(shape, ir.Var):
             attr_var = shape

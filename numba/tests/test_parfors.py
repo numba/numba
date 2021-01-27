@@ -1754,6 +1754,13 @@ class TestParfors(TestParforsBase):
         b = np.ones(10, dtype=np.int64)
         self.check(test_impl, a, b)
 
+    @skip_parfors_unsupported
+    def test_tuple_arg(self):
+        def test_impl(x):
+            y = np.zeros(x)
+            return y
+
+        self.check(test_impl, (5,5))
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
