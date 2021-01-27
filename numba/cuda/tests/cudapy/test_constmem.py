@@ -138,7 +138,7 @@ class TestCudaConstantMemory(CUDATestCase):
             # and > 11.1 use a vector of 2x f32. The root cause of these
             # codegen differences is not known, but must be accounted for in
             # this test.
-            if cuda.runtime.get_version() in ((8, 0), (9, 0), (9, 1), (11, 2)):
+            if cuda.runtime.get_version() in ((9, 0), (9, 1), (11, 2)):
                 complex_load = 'ld.const.v2.f32'
                 description = 'Load the complex as a vector of 2x f32'
             else:
