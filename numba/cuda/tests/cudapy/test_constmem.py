@@ -169,13 +169,13 @@ class TestCudaConstantMemory(CUDATestCase):
         jcuconst = cuda.jit(cuconstRec).specialize(A, B)
 
         rtver = cuda.runtime.get_version()
-        old_runtime = rtver in ((8, 0), (9, 0), (9, 1))
+        old_runtime = rtver in ((9, 0), (9, 1))
         nvvm70_runtime = rtver >= (11, 2)
         windows = sys.platform.startswith('win')
 
         if old_runtime:
             if windows:
-                # for some reason Win64 / Py3 / CUDA 9.1 decides to do two u32
+                # For some reason Win64 / CUDA 9.1 and 9.2 decide to do two u32
                 # loads, and shifts and ors the values to get the float `x`
                 # field, then uses another ld.const.u32 to load the int `y` as
                 # a 32-bit value!
@@ -186,9 +186,15 @@ class TestCudaConstantMemory(CUDATestCase):
                 self.assertIn('ld.const.v2.f64', jcuconst.ptx,
                               'load record fields as vector of 2x f64')
         elif nvvm70_runtime:
-            # Load of the x and y fields fused into a single instruction
-            self.assertIn('ld.const.v2.u64', jcuconst.ptx,
-                          'load record fields as vector of 2x u64')
+            if windows:
+                # Two ld.const.u32 as above, but using a bit-field insert to
+                # combine them
+                self.assertIn('ld.const.u32', jcuconst.ptx,
+                              'load record fields as u32')
+            else:
+                # Load of the x and y fields fused into a single instruction
+                self.assertIn('ld.const.v2.u64', jcuconst.ptx,
+                              'load record fields as vector of 2x u64')
         else:
             # In newer toolkits, constant values are all loaded 8 bits at a
             # time. Check that there are enough 8-bit loads for everything to
