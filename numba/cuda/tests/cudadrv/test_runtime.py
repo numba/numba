@@ -3,6 +3,7 @@ import os
 from numba.core import config
 from numba.cuda.cudadrv.runtime import runtime
 from numba.cuda.testing import unittest, SerialMixin
+from unittest.mock import patch
 
 
 def set_visible_devices_and_check(q):
@@ -17,14 +18,29 @@ def set_visible_devices_and_check(q):
         q.put(-1)
 
 
+if config.ENABLE_CUDASIM:
+    SUPPORTED_VERSIONS = (-1, -1),
+else:
+    SUPPORTED_VERSIONS = ((9, 0), (9, 1), (9, 2),
+                          (10, 0), (10, 1), (10, 2),
+                          (11, 0), (11, 1), (11, 2))
+
+
 class TestRuntime(unittest.TestCase):
     def test_get_version(self):
-        if config.ENABLE_CUDASIM:
-            supported_versions = (-1, -1),
-        else:
-            supported_versions = ((9, 0), (9, 1), (9, 2), (10, 0),
-                                  (10, 1), (10, 2), (11, 0), (11, 1), (11, 2))
-        self.assertIn(runtime.get_version(), supported_versions)
+        self.assertIn(runtime.get_version(), SUPPORTED_VERSIONS)
+
+    def test_is_supported_version_true(self):
+        for v in SUPPORTED_VERSIONS:
+            with patch.object(runtime, 'get_version', return_value=v):
+                self.assertTrue(runtime.is_supported_version())
+
+    def test_is_supported_version_false(self):
+        # Check with an old unsupported version and some potential future
+        # versions
+        for v in ((8, 0), (11, 3), (12, 0)):
+            with patch.object(runtime, 'get_version', return_value=v):
+                self.assertFalse(runtime.is_supported_version())
 
 
 class TestVisibleDevices(unittest.TestCase, SerialMixin):

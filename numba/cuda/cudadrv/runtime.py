@@ -113,5 +113,15 @@ class Runtime:
         minor = (rtver.value - (major * 1000)) // 10
         return (major, minor)
 
+    def is_supported_version(self):
+        """
+        Returns True if the CUDA Runtime is a supported version.
+        """
+
+        supported_versions = ((9, 0), (9, 1), (9, 2),
+                              (10, 0), (10, 1), (10, 2),
+                              (11, 0), (11, 1), (11, 2))
+        return self.get_version() in supported_versions
+
 
 runtime = Runtime()

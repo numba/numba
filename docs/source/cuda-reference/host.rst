@@ -213,4 +213,9 @@ accessed through ``cuda.runtime``, which is an instance of the
 :class:`numba.cuda.cudadrv.runtime.Runtime` class:
 
 .. autoclass:: numba.cuda.cudadrv.runtime.Runtime
-   :members: get_version
+   :members: get_version, is_supported_version
+
+Whether the current runtime is officially supported and tested with the current
+version of Numba can also be queried:
+
+.. autofunction:: numba.cuda.is_supported_version

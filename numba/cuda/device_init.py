@@ -51,6 +51,23 @@ def is_available():
     return driver_is_available and nvvm.is_available()
 
 
+def is_supported_version():
+    """Returns true if the CUDA Runtime is a supported version.
+
+    Unsupported versions (e.g. newer versions than those known to Numba)
+    may still work; this function provides a facility to check whether the
+    current Numba version is tested and known to work with the current
+    runtime version. If the current version is unsupported, the caller can
+    decide how to act. Options include:
+
+    - Continuing silently,
+    - Emitting a warning,
+    - Generating an error or otherwise preventing the use of CUDA.
+    """
+
+    return runtime.is_supported_version()
+
+
 def cuda_error():
     """Returns None or an exception if the CUDA driver fails to initialize.
     """
