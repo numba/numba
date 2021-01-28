@@ -28,7 +28,7 @@ from numba.core.errors import TypingError, LoweringError
 from numba.core.typing.templates import Signature
 import typing as pt
 
-Int_or_Slice = pt.Union[int, slice]
+Int_or_Slice = pt.Union["pt.SupportsIndex", slice]
 
 DEFAULT_ALLOCATED = listobject.DEFAULT_ALLOCATED
 
