@@ -10,6 +10,7 @@ from numba.core.utils import (PYVERSION, BINOPS_TO_OPERATORS,
                               INPLACE_BINOPS_TO_OPERATORS,)
 from numba.core.byteflow import Flow, AdaptDFA, AdaptCFA
 from numba.core.unsafe import eh
+from numba.cpython.unsafe.tuple import unpack_single_tuple
 
 
 class _UNKNOWN_VALUE(object):
@@ -1134,20 +1135,31 @@ class Interpreter(object):
             expr = ir.Expr.call(func, [], [], loc=self.loc, vararg=vararg)
             self.store(expr, res)
 
-    def _build_tuple_unpack(self, inst, tuples, temps):
+    def _build_tuple_unpack(self, inst, tuples, temps, is_assign):
         first = self.get(tuples[0])
-        for other, tmp in zip(map(self.get, tuples[1:]), temps):
-            out = ir.Expr.binop(fn=operator.add, lhs=first, rhs=other,
-                                loc=self.loc)
-            self.store(out, tmp)
-            first = self.get(tmp)
+        if is_assign:
+            # it's assign-like, defer handling to an intrinsic that will have
+            # type information.
+            # Can deal with tuples only, i.e. y = (*x,). where x = <tuple>
+            gv_name = "unpack_single_tuple"
+            gv_fn = ir.Global(gv_name, unpack_single_tuple, loc=self.loc,)
+            self.store(value=gv_fn, name=gv_name, redefine=True)
+            exc = ir.Expr.call(self.get(gv_name), args=(first,), kws=(),
+                               loc=self.loc,)
+            self.store(exc, temps[0])
+        else:
+            for other, tmp in zip(map(self.get, tuples[1:]), temps):
+                out = ir.Expr.binop(fn=operator.add, lhs=first, rhs=other,
+                                    loc=self.loc)
+                self.store(out, tmp)
+                first = self.get(tmp)
 
-    def op_BUILD_TUPLE_UNPACK_WITH_CALL(self, inst, tuples, temps):
+    def op_BUILD_TUPLE_UNPACK_WITH_CALL(self, inst, tuples, temps, is_assign):
         # just unpack the input tuple, call inst will be handled afterwards
-        self._build_tuple_unpack(inst, tuples, temps)
+        self._build_tuple_unpack(inst, tuples, temps, is_assign)
 
-    def op_BUILD_TUPLE_UNPACK(self, inst, tuples, temps):
-        self._build_tuple_unpack(inst, tuples, temps)
+    def op_BUILD_TUPLE_UNPACK(self, inst, tuples, temps, is_assign):
+        self._build_tuple_unpack(inst, tuples, temps, is_assign)
 
     def op_LIST_TO_TUPLE(self, inst, const_list, res):
         expr = ir.Expr.dummy('list_to_tuple', (const_list,), loc=self.loc)

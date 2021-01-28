@@ -846,7 +846,14 @@ class TraceRunner(object):
         # Builds tuple from other tuples on the stack
         tuples = list(reversed([state.pop() for _ in range(inst.arg)]))
         temps = [state.make_temp() for _ in range(len(tuples) - 1)]
-        state.append(inst, tuples=tuples, temps=temps)
+
+        # if the unpack is assign-like, e.g. x = (*y,), it needs handling
+        # differently.
+        is_assign = len(tuples) == 1
+        if is_assign:
+            temps = [state.make_temp(),]
+
+        state.append(inst, tuples=tuples, temps=temps, is_assign=is_assign)
         # The result is in the last temp var
         state.push(temps[-1])
 
