@@ -594,6 +594,14 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         Type the overloaded function by compiling the appropriate
         implementation for the given args.
         """
+        # try the signature cache if already compiled, assuming overloads are
+        # idempotent
+        cache_key = self.context, tuple(args), tuple(kws.items())
+        try:
+            return self._sig_cache[cache_key]
+        except:
+            pass
+
         disp, new_args = self._get_impl(args, kws)
         if disp is None:
             return
@@ -669,6 +677,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         else:
             sig = disp_type.get_call_type(self.context, new_args, kws)
             self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
+        self._sig_cache[cache_key] = sig
         return sig
 
     def _get_impl(self, args, kws):
@@ -817,7 +826,7 @@ def make_overload_template(func, overload_func, jit_options, strict,
     dct = dict(key=func, _overload_func=staticmethod(overload_func),
                _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options,
                _strict=strict, _inline=staticmethod(InlineOptions(inline)),
-               _inline_overloads={}, prefer_literal=prefer_literal)
+               _inline_overloads={}, prefer_literal=prefer_literal, _sig_cache={})
     return type(base)(name, (base,), dct)
 
 
@@ -1009,6 +1018,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
             _overload_func = staticmethod(self._overload_func)
             _inline_overloads = self._inline_overloads
             prefer_literal = self.prefer_literal
+            _sig_cache = self._sig_cache
 
             def generic(_, args, kws):
                 args = (typ,) + tuple(args)
@@ -1038,6 +1048,7 @@ def make_overload_attribute_template(typ, attr, overload_func, inline,
                _inline_overloads={},
                _overload_func=staticmethod(overload_func),
                prefer_literal=prefer_literal,
+               _sig_cache={},
                )
     obj = type(base)(name, (base,), dct)
     return obj
