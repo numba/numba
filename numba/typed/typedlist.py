@@ -27,13 +27,14 @@ from numba.typed import listobject
 from numba.core.errors import TypingError, LoweringError
 from numba.core.typing.templates import Signature
 import typing as pt
+from typing_extensions import Protocol
 
 Int_or_Slice = pt.Union["pt.SupportsIndex", slice]
 
 T_co = pt.TypeVar('T_co', covariant=True)
 
 
-class _Sequence(pt.Protocol[T_co]):
+class _Sequence(Protocol[T_co]):
     def __getitem__(self, i: int) -> T_co: ...
 
     def __len__(self) -> int: ...
