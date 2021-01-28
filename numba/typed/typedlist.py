@@ -372,7 +372,7 @@ class List(MutableSequence, pt.Generic[T]):
     def count(self, item: T) -> int:
         return _count(self, item)
 
-    def pop(self, i: int = -1) -> T:
+    def pop(self, i: "pt.SupportsIndex" = -1) -> T:
         return _pop(self, i)
 
     def extend(self, iterable: pt.Sequence[T]) -> None: #type: ignore[override]
