@@ -361,7 +361,7 @@ class List(MutableSequence, pt.Generic[T]):
     def __contains__(self, item: T) -> bool:  # type: ignore[override]
         return _contains(self, item)
 
-    def __delitem__(self, i: pt.Union[int, slice]) -> None:
+    def __delitem__(self, i: Int_or_Slice) -> None:
         _delitem(self, i)
 
     def insert(self, i: int, item: T) -> None:
