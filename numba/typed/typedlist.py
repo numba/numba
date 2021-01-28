@@ -30,6 +30,15 @@ import typing as pt
 
 Int_or_Slice = pt.Union["pt.SupportsIndex", slice]
 
+T_co = pt.TypeVar('T_co', covariant=True)
+
+
+class _Sequence(pt.Protocol[T_co]):
+    def __getitem__(self, i: int) -> T_co: ...
+
+    def __len__(self) -> int: ...
+
+
 DEFAULT_ALLOCATED = listobject.DEFAULT_ALLOCATED
 
 
@@ -375,7 +384,7 @@ class List(MutableSequence, pt.Generic[T]):
     def pop(self, i: "pt.SupportsIndex" = -1) -> T:
         return _pop(self, i)
 
-    def extend(self, iterable: pt.Sequence[T]) -> None: #type: ignore[override]
+    def extend(self, iterable: _Sequence[T]) -> None: #type: ignore[override]
         # Empty iterable, do nothing
         if len(iterable) == 0:
             return None
