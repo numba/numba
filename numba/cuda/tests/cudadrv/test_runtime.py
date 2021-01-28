@@ -43,6 +43,9 @@ class TestRuntime(unittest.TestCase):
             with patch.object(runtime, 'get_version', return_value=v):
                 self.assertFalse(runtime.is_supported_version())
 
+    def test_supported_versions(self):
+        self.assertEqual(SUPPORTED_VERSIONS, runtime.supported_versions)
+
 
 class TestVisibleDevices(unittest.TestCase, SerialMixin):
     def test_visible_devices_set_after_import(self):

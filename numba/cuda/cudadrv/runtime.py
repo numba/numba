@@ -118,10 +118,15 @@ class Runtime:
         Returns True if the CUDA Runtime is a supported version.
         """
 
-        supported_versions = ((9, 0), (9, 1), (9, 2),
-                              (10, 0), (10, 1), (10, 2),
-                              (11, 0), (11, 1), (11, 2))
-        return self.get_version() in supported_versions
+        return self.get_version() in self.supported_versions
+
+    @property
+    def supported_versions(self):
+        """A tuple of supported CUDA toolkit versions. Versions are given in
+        the form ``(major_version, minor_version)``."""
+        return ((9, 0), (9, 1), (9, 2),
+                (10, 0), (10, 1), (10, 2),
+                (11, 0), (11, 1), (11, 2))
 
 
 runtime = Runtime()
