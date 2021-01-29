@@ -35,7 +35,7 @@ jobs:
 
     - script: |
         export PATH=$HOME/miniconda3/bin:$PATH
-        conda install -y mypy typing_extensions
+        conda install -y mypy
         mypy
       displayName: 'Mypy'
       condition: eq(variables['RUN_MYPY'], 'yes')
