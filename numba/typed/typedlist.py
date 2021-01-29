@@ -27,24 +27,10 @@ from numba.typed import listobject
 from numba.core.errors import TypingError, LoweringError
 from numba.core.typing.templates import Signature
 import typing as pt
+from itertools import chain
 
 
 Int_or_Slice = pt.Union["pt.SupportsIndex", slice]
-
-T_co = pt.TypeVar('T_co', covariant=True)
-
-try:
-    from typing import Protocol
-except ImportError:
-    # without access to Protocol there's no generic that has getitem and len
-    # but not other methods that np.ndarray does not have. Therefore extend cannot
-    # be accurately typed considering it needs to accept ndarrays
-    _Sequence = pt.Any
-else:
-    class _Sequence(Protocol[T_co]):
-        def __getitem__(self, i: int) -> T_co: ...
-
-        def __len__(self) -> int: ...
 
 
 DEFAULT_ALLOCATED = listobject.DEFAULT_ALLOCATED
@@ -392,15 +378,16 @@ class List(MutableSequence, pt.Generic[T]):
     def pop(self, i: "pt.SupportsIndex" = -1) -> T:
         return _pop(self, i)
 
-    def extend(self, iterable: _Sequence[T]) -> None: #type: ignore[override]
+    def extend(self, iterable: pt.Iterable[T]) -> None:
         # Empty iterable, do nothing
         if len(iterable) == 0:
             return None
         if not self._typed:
             # Need to get the first element of the iterable to initialise the
-            # type of the list. FIXME: this may be a problem if the iterable
-            # can not be sliced.
-            self._initialise_list(iterable[0])
+            # type of the list.
+            first_item = next(iter(iterable))
+            self._initialise_list(first_item)
+            iterable = chain([first_item], iterable)
         return _extend(self, iterable)
 
     def remove(self, item: T) -> None:
