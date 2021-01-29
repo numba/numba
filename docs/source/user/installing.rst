@@ -14,7 +14,7 @@ Our supported platforms are:
 * Windows 7 and later (32-bit and 64-bit)
 * OS X 10.9 and later (64-bit)
 * \*BSD (unofficial support only)
-* NVIDIA GPUs of compute capability 2.0 and later
+* NVIDIA GPUs of compute capability 3.0 and later
 * AMD ROC dGPUs (linux only and not for AMD Carrizo or Kaveri APU)
 * ARMv7 (32-bit little-endian, such as Raspberry Pi 2 and 3)
 * ARMv8 (64-bit little-endian, such as the NVIDIA Jetson)
