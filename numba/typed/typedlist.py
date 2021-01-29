@@ -27,21 +27,17 @@ from numba.typed import listobject
 from numba.core.errors import TypingError, LoweringError
 from numba.core.typing.templates import Signature
 import typing as pt
+import sys
 
 
 Int_or_Slice = pt.Union["pt.SupportsIndex", slice]
 
-T_co = pt.TypeVar('T_co', covariant=True)
 
-try:
-    from typing import Protocol
-except ImportError:
-    # without access to Protocol there's no generic that has getitem and len
-    # but not other methods that np.ndarray does not have. Therefore extend cannot
-    # be accurately typed considering it needs to accept ndarrays
-    _Sequence = pt.Any
-else:
-    class _Sequence(Protocol[T_co]):
+if ((sys.version_info.major == 3 and sys.version_info.minor >= 8) or
+        sys.version_info.major > 3):
+    T_co = pt.TypeVar('T_co', covariant=True)
+
+    class _Sequence(pt.Protocol[T_co]):
         def __getitem__(self, i: int) -> T_co: ...
 
         def __len__(self) -> int: ...
@@ -392,7 +388,7 @@ class List(MutableSequence, pt.Generic[T]):
     def pop(self, i: "pt.SupportsIndex" = -1) -> T:
         return _pop(self, i)
 
-    def extend(self, iterable: _Sequence[T]) -> None: #type: ignore[override]
+    def extend(self, iterable: "_Sequence[T]") -> None: #type: ignore[override]
         # Empty iterable, do nothing
         if len(iterable) == 0:
             return None
