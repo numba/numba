@@ -38,9 +38,11 @@ if ((sys.version_info.major == 3 and sys.version_info.minor >= 8) or
     T_co = pt.TypeVar('T_co', covariant=True)
 
     class _Sequence(pt.Protocol[T_co]):
-        def __getitem__(self, i: int) -> T_co: ...
+        def __getitem__(self, i: int) -> T_co:
+            ...
 
-        def __len__(self) -> int: ...
+        def __len__(self) -> int:
+            ...
 
 
 DEFAULT_ALLOCATED = listobject.DEFAULT_ALLOCATED
@@ -344,7 +346,7 @@ class List(MutableSequence, pt.Generic[T]):
 
     # noqa F811 comments required due to github.com/PyCQA/pyflakes/issues/592
     # noqa E704 required to follow overload style of using ... in the same line
-    @pt.overload # type: ignore[override]
+    @pt.overload  # type: ignore[override]
     def __setitem__(self, i: int, o: T) -> None: ...  # noqa: F811, E704
     @pt.overload
     def __setitem__(self, s: slice, o: 'List[T]') -> None: ...  # noqa: F811, E704, E501
