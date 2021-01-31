@@ -33,8 +33,7 @@ import sys
 Int_or_Slice = pt.Union["pt.SupportsIndex", slice]
 
 
-if ((sys.version_info.major == 3 and sys.version_info.minor >= 8) or
-        sys.version_info.major > 3):
+if sys.version_info >= (3, 8):
     T_co = pt.TypeVar('T_co', covariant=True)
 
     class _Sequence(pt.Protocol[T_co]):
