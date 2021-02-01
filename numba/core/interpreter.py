@@ -545,7 +545,7 @@ class Interpreter(object):
             # the same temporary is assigned to multiple variables in cases
             # like a = b[i] = 1, so need to handle replaced temporaries in
             # later setitem/setattr nodes
-            if (isinstance(inst, (ir.SetItem, ir.SetItem))
+            if (isinstance(inst, (ir.SetItem, ir.SetAttr))
                     and inst.value.name in replaced_var):
                 inst.value = replaced_var[inst.value.name]
             elif isinstance(inst, ir.Assign):
