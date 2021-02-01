@@ -45,7 +45,11 @@ Software
 
 Numba aims to support CUDA Toolkit versions released within the last 3 years. At
 the present time, you will need the CUDA toolkit version 9.0 or later installed.
-If you are using Conda, just type::
+
+CUDA is supported on 64-bit Linux and Windows. 32-bit platforms, and macOS are
+unsupported.
+
+If you are using Conda, you can install the CUDA toolkit with::
 
    $ conda install cudatoolkit
 
