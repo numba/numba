@@ -151,6 +151,12 @@ def get_ext_modules():
     # C API (include dirs, library dirs etc.)
     np_compile_args = np_misc.get_info('npymath')
 
+    ext_devicearray = Extension(name='numba._devicearray',
+                                sources=['numba/_devicearray.cpp'],
+                                depends=['numba/_pymodule.h',
+                                         'numba/_devicearray.h'],
+                                include_dirs=['numba'])
+
     ext_dynfunc = Extension(name='numba._dynfunc',
                             sources=['numba/_dynfuncmod.c'],
                             depends=['numba/_pymodule.h',
@@ -344,9 +350,10 @@ def get_ext_modules():
                                 depends=['numba/_pymodule.h'],
                                 include_dirs=["numba"])
 
-    ext_modules = [ext_dynfunc, ext_dispatcher, ext_helperlib, ext_typeconv,
-                   ext_np_ufunc, ext_npyufunc_num_threads, ext_mviewbuf,
-                   ext_nrt_python, ext_jitclass_box, ext_cuda_extras]
+    ext_modules = [ext_dynfunc, ext_dispatcher, ext_helperlib,
+                   ext_typeconv, ext_np_ufunc, ext_npyufunc_num_threads,
+                   ext_mviewbuf, ext_nrt_python, ext_jitclass_box,
+                   ext_cuda_extras, ext_devicearray]
 
     ext_modules += ext_np_ufunc_backends
 
