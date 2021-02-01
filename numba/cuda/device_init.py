@@ -52,7 +52,7 @@ def is_available():
 
 
 def is_supported_version():
-    """Returns true if the CUDA Runtime is a supported version.
+    """Returns True if the CUDA Runtime is a supported version.
 
     Unsupported versions (e.g. newer versions than those known to Numba)
     may still work; this function provides a facility to check whether the

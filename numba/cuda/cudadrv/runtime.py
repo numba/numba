@@ -123,7 +123,7 @@ class Runtime:
 
     @property
     def supported_versions(self):
-        """A tuple of supported CUDA toolkit versions. Versions are given in
+        """A tuple of all supported CUDA toolkit versions. Versions are given in
         the form ``(major_version, minor_version)``."""
         if sys.platform not in ('linux', 'win32') or config.MACHINE_BITS != 64:
             # Only 64-bit Linux and Windows are supported
