@@ -1603,7 +1603,7 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
         lit = types.maybe_literal(gvar.value)
         # The user may have provided the type for this variable already.
         # In this case, call add_type() to make sure the value type is
-        # consistent. See numba.tests.test_array_reductions 
+        # consistent. See numba.tests.test_array_reductions
         # TestArrayReductions.test_array_cumsum for examples.
         # Variable type locked by using the locals dict.
         tv = self.typevars[target.name]
