@@ -2651,7 +2651,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check = partial(self._check_output, pyfunc, cfunc)
 
         # passes (NumPy and Numba return 2.0)
-        y = np.array([True, False, True, True]).astype(np.int)
+        y = np.array([True, False, True, True]).astype(int)
         _check({'y': y})
 
         # fails (NumPy returns 1.5; Numba returns 2.0)

@@ -371,7 +371,7 @@ class TestDynArray(NrtRefCtTest, TestCase):
 
         cfunc = nrtjit(pyfunc)
         size = 10
-        input = np.arange(size, dtype=np.float)
+        input = np.arange(size, dtype=float)
         expected_refct = sys.getrefcount(input)
         swapct = random.randrange(1000)
         expected = pyfunc(swapct, input)
