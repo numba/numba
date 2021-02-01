@@ -1347,8 +1347,9 @@ class ArrayAnalysis(object):
                     if 'rhs' in result.kwargs:
                         inst.value = result.kwargs['rhs']
             elif isinstance(inst.value, ir.Arg):
-                if (isinstance(typ, types.UniTuple) and
-                    isinstance(typ.dtype, types.Integer)
+                if (
+                    isinstance(typ, types.UniTuple)
+                    and isinstance(typ.dtype, types.Integer)
                 ):
                     shape = inst.value
             elif isinstance(inst.value, (ir.Var, ir.Const)):
