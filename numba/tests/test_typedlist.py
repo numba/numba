@@ -1,5 +1,6 @@
 import sys
 import subprocess
+import unittest
 from itertools import product
 from textwrap import dedent
 
@@ -1658,3 +1659,7 @@ class TestListFromIter(MemoryLeakMixin, TestCase):
             "List() takes no keyword arguments",
             str(raises.exception),
         )
+
+
+if __name__ == '__main__':
+    unittest.main()
