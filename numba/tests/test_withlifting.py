@@ -825,6 +825,37 @@ class TestLiftObj(MemoryLeak, TestCase):
         ):
             global_var()
 
+    def test_objmode_gv_mod_attr(self):
+        @njit
+        def modattr1():
+            with objmode(val=types.intp):
+                val = 12.3
+            return val
+
+        @njit
+        def modattr2():
+            with objmode(val=numba.types.intp):
+                val = 12.3
+            return val
+
+        for fn in (modattr1, modattr2):
+            with self.subTest(fn=str(fn)):
+                ret = fn()
+                # the result is truncated because of the intp return-type
+                self.assertIsInstance(ret, int)
+                self.assertEqual(ret, 12)
+
+    def test_objmode_gv_mod_attr_error(self):
+        @njit
+        def moderror():
+            with objmode(val=types.THIS_DOES_NOT_EXIST):
+                val = 12.3
+            return val
+        with self.assertRaises(errors.CompilerError) as raises:
+            moderror()
+        self.assertIn("Getattr cannot be resolved at compile-time",
+                      str(raises.exception))
+
     def test_objmode_closure_type_in_overload(self):
         def foo():
             pass

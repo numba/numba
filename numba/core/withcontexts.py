@@ -179,12 +179,14 @@ class _ObjModeContextType(WithContext):
     """
     is_callable = True
 
-    def _legalize_args(self, args, kwargs, loc, func_globals, func_closures):
+    def _legalize_args(self, func_ir, args, kwargs, loc, func_globals,
+                       func_closures):
         """
         Legalize arguments to the context-manager
 
         Parameters
         ----------
+        func_ir: FunctionIR
         args: tuple
             Positional arguments to the with-context call as IR nodes.
         kwargs: dict
@@ -220,12 +222,22 @@ class _ObjModeContextType(WithContext):
                         f"Global {v.name!r} is not defined"
                     )
                 typeanns[k] = v
+            elif isinstance(v, ir.Expr) and v.op == "getattr":
+                try:
+                    base_obj = func_ir.infer_constant(v.value)
+                    typ = getattr(base_obj, v.attr)
+                except (errors.ConstantInferenceError, AttributeError):
+                    raise errors.CompilerError(
+                        f"Getattr cannot be resolved at compile-time",
+                        loc=loc,
+                    )
+                else:
+                    typeanns[k] = typ
             else:
                 raise errors.CompilerError(
                     "objectmode context requires constants string for "
                     "type annotation",
                 )
-
         return typeanns
 
     def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
@@ -250,11 +262,14 @@ class _ObjModeContextType(WithContext):
             func_closures = {}
         args = extra['args'] if extra else ()
         kwargs = extra['kwargs'] if extra else {}
-        typeanns = self._legalize_args(args=args,
+
+        typeanns = self._legalize_args(func_ir=func_ir,
+                                       args=args,
                                        kwargs=kwargs,
                                        loc=blocks[blk_start].loc,
                                        func_globals=func_globals,
-                                       func_closures=func_closures)
+                                       func_closures=func_closures,
+                                       )
         vlt = func_ir.variable_lifetime
 
         inputs, outputs = find_region_inout_vars(
