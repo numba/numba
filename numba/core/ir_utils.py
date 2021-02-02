@@ -1739,23 +1739,25 @@ def replace_arg_nodes(block, args):
             stmt.value = args[idx]
     return
 
+
 def replace_returns(blocks, target, return_label):
     """
     Return return statement by assigning directly to target, and a jump.
     """
     for block in blocks.values():
-        casts = []
-        for i, stmt in enumerate(block.body):
-            if isinstance(stmt, ir.Return):
-                assert(i + 1 == len(block.body))
-                block.body[i] = ir.Assign(stmt.value, target, stmt.loc)
-                block.body.append(ir.Jump(return_label, stmt.loc))
-                # remove cast of the returned value
-                for cast in casts:
-                    if cast.target.name == stmt.value.name:
-                        cast.value = cast.value.value
-            elif isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr) and stmt.value.op == 'cast':
-                casts.append(stmt)
+        # some blocks may be empty during transformations
+        if not block.body:
+            continue
+        stmt = block.terminator
+        if isinstance(stmt, ir.Return):
+            block.body.pop()  # remove return
+            cast_stmt = block.body.pop()
+            assert (isinstance(cast_stmt, ir.Assign)
+                and isinstance(cast_stmt.value, ir.Expr)
+                and cast_stmt.value.op == 'cast'), "invalid return cast"
+            block.body.append(ir.Assign(cast_stmt.value.value, target, stmt.loc))
+            block.body.append(ir.Jump(return_label, stmt.loc))
+
 
 def gen_np_call(func_as_str, func, lhs, args, typingctx, typemap, calltypes):
     scope = args[0].scope

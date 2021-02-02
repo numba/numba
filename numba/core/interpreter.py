@@ -541,13 +541,68 @@ class Interpreter(object):
         current block.
         """
         new_body = []
+        replaced_var = {}
         for inst in self.current_block.body:
-            if (isinstance(inst, ir.Assign)
-                    and inst.target.is_temp
-                    and inst.target.name in self.assigner.unused_dests):
-                continue
+            # the same temporary is assigned to multiple variables in cases
+            # like a = b[i] = 1, so need to handle replaced temporaries in
+            # later setitem/setattr nodes
+            if (isinstance(inst, (ir.SetItem, ir.SetAttr))
+                    and inst.value.name in replaced_var):
+                inst.value = replaced_var[inst.value.name]
+            elif isinstance(inst, ir.Assign):
+                if (inst.target.is_temp
+                        and inst.target.name in self.assigner.unused_dests):
+                    continue
+                # the same temporary is assigned to multiple variables in cases
+                # like a = b = 1, so need to handle replaced temporaries in
+                # later assignments
+                if (isinstance(inst.value, ir.Var)
+                        and inst.value.name in replaced_var):
+                    inst.value = replaced_var[inst.value.name]
+                    new_body.append(inst)
+                    continue
+                # chained unpack cases may reuse temporary
+                # e.g. a = (b, c) = (x, y)
+                if (isinstance(inst.value, ir.Expr)
+                        and inst.value.op == "exhaust_iter"
+                        and inst.value.value.name in replaced_var):
+                    inst.value.value = replaced_var[inst.value.value.name]
+                    new_body.append(inst)
+                    continue
+                # eliminate temporary variables that are assigned to user
+                # variables right after creation. E.g.:
+                # $1 = f(); a = $1 -> a = f()
+                # the temporary variable is not reused elsewhere since CPython
+                # bytecode is stack-based and this pattern corresponds to a pop
+                if (isinstance(inst.value, ir.Var) and inst.value.is_temp
+                        and new_body and isinstance(new_body[-1], ir.Assign)):
+                    prev_assign = new_body[-1]
+                    # _var_used_in_binop check makes sure we don't create a new
+                    # inplace binop operation which can fail
+                    # (see TestFunctionType.test_in_iter_func_call)
+                    if (prev_assign.target.name == inst.value.name
+                            and not self._var_used_in_binop(
+                                inst.target.name, prev_assign.value)):
+                        replaced_var[inst.value.name] = inst.target
+                        prev_assign.target = inst.target
+                        # replace temp var definition in target with proper defs
+                        self.definitions[inst.target.name].remove(inst.value)
+                        self.definitions[inst.target.name].extend(
+                            self.definitions.pop(inst.value.name)
+                        )
+                        continue
+
             new_body.append(inst)
+
         self.current_block.body = new_body
+
+    def _var_used_in_binop(self, varname, expr):
+        """return True if 'expr' is a binary expression and 'varname' is used
+        in it as an argument
+        """
+        return (isinstance(expr, ir.Expr)
+                and expr.op in ("binop", "inplace_binop")
+                and (varname == expr.lhs.name or varname == expr.rhs.name))
 
     def _insert_outgoing_phis(self):
         """

@@ -158,7 +158,7 @@ class RewriteArrayExprs(rewrites.Rewrite):
             self.array_assigns[instr.target.name] = new_instr
             for operand in self._get_operands(expr):
                 operand_name = operand.name
-                if operand_name in self.array_assigns:
+                if operand.is_temp and operand_name in self.array_assigns:
                     child_assign = self.array_assigns[operand_name]
                     child_expr = child_assign.value
                     child_operands = child_expr.list_vars()
