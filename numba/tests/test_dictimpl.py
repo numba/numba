@@ -648,4 +648,4 @@ class TestDictImpl(TestCase):
         set_parametrized_data.targetctx.init()
 
         for ii in range(50):  # <- somtimes works a few times
-            assert set_parametrized_data(x, y) is None
+            self.assertIsNone(set_parametrized_data(x, y))
