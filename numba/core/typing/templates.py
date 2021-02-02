@@ -602,7 +602,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         except:
             pass
 
-        disp, new_args = self._get_impl(args, kws)
+        disp, new_args, sig_changed = self._get_impl(args, kws)
         if disp is None:
             return
         # Compile and type it for the given types
@@ -677,7 +677,16 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         else:
             sig = disp_type.get_call_type(self.context, new_args, kws)
             self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
-        self._sig_cache[cache_key] = sig
+
+        # only cache if overload didn't return a new signature, see
+        # @overload_method(types.ListType, 'extend') as an example
+        # _build_impl() doesn't cache these cases either
+        if sig_changed:
+            # cleaning up existing cache is necessary to install new impl later
+            cache_key = self.context, tuple(new_args), tuple(kws.items())
+            self._sig_cache.pop(cache_key, None)
+        else:
+            self._sig_cache[cache_key] = sig
         return sig
 
     def _get_impl(self, args, kws):
@@ -687,11 +696,12 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         internally in `self._impl_cache`.
         """
         cache_key = self.context, tuple(args), tuple(kws.items())
+        sig_changed = False
         try:
             impl, args = self._impl_cache[cache_key]
         except KeyError:
-            impl, args = self._build_impl(cache_key, args, kws)
-        return impl, args
+            impl, args, sig_changed = self._build_impl(cache_key, args, kws)
+        return impl, args, sig_changed
 
     def _build_impl(self, cache_key, args, kws):
         """Build and cache the implementation.
@@ -722,6 +732,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
         # Get the overload implementation for the given types
         ovf_result = self._overload_func(*args, **kws)
+        sig_changed = False
         if ovf_result is None:
             # No implementation => fail typing
             self._impl_cache[cache_key] = None, None
@@ -733,6 +744,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             args = sig.args
             kws = {}
             cache_key = None            # don't cache
+            sig_changed = True
         else:
             # Regular case
             pyfunc = ovf_result
@@ -754,7 +766,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         disp_type.get_call_type(self.context, args, kws)
         if cache_key is not None:
             self._impl_cache[cache_key] = disp, args
-        return disp, args
+        return disp, args, sig_changed
 
     def get_impl_key(self, sig):
         """
