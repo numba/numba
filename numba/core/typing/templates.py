@@ -599,7 +599,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         cache_key = self.context, tuple(args), tuple(kws.items())
         try:
             return self._sig_cache[cache_key]
-        except:
+        except KeyError:
             pass
 
         disp, new_args, sig_changed = self._get_impl(args, kws)
@@ -838,7 +838,8 @@ def make_overload_template(func, overload_func, jit_options, strict,
     dct = dict(key=func, _overload_func=staticmethod(overload_func),
                _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options,
                _strict=strict, _inline=staticmethod(InlineOptions(inline)),
-               _inline_overloads={}, prefer_literal=prefer_literal, _sig_cache={})
+               _inline_overloads={}, prefer_literal=prefer_literal,
+               _sig_cache={})
     return type(base)(name, (base,), dct)
 
 
