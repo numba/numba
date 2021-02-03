@@ -100,8 +100,8 @@ Schedule
 This feature will be removed with respect to this schedule:
 
 * Pending-deprecation warnings will be issued in version 0.44.0
-* Deprecation warnings and replacements will be issued in version 0.53.0
-* Support will be removed in version 0.54.0
+* Prominent notice will be given for a minimum of two releases prior to full
+  removal.
 
 Recommendations
 ---------------
@@ -205,7 +205,8 @@ Schedule
 This feature will be removed with respect to this schedule:
 
 * Deprecation warnings will be issued in version 0.44.0
-* Support will be removed in version 0.54.0
+* Prominent notice will be given for a minimum of two releases prior to full
+  removal.
 
 Recommendations
 ---------------
@@ -240,7 +241,7 @@ Schedule
 This feature will be moved with respect to this schedule:
 
 * Deprecation warnings will be issued in 0.51.0.
-* The target kwarg will be removed in version 0.53.0.
+* The target kwarg will be removed in version 0.54.0.
 
 
 Deprecation of the role of compute capability for CUDA inspection methods
