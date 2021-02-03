@@ -130,6 +130,9 @@ class Flow(object):
                         state.advance_pc()
                         # Must the new PC be a new block?
                         if self._is_implicit_new_block(state):
+                            # check if this is a with...as, abort if so
+                            self._guard_with_as(state)
+                            # else split
                             state.split_new_block()
                             break
                 _logger.debug("end state. edges=%s", state.outgoing_edges)
@@ -244,6 +247,19 @@ class Flow(object):
             return True
         else:
             return False
+
+    def _guard_with_as(self, state):
+        """Checks if the next instruction after a SETUP_WITH is something other
+        than a POP_TOP, if it is something else it'll be some sort of store
+        which is not supported (this corresponds to `with CTXMGR as VAR(S)`)."""
+        current_inst = state.get_inst()
+        if current_inst.opname == "SETUP_WITH":
+            next_op = self._bytecode[current_inst.next].opname
+            if next_op != "POP_TOP":
+                msg = ("The 'with (context manager) as "
+                       "(variable):' construct is not "
+                       "supported.")
+                raise UnsupportedError(msg)
 
 
 class TraceRunner(object):

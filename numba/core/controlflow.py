@@ -847,6 +847,7 @@ class ControlFlowAnalysis(object):
     def _iter_inst(self):
         for inst in self.bytecode:
             if self._use_new_block(inst):
+                self._guard_with_as(inst)
                 self._start_new_block(inst)
             self._curblock.body.append(inst.offset)
             yield inst
@@ -866,6 +867,18 @@ class ControlFlowAnalysis(object):
         self._curblock = CFBlock(inst.offset)
         self.blocks[inst.offset] = self._curblock
         self.blockseq.append(inst.offset)
+
+    def _guard_with_as(self, current_inst):
+        """Checks if the next instruction after a SETUP_WITH is something other
+        than a POP_TOP, if it is something else it'll be some sort of store
+        which is not supported (this corresponds to `with CTXMGR as VAR(S)`)."""
+        if current_inst.opname == "SETUP_WITH":
+            next_op = self.bytecode[current_inst.next].opname
+            if next_op != "POP_TOP":
+                msg = ("The 'with (context manager) as "
+                       "(variable):' construct is not "
+                       "supported.")
+                raise UnsupportedError(msg)
 
     def op_SETUP_LOOP(self, inst):
         end = inst.get_jump_target()
