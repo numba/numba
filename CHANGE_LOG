@@ -35,7 +35,7 @@ Highlights of changes for the CUDA target:
   added (Graham Markall).
 * Tuples and ``namedtuples`` can now be passed to kernels (Graham Markall).
 * Initial support for Cooperative Groups is added, with support for Grid Groups
-  and Grid Sync (Graham Markall).
+  and Grid Sync (Graham Markall and Nick White).
 * Support for ``math.log2`` and ``math.remainder`` is added (Guilherme Leobas).
 
 General deprecation notices:
