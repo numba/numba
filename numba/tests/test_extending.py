@@ -1913,22 +1913,24 @@ class TestOverloadPreferLiteral(TestCase):
 
 class TestIntrinsicPreferLiteral(TestCase):
     def test_intrinsic(self):
-        int64_100 = ir.Constant(ir.IntType(64), 100)
-        int64_cafe = ir.Constant(ir.IntType(64), 0xcafe)
-
         def intrin(context, x):
-            sig = signature(types.int64, x)
+            sig = signature(types.intp, x)
             if isinstance(x, types.IntegerLiteral):
                 # With prefer_literal=False, this branch will not be reached
                 if x.literal_value == 1:
                     def codegen(context, builder, signature, args):
-                        return int64_cafe
+                        atype = signature.args[0]
+                        llrtype = context.get_value_type(atype)
+                        return ir.Constant(llrtype, 0xcafe)
                     return sig, codegen
                 else:
                     raise errors.TypingError('literal value')
             else:
                 def codegen(context, builder, signature, args):
-                    return builder.mul(args[0], int64_100)
+                    atype = signature.return_type
+                    llrtype = context.get_value_type(atype)
+                    int_100 = ir.Constant(llrtype, 100)
+                    return builder.mul(args[0], int_100)
                 return sig, codegen
 
         prefer_lit = intrinsic(prefer_literal=True)(intrin)
