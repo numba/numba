@@ -1922,7 +1922,6 @@ class ConvertNumpyPass:
                     lhs = instr.target
                     lhs_typ = self.pass_states.typemap[lhs.name]
                     if self._is_C_or_F_order(lhs_typ):
-                        # only translate C order since we can't allocate F
                         if guard(self._is_supported_npycall, expr):
                             new_instr = self._numpy_to_parfor(equiv_set, lhs, expr)
                             if new_instr is not None:
