@@ -119,6 +119,7 @@ Fixes:
 * PR #6653: Fix get_numba_envvar (Siu Kwan Lam)
 * PR #6654: Fix #6632 support alternative dtype string spellings (Stuart
   Archibald)
+* PR #6685: Add Python 3.9 to classifiers. (Stuart Archibald)
 
 CUDA Enhancements/Fixes:
 
