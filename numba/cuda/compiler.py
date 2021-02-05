@@ -514,7 +514,8 @@ class _Kernel(serialize.ReduceMixin):
 
         cres = compile_cuda(self.py_func, types.void, self.argtypes,
                             debug=self.debug,
-                            inline=inline)
+                            inline=inline,
+                            fastmath=fastmath)
         fname = cres.fndesc.llvm_func_name
         args = cres.signature.args
         lib, kernel = cres.target_context.prepare_cuda_kernel(cres.library,
