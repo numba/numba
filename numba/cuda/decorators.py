@@ -45,7 +45,9 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
     :param fastmath: If true, enables flush-to-zero and fused-multiply-add,
        disables precise division and square root. This parameter has no effect
        on device function, whose fastmath setting depends on the kernel function
-       from which they are called.
+       from which they are called. The fastmath parameter if enabled substitutes
+       faster non-IEEE-754 version of some functions as detailed here:
+       :ref:`cuda-fast-math`
     :param max_registers: Request that the kernel is limited to using at most
        this number of registers per thread. The limit may not be respected if
        the ABI requires a greater number of registers than that requested.
