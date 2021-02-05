@@ -354,6 +354,46 @@ class TestVectorizeDecor(TestCase):
             guvectorize(sigs, "(x,y),(x,y),(x,y)->")(guadd)
         # (error message depends on Numpy version)
 
+    def test_guvectorize_const_dims(self):
+        a = np.arange(10, dtype='int32').reshape(2, 5)
+        sigs = [
+            "(2,y),(2,y)->(2,y)",
+            "(x,5),(x,5)->(x,5)",
+            "(2,5),(2,5)->(2,5)",
+        ]
+        for sig in sigs:
+            ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
+                                sig)(guadd)
+            b = ufunc(a, a)
+            self.assertPreciseEqual(a + a, b)
+
+    def test_guvectorize_const_dims_invalid_layout(self):
+        a = np.arange(10, dtype='int32').reshape(2, 5)
+        sigs = [
+            "(2,y),(2,y)->(3,y)",
+            "(x,5),(x,5)->(x,2)",
+            "(2,5),(2,5)->(2,6)",
+        ]
+        for sig in sigs:
+            with self.assertRaises(NameError):
+                # This should trip at compile time
+                guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
+                                    sig)(guadd)
+
+    def test_guvectorize_const_dims_invalid_input_dims(self):
+        a = np.arange(18, dtype='int32').reshape(3, 6)
+        sigs = [
+            "(2,y),(2,y)->(2,y)",
+            "(x,5),(x,5)->(x,5)",
+            "(2,5),(2,5)->(2,5)",
+        ]
+        for sig in sigs:
+            ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
+                                sig)(guadd)
+            # This should trip at run time
+            with self.assertRaises(ValueError):
+                ufunc(a, a)
+
 
 class TestVectorizeDecorJitDisabled(TestVectorizeDecor):
 
