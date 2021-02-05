@@ -334,7 +334,7 @@ class StencilFunc(object):
                              "be the primary input array.")
 
         from numba.core import typed_passes
-        typemap, return_type, calltypes = typed_passes.type_inference_stage(
+        typemap, return_type, calltypes, _ = typed_passes.type_inference_stage(
                 self._typingctx,
                 self.kernel_ir,
                 argtys,

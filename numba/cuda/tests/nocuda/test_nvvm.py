@@ -34,13 +34,13 @@ class TestNvvmWithoutCuda(SerialMixin, unittest.TestCase):
         ptx = nvvm.llvm_to_ptx(llvmir)
         self.assertIn("foo", ptx.decode('ascii'))
 
-    def test_nvvm_memset_fixup(self):
+    def test_nvvm_memset_fixup_for_34(self):
         """
         Test llvm.memset changes in llvm7.
         In LLVM7 the alignment parameter can be implicitly provided as
         an attribute to pointer in the first argument.
         """
-        fixed = nvvm.llvm39_to_34_ir(original)
+        fixed = nvvm.llvm100_to_34_ir(original)
         self.assertIn("call void @llvm.memset", fixed)
 
         for ln in fixed.splitlines():
@@ -51,13 +51,13 @@ class TestNvvmWithoutCuda(SerialMixin, unittest.TestCase):
                     r'i32 4, i1 false\)'.replace(' ', r'\s+'),
                 )
 
-    def test_nvvm_memset_fixup_missing_align(self):
+    def test_nvvm_memset_fixup_for_34_missing_align(self):
         """
         We require alignment to be specified as a parameter attribute to the
         dest argument of a memset.
         """
         with self.assertRaises(ValueError) as e:
-            nvvm.llvm39_to_34_ir(missing_align)
+            nvvm.llvm100_to_34_ir(missing_align)
 
         self.assertIn(str(e.exception),
                       "No alignment attribute found on memset dest")

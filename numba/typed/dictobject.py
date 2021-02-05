@@ -283,9 +283,9 @@ def _dict_set_method_table(typingctx, dp, keyty, valty):
 
         dm_key = context.data_model_manager[keyty.instance_type]
         if dm_key.contains_nrt_meminfo():
-            equal = _get_equal(context, builder.module, dm_key, 'dict')
+            equal = _get_equal(context, builder.module, dm_key, 'dict_key')
             key_incref, key_decref = _get_incref_decref(
-                context, builder.module, dm_key, 'dict'
+                context, builder.module, dm_key, 'dict_key'
             )
             builder.store(
                 builder.bitcast(equal, key_equal_ptr.type.pointee),
@@ -303,7 +303,7 @@ def _dict_set_method_table(typingctx, dp, keyty, valty):
         dm_val = context.data_model_manager[valty.instance_type]
         if dm_val.contains_nrt_meminfo():
             val_incref, val_decref = _get_incref_decref(
-                context, builder.module, dm_val, 'dict'
+                context, builder.module, dm_val, 'dict_value'
             )
             builder.store(
                 builder.bitcast(val_incref, val_incref_ptr.type.pointee),
@@ -343,6 +343,8 @@ def _dict_insert(typingctx, d, key, hashval, val):
         data_val = dm_val.as_data(builder, val)
 
         ptr_key = cgutils.alloca_once_value(builder, data_key)
+        cgutils.memset_padding(builder, ptr_key)
+
         ptr_val = cgutils.alloca_once_value(builder, data_val)
         # TODO: the ptr_oldval is not used.  needed for refct
         ptr_oldval = cgutils.alloca_once(builder, data_val.type)
@@ -435,6 +437,7 @@ def _dict_lookup(typingctx, d, key, hashval):
 
         data_key = dm_key.as_data(builder, key)
         ptr_key = cgutils.alloca_once_value(builder, data_key)
+        cgutils.memset_padding(builder, ptr_key)
 
         ll_val = context.get_data_type(td.value_type)
         ptr_val = cgutils.alloca_once(builder, ll_val)

@@ -13,8 +13,9 @@ from ctypes import c_void_p
 import numpy as np
 
 import numba
-from numba.cuda.cudadrv import driver as _driver
+from numba import _devicearray
 from numba.cuda.cudadrv import devices
+from numba.cuda.cudadrv import driver as _driver
 from numba.core import types
 from numba.np.unsafe.ndarray import to_fixed_tuple
 from numba.misc import dummyarray
@@ -55,7 +56,7 @@ def require_cuda_ndarray(obj):
         raise ValueError('require an cuda ndarray object')
 
 
-class DeviceNDArrayBase(object):
+class DeviceNDArrayBase(_devicearray.DeviceArray):
     """A on GPU NDArray representation
     """
     __cuda_memory__ = True
