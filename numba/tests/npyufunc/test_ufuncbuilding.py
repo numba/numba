@@ -6,6 +6,7 @@ from numba.np.ufunc.ufuncbuilder import GUFuncBuilder
 from numba import vectorize, guvectorize
 from numba.np.ufunc import PyUFunc_One
 from numba.np.ufunc.dufunc import DUFunc as UFuncBuilder
+from numba.np.numpy_support import numpy_version
 from numba.tests.support import tag, TestCase
 from numba.core import config
 import unittest
@@ -354,6 +355,7 @@ class TestVectorizeDecor(TestCase):
             guvectorize(sigs, "(x,y),(x,y),(x,y)->")(guadd)
         # (error message depends on Numpy version)
 
+    @unittest.skipIf(numpy_version < (1, 16), "NumPy > 1.15 required")
     def test_guvectorize_const_dims(self):
         a = np.arange(10, dtype='int32').reshape(2, 5)
         sigs = [
@@ -367,6 +369,7 @@ class TestVectorizeDecor(TestCase):
             b = ufunc(a, a)
             self.assertPreciseEqual(a + a, b)
 
+    @unittest.skipIf(numpy_version < (1, 16), "NumPy > 1.15 required")
     def test_guvectorize_const_dims_invalid_layout(self):
         a = np.arange(10, dtype='int32').reshape(2, 5)
         sigs = [
@@ -380,6 +383,7 @@ class TestVectorizeDecor(TestCase):
                 guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
                                     sig)(guadd)
 
+    @unittest.skipIf(numpy_version < (1, 16), "NumPy > 1.15 required")
     def test_guvectorize_const_dims_invalid_input_dims(self):
         a = np.arange(18, dtype='int32').reshape(3, 6)
         sigs = [

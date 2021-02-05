@@ -3,6 +3,7 @@ import numpy.core.umath_tests as ut
 
 from numba import void, float32, jit, guvectorize
 from numba.np.ufunc import GUVectorize
+from numba.np.numpy_support import numpy_version
 from numba.tests.support import tag, TestCase
 import unittest
 
@@ -42,6 +43,7 @@ class TestGUFunc(TestCase):
 
         self.check_matmul_gufunc(gufunc)
 
+    @unittest.skipIf(numpy_version < (1, 16), "NumPy > 1.15 required")
     def test_gufunc_const_dims(self):
         gufunc = GUVectorize(matmulcore, '(2,4),(4,5)->(2,5)',
                              target=self.target)
@@ -100,6 +102,7 @@ class TestDynamicGUFunc(TestCase):
 
         self.assertEqual(len(gufunc.types), 2)  # ensure two versions of gufunc
 
+    @unittest.skipIf(numpy_version < (1, 16), "NumPy > 1.15 required")
     def test_dynamic_matmul_const_dims(self):
         gufunc = GUVectorize(matmulcore, '(2,4),(4,5)->(2,5)',
                              target=self.target, is_dynamic=True)
