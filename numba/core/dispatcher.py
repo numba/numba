@@ -414,7 +414,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 args_str = "\n".join(
                     f"- argument {i}: {err}" for i, err in failed_args
                 )
-                msg = (f"{str(e).rstrip()} \n\nThis error may have been caused"
+                msg = (f"{str(e).rstrip()} \n\nThis error may have been caused "
                        f"by the following argument(s):\n{args_str}\n")
                 e.patch_message(msg)
 
