@@ -607,7 +607,8 @@ def _atomic_dispatcher(dispatch_fn):
                             (aryty.ndim, len(indty)))
 
         lary = context.make_array(aryty)(context, builder, ary)
-        ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices)
+        ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices,
+                                       wraparound=True)
         # dispatcher to implementation base on dtype
         return dispatch_fn(context, builder, dtype, ptr, val)
     return imp
