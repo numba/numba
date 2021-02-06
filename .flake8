@@ -21,7 +21,6 @@ exclude =
     *.h
     __init__.py
     # Grandfather in existing failing files.  This list should shrink over time
-    numba/core/dispatcher.py
     numba/core/funcdesc.py
     numba/core/postproc.py
     numba/stencils/stencil.py
