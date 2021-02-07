@@ -87,6 +87,12 @@ class TestArrayAttr(CUDATestCase):
         got = dary_reshaped.copy_to_host()
         self.assertPreciseEqual(expect, got)
 
+    def test_bug6697(self):
+        ary = np.arange(10, dtype=np.int16)
+        dary = cuda.to_device(ary)
+        got = np.asarray(dary)
+        self.assertEqual(got.dtype, dary.dtype)
+
 
 if __name__ == '__main__':
     unittest.main()
