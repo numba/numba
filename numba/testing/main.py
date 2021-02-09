@@ -386,7 +386,7 @@ def _choose_gitdiff_tests(tests):
         raise ValueError("gitpython needed for git functionality")
     repo = Repo('.')
     path = os.path.join('numba', 'tests')
-    target = 'origin/master..HEAD'
+    target = 'HEAD'
     gdiff_paths = repo.git.diff(target, path, name_only=True).split()
     # normalise the paths as they are unix style from repo.git.diff
     gdiff_paths = [os.path.normpath(x) for x in gdiff_paths]
