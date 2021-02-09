@@ -68,16 +68,22 @@ def atomic_binary_2dim_shared(ary, op2, ary_dtype, ary_shape,
 
 
 @cuda.jit(device=True)
-def atomic_binary_2dim_global(ary, op2, binop_func, y_cast_func):
+def atomic_binary_2dim_global(ary, op2, binop_func, y_cast_func, neg_idx):
     tx = cuda.threadIdx.x
     ty = cuda.threadIdx.y
-    binop_func(ary, (tx, y_cast_func(ty)), op2)
+    bin = (tx, y_cast_func(ty))
+    if neg_idx:
+        bin = (bin[0] - ary.shape[0], bin[1] - ary.shape[1])
+    binop_func(ary, bin, op2)
 
 
 @cuda.jit(device=True)
-def atomic_binary_1dim_global(ary, idx, ary_nelements, op2, binop_func):
+def atomic_binary_1dim_global(ary, idx, ary_nelements, op2,
+                              binop_func, neg_idx):
     tid = cuda.threadIdx.x
     bin = int(idx[tid] % ary_nelements)
+    if neg_idx:
+        bin = bin - ary_nelements
     binop_func(ary, bin, op2)
 
 
@@ -132,15 +138,24 @@ def atomic_add_float_3(ary):
 
 
 def atomic_add_double_global(idx, ary):
-    atomic_binary_1dim_global(ary, idx, 32, 1.0, cuda.atomic.add)
+    atomic_binary_1dim_global(ary, idx, 32, 1.0, cuda.atomic.add, False)
+
+
+def atomic_add_double_global_wrap(idx, ary):
+    atomic_binary_1dim_global(ary, idx, 32, 1.0, cuda.atomic.add, True)
 
 
 def atomic_add_double_global_2(ary):
-    atomic_binary_2dim_global(ary, 1, cuda.atomic.add, atomic_cast_none)
+    atomic_binary_2dim_global(ary, 1, cuda.atomic.add, atomic_cast_none, False)
+
+
+def atomic_add_double_global_2_wrap(ary):
+    atomic_binary_2dim_global(ary, 1, cuda.atomic.add, atomic_cast_none, True)
 
 
 def atomic_add_double_global_3(ary):
-    atomic_binary_2dim_global(ary, 1, cuda.atomic.add, atomic_cast_to_uint64)
+    atomic_binary_2dim_global(ary, 1, cuda.atomic.add, atomic_cast_to_uint64,
+                              False)
 
 
 def atomic_add_double(idx, ary):
@@ -214,11 +229,12 @@ def atomic_sub_double_3(ary):
 
 
 def atomic_sub_double_global(idx, ary):
-    atomic_binary_1dim_global(ary, idx, 32, 1.0, cuda.atomic.sub)
+    atomic_binary_1dim_global(ary, idx, 32, 1.0, cuda.atomic.sub, False)
 
 
 def atomic_sub_double_global_2(ary):
-    atomic_binary_2dim_global(ary, 1.0, cuda.atomic.sub, atomic_cast_none)
+    atomic_binary_2dim_global(ary, 1.0, cuda.atomic.sub, atomic_cast_none,
+                              False)
 
 
 def atomic_sub_double_global_3(ary):
@@ -242,12 +258,12 @@ def atomic_and3(ary, op2):
 
 
 def atomic_and_global(idx, ary, op2):
-    atomic_binary_1dim_global(ary, idx, 32, op2, cuda.atomic.and_)
+    atomic_binary_1dim_global(ary, idx, 32, op2, cuda.atomic.and_, False)
 
 
 def atomic_and_global_2(ary, op2):
     atomic_binary_2dim_global(ary, op2, cuda.atomic.and_,
-                              atomic_cast_none)
+                              atomic_cast_none, False)
 
 
 def atomic_or(ary, op2):
@@ -266,12 +282,12 @@ def atomic_or3(ary, op2):
 
 
 def atomic_or_global(idx, ary, op2):
-    atomic_binary_1dim_global(ary, idx, 32, op2, cuda.atomic.or_)
+    atomic_binary_1dim_global(ary, idx, 32, op2, cuda.atomic.or_, False)
 
 
 def atomic_or_global_2(ary, op2):
     atomic_binary_2dim_global(ary, op2, cuda.atomic.or_,
-                              atomic_cast_none)
+                              atomic_cast_none, False)
 
 
 def atomic_xor(ary, op2):
@@ -290,12 +306,12 @@ def atomic_xor3(ary, op2):
 
 
 def atomic_xor_global(idx, ary, op2):
-    atomic_binary_1dim_global(ary, idx, 32, op2, cuda.atomic.xor)
+    atomic_binary_1dim_global(ary, idx, 32, op2, cuda.atomic.xor, False)
 
 
 def atomic_xor_global_2(ary, op2):
     atomic_binary_2dim_global(ary, op2, cuda.atomic.xor,
-                              atomic_cast_none)
+                              atomic_cast_none, False)
 
 
 def atomic_inc32(ary, idx, op2):
@@ -324,12 +340,12 @@ def atomic_inc3(ary, op2):
 
 
 def atomic_inc_global(idx, ary, op2):
-    atomic_binary_1dim_global(ary, idx, 32, op2, cuda.atomic.inc)
+    atomic_binary_1dim_global(ary, idx, 32, op2, cuda.atomic.inc, False)
 
 
 def atomic_inc_global_2(ary, op2):
     atomic_binary_2dim_global(ary, op2, cuda.atomic.inc,
-                              atomic_cast_none)
+                              atomic_cast_none, False)
 
 
 def atomic_dec32(ary, idx, op2):
@@ -358,12 +374,12 @@ def atomic_dec3(ary, op2):
 
 
 def atomic_dec_global(idx, ary, op2):
-    atomic_binary_1dim_global(ary, idx, 32, op2, cuda.atomic.dec)
+    atomic_binary_1dim_global(ary, idx, 32, op2, cuda.atomic.dec, False)
 
 
 def atomic_dec_global_2(ary, op2):
     atomic_binary_2dim_global(ary, op2, cuda.atomic.dec,
-                              atomic_cast_none)
+                              atomic_cast_none, False)
 
 
 def atomic_exch(ary, idx, op2):
@@ -382,7 +398,7 @@ def atomic_exch3(ary, op2):
 
 
 def atomic_exch_global(idx, ary, op2):
-    atomic_binary_1dim_global(ary, idx, 32, op2, cuda.atomic.exch)
+    atomic_binary_1dim_global(ary, idx, 32, op2, cuda.atomic.exch, False)
 
 
 def gen_atomic_extreme_funcs(func):
@@ -590,24 +606,40 @@ class TestCudaAtomics(CUDATestCase):
     def test_atomic_add_double_global(self):
         idx = np.random.randint(0, 32, size=32, dtype=np.int64)
         ary = np.zeros(32, np.float64)
+        ary_wrap = ary.copy()
+
         sig = 'void(int64[:], float64[:])'
         cuda_func = cuda.jit(sig)(atomic_add_double_global)
+        wrap_cuda_func = cuda.jit(sig)(atomic_add_double_global_wrap)
+
         cuda_func[1, 32](idx, ary)
+        wrap_cuda_func[1, 32](idx, ary_wrap)
 
         gold = np.zeros(32, dtype=np.uint32)
         for i in range(idx.size):
             gold[idx[i]] += 1.0
 
         np.testing.assert_equal(ary, gold)
+        np.testing.assert_equal(ary_wrap, gold)
         self.assertCorrectFloat64Atomics(cuda_func, shared=False)
+        self.assertCorrectFloat64Atomics(wrap_cuda_func, shared=False)
 
     def test_atomic_add_double_global_2(self):
         ary = np.random.randint(0, 32, size=32).astype(np.float64).reshape(4, 8)
+        ary_wrap = ary.copy()
         orig = ary.copy()
-        cuda_func = cuda.jit('void(float64[:,:])')(atomic_add_double_global_2)
+
+        sig = 'void(float64[:,:])'
+        cuda_func = cuda.jit(sig)(atomic_add_double_global_2)
+        wrap_cuda_func = cuda.jit(sig)(atomic_add_double_global_2_wrap)
+
         cuda_func[1, (4, 8)](ary)
+        wrap_cuda_func[1, (4, 8)](ary_wrap)
+
         np.testing.assert_equal(ary, orig + 1)
+        np.testing.assert_equal(ary_wrap, orig + 1)
         self.assertCorrectFloat64Atomics(cuda_func, shared=False)
+        self.assertCorrectFloat64Atomics(wrap_cuda_func, shared=False)
 
     def test_atomic_add_double_global_3(self):
         ary = np.random.randint(0, 32, size=32).astype(np.float64).reshape(4, 8)
