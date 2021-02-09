@@ -182,6 +182,109 @@ def signature(return_type, *args, **kws):
     return Signature(return_type, args, recvr=recvr)
 
 
+class FoldArguments:
+    def __init__(self, pysig, handlers):
+        self._pysig = pysig
+        self._handlers = handlers
+
+    def fold(self, args, kws):
+        pysig = self._pysig
+
+        if isinstance(kws, Sequence):
+            # Normalize dict kws
+            kws = dict(kws)
+
+        # deal with kwonly args
+        params = pysig.parameters
+        kwonly = []
+        for name, p in params.items():
+            if p.kind == p.KEYWORD_ONLY:
+                kwonly.append(name)
+
+        if kwonly:
+            bind_args = args[:-len(kwonly)]
+        else:
+            bind_args = args
+        bind_kws = kws.copy()
+        if kwonly:
+            for idx, n in enumerate(kwonly):
+                bind_kws[n] = args[len(kwonly) + idx]
+
+        # now bind
+        ba = pysig.bind(*bind_args, **bind_kws)
+        return self._fix_binding(ba)
+
+    def _fix_binding(self, ba):
+        pysig = self._pysig
+        handlers = self._handlers
+
+        normal_handler = handlers.normal_handler
+        default_handler = handlers.default_handler
+        stararg_handler = handlers.stararg_handler
+        for i, param in enumerate(pysig.parameters.values()):
+            name = param.name
+            default = param.default
+            if param.kind == param.VAR_POSITIONAL:
+                # stararg may be omitted, in which case its "default" value
+                # is simply the empty tuple
+                if name in ba.arguments:
+                    argval = ba.arguments[name]
+                    # NOTE: avoid wrapping the tuple type for stararg in another
+                    #       tuple.
+                    if (len(argval) == 1 and
+                            isinstance(argval[0], (types.StarArgTuple,
+                                                   types.StarArgUniTuple))):
+                        argval = tuple(argval[0])
+                else:
+                    argval = ()
+                out = stararg_handler(i, param, argval)
+
+                ba.arguments[name] = out
+            elif name in ba.arguments:
+                # Non-stararg, present
+                ba.arguments[name] = normal_handler(i, param, ba.arguments[name])
+            else:
+                # Non-stararg, omitted
+                assert default is not param.empty
+                ba.arguments[name] = default_handler(i, param, default)
+        # Collect args in the right order
+        args = tuple(ba.arguments[param.name]
+                     for param in pysig.parameters.values())
+        return args
+
+
+class SymbolFoldArguments(FoldArguments):
+    def _fix_binding(self, ba):
+        pysig = self._pysig
+        handlers = self._handlers
+        normal_handler = handlers.normal_handler
+        default_handler = handlers.default_handler
+        stararg_handler = handlers.stararg_handler
+        for i, param in enumerate(pysig.parameters.values()):
+            name = param.name
+            default = param.default
+            if param.kind == param.VAR_POSITIONAL:
+                # stararg may be omitted, in which case its "default" value
+                # is simply the empty tuple
+                if name in ba.arguments:
+                    argval = ba.arguments[name]
+                else:
+                    argval = ()
+                out = stararg_handler(i, param, argval)
+                ba.arguments[name] = out
+            elif name in ba.arguments:
+                # Non-stararg, present
+                ba.arguments[name] = normal_handler(i, param, ba.arguments[name])
+            else:
+                # Non-stararg, omitted
+                assert default is not param.empty
+                ba.arguments[name] = default_handler(i, param, default)
+        args = tuple(ba.arguments[param.name]
+                     for param in pysig.parameters.values())
+        return args
+
+
+
 def fold_arguments(pysig, args, kws, normal_handler, default_handler,
                    stararg_handler):
     """

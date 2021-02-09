@@ -586,11 +586,12 @@ class CallConstraint(object):
         try:
             sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
         except ForceLiteralArg as e:
+            from numba.core.dispatcher import SymbolFolder
             # Adjust for bound methods
-            folding_args = ((fnty.this,) + tuple(self.args)
+            folding_args = ((None,) + tuple(self.args)
                             if isinstance(fnty, types.BoundFunction)
                             else self.args)
-            folded = e.fold_arguments(folding_args, self.kws)
+            folded = e.fold_arguments(SymbolFolder(), folding_args, self.kws)
             requested = set()
             unsatisified = set()
             for idx in e.requested_args:

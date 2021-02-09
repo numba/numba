@@ -449,11 +449,13 @@ def sentry_literal_args(pysig, literal_args, args, kwargs):
         e = errors.ForceLiteralArg(request_pos)
 
         # A helper function to fold arguments
-        def folded(args, kwargs):
-            out = pysig.bind(*args, **kwargs).arguments.values()
-            return tuple(out)
 
-        raise e.bind_fold_arguments(folded)
+        class Fold:
+            def fold(self, args, kwargs):
+                out = pysig.bind(*args, **kwargs).arguments.values()
+                return tuple(out)
+
+        raise e.bind_folder(lambda hdlr: Fold(pysig))
 
 
 class SentryLiteralArgs(collections.namedtuple(

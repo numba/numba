@@ -15,6 +15,32 @@ from numba.core.environment import Environment
 _VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
 
 
+class LowerFolder:
+    def __init__(self, lowerer, signature):
+        self._lowerer = lowerer
+        self._signature = signature
+
+    def normal_handler(self, index, param, var):
+        lowerer = self._lowerer
+        signature = self._signature
+        return lowerer._cast_var(var, signature.args[index])
+
+    def default_handler(self, index, param, default):
+        lowerer = self._lowerer
+        signature = self._signature
+        return lowerer.context.get_constant_generic(
+            lowerer.builder, signature.args[index], default)
+
+    def stararg_handler(self, index, param, vars):
+        lowerer = self._lowerer
+        signature = self._signature
+        stararg_ty = signature.args[index]
+        assert isinstance(stararg_ty, types.BaseTuple), stararg_ty
+        values = [lowerer._cast_var(var, sigty)
+                  for var, sigty in zip(vars, stararg_ty)]
+        return cgutils.make_anonymous_struct(lowerer.builder, values)
+
+
 class BaseLower(object):
     """
     Lower IR to LLVM
@@ -683,25 +709,9 @@ class Lower(BaseLower):
             argvals = [self._cast_var(var, sigty)
                        for var, sigty in zip(pos_args, signature.args)]
         else:
-            def normal_handler(index, param, var):
-                return self._cast_var(var, signature.args[index])
+            folder = LowerFolder(self, signature)
+            argvals = typing.FoldArguments(pysig, folder).fold(pos_args, dict(kw_args))
 
-            def default_handler(index, param, default):
-                return self.context.get_constant_generic(
-                    self.builder, signature.args[index], default)
-
-            def stararg_handler(index, param, vars):
-                stararg_ty = signature.args[index]
-                assert isinstance(stararg_ty, types.BaseTuple), stararg_ty
-                values = [self._cast_var(var, sigty)
-                          for var, sigty in zip(vars, stararg_ty)]
-                return cgutils.make_anonymous_struct(self.builder, values)
-
-            argvals = typing.fold_arguments(pysig,
-                                            pos_args, dict(kw_args),
-                                            normal_handler,
-                                            default_handler,
-                                            stararg_handler)
         return argvals
 
     def lower_print(self, inst):

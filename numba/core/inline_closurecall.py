@@ -1,6 +1,9 @@
 import types as pytypes  # avoid confusion with numba.types
 import copy
 import ctypes
+import inspect
+import typing as pt
+
 import numba.core.analysis
 from numba.core import utils, types, typing, errors, ir, rewrites, config, ir_utils
 from numba import prange
@@ -680,6 +683,19 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     return callee_blocks, var_dict
 
 
+class InlineFolder:
+    def normal_handler(self, index: int, param: inspect.Parameter, value: ir.Var):
+        return value
+
+    def default_handler(self, index: int, param: inspect.Parameter, default: object):
+        return ir.Const(default, loc)
+
+    def stararg_handler(self, index: int, param: inspect.Parameter, values: pt.Tuple[object, ...]):
+        raise NotImplementedError(
+                "Stararg not supported in inliner for arg {} {}".format(
+                    index, param))
+
+
 def _get_callee_args(call_expr, callee, loc, func_ir):
     """Get arguments for calling 'callee', including the default arguments.
     keyword arguments are currently only handled when 'callee' is a function.
@@ -698,21 +714,13 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
     # handle defaults and kw arguments using pysignature if callee is function
     if isinstance(callee, pytypes.FunctionType):
         pysig = numba.core.utils.pysignature(callee)
-        normal_handler = lambda index, param, default: default
-        default_handler = lambda index, param, default: ir.Const(default, loc)
-        # Throw error for stararg
-        # TODO: handle stararg
-        def stararg_handler(index, param, default):
-            raise NotImplementedError(
-                "Stararg not supported in inliner for arg {} {}".format(
-                    index, param))
         if call_expr.op == 'call':
             kws = dict(call_expr.kws)
         else:
             kws = {}
-        return numba.core.typing.fold_arguments(
-            pysig, args, kws, normal_handler, default_handler,
-            stararg_handler)
+        handler = InlineFolder()
+        return numba.core.typing.FoldArguments(pysig, handler).fold(args, kws)
+
     else:
         # TODO: handle arguments for make_function case similar to function
         # case above

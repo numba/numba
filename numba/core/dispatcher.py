@@ -9,14 +9,17 @@ import sys
 import types as pytypes
 import uuid
 import weakref
+import inspect
+import typing as pt
 from copy import deepcopy
 from contextlib import ExitStack
 
 from numba import _dispatcher
+from numba.core import ir
 from numba.core import utils, types, errors, typing, serialize, config, compiler, sigutils
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.typeconv.rules import default_type_manager
-from numba.core.typing.templates import fold_arguments
+from numba.core.typing.templates import FoldArguments, SymbolFoldArguments
 from numba.core.typing.typeof import Purpose, typeof
 from numba.core.bytecode import get_code_object
 from numba.core.caching import NullCache, FunctionCache
@@ -40,6 +43,29 @@ class OmittedArg(object):
         return types.Omitted(self.value)
 
 
+
+class TypeFolder:
+    def normal_handler(self, index: int, param: inspect.Parameter, value: types.Type):
+        return value
+
+    def default_handler(self, index: int, param: inspect.Parameter, default: object):
+        return types.Omitted(default)
+
+    def stararg_handler(self, index: int, param: inspect.Parameter, values: pt.Tuple[types.Type, ...]):
+        return types.StarArgTuple(values)
+
+
+class SymbolFolder:
+    def normal_handler(self, index: int, param: inspect.Parameter, value: pt.Optional[ir.Var]):
+        return value
+
+    def default_handler(self, index: int, param: inspect.Parameter, default: object):
+        return types.Omitted(default)
+
+    def stararg_handler(self, index: int, param: inspect.Parameter, values: pt.Tuple[ir.Var, ...]):
+        return types.StarArgTuple(values)
+
+
 class _FunctionCompiler(object):
     def __init__(self, py_func, targetdescr, targetoptions, locals,
                  pipeline_class):
@@ -54,25 +80,19 @@ class _FunctionCompiler(object):
         # the exceptions.
         self._failed_cache = {}
 
-    def fold_argument_types(self, args, kws):
+    def fold_argument_symbol(self, args: pt.Tuple[ir.Var, ...], kws):
+        args = FoldArguments(self.pysig, SymbolFolder()).fold(args, kws)
+        return self.pysig, args
+
+    def fold_argument_types(self, args: pt.Tuple[types.Type, ...], kws):
         """
         Given positional and named argument types, fold keyword arguments
         and resolve defaults by inserting types.Omitted() instances.
 
         A (pysig, argument types) tuple is returned.
         """
-        def normal_handler(index, param, value):
-            return value
-        def default_handler(index, param, default):
-            return types.Omitted(default)
-        def stararg_handler(index, param, values):
-            return types.StarArgTuple(values)
-        # For now, we take argument values from the @jit function, even
-        # in the case of generated jit.
-        args = fold_arguments(self.pysig, args, kws,
-                              normal_handler,
-                              default_handler,
-                              stararg_handler)
+
+        args = SymbolFoldArguments(self.pysig, TypeFolder()).fold(args, kws)
         return self.pysig, args
 
     def compile(self, args, return_type):
@@ -308,7 +328,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         # following?
 
         # Fold keyword arguments and resolve default values
-        pysig, args = self._compiler.fold_argument_types(args, kws)
+        pysig, args = self._compiler.fold_argument_types(tuple(args), kws)
         kws = {}
         # Ensure an overload is available
         if self._can_compile:
@@ -908,9 +928,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                     try:
                         cres = self._compiler.compile(args, return_type)
                     except errors.ForceLiteralArg as e:
-                        def folded(args, kws):
-                            return self._compiler.fold_argument_types(args, kws)[1]
-                        raise e.bind_fold_arguments(folded)
+                        raise e.bind_folder(lambda hdlr: FoldArguments(self._compiler.pysig, hdlr))
                     self.add_overload(cres)
                 self._cache.save_overload(sig, cres)
                 return cres.entry_point

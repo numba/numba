@@ -1,19 +1,23 @@
 """
 Numba-specific errors and warnings.
 """
-
+from __future__ import annotations
 
 import abc
 import contextlib
 import os
 import sys
 import warnings
-import numba.core.config
-import numpy as np
+import typing as pt
 from collections import defaultdict
-from numba.core.utils import chain_exception
 from functools import wraps
 from abc import abstractmethod
+
+import numpy as np
+
+import numba
+import numba.core.config
+from numba.core.utils import chain_exception
 
 # Filled at the end
 __all__ = []
@@ -667,7 +671,10 @@ class ForceLiteralArg(NumbaError):
     requested_args : frozenset[int]
         requested positions of the arguments.
     """
-    def __init__(self, arg_indices, fold_arguments=None, loc=None):
+    def __init__(self,
+                 arg_indices,
+                 fold_arg_maker=None,
+                 loc=None):
         """
         Parameters
         ----------
@@ -683,9 +690,13 @@ class ForceLiteralArg(NumbaError):
             loc=loc,
         )
         self.requested_args = frozenset(arg_indices)
-        self.fold_arguments = fold_arguments
+        self._fold_arg_maker = fold_arg_maker
 
-    def bind_fold_arguments(self, fold_arguments):
+    def fold_arguments(self, handler, args, kws):
+        folder = self._fold_arg_maker(handler)
+        return folder.fold(args, kws)
+
+    def bind_folder(self, fold_arguments):
         """Bind the fold_arguments function
         """
         e = ForceLiteralArg(self.requested_args, fold_arguments,
