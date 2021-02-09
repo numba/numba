@@ -332,11 +332,6 @@ class PassManager(object):
                     raise BaseException("Legacy pass in use")
             except _EarlyPipelineCompletion as e:
                 raise e
-            except Exception as e:
-                msg = "Failed in %s mode pipeline (step: %s)" % \
-                    (self.pipeline_name, pass_desc)
-                patched_exception = self._patch_error(msg, e)
-                raise patched_exception
 
     def dependency_analysis(self):
         """
