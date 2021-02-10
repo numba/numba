@@ -52,6 +52,11 @@ class TypeFolder:
         return types.Omitted(default)
 
     def stararg_handler(self, index: int, param: inspect.Parameter, values: pt.Tuple[types.Type, ...]):
+        # NOTE: avoid wrapping the tuple type for stararg in another
+        #       tuple.
+        if len(values) == 1:
+            if isinstance(values[0], (types.StarArgTuple, types.StarArgUniTuple)):
+                return values[0]
         return types.StarArgTuple(values)
 
 
@@ -60,10 +65,10 @@ class SymbolFolder:
         return value
 
     def default_handler(self, index: int, param: inspect.Parameter, default: object):
-        return types.Omitted(default)
+        return default
 
     def stararg_handler(self, index: int, param: inspect.Parameter, values: pt.Tuple[ir.Var, ...]):
-        return types.StarArgTuple(values)
+        return values
 
 
 class _FunctionCompiler(object):

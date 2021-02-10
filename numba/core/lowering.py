@@ -40,6 +40,9 @@ class LowerFolder:
                   for var, sigty in zip(vars, stararg_ty)]
         return cgutils.make_anonymous_struct(lowerer.builder, values)
 
+    def omitted_stararg_handler(self, index, param):
+        lowerer = self._lowerer
+        return cgutils.make_anonymous_struct(lowerer.builder, ())
 
 class BaseLower(object):
     """

@@ -220,7 +220,7 @@ class FoldArguments:
 
         normal_handler = handlers.normal_handler
         default_handler = handlers.default_handler
-        stararg_handler = handlers.stararg_handler
+
         for i, param in enumerate(pysig.parameters.values()):
             name = param.name
             default = param.default
@@ -229,16 +229,9 @@ class FoldArguments:
                 # is simply the empty tuple
                 if name in ba.arguments:
                     argval = ba.arguments[name]
-                    # NOTE: avoid wrapping the tuple type for stararg in another
-                    #       tuple.
-                    if (len(argval) == 1 and
-                            isinstance(argval[0], (types.StarArgTuple,
-                                                   types.StarArgUniTuple))):
-                        argval = tuple(argval[0])
+                    out = handlers.stararg_handler(i, param, argval)
                 else:
-                    argval = ()
-                out = stararg_handler(i, param, argval)
-
+                    out = handlers.omitted_stararg_handler(i, param)
                 ba.arguments[name] = out
             elif name in ba.arguments:
                 # Non-stararg, present

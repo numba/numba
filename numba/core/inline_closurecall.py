@@ -684,11 +684,14 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
 
 
 class InlineFolder:
+    def __init__(self, loc):
+        self._loc = loc
+
     def normal_handler(self, index: int, param: inspect.Parameter, value: ir.Var):
         return value
 
     def default_handler(self, index: int, param: inspect.Parameter, default: object):
-        return ir.Const(default, loc)
+        return ir.Const(default, loc=self._loc)
 
     def stararg_handler(self, index: int, param: inspect.Parameter, values: pt.Tuple[object, ...]):
         raise NotImplementedError(
@@ -718,7 +721,7 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
             kws = dict(call_expr.kws)
         else:
             kws = {}
-        handler = InlineFolder()
+        handler = InlineFolder(loc=loc)
         return numba.core.typing.FoldArguments(pysig, handler).fold(args, kws)
 
     else:

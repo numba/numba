@@ -455,7 +455,7 @@ def sentry_literal_args(pysig, literal_args, args, kwargs):
                 out = pysig.bind(*args, **kwargs).arguments.values()
                 return tuple(out)
 
-        raise e.bind_folder(lambda hdlr: Fold(pysig))
+        raise e.bind_folder(lambda hdlr: Fold())
 
 
 class SentryLiteralArgs(collections.namedtuple(
