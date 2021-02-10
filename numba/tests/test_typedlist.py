@@ -1,3 +1,5 @@
+import sys
+import subprocess
 from itertools import product
 from textwrap import dedent
 
@@ -12,7 +14,6 @@ from numba.typed import List, Dict
 from numba.core.errors import TypingError
 from numba.tests.support import (TestCase, MemoryLeakMixin, override_config,
                                  forbid_codegen, skip_parfors_unsupported)
-
 from numba.core.unsafe.refcount import get_refcount
 from numba.experimental import jitclass
 
@@ -530,6 +531,37 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         expected = "ListType[int32]([1, 2, 3])"
         self.assertEqual(expected, repr(l))
 
+    def test_repr_long_list_ipython(self):
+        # Test repr of long typed Lists in an IPython session
+        args = ["-m", "IPython", "--quiet", "--quick", "--no-banner",
+                "--colors=NoColor", "-c"]
+        base_cmd = [sys.executable] + args
+        try:
+            subprocess.check_output(base_cmd + ["--version"])
+        except subprocess.CalledProcessError as e:
+            self.skipTest("ipython not found: return code %d" % e.returncode)
+        repr_cmd = [" ".join(
+            [
+                "import sys;",
+                "from numba.typed import List;",
+                "res = repr(List(range(1005)));",
+                "sys.stderr.write(res);"
+            ]
+        )]
+        cmd = base_cmd + repr_cmd
+        p = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+        )
+        out, err = p.communicate()
+
+        l = List(range(1005))
+        # Assert that the long list is truncated
+        expected = f"{typeof(l)}([{', '.join(map(str, l[:1000]))}, ...])"
+        self.assertEqual(expected, err)
+
     def test_iter_mutates_self(self):
         self.disable_leak_check()
 
@@ -776,7 +808,8 @@ class TestExtend(MemoryLeakMixin, TestCase):
         # Extending an unrefined list with an empty iterable doesn't work in a
         # jit compiled function as the list remains untyped.
         l = List()
-        l.extend(tuple())
+        ret = l.extend(tuple())
+        self.assertIsNone(ret)
         self.assertEqual(len(l), 0)
         self.assertFalse(l._typed)
 

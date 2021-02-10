@@ -1,12 +1,14 @@
 #include "_pymodule.h"
 
-#include <string.h>
-#include <time.h>
-#include <assert.h>
+#include <cstring>
+#include <ctime>
+#include <cassert>
+#include <vector>
 
-#include "_dispatcher.h"
 #include "_typeof.h"
 #include "frameobject.h"
+#include "core/typeconv/typeconv.hpp"
+#include "_devicearray.h"
 
 /*
  * The following call_trace and call_trace_protected functions
@@ -97,17 +99,34 @@ else                                                            \
     }                                                           \
 }
 
+typedef std::vector<Type> TypeTable;
+typedef std::vector<PyObject*> Functions;
 
-typedef struct DispatcherObject{
+/* The Dispatcher class is the base class of all dispatchers in the CPU and
+   CUDA targets. Its main responsibilities are:
+
+   - Resolving the best overload to call for a given set of arguments, and
+   - Calling the resolved overload.
+
+   This logic is implemented within this class for efficiency (lookup of the
+   appropriate overload needs to be fast) and ease of implementation (calling
+   directly into a compiled function using a function pointer is easier within
+   the C++ code where the overload has been resolved). */
+class Dispatcher {
+public:
     PyObject_HEAD
-    /* Holds borrowed references to PyCFunction objects */
-    dispatcher_t *dispatcher;
-    char can_compile;        /* Can auto compile */
-    char can_fallback;       /* Can fallback */
+    /* Whether compilation of new overloads is permitted */
+    char can_compile;
+    /* Whether fallback to object mode is permitted */
+    char can_fallback;
+    /* Whether types must match exactly when resolving overloads.
+       If not, conversions (e.g. float32 -> float64) are permitted when
+       searching for a match. */
     char exact_match_required;
     /* Borrowed reference */
     PyObject *fallbackdef;
-    /* Whether to fold named arguments and default values (false for lifted loops)*/
+    /* Whether to fold named arguments and default values
+      (false for lifted loops) */
     int fold_args;
     /* Whether the last positional argument is a stararg */
     int has_stararg;
@@ -115,28 +134,94 @@ typedef struct DispatcherObject{
     PyObject *argnames;
     /* Tuple of default values */
     PyObject *defargs;
-} DispatcherObject;
+    /* Number of arguments to function */
+    int argct;
+    /* Used for selecting overloaded function implementations */
+    TypeManager *tm;
+    /* An array of overloads */
+    Functions functions;
+    /* A flattened array of argument types to all overloads
+     * (invariant: sizeof(overloads) == argct * sizeof(functions)) */
+    TypeTable overloads;
+
+    /* Add a new overload. Parameters:
+
+       - args: An array of Type objects, one for each parameter
+       - callable: The callable implementing this overload. */
+    void addDefinition(Type args[], PyObject *callable) {
+        overloads.reserve(argct + overloads.size());
+        for (int i=0; i<argct; ++i) {
+            overloads.push_back(args[i]);
+        }
+        functions.push_back(callable);
+    }
+
+    /* Given a list of types, find the overloads that have a matching signature.
+       Returns the best match, as well as the number of matches found.
+
+       Parameters:
+
+       - sig: an array of Type objects, one for each parameter.
+       - matches: the number of matches found (mutated by this function).
+       - allow_unsafe: whether to match overloads that would require an unsafe
+                       cast.
+       - exact_match_required: Whether all arguments types must match the
+                               overload's types exactly. When false,
+                               overloads that would require a type conversion
+                               can also be matched. */
+    PyObject* resolve(Type sig[], int &matches, bool allow_unsafe,
+                      bool exact_match_required) const {
+        const int ovct = functions.size();
+        int selected;
+        matches = 0;
+        if (0 == ovct) {
+            // No overloads registered
+            return NULL;
+        }
+        if (argct == 0) {
+            // Nullary function: trivial match on first overload
+            matches = 1;
+            selected = 0;
+        }
+        else {
+            matches = tm->selectOverload(sig, &overloads[0], selected, argct,
+                                         ovct, allow_unsafe,
+                                         exact_match_required);
+        }
+        if (matches == 1) {
+            return functions[selected];
+        }
+        return NULL;
+    }
+
+    /* Remove all overloads */
+    void clear() {
+        functions.clear();
+        overloads.clear();
+    }
+
+};
 
 
 static int
-Dispatcher_traverse(DispatcherObject *self, visitproc visit, void *arg)
+Dispatcher_traverse(Dispatcher *self, visitproc visit, void *arg)
 {
     Py_VISIT(self->defargs);
     return 0;
 }
 
 static void
-Dispatcher_dealloc(DispatcherObject *self)
+Dispatcher_dealloc(Dispatcher *self)
 {
     Py_XDECREF(self->argnames);
     Py_XDECREF(self->defargs);
-    dispatcher_del(self->dispatcher);
+    self->clear();
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
 
 static int
-Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
+Dispatcher_init(Dispatcher *self, PyObject *args, PyObject *kwds)
 {
     PyObject *tmaddrobj;
     void *tmaddr;
@@ -158,7 +243,8 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
     Py_INCREF(self->argnames);
     Py_INCREF(self->defargs);
     tmaddr = PyLong_AsVoidPtr(tmaddrobj);
-    self->dispatcher = dispatcher_new(tmaddr, argct);
+    self->tm = static_cast<TypeManager*>(tmaddr);
+    self->argct = argct;
     self->can_compile = 1;
     self->can_fallback = can_fallback;
     self->fallbackdef = NULL;
@@ -168,33 +254,45 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
 }
 
 static PyObject *
-Dispatcher_clear(DispatcherObject *self, PyObject *args)
+Dispatcher_clear(Dispatcher *self, PyObject *args)
 {
-    dispatcher_clear(self->dispatcher);
+    self->clear();
     Py_RETURN_NONE;
 }
 
 static
 PyObject*
-Dispatcher_Insert(DispatcherObject *self, PyObject *args)
+Dispatcher_Insert(Dispatcher *self, PyObject *args, PyObject *kwds)
 {
+    /* The cuda kwarg is a temporary addition until CUDA overloads are compiled
+     * functions. Once they are compiled functions, kwargs can be removed from
+     * this function. */
+    static char *keywords[] = {
+        (char*)"sig",
+        (char*)"func",
+        (char*)"objectmode",
+        (char*)"cuda",
+        NULL
+    };
+
     PyObject *sigtup, *cfunc;
     int i, sigsz;
     int *sig;
     int objectmode = 0;
+    int cuda = 0;
 
-    if (!PyArg_ParseTuple(args, "OO|i", &sigtup,
-                          &cfunc, &objectmode)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO|ip", keywords, &sigtup,
+                                     &cfunc, &objectmode, &cuda)) {
         return NULL;
     }
 
-    if (!PyObject_TypeCheck(cfunc, &PyCFunction_Type) ) {
+    if (!cuda && !PyObject_TypeCheck(cfunc, &PyCFunction_Type) ) {
         PyErr_SetString(PyExc_TypeError, "must be builtin_function_or_method");
         return NULL;
     }
 
     sigsz = PySequence_Fast_GET_SIZE(sigtup);
-    sig = malloc(sigsz * sizeof(int));
+    sig = new int[sigsz];
 
     for (i = 0; i < sigsz; ++i) {
         sig[i] = PyLong_AsLong(PySequence_Fast_GET_ITEM(sigtup, i));
@@ -202,18 +300,17 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
 
     /* The reference to cfunc is borrowed; this only works because the
        derived Python class also stores an (owned) reference to cfunc. */
-    dispatcher_add_defn(self->dispatcher, sig, (void*) cfunc);
+    self->addDefinition(sig, cfunc);
 
     /* Add pure python fallback */
     if (!self->fallbackdef && objectmode){
         self->fallbackdef = cfunc;
     }
 
-    free(sig);
+    delete[] sig;
 
     Py_RETURN_NONE;
 }
-
 
 static
 void explain_issue(PyObject *dispatcher, PyObject *args, PyObject *kws,
@@ -277,7 +374,7 @@ int search_new_conversions(PyObject *dispatcher, PyObject *args, PyObject *kws)
 
 /* A custom, fast, inlinable version of PyCFunction_Call() */
 static PyObject *
-call_cfunc(DispatcherObject *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObject *locals)
+call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObject *locals)
 {
     PyCFunctionWithKeywords fn;
     PyThreadState *tstate;
@@ -342,7 +439,7 @@ call_cfunc(DispatcherObject *self, PyObject *cfunc, PyObject *args, PyObject *kw
 
 static
 PyObject*
-compile_and_invoke(DispatcherObject *self, PyObject *args, PyObject *kws, PyObject *locals)
+compile_and_invoke(Dispatcher *self, PyObject *args, PyObject *kws, PyObject *locals)
 {
     /* Compile a new one */
     PyObject *cfa, *cfunc, *retval;
@@ -370,8 +467,28 @@ compile_and_invoke(DispatcherObject *self, PyObject *args, PyObject *kws, PyObje
     return retval;
 }
 
+/* A copy of compile_and_invoke, that only compiles. This is needed for CUDA
+ * kernels, because its overloads are Python instances of the _Kernel class,
+ * rather than compiled functions. Once CUDA overloads are compiled functions,
+ * cuda_compile_only can be removed. */
+static
+PyObject*
+cuda_compile_only(Dispatcher *self, PyObject *args, PyObject *kws, PyObject *locals)
+{
+    /* Compile a new one */
+    PyObject *cfa, *cfunc;
+    cfa = PyObject_GetAttrString((PyObject*)self, "_compile_for_args");
+    if (cfa == NULL)
+        return NULL;
+
+    cfunc = PyObject_Call(cfa, args, kws);
+    Py_DECREF(cfa);
+
+    return cfunc;
+}
+
 static int
-find_named_args(DispatcherObject *self, PyObject **pargs, PyObject **pkws)
+find_named_args(Dispatcher *self, PyObject **pargs, PyObject **pkws)
 {
     PyObject *oldargs = *pargs, *newargs;
     PyObject *kws = *pkws;
@@ -485,7 +602,7 @@ find_named_args(DispatcherObject *self, PyObject **pargs, PyObject **pkws)
 }
 
 static PyObject*
-Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
+Dispatcher_call(Dispatcher *self, PyObject *args, PyObject *kws)
 {
     PyObject *tmptype, *retval = NULL;
     int *tys = NULL;
@@ -496,6 +613,11 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     PyObject *cfunc;
     PyThreadState *ts = PyThreadState_Get();
     PyObject *locals = NULL;
+
+    /* If compilation is enabled, ensure that an exact match is found and if
+     * not compile one */
+    int exact_match_required = self->can_compile ? 1 : self->exact_match_required;
+
     if (ts->use_tracing && ts->c_profilefunc) {
         locals = PyEval_GetLocals();
         if (locals == NULL) {
@@ -515,7 +637,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     if (argct < (Py_ssize_t) (sizeof(prealloc) / sizeof(int)))
         tys = prealloc;
     else
-        tys = malloc(argct * sizeof(int));
+        tys = new int[argct];
 
     for (i = 0; i < argct; ++i) {
         tmptype = PySequence_Fast_GET_ITEM(args, i);
@@ -530,14 +652,13 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
         }
     }
 
-    /* If compilation is enabled, ensure that an exact match is found and if
-     * not compile one */
-    int exact_match_required = self->can_compile ? 1 : self->exact_match_required;
-
     /* We only allow unsafe conversions if compilation of new specializations
-       has been disabled. */
-    cfunc = dispatcher_resolve(self->dispatcher, tys, &matches,
-                               !self->can_compile, exact_match_required);
+       has been disabled.
+
+       Note that the number of matches is returned in matches by resolve, which
+       accepts it as a reference. */
+    cfunc = self->resolve(tys, matches, !self->can_compile,
+                          exact_match_required);
 
     if (matches == 0 && !self->can_compile) {
         /*
@@ -552,12 +673,10 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
         }
         if (res > 0) {
             /* Retry with the newly registered conversions */
-            cfunc = dispatcher_resolve(self->dispatcher, tys, &matches,
-                                       !self->can_compile,
-                                       exact_match_required);
+            cfunc = self->resolve(tys, matches, !self->can_compile,
+                                  exact_match_required);
         }
     }
-
     if (matches == 1) {
         /* Definition is found */
         retval = call_cfunc(self, cfunc, args, kws, locals);
@@ -584,21 +703,153 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
 
 CLEANUP:
     if (tys != prealloc)
-        free(tys);
+        delete[] tys;
     Py_DECREF(args);
 
     return retval;
 }
 
+/* Based on Dispatcher_call above, with the following differences:
+   1. It does not invoke the definition of the function.
+   2. It returns the definition, instead of a value returned by the function.
+
+   This is because CUDA functions are, at present, _Kernel objects rather than
+   compiled functions. */
+static PyObject*
+Dispatcher_cuda_call(Dispatcher *self, PyObject *args, PyObject *kws)
+{
+    PyObject *tmptype, *retval = NULL;
+    int *tys = NULL;
+    int argct;
+    int i;
+    int prealloc[24];
+    int matches;
+    PyObject *cfunc;
+    PyThreadState *ts = PyThreadState_Get();
+    PyObject *locals = NULL;
+
+    /* If compilation is enabled, ensure that an exact match is found and if
+     * not compile one */
+    int exact_match_required = self->can_compile ? 1 : self->exact_match_required;
+
+    if (ts->use_tracing && ts->c_profilefunc) {
+        locals = PyEval_GetLocals();
+        if (locals == NULL) {
+            goto CLEANUP;
+        }
+    }
+    if (self->fold_args) {
+        if (find_named_args(self, &args, &kws))
+            return NULL;
+    }
+    else
+        Py_INCREF(args);
+    /* Now we own a reference to args */
+
+    argct = PySequence_Fast_GET_SIZE(args);
+
+    if (argct < (Py_ssize_t) (sizeof(prealloc) / sizeof(int)))
+        tys = prealloc;
+    else
+        tys = new int[argct];
+
+    for (i = 0; i < argct; ++i) {
+        tmptype = PySequence_Fast_GET_ITEM(args, i);
+        tys[i] = typeof_typecode((PyObject *) self, tmptype);
+        if (tys[i] == -1) {
+            if (self->can_fallback){
+                /* We will clear the exception if fallback is allowed. */
+                PyErr_Clear();
+            } else {
+                goto CLEANUP;
+            }
+        }
+    }
+
+    /* We only allow unsafe conversions if compilation of new specializations
+       has been disabled. */
+    cfunc = self->resolve(tys, matches, !self->can_compile,
+                          exact_match_required);
+
+    if (matches == 0 && !self->can_compile) {
+        /*
+         * If we can't compile a new specialization, look for
+         * matching signatures for which conversions haven't been
+         * registered on the C++ TypeManager.
+         */
+        int res = search_new_conversions((PyObject *) self, args, kws);
+        if (res < 0) {
+            retval = NULL;
+            goto CLEANUP;
+        }
+        if (res > 0) {
+            /* Retry with the newly registered conversions */
+            cfunc = self->resolve(tys, matches, !self->can_compile,
+                                  exact_match_required);
+        }
+    }
+
+    if (matches == 1) {
+        /* Definition is found */
+        retval = cfunc;
+        Py_INCREF(retval);
+    } else if (matches == 0) {
+        /* No matching definition */
+        if (self->can_compile) {
+            retval = cuda_compile_only(self, args, kws, locals);
+        } else if (self->fallbackdef) {
+            /* Have object fallback */
+            retval = call_cfunc(self, self->fallbackdef, args, kws, locals);
+        } else {
+            /* Raise TypeError */
+            explain_matching_error((PyObject *) self, args, kws);
+            retval = NULL;
+        }
+    } else if (self->can_compile) {
+        /* Ambiguous, but are allowed to compile */
+        retval = cuda_compile_only(self, args, kws, locals);
+    } else {
+        /* Ambiguous */
+        explain_ambiguous((PyObject *) self, args, kws);
+        retval = NULL;
+    }
+
+CLEANUP:
+    if (tys != prealloc)
+        delete[] tys;
+    Py_DECREF(args);
+
+    return retval;
+}
+
+static int
+import_devicearray(void)
+{
+    PyObject *devicearray = PyImport_ImportModule("numba._devicearray");
+    if (devicearray == NULL) {
+        return -1;
+    }
+    Py_DECREF(devicearray);
+
+    DeviceArray_API = (void**)PyCapsule_Import("numba._devicearray._DEVICEARRAY_API", 0);
+    if (DeviceArray_API == NULL) {
+        return -1;
+    }
+
+    return 0;
+}
+
 static PyMethodDef Dispatcher_methods[] = {
     { "_clear", (PyCFunction)Dispatcher_clear, METH_NOARGS, NULL },
-    { "_insert", (PyCFunction)Dispatcher_Insert, METH_VARARGS,
+    { "_insert", (PyCFunction)Dispatcher_Insert, METH_VARARGS | METH_KEYWORDS,
       "insert new definition"},
+    { "_cuda_call", (PyCFunction)Dispatcher_cuda_call,
+      METH_VARARGS | METH_KEYWORDS, "CUDA call resolution" },
     { NULL },
 };
 
 static PyMemberDef Dispatcher_members[] = {
-    {"_can_compile", T_BOOL, offsetof(DispatcherObject, can_compile), 0, NULL },
+    {(char*)"_can_compile", T_BOOL, offsetof(Dispatcher, can_compile), 0, NULL },
     {NULL}  /* Sentinel */
 };
 
@@ -606,7 +857,7 @@ static PyMemberDef Dispatcher_members[] = {
 static PyTypeObject DispatcherType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     "_dispatcher.Dispatcher",                    /* tp_name */
-    sizeof(DispatcherObject),                    /* tp_basicsize */
+    sizeof(Dispatcher),                          /* tp_basicsize */
     0,                                           /* tp_itemsize */
     (destructor)Dispatcher_dealloc,              /* tp_dealloc */
     0,                                           /* tp_print */
@@ -652,9 +903,14 @@ static PyTypeObject DispatcherType = {
     0,                                           /* tp_del */
     0,                                           /* tp_version_tag */
     0,                                           /* tp_finalize */
-#if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION > 7
+#if PY_MAJOR_VERSION == 3
+/* Python 3.8 has two slots, 3.9 has one. */
+#if PY_MINOR_VERSION > 7
     0,                                           /* tp_vectorcall */
+#if PY_MINOR_VERSION == 8
     0,                                           /* tp_print */
+#endif
+#endif
 #endif
 };
 
@@ -677,6 +933,12 @@ static PyMethodDef ext_methods[] = {
 
 
 MOD_INIT(_dispatcher) {
+    if (import_devicearray() < 0) {
+      PyErr_Print();
+      PyErr_SetString(PyExc_ImportError, "numba._devicearray failed to import");
+      return MOD_ERROR_VAL;
+    }
+
     PyObject *m;
     MOD_DEF(m, "_dispatcher", "No docs", ext_methods)
     if (m == NULL)

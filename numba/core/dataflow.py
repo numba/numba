@@ -333,7 +333,13 @@ class DataFlowAnalysis(object):
         # Builds tuple from other tuples on the stack
         tuples = list(reversed([info.pop() for _ in range(inst.arg)]))
         temps = [info.make_temp() for _ in range(len(tuples) - 1)]
-        info.append(inst, tuples=tuples, temps=temps)
+        # if the unpack is assign-like, e.g. x = (*y,), it needs handling
+        # differently.
+        is_assign = len(tuples) == 1
+        if is_assign:
+            temps = [info.make_temp(),]
+
+        info.append(inst, tuples=tuples, temps=temps, is_assign=is_assign)
         # The result is in the last temp var
         info.push(temps[-1])
 
@@ -384,6 +390,8 @@ class DataFlowAnalysis(object):
         info.push(res)
 
     op_COMPARE_OP = _binaryop
+    op_IS_OP = _binaryop
+    op_CONTAINS_OP = _binaryop
 
     op_INPLACE_ADD = _binaryop
     op_INPLACE_SUBTRACT = _binaryop

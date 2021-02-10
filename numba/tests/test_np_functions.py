@@ -41,6 +41,10 @@ def array_equal(a, b):
     return np.array_equal(a, b)
 
 
+def intersect1d(a, b):
+    return np.intersect1d(a, b)
+
+
 def append(arr, values, axis):
     return np.append(arr, values, axis=axis)
 
@@ -587,6 +591,29 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             'Both arguments to "array_equals" must be array-like',
             str(raises.exception)
         )
+
+    def test_intersect1d(self):
+
+        def arrays():
+            yield [], []  # two empty arrays
+            yield [1], []  # empty right
+            yield [], [1]  # empty left
+            yield [1], [2]  # singletons no intersection
+            yield [1], [1]  # singletons one intersection
+            yield [1, 2], [1]
+            yield [1, 2, 2], [2, 2]
+            yield [1, 2], [2, 1]
+            yield [1, 2, 3], [1, 2, 3]
+
+        pyfunc = intersect1d
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for a, b in arrays():
+            a = np.array(a)
+            b = np.array(b)
+            expected = pyfunc(a, b)
+            got = cfunc(a, b)
+            self.assertPreciseEqual(expected, got)
 
     def test_count_nonzero(self):
 
@@ -2624,7 +2651,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check = partial(self._check_output, pyfunc, cfunc)
 
         # passes (NumPy and Numba return 2.0)
-        y = np.array([True, False, True, True]).astype(np.int)
+        y = np.array([True, False, True, True]).astype(int)
         _check({'y': y})
 
         # fails (NumPy returns 1.5; Numba returns 2.0)

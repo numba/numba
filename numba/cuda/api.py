@@ -8,6 +8,7 @@ import contextlib
 import numpy as np
 
 from .cudadrv import devicearray, devices, driver
+from numba.core import config
 
 
 # NDarray device helper
@@ -18,10 +19,13 @@ gpus = devices.gpus
 
 
 @require_context
-def from_cuda_array_interface(desc, owner=None):
+def from_cuda_array_interface(desc, owner=None, sync=True):
     """Create a DeviceNDArray from a cuda-array-interface description.
-    The *owner* is the owner of the underlying memory.
+    The ``owner`` is the owner of the underlying memory.
     The resulting DeviceNDArray will acquire a reference from it.
+
+    If ``sync`` is ``True``, then the imported stream (if present) will be
+    synchronized.
     """
     version = desc.get('version')
     # Mask introduced in version 1
@@ -42,23 +46,34 @@ def from_cuda_array_interface(desc, owner=None):
     devptr = driver.get_devptr_for_active_ctx(desc['data'][0])
     data = driver.MemoryPointer(
         current_context(), devptr, size=size, owner=owner)
+    stream_ptr = desc.get('stream', None)
+    if stream_ptr is not None:
+        stream = external_stream(stream_ptr)
+        if sync and config.CUDA_ARRAY_INTERFACE_SYNC:
+            stream.synchronize()
+    else:
+        stream = 0 # No "Numba default stream", not the CUDA default stream
     da = devicearray.DeviceNDArray(shape=shape, strides=strides,
-                                   dtype=dtype, gpu_data=data)
+                                   dtype=dtype, gpu_data=data,
+                                   stream=stream)
     return da
 
 
-def as_cuda_array(obj):
+def as_cuda_array(obj, sync=True):
     """Create a DeviceNDArray from any object that implements
     the :ref:`cuda array interface <cuda-array-interface>`.
 
     A view of the underlying GPU buffer is created.  No copying of the data
     is done.  The resulting DeviceNDArray will acquire a reference from `obj`.
+
+    If ``sync`` is ``True``, then the imported stream (if present) will be
+    synchronized.
     """
     if not is_cuda_array(obj):
         raise TypeError("*obj* doesn't implement the cuda array interface.")
     else:
         return from_cuda_array_interface(obj.__cuda_array_interface__,
-                                         owner=obj)
+                                         owner=obj, sync=sync)
 
 
 def is_cuda_array(obj):
@@ -109,8 +124,8 @@ def to_device(obj, stream=0, copy=True, to=None):
 
 
 @require_context
-def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
-    """device_array(shape, dtype=np.float, strides=None, order='C', stream=0)
+def device_array(shape, dtype=np.float_, strides=None, order='C', stream=0):
+    """device_array(shape, dtype=np.float_, strides=None, order='C', stream=0)
 
     Allocate an empty device ndarray. Similar to :meth:`numpy.empty`.
     """
@@ -121,9 +136,9 @@ def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
 
 
 @require_context
-def managed_array(shape, dtype=np.float, strides=None, order='C', stream=0,
+def managed_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
                   attach_global=True):
-    """managed_array(shape, dtype=np.float, strides=None, order='C', stream=0,
+    """managed_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
                      attach_global=True)
 
     Allocate a np.ndarray with a buffer that is managed.
@@ -151,8 +166,8 @@ def managed_array(shape, dtype=np.float, strides=None, order='C', stream=0,
 
 
 @require_context
-def pinned_array(shape, dtype=np.float, strides=None, order='C'):
-    """pinned_array(shape, dtype=np.float, strides=None, order='C')
+def pinned_array(shape, dtype=np.float_, strides=None, order='C'):
+    """pinned_array(shape, dtype=np.float_, strides=None, order='C')
 
     Allocate an :class:`ndarray <numpy.ndarray>` with a buffer that is pinned
     (pagelocked).  Similar to :func:`np.empty() <numpy.empty>`.
@@ -167,9 +182,9 @@ def pinned_array(shape, dtype=np.float, strides=None, order='C'):
 
 
 @require_context
-def mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0,
+def mapped_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
                  portable=False, wc=False):
-    """mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0,
+    """mapped_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
                     portable=False, wc=False)
 
     Allocate a mapped ndarray with a buffer that is pinned and mapped on

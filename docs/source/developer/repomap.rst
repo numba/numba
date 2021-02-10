@@ -93,6 +93,8 @@ These define aspects of the public Numba interface.
   Numba IR
 - :ghfile:`numba/core/annotations/pretty_annotate.py` - Code highlighting of
   Numba functions and types (both ANSI terminal and HTML)
+- :ghfile:`numba/core/event.py` - A simple event system for applications to
+  listen to specific compiler events.
 
 
 Dispatching
@@ -101,10 +103,8 @@ Dispatching
 - :ghfile:`numba/core/dispatcher.py` - Dispatcher objects are compiled functions
   produced by ``@jit``.  A dispatcher has different implementations
   for different type signatures.
-- :ghfile:`numba/_dispatcher.{h,c}` - C interface to C++ dispatcher
-  implementation
-- :ghfile:`numba/_dispatcherimpl.cpp` - C++ dispatcher implementation (for
-  speed on common data types)
+- :ghfile:`numba/_dispatcher.cpp` - C++ dispatcher implementation (for speed on
+  common data types)
 
 
 Compiler Pipeline
@@ -257,7 +257,8 @@ Misc Support
 - :ghfile:`numba/core/caching.py` - Disk cache for compiled functions
 - :ghfile:`numba/np/npdatetime.py` - Helper functions for implementing NumPy
   datetime64 support
-
+- :ghfile:`numba/misc/llvm_pass_timings.py` - Helper to record timings of
+  LLVM passes.
 
 Core Python Data Types
 ''''''''''''''''''''''

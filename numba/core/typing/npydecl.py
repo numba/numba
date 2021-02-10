@@ -453,9 +453,13 @@ def parse_dtype(dtype):
     elif isinstance(dtype, types.TypeRef):
         return dtype.instance_type
     elif isinstance(dtype, types.StringLiteral):
-        dt = getattr(np, dtype.literal_value, None)
-        if dt is not None:
-            return from_dtype(dt)
+        dtstr = dtype.literal_value
+        try:
+            dt = np.dtype(dtstr)
+        except TypeError:
+            msg = f"Invalid NumPy dtype specified: '{dtstr}'"
+            raise TypingError(msg)
+        return from_dtype(dt)
 
 def _parse_nested_sequence(context, typ):
     """

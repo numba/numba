@@ -407,6 +407,12 @@ class TestCudaNDArray(CUDATestCase):
         d = cuda.to_device(a)
         self.assertEqual(d._numba_type_.layout, 'A')
 
+    def test_bug6697(self):
+        ary = np.arange(10, dtype=np.int16)
+        dary = cuda.to_device(ary)
+        got = np.asarray(dary)
+        self.assertEqual(got.dtype, dary.dtype)
+
 
 class TestRecarray(CUDATestCase):
     def test_recarray(self):

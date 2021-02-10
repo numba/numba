@@ -34,6 +34,7 @@ class MyPipeline(object):
         self.state.typemap = None
         self.state.return_type = None
         self.state.calltypes = None
+        self.state.metadata = {}
 
 
 class BaseTest(TestCase):
@@ -65,6 +66,7 @@ class BaseTest(TestCase):
                 tp.state.typemap,
                 tp.state.return_type,
                 tp.state.calltypes,
+                _
             ) = typed_passes.type_inference_stage(
                 tp.state.typingctx, tp.state.func_ir, tp.state.args, None
             )
@@ -99,6 +101,7 @@ class BaseTest(TestCase):
             tp.state.typingctx,
             options,
             flags,
+            tp.state.metadata,
             diagnostics=diagnostics,
         )
         parfor_pass._pre_run()

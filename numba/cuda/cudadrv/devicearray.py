@@ -4,7 +4,6 @@ on the object.  If it exists and evaluate to True, it must define shape,
 strides, dtype and size attributes similar to a NumPy ndarray.
 """
 
-import warnings
 import math
 import functools
 import operator
@@ -14,8 +13,9 @@ from ctypes import c_void_p
 import numpy as np
 
 import numba
-from numba.cuda.cudadrv import driver as _driver
+from numba import _devicearray
 from numba.cuda.cudadrv import devices
+from numba.cuda.cudadrv import driver as _driver
 from numba.core import types
 from numba.np.unsafe.ndarray import to_fixed_tuple
 from numba.misc import dummyarray
@@ -56,14 +56,13 @@ def require_cuda_ndarray(obj):
         raise ValueError('require an cuda ndarray object')
 
 
-class DeviceNDArrayBase(object):
+class DeviceNDArrayBase(_devicearray.DeviceArray):
     """A on GPU NDArray representation
     """
     __cuda_memory__ = True
     __cuda_ndarray__ = True     # There must be gpu_data attribute
 
-    def __init__(self, shape, strides, dtype, stream=0, writeback=None,
-                 gpu_data=None):
+    def __init__(self, shape, strides, dtype, stream=0, gpu_data=None):
         """
         Args
         ----
@@ -76,8 +75,6 @@ class DeviceNDArrayBase(object):
             data type as np.dtype coercible object.
         stream
             cuda stream.
-        writeback
-            Deprecated.
         gpu_data
             user provided device memory for the ndarray data buffer
         """
@@ -110,8 +107,6 @@ class DeviceNDArrayBase(object):
             self.alloc_size = 0
 
         self.gpu_data = gpu_data
-
-        self.__writeback = writeback    # should deprecate the use of this
         self.stream = stream
 
     @property
@@ -126,7 +121,8 @@ class DeviceNDArrayBase(object):
             'strides': None if is_contiguous(self) else tuple(self.strides),
             'data': (ptr, False),
             'typestr': self.dtype.str,
-            'version': 2,
+            'stream': int(self.stream) if self.stream != 0 else None,
+            'version': 3,
         }
 
     def bind(self, stream=0):
@@ -273,14 +269,6 @@ class DeviceNDArrayBase(object):
                 hostary = np.ndarray(shape=self.shape, dtype=self.dtype,
                                      strides=self.strides, buffer=hostary)
         return hostary
-
-    def to_host(self, stream=0):
-        stream = self._default_stream(stream)
-        warnings.warn("to_host() is deprecated and will be removed",
-                      DeprecationWarning)
-        if self.__writeback is None:
-            raise ValueError("no associated writeback array")
-        self.copy_to_host(self.__writeback, stream=stream)
 
     def split(self, section, stream=0):
         """Split the array into equal partition of the `section` size.
@@ -495,7 +483,10 @@ class DeviceNDArray(DeviceNDArrayBase):
         """
         :return: an `numpy.ndarray`, so copies to the host.
         """
-        return self.copy_to_host().__array__(dtype)
+        if dtype:
+            return self.copy_to_host().__array__(dtype)
+        else:
+            return self.copy_to_host().__array__()
 
     def __len__(self):
         return self.shape[0]
@@ -581,11 +572,19 @@ class DeviceNDArray(DeviceNDArrayBase):
     def setitem(self, key, value, stream=0):
         """Do `__setitem__(key, value)` with CUDA stream
         """
-        return self._so_getitem(key, value, stream)
+        return self._do_setitem(key, value, stream=stream)
 
     def _do_setitem(self, key, value, stream=0):
 
         stream = self._default_stream(stream)
+
+        # If the array didn't have a default stream, and the user didn't provide
+        # a stream, then we will use the default stream for the assignment
+        # kernel and synchronize on it.
+        synchronous = not stream
+        if synchronous:
+            ctx = devices.get_context()
+            stream = ctx.get_default_stream()
 
         # (1) prepare LHS
 
@@ -627,6 +626,8 @@ class DeviceNDArray(DeviceNDArrayBase):
 
         n_elements = functools.reduce(operator.mul, lhs.shape, 1)
         _assign_kernel(lhs.ndim).forall(n_elements, stream=stream)(lhs, rhs)
+        if synchronous:
+            stream.synchronize()
 
 
 class IpcArrayHandle(object):
@@ -693,8 +694,8 @@ class ManagedNDArray(DeviceNDArrayBase, np.ndarray):
 
 def from_array_like(ary, stream=0, gpu_data=None):
     "Create a DeviceNDArray object that is like ary."
-    return DeviceNDArray(ary.shape, ary.strides, ary.dtype,
-                         writeback=ary, stream=stream, gpu_data=gpu_data)
+    return DeviceNDArray(ary.shape, ary.strides, ary.dtype, stream=stream,
+                         gpu_data=gpu_data)
 
 
 def from_record_like(rec, stream=0, gpu_data=None):

@@ -61,6 +61,11 @@ class TestNumbaImport(TestCase):
         flags = ["-Werror",]
         self.run_in_subproc(code, flags)
 
+    def test_import_star(self):
+        # checks that "from numba import *" works.
+        code = "from numba import *"
+        self.run_in_subproc(code)
+
 
 if __name__ == '__main__':
     unittest.main()

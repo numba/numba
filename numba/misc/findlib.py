@@ -35,6 +35,10 @@ def find_lib(libname, libdir=None, platform=None, static=False):
     platform = 'bsd' if 'bsd' in platform else platform
     if static:
         platform = f"{platform}-static"
+    if platform not in DLLNAMEMAP:
+        # Return empty list if platform name is undefined.
+        # Not all platforms define their static library paths.
+        return []
     pat = DLLNAMEMAP[platform] % {"name": libname, "ver": RE_VER}
     regex = re.compile(pat)
     return find_file(regex, libdir)

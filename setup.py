@@ -20,7 +20,7 @@ except ImportError:
 
 
 min_python_version = "3.6"
-max_python_version = "3.9"  # exclusive
+max_python_version = "3.10"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.15"
 min_llvmlite_version = "0.36.0.dev0"
@@ -42,7 +42,7 @@ def _guard_py_ver():
     cur_py = parse('.'.join(map(str, sys.version_info[:3])))
 
     if not min_py <= cur_py < max_py:
-        msg = ('Cannot install on Python version {}; only versions >={},<{} ',
+        msg = ('Cannot install on Python version {}; only versions >={},<{} '
                'are supported.')
         raise RuntimeError(msg.format(cur_py, min_py, max_py))
 
@@ -151,19 +151,23 @@ def get_ext_modules():
     # C API (include dirs, library dirs etc.)
     np_compile_args = np_misc.get_info('npymath')
 
+    ext_devicearray = Extension(name='numba._devicearray',
+                                sources=['numba/_devicearray.cpp'],
+                                depends=['numba/_pymodule.h',
+                                         'numba/_devicearray.h'],
+                                include_dirs=['numba'])
+
     ext_dynfunc = Extension(name='numba._dynfunc',
                             sources=['numba/_dynfuncmod.c'],
                             depends=['numba/_pymodule.h',
                                      'numba/_dynfunc.c'])
 
     ext_dispatcher = Extension(name="numba._dispatcher",
-                               sources=['numba/_dispatcher.c',
+                               sources=['numba/_dispatcher.cpp',
                                         'numba/_typeof.c',
                                         'numba/_hashtable.c',
-                                        'numba/_dispatcherimpl.cpp',
                                         'numba/core/typeconv/typeconv.cpp'],
                                depends=["numba/_pymodule.h",
-                                        "numba/_dispatcher.h",
                                         "numba/_typeof.h",
                                         "numba/_hashtable.h"],
                                **np_compile_args)
@@ -346,9 +350,10 @@ def get_ext_modules():
                                 depends=['numba/_pymodule.h'],
                                 include_dirs=["numba"])
 
-    ext_modules = [ext_dynfunc, ext_dispatcher, ext_helperlib, ext_typeconv,
-                   ext_np_ufunc, ext_npyufunc_num_threads, ext_mviewbuf,
-                   ext_nrt_python, ext_jitclass_box, ext_cuda_extras]
+    ext_modules = [ext_dynfunc, ext_dispatcher, ext_helperlib,
+                   ext_typeconv, ext_np_ufunc, ext_npyufunc_num_threads,
+                   ext_mviewbuf, ext_nrt_python, ext_jitclass_box,
+                   ext_cuda_extras, ext_devicearray]
 
     ext_modules += ext_np_ufunc_backends
 
@@ -378,6 +383,7 @@ metadata = dict(
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
         "Topic :: Software Development :: Compilers",
     ],
     package_data={
@@ -393,6 +399,7 @@ metadata = dict(
         "numba.cext": ["*.c", "*.h"],
         # numba gdb hook init command language file
         "numba.misc": ["cmdlang.gdb"],
+        "numba.typed": ["py.typed"],
     },
     scripts=["numba/pycc/pycc", "bin/numba"],
     author="Anaconda, Inc.",

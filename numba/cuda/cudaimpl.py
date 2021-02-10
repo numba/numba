@@ -387,6 +387,28 @@ def ptx_popc(context, builder, sig, args):
 def ptx_fma(context, builder, sig, args):
     return builder.fma(*args)
 
+# See:
+# https://docs.nvidia.com/cuda/libdevice-users-guide/__nv_cbrt.html#__nv_cbrt
+# https://docs.nvidia.com/cuda/libdevice-users-guide/__nv_cbrtf.html#__nv_cbrtf
+
+
+cbrt_funcs = {
+    types.float32: '__nv_cbrtf',
+    types.float64: '__nv_cbrt',
+}
+
+
+@lower(stubs.cbrt, types.float32)
+@lower(stubs.cbrt, types.float64)
+def ptx_cbrt(context, builder, sig, args):
+    ty = sig.return_type
+    fname = cbrt_funcs[ty]
+    fty = context.get_value_type(ty)
+    lmod = builder.module
+    fnty = Type.function(fty, [fty])
+    fn = lmod.get_or_insert_function(fnty, name=fname)
+    return builder.call(fn, args)
+
 
 @lower(stubs.brev, types.u4)
 def ptx_brev_u4(context, builder, sig, args):
@@ -625,6 +647,34 @@ def ptx_atomic_sub(context, builder, dtype, ptr, val):
         return builder.atomic_rmw('sub', ptr, val, 'monotonic')
 
 
+@lower(stubs.atomic.inc, types.Array, types.intp, types.Any)
+@lower(stubs.atomic.inc, types.Array, types.UniTuple, types.Any)
+@lower(stubs.atomic.inc, types.Array, types.Tuple, types.Any)
+@_atomic_dispatcher
+def ptx_atomic_inc(context, builder, dtype, ptr, val):
+    if dtype in cuda.cudadecl.unsigned_int_numba_types:
+        bw = dtype.bitwidth
+        lmod = builder.module
+        fn = getattr(nvvmutils, f'declare_atomic_inc_int{bw}')
+        return builder.call(fn(lmod), (ptr, val))
+    else:
+        raise TypeError(f'Unimplemented atomic inc with {dtype} array')
+
+
+@lower(stubs.atomic.dec, types.Array, types.intp, types.Any)
+@lower(stubs.atomic.dec, types.Array, types.UniTuple, types.Any)
+@lower(stubs.atomic.dec, types.Array, types.Tuple, types.Any)
+@_atomic_dispatcher
+def ptx_atomic_dec(context, builder, dtype, ptr, val):
+    if dtype in cuda.cudadecl.unsigned_int_numba_types:
+        bw = dtype.bitwidth
+        lmod = builder.module
+        fn = getattr(nvvmutils, f'declare_atomic_dec_int{bw}')
+        return builder.call(fn(lmod), (ptr, val))
+    else:
+        raise TypeError(f'Unimplemented atomic dec with {dtype} array')
+
+
 def ptx_atomic_bitwise(stub, op):
     @_atomic_dispatcher
     def impl_ptx_atomic(context, builder, dtype, ptr, val):
@@ -640,6 +690,17 @@ def ptx_atomic_bitwise(stub, op):
 ptx_atomic_bitwise(stubs.atomic.and_, 'and')
 ptx_atomic_bitwise(stubs.atomic.or_, 'or')
 ptx_atomic_bitwise(stubs.atomic.xor, 'xor')
+
+
+@lower(stubs.atomic.exch, types.Array, types.intp, types.Any)
+@lower(stubs.atomic.exch, types.Array, types.UniTuple, types.Any)
+@lower(stubs.atomic.exch, types.Array, types.Tuple, types.Any)
+@_atomic_dispatcher
+def ptx_atomic_exch(context, builder, dtype, ptr, val):
+    if dtype in (cuda.cudadecl.integer_numba_types):
+        return builder.atomic_rmw('xchg', ptr, val, 'monotonic')
+    else:
+        raise TypeError(f'Unimplemented atomic exch with {dtype} array')
 
 
 @lower(stubs.atomic.max, types.Array, types.intp, types.Any)
@@ -731,10 +792,11 @@ def ptx_atomic_cas_tuple(context, builder, sig, args):
     lary = context.make_array(aryty)(context, builder, ary)
     zero = context.get_constant(types.intp, 0)
     ptr = cgutils.get_item_pointer(context, builder, aryty, lary, (zero,))
-    if aryty.dtype == types.int32:
+
+    if aryty.dtype in (cuda.cudadecl.integer_numba_types):
         lmod = builder.module
-        return builder.call(nvvmutils.declare_atomic_cas_int32(lmod),
-                            (ptr, old, val))
+        bitwidth = aryty.dtype.bitwidth
+        return nvvmutils.atomic_cmpxchg(builder, lmod, bitwidth, ptr, old, val)
     else:
         raise TypeError('Unimplemented atomic compare_and_swap '
                         'with %s array' % dtype)

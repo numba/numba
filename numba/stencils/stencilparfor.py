@@ -669,7 +669,7 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
 
         rewrites.rewrite_registry.apply('before-inference', tp.state)
 
-        tp.state.typemap, tp.state.return_type, tp.state.calltypes = type_inference_stage(
+        tp.state.typemap, tp.state.return_type, tp.state.calltypes, _ = type_inference_stage(
             tp.state.typingctx, tp.state.func_ir, tp.state.args, None)
 
         type_annotations.TypeAnnotation(

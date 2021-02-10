@@ -10,11 +10,11 @@ Numba is compatible with Python 3.6 or later, and Numpy versions 1.15 or later.
 Our supported platforms are:
 
 * Linux x86 (32-bit and 64-bit)
-* Linux ppcle64 (POWER8)
+* Linux ppcle64 (POWER8, POWER9)
 * Windows 7 and later (32-bit and 64-bit)
-* OS X 10.9 and later (64-bit)
+* OS X 10.9 and later (64-bit and unofficial support on M1/Arm64)
 * \*BSD (unofficial support only)
-* NVIDIA GPUs of compute capability 2.0 and later
+* NVIDIA GPUs of compute capability 3.0 and later
 * AMD ROC dGPUs (linux only and not for AMD Carrizo or Kaveri APU)
 * ARMv7 (32-bit little-endian, such as Raspberry Pi 2 and 3)
 * ARMv8 (64-bit little-endian, such as the NVIDIA Jetson)
@@ -116,13 +116,8 @@ Raspberry Pi CPU is 64-bit, Raspbian runs it in 32-bit mode, so look at
 Conda-forge support for AArch64 is still quite experimental and packages are limited,
 but it does work enough for Numba to build and pass tests.  To set up the environment:
 
-* Install `conda4aarch64 <https://github.com/jjhelmus/conda4aarch64/releases>`_.
+* Install `miniforge <https://github.com/conda-forge/miniforge>`_.
   This will create a minimal conda environment.
-* Add the ``c4aarch64`` and ``conda-forge`` channels to your conda
-  configuration::
-
-    $ conda config --add channels c4aarch64
-    $ conda config --add channels conda-forge
 
 * Then you can install Numba from the ``numba`` channel::
 
@@ -266,6 +261,8 @@ vary with target operating system and hardware. The following lists them all
   * ``graphviz`` - for some CFG inspection functionality.
   * ``pickle5`` - provides Python 3.8 pickling features for faster pickling in
     Python 3.6 and 3.7.
+  * ``typeguard`` - used by ``runtests.py`` for
+    :ref:`runtime type-checking <type_anno_check>`.
 
 * To build the documentation:
 

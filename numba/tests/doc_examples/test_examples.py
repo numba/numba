@@ -1,11 +1,32 @@
 # Contents in this file are referenced from the sphinx-generated docs.
 # "magictoken" is used for markers as beginning and ending of example text.
 
+import sys
 import unittest
 from numba.tests.support import captured_stdout
 
 
+class MatplotlibBlocker:
+    '''Blocks the import of matplotlib, so that doc examples that attempt to
+    plot the output don't result in plots popping up and blocking testing.'''
+
+    def find_spec(self, fullname, path, target=None):
+        if fullname == 'matplotlib':
+            msg = 'Blocked import of matplotlib for test suite run'
+            raise ImportError(msg)
+
+
 class DocsExamplesTest(unittest.TestCase):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._mpl_blocker = MatplotlibBlocker()
+
+    def setUp(self):
+        sys.meta_path.insert(0, self._mpl_blocker)
+
+    def tearDown(self):
+        sys.meta_path.remove(self._mpl_blocker)
 
     def test_mandelbrot(self):
         with captured_stdout():

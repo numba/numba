@@ -5,7 +5,7 @@ from .stubs import (threadIdx, blockIdx, blockDim, gridDim, laneid,
                     const, grid, gridsize, atomic, shfl_sync_intrinsic,
                     vote_sync_intrinsic, match_any_sync, match_all_sync,
                     threadfence_block, threadfence_system,
-                    threadfence, selp, popc, brev, clz, ffs, fma,
+                    threadfence, selp, popc, brev, clz, ffs, fma, cbrt,
                     cg)
 from .cudadrv.error import CudaSupportError
 from numba.cuda.cudadrv.driver import (BaseCUDAMemoryManager,
@@ -49,6 +49,23 @@ def is_available():
         pass
 
     return driver_is_available and nvvm.is_available()
+
+
+def is_supported_version():
+    """Returns True if the CUDA Runtime is a supported version.
+
+    Unsupported versions (e.g. newer versions than those known to Numba)
+    may still work; this function provides a facility to check whether the
+    current Numba version is tested and known to work with the current
+    runtime version. If the current version is unsupported, the caller can
+    decide how to act. Options include:
+
+    - Continuing silently,
+    - Emitting a warning,
+    - Generating an error or otherwise preventing the use of CUDA.
+    """
+
+    return runtime.is_supported_version()
 
 
 def cuda_error():
