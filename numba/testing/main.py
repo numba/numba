@@ -764,9 +764,6 @@ class ParallelTestRunner(runner.TextTestRunner):
                 raise e
             else:
                 result.add_results(child_result)
-                if child_result.errors or child_result.failures or child_result.unexpectedSuccesses:
-                    with open("failed_tests.log", "a") as fout:
-                        print(f"{child_result.test_id}", file=fout)
                 remaining_ids.discard(child_result.test_id)
                 if child_result.shouldStop:
                     result.shouldStop = True
