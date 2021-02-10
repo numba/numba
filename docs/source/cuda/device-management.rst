@@ -86,7 +86,7 @@ For example, to obtain the UUID of the current device:
 
 .. code-block:: python
 
-   dev = cuda.get_context().device
+   dev = cuda.current_context().device
    # prints e.g. "GPU-e6489c45-5b68-3b03-bab7-0e7c8e809643"
    print(dev.uuid)
 
