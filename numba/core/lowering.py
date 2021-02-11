@@ -1,4 +1,4 @@
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 import operator
 from functools import partial
 
@@ -274,10 +274,29 @@ lower_extensions = {}
 class Lower(BaseLower):
     GeneratorLower = generators.GeneratorLower
 
+    def init(self):
+        super().init()
+        # find all singlely assigned variable
+        self._find_singlely_assigned_variable()
+
+    def _find_singlely_assigned_variable(self):
+        func_ir = self.func_ir
+        blocks = func_ir.blocks
+        var_assign_map = defaultdict(int)
+        for blk in blocks.values():
+            for stmt in blk.body:
+                if isinstance(stmt, ir.Assign):
+                    var_assign_map[stmt.target.name] += 1
+        self._singlely_assigned_vars = frozenset(
+            {k for k, v in var_assign_map.items() if v == 1},
+        )
+        self._blk_local_varmap = {}
+
     def pre_block(self, block):
         from numba.core.unsafe import eh
 
         super(Lower, self).pre_block(block)
+        self._cur_ir_block = block
 
         if block == self.firstblk:
             # create slots for all the vars, irrespective of whether they are
@@ -1235,9 +1254,16 @@ class Lower(BaseLower):
         """
         Ensure the given variable has an allocated stack slot.
         """
-        if name not in self.varmap:
+        if name in self.varmap:
+            # quit early
+            return
+
+        llty = self.context.get_value_type(fetype)
+        # find if name is used in multiple blocks
+        if name in self._singlely_assigned_vars:
+            pass
+        else:
             # If not already defined, allocate it
-            llty = self.context.get_value_type(fetype)
             ptr = self.alloca_lltype(name, llty)
             # Remember the pointer
             self.varmap[name] = ptr
@@ -1246,12 +1272,15 @@ class Lower(BaseLower):
         """
         Get a pointer to the given variable's slot.
         """
+        assert name not in self._blk_local_varmap
         return self.varmap[name]
 
     def loadvar(self, name):
         """
         Load the given variable's value.
         """
+        if name in self._blk_local_varmap:
+            return self._blk_local_varmap[name]
         ptr = self.getvar(name)
         return self.builder.load(ptr)
 
@@ -1263,21 +1292,25 @@ class Lower(BaseLower):
         # Define if not already
         self._alloca_var(name, fetype)
 
-        # Clean up existing value stored in the variable
-        old = self.loadvar(name)
-        self.decref(fetype, old)
-
         # Store variable
-        ptr = self.getvar(name)
-        if value.type != ptr.type.pointee:
-            msg = ("Storing {value.type} to ptr of {ptr.type.pointee} "
-                   "('{name}'). FE type {fetype}").format(value=value,
-                                                          ptr=ptr,
-                                                          fetype=fetype,
-                                                          name=name)
-            raise AssertionError(msg)
+        if name in self._singlely_assigned_vars:
+            self._blk_local_varmap[name] = value
+        else:
+            # Clean up existing value stored in the variable
+            old = self.loadvar(name)
+            self.decref(fetype, old)
 
-        self.builder.store(value, ptr)
+            # stack stored variable
+            ptr = self.getvar(name)
+            if value.type != ptr.type.pointee:
+                msg = ("Storing {value.type} to ptr of {ptr.type.pointee} "
+                    "('{name}'). FE type {fetype}").format(value=value,
+                                                            ptr=ptr,
+                                                            fetype=fetype,
+                                                            name=name)
+                raise AssertionError(msg)
+
+            self.builder.store(value, ptr)
 
     def delvar(self, name):
         """
@@ -1289,10 +1322,14 @@ class Lower(BaseLower):
         # at the beginning of a loop, but only set later in the loop)
         self._alloca_var(name, fetype)
 
-        ptr = self.getvar(name)
-        self.decref(fetype, self.builder.load(ptr))
-        # Zero-fill variable to avoid double frees on subsequent dels
-        self.builder.store(Constant.null(ptr.type.pointee), ptr)
+        if name in self._blk_local_varmap:
+            llval = self._blk_local_varmap[name]
+            self.decref(fetype, llval)
+        else:
+            ptr = self.getvar(name)
+            self.decref(fetype, self.builder.load(ptr))
+            # Zero-fill variable to avoid double frees on subsequent dels
+            self.builder.store(Constant.null(ptr.type.pointee), ptr)
 
     def alloca(self, name, type):
         lltype = self.context.get_value_type(type)
