@@ -421,15 +421,22 @@ class CFGraph(object):
         post_order = []
         seen = set()
 
-        def _dfs_rec(node):
+        post_order = []
+
+        # DFS
+        def dfs_rec(node):
             if node not in seen:
                 seen.add(node)
+                stack.append((post_order.append, node))
                 for dest in succs[node]:
                     if (node, dest) not in back_edges:
-                        _dfs_rec(dest)
-                post_order.append(node)
+                        stack.append((dfs_rec, dest))
 
-        _dfs_rec(self._entry_point)
+        stack = [(dfs_rec, self._entry_point)]
+        while stack:
+            cb, data = stack.pop()
+            cb(data)
+
         return post_order
 
     def _find_immediate_dominators(self):
