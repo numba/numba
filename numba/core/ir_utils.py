@@ -664,7 +664,12 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
         else:
             lives |= {v.name for v in stmt.list_vars()}
             if isinstance(stmt, ir.Assign):
-                lives.remove(lhs.name)
+                # make sure lhs is not used in rhs, e.g. a = g(a)
+                rhs_vars = set()
+                if isinstance(stmt.value, ir.Expr):
+                    rhs_vars = {v.name for v in stmt.value.list_vars()}
+                if lhs.name not in rhs_vars:
+                    lives.remove(lhs.name)
 
         new_body.append(stmt)
     new_body.reverse()

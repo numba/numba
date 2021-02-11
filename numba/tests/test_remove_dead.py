@@ -218,6 +218,18 @@ class TestRemoveDead(unittest.TestCase):
             # recover global state
             ir_utils.alias_func_extensions = old_ext_handlers
 
+    def test_rm_dead_rhs_vars(self):
+        """make sure lhs variable of assignment is considered live if used in
+        rhs (test for #6715).
+        """
+        @numba.njit
+        def func():
+            for i in range(3):
+                a = (lambda j: j)(i)
+                a = np.array(a)
+
+        func()
+
     @skip_parfors_unsupported
     def test_alias_parfor_extension(self):
         """Make sure aliases are considered in remove dead extension for
