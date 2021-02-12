@@ -69,7 +69,8 @@ def _run_ssa(blocks):
         _logger.debug("Replaced assignments: %s", pformat(defmap))
         # Fix up the RHS
         # Re-associate the variable uses with the reaching definition
-        blocks = _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus, cache_list_vars)
+        blocks = _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus,
+                               cache_list_vars)
 
     # Post-condition checks.
     # CFG invariant
