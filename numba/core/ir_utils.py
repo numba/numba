@@ -118,32 +118,8 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc, lhs_typ):
         cac._return_type = arr_typ
         calltypes[alloc_call] = cac
 
-    if lhs_typ.layout == 'F':
-        empty_c_typ = lhs_typ.copy(layout='C')
-        empty_c_var = ir.Var(scope, mk_unique_var("$empty_c_var"), loc)
-        if typemap:
-            typemap[empty_c_var.name] = lhs_typ.copy(layout='C')
-        empty_c_assign = ir.Assign(alloc_call, empty_c_var, loc)
-
-        # attr call: asfortranarray = getattr(g_np_var, asfortranarray)
-        asfortranarray_attr_call = ir.Expr.getattr(g_np_var, "asfortranarray", loc)
-        afa_attr_var = ir.Var(scope, mk_unique_var("$asfortran_array_attr"), loc)
-        if typemap:
-            typemap[afa_attr_var.name] = get_np_ufunc_typ(numpy.asfortranarray)
-        afa_attr_assign = ir.Assign(asfortranarray_attr_call, afa_attr_var, loc)
-        # call asfortranarray
-        asfortranarray_call = ir.Expr.call(afa_attr_var, [empty_c_var], (), loc)
-        if calltypes:
-            calltypes[asfortranarray_call] = typemap[afa_attr_var.name].get_call_type(
-                typing.Context(), [empty_c_typ], {})
-
-        asfortranarray_assign = ir.Assign(asfortranarray_call, lhs, loc)
-
-        out.extend([g_np_assign, attr_assign, typ_var_assign, empty_c_assign,
-                    afa_attr_assign, asfortranarray_assign])
-    else:
-        alloc_assign = ir.Assign(alloc_call, lhs, loc)
-        out.extend([g_np_assign, attr_assign, typ_var_assign, alloc_assign])
+    alloc_assign = ir.Assign(alloc_call, lhs, loc)
+    out.extend([g_np_assign, attr_assign, typ_var_assign, alloc_assign])
 
     return out
 
