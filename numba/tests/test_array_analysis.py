@@ -46,6 +46,7 @@ class ExampleClass3700(object):
 
 # test value for test_global_tuple
 GVAL = (1.2,)
+GVAL2 = (3, 4)
 
 
 
@@ -934,6 +935,16 @@ class TestArrayAnalysis(TestCase):
         self._compile_and_test(test_broadcast, (types.intp, types.intp),
                                equivs=[self.with_equiv('a', 'c', 'e')],
                                asserts=None)
+
+        # make sure shape of a global tuple of ints is handled properly
+        def test_global_tuple():
+            a = np.ones(GVAL2)
+            b = np.ones(GVAL2)
+
+        self._compile_and_test(test_global_tuple, (),
+                               equivs=[self.with_equiv('a', 'b')],
+                               asserts=None)
+
 
 class TestArrayAnalysisParallelRequired(TestCase):
     """This is to just split out tests that need the parallel backend and
