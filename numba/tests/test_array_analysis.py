@@ -44,6 +44,11 @@ class ExampleClass3700(object):
         self.T = n + 1
 
 
+# test value for test_global_tuple
+GVAL = (1.2,)
+
+
+
 class TestEquivSet(TestCase):
 
     """
@@ -1016,6 +1021,18 @@ class TestArrayAnalysisParallelRequired(TestCase):
 
         data = np.arange(10.)
         np.testing.assert_array_equal(test_impl(data), test_impl.py_func(data))
+
+    @skip_unsupported
+    def test_global_tuple(self):
+        """make sure a gobal value with non-integers does not cause errors
+        (test for #6726).
+        """
+
+        def test_impl():
+            d = GVAL[0]
+            return d
+
+        self.assertEqual(njit(test_impl, parallel=True)(), test_impl())
 
 
 class TestArrayAnalysisInterface(TestCase):
