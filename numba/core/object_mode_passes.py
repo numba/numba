@@ -76,6 +76,7 @@ class ObjectModeBackEnd(LoweringPass):
         with targetctx.push_code_library(library):
             lower = pylowering.PyLower(targetctx, library, fndesc, interp)
             lower.lower()
+            library.add_ir_module(lower.module)
             if not flags.no_cpython_wrapper:
                 lower.create_cpython_wrapper()
             env = lower.env
