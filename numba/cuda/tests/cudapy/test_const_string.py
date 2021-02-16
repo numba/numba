@@ -7,10 +7,10 @@ from llvmlite import ir
 class TestCudaConstString(unittest.TestCase):
     def test_const_string(self):
         # These imports are incompatible with CUDASIM
-        from numba.cuda.descriptor import CUDATargetDesc
+        from numba.cuda.descriptor import cuda_target
         from numba.cuda.cudadrv.nvvm import llvm_to_ptx, ADDRSPACE_CONSTANT
 
-        targetctx = CUDATargetDesc.targetctx
+        targetctx = cuda_target.targetctx
         mod = targetctx.create_module("")
         textstring = 'A Little Brown Fox'
         gv0 = targetctx.insert_const_string(mod, textstring)

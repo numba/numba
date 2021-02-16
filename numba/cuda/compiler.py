@@ -113,12 +113,10 @@ class CUDACompiler(CompilerBase):
 
 @global_compiler_lock
 def compile_cuda(pyfunc, return_type, args, debug=False, inline=False):
-    # First compilation will trigger the initialization of the CUDA backend.
-    from .descriptor import CUDATargetDesc
+    from .descriptor import cuda_target
+    typingctx = cuda_target.typingctx
+    targetctx = cuda_target.targetctx
 
-    typingctx = CUDATargetDesc.typingctx
-    targetctx = CUDATargetDesc.targetctx
-    # TODO handle debug flag
     flags = compiler.Flags()
     # Do not compile (generate native code), just lower (to LLVM)
     flags.set('no_compile')
@@ -331,7 +329,7 @@ def compile_device_template(pyfunc, debug=False, inline=False, opt=True):
     """Create a DeviceFunctionTemplate object and register the object to
     the CUDA typing context.
     """
-    from .descriptor import CUDATargetDesc
+    from .descriptor import cuda_target
 
     dft = DeviceFunctionTemplate(pyfunc, debug=debug, inline=inline, opt=opt)
 
@@ -357,7 +355,7 @@ def compile_device_template(pyfunc, debug=False, inline=False, opt=True):
             }
             return info
 
-    typingctx = CUDATargetDesc.typingctx
+    typingctx = cuda_target.typingctx
     typingctx.insert_user_function(dft, device_function_template)
     return dft
 
@@ -367,10 +365,9 @@ def compile_device(pyfunc, return_type, args, inline=True, debug=False):
 
 
 def declare_device_function(name, restype, argtypes):
-    from .descriptor import CUDATargetDesc
-
-    typingctx = CUDATargetDesc.typingctx
-    targetctx = CUDATargetDesc.targetctx
+    from .descriptor import cuda_target
+    typingctx = cuda_target.typingctx
+    targetctx = cuda_target.targetctx
     sig = typing.signature(restype, *argtypes)
     extfn = ExternFunction(name, sig)
 
@@ -955,9 +952,9 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         self.targetoptions['extensions'] = \
             list(self.targetoptions.get('extensions', []))
 
-        from .descriptor import CUDATargetDesc
+        from .descriptor import cuda_target
 
-        self.typingctx = CUDATargetDesc.typingctx
+        self.typingctx = cuda_target.typingctx
 
         self._tm = default_type_manager
 
