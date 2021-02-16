@@ -483,7 +483,10 @@ class DeviceNDArray(DeviceNDArrayBase):
         """
         :return: an `numpy.ndarray`, so copies to the host.
         """
-        return self.copy_to_host().__array__(dtype)
+        if dtype:
+            return self.copy_to_host().__array__(dtype)
+        else:
+            return self.copy_to_host().__array__()
 
     def __len__(self):
         return self.shape[0]
