@@ -283,13 +283,25 @@ class Lower(BaseLower):
         func_ir = self.func_ir
         blocks = func_ir.blocks
         var_assign_map = defaultdict(int)
-        for blk in blocks.values():
+        def_block = {}
+
+        for off, blk in sorted(blocks.items()):
             for stmt in blk.body:
                 if isinstance(stmt, ir.Assign):
-                    var_assign_map[stmt.target.name] += 1
-        self._singlely_assigned_vars = frozenset(
-            {k for k, v in var_assign_map.items() if v == 1},
-        )
+                    varname = stmt.target.name
+                    var_assign_map[varname] += 1
+                    def_block[varname] = off
+
+        sav = {k for k, v in var_assign_map.items() if v == 1}
+
+        for off, blk in sorted(blocks.items()):
+            for stmt in blk.body:
+                for v in stmt.list_vars():
+                    varname = v.name
+                    if varname in sav and def_block[varname] != off:
+                        sav.discard(varname)
+
+        self._singlely_assigned_vars = sav
         self._blk_local_varmap = {}
 
     def pre_block(self, block):
@@ -1273,6 +1285,7 @@ class Lower(BaseLower):
         Get a pointer to the given variable's slot.
         """
         assert name not in self._blk_local_varmap
+        assert name not in self._singlely_assigned_vars
         return self.varmap[name]
 
     def loadvar(self, name):
@@ -1317,6 +1330,11 @@ class Lower(BaseLower):
         Delete the given variable.
         """
         fetype = self.typeof(name)
+
+        # Out-of-order
+        if name not in self._blk_local_varmap:
+            if name in self._singlely_assigned_vars:
+                self._singlely_assigned_vars.discard(name)
 
         # Define if not already (may happen if the variable is deleted
         # at the beginning of a loop, but only set later in the loop)
