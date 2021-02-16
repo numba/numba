@@ -14,9 +14,13 @@ from numba.core.typing.templates import AbstractTemplate, ConcreteTemplate
 from numba.core import (types, typing, utils, funcdesc, serialize, config,
                         compiler, sigutils)
 from numba.core.typeconv.rules import default_type_manager
+from numba.core.compiler import CompilerBase, DefaultPassBuilder
 from numba.core.compiler_lock import global_compiler_lock
+from numba.core.compiler_machinery import (LoweringPass, PassManager,
+                                           register_pass)
 from numba.core.dispatcher import OmittedArg
 from numba.core.errors import NumbaDeprecationWarning
+from numba.core.typed_passes import IRLegalization, NativeLowering
 from numba.core.typing.typeof import Purpose, typeof
 from warnings import warn
 import numba
@@ -26,6 +30,73 @@ from .cudadrv import nvvm, driver
 from .errors import missing_launch_config_msg, normalize_kernel_dimensions
 from .api import get_current_device
 from .args import wrap_arg
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class CUDABackend(LoweringPass):
+
+    _name = "cuda_backend"
+
+    def __init__(self):
+        LoweringPass.__init__(self)
+
+    def run_pass(self, state):
+        """
+        Back-end: Generate LLVM IR from Numba IR, compile to machine code
+        """
+        lowered = state['cr']
+        signature = typing.signature(state.return_type, *state.args)
+
+        from numba.core.compiler import compile_result
+        state.cr = compile_result(
+            typing_context=state.typingctx,
+            target_context=state.targetctx,
+#            entry_point=lowered.cfunc,
+#            typing_error=state.status.fail_reason,
+#            type_annotation=state.type_annotation,
+#            library=state.library,
+#            call_helper=lowered.call_helper,
+            signature=signature,
+#            objectmode=False,
+#            lifted=state.lifted,
+            fndesc=lowered.fndesc,
+#            environment=lowered.env,
+#            metadata=state.metadata,
+#            reload_init=state.reload_init,
+            ir_module=lowered.ir_module
+        )
+        return True
+
+
+class CUDACompiler(CompilerBase):
+    def define_pipelines(self):
+        dpb = DefaultPassBuilder
+        pm = PassManager('cuda')
+
+        untyped_passes = dpb.define_untyped_pipeline(self.state)
+        pm.passes.extend(untyped_passes.passes)
+
+        typed_passes = dpb.define_typed_pipeline(self.state)
+        pm.passes.extend(typed_passes.passes)
+
+        lowering_passes = self.define_cuda_lowering_pipeline(self.state)
+        pm.passes.extend(lowering_passes.passes)
+
+        pm.finalize()
+        return [pm]
+
+    def define_cuda_lowering_pipeline(self, state):
+        pm = PassManager('cuda_lowering')
+        # legalise
+        pm.add_pass(IRLegalization,
+                    "ensure IR is legal prior to lowering")
+
+        # lower
+        pm.add_pass(NativeLowering, "native lowering")
+        pm.add_pass(CUDABackend, "cuda backend")
+
+        pm.finalize()
+        return pm
 
 
 @global_compiler_lock
@@ -52,10 +123,12 @@ def compile_cuda(pyfunc, return_type, args, debug=False, inline=False):
                                   args=args,
                                   return_type=return_type,
                                   flags=flags,
-                                  locals={})
+                                  locals={},
+                                  pipeline_class=CUDACompiler)
 
-    library = cres.library
-    library.finalize()
+    #from pudb import set_trace; set_trace()
+    #library = cres.library
+    #library.finalize()
 
     return cres
 
@@ -93,14 +166,16 @@ def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
     cres = compile_cuda(pyfunc, None, args, debug=debug)
     resty = cres.signature.return_type
     if device:
-        llvm_module = cres.library._final_module
-        nvvm.fix_data_layout(llvm_module)
+        # Not sure fixing data layout necessary anymore?
+        #nvvm.fix_data_layout(cres.ir_module)
+        llvm_module = cres.ir_module
     else:
         fname = cres.fndesc.llvm_func_name
         tgt = cres.target_context
-        lib, kernel = tgt.prepare_cuda_kernel(cres.library, fname,
-                                              cres.signature.args, debug=debug)
-        llvm_module = lib._final_module
+        #lib, _ = 
+        tgt.prepare_cuda_kernel(cres.ir_module, fname, cres.signature.args,
+                                debug=debug)
+        llvm_module = cres.ir_module # lib._final_module
 
     options = {
         'debug': debug,

@@ -358,6 +358,7 @@ class NativeLowering(LoweringPass):
         LoweringPass.__init__(self)
 
     def run_pass(self, state):
+        #from pudb import set_trace; set_trace()
         if state.library is None:
             codegen = state.targetctx.codegen()
             state.library = codegen.create_library(state.func_id.func_qualname)
@@ -389,6 +390,7 @@ class NativeLowering(LoweringPass):
                 lower = lowering.Lower(targetctx, library, fndesc, interp,
                                        metadata=metadata)
                 lower.lower()
+                ir_module = lower.module
                 library.add_ir_module(lower.module)
                 if not flags.no_cpython_wrapper:
                     lower.create_cpython_wrapper(flags.release_gil)
@@ -413,7 +415,8 @@ class NativeLowering(LoweringPass):
             from numba.core.compiler import _LowerResult  # TODO: move this
             if flags.no_compile:
                 state['cr'] = _LowerResult(fndesc, call_helper,
-                                           cfunc=None, env=env)
+                                           cfunc=None, env=env,
+                                           ir_module=ir_module)
             else:
                 # Prepare for execution
                 cfunc = targetctx.get_executable(library, fndesc, env)

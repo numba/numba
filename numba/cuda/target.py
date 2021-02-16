@@ -118,7 +118,7 @@ class CUDATargetContext(BaseContext):
     def mangler(self, name, argtypes):
         return itanium_mangler.mangle(name, argtypes)
 
-    def prepare_cuda_kernel(self, codelib, fname, argtypes, debug):
+    def prepare_cuda_kernel(self, module, fname, argtypes, debug):
         """
         Adapt a code library ``codelib`` with the numba compiled CUDA kernel
         with name ``fname`` and arguments ``argtypes`` for NVVM.
@@ -127,14 +127,15 @@ class CUDATargetContext(BaseContext):
 
         Returns the new code library and the wrapper function.
         """
-        library = self.codegen().create_library('')
-        library.add_linking_library(codelib)
-        wrapper = self.generate_kernel_wrapper(library, fname, argtypes,
-                                               debug=debug)
-        nvvm.fix_data_layout(library._final_module)
-        return library, wrapper
+        #from pudb import set_trace; set_trace()
+        #library = self.codegen().create_library('')
+        #library.add_linking_library(codelib)
+        #wrapper =
+        self.generate_kernel_wrapper(module, fname, argtypes, debug=debug)
+        #nvvm.fix_data_layout(library._final_module)
+        # return library, wrapper
 
-    def generate_kernel_wrapper(self, library, fname, argtypes, debug):
+    def generate_kernel_wrapper(self, module, fname, argtypes, debug):
         """
         Generate the kernel wrapper in the given ``library``.
         The function being wrapped have the name ``fname`` and argument types
@@ -143,11 +144,11 @@ class CUDATargetContext(BaseContext):
         arginfo = self.get_arg_packer(argtypes)
         argtys = list(arginfo.argument_types)
         wrapfnty = Type.function(Type.void(), argtys)
-        wrapper_module = self.create_module("cuda.kernel.wrapper")
+        wrapper_module = module # self.create_module("cuda.kernel.wrapper")
         fnty = Type.function(Type.int(),
                              [self.call_conv.get_return_type(types.pyobject)]
                              + argtys)
-        func = wrapper_module.add_function(fnty, name=fname)
+        func = wrapper_module.get_or_insert_function(fnty, fname)
 
         prefixed = itanium_mangler.prepend_namespace(func.name, ns='cudapy')
         wrapfn = wrapper_module.add_function(wrapfnty, name=prefixed)
@@ -210,10 +211,10 @@ class CUDATargetContext(BaseContext):
         builder.ret_void()
 
         nvvm.set_cuda_kernel(wrapfn)
-        library.add_ir_module(wrapper_module)
-        library.finalize()
-        wrapfn = library.get_function(wrapfn.name)
-        return wrapfn
+        #library.add_ir_module(wrapper_module)
+        #library.finalize()
+        #wrapfn = library.get_function(wrapfn.name)
+        #return wrapfn
 
     def make_constant_array(self, builder, aryty, arr):
         """
