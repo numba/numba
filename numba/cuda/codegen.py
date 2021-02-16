@@ -11,6 +11,11 @@ CUDA_TRIPLE = {32: 'nvptx-nvidia-cuda',
 
 
 class CUDACodeLibrary(CodeLibrary):
+
+    def __init__(self, codegen, name):
+        super().__init__(codegen, name)
+        self.modules = []
+
     # We don't optimize the IR at the function or module level because it is
     # optimized by NVVM after we've passed it on.
 
@@ -30,6 +35,25 @@ class CUDACodeLibrary(CodeLibrary):
         # Return nothing: we can only dump assembly code when it is later
         # generated (in numba.cuda.compiler).
         return None
+
+    def add_ir_module(self, mod):
+        #from pudb import set_trace; set_trace()
+        self.modules.append(mod)
+        # XXX: Can I delete this?
+        super().add_ir_module(mod)
+
+    def add_linking_library(self, library):
+        #from pudb import set_trace; set_trace()
+        for mod in library.modules:
+            self.modules.append(mod)
+
+#        self._linking_libraries.append(library)
+    #    # We do nothing here because we're not linking things
+    #    print(f"Warning, linking {library}")
+
+    def finalize(self):
+        # Reminder to step into this and see what goes wrong
+        super().finalize()
 
 
 class JITCUDACodegen(BaseCPUCodegen):

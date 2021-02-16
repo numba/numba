@@ -32,6 +32,17 @@ from .api import get_current_device
 from .args import wrap_arg
 
 
+class Dummy:
+    def __init__(self, i):
+        self.i = i
+
+    def __repr__(self):
+        return f"Dummy({self.i})"
+
+    def __str__(self):
+        return repr(self)
+
+
 @register_pass(mutates_CFG=True, analysis_only=False)
 class CUDABackend(LoweringPass):
 
@@ -47,22 +58,24 @@ class CUDABackend(LoweringPass):
         lowered = state['cr']
         signature = typing.signature(state.return_type, *state.args)
 
+        #from pudb import set_trace; set_trace()
+
         from numba.core.compiler import compile_result
         state.cr = compile_result(
             typing_context=state.typingctx,
             target_context=state.targetctx,
-#            entry_point=lowered.cfunc,
-#            typing_error=state.status.fail_reason,
-#            type_annotation=state.type_annotation,
-#            library=state.library,
-#            call_helper=lowered.call_helper,
+            entry_point=Dummy('lowered.cfunc'),
+            typing_error=state.status.fail_reason,
+            type_annotation=Dummy('state.type_annotation'),
+            library=state.library,
+            call_helper=Dummy('lowered.call_helper'),
             signature=signature,
-#            objectmode=False,
-#            lifted=state.lifted,
+            objectmode=Dummy('False'),
+            lifted=Dummy('state.lifted'),
             fndesc=lowered.fndesc,
-#            environment=lowered.env,
-#            metadata=state.metadata,
-#            reload_init=state.reload_init,
+            environment=Dummy('lowered.env'),
+            metadata=Dummy('state.metadata'),
+            reload_init=Dummy('state.reload_init'),
             ir_module=lowered.ir_module
         )
         return True
@@ -579,6 +592,7 @@ class _Kernel(serialize.ReduceMixin):
                  fastmath=False, extensions=None, max_registers=None, opt=True):
         super().__init__()
 
+        #from pudb import set_trace; set_trace()
         self.py_func = py_func
         self.argtypes = argtypes
         self.debug = debug
@@ -599,7 +613,7 @@ class _Kernel(serialize.ReduceMixin):
             'opt': 3 if opt else 0
         }
 
-        llvm_ir = str(cres.ir_module)
+        llvm_ir = [str(mod) for mod in cres.library.modules]
         pretty_name = cres.fndesc.qualname
         ptx = CachedPTX(pretty_name, llvm_ir, options=options)
 

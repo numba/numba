@@ -191,6 +191,9 @@ class CompilationUnit(object):
          - The buffer should contain an NVVM module IR either in the bitcode
            representation (LLVM3.0) or in the text representation.
         """
+        #if buffer[:4] != b'BC\xc0\xde':
+        #    print(buffer.decode())
+        #from pudb import set_trace; set_trace()
         err = self.driver.nvvmAddModuleToProgram(self._handle, buffer,
                                                  len(buffer), None)
         self.driver.check_error(err, 'Failed to add module')
@@ -662,13 +665,18 @@ def llvm_to_ptx(llvmir, **opts):
     cu = CompilationUnit()
     libdevice = LibDevice(arch=opts.get('arch', 'compute_20'))
 
-    llvmir = llvm_replace(llvmir)
-    cu.add_module(llvmir.encode('utf8'))
+    #from pudb import set_trace; set_trace()
+
+    for mod in llvmir:
+        mod = llvm_replace(mod)
+        cu.add_module(mod.encode('utf8'))
     cu.add_module(libdevice.get())
 
     ptx = cu.compile(**opts)
     # XXX remove debug_pubnames seems to be necessary sometimes
-    return patch_ptx_debug_pubnames(ptx)
+    res = patch_ptx_debug_pubnames(ptx)
+    #print(res.decode())
+    return res
 
 
 def patch_ptx_debug_pubnames(ptx):
