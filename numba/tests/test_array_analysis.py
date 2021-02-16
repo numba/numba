@@ -49,7 +49,6 @@ GVAL = (1.2,)
 GVAL2 = (3, 4)
 
 
-
 class TestEquivSet(TestCase):
 
     """
@@ -1035,7 +1034,7 @@ class TestArrayAnalysisParallelRequired(TestCase):
 
     @skip_unsupported
     def test_global_tuple(self):
-        """make sure a gobal value with non-integers does not cause errors
+        """make sure a global tuple with non-integer values does not cause errors
         (test for #6726).
         """
 
