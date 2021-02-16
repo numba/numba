@@ -131,7 +131,8 @@ class CUDATargetContext(BaseContext):
         #library = self.codegen().create_library('')
         #library.add_linking_library(codelib)
         #wrapper =
-        self.generate_kernel_wrapper(module, fname, argtypes, debug=debug)
+        return self.generate_kernel_wrapper(module, fname, argtypes,
+                                            debug=debug)
         #nvvm.fix_data_layout(library._final_module)
         # return library, wrapper
 
@@ -214,7 +215,7 @@ class CUDATargetContext(BaseContext):
         #library.add_ir_module(wrapper_module)
         #library.finalize()
         #wrapfn = library.get_function(wrapfn.name)
-        #return wrapfn
+        return wrapfn
 
     def make_constant_array(self, builder, aryty, arr):
         """

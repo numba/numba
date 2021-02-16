@@ -589,10 +589,9 @@ class _Kernel(serialize.ReduceMixin):
                             inline=inline)
         fname = cres.fndesc.llvm_func_name
         args = cres.signature.args
-        lib, kernel = cres.target_context.prepare_cuda_kernel(cres.library,
-                                                              fname,
-                                                              args,
-                                                              debug=self.debug)
+        kernel = cres.target_context.prepare_cuda_kernel(cres.ir_module, fname,
+                                                         args,
+                                                         debug=self.debug)
 
         options = {
             'debug': self.debug,
@@ -600,7 +599,7 @@ class _Kernel(serialize.ReduceMixin):
             'opt': 3 if opt else 0
         }
 
-        llvm_ir = str(lib._final_module)
+        llvm_ir = str(cres.ir_module)
         pretty_name = cres.fndesc.qualname
         ptx = CachedPTX(pretty_name, llvm_ir, options=options)
 
