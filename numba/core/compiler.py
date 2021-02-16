@@ -28,7 +28,8 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                      NopythonRewrites, PreParforPass,
                                      ParforPass, DumpParforDiagnostics,
                                      IRLegalization, NoPythonBackend,
-                                     InlineOverloads, PreLowerStripPhis)
+                                     InlineOverloads, PreLowerStripPhis,
+                                     NativeLowering)
 
 from numba.core.object_mode_passes import (ObjectModeFrontEnd,
                                            ObjectModeBackEnd)
@@ -476,6 +477,7 @@ class DefaultPassBuilder(object):
                     "ensure IR is legal prior to lowering")
 
         # lower
+        pm.add_pass(NativeLowering, "native lowering")
         pm.add_pass(NoPythonBackend, "nopython mode backend")
         pm.add_pass(DumpParforDiagnostics, "dump parfor diagnostics")
         pm.finalize()
