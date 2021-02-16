@@ -10,6 +10,7 @@ from numba.core.errors import (LoweringError, new_error_context, TypingError,
                                LiteralTypingError, UnsupportedError)
 from numba.core.funcdesc import default_mangler
 from numba.core.environment import Environment
+from numba.core.analysis import compute_use_defs
 
 
 _VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
@@ -282,24 +283,30 @@ class Lower(BaseLower):
     def _find_singlely_assigned_variable(self):
         func_ir = self.func_ir
         blocks = func_ir.blocks
-        var_assign_map = defaultdict(int)
-        def_block = {}
 
-        for off, blk in sorted(blocks.items()):
-            for stmt in blk.body:
-                if isinstance(stmt, ir.Assign):
-                    varname = stmt.target.name
-                    var_assign_map[varname] += 1
-                    def_block[varname] = off
+        sav = set()
 
-        sav = {k for k, v in var_assign_map.items() if v == 1}
+        if not self.func_ir.func_id.is_generator:
+            use_defs = compute_use_defs(blocks)
 
-        for off, blk in sorted(blocks.items()):
-            for stmt in blk.body:
-                for v in stmt.list_vars():
-                    varname = v.name
-                    if varname in sav and def_block[varname] != off:
-                        sav.discard(varname)
+            # Compute where variables are defined
+            var_assign_map = defaultdict(set)
+            for blk, vl in use_defs.defmap.items():
+                for var in vl:
+                    var_assign_map[var].add(blk)
+
+            # Compute where variables are used
+            var_use_map = defaultdict(set)
+            for blk, vl in use_defs.usemap.items():
+                for var in vl:
+                    var_use_map[var].add(blk)
+
+            # Keep only variable that are defined locally and used locally
+            for var in var_assign_map:
+                if len(var_assign_map[var]) == 1:
+                    # Usemap do not keep locally defined variables.
+                    if len(var_use_map[var]) == 0:
+                        sav.add(var)
 
         self._singlely_assigned_vars = sav
         self._blk_local_varmap = {}
