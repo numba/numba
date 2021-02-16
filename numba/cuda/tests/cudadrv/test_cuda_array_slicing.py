@@ -266,6 +266,7 @@ class CudaArraySetting(CUDATestCase):
         np.testing.assert_array_equal(darr.copy_to_host(), arr)
 
     def test_array_assign_all(self):
+        #from pudb import set_trace; set_trace()
         arr = np.arange(5 * 7).reshape(5, 7)
         darr = cuda.to_device(arr)
         _400 = np.full(shape=(5, 7), fill_value=400)

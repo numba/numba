@@ -198,7 +198,7 @@ def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
     cc = cc or config.CUDA_DEFAULT_PTX_CC
     opt = 3 if opt else 0
     arch = nvvm.get_arch_option(*cc)
-    llvmir = str(llvm_module)
+    llvmir = [str(llvm_module)]
     ptx = nvvm.llvm_to_ptx(llvmir, opt=opt, arch=arch, **options)
     return ptx.decode('utf-8'), resty
 

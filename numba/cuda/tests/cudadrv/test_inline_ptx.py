@@ -27,7 +27,7 @@ class TestCudaInlineAsm(ContextResettingTestCase):
         nvvm.fix_data_layout(mod)
         nvvm.set_cuda_kernel(fn)
         nvvmir = str(mod)
-        ptx = nvvm.llvm_to_ptx(nvvmir)
+        ptx = nvvm.llvm_to_ptx([nvvmir])
         self.assertTrue('rsqrt.approx.f32' in str(ptx))
 
 

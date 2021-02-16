@@ -22,7 +22,7 @@ class TestNvvmDriver(unittest.TestCase):
 
     def test_nvvm_compile_simple(self):
         nvvmir = self.get_nvvmir()
-        ptx = llvm_to_ptx(nvvmir).decode('utf8')
+        ptx = llvm_to_ptx([nvvmir]).decode('utf8')
         self.assertTrue('simple' in ptx)
         self.assertTrue('ave' in ptx)
 
@@ -35,7 +35,7 @@ class TestNvvmDriver(unittest.TestCase):
         set_cuda_kernel(kernel)
 
         fix_data_layout(m)
-        ptx = llvm_to_ptx(str(m)).decode('utf8')
+        ptx = llvm_to_ptx([str(m)]).decode('utf8')
         self.assertTrue('mycudakernel' in ptx)
         if is64bit:
             self.assertTrue('.address_size 64' in ptx)
@@ -45,7 +45,7 @@ class TestNvvmDriver(unittest.TestCase):
     def _test_nvvm_support(self, arch):
         compute_xx = 'compute_{0}{1}'.format(*arch)
         nvvmir = self.get_nvvmir()
-        ptx = llvm_to_ptx(nvvmir, arch=compute_xx, ftz=1, prec_sqrt=0,
+        ptx = llvm_to_ptx([nvvmir], arch=compute_xx, ftz=1, prec_sqrt=0,
                           prec_div=0).decode('utf8')
         self.assertIn(".target sm_{0}{1}".format(*arch), ptx)
         self.assertIn('simple', ptx)

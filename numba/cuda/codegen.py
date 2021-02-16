@@ -45,7 +45,8 @@ class CUDACodeLibrary(CodeLibrary):
     def add_linking_library(self, library):
         #from pudb import set_trace; set_trace()
         for mod in library.modules:
-            self.modules.append(mod)
+            if mod not in self.modules:
+                self.modules.append(mod)
 
 #        self._linking_libraries.append(library)
     #    # We do nothing here because we're not linking things
