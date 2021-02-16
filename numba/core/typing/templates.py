@@ -736,7 +736,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         if ovf_result is None:
             # No implementation => fail typing
             self._impl_cache[cache_key] = None, None
-            return None, None
+            return None, None, False
         elif isinstance(ovf_result, tuple):
             # The implementation returned a signature that the type-inferencer
             # should be using.
