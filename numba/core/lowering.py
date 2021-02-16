@@ -170,9 +170,6 @@ class BaseLower(object):
         # Run target specific post lowering transformation
         self.context.post_lowering(self.module, self.library)
 
-        # Materialize LLVM Module
-        self.library.add_ir_module(self.module)
-
     def extract_function_arguments(self):
         self.fnargs = self.call_conv.decode_arguments(self.builder,
                                                       self.fndesc.argtypes,
