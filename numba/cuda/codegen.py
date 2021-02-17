@@ -14,7 +14,8 @@ class CUDACodeLibrary(CodeLibrary):
 
     def __init__(self, codegen, name):
         super().__init__(codegen, name)
-        self.modules = []
+        self._module = None
+        self._linked_modules = []
 
     # We don't optimize the IR at the function or module level because it is
     # optimized by NVVM after we've passed it on.
@@ -38,32 +39,51 @@ class CUDACodeLibrary(CodeLibrary):
 
     def add_ir_module(self, mod):
         self._raise_if_finalized()
-        self.modules.append(mod)
+        if self._module is not None:
+            raise RuntimeError('CUDACodeLibrary only supports one module')
+        self._module = mod
 
     def add_linking_library(self, library):
         library._ensure_finalized()
+
+        # We don't want to allow linking more libraries in after finalization
+        # because our linked libraries are modified by the finalization, and we
+        # won't be able to finalize again after adding new ones
+        self._raise_if_finalized()
+
         for mod in library.modules:
-            if mod not in self.modules:
-                self.modules.append(mod)
+            if mod not in self._linked_modules:
+                self._linked_modules.append(mod)
 
     def get_function(self, name):
-        for mod in self.modules:
-            for fn in mod.functions:
-                if fn.name == name:
-                    return fn
+        for fn in self._module.functions:
+            if fn.name == name:
+                return fn
         raise KeyError(f'Function {name} not found')
+
+    @property
+    def modules(self):
+        return [self._module] + self._linked_modules
 
     def finalize(self):
         # Unlike the CPUCodeLibrary, we don't invoke the binding layer here -
         # we only adjust the linkage of functions. Global kernels (with
         # external linkage) have their linkage untouched. Device functions are
         # set linkonce_odr to prevent them appearing in the PTX.
+
         self._raise_if_finalized()
 
-        #for mod in self.modules:
-        #    for fn in mod.functions:
-        #        if not fn.is_declaration and fn.linkage != 'external':
-        #            fn.linkage = 'linkonce_odr'
+        # Note in-place modification of the linkage of functions in linked
+        # libraries. This presently causes no issues as only device functions
+        # are shared across code libraries, so they would always need their
+        # linkage set to linkonce_odr. If in a future scenario some code
+        # libraries require linkonce_odr linkage of functions in linked
+        # modules, and another code library requires another linkage, each code
+        # library will need to take its own private copy of its linked modules.
+        for mod in self._linked_modules:
+            for fn in mod.functions:
+                if not fn.is_declaration and fn.linkage != 'external':
+                    fn.linkage = 'linkonce_odr'
 
         self._finalized = True
 
