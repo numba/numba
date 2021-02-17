@@ -586,38 +586,38 @@ def _replace_datalayout(llvmir):
 
 def llvm_replace(llvmir):
     replacements = [
-        ('declare double @"___numba_atomic_double_add"(double* %".1", double %".2")',
+        ('declare double @"___numba_atomic_double_add"(double* %".1", double %".2")',     # noqa: E501
          ir_numba_atomic_binary(T='double', Ti='i64', OP='fadd', FUNC='add')),
-        ('declare float @"___numba_atomic_float_sub"(float* %".1", float %".2")',
+        ('declare float @"___numba_atomic_float_sub"(float* %".1", float %".2")',         # noqa: E501
          ir_numba_atomic_binary(T='float', Ti='i32', OP='fsub', FUNC='sub')),
-        ('declare double @"___numba_atomic_double_sub"(double* %".1", double %".2")',
+        ('declare double @"___numba_atomic_double_sub"(double* %".1", double %".2")',     # noqa: E501
          ir_numba_atomic_binary(T='double', Ti='i64', OP='fsub', FUNC='sub')),
         ('declare i64 @"___numba_atomic_u64_inc"(i64* %".1", i64 %".2")',
          ir_numba_atomic_inc(T='i64', Tu='u64')),
         ('declare i64 @"___numba_atomic_u64_dec"(i64* %".1", i64 %".2")',
          ir_numba_atomic_dec(T='i64', Tu='u64')),
-        ('declare float @"___numba_atomic_float_max"(float* %".1", float %".2")',
+        ('declare float @"___numba_atomic_float_max"(float* %".1", float %".2")',         # noqa: E501
          ir_numba_atomic_minmax(T='float', Ti='i32', NAN='', OP='nnan olt',
                                 PTR_OR_VAL='ptr', FUNC='max')),
-        ('declare double @"___numba_atomic_double_max"(double* %".1", double %".2")',
+        ('declare double @"___numba_atomic_double_max"(double* %".1", double %".2")',     # noqa: E501
          ir_numba_atomic_minmax(T='double', Ti='i64', NAN='', OP='nnan olt',
                                 PTR_OR_VAL='ptr', FUNC='max')),
-        ('declare float @"___numba_atomic_float_min"(float* %".1", float %".2")',
+        ('declare float @"___numba_atomic_float_min"(float* %".1", float %".2")',         # noqa: E501
          ir_numba_atomic_minmax(T='float', Ti='i32', NAN='', OP='nnan ogt',
                                 PTR_OR_VAL='ptr', FUNC='min')),
-        ('declare double @"___numba_atomic_double_min"(double* %".1", double %".2")',
+        ('declare double @"___numba_atomic_double_min"(double* %".1", double %".2")',     # noqa: E501
          ir_numba_atomic_minmax(T='double', Ti='i64', NAN='', OP='nnan ogt',
                                 PTR_OR_VAL='ptr', FUNC='min')),
-        ('declare float @"___numba_atomic_float_nanmax"(float* %".1", float %".2")',
+        ('declare float @"___numba_atomic_float_nanmax"(float* %".1", float %".2")',      # noqa: E501
          ir_numba_atomic_minmax(T='float', Ti='i32', NAN='nan', OP='ult',
                                 PTR_OR_VAL='', FUNC='max')),
-        ('declare double @"___numba_atomic_double_nanmax"(double* %".1", double %".2")',
+        ('declare double @"___numba_atomic_double_nanmax"(double* %".1", double %".2")',  # noqa: E501
          ir_numba_atomic_minmax(T='double', Ti='i64', NAN='nan', OP='ult',
                                 PTR_OR_VAL='', FUNC='max')),
-        ('declare float @"___numba_atomic_float_nanmin"(float* %".1", float %".2")',
+        ('declare float @"___numba_atomic_float_nanmin"(float* %".1", float %".2")',      # noqa: E501
          ir_numba_atomic_minmax(T='float', Ti='i32', NAN='nan', OP='ugt',
                                 PTR_OR_VAL='', FUNC='min')),
-        ('declare double @"___numba_atomic_double_nanmin"(double* %".1", double %".2")',
+        ('declare double @"___numba_atomic_double_nanmin"(double* %".1", double %".2")',  # noqa: E501
          ir_numba_atomic_minmax(T='double', Ti='i64', NAN='nan', OP='ugt',
                                 PTR_OR_VAL='', FUNC='min')),
         ('immarg', '')
@@ -745,22 +745,6 @@ def llvm100_to_70_ir(ir):
             attrs = m.group(1).split()
             attrs = ' '.join(a for a in attrs if a != 'willreturn')
             line = line.replace(m.group(1), attrs)
-
-#        if '!DISubprogram' in line:
-#            # Replace the DISPFlags (LLVM 10.0) with main subprogram DIFlags
-#            # (LLVM 7.0). Example:
-#            #
-#            #     spflags: DISPFlagDefinition | DISPFlagOptimized
-#            #
-#            # becomes:
-#            #
-#            #     isDefinition: true, isOptimized: true
-#            m = re_spflags.search(line)
-#            flags = m.group(1).split(' | ')
-#            new_flags = ", ".join([ '%s: true' % spflagmap[f] for f in flags ])
-#            start_of_line = line[:m.span()[0]]
-#            end_of_line = line[m.span()[1] - 1:]
-#            line = start_of_line + new_flags + end_of_line
 
         buf.append(line)
 

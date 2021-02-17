@@ -48,7 +48,7 @@ class CUDACodeLibrary(CodeLibrary):
         # A CUDACodeLibrary isn't a real CodeLibrary that does any code
         # generation, so expecting to do anything with it after finalization is
         # almost certainly an error.
-        raise RuntimeError('CUDACodeLibraries cannot be finalized')
+        raise RuntimeError('CUDACodeLibrary cannot be finalized')
 
 
 class JITCUDACodegen(BaseCPUCodegen):
