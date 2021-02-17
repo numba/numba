@@ -746,21 +746,21 @@ def llvm100_to_70_ir(ir):
             attrs = ' '.join(a for a in attrs if a != 'willreturn')
             line = line.replace(m.group(1), attrs)
 
-        if '!DISubprogram' in line:
-            # Replace the DISPFlags (LLVM 10.0) with main subprogram DIFlags
-            # (LLVM 7.0). Example:
-            #
-            #     spflags: DISPFlagDefinition | DISPFlagOptimized
-            #
-            # becomes:
-            #
-            #     isDefinition: true, isOptimized: true
-            m = re_spflags.search(line)
-            flags = m.group(1).split(' | ')
-            new_flags = ", ".join([ '%s: true' % spflagmap[f] for f in flags ])
-            start_of_line = line[:m.span()[0]]
-            end_of_line = line[m.span()[1] - 1:]
-            line = start_of_line + new_flags + end_of_line
+#        if '!DISubprogram' in line:
+#            # Replace the DISPFlags (LLVM 10.0) with main subprogram DIFlags
+#            # (LLVM 7.0). Example:
+#            #
+#            #     spflags: DISPFlagDefinition | DISPFlagOptimized
+#            #
+#            # becomes:
+#            #
+#            #     isDefinition: true, isOptimized: true
+#            m = re_spflags.search(line)
+#            flags = m.group(1).split(' | ')
+#            new_flags = ", ".join([ '%s: true' % spflagmap[f] for f in flags ])
+#            start_of_line = line[:m.span()[0]]
+#            end_of_line = line[m.span()[1] - 1:]
+#            line = start_of_line + new_flags + end_of_line
 
         buf.append(line)
 
