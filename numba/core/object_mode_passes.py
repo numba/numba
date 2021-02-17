@@ -84,11 +84,13 @@ class ObjectModeBackEnd(LoweringPass):
             del lower
         from numba.core.compiler import _LowerResult  # TODO: move this
         if flags.no_compile:
-            return _LowerResult(fndesc, call_helper, cfunc=None, env=env)
+            return _LowerResult(fndesc, call_helper, cfunc=None, env=env,
+                                ir_module=None)
         else:
             # Prepare for execution
             cfunc = targetctx.get_executable(library, fndesc, env)
-            return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=env)
+            return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=env,
+                                ir_module=None)
 
     def run_pass(self, state):
         """
