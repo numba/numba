@@ -621,7 +621,10 @@ class _Kernel(serialize.ReduceMixin):
             link = []
 
         # A kernel needs cooperative launch if grid_sync is being used.
-        self.cooperative = 'cudaCGGetIntrinsicHandle' in ptx.llvmir
+        self.cooperative = False
+        for ir in ptx.llvmir:
+            if 'cudaCGGetIntrinsicHandle' in ir:
+                self.cooperative = True
         # We need to link against cudadevrt if grid sync is being used.
         if self.cooperative:
             link.append(get_cudalib('cudadevrt', static=True))
