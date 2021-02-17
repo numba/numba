@@ -32,17 +32,6 @@ from .api import get_current_device
 from .args import wrap_arg
 
 
-class Dummy:
-    def __init__(self, i):
-        self.i = i
-
-    def __repr__(self):
-        return f"Dummy({self.i})"
-
-    def __str__(self):
-        return repr(self)
-
-
 @register_pass(mutates_CFG=True, analysis_only=False)
 class CUDABackend(LoweringPass):
 
@@ -53,29 +42,21 @@ class CUDABackend(LoweringPass):
 
     def run_pass(self, state):
         """
-        Back-end: Generate LLVM IR from Numba IR, compile to machine code
+        Back-end: Generate LLVM IR from Numba IR
         """
         lowered = state['cr']
         signature = typing.signature(state.return_type, *state.args)
-
-        #from pudb import set_trace; set_trace()
 
         from numba.core.compiler import compile_result
         state.cr = compile_result(
             typing_context=state.typingctx,
             target_context=state.targetctx,
-            entry_point=Dummy('lowered.cfunc'),
             typing_error=state.status.fail_reason,
-            type_annotation=Dummy('state.type_annotation'),
+            type_annotation=state.type_annotation,
             library=state.library,
             call_helper=lowered.call_helper,
             signature=signature,
-            objectmode=Dummy('False'),
-            lifted=Dummy('state.lifted'),
             fndesc=lowered.fndesc,
-            environment=Dummy('lowered.env'),
-            metadata=Dummy('state.metadata'),
-            reload_init=Dummy('state.reload_init'),
         )
         return True
 
