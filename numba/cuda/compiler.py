@@ -117,10 +117,6 @@ def compile_cuda(pyfunc, return_type, args, debug=False, inline=False):
                                   locals={},
                                   pipeline_class=CUDACompiler)
 
-    #from pudb import set_trace; set_trace()
-    #library = cres.library
-    #library.finalize()
-
     return cres
 
 
@@ -563,7 +559,6 @@ class _Kernel(serialize.ReduceMixin):
                  fastmath=False, extensions=None, max_registers=None, opt=True):
         super().__init__()
 
-        #from pudb import set_trace; set_trace()
         self.py_func = py_func
         self.argtypes = argtypes
         self.debug = debug
