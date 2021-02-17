@@ -651,6 +651,9 @@ def llvm_replace(llvmir):
 
 
 def llvm_to_ptx(llvmir, **opts):
+    if isinstance(llvmir, str):
+        llvmir = [llvmir]
+
     if opts.pop('fastmath', False):
         opts.update({
             'ftz': True,

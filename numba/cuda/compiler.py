@@ -14,7 +14,8 @@ from numba.core.typing.templates import AbstractTemplate, ConcreteTemplate
 from numba.core import (types, typing, utils, funcdesc, serialize, config,
                         compiler, sigutils)
 from numba.core.typeconv.rules import default_type_manager
-from numba.core.compiler import CompilerBase, DefaultPassBuilder
+from numba.core.compiler import (CompilerBase, DefaultPassBuilder,
+                                 compile_result)
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.compiler_machinery import (LoweringPass, PassManager,
                                            register_pass)
@@ -42,12 +43,11 @@ class CUDABackend(LoweringPass):
 
     def run_pass(self, state):
         """
-        Back-end: Generate LLVM IR from Numba IR
+        Back-end: Packages lowering output in a compile result
         """
         lowered = state['cr']
         signature = typing.signature(state.return_type, *state.args)
 
-        from numba.core.compiler import compile_result
         state.cr = compile_result(
             typing_context=state.typingctx,
             target_context=state.targetctx,
@@ -154,9 +154,9 @@ def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
     resty = cres.signature.return_type
     if not device:
         fname = cres.fndesc.llvm_func_name
+        args = cres.signature.args
         tgt = cres.target_context
-        kernel = tgt.generate_kernel_wrapper(fname, cres.signature.args,
-                                             debug=debug)
+        kernel = tgt.generate_kernel_wrapper(fname, args, debug=debug)
         cres.library.add_ir_module(kernel.module)
 
     options = {
@@ -283,13 +283,15 @@ class DeviceFunctionTemplate(serialize.ReduceMixin):
         ----------
         args: tuple[Type]
             Argument types.
-        nvvm_options : dict; optional
-            See `CompilationUnit.compile` in `numba/cuda/cudadrv/nvvm.py`.
 
         Returns
         -------
         ptx : bytes
         """
+        if nvvm_options:
+            msg = 'nvvm_options kwarg for inspect_ptx is deprecated'
+            warn(msg, category=NumbaDeprecationWarning)
+
         llvmir = self.inspect_llvm(args)
         # Make PTX
         cuctx = get_context()
@@ -297,7 +299,7 @@ class DeviceFunctionTemplate(serialize.ReduceMixin):
         cc = device.compute_capability
         arch = nvvm.get_arch_option(*cc)
         opt = 3 if self.opt else 0
-        ptx = nvvm.llvm_to_ptx([llvmir], opt=opt, arch=arch, **nvvm_options)
+        ptx = nvvm.llvm_to_ptx(llvmir, opt=opt, arch=arch, **nvvm_options)
         return ptx
 
 
@@ -564,14 +566,12 @@ class _Kernel(serialize.ReduceMixin):
         self.debug = debug
         self.extensions = extensions or []
 
-        cres = compile_cuda(self.py_func, types.void, self.argtypes,
-                            debug=self.debug,
+        cres = compile_cuda(py_func, types.void, argtypes, debug=debug,
                             inline=inline)
         fname = cres.fndesc.llvm_func_name
         args = cres.signature.args
-
-        kernel = cres.target_context.generate_kernel_wrapper(fname, args,
-                                                             debug=self.debug)
+        tgt = cres.target_context
+        kernel = tgt.generate_kernel_wrapper(fname, args, debug=self.debug)
         cres.library.add_ir_module(kernel.module)
 
         options = {
