@@ -424,7 +424,7 @@ class NativeLowering(LoweringPass):
                 # We also register its library to allow for inlining.
                 targetctx.insert_user_function(cfunc, fndesc, [library])
                 state['cr'] = _LowerResult(fndesc, call_helper,
-                                           cfunc=cfunc, env=env)
+                                           cfunc=cfunc, env=env, ir_module=None)
 
             # capture pruning stats
             post_stats = llvm.passmanagers.dump_refprune_stats()

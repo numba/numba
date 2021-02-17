@@ -183,6 +183,7 @@ class TestCudaIntrinsic(CUDATestCase):
         compiled[nctaid, ntid](ary)
         self.assertEqual(ary[0], nctaid * ntid)
 
+    @unittest.skip('twice as many bra insts due to presence of device func')
     @skip_on_cudasim('Tests PTX emission')
     def test_selp(self):
         sig = 'void(i8[:], i8, i8[:])'
