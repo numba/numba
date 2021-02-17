@@ -37,24 +37,18 @@ class CUDACodeLibrary(CodeLibrary):
         return None
 
     def add_ir_module(self, mod):
-        #from pudb import set_trace; set_trace()
         self.modules.append(mod)
-        # XXX: Can I delete this?
-        super().add_ir_module(mod)
 
     def add_linking_library(self, library):
-        #from pudb import set_trace; set_trace()
         for mod in library.modules:
             if mod not in self.modules:
                 self.modules.append(mod)
 
-#        self._linking_libraries.append(library)
-    #    # We do nothing here because we're not linking things
-    #    print(f"Warning, linking {library}")
-
     def finalize(self):
-        # Reminder to step into this and see what goes wrong
-        super().finalize()
+        # A CUDACodeLibrary isn't a real CodeLibrary that does any code
+        # generation, so expecting to do anything with it after finalization is
+        # almost certainly an error.
+        raise RuntimeError('CUDACodeLibraries cannot be finalized')
 
 
 class JITCUDACodegen(BaseCPUCodegen):

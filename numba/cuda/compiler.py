@@ -297,8 +297,7 @@ class DeviceFunctionTemplate(serialize.ReduceMixin):
         # been called for the given arguments from a jitted kernel.
         self.compile(args)
         cres = self._compileinfos[args]
-        mod = cres.library._final_module
-        return str(mod)
+        return "\n\n".join([str(mod) for mod in cres.library.modules])
 
     def inspect_ptx(self, args, nvvm_options={}):
         """Returns the PTX compiled for *args* for the currently active GPU

@@ -411,16 +411,16 @@ class NativeLowering(LoweringPass):
 
             from numba.core.compiler import _LowerResult  # TODO: move this
             if flags.no_compile:
-                state['cr'] = _LowerResult(fndesc, call_helper, cfunc=None,
-                                           env=env)
+                state['cr'] = _LowerResult(fndesc, call_helper,
+                                           cfunc=None, env=env)
             else:
                 # Prepare for execution
                 cfunc = targetctx.get_executable(library, fndesc, env)
                 # Insert native function for use by other jitted-functions.
                 # We also register its library to allow for inlining.
                 targetctx.insert_user_function(cfunc, fndesc, [library])
-                state['cr'] = _LowerResult(fndesc, call_helper, cfunc=cfunc,
-                                           env=env)
+                state['cr'] = _LowerResult(fndesc, call_helper,
+                                           cfunc=cfunc, env=env)
 
             # capture pruning stats
             post_stats = llvm.passmanagers.dump_refprune_stats()
