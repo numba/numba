@@ -76,7 +76,6 @@ class CUDABackend(LoweringPass):
             environment=Dummy('lowered.env'),
             metadata=Dummy('state.metadata'),
             reload_init=Dummy('state.reload_init'),
-            ir_module=lowered.ir_module
         )
         return True
 
@@ -178,17 +177,12 @@ def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
     """
     cres = compile_cuda(pyfunc, None, args, debug=debug)
     resty = cres.signature.return_type
-    if device:
-        # Not sure fixing data layout necessary anymore?
-        #nvvm.fix_data_layout(cres.ir_module)
-        llvm_module = cres.ir_module
-    else:
+    if not device:
         fname = cres.fndesc.llvm_func_name
         tgt = cres.target_context
-        #lib, _ = 
-        tgt.prepare_cuda_kernel(cres.ir_module, fname, cres.signature.args,
-                                debug=debug)
-        llvm_module = cres.ir_module # lib._final_module
+        kernel = tgt.generate_kernel_wrapper(fname, cres.signature.args,
+                                             debug=debug)
+        cres.library.add_ir_module(kernel.module)
 
     options = {
         'debug': debug,
@@ -198,7 +192,7 @@ def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
     cc = cc or config.CUDA_DEFAULT_PTX_CC
     opt = 3 if opt else 0
     arch = nvvm.get_arch_option(*cc)
-    llvmir = [str(llvm_module)]
+    llvmir = [str(mod) for mod in cres.library.modules]
     ptx = nvvm.llvm_to_ptx(llvmir, opt=opt, arch=arch, **options)
     return ptx.decode('utf-8'), resty
 
@@ -603,9 +597,10 @@ class _Kernel(serialize.ReduceMixin):
                             inline=inline)
         fname = cres.fndesc.llvm_func_name
         args = cres.signature.args
-        kernel = cres.target_context.prepare_cuda_kernel(cres.ir_module, fname,
-                                                         args,
-                                                         debug=self.debug)
+
+        kernel = cres.target_context.generate_kernel_wrapper(fname, args,
+                                                             debug=self.debug)
+        cres.library.add_ir_module(kernel.module)
 
         options = {
             'debug': self.debug,

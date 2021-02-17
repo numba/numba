@@ -92,8 +92,6 @@ CR_FIELDS = ["typing_context",
              # (i.e cache load).
              "reload_init",
              "referenced_envs",
-             # llvmlite IR-level module
-             "ir_module",
              ]
 
 
@@ -180,7 +178,6 @@ _LowerResult = namedtuple("_LowerResult", [
     "call_helper",
     "cfunc",
     "env",
-    "ir_module",
 ])
 
 

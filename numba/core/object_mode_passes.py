@@ -76,7 +76,6 @@ class ObjectModeBackEnd(LoweringPass):
         with targetctx.push_code_library(library):
             lower = pylowering.PyLower(targetctx, library, fndesc, interp)
             lower.lower()
-            library.add_ir_module(lower.module)
             if not flags.no_cpython_wrapper:
                 lower.create_cpython_wrapper()
             env = lower.env
@@ -84,13 +83,11 @@ class ObjectModeBackEnd(LoweringPass):
             del lower
         from numba.core.compiler import _LowerResult  # TODO: move this
         if flags.no_compile:
-            return _LowerResult(fndesc, call_helper, cfunc=None, env=env,
-                                ir_module=None)
+            return _LowerResult(fndesc, call_helper, cfunc=None, env=env)
         else:
             # Prepare for execution
             cfunc = targetctx.get_executable(library, fndesc, env)
-            return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=env,
-                                ir_module=None)
+            return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=env)
 
     def run_pass(self, state):
         """
