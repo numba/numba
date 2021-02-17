@@ -117,6 +117,8 @@ def compile_cuda(pyfunc, return_type, args, debug=False, inline=False):
                                   locals={},
                                   pipeline_class=CUDACompiler)
 
+    library = cres.library
+    library.finalize()
     return cres
 
 
@@ -152,12 +154,15 @@ def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
     """
     cres = compile_cuda(pyfunc, None, args, debug=debug)
     resty = cres.signature.return_type
-    if not device:
+
+    if device:
+        llvm_modules = cres.library.modules
+    else:
         fname = cres.fndesc.llvm_func_name
-        args = cres.signature.args
         tgt = cres.target_context
-        kernel = tgt.generate_kernel_wrapper(fname, args, debug=debug)
-        cres.library.add_ir_module(kernel.module)
+        lib, kernel = tgt.prepare_cuda_kernel(cres.library, fname,
+                                              cres.signature.args, debug=debug)
+        llvm_modules = lib.modules
 
     options = {
         'debug': debug,
@@ -167,7 +172,7 @@ def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
     cc = cc or config.CUDA_DEFAULT_PTX_CC
     opt = 3 if opt else 0
     arch = nvvm.get_arch_option(*cc)
-    llvmir = [str(mod) for mod in cres.library.modules]
+    llvmir = [str(mod) for mod in llvm_modules]
     ptx = nvvm.llvm_to_ptx(llvmir, opt=opt, arch=arch, **options)
     return ptx.decode('utf-8'), resty
 
@@ -566,13 +571,15 @@ class _Kernel(serialize.ReduceMixin):
         self.debug = debug
         self.extensions = extensions or []
 
-        cres = compile_cuda(py_func, types.void, argtypes, debug=debug,
+        cres = compile_cuda(self.py_func, types.void, self.argtypes,
+                            debug=debug,
                             inline=inline)
         fname = cres.fndesc.llvm_func_name
         args = cres.signature.args
-        tgt = cres.target_context
-        kernel = tgt.generate_kernel_wrapper(fname, args, debug=self.debug)
-        cres.library.add_ir_module(kernel.module)
+        lib, kernel = cres.target_context.prepare_cuda_kernel(cres.library,
+                                                              fname,
+                                                              args,
+                                                              debug=self.debug)
 
         options = {
             'debug': self.debug,
@@ -580,7 +587,7 @@ class _Kernel(serialize.ReduceMixin):
             'opt': 3 if opt else 0
         }
 
-        llvm_ir = [str(mod) for mod in cres.library.modules]
+        llvm_ir = [str(mod) for mod in lib.modules]
         pretty_name = cres.fndesc.qualname
         ptx = CachedPTX(pretty_name, llvm_ir, options=options)
 

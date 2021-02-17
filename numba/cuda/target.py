@@ -118,10 +118,27 @@ class CUDATargetContext(BaseContext):
     def mangler(self, name, argtypes):
         return itanium_mangler.mangle(name, argtypes)
 
-    def generate_kernel_wrapper(self, fname, argtypes, debug):
+    def prepare_cuda_kernel(self, codelib, fname, argtypes, debug):
         """
-        Generate the kernel wrapper for a function ``fname`` with argument
-        types ``argtypes``. The wrapper function is returned.
+        Adapt a code library ``codelib`` with the numba compiled CUDA kernel
+        with name ``fname`` and arguments ``argtypes`` for NVVM.
+        A new library is created with a wrapper function that can be used as
+        the kernel entry point for the given kernel.
+
+        Returns the new code library and the wrapper function.
+        """
+        library = self.codegen().create_library('')
+        library.add_linking_library(codelib)
+        wrapper = self.generate_kernel_wrapper(library, fname, argtypes,
+                                               debug=debug)
+        nvvm.fix_data_layout(library._final_module)
+        return library, wrapper
+
+    def generate_kernel_wrapper(self, library, fname, argtypes, debug):
+        """
+        Generate the kernel wrapper in the given ``library``.
+        The function being wrapped have the name ``fname`` and argument types
+        ``argtypes``.  The wrapper function is returned.
         """
         arginfo = self.get_arg_packer(argtypes)
         argtys = list(arginfo.argument_types)
@@ -193,6 +210,9 @@ class CUDATargetContext(BaseContext):
         builder.ret_void()
 
         nvvm.set_cuda_kernel(wrapfn)
+        library.add_ir_module(wrapper_module)
+        library.finalize()
+        wrapfn = library.get_function(wrapfn.name)
         return wrapfn
 
     def make_constant_array(self, builder, aryty, arr):

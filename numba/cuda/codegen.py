@@ -37,18 +37,35 @@ class CUDACodeLibrary(CodeLibrary):
         return None
 
     def add_ir_module(self, mod):
+        self._raise_if_finalized()
         self.modules.append(mod)
 
     def add_linking_library(self, library):
+        library._ensure_finalized()
         for mod in library.modules:
             if mod not in self.modules:
                 self.modules.append(mod)
 
+    def get_function(self, name):
+        for mod in self.modules:
+            for fn in mod.functions:
+                if fn.name == name:
+                    return fn
+        raise KeyError(f'Function {name} not found')
+
     def finalize(self):
-        # A CUDACodeLibrary isn't a real CodeLibrary that does any code
-        # generation, so expecting to do anything with it after finalization is
-        # almost certainly an error.
-        raise RuntimeError('CUDACodeLibrary cannot be finalized')
+        # Unlike the CPUCodeLibrary, we don't invoke the binding layer here -
+        # we only adjust the linkage of functions. Global kernels (with
+        # external linkage) have their linkage untouched. Device functions are
+        # set linkonce_odr to prevent them appearing in the PTX.
+        self._raise_if_finalized()
+
+        #for mod in self.modules:
+        #    for fn in mod.functions:
+        #        if not fn.is_declaration and fn.linkage != 'external':
+        #            fn.linkage = 'linkonce_odr'
+
+        self._finalized = True
 
 
 class JITCUDACodegen(BaseCPUCodegen):
