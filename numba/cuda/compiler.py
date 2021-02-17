@@ -68,7 +68,7 @@ class CUDABackend(LoweringPass):
             typing_error=state.status.fail_reason,
             type_annotation=Dummy('state.type_annotation'),
             library=state.library,
-            call_helper=Dummy('lowered.call_helper'),
+            call_helper=lowered.call_helper,
             signature=signature,
             objectmode=Dummy('False'),
             lifted=Dummy('state.lifted'),
@@ -329,7 +329,7 @@ class DeviceFunctionTemplate(serialize.ReduceMixin):
         cc = device.compute_capability
         arch = nvvm.get_arch_option(*cc)
         opt = 3 if self.opt else 0
-        ptx = nvvm.llvm_to_ptx(llvmir, opt=opt, arch=arch, **nvvm_options)
+        ptx = nvvm.llvm_to_ptx([llvmir], opt=opt, arch=arch, **nvvm_options)
         return ptx
 
 
