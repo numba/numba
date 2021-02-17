@@ -130,7 +130,7 @@ class CUDATargetContext(BaseContext):
         fnty = Type.function(Type.int(),
                              [self.call_conv.get_return_type(types.pyobject)]
                              + argtys)
-        func = wrapper_module.add_function(fnty, fname)
+        func = wrapper_module.add_function(fnty, name=fname)
 
         prefixed = itanium_mangler.prepend_namespace(func.name, ns='cudapy')
         wrapfn = wrapper_module.add_function(wrapfnty, name=prefixed)
