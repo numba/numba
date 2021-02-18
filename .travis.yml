@@ -1,0 +1,21 @@
+language: generic
+group: travis_latest
+os: linux
+dist: xenial
+arch:
+  - amd64
+  - ppc64le
+env:
+  - PYTHON='3.6' NUMPY='1.15' CONDA_ENV=travisci TEST_START_INDEX=0
+
+
+before_script:
+  - git remote set-branches --add origin master
+  - git fetch origin master --depth=1
+script:
+  - while sleep 9m; do echo -e "\n\n[ avoid travis timeout ]\n\n"; done &
+  - buildscripts/incremental/install_miniconda.sh
+  - export PATH=$HOME/miniconda3/bin:$PATH
+  - buildscripts/incremental/setup_conda_environment.sh
+  - buildscripts/incremental/build.sh
+  - buildscripts/incremental/test.sh
