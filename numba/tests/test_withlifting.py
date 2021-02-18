@@ -945,7 +945,6 @@ class TestLiftObj(MemoryLeak, TestCase):
             output = x / 10
         return output
 
-
     def test_objmode_reflected_list(self):
         ret_type = typeof([1, 2, 3, 4, 5])
         @njit
@@ -991,7 +990,8 @@ class TestLiftObj(MemoryLeak, TestCase):
         with self.assertRaises(TypeError) as raises:
             test4()
         self.assertIn(
-            "can't unbox <class 'numba.typed.typeddict.Dict'> from <class 'dict'>",
+            ("can't unbox <class 'numba.typed.typeddict.Dict'> "
+             "from <class 'dict'>"),
             str(raises.exception),
         )
 

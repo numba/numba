@@ -233,16 +233,24 @@ class _ObjModeContextType(WithContext):
         return typeanns
 
     def _legalize_arg_type(self, name, typ, loc):
-        def report_error(msg):
+        """Legalize the argument type
+
+        Parameters
+        ----------
+        name: str
+            argument name.
+        typ: numba.core.types.Type
+            argument type.
+        loc: numba.core.ir.Loc
+            source location for error reporting.
+        """
+        if getattr(typ, "reflected", False):
             msgbuf = [
                 "Objmode context failed.",
                 f"Argument {name!r} is using unsupported type.",
-                msg,
+                f"Reflected types is not supported.",
             ]
             raise errors.CompilerError(" ".join(msgbuf), loc=loc)
-
-        if getattr(typ, "reflected", False):
-            report_error(f"Reflected types is not supported.")
 
     def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
                          body_blocks, dispatcher_factory, extra):

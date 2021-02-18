@@ -260,6 +260,7 @@ def box_dicttype(typ, val, c):
 def unbox_dicttype(typ, val, c):
     context = c.context
 
+    # Check that `type(val) is Dict`
     dict_type = c.pyapi.unserialize(c.pyapi.serialize_object(Dict))
     valtype = c.pyapi.object_type(val)
     same_type = c.builder.icmp_unsigned("==", valtype, dict_type)
@@ -297,6 +298,7 @@ def unbox_dicttype(typ, val, c):
             )
             bb_else = c.builder.basic_block
 
+    # Phi nodes to gather the output
     dctobj_res = c.builder.phi(dctobj.type)
     is_error_res = c.builder.phi(is_error.type)
 
