@@ -80,6 +80,9 @@ class CUDACodeLibrary(CodeLibrary):
         # libraries require linkonce_odr linkage of functions in linked
         # modules, and another code library requires another linkage, each code
         # library will need to take its own private copy of its linked modules.
+        #
+        # See also discussion on PR #890:
+        # https://github.com/numba/numba/pull/890
         for mod in self._linked_modules:
             for fn in mod.functions:
                 if not fn.is_declaration and fn.linkage != 'external':
