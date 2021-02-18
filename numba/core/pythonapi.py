@@ -950,6 +950,11 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyObject_Call")
         return self.builder.call(fn, (callee, args, kws))
 
+    def object_type(self, obj):
+        fnty = Type.function(self.pyobj, [self.pyobj] * 1)
+        fn = self._get_function(fnty, name="PyObject_Type")
+        return self.builder.call(fn, (obj,))
+
     def object_istrue(self, obj):
         fnty = Type.function(Type.int(), [self.pyobj])
         fn = self._get_function(fnty, name="PyObject_IsTrue")

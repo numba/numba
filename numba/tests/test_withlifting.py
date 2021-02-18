@@ -946,6 +946,56 @@ class TestLiftObj(MemoryLeak, TestCase):
         return output
 
 
+    def test_objmode_reflected_list(self):
+        ret_type = typeof([1, 2, 3, 4, 5])
+        @njit
+        def test2():
+            with objmode(out=ret_type):
+                out = [1, 2, 3, 4, 5]
+            return out
+
+        with self.assertRaises(errors.CompilerError) as raises:
+            test2()
+        self.assertIn(
+            ("Objmode context failed. "
+             "Argument 'out' is using unsupported type. "
+             "Reflected types is not supported."),
+            str(raises.exception),
+        )
+
+    def test_objmode_reflected_set(self):
+        ret_type = typeof({1, 2, 3, 4, 5})
+        @njit
+        def test2():
+            with objmode(result=ret_type):
+                result = {1, 2, 3, 4, 5}
+            return result
+
+        with self.assertRaises(errors.CompilerError) as raises:
+            test2()
+        self.assertIn(
+            ("Objmode context failed. "
+             "Argument 'result' is using unsupported type. "
+             "Reflected types is not supported."),
+            str(raises.exception),
+        )
+
+    def test_objmode_typed_dict(self):
+        ret_type = types.DictType(types.unicode_type, types.int64)
+        @njit
+        def test4():
+            with objmode(res=ret_type):
+                res = {'A': 1, 'B': 2}
+            return res
+
+        with self.assertRaises(TypeError) as raises:
+            test4()
+        self.assertIn(
+            "can't unbox <class 'numba.typed.typeddict.Dict'> from <class 'dict'>",
+            str(raises.exception),
+        )
+
+
 def case_inner_pyfunc(x):
     return x / 10
 

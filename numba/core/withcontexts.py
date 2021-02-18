@@ -226,7 +226,23 @@ class _ObjModeContextType(WithContext):
                     "type annotation",
                 )
 
+        # Legalize the types for objmode
+        for name, typ in typeanns.items():
+            self._legalize_arg_type(name, typ, loc)
+
         return typeanns
+
+    def _legalize_arg_type(self, name, typ, loc):
+        def report_error(msg):
+            msgbuf = [
+                "Objmode context failed.",
+                f"Argument {name!r} is using unsupported type.",
+                msg,
+            ]
+            raise errors.CompilerError(" ".join(msgbuf), loc=loc)
+
+        if getattr(typ, "reflected", False):
+            report_error(f"Reflected types is not supported.")
 
     def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
                          body_blocks, dispatcher_factory, extra):
