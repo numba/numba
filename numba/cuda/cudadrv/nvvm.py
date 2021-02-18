@@ -583,38 +583,38 @@ def _replace_datalayout(llvmir):
 
 def llvm_replace(llvmir):
     replacements = [
-        ('declare double @___numba_atomic_double_add(double*, double)',
+        ('declare double @"___numba_atomic_double_add"(double* %".1", double %".2")',     # noqa: E501
          ir_numba_atomic_binary(T='double', Ti='i64', OP='fadd', FUNC='add')),
-        ('declare float @___numba_atomic_float_sub(float*, float)',
+        ('declare float @"___numba_atomic_float_sub"(float* %".1", float %".2")',         # noqa: E501
          ir_numba_atomic_binary(T='float', Ti='i32', OP='fsub', FUNC='sub')),
-        ('declare double @___numba_atomic_double_sub(double*, double)',
+        ('declare double @"___numba_atomic_double_sub"(double* %".1", double %".2")',     # noqa: E501
          ir_numba_atomic_binary(T='double', Ti='i64', OP='fsub', FUNC='sub')),
-        ('declare i64 @___numba_atomic_u64_inc(i64*, i64)',
+        ('declare i64 @"___numba_atomic_u64_inc"(i64* %".1", i64 %".2")',
          ir_numba_atomic_inc(T='i64', Tu='u64')),
-        ('declare i64 @___numba_atomic_u64_dec(i64*, i64)',
+        ('declare i64 @"___numba_atomic_u64_dec"(i64* %".1", i64 %".2")',
          ir_numba_atomic_dec(T='i64', Tu='u64')),
-        ('declare float @___numba_atomic_float_max(float*, float)',
+        ('declare float @"___numba_atomic_float_max"(float* %".1", float %".2")',         # noqa: E501
          ir_numba_atomic_minmax(T='float', Ti='i32', NAN='', OP='nnan olt',
                                 PTR_OR_VAL='ptr', FUNC='max')),
-        ('declare double @___numba_atomic_double_max(double*, double)',
+        ('declare double @"___numba_atomic_double_max"(double* %".1", double %".2")',     # noqa: E501
          ir_numba_atomic_minmax(T='double', Ti='i64', NAN='', OP='nnan olt',
                                 PTR_OR_VAL='ptr', FUNC='max')),
-        ('declare float @___numba_atomic_float_min(float*, float)',
+        ('declare float @"___numba_atomic_float_min"(float* %".1", float %".2")',         # noqa: E501
          ir_numba_atomic_minmax(T='float', Ti='i32', NAN='', OP='nnan ogt',
                                 PTR_OR_VAL='ptr', FUNC='min')),
-        ('declare double @___numba_atomic_double_min(double*, double)',
+        ('declare double @"___numba_atomic_double_min"(double* %".1", double %".2")',     # noqa: E501
          ir_numba_atomic_minmax(T='double', Ti='i64', NAN='', OP='nnan ogt',
                                 PTR_OR_VAL='ptr', FUNC='min')),
-        ('declare float @___numba_atomic_float_nanmax(float*, float)',
+        ('declare float @"___numba_atomic_float_nanmax"(float* %".1", float %".2")',      # noqa: E501
          ir_numba_atomic_minmax(T='float', Ti='i32', NAN='nan', OP='ult',
                                 PTR_OR_VAL='', FUNC='max')),
-        ('declare double @___numba_atomic_double_nanmax(double*, double)',
+        ('declare double @"___numba_atomic_double_nanmax"(double* %".1", double %".2")',  # noqa: E501
          ir_numba_atomic_minmax(T='double', Ti='i64', NAN='nan', OP='ult',
                                 PTR_OR_VAL='', FUNC='max')),
-        ('declare float @___numba_atomic_float_nanmin(float*, float)',
+        ('declare float @"___numba_atomic_float_nanmin"(float* %".1", float %".2")',      # noqa: E501
          ir_numba_atomic_minmax(T='float', Ti='i32', NAN='nan', OP='ugt',
                                 PTR_OR_VAL='', FUNC='min')),
-        ('declare double @___numba_atomic_double_nanmin(double*, double)',
+        ('declare double @"___numba_atomic_double_nanmin"(double* %".1", double %".2")',  # noqa: E501
          ir_numba_atomic_minmax(T='double', Ti='i64', NAN='nan', OP='ugt',
                                 PTR_OR_VAL='', FUNC='min')),
         ('immarg', '')
@@ -624,9 +624,9 @@ def llvm_replace(llvmir):
         # Replace with our cmpxchg implementation because LLVM 3.5 has a new
         # semantic for cmpxchg.
         replacements += [
-            ('declare i32 @___numba_atomic_i32_cas_hack(i32*, i32, i32)',
+            ('declare i32 @"___numba_atomic_i32_cas_hack"(i32* %".1", i32 %".2", i32 %".3")',  # noqa: E501
              ir_numba_cas_hack.format(T='i32')),
-            ('declare i64 @___numba_atomic_i64_cas_hack(i64*, i64, i64)',
+            ('declare i64 @"___numba_atomic_i64_cas_hack"(i64* %".1", i64 %".2", i64 %".3")',  # noqa: E501
              ir_numba_cas_hack.format(T='i64'))
         ]
         # Newer LLVMs generate a shorthand for datalayout that NVVM34 does not
@@ -651,6 +651,9 @@ def llvm_replace(llvmir):
 
 
 def llvm_to_ptx(llvmir, **opts):
+    if isinstance(llvmir, str):
+        llvmir = [llvmir]
+
     if opts.pop('fastmath', False):
         opts.update({
             'ftz': True,
@@ -662,8 +665,9 @@ def llvm_to_ptx(llvmir, **opts):
     cu = CompilationUnit()
     libdevice = LibDevice(arch=opts.get('arch', 'compute_20'))
 
-    llvmir = llvm_replace(llvmir)
-    cu.add_module(llvmir.encode('utf8'))
+    for mod in llvmir:
+        mod = llvm_replace(mod)
+        cu.add_module(mod.encode('utf8'))
     cu.add_module(libdevice.get())
 
     ptx = cu.compile(**opts)
@@ -737,22 +741,6 @@ def llvm100_to_70_ir(ir):
             attrs = m.group(1).split()
             attrs = ' '.join(a for a in attrs if a != 'willreturn')
             line = line.replace(m.group(1), attrs)
-
-        if '!DISubprogram' in line:
-            # Replace the DISPFlags (LLVM 10.0) with main subprogram DIFlags
-            # (LLVM 7.0). Example:
-            #
-            #     spflags: DISPFlagDefinition | DISPFlagOptimized
-            #
-            # becomes:
-            #
-            #     isDefinition: true, isOptimized: true
-            m = re_spflags.search(line)
-            flags = m.group(1).split(' | ')
-            new_flags = ", ".join([ '%s: true' % spflagmap[f] for f in flags ])
-            start_of_line = line[:m.span()[0]]
-            end_of_line = line[m.span()[1] - 1:]
-            line = start_of_line + new_flags + end_of_line
 
         buf.append(line)
 
@@ -903,6 +891,8 @@ def set_cuda_kernel(lfunc):
 
     nmd = mod.get_or_insert_named_metadata('nvvm.annotations')
     nmd.add(md)
+
+    lfunc.linkage = 'external'
 
 
 def add_ir_version(mod):

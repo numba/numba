@@ -91,14 +91,13 @@ def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
     cres = compile_cuda(pyfunc, None, args, debug=debug)
     resty = cres.signature.return_type
     if device:
-        llvm_module = cres.library._final_module
-        nvvm.fix_data_layout(llvm_module)
+        llvm_modules = cres.library.modules
     else:
         fname = cres.fndesc.llvm_func_name
         tgt = cres.target_context
         lib, kernel = tgt.prepare_cuda_kernel(cres.library, fname,
                                               cres.signature.args, debug=debug)
-        llvm_module = lib._final_module
+        llvm_modules = lib.modules
 
     options = {
         'debug': debug,
@@ -108,7 +107,7 @@ def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
     cc = cc or config.CUDA_DEFAULT_PTX_CC
     opt = 3 if opt else 0
     arch = nvvm.get_arch_option(*cc)
-    llvmir = str(llvm_module)
+    llvmir = [str(mod) for mod in llvm_modules]
     ptx = nvvm.llvm_to_ptx(llvmir, opt=opt, arch=arch, **options)
     return ptx.decode('utf-8'), resty
 
@@ -215,8 +214,7 @@ class DeviceFunctionTemplate(serialize.ReduceMixin):
         # been called for the given arguments from a jitted kernel.
         self.compile(args)
         cres = self._compileinfos[args]
-        mod = cres.library._final_module
-        return str(mod)
+        return "\n\n".join([str(mod) for mod in cres.library.modules])
 
     def inspect_ptx(self, args, nvvm_options={}):
         """Returns the PTX compiled for *args* for the currently active GPU
@@ -225,13 +223,15 @@ class DeviceFunctionTemplate(serialize.ReduceMixin):
         ----------
         args: tuple[Type]
             Argument types.
-        nvvm_options : dict; optional
-            See `CompilationUnit.compile` in `numba/cuda/cudadrv/nvvm.py`.
 
         Returns
         -------
         ptx : bytes
         """
+        if nvvm_options:
+            msg = 'nvvm_options kwarg for inspect_ptx is deprecated'
+            warn(msg, category=NumbaDeprecationWarning)
+
         llvmir = self.inspect_llvm(args)
         # Make PTX
         cuctx = get_context()
@@ -522,7 +522,7 @@ class _Kernel(serialize.ReduceMixin):
             'opt': 3 if opt else 0
         }
 
-        llvm_ir = str(lib._final_module)
+        llvm_ir = [str(mod) for mod in lib.modules]
         pretty_name = cres.fndesc.qualname
         ptx = CachedPTX(pretty_name, llvm_ir, options=options)
 
@@ -530,7 +530,10 @@ class _Kernel(serialize.ReduceMixin):
             link = []
 
         # A kernel needs cooperative launch if grid_sync is being used.
-        self.cooperative = 'cudaCGGetIntrinsicHandle' in ptx.llvmir
+        self.cooperative = False
+        for ir in ptx.llvmir:
+            if 'cudaCGGetIntrinsicHandle' in ir:
+                self.cooperative = True
         # We need to link against cudadevrt if grid sync is being used.
         if self.cooperative:
             link.append(get_cudalib('cudadevrt', static=True))
@@ -614,7 +617,7 @@ class _Kernel(serialize.ReduceMixin):
         '''
         Returns the LLVM IR for this kernel.
         '''
-        return str(self._func.ptx.llvmir)
+        return "\n\n".join([str(ir) for ir in self._func.ptx.llvmir])
 
     def inspect_asm(self, cc):
         '''
