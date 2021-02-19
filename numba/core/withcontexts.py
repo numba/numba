@@ -248,8 +248,9 @@ class _ObjModeContextType(WithContext):
             else:
                 report_error(
                     varname=k,
-                    msg=("objectmode context requires constants string for "
-                         "type annotation"),
+                    msg=("The value must be a compile-time constant either as "
+                         "a non-local variable or a getattr expression that "
+                         "refers to a Numba type."),
                     loc=loc
                 )
         return typeanns

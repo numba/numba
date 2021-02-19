@@ -922,6 +922,21 @@ class TestLiftObj(MemoryLeak, TestCase):
         ):
             bar()
 
+    def test_objmode_invalid_use(self):
+        @njit
+        def moderror():
+            with objmode(bad=1 + 1):
+                out = 1
+            return val
+        with self.assertRaisesRegex(
+            errors.CompilerError,
+            ("Error handling objmode argument 'bad'. "
+             "The value must be a compile-time constant either as "
+             "a non-local variable or a getattr expression that "
+             "refers to a Numba type."),
+        ):
+            moderror()
+
     def test_objmode_multi_type_args(self):
         array_ty = types.int32[:]
         @njit
