@@ -821,7 +821,9 @@ class TestLiftObj(MemoryLeak, TestCase):
             return val
 
         with self.assertRaisesRegex(
-            errors.CompilerError, "Global 'gv_type2' is not defined",
+            errors.CompilerError,
+            ("Error handling objmode argument 'val'. "
+             "Global 'gv_type2' is not defined\.")
         ):
             global_var()
 
@@ -851,10 +853,28 @@ class TestLiftObj(MemoryLeak, TestCase):
             with objmode(val=types.THIS_DOES_NOT_EXIST):
                 val = 12.3
             return val
-        with self.assertRaises(errors.CompilerError) as raises:
+        with self.assertRaisesRegex(
+            errors.CompilerError,
+            ("Error handling objmode argument 'val'. "
+             "Getattr cannot be resolved at compile-time"),
+        ):
             moderror()
-        self.assertIn("Getattr cannot be resolved at compile-time",
-                      str(raises.exception))
+
+    def test_objmode_gv_mod_attr_error_multiple(self):
+        @njit
+        def moderror():
+            with objmode(v1=types.intp, v2=types.THIS_DOES_NOT_EXIST,
+                         v3=types.float32):
+                v1 = 12.3
+                v2 = 12.3
+                v3 = 12.3
+            return val
+        with self.assertRaisesRegex(
+            errors.CompilerError,
+            ("Error handling objmode argument 'v2'. "
+             "Getattr cannot be resolved at compile-time"),
+        ):
+            moderror()
 
     def test_objmode_closure_type_in_overload(self):
         def foo():
@@ -896,7 +916,9 @@ class TestLiftObj(MemoryLeak, TestCase):
             return foo()
 
         with self.assertRaisesRegex(
-            errors.TypingError, "Freevar 'shrubbery' is not defined",
+            errors.TypingError,
+            ("Error handling objmode argument 'out'. "
+             "Freevar 'shrubbery' is not defined"),
         ):
             bar()
 

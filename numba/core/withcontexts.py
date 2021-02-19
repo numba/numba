@@ -203,6 +203,13 @@ class _ObjModeContextType(WithContext):
                 "objectmode context doesn't take any positional arguments",
                 )
         typeanns = {}
+
+        def report_error(varname, msg, loc):
+            raise errors.CompilerError(
+                    f"Error handling objmode argument {varname!r}. {msg}",
+                    loc=loc,
+                )
+
         for k, v in kwargs.items():
             if isinstance(v, ir.Const) and isinstance(v.value, str):
                 typeanns[k] = sigutils._parse_signature_string(v.value)
@@ -210,16 +217,20 @@ class _ObjModeContextType(WithContext):
                 try:
                     v = func_closures[v.name]
                 except KeyError:
-                    raise errors.CompilerError(
-                        f"Freevar {v.name!r} is not defined"
+                    report_error(
+                        varname=k,
+                        msg=f"Freevar {v.name!r} is not defined.",
+                        loc=loc,
                     )
                 typeanns[k] = v
             elif isinstance(v, ir.Global):
                 try:
                     v = func_globals[v.name]
                 except KeyError:
-                    raise errors.CompilerError(
-                        f"Global {v.name!r} is not defined"
+                    report_error(
+                        varname=k,
+                        msg=f"Global {v.name!r} is not defined.",
+                        loc=loc,
                     )
                 typeanns[k] = v
             elif isinstance(v, ir.Expr) and v.op == "getattr":
@@ -227,16 +238,19 @@ class _ObjModeContextType(WithContext):
                     base_obj = func_ir.infer_constant(v.value)
                     typ = getattr(base_obj, v.attr)
                 except (errors.ConstantInferenceError, AttributeError):
-                    raise errors.CompilerError(
-                        f"Getattr cannot be resolved at compile-time",
+                    report_error(
+                        varname=k,
+                        msg="Getattr cannot be resolved at compile-time.",
                         loc=loc,
                     )
                 else:
                     typeanns[k] = typ
             else:
-                raise errors.CompilerError(
-                    "objectmode context requires constants string for "
-                    "type annotation",
+                report_error(
+                    varname=k,
+                    msg=("objectmode context requires constants string for "
+                         "type annotation"),
+                    loc=loc
                 )
         return typeanns
 
