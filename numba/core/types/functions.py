@@ -610,6 +610,10 @@ class ExternalFunctionPointer(BaseFunction):
     def key(self):
         return self.sig, self.cconv, self.get_pointer
 
+    def unify(self, typingctx, other):
+        if isinstance(other, Function):
+            return self
+
 
 class ExternalFunction(Function):
     """
