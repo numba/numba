@@ -185,6 +185,12 @@ def np_int_srem_impl(context, builder, sig, args):
     return result
 
 
+def np_int_sdivrem_impl(context, builder, sig, args):
+    div = np_int_sdiv_impl(context, builder, sig.return_type[0](*sig.args), args)
+    rem = np_int_srem_impl(context, builder, sig.return_type[1](*sig.args), args)
+    return context.make_tuple(builder, sig.return_type, [div, rem])
+
+
 def np_int_udiv_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
@@ -227,6 +233,12 @@ def np_int_urem_impl(context, builder, sig, args):
     result.add_incoming(mod, bb_if)
 
     return result
+
+
+def np_int_udivrem_impl(context, builder, sig, args):
+    div = np_int_udiv_impl(context, builder, sig.return_type[0](*sig.args), args)
+    rem = np_int_urem_impl(context, builder, sig.return_type[1](*sig.args), args)
+    return context.make_tuple(builder, sig.return_type, [div, rem])
 
 
 # implementation of int_fmod is in fact the same as the unsigned remainder,
@@ -400,6 +412,12 @@ def np_real_floor_div_impl(context, builder, sig, args):
     res = np_real_div_impl(context, builder, sig, args)
     s = typing.signature(sig.return_type, sig.return_type)
     return np_real_floor_impl(context, builder, s, (res,))
+
+
+def np_real_divmod_impl(context, builder, sig, args):
+    div = np_real_floor_div_impl(context, builder, sig.return_type[0](*sig.args), args)
+    rem = np_real_mod_impl(context, builder, sig.return_type[1](*sig.args), args)
+    return context.make_tuple(builder, sig.return_type, [div, rem])
 
 
 def np_complex_floor_div_impl(context, builder, sig, args):

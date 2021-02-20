@@ -105,7 +105,7 @@ additional things to watch out for.
 
 * If you are implementing a new function, you should always update the
   `documentation
-  <http://numba.pydata.org/numba-doc/latest/reference/numpysupported.html>`_.
+  <https://numba.pydata.org/numba-doc/latest/reference/numpysupported.html>`_.
   The sources can be found in ``docs/source/reference/numpysupported.rst``. Be
   sure to mention any limitations that your implementation has, e.g. no support
   for the ``axis`` keyword.

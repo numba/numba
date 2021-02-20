@@ -84,7 +84,11 @@ the functionality of the selected device:
 
    .. attribute:: name
 
-      The name of the device (e.g. "GeForce GTX 970")
+      The name of the device (e.g. "GeForce GTX 970").
+
+   .. attribute:: uuid
+
+      The UUID of the device (e.g. "GPU-e6489c45-5b68-3b03-bab7-0e7c8e809643").
 
    .. method:: reset
 
@@ -178,7 +182,7 @@ Programming Guide Streams section
 Streams are instances of :class:`numba.cuda.cudadrv.driver.Stream`:
 
 .. autoclass:: numba.cuda.cudadrv.driver.Stream
-   :members: synchronize, auto_synchronize
+   :members: synchronize, auto_synchronize, add_callback, async_done
 
 To create a new stream:
 
@@ -202,3 +206,20 @@ stream, and the stream must remain valid whilst the Numba ``Stream`` object is
 in use.
 
 .. autofunction:: numba.cuda.external_stream
+
+
+Runtime
+-------
+
+Numba generally uses the Driver API, but it provides a simple wrapper to the
+Runtime API so that the version of the runtime in use can be queried. This is
+accessed through ``cuda.runtime``, which is an instance of the
+:class:`numba.cuda.cudadrv.runtime.Runtime` class:
+
+.. autoclass:: numba.cuda.cudadrv.runtime.Runtime
+   :members: get_version, is_supported_version, supported_versions
+
+Whether the current runtime is officially supported and tested with the current
+version of Numba can also be queried:
+
+.. autofunction:: numba.cuda.is_supported_version

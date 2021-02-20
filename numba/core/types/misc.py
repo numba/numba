@@ -1,4 +1,4 @@
-from numba.core.types.abstract import Callable, Literal, Type
+from numba.core.types.abstract import Callable, Literal, Type, Hashable
 from numba.core.types.common import (Dummy, IterableType, Opaque,
                                      SimpleIteratorType)
 from numba.core.typeconv import Conversion
@@ -119,17 +119,6 @@ class Module(Dummy):
     @property
     def key(self):
         return self.pymod
-
-
-class Macro(Type):
-    def __init__(self, template):
-        self.template = template
-        cls = type(self)
-        super(Macro, self).__init__("%s(%s)" % (cls.__name__, template))
-
-    @property
-    def key(self):
-        return self.template
 
 
 class MemInfoPointer(Type):
@@ -509,7 +498,7 @@ class ContextManager(Callable, Phantom):
         return typing.signature(self, *posargs)
 
 
-class UnicodeType(IterableType):
+class UnicodeType(IterableType, Hashable):
 
     def __init__(self, name):
         super(UnicodeType, self).__init__(name)

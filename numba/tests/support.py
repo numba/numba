@@ -5,7 +5,6 @@ Assorted utilities for use in tests.
 import cmath
 import contextlib
 import enum
-import errno
 import gc
 import math
 import platform
@@ -19,6 +18,7 @@ import io
 import ctypes
 import multiprocessing as mp
 import warnings
+import traceback
 from contextlib import contextmanager
 
 import numpy as np
@@ -80,10 +80,31 @@ _is_armv7l = platform.machine() == 'armv7l'
 
 disabled_test = unittest.skipIf(True, 'Test disabled')
 
-# See issue #4026, PPC64LE LLVM bug
-skip_ppc64le_issue4026 = unittest.skipIf(platform.machine() == 'ppc64le',
-                                         ("Hits: 'LLVM Invalid PPC CTR Loop! "
-                                          "UNREACHABLE executed' bug"))
+# See issue #4563, PPC64LE LLVM bug
+skip_ppc64le_issue4563 = unittest.skipIf(platform.machine() == 'ppc64le',
+                                         ("Hits: 'Parameter area must exist "
+                                          "to pass an argument in memory'"))
+
+# Typeguard
+has_typeguard = bool(os.environ.get('NUMBA_USE_TYPEGUARD', 0))
+
+skip_unless_typeguard = unittest.skipUnless(
+    has_typeguard, "Typeguard is not enabled",
+)
+
+skip_if_typeguard = unittest.skipIf(
+    has_typeguard, "Broken if Typeguard is enabled",
+)
+
+# See issue #6465, PPC64LE LLVM bug
+skip_ppc64le_issue6465 = unittest.skipIf(platform.machine() == 'ppc64le',
+                                         ("Hits: 'mismatch in size of "
+                                          "parameter area' in "
+                                          "LowerCall_64SVR4"))
+
+skip_unless_py37_or_later = lambda reason: \
+    unittest.skipIf(utils.PYVERSION < (3, 7),
+    reason)
 
 try:
     import scipy.linalg.cython_lapack
@@ -122,9 +143,9 @@ class CompilationCache(object):
         from numba.core.registry import cpu_target
 
         cache_key = (func, args, return_type, flags)
-        try:
+        if cache_key in self.cr_cache:
             cr = self.cr_cache[cache_key]
-        except KeyError:
+        else:
             # Register the contexts in case for nested @jit or @overload calls
             # (same as compile_isolated())
             with cpu_target.nested_context(self.typingctx, self.targetctx):
@@ -203,7 +224,7 @@ class TestCase(unittest.TestCase):
 
 
     _bool_types = (bool, np.bool_)
-    _exact_typesets = [_bool_types, utils.INT_TYPES, (str,), (np.integer,),
+    _exact_typesets = [_bool_types, (int,), (str,), (np.integer,),
                        (bytes, np.bytes_)]
     _approx_typesets = [(float,), (complex,), (np.inexact)]
     _sequence_typesets = [(tuple, list)]
@@ -580,9 +601,8 @@ _trashcan_timeout = 24 * 3600  # 1 day
 def _create_trashcan_dir():
     try:
         os.mkdir(_trashcan_dir)
-    except OSError as e:
-        if e.errno != errno.EEXIST:
-            raise
+    except FileExistsError:
+        pass
 
 def _purge_trashcan_dir():
     freshness_threshold = time.time() - _trashcan_timeout
@@ -786,9 +806,28 @@ def run_in_new_process_caching(func, cache_dir_prefix=__name__, verbose=True):
         stdout: str
         stderr: str
     """
+    cache_dir = temp_directory(cache_dir_prefix)
+    return run_in_new_process_in_cache_dir(func, cache_dir, verbose=verbose)
+
+
+def run_in_new_process_in_cache_dir(func, cache_dir, verbose=True):
+    """Spawn a new process to run `func` with a temporary cache directory.
+
+    The childprocess's stdout and stderr will be captured and redirected to
+    the current process's stdout and stderr.
+
+    Similar to ``run_in_new_process_caching()`` but the ``cache_dir`` is a
+    directory path instead of a name prefix for the directory path.
+
+    Returns
+    -------
+    ret : dict
+        exitcode: 0 for success. 1 for exception-raised.
+        stdout: str
+        stderr: str
+    """
     ctx = mp.get_context('spawn')
     qout = ctx.Queue()
-    cache_dir = temp_directory(cache_dir_prefix)
     with override_env_config('NUMBA_CACHE_DIR', cache_dir):
         proc = ctx.Process(target=_remote_runner, args=[func, qout])
         proc.start()

@@ -8,17 +8,19 @@ import os
 from numba import jit, njit, typed, int64, types
 from numba.core import errors
 import numba.core.typing.cffi_utils as cffi_support
+from numba.experimental import structref
 from numba.extending import (overload, intrinsic, overload_method,
                              overload_attribute)
 from numba.core.compiler import CompilerBase
 from numba.core.untyped_passes import (TranslateByteCode, FixupArgs,
                                        IRProcessing,)
 from numba.core.typed_passes import (NopythonTypeInference, DeadCodeElimination,
-                                     NoPythonBackend)
+                                     NoPythonBackend, NativeLowering)
 from numba.core.compiler_machinery import PassManager
 from numba.core.types.functions import _err_reasons as error_reasons
 
-from numba.tests.support import skip_parfors_unsupported
+from numba.tests.support import (skip_parfors_unsupported, override_config,
+                                 SerialMixin)
 import unittest
 
 # used in TestMiscErrorHandling::test_handling_of_write_to_*_global
@@ -108,6 +110,7 @@ class TestMiscErrorHandling(unittest.TestCase):
                 pm.add_pass(DeadCodeElimination, "DCE")
                 # typing
                 pm.add_pass(NopythonTypeInference, "nopython frontend")
+                pm.add_pass(NativeLowering, "native lowering")
                 pm.add_pass(NoPythonBackend, "nopython mode backend")
                 pm.finalize()
                 return [pm]
@@ -421,6 +424,42 @@ class TestErrorMessages(unittest.TestCase):
 
         excstr = str(raises.exception)
         self.assertIn("Type Restricted Function in function 'unknown'", excstr)
+
+    def test_missing_source(self):
+
+        @structref.register
+        class ParticleType(types.StructRef):
+            pass
+
+        class Particle(structref.StructRefProxy):
+            def __new__(cls, pos, mass):
+                return structref.StructRefProxy.__new__(cls, pos)
+                # didn't provide the required mass argument ----^
+
+        structref.define_proxy(Particle, ParticleType, ["pos", "mass"])
+
+        with self.assertRaises(errors.TypingError) as raises:
+            Particle(pos=1, mass=2)
+
+        excstr = str(raises.exception)
+        self.assertIn("required positional argument: 'mass'", excstr)
+
+
+class TestDeveloperSpecificErrorMessages(SerialMixin, unittest.TestCase):
+
+    def test_bound_function_error_string(self):
+        # See PR #5952
+        def foo(x):
+            x.max(-1) # axis not supported
+
+        with override_config('DEVELOPER_MODE', 1):
+            with self.assertRaises(errors.TypingError) as raises:
+                njit("void(int64[:,:])")(foo)
+
+        excstr = str(raises.exception)
+        self.assertIn("AssertionError()", excstr)
+        self.assertIn("BoundFunction(array.max for array(int64, 2d, A))",
+                      excstr)
 
 
 if __name__ == '__main__':

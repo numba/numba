@@ -166,6 +166,19 @@ follows:
    :member-order: bysource
 
 
+The IPC Handle Mixin
+--------------------
+
+An implementation of the ``get_ipc_handle()`` function is is provided in the
+``GetIpcHandleMixin`` class. This uses the driver API to determine the base
+address of an allocation for opening an IPC handle. If this implementation is
+appropriate for an EMM plugin, it can be added by mixing in the
+``GetIpcHandleMixin`` class:
+
+.. autoclass:: numba.cuda.GetIpcHandleMixin
+   :members: get_ipc_handle
+
+
 Classes and structures of returned objects
 ==========================================
 
