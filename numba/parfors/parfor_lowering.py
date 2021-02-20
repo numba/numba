@@ -106,12 +106,23 @@ def _lower_parfor_parallel(lowerer, parfor):
 
         # For each reduction variable...
         for i in range(nredvars):
+            # Get the type of the reduction variable.
             redvar_typ = lowerer.fndesc.typemap[parfor_redvars[i]]
+            # Get the ir.Var for the reduction variable.
             redvar = ir.Var(scope, parfor_redvars[i], loc)
+            # Get the type of the array that holds the per-thread
+            # reduction variables.
             redarrvar_typ = redtyp_to_redarraytype(redvar_typ)
             reddtype = redarrvar_typ.dtype
             if config.DEBUG_ARRAY_OPT:
-                print("redvar_typ", redvar_typ, redarrvar_typ, reddtype, types.DType(reddtype))
+                print(
+                    "reduction_info",
+                    parfor_redvars[i],
+                    redvar_typ,
+                    redarrvar_typ,
+                    reddtype,
+                    types.DType(reddtype)
+                )
 
             # If this is reduction over an array,
             # the reduction array has just one added per-worker dimension.
@@ -254,7 +265,6 @@ def _lower_parfor_parallel(lowerer, parfor):
         (func,
          func_args,
          func_sig,
-         redargstartdim,
          func_arg_types,
          exp_name_to_tuple_var) = _create_gufunc_for_parfor_body(
             lowerer, parfor, typemap, typingctx, targetctx, flags, {},
@@ -277,7 +287,6 @@ def _lower_parfor_parallel(lowerer, parfor):
         num_inputs,
         num_reductions,
         func_args,
-        redargstartdim,
         func_sig,
         parfor.races,
         typemap)
@@ -318,6 +327,7 @@ def _lower_parfor_parallel(lowerer, parfor):
             name = parfor_redvars[i]
             redarr = redarrs[name]
             redvar_typ = lowerer.fndesc.typemap[name]
+            redarrvar_typ = redtyp_to_redarraytype(redvar_typ)
             if config.DEBUG_ARRAY_OPT:
                 print("post-gufunc reduction:", name, redarr, redvar_typ)
 
@@ -488,14 +498,13 @@ def _create_shape_signature(
         num_inputs,
         num_reductions,
         args,
-        redargstartdim,
         func_sig,
         races,
         typemap):
     '''Create shape signature for GUFunc
     '''
     if config.DEBUG_ARRAY_OPT:
-        print("_create_shape_signature", num_inputs, num_reductions, args, redargstartdim)
+        print("_create_shape_signature", num_inputs, num_reductions, args, races)
         for i in args[1:]:
             print("argument", i, type(i), get_shape_classes(i, typemap=typemap))
 
@@ -510,6 +519,8 @@ def _create_shape_signature(
     max_class = max(class_set) + 1 if class_set else 0
     classes.insert(0, (max_class,)) # force set the class of 'sched' argument
     class_set.add(max_class)
+    thread_num_class = max_class + 1
+    class_set.add(thread_num_class)
     class_map = {}
     # TODO: use prefix + class number instead of single char
     alphabet = ord('a')
@@ -517,6 +528,7 @@ def _create_shape_signature(
        if n >= 0:
            class_map[n] = chr(alphabet)
            alphabet += 1
+    threadcount_ordinal = chr(alphabet)
 
     alpha_dict = {'latest_alpha' : alphabet}
 
@@ -534,6 +546,7 @@ def _create_shape_signature(
     if config.DEBUG_ARRAY_OPT:
         print("args", args)
         print("classes", classes)
+        print("threadcount_ordinal", threadcount_ordinal)
     for cls, arg in zip(classes, args):
         count = count + 1
         if cls:
@@ -541,9 +554,9 @@ def _create_shape_signature(
         else:
             dim_syms = ()
         if (count > num_inouts):
-            # Strip the first symbol corresponding to the number of workers
-            # so that guvectorize will parallelize across the reduction.
-            gu_sin.append(dim_syms[redargstartdim[arg]:])
+            # Add the threadcount_ordinal to represent the thread count
+            # to the start of the reduction array.
+            gu_sin.append(tuple([threadcount_ordinal] + list(dim_syms[1:])))
         else:
             gu_sin.append(dim_syms)
             syms_sin += dim_syms
@@ -813,17 +826,15 @@ def redtyp_to_redarraytype(redtyp):
     # If the reduction type is an array then allocate reduction array with ndim+1 dimensions.
     if isinstance(redtyp, types.npytypes.Array):
         redarrdim += redtyp.ndim
-        # We don't create array of array but multi-dimensional reduciton array with same dtype.
+        # We don't create array of array but multi-dimensional reduction array with same dtype.
         redtyp = redtyp.dtype
     return types.npytypes.Array(redtyp, redarrdim, "C")
 
 def redarraytype_to_sig(redarraytyp):
     """Given a reduction array type, find the type of the reduction argument to the gufunc.
-       Scalar and 1D array reduction both end up with 1D gufunc param type since scalars have to
-       be passed as arrays.
     """
     assert isinstance(redarraytyp, types.npytypes.Array)
-    return types.npytypes.Array(redarraytyp.dtype, max(1, redarraytyp.ndim - 1), redarraytyp.layout)
+    return types.npytypes.Array(redarraytyp.dtype, redarraytyp.ndim, redarraytyp.layout)
 
 def legalize_names_with_typemap(names, typemap):
     """ We use ir_utils.legalize_names to replace internal IR variable names
@@ -1029,6 +1040,9 @@ def _create_gufunc_for_parfor_body(
     param_types = [to_scalar_from_0d(typemap[v]) for v in parfor_params]
     # Calculate types of args passed to gufunc.
     func_arg_types = [typemap[v] for v in (parfor_inputs + parfor_outputs)] + parfor_red_arg_types
+    if config.DEBUG_ARRAY_OPT >= 1:
+        print("new param_types:", param_types)
+        print("new func_arg_types:", func_arg_types)
 
     # Replace illegal parameter names in the loop body with legal ones.
     replace_var_names(loop_body, param_dict)
@@ -1074,7 +1088,7 @@ def _create_gufunc_for_parfor_body(
     gufunc_txt += "def " + gufunc_name + \
         "(sched, " + (", ".join(parfor_params)) + "):\n"
 
-    globls = {"np": np}
+    globls = {"np": np, "numba": numba}
 
     # First thing in the gufunc, we reconstruct tuples from their
     # individual parts, e.g., orig_tup_name = (part1, part2,).
@@ -1144,17 +1158,20 @@ def _create_gufunc_for_parfor_body(
             gufunc_txt += ("    " + parfor_params_orig[pindex]
                 + " = np.ascontiguousarray(" + parfor_params[pindex] + ")\n")
 
+    gufunc_thread_id_var = "ParallelAcceleratorGufuncThreadId"
+
+    if len(parfor_redarrs) > 0:
+        gufunc_txt += "    " + gufunc_thread_id_var + " = "
+        gufunc_txt += "numba.np.ufunc.parallel._get_thread_id()\n"
+
     # Add initialization of reduction variables
     for arr, var in zip(parfor_redarrs, parfor_redvars):
-        # If reduction variable is a scalar then save current value to
-        # temp and accumulate on that temp to prevent false sharing.
-        if redtyp_is_scalar(typemap[var]):
-            gufunc_txt += "    " + param_dict[var] + \
-                 "=" + param_dict[arr] + "[0]\n"
-        else:
-            # The reduction variable is an array so np.copy it to a temp.
-            gufunc_txt += "    " + param_dict[var] + \
-                 "=np.copy(" + param_dict[arr] + ")\n"
+        gufunc_txt += "    " + param_dict[var] + \
+             "=" + param_dict[arr] + "[" + gufunc_thread_id_var + "]\n"
+        if config.DEBUG_ARRAY_OPT_RUNTIME:
+            gufunc_txt += "    print(\"thread id =\", ParallelAcceleratorGufuncThreadId)\n"
+            gufunc_txt += "    print(\"initial reduction value\",ParallelAcceleratorGufuncThreadId," + param_dict[var] + "," + param_dict[var] + ".shape)\n"
+            gufunc_txt += "    print(\"reduction array\",ParallelAcceleratorGufuncThreadId," + param_dict[arr] + "," + param_dict[arr] + ".shape)\n"
 
     # For each dimension of the parfor, create a for loop in the generated gufunc function.
     # Iterate across the proper values extracted from the schedule.
@@ -1187,22 +1204,18 @@ def _create_gufunc_for_parfor_body(
         gufunc_txt += "    "
     gufunc_txt += sentinel_name + " = 0\n"
     # Add assignments of reduction variables (for returning the value)
-    redargstartdim = {}
     for arr, var in zip(parfor_redarrs, parfor_redvars):
+        if config.DEBUG_ARRAY_OPT_RUNTIME:
+            gufunc_txt += "    print(\"final reduction value\",ParallelAcceleratorGufuncThreadId," + param_dict[var] + ")\n"
+            gufunc_txt += "    print(\"final reduction array\",ParallelAcceleratorGufuncThreadId," + param_dict[arr] + ")\n"
         # After the gufunc loops, copy the accumulated temp value back to reduction array.
-        if redtyp_is_scalar(typemap[var]):
-            gufunc_txt += "    " + param_dict[arr] + \
-                "[0] = " + param_dict[var] + "\n"
-            redargstartdim[arr] = 1
-        else:
-            # After the gufunc loops, copy the accumulated temp array back to reduction array with ":"
-            gufunc_txt += "    " + param_dict[arr] + \
-                "[:] = " + param_dict[var] + "[:]\n"
-            redargstartdim[arr] = 0
+        gufunc_txt += "    " + param_dict[arr] + \
+            "[" + gufunc_thread_id_var + "] = " + param_dict[var] + "\n"
     gufunc_txt += "    return None\n"
 
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_txt = ", type(gufunc_txt), "\n", gufunc_txt)
+        print("globls:", globls, type(globls))
     # Force gufunc outline into existence.
     locls = {}
     exec(gufunc_txt, globls, locls)
@@ -1373,7 +1386,7 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT:
         print("finished create_gufunc_for_parfor_body. kernel_sig = ", kernel_sig)
 
-    return kernel_func, parfor_args, kernel_sig, redargstartdim, func_arg_types, expanded_name_to_tuple_var
+    return kernel_func, parfor_args, kernel_sig, func_arg_types, expanded_name_to_tuple_var
 
 def replace_var_with_array_in_block(vars, block, typemap, calltypes):
     new_block = []
@@ -1498,10 +1511,10 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     # Call do_scheduling with appropriate arguments
     dim_starts = cgutils.alloca_once(
         builder, sched_type, size=context.get_constant(
-            types.uintp, num_dim), name="dims")
+            types.uintp, num_dim), name="dim_starts")
     dim_stops = cgutils.alloca_once(
         builder, sched_type, size=context.get_constant(
-            types.uintp, num_dim), name="dims")
+            types.uintp, num_dim), name="dim_stops")
     for i in range(num_dim):
         start, stop, step = loop_ranges[i]
         if start.type != one_type:
@@ -1577,18 +1590,6 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     nredvars = len(redvars)
     ninouts = len(expr_args) - nredvars
 
-    if config.DEBUG_ARRAY_OPT:
-        for i in range(get_thread_count()):
-            cgutils.printf(builder, "sched[" + str(i) + "] = ")
-            for j in range(num_dim * 2):
-                cgutils.printf(
-                    builder, "%d ", builder.load(
-                        builder.gep(
-                            sched, [
-                                context.get_constant(
-                                    types.intp, i * num_dim * 2 + j)])))
-            cgutils.printf(builder, "\n")
-
     def load_potential_tuple_var(x):
         """Given a variable name, if that variable is not a new name
            introduced as the extracted part of a tuple then just return
@@ -1623,7 +1624,6 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     # sched goes first
     builder.store(builder.bitcast(sched, byte_ptr_t), args)
     array_strides.append(context.get_constant(types.intp, sizeof_intp))
-    red_shapes = {}
     rv_to_arg_dict = {}
     # followed by other arguments
     for i in range(num_args):
@@ -1634,11 +1634,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         if i >= ninouts:  # reduction variables
             ary = context.make_array(aty)(context, builder, arg)
             strides = cgutils.unpack_tuple(builder, ary.strides, aty.ndim)
-            ary_shapes = cgutils.unpack_tuple(builder, ary.shape, aty.ndim)
             # Start from 1 because we skip the first dimension of length num_threads just like sched.
-            for j in range(1, len(strides)):
+            for j in range(len(strides)):
                 array_strides.append(strides[j])
-            red_shapes[i] = ary_shapes[1:]
             builder.store(builder.bitcast(ary.data, byte_ptr_t), dst)
         elif isinstance(aty, types.ArrayCompatible):
             if var in races:
@@ -1738,24 +1736,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                   steps)
     # The steps for all others are 0, except for reduction results.
     for i in range(num_args):
-        if i >= ninouts:  # steps for reduction vars are abi_sizeof(typ)
-            j = i - ninouts
-            # Get the base dtype of the reduction array.
-            redtyp = lowerer.fndesc.typemap[redvars[j]]
-            red_stride = None
-            if isinstance(redtyp, types.npytypes.Array):
-                redtyp = redtyp.dtype
-                red_stride = red_shapes[i]
-            typ = context.get_value_type(redtyp)
-            sizeof = context.get_abi_sizeof(typ)
-            # Set stepsize to the size of that dtype.
-            stepsize = context.get_constant(types.intp, sizeof)
-            if red_stride is not None:
-                for rs in red_stride:
-                    stepsize = builder.mul(stepsize, rs)
-        else:
-            # steps are strides
-            stepsize = zero
+        # steps are strides from one thread to the next
+        stepsize = zero
+
         dst = builder.gep(steps, [context.get_constant(types.intp, 1 + i)])
         builder.store(stepsize, dst)
     for j in range(len(array_strides)):
