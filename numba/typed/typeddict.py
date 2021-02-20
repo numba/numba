@@ -1,8 +1,7 @@
 """
 Python wrapper that connects CPython interpreter to the numba dictobject.
 """
-from typing import MutableMapping, TypeVar, Iterator, Tuple
-
+import typing as pt
 from numba.core.types import DictType, TypeRef
 from numba.core.imputils import numba_typeref_ctor
 from numba import njit, typeof
@@ -79,11 +78,11 @@ def _from_meminfo_ptr(ptr, dicttype):
     return d
 
 
-KT = TypeVar('KT')
-VT = TypeVar('VT')
+KT = pt.TypeVar('KT')
+VT = pt.TypeVar('VT')
 
 
-class Dict(MutableMapping[KT, VT]):
+class Dict(pt.MutableMapping[KT, VT]):
     """A typed-dictionary usable in Numba compiled functions.
 
     Implements the MutableMapping interface.
@@ -164,7 +163,7 @@ class Dict(MutableMapping[KT, VT]):
             raise KeyError(key)
         _delitem(self, key)
 
-    def __iter__(self) -> Iterator[KT]:
+    def __iter__(self) -> pt.Iterator[KT]:
         if not self._typed:
             return iter(())
         else:
@@ -176,7 +175,7 @@ class Dict(MutableMapping[KT, VT]):
         else:
             return _length(self)
 
-    def __contains__(self, key: KT) -> bool:
+    def __contains__(self, key: KT) -> bool:  # type: ignore[override]
         if len(self) == 0:
             return False
         else:
@@ -193,18 +192,19 @@ class Dict(MutableMapping[KT, VT]):
         prefix = str(self._dict_type)
         return "{prefix}({body})".format(prefix=prefix, body=body)
 
-    def get(self, key: KT, default: VT = None) -> VT:
+    def get(self,   # type: ignore[override]
+            key: KT, default: pt.Optional[VT] = None) -> pt.Optional[VT]:
         if not self._typed:
             return default
         return _get(self, key, default)
 
-    def setdefault(self, key: KT, default: VT = None) -> VT:
+    def setdefault(self, key: KT, default: VT) -> VT:  # type: ignore[override]
         if not self._typed:
             if default is not None:
                 self._initialise_dict(key, default)
         return _setdefault(self, key, default)
 
-    def popitem(self) -> Tuple[KT, VT]:
+    def popitem(self) -> pt.Tuple[KT, VT]:
         if len(self) == 0:
             raise KeyError('dictionary is empty')
         return _popitem(self)
