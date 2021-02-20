@@ -18,10 +18,12 @@ from numpy.random import randn
 import operator
 from collections import defaultdict, namedtuple
 import copy
+from itertools import cycle, chain
 
 import numba.parfors.parfor
 from numba import (njit, prange, parallel_chunksize,
-                   get_parallel_chunksize, set_parallel_chunksize)
+                   get_parallel_chunksize, set_parallel_chunksize,
+                   set_num_threads, get_num_threads, typeof)
 from numba.core import (types, utils, typing, errors, ir, rewrites,
                         typed_passes, inline_closurecall, config, compiler, cpu)
 from numba.extending import (overload_method, register_model,
@@ -530,16 +532,60 @@ class TestParfors(TestParforsBase):
         cfunc, cpfunc = self.compile_all(pyfunc, *args)
         self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
 
+    def gen_linspace(self, n, ct):
+        """Make *ct* sample 1D arrays of length *n* using np.linspace().
+        """
+        def gen():
+            yield np.linspace(0, 1, n)
+            yield np.linspace(2, 1, n)
+            yield np.linspace(1, 2, n)
+
+        src = cycle(gen())
+        return [next(src) for i in range(ct)]
+
+    def gen_linspace_variants(self, ct):
+        """Make 1D, 2D, 3D variants of the data in C and F orders
+        """
+        # 1D
+        yield self.gen_linspace(10, ct=ct)
+
+        # 2D
+        arr2ds = [x.reshape((2, 3))
+                  for x in self.gen_linspace(n=2 * 3, ct=ct)]
+        yield arr2ds
+        # Fortran order
+        yield [np.asfortranarray(x) for x in arr2ds]
+
+        # 3D
+        arr3ds = [x.reshape((2, 3, 4))
+                  for x in self.gen_linspace(n=2 * 3 * 4, ct=ct)]
+        yield arr3ds
+        # Fortran order
+        yield [np.asfortranarray(x) for x in arr3ds]
+
+    def check_variants(self, impl, arg_gen, **kwargs):
+        """Run self.check(impl, ...) on array data generated from arg_gen.
+        """
+        for args in arg_gen():
+            with self.subTest(list(map(typeof, args))):
+                self.check(impl, *args, **kwargs)
+
+    def count_parfors_variants(self, impl, arg_gen, **kwargs):
+        """Run self.countParfors(impl, ...) on array types generated from
+        arg_gen.
+        """
+        for args in arg_gen():
+            with self.subTest(list(map(typeof, args))):
+                argtys = tuple(map(typeof, args))
+                # At least one parfors
+                self.assertGreaterEqual(countParfors(impl, argtys), 1)
+
     @skip_parfors_unsupported
     def test_arraymap(self):
         def test_impl(a, x, y):
             return a * x + y
 
-        A = np.linspace(0, 1, 10)
-        X = np.linspace(2, 1, 10)
-        Y = np.linspace(1, 2, 10)
-
-        self.check(test_impl, A, X, Y)
+        self.check_variants(test_impl, lambda: self.gen_linspace_variants(3))
 
     @skip_parfors_unsupported
     @needs_blas
@@ -559,7 +605,7 @@ class TestParfors(TestParforsBase):
             Y = np.ones((10, 12))
             return np.sum(X + Y)
         self.check(test_impl)
-        self.assertTrue(countParfors(test_impl, ()) == 1)
+        self.assertEqual(countParfors(test_impl, ()), 1)
 
     @skip_parfors_unsupported
     def test_2d_parfor(self):
@@ -568,7 +614,22 @@ class TestParfors(TestParforsBase):
             Y = np.zeros((10, 12))
             return np.sum(X + Y)
         self.check(test_impl)
-        self.assertTrue(countParfors(test_impl, ()) == 1)
+        self.assertEqual(countParfors(test_impl, ()), 1)
+
+    @skip_parfors_unsupported
+    def test_nd_parfor(self):
+        def case1():
+            X = np.ones((10, 12))
+            Y = np.zeros((10, 12))
+            yield (X, Y)
+
+        data_gen = lambda: chain(case1(), self.gen_linspace_variants(2))
+
+        def test_impl(X, Y):
+            return np.sum(X + Y)
+
+        self.check_variants(test_impl, data_gen)
+        self.count_parfors_variants(test_impl, data_gen)
 
     @skip_parfors_unsupported
     def test_pi(self):
@@ -578,8 +639,8 @@ class TestParfors(TestParforsBase):
             return 4 * np.sum(x**2 + y**2 < 1) / n
 
         self.check(test_impl, 100000, decimal=1)
-        self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
-        self.assertTrue(countArrays(test_impl, (types.intp,)) == 0)
+        self.assertEqual(countParfors(test_impl, (types.int64, )), 1)
+        self.assertEqual(countArrays(test_impl, (types.intp,)), 0)
 
     @skip_parfors_unsupported
     def test_fuse_argmin_argmax_max_min(self):
@@ -590,22 +651,22 @@ class TestParfors(TestParforsBase):
                 B = A.sum()
                 return B + C
             self.check(test_impl, 256)
-            self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
-            self.assertTrue(countArrays(test_impl, (types.intp,)) == 0)
+            self.assertEqual(countParfors(test_impl, (types.int64, )), 1)
+            self.assertEqual(countArrays(test_impl, (types.intp,)), 0)
 
     @skip_parfors_unsupported
     def test_blackscholes(self):
         # blackscholes takes 5 1D float array args
         args = (numba.float64[:], ) * 5
-        self.assertTrue(countParfors(blackscholes_impl, args) == 1)
+        self.assertEqual(countParfors(blackscholes_impl, args), 1)
 
     @skip_parfors_unsupported
     @needs_blas
     def test_logistic_regression(self):
         args = (numba.float64[:], numba.float64[:,:], numba.float64[:],
                 numba.int64)
-        self.assertTrue(countParfors(lr_impl, args) == 2)
-        self.assertTrue(countArrayAllocs(lr_impl, args) == 1)
+        self.assertEqual(countParfors(lr_impl, args), 2)
+        self.assertEqual(countArrayAllocs(lr_impl, args), 1)
 
     @skip_parfors_unsupported
     def test_kmeans(self):
@@ -621,8 +682,8 @@ class TestParfors(TestParforsBase):
         # requires recursive parfor counting
         arg_typs = (types.Array(types.float64, 2, 'C'), types.intp, types.intp,
                     types.Array(types.float64, 2, 'C'))
-        self.assertTrue(
-            countNonParforArrayAccesses(example_kmeans_test, arg_typs) == 0)
+        self.assertEqual(
+            countNonParforArrayAccesses(example_kmeans_test, arg_typs), 0)
 
     @unittest.skipIf(not _32bit, "Only impacts 32 bit hardware")
     @needs_blas
@@ -828,7 +889,7 @@ class TestParfors(TestParforsBase):
         def test_impl(n):
             A = randn(n)
             return A[0]
-        self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
+        self.assertEqual(countParfors(test_impl, (types.int64, )), 1)
 
     @skip_parfors_unsupported
     def test_arange(self):
@@ -883,8 +944,13 @@ class TestParfors(TestParforsBase):
         B = np.random.randint(10, size=(N, 3))
         self.check(test_impl, A)
         self.check(test_impl, B)
-        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'), )) == 1)
-        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )) == 1)
+        self.assertEqual(countParfors(test_impl, (types.Array(types.float64, 1, 'C'), )), 1)
+        self.assertEqual(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )), 1)
+
+        # Test variants
+        data_gen = lambda: self.gen_linspace_variants(1)
+        self.check_variants(test_impl, data_gen)
+        self.count_parfors_variants(test_impl, data_gen)
 
     @skip_parfors_unsupported
     def test_var(self):
@@ -897,8 +963,13 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, A)
         self.check(test_impl, B)
         self.check(test_impl, C)
-        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'), )) == 2)
-        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )) == 2)
+        self.assertEqual(countParfors(test_impl, (types.Array(types.float64, 1, 'C'), )), 2)
+        self.assertEqual(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )), 2)
+
+        # Test variants
+        data_gen = lambda: self.gen_linspace_variants(1)
+        self.check_variants(test_impl, data_gen)
+        self.count_parfors_variants(test_impl, data_gen)
 
     @skip_parfors_unsupported
     def test_std(self):
@@ -911,8 +982,14 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, A)
         self.check(test_impl, B)
         self.check(test_impl, C)
-        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'), )) == 2)
-        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )) == 2)
+        argty = (types.Array(types.float64, 1, 'C'),)
+        self.assertEqual(countParfors(test_impl, argty), 2)
+        self.assertEqual(countParfors(test_impl, argty), 2)
+
+        # Test variants
+        data_gen = lambda: self.gen_linspace_variants(1)
+        self.check_variants(test_impl, data_gen)
+        self.count_parfors_variants(test_impl, data_gen)
 
     @skip_parfors_unsupported
     def test_issue4963_globals(self):
@@ -939,7 +1016,7 @@ class TestParfors(TestParforsBase):
         def test_impl(n):
             A = np.random.ranf((n, n))
             return A
-        self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
+        self.assertEqual(countParfors(test_impl, (types.int64, )), 1)
 
     @skip_parfors_unsupported
     def test_randoms(self):
@@ -958,7 +1035,7 @@ class TestParfors(TestParforsBase):
         py_output = test_impl(n)
         # check results within 5% since random numbers generated in parallel
         np.testing.assert_allclose(parfor_output, py_output, rtol=0.05)
-        self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
+        self.assertEqual(countParfors(test_impl, (types.int64, )), 1)
 
     @skip_parfors_unsupported
     def test_dead_randoms(self):
@@ -976,7 +1053,7 @@ class TestParfors(TestParforsBase):
         parfor_output = cpfunc.entry_point(n)
         py_output = test_impl(n)
         self.assertEqual(parfor_output, py_output)
-        self.assertTrue(countParfors(test_impl, (types.int64, )) == 0)
+        self.assertEqual(countParfors(test_impl, (types.int64, )), 0)
 
     @skip_parfors_unsupported
     def test_cfg(self):
@@ -1035,7 +1112,7 @@ class TestParfors(TestParforsBase):
             return np.sum(A[B>=3,1:2])
         self.check(test_impl, A.reshape((16,10)))
         # this doesn't fuse due to mixed indices
-        self.assertTrue(countParfors(test_impl, (numba.float64[:,:],)) == 2)
+        self.assertEqual(countParfors(test_impl, (numba.float64[:,:],)), 2)
 
     @skip_parfors_unsupported
     def test_min(self):
@@ -1068,6 +1145,13 @@ class TestParfors(TestParforsBase):
                 pcfunc.entry_point(np.array([], dtype=np.int64))
             self.assertIn(msg, str(e.exception))
 
+        # Test variants
+        data_gen = lambda: self.gen_linspace_variants(1)
+        self.check_variants(test_impl1, data_gen)
+        self.count_parfors_variants(test_impl1, data_gen)
+        self.check_variants(test_impl2, data_gen)
+        self.count_parfors_variants(test_impl2, data_gen)
+
     @skip_parfors_unsupported
     def test_max(self):
         def test_impl1(A):
@@ -1098,6 +1182,13 @@ class TestParfors(TestParforsBase):
             with self.assertRaises(ValueError) as e:
                 pcfunc.entry_point(np.array([], dtype=np.int64))
             self.assertIn(msg, str(e.exception))
+
+        # Test variants
+        data_gen = lambda: self.gen_linspace_variants(1)
+        self.check_variants(test_impl1, data_gen)
+        self.count_parfors_variants(test_impl1, data_gen)
+        self.check_variants(test_impl2, data_gen)
+        self.count_parfors_variants(test_impl2, data_gen)
 
     @skip_parfors_unsupported
     def test_use_of_reduction_var1(self):
@@ -1140,6 +1231,13 @@ class TestParfors(TestParforsBase):
                 pcfunc.entry_point(np.array([], dtype=np.int64))
             self.assertIn(msg, str(e.exception))
 
+        # Test variants
+        data_gen = lambda: self.gen_linspace_variants(1)
+        self.check_variants(test_impl1, data_gen)
+        self.count_parfors_variants(test_impl1, data_gen)
+        self.check_variants(test_impl2, data_gen)
+        self.count_parfors_variants(test_impl2, data_gen)
+
     @skip_parfors_unsupported
     def test_argmax(self):
         def test_impl1(A):
@@ -1166,6 +1264,13 @@ class TestParfors(TestParforsBase):
             with self.assertRaises(ValueError) as e:
                 pcfunc.entry_point(np.array([], dtype=np.int64))
             self.assertIn(msg, str(e.exception))
+
+        # Test variants
+        data_gen = lambda: self.gen_linspace_variants(1)
+        self.check_variants(test_impl1, data_gen)
+        self.count_parfors_variants(test_impl1, data_gen)
+        self.check_variants(test_impl2, data_gen)
+        self.count_parfors_variants(test_impl2, data_gen)
 
     @skip_parfors_unsupported
     def test_parfor_array_access1(self):
@@ -1553,7 +1658,8 @@ class TestParfors(TestParforsBase):
             return x
         x = np.zeros(10)
         self.check(test_impl, x)
-        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'),)) == 1)
+        argty = (types.Array(types.float64, 1, 'C'),)
+        self.assertEqual(countParfors(test_impl, argty), 1)
 
     @skip_parfors_unsupported
     def test_ndarray_fill2d(self):
@@ -1562,7 +1668,8 @@ class TestParfors(TestParforsBase):
             return x
         x = np.zeros((2,2))
         self.check(test_impl, x)
-        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 2, 'C'),)) == 1)
+        argty = (types.Array(types.float64, 2, 'C'),)
+        self.assertEqual(countParfors(test_impl, argty), 1)
 
     @skip_parfors_unsupported
     def test_0d_array(self):
@@ -1598,9 +1705,9 @@ class TestParfors(TestParforsBase):
         y = np.arange(10 ** 2, dtype=float)
 
         self.check(test_impl, x, y)
-        self.assertTrue(countParfors(test_impl,
+        self.assertEqual(countParfors(test_impl,
                                     (types.Array(types.float64, 1, 'C'),
-                                     types.Array(types.float64, 1, 'C'))) == 1)
+                                     types.Array(types.float64, 1, 'C'))), 1)
 
     @skip_parfors_unsupported
     def test_tuple1(self):
@@ -1687,9 +1794,9 @@ class TestParfors(TestParforsBase):
         X = np.arange(10) + 10
         Y = np.arange(10) + 100
         self.check(test_impl, X, Y)
-        self.assertTrue(countParfors(test_impl,
+        self.assertEqual(countParfors(test_impl,
                                     (types.Array(types.float64, 1, 'C'),
-                                     types.Array(types.float64, 1, 'C'))) == 1)
+                                     types.Array(types.float64, 1, 'C'))), 1)
 
     @skip_parfors_unsupported
     def test_tuple_concat(self):
@@ -2728,7 +2835,7 @@ class TestParforsVectorizer(TestPrangeBase):
                 matches = schedty.findall(cres.library.get_llvm_str())
                 self.assertGreaterEqual(len(matches), 1) # at least 1 parfor call
                 self.assertEqual(matches[0], schedule_type)
-                self.assertTrue(asm != {})
+                self.assertNotEqual(asm, {})
 
             return asm
 
@@ -3446,7 +3553,7 @@ class TestParforsMisc(TestParforsBase):
                 res += arr[i]
             return res + dummy[2]
 
-        self.assertTrue(get_init_block_size(test_impl, ()) == 0)
+        self.assertEqual(get_init_block_size(test_impl, ()), 0)
 
     @skip_parfors_unsupported
     def test_alias_analysis_for_parfor1(self):

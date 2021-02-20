@@ -121,21 +121,14 @@ def is_building():
         # User forgot to give an argument probably, let setuptools handle that.
         return True
 
-    info_commands = ['--help-commands', '--name', '--version', '-V',
-                     '--fullname', '--author', '--author-email',
-                     '--maintainer', '--maintainer-email', '--contact',
-                     '--contact-email', '--url', '--license', '--description',
-                     '--long-description', '--platforms', '--classifiers',
-                     '--keywords', '--provides', '--requires', '--obsoletes']
-    # Add commands that do more than print info, but also don't need
-    # any build step.
-    info_commands.extend(['egg_info', 'install_egg_info', 'rotate'])
+    build_commands = ['build', 'build_py', 'build_ext', 'build_clib'
+                      'build_scripts', 'install', 'install_lib',
+                      'install_headers', 'install_scripts', 'install_data',
+                      'sdist', 'bdist', 'bdist_dumb', 'bdist_rpm',
+                      'bdist_wininst', 'check', 'build_doc', 'bdist_wheel',
+                      'bdist_egg', 'develop', 'easy_install', 'test']
+    return any(bc in sys.argv[1:] for bc in build_commands)
 
-    for command in info_commands:
-        if command in sys.argv[1:]:
-            return False
-
-    return True
 
 
 def get_ext_modules():
@@ -150,6 +143,12 @@ def get_ext_modules():
     # Inject required options for extensions compiled against the Numpy
     # C API (include dirs, library dirs etc.)
     np_compile_args = np_misc.get_info('npymath')
+
+    ext_devicearray = Extension(name='numba._devicearray',
+                                sources=['numba/_devicearray.cpp'],
+                                depends=['numba/_pymodule.h',
+                                         'numba/_devicearray.h'],
+                                include_dirs=['numba'])
 
     ext_dynfunc = Extension(name='numba._dynfunc',
                             sources=['numba/_dynfuncmod.c'],
@@ -344,9 +343,10 @@ def get_ext_modules():
                                 depends=['numba/_pymodule.h'],
                                 include_dirs=["numba"])
 
-    ext_modules = [ext_dynfunc, ext_dispatcher, ext_helperlib, ext_typeconv,
-                   ext_np_ufunc, ext_npyufunc_num_threads, ext_mviewbuf,
-                   ext_nrt_python, ext_jitclass_box, ext_cuda_extras]
+    ext_modules = [ext_dynfunc, ext_dispatcher, ext_helperlib,
+                   ext_typeconv, ext_np_ufunc, ext_npyufunc_num_threads,
+                   ext_mviewbuf, ext_nrt_python, ext_jitclass_box,
+                   ext_cuda_extras, ext_devicearray]
 
     ext_modules += ext_np_ufunc_backends
 
@@ -376,6 +376,7 @@ metadata = dict(
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
         "Topic :: Software Development :: Compilers",
     ],
     package_data={
@@ -391,6 +392,7 @@ metadata = dict(
         "numba.cext": ["*.c", "*.h"],
         # numba gdb hook init command language file
         "numba.misc": ["cmdlang.gdb"],
+        "numba.typed": ["py.typed"],
     },
     scripts=["numba/pycc/pycc", "bin/numba"],
     author="Anaconda, Inc.",

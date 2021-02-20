@@ -50,6 +50,7 @@ class JITCUDACodegen(BaseCPUCodegen):
         ir_module.triple = CUDA_TRIPLE[utils.MACHINE_BITS]
         if self._data_layout:
             ir_module.data_layout = self._data_layout
+        nvvm.add_ir_version(ir_module)
         return ir_module
 
     def _module_pass_manager(self):

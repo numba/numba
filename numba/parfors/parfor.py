@@ -1920,8 +1920,8 @@ class ConvertNumpyPass:
                 if isinstance(instr, ir.Assign):
                     expr = instr.value
                     lhs = instr.target
-                    if self._is_C_order(lhs.name):
-                        # only translate C order since we can't allocate F
+                    lhs_typ = self.pass_states.typemap[lhs.name]
+                    if self._is_C_or_F_order(lhs_typ):
                         if guard(self._is_supported_npycall, expr):
                             new_instr = self._numpy_to_parfor(equiv_set, lhs, expr)
                             if new_instr is not None:
@@ -1945,8 +1945,26 @@ class ConvertNumpyPass:
             block.body = new_body
 
     def _is_C_order(self, arr_name):
-        typ = self.pass_states.typemap[arr_name]
-        return isinstance(typ, types.npytypes.Array) and typ.layout == 'C' and typ.ndim > 0
+        if isinstance(arr_name, types.npytypes.Array):
+            return arr_name.layout == 'C' and arr_name.ndim > 0
+        elif arr_name is str:
+            typ = self.pass_states.typemap[arr_name]
+            return (isinstance(typ, types.npytypes.Array) and
+                    typ.layout == 'C' and
+                    typ.ndim > 0)
+        else:
+            return False
+
+    def _is_C_or_F_order(self, arr_name):
+        if isinstance(arr_name, types.npytypes.Array):
+            return (arr_name.layout == 'C' or arr_name.layout == 'F') and arr_name.ndim > 0
+        elif arr_name is str:
+            typ = self.pass_states.typemap[arr_name]
+            return (isinstance(typ, types.npytypes.Array) and
+                    (typ.layout == 'C' or typ.layout == 'F') and
+                    typ.ndim > 0)
+        else:
+            return False
 
     def _arrayexpr_to_parfor(self, equiv_set, lhs, arrayexpr, avail_vars):
         """generate parfor from arrayexpr node, which is essentially a
@@ -1966,7 +1984,8 @@ class ConvertNumpyPass:
         # generate init block and body
         init_block = ir.Block(scope, loc)
         init_block.body = mk_alloc(pass_states.typemap, pass_states.calltypes, lhs,
-                                   tuple(size_vars), el_typ, scope, loc)
+                                   tuple(size_vars), el_typ, scope, loc,
+                                   pass_states.typemap[lhs.name])
         body_label = next_label()
         body_block = ir.Block(scope, loc)
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
@@ -2049,7 +2068,8 @@ class ConvertNumpyPass:
         # generate init block and body
         init_block = ir.Block(scope, loc)
         init_block.body = mk_alloc(pass_states.typemap, pass_states.calltypes, lhs,
-                                   tuple(size_vars), el_typ, scope, loc)
+                                   tuple(size_vars), el_typ, scope, loc,
+                                   pass_states.typemap[lhs.name])
         body_label = next_label()
         body_block = ir.Block(scope, loc)
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
@@ -3522,13 +3542,17 @@ def check_conflicting_reduction_operators(param, nodes):
 def get_reduction_init(nodes):
     """
     Get initial value for known reductions.
-    Currently, only += and *= are supported. We assume the inplace_binop node
-    is followed by an assignment.
+    Currently, only += and *= are supported.
     """
-    require(len(nodes) >=2)
-    require(isinstance(nodes[-1].value, ir.Var))
-    require(nodes[-2].target.name == nodes[-1].value.name)
-    acc_expr = nodes[-2].value
+    require(len(nodes) >=1)
+    # there could be an extra assignment after the reduce node
+    # See: test_reduction_var_reuse
+    if isinstance(nodes[-1].value, ir.Var):
+        require(len(nodes) >=2)
+        require(nodes[-2].target.name == nodes[-1].value.name)
+        acc_expr = nodes[-2].value
+    else:
+        acc_expr = nodes[-1].value
     require(isinstance(acc_expr, ir.Expr) and acc_expr.op=='inplace_binop')
     if acc_expr.fn == operator.iadd or acc_expr.fn == operator.isub:
         return 0, acc_expr.fn
@@ -3573,9 +3597,13 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
         if isinstance(rhs, ir.Expr):
             in_vars = set(lookup(v, True).name for v in rhs.list_vars())
             if name in in_vars:
-                next_node = nodes[i+1]
-                target_name = next_node.target.unversioned_name
-                if not (isinstance(next_node, ir.Assign) and target_name == unversioned_name):
+                # reductions like sum have an assignment afterwards
+                # e.g. $2 = a + $1; a = $2
+                # reductions that are functions calls like max() don't have an
+                # extra assignment afterwards
+                if (not (i+1 < len(nodes) and isinstance(nodes[i+1], ir.Assign)
+                        and nodes[i+1].target.unversioned_name == unversioned_name)
+                        and lhs.unversioned_name != unversioned_name):
                     raise ValueError(
                         f"Use of reduction variable {unversioned_name!r} other "
                         "than in a supported reduction function is not "
@@ -3593,7 +3621,7 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
                 replace_dict[non_red_args[0]] = ir.Var(lhs.scope, name+"#init", lhs.loc)
                 replace_vars_inner(rhs, replace_dict)
                 reduce_nodes = nodes[i:]
-                break;
+                break
     return reduce_nodes
 
 def get_expr_args(expr):

@@ -8,6 +8,7 @@
 #include "_typeof.h"
 #include "frameobject.h"
 #include "core/typeconv/typeconv.hpp"
+#include "_devicearray.h"
 
 /*
  * The following call_trace and call_trace_protected functions
@@ -261,19 +262,31 @@ Dispatcher_clear(Dispatcher *self, PyObject *args)
 
 static
 PyObject*
-Dispatcher_Insert(Dispatcher *self, PyObject *args)
+Dispatcher_Insert(Dispatcher *self, PyObject *args, PyObject *kwds)
 {
+    /* The cuda kwarg is a temporary addition until CUDA overloads are compiled
+     * functions. Once they are compiled functions, kwargs can be removed from
+     * this function. */
+    static char *keywords[] = {
+        (char*)"sig",
+        (char*)"func",
+        (char*)"objectmode",
+        (char*)"cuda",
+        NULL
+    };
+
     PyObject *sigtup, *cfunc;
     int i, sigsz;
     int *sig;
     int objectmode = 0;
+    int cuda = 0;
 
-    if (!PyArg_ParseTuple(args, "OO|i", &sigtup,
-                          &cfunc, &objectmode)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO|ip", keywords, &sigtup,
+                                     &cfunc, &objectmode, &cuda)) {
         return NULL;
     }
 
-    if (!PyObject_TypeCheck(cfunc, &PyCFunction_Type) ) {
+    if (!cuda && !PyObject_TypeCheck(cfunc, &PyCFunction_Type) ) {
         PyErr_SetString(PyExc_TypeError, "must be builtin_function_or_method");
         return NULL;
     }
@@ -298,7 +311,6 @@ Dispatcher_Insert(Dispatcher *self, PyObject *args)
 
     Py_RETURN_NONE;
 }
-
 
 static
 void explain_issue(PyObject *dispatcher, PyObject *args, PyObject *kws,
@@ -453,6 +465,26 @@ compile_and_invoke(Dispatcher *self, PyObject *args, PyObject *kws, PyObject *lo
     Py_DECREF(cfunc);
 
     return retval;
+}
+
+/* A copy of compile_and_invoke, that only compiles. This is needed for CUDA
+ * kernels, because its overloads are Python instances of the _Kernel class,
+ * rather than compiled functions. Once CUDA overloads are compiled functions,
+ * cuda_compile_only can be removed. */
+static
+PyObject*
+cuda_compile_only(Dispatcher *self, PyObject *args, PyObject *kws, PyObject *locals)
+{
+    /* Compile a new one */
+    PyObject *cfa, *cfunc;
+    cfa = PyObject_GetAttrString((PyObject*)self, "_compile_for_args");
+    if (cfa == NULL)
+        return NULL;
+
+    cfunc = PyObject_Call(cfa, args, kws);
+    Py_DECREF(cfa);
+
+    return cfunc;
 }
 
 static int
@@ -677,10 +709,142 @@ CLEANUP:
     return retval;
 }
 
+/* Based on Dispatcher_call above, with the following differences:
+   1. It does not invoke the definition of the function.
+   2. It returns the definition, instead of a value returned by the function.
+
+   This is because CUDA functions are, at present, _Kernel objects rather than
+   compiled functions. */
+static PyObject*
+Dispatcher_cuda_call(Dispatcher *self, PyObject *args, PyObject *kws)
+{
+    PyObject *tmptype, *retval = NULL;
+    int *tys = NULL;
+    int argct;
+    int i;
+    int prealloc[24];
+    int matches;
+    PyObject *cfunc;
+    PyThreadState *ts = PyThreadState_Get();
+    PyObject *locals = NULL;
+
+    /* If compilation is enabled, ensure that an exact match is found and if
+     * not compile one */
+    int exact_match_required = self->can_compile ? 1 : self->exact_match_required;
+
+    if (ts->use_tracing && ts->c_profilefunc) {
+        locals = PyEval_GetLocals();
+        if (locals == NULL) {
+            goto CLEANUP;
+        }
+    }
+    if (self->fold_args) {
+        if (find_named_args(self, &args, &kws))
+            return NULL;
+    }
+    else
+        Py_INCREF(args);
+    /* Now we own a reference to args */
+
+    argct = PySequence_Fast_GET_SIZE(args);
+
+    if (argct < (Py_ssize_t) (sizeof(prealloc) / sizeof(int)))
+        tys = prealloc;
+    else
+        tys = new int[argct];
+
+    for (i = 0; i < argct; ++i) {
+        tmptype = PySequence_Fast_GET_ITEM(args, i);
+        tys[i] = typeof_typecode((PyObject *) self, tmptype);
+        if (tys[i] == -1) {
+            if (self->can_fallback){
+                /* We will clear the exception if fallback is allowed. */
+                PyErr_Clear();
+            } else {
+                goto CLEANUP;
+            }
+        }
+    }
+
+    /* We only allow unsafe conversions if compilation of new specializations
+       has been disabled. */
+    cfunc = self->resolve(tys, matches, !self->can_compile,
+                          exact_match_required);
+
+    if (matches == 0 && !self->can_compile) {
+        /*
+         * If we can't compile a new specialization, look for
+         * matching signatures for which conversions haven't been
+         * registered on the C++ TypeManager.
+         */
+        int res = search_new_conversions((PyObject *) self, args, kws);
+        if (res < 0) {
+            retval = NULL;
+            goto CLEANUP;
+        }
+        if (res > 0) {
+            /* Retry with the newly registered conversions */
+            cfunc = self->resolve(tys, matches, !self->can_compile,
+                                  exact_match_required);
+        }
+    }
+
+    if (matches == 1) {
+        /* Definition is found */
+        retval = cfunc;
+        Py_INCREF(retval);
+    } else if (matches == 0) {
+        /* No matching definition */
+        if (self->can_compile) {
+            retval = cuda_compile_only(self, args, kws, locals);
+        } else if (self->fallbackdef) {
+            /* Have object fallback */
+            retval = call_cfunc(self, self->fallbackdef, args, kws, locals);
+        } else {
+            /* Raise TypeError */
+            explain_matching_error((PyObject *) self, args, kws);
+            retval = NULL;
+        }
+    } else if (self->can_compile) {
+        /* Ambiguous, but are allowed to compile */
+        retval = cuda_compile_only(self, args, kws, locals);
+    } else {
+        /* Ambiguous */
+        explain_ambiguous((PyObject *) self, args, kws);
+        retval = NULL;
+    }
+
+CLEANUP:
+    if (tys != prealloc)
+        delete[] tys;
+    Py_DECREF(args);
+
+    return retval;
+}
+
+static int
+import_devicearray(void)
+{
+    PyObject *devicearray = PyImport_ImportModule("numba._devicearray");
+    if (devicearray == NULL) {
+        return -1;
+    }
+    Py_DECREF(devicearray);
+
+    DeviceArray_API = (void**)PyCapsule_Import("numba._devicearray._DEVICEARRAY_API", 0);
+    if (DeviceArray_API == NULL) {
+        return -1;
+    }
+
+    return 0;
+}
+
 static PyMethodDef Dispatcher_methods[] = {
     { "_clear", (PyCFunction)Dispatcher_clear, METH_NOARGS, NULL },
-    { "_insert", (PyCFunction)Dispatcher_Insert, METH_VARARGS,
+    { "_insert", (PyCFunction)Dispatcher_Insert, METH_VARARGS | METH_KEYWORDS,
       "insert new definition"},
+    { "_cuda_call", (PyCFunction)Dispatcher_cuda_call,
+      METH_VARARGS | METH_KEYWORDS, "CUDA call resolution" },
     { NULL },
 };
 
@@ -769,6 +933,12 @@ static PyMethodDef ext_methods[] = {
 
 
 MOD_INIT(_dispatcher) {
+    if (import_devicearray() < 0) {
+      PyErr_Print();
+      PyErr_SetString(PyExc_ImportError, "numba._devicearray failed to import");
+      return MOD_ERROR_VAL;
+    }
+
     PyObject *m;
     MOD_DEF(m, "_dispatcher", "No docs", ext_methods)
     if (m == NULL)

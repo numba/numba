@@ -392,6 +392,14 @@ class fma(Stub):
     """
 
 
+class cbrt(Stub):
+    """"
+    cbrt(a)
+
+    Perform the cube root operation.
+    """
+
+
 #-------------------------------------------------------------------------------
 # atomic
 

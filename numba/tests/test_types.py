@@ -474,7 +474,7 @@ class TestPickling(TestCase):
         recordtype = np.dtype([('a', np.float64),
                                ('b', np.int32),
                                ('c', np.complex64),
-                               ('d', (np.str, 5))])
+                               ('d', (np.str_, 5))])
         ty = numpy_support.from_dtype(recordtype)
         self.check_pickling(ty)
         self.check_pickling(types.Array(ty, 1, 'A'))
