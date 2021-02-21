@@ -1569,7 +1569,8 @@ class TestNonCompiledInfer(TestCase):
             d.setdefault(1)
         self.assertEqual(
             str(raises.exception),
-            str(TypeError("setdefault() missing 1 required positional argument: 'default'")),
+            str(TypeError("setdefault() missing 1 required positional "
+                          "argument: 'default'")),
         )
         # Test __contains__
         self.assertFalse(1 in d)
