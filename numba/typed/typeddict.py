@@ -198,7 +198,7 @@ class Dict(pt.MutableMapping[KT, VT]):
             return default
         return _get(self, key, default)
 
-    def setdefault(self, key: KT, default: VT = None) -> VT:  # type: ignore[override]
+    def setdefault(self, key: KT, default: VT) -> VT:  # type: ignore[override]
         if not self._typed:
             if default is not None:
                 self._initialise_dict(key, default)
