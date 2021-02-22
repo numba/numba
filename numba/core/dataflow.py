@@ -172,7 +172,7 @@ class DataFlowAnalysis(object):
     def op_FORMAT_VALUE(self, info, inst):
         """
         FORMAT_VALUE(flags): flags argument specifies format spec which is
-        not supported yet. Currently, we just call str() on the value.
+        not supported yet. Currently, str() is simply called on the value.
         Pops a value from stack and pushes results back.
         Required for supporting f-strings.
         https://docs.python.org/3/library/dis.html#opcode-FORMAT_VALUE

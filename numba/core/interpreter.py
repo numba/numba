@@ -470,7 +470,7 @@ class Interpreter(object):
     def op_FORMAT_VALUE(self, inst, value, res, strvar):
         """
         FORMAT_VALUE(flags): flags argument specifies format spec which is not supported
-        yet. Currently, we just call str() on the value.
+        yet. Currently, str() is simply called on the value.
         https://docs.python.org/3/library/dis.html#opcode-FORMAT_VALUE
         """
         value = self.get(value)
