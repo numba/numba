@@ -2570,7 +2570,7 @@ class TestUnicodeAuxillary(BaseTest):
 
         # corner case: empty string
         def impl5():
-            return f""
+            return f""  # noqa: F541
 
         self.assertEqual(impl1(3), njit(impl1)(3))
         self.assertEqual(impl2(2), njit(impl2)(2))
