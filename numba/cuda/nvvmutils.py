@@ -12,6 +12,15 @@ def declare_atomic_cas_int(lmod, isize):
                              lc.Type.int(isize)))
     return lmod.get_or_insert_function(fnty, fname)
 
+
+def atomic_cmpxchg(builder, lmod, isize, ptr, cmp, val):
+    if nvvm.NVVM().is_nvvm70:
+        out = builder.cmpxchg(ptr, cmp, val, 'monotonic', 'monotonic')
+        return builder.extract_value(out, 0)
+    else:
+        return builder.call(declare_atomic_cas_int(lmod, isize),
+                            (ptr, cmp, val))
+
 # For atomic intrinsics, "numba_nvvm" prevents LLVM 9 onwards auto-upgrading
 # them into atomicrmw instructions that are not recognized by NVVM. It is
 # replaced with "nvvm" in llvm_to_ptx later, after the module has been parsed

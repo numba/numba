@@ -1385,7 +1385,10 @@ def replace_var_with_array_in_block(vars, block, typemap, calltypes):
             const_assign = ir.Assign(const_node, const_var, inst.loc)
             new_block.append(const_assign)
 
-            setitem_node = ir.SetItem(inst.target, const_var, inst.value, inst.loc)
+            val_var = ir.Var(inst.target.scope, mk_unique_var("$val"), inst.loc)
+            typemap[val_var.name] = typemap[inst.target.name]
+            new_block.append(ir.Assign(inst.value, val_var, inst.loc))
+            setitem_node = ir.SetItem(inst.target, const_var, val_var, inst.loc)
             calltypes[setitem_node] = signature(
                 types.none, types.npytypes.Array(typemap[inst.target.name], 1, "C"), types.intp, typemap[inst.target.name])
             new_block.append(setitem_node)

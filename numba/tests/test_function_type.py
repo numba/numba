@@ -1,3 +1,4 @@
+import unittest
 import types as pytypes
 from numba import jit, njit, cfunc, types, int64, float64, float32, errors
 from numba import literal_unroll
@@ -1252,3 +1253,7 @@ class TestBasicSubtyping(TestCase):
         got = bar(tup, tup_bar)
         expected = foo1(a) + foo2(a) + bar1(a) + bar2(a)
         self.assertEqual(got, expected)
+
+
+if __name__ == '__main__':
+    unittest.main()

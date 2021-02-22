@@ -23,14 +23,15 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, Fixup
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                            NopythonRewrites, PreParforPass, ParforPass,
                            DumpParforDiagnostics, NativeLowering,
-                           IRLegalization, NoPythonBackend)
+                           IRLegalization, NoPythonBackend, NativeLowering)
 import numpy as np
 from numba.tests.support import skip_parfors_unsupported, needs_blas
 import unittest
 
 
 def test_will_propagate(b, z, w):
-    x = 3
+    x1 = 3
+    x = x1
     if b > 0:
         y = z + w
     else:
@@ -287,6 +288,7 @@ class TestRemoveDead(unittest.TestCase):
                 pm.add_pass(AnnotateTypes, "annotate types")
 
                 # lower
+                pm.add_pass(NativeLowering, "native lowering")
                 pm.add_pass(NoPythonBackend, "nopython mode backend")
                 pm.finalize()
                 return [pm]

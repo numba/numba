@@ -1306,7 +1306,11 @@ class ArrayAnalysis(object):
                 shape = inst.value
             elif isinstance(inst.value, ir.Global):
                 gvalue = inst.value.value
-                if isinstance(gvalue, tuple):
+                # only integer values can be part of shape
+                # TODO: support cases with some but not all integer values or
+                # nested tuples
+                if (isinstance(gvalue, tuple)
+                        and all(isinstance(v, int) for v in gvalue)):
                     shape = gvalue
                 elif isinstance(gvalue, int):
                     shape = (gvalue,)

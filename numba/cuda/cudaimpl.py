@@ -607,7 +607,8 @@ def _atomic_dispatcher(dispatch_fn):
                             (aryty.ndim, len(indty)))
 
         lary = context.make_array(aryty)(context, builder, ary)
-        ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices)
+        ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices,
+                                       wraparound=True)
         # dispatcher to implementation base on dtype
         return dispatch_fn(context, builder, dtype, ptr, val)
     return imp
@@ -796,9 +797,7 @@ def ptx_atomic_cas_tuple(context, builder, sig, args):
     if aryty.dtype in (cuda.cudadecl.integer_numba_types):
         lmod = builder.module
         bitwidth = aryty.dtype.bitwidth
-        return builder.call(nvvmutils.declare_atomic_cas_int(lmod,
-                                                             bitwidth),
-                            (ptr, old, val))
+        return nvvmutils.atomic_cmpxchg(builder, lmod, bitwidth, ptr, old, val)
     else:
         raise TypeError('Unimplemented atomic compare_and_swap '
                         'with %s array' % dtype)

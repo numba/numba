@@ -55,7 +55,6 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                 ``False``, ``-opt=0`` is passed to NVVM. Defaults to ``True``.
     :type opt: bool
     """
-    debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
 
     if link and config.ENABLE_CUDASIM:
         raise NotImplementedError('Cannot link PTX in the simulator')
@@ -73,8 +72,37 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
         msg = _msg_deprecated_signature_arg.format('bind')
         raise DeprecationError(msg)
 
+    debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
     fastmath = kws.get('fastmath', False)
-    if not sigutils.is_signature(func_or_sig):
+
+    if sigutils.is_signature(func_or_sig):
+        if config.ENABLE_CUDASIM:
+            def jitwrapper(func):
+                return FakeCUDAKernel(func, device=device, fastmath=fastmath,
+                                      debug=debug)
+            return jitwrapper
+
+        argtypes, restype = sigutils.normalize_signature(func_or_sig)
+
+        if restype and not device and restype != types.void:
+            raise TypeError("CUDA kernel must have void return type.")
+
+        def kernel_jit(func):
+            targetoptions = kws.copy()
+            targetoptions['debug'] = debug
+            targetoptions['link'] = link
+            targetoptions['opt'] = opt
+            return Dispatcher(func, [func_or_sig], targetoptions=targetoptions)
+
+        def device_jit(func):
+            return compile_device(func, restype, argtypes, inline=inline,
+                                  debug=debug)
+
+        if device:
+            return device_jit
+        else:
+            return kernel_jit
+    else:
         if func_or_sig is None:
             if config.ENABLE_CUDASIM:
                 def autojitwrapper(func):
@@ -100,43 +128,6 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                 sigs = None
                 return Dispatcher(func_or_sig, sigs,
                                   targetoptions=targetoptions)
-
-    else:
-        if config.ENABLE_CUDASIM:
-            def jitwrapper(func):
-                return FakeCUDAKernel(func, device=device, fastmath=fastmath,
-                                      debug=debug)
-            return jitwrapper
-
-        if isinstance(func_or_sig, list):
-            msg = 'Lists of signatures are not yet supported in CUDA'
-            raise ValueError(msg)
-        elif sigutils.is_signature(func_or_sig):
-            sigs = [func_or_sig]
-        else:
-            raise ValueError("Expecting signature or list of signatures")
-
-        for sig in sigs:
-            argtypes, restype = sigutils.normalize_signature(sig)
-
-            if restype and not device and restype != types.void:
-                raise TypeError("CUDA kernel must have void return type.")
-
-        def kernel_jit(func):
-            targetoptions = kws.copy()
-            targetoptions['debug'] = debug
-            targetoptions['link'] = link
-            targetoptions['opt'] = opt
-            return Dispatcher(func, sigs, targetoptions=targetoptions)
-
-        def device_jit(func):
-            return compile_device(func, restype, argtypes, inline=inline,
-                                  debug=debug)
-
-        if device:
-            return device_jit
-        else:
-            return kernel_jit
 
 
 def declare_device(name, sig):
