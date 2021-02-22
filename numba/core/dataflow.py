@@ -194,9 +194,12 @@ class DataFlowAnalysis(object):
         https://docs.python.org/3/library/dis.html#opcode-BUILD_STRING
         """
         count = inst.arg
-        assert count > 0, "invalid BUILD_STRING count"
         strings = list(reversed([info.pop() for _ in range(count)]))
-        tmps = [info.make_temp() for _ in range(count - 1)]
+        # corner case: f""
+        if count == 0:
+            tmps = [info.make_temp()]
+        else:
+            tmps = [info.make_temp() for _ in range(count - 1)]
         info.append(inst, strings=strings, tmps=tmps)
         info.push(tmps[-1])
 

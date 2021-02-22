@@ -296,9 +296,12 @@ class TraceRunner(object):
         https://docs.python.org/3/library/dis.html#opcode-BUILD_STRING
         """
         count = inst.arg
-        assert count > 0, "invalid BUILD_STRING count"
         strings = list(reversed([state.pop() for _ in range(count)]))
-        tmps = [state.make_temp() for _ in range(count - 1)]
+        # corner case: f""
+        if count == 0:
+            tmps = [state.make_temp()]
+        else:
+            tmps = [state.make_temp() for _ in range(count - 1)]
         state.append(inst, strings=strings, tmps=tmps)
         state.push(tmps[-1])
 

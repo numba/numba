@@ -486,7 +486,12 @@ class Interpreter(object):
         https://docs.python.org/3/library/dis.html#opcode-BUILD_STRING
         """
         count = inst.arg
-        assert count > 0, "invalid BUILD_STRING count"
+        # corner case: f""
+        if count == 0:
+            const = ir.Const("", loc=self.loc)
+            self.store(const, tmps[-1])
+            return
+
         prev = self.get(strings[0])
         for other, tmp in zip(strings[1:], tmps):
             other = self.get(other)

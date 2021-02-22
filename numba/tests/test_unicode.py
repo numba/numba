@@ -6,7 +6,7 @@ from numba import njit
 from numba.core import types, utils
 import unittest
 from numba.tests.support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
-from numba.core.errors import TypingError
+from numba.core.errors import TypingError, UnsupportedError
 from numba.cpython.unicode import _MAX_UNICODE
 from numba.core.types.functions import _header_lead
 from numba.extending import overload
@@ -2560,8 +2560,33 @@ class TestUnicodeAuxillary(BaseTest):
         def impl2(a):
             return f"{a+2}"
 
+        # no expression
+        def impl3(a):
+            return f"ABC_{a}"
+
+        # format spec not allowed
+        def impl4(a):
+            return f"ABC_{a:0}"
+
+        # corner case: empty string
+        def impl5():
+            return f""
+
         self.assertEqual(impl1(3), njit(impl1)(3))
         self.assertEqual(impl2(2), njit(impl2)(2))
+        # string input
+        self.assertEqual(impl3("DE"), njit(impl3)("DE"))
+        # check error when input type doesn't have str() implementation
+        with self.assertRaises(TypingError) as raises:
+            njit(impl3)(["A", "B"])
+        msg = "No implementation of function Function(<class 'str'>)"
+        self.assertIn(msg, str(raises.exception))
+        # check error when format spec provided
+        with self.assertRaises(UnsupportedError) as raises:
+            njit(impl4)(["A", "B"])
+        msg = "format spec in f-strings not supported yet"
+        self.assertIn(msg, str(raises.exception))
+        self.assertEqual(impl5(), njit(impl5)())
 
 
 if __name__ == '__main__':
