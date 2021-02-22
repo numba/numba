@@ -953,7 +953,7 @@ class PythonAPI(object):
     def object_type(self, obj):
         """Emit a call to ``PyObject_Type(obj)`` to get the type of ``obj``.
         """
-        fnty = Type.function(self.pyobj, [self.pyobj] * 1)
+        fnty = Type.function(self.pyobj, [self.pyobj])
         fn = self._get_function(fnty, name="PyObject_Type")
         return self.builder.call(fn, (obj,))
 

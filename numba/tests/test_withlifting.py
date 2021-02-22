@@ -957,7 +957,8 @@ class TestLiftObj(MemoryLeak, TestCase):
             test2()
         self.assertIn(
             ("Objmode context failed. "
-             "Argument 'out' is using unsupported type. "
+             "Argument 'out' is using unsupported type: "
+             "reflected list(int64)<iv=None>. "
              "Reflected types is not supported."),
             str(raises.exception),
         )
@@ -974,7 +975,8 @@ class TestLiftObj(MemoryLeak, TestCase):
             test2()
         self.assertIn(
             ("Objmode context failed. "
-             "Argument 'result' is using unsupported type. "
+             "Argument 'result' is using unsupported type: "
+             "reflected set(int64). "
              "Reflected types is not supported."),
             str(raises.exception),
         )
@@ -990,8 +992,11 @@ class TestLiftObj(MemoryLeak, TestCase):
         with self.assertRaises(TypeError) as raises:
             test4()
         self.assertIn(
-            ("can't unbox <class 'numba.typed.typeddict.Dict'> "
-             "from <class 'dict'>"),
+            ("can't unbox a <class 'dict'> "
+             "as a <class 'numba.typed.typeddict.Dict'>"),
+            str(raises.exception),
+        )
+
             str(raises.exception),
         )
 

@@ -293,8 +293,8 @@ def unbox_dicttype(typ, val, c):
             # Raise error on incorrect type
             c.pyapi.err_format(
                 "PyExc_TypeError",
-                "can't unbox %S from %S",
-                dict_type, valtype
+                "can't unbox a %S as a %S",
+                valtype, dict_type,
             )
             bb_else = c.builder.basic_block
 
