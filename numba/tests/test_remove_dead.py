@@ -222,13 +222,13 @@ class TestRemoveDead(unittest.TestCase):
         """make sure lhs variable of assignment is considered live if used in
         rhs (test for #6715).
         """
-        @numba.njit
         def func():
             for i in range(3):
                 a = (lambda j: j)(i)
                 a = np.array(a)
+            return a
 
-        func()
+        self.assertEqual(func(), numba.njit(func)())
 
     @skip_parfors_unsupported
     def test_alias_parfor_extension(self):
