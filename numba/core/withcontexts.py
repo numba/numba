@@ -247,8 +247,9 @@ class _ObjModeContextType(WithContext):
         if getattr(typ, "reflected", False):
             msgbuf = [
                 "Objmode context failed.",
-                f"Argument {name!r} is using unsupported type: {typ}.",
-                f"Reflected types is not supported.",
+                f"Argument {name!r} is declared as "
+                f"an unsupported type: {typ}.",
+                f"Reflected types are not supported.",
             ]
             raise errors.CompilerError(" ".join(msgbuf), loc=loc)
 
