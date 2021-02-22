@@ -68,6 +68,7 @@ if [[ $(uname) == Linux ]]; then
     if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
         $CONDA_INSTALL gcc_linux-32 gxx_linux-32
     elif [[ "$arch" == "ppc64le" ]] ; then
+        # This branch is not exercised by Numba's Azure CI for the main fork.
         $CONDA_INSTALL gcc_linux-"$arch" gxx_linux-"$arch"
     else
         $CONDA_INSTALL gcc_linux-64 gxx_linux-64
