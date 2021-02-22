@@ -997,6 +997,19 @@ class TestLiftObj(MemoryLeak, TestCase):
             str(raises.exception),
         )
 
+    def test_objmode_typed_list(self):
+        ret_type = types.ListType(types.int64)
+        @njit
+        def test4():
+            with objmode(res=ret_type):
+                res = [1, 2]
+            return res
+
+        with self.assertRaises(TypeError) as raises:
+            test4()
+        self.assertIn(
+            ("can't unbox a <class 'list'> "
+             "as a <class 'numba.typed.typedlist.List'>"),
             str(raises.exception),
         )
 
