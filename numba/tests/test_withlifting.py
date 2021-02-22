@@ -959,7 +959,7 @@ class TestLiftObj(MemoryLeak, TestCase):
             ("Objmode context failed. "
              "Argument 'out' is declared as an unsupported type: "
              "reflected list(int64)<iv=None>. "
-             "Reflected types is not supported."),
+             "Reflected types are not supported."),
             str(raises.exception),
         )
 
@@ -975,9 +975,9 @@ class TestLiftObj(MemoryLeak, TestCase):
             test2()
         self.assertIn(
             ("Objmode context failed. "
-             "Argument 'out' is declared as an unsupported type: "
+             "Argument 'result' is declared as an unsupported type: "
              "reflected set(int64). "
-             "Reflected types is not supported."),
+             "Reflected types are not supported."),
             str(raises.exception),
         )
 
