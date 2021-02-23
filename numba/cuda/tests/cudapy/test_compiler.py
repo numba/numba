@@ -63,6 +63,31 @@ class TestCompileToPTX(unittest.TestCase):
         self.assertIn('div.full.ftz.f32', ptx)
         self.assertIn('sqrt.approx.ftz.f32', ptx)
 
+    def check_debug_info(self, ptx):
+        # A debug_info section should exist in the PTX. Whitespace varies
+        # between CUDA toolkit versions.
+        self.assertRegex(ptx, '\\.section\\s+\\.debug_info')
+        # A .file directive should be produced and include the name of the
+        # source. The path and whitespace may vary, so we accept anything
+        # ending in the filename of this module.
+        self.assertRegex(ptx, '\\.file.*test_compiler.py"')
+
+    def test_device_function_with_debug(self):
+        # See Issue #6719
+        def f():
+            pass
+
+        ptx, resty = compile_ptx(f, [], device=True, debug=True)
+        self.check_debug_info(ptx)
+
+    def test_kernel_with_debug(self):
+        # Inspired by (but not originally affected by) Issue #6719
+        def f():
+            pass
+
+        ptx, resty = compile_ptx(f, [], debug=True)
+        self.check_debug_info(ptx)
+
 
 @skip_on_cudasim('Compilation unsupported in the simulator')
 class TestCompileToPTXForCurrentDevice(CUDATestCase):

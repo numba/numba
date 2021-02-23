@@ -33,7 +33,7 @@ from numba import mviewbuf
 from numba.core import utils, serialize, config
 from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
-from .drvapi import cu_occupancy_b2d_size, cu_stream_callback_pyobj
+from .drvapi import cu_occupancy_b2d_size, cu_stream_callback_pyobj, cu_uuid
 from numba.cuda.cudadrv import enums, drvapi, _extras
 from numba.cuda.envvars import get_numba_envvar
 
@@ -462,17 +462,30 @@ class Device(object):
         assert devnum == got_devnum.value, "Driver returned another device"
         self.id = got_devnum.value
         self.attributes = {}
+
         # Read compute capability
         cc_major = c_int()
         cc_minor = c_int()
         driver.cuDeviceComputeCapability(byref(cc_major), byref(cc_minor),
                                          self.id)
         self.compute_capability = (cc_major.value, cc_minor.value)
+
         # Read name
         bufsz = 128
         buf = (c_char * bufsz)()
         driver.cuDeviceGetName(buf, bufsz, self.id)
         self.name = buf.value
+
+        # Read UUID
+        uuid = cu_uuid()
+        driver.cuDeviceGetUuid(byref(uuid), self.id)
+        b = '%02x'
+        b2 = b * 2
+        b4 = b * 4
+        b6 = b * 6
+        fmt = f'GPU-{b4}-{b2}-{b2}-{b2}-{b6}'
+        self.uuid = fmt % tuple(bytes(uuid))
+
         self.primary_context = None
 
     def get_device_identity(self):

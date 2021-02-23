@@ -16,6 +16,7 @@ cu_event = c_void_p
 cu_link_state = c_void_p
 cu_function_attribute = c_int
 cu_ipc_mem_handle = (c_byte * _extras.CUDA_IPC_HANDLE_SIZE)   # 64 bytes wide
+cu_uuid = (c_byte * 16)         # Device UUID
 
 cu_stream_callback_pyobj = CFUNCTYPE(None, cu_stream, c_int, py_object)
 
@@ -388,4 +389,6 @@ API_PROTOTYPES = {
     'cuDeviceCanAccessPeer': (c_int,
                               POINTER(c_int), cu_device, cu_device),
 
+    # CUresult cuDeviceGetUuid ( CUuuid* uuid, CUdevice dev )
+    'cuDeviceGetUuid': (c_int, POINTER(cu_uuid), cu_device),
 }

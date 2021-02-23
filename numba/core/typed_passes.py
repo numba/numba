@@ -358,8 +358,15 @@ class NativeLowering(LoweringPass):
         LoweringPass.__init__(self)
 
     def run_pass(self, state):
-        targetctx = state.targetctx
+        if state.library is None:
+            codegen = state.targetctx.codegen()
+            state.library = codegen.create_library(state.func_id.func_qualname)
+            # Enable object caching upfront, so that the library can
+            # be later serialized.
+            state.library.enable_object_caching()
+
         library = state.library
+        targetctx = state.targetctx
         interp = state.func_ir  # why is it called this?!
         typemap = state.typemap
         restype = state.return_type
@@ -452,15 +459,6 @@ class NoPythonBackend(LoweringPass):
         """
         Back-end: Generate LLVM IR from Numba IR, compile to machine code
         """
-        if state.library is None:
-            codegen = state.targetctx.codegen()
-            state.library = codegen.create_library(state.func_id.func_qualname)
-            # Enable object caching upfront, so that the library can
-            # be later serialized.
-            state.library.enable_object_caching()
-
-        # TODO: Pull this out into the pipeline
-        NativeLowering().run_pass(state)
         lowered = state['cr']
         signature = typing.signature(state.return_type, *state.args)
 

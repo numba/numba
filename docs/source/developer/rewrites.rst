@@ -261,7 +261,7 @@ object:
 * *const_assigns*: A map from assignment variable names to the
   constant valued expression that defines the constant variable.
 
-At this point, the match method iterates iterates over the assignment
+At this point, the match method iterates over the assignment
 instructions in the input basic block.  For each assignment
 instruction, the matcher looks for one of two things:
 

@@ -14,9 +14,14 @@ from numba.core.typing.templates import AbstractTemplate, ConcreteTemplate
 from numba.core import (types, typing, utils, funcdesc, serialize, config,
                         compiler, sigutils)
 from numba.core.typeconv.rules import default_type_manager
+from numba.core.compiler import (CompilerBase, DefaultPassBuilder,
+                                 compile_result)
 from numba.core.compiler_lock import global_compiler_lock
+from numba.core.compiler_machinery import (LoweringPass, PassManager,
+                                           register_pass)
 from numba.core.dispatcher import OmittedArg
 from numba.core.errors import NumbaDeprecationWarning
+from numba.core.typed_passes import IRLegalization, NativeLowering
 from numba.core.typing.typeof import Purpose, typeof
 from warnings import warn
 import numba
@@ -28,14 +33,71 @@ from .api import get_current_device
 from .args import wrap_arg
 
 
+@register_pass(mutates_CFG=True, analysis_only=False)
+class CUDABackend(LoweringPass):
+
+    _name = "cuda_backend"
+
+    def __init__(self):
+        LoweringPass.__init__(self)
+
+    def run_pass(self, state):
+        """
+        Back-end: Packages lowering output in a compile result
+        """
+        lowered = state['cr']
+        signature = typing.signature(state.return_type, *state.args)
+
+        state.cr = compile_result(
+            typing_context=state.typingctx,
+            target_context=state.targetctx,
+            typing_error=state.status.fail_reason,
+            type_annotation=state.type_annotation,
+            library=state.library,
+            call_helper=lowered.call_helper,
+            signature=signature,
+            fndesc=lowered.fndesc,
+        )
+        return True
+
+
+class CUDACompiler(CompilerBase):
+    def define_pipelines(self):
+        dpb = DefaultPassBuilder
+        pm = PassManager('cuda')
+
+        untyped_passes = dpb.define_untyped_pipeline(self.state)
+        pm.passes.extend(untyped_passes.passes)
+
+        typed_passes = dpb.define_typed_pipeline(self.state)
+        pm.passes.extend(typed_passes.passes)
+
+        lowering_passes = self.define_cuda_lowering_pipeline(self.state)
+        pm.passes.extend(lowering_passes.passes)
+
+        pm.finalize()
+        return [pm]
+
+    def define_cuda_lowering_pipeline(self, state):
+        pm = PassManager('cuda_lowering')
+        # legalise
+        pm.add_pass(IRLegalization,
+                    "ensure IR is legal prior to lowering")
+
+        # lower
+        pm.add_pass(NativeLowering, "native lowering")
+        pm.add_pass(CUDABackend, "cuda backend")
+
+        pm.finalize()
+        return pm
+
+
 @global_compiler_lock
 def compile_cuda(pyfunc, return_type, args, debug=False, inline=False):
-    # First compilation will trigger the initialization of the CUDA backend.
-    from .descriptor import CUDATargetDesc
+    from .descriptor import cuda_target
+    typingctx = cuda_target.typingctx
+    targetctx = cuda_target.targetctx
 
-    typingctx = CUDATargetDesc.typingctx
-    targetctx = CUDATargetDesc.targetctx
-    # TODO handle debug flag
     flags = compiler.Flags()
     # Do not compile (generate native code), just lower (to LLVM)
     flags.set('no_compile')
@@ -52,7 +114,8 @@ def compile_cuda(pyfunc, return_type, args, debug=False, inline=False):
                                   args=args,
                                   return_type=return_type,
                                   flags=flags,
-                                  locals={})
+                                  locals={},
+                                  pipeline_class=CUDACompiler)
 
     library = cres.library
     library.finalize()
@@ -249,7 +312,7 @@ def compile_device_template(pyfunc, debug=False, inline=False, opt=True):
     """Create a DeviceFunctionTemplate object and register the object to
     the CUDA typing context.
     """
-    from .descriptor import CUDATargetDesc
+    from .descriptor import cuda_target
 
     dft = DeviceFunctionTemplate(pyfunc, debug=debug, inline=inline, opt=opt)
 
@@ -275,7 +338,7 @@ def compile_device_template(pyfunc, debug=False, inline=False, opt=True):
             }
             return info
 
-    typingctx = CUDATargetDesc.typingctx
+    typingctx = cuda_target.typingctx
     typingctx.insert_user_function(dft, device_function_template)
     return dft
 
@@ -285,10 +348,9 @@ def compile_device(pyfunc, return_type, args, inline=True, debug=False):
 
 
 def declare_device_function(name, restype, argtypes):
-    from .descriptor import CUDATargetDesc
-
-    typingctx = CUDATargetDesc.typingctx
-    targetctx = CUDATargetDesc.targetctx
+    from .descriptor import cuda_target
+    typingctx = cuda_target.typingctx
+    targetctx = cuda_target.targetctx
     sig = typing.signature(restype, *argtypes)
     extfn = ExternFunction(name, sig)
 
@@ -869,9 +931,9 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         self.targetoptions['extensions'] = \
             list(self.targetoptions.get('extensions', []))
 
-        from .descriptor import CUDATargetDesc
+        from .descriptor import cuda_target
 
-        self.typingctx = CUDATargetDesc.typingctx
+        self.typingctx = cuda_target.typingctx
 
         self._tm = default_type_manager
 
