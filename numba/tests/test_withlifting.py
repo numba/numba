@@ -955,12 +955,12 @@ class TestLiftObj(MemoryLeak, TestCase):
 
         with self.assertRaises(errors.CompilerError) as raises:
             test2()
-        self.assertIn(
-            ("Objmode context failed. "
-             "Argument 'out' is declared as an unsupported type: "
-             "reflected list(int64)<iv=None>. "
-             "Reflected types are not supported."),
+        self.assertRegex(
             str(raises.exception),
+            (r"Objmode context failed. "
+             r"Argument 'out' is declared as an unsupported type: "
+             r"reflected list\(int(32|64)\)<iv=None>. "
+             r"Reflected types are not supported."),
         )
 
     def test_objmode_reflected_set(self):
@@ -973,12 +973,12 @@ class TestLiftObj(MemoryLeak, TestCase):
 
         with self.assertRaises(errors.CompilerError) as raises:
             test2()
-        self.assertIn(
-            ("Objmode context failed. "
-             "Argument 'result' is declared as an unsupported type: "
-             "reflected set(int64). "
-             "Reflected types are not supported."),
+        self.assertRegex(
             str(raises.exception),
+            (r"Objmode context failed. "
+             r"Argument 'result' is declared as an unsupported type: "
+             r"reflected set\(int(32|64)\). "
+             r"Reflected types are not supported."),
         )
 
     def test_objmode_typed_dict(self):
