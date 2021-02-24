@@ -821,9 +821,60 @@ class TestLiftObj(MemoryLeak, TestCase):
             return val
 
         with self.assertRaisesRegex(
-            errors.CompilerError, "Global 'gv_type2' is not defined",
+            errors.CompilerError,
+            ("Error handling objmode argument 'val'. "
+             "Global 'gv_type2' is not defined\.")
         ):
             global_var()
+
+    def test_objmode_gv_mod_attr(self):
+        @njit
+        def modattr1():
+            with objmode(val=types.intp):
+                val = 12.3
+            return val
+
+        @njit
+        def modattr2():
+            with objmode(val=numba.types.intp):
+                val = 12.3
+            return val
+
+        for fn in (modattr1, modattr2):
+            with self.subTest(fn=str(fn)):
+                ret = fn()
+                # the result is truncated because of the intp return-type
+                self.assertIsInstance(ret, int)
+                self.assertEqual(ret, 12)
+
+    def test_objmode_gv_mod_attr_error(self):
+        @njit
+        def moderror():
+            with objmode(val=types.THIS_DOES_NOT_EXIST):
+                val = 12.3
+            return val
+        with self.assertRaisesRegex(
+            errors.CompilerError,
+            ("Error handling objmode argument 'val'. "
+             "Getattr cannot be resolved at compile-time"),
+        ):
+            moderror()
+
+    def test_objmode_gv_mod_attr_error_multiple(self):
+        @njit
+        def moderror():
+            with objmode(v1=types.intp, v2=types.THIS_DOES_NOT_EXIST,
+                         v3=types.float32):
+                v1 = 12.3
+                v2 = 12.3
+                v3 = 12.3
+            return val
+        with self.assertRaisesRegex(
+            errors.CompilerError,
+            ("Error handling objmode argument 'v2'. "
+             "Getattr cannot be resolved at compile-time"),
+        ):
+            moderror()
 
     def test_objmode_closure_type_in_overload(self):
         def foo():
@@ -865,9 +916,26 @@ class TestLiftObj(MemoryLeak, TestCase):
             return foo()
 
         with self.assertRaisesRegex(
-            errors.TypingError, "Freevar 'shrubbery' is not defined",
+            errors.TypingError,
+            ("Error handling objmode argument 'out'. "
+             "Freevar 'shrubbery' is not defined"),
         ):
             bar()
+
+    def test_objmode_invalid_use(self):
+        @njit
+        def moderror():
+            with objmode(bad=1 + 1):
+                out = 1
+            return val
+        with self.assertRaisesRegex(
+            errors.CompilerError,
+            ("Error handling objmode argument 'bad'. "
+             "The value must be a compile-time constant either as "
+             "a non-local variable or a getattr expression that "
+             "refers to a Numba type."),
+        ):
+            moderror()
 
     def test_objmode_multi_type_args(self):
         array_ty = types.int32[:]
@@ -944,6 +1012,76 @@ class TestLiftObj(MemoryLeak, TestCase):
         with objmode(output='float64'):
             output = x / 10
         return output
+
+    def test_objmode_reflected_list(self):
+        ret_type = typeof([1, 2, 3, 4, 5])
+        @njit
+        def test2():
+            with objmode(out=ret_type):
+                out = [1, 2, 3, 4, 5]
+            return out
+
+        with self.assertRaises(errors.CompilerError) as raises:
+            test2()
+        self.assertRegex(
+            str(raises.exception),
+            (r"Objmode context failed. "
+             r"Argument 'out' is declared as an unsupported type: "
+             r"reflected list\(int(32|64)\)<iv=None>. "
+             r"Reflected types are not supported."),
+        )
+
+    def test_objmode_reflected_set(self):
+        ret_type = typeof({1, 2, 3, 4, 5})
+        @njit
+        def test2():
+            with objmode(result=ret_type):
+                result = {1, 2, 3, 4, 5}
+            return result
+
+        with self.assertRaises(errors.CompilerError) as raises:
+            test2()
+        self.assertRegex(
+            str(raises.exception),
+            (r"Objmode context failed. "
+             r"Argument 'result' is declared as an unsupported type: "
+             r"reflected set\(int(32|64)\). "
+             r"Reflected types are not supported."),
+        )
+
+    def test_objmode_typed_dict(self):
+        ret_type = types.DictType(types.unicode_type, types.int64)
+        @njit
+        def test4():
+            with objmode(res=ret_type):
+                res = {'A': 1, 'B': 2}
+            return res
+
+        with self.assertRaises(TypeError) as raises:
+            test4()
+        self.assertIn(
+            ("can't unbox a <class 'dict'> "
+             "as a <class 'numba.typed.typeddict.Dict'>"),
+            str(raises.exception),
+        )
+
+    def test_objmode_typed_list(self):
+        ret_type = types.ListType(types.int64)
+        @njit
+        def test4():
+            with objmode(res=ret_type):
+                res = [1, 2]
+            return res
+
+        with self.assertRaises(TypeError) as raises:
+            test4()
+        # Note: in python3.6, the Generic[T] on typedlist is causing it to
+        #       format differently.
+        self.assertRegex(
+            str(raises.exception),
+            (r"can't unbox a <class 'list'> "
+             r"as a (<class ')?numba.typed.typedlist.List('>)?"),
+        )
 
 
 def case_inner_pyfunc(x):
