@@ -111,7 +111,9 @@ class TestBuiltins(unittest.TestCase):
             cfunc = jit(do_loop)
             cfunc(x)
 
-            self.assertEqual(len(w), 4)
+            msg = '\n'.join(f"----------\n{x.message}" for x in w)
+
+            self.assertEqual(len(w), 4, msg=msg)
 
             # Type inference failure (1st pass, in npm, fall-back to objmode
             # with looplift)
