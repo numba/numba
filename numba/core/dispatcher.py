@@ -8,6 +8,7 @@ import types as pytypes
 import uuid
 import weakref
 from contextlib import ExitStack
+import threading
 
 from numba import _dispatcher
 from numba.core import (
@@ -21,6 +22,32 @@ from numba.core.bytecode import get_code_object
 from numba.core.caching import NullCache, FunctionCache
 from numba.core import entrypoints
 import numba.core.event as ev
+import numba.core.decorators as _nb_decor
+
+
+class TargetConfig:
+    _tls = threading.local()
+
+    def __init__(self):
+        tls = self._tls
+        try:
+            tls_stack = tls.stack
+        except AttributeError:
+            tls_stack = tls.stack = list()
+
+        self._stack = tls_stack
+
+    def push(self, state):
+        self._stack.append(state)
+
+    def pop(self):
+        return self._stack.pop()
+
+    def get(self):
+        return self._stack[0]
+
+    def __len__(self):
+        return len(self._stack)
 
 
 class OmittedArg(object):
@@ -742,6 +769,44 @@ class _MemoMixin:
         self._recent.append(self)
 
 
+class Siblings:
+    def __init__(self):
+        self._cache = {}
+        self._stat_hit = 0
+        self._stat_miss = 0
+
+    def normalize_key(self, options):
+        """Normalize target options into something that is hashable so it can
+        be used later in ``save_cache()`` and ``load_cache()``.
+        """
+        return tuple(map(tuple, options.items()))
+
+    def save_cache(self, key, new_disp):
+        """Save a dispatcher associated with the given key.
+        """
+        self._cache[key] = new_disp
+
+    def load_cache(self, key):
+        """Load a dispatcher associated with the given key.
+        """
+        out = self._cache.get(key)
+        if out is None:
+            self._stat_miss += 1
+        else:
+            self._stat_hit += 1
+        return out
+
+    def items(self):
+        """Returns the contents of the cache.
+        """
+        return self._cache.items()
+
+    def stats(self):
+        """Returns stats regarding cache hit/miss.
+        """
+        return {'hit': self._stat_hit, 'miss': self._stat_miss}
+
+
 class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
     """
     Implementation of user-facing dispatcher objects (i.e. created using
@@ -797,6 +862,9 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
 
         self._type = types.Dispatcher(self)
         self.typingctx.insert_global(self, self._type)
+
+        # Remember the sibling dispatchers
+        self._siblings = Siblings()
 
     def dump(self, tab=''):
         print(f'{tab}DUMP {type(self).__name__}[{self.py_func.__name__}'
@@ -994,6 +1062,21 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         if not self._can_compile and len(self.overloads) == 1:
             cres = tuple(self.overloads.values())[0]
             return types.FunctionType(cres.signature)
+
+    def _call_tls_target(self, args, kwargs):
+        # Check TLS target configuration
+        tc = TargetConfig()
+        options = tc.get()
+        # Check cache
+        siblings = self._siblings
+        key = siblings.normalize_key(options)
+        disp = siblings.load_cache(key)
+        if disp is None:
+            # make new
+            disp = _nb_decor.jit(**options)(self.py_func)
+            siblings.save_cache(key, disp)
+        # Call the new dispatcher
+        return disp(*args, **kwargs)
 
 
 class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
