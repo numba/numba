@@ -1013,6 +1013,76 @@ class TestLiftObj(MemoryLeak, TestCase):
             output = x / 10
         return output
 
+    def test_objmode_reflected_list(self):
+        ret_type = typeof([1, 2, 3, 4, 5])
+        @njit
+        def test2():
+            with objmode(out=ret_type):
+                out = [1, 2, 3, 4, 5]
+            return out
+
+        with self.assertRaises(errors.CompilerError) as raises:
+            test2()
+        self.assertRegex(
+            str(raises.exception),
+            (r"Objmode context failed. "
+             r"Argument 'out' is declared as an unsupported type: "
+             r"reflected list\(int(32|64)\)<iv=None>. "
+             r"Reflected types are not supported."),
+        )
+
+    def test_objmode_reflected_set(self):
+        ret_type = typeof({1, 2, 3, 4, 5})
+        @njit
+        def test2():
+            with objmode(result=ret_type):
+                result = {1, 2, 3, 4, 5}
+            return result
+
+        with self.assertRaises(errors.CompilerError) as raises:
+            test2()
+        self.assertRegex(
+            str(raises.exception),
+            (r"Objmode context failed. "
+             r"Argument 'result' is declared as an unsupported type: "
+             r"reflected set\(int(32|64)\). "
+             r"Reflected types are not supported."),
+        )
+
+    def test_objmode_typed_dict(self):
+        ret_type = types.DictType(types.unicode_type, types.int64)
+        @njit
+        def test4():
+            with objmode(res=ret_type):
+                res = {'A': 1, 'B': 2}
+            return res
+
+        with self.assertRaises(TypeError) as raises:
+            test4()
+        self.assertIn(
+            ("can't unbox a <class 'dict'> "
+             "as a <class 'numba.typed.typeddict.Dict'>"),
+            str(raises.exception),
+        )
+
+    def test_objmode_typed_list(self):
+        ret_type = types.ListType(types.int64)
+        @njit
+        def test4():
+            with objmode(res=ret_type):
+                res = [1, 2]
+            return res
+
+        with self.assertRaises(TypeError) as raises:
+            test4()
+        # Note: in python3.6, the Generic[T] on typedlist is causing it to
+        #       format differently.
+        self.assertRegex(
+            str(raises.exception),
+            (r"can't unbox a <class 'list'> "
+             r"as a (<class ')?numba.typed.typedlist.List('>)?"),
+        )
+
 
 def case_inner_pyfunc(x):
     return x / 10
