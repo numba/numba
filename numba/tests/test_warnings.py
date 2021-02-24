@@ -106,6 +106,7 @@ class TestBuiltins(unittest.TestCase):
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always', NumbaWarning)
+            warnings.filterwarnings('ignore', module="typeguard")
 
             x = np.ones(4, dtype=np.float32)
             cfunc = jit(do_loop)
