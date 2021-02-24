@@ -202,6 +202,16 @@ class DataFlowAnalysis(object):
         info.append(inst, items=items[::-1], size=count, res=dct)
         info.push(dct)
 
+    def op_MAP_ADD(self, info, inst):
+        key = info.pop()
+        value = info.pop()
+        index = inst.arg
+        target = info.peek(index)
+        setitemvar = info.make_temp()
+        res = info.make_temp()
+        info.append(inst, target=target, key=key, value=value,
+                     setitemvar=setitemvar, res=res)
+
     def op_BUILD_SET(self, info, inst):
         count = inst.arg
         # Note: related python bug http://bugs.python.org/issue26020
