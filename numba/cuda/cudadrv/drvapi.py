@@ -16,6 +16,7 @@ cu_event = c_void_p
 cu_link_state = c_void_p
 cu_function_attribute = c_int
 cu_ipc_mem_handle = (c_byte * _extras.CUDA_IPC_HANDLE_SIZE)   # 64 bytes wide
+cu_uuid = (c_byte * 16)         # Device UUID
 
 cu_stream_callback_pyobj = CFUNCTYPE(None, cu_stream, c_int, py_object)
 
@@ -116,6 +117,10 @@ API_PROTOTYPES = {
     # CUresult cuMemAlloc(CUdeviceptr *dptr, size_t bytesize);
     'cuMemAlloc': (c_int, POINTER(cu_device_ptr), c_size_t),
 
+    # CUresult cuMemAllocManaged(CUdeviceptr *dptr, size_t bytesize,
+    #                            unsigned int flags);
+    'cuMemAllocManaged': (c_int, c_void_p, c_size_t, c_uint),
+
     # CUresult cuMemsetD8(CUdeviceptr dstDevice, unsigned char uc, size_t N)
     'cuMemsetD8': (c_int, cu_device_ptr, c_uint8, c_size_t),
 
@@ -184,6 +189,18 @@ API_PROTOTYPES = {
     'cuLaunchKernel': (c_int, cu_function, c_uint, c_uint, c_uint,
                        c_uint, c_uint, c_uint, c_uint, cu_stream,
                        POINTER(c_void_p), POINTER(c_void_p)),
+
+    # CUresult cuLaunchCooperativeKernel(CUfunction f, unsigned int gridDimX,
+    #                                   unsigned int gridDimY,
+    #                                   unsigned int gridDimZ,
+    #                                   unsigned int blockDimX,
+    #                                   unsigned int blockDimY,
+    #                                   unsigned int blockDimZ,
+    #                                   unsigned int sharedMemBytes,
+    #                                   CUstream hStream, void **kernelParams)
+    'cuLaunchCooperativeKernel': (c_int, cu_function, c_uint, c_uint, c_uint,
+                                  c_uint, c_uint, c_uint, c_uint, cu_stream,
+                                  POINTER(c_void_p)),
 
     #  CUresult cuMemHostAlloc (	void ** 	pp,
     #                               size_t 	bytesize,
@@ -372,4 +389,6 @@ API_PROTOTYPES = {
     'cuDeviceCanAccessPeer': (c_int,
                               POINTER(c_int), cu_device, cu_device),
 
+    # CUresult cuDeviceGetUuid ( CUuuid* uuid, CUdevice dev )
+    'cuDeviceGetUuid': (c_int, POINTER(cu_uuid), cu_device),
 }

@@ -6,18 +6,21 @@ from llvmlite import ir
 @skip_on_cudasim("This is testing CUDA backend code generation")
 class TestCudaConstString(unittest.TestCase):
     def test_const_string(self):
-        # These imports is incompatible with CUDASIM
-        from numba.cuda.descriptor import CUDATargetDesc
+        # These imports are incompatible with CUDASIM
+        from numba.cuda.descriptor import cuda_target
         from numba.cuda.cudadrv.nvvm import llvm_to_ptx, ADDRSPACE_CONSTANT
 
-        targetctx = CUDATargetDesc.targetctx
+        targetctx = cuda_target.targetctx
         mod = targetctx.create_module("")
         textstring = 'A Little Brown Fox'
         gv0 = targetctx.insert_const_string(mod, textstring)
-        gv1 = targetctx.insert_const_string(mod, textstring)
+        # Insert the same const string a second time - the first should be
+        # reused.
+        targetctx.insert_const_string(mod, textstring)
 
         res = re.findall(r"@\"__conststring__.*internal.*constant.*\["
                          r"19\s+x\s+i8\]", str(mod))
+        # Ensure that the const string was only inserted once
         self.assertEqual(len(res), 1)
 
         fnty = ir.FunctionType(ir.IntType(8).as_pointer(), [])

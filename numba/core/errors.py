@@ -76,6 +76,12 @@ class NumbaExperimentalFeatureWarning(NumbaWarning):
     Warning category for using an experimental feature.
     """
 
+
+class NumbaInvalidConfigWarning(NumbaWarning):
+    """
+    Warning category for using an invalid configuration.
+    """
+
 # These are needed in the color formatting of errors setup
 
 
@@ -544,7 +550,8 @@ class NotDefinedError(IRError):
 
     def __init__(self, name, loc=None):
         self.name = name
-        msg = "Variable '%s' is not defined." % name
+        msg = ("The compiler failed to analyze the bytecode. "
+               "Variable '%s' is not defined." % name)
         super(NotDefinedError, self).__init__(msg, loc=loc)
 
 

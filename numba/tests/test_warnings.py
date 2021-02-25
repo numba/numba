@@ -106,12 +106,15 @@ class TestBuiltins(unittest.TestCase):
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always', NumbaWarning)
+            warnings.filterwarnings('ignore', module="typeguard")
 
             x = np.ones(4, dtype=np.float32)
             cfunc = jit(do_loop)
             cfunc(x)
 
-            self.assertEqual(len(w), 4)
+            msg = '\n'.join(f"----------\n{x.message}" for x in w)
+
+            self.assertEqual(len(w), 4, msg=msg)
 
             # Type inference failure (1st pass, in npm, fall-back to objmode
             # with looplift)

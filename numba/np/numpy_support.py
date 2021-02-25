@@ -4,7 +4,7 @@ import re
 
 import numpy as np
 
-from numba.core import errors, types, utils
+from numba.core import errors, types
 from numba.core.typing.templates import signature
 
 
@@ -95,13 +95,18 @@ def from_dtype(dtype):
     try:
         return FROM_DTYPE[dtype]
     except KeyError:
-        char = dtype.char
+        pass
 
+    try:
+        char = dtype.char
+    except AttributeError:
+        pass
+    else:
         if char in 'SU':
             return _from_str_dtype(dtype)
         if char in 'mM':
             return _from_datetime_dtype(dtype)
-        if char in 'V':
+        if char in 'V' and dtype.subdtype is not None:
             subtype = from_dtype(dtype.subdtype[0])
             return types.NestedArray(subtype, dtype.shape)
 
@@ -448,7 +453,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
 
     for candidate in ufunc.types:
         ufunc_inputs = candidate[:ufunc.nin]
-        ufunc_outputs = candidate[-ufunc.nout:]
+        ufunc_outputs = candidate[-ufunc.nout:] if ufunc.nout else []
         if 'O' in ufunc_inputs:
             # Skip object arrays
             continue
@@ -587,7 +592,7 @@ def farray(ptr, shape, dtype=None):
     given *shape*, in Fortran order.  If *dtype* is given, it is used as the
     array's dtype, otherwise the array's dtype is inferred from *ptr*'s type.
     """
-    if not isinstance(shape, utils.INT_TYPES):
+    if not isinstance(shape, int):
         shape = shape[::-1]
     return carray(ptr, shape, dtype).T
 

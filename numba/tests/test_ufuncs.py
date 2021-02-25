@@ -1200,7 +1200,7 @@ class TestScalarUFuncs(TestCase):
                     expected = float(expected)
                 elif np.issubdtype(expected.dtype, np.integer):
                     expected = int(expected)
-                elif np.issubdtype(expected.dtype, np.bool):
+                elif np.issubdtype(expected.dtype, np.bool_):
                     expected = bool(expected)
 
             alltypes = cr.signature.args + (cr.signature.return_type,)
