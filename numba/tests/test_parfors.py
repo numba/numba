@@ -1839,6 +1839,14 @@ class TestParfors(TestParforsBase):
         x = np.ones((3,3))
         self.check(test_impl, x)
 
+    @skip_parfors_unsupported
+    def test_high_dimension1(self):
+        # issue6749
+        def test_impl(x):
+            return x * 1.0
+        x = np.ones((2, 2, 2, 2, 2, 15))
+        self.check(test_impl, x)
+
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
