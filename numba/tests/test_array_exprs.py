@@ -24,6 +24,7 @@ import shutil
 import uuid
 import os
 import sys
+import textwrap
 
 import unittest
 
@@ -648,13 +649,13 @@ class TestExternalTypes(MemoryLeakMixin, unittest.TestCase):
     """ Tests RewriteArrayExprs with external (user defined) types,
     see #5157"""
 
-    source_lines = """
-from numba.core import types
+    source_lines = textwrap.dedent("""
+        from numba.core import types
 
-class FooType(types.Type):
-    def __init__(self):
-        super(FooType, self).__init__(name='Foo')
-"""
+        class FooType(types.Type):
+            def __init__(self):
+                super(FooType, self).__init__(name='Foo')
+        """)
 
     # copied from test_types
     @contextlib.contextmanager
