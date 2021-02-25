@@ -20,6 +20,7 @@ import multiprocessing as mp
 import warnings
 import traceback
 from contextlib import contextmanager
+from distutils.version import LooseVersion
 
 import numpy as np
 
@@ -72,6 +73,11 @@ skip_tryexcept_supported = unittest.skipIf(
 
 _msg = "SciPy needed for test"
 skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
+skip_unless_numpy_1_2_0 = unittest.skipIf(
+    LooseVersion(np.__version__) < "1.2.0",
+    "NumPy>=1.2.0 needed for test"
+)
+
 
 _lnx_reason = 'linux only test'
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
