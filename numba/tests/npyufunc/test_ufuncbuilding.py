@@ -7,7 +7,7 @@ from numba.np.ufunc.ufuncbuilder import GUFuncBuilder
 from numba import vectorize, guvectorize
 from numba.np.ufunc import PyUFunc_One
 from numba.np.ufunc.dufunc import DUFunc as UFuncBuilder
-from numba.tests.support import tag, TestCase, skip_unless_numpy_1_2_0
+from numba.tests.support import tag, TestCase, skip_unless_numpy_1_20_0
 from numba.core import config
 import unittest
 
@@ -147,7 +147,7 @@ class TestUfuncBuilding(TestCase):
         ufunc = builder.build_ufunc()
         self.assertEqual(ufunc(-1, 3), 2)
 
-    @skip_unless_numpy_1_2_0
+    @skip_unless_numpy_1_20_0
     def test_pickle(self):
         result = pickle.loads(pickle.dumps(inner_explicit))
         self.assertEqual(result.__name__, inner_explicit.__name__)
