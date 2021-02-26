@@ -10,7 +10,6 @@ import weakref
 from contextlib import ExitStack
 import threading
 
-import numba
 from numba import _dispatcher
 from numba.core import (
     utils, types, errors, typing, serialize, config, compiler, sigutils
@@ -775,12 +774,6 @@ class Siblings:
         self._stat_hit = 0
         self._stat_miss = 0
 
-    def normalize_key(self, options):
-        """Normalize target options into something that is hashable so it can
-        be used later in ``save_cache()`` and ``load_cache()``.
-        """
-        return tuple(map(tuple, options.items()))
-
     def save_cache(self, key, new_disp):
         """Save a dispatcher associated with the given key.
         """
@@ -1066,15 +1059,14 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
     def _call_tls_target(self, args, kwargs):
         # Check TLS target configuration
         tc = TargetConfig()
-        options = tc.get()
+        retarget = tc.get()
         # Check cache
         siblings = self._siblings
-        key = siblings.normalize_key(options)
-        disp = siblings.load_cache(key)
+        disp = siblings.load_cache(retarget)
         if disp is None:
             # make new
-            disp = numba.core.decorators.jit(**options)(self.py_func)
-            siblings.save_cache(key, disp)
+            disp = retarget(self)
+            siblings.save_cache(retarget, disp)
         # Call the new dispatcher
         return disp(*args, **kwargs)
 
