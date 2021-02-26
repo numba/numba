@@ -10,6 +10,7 @@ import weakref
 from contextlib import ExitStack
 import threading
 
+import numba
 from numba import _dispatcher
 from numba.core import (
     utils, types, errors, typing, serialize, config, compiler, sigutils
@@ -22,7 +23,6 @@ from numba.core.bytecode import get_code_object
 from numba.core.caching import NullCache, FunctionCache
 from numba.core import entrypoints
 import numba.core.event as ev
-import numba.core.decorators as _nb_decor
 
 
 class TargetConfig:
@@ -1073,7 +1073,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         disp = siblings.load_cache(key)
         if disp is None:
             # make new
-            disp = _nb_decor.jit(**options)(self.py_func)
+            disp = numba.core.decorators.jit(**options)(self.py_func)
             siblings.save_cache(key, disp)
         # Call the new dispatcher
         return disp(*args, **kwargs)
