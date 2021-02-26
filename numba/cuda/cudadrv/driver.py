@@ -2124,7 +2124,10 @@ FILE_EXTENSION_MAP = {
 
 
 class Linker(object):
-    def __init__(self, max_registers=0):
+    """
+    Links for current device if no CC given
+    """
+    def __init__(self, max_registers=0, cc=None):
         logsz = int(get_numba_envvar('CUDA_LOG_SIZE', 1024))
         linkerinfo = (c_char * logsz)()
         linkererrors = (c_char * logsz)()
@@ -2139,7 +2142,14 @@ class Linker(object):
         if max_registers:
             options[enums.CU_JIT_MAX_REGISTERS] = c_void_p(max_registers)
 
-        raw_keys = list(options.keys()) + [enums.CU_JIT_TARGET_FROM_CUCONTEXT]
+        if cc is None:
+            # No option value is needed, but we need something as a placeholder
+            options[enums.CU_JIT_TARGET_FROM_CUCONTEXT] = 1
+        else:
+            cc_val = cc[0] * 10 + cc[1]
+            options[enums.CU_JIT_TARGET] = c_void_p(cc_val)
+
+        raw_keys = list(options.keys())
         raw_values = list(options.values())
         del options
 
