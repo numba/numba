@@ -96,7 +96,7 @@ class TestCudaCooperativeGroups(CUDATestCase):
 
         for key, defn in no_sync.definitions.items():
             self.assertFalse(defn.cooperative)
-            for link in defn._func.linking:
+            for link in defn._codelibrary._linking_files:
                 self.assertNotIn('cudadevrt', link)
 
     @skip_unless_cc_60

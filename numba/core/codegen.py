@@ -1148,12 +1148,12 @@ class Codegen(metaclass=ABCMeta):
         """
         return self._target_data
 
-    def create_library(self, name):
+    def create_library(self, name, **kwargs):
         """
         Create a :class:`CodeLibrary` object for use with this codegen
         instance.
         """
-        return self._library_class(self, name)
+        return self._library_class(self, name, **kwargs)
 
     def unserialize_library(self, serialized):
         return self._library_class._unserialize(self, serialized)
