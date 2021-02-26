@@ -245,14 +245,14 @@ def _prepare_shape_strides_dtype(shape, strides, dtype, order):
     if isinstance(strides, int):
         strides = (strides,)
     else:
-        if shape == ():
-            shape = (1,)
         strides = strides or _fill_stride_by_order(shape, dtype, order)
     return shape, strides, dtype
 
 
 def _fill_stride_by_order(shape, dtype, order):
     nd = len(shape)
+    if nd == 0:
+        return ()
     strides = [0] * nd
     if order == 'C':
         strides[-1] = dtype.itemsize
