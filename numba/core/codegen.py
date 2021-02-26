@@ -551,8 +551,12 @@ class CodeLibrary(metaclass=ABCMeta):
         """
         return self._codegen
 
+    @property
+    def name(self):
+        return self._name
+
     def __repr__(self):
-        return "<Library %r at 0x%x>" % (self._name, id(self))
+        return "<Library %r at 0x%x>" % (self.name, id(self))
 
     def _raise_if_finalized(self):
         if self._finalized:
@@ -641,8 +645,8 @@ class CPUCodeLibrary(CodeLibrary):
         super().__init__(codegen, name)
         self._linking_libraries = []   # maintain insertion order
         self._final_module = ll.parse_assembly(
-            str(self._codegen._create_empty_module(self._name)))
-        self._final_module.name = cgutils.normalize_ir_text(self._name)
+            str(self._codegen._create_empty_module(self.name)))
+        self._final_module.name = cgutils.normalize_ir_text(self.name)
         self._shared_module = None
 
     def _optimize_functions(self, ll_module):
@@ -742,7 +746,7 @@ class CPUCodeLibrary(CodeLibrary):
         self._raise_if_finalized()
 
         if config.DUMP_FUNC_OPT:
-            dump("FUNCTION OPTIMIZED DUMP %s" % self._name,
+            dump("FUNCTION OPTIMIZED DUMP %s" % self.name,
                  self.get_llvm_str(), 'llvm')
 
         # Link libraries for shared code
@@ -797,10 +801,10 @@ class CPUCodeLibrary(CodeLibrary):
         self._finalized = True
 
         if config.DUMP_OPTIMIZED:
-            dump("OPTIMIZED DUMP %s" % self._name, self.get_llvm_str(), 'llvm')
+            dump("OPTIMIZED DUMP %s" % self.name, self.get_llvm_str(), 'llvm')
 
         if config.DUMP_ASSEMBLY:
-            dump("ASSEMBLY %s" % self._name, self.get_asm_str(), 'asm')
+            dump("ASSEMBLY %s" % self.name, self.get_asm_str(), 'asm')
 
     def get_defined_functions(self):
         """
@@ -905,7 +909,7 @@ class CPUCodeLibrary(CodeLibrary):
         Serialize this library using its bitcode as the cached representation.
         """
         self._ensure_finalized()
-        return (self._name, 'bitcode', self._final_module.as_bitcode())
+        return (self.name, 'bitcode', self._final_module.as_bitcode())
 
     def serialize_using_object_code(self):
         """
@@ -916,7 +920,7 @@ class CPUCodeLibrary(CodeLibrary):
         self._ensure_finalized()
         data = (self._get_compiled_object(),
                 self._get_module_for_linking().as_bitcode())
-        return (self._name, 'object', data)
+        return (self.name, 'object', data)
 
     @classmethod
     def _unserialize(cls, codegen, state):
