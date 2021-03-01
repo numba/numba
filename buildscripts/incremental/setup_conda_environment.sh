@@ -79,7 +79,7 @@ fi
 $CONDA_INSTALL -c numba/label/dev llvmlite
 
 # Install t2bc on Linux
-if [[ $(uname) == Linux ]]; then
+if [[ $(uname) == Linux && "$BITS32" != "yes" ]]; then
     $CONDA_INSTALL gmarkall::t2bc
 fi
 
