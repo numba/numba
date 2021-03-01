@@ -91,6 +91,11 @@ def wrap_index(typingctx, idx, size):
     during slice/range analysis.
     """
     unified_ty = typingctx.unify_types(idx, size)
+    # Mixing signed and unsigned ints will unify to double which is
+    # no good for indexing.  If the unified type is not an integer
+    # then just use int64 as the common index type.
+    if not isinstance(unified_ty, types.Integer):
+        unified_ty = types.int64
     if not unified_ty:
         raise ValueError("Argument types for wrap_index must match")
 
