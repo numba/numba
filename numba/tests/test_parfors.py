@@ -1843,7 +1843,7 @@ class TestParfors(TestParforsBase):
     def test_high_dimension1(self):
         # issue6749
         def test_impl(x):
-            return x * 1.0
+            return x * 5.0
         x = np.ones((2, 2, 2, 2, 2, 15))
         self.check(test_impl, x)
 
