@@ -188,13 +188,12 @@ class CompilationUnit(object):
         """
          Add a module level NVVM IR to a compilation unit.
          - The buffer should contain an NVVM module IR either in the bitcode
-           representation (LLVM3.0) or in the text representation.
+           representation or in the text representation.
         """
-        # t2bc only exists for supported platforms (64-bit Linux + Windows), so
-        # we cannot import it at the top level.
-
-        from t2bc.binding import assemble
-        if buffer[:4] != b'BC\xC0\xDE':
+        if buffer[:4] != b'BC\xC0\xDE' and NVVM().is_nvvm70:
+            # t2bc only exists for supported platforms (64-bit Linux +
+            # Windows), so we cannot import it at the top level.
+            from t2bc.binding import assemble
             bitcode = assemble(buffer)
         else:
             bitcode = buffer
