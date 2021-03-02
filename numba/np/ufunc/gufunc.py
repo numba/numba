@@ -113,11 +113,14 @@ class GUFunc(object):
 
         return types.none(*l)
 
-    def __call__(self, *args):
+    def __call__(self, *args, **kwargs):
         # If compilation is disabled OR it is NOT a dynamic gufunc
         # call the underlying gufunc
         if self._frozen or not self.is_dynamic:
-            return self.ufunc(*args)
+            return self.ufunc(*args, **kwargs)
+        elif "out" in kwargs:
+            # If "out" argument is supplied
+            args += (kwargs.pop("out"),)
 
         if self._num_args_match(*args) is False:
             # It is not allowed to call a dynamic gufunc without
@@ -137,4 +140,4 @@ class GUFunc(object):
             sig = self._get_signature(*args)
             self.add(sig)
             self.build_ufunc()
-        return self.ufunc(*args)
+        return self.ufunc(*args, **kwargs)

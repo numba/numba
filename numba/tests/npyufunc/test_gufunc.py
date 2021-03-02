@@ -62,6 +62,24 @@ class TestGUFunc(TestCase):
 
         np.testing.assert_equal(out, x * x + x)
 
+    def test_axis(self):
+        @guvectorize(["f8[:],f8[:]"], "(n)->(n)")
+        def my_cumsum(x, res):
+            acc = 0
+            for i in range(x.shape[0]):
+                acc += x[i]
+                res[i] = acc
+
+        x = np.ones((20, 30))
+        # Check regular call
+        y = my_cumsum(x, axis=0)
+        expected = np.cumsum(x, axis=0)
+        np.testing.assert_equal(y, expected)
+        # Check "out" kw
+        out_kw = np.zeros_like(y)
+        my_cumsum(x, out=out_kw, axis=0)
+        np.testing.assert_equal(out_kw, expected)
+
 
 class TestGUFuncParallel(TestGUFunc):
     _numba_parallel_test_ = False
@@ -74,8 +92,8 @@ class TestDynamicGUFunc(TestCase):
     def test_dynamic_matmul(self):
 
         def check_matmul_gufunc(gufunc, A, B, C):
-            gufunc(A, B, C)
             Gold = ut.matrix_multiply(A, B)
+            gufunc(A, B, C)
             np.testing.assert_allclose(C, Gold, rtol=1e-5, atol=1e-8)
 
         gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)',
@@ -98,8 +116,12 @@ class TestDynamicGUFunc(TestCase):
 
         def check_ufunc_output(gufunc, x):
             out = np.zeros(10, dtype=x.dtype)
+            out_kw = np.zeros(10, dtype=x.dtype)
             gufunc(x, x, x, out)
-            np.testing.assert_equal(out, x * x + x)
+            gufunc(x, x, x, out=out_kw)
+            golden = x * x + x
+            np.testing.assert_equal(out, golden)
+            np.testing.assert_equal(out_kw, golden)
 
         # Test problem that the stride of "scalar" gufunc argument not properly
         # handled when the actual argument is an array,
@@ -140,6 +162,24 @@ class TestDynamicGUFunc(TestCase):
         with self.assertRaisesRegex(TypeError, msg):
             sum_row(inp)
 
+    def test_axis(self):
+        @guvectorize("(n)->(n)")
+        def my_cumsum(x, res):
+            acc = 0
+            for i in range(x.shape[0]):
+                acc += x[i]
+                res[i] = acc
+
+        x = np.ones((20, 30))
+        expected = np.cumsum(x, axis=0)
+        # Check regular call
+        y = np.zeros_like(expected)
+        my_cumsum(x, y, axis=0)
+        np.testing.assert_equal(y, expected)
+        # Check "out" kw
+        out_kw = np.zeros_like(y)
+        my_cumsum(x, out=out_kw, axis=0)
+        np.testing.assert_equal(out_kw, expected)
 
 class TestGUVectorizeScalar(TestCase):
     """
