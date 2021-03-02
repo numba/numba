@@ -136,7 +136,6 @@ class GUFunc(object):
         # at this point we know the gufunc is a dynamic one
         ewise = self._get_ewise_dtypes(args)
         if not (self.ufunc and ufunc_find_matching_loop(self.ufunc, ewise)):
-            self._is_dynamic = True
             sig = self._get_signature(*args)
             self.add(sig)
             self.build_ufunc()
