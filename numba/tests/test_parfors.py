@@ -3506,9 +3506,7 @@ class TestParforsMisc(TestParforsBase):
                                     module=r'numba\.np\.ufunc\.parallel.*')
             cfunc()
 
-        errmsg = '\n'.join([f"====\n{w.message}" for w in raised_warnings])
-        self.assertEqual(len(raised_warnings), 0,
-                         msg=errmsg)
+        self.assertEqual(len(raised_warnings), 0)
 
         # Make sure the dynamic globals flag is set
         has_dynamic_globals = [cres.library.has_dynamic_globals
