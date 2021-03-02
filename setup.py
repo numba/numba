@@ -23,8 +23,8 @@ min_python_version = "3.6"
 max_python_version = "3.10"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.15"
-min_llvmlite_version = "0.36.0.dev0"
-max_llvmlite_version = "0.37"
+min_llvmlite_version = "0.37.0.dev0"
+max_llvmlite_version = "0.38"
 
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
@@ -148,7 +148,9 @@ def get_ext_modules():
                                 sources=['numba/_devicearray.cpp'],
                                 depends=['numba/_pymodule.h',
                                          'numba/_devicearray.h'],
-                                include_dirs=['numba'])
+                                include_dirs=['numba'],
+                                extra_compile_args=['-std=c++11'],
+                                )
 
     ext_dynfunc = Extension(name='numba._dynfunc',
                             sources=['numba/_dynfuncmod.c'],

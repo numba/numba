@@ -42,10 +42,8 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
        kernel. Since this degrades performance, this should only be used for
        debugging purposes.  Defaults to False.  (The default value can be
        overridden by setting environment variable ``NUMBA_CUDA_DEBUGINFO=1``.)
-    :param fastmath: If true, enables flush-to-zero and fused-multiply-add,
-       disables precise division and square root. This parameter has no effect
-       on device function, whose fastmath setting depends on the kernel function
-       from which they are called.
+    :param fastmath: When True, enables fastmath optimizations as outlined in
+       the :ref:`CUDA Fast Math documentation <cuda-fast-math>`.
     :param max_registers: Request that the kernel is limited to using at most
        this number of registers per thread. The limit may not be respected if
        the ABI requires a greater number of registers than that requested.
@@ -92,6 +90,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             targetoptions['debug'] = debug
             targetoptions['link'] = link
             targetoptions['opt'] = opt
+            targetoptions['fastmath'] = fastmath
             return Dispatcher(func, [func_or_sig], targetoptions=targetoptions)
 
         def device_jit(func):
@@ -125,6 +124,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                 targetoptions['debug'] = debug
                 targetoptions['opt'] = opt
                 targetoptions['link'] = link
+                targetoptions['fastmath'] = fastmath
                 sigs = None
                 return Dispatcher(func_or_sig, sigs,
                                   targetoptions=targetoptions)
