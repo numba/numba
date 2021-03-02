@@ -11,8 +11,6 @@ from ctypes import (c_void_p, c_int, POINTER, c_char_p, c_size_t, byref,
 import threading
 
 from llvmlite import ir
-from t2bc.binding import assemble
-
 from .error import NvvmError, NvvmSupportError
 from .libs import get_libdevice, open_libdevice, open_cudalib
 from numba.core import config
@@ -192,6 +190,10 @@ class CompilationUnit(object):
          - The buffer should contain an NVVM module IR either in the bitcode
            representation (LLVM3.0) or in the text representation.
         """
+        # t2bc only exists for supported platforms (64-bit Linux + Windows), so
+        # we cannot import it at the top level.
+
+        from t2bc.binding import assemble
         if buffer[:4] != b'BC\xC0\xDE':
             bitcode = assemble(buffer)
         else:
