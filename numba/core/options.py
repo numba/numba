@@ -2,7 +2,7 @@
 Target Options
 """
 
-from numba.core import config
+from numba.core import config, utils
 
 class TargetOptions(object):
     OPTIONS = {}
@@ -43,7 +43,7 @@ class TargetOptions(object):
         if kws.pop('looplift', True):
             flags.set("enable_looplift")
 
-        if kws.pop('_nrt', True):
+        if utils.TriState.check(kws, "_nrt", "nrt", utils.TriState.Inherit, unset_default=True):
             flags.set("nrt")
 
         debug_mode = kws.pop('debug', config.DEBUGINFO_DEFAULT)
