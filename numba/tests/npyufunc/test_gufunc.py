@@ -63,6 +63,7 @@ class TestGUFunc(TestCase):
         np.testing.assert_equal(out, x * x + x)
 
     def test_axis(self):
+        # issue https://github.com/numba/numba/issues/6773
         @guvectorize(["f8[:],f8[:]"], "(n)->(n)")
         def my_cumsum(x, res):
             acc = 0
@@ -163,6 +164,7 @@ class TestDynamicGUFunc(TestCase):
             sum_row(inp)
 
     def test_axis(self):
+        # issue https://github.com/numba/numba/issues/6773
         @guvectorize("(n)->(n)")
         def my_cumsum(x, res):
             acc = 0
