@@ -323,8 +323,11 @@ def number_constructor(context, builder, sig, args):
     """
     if isinstance(sig.return_type, types.Array):
         # Array constructor
-        impl = context.get_function(np.array, sig)
-        return impl(builder, args)
+        dt = sig.return_type.dtype
+        def foo(*arg_hack):
+            return np.array(arg_hack, dtype=dt)
+        res = context.compile_internal(builder, foo, sig, args)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
     else:
         # Scalar constructor
         [val] = args

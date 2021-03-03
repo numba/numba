@@ -797,8 +797,9 @@ class NumberClassAttribute(AttributeTemplate):
         def typer(val):
             if isinstance(val, (types.BaseTuple, types.Sequence)):
                 # Array constructor, e.g. np.int32([1, 2])
-                sig = self.context.resolve_function_type(
-                    np.array, (val,), {'dtype': types.DType(ty)})
+                fnty = self.context.resolve_value_type(np.array)
+                sig = fnty.get_call_type(self.context, (val, types.DType(ty)),
+                                         {})
                 return sig.return_type
             else:
                 # Scalar constructor, e.g. np.int32(42)

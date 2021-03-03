@@ -141,14 +141,17 @@ class OverloadWrapper(object):
                 # Tuple assembling in the IR which ends up with literal
                 # information being lost. As a result the _exact_ argument list
                 # is generated to match the number of arguments and kwargs.
+                name = str(self._function)
+                name = ''.join([x if x not in {'>','<',' ','-'} else '_'
+                                for x in name])
                 gen = textwrap.dedent(("""
-                def jit_wrapper({}):
+                def jit_wrapper_{}({}):
                     return intrin({})
-                """)).format(call_str, call_str)
+                """)).format(name, call_str, call_str)
                 l = {}
                 g = {'intrin': intrin}
                 exec(gen, g, l)
-                return l['jit_wrapper']
+                return l['jit_wrapper_{}'.format(name)]
             else:
 
                 def body(tyctx):
