@@ -202,6 +202,9 @@ void divide_work(const RangeActual &full_iteration_space,
         } else {
             // We allocate the remaining threads proportionally to the ratio of the current dimension length to the total.
             divisions_for_this_dim = intp(guround(num_threads * ((float)dims[index].length / total_len)));
+            if (divisions_for_this_dim < 1) {
+                        divisions_for_this_dim = 1;
+            }
         }
 
         // These are used to divide the iteration space.

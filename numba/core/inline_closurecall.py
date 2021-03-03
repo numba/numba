@@ -413,6 +413,8 @@ class InlineWorker(object):
             if arg_typs is None:
                 raise TypeError('arg_typs should have a value not None')
             self.update_type_and_call_maps(callee_ir, arg_typs)
+            # update_type_and_call_maps replaces blocks
+            callee_blocks = callee_ir.blocks
 
         self.debug_print("After arguments rename: ")
         _debug_dump(callee_ir)
@@ -462,10 +464,13 @@ class InlineWorker(object):
         return self.inline_ir(caller_ir, block, i, callee_ir, freevars,
                               arg_typs=arg_typs)
 
-    def run_untyped_passes(self, func):
+    def run_untyped_passes(self, func, enable_ssa=False):
         """
         Run the compiler frontend's untyped passes over the given Python
         function, and return the function's canonical Numba IR.
+
+        Disable SSA transformation by default, since the call site won't be in SSA
+        form and self.inline_ir depends on this being the case.
         """
         from numba.core.compiler import StateDict, _CompileStatus
         from numba.core.untyped_passes import ExtractByteCode, WithLifting
@@ -478,10 +483,7 @@ class InlineWorker(object):
         state.locals = self.locals
         state.pipeline = self.pipeline
         state.flags = self.flags
-
-        # Disable SSA transformation, the call site won't be in SSA form and
-        # self.inline_ir depends on this being the case.
-        state.flags.enable_ssa = False
+        state.flags.enable_ssa = enable_ssa
 
         state.func_id = bytecode.FunctionIdentity.from_function(func)
 
@@ -507,6 +509,9 @@ class InlineWorker(object):
     def update_type_and_call_maps(self, callee_ir, arg_typs):
         """ Updates the type and call maps based on calling callee_ir with arguments
         from arg_typs"""
+        from numba.core.ssa import reconstruct_ssa
+        from numba.core.typed_passes import PreLowerStripPhis
+
         if not self._permit_update_type_and_call_maps:
             msg = ("InlineWorker instance not configured correctly, typemap or "
                    "calltypes missing in initialization.")
@@ -515,8 +520,13 @@ class InlineWorker(object):
         # call branch pruning to simplify IR and avoid inference errors
         callee_ir._definitions = ir_utils.build_definitions(callee_ir.blocks)
         numba.core.analysis.dead_branch_prune(callee_ir, arg_typs)
+        # callee's typing may require SSA
+        callee_ir = reconstruct_ssa(callee_ir)
+        callee_ir._definitions = ir_utils.build_definitions(callee_ir.blocks)
         f_typemap, f_return_type, f_calltypes, _ = typed_passes.type_inference_stage(
                 self.typingctx, callee_ir, arg_typs, None)
+        callee_ir = PreLowerStripPhis()._strip_phi_nodes(callee_ir)
+        callee_ir._definitions = ir_utils.build_definitions(callee_ir.blocks)
         canonicalize_array_math(callee_ir, f_typemap,
                                 f_calltypes, self.typingctx)
         # remove argument entries like arg.a from typemap

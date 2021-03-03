@@ -1839,6 +1839,14 @@ class TestParfors(TestParforsBase):
         x = np.ones((3,3))
         self.check(test_impl, x)
 
+    @skip_parfors_unsupported
+    def test_high_dimension1(self):
+        # issue6749
+        def test_impl(x):
+            return x * 5.0
+        x = np.ones((2, 2, 2, 2, 2, 15))
+        self.check(test_impl, x)
+
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
@@ -3499,6 +3507,13 @@ class TestParforsMisc(TestParforsBase):
 
         with warnings.catch_warnings(record=True) as raised_warnings:
             warnings.simplefilter('always')
+            warnings.filterwarnings(action="ignore",
+                                    module="typeguard")
+            # Filter out warnings about TBB interface mismatch
+            warnings.filterwarnings(action='ignore',
+                                    message=r".*TBB_INTERFACE_VERSION.*",
+                                    category=numba.errors.NumbaWarning,
+                                    module=r'numba\.np\.ufunc\.parallel.*')
             cfunc()
 
         self.assertEqual(len(raised_warnings), 0)

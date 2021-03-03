@@ -671,6 +671,7 @@ def impl_len(d):
     return impl
 
 
+@overload_method(types.DictType, '__setitem__')
 @overload(operator.setitem)
 def impl_setitem(d, key, value):
     if not isinstance(d, types.DictType):
