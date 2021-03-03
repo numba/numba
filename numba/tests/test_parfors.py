@@ -3367,9 +3367,10 @@ class TestParforsSlice(TestParforsBase):
     def test_issue6774(self):
         @njit(parallel=True)
         def test_impl():
-            na_mask = np.ones((5,))
-            result = np.empty((5,))
-            for i in prange(1):
+            n = 5
+            na_mask = np.ones((n,))
+            result = np.empty((n - 1,))
+            for i in prange(len(result)):
                 result[i] = np.sum(na_mask[i:i + 1])
             return result
 

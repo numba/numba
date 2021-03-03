@@ -93,11 +93,11 @@ def wrap_index(typingctx, idx, size):
     unified_ty = typingctx.unify_types(idx, size)
     # Mixing signed and unsigned ints will unify to double which is
     # no good for indexing.  If the unified type is not an integer
-    # then just use int64 as the common index type.
+    # then just use int64 as the common index type.  This does have
+    # some overflow potential if the unsigned value is greater than
+    # 2**63.
     if not isinstance(unified_ty, types.Integer):
         unified_ty = types.int64
-    if not unified_ty:
-        raise ValueError("Argument types for wrap_index must match")
 
     def codegen(context, builder, sig, args):
         ll_unified_ty = context.get_data_type(unified_ty)
