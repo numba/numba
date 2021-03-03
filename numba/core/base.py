@@ -834,10 +834,17 @@ class BaseContext(object):
             codegen = self.codegen()
             library = codegen.create_library(impl.__name__)
             if flags is None:
-                flags = compiler.Flags()
+                from numba.core import utils
+
+                cstk = utils.ConfigStack()
+                if cstk:
+                    flags = cstk.top()
+                else:
+                    flags = compiler.Flags()
             flags.set('no_compile')
             flags.set('no_cpython_wrapper')
             flags.set('no_cfunc_wrapper')
+
             cres = compiler.compile_internal(self.typing_context, self,
                                              library,
                                              impl, sig.args,
