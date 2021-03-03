@@ -1,7 +1,7 @@
 import math
 import operator
 from llvmlite import ir
-from numba.core import types, typing, utils
+from numba.core import types, typing, utils, cgutils
 from numba.core.imputils import Registry
 from numba.types import float32, float64, int64, uint64
 from numba.cuda import libdevice
@@ -69,6 +69,22 @@ binarys_fastmath['powf'] = 'fast_powf'
 @lower(math.isnan, types.Integer)
 def math_isinf_isnan_int(context, builder, sig, args):
     return context.get_constant(types.boolean, 0)
+
+
+@lower(operator.truediv, types.float32, types.float32)
+def maybe_fast_truediv(context, builder, sig, args):
+    with cgutils.if_zero(builder, args[1]):
+        context.error_model.fp_zero_division(builder, ("division by zero",))
+
+    if context.fastmath:
+        fast_replacement = 'fast_fdividef'
+        actual_libfunc = getattr(libdevice, fast_replacement)
+        sig = typing.signature(float32, float32, float32)
+        libfunc_impl = context.get_function(actual_libfunc, sig)
+        return libfunc_impl(builder, args)
+    else:
+        res = builder.fdiv(*args)
+        return res
 
 
 @lower(math.isfinite, types.Integer)

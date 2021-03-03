@@ -5,6 +5,7 @@ import unittest
 
 
 class TestFastMathOption(CUDATestCase):
+    @skip_on_cudasim('fast divide not available in CUDASIM')
     def test_kernel(self):
 
         def foo(arr, val):
@@ -15,8 +16,8 @@ class TestFastMathOption(CUDATestCase):
         fastver = cuda.jit("void(float32[:], float32)", fastmath=True)(foo)
         precver = cuda.jit("void(float32[:], float32)")(foo)
 
-        self.assertIn('div.full.ftz.f32', fastver.ptx)
-        self.assertNotIn('div.full.ftz.f32', precver.ptx)
+        self.assertIn('div.approx.ftz.f32', fastver.ptx)
+        self.assertNotIn('div.approx.ftz.f32', precver.ptx)
 
     @skip_on_cudasim('fast cos not available in CUDASIM')
     def test_cosf(self):
@@ -104,6 +105,17 @@ class TestFastMathOption(CUDATestCase):
         slowver = cuda.jit("void(float32[::1], float32, float32)")(f8)
         self.assertIn('lg2.approx.ftz.f32 ', fastver.ptx)
         self.assertNotIn('lg2.approx.ftz.f32 ', slowver.ptx)
+
+    @skip_on_cudasim('fast divide not available in CUDASIM')
+    def test_divf(self):
+        def f9(r, x, y):
+            r[0] = x / y
+
+        fastver = cuda.jit("void(float32[::1], float32, float32)",
+                           fastmath=True)(f9)
+        slowver = cuda.jit("void(float32[::1], float32, float32)")(f9)
+        self.assertIn('div.approx.ftz.f32 ', fastver.ptx)
+        self.assertNotIn('div.approx.ftz.f32 ', slowver.ptx)
 
     def test_device(self):
         # fastmath option is ignored for device function
