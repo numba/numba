@@ -3507,6 +3507,8 @@ class TestParforsMisc(TestParforsBase):
 
         with warnings.catch_warnings(record=True) as raised_warnings:
             warnings.simplefilter('always')
+            warnings.filterwarnings(action="ignore",
+                                    module="typeguard")
             # Filter out warnings about TBB interface mismatch
             warnings.filterwarnings(action='ignore',
                                     message=r".*TBB_INTERFACE_VERSION.*",
