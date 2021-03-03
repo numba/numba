@@ -10,6 +10,9 @@ import sys
 import traceback
 import weakref
 import warnings
+import threading
+import contextlib
+
 from types import ModuleType
 from importlib import import_module
 from collections.abc import Mapping, Sequence
@@ -175,6 +178,59 @@ def shutting_down(globals=globals):
 # finalizer then register atexit to ensure this ordering.
 weakref.finalize(lambda: None, lambda: None)
 atexit.register(_at_shutdown)
+
+
+class ConfigStack:
+    tls = threading.local()
+
+    def __init__(self):
+        tls = self.tls
+        try:
+            stk = tls.stack
+        except AttributeError:
+            tls.stack = stk = []
+        self._stk = stk
+
+    def push(self, data):
+        self._stk.append(data)
+
+    def pop(self):
+        return self._stk.pop()
+
+    def top(self):
+        return self._stk[-1]
+
+    def __len__(self):
+        return len(self._stk)
+
+    @contextlib.contextmanager
+    def enter(self, flags):
+        self.push(flags)
+        try:
+            yield
+        finally:
+            self.pop()
+
+
+class TriState:
+
+    class InheritType:
+        def __bool__(self):
+            raise TypeError("Inherit type disable __bool__")
+
+    Inherit = InheritType()
+
+    def __init__(self, init):
+        self._value = init
+
+    @classmethod
+    def check(cls, flagdict, key, flagkey, default, unset_default):
+        got = flagdict.pop(key, default)
+        if got is cls.Inherit:
+            cs = ConfigStack()
+            if cs:
+                return getattr(cs.top(), flagkey)
+        return unset_default
 
 
 class ConfigOptions(object):
