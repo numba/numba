@@ -121,7 +121,7 @@ class CUDACompiler(CompilerBase):
 
 @global_compiler_lock
 def compile_cuda(pyfunc, return_type, args, debug=False, inline=False,
-                 nvvm_options=None):
+                 fastmath=False, nvvm_options=None):
     from .descriptor import cuda_target
     typingctx = cuda_target.typingctx
     targetctx = cuda_target.targetctx
@@ -135,6 +135,8 @@ def compile_cuda(pyfunc, return_type, args, debug=False, inline=False,
         flags.set('debuginfo')
     if inline:
         flags.set('forceinline')
+    if fastmath:
+        flags.set('fastmath')
     if nvvm_options:
         flags.set('nvvm_options', nvvm_options)
 
@@ -469,7 +471,8 @@ class _Kernel(serialize.ReduceMixin):
 
         cres = compile_cuda(self.py_func, types.void, self.argtypes,
                             debug=self.debug,
-                            inline=inline)
+                            inline=inline,
+                            fastmath=fastmath)
         fname = cres.fndesc.llvm_func_name
         args = cres.signature.args
 
