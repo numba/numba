@@ -178,9 +178,20 @@ class OverloadWrapper(object):
                 stub = stub_generator(len(ol_args), {'body': body})
                 intrin = intrinsic(stub)
 
-                def jit_wrapper(*ol_args):
-                    return intrin(*ol_args)
-                return jit_wrapper
+                arg_str = ','.join([f'tmp{x}' for x in range(len(ol_args))])
+                kws_str = ','.join(ol_kwargs.keys())
+                call_str = ','.join([x for x in (arg_str, kws_str) if x])
+                name = str(self._function)
+                name = ''.join([x if x not in {'>','<',' ','-'} else '_'
+                                for x in name])
+                gen = textwrap.dedent(("""
+                def jit_wrapper_{}({}):
+                    return intrin({})
+                """)).format(name, call_str, call_str)
+                l = {}
+                g = {'intrin': intrin}
+                exec(gen, g, l)
+                return l['jit_wrapper_{}'.format(name)]
 
 
 class Gluer():
