@@ -134,11 +134,10 @@ class TestCudaConstantMemory(CUDATestCase):
         self.assertTrue(np.all(A == CONST3D))
 
         if not ENABLE_CUDASIM:
-            # CUDA 9.2 - 11.1 use two f32 loads to load the complex. CUDA < 9.2
-            # and > 11.1 use a vector of 2x f32. The root cause of these
-            # codegen differences is not known, but must be accounted for in
-            # this test.
-            if cuda.runtime.get_version() in ((9, 0), (9, 1), (11, 2)):
+            # CUDA <= 11.1 uses two f32 loads to load the complex. CUDA >= 11.2
+            # uses a vector of 2x f32. The root cause of these codegen
+            # differences is not known, but must be accounted for in this test.
+            if cuda.runtime.get_version() > (11, 1):
                 complex_load = 'ld.const.v2.f32'
                 description = 'Load the complex as a vector of 2x f32'
             else:
@@ -168,24 +167,10 @@ class TestCudaConstantMemory(CUDATestCase):
         B = np.zeros(2, dtype=int)
         jcuconst = cuda.jit(cuconstRec).specialize(A, B)
 
-        rtver = cuda.runtime.get_version()
-        old_runtime = rtver in ((9, 0), (9, 1))
-        nvvm70_runtime = rtver >= (11, 2)
+        nvvm70_runtime = cuda.runtime.get_version() >= (11, 2)
         windows = sys.platform.startswith('win')
 
-        if old_runtime:
-            if windows:
-                # For some reason Win64 / CUDA 9.1 and 9.2 decide to do two u32
-                # loads, and shifts and ors the values to get the float `x`
-                # field, then uses another ld.const.u32 to load the int `y` as
-                # a 32-bit value!
-                self.assertIn('ld.const.u32', jcuconst.ptx,
-                              'load record fields as u32')
-            else:
-                # Load of the x and y fields fused into a single instruction
-                self.assertIn('ld.const.v2.f64', jcuconst.ptx,
-                              'load record fields as vector of 2x f64')
-        elif nvvm70_runtime:
+        if nvvm70_runtime:
             if windows:
                 # Two ld.const.u32 as above, but using a bit-field insert to
                 # combine them

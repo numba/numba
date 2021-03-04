@@ -321,18 +321,23 @@ def get_supported_ccs():
         # The CUDA Runtime may not be present
         cudart_version_major = 0
 
+    ctk_ver = f"{cudart_version_major}.{cudart_version_minor}"
+    unsupported_ver = f"CUDA Toolkit {ctk_ver} is unsupported by Numba - " \
+                      + "9.2 is the minimum required version."
+
     # List of supported compute capability in sorted order
     if cudart_version_major == 0:
         _supported_cc = ()
     elif cudart_version_major < 9:
         _supported_cc = ()
-        ctk_ver = f"{cudart_version_major}.{cudart_version_minor}"
-        msg = f"CUDA Toolkit {ctk_ver} is unsupported by Numba - 9.0 is the " \
-              + "minimum required version."
-        warnings.warn(msg)
+        warnings.warn(unsupported_ver)
     elif cudart_version_major == 9:
-        # CUDA 9.x
-        _supported_cc = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0) # noqa: E501
+        if cudart_version_minor != 2:
+            _supported_cc = ()
+            warnings.warn(unsupported_ver)
+        else:
+            # CUDA 9.2
+            _supported_cc = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0) # noqa: E501
     elif cudart_version_major == 10:
         # CUDA 10.x
         _supported_cc = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5) # noqa: E501

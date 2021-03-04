@@ -21,7 +21,7 @@ def set_visible_devices_and_check(q):
 if config.ENABLE_CUDASIM:
     SUPPORTED_VERSIONS = (-1, -1),
 else:
-    SUPPORTED_VERSIONS = ((9, 0), (9, 1), (9, 2),
+    SUPPORTED_VERSIONS = ((9, 2),
                           (10, 0), (10, 1), (10, 2),
                           (11, 0), (11, 1), (11, 2))
 

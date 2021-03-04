@@ -53,8 +53,8 @@ requirements:
     - tbb >=2019.5,<=2020.3    # [not (armv6l or armv7l or aarch64 or linux32)]
     # avoid confusion from openblas bugs
     - libopenblas !=0.3.6      # [x86_64]
-    # CUDA 9.0 or later is required for CUDA support
-    - cudatoolkit >=9.0
+    # CUDA 9.2 or later is required for CUDA support
+    - cudatoolkit >=9.2
     # scipy 1.0 or later
     - scipy >=1.0
 
