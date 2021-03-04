@@ -692,6 +692,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             # cleaning up existing cache is necessary to install new impl later
             cache_key = self.context, tuple(new_args), tuple(kws.items())
             self._sig_cache.pop(cache_key, None)
+            cache_key = self.context, tuple(args), tuple(kws.items())
+            self._sig_cache.pop(cache_key, None)
         else:
             self._sig_cache[cache_key] = sig
         return sig
