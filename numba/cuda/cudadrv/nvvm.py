@@ -82,6 +82,13 @@ class NVVM(object):
         'nvvmAddModuleToProgram': (
             nvvm_result, nvvm_program, c_char_p, c_size_t, c_char_p),
 
+        # nvvmResult nvvmLazyAddModuleToProgram(nvvmProgram cu,
+        #                                       const char* buffer,
+        #                                       size_t size,
+        #                                       const char *name)
+        'nvvmLazyAddModuleToProgram': (
+            nvvm_result, nvvm_program, c_char_p, c_size_t, c_char_p),
+
         # nvvmResult nvvmCompileProgram(nvvmProgram cu, int numOptions,
         #                          const char **options)
         'nvvmCompileProgram': (
@@ -193,6 +200,16 @@ class CompilationUnit(object):
         """
         err = self.driver.nvvmAddModuleToProgram(self._handle, buffer,
                                                  len(buffer), None)
+        self.driver.check_error(err, 'Failed to add module')
+
+    def lazy_add_module(self, buffer):
+        """
+        Lazily add an NVVM IR module to a compilation unit.
+        The buffer should contain NVVM module IR either in the bitcode
+        representation or in the text representation.
+        """
+        err = self.driver.nvvmLazyAddModuleToProgram(self._handle, buffer,
+                                                     len(buffer), None)
         self.driver.check_error(err, 'Failed to add module')
 
     def compile(self, **options):
@@ -669,7 +686,7 @@ def llvm_to_ptx(llvmir, **opts):
 
     llvmir = llvm_replace(llvmir)
     cu.add_module(llvmir.encode('utf8'))
-    cu.add_module(libdevice.get())
+    cu.lazy_add_module(libdevice.get())
 
     ptx = cu.compile(**opts)
     # XXX remove debug_pubnames seems to be necessary sometimes
