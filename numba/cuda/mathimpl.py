@@ -73,16 +73,13 @@ def math_isinf_isnan_int(context, builder, sig, args):
 
 @lower(operator.truediv, types.float32, types.float32)
 def maybe_fast_truediv(context, builder, sig, args):
-    with cgutils.if_zero(builder, args[1]):
-        context.error_model.fp_zero_division(builder, ("division by zero",))
-
     if context.fastmath:
-        fast_replacement = 'fast_fdividef'
-        actual_libfunc = getattr(libdevice, fast_replacement)
         sig = typing.signature(float32, float32, float32)
-        libfunc_impl = context.get_function(actual_libfunc, sig)
-        return libfunc_impl(builder, args)
+        impl = context.get_function(libdevice.fast_fdividef, sig)
+        return impl(builder, args)
     else:
+        with cgutils.if_zero(builder, args[1]):
+            context.error_model.fp_zero_division(builder, ("division by zero",))
         res = builder.fdiv(*args)
         return res
 

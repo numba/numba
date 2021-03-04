@@ -1,5 +1,6 @@
 from numba import cuda, float32
 from math import cos, sin, tan, exp, log, log10, log2, pow
+import numpy as np
 from numba.cuda.testing import CUDATestCase, skip_on_cudasim
 import unittest
 
@@ -7,7 +8,7 @@ import unittest
 class TestFastMathOption(CUDATestCase):
     @skip_on_cudasim('fast divide not available in CUDASIM')
     def test_kernel(self):
-
+        # Test the cast of an int being used in fastmath divide
         def foo(arr, val):
             i = cuda.grid(1)
             if i < arr.size:
@@ -116,6 +117,27 @@ class TestFastMathOption(CUDATestCase):
         slowver = cuda.jit("void(float32[::1], float32, float32)")(f9)
         self.assertIn('div.approx.ftz.f32 ', fastver.ptx)
         self.assertNotIn('div.approx.ftz.f32 ', slowver.ptx)
+        self.assertIn('div.rn.f32', slowver.ptx)
+        self.assertNotIn('div.rn.f32', fastver.ptx)
+
+    @skip_on_cudasim('fast divide not available in CUDASIM')
+    def test_divf_exception(self):
+        def f10(r, x, y):
+            r[0] = x / y
+
+        fastver = cuda.jit("void(float32[::1], float32, float32)",
+                           fastmath=True, debug=True)(f10)
+        slowver = cuda.jit("void(float32[::1], float32, float32)",
+                           debug=True)(f10)
+        nelem = 10
+        ary = np.empty(nelem, dtype=np.float32)
+        with self.assertRaises(ZeroDivisionError):
+            slowver[1, nelem](ary, 10.0, 0.0)
+
+        try:
+            fastver[1, nelem](ary, 10.0, 0.0)
+        except ZeroDivisionError:
+            self.fail("Divide in fastmath should not throw ZeroDivisionError")
 
     def test_device(self):
         # fastmath option is ignored for device function
