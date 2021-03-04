@@ -3371,6 +3371,19 @@ class TestParforsSlice(TestParforsBase):
         r = np.array([[0., 0., 0.], [0., 0., 1.]])
         self.assertPreciseEqual(f(r), f.py_func(r))
 
+    @skip_parfors_unsupported
+    def test_issue6774(self):
+        @njit(parallel=True)
+        def test_impl():
+            n = 5
+            na_mask = np.ones((n,))
+            result = np.empty((n - 1,))
+            for i in prange(len(result)):
+                result[i] = np.sum(na_mask[i:i + 1])
+            return result
+
+        self.check(test_impl)
+
 
 class TestParforsOptions(TestParforsBase):
 
