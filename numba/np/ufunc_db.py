@@ -249,6 +249,21 @@ def _fill_ufunc_db(ufunc_db):
         'dd->d': npyfuncs.np_real_mod_impl,
     }
 
+    ufunc_db[np.divmod] = {
+        'bb->bb': npyfuncs.np_int_sdivrem_impl,
+        'BB->BB': npyfuncs.np_int_udivrem_impl,
+        'hh->hh': npyfuncs.np_int_sdivrem_impl,
+        'HH->HH': npyfuncs.np_int_udivrem_impl,
+        'ii->ii': npyfuncs.np_int_sdivrem_impl,
+        'II->II': npyfuncs.np_int_udivrem_impl,
+        'll->ll': npyfuncs.np_int_sdivrem_impl,
+        'LL->LL': npyfuncs.np_int_udivrem_impl,
+        'qq->qq': npyfuncs.np_int_sdivrem_impl,
+        'QQ->QQ': npyfuncs.np_int_udivrem_impl,
+        'ff->ff': npyfuncs.np_real_divmod_impl,
+        'dd->dd': npyfuncs.np_real_divmod_impl,
+    }
+
     ufunc_db[np.fmod] = {
         'bb->b': npyfuncs.np_int_fmod_impl,
         'BB->B': npyfuncs.np_int_fmod_impl,

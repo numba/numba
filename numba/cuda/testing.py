@@ -1,5 +1,6 @@
 import contextlib
 import os
+import shutil
 import sys
 
 from numba.tests.support import (
@@ -8,6 +9,7 @@ from numba.tests.support import (
     redirect_c_stdout,
 )
 from numba.cuda.cuda_paths import get_conda_ctk
+from numba.cuda.cudadrv import devices, libs
 from numba.core import config
 from numba.tests.support import TestCase
 import unittest
@@ -57,6 +59,48 @@ def skip_if_external_memmgr(reason):
 
 def skip_under_cuda_memcheck(reason):
     return unittest.skipIf(os.environ.get('CUDA_MEMCHECK') is not None, reason)
+
+
+def skip_without_nvdisasm(reason):
+    nvdisasm_path = shutil.which('nvdisasm')
+    return unittest.skipIf(nvdisasm_path is None, reason)
+
+
+def skip_with_nvdisasm(reason):
+    nvdisasm_path = shutil.which('nvdisasm')
+    return unittest.skipIf(nvdisasm_path is not None, reason)
+
+
+def cc_X_or_above(major, minor):
+    if not config.ENABLE_CUDASIM:
+        cc = devices.get_context().device.compute_capability
+        return cc >= (major, minor)
+    else:
+        return True
+
+
+def skip_unless_cc_32(fn):
+    return unittest.skipUnless(cc_X_or_above(3, 2), "requires cc >= 3.2")(fn)
+
+
+def skip_unless_cc_50(fn):
+    return unittest.skipUnless(cc_X_or_above(5, 0), "requires cc >= 5.0")(fn)
+
+
+def skip_unless_cc_60(fn):
+    return unittest.skipUnless(cc_X_or_above(6, 0), "requires cc >= 6.0")(fn)
+
+
+def cudadevrt_missing():
+    try:
+        libs.check_static_lib('cudadevrt')
+    except FileNotFoundError:
+        return True
+    return False
+
+
+def skip_if_cudadevrt_missing(fn):
+    return unittest.skipIf(cudadevrt_missing(), 'cudadevrt missing')(fn)
 
 
 class CUDATextCapture(object):

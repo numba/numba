@@ -115,6 +115,7 @@ as items in sequences, in addition to being callable.
 
 First-class function support is enabled for all Numba :term:`JIT`
 compiled functions and Numba ``cfunc`` compiled functions except when:
+
 - using a non-CPU compiler,
 - the compiled function is a Python generator,
 - the compiled function has Omitted arguments,
@@ -329,3 +330,44 @@ Optional types
       True
       >>> f(None)
       False
+
+
+Type annotations
+-----------------
+
+.. function:: numba.extending.as_numba_type(py_type)
+
+   Create a Numba type corresponding to the given Python *type annotation*.
+   ``TypingError`` is raised if the type annotation can't be mapped to a Numba
+   type.  This function is meant to be used at statically compile time to
+   evaluate Python type annotations.  For runtime checking of Python objects
+   see ``typeof`` above.
+
+   For any numba type, ``as_numba_type(nb_type) == nb_type``.
+
+      >>> numba.extending.as_numba_type(int)
+      int64
+      >>> import typing  # the Python library, not the Numba one
+      >>> numba.extending.as_numba_type(typing.List[float])
+      ListType[float64]
+      >>> numba.extending.as_numba_type(numba.int32)
+      int32
+
+   ``as_numba_type`` is automatically updated to include any ``@jitclass``.
+
+      >>> @jitclass
+      ... class Counter:
+      ...     x: int
+      ...
+      ...     def __init__(self):
+      ...         self.x = 0
+      ...
+      ...     def inc(self):
+      ...         old_val = self.x
+      ...         self.x += 1
+      ...         return old_val
+      ...
+      >>> numba.extending.as_numba_type(Counter)
+      instance.jitclass.Counter#11bad4278<x:int64>
+
+   Currently ``as_numba_type`` is only used to infer fields for ``@jitclass``.

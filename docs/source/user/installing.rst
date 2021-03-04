@@ -10,10 +10,11 @@ Numba is compatible with Python 3.6 or later, and Numpy versions 1.15 or later.
 Our supported platforms are:
 
 * Linux x86 (32-bit and 64-bit)
-* Linux ppcle64 (POWER8)
+* Linux ppcle64 (POWER8, POWER9)
 * Windows 7 and later (32-bit and 64-bit)
-* OS X 10.9 and later (64-bit)
-* NVIDIA GPUs of compute capability 2.0 and later
+* OS X 10.9 and later (64-bit and unofficial support on M1/Arm64)
+* \*BSD (unofficial support only)
+* NVIDIA GPUs of compute capability 3.0 and later
 * AMD ROC dGPUs (linux only and not for AMD Carrizo or Kaveri APU)
 * ARMv7 (32-bit little-endian, such as Raspberry Pi 2 and 3)
 * ARMv8 (64-bit little-endian, such as the NVIDIA Jetson)
@@ -115,13 +116,8 @@ Raspberry Pi CPU is 64-bit, Raspbian runs it in 32-bit mode, so look at
 Conda-forge support for AArch64 is still quite experimental and packages are limited,
 but it does work enough for Numba to build and pass tests.  To set up the environment:
 
-* Install `conda4aarch64 <https://github.com/jjhelmus/conda4aarch64/releases>`_.
+* Install `miniforge <https://github.com/conda-forge/miniforge>`_.
   This will create a minimal conda environment.
-* Add the ``c4aarch64`` and ``conda-forge`` channels to your conda
-  configuration::
-
-    $ conda config --add channels c4aarch64
-    $ conda config --add channels conda-forge
 
 * Then you can install Numba from the ``numba`` channel::
 
@@ -170,6 +166,37 @@ Then you can build and install Numba from the top level of the source tree::
 
     $ python setup.py install
 
+.. _numba-source-install-env_vars:
+
+Build time environment variables and configuration of optional components
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Below are environment variables that are applicable to altering how Numba would
+otherwise build by default along with information on configuration options.
+
+.. envvar:: NUMBA_DISABLE_OPENMP (default: not set)
+
+  To disable compilation of the OpenMP threading backend set this environment
+  variable to a non-empty string when building. If not set (default):
+
+  * For Linux and Windows it is necessary to provide OpenMP C headers and
+    runtime  libraries compatible with the compiler tool chain mentioned above,
+    and for these to be accessible to the compiler via standard flags.
+  * For OSX the conda packages ``llvm-openmp`` and ``intel-openmp`` provide
+    suitable C headers and libraries. If the compilation requirements are not
+    met the OpenMP threading backend will not be compiled
+
+.. envvar:: NUMBA_DISABLE_TBB (default: not set)
+
+  To disable the compilation of the TBB threading backend set this environment
+  variable to a non-empty string when building. If not set (default) the TBB C
+  headers and libraries must be available at compile time. If building with
+  ``conda build`` this requirement can be met by installing the ``tbb-devel``
+  package. If not building with ``conda build`` the requirement can be met via a
+  system installation of TBB or through the use of the ``TBBROOT`` environment
+  variable to provide the location of the TBB installation. For more
+  information about setting ``TBBROOT`` see the `Intel documentation <https://software.intel.com/content/www/us/en/develop/documentation/advisor-user-guide/top/appendix/adding-parallelism-to-your-program/adding-the-parallel-framework-to-your-build-environment/defining-the-tbbroot-environment-variable.html>`_.
+
 .. _numba-source-install-check:
 
 Dependency List
@@ -177,7 +204,7 @@ Dependency List
 
 Numba has numerous required and optional dependencies which additionally may
 vary with target operating system and hardware. The following lists them all
-(as of September 2019).
+(as of July 2020).
 
 * Required build time:
 
@@ -185,11 +212,17 @@ vary with target operating system and hardware. The following lists them all
   * ``numpy``
   * ``llvmlite``
   * Compiler toolchain mentioned above
-  * OpenMP C headers and runtime libraries compatible with the compiler
-    toolchain mentioned above and accessible to the compiler via standard flags
-    (Linux, Windows).
+
+* Required run time:
+
+  * ``setuptools``
+  * ``numpy``
+  * ``llvmlite``
 
 * Optional build time:
+
+  See :ref:`numba-source-install-env_vars` for more details about additional
+  options for the configuration and specification of these optional components.
 
   * ``llvm-openmp`` (OSX) - provides headers for compiling OpenMP support into
     Numba's threading backend
@@ -197,12 +230,6 @@ vary with target operating system and hardware. The following lists them all
     threading backend.
   * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support
     into Numba's threading backend
-
-* Required run time:
-
-  * ``setuptools``
-  * ``numpy``
-  * ``llvmlite``
 
 * Optional runtime are:
 
@@ -232,6 +259,10 @@ vary with target operating system and hardware. The following lists them all
     inspection. `See here <https://github.com/radareorg/radare2>`_ for
     information on obtaining and installing.
   * ``graphviz`` - for some CFG inspection functionality.
+  * ``pickle5`` - provides Python 3.8 pickling features for faster pickling in
+    Python 3.6 and 3.7.
+  * ``typeguard`` - used by ``runtests.py`` for
+    :ref:`runtime type-checking <type_anno_check>`.
 
 * To build the documentation:
 
@@ -297,4 +328,3 @@ further information.
                                   pci bus id: 1
 
 (output truncated due to length)
-

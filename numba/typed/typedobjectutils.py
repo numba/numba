@@ -50,6 +50,7 @@ def _sentry_safe_cast(fromty, toty):
     isint = lambda x: isinstance(x, types.Integer)
     isflt = lambda x: isinstance(x, types.Float)
     iscmplx = lambda x: isinstance(x, types.Complex)
+    isdict = lambda x: isinstance(x, types.DictType)
     # Only check against numeric types.
     if by is None or by > Conversion.safe:
         if isint(fromty) and isint(toty):
@@ -64,6 +65,8 @@ def _sentry_safe_cast(fromty, toty):
         elif iscmplx(fromty) and iscmplx(toty):
             # Accept if complex to complex
             warn()
+        elif isdict(fromty) and isdict(toty):
+            pass # it's complaining about initial values being different
         elif not isinstance(toty, types.Number):
             # Non-numbers
             warn()
@@ -117,7 +120,7 @@ def _container_get_meminfo(context, builder, container_ty, c):
     return conatainer_struct.meminfo
 
 
-def _get_incref_decref(context, module, datamodel, container_type):
+def _get_incref_decref(context, module, datamodel, container_element_type):
     assert datamodel.contains_nrt_meminfo()
 
     fe_type = datamodel.fe_type
@@ -125,7 +128,8 @@ def _get_incref_decref(context, module, datamodel, container_type):
     refct_fnty = ir.FunctionType(ir.VoidType(), [data_ptr_ty])
     incref_fn = module.get_or_insert_function(
         refct_fnty,
-        name='.numba_{}_incref${}'.format(container_type, fe_type),
+        name='.numba_{}.{}_incref'.format(
+            context.fndesc.mangled_name, container_element_type),
     )
 
     builder = ir.IRBuilder(incref_fn.append_basic_block())
@@ -137,7 +141,8 @@ def _get_incref_decref(context, module, datamodel, container_type):
 
     decref_fn = module.get_or_insert_function(
         refct_fnty,
-        name='.numba_{}_decref${}'.format(container_type, fe_type),
+        name='.numba_{}.{}_decref'.format(
+            context.fndesc.mangled_name, container_element_type),
     )
     builder = ir.IRBuilder(decref_fn.append_basic_block())
     context.nrt.decref(
@@ -149,7 +154,7 @@ def _get_incref_decref(context, module, datamodel, container_type):
     return incref_fn, decref_fn
 
 
-def _get_equal(context, module, datamodel, container_type):
+def _get_equal(context, module, datamodel, container_element_type):
     assert datamodel.contains_nrt_meminfo()
 
     fe_type = datamodel.fe_type
@@ -174,14 +179,16 @@ def _get_equal(context, module, datamodel, container_type):
 
     wrapfn = module.get_or_insert_function(
         wrapfnty,
-        name='.numba_{}_item_equal.wrap${}'.format(container_type, fe_type)
+        name='.numba_{}.{}_equal.wrap'.format(
+            context.fndesc.mangled_name, container_element_type)
     )
     build_wrapper(wrapfn)
 
     equal_fnty = ir.FunctionType(ir.IntType(32), [data_ptr_ty, data_ptr_ty])
     equal_fn = module.get_or_insert_function(
         equal_fnty,
-        name='.numba_{}_item_equal${}'.format(container_type, fe_type),
+        name='.numba_{}.{}_equal'.format(
+            context.fndesc.mangled_name, container_element_type),
     )
     builder = Builder(equal_fn.append_basic_block())
     lhs = datamodel.load_from_data_pointer(builder, equal_fn.args[0])

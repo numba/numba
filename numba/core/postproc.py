@@ -53,9 +53,11 @@ class VariableLifetime(object):
         return analysis.compute_dead_maps(self.cfg, self._blocks, self.livemap,
                                           self.usedefs.defmap)
 
+
 # other packages that define new nodes add calls for inserting dels
 # format: {type:function}
 ir_extension_insert_dels = {}
+
 
 class PostProcessor(object):
     """
@@ -213,7 +215,6 @@ class PostProcessor(object):
             escape_dead_set = escaping_dead_map[offset]
             for var_name in sorted(escape_dead_set):
                 ir_block.prepend(ir.Del(var_name, loc=ir_block.body[0].loc))
-
 
     def remove_dels(self):
         """

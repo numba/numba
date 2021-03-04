@@ -62,11 +62,126 @@ class TestGUFunc(TestCase):
 
         np.testing.assert_equal(out, x * x + x)
 
+    def test_axis(self):
+        # issue https://github.com/numba/numba/issues/6773
+        @guvectorize(["f8[:],f8[:]"], "(n)->(n)")
+        def my_cumsum(x, res):
+            acc = 0
+            for i in range(x.shape[0]):
+                acc += x[i]
+                res[i] = acc
+
+        x = np.ones((20, 30))
+        # Check regular call
+        y = my_cumsum(x, axis=0)
+        expected = np.cumsum(x, axis=0)
+        np.testing.assert_equal(y, expected)
+        # Check "out" kw
+        out_kw = np.zeros_like(y)
+        my_cumsum(x, out=out_kw, axis=0)
+        np.testing.assert_equal(out_kw, expected)
+
 
 class TestGUFuncParallel(TestGUFunc):
     _numba_parallel_test_ = False
     target = 'parallel'
 
+
+class TestDynamicGUFunc(TestCase):
+    target = 'cpu'
+
+    def test_dynamic_matmul(self):
+
+        def check_matmul_gufunc(gufunc, A, B, C):
+            Gold = ut.matrix_multiply(A, B)
+            gufunc(A, B, C)
+            np.testing.assert_allclose(C, Gold, rtol=1e-5, atol=1e-8)
+
+        gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)',
+                             target=self.target, is_dynamic=True)
+        matrix_ct = 10
+        Ai64 = np.arange(matrix_ct * 2 * 4, dtype=np.int64).reshape(matrix_ct, 2, 4)
+        Bi64 = np.arange(matrix_ct * 4 * 5, dtype=np.int64).reshape(matrix_ct, 4, 5)
+        Ci64 = np.arange(matrix_ct * 2 * 5, dtype=np.int64).reshape(matrix_ct, 2, 5)
+        check_matmul_gufunc(gufunc, Ai64, Bi64, Ci64)
+
+        A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2, 4)
+        B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4, 5)
+        C = np.arange(matrix_ct * 2 * 5, dtype=np.float32).reshape(matrix_ct, 2, 5)
+        check_matmul_gufunc(gufunc, A, B, C)  # trigger compilation
+
+        self.assertEqual(len(gufunc.types), 2)  # ensure two versions of gufunc
+
+
+    def test_dynamic_ufunc_like(self):
+
+        def check_ufunc_output(gufunc, x):
+            out = np.zeros(10, dtype=x.dtype)
+            out_kw = np.zeros(10, dtype=x.dtype)
+            gufunc(x, x, x, out)
+            gufunc(x, x, x, out=out_kw)
+            golden = x * x + x
+            np.testing.assert_equal(out, golden)
+            np.testing.assert_equal(out_kw, golden)
+
+        # Test problem that the stride of "scalar" gufunc argument not properly
+        # handled when the actual argument is an array,
+        # causing the same value (first value) being repeated.
+        gufunc = GUVectorize(axpy, '(), (), () -> ()', target=self.target,
+                             is_dynamic=True)
+        x = np.arange(10, dtype=np.intp)
+        check_ufunc_output(gufunc, x)
+
+
+    def test_dynamic_scalar_output(self):
+        """
+        Note that scalar output is a 0-dimension array that acts as
+        a pointer to the output location.
+        """
+
+        @guvectorize('(n)->()', target=self.target, nopython=True)
+        def sum_row(inp, out):
+            tmp = 0.
+            for i in range(inp.shape[0]):
+                tmp += inp[i]
+            out[()] = tmp
+
+        # inp is (10000, 3)
+        # out is (10000)
+        # The outter (leftmost) dimension must match or numpy broadcasting is performed.
+
+        self.assertTrue(sum_row.is_dynamic)
+        inp = np.arange(30000, dtype=np.int32).reshape(10000, 3)
+        out = np.zeros(10000, dtype=np.int32)
+        sum_row(inp, out)
+
+        # verify result
+        for i in range(inp.shape[0]):
+            self.assertEqual(out[i], inp[i].sum())
+
+        msg = "Too few arguments for function 'sum_row'."
+        with self.assertRaisesRegex(TypeError, msg):
+            sum_row(inp)
+
+    def test_axis(self):
+        # issue https://github.com/numba/numba/issues/6773
+        @guvectorize("(n)->(n)")
+        def my_cumsum(x, res):
+            acc = 0
+            for i in range(x.shape[0]):
+                acc += x[i]
+                res[i] = acc
+
+        x = np.ones((20, 30))
+        expected = np.cumsum(x, axis=0)
+        # Check regular call
+        y = np.zeros_like(expected)
+        my_cumsum(x, y, axis=0)
+        np.testing.assert_equal(y, expected)
+        # Check "out" kw
+        out_kw = np.zeros_like(y)
+        my_cumsum(x, out=out_kw, axis=0)
+        np.testing.assert_equal(out_kw, expected)
 
 class TestGUVectorizeScalar(TestCase):
     """
@@ -97,7 +212,7 @@ class TestGUVectorizeScalar(TestCase):
 
         # verify result
         for i in range(inp.shape[0]):
-            assert out[i] == inp[i].sum()
+            self.assertEqual(out[i], inp[i].sum())
 
     def test_scalar_input(self):
 

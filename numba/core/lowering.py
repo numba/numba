@@ -1,58 +1,15 @@
-import weakref
 from collections import namedtuple
 import operator
 from functools import partial
 
 from llvmlite.llvmpy.core import Constant, Type, Builder
 
-from numba import _dynfunc
 from numba.core import (typing, utils, types, ir, debuginfo, funcdesc,
                         generators, config, ir_utils, cgutils, removerefctpass)
 from numba.core.errors import (LoweringError, new_error_context, TypingError,
                                LiteralTypingError, UnsupportedError)
 from numba.core.funcdesc import default_mangler
-
-
-class Environment(_dynfunc.Environment):
-    """Stores globals and constant pyobjects for runtime.
-
-    It is often needed to convert b/w nopython objects and pyobjects.
-    """
-    __slots__ = ('env_name', '__weakref__')
-    # A weak-value dictionary to store live environment with env_name as the
-    # key.
-    _memo = weakref.WeakValueDictionary()
-
-    @classmethod
-    def from_fndesc(cls, fndesc):
-        try:
-            # Avoid creating new Env
-            return cls._memo[fndesc.env_name]
-        except KeyError:
-            inst = cls(fndesc.lookup_globals())
-            inst.env_name = fndesc.env_name
-            cls._memo[fndesc.env_name] = inst
-            return inst
-
-    def __reduce__(self):
-        return _rebuild_env, (
-            self.globals['__name__'],
-            self.consts,
-            self.env_name,
-        )
-
-    def __del__(self):
-        return
-
-
-def _rebuild_env(modname, consts, env_name):
-    if env_name in Environment._memo:
-        return Environment._memo[env_name]
-    from numba.core import serialize
-    mod = serialize._rebuild_module(modname)
-    env = Environment(mod.__dict__)
-    env.consts[:] = consts
-    return env
+from numba.core.environment import Environment
 
 
 _VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
@@ -66,7 +23,7 @@ class BaseLower(object):
     def __init__(self, context, library, fndesc, func_ir, metadata=None):
         self.library = library
         self.fndesc = fndesc
-        self.blocks = utils.SortedMap(utils.iteritems(func_ir.blocks))
+        self.blocks = utils.SortedMap(func_ir.blocks.items())
         self.func_ir = func_ir
         self.call_conv = context.call_conv
         self.generator_info = func_ir.generator_info
@@ -396,8 +353,8 @@ class Lower(BaseLower):
                 # If returning an optional type
                 self.call_conv.return_optional_value(self.builder, ty, oty, val)
                 return
-            if ty != oty:
-                val = self.context.cast(self.builder, val, oty, ty)
+            assert ty == oty, (
+                "type '{}' does not match return type '{}'".format(oty, ty))
             retval = self.context.get_return_value(self.builder, ty, val)
             self.call_conv.return_value(self.builder, retval)
 
@@ -508,7 +465,8 @@ class Lower(BaseLower):
             target = self.context.cast(self.builder, target, targetty,
                                        targetty.type)
         else:
-            assert targetty == signature.args[0]
+            ul = types.unliteral
+            assert ul(targetty) == ul(signature.args[0])
 
         index = self.context.cast(self.builder, index, indexty,
                                   signature.args[1])
@@ -781,10 +739,7 @@ class Lower(BaseLower):
         if isinstance(signature.return_type, types.Phantom):
             return self.context.get_dummy_value()
 
-        if isinstance(expr.func, ir.Intrinsic):
-            fnty = expr.func.name
-        else:
-            fnty = self.typeof(expr.func.name)
+        fnty = self.typeof(expr.func.name)
 
         if isinstance(fnty, types.ObjModeDispatcher):
             res = self._lower_call_ObjModeDispatcher(fnty, expr, signature)
@@ -821,6 +776,8 @@ class Lower(BaseLower):
                                  resty)
 
     def _lower_call_ObjModeDispatcher(self, fnty, expr, signature):
+        from numba.core.pythonapi import ObjModeUtils
+
         self.init_pyapi()
         # Acquire the GIL
         gil_state = self.pyapi.gil_ensure()
@@ -835,13 +792,10 @@ class Lower(BaseLower):
         argobjs = [self.pyapi.from_native_value(atyp, aval,
                                                 self.env_manager)
                    for atyp, aval in zip(argtypes, argvalues)]
+
+        # Load objmode dispatcher
+        callee = ObjModeUtils(self.pyapi).load_dispatcher(fnty, argtypes)
         # Make Call
-        entry_pt = fnty.dispatcher.compile(tuple(argtypes))
-        callee = self.context.add_dynamic_addr(
-            self.builder,
-            id(entry_pt),
-            info="with_objectmode",
-        )
         ret_obj = self.pyapi.call_function_objargs(callee, argobjs)
         has_exception = cgutils.is_null(self.builder, ret_obj)
         with self. builder.if_else(has_exception) as (then, orelse):
@@ -1023,8 +977,7 @@ class Lower(BaseLower):
         # Normal function resolution
         self.debug_print("# calling normal function: {0}".format(fnty))
         self.debug_print("# signature: {0}".format(signature))
-        if (isinstance(expr.func, ir.Intrinsic) or
-                isinstance(fnty, types.ObjModeDispatcher)):
+        if isinstance(fnty, types.ObjModeDispatcher):
             argvals = expr.func.args
         else:
             argvals = self.fold_call_args(
@@ -1217,10 +1170,20 @@ class Lower(BaseLower):
         elif expr.op == "build_list":
             itemvals = [self.loadvar(i.name) for i in expr.items]
             itemtys = [self.typeof(i.name) for i in expr.items]
-            castvals = [self.context.cast(self.builder, val, fromty,
-                                          resty.dtype)
-                        for val, fromty in zip(itemvals, itemtys)]
-            return self.context.build_list(self.builder, resty, castvals)
+            if isinstance(resty, types.LiteralList):
+                castvals = [self.context.cast(self.builder, val, fromty, toty)
+                            for val, toty, fromty in zip(itemvals, resty.types,
+                                                         itemtys)]
+                tup = self.context.make_tuple(self.builder,
+                                              types.Tuple(resty.types),
+                                              castvals)
+                self.incref(resty, tup)
+                return tup
+            else:
+                castvals = [self.context.cast(self.builder, val, fromty,
+                                              resty.dtype)
+                            for val, fromty in zip(itemvals, itemtys)]
+                return self.context.build_list(self.builder, resty, castvals)
 
         elif expr.op == "build_set":
             # Insert in reverse order, as Python does
@@ -1297,7 +1260,6 @@ class Lower(BaseLower):
         Store the value into the given variable.
         """
         fetype = self.typeof(name)
-
         # Define if not already
         self._alloca_var(name, fetype)
 

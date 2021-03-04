@@ -27,14 +27,15 @@ def _gpu_reduce_factory(fn, nbtype):
 
         sm_this = sm_partials[warpid, :]
         sm_this[laneid] = init
-        # XXX expect warp synchronization
+        cuda.syncwarp()
+
         width = _WARPSIZE // 2
         while width:
             if laneid < width:
                 old = sm_this[laneid]
                 sm_this[laneid] = reduce_op(old, sm_this[laneid + width])
+            cuda.syncwarp()
             width //= 2
-            # XXX expect warp synchronization
 
     @cuda.jit(device=True)
     def device_reduce_full_block(arr, partials, sm_partials):
@@ -87,6 +88,7 @@ def _gpu_reduce_factory(fn, nbtype):
         if tid < 2:
             sm_partials[tid, 0] = reduce_op(sm_partials[tid, 0],
                                             sm_partials[tid + 2, 0])
+            cuda.syncwarp()
         if tid == 0:
             partials[blkid] = reduce_op(sm_partials[0, 0], sm_partials[1, 0])
 

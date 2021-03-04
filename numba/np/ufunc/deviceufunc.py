@@ -9,7 +9,6 @@ from functools import reduce
 
 import numpy as np
 
-from numba.core.utils import longint
 from numba.np.ufunc.ufuncbuilder import _BaseUFuncBuilder, parse_identity
 from numba.core import types, sigutils
 from numba.core.typing import signature
@@ -95,7 +94,7 @@ class UFuncMechanism(object):
                 self.arrays[i] = arg
             elif self.is_device_array(arg):
                 self.arrays[i] = self.as_device_array(arg)
-            elif isinstance(arg, (int, longint, float, complex, np.number)):
+            elif isinstance(arg, (int, float, complex, np.number)):
                 # Is scalar
                 self.scalarpos.append(i)
             else:
