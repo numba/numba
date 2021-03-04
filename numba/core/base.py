@@ -838,7 +838,7 @@ class BaseContext(object):
 
                 cstk = utils.ConfigStack()
                 if cstk:
-                    flags = cstk.top()
+                    flags = cstk.top().copy()
                 else:
                     flags = compiler.Flags()
             flags.set('no_compile')
