@@ -135,6 +135,7 @@ Fixes:
 * PR #6741: Enable SSA in IR inliner (Ehsan Totoni)
 * PR #6763: use an alternative constraint for the conda packages (Valentin
   Haenel)
+* PR #6786: Fix gufunc kwargs support (Siu Kwan Lam)
 
 CUDA Enhancements/Fixes:
 
