@@ -606,6 +606,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
         disp, new_args, sig_changed = self._get_impl(args, kws)
         if disp is None:
+            self._sig_cache.pop(cache_key, None)
             return
         # Compile and type it for the given types
         disp_type = types.Dispatcher(disp)
