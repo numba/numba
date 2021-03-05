@@ -570,7 +570,7 @@ class BaseContext(object):
             self.refresh()
             return self.get_function(fn, sig, _firstcall=False)
 
-        raise NotImplementedError("No definition for lowering %s%s" % (key, sig))
+        raise NotImplementedError("No definition for lowering %s%s%s" % (key, sig, overloads.versions))
 
     def get_generator_desc(self, genty):
         """
