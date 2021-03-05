@@ -11,7 +11,8 @@ from datetime import datetime
 from io import StringIO
 from subprocess import check_output, PIPE, CalledProcessError
 import llvmlite.binding as llvmbind
-from numba import cuda as cu
+from llvmlite import __version__ as llvmlite_version
+from numba import cuda as cu, __version__ as version_number
 from numba import roc
 from numba.roc.hlc import hlc, libhlc
 from numba.cuda import cudadrv
@@ -32,6 +33,7 @@ __all__ = ['get_sysinfo', 'display_sysinfo']
 
 # Time info
 _start, _start_utc, _runtime = 'Start', 'Start UTC', 'Runtime'
+_numba_version = 'Numba Version'
 # Hardware info
 _machine = 'Machine'
 _cpu_name, _cpu_count = 'CPU Name', 'CPU Count'
@@ -51,6 +53,7 @@ _python_impl = 'Python Implementation'
 _python_version = 'Python Version'
 _python_locale = 'Python Locale'
 # LLVM info
+_llvmlite_version = 'llvmlite Version'
 _llvm_version = 'LLVM Version'
 # CUDA info
 _cu_dev_init = 'CUDA Device Init'
@@ -296,7 +299,9 @@ def get_sysinfo():
         _python_version: platform.python_version(),
         _numba_env_vars: {k: v for (k, v) in os.environ.items()
                           if k.startswith('NUMBA_')},
+        _numba_version: version_number,
         _llvm_version: '.'.join(str(i) for i in llvmbind.llvm_version_info),
+        _llvmlite_version: llvmlite_version,
         _roc_available: roc.is_available(),
         _psutil: _psutil_import,
     }
@@ -585,7 +590,11 @@ def display_sysinfo(info=None, sep_pos=45):
         ("__Python Information__",),
         DisplayMap({k: v for k, v in info.items() if k.startswith('Python')}),
         ("",),
+        ("__Numba Information__",),
+        ("Numba Version", info.get(_numba_version, '?')),
+        ("",),
         ("__LLVM Information__",),
+        ("llvmlite Version", info.get(_llvmlite_version, '?')),
         ("LLVM Version", info.get(_llvm_version, '?')),
         ("",),
         ("__CUDA Information__",),
