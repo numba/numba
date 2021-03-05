@@ -1004,13 +1004,13 @@ class SymbolicEquivSet(ShapeEquivSet):
     def set_shape_setitem(self, obj, shape):
         """remember shapes of SetItem IR nodes.
         """
-        assert isinstance(obj, ir.StaticSetItem) or isinstance(obj, ir.SetItem)
+        assert isinstance(obj, (ir.StaticSetItem, ir.SetItem))
         self.ext_shapes[obj] = shape
 
     def _get_shape(self, obj):
         """Overload _get_shape to retrieve the shape of SetItem IR nodes.
         """
-        if isinstance(obj, ir.StaticSetItem) or isinstance(obj, ir.SetItem):
+        if isinstance(obj, (ir.StaticSetItem, ir.SetItem)):
             require(obj in self.ext_shapes)
             return self.ext_shapes[obj]
         else:
@@ -1252,12 +1252,6 @@ class ArrayAnalysis(object):
         pending_transforms = []
         for inst in block.body:
             redefined = set()
-            if isinstance(inst, ir.StaticSetItem):
-                orig_calltype = self.calltypes[inst]
-                inst = ir.SetItem(
-                    inst.target, inst.index_var, inst.value, inst.loc
-                )
-                self.calltypes[inst] = orig_calltype
             pre, post = self._analyze_inst(
                 label, scope, equiv_set, inst, redefined
             )
@@ -1403,7 +1397,7 @@ class ArrayAnalysis(object):
             if not result:
                 return [], []
             if result[0] is not None:
-                assert isinstance(inst, ir.SetItem)
+                assert isinstance(inst, (ir.StaticSetItem, ir.SetItem))
                 inst.index = result[0]
             result = result[1]
             target_shape = result.kwargs['shape']
