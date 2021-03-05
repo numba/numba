@@ -2800,6 +2800,22 @@ class TestPrange(TestPrangeBase):
 
         self.prange_tester(test_impl)
 
+    @skip_parfors_unsupported
+    def test_record_array(self):
+        # issue6704
+        state_dtype = np.dtype([('var', np.int32)])
+
+        def test_impl(states):
+            for i in range(1):
+                states[i]['var'] = 1
+
+        def comparer(a, b):
+            assert(a[0]['var'] == b[0]['var'])
+
+        self.prange_tester(test_impl,
+                           np.empty(shape=1, dtype=state_dtype),
+                           check_arg_equality=[comparer])
+
 
 @skip_parfors_unsupported
 @x86_only
