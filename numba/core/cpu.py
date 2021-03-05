@@ -17,6 +17,7 @@ import numba.core.entrypoints
 from numba.core.cpu_options import (ParallelOptions, FastMathOptions,
                                     InlineOptions)
 from numba.cpython import setobj, listobj
+from numba.np import ufunc_db
 
 # Keep those structures in sync with _dynfunc.c.
 
@@ -229,6 +230,10 @@ class CPUContext(BaseContext):
         '''
         aryty = types.Array(types.int32, ndim, 'A')
         return self.get_abi_sizeof(self.get_value_type(aryty))
+
+    # Overrides
+    def get_ufunc_info(self, ufunc_key):
+        return ufunc_db.get_ufunc_info(ufunc_key)
 
 
 # ----------------------------------------------------------------------------

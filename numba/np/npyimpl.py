@@ -448,12 +448,7 @@ def _ufunc_db_function(ufunc):
             super(_KernelImpl, self).__init__(context, builder, outer_sig)
             loop = ufunc_find_matching_loop(
                 ufunc, outer_sig.args + tuple(_unpack_output_types(ufunc, outer_sig)))
-
-            if hasattr(context, 'ufunc_db'):
-                self.fn = context.ufunc_db[ufunc].get(loop.ufunc_sig)
-            else:
-                self.fn = ufunc_db.get_ufunc_info(ufunc).get(loop.ufunc_sig)
-
+            self.fn = context.get_ufunc_info(ufunc).get(loop.ufunc_sig)
             self.inner_sig = _ufunc_loop_sig(loop.outputs, loop.inputs)
 
             if self.fn is None:
@@ -544,7 +539,7 @@ def array_positive_impl(context, builder, sig, args):
 
 def _register_ufuncs():
     kernels = {}
-
+    # Assuming ufunc implementation for the CPUContext.
     for ufunc in ufunc_db.get_ufuncs():
         kernels[ufunc] = register_ufunc_kernel(ufunc, _ufunc_db_function(ufunc))
 
