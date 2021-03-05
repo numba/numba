@@ -1163,8 +1163,7 @@ class BaseContext(object):
             A mapping of NumPy ufunc type signature to the lower-level
             implementation.
         """
-        raise NotImplementedError("{self} does not support ufunc")
-
+        raise NotImplementedError(f"{self} does not support ufunc")
 
 class _wrap_impl(object):
     """
