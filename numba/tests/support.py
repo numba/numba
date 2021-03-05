@@ -895,6 +895,12 @@ def _format_jit_options(**jit_options):
 
 @contextlib.contextmanager
 def create_temp_module(source_lines, **jit_options):
+    """A context manager that creates and imports a temporary module
+    from sources provided in ``source_lines``.
+
+    Optionally it is possible to provide jit options for ``jit_module`` if it
+    is explicitly used in ``source_lines`` like ``jit_module({jit_options})``.
+    """
     # Use try/finally so cleanup happens even when an exception is raised
     try:
         tempdir = temp_directory('test_temp_module')
