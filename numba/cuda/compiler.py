@@ -93,8 +93,8 @@ class CUDACompiler(CompilerBase):
 
 
 @global_compiler_lock
-def compile_cuda(pyfunc, return_type, args, debug=False, inline=False,
-                 fastmath=False):
+def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
+                 inline=False, fastmath=False):
     from .descriptor import cuda_target
     typingctx = cuda_target.typingctx
     targetctx = cuda_target.targetctx
@@ -104,7 +104,10 @@ def compile_cuda(pyfunc, return_type, args, debug=False, inline=False,
     flags.set('no_compile')
     flags.set('no_cpython_wrapper')
     flags.set('no_cfunc_wrapper')
-    if debug:
+    if debug or lineinfo:
+        # Note both debug and lineinfo turn on debug information in the
+        # compiled code, but we keep them separate arguments in case we
+        # later want to overload some other behavior on the debug flag.
         flags.set('debuginfo')
     if inline:
         flags.set('forceinline')
@@ -126,22 +129,29 @@ def compile_cuda(pyfunc, return_type, args, debug=False, inline=False,
     return cres
 
 
-def compile_kernel(pyfunc, args, link, debug=False, inline=False,
-                   fastmath=False, extensions=[], max_registers=None, opt=True):
-    return _Kernel(pyfunc, args, link, debug=debug, inline=inline,
-                   fastmath=fastmath, extensions=extensions,
+def compile_kernel(pyfunc, args, link, debug=False, lineinfo=False,
+                   inline=False, fastmath=False, extensions=[],
+                   max_registers=None, opt=True):
+    return _Kernel(pyfunc, args, link, debug=debug, lineinfo=lineinfo,
+                   inline=inline, fastmath=fastmath, extensions=extensions,
                    max_registers=max_registers, opt=opt)
 
 
 @global_compiler_lock
-def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
-                cc=None, opt=True):
+def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
+                fastmath=False, cc=None, opt=True):
     """Compile a Python function to PTX for a given set of argument types.
 
     :param pyfunc: The Python function to compile.
     :param args: A tuple of argument types to compile for.
     :param debug: Whether to include debug info in the generated PTX.
     :type debug: bool
+    :param lineinfo: Whether to include a line mapping from the generated PTX
+                     to the source code. Usually this is used with optimized
+                     code (since debug mode would automatically include this),
+                     so we want debug info in the LLVM but only the line
+                     mapping in the final PTX.
+    :type lineinfo: bool
     :param device: Whether to compile a device function. Defaults to ``False``,
                    to compile global kernel functions.
     :type device: bool
@@ -156,7 +166,7 @@ def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
     :return: (ptx, resty): The PTX code and inferred return type
     :rtype: tuple
     """
-    cres = compile_cuda(pyfunc, None, args, debug=debug)
+    cres = compile_cuda(pyfunc, None, args, debug=debug, lineinfo=lineinfo)
     resty = cres.signature.return_type
     if device:
         llvm_module = cres.library._final_module
@@ -170,6 +180,7 @@ def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
 
     options = {
         'debug': debug,
+        'lineinfo': lineinfo,
         'fastmath': fastmath,
     }
 
@@ -181,14 +192,14 @@ def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
     return ptx.decode('utf-8'), resty
 
 
-def compile_ptx_for_current_device(pyfunc, args, debug=False, device=False,
-                                   fastmath=False, opt=True):
+def compile_ptx_for_current_device(pyfunc, args, debug=False, lineinfo=False,
+                                   device=False, fastmath=False, opt=True):
     """Compile a Python function to PTX for a given set of argument types for
     the current device's compute capabilility. This calls :func:`compile_ptx`
     with an appropriate ``cc`` value for the current device."""
     cc = get_current_device().compute_capability
-    return compile_ptx(pyfunc, args, debug=-debug, device=device,
-                       fastmath=fastmath, cc=cc, opt=True)
+    return compile_ptx(pyfunc, args, debug=-debug, lineinfo=lineinfo,
+                       device=device, fastmath=fastmath, cc=cc, opt=True)
 
 
 def disassemble_cubin(cubin):
@@ -346,8 +357,10 @@ def compile_device_template(pyfunc, debug=False, inline=False, opt=True):
     return dft
 
 
-def compile_device(pyfunc, return_type, args, inline=True, debug=False):
-    return DeviceFunction(pyfunc, return_type, args, inline=True, debug=False)
+def compile_device(pyfunc, return_type, args, inline=True, debug=False,
+                   lineinfo=False):
+    return DeviceFunction(pyfunc, return_type, args, inline=True, debug=False,
+                          lineinfo=False)
 
 
 def declare_device_function(name, restype, argtypes):
@@ -370,14 +383,16 @@ def declare_device_function(name, restype, argtypes):
 
 class DeviceFunction(serialize.ReduceMixin):
 
-    def __init__(self, pyfunc, return_type, args, inline, debug):
+    def __init__(self, pyfunc, return_type, args, inline, debug, lineinfo):
         self.py_func = pyfunc
         self.return_type = return_type
         self.args = args
         self.inline = True
         self.debug = False
+        self.lineinfo = False
         cres = compile_cuda(self.py_func, self.return_type, self.args,
-                            debug=self.debug, inline=self.inline)
+                            debug=self.debug, inline=self.inline,
+                            lineinfo=self.lineinfo)
         self.cres = cres
 
         class device_function_template(ConcreteTemplate):
@@ -391,11 +406,12 @@ class DeviceFunction(serialize.ReduceMixin):
 
     def _reduce_states(self):
         return dict(py_func=self.py_func, return_type=self.return_type,
-                    args=self.args, inline=self.inline, debug=self.debug)
+                    args=self.args, inline=self.inline, debug=self.debug,
+                    lineinfo=self.lineinfo)
 
     @classmethod
-    def _rebuild(cls, py_func, return_type, args, inline, debug):
-        return cls(py_func, return_type, args, inline, debug)
+    def _rebuild(cls, py_func, return_type, args, inline, debug, lineinfo):
+        return cls(py_func, return_type, args, inline, debug, lineinfo)
 
     def __repr__(self):
         fmt = "<DeviceFunction py_func={0} signature={1}>"
@@ -488,7 +504,7 @@ class CachedCUFunction(serialize.ReduceMixin):
     Uses device ID as key for cache.
     """
 
-    def __init__(self, entry_name, ptx, linking, max_registers):
+    def __init__(self, entry_name, ptx, linking, max_registers, lineinfo):
         self.entry_name = entry_name
         self.ptx = ptx
         self.linking = linking
@@ -496,6 +512,7 @@ class CachedCUFunction(serialize.ReduceMixin):
         self.ccinfos = {}
         self.cubins = {}
         self.max_registers = max_registers
+        self.lineinfo = lineinfo
 
     def get(self):
         cuctx = get_context()
@@ -505,7 +522,8 @@ class CachedCUFunction(serialize.ReduceMixin):
             ptx = self.ptx.get()
 
             # Link
-            linker = driver.Linker(max_registers=self.max_registers)
+            linker = driver.Linker(max_registers=self.max_registers,
+                                   lineinfo=self.lineinfo)
             linker.add_ptx(ptx)
             for path in self.linking:
                 linker.add_file_guess_ext(path)
@@ -565,17 +583,20 @@ class _Kernel(serialize.ReduceMixin):
     '''
 
     @global_compiler_lock
-    def __init__(self, py_func, argtypes, link=None, debug=False, inline=False,
-                 fastmath=False, extensions=None, max_registers=None, opt=True):
+    def __init__(self, py_func, argtypes, link=None, debug=False,
+                 lineinfo=False, inline=False, fastmath=False, extensions=None,
+                 max_registers=None, opt=True):
         super().__init__()
 
         self.py_func = py_func
         self.argtypes = argtypes
         self.debug = debug
+        self.lineinfo = lineinfo
         self.extensions = extensions or []
 
         cres = compile_cuda(self.py_func, types.void, self.argtypes,
                             debug=self.debug,
+                            lineinfo=self.lineinfo,
                             inline=inline,
                             fastmath=fastmath)
         fname = cres.fndesc.llvm_func_name
@@ -587,6 +608,7 @@ class _Kernel(serialize.ReduceMixin):
 
         options = {
             'debug': self.debug,
+            'lineinfo': self.lineinfo,
             'fastmath': fastmath,
             'opt': 3 if opt else 0
         }
@@ -604,7 +626,8 @@ class _Kernel(serialize.ReduceMixin):
         if self.cooperative:
             link.append(get_cudalib('cudadevrt', static=True))
 
-        cufunc = CachedCUFunction(kernel.name, ptx, link, max_registers)
+        cufunc = CachedCUFunction(kernel.name, ptx, link, max_registers,
+                                  lineinfo)
 
         # populate members
         self.entry_name = kernel.name
@@ -620,7 +643,7 @@ class _Kernel(serialize.ReduceMixin):
 
     @classmethod
     def _rebuild(cls, cooperative, name, argtypes, cufunc, link, debug,
-                 call_helper, extensions):
+                 lineinfo, call_helper, extensions):
         """
         Rebuild an instance.
         """
@@ -635,6 +658,7 @@ class _Kernel(serialize.ReduceMixin):
         instance._type_annotation = None
         instance._func = cufunc
         instance.debug = debug
+        instance.lineinfo = lineinfo
         instance.call_helper = call_helper
         instance.extensions = extensions
         return instance
@@ -649,8 +673,8 @@ class _Kernel(serialize.ReduceMixin):
         """
         return dict(cooperative=self.cooperative, name=self.entry_name,
                     argtypes=self.argtypes, cufunc=self._func, link=self.link,
-                    debug=self.debug, call_helper=self.call_helper,
-                    extensions=self.extensions)
+                    debug=self.debug, lineinfo=self.lineinfo,
+                    call_helper=self.call_helper, extensions=self.extensions)
 
     def bind(self):
         """

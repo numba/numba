@@ -2124,7 +2124,7 @@ FILE_EXTENSION_MAP = {
 
 
 class Linker(object):
-    def __init__(self, max_registers=0):
+    def __init__(self, max_registers=0, lineinfo=False):
         logsz = int(get_numba_envvar('CUDA_LOG_SIZE', 1024))
         linkerinfo = (c_char * logsz)()
         linkererrors = (c_char * logsz)()
@@ -2138,6 +2138,8 @@ class Linker(object):
         }
         if max_registers:
             options[enums.CU_JIT_MAX_REGISTERS] = c_void_p(max_registers)
+        if lineinfo:
+            options[enums.CU_JIT_GENERATE_LINE_INFO] = c_void_p(1)
 
         raw_keys = list(options.keys()) + [enums.CU_JIT_TARGET_FROM_CUCONTEXT]
         raw_values = list(options.values())
