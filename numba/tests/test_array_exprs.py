@@ -7,7 +7,8 @@ from numba import njit, vectorize
 from numba import typeof
 from numba.core import utils, types, typing, ir, compiler, cpu, cgutils
 from numba.core.compiler import Compiler, Flags
-from numba.tests.support import MemoryLeakMixin, TestCase, temp_directory
+from numba.tests.support import (MemoryLeakMixin, TestCase, temp_directory,
+                                 create_temp_module)
 from numba.extending import (
     overload,
     models,
@@ -18,12 +19,6 @@ from numba.extending import (
     typeof_impl
 )
 import operator
-import contextlib
-import importlib
-import shutil
-import uuid
-import os
-import sys
 import textwrap
 
 import unittest
@@ -657,31 +652,6 @@ class TestExternalTypes(MemoryLeakMixin, unittest.TestCase):
                 super(FooType, self).__init__(name='Foo')
         """)
 
-    # copied from test_types
-    @contextlib.contextmanager
-    def create_temp_module(self, source_lines=None, **jit_options):
-        # Use try/finally so cleanup happens even when an exception is raised
-        try:
-            if source_lines is None:
-                source_lines = self.source_lines
-            tempdir = temp_directory('test_extension_type')
-            # Generate random module name
-            temp_module_name = 'test_extension_type_{}'.format(
-                str(uuid.uuid4()).replace('-', '_'))
-            temp_module_path = os.path.join(tempdir, temp_module_name + '.py')
-
-            with open(temp_module_path, 'w') as f:
-                lines = source_lines.format(jit_options=jit_options)
-                f.write(lines)
-            # Add test_module to sys.path so it can be imported
-            sys.path.insert(0, tempdir)
-            test_module = importlib.import_module(temp_module_name)
-            yield test_module
-        finally:
-            sys.modules.pop(temp_module_name, None)
-            sys.path.remove(tempdir)
-            shutil.rmtree(tempdir)
-
     def make_foo_type(self, FooType):
         class Foo(object):
             def __init__(self, value):
@@ -717,7 +687,7 @@ class TestExternalTypes(MemoryLeakMixin, unittest.TestCase):
         return Foo, FooType
 
     def test_external_type(self):
-        with self.create_temp_module(self.source_lines) as test_module:
+        with create_temp_module(self.source_lines) as test_module:
             Foo, FooType = self.make_foo_type(test_module.FooType)
 
             # sum of foo class instance and array return an array
