@@ -597,7 +597,7 @@ def display_sysinfo(info=None, sep_pos=45):
         ("__CUDA Information__",),
         ("CUDA Device Initialized", info.get(_cu_dev_init, '?')),
         ("CUDA Driver Version", info.get(_cu_drv_ver, '?')),
-        ("CUDA Runtime Version",info.get(_cu_rt_ver,'?')),
+        ("CUDA Runtime Version",info.get(_cu_rt_ver, '?')),
         ("CUDA Detect Output:",),
         (info.get(_cu_detect_out, "None"),),
         ("CUDA Libraries Test Output:",),
