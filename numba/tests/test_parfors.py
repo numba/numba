@@ -2801,7 +2801,7 @@ class TestPrange(TestPrangeBase):
         self.prange_tester(test_impl)
 
     @skip_parfors_unsupported
-    def test_record_array(self):
+    def test_record_array_setitem(self):
         # issue6704
         state_dtype = np.dtype([('var', np.int32)])
 
