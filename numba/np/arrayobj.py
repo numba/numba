@@ -1832,12 +1832,7 @@ def np_clip(a, a_min, a_max, out=None):
             # implementation when both bounds defined
             ret = _alloc_out(a, out)
             for index, val in np.ndenumerate(a):
-                if val < a_min:
-                    ret[index] = a_min
-                elif val > a_max:
-                    ret[index] = a_max
-                else:
-                    ret[index] = val
+                ret[index] = min(max(val, a_min), a_max)
             return ret
 
     return np_clip_impl
