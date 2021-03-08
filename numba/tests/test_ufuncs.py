@@ -1789,7 +1789,7 @@ class TestUfuncOnContext(TestCase):
         self.assertEqual(raises.exception.args, (badkey,))
 
     def test_base_get_ufunc_info(self):
-        # The BaseContext always raise NotImplementedError
+        # The BaseContext always raises NotImplementedError
         targetctx = BaseContext(cpu_target.typing_context)
         with self.assertRaises(NotImplementedError) as raises:
             targetctx.get_ufunc_info(np.add)

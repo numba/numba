@@ -539,7 +539,7 @@ def array_positive_impl(context, builder, sig, args):
 
 def _register_ufuncs():
     kernels = {}
-    # Assuming ufunc implementation for the CPUContext.
+    # NOTE: Assuming ufunc implementation for the CPUContext.
     for ufunc in ufunc_db.get_ufuncs():
         kernels[ufunc] = register_ufunc_kernel(ufunc, _ufunc_db_function(ufunc))
 
