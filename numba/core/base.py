@@ -837,10 +837,12 @@ class BaseContext(object):
                 from numba.core import utils
 
                 cstk = utils.ConfigStack()
+                flags = compiler.Flags()
                 if cstk:
-                    flags = cstk.top()
-                else:
-                    flags = compiler.Flags()
+                    tls_flags = cstk.top()
+                    if tls_flags.nrt:
+                        flags.set("nrt")
+
             flags.set('no_compile')
             flags.set('no_cpython_wrapper')
             flags.set('no_cfunc_wrapper')

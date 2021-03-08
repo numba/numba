@@ -373,7 +373,7 @@ class CompilerBase(object):
         Populate and run compiler pipeline
         """
         from numba.core import utils
-        with utils.ConfigStack().enter(self.state.flags):
+        with utils.ConfigStack().enter(self.state.flags.copy()):
 
             pms = self.define_pipelines()
             for pm in pms:
