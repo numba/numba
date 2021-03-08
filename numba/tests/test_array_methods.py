@@ -1366,7 +1366,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                 # verifies that type-inference is working on the return value
                 # this used to trigger issue #3489
                 def lower_clip_result(a):
-                    return np.expm1(pyfunc(a, -5, 5))
+                    return np.expm1(cfunc(a, -5, 5))
                 np.testing.assert_almost_equal(
                     lower_clip_result(a),
                     jit(nopython=True)(lower_clip_result)(a))
