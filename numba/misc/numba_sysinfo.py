@@ -16,6 +16,7 @@ from numba import roc
 from numba.roc.hlc import hlc, libhlc
 from numba.cuda import cudadrv
 from numba.cuda.cudadrv.driver import driver as cudriver
+from numba.cuda.cudadrv.runtime import runtime as curuntime
 from numba.core import config
 
 _psutil_import = False
@@ -55,6 +56,7 @@ _llvm_version = 'LLVM Version'
 # CUDA info
 _cu_dev_init = 'CUDA Device Init'
 _cu_drv_ver = 'CUDA Driver Version'
+_cu_rt_ver = 'CUDA Runtime Version'
 _cu_detect_out, _cu_lib_test = 'CUDA Detect Output', 'CUDA Lib Test'
 # ROC information
 _roc_available, _roc_toolchains = 'ROC Available', 'ROC Toolchains'
@@ -356,6 +358,10 @@ def get_sysinfo():
             cudriver.cuDriverGetVersion(ctypes.byref(dv))
             sys_info[_cu_drv_ver] = dv.value
 
+            rtver = ctypes.c_int(0)
+            curuntime.cudaRuntimeGetVersion(ctypes.byref(rtver))
+            sys_info[_cu_rt_ver] = rtver.value
+
             output = StringIO()
             with redirect_stdout(output):
                 cudadrv.libs.test(sys.platform, print_paths=False)
@@ -591,6 +597,7 @@ def display_sysinfo(info=None, sep_pos=45):
         ("__CUDA Information__",),
         ("CUDA Device Initialized", info.get(_cu_dev_init, '?')),
         ("CUDA Driver Version", info.get(_cu_drv_ver, '?')),
+        ("CUDA Runtime Version",info.get(_cu_rt_ver, '?')),
         ("CUDA Detect Output:",),
         (info.get(_cu_detect_out, "None"),),
         ("CUDA Libraries Test Output:",),
