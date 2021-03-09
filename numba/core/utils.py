@@ -230,7 +230,7 @@ class TriState:
             cs = ConfigStack()
             if cs:
                 return getattr(cs.top(), flagkey)
-        return unset_default
+        return False if got is False else unset_default
 
 
 class ConfigOptions(object):
