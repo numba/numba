@@ -487,13 +487,15 @@ def detect():
     for dev in devlist:
         attrs = []
         cc = dev.compute_capability
+        kernel_timeout = dev.KERNEL_EXEC_TIMEOUT
+        tcc = dev.TCC_DRIVER
+        fp32_to_fp64_ratio = dev.SINGLE_TO_DOUBLE_PRECISION_PERF_RATIO
         attrs += [('Compute Capability', '%d.%d' % cc)]
         attrs += [('PCI Device ID', dev.PCI_DEVICE_ID)]
         attrs += [('PCI Bus ID', dev.PCI_BUS_ID)]
-        attrs += [('Watchdog', "Enabled" if dev.KERNEL_EXEC_TIMEOUT else "Disabled")]
-        attrs += [('Compute Mode', "TCC" if dev.TCC_DRIVER else "WDDM")]
-        attrs += [('FP32/FP64 Performance Ratio',
-                   dev.SINGLE_TO_DOUBLE_PRECISION_PERF_RATIO)]
+        attrs += [('Watchdog', 'Enabled' if kernel_timeout else 'Disabled')]
+        attrs += [('Compute Mode', 'TCC' if tcc else 'WDDM')]
+        attrs += [('FP32/FP64 Performance Ratio', fp32_to_fp64_ratio)]
         if cc < (2, 0):
             support = '[NOT SUPPORTED: CC < 2.0]'
         else:
