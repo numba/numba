@@ -71,7 +71,7 @@ class CUDACodeLibrary(CodeLibrary):
         # https://github.com/numba/numba/pull/890
         for mod in self._linked_modules:
             for fn in mod.functions:
-                if not fn.is_declaration and fn.linkage != 'external':
+                if not fn.is_declaration:
                     fn.linkage = 'linkonce_odr'
 
         self._finalized = True
