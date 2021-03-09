@@ -1,4 +1,5 @@
 from itertools import product, cycle, permutations
+import gc
 import sys
 import warnings
 
@@ -489,8 +490,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             got = run(buf)
             self.assertPreciseEqual(got, expected)
             del expected
+            gc.collect()
             self.assertEqual(sys.getrefcount(buf), old_refcnt + 1)
             del got
+            gc.collect()
             self.assertEqual(sys.getrefcount(buf), old_refcnt)
             self.memory_leak_teardown()
 
