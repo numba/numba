@@ -491,8 +491,9 @@ def detect():
         attrs += [('pci device id', dev.PCI_DEVICE_ID)]
         attrs += [('pci bus id', dev.PCI_BUS_ID)]
         attrs += [('Watchdog Enabled', dev.KERNEL_EXEC_TIMEOUT)]
-        attrs += [('Compute Mode', dev.TCC_DRIVER)]
-        attrs += [('Single To Double Precision Perf ratio', dev.SINGLE_TO_DOUBLE_PRECISION_PERF_RATIO)]
+        attrs += [('Compute Mode', "TCC" if dev.TCC_DRIVER else "WDDM")]
+        # A large number (>3) indicates a card with slow double precision.
+        attrs += [('FP32:FP64 Performance', dev.SINGLE_TO_DOUBLE_PRECISION_PERF_RATIO)]
         if cc < (2, 0):
             support = '[NOT SUPPORTED: CC < 2.0]'
         else:
