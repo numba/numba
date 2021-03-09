@@ -4,6 +4,7 @@ API that are reported to numba.cuda
 
 
 import contextlib
+import os
 
 import numpy as np
 
@@ -494,7 +495,8 @@ def detect():
         attrs += [('PCI Device ID', dev.PCI_DEVICE_ID)]
         attrs += [('PCI Bus ID', dev.PCI_BUS_ID)]
         attrs += [('Watchdog', 'Enabled' if kernel_timeout else 'Disabled')]
-        attrs += [('Compute Mode', 'TCC' if tcc else 'WDDM')]
+        if os.name == "nt":
+            attrs += [('Compute Mode', 'TCC' if tcc else 'WDDM')]
         attrs += [('FP32/FP64 Performance Ratio', fp32_to_fp64_ratio)]
         if cc < (2, 0):
             support = '[NOT SUPPORTED: CC < 2.0]'
