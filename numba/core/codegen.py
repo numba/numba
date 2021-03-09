@@ -761,7 +761,6 @@ class CPUCodeLibrary(CodeLibrary):
         self._final_module.verify()
         self._finalize_final_module()
 
-
     def _finalize_dynamic_globals(self):
         # Scan for dynamic globals
         for gv in self._final_module.global_variables:
