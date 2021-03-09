@@ -8,7 +8,7 @@ from numba import jit, typeof
 from numba.core import types
 from numba.core.compiler import compile_isolated
 from numba.core.errors import TypingError, LoweringError
-from numba.np.numpy_support import as_dtype
+from numba.np.numpy_support import as_dtype, numpy_version
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeak,
                                  MemoryLeakMixin, tag, needs_blas)
 import unittest
@@ -1358,10 +1358,13 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                                         cfunc(a, -5, 5, cout))
                 np.testing.assert_equal(pyout, cout)
 
-                # this test exhibits undefined behaviour since min > max,
-                # but we'll make sure it's consistent with numpy, which
-                # has the `val < a_min` check go before `val > a_max`
-                np.testing.assert_equal(pyfunc(a, 8, 5), cfunc(a, 8, 5))
+                # This test exhibits undefined behaviour since min > max, but
+                # we'll make sure it's consistent with NumPy, which computes
+                # min(max(val, a_min), a_max) since 1.17. Prior to that min and
+                # max were the other way round, so we're not consistent with
+                # older NumPy versions.
+                if numpy_version > (1, 16):
+                    np.testing.assert_equal(pyfunc(a, 8, 5), cfunc(a, 8, 5))
 
                 # verifies that type-inference is working on the return value
                 # this used to trigger issue #3489
