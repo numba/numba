@@ -487,10 +487,10 @@ def detect():
     for dev in devlist:
         attrs = []
         cc = dev.compute_capability
-        attrs += [('compute capability', '%d.%d' % cc)]
-        attrs += [('pci device id', dev.PCI_DEVICE_ID)]
-        attrs += [('pci bus id', dev.PCI_BUS_ID)]
-        attrs += [('Watchdog Enabled', dev.KERNEL_EXEC_TIMEOUT)]
+        attrs += [('Compute Capability', '%d.%d' % cc)]
+        attrs += [('PCI Device ID', dev.PCI_DEVICE_ID)]
+        attrs += [('PCI Bus ID', dev.PCI_BUS_ID)]
+        attrs += [('Watchdog', "Enabled" if dev.KERNEL_EXEC_TIMEOUT else "Disabled")]
         attrs += [('Compute Mode', "TCC" if dev.TCC_DRIVER else "WDDM")]
         attrs += [('FP32/FP64 Performance Ratio',
                    dev.SINGLE_TO_DOUBLE_PRECISION_PERF_RATIO)]
