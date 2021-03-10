@@ -490,6 +490,8 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             got = run(buf)
             self.assertPreciseEqual(got, expected)
             del expected
+            # Note gc.collect is due to references in `except ... as e` that
+            # aren't immediately cleared
             gc.collect()
             self.assertEqual(sys.getrefcount(buf), old_refcnt + 1)
             del got

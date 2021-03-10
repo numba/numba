@@ -110,14 +110,9 @@ class _OverloadWrapper(object):
                 typing = self._TYPER(tyctx)
                 sig = typing.apply(ol_args, ol_kwargs)
                 if sig is None:
-                    from numba.core import errors
-                    # TODO: Something about this, it might be possible to
-                    # fish out the actual arguments. Needs kwargs plugging
-                    # in to the error message too.
-                    err = ("No match. No implementation of %s found for "
-                           "argument type(s) %s" % (self._function,
-                                                    str(ol_args)))
-                    raise errors.TypingError(err)
+                    # this follows convention of something not typeable
+                    # returning None
+                    return None
                 if self._selector is None:
                     self._assemble()
                 lowering = self._selector.find(sig.args)
