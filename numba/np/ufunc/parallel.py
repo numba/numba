@@ -22,7 +22,7 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
 from numba.np.numpy_support import as_dtype
-from numba.core import types, config, errors
+from numba.core import types, cgutils, config, errors
 from numba.np.ufunc.wrappers import _wrapper_info
 from numba.np.ufunc import ufuncbuilder
 from numba.extending import overload
@@ -134,22 +134,22 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
 
     parallel_for_ty = lc.Type.function(lc.Type.void(),
                                        [byte_ptr_t] * 5 + [intp_t, ] * 3)
-    parallel_for = mod.get_or_insert_function(parallel_for_ty,
-                                              name='numba_parallel_for')
+    parallel_for = cgutils.get_or_insert_function(mod, parallel_for_ty,
+                                                  'numba_parallel_for')
 
     # Reference inner-function and link
     innerfunc_fnty = lc.Type.function(
         lc.Type.void(),
         [byte_ptr_ptr_t, intp_ptr_t, intp_ptr_t, byte_ptr_t],
     )
-    tmp_voidptr = mod.get_or_insert_function(
-        innerfunc_fnty, name=info.name,
-    )
+    tmp_voidptr = cgutils.get_or_insert_function(mod, innerfunc_fnty,
+                                                 info.name,)
     wrapperlib.add_linking_library(info.library)
 
-    get_num_threads = builder.module.get_or_insert_function(
+    get_num_threads = cgutils.get_or_insert_function(
+        builder.module,
         lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
-        name="get_num_threads")
+        "get_num_threads")
 
     num_threads = builder.call(get_num_threads, [])
 

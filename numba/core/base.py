@@ -428,7 +428,7 @@ class BaseContext(object):
 
     def declare_function(self, module, fndesc):
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
-        fn = cgutils.get_or_insert_function(module, fnty, name=fndesc.mangled_name)
+        fn = cgutils.get_or_insert_function(module, fnty, fndesc.mangled_name)
         self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes, noalias=fndesc.noalias)
         if fndesc.inline:
             fn.attributes.add('alwaysinline')
@@ -436,7 +436,7 @@ class BaseContext(object):
 
     def declare_external_function(self, module, fndesc):
         fnty = self.get_external_function_type(fndesc)
-        fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
+        fn = cgutils.get_or_insert_function(module, fnty, fndesc.mangled_name)
         assert fn.is_declaration
         for ak, av in zip(fndesc.args, fn.args):
             av.name = "arg.%s" % ak
@@ -787,7 +787,7 @@ class BaseContext(object):
         mod = builder.module
         cstring = GENERIC_POINTER
         fnty = Type.function(Type.int(), [cstring])
-        puts = mod.get_or_insert_function(fnty, "puts")
+        puts = cgutils.get_or_insert_function(mod, fnty, "puts")
         return builder.call(puts, [text])
 
     def debug_print(self, builder, text):
@@ -802,7 +802,7 @@ class BaseContext(object):
         else:
             cstr = format_string
         fnty = Type.function(Type.int(), (GENERIC_POINTER,), var_arg=True)
-        fn = mod.get_or_insert_function(fnty, "printf")
+        fn = cgutils.get_or_insert_function(mod, fnty, "printf")
         return builder.call(fn, (cstr,) + tuple(args))
 
     def get_struct_type(self, struct):

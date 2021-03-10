@@ -404,7 +404,7 @@ def insert_pure_function(module, fnty, name):
     Insert a pure function (in the functional programming sense) in the
     given module.
     """
-    fn = module.get_or_insert_function(fnty, name=name)
+    fn = get_or_insert_function(module, fnty, name)
     fn.attributes.add("readonly")
     fn.attributes.add("nounwind")
     return fn

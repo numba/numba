@@ -3,7 +3,7 @@ from contextlib import contextmanager
 
 import llvmlite.llvmpy.core as lc
 
-from numba.core import types, typing, callconv, cpu
+from numba.core import types, typing, callconv, cpu, cgutils
 
 
 class TestCompileCache(unittest.TestCase):
@@ -23,7 +23,8 @@ class TestCompileCache(unittest.TestCase):
             sig = typing.signature(types.int32, types.int32)
             llvm_fnty = context.call_conv.get_function_type(sig.return_type,
                                                             sig.args)
-            function = module.get_or_insert_function(llvm_fnty, name='test_fn')
+            function = cgutils.get_or_insert_function(module, llvm_fnty,
+                                                      'test_fn')
             args = context.call_conv.get_arguments(function)
             assert function.is_declaration
             entry_block = function.append_basic_block('entry')
@@ -61,8 +62,8 @@ class TestCompileCache(unittest.TestCase):
             sig2 = typing.signature(types.float64, types.float64)
             llvm_fnty2 = context.call_conv.get_function_type(sig2.return_type,
                                                             sig2.args)
-            function2 = builder.module.get_or_insert_function(llvm_fnty2,
-                                                            name='test_fn_2')
+            function2 = cgutils.get_or_insert_function(builder.module,
+                                                       llvm_fnty2, 'test_fn_2')
             args2 = context.call_conv.get_arguments(function2)
             assert function2.is_declaration
             entry_block2 = function2.append_basic_block('entry')

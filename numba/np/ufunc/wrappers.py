@@ -525,7 +525,8 @@ def _prepare_call_to_object_mode(context, builder, pyapi, func,
                                     ll_intp_ptr, ll_voidptr,
                                     ll_int, ll_int])
 
-    fn_array_new = mod.get_or_insert_function(fnty, name="numba_ndarray_new")
+    fn_array_new = cgutils.get_or_insert_function(mod, fnty,
+                                                  "numba_ndarray_new")
 
     # Convert each llarray into pyobject
     error_pointer = cgutils.alloca_once(builder, Type.int(1), name='error')

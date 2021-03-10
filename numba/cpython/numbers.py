@@ -995,7 +995,7 @@ def complex_power_impl(context, builder, sig, args):
                 types.complex128: "numba_cpow",
                 }[ty]
             fnty = Type.function(Type.void(), [pa.type] * 3)
-            cpow = module.get_or_insert_function(fnty, name=func_name)
+            cpow = cgutils.get_or_insert_function(module, fnty, func_name)
             builder.call(cpow, (pa, pb, pc))
 
     res = builder.load(pc)
