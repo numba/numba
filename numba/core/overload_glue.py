@@ -101,97 +101,57 @@ class OverloadWrapper(object):
 
         @overload(self._function, strict=False)
         def ol_generated(*ol_args, **ol_kwargs):
-            if ol_kwargs:
-                # TODO: Join these branchess
-                def body(tyctx):
-                    msg = f"No typer registered for {self._function}"
-                    assert self._TYPER is not None, msg
-                    typing = self._TYPER(tyctx)
-                    sig = typing.apply(ol_args, ol_kwargs)
-                    if sig is None:
-                        from numba.core import errors
-                        # TODO: Something about this, it might be possible to
-                        # fish out the actual arguments. Needs kwargs plugging
-                        # in to the error message too.
-                        err = ("No match. No implementation of %s found for "
-                               "argument type(s) %s" % (self._function,
-                                                        str(ol_args)))
-                        raise errors.TypingError(err)
-                    if self._selector is None:
-                        self._assemble()
-                    lowering = self._selector.find(sig.args)
-                    msg = (f"Could not find implementation to lower {sig} for ",
-                           f"{self._function}")
-                    assert lowering is not None, msg
-                    return sig, lowering
 
-                stub = stub_generator(len(ol_args), {'body': body}, ol_kwargs)
+            def body(tyctx):
+                msg = f"No typer registered for {self._function}"
+                assert self._TYPER is not None, msg
+                typing = self._TYPER(tyctx)
+                sig = typing.apply(ol_args, ol_kwargs)
+                if sig is None:
+                    from numba.core import errors
+                    # TODO: Something about this, it might be possible to
+                    # fish out the actual arguments. Needs kwargs plugging
+                    # in to the error message too.
+                    err = ("No match. No implementation of %s found for "
+                           "argument type(s) %s" % (self._function,
+                                                    str(ol_args)))
+                    raise errors.TypingError(err)
+                if self._selector is None:
+                    self._assemble()
+                lowering = self._selector.find(sig.args)
+                msg = (f"Could not find implementation to lower {sig} for ",
+                       f"{self._function}")
+                assert lowering is not None, msg
+                return sig, lowering
 
-                intrin = intrinsic(stub)
-                # This is horrible, need to generate a jit wrapper function that
-                # walks the ol_kwargs into the intrin with a signature that
-                # matches the lowering sig. The actual kwarg var names matter,
-                # they have to match exactly.
-                arg_str = ','.join([f'tmp{x}' for x in range(len(ol_args))])
-                kws_str = ','.join(ol_kwargs.keys())
-                call_str = ','.join([x for x in (arg_str, kws_str) if x])
-                # NOTE: The jit_wrapper functions cannot take `*args`
-                # albeit this an obvious choice for accepting an unknown number
-                # of arguments. If this is done, `*args` ends up as a cascade of
-                # Tuple assembling in the IR which ends up with literal
-                # information being lost. As a result the _exact_ argument list
-                # is generated to match the number of arguments and kwargs.
-                name = str(self._function)
-                name = ''.join([x if x not in {'>','<',' ','-'} else '_'
-                                for x in name])
-                gen = textwrap.dedent(("""
-                def jit_wrapper_{}({}):
-                    return intrin({})
-                """)).format(name, call_str, call_str)
-                l = {}
-                g = {'intrin': intrin}
-                exec(gen, g, l)
-                return l['jit_wrapper_{}'.format(name)]
-            else:
+            stub = stub_generator(len(ol_args), {'body': body}, ol_kwargs)
+            intrin = intrinsic(stub)
 
-                def body(tyctx):
-                    msg = f"No typer registered for {self._function}"
-                    assert self._TYPER is not None, msg
-                    typing = self._TYPER(tyctx)
-                    sig = typing.apply(ol_args, {})
-                    if sig is None:
-                        from numba.core import errors
-                        # TODO: Something about this, it might be possible to
-                        # fish out the actual arguments.
-                        err = ("No match. No implementation of %s found for "
-                               "argument type(s) %s" % (self._function,
-                                                        str(ol_args)))
-                        raise errors.TypingError(err)
-                    if self._selector is None:
-                        self._assemble()
-                    lowering = self._selector.find(sig.args)
-                    msg = (f"Could not find implementation to lower {sig} for ",
-                           f"{self._function}")
-                    assert lowering is not None, msg
-                    return sig, lowering
-
-                stub = stub_generator(len(ol_args), {'body': body})
-                intrin = intrinsic(stub)
-
-                arg_str = ','.join([f'tmp{x}' for x in range(len(ol_args))])
-                kws_str = ','.join(ol_kwargs.keys())
-                call_str = ','.join([x for x in (arg_str, kws_str) if x])
-                name = str(self._function)
-                name = ''.join([x if x not in {'>','<',' ','-'} else '_'
-                                for x in name])
-                gen = textwrap.dedent(("""
-                def jit_wrapper_{}({}):
-                    return intrin({})
-                """)).format(name, call_str, call_str)
-                l = {}
-                g = {'intrin': intrin}
-                exec(gen, g, l)
-                return l['jit_wrapper_{}'.format(name)]
+            # This is horrible, need to generate a jit wrapper function that
+            # walks the ol_kwargs into the intrin with a signature that
+            # matches the lowering sig. The actual kwarg var names matter,
+            # they have to match exactly.
+            arg_str = ','.join([f'tmp{x}' for x in range(len(ol_args))])
+            kws_str = ','.join(ol_kwargs.keys())
+            call_str = ','.join([x for x in (arg_str, kws_str) if x])
+            # NOTE: The jit_wrapper functions cannot take `*args`
+            # albeit this an obvious choice for accepting an unknown number
+            # of arguments. If this is done, `*args` ends up as a cascade of
+            # Tuple assembling in the IR which ends up with literal
+            # information being lost. As a result the _exact_ argument list
+            # is generated to match the number of arguments and kwargs.
+            name = str(self._function)
+            # This is to name the function with something vaguely identifiable
+            name = ''.join([x if x not in {'>','<',' ','-'} else '_'
+                            for x in name])
+            gen = textwrap.dedent(("""
+            def jit_wrapper_{}({}):
+                return intrin({})
+            """)).format(name, call_str, call_str)
+            l = {}
+            g = {'intrin': intrin}
+            exec(gen, g, l)
+            return l['jit_wrapper_{}'.format(name)]
 
 
 class Gluer():
