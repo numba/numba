@@ -609,7 +609,7 @@ def real_divmod(context, builder, x, y):
     module = builder.module
     fname = context.mangler(".numba.python.rem", [x.type])
     fnty = Type.function(floatty, (floatty, floatty, Type.pointer(floatty)))
-    fn = module.get_or_insert_function(fnty, fname)
+    fn = cgutils.get_or_insert_function(module, fnty, fname)
 
     if fn.is_declaration:
         fn.linkage = lc.LINKAGE_LINKONCE_ODR

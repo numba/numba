@@ -14,7 +14,7 @@ from llvmlite import ir
 
 from .error import NvvmError, NvvmSupportError
 from .libs import get_libdevice, open_libdevice, open_cudalib
-from numba.core import config
+from numba.core import cgutils, config
 
 
 logger = logging.getLogger(__name__)
@@ -894,14 +894,13 @@ def _replace_llvm_memset_declaration(m):
 
 
 def set_cuda_kernel(lfunc):
-    from llvmlite.llvmpy.core import MetaData, MetaDataString, Constant, Type
-
     mod = lfunc.module
 
-    ops = lfunc, MetaDataString.get(mod, "kernel"), Constant.int(Type.int(), 1)
-    md = MetaData.get(mod, ops)
+    mdstr = ir.MetaDataString(mod, "kernel")
+    mdvalue = ir.Constant(ir.IntType(32), 1)
+    md = mod.add_metadata((lfunc, mdstr, mdvalue))
 
-    nmd = mod.get_or_insert_named_metadata('nvvm.annotations')
+    nmd = cgutils.get_or_insert_named_metadata(mod, 'nvvm.annotations')
     nmd.add(md)
 
 

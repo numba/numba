@@ -428,7 +428,7 @@ class BaseContext(object):
 
     def declare_function(self, module, fndesc):
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
-        fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
+        fn = cgutils.get_or_insert_function(module, fnty, name=fndesc.mangled_name)
         self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes, noalias=fndesc.noalias)
         if fndesc.inline:
             fn.attributes.add('alwaysinline')
