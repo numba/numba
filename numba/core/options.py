@@ -36,69 +36,8 @@ class TargetOptions:
         from numba.core.targetconfig import TargetConfig
         if isinstance(flags, TargetConfig):
             return self._set_flags_new(flags)
-        kws = self.values.copy()
-
-        if kws.pop('nopython', False) == False:
-            flags.set("enable_pyobject")
-
-        if kws.pop("forceobj", False):
-            flags.set("force_pyobject")
-
-        if kws.pop('looplift', True):
-            flags.set("enable_looplift")
-
-        if utils.TriState.check(kws, "_nrt", "nrt", utils.TriState.Inherit, unset_default=True):
-            flags.set("nrt")
-
-        debug_mode = kws.pop('debug', config.DEBUGINFO_DEFAULT)
-
-        # boundscheck is supplied
-        if 'boundscheck' in kws:
-            boundscheck = kws.pop("boundscheck")
-            if boundscheck is None and debug_mode:
-                # if it's None and debug is on then set it
-                flags.set("boundscheck")
-            else:
-                # irrespective of debug set it to the requested value
-                flags.set("boundscheck", boundscheck)
         else:
-            # no boundscheck given, if debug mode, set it
-            if debug_mode:
-                flags.set("boundscheck")
-
-        if debug_mode:
-            flags.set("debuginfo")
-
-
-        if kws.pop('nogil', False):
-            flags.set("release_gil")
-
-        if kws.pop('no_rewrites', False):
-            flags.set('no_rewrites')
-
-        if kws.pop('no_cpython_wrapper', False):
-            flags.set('no_cpython_wrapper')
-
-        if kws.pop('no_cfunc_wrapper', False):
-            flags.set('no_cfunc_wrapper')
-
-        if 'parallel' in kws:
-            flags.set('auto_parallel', kws.pop('parallel'))
-
-        if 'fastmath' in kws:
-            flags.set('fastmath', kws.pop('fastmath'))
-
-        if 'error_model' in kws:
-            flags.set('error_model', kws.pop('error_model'))
-
-        if 'inline' in kws:
-            flags.set('inline', kws.pop('inline'))
-
-        flags.set("enable_pyobject_looplift")
-
-        if kws:
-            # Unread options?
-            raise NameError("Unrecognized options: %s" % kws.keys())
+            raise NotImplementedError(type(flags))
 
     def _set_flags_new(self, flags):
         kws = self.values.copy()

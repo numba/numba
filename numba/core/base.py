@@ -841,11 +841,11 @@ class BaseContext(object):
                 if cstk:
                     tls_flags = cstk.top()
                     if tls_flags.nrt:
-                        flags.set("nrt")
+                        flags.nrt = True
 
-            flags.set('no_compile')
-            flags.set('no_cpython_wrapper')
-            flags.set('no_cfunc_wrapper')
+            flags.no_compile = True
+            flags.no_cpython_wrapper = True
+            flags.no_cfunc_wrapper = True
 
             cres = compiler.compile_internal(self.typing_context, self,
                                              library,

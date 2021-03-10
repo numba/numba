@@ -47,8 +47,8 @@ def supported_parfor(n):
     return a
 
 force_parallel_flags = Flags()
-force_parallel_flags.set("auto_parallel", ParallelOptions(True))
-force_parallel_flags.set('nrt')
+force_parallel_flags.auto_parallel = ParallelOptions(True)
+force_parallel_flags.nrt = True
 
 class DebugTestBase(TestCase):
 

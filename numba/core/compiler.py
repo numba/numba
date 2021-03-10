@@ -36,9 +36,7 @@ from numba.core.object_mode_passes import (ObjectModeFrontEnd,
 from numba.core.targetconfig import TargetConfig, Option
 
 
-
 class Flags(TargetConfig):
-
     enable_looplift = Option(
         type=bool,
         default=False,
@@ -440,7 +438,7 @@ class CompilerBase(object):
         Populate and run compiler pipeline
         """
         from numba.core import utils
-
+        # print('----', self.state.func_id.func_qualname, self.state.flags)
         with utils.ConfigStack().enter(self.state.flags.copy()):
 
             pms = self.define_pipelines()

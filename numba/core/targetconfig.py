@@ -1,7 +1,6 @@
 
 from collections import namedtuple
 from types import MappingProxyType
-from numba.core import config, utils
 
 
 Option = namedtuple("Option", ["type", "default", "doc"])
@@ -86,10 +85,17 @@ class TargetConfig(metaclass=_MetaTargetConfig):
     def is_not_set(self, name):
         """Is the option not set?
         """
-        if name not in self.options:
-            msg = f"{name!r} is not a valid option for {type(self)}"
-            raise ValueError(msg)
+        self._guard_option(name)
         return name not in self._values
+
+    def discard(self, name):
+        self._guard_option(name)
+        self._values.pop(name, None)
 
     def copy(self):
         return type(self)(self)
+
+    def _guard_option(self, name):
+        if name not in self.options:
+            msg = f"{name!r} is not a valid option for {type(self)}"
+            raise ValueError(msg)

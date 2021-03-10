@@ -22,7 +22,7 @@ import unittest
 
 
 no_pyobj_flags = Flags()
-no_pyobj_flags.set("nrt")
+no_pyobj_flags.nrt = True
 
 
 def sinc(x):

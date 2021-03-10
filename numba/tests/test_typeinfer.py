@@ -805,7 +805,7 @@ def get_func_typing_errs(func, arg_types):
     return_type = None
     _locals = {}
     flags = numba.core.compiler.Flags()
-    flags.set('nrt')
+    flags.nrt = True
 
     pipeline = TyperCompiler(
         typingctx, targetctx, library, arg_types, return_type, flags, _locals

@@ -84,11 +84,12 @@ class UFuncDispatcher(serialize.ReduceMixin):
         flags = compiler.Flags()
         self.targetdescr.options.parse_as_flags(flags, topt)
 
-        flags.set("no_cpython_wrapper")
-        flags.set("error_model", "numpy")
+        flags.no_cpython_wrapper = True
+        flags.error_model = "numpy"
         # Disable loop lifting
-        # The feature requires a real python function
-        flags.unset("enable_looplift")
+        # The feature requires a real
+        #  python function
+        flags.enable_looplift = False
 
         return self._compile_core(sig, flags, locals)
 

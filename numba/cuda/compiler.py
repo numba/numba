@@ -101,15 +101,15 @@ def compile_cuda(pyfunc, return_type, args, debug=False, inline=False,
 
     flags = compiler.Flags()
     # Do not compile (generate native code), just lower (to LLVM)
-    flags.set('no_compile')
-    flags.set('no_cpython_wrapper')
-    flags.set('no_cfunc_wrapper')
+    flags.no_compile = True
+    flags.no_cpython_wrapper = True
+    flags.no_cfunc_wrapper = True
     if debug:
-        flags.set('debuginfo')
+        flags.debuginfo = True
     if inline:
-        flags.set('forceinline')
+        flags.forceinline = True
     if fastmath:
-        flags.set('fastmath')
+        flags.fastmath = True
     # Run compilation pipeline
     cres = compiler.compile_extra(typingctx=typingctx,
                                   targetctx=targetctx,
