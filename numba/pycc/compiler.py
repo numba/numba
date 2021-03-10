@@ -244,8 +244,9 @@ class _ModuleCompiler(object):
         sentinel = lc.Constant.struct([NULL, NULL, ZERO, NULL])
         method_defs.append(sentinel)
         method_array_init = lc.Constant.array(self.method_def_ty, method_defs)
-        method_array = llvm_module.add_global_variable(method_array_init.type,
-                                                       '.module_methods')
+        method_array = cgutils.add_global_variable(llvm_module,
+                                                   method_array_init.type,
+                                                   '.module_methods')
         method_array.initializer = method_array_init
         method_array.linkage = lc.LINKAGE_INTERNAL
         method_array_ptr = lc.Constant.gep(method_array, [ZERO, ZERO])
@@ -405,8 +406,9 @@ class ModuleCompiler(_ModuleCompiler):
              lc.Constant.null(lt._pyobject_head_p),         # m_copy
             )
         )
-        mod_def_base = llvm_module.add_global_variable(mod_def_base_init.type,
-                                                       '.module_def_base')
+        mod_def_base = cgutils.add_global_variable(llvm_module,
+                                                   mod_def_base_init.type,
+                                                   '.module_def_base')
         mod_def_base.initializer = mod_def_base_init
         mod_def_base.linkage = lc.LINKAGE_INTERNAL
 
@@ -426,8 +428,8 @@ class ModuleCompiler(_ModuleCompiler):
         )
 
         # Define a constant string for the module name.
-        mod_def = llvm_module.add_global_variable(mod_def_init.type,
-                                                  '.module_def')
+        mod_def = cgutils.add_global_variable(llvm_module, mod_def_init.type,
+                                              '.module_def')
         mod_def.initializer = mod_def_init
         mod_def.linkage = lc.LINKAGE_INTERNAL
 

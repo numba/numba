@@ -766,7 +766,7 @@ class BaseContext(object):
         try:
             gv = module.get_global_variable_named(name)
         except LLVMException:
-            gv = module.add_global_variable(typ, name)
+            gv = cgutils.add_global_variable(module, typ, name)
             if dllimport and self.aot_mode and sys.platform == 'win32':
                 gv.storage_class = "dllimport"
         return gv
@@ -1087,7 +1087,7 @@ class BaseContext(object):
         addr = self.get_constant(types.uintp, intaddr).inttoptr(llvoidptr)
         # Use a unique name by embedding the address value
         symname = 'numba.dynamic.globals.{:x}'.format(intaddr)
-        gv = mod.add_global_variable(llvoidptr, name=symname)
+        gv = cgutils.add_global_variable(mod, llvoidptr, symname)
         # Use linkonce linkage to allow merging with other GV of the same name.
         # And, avoid optimization from assuming its value.
         gv.linkage = 'linkonce'

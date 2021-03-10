@@ -264,7 +264,8 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace):
         lmod = builder.module
 
         # Create global variable in the requested address-space
-        gvmem = lmod.add_global_variable(laryty, symbol_name, addrspace)
+        gvmem = cgutils.add_global_variable(lmod, laryty, symbol_name,
+                                            addrspace)
 
         if elemcount <= 0:
             raise ValueError("array length <= 0")
