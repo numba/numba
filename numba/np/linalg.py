@@ -18,7 +18,7 @@ from numba.core import types, cgutils
 from numba.core.errors import TypingError
 from .arrayobj import make_array, _empty_nd_impl, array_copy
 from numba.np import numpy_support as np_support
-from numba.core.overload_glue import glue_wrap, overload_glue
+from numba.core.overload_glue import glue_lowering
 
 ll_char = ir.IntType(8)
 ll_char_p = ll_char.as_pointer()
@@ -521,7 +521,7 @@ def dot_2_vv(context, builder, sig, args, conjugate=False):
     return builder.load(out)
 
 
-@glue_wrap(overload_glue(np.dot).wrap_impl(np.dot, types.Array, types.Array))
+@glue_lowering(np.dot, types.Array, types.Array)
 def dot_2(context, builder, sig, args):
     """
     np.dot(a, b)
@@ -545,7 +545,7 @@ def dot_2(context, builder, sig, args):
 
 lower_builtin(operator.matmul, types.Array, types.Array)(dot_2)
 
-@glue_wrap(overload_glue(np.vdot).wrap_impl(np.vdot, types.Array, types.Array))
+@glue_lowering(np.vdot, types.Array, types.Array)
 def vdot(context, builder, sig, args):
     """
     np.vdot(a, b)
@@ -724,8 +724,7 @@ def dot_3_mm(context, builder, sig, args):
                              out._getvalue())
 
 
-@glue_wrap(overload_glue(np.dot).wrap_impl(np.dot, types.Array, types.Array,
-                                           types.Array))
+@glue_lowering(np.dot, types.Array, types.Array, types.Array)
 def dot_3(context, builder, sig, args):
     """
     np.dot(a, b, out)

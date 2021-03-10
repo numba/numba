@@ -44,6 +44,7 @@ def stub_generator(nargs, glbls, kwargs=None):
 class OverloadWrapper(object):
 
     def __init__(self, function=None):
+        assert function is not None
         self._function = function
         self._BIND_TYPES = dict()
         self._selector = None
@@ -53,16 +54,11 @@ class OverloadWrapper(object):
         # is all lazy.
         self._build()
 
-    def wrap_typing(self, concrete_function):
+    def wrap_typing(self):
         """
         Use this to replace @infer_global, it records the decorated function
         as a typer for the argument `concrete_function`.
         """
-        assert concrete_function is self._function, \
-            "Wrong typing wrapper %s vs %s" % (
-                concrete_function, self._function)
-        # concrete_function is e.g. the numpy function this is implementing
-
         def inner(typing_class):
             # arg is the typing class
             self._TYPER = typing_class
@@ -76,12 +72,8 @@ class OverloadWrapper(object):
         Use this to replace @lower*, it records the decorated function as the
         lowering implementation
         """
-        # args is (concrete_function, *numba types)
-        concrete_function = args[0]
-        assert concrete_function is self._function, "Wrong impl wrapper"
-
         def inner(lowerer):
-            self._BIND_TYPES[args[1:]] = lowerer
+            self._BIND_TYPES[args] = lowerer
             return lowerer
         return inner
 
@@ -171,5 +163,9 @@ overload_glue = Gluer()
 del Gluer
 
 
-def glue_wrap(x):
-    return x
+def glue_typing(*args):
+    return overload_glue(args[0]).wrap_typing()
+
+
+def glue_lowering(*args):
+    return overload_glue(args[0]).wrap_impl(*args[1:])
