@@ -1,47 +1,15 @@
+"""
+Provides wrapper functions for "glueing" together Numba implementations that are
+written in the "old" style of a separate typing and lowering implementation.
+"""
 import types as pytypes
 import textwrap
 
 
-def stub_generator(nargs, glbls, kwargs=None):
-    def stub(tyctx):
-        # body is supplied when the function is magic'd into life via glbls
-        return body(tyctx)  # noqa: F821
-    if kwargs is None:
-        kwargs = {}
-    # create new code parts
-    stub_code = stub.__code__
-    co_args = [stub_code.co_argcount + nargs + len(kwargs)]
-
-    new_varnames = [*stub_code.co_varnames]
-    new_varnames.extend([f'tmp{x}' for x in range(nargs)])
-    new_varnames.extend([x for x, _ in kwargs.items()])
-    from numba.core import utils
-    if utils.PYVERSION >= (3, 8):
-        co_args.append(stub_code.co_posonlyargcount)
-    co_args.append(stub_code.co_kwonlyargcount)
-    co_args.extend([stub_code.co_nlocals + nargs + len(kwargs),
-                    stub_code.co_stacksize,
-                    stub_code.co_flags,
-                    stub_code.co_code,
-                    stub_code.co_consts,
-                    stub_code.co_names,
-                    tuple(new_varnames),
-                    stub_code.co_filename,
-                    stub_code.co_name,
-                    stub_code.co_firstlineno,
-                    stub_code.co_lnotab,
-                    stub_code.co_freevars,
-                    stub_code.co_cellvars
-                    ])
-
-    new_code = pytypes.CodeType(*co_args)
-
-    # get function
-    new_func = pytypes.FunctionType(new_code, glbls)
-    return new_func
-
-
-class OverloadWrapper(object):
+class _OverloadWrapper(object):
+    """This class does all the work of assembling and registering wrapped split
+    implementations.
+    """
 
     def __init__(self, function=None):
         assert function is not None
@@ -53,6 +21,48 @@ class OverloadWrapper(object):
         # registered impls at the point the overload is evaluated, i.e. this
         # is all lazy.
         self._build()
+
+    def _stub_generator(self, nargs, body_func, kwargs=None):
+        """ This generates a function that takes "nargs" count of arguments
+        and the presented kwargs, the "body_func" is the function that'll
+        type the overloaded function and then work out which lowering to
+        return"""
+        def stub(tyctx):
+            # body is supplied when the function is magic'd into life via glbls
+            return body(tyctx)  # noqa: F821
+        if kwargs is None:
+            kwargs = {}
+        # create new code parts
+        stub_code = stub.__code__
+        co_args = [stub_code.co_argcount + nargs + len(kwargs)]
+
+        new_varnames = [*stub_code.co_varnames]
+        new_varnames.extend([f'tmp{x}' for x in range(nargs)])
+        new_varnames.extend([x for x, _ in kwargs.items()])
+        from numba.core import utils
+        if utils.PYVERSION >= (3, 8):
+            co_args.append(stub_code.co_posonlyargcount)
+        co_args.append(stub_code.co_kwonlyargcount)
+        co_args.extend([stub_code.co_nlocals + nargs + len(kwargs),
+                        stub_code.co_stacksize,
+                        stub_code.co_flags,
+                        stub_code.co_code,
+                        stub_code.co_consts,
+                        stub_code.co_names,
+                        tuple(new_varnames),
+                        stub_code.co_filename,
+                        stub_code.co_name,
+                        stub_code.co_firstlineno,
+                        stub_code.co_lnotab,
+                        stub_code.co_freevars,
+                        stub_code.co_cellvars
+                        ])
+
+        new_code = pytypes.CodeType(*co_args)
+
+        # get function
+        new_func = pytypes.FunctionType(new_code, {'body': body_func})
+        return new_func
 
     def wrap_typing(self):
         """
@@ -116,7 +126,7 @@ class OverloadWrapper(object):
                 assert lowering is not None, msg
                 return sig, lowering
 
-            stub = stub_generator(len(ol_args), {'body': body}, ol_kwargs)
+            stub = self._stub_generator(len(ol_args), body, ol_kwargs)
             intrin = intrinsic(stub)
 
             # This is horrible, need to generate a jit wrapper function that
@@ -146,7 +156,9 @@ class OverloadWrapper(object):
             return l['jit_wrapper_{}'.format(name)]
 
 
-class Gluer():
+class _Gluer():
+    """ This is a helper class to make sure that each concrete overload has only
+    one wrapper as the code relies on the wrapper being a singleton."""
     def __init__(self):
         self._registered = dict()
 
@@ -154,18 +166,24 @@ class Gluer():
         if func in self._registered:
             return self._registered[func]
         else:
-            wrapper = OverloadWrapper(func)
+            wrapper = _OverloadWrapper(func)
             self._registered[func] = wrapper
             return wrapper
 
 
-overload_glue = Gluer()
-del Gluer
+_overload_glue = _Gluer()
+del _Gluer
 
 
-def glue_typing(*args):
-    return overload_glue(args[0]).wrap_typing()
+def glue_typing(concrete_function):
+    """This is a decorator for wrapping the typing part for a concrete function
+    'concrete_function', it's a text-only replacement for '@infer_global'"""
+    return _overload_glue(concrete_function).wrap_typing()
 
 
 def glue_lowering(*args):
-    return overload_glue(args[0]).wrap_impl(*args[1:])
+    """This is a decorator for wrapping the implementation (lowering) part for
+    a concrete function. 'args[0]' is the concrete_function, 'args[1:]' are the
+    types the lowering will accept. This acts as a text-only replacement for
+    '@lower/@lower_builtin'"""
+    return _overload_glue(args[0]).wrap_impl(*args[1:])
