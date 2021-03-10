@@ -33,46 +33,113 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
 
 from numba.core.object_mode_passes import (ObjectModeFrontEnd,
                                            ObjectModeBackEnd)
+from numba.core.targetconfig import TargetConfig, Option
 
 
-class Flags(utils.ConfigOptions):
-    # These options are all false by default, but the defaults are
-    # different with the @jit decorator (see targets.options.TargetOptions).
 
-    OPTIONS = {
-        # Enable loop-lifting
-        'enable_looplift': False,
-        # Enable pyobject mode (in general)
-        'enable_pyobject': False,
-        # Enable pyobject mode inside lifted loops
-        'enable_pyobject_looplift': False,
-        # Enable SSA:
-        'enable_ssa': True,
-        # Force pyobject mode inside the whole function
-        'force_pyobject': False,
-        # Release GIL inside the native function
-        'release_gil': False,
-        'no_compile': False,
-        'debuginfo': False,
-        'boundscheck': False,
-        'forceinline': False,
-        'no_cpython_wrapper': False,
-        'no_cfunc_wrapper': False,
-        # Enable automatic parallel optimization, can be fine-tuned by taking
-        # a dictionary of sub-options instead of a boolean, see parfor.py for
-        # detail.
-        'auto_parallel': cpu.ParallelOptions(False),
-        'nrt': False,
-        'no_rewrites': False,
-        'error_model': 'python',
-        'fastmath': cpu.FastMathOptions(False),
-        'noalias': False,
-        'inline': cpu.InlineOptions('never'),
-    }
+class Flags(TargetConfig):
+
+    enable_looplift = Option(
+        type=bool,
+        default=False,
+        doc="Enable loop-lifting",
+    )
+    enable_pyobject = Option(
+        type=bool,
+        default=False,
+        doc="Enable pyobject mode (in general)",
+    )
+    enable_pyobject_looplift = Option(
+        type=bool,
+        default=False,
+        doc="Enable pyobject mode inside lifted loops",
+    )
+    enable_ssa = Option(
+        type=bool,
+        default=True,
+        doc="Enable SSA",
+    )
+    force_pyobject = Option(
+        type=bool,
+        default=False,
+        doc="Force pyobject mode inside the whole function",
+    )
+    release_gil = Option(
+        type=bool,
+        default=False,
+        doc="Release GIL inside the native function",
+    )
+    no_compile = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    debuginfo = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    boundscheck = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    forceinline = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    no_cpython_wrapper = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    no_cfunc_wrapper = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    auto_parallel = Option(
+        type=cpu.ParallelOptions,
+        default=cpu.ParallelOptions(False),
+        doc="""Enable automatic parallel optimization, can be fine-tuned by
+taking a dictionary of sub-options instead of a boolean, see parfor.py for
+detail""",
+    )
+    nrt = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    no_rewrites = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    error_model = Option(
+        type=str,
+        default="python",
+        doc="TODO",
+    )
+    fastmath = Option(
+        type=cpu.FastMathOptions,
+        default=cpu.FastMathOptions(False),
+        doc="TODO",
+    )
+    noalias = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    inline = Option(
+        type=cpu.InlineOptions,
+        default=cpu.InlineOptions("never"),
+        doc="TODO",
+    )
 
 
 DEFAULT_FLAGS = Flags()
-DEFAULT_FLAGS.set('nrt')
+DEFAULT_FLAGS.nrt = True
 
 
 CR_FIELDS = ["typing_context",
@@ -373,6 +440,7 @@ class CompilerBase(object):
         Populate and run compiler pipeline
         """
         from numba.core import utils
+
         with utils.ConfigStack().enter(self.state.flags.copy()):
 
             pms = self.define_pipelines()
