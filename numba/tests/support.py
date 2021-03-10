@@ -739,7 +739,7 @@ def forbid_codegen():
     If code generation is invoked, a RuntimeError is raised.
     """
     from numba.core import codegen
-    patchpoints = ['CodeLibrary._finalize_final_module']
+    patchpoints = ['CPUCodeLibrary._finalize_final_module']
 
     old = {}
     def fail(*args, **kwargs):
