@@ -764,8 +764,8 @@ class BaseContext(object):
         """
         module = builder.function.module
         try:
-            gv = module.get_global_variable_named(name)
-        except LLVMException:
+            gv = module.globals[name]
+        except KeyError:
             gv = cgutils.add_global_variable(module, typ, name)
             if dllimport and self.aot_mode and sys.platform == 'win32':
                 gv.storage_class = "dllimport"
@@ -1122,7 +1122,7 @@ class BaseContext(object):
     def create_module(self, name):
         """Create a LLVM module
         """
-        return lc.Module(name)
+        return ir.Module(name)
 
     @property
     def active_code_library(self):

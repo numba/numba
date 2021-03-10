@@ -1,7 +1,7 @@
 import unittest
 from contextlib import contextmanager
 
-import llvmlite.llvmpy.core as lc
+from llvmlite import ir
 
 from numba.core import types, typing, callconv, cpu, cgutils
 
@@ -18,7 +18,7 @@ class TestCompileCache(unittest.TestCase):
         context = cpu.CPUContext(typing_context)
         lib = context.codegen().create_library('testing')
         with context.push_code_library(lib):
-            module = lc.Module("test_module")
+            module = ir.Module("test_module")
 
             sig = typing.signature(types.int32, types.int32)
             llvm_fnty = context.call_conv.get_function_type(sig.return_type,
@@ -28,7 +28,7 @@ class TestCompileCache(unittest.TestCase):
             args = context.call_conv.get_arguments(function)
             assert function.is_declaration
             entry_block = function.append_basic_block('entry')
-            builder = lc.Builder(entry_block)
+            builder = ir.IRBuilder(entry_block)
 
             yield context, builder, sig, args
 
@@ -67,7 +67,7 @@ class TestCompileCache(unittest.TestCase):
             args2 = context.call_conv.get_arguments(function2)
             assert function2.is_declaration
             entry_block2 = function2.append_basic_block('entry')
-            builder2 = lc.Builder(entry_block2)
+            builder2 = ir.IRBuilder(entry_block2)
 
             # Ensure that the same function with a different signature does not
             # reuse an entry from the cache in error

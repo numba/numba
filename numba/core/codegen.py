@@ -1126,7 +1126,7 @@ class BaseCPUCodegen(object):
                                       self._library_class._object_getbuffer_hook)
 
     def _create_empty_module(self, name):
-        ir_module = lc.Module(cgutils.normalize_ir_text(name))
+        ir_module = llvmir.Module(cgutils.normalize_ir_text(name))
         ir_module.triple = ll.get_process_triple()
         if self._data_layout:
             ir_module.data_layout = self._data_layout

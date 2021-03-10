@@ -232,7 +232,7 @@ class _ModuleCompiler(object):
             name = entry.symbol
             llvm_func_name = self._mangle_method_symbol(name)
             fnty = self.exported_function_types[entry]
-            lfunc = llvm_module.add_function(fnty, name=llvm_func_name)
+            lfunc = ir.Function(llvm_module, fnty, llvm_func_name)
 
             method_name = self.context.insert_const_string(llvm_module, name)
             method_def_const = lc.Constant.struct((method_name,
@@ -297,7 +297,7 @@ class _ModuleCompiler(object):
             fnty = ir.FunctionType(lt._int32,
                                    [modobj.type, self.method_def_ptr,
                                     self.env_def_ptr, envgv_array.type])
-            fn = llvm_module.add_function(fnty, self.external_init_function)
+            fn = ir.Function(llvm_module, fnty, self.external_init_function)
             return builder.call(fn, [modobj, method_array, env_array,
                                      envgv_array])
         else:
@@ -392,7 +392,7 @@ class ModuleCompiler(_ModuleCompiler):
     def _emit_python_wrapper(self, llvm_module):
         # Figure out the Python C API module creation function, and
         # get a LLVM function for it.
-        create_module_fn = llvm_module.add_function(*self.module_create_definition)
+        create_module_fn = ir.Function(llvm_module, *self.module_create_definition)
         create_module_fn.linkage = lc.LINKAGE_EXTERNAL
 
         # Define a constant string for the module name.
@@ -434,7 +434,7 @@ class ModuleCompiler(_ModuleCompiler):
         mod_def.linkage = lc.LINKAGE_INTERNAL
 
         # Define the module initialization function.
-        mod_init_fn = llvm_module.add_function(*self.module_init_definition)
+        mod_init_fn = ir.Function(llvm_module, *self.module_init_definition)
         entry = mod_init_fn.append_basic_block('Entry')
         builder = lc.Builder(entry)
         pyapi = self.context.get_python_api(builder)

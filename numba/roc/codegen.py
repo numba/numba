@@ -1,5 +1,4 @@
-from llvmlite import binding as ll
-from llvmlite.llvmpy import core as lc
+from llvmlite import ir, binding as ll
 from numba.core import utils
 from numba.core.codegen import BaseCPUCodegen, CodeLibrary
 from .hlc import DATALAYOUT, TRIPLE, hlc
@@ -34,7 +33,7 @@ class JITHSACodegen(BaseCPUCodegen):
         self._target_data = ll.create_target_data(self._data_layout)
 
     def _create_empty_module(self, name):
-        ir_module = lc.Module(name)
+        ir_module = ir.Module(name)
         ir_module.triple = TRIPLE
         return ir_module
 

@@ -191,7 +191,7 @@ class CUDATargetContext(BaseContext):
                                                          old.type])
 
                     cas_hack = "___numba_atomic_i32_cas_hack"
-                    casfn = wrapper_module.add_function(casfnty, name=cas_hack)
+                    casfn = ir.Function(wrapper_module, casfnty, name=cas_hack)
                     xchg = builder.call(casfn, [gv_exc, old, status.code])
                     changed = builder.icmp('==', xchg, old)
 

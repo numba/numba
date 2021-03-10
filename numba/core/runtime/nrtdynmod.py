@@ -69,8 +69,9 @@ def _define_nrt_decref(module, atomic_decr):
                                                "NRT_decref")
     # Cannot inline this for refcount pruning to work
     fn_decref.attributes.add('noinline')
-    calldtor = module.add_function(ir.FunctionType(ir.VoidType(), [_pointer_type]),
-                                   name="NRT_MemInfo_call_dtor")
+    calldtor = ir.Function(module,
+                           ir.FunctionType(ir.VoidType(), [_pointer_type]),
+                           name="NRT_MemInfo_call_dtor")
 
     builder = ir.IRBuilder(fn_decref.append_basic_block())
     [ptr] = fn_decref.args

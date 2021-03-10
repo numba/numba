@@ -20,6 +20,7 @@ import numpy as np
 
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
+from llvmlite import ir
 
 from numba.np.numpy_support import as_dtype
 from numba.core import types, cgutils, config, errors
@@ -110,7 +111,7 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
     wrapperlib = ctx.codegen().create_library('parallelgufuncwrapper')
     mod = wrapperlib.create_ir_module('parallel.gufunc.wrapper')
     kernel_name = ".kernel.{}_{}".format(id(info.env), info.name)
-    lfunc = mod.add_function(fnty, name=kernel_name)
+    lfunc = ir.Function(mod, fnty, name=kernel_name)
 
     bb_entry = lfunc.append_basic_block('')
 
