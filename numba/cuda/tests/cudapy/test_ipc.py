@@ -81,7 +81,6 @@ def ipc_array_test(ipcarr, result_queue):
     result_queue.put((succ, out))
 
 
-@linux_only
 @skip_under_cuda_memcheck('Hangs cuda-memcheck')
 @unittest.skipUnless(has_mp_get_context, "requires multiprocessing.get_context")
 @skip_on_cudasim('Ipc not available in CUDASIM')
@@ -190,18 +189,6 @@ class TestIpcMemory(ContextResettingTestCase):
                 self.check_ipc_array(index, foreign)
 
 
-@unittest.skipIf(linux, 'Only on OS other than Linux')
-@skip_on_cudasim('Ipc not available in CUDASIM')
-class TestIpcNotSupported(ContextResettingTestCase):
-    def test_unsupported(self):
-        arr = np.arange(10, dtype=np.intp)
-        devarr = cuda.to_device(arr)
-        with self.assertRaises(OSError) as raises:
-            devarr.get_ipc_handle()
-        errmsg = str(raises.exception)
-        self.assertIn('OS does not support CUDA IPC', errmsg)
-
-
 def staged_ipc_handle_test(handle, device_num, result_queue):
     def the_work():
         with cuda.gpus[device_num]:
@@ -244,7 +231,6 @@ def staged_ipc_array_test(ipcarr, device_num, result_queue):
     result_queue.put((succ, out))
 
 
-@linux_only
 @skip_under_cuda_memcheck('Hangs cuda-memcheck')
 @unittest.skipUnless(has_mp_get_context, "requires multiprocessing.get_context")
 @skip_on_cudasim('Ipc not available in CUDASIM')
