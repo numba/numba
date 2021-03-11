@@ -14,7 +14,7 @@ from llvmlite.llvmpy.core import Constant
 
 import numpy as np
 
-from numba import pndindex, literal_unroll
+from numba import pndindex, literally, literal_unroll
 from numba.core import types, utils, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                     is_fortran)
@@ -32,6 +32,7 @@ from numba.core.extending import (register_jitable, overload, overload_method,
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
+from numba.np.unsafe.ndarray import to_fixed_tuple
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
@@ -1540,6 +1541,40 @@ def numpy_transpose(a, axes=None):
             return a.transpose(axes)
 
     return np_transpose_impl
+
+
+@overload(np.swapaxes)
+def numpy_swapaxes(a, axis1, axis2):
+    # Get the literal values if they are not literal already
+    force_literal = lambda a, axis1, axis2: (
+        a, literally(axis1), literally(axis2))
+
+    if isinstance(axis1, types.LiteralInteger):
+        axis1_val = axis1.literal_value
+    elif not isinstance(axis1, types.Integer):
+        raise errors.TypingError('axis1 must be an integer')
+    else:
+        return force_literal
+
+    if isinstance(axis2, types.LiteralInteger):
+        axis2_val = axis2.literal_value
+    elif not isinstance(axis2, types.Integer):
+        raise errors.TypingError('axis2 must be an integer')
+    else:
+        return force_literal
+
+    def impl(a, axis1, axis2):
+        axis1 = a.ndim + axis1_val if axis1_val < 0 else axis1_val
+        axis2 = a.ndim + axis2_val if axis2_val < 0 else axis2_val
+        if axis1 == axis2:
+            return a
+        pos = to_fixed_tuple(np.arange(a.ndim), a.ndim)
+        tmp = pos[axis1]
+        pos = tuple_setitem(pos, axis1, pos[axis2])
+        pos = tuple_setitem(pos, axis2, tmp)
+        return a.transpose(pos)
+
+    return impl
 
 
 @lower_getattr(types.Array, 'T')
