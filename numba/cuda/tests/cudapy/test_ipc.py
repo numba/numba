@@ -9,7 +9,6 @@ import numpy as np
 from numba import cuda
 from numba.cuda.testing import (skip_on_cudasim, skip_under_cuda_memcheck,
                                 ContextResettingTestCase, ForeignArray)
-from numba.tests.support import linux_only
 import unittest
 
 linux = sys.platform.startswith('linux')
