@@ -380,9 +380,9 @@ class TestSVML(TestCase):
                          override_env_config('NUMBA_CPU_FEATURES', ''):
                         sig = (numba.int32,)
                         f = Flags()
-                        f.set('nrt')
+                        f.nrt = True
                         std = compile_isolated(math_sin_loop, sig, flags=f)
-                        f.set('fastmath', cpu.FastMathOptions(True))
+                        f.fastmath = cpu.FastMathOptions(True)
                         fast = compile_isolated(math_sin_loop, sig, flags=f)
                         fns = std, fast
 
