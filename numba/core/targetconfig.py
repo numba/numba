@@ -54,7 +54,7 @@ class TargetConfig(metaclass=_MetaTargetConfig):
         defs = []
         for k in self.options:
             msg = f"{k}={getattr(self, k)}"
-            if self.is_not_set(k):
+            if not self.is_set(k):
                 defs.append(msg)
             else:
                 args.append(msg)
@@ -82,11 +82,11 @@ class TargetConfig(metaclass=_MetaTargetConfig):
         """
         return {k: getattr(self, k) for k in self.options}
 
-    def is_not_set(self, name):
-        """Is the option not set?
+    def is_set(self, name):
+        """Is the option set?
         """
         self._guard_option(name)
-        return name not in self._values
+        return name in self._values
 
     def discard(self, name):
         self._guard_option(name)
@@ -94,6 +94,15 @@ class TargetConfig(metaclass=_MetaTargetConfig):
 
     def copy(self):
         return type(self)(self)
+
+    def summary(self):
+        args = []
+        for k in self.options:
+            msg = f"{k}={getattr(self, k)}"
+            if self.is_set(k):
+                args.append(msg)
+        clsname = self.__class__.__name__
+        return f"{clsname}({', '.join(args)})"
 
     def _guard_option(self, name):
         if name not in self.options:

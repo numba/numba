@@ -51,8 +51,16 @@ class TargetOptions:
         if kws.pop('looplift', True):
             flags.enable_looplift = True
 
-        if utils.TriState.check(kws, "_nrt", "nrt", utils.TriState.Inherit, unset_default=True):
+        cstk = utils.ConfigStack()
+        if "_nrt" in kws:
+            flags.nrt = kws.pop("_nrt")
+        elif cstk:
+            top = cstk.top()
+            if top.is_set("nrt"):
+                flags.nrt = top.nrt
+        else:
             flags.nrt = True
+
 
         debug_mode = kws.pop('debug', config.DEBUGINFO_DEFAULT)
 
@@ -61,7 +69,7 @@ class TargetOptions:
             boundscheck = kws.pop("boundscheck")
             if boundscheck is None and debug_mode:
                 # if it's None and debug is on then set it
-                flags.boundscheck = Triue
+                flags.boundscheck = True
             else:
                 # irrespective of debug set it to the requested value
                 flags.boundscheck = boundscheck

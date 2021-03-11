@@ -212,27 +212,6 @@ class ConfigStack:
             self.pop()
 
 
-class TriState:
-
-    class InheritType:
-        def __bool__(self):
-            raise TypeError("Inherit type disable __bool__")
-
-    Inherit = InheritType()
-
-    def __init__(self, init):
-        self._value = init
-
-    @classmethod
-    def check(cls, flagdict, key, flagkey, default, unset_default):
-        got = flagdict.pop(key, default)
-        if got is cls.Inherit:
-            cs = ConfigStack()
-            if cs:
-                return getattr(cs.top(), flagkey)
-        return False if got is False else unset_default
-
-
 class ConfigOptions(object):
     OPTIONS = {}
 

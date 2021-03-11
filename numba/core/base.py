@@ -840,7 +840,7 @@ class BaseContext(object):
                 flags = compiler.Flags()
                 if cstk:
                     tls_flags = cstk.top()
-                    if tls_flags.nrt:
+                    if tls_flags.is_set("nrt") and tls_flags.nrt:
                         flags.nrt = True
 
             flags.no_compile = True
