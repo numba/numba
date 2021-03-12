@@ -232,7 +232,7 @@ class CUDACodeLibrary(CodeLibrary, serialize.ReduceMixin):
         # https://github.com/numba/numba/pull/890
         for library in self._linking_libraries:
             for fn in library._module.functions:
-                if not fn.is_declaration and fn.linkage != 'external':
+                if not fn.is_declaration:
                     fn.linkage = 'linkonce_odr'
 
         self._finalized = True

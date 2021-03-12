@@ -27,9 +27,6 @@ else:
 
 
 class TestRuntime(unittest.TestCase):
-    def test_get_version(self):
-        self.assertIn(runtime.get_version(), SUPPORTED_VERSIONS)
-
     def test_is_supported_version_true(self):
         for v in SUPPORTED_VERSIONS:
             with patch.object(runtime, 'get_version', return_value=v):

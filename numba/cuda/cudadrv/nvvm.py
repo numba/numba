@@ -892,8 +892,6 @@ def set_cuda_kernel(lfunc):
     nmd = mod.get_or_insert_named_metadata('nvvm.annotations')
     nmd.add(md)
 
-    lfunc.linkage = 'external'
-
 
 def add_ir_version(mod):
     """Add NVVM IR version to module"""

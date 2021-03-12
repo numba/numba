@@ -417,6 +417,20 @@ GPU support
    takes place, and the user of Numba (and other CUDA libraries) is responsible
    for ensuring correctness with respect to synchronization on streams.
 
+.. envvar:: NUMBA_CUDA_LOG_LEVEL
+
+   For debugging purposes. If no other logging is configured, the value of this
+   variable is the logging level for CUDA API calls. The default value is
+   ``CRITICAL`` - to trace all API calls on standard error, set this to
+   ``DEBUG``.
+
+.. envvar:: NUMBA_CUDA_LOG_API_ARGS
+
+   By default the CUDA API call logs only give the names of functions called.
+   Setting this variable to 1 also includes the values of arguments to Driver
+   API calls in the logs.
+
+
 Threading Control
 -----------------
 
