@@ -1,9 +1,25 @@
-
-from collections import namedtuple
 from types import MappingProxyType
 
 
-Option = namedtuple("Option", ["type", "default", "doc"])
+class Option:
+    __slots__ = "_type", "_default", "_doc"
+
+    def __init__(self, type, *, default, doc):
+        self._type = type
+        self._default = default
+        self._doc = doc
+
+    @property
+    def type(self):
+        return self._type
+
+    @property
+    def default(self):
+        return self._default
+
+    @property
+    def doc(self):
+        return self._doc
 
 
 class _MetaTargetConfig(type):
@@ -23,7 +39,7 @@ class _MetaTargetConfig(type):
                 return self._values.get(name, option.default)
 
             def setter(self, val):
-                self._values[name] = val
+                self._values[name] = option.type(val)
 
             def delter(self):
                 del self._values[name]

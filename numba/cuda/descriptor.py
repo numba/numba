@@ -4,7 +4,7 @@ from .target import CUDATargetContext, CUDATypingContext
 
 
 class CUDATargetOptions(TargetOptions):
-    OPTIONS = {}
+    pass
 
 
 class CUDATarget(TargetDescriptor):
