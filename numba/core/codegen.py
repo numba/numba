@@ -569,7 +569,7 @@ class CodeLibrary(metaclass=ABCMeta):
 
     def create_ir_module(self, name):
         """
-        Create a LLVM IR module for use by this library.
+        Create an LLVM IR module for use by this library.
         """
         self._raise_if_finalized()
         ir_module = self._codegen._create_empty_module(name)
@@ -585,7 +585,7 @@ class CodeLibrary(metaclass=ABCMeta):
     @abstractmethod
     def add_ir_module(self, ir_module):
         """
-        Add a LLVM IR module's contents to this library.
+        Add an LLVM IR module's contents to this library.
         """
 
     @abstractmethod

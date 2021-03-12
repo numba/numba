@@ -241,7 +241,7 @@ class CUDACodeLibrary(CodeLibrary, serialize.ReduceMixin):
         """
         Reduce the instance for serialization. We retain the PTX and cubins,
         but loaded functions are discarded. They are recreated when needed
-        after unserialization.
+        after deserialization.
         """
         if self._linking_files:
             msg = ('cannot pickle CUDACodeLibrary function with additional '
