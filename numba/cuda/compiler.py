@@ -296,10 +296,6 @@ class DeviceFunctionTemplate(serialize.ReduceMixin):
         -------
         ptx : bytes
         """
-        if nvvm_options:
-            msg = 'nvvm_options kwarg for inspect_ptx is deprecated'
-            warn(msg, category=NumbaDeprecationWarning)
-
         llvmir = self.inspect_llvm(args)
         # Make PTX
         cuctx = get_context()
