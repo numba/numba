@@ -570,7 +570,7 @@ class _Kernel(serialize.ReduceMixin):
         '''
         Returns the LLVM IR for this kernel.
         '''
-        return self._codelibrary.get_asm_str()
+        return self._codelibrary.get_llvm_str()
 
     def inspect_asm(self, cc):
         '''
