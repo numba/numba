@@ -293,12 +293,23 @@ class Driver(object):
         return safe_call
 
     def _wrap_api_call(self, fname, libfn):
-        @functools.wraps(libfn)
+        def verbose_cuda_api_call(*args):
+            argstr = ", ".join([str(arg) for arg in args])
+            _logger.debug('call driver api: %s(%s)', libfn.__name__, argstr)
+            retcode = libfn(*args)
+            self._check_error(fname, retcode)
+
         def safe_cuda_api_call(*args):
             _logger.debug('call driver api: %s', libfn.__name__)
             retcode = libfn(*args)
             self._check_error(fname, retcode)
-        return safe_cuda_api_call
+
+        if config.CUDA_LOG_API_ARGS:
+            wrapper = verbose_cuda_api_call
+        else:
+            wrapper = safe_cuda_api_call
+
+        return functools.wraps(libfn)(wrapper)
 
     def _find_api(self, fname):
         # Try version 2

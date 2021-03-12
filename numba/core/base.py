@@ -1147,6 +1147,24 @@ class BaseContext(object):
         for lib in libs:
             colib.add_linking_library(lib)
 
+    def get_ufunc_info(self, ufunc_key):
+        """Get the ufunc implementation for a given ufunc object.
+
+        The default implementation in BaseContext always raises a
+        ``NotImplementedError`` exception. Subclasses may raise ``KeyError``
+        to signal that the given ``ufunc_key`` is not available.
+
+        Parameters
+        ----------
+        ufunc_key : NumPy ufunc
+
+        Returns
+        -------
+        res : dict[str, callable]
+            A mapping of a NumPy ufunc type signature to a lower-level
+            implementation.
+        """
+        raise NotImplementedError(f"{self} does not support ufunc")
 
 class _wrap_impl(object):
     """

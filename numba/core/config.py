@@ -323,6 +323,9 @@ class _EnvReloader(object):
         #       Any existing logging configuration is preserved.
         CUDA_LOG_LEVEL = _readenv("NUMBA_CUDA_LOG_LEVEL", str, '')
 
+        # Include argument values in the CUDA Driver API logs
+        CUDA_LOG_API_ARGS = _readenv("NUMBA_CUDA_LOG_API_ARGS", int, 0)
+
         # Maximum number of pending CUDA deallocations (default: 10)
         CUDA_DEALLOCS_COUNT = _readenv("NUMBA_CUDA_MAX_PENDING_DEALLOCS_COUNT",
                                        int, 10)

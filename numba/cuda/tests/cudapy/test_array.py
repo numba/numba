@@ -22,6 +22,13 @@ class TestCudaArray(CUDATestCase):
         self.assertEqual(x.shape, hx.shape)
         self.assertEqual(x.size, hx.size)
 
+    def test_null_shape(self):
+        null_shape = ()
+        shape1 = cuda.device_array(()).shape
+        shape2 = cuda.device_array_like(np.ndarray(())).shape
+        self.assertEqual(shape1, null_shape)
+        self.assertEqual(shape2, null_shape)
+
     def test_gpu_array_strided(self):
 
         @cuda.jit('void(double[:])')

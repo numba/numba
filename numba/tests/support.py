@@ -20,6 +20,8 @@ import multiprocessing as mp
 import warnings
 import traceback
 from contextlib import contextmanager
+import uuid
+import importlib
 
 import numpy as np
 
@@ -737,7 +739,7 @@ def forbid_codegen():
     If code generation is invoked, a RuntimeError is raised.
     """
     from numba.core import codegen
-    patchpoints = ['CodeLibrary._finalize_final_module']
+    patchpoints = ['CPUCodeLibrary._finalize_final_module']
 
     old = {}
     def fail(*args, **kwargs):
@@ -878,3 +880,44 @@ class CheckWarningsMixin(object):
                     self.assertEqual(w.category, category)
                     found += 1
         self.assertEqual(found, len(messages))
+
+
+def _format_jit_options(**jit_options):
+    if not jit_options:
+        return ''
+    out = []
+    for key, value in jit_options.items():
+        if isinstance(value, str):
+            value = '"{}"'.format(value)
+        out.append('{}={}'.format(key, value))
+    return ', '.join(out)
+
+
+@contextlib.contextmanager
+def create_temp_module(source_lines, **jit_options):
+    """A context manager that creates and imports a temporary module
+    from sources provided in ``source_lines``.
+
+    Optionally it is possible to provide jit options for ``jit_module`` if it
+    is explicitly used in ``source_lines`` like ``jit_module({jit_options})``.
+    """
+    # Use try/finally so cleanup happens even when an exception is raised
+    try:
+        tempdir = temp_directory('test_temp_module')
+        # Generate random module name
+        temp_module_name = 'test_temp_module_{}'.format(
+            str(uuid.uuid4()).replace('-', '_'))
+        temp_module_path = os.path.join(tempdir, temp_module_name + '.py')
+
+        jit_options = _format_jit_options(**jit_options)
+        with open(temp_module_path, 'w') as f:
+            lines = source_lines.format(jit_options=jit_options)
+            f.write(lines)
+        # Add test_module to sys.path so it can be imported
+        sys.path.insert(0, tempdir)
+        test_module = importlib.import_module(temp_module_name)
+        yield test_module
+    finally:
+        sys.modules.pop(temp_module_name, None)
+        sys.path.remove(tempdir)
+        shutil.rmtree(tempdir)
