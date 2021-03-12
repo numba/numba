@@ -129,7 +129,6 @@ class CUDATargetContext(BaseContext):
         library.add_linking_library(codelib)
         wrapper = self.generate_kernel_wrapper(library, fname, argtypes,
                                                debug=debug)
-        nvvm.fix_data_layout(library._final_module)
         return library, wrapper
 
     def generate_kernel_wrapper(self, library, fname, argtypes, debug):
