@@ -1562,6 +1562,45 @@ def array_T(context, builder, typ, value):
     return impl_ret_borrowed(context, builder, typ, res)
 
 
+@overload(np.rot90)
+def numpy_rot90(arr, k=1):
+    # axes = (0, 1) using other axes needs axis support in flip
+
+    if not isinstance(k, types.Integer):
+        raise errors.TypingError('The second argument "k" must be an integer')
+    if not type_can_asarray(arr):
+        raise errors.TypingError('The first argument "arr" must be array-like')
+
+    def impl(arr, k=1):
+        arr = np.asarray(arr)
+
+        if arr.ndim < 2:
+            raise ValueError('Input must be >= 1-d.')
+
+        k = k % 4
+        if k == 0:
+            return arr[:]
+        if k == 2:
+            return np.flipud(np.fliplr(arr))
+
+        def axes_list_gen(i):
+            if i == 0:
+                return 1
+            if i == 1:
+                return 0
+            return i
+
+        axes_list = (1, 0)
+        for i in range(2, arr.ndim):
+            axes_list = tuple_setitem(axes_list, i, i)
+
+        if k == 1:
+            return np.transpose(np.fliplr(arr), axes_list)
+        # k == 3
+        return np.fliplr(np.transpose(arr, axes_list))
+    return impl
+
+
 def _attempt_nocopy_reshape(context, builder, aryty, ary,
                             newnd, newshape, newstrides):
     """

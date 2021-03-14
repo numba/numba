@@ -129,6 +129,10 @@ def flip(a):
     return np.flip(a)
 
 
+def rot90(a, k=1):
+    return np.rot90(a, k)
+
+
 def array_split(a, indices, axis=0):
     return np.array_split(a, indices, axis=axis)
 
@@ -2316,6 +2320,46 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc((1, 2, 3))
 
         self.assertIn("Cannot np.flip on UniTuple", str(raises.exception))
+
+    def test_rot90_basic(self):
+        pyfunc = rot90
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(10).reshape(5, 2)
+            yield np.arange(20).reshape(5, 2, 2)
+            yield ([1, 2], [3, 4],)
+
+        for a in a_variations():
+            for k in range(-3, 13):
+                expected = pyfunc(a, k)
+                got = cfunc(a, k)
+                self.assertPreciseEqual(expected, got)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc")
+
+        self.assertIn('The first argument "arr" must be array-like',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc([[1, 2], [3, 4]], k="abc")
+
+        self.assertIn('The second argument "k" must be an integer',
+                      str(raises.exception))
+
+    def test_rot90_exception(self):
+        pyfunc = rot90
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(3))
+
+        self.assertIn("cannot index array", str(raises.exception))
+        self.assertIn("with 2 indices", str(raises.exception))
 
     def _check_split(self, func):
         # Since np.split and np.array_split are very similar
