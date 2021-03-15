@@ -82,6 +82,13 @@ class NVVM(object):
         'nvvmAddModuleToProgram': (
             nvvm_result, nvvm_program, c_char_p, c_size_t, c_char_p),
 
+        # nvvmResult nvvmLazyAddModuleToProgram(nvvmProgram cu,
+        #                                       const char* buffer,
+        #                                       size_t size,
+        #                                       const char *name)
+        'nvvmLazyAddModuleToProgram': (
+            nvvm_result, nvvm_program, c_char_p, c_size_t, c_char_p),
+
         # nvvmResult nvvmCompileProgram(nvvmProgram cu, int numOptions,
         #                          const char **options)
         'nvvmCompileProgram': (
@@ -125,7 +132,19 @@ class NVVM(object):
 
                 # Find & populate functions
                 for name, proto in inst._PROTOTYPES.items():
-                    func = getattr(inst.driver, name)
+                    try:
+                        func = getattr(inst.driver, name)
+                    except AttributeError:
+                        # CUDA 9.2 has no nvvmLazyAddModuleToProgram, but
+                        # nvvmAddModuleToProgram fulfils the same function,
+                        # just less efficiently, so we work around this here.
+                        # This workaround to be removed once support for CUDA
+                        # 9.2 is dropped.
+                        if name == 'nvvmLazyAddModuleToProgram':
+                            func = getattr(inst.driver,
+                                           'nvvmAddModuleToProgram')
+                        else:
+                            raise
                     func.restype = proto[0]
                     func.argtypes = proto[1:]
                     setattr(inst, name, func)
@@ -193,6 +212,16 @@ class CompilationUnit(object):
         """
         err = self.driver.nvvmAddModuleToProgram(self._handle, buffer,
                                                  len(buffer), None)
+        self.driver.check_error(err, 'Failed to add module')
+
+    def lazy_add_module(self, buffer):
+        """
+        Lazily add an NVVM IR module to a compilation unit.
+        The buffer should contain NVVM module IR either in the bitcode
+        representation or in the text representation.
+        """
+        err = self.driver.nvvmLazyAddModuleToProgram(self._handle, buffer,
+                                                     len(buffer), None)
         self.driver.check_error(err, 'Failed to add module')
 
     def compile(self, **options):
@@ -321,18 +350,23 @@ def get_supported_ccs():
         # The CUDA Runtime may not be present
         cudart_version_major = 0
 
+    ctk_ver = f"{cudart_version_major}.{cudart_version_minor}"
+    unsupported_ver = f"CUDA Toolkit {ctk_ver} is unsupported by Numba - " \
+                      + "9.2 is the minimum required version."
+
     # List of supported compute capability in sorted order
     if cudart_version_major == 0:
         _supported_cc = ()
     elif cudart_version_major < 9:
         _supported_cc = ()
-        ctk_ver = f"{cudart_version_major}.{cudart_version_minor}"
-        msg = f"CUDA Toolkit {ctk_ver} is unsupported by Numba - 9.0 is the " \
-              + "minimum required version."
-        warnings.warn(msg)
+        warnings.warn(unsupported_ver)
     elif cudart_version_major == 9:
-        # CUDA 9.x
-        _supported_cc = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0) # noqa: E501
+        if cudart_version_minor != 2:
+            _supported_cc = ()
+            warnings.warn(unsupported_ver)
+        else:
+            # CUDA 9.2
+            _supported_cc = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0) # noqa: E501
     elif cudart_version_major == 10:
         # CUDA 10.x
         _supported_cc = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5) # noqa: E501
@@ -668,7 +702,7 @@ def llvm_to_ptx(llvmir, **opts):
     for mod in llvmir:
         mod = llvm_replace(mod)
         cu.add_module(mod.encode('utf8'))
-    cu.add_module(libdevice.get())
+    cu.lazy_add_module(libdevice.get())
 
     ptx = cu.compile(**opts)
     # XXX remove debug_pubnames seems to be necessary sometimes
