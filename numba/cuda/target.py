@@ -192,7 +192,7 @@ class CUDATargetContext(BaseContext):
                     cas_hack = "___numba_atomic_i32_cas_hack"
                     casfn = ir.Function(wrapper_module, casfnty, name=cas_hack)
                     xchg = builder.call(casfn, [gv_exc, old, status.code])
-                    changed = builder.icmp('==', xchg, old)
+                    changed = builder.icmp_unsigned('==', xchg, old)
 
                 # If the xchange is successful, save the thread ID.
                 sreg = nvvmutils.SRegBuilder(builder)
