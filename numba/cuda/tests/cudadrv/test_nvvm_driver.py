@@ -1,4 +1,4 @@
-from llvmlite.llvmpy.core import Module, Type, Builder
+from llvmlite import ir
 from numba.cuda.cudadrv.nvvm import (llvm_to_ptx, set_cuda_kernel,
                                      fix_data_layout, get_arch_option,
                                      get_supported_ccs)
@@ -27,10 +27,10 @@ class TestNvvmDriver(unittest.TestCase):
         self.assertTrue('ave' in ptx)
 
     def test_nvvm_from_llvm(self):
-        m = Module("test_nvvm_from_llvm")
-        fty = Type.function(Type.void(), [Type.int()])
-        kernel = m.add_function(fty, name='mycudakernel')
-        bldr = Builder(kernel.append_basic_block('entry'))
+        m = ir.Module("test_nvvm_from_llvm")
+        fty = ir.FunctionType(ir.VoidType(), [ir.IntType(32)])
+        kernel = ir.Function(m, fty, name='mycudakernel')
+        bldr = ir.IRBuilder(kernel.append_basic_block('entry'))
         bldr.ret_void()
         set_cuda_kernel(kernel)
 
