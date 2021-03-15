@@ -132,7 +132,19 @@ class NVVM(object):
 
                 # Find & populate functions
                 for name, proto in inst._PROTOTYPES.items():
-                    func = getattr(inst.driver, name)
+                    try:
+                        func = getattr(inst.driver, name)
+                    except AttributeError:
+                        # CUDA 9.2 has no nvvmLazyAddModuleToProgram, but
+                        # nvvmAddModuleToProgram fulfils the same function,
+                        # just less efficiently, so we work around this here.
+                        # This workaround to be removed once support for CUDA
+                        # 9.2 is dropped.
+                        if name == 'nvvmLazyAddModuleToProgram':
+                            func = getattr(inst.driver,
+                                           'nvvmAddModuleToProgram')
+                        else:
+                            raise
                     func.restype = proto[0]
                     func.argtypes = proto[1:]
                     setattr(inst, name, func)
