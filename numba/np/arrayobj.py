@@ -19,6 +19,7 @@ from numba.core import types, utils, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                     is_fortran)
 from numba.np.numpy_support import type_can_asarray, is_nonelike
+from numba.np.unsafe.ndarray import to_fixed_tuple
 from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_getattr_generic,
                                  lower_setattr_generic,
@@ -1583,16 +1584,9 @@ def numpy_rot90(arr, k=1):
         if k == 2:
             return np.flipud(np.fliplr(arr))
 
-        def axes_list_gen(i):
-            if i == 0:
-                return 1
-            if i == 1:
-                return 0
-            return i
-
-        axes_list = (1, 0)
-        for i in range(2, arr.ndim):
-            axes_list = tuple_setitem(axes_list, i, i)
+        axes_list = np.arange(arr.ndim)
+        axes_list[:2] = [1, 0]
+        axes_list = to_fixed_tuple(axes_list, arr.ndim)
 
         if k == 1:
             return np.transpose(np.fliplr(arr), axes_list)
