@@ -45,7 +45,7 @@ class Buffer(IterableType, ArrayCompatible):
     # CS and FS are not reserved for inner contig but strided
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
 
-    def __init__(self, dtype, ndim, layout, readonly=False, name=None, addrspace=None):
+    def __init__(self, dtype, ndim, layout, readonly=False, name=None):
         from .misc import unliteral
 
         if isinstance(dtype, Buffer):
@@ -55,7 +55,6 @@ class Buffer(IterableType, ArrayCompatible):
         self.dtype = unliteral(dtype)
         self.ndim = ndim
         self.layout = layout
-        self.addrspace = addrspace
         if readonly:
             self.mutable = False
         if name is None:
