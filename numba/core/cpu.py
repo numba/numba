@@ -156,7 +156,7 @@ class CPUContext(BaseContext):
                                release_gil=False):
         wrapper_module = self.create_module("wrapper")
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
-        wrapper_callee = wrapper_module.add_function(fnty, fndesc.llvm_func_name)
+        wrapper_callee = ir.Function(wrapper_module, fnty, fndesc.llvm_func_name)
         builder = PyCallWrapper(self, wrapper_module, wrapper_callee,
                                 fndesc, env, call_helper=call_helper,
                                 release_gil=release_gil)
@@ -167,13 +167,13 @@ class CPUContext(BaseContext):
 
         wrapper_module = self.create_module("cfunc_wrapper")
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
-        wrapper_callee = wrapper_module.add_function(fnty, fndesc.llvm_func_name)
+        wrapper_callee = ir.Function(wrapper_module, fnty, fndesc.llvm_func_name)
 
         ll_argtypes = [self.get_value_type(ty) for ty in fndesc.argtypes]
         ll_return_type = self.get_value_type(fndesc.restype)
 
         wrapty = ir.FunctionType(ll_return_type, ll_argtypes)
-        wrapfn = wrapper_module.add_function(wrapty, fndesc.llvm_cfunc_wrapper_name)
+        wrapfn = ir.Function(wrapper_module, wrapty, fndesc.llvm_cfunc_wrapper_name)
         builder = ir.IRBuilder(wrapfn.append_basic_block('entry'))
 
         status, out = self.call_conv.call_function(

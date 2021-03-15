@@ -7,6 +7,7 @@ import abc
 import os.path
 
 from llvmlite import ir
+from numba.core import cgutils
 
 
 class AbstractDIBuilder(metaclass=abc.ABCMeta):
@@ -119,7 +120,7 @@ class DIBuilder(AbstractDIBuilder):
     def mark_variable(self, builder, allocavalue, name, lltype, size, loc):
         m = self.module
         fnty = ir.FunctionType(ir.VoidType(), [ir.MetaDataType()] * 3)
-        decl = m.get_or_insert_function(fnty, name='llvm.dbg.declare')
+        decl = cgutils.get_or_insert_function(m, fnty, 'llvm.dbg.declare')
 
         mdtype = self._var_type(lltype, size)
         name = name.replace('.', '$')    # for gdb to work correctly
@@ -146,7 +147,7 @@ class DIBuilder(AbstractDIBuilder):
         function.attributes.add('noinline')
 
     def finalize(self):
-        dbgcu = self.module.get_or_insert_named_metadata(self.DBG_CU_NAME)
+        dbgcu = cgutils.get_or_insert_named_metadata(self.module, self.DBG_CU_NAME)
         dbgcu.add(self.dicompileunit)
         self._set_module_flags()
 
@@ -158,7 +159,7 @@ class DIBuilder(AbstractDIBuilder):
         """Set the module flags metadata
         """
         module = self.module
-        mflags = module.get_or_insert_named_metadata('llvm.module.flags')
+        mflags = cgutils.get_or_insert_named_metadata(module, 'llvm.module.flags')
         # Set *require* behavior to warning
         # See http://llvm.org/docs/LangRef.html#module-flags-metadata
         require_warning_behavior = self._const_int(2)

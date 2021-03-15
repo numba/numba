@@ -31,8 +31,8 @@ def _define_nrt_meminfo_data(module):
     Implement NRT_MemInfo_data_fast in the module.  This allows LLVM
     to inline lookup of the data pointer.
     """
-    fn = module.get_or_insert_function(meminfo_data_ty,
-                                       name="NRT_MemInfo_data_fast")
+    fn = cgutils.get_or_insert_function(module, meminfo_data_ty,
+                                        "NRT_MemInfo_data_fast")
     builder = ir.IRBuilder(fn.append_basic_block())
     [ptr] = fn.args
     struct_ptr = builder.bitcast(ptr, _meminfo_struct_type.as_pointer())
@@ -44,8 +44,8 @@ def _define_nrt_incref(module, atomic_incr):
     """
     Implement NRT_incref in the module
     """
-    fn_incref = module.get_or_insert_function(incref_decref_ty,
-                                              name="NRT_incref")
+    fn_incref = cgutils.get_or_insert_function(module, incref_decref_ty,
+                                              "NRT_incref")
     # Cannot inline this for refcount pruning to work
     fn_incref.attributes.add('noinline')
     builder = ir.IRBuilder(fn_incref.append_basic_block())
@@ -65,12 +65,13 @@ def _define_nrt_decref(module, atomic_decr):
     """
     Implement NRT_decref in the module
     """
-    fn_decref = module.get_or_insert_function(incref_decref_ty,
-                                              name="NRT_decref")
+    fn_decref = cgutils.get_or_insert_function(module, incref_decref_ty,
+                                               "NRT_decref")
     # Cannot inline this for refcount pruning to work
     fn_decref.attributes.add('noinline')
-    calldtor = module.add_function(ir.FunctionType(ir.VoidType(), [_pointer_type]),
-                                   name="NRT_MemInfo_call_dtor")
+    calldtor = ir.Function(module,
+                           ir.FunctionType(ir.VoidType(), [_pointer_type]),
+                           name="NRT_MemInfo_call_dtor")
 
     builder = ir.IRBuilder(fn_decref.append_basic_block())
     [ptr] = fn_decref.args

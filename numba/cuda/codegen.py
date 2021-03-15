@@ -1,5 +1,5 @@
 from llvmlite import binding as ll
-from llvmlite.llvmpy import core as lc
+from llvmlite import ir
 
 from numba.core.codegen import Codegen, CodeLibrary
 from .cudadrv import nvvm
@@ -90,7 +90,7 @@ class JITCUDACodegen(Codegen):
         self._target_data = ll.create_target_data(self._data_layout)
 
     def _create_empty_module(self, name):
-        ir_module = lc.Module(name)
+        ir_module = ir.Module(name)
         ir_module.triple = CUDA_TRIPLE
         if self._data_layout:
             ir_module.data_layout = self._data_layout

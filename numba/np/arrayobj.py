@@ -1581,8 +1581,8 @@ def _attempt_nocopy_reshape(context, builder, aryty, ary,
         ll_intp, ll_intp_star, ll_intp_star,
         # itemsize, is_f_order
         ll_intp, ll_intc])
-    fn = builder.module.get_or_insert_function(
-        fnty, name="numba_attempt_nocopy_reshape")
+    fn = cgutils.get_or_insert_function(builder.module, fnty,
+                                        "numba_attempt_nocopy_reshape")
 
     nd = ll_intp(aryty.ndim)
     shape = cgutils.gep_inbounds(builder, ary._get_ptr_by_name('shape'), 0, 0)
