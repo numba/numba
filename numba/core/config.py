@@ -337,6 +337,12 @@ class _EnvReloader(object):
         CUDA_ARRAY_INTERFACE_SYNC = _readenv("NUMBA_CUDA_ARRAY_INTERFACE_SYNC",
                                              int, 1)
 
+        # Compute contiguity of device arrays using the relaxed strides
+        # checking algorithm.
+        NPY_RELAXED_STRIDES_CHECKING = _readenv(
+            "NUMBA_NPY_RELAXED_STRIDES_CHECKING",
+            int, 1)
+
         # HSA Configs
 
         # Disable HSA support
