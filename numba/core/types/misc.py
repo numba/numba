@@ -151,7 +151,7 @@ class CPointer(Type):
     def __init__(self, dtype, addrspace=None):
         self.dtype = dtype
         self.addrspace = addrspace
-        if addrspace:
+        if addrspace != None:
             name = "%s_%s*" % (dtype, addrspace)
         else:
             name = "%s*" % dtype
