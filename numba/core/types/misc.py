@@ -141,13 +141,20 @@ class MemInfoPointer(Type):
 class CPointer(Type):
     """
     Type class for pointers to other types.
+
+    Attributes:
+        dtype : The type current pointer represents.
+        addrspace (int): The address space current pointer belongs to.
     """
     mutable = True
 
     def __init__(self, dtype, addrspace=None):
         self.dtype = dtype
         self.addrspace = addrspace
-        name = "%s*" % dtype
+        if addrspace:
+            name = "%s_%s*" % (dtype, addrspace)
+        else:
+            name = "%s*" % dtype
         super(CPointer, self).__init__(name)
 
     @property
