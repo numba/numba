@@ -142,16 +142,18 @@ class CPointer(Type):
     """
     Type class for pointers to other types.
 
-    Attributes:
-        dtype : The type current pointer represents.
-        addrspace (int): The address space current pointer belongs to.
+    Attributes
+    ----------
+        dtype : The pointee type
+        addrspace : [int]
+            The address space pointee belongs to.
     """
     mutable = True
 
     def __init__(self, dtype, addrspace=None):
         self.dtype = dtype
         self.addrspace = addrspace
-        if addrspace != None:
+        if addrspace is not None:
             name = "%s_%s*" % (dtype, addrspace)
         else:
             name = "%s*" % dtype

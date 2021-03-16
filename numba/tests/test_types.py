@@ -95,6 +95,12 @@ class TestTypes(TestCase):
         # Different dtypes
         self.assertNotEqual(types.DType(types.int32), types.DType(types.int64))
 
+        # CPointer with same addrspace
+        self.assertEqual(types.CPointer(types.float32), types.CPointer(types.float32))
+
+        # CPointer with different addrspace
+        self.assertNotEqual(types.CPointer(types.float32, 0), types.CPointer(types.float32, 1))
+
     def test_weaktype(self):
         d = Dummy()
         e = Dummy()
