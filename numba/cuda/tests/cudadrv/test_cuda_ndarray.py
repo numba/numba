@@ -318,6 +318,7 @@ class TestCudaNDArray(CUDATestCase):
             devicearray.errmsg_contiguous_buffer,
             str(e.exception))
 
+    @skip_on_cudasim('DeviceNDArray class not present in simulator')
     def test_devicearray_relaxed_strides(self):
         # From the reproducer in Issue #6824.
 
@@ -332,6 +333,7 @@ class TestCudaNDArray(CUDATestCase):
             self.assertTrue(arr.flags['C_CONTIGUOUS'])
             self.assertTrue(arr.flags['F_CONTIGUOUS'])
 
+    @skip_on_cudasim('DeviceNDArray class not present in simulator')
     def test_devicearray_strict_strides(self):
         # From the reproducer in Issue #6824.
 
