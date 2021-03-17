@@ -512,6 +512,7 @@ The following Python libraries have adopted the CUDA Array Interface:
 - `mpi4py <https://mpi4py.readthedocs.io/en/latest/overview.html#support-for-cuda-aware-mpi>`_
 - `ArrayViews <https://github.com/xnd-project/arrayviews>`_
 - `JAX <https://jax.readthedocs.io/en/latest/index.html>`_
+- `PyCUDA <https://documen.tician.de/pycuda/tutorial.html#interoperability-with-other-libraries-using-the-cuda-array-interface>`_
 - The RAPIDS stack:
 
     - `cuDF <https://rapidsai.github.io/projects/cudf/en/0.11.0/10min-cudf-cupy.html>`_

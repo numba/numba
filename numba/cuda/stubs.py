@@ -472,7 +472,7 @@ class atomic(Stub):
         """dec(ary, idx, val)
 
         Perform ary[idx] = (value if (array[idx] == 0) or
-                            (array[idx] > value) else array[idx] - 1).
+        (array[idx] > value) else array[idx] - 1).
 
         Supported on uint32, and uint64 operands only.
 
