@@ -174,6 +174,7 @@ class Array(object):
         # The logic here is based on that in _UpdateContiguousFlags from
         # numpy/core/src/multiarray/flagsobject.c in NumPy v1.19.1 (commit
         # 13661ac70).
+        # https://github.com/numpy/numpy/blob/maintenance/1.19.x/numpy/core/src/multiarray/flagsobject.c#L123-L191
 
         # Records have no dims, and we can treat them as contiguous
         if not self.dims:
