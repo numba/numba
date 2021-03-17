@@ -60,7 +60,7 @@ class TestNumbaImport(TestCase):
         code = "import numba"
         # See: https://github.com/numba/numba/issues/6831
         # bug in setuptools/packaging causing a deprecation warning
-        flags = ["-Werror", "-Wignore::DeprecationWarning:packaging:"]
+        flags = ["-Werror", "-Wignore::DeprecationWarning:packaging.version:"]
         self.run_in_subproc(code, flags)
 
     def test_import_star(self):
