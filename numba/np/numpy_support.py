@@ -284,6 +284,7 @@ def supported_ufunc_loop(ufunc, loop):
     legacy and when implementing new ufuncs the ufunc_db should be preferred,
     as it allows for a more fine-grained incremental support.
     """
+    # NOTE: Assuming ufunc for the CPUContext
     from numba.np import ufunc_db
     loop_sig = loop.ufunc_sig
     try:

@@ -1839,6 +1839,14 @@ class TestParfors(TestParforsBase):
         x = np.ones((3,3))
         self.check(test_impl, x)
 
+    @skip_parfors_unsupported
+    def test_high_dimension1(self):
+        # issue6749
+        def test_impl(x):
+            return x * 5.0
+        x = np.ones((2, 2, 2, 2, 2, 15))
+        self.check(test_impl, x)
+
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
@@ -3363,6 +3371,19 @@ class TestParforsSlice(TestParforsBase):
         r = np.array([[0., 0., 0.], [0., 0., 1.]])
         self.assertPreciseEqual(f(r), f.py_func(r))
 
+    @skip_parfors_unsupported
+    def test_issue6774(self):
+        @njit(parallel=True)
+        def test_impl():
+            n = 5
+            na_mask = np.ones((n,))
+            result = np.empty((n - 1,))
+            for i in prange(len(result)):
+                result[i] = np.sum(na_mask[i:i + 1])
+            return result
+
+        self.check(test_impl)
+
 
 class TestParforsOptions(TestParforsBase):
 
@@ -3499,6 +3520,8 @@ class TestParforsMisc(TestParforsBase):
 
         with warnings.catch_warnings(record=True) as raised_warnings:
             warnings.simplefilter('always')
+            warnings.filterwarnings(action="ignore",
+                                    module="typeguard")
             # Filter out warnings about TBB interface mismatch
             warnings.filterwarnings(action='ignore',
                                     message=r".*TBB_INTERFACE_VERSION.*",

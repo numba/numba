@@ -306,3 +306,33 @@ In 0.54.0:
 - ``ptx`` and the inspection methods will always return a dict.
 - Support for indexing into the results of these methods using ``(cc,
   argtypes)`` will be removed.
+
+
+.. _deprecation-strict-strides:
+
+Deprecation of strict strides checking when computing contiguity
+================================================================
+
+The contiguity of device arrays (the ``'C_CONTIGUOUS'`` and ``'F_CONTIGUOUS'``
+elements of the flags of a device array) are computed using relaxed strides
+checking, which matches the default in NumPy since Version 1.12. A config
+variable, :envvar:`NUMBA_NPY_RELAXED_STRIDES_CHECKING`, is provided to force
+computation of these flags using strict strides checking.
+
+This flag is provided to work around any bugs that may be exposed by strict
+strides checking, and will be removed in future.
+
+Schedule
+--------
+
+In 0.54.0:
+
+- Relaxed strides checking will become the default.
+- Strict strides checking will be deprecated.
+
+In 0.55.0:
+
+- Strict strides checking will be removed, if there are no reports of bugs
+  related to relaxed strides checking in 0.54.0 onwards. This plan will be
+  re-examined if bugs related to relaxed strides checking are reported, but may
+  not necessarily change as a result.

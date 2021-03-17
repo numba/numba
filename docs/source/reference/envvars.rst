@@ -417,6 +417,35 @@ GPU support
    takes place, and the user of Numba (and other CUDA libraries) is responsible
    for ensuring correctness with respect to synchronization on streams.
 
+.. envvar:: NUMBA_CUDA_LOG_LEVEL
+
+   For debugging purposes. If no other logging is configured, the value of this
+   variable is the logging level for CUDA API calls. The default value is
+   ``CRITICAL`` - to trace all API calls on standard error, set this to
+   ``DEBUG``.
+
+.. envvar:: NUMBA_CUDA_LOG_API_ARGS
+
+   By default the CUDA API call logs only give the names of functions called.
+   Setting this variable to 1 also includes the values of arguments to Driver
+   API calls in the logs.
+
+.. envvar:: NUMBA_NPY_RELAXED_STRIDES_CHECKING
+
+   By default arrays that inherit from ``numba.misc.dummyarray.Array`` (e.g.
+   CUDA and ROCm device arrays) compute their contiguity using relaxed strides
+   checking, which is the default mechanism used by NumPy since version 1.12
+   (see `NPY_RELAXED_STRIDES_CHECKING
+   <https://numpy.org/doc/stable/release/1.8.0-notes.html#npy-relaxed-strides-checking>`_).
+   Setting ``NUMBA_NPY_RELAXED_STRIDES_CHECKING=0`` reverts back to strict
+   strides checking. This option should not normally be needed, but is provided
+   in case it is needed to work around latent bugs related to strict strides
+   checking.
+
+   Strict strides checking is deprecated and may be removed in future. See
+   :ref:`deprecation-strict-strides`.
+
+
 Threading Control
 -----------------
 

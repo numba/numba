@@ -30,7 +30,7 @@ class TestNvvmWithoutCuda(SerialMixin, unittest.TestCase):
             x[0] = 123
 
         cukern = compile_kernel(foo, args=(types.int32[::1],), link=())
-        llvmir = cukern._func.ptx.llvmir
+        llvmir = cukern._codelibrary.get_llvm_str()
         ptx = nvvm.llvm_to_ptx(llvmir)
         self.assertIn("foo", ptx.decode('ascii'))
 
