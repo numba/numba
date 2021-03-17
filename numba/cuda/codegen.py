@@ -44,7 +44,7 @@ def disassemble_cubin(cubin):
             os.unlink(fname)
 
 
-class CUDACodeLibrary(CodeLibrary, serialize.ReduceMixin):
+class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
     """
     The CUDACodeLibrary generates PTX, SASS, cubins for multiple different
     compute capabilities. It also loads cubins to multiple devices (via
