@@ -4,7 +4,7 @@ from numba import vectorize, guvectorize
 from numba import cuda
 from numba.cuda.testing import unittest, ContextResettingTestCase, ForeignArray
 from numba.cuda.testing import skip_on_cudasim, skip_if_external_memmgr
-from numba.tests.support import override_config
+from numba.tests.support import linux_only, override_config
 from unittest.mock import call, patch
 
 
@@ -261,10 +261,30 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         c_arr = cuda.device_array(10)
         self.assertIsNone(c_arr.__cuda_array_interface__['stream'])
 
+        mapped_arr = cuda.mapped_array(10)
+        self.assertIsNone(mapped_arr.__cuda_array_interface__['stream'])
+
+    @linux_only
+    def test_produce_managed_no_stream(self):
+        managed_arr = cuda.managed_array(10)
+        self.assertIsNone(managed_arr.__cuda_array_interface__['stream'])
+
     def test_produce_stream(self):
         s = cuda.stream()
         c_arr = cuda.device_array(10, stream=s)
         cai_stream = c_arr.__cuda_array_interface__['stream']
+        self.assertEqual(s.handle.value, cai_stream)
+
+        s = cuda.stream()
+        mapped_arr = cuda.mapped_array(10, stream=s)
+        cai_stream = mapped_arr.__cuda_array_interface__['stream']
+        self.assertEqual(s.handle.value, cai_stream)
+
+    @linux_only
+    def test_produce_managed_stream(self):
+        s = cuda.stream()
+        managed_arr = cuda.managed_array(10, stream=s)
+        cai_stream = managed_arr.__cuda_array_interface__['stream']
         self.assertEqual(s.handle.value, cai_stream)
 
     def test_consume_no_stream(self):
