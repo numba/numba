@@ -97,11 +97,11 @@ class TestTypes(TestCase):
 
         # CPointer with same addrspace
         self.assertEqual(types.CPointer(types.float32),
-                types.CPointer(types.float32))
+                         types.CPointer(types.float32))
 
         # CPointer with different addrspace
         self.assertNotEqual(types.CPointer(types.float32, 0),
-                types.CPointer(types.float32, 1))
+                            types.CPointer(types.float32, 1))
 
     def test_weaktype(self):
         d = Dummy()
