@@ -989,23 +989,6 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         """
         return len(self.sigs) == 1 and not self._can_compile
 
-    @property
-    def definition(self):
-        warn('Use overloads instead of definition',
-             category=NumbaDeprecationWarning)
-        # There is a single definition only when the dispatcher has been
-        # specialized.
-        if not self.specialized:
-            raise ValueError("Dispatcher needs to be specialized to get the "
-                             "single definition")
-        return next(iter(self.overloads.values()))
-
-    @property
-    def definitions(self):
-        warn('Use overloads instead of definitions',
-             category=NumbaDeprecationWarning)
-        return self.overloads
-
     def get_regs_per_thread(self, signature=None):
         '''
         Returns the number of registers used by each thread in this kernel for
@@ -1018,12 +1001,12 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
                  kernel for the given signature and current device.
         '''
         if signature is not None:
-            return self.definitions[signature.args].regs_per_thread
+            return self.overloads[signature.args].regs_per_thread
         if self.specialized:
-            return self.definition.regs_per_thread
+            return next(iter(self.overloads.values())).regs_per_thread
         else:
-            return {sig: defn.regs_per_thread
-                    for sig, defn in self.definitions.items()}
+            return {sig: overload.regs_per_thread
+                    for sig, overload in self.overloads.items()}
 
     def compile(self, sig):
         '''
