@@ -329,7 +329,8 @@ class TestCudaNDArray(CUDATestCase):
             # because the first axis size is 1.
             arr = devicearray.DeviceNDArray((1, 10), (800, 8), np.float64)
 
-            # Ensure we still believe the array to be contiguous.
+            # Ensure we still believe the array to be contiguous because
+            # strides checking is relaxed.
             self.assertTrue(arr.flags['C_CONTIGUOUS'])
             self.assertTrue(arr.flags['F_CONTIGUOUS'])
 
@@ -343,7 +344,8 @@ class TestCudaNDArray(CUDATestCase):
             # the strides * size (10 * 8 = 80) for the previous axis.
             arr = devicearray.DeviceNDArray((1, 10), (800, 8), np.float64)
 
-            # Ensure we still believe the array to be contiguous.
+            # Ensure we don't believe the array to be contiguous becase strides
+            # checking is strict.
             self.assertFalse(arr.flags['C_CONTIGUOUS'])
             self.assertFalse(arr.flags['F_CONTIGUOUS'])
 
