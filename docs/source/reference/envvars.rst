@@ -432,7 +432,7 @@ GPU support
 
 .. envvar:: NUMBA_NPY_RELAXED_STRIDES_CHECKING
 
-   By default arrays that inherit from ``numba.misc.dummyarray.Array` (e.g.
+   By default arrays that inherit from ``numba.misc.dummyarray.Array`` (e.g.
    CUDA and ROCm device arrays) compute their contiguity using relaxed strides
    checking, which is the default mechanism used by NumPy since version 1.12
    (see `NPY_RELAXED_STRIDES_CHECKING
