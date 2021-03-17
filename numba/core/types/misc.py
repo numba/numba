@@ -145,7 +145,7 @@ class CPointer(Type):
     Attributes
     ----------
         dtype : The pointee type
-        addrspace : [int]
+        addrspace : int
             The address space pointee belongs to.
     """
     mutable = True
