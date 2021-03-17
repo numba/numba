@@ -544,7 +544,8 @@ class TestCudaAtomics(CUDATestCase):
         if config.ENABLE_CUDASIM:
             return
 
-        asm = kernel.inspect_asm()
+        # Use the first (and only) definition
+        asm = next(iter(kernel.inspect_asm().values()))
         if cc_X_or_above(6, 0):
             if shared:
                 self.assertIn('atom.shared.add.f64', asm)
