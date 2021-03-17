@@ -1565,12 +1565,13 @@ def array_T(context, builder, typ, value):
 
 @overload(np.rot90)
 def numpy_rot90(arr, k=1):
-    # axes = (0, 1) using other axes needs axis support in flip
-
+    # supporting axes argument it needs to be included in np.flip
     if not isinstance(k, types.Integer):
         raise errors.TypingError('The second argument "k" must be an integer')
-    if not type_can_asarray(arr):
-        raise errors.TypingError('The first argument "arr" must be array-like')
+    if not isinstance(arr, types.Array):
+        raise errors.TypingError('The first argument "arr" must be an array')
+
+    const_arr_ndim = arr.ndim
 
     def impl(arr, k=1):
         arr = np.asarray(arr)
@@ -1586,7 +1587,7 @@ def numpy_rot90(arr, k=1):
 
         axes_list = np.arange(arr.ndim)
         axes_list[:2] = [1, 0]
-        axes_list = to_fixed_tuple(axes_list, arr.ndim)
+        axes_list = to_fixed_tuple(axes_list, const_arr_ndim)
 
         if k == 1:
             return np.transpose(np.fliplr(arr), axes_list)

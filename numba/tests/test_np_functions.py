@@ -2328,7 +2328,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def a_variations():
             yield np.arange(10).reshape(5, 2)
             yield np.arange(20).reshape(5, 2, 2)
-            yield ([1, 2], [3, 4],)
 
         for a in a_variations():
             for k in range(-3, 13):
@@ -2339,11 +2338,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc("abc")
 
-        self.assertIn('The first argument "arr" must be array-like',
+        self.assertIn('The first argument "arr" must be an array',
                       str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
-            cfunc([[1, 2], [3, 4]], k="abc")
+            cfunc(np.arange(4).reshape(2, 2), k="abc")
 
         self.assertIn('The second argument "k" must be an integer',
                       str(raises.exception))
