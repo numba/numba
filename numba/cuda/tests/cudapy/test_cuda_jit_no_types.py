@@ -85,5 +85,6 @@ class TestCudaJitNoTypes(CUDATestCase):
             def f(x):
                 pass
 
+
 if __name__ == '__main__':
     unittest.main()
