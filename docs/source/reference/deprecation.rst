@@ -332,7 +332,7 @@ In 0.54.0:
 
 In 0.55.0:
 
-- Strict strides checking will be removed, if no reports of bugs related to
-  relaxed strides checking in 0.54.0 onwards. This plan will be re-examined if
-  bugs related to relaxed strides checking are reported, but may not necessarily
-  change as a result.
+- Strict strides checking will be removed, if there are no reports of bugs
+  related to relaxed strides checking in 0.54.0 onwards. This plan will be
+  re-examined if bugs related to relaxed strides checking are reported, but may
+  not necessarily change as a result.
