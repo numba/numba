@@ -106,7 +106,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             if config.ENABLE_CUDASIM:
                 def autojitwrapper(func):
                     return FakeCUDAKernel(func, device=device,
-                                          fastmath=fastmath, debug=debug)
+                                          fastmath=fastmath)
             else:
                 def autojitwrapper(func):
                     return jit(func, device=device, debug=debug, opt=opt, **kws)
@@ -116,7 +116,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
         else:
             if config.ENABLE_CUDASIM:
                 return FakeCUDAKernel(func_or_sig, device=device,
-                                      fastmath=fastmath, debug=debug)
+                                      fastmath=fastmath)
             elif device:
                 return jitdevice(func_or_sig, debug=debug, opt=opt, **kws)
             else:
