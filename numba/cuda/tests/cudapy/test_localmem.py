@@ -1,7 +1,7 @@
 import numpy as np
 
 from numba import cuda, int32, complex128
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 
 
 def culocal(A, B):
@@ -28,6 +28,7 @@ def culocal1tuple(A, B):
         B[i] = C[i]
 
 
+@skip_on_cudasim('PTX inspection not available in cudasim')
 class TestCudaLocalMem(CUDATestCase):
     def test_local_array(self):
         sig = (int32[:], int32[:])
