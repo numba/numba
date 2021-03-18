@@ -92,6 +92,8 @@ def skip_unless_cc_60(fn):
 
 
 def cudadevrt_missing():
+    if config.ENABLE_CUDASIM:
+        return False
     try:
         libs.check_static_lib('cudadevrt')
     except FileNotFoundError:
