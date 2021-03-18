@@ -704,28 +704,7 @@ def llvm_to_ptx(llvmir, **opts):
         cu.add_module(mod.encode('utf8'))
     cu.lazy_add_module(libdevice.get())
 
-    ptx = cu.compile(**opts)
-    # XXX remove debug_pubnames seems to be necessary sometimes
-    return patch_ptx_debug_pubnames(ptx)
-
-
-def patch_ptx_debug_pubnames(ptx):
-    """
-    Patch PTX to workaround .debug_pubnames NVVM error::
-
-        ptxas fatal   : Internal error: overlapping non-identical data
-
-    """
-    while True:
-        # Repeatedly remove debug_pubnames sections
-        start = ptx.find(b'.section .debug_pubnames')
-        if start < 0:
-            break
-        stop = ptx.find(b'}', start)
-        if stop < 0:
-            raise ValueError('missing "}"')
-        ptx = ptx[:start] + ptx[stop + 1:]
-    return ptx
+    return cu.compile(**opts)
 
 
 re_metadata_def = re.compile(r"\!\d+\s*=")
