@@ -61,6 +61,23 @@ class TestCudaDebugInfo(CUDATestCase):
         def f(x):
             x[0] = 0
 
+    def test_wrapper_has_debuginfo(self):
+        sig = (types.int32[::1],)
+
+        @cuda.jit(sig, debug=True, opt=0)
+        def f(x):
+            x[0] = 1
+
+        llvm_ir = f.inspect_llvm(sig)
+        defines = [line for line in llvm_ir.splitlines()
+                   if 'define void @"_ZN6cudapy' in line]
+
+        # Make sure we only found one definition
+        self.assertEqual(len(defines), 1)
+
+        wrapper_define = defines[0]
+        self.assertIn('noinline!dbg', wrapper_define)
+
 
 if __name__ == '__main__':
     unittest.main()
