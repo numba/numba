@@ -15,6 +15,7 @@ class TestInspect(CUDATestCase):
 
     def test_monotyped(self):
         sig = (float32, int32)
+
         @cuda.jit(sig)
         def foo(x, y):
             pass
