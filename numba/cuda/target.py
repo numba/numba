@@ -117,7 +117,8 @@ class CUDATargetContext(BaseContext):
         return itanium_mangler.mangle(name, argtypes)
 
     def prepare_cuda_kernel(self, codelib, func_name, argtypes, debug,
-                            nvvm_options, max_registers=None):
+                            nvvm_options, filename, linenum,
+                            max_registers=None):
         """
         Adapt a code library ``codelib`` with the numba compiled CUDA kernel
         with name ``fname`` and arguments ``argtypes`` for NVVM.
@@ -134,6 +135,8 @@ class CUDATargetContext(BaseContext):
         argtypes:      An iterable of the types of arguments to the kernel.
         debug:         Whether to compile with debug.
         nvvm_options:  Dict of NVVM options used when compiling the new library.
+        filename:      The source filename that the function is contained in.
+        linenum:       The source line that the function is on.
         max_registers: The max_registers argument for the code library.
         """
         kernel_name = itanium_mangler.prepend_namespace(func_name, ns='cudapy')
@@ -143,11 +146,12 @@ class CUDATargetContext(BaseContext):
                                                 max_registers=max_registers)
         library.add_linking_library(codelib)
         wrapper = self.generate_kernel_wrapper(library, kernel_name, func_name,
-                                               argtypes, debug)
+                                               argtypes, debug, filename,
+                                               linenum)
         return library, wrapper
 
     def generate_kernel_wrapper(self, library, kernel_name, func_name,
-                                argtypes, debug):
+                                argtypes, debug, filename, linenum):
         """
         Generate the kernel wrapper in the given ``library``.
         The function being wrapped have the name ``fname`` and argument types
@@ -165,6 +169,11 @@ class CUDATargetContext(BaseContext):
         prefixed = itanium_mangler.prepend_namespace(func.name, ns='cudapy')
         wrapfn = ir.Function(wrapper_module, wrapfnty, prefixed)
         builder = ir.IRBuilder(wrapfn.append_basic_block(''))
+
+        if debug:
+            debuginfo = self.DIBuilder(module=wrapper_module, filepath=filename)
+            debuginfo.mark_subprogram(wrapfn, kernel_name, linenum)
+            debuginfo.mark_location(builder, linenum)
 
         # Define error handling variables
         def define_error_gv(postfix):
@@ -225,6 +234,8 @@ class CUDATargetContext(BaseContext):
 
         nvvm.set_cuda_kernel(wrapfn)
         library.add_ir_module(wrapper_module)
+        if debug:
+            debuginfo.finalize()
         library.finalize()
         wrapfn = library.get_function(wrapfn.name)
         return wrapfn

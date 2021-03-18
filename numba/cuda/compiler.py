@@ -200,9 +200,11 @@ def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
     else:
         fname = cres.fndesc.llvm_func_name
         tgt = cres.target_context
+        filename = cres.type_annotation.filename
+        linenum = int(cres.type_annotation.linenum)
         lib, kernel = tgt.prepare_cuda_kernel(cres.library, fname,
                                               cres.signature.args, debug,
-                                              nvvm_options)
+                                              nvvm_options, filename, linenum)
 
     cc = cc or config.CUDA_DEFAULT_PTX_CC
     ptx = lib.get_asm_str(cc=cc)
@@ -479,8 +481,11 @@ class _Kernel(serialize.ReduceMixin):
         }
 
         tgt_ctx = cres.target_context
+        filename = cres.type_annotation.filename
+        linenum = int(cres.type_annotation.linenum)
         lib, kernel = tgt_ctx.prepare_cuda_kernel(cres.library, fname, args,
                                                   debug, nvvm_options,
+                                                  filename, linenum,
                                                   max_registers)
 
         if not link:
