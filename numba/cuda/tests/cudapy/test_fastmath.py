@@ -5,8 +5,8 @@ from numba.cuda.testing import CUDATestCase, skip_on_cudasim
 import unittest
 
 
+@skip_on_cudasim('Fastmath and PTX inspection not available on cudasim')
 class TestFastMathOption(CUDATestCase):
-    @skip_on_cudasim('fast divide not available in CUDASIM')
     def test_kernel(self):
         # Test the cast of an int being used in fastmath divide
         def foo(arr, val):
@@ -21,7 +21,6 @@ class TestFastMathOption(CUDATestCase):
         self.assertIn('div.approx.ftz.f32', fastver.ptx[sig])
         self.assertNotIn('div.approx.ftz.f32', precver.ptx[sig])
 
-    @skip_on_cudasim('fast cos not available in CUDASIM')
     def test_cosf(self):
         def f1(r, x):
             r[0] = cos(x)
@@ -32,7 +31,6 @@ class TestFastMathOption(CUDATestCase):
         self.assertIn('cos.approx.ftz.f32 ', fastver.ptx[sig])
         self.assertNotIn('cos.approx.ftz.f32 ', slowver.ptx[sig])
 
-    @skip_on_cudasim('fast sin not available in CUDASIM')
     def test_sinf(self):
         def f2(r, x):
             r[0] = sin(x)
@@ -43,7 +41,6 @@ class TestFastMathOption(CUDATestCase):
         self.assertIn('sin.approx.ftz.f32 ', fastver.ptx[sig])
         self.assertNotIn('sin.approx.ftz.f32 ', slowver.ptx[sig])
 
-    @skip_on_cudasim('fast tan not available in CUDASIM')
     def test_tanf(self):
         def f3(r, x):
             r[0] = tan(x)
@@ -56,7 +53,6 @@ class TestFastMathOption(CUDATestCase):
         self.assertIn('div.approx.ftz.f32 ', fastver.ptx[sig])
         self.assertNotIn('sin.approx.ftz.f32 ', slowver.ptx[sig])
 
-    @skip_on_cudasim('fast exp not available in CUDASIM')
     def test_expf(self):
         def f4(r, x):
             r[0] = exp(x)
@@ -67,7 +63,6 @@ class TestFastMathOption(CUDATestCase):
         self.assertNotIn('fma.rn.f32 ', fastver.ptx[sig])
         self.assertIn('fma.rn.f32 ', slowver.ptx[sig])
 
-    @skip_on_cudasim('fast log not available in CUDASIM')
     def test_logf(self):
         def f5(r, x):
             r[0] = log(x)
@@ -80,7 +75,6 @@ class TestFastMathOption(CUDATestCase):
         self.assertIn('0f3F317218', fastver.ptx[sig])
         self.assertNotIn('lg2.approx.ftz.f32 ', slowver.ptx[sig])
 
-    @skip_on_cudasim('fast log10 not available in CUDASIM')
     def test_log10f(self):
         def f6(r, x):
             r[0] = log10(x)
@@ -93,7 +87,6 @@ class TestFastMathOption(CUDATestCase):
         self.assertIn('0f3E9A209B', fastver.ptx[sig])
         self.assertNotIn('lg2.approx.ftz.f32 ', slowver.ptx[sig])
 
-    @skip_on_cudasim('fast log2 not available in CUDASIM')
     def test_log2f(self):
         def f7(r, x):
             r[0] = log2(x)
@@ -104,7 +97,6 @@ class TestFastMathOption(CUDATestCase):
         self.assertIn('lg2.approx.ftz.f32 ', fastver.ptx[sig])
         self.assertNotIn('lg2.approx.ftz.f32 ', slowver.ptx[sig])
 
-    @skip_on_cudasim('fast pow not available in CUDASIM')
     def test_powf(self):
         def f8(r, x, y):
             r[0] = pow(x, y)
@@ -115,7 +107,6 @@ class TestFastMathOption(CUDATestCase):
         self.assertIn('lg2.approx.ftz.f32 ', fastver.ptx[sig])
         self.assertNotIn('lg2.approx.ftz.f32 ', slowver.ptx[sig])
 
-    @skip_on_cudasim('fast divide not available in CUDASIM')
     def test_divf(self):
         def f9(r, x, y):
             r[0] = x / y
@@ -128,7 +119,6 @@ class TestFastMathOption(CUDATestCase):
         self.assertIn('div.rn.f32', slowver.ptx[sig])
         self.assertNotIn('div.rn.f32', fastver.ptx[sig])
 
-    @skip_on_cudasim('fast divide not available in CUDASIM')
     def test_divf_exception(self):
         def f10(r, x, y):
             r[0] = x / y

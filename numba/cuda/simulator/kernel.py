@@ -146,18 +146,6 @@ class FakeCUDAKernel(object):
         msg = 'Multiple definitions are unsupported in the simulator'
         raise NotImplementedError(msg)
 
-    @property
-    def ptx(self):
-        '''
-        Required in order to proceed through some tests, but serves no
-        functional purpose.
-        '''
-        res = '.const'
-        res += '\n.local'
-        if self._fastmath:
-            res += '\ndiv.full.ftz.f32'
-        return res
-
 
 # Thread emulation
 
