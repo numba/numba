@@ -90,12 +90,8 @@ class TestCasting(unittest.TestCase):
         user tries to convert numpy array to scalar
         """
 
-        try:
+        with self.assertRaises(TypingError):
             compile_isolated(numpy_scalar_cast_error, ())
-        except TypingError as e:
-            self.assertIn("Casting array", str(e))
-        else:
-            self.fail("Should raise error")
 
     def test_optional_to_optional(self):
         """
