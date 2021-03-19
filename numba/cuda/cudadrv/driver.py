@@ -37,7 +37,7 @@ from .drvapi import cu_occupancy_b2d_size, cu_stream_callback_pyobj, cu_uuid
 from numba.cuda.cudadrv import enums, drvapi, _extras
 
 
-MIN_REQUIRED_CC = (2, 0)
+MIN_REQUIRED_CC = (3, 0)
 SUPPORTS_IPC = sys.platform.startswith('linux')
 
 
