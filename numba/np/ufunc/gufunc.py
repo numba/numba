@@ -38,18 +38,20 @@ class GUFunc(serialize.ReduceMixin):
             is_dynamic=self._is_dynamic,
             targetoptions=gb.targetoptions,
             typesigs=gb._sigs,
+            frozen=self._frozen,
         )
         return dct
 
     @classmethod
     def _rebuild(cls, py_func, signature, identity, cache, is_dynamic,
-                 targetoptions, typesigs):
+                 targetoptions, typesigs, frozen):
         self = cls(py_func=py_func, signature=signature, identity=identity,
                    cache=cache, is_dynamic=is_dynamic,
                    targetoptions=targetoptions)
         for sig in typesigs:
             self.add(sig)
         self.build_ufunc()
+        self._frozen = frozen
         return self
 
     def __repr__(self):

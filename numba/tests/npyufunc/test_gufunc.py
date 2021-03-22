@@ -295,7 +295,16 @@ class TestGUVectorizePickling(TestCase):
         ser = pickle.dumps(double)
         cloned = pickle.loads(ser)
 
+        # attributes carried over
+        self.assertEqual(cloned._frozen, double._frozen)
+        self.assertEqual(cloned.identity, double.identity)
+        self.assertEqual(cloned.gufunc_builder._sigs,
+                         double.gufunc_builder._sigs)
+        # expected value of attributes
+        self.assertTrue(cloned._frozen)
+
         cloned.disable_compile()
+        self.assertTrue(cloned._frozen)
 
         # scalar version
         self.assertPreciseEqual(double(0.5), cloned(0.5))
@@ -306,13 +315,21 @@ class TestGUVectorizePickling(TestCase):
     def test_pickle_gufunc_dyanmic_null_init(self):
         """Dynamic gufunc w/o prepopulating before pickling.
         """
-        @guvectorize("()->()")
+        @guvectorize("()->()", identity=1)
         def double(x, out):
             out[:] = x * 2
 
         # pickle
         ser = pickle.dumps(double)
         cloned = pickle.loads(ser)
+
+        # attributes carried over
+        self.assertEqual(cloned._frozen, double._frozen)
+        self.assertEqual(cloned.identity, double.identity)
+        self.assertEqual(cloned.gufunc_builder._sigs,
+                         double.gufunc_builder._sigs)
+        # expected value of attributes
+        self.assertFalse(cloned._frozen)
 
         # scalar version
         expect = np.zeros(1)
@@ -334,7 +351,7 @@ class TestGUVectorizePickling(TestCase):
         Once unpickled, we disable compilation to verify that the gufunc
         compilation state is carried over.
         """
-        @guvectorize("()->()")
+        @guvectorize("()->()", identity=1)
         def double(x, out):
             out[:] = x * 2
 
@@ -352,8 +369,17 @@ class TestGUVectorizePickling(TestCase):
         ser = pickle.dumps(double)
         cloned = pickle.loads(ser)
 
+        # attributes carried over
+        self.assertEqual(cloned._frozen, double._frozen)
+        self.assertEqual(cloned.identity, double.identity)
+        self.assertEqual(cloned.gufunc_builder._sigs,
+                         double.gufunc_builder._sigs)
+        # expected value of attributes
+        self.assertFalse(cloned._frozen)
+
         # disable compilation
         cloned.disable_compile()
+        self.assertTrue(cloned._frozen)
         # scalar version
         expect = np.zeros(1)
         got = np.zeros(1)
