@@ -5,6 +5,33 @@ from numba.tests.support import TestCase, override_config
 from numba.misc import llvm_pass_timings as lpt
 
 
+timings_raw1 = """
+===-------------------------------------------------------------------------===
+                      ... Pass execution timing report ...
+===-------------------------------------------------------------------------===
+  Total Execution Time: 0.0001 seconds (0.0001 wall clock)
+
+   ---User Time---   --System Time--   --User+System--   ---Wall Time---  --- Name ---
+   0.0001 ( 90.1%)   0.0001 ( 90.1%)   0.0001 ( 90.1%)   0.0001 ( 90.1%)  A1
+   0.0000 (  9.9%)   0.0000 (  9.9%)   0.0000 (  9.9%)   0.0000 (  9.9%)  A2
+   0.0001 (100.0%)   0.0001 (100.0%)   0.0001 (100.0%)   0.0001 (100.0%)  Total
+
+"""    # noqa: E501
+
+timings_raw2 = """
+===-------------------------------------------------------------------------===
+                      ... Pass execution timing report ...
+===-------------------------------------------------------------------------===
+  Total Execution Time: 0.0001 seconds (0.0001 wall clock)
+
+   ---User Time---   --System Time--   --User+System--   ---Wall Time---  --- Name ---
+   0.0001 ( 90.1%)        -----        0.0001 ( 90.1%)   0.0001 ( 90.1%)  A1
+   0.0000 (  9.9%)        -----        0.0000 (  9.9%)   0.0000 (  9.9%)  A2
+   0.0001 (100.0%)        -----        0.0001 (100.0%)   0.0001 (100.0%)  Total
+
+"""    # noqa: E501
+
+
 class TestLLVMPassTimings(TestCase):
 
     def test_usage(self):
@@ -60,6 +87,15 @@ class TestLLVMPassTimings(TestCase):
             cur = rec.timings.get_total_time()
             self.assertGreaterEqual(last, cur)
             cur = last
+
+    def test_parse_raw(self):
+        timings1 = lpt.ProcessedPassTimings(timings_raw1)
+        self.assertAlmostEqual(timings1.get_total_time(), 0.0001)
+        self.assertIsInstance(timings1.summary(), str)
+
+        timings2 = lpt.ProcessedPassTimings(timings_raw2)
+        self.assertAlmostEqual(timings2.get_total_time(), 0.0001)
+        self.assertIsInstance(timings2.summary(), str)
 
 
 class TestLLVMPassTimingsDisabled(TestCase):
