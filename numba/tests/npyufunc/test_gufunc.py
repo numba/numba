@@ -298,6 +298,7 @@ class TestGUVectorizePickling(TestCase):
         # attributes carried over
         self.assertEqual(cloned._frozen, double._frozen)
         self.assertEqual(cloned.identity, double.identity)
+        self.assertEqual(cloned.is_dynamic, double.is_dynamic)
         self.assertEqual(cloned.gufunc_builder._sigs,
                          double.gufunc_builder._sigs)
         # expected value of attributes
@@ -326,6 +327,7 @@ class TestGUVectorizePickling(TestCase):
         # attributes carried over
         self.assertEqual(cloned._frozen, double._frozen)
         self.assertEqual(cloned.identity, double.identity)
+        self.assertEqual(cloned.is_dynamic, double.is_dynamic)
         self.assertEqual(cloned.gufunc_builder._sigs,
                          double.gufunc_builder._sigs)
         # expected value of attributes
@@ -372,6 +374,7 @@ class TestGUVectorizePickling(TestCase):
         # attributes carried over
         self.assertEqual(cloned._frozen, double._frozen)
         self.assertEqual(cloned.identity, double.identity)
+        self.assertEqual(cloned.is_dynamic, double.is_dynamic)
         self.assertEqual(cloned.gufunc_builder._sigs,
                          double.gufunc_builder._sigs)
         # expected value of attributes
