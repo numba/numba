@@ -285,17 +285,6 @@ class ProxyModel(DataModel):
         return self._proxied_model.from_return(builder, value)
 
 
-@register_default(types.EnumMember)
-@register_default(types.IntEnumMember)
-class EnumModel(ProxyModel):
-    """
-    Enum members are represented exactly like their values.
-    """
-    def __init__(self, dmm, fe_type):
-        super(EnumModel, self).__init__(dmm, fe_type)
-        self._proxied_model = dmm.lookup(fe_type.dtype)
-
-
 @register_default(types.Opaque)
 @register_default(types.PyObject)
 @register_default(types.RawPointer)
@@ -713,6 +702,21 @@ class StructModel(CompositeModel):
 
     def inner_models(self):
         return self._models
+
+
+@register_default(types.IntEnumMember)
+@register_default(types.EnumMember)
+class EnumModel(StructModel):
+    """
+    Enum members are structures with a value field and a name field.
+    """
+    def __init__(self, dmm, fe_type):
+        members = [
+            ('name', fe_type.ntype),
+            ('value', fe_type.dtype),
+        ]
+        self._valuemodel = dmm.lookup(fe_type.dtype)
+        super(EnumModel, self).__init__(dmm, fe_type, members)
 
 
 @register_default(types.Complex)
@@ -1374,4 +1378,3 @@ class StructRefModel(StructModel):
             ("meminfo", types.MemInfoPointer(dtype)),
         ]
         super().__init__(dmm, fe_typ, members)
-

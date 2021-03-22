@@ -142,7 +142,7 @@ def as_dtype(nbtype):
         return np.dtype('%s%d' % (letter, nbtype.count))
     if isinstance(nbtype, types.Record):
         return as_struct_dtype(nbtype)
-    if isinstance(nbtype, types.EnumMember):
+    if isinstance(nbtype, types.IntEnumMember):
         return as_dtype(nbtype.dtype)
     if isinstance(nbtype, types.npytypes.DType):
         return as_dtype(nbtype.dtype)

@@ -19,6 +19,9 @@ class EnumAttribute(AttributeTemplate):
     def resolve_value(self, ty):
         return ty.dtype
 
+    def resolve_name(self, ty):
+        return ty.ntype
+
 
 @infer_getattr
 class EnumClassAttribute(AttributeTemplate):

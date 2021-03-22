@@ -51,10 +51,17 @@ def int_coerce_usecase(x):
 
 
 def vectorize_usecase(x):
-    if x != RequestError.not_found:
-        return RequestError['internal_error']
-    else:
-        return RequestError.dummy
+    return RequestError['internal_error']
+
+
+def numpy_serial_usecase(x):
+    out = np.empty_like(x)
+    for i, x_ in enumerate(x):
+        if x_ != RequestError.not_found:
+            out[i] = RequestError['internal_error']
+        else:
+            out[i] = RequestError.dummy
+    return out
 
 
 class BaseEnumTest(object):
@@ -88,6 +95,12 @@ class BaseEnumTest(object):
         self.check_constant_usecase(getattr_usecase)
         self.check_constant_usecase(getitem_usecase)
         self.check_constant_usecase(make_constant_usecase(self.values[0]))
+
+    def test_hash(self):
+        pyfun = lambda x: hash(x)
+        cfunc = jit(nopython=True)(pyfun)
+        for member in self.values:
+            self.assertPreciseEqual(pyfun(member), cfunc(member))
 
 
 class TestEnum(BaseEnumTest, TestCase):
@@ -134,12 +147,54 @@ class TestIntEnum(BaseEnumTest, TestCase):
         for arg in [300, 450, 550]:
             self.assertPreciseEqual(pyfunc(arg), cfunc(arg))
 
+    def test_explicit_int_cast(self):
+        pyfunc = lambda x: int(x)
+        cfunc = jit(nopython=True)(pyfunc)
+        for member in RequestError:
+            self.assertPreciseEqual(pyfunc(member), cfunc(member))
+
+    def test_array_of_enums(self):
+        pyfunc = lambda : np.array([RequestError.dummy, RequestError.not_found])
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertPreciseEqual(pyfunc(), cfunc())
+
+    def test_numpy_comparison(self):
+        cases = [
+            lambda x: RequestError.dummy == x,
+            lambda x: RequestError.dummy != x,
+            lambda x: RequestError.dummy < x,
+            lambda x: RequestError.dummy <= x,
+            lambda x: RequestError.dummy > x,
+            lambda x: RequestError.dummy >= x,
+        ]
+        for pyfunc in cases:
+            cfunc = jit(nopython=True)(pyfunc)
+            arg = np.array([2, 404, 500, 404])
+            self.assertPreciseEqual(pyfunc(arg), cfunc(arg))
+
+    def test_numpy_arithmetic(self):
+        cases = [
+            lambda x: RequestError.dummy * x,
+            lambda x: RequestError.dummy + x,
+            lambda x: RequestError.dummy - x,
+            lambda x: RequestError.dummy / x,
+        ]
+        for pyfunc in cases:
+            cfunc = jit(nopython=True)(pyfunc)
+            arg = np.array([2, 404, 500, 404])
+            self.assertPreciseEqual(pyfunc(arg), cfunc(arg))
+
     def test_vectorize(self):
         cfunc = vectorize(nopython=True)(vectorize_usecase)
         arg = np.array([2, 404, 500, 404])
         sol = np.array([vectorize_usecase(i) for i in arg], dtype=arg.dtype)
         self.assertPreciseEqual(sol, cfunc(arg))
 
+    def test_numpy_serial(self):
+        cfunc = jit(nopython=True)(numpy_serial_usecase)
+        arg = np.array([2, 404, 500, 404])
+        sol = numpy_serial_usecase(arg)
+        self.assertPreciseEqual(sol, cfunc(arg))
 
 if __name__ == '__main__':
     unittest.main()

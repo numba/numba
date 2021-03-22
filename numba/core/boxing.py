@@ -162,10 +162,10 @@ def box_enum(typ, val, c):
     """
     Fetch an enum member given its native value.
     """
-    valobj = c.box(typ.dtype, val)
-    # Call the enum class with the value object
+    member = c.context.make_helper(c.builder, typ, val)
+    valueobj = c.box(typ.dtype, member.value)
     cls_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ.instance_class))
-    return c.pyapi.call_function_objargs(cls_obj, (valobj,))
+    return c.pyapi.call_function_objargs(cls_obj, (valueobj,))
 
 
 @unbox(types.EnumMember)
@@ -173,8 +173,15 @@ def unbox_enum(typ, obj, c):
     """
     Convert an enum member's value to its native value.
     """
+    nameobj = c.pyapi.object_getattr_string(obj, "name")
     valobj = c.pyapi.object_getattr_string(obj, "value")
-    return c.unbox(typ.dtype, valobj)
+    member = c.context.make_helper(c.builder, typ)
+    member.name = c.unbox(typ.ntype, nameobj).value
+    member.value = c.unbox(typ.dtype, valobj).value
+    c.pyapi.decref(nameobj)
+    c.pyapi.decref(valobj)
+    return NativeValue(member._getvalue(), is_error=c.pyapi.c_api_error())
+
 
 #
 # Composite types

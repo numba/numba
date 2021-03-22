@@ -3,6 +3,7 @@ import enum
 import numpy as np
 
 from .abstract import Dummy, Hashable, Literal, Number, Type
+from .misc import UnicodeType
 from functools import total_ordering
 from numba.core import utils
 from numba.core.typeconv import Conversion
@@ -192,6 +193,7 @@ class EnumClass(Dummy):
     Type class for Enum classes.
     """
     basename = "Enum class"
+    ntype = UnicodeType('unicode_type') # Type for the name field
 
     def __init__(self, cls, dtype):
         assert isinstance(cls, type)
@@ -233,6 +235,7 @@ class EnumMember(Type):
     """
     basename = "Enum"
     class_type_class = EnumClass
+    ntype = EnumClass.ntype
 
     def __init__(self, cls, dtype):
         assert isinstance(cls, type)

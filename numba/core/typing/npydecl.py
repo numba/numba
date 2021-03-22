@@ -495,6 +495,8 @@ class NpArray(CallableTemplate):
                 dtype = parse_dtype(dtype)
                 if dtype is None:
                     return
+            if isinstance(dtype, types.IntEnumMember):
+                dtype = dtype.dtype
             return types.Array(dtype, ndim, 'C')
 
         return typer

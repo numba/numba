@@ -931,6 +931,8 @@ class Int(AbstractTemplate):
             return signature(arg, arg)
         if isinstance(arg, (types.Float, types.Boolean)):
             return signature(types.intp, arg)
+        if isinstance(arg, types.IntEnumMember):
+            return signature(types.intp, arg) #Needed for explicit casting
 
 
 @infer_global(float)
