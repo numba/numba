@@ -434,20 +434,21 @@ GPU support
 
    Path of the directory in which the CUDA driver libraries are to be found.
    Normally this should not need to be set as Numba can locate the driver in
-   standard locations. However, ths variable can be used if the driver is in a
+   standard locations. However, this variable can be used if the driver is in a
    non-standard location.
 
 .. envvar:: NUMBA_CUDA_LOG_SIZE
 
-   Buffer size for logs produced by driver API operations. This defaults to 1024
-   and should not normally need to be modified - however, if an error in an API
-   call produces a large amount of output that appears to be truncated (perhaps
-   due to multiple long function names, for example) then this variable can be
-   used to increase the buffer size and view the full error message.
+   Buffer size for logs produced by CUDA driver API operations. This defaults
+   to 1024 and should not normally need to be modified - however, if an error
+   in an API call produces a large amount of output that appears to be
+   truncated (perhaps due to multiple long function names, for example) then
+   this variable can be used to increase the buffer size and view the full
+   error message.
 
 .. envvar:: NUMBA_CUDA_VERBOSE_JIT_LOG
 
-   Whether the driver should produce verbose log messages. Defaults to 1,
+   Whether the CUDA driver should produce verbose log messages. Defaults to 1,
    indicating that verbose messaging is enabled. This should not need to be
    modified under normal circumstances.
 
