@@ -1,4 +1,3 @@
-import sys
 import multiprocessing as mp
 import itertools
 import traceback
@@ -11,7 +10,6 @@ from numba.cuda.testing import (skip_on_cudasim, skip_under_cuda_memcheck,
                                 ContextResettingTestCase, ForeignArray)
 import unittest
 
-linux = sys.platform.startswith('linux')
 has_mp_get_context = hasattr(mp, 'get_context')
 
 
