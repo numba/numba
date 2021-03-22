@@ -2376,7 +2376,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc(np.arange(3))
 
-        self.assertIn("Input must be >= 1-d.", str(raises.exception))
+        self.assertIn("Input must be >= 2-d.", str(raises.exception))
 
     def _check_split(self, func):
         # Since np.split and np.array_split are very similar

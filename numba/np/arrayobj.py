@@ -1571,13 +1571,11 @@ def numpy_rot90(arr, k=1):
         raise errors.TypingError('The first argument "arr" must be an array')
 
     if arr.ndim < 2:
-        raise ValueError('Input must be >= 1-d.')
+        raise ValueError('Input must be >= 2-d.')
 
     axes_list = (1, 0, *range(2, arr.ndim))
 
     def impl(arr, k=1):
-        arr = np.asarray(arr)
-
         k = k % 4
         if k == 0:
             return arr[:]
@@ -1588,7 +1586,8 @@ def numpy_rot90(arr, k=1):
         elif k == 3:
             return np.fliplr(np.transpose(arr, axes_list))
         else:
-            assert 0 # unreachable
+            assert 0  # unreachable
+
     return impl
 
 
