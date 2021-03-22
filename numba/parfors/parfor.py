@@ -1692,6 +1692,7 @@ class ConvertInplaceBinop:
 def get_index_var(x):
     return x.index if isinstance(x, ir.SetItem) else x.index_var
 
+
 class ConvertSetItemPass:
     """Parfor subpass to convert setitem on Arrays
     """
