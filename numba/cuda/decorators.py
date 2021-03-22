@@ -76,8 +76,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
     if sigutils.is_signature(func_or_sig):
         if config.ENABLE_CUDASIM:
             def jitwrapper(func):
-                return FakeCUDAKernel(func, device=device, fastmath=fastmath,
-                                      debug=debug)
+                return FakeCUDAKernel(func, device=device, fastmath=fastmath)
             return jitwrapper
 
         argtypes, restype = sigutils.normalize_signature(func_or_sig)
