@@ -1566,33 +1566,31 @@ def array_T(context, builder, typ, value):
 @overload(np.rot90)
 def numpy_rot90(arr, k=1):
     # supporting axes argument it needs to be included in np.flip
-    if not isinstance(k, types.Integer):
+    if not isinstance(k, (int, types.Integer)):
         raise errors.TypingError('The second argument "k" must be an integer')
     if not isinstance(arr, types.Array):
         raise errors.TypingError('The first argument "arr" must be an array')
 
-    const_arr_ndim = arr.ndim
+    if arr.ndim < 2:
+        raise ValueError('Input must be >= 1-d.')
+
+    axes_list = tuple([1, 0] + [*range(2, arr.ndim)])
 
     def impl(arr, k=1):
         arr = np.asarray(arr)
 
-        if arr.ndim < 2:
-            raise ValueError('Input must be >= 1-d.')
 
         k = k % 4
         if k == 0:
             return arr[:]
-        if k == 2:
-            return np.flipud(np.fliplr(arr))
-
-        axes_list = np.arange(arr.ndim)
-        axes_list[:2] = [1, 0]
-        axes_list = to_fixed_tuple(axes_list, const_arr_ndim)
-
-        if k == 1:
+        elif k == 1:
             return np.transpose(np.fliplr(arr), axes_list)
-        # k == 3
-        return np.fliplr(np.transpose(arr, axes_list))
+        elif k == 2:
+            return np.flipud(np.fliplr(arr))
+        elif k == 3:
+            return np.fliplr(np.transpose(arr, axes_list))
+        else:
+            assert 0 # unreachable
     return impl
 
 
