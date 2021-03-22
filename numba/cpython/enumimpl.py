@@ -7,7 +7,7 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_getattr_generic, lower_cast,
                                  lower_constant, impl_ret_untracked)
 from numba.core import types
-from numba.extending import overload_method
+from numba.core.extending import overload_method
 
 
 @lower_builtin(operator.eq, types.EnumMember, types.EnumMember)
