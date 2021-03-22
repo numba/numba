@@ -132,8 +132,10 @@ def flip(a):
 def rot90(a):
     return np.rot90(a)
 
+
 def rot90_k(a, k=1):
     return np.rot90(a, k)
+
 
 def array_split(a, indices, axis=0):
     return np.array_split(a, indices, axis=axis)
