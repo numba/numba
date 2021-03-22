@@ -51,6 +51,7 @@ static int tsi_count = 0;
 
 #if HAS_TASK_SCHEDULER_HANDLE
 static tbb::task_scheduler_handle tsh;
+static bool tsh_was_initialized = false;
 #endif
 
 #ifdef _MSC_VER
@@ -267,9 +268,26 @@ static void prepare_fork(void)
     }
 #endif
 #if HAS_TASK_SCHEDULER_HANDLE
-    if (!tbb::finalize(tsh, std::nothrow))
+    if (tsh_was_initialized)
     {
-        puts("Unable to join threads to shut down before fork(). It can break multithreading in child process\n");
+        if(is_main_thread())
+        {
+            if (tbb::finalize(tsh, std::nothrow))
+            {
+                tsh_was_initialized = false;
+                need_reinit_after_fork = true;
+            }
+            else
+            {
+                puts("Unable to join threads to shut down before fork(). It can break multithreading in child process\n");
+            }
+        }
+        else
+        {
+            fprintf(stderr, "Numba: Attempted to fork from a non-main thread, "
+                            "the TBB library may be in an invalid state in the "
+                            "child process.\n");
+        }
     }
 #endif
 }
@@ -285,6 +303,14 @@ static void reset_after_fork(void)
     if(tsi && need_reinit_after_fork)
     {
         tsi->initialize(tsi_count);
+        set_main_thread();
+        need_reinit_after_fork = false;
+    }
+#endif
+#if HAS_TASK_SCHEDULER_HANDLE
+    if(need_reinit_after_fork)
+    {
+        tsh = tbb::task_scheduler_handle::get();
         set_main_thread();
         need_reinit_after_fork = false;
     }
@@ -315,8 +341,12 @@ static void unload_tbb(void)
     }
 #endif
 #if HAS_TASK_SCHEDULER_HANDLE
-    // bloking terminate is not strictly required here, ignore return value
-    (void)tbb::finalize(tsh, std::nothrow);
+    if (tsh_was_initialized)
+    {
+        // blocking terminate is not strictly required here, ignore return value
+        (void)tbb::finalize(tsh, std::nothrow);
+        tsh_was_initialized = false;
+    }
 #endif
 }
 #endif
@@ -338,6 +368,7 @@ static void launch_threads(int count)
 
 #if HAS_TASK_SCHEDULER_HANDLE
     tsh = tbb::task_scheduler_handle::get();
+    tsh_was_initialized = true;
 #endif
     tg = new tbb::task_group;
     tg->run([] {}); // start creating threads asynchronously
