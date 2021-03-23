@@ -933,7 +933,7 @@ def compute_sum_of_square_diffs(a,isnan):
 
 
 @overload(np.nanvar)
-def np_nanvar(a, ddof):
+def np_nanvar(a, ddof=0):
 
     if not isinstance(ddof, (types.Integer, types.Float, types.NoneType)):
         raise TypingError("ddof")
@@ -946,29 +946,18 @@ def np_nanvar(a, ddof):
 
     isnan = get_isnan(a.dtype)
 
-    if isinstance(ddof, types.NoneType):
-        def nanvar_impl(a):
-            # Compute the sum of square diffs
-            ssd, count = compute_sum_of_square_diffs(a,isnan)
 
-            if count <= 0:
-                return np.nan
-            # np.divide() doesn't raise ZeroDivisionError
-            return np.divide(ssd, count)
+    def nanvar_impl(a, ddof=0):
+        # Compute the sum of square diffs
+        ssd, count = compute_sum_of_square_diffs(a,isnan)
 
-        return nanvar_impl
-    else:
-        def nanvar_impl(a, ddof):
-            # Compute the sum of square diffs
-            ssd, count = compute_sum_of_square_diffs(a,isnan)
+        count = count - ddof
+        if count <= 0:
+            return np.nan
+        # np.divide() doesn't raise ZeroDivisionError
+        return np.divide(ssd, count)
 
-            count = count - ddof
-            if count <= 0:
-                return np.nan
-            # np.divide() doesn't raise ZeroDivisionError
-            return np.divide(ssd, count)
-
-        return nanvar_impl
+    return nanvar_impl
 
 
 @overload(np.nanstd)
