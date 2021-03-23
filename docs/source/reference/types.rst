@@ -77,9 +77,8 @@ Arrays
 ------
 
 The easy way to declare :class:`~numba.types.Array` types is to subscript an
-elementary type according to the number of dimensions. 
-
-For example a 1-dimension single-precision array::
+elementary type according to the number of dimensions. For example a 
+1-dimension single-precision array::
 
    >>> numba.float32[:]
    array(float32, 1d, A)
