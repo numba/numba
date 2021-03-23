@@ -1586,7 +1586,7 @@ def numpy_rot90(arr, k=1):
         elif k == 3:
             return np.fliplr(np.transpose(arr, axes_list))
         else:
-            assert 0  # unreachable
+            raise AssertionError  # unreachable
 
     return impl
 
