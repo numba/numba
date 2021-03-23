@@ -40,7 +40,6 @@ from numba.cuda.envvars import get_numba_envvar
 
 VERBOSE_JIT_LOG = int(get_numba_envvar('VERBOSE_CU_JIT_LOG', 1))
 MIN_REQUIRED_CC = (2, 0)
-SUPPORTS_IPC = sys.platform.startswith('linux')
 
 
 _py_decref = ctypes.pythonapi.Py_DecRef
@@ -1164,8 +1163,6 @@ class Context(object):
         """
         Returns a *IpcHandle* from a GPU allocation.
         """
-        if not SUPPORTS_IPC:
-            raise OSError('OS does not support CUDA IPC')
         return self.memory_manager.get_ipc_handle(memory)
 
     def open_ipc_handle(self, handle, size):
