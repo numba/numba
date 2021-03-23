@@ -936,13 +936,13 @@ def compute_sum_of_square_diffs(a,isnan):
 def np_nanvar(a, ddof=0):
 
     if not isinstance(ddof, (types.Integer, types.Float, types.NoneType)):
-        raise TypingError("ddof")
+        raise None
 
     if not isinstance(a, types.Array):
-        raise TypingError("a_min must be a_min scalar int/float")
+        raise None
 
     if not isinstance(a.dtype, (types.Integer, types.Float)):
-        raise TypingError("a_min must be a_min scalar int/float")
+        raise None
 
     isnan = get_isnan(a.dtype)
 
