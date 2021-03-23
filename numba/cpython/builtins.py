@@ -235,7 +235,7 @@ def round_impl_unary(context, builder, sig, args):
     llty = context.get_value_type(fltty)
     module = builder.module
     fnty = Type.function(llty, [llty])
-    fn = module.get_or_insert_function(fnty, name=_round_intrinsic(fltty))
+    fn = cgutils.get_or_insert_function(module, fnty, _round_intrinsic(fltty))
     res = builder.call(fn, args)
     # unary round() returns an int
     res = builder.fptosi(res, context.get_value_type(sig.return_type))

@@ -8,7 +8,8 @@ import unittest
 from numba import jit, vectorize
 
 from numba.tests.support import TestCase
-from .enum_usecases import Color, Shape, Shake, Planet, RequestError
+from .enum_usecases import Color, Shape, Shake, Planet, RequestError, \
+                           IntEnumWithNegatives
 
 
 def compare_usecase(a, b):
@@ -139,6 +140,13 @@ class TestIntEnum(BaseEnumTest, TestCase):
         arg = np.array([2, 404, 500, 404])
         sol = np.array([vectorize_usecase(i) for i in arg], dtype=arg.dtype)
         self.assertPreciseEqual(sol, cfunc(arg))
+
+    def test_hash(self):
+        def pyfun(x):
+            return hash(x)
+        cfunc = jit(nopython=True)(pyfun)
+        for member in IntEnumWithNegatives:
+            self.assertPreciseEqual(pyfun(member), cfunc(member))
 
 
 if __name__ == '__main__':

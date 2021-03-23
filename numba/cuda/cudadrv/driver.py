@@ -40,7 +40,6 @@ from numba.cuda.envvars import get_numba_envvar
 
 VERBOSE_JIT_LOG = int(get_numba_envvar('VERBOSE_CU_JIT_LOG', 1))
 MIN_REQUIRED_CC = (2, 0)
-SUPPORTS_IPC = sys.platform.startswith('linux')
 
 
 _py_decref = ctypes.pythonapi.Py_DecRef
@@ -191,7 +190,7 @@ def _getpid():
 ERROR_MAP = _build_reverse_error_map()
 
 MISSING_FUNCTION_ERRMSG = """driver missing function: %s.
-Requires CUDA 9.0 or above.
+Requires CUDA 9.2 or above.
 """
 
 
@@ -1164,8 +1163,6 @@ class Context(object):
         """
         Returns a *IpcHandle* from a GPU allocation.
         """
-        if not SUPPORTS_IPC:
-            raise OSError('OS does not support CUDA IPC')
         return self.memory_manager.get_ipc_handle(memory)
 
     def open_ipc_handle(self, handle, size):
@@ -2135,7 +2132,10 @@ FILE_EXTENSION_MAP = {
 
 
 class Linker(object):
-    def __init__(self, max_registers=0):
+    """
+    Links for current device if no CC given
+    """
+    def __init__(self, max_registers=0, cc=None):
         logsz = int(get_numba_envvar('CUDA_LOG_SIZE', 1024))
         linkerinfo = (c_char * logsz)()
         linkererrors = (c_char * logsz)()
@@ -2150,7 +2150,14 @@ class Linker(object):
         if max_registers:
             options[enums.CU_JIT_MAX_REGISTERS] = c_void_p(max_registers)
 
-        raw_keys = list(options.keys()) + [enums.CU_JIT_TARGET_FROM_CUCONTEXT]
+        if cc is None:
+            # No option value is needed, but we need something as a placeholder
+            options[enums.CU_JIT_TARGET_FROM_CUCONTEXT] = 1
+        else:
+            cc_val = cc[0] * 10 + cc[1]
+            options[enums.CU_JIT_TARGET] = c_void_p(cc_val)
+
+        raw_keys = list(options.keys())
         raw_values = list(options.values())
         del options
 

@@ -1,5 +1,5 @@
 from numba import jit, typeof
-from numba.core import types, serialize, sigutils
+from numba.core import cgutils, types, serialize, sigutils
 from numba.core.typing import npydecl
 from numba.core.typing.templates import AbstractTemplate, signature
 from numba.np.ufunc import _internal
@@ -38,8 +38,9 @@ def make_dufunc_kernel(_dufunc):
                 func_type = self.context.call_conv.get_function_type(
                     isig.return_type, isig.args)
             module = self.builder.block.function.module
-            entry_point = module.get_or_insert_function(
-                func_type, name=self.cres.fndesc.llvm_func_name)
+            entry_point = cgutils.get_or_insert_function(
+                module, func_type,
+                self.cres.fndesc.llvm_func_name)
             entry_point.attributes.add("alwaysinline")
 
             _, res = self.context.call_conv.call_function(
