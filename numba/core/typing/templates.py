@@ -635,6 +635,11 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             # situations that will succeed. For context see #5887.
             resolve = disp_type.dispatcher.get_call_template
             template, pysig, folded_args, kws = resolve(new_args, kws)
+
+            # avoid recompiling the implementation if info already available
+            if folded_args in self._inline_overloads:
+                return self._inline_overloads[folded_args]['iinfo'].signature
+
             ir = inline_worker.run_untyped_passes(
                 disp_type.dispatcher.py_func, enable_ssa=True
             )
