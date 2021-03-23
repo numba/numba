@@ -946,7 +946,6 @@ def np_nanvar(a, ddof=0):
 
     isnan = get_isnan(a.dtype)
 
-
     def nanvar_impl(a, ddof=0):
         # Compute the sum of square diffs
         ssd, count = compute_sum_of_square_diffs(a,isnan)
