@@ -90,8 +90,11 @@ class TestCasting(unittest.TestCase):
         user tries to convert numpy array to scalar
         """
 
-        with self.assertRaises(TypingError):
+        with self.assertRaises(TypingError) as raises:
             compile_isolated(numpy_scalar_cast_error, ())
+
+        self.assertIn("Casting array(float64, 1d, C) to int32 directly is unsupported.",
+                      str(raises.exception))
 
     def test_optional_to_optional(self):
         """
