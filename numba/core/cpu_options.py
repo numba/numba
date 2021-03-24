@@ -41,6 +41,9 @@ class FastMathOptions(object):
 
     __nonzero__ = __bool__
 
+    def __repr__(self):
+        return f"FastMathOptions({self.flags})"
+
 
 class ParallelOptions(object):
     """
