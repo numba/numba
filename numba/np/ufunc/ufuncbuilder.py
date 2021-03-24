@@ -3,6 +3,7 @@
 import inspect
 from contextlib import contextmanager
 
+from numba.core import config
 from numba.core.decorators import jit
 from numba.core.descriptors import TargetDescriptor
 from numba.core.options import TargetOptions, include_default_options
@@ -25,7 +26,36 @@ _options_mixin = include_default_options(
 
 
 class UFuncTargetOptions(_options_mixin, TargetOptions):
-    pass
+
+    def finalize(self, flags, options):
+        cstk = utils.ConfigStack()
+        if not flags.is_set("enable_pyobject"):
+            flags.enable_pyobject = True
+
+        if not flags.is_set("enable_looplift"):
+            flags.enable_looplift = True
+
+        if not flags.is_set("nrt"):
+            if cstk:
+                # inherit
+                top = cstk.top()
+                flags.nrt = top.nrt
+            else:
+                flags.nrt = True
+
+        if not flags.is_set("debuginfo"):
+            flags.debuginfo = config.DEBUGINFO_DEFAULT
+
+        if not flags.is_set("boundscheck"):
+            flags.boundscheck = flags.debuginfo
+
+        flags.enable_pyobject_looplift = True
+
+        if not flags.is_set("fastmath"):
+            if cstk:
+                # inherit
+                top = cstk.top()
+                flags.fastmath = top.fastmath
 
 
 class UFuncTarget(TargetDescriptor):
