@@ -276,6 +276,12 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
 
         flags.enable_pyobject_looplift = True
 
+        if not flags.is_set("fastmath"):
+            if cstk:
+                # inherit
+                top = cstk.top()
+                flags.fastmath = top.fastmath
+
 # ----------------------------------------------------------------------------
 # Internal
 

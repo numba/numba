@@ -19,11 +19,11 @@ class TargetOptions:
     @classmethod
     def parse_as_flags(cls, flags, options):
         opt = cls()
-        try:
-            opt.apply(flags, options)
-            opt.finalize(flags, options)
-        except:
-            raise TypeError(f"failed in {opt}")
+        # try:
+        opt.apply(flags, options)
+        opt.finalize(flags, options)
+        # except:
+        #     raise TypeError(f"failed in {opt}")
         # finalized Flags(enable_looplift=True, enable_pyobject=True, enable_pyobject_looplift=True, boundscheck=None, nrt=True)
         # print('finalized', flags.summary())
         return flags
