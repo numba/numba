@@ -43,7 +43,7 @@ class TargetConfig:
         return self._stack.pop()
 
     def get(self):
-        return self._stack[0]
+        return self._stack[-1]
 
     def __len__(self):
         return len(self._stack)
