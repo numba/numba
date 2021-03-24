@@ -68,7 +68,7 @@ class DefaultOptions:
     no_cpython_wrapper = _mapping("no_cpython_wrapper")
     no_cfunc_wrapper = _mapping("no_cfunc_wrapper")
 
-    parallel = _mapping("parallel")
+    parallel = _mapping("auto_parallel")
     fastmath = _mapping("fastmath")
     error_model = _mapping("error_model")
     inline = _mapping("inline")
