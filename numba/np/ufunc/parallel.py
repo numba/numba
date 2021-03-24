@@ -356,10 +356,10 @@ def _check_tbb_version_compatible():
         version_func.argtypes = []
         version_func.restype = c_int
         tbb_iface_ver = version_func()
-        if tbb_iface_ver < 11005: # magic number from TBB
+        if tbb_iface_ver < 12010: # magic number from TBB
             msg = ("The TBB threading layer requires TBB "
-                   "version 2019.5 or later i.e., "
-                   "TBB_INTERFACE_VERSION >= 11005. Found "
+                   "version 2021 update 1 or later i.e., "
+                   "TBB_INTERFACE_VERSION >= 12010. Found "
                    "TBB_INTERFACE_VERSION = %s. The TBB "
                    "threading layer is disabled.") % tbb_iface_ver
             problem = errors.NumbaWarning(msg)
