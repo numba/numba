@@ -681,6 +681,7 @@ class MappedNDArray(DeviceNDArrayBase, np.ndarray):
 
     def device_setup(self, gpu_data, stream=0):
         self.gpu_data = gpu_data
+        self.stream = stream
 
 
 class ManagedNDArray(DeviceNDArrayBase, np.ndarray):
@@ -690,6 +691,7 @@ class ManagedNDArray(DeviceNDArrayBase, np.ndarray):
 
     def device_setup(self, gpu_data, stream=0):
         self.gpu_data = gpu_data
+        self.stream = stream
 
 
 def from_array_like(ary, stream=0, gpu_data=None):

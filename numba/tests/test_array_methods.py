@@ -925,6 +925,16 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                     self.assertIn("Maximum allowed size exceeded",
                                 str(raises.exception))
 
+    def test_arange_accuracy(self):
+        # Checking arange reasonably replicates NumPy's algorithm
+        # see https://github.com/numba/numba/issues/6768
+        @jit(nopython=True)
+        def foo(step):
+            return np.arange(0, 1 + step, step)
+
+        x = 0.010101010101010102
+        self.assertPreciseEqual(foo(x), foo.py_func(x))
+
     def test_item(self):
         pyfunc = array_item
         cfunc = jit(nopython=True)(pyfunc)

@@ -1689,6 +1689,10 @@ class ConvertInplaceBinop:
         return self.pass_states.typingctx.resolve_function_type(fnty, tuple(args), {})
 
 
+def get_index_var(x):
+    return x.index if isinstance(x, ir.SetItem) else x.index_var
+
+
 class ConvertSetItemPass:
     """Parfor subpass to convert setitem on Arrays
     """
@@ -1713,11 +1717,10 @@ class ConvertSetItemPass:
             new_body = []
             equiv_set = pass_states.array_analysis.get_equiv_set(label)
             for instr in block.body:
-                if isinstance(instr, ir.StaticSetItem) or isinstance(instr, ir.SetItem):
+                if isinstance(instr, (ir.StaticSetItem, ir.SetItem)):
                     loc = instr.loc
                     target = instr.target
-                    index = (instr.index if isinstance(instr, ir.SetItem)
-                             else instr.index_var)
+                    index = get_index_var(instr)
                     value = instr.value
                     target_typ = pass_states.typemap[target.name]
                     index_typ = pass_states.typemap[index.name]
@@ -3435,9 +3438,9 @@ def get_parfor_outputs(parfor, parfor_params):
     outputs = []
     for blk in parfor.loop_body.values():
         for stmt in blk.body:
-            if isinstance(stmt, ir.SetItem):
-                if stmt.index.name == parfor.index_var.name:
-                    outputs.append(stmt.target.name)
+            if (isinstance(stmt, (ir.StaticSetItem, ir.SetItem)) and
+                get_index_var(stmt).name == parfor.index_var.name):
+                outputs.append(stmt.target.name)
     # make sure these written arrays are in parfor parameters (live coming in)
     outputs = list(set(outputs) & set(parfor_params))
     return sorted(outputs)
@@ -4135,8 +4138,8 @@ def remove_dead_parfor(parfor, lives, lives_n_aliases, arg_aliases, alias_map, f
             alias_lives = in_lives & alias_set
             for v in alias_lives:
                 in_lives |= alias_map[v]
-            if (isinstance(stmt, ir.SetItem) and
-                stmt.index.name == parfor.index_var.name and
+            if (isinstance(stmt, (ir.StaticSetItem, ir.SetItem)) and
+                get_index_var(stmt).name == parfor.index_var.name and
                 stmt.target.name not in in_lives and
                 stmt.target.name not in arg_aliases):
                 continue
@@ -4173,8 +4176,9 @@ def _update_parfor_get_setitems(block_body, index_var, alias_map,
     replace getitems of a previously set array in a block of parfor loop body
     """
     for stmt in block_body:
-        if (isinstance(stmt, ir.SetItem) and stmt.index.name ==
-                index_var.name and stmt.target.name not in lives):
+        if (isinstance(stmt, (ir.StaticSetItem, ir.SetItem)) and
+            get_index_var(stmt).name == index_var.name and
+            stmt.target.name not in lives):
             # saved values of aliases of SetItem target array are invalid
             for w in alias_map.get(stmt.target.name, []):
                 saved_values.pop(w, None)

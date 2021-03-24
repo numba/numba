@@ -1562,6 +1562,35 @@ def array_T(context, builder, typ, value):
     return impl_ret_borrowed(context, builder, typ, res)
 
 
+@overload(np.rot90)
+def numpy_rot90(arr, k=1):
+    # supporting axes argument it needs to be included in np.flip
+    if not isinstance(k, (int, types.Integer)):
+        raise errors.TypingError('The second argument "k" must be an integer')
+    if not isinstance(arr, types.Array):
+        raise errors.TypingError('The first argument "arr" must be an array')
+
+    if arr.ndim < 2:
+        raise ValueError('Input must be >= 2-d.')
+
+    axes_list = (1, 0, *range(2, arr.ndim))
+
+    def impl(arr, k=1):
+        k = k % 4
+        if k == 0:
+            return arr[:]
+        elif k == 1:
+            return np.transpose(np.fliplr(arr), axes_list)
+        elif k == 2:
+            return np.flipud(np.fliplr(arr))
+        elif k == 3:
+            return np.fliplr(np.transpose(arr, axes_list))
+        else:
+            raise AssertionError  # unreachable
+
+    return impl
+
+
 def _attempt_nocopy_reshape(context, builder, aryty, ary,
                             newnd, newshape, newstrides):
     """
@@ -1581,8 +1610,8 @@ def _attempt_nocopy_reshape(context, builder, aryty, ary,
         ll_intp, ll_intp_star, ll_intp_star,
         # itemsize, is_f_order
         ll_intp, ll_intc])
-    fn = builder.module.get_or_insert_function(
-        fnty, name="numba_attempt_nocopy_reshape")
+    fn = cgutils.get_or_insert_function(builder.module, fnty,
+                                        "numba_attempt_nocopy_reshape")
 
     nd = ll_intp(aryty.ndim)
     shape = cgutils.gep_inbounds(builder, ary._get_ptr_by_name('shape'), 0, 0)
@@ -3926,8 +3955,7 @@ def np_arange(start, stop=None, step=None, dtype=None):
         arr = np.empty(nitems, true_dtype)
         val = _start
         for i in range(nitems):
-            arr[i] = val
-            val += _step
+            arr[i] = val + (i * _step)
         return arr
 
     return impl
@@ -3949,15 +3977,19 @@ def numpy_linspace_2(context, builder, sig, args):
 def numpy_linspace_3(context, builder, sig, args):
     dtype = as_dtype(sig.return_type.dtype)
 
+    # Implementation based on https://github.com/numpy/numpy/blob/v1.20.0/numpy/core/function_base.py#L24 # noqa: E501
     def linspace(start, stop, num):
         arr = np.empty(num, dtype)
         if num == 0:
             return arr
         div = num - 1
-        delta = stop - start
-        arr[0] = start
-        for i in range(1, num):
-            arr[i] = start + delta * (i / div)
+        if div > 0:
+            delta = stop - start
+            step = delta / div
+            for i in range(0, num):
+                arr[i] = start + (i * step)
+        else:
+            arr[0] = start
         return arr
 
     res = context.compile_internal(builder, linspace, sig, args)

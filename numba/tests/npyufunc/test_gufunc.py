@@ -1,10 +1,12 @@
+import unittest
+import pickle
+
 import numpy as np
 import numpy.core.umath_tests as ut
 
 from numba import void, float32, jit, guvectorize
 from numba.np.ufunc import GUVectorize
 from numba.tests.support import tag, TestCase
-import unittest
 
 
 def matmulcore(A, B, C):
@@ -62,6 +64,25 @@ class TestGUFunc(TestCase):
 
         np.testing.assert_equal(out, x * x + x)
 
+    def test_axis(self):
+        # issue https://github.com/numba/numba/issues/6773
+        @guvectorize(["f8[:],f8[:]"], "(n)->(n)")
+        def my_cumsum(x, res):
+            acc = 0
+            for i in range(x.shape[0]):
+                acc += x[i]
+                res[i] = acc
+
+        x = np.ones((20, 30))
+        # Check regular call
+        y = my_cumsum(x, axis=0)
+        expected = np.cumsum(x, axis=0)
+        np.testing.assert_equal(y, expected)
+        # Check "out" kw
+        out_kw = np.zeros_like(y)
+        my_cumsum(x, out=out_kw, axis=0)
+        np.testing.assert_equal(out_kw, expected)
+
 
 class TestGUFuncParallel(TestGUFunc):
     _numba_parallel_test_ = False
@@ -74,8 +95,8 @@ class TestDynamicGUFunc(TestCase):
     def test_dynamic_matmul(self):
 
         def check_matmul_gufunc(gufunc, A, B, C):
-            gufunc(A, B, C)
             Gold = ut.matrix_multiply(A, B)
+            gufunc(A, B, C)
             np.testing.assert_allclose(C, Gold, rtol=1e-5, atol=1e-8)
 
         gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)',
@@ -98,8 +119,12 @@ class TestDynamicGUFunc(TestCase):
 
         def check_ufunc_output(gufunc, x):
             out = np.zeros(10, dtype=x.dtype)
+            out_kw = np.zeros(10, dtype=x.dtype)
             gufunc(x, x, x, out)
-            np.testing.assert_equal(out, x * x + x)
+            gufunc(x, x, x, out=out_kw)
+            golden = x * x + x
+            np.testing.assert_equal(out, golden)
+            np.testing.assert_equal(out_kw, golden)
 
         # Test problem that the stride of "scalar" gufunc argument not properly
         # handled when the actual argument is an array,
@@ -140,6 +165,25 @@ class TestDynamicGUFunc(TestCase):
         with self.assertRaisesRegex(TypeError, msg):
             sum_row(inp)
 
+    def test_axis(self):
+        # issue https://github.com/numba/numba/issues/6773
+        @guvectorize("(n)->(n)")
+        def my_cumsum(x, res):
+            acc = 0
+            for i in range(x.shape[0]):
+                acc += x[i]
+                res[i] = acc
+
+        x = np.ones((20, 30))
+        expected = np.cumsum(x, axis=0)
+        # Check regular call
+        y = np.zeros_like(expected)
+        my_cumsum(x, y, axis=0)
+        np.testing.assert_equal(y, expected)
+        # Check "out" kw
+        out_kw = np.zeros_like(y)
+        my_cumsum(x, out=out_kw, axis=0)
+        np.testing.assert_equal(out_kw, expected)
 
 class TestGUVectorizeScalar(TestCase):
     """
@@ -237,6 +281,120 @@ class TestGUVectorizeScalar(TestCase):
 class TestGUVectorizeScalarParallel(TestGUVectorizeScalar):
     _numba_parallel_test_ = False
     target = 'parallel'
+
+
+class TestGUVectorizePickling(TestCase):
+    def test_pickle_gufunc_non_dyanmic(self):
+        """Non-dynamic gufunc.
+        """
+        @guvectorize(["f8,f8[:]"], "()->()")
+        def double(x, out):
+            out[:] = x * 2
+
+        # pickle
+        ser = pickle.dumps(double)
+        cloned = pickle.loads(ser)
+
+        # attributes carried over
+        self.assertEqual(cloned._frozen, double._frozen)
+        self.assertEqual(cloned.identity, double.identity)
+        self.assertEqual(cloned.is_dynamic, double.is_dynamic)
+        self.assertEqual(cloned.gufunc_builder._sigs,
+                         double.gufunc_builder._sigs)
+        # expected value of attributes
+        self.assertTrue(cloned._frozen)
+
+        cloned.disable_compile()
+        self.assertTrue(cloned._frozen)
+
+        # scalar version
+        self.assertPreciseEqual(double(0.5), cloned(0.5))
+        # array version
+        arr = np.arange(10)
+        self.assertPreciseEqual(double(arr), cloned(arr))
+
+    def test_pickle_gufunc_dyanmic_null_init(self):
+        """Dynamic gufunc w/o prepopulating before pickling.
+        """
+        @guvectorize("()->()", identity=1)
+        def double(x, out):
+            out[:] = x * 2
+
+        # pickle
+        ser = pickle.dumps(double)
+        cloned = pickle.loads(ser)
+
+        # attributes carried over
+        self.assertEqual(cloned._frozen, double._frozen)
+        self.assertEqual(cloned.identity, double.identity)
+        self.assertEqual(cloned.is_dynamic, double.is_dynamic)
+        self.assertEqual(cloned.gufunc_builder._sigs,
+                         double.gufunc_builder._sigs)
+        # expected value of attributes
+        self.assertFalse(cloned._frozen)
+
+        # scalar version
+        expect = np.zeros(1)
+        got = np.zeros(1)
+        double(0.5, out=expect)
+        cloned(0.5, out=got)
+        self.assertPreciseEqual(expect, got)
+        # array version
+        arr = np.arange(10)
+        expect = np.zeros_like(arr)
+        got = np.zeros_like(arr)
+        double(arr, out=expect)
+        cloned(arr, out=got)
+        self.assertPreciseEqual(expect, got)
+
+    def test_pickle_gufunc_dyanmic_initialized(self):
+        """Dynamic gufunc prepopulated before pickling.
+
+        Once unpickled, we disable compilation to verify that the gufunc
+        compilation state is carried over.
+        """
+        @guvectorize("()->()", identity=1)
+        def double(x, out):
+            out[:] = x * 2
+
+        # prepopulate scalar
+        expect = np.zeros(1)
+        got = np.zeros(1)
+        double(0.5, out=expect)
+        # prepopulate array
+        arr = np.arange(10)
+        expect = np.zeros_like(arr)
+        got = np.zeros_like(arr)
+        double(arr, out=expect)
+
+        # pickle
+        ser = pickle.dumps(double)
+        cloned = pickle.loads(ser)
+
+        # attributes carried over
+        self.assertEqual(cloned._frozen, double._frozen)
+        self.assertEqual(cloned.identity, double.identity)
+        self.assertEqual(cloned.is_dynamic, double.is_dynamic)
+        self.assertEqual(cloned.gufunc_builder._sigs,
+                         double.gufunc_builder._sigs)
+        # expected value of attributes
+        self.assertFalse(cloned._frozen)
+
+        # disable compilation
+        cloned.disable_compile()
+        self.assertTrue(cloned._frozen)
+        # scalar version
+        expect = np.zeros(1)
+        got = np.zeros(1)
+        double(0.5, out=expect)
+        cloned(0.5, out=got)
+        self.assertPreciseEqual(expect, got)
+        # array version
+        expect = np.zeros_like(arr)
+        got = np.zeros_like(arr)
+        double(arr, out=expect)
+        cloned(arr, out=got)
+        self.assertPreciseEqual(expect, got)
 
 
 if __name__ == '__main__':

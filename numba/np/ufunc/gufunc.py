@@ -3,9 +3,10 @@ from numba.core import types
 from numba.np.ufunc.ufuncbuilder import GUFuncBuilder
 from numba.np.ufunc.sigparse import parse_signature
 from numba.np.numpy_support import ufunc_find_matching_loop
+from numba.core import serialize
 
 
-class GUFunc(object):
+class GUFunc(serialize.ReduceMixin):
     """
     Dynamic generalized universal function (GUFunc)
     intended to act like a normal Numpy gufunc, but capable
@@ -18,6 +19,7 @@ class GUFunc(object):
         self.ufunc = None
         self._frozen = False
         self._is_dynamic = is_dynamic
+        self._identity = identity
 
         # GUFunc cannot inherit from GUFuncBuilder because "identity"
         # is a property of GUFunc. Thus, we hold a reference to a GUFuncBuilder
@@ -25,6 +27,32 @@ class GUFunc(object):
         self.gufunc_builder = GUFuncBuilder(
             py_func, signature, identity, cache, targetoptions)
         self.__name__ = self.gufunc_builder.py_func.__name__
+
+    def _reduce_states(self):
+        gb = self.gufunc_builder
+        dct = dict(
+            py_func=gb.py_func,
+            signature=gb.signature,
+            identity=self._identity,
+            cache=gb.cache,
+            is_dynamic=self._is_dynamic,
+            targetoptions=gb.targetoptions,
+            typesigs=gb._sigs,
+            frozen=self._frozen,
+        )
+        return dct
+
+    @classmethod
+    def _rebuild(cls, py_func, signature, identity, cache, is_dynamic,
+                 targetoptions, typesigs, frozen):
+        self = cls(py_func=py_func, signature=signature, identity=identity,
+                   cache=cache, is_dynamic=is_dynamic,
+                   targetoptions=targetoptions)
+        for sig in typesigs:
+            self.add(sig)
+        self.build_ufunc()
+        self._frozen = frozen
+        return self
 
     def __repr__(self):
         return f"<numba._GUFunc '{self.__name__}'>"
@@ -113,11 +141,14 @@ class GUFunc(object):
 
         return types.none(*l)
 
-    def __call__(self, *args):
+    def __call__(self, *args, **kwargs):
         # If compilation is disabled OR it is NOT a dynamic gufunc
         # call the underlying gufunc
         if self._frozen or not self.is_dynamic:
-            return self.ufunc(*args)
+            return self.ufunc(*args, **kwargs)
+        elif "out" in kwargs:
+            # If "out" argument is supplied
+            args += (kwargs.pop("out"),)
 
         if self._num_args_match(*args) is False:
             # It is not allowed to call a dynamic gufunc without
@@ -133,8 +164,7 @@ class GUFunc(object):
         # at this point we know the gufunc is a dynamic one
         ewise = self._get_ewise_dtypes(args)
         if not (self.ufunc and ufunc_find_matching_loop(self.ufunc, ewise)):
-            self._is_dynamic = True
             sig = self._get_signature(*args)
             self.add(sig)
             self.build_ufunc()
-        return self.ufunc(*args)
+        return self.ufunc(*args, **kwargs)

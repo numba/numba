@@ -1217,9 +1217,10 @@ class PythonAPI(object):
             cgutils.voidptr_t,
             [cgutils.voidptr_t, cgutils.voidptr_t],
             )
-        fn = mod.get_or_insert_function(
+        fn = cgutils.get_or_insert_function(
+            mod,
             fnty,
-            name="NRT_meminfo_new_from_pyobject",
+            "NRT_meminfo_new_from_pyobject",
             )
         fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
         fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
@@ -1232,9 +1233,10 @@ class PythonAPI(object):
             self.pyobj,
             [cgutils.voidptr_t]
         )
-        fn = mod.get_or_insert_function(
+        fn = cgutils.get_or_insert_function(
+            mod,
             fnty,
-            name='NRT_meminfo_as_pyobject',
+            'NRT_meminfo_as_pyobject',
         )
         fn.return_value.add_attribute("noalias")
         return self.builder.call(fn, [miptr])
@@ -1245,9 +1247,10 @@ class PythonAPI(object):
             cgutils.voidptr_t,
             [self.pyobj]
         )
-        fn = mod.get_or_insert_function(
+        fn = cgutils.get_or_insert_function(
+            mod,
             fnty,
-            name='NRT_meminfo_from_pyobject',
+            'NRT_meminfo_from_pyobject',
         )
         fn.return_value.add_attribute("noalias")
         return self.builder.call(fn, [miobj])
@@ -1272,7 +1275,7 @@ class PythonAPI(object):
     # ------ utils -----
 
     def _get_function(self, fnty, name):
-        return self.module.get_or_insert_function(fnty, name=name)
+        return cgutils.get_or_insert_function(self.module, fnty, name)
 
     def alloca_obj(self):
         return self.builder.alloca(self.pyobj)

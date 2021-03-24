@@ -719,7 +719,7 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
 
 def find_setitems_block(setitems, itemsset, block, typemap):
     for inst in block.body:
-        if isinstance(inst, ir.StaticSetItem) or isinstance(inst, ir.SetItem):
+        if isinstance(inst, (ir.StaticSetItem, ir.SetItem)):
             setitems.add(inst.target.name)
             # If we store a non-mutable object into an array then that is safe to hoist.
             # If the stored object is mutable and you hoist then multiple entries in the
@@ -1533,15 +1533,17 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     scheduling_fnty = lc.Type.function(
         intp_ptr_t, [uintp_t, sched_ptr_type, sched_ptr_type, uintp_t, sched_ptr_type, intp_t])
     if index_var_typ.signed:
-        do_scheduling = builder.module.get_or_insert_function(scheduling_fnty,
-                                                          name="do_scheduling_signed")
+        do_scheduling = cgutils.get_or_insert_function(builder.module,
+                                                       scheduling_fnty,
+                                                       "do_scheduling_signed")
     else:
-        do_scheduling = builder.module.get_or_insert_function(scheduling_fnty,
-                                                          name="do_scheduling_unsigned")
+        do_scheduling = cgutils.get_or_insert_function(builder.module,
+                                                       scheduling_fnty,
+                                                       "do_scheduling_unsigned")
 
-    get_num_threads = builder.module.get_or_insert_function(
-        lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
-        name="get_num_threads")
+    get_num_threads = cgutils.get_or_insert_function(
+        builder.module, lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
+        "get_num_threads")
 
     num_threads = builder.call(get_num_threads, [])
 
@@ -1760,7 +1762,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     fnty = lc.Type.function(lc.Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                              intp_ptr_t, byte_ptr_t])
 
-    fn = builder.module.get_or_insert_function(fnty, name=wrapper_name)
+    fn = cgutils.get_or_insert_function(builder.module, fnty, wrapper_name)
     context.active_code_library.add_linking_library(info.library)
 
     if config.DEBUG_ARRAY_OPT:

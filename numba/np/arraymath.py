@@ -2968,7 +2968,7 @@ def _np_round_float(context, builder, tp, val):
     llty = context.get_value_type(tp)
     module = builder.module
     fnty = lc.Type.function(llty, [llty])
-    fn = module.get_or_insert_function(fnty, name=_np_round_intrinsic(tp))
+    fn = cgutils.get_or_insert_function(module, fnty, _np_round_intrinsic(tp))
     return builder.call(fn, (val,))
 
 

@@ -14,7 +14,7 @@ from llvmlite import ir
 
 from .error import NvvmError, NvvmSupportError
 from .libs import get_libdevice, open_libdevice, open_cudalib
-from numba.core import config
+from numba.core import cgutils, config
 
 
 logger = logging.getLogger(__name__)
@@ -82,6 +82,13 @@ class NVVM(object):
         'nvvmAddModuleToProgram': (
             nvvm_result, nvvm_program, c_char_p, c_size_t, c_char_p),
 
+        # nvvmResult nvvmLazyAddModuleToProgram(nvvmProgram cu,
+        #                                       const char* buffer,
+        #                                       size_t size,
+        #                                       const char *name)
+        'nvvmLazyAddModuleToProgram': (
+            nvvm_result, nvvm_program, c_char_p, c_size_t, c_char_p),
+
         # nvvmResult nvvmCompileProgram(nvvmProgram cu, int numOptions,
         #                          const char **options)
         'nvvmCompileProgram': (
@@ -125,7 +132,19 @@ class NVVM(object):
 
                 # Find & populate functions
                 for name, proto in inst._PROTOTYPES.items():
-                    func = getattr(inst.driver, name)
+                    try:
+                        func = getattr(inst.driver, name)
+                    except AttributeError:
+                        # CUDA 9.2 has no nvvmLazyAddModuleToProgram, but
+                        # nvvmAddModuleToProgram fulfils the same function,
+                        # just less efficiently, so we work around this here.
+                        # This workaround to be removed once support for CUDA
+                        # 9.2 is dropped.
+                        if name == 'nvvmLazyAddModuleToProgram':
+                            func = getattr(inst.driver,
+                                           'nvvmAddModuleToProgram')
+                        else:
+                            raise
                     func.restype = proto[0]
                     func.argtypes = proto[1:]
                     setattr(inst, name, func)
@@ -193,6 +212,16 @@ class CompilationUnit(object):
         """
         err = self.driver.nvvmAddModuleToProgram(self._handle, buffer,
                                                  len(buffer), None)
+        self.driver.check_error(err, 'Failed to add module')
+
+    def lazy_add_module(self, buffer):
+        """
+        Lazily add an NVVM IR module to a compilation unit.
+        The buffer should contain NVVM module IR either in the bitcode
+        representation or in the text representation.
+        """
+        err = self.driver.nvvmLazyAddModuleToProgram(self._handle, buffer,
+                                                     len(buffer), None)
         self.driver.check_error(err, 'Failed to add module')
 
     def compile(self, **options):
@@ -321,18 +350,23 @@ def get_supported_ccs():
         # The CUDA Runtime may not be present
         cudart_version_major = 0
 
+    ctk_ver = f"{cudart_version_major}.{cudart_version_minor}"
+    unsupported_ver = f"CUDA Toolkit {ctk_ver} is unsupported by Numba - " \
+                      + "9.2 is the minimum required version."
+
     # List of supported compute capability in sorted order
     if cudart_version_major == 0:
         _supported_cc = ()
     elif cudart_version_major < 9:
         _supported_cc = ()
-        ctk_ver = f"{cudart_version_major}.{cudart_version_minor}"
-        msg = f"CUDA Toolkit {ctk_ver} is unsupported by Numba - 9.0 is the " \
-              + "minimum required version."
-        warnings.warn(msg)
+        warnings.warn(unsupported_ver)
     elif cudart_version_major == 9:
-        # CUDA 9.x
-        _supported_cc = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0) # noqa: E501
+        if cudart_version_minor != 2:
+            _supported_cc = ()
+            warnings.warn(unsupported_ver)
+        else:
+            # CUDA 9.2
+            _supported_cc = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0) # noqa: E501
     elif cudart_version_major == 10:
         # CUDA 10.x
         _supported_cc = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5) # noqa: E501
@@ -583,38 +617,38 @@ def _replace_datalayout(llvmir):
 
 def llvm_replace(llvmir):
     replacements = [
-        ('declare double @___numba_atomic_double_add(double*, double)',
+        ('declare double @"___numba_atomic_double_add"(double* %".1", double %".2")',     # noqa: E501
          ir_numba_atomic_binary(T='double', Ti='i64', OP='fadd', FUNC='add')),
-        ('declare float @___numba_atomic_float_sub(float*, float)',
+        ('declare float @"___numba_atomic_float_sub"(float* %".1", float %".2")',         # noqa: E501
          ir_numba_atomic_binary(T='float', Ti='i32', OP='fsub', FUNC='sub')),
-        ('declare double @___numba_atomic_double_sub(double*, double)',
+        ('declare double @"___numba_atomic_double_sub"(double* %".1", double %".2")',     # noqa: E501
          ir_numba_atomic_binary(T='double', Ti='i64', OP='fsub', FUNC='sub')),
-        ('declare i64 @___numba_atomic_u64_inc(i64*, i64)',
+        ('declare i64 @"___numba_atomic_u64_inc"(i64* %".1", i64 %".2")',
          ir_numba_atomic_inc(T='i64', Tu='u64')),
-        ('declare i64 @___numba_atomic_u64_dec(i64*, i64)',
+        ('declare i64 @"___numba_atomic_u64_dec"(i64* %".1", i64 %".2")',
          ir_numba_atomic_dec(T='i64', Tu='u64')),
-        ('declare float @___numba_atomic_float_max(float*, float)',
+        ('declare float @"___numba_atomic_float_max"(float* %".1", float %".2")',         # noqa: E501
          ir_numba_atomic_minmax(T='float', Ti='i32', NAN='', OP='nnan olt',
                                 PTR_OR_VAL='ptr', FUNC='max')),
-        ('declare double @___numba_atomic_double_max(double*, double)',
+        ('declare double @"___numba_atomic_double_max"(double* %".1", double %".2")',     # noqa: E501
          ir_numba_atomic_minmax(T='double', Ti='i64', NAN='', OP='nnan olt',
                                 PTR_OR_VAL='ptr', FUNC='max')),
-        ('declare float @___numba_atomic_float_min(float*, float)',
+        ('declare float @"___numba_atomic_float_min"(float* %".1", float %".2")',         # noqa: E501
          ir_numba_atomic_minmax(T='float', Ti='i32', NAN='', OP='nnan ogt',
                                 PTR_OR_VAL='ptr', FUNC='min')),
-        ('declare double @___numba_atomic_double_min(double*, double)',
+        ('declare double @"___numba_atomic_double_min"(double* %".1", double %".2")',     # noqa: E501
          ir_numba_atomic_minmax(T='double', Ti='i64', NAN='', OP='nnan ogt',
                                 PTR_OR_VAL='ptr', FUNC='min')),
-        ('declare float @___numba_atomic_float_nanmax(float*, float)',
+        ('declare float @"___numba_atomic_float_nanmax"(float* %".1", float %".2")',      # noqa: E501
          ir_numba_atomic_minmax(T='float', Ti='i32', NAN='nan', OP='ult',
                                 PTR_OR_VAL='', FUNC='max')),
-        ('declare double @___numba_atomic_double_nanmax(double*, double)',
+        ('declare double @"___numba_atomic_double_nanmax"(double* %".1", double %".2")',  # noqa: E501
          ir_numba_atomic_minmax(T='double', Ti='i64', NAN='nan', OP='ult',
                                 PTR_OR_VAL='', FUNC='max')),
-        ('declare float @___numba_atomic_float_nanmin(float*, float)',
+        ('declare float @"___numba_atomic_float_nanmin"(float* %".1", float %".2")',      # noqa: E501
          ir_numba_atomic_minmax(T='float', Ti='i32', NAN='nan', OP='ugt',
                                 PTR_OR_VAL='', FUNC='min')),
-        ('declare double @___numba_atomic_double_nanmin(double*, double)',
+        ('declare double @"___numba_atomic_double_nanmin"(double* %".1", double %".2")',  # noqa: E501
          ir_numba_atomic_minmax(T='double', Ti='i64', NAN='nan', OP='ugt',
                                 PTR_OR_VAL='', FUNC='min')),
         ('immarg', '')
@@ -624,9 +658,9 @@ def llvm_replace(llvmir):
         # Replace with our cmpxchg implementation because LLVM 3.5 has a new
         # semantic for cmpxchg.
         replacements += [
-            ('declare i32 @___numba_atomic_i32_cas_hack(i32*, i32, i32)',
+            ('declare i32 @"___numba_atomic_i32_cas_hack"(i32* %".1", i32 %".2", i32 %".3")',  # noqa: E501
              ir_numba_cas_hack.format(T='i32')),
-            ('declare i64 @___numba_atomic_i64_cas_hack(i64*, i64, i64)',
+            ('declare i64 @"___numba_atomic_i64_cas_hack"(i64* %".1", i64 %".2", i64 %".3")',  # noqa: E501
              ir_numba_cas_hack.format(T='i64'))
         ]
         # Newer LLVMs generate a shorthand for datalayout that NVVM34 does not
@@ -651,6 +685,9 @@ def llvm_replace(llvmir):
 
 
 def llvm_to_ptx(llvmir, **opts):
+    if isinstance(llvmir, str):
+        llvmir = [llvmir]
+
     if opts.pop('fastmath', False):
         opts.update({
             'ftz': True,
@@ -662,9 +699,10 @@ def llvm_to_ptx(llvmir, **opts):
     cu = CompilationUnit()
     libdevice = LibDevice(arch=opts.get('arch', 'compute_20'))
 
-    llvmir = llvm_replace(llvmir)
-    cu.add_module(llvmir.encode('utf8'))
-    cu.add_module(libdevice.get())
+    for mod in llvmir:
+        mod = llvm_replace(mod)
+        cu.add_module(mod.encode('utf8'))
+    cu.lazy_add_module(libdevice.get())
 
     ptx = cu.compile(**opts)
     # XXX remove debug_pubnames seems to be necessary sometimes
@@ -737,22 +775,6 @@ def llvm100_to_70_ir(ir):
             attrs = m.group(1).split()
             attrs = ' '.join(a for a in attrs if a != 'willreturn')
             line = line.replace(m.group(1), attrs)
-
-        if '!DISubprogram' in line:
-            # Replace the DISPFlags (LLVM 10.0) with main subprogram DIFlags
-            # (LLVM 7.0). Example:
-            #
-            #     spflags: DISPFlagDefinition | DISPFlagOptimized
-            #
-            # becomes:
-            #
-            #     isDefinition: true, isOptimized: true
-            m = re_spflags.search(line)
-            flags = m.group(1).split(' | ')
-            new_flags = ", ".join([ '%s: true' % spflagmap[f] for f in flags ])
-            start_of_line = line[:m.span()[0]]
-            end_of_line = line[m.span()[1] - 1:]
-            line = start_of_line + new_flags + end_of_line
 
         buf.append(line)
 
@@ -894,14 +916,13 @@ def _replace_llvm_memset_declaration(m):
 
 
 def set_cuda_kernel(lfunc):
-    from llvmlite.llvmpy.core import MetaData, MetaDataString, Constant, Type
-
     mod = lfunc.module
 
-    ops = lfunc, MetaDataString.get(mod, "kernel"), Constant.int(Type.int(), 1)
-    md = MetaData.get(mod, ops)
+    mdstr = ir.MetaDataString(mod, "kernel")
+    mdvalue = ir.Constant(ir.IntType(32), 1)
+    md = mod.add_metadata((lfunc, mdstr, mdvalue))
 
-    nmd = mod.get_or_insert_named_metadata('nvvm.annotations')
+    nmd = cgutils.get_or_insert_named_metadata(mod, 'nvvm.annotations')
     nmd.add(md)
 
 
