@@ -178,7 +178,7 @@ def get_html_template():
                                     <tbody>
                                         {%- for ir_line, ir_line_type in func_data[func_key]['ir_lines'][num] %}
                                             <tr class="ir_code">
-                                                <td><code>
+                                                <td style="text-align: left;"><code>
                                                 &nbsp;
                                                 {{- '&nbsp;'*func_data[func_key]['python_indent'][num]}}
                                                 {{ '&nbsp;'*func_data[func_key]['ir_indent'][num][loop.index0]}}{{ir_line|e -}}
