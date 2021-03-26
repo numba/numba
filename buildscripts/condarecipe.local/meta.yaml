@@ -38,7 +38,9 @@ requirements:
     - llvmlite >=0.37.0dev0,<0.37
     # TBB devel version is to match TBB libs.
     # 2020.3 is the last version with the "old" ABI
-    - tbb-devel >=2019.5,<=2020.3       # [not (armv6l or armv7l or aarch64 or linux32)]
+    # NOTE: ppc64le exclusion is temporary until packages are more generally
+    #       available.
+    - tbb-devel >=2021       # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
   run:
     - python >=3.6
     - numpy >=1.15
@@ -46,11 +48,8 @@ requirements:
     # On channel https://anaconda.org/numba/
     - llvmlite >=0.37.0dev0,<0.37
   run_constrained:
-    # If TBB is present it must be at least version 2019.5 from Anaconda due to
-    # build flag issues triggering UB. It must also be <=2020.3 due to ABI
-    # changes in TBB, see https://github.com/numba/numba/pull/6096.
-    # 2020.3 is the last version with the "old" ABI
-    - tbb >=2019.5,<=2020.3    # [not (armv6l or armv7l or aarch64 or linux32)]
+    # If TBB is present it must be at least version 2021
+    - tbb >=2021    # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
     # avoid confusion from openblas bugs
     - libopenblas !=0.3.6      # [x86_64]
     # CUDA 9.2 or later is required for CUDA support
@@ -67,7 +66,7 @@ test:
     - scipy                    # [not (armv6l or armv7l)]
     - ipython                  # [not (armv6l or armv7l or aarch64)]
     - setuptools
-    - tbb  >=2019.5            # [not (armv6l or armv7l or aarch64 or linux32)]
+    - tbb  >=2021              # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
     - intel-openmp             # [osx]
     # Need these for AOT. Do not init msvc as it may not be present
     - {{ compiler('c') }}      # [not (win or armv6l or armv7l or aarch64)]
