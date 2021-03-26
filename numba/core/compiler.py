@@ -437,10 +437,7 @@ class CompilerBase(object):
         """
         Populate and run compiler pipeline
         """
-        from numba.core import utils
-        # print('----', self.state.func_id.func_qualname, self.state.flags)
         with utils.ConfigStack().enter(self.state.flags.copy()):
-
             pms = self.define_pipelines()
             for pm in pms:
                 pipeline_name = pm.pipeline_name

@@ -8,22 +8,41 @@ from numba.core.targetconfig import TargetConfig, Option
 
 
 class TargetOptions:
+    """Target options maps user options from decorators to the
+    ``numba.core.compiler.Flags`` used by lowering and target context.
+    """
     class Mapping:
         def __init__(self, flag_name, apply=lambda x: x):
             self.flag_name = flag_name
             self.apply = apply
 
-    def finalize(self, settings, flags):
+    def finalize(self, flags, options):
+        """Subclass can override this method to make target specific
+        customization of default flags.
+
+        Parameters
+        ----------
+        flags : Flags
+        options : dict
+        """
         pass
 
     @classmethod
     def parse_as_flags(cls, flags, options):
+        """Parse target options defined in ``options`` and set ``flags``
+        accordingly.
+
+        Parameters
+        ----------
+        flags : Flags
+        options : dict
+        """
         opt = cls()
         opt.apply(flags, options)
         opt.finalize(flags, options)
         return flags
 
-    def apply(self, flags, options):
+    def _apply(self, flags, options):
         # Find all Mapping instances in the class
         mappings = {}
         cls = type(self)
@@ -51,6 +70,8 @@ _mapping = TargetOptions.Mapping
 
 
 class DefaultOptions:
+    """Defines how user-level target options are mapped to the target flags.
+    """
     nopython = _mapping("enable_pyobject", operator.not_)
     forceobj = _mapping("force_pyobject")
     looplift = _mapping("enable_looplift")
@@ -70,7 +91,13 @@ class DefaultOptions:
 
 
 def include_default_options(*args):
+    """Returns a mixin class with a subset of the options
+
+    Parameters
+    ----------
+    *args : str
+        Option names to include.
+    """
     glbs = {k: getattr(DefaultOptions, k) for k in args}
 
     return type("OptionMixins", (), glbs)
-
