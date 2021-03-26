@@ -38,7 +38,6 @@ from numba.cuda.cudadrv import enums, drvapi, _extras
 
 
 MIN_REQUIRED_CC = (3, 0)
-SUPPORTS_IPC = sys.platform.startswith('linux')
 
 
 _py_decref = ctypes.pythonapi.Py_DecRef
@@ -1162,8 +1161,6 @@ class Context(object):
         """
         Returns a *IpcHandle* from a GPU allocation.
         """
-        if not SUPPORTS_IPC:
-            raise OSError('OS does not support CUDA IPC')
         return self.memory_manager.get_ipc_handle(memory)
 
     def open_ipc_handle(self, handle, size):

@@ -58,7 +58,9 @@ class TestNumbaImport(TestCase):
         # checks that importing Numba isn't accidentally triggering warnings due
         # to e.g. deprecated use of import locations from Python's stdlib
         code = "import numba"
-        flags = ["-Werror",]
+        # See: https://github.com/numba/numba/issues/6831
+        # bug in setuptools/packaging causing a deprecation warning
+        flags = ["-Werror", "-Wignore::DeprecationWarning:packaging.version:"]
         self.run_in_subproc(code, flags)
 
     def test_import_star(self):
