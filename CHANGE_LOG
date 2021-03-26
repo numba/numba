@@ -3,6 +3,26 @@ Version 0.54.0
 
 In development
 
+Version 0.53.1 (25 March, 2021)
+-------------------------------
+
+This is a bugfix release for 0.53.0. It contains the following four
+pull-requests which fix two critical regressions and two build failures
+reported by the openSuSe team:
+
+* PR #6826 Fix regression on gufunc serialization
+* PR #6828 Fix regression in CUDA: Set stream in mapped and managed array
+  device_setup
+* PR #6837 Ignore warnings from packaging module when testing import behaviour.
+* PR #6851 set non-reported llvm timing values to 0.0
+
+Authors:
+
+* Ben Greiner
+* Graham Markall
+* Siu Kwan Lam
+* Stuart Archibald
+
 Version 0.53.0 (11 March, 2021)
 -------------------------------
 
