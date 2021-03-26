@@ -266,15 +266,6 @@ class TestIRNodes(CheckEquality):
         e = ir.Var(None, 'bar', self.loc1)
         self.check(a, same=[b, c, d], different=[e])
 
-    def test_intrinsic(self):
-        a = ir.Intrinsic('foo', 'bar', (0,), self.loc1)
-        b = ir.Intrinsic('foo', 'bar', (0,), self.loc1)
-        c = ir.Intrinsic('foo', 'bar', (0,), self.loc2)
-        d = ir.Intrinsic('baz', 'bar', (0,), self.loc1)
-        e = ir.Intrinsic('foo', 'baz', (0,), self.loc1)
-        f = ir.Intrinsic('foo', 'bar', (1,), self.loc1)
-        self.check(a, same=[b, c], different=[d, e, f])
-
     def test_undefinedtype(self):
         a = ir.UndefinedType()
         b = ir.UndefinedType()

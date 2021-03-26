@@ -139,10 +139,10 @@ class HSATargetContext(BaseContext):
                                 [self.call_conv.get_return_type(
                                     types.pyobject)] + argtys)
 
-        func = wrapper_module.add_function(fnty, name=func.name)
+        func = llvmir.Function(wrapper_module, fnty, func.name)
         func.calling_convention = CC_SPIR_FUNC
 
-        wrapper = wrapper_module.add_function(wrapperfnty, name=wrappername)
+        wrapper = llvmir.Function(wrapper_module, wrapperfnty, name=wrappername)
 
         builder = lc.Builder(wrapper.append_basic_block(''))
 
@@ -212,7 +212,7 @@ def set_hsa_kernel(fn):
     fn.calling_convention = CC_SPIR_KERNEL
 
     # Mark kernels
-    ocl_kernels = mod.get_or_insert_named_metadata("opencl.kernels")
+    ocl_kernels = cgutils.get_or_insert_named_metadata(mod, "opencl.kernels")
     ocl_kernels.add(lc.MetaData.get(mod, [fn,
                                           gen_arg_addrspace_md(fn),
                                           gen_arg_access_qual_md(fn),
@@ -224,11 +224,13 @@ def set_hsa_kernel(fn):
     make_constant = lambda x: lc.Constant.int(lc.Type.int(), x)
     spir_version_constant = [make_constant(x) for x in SPIR_VERSION]
 
-    spir_version = mod.get_or_insert_named_metadata("opencl.spir.version")
+    spir_version = cgutils.get_or_insert_named_metadata(mod,
+                                                        "opencl.spir.version")
     if not spir_version.operands:
         spir_version.add(lc.MetaData.get(mod, spir_version_constant))
 
-    ocl_version = mod.get_or_insert_named_metadata("opencl.ocl.version")
+    ocl_version = cgutils.get_or_insert_named_metadata(mod,
+                                                       "opencl.ocl.version")
     if not ocl_version.operands:
         ocl_version.add(lc.MetaData.get(mod, spir_version_constant))
 
@@ -240,7 +242,7 @@ def set_hsa_kernel(fn):
         #           "opencl.compiler.options"]cat
         #
         # for name in others:
-        #     nmd = mod.get_or_insert_named_metadata(name)
+        #     nmd = cgutils.get_or_insert_named_metadata(mod, name)
         #     if not nmd.operands:
         #         nmd.add(empty_md)
 

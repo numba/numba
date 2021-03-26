@@ -11,7 +11,7 @@ import numpy as np
 from numba import jit, njit, typeof
 from numba.core import errors
 from numba.tests.support import (TestCase, tag, needs_lapack, needs_blas,
-                                 _is_armv7l, skip_ppc64le_issue4026)
+                                 _is_armv7l)
 from .matmul_usecase import matmul_usecase
 import unittest
 
@@ -797,7 +797,6 @@ class TestLinalgInv(TestLinalgBase):
         np.testing.assert_allclose(expected, got)
 
 
-@skip_ppc64le_issue4026
 class TestLinalgCholesky(TestLinalgBase):
     """
     Tests for np.linalg.cholesky.
@@ -2609,8 +2608,9 @@ class TestBasics(TestLinalgSystems):  # TestLinalgSystems for 1d test
             with self.assertNoNRTLeak():
                 cfunc(a, b, **kwargs)
 
-        for size1, size2, dtype in \
-                product(self.sizes, self.sizes, self.dtypes):
+        dts = cycle(self.dtypes)
+        for size1, size2 in product(self.sizes, self.sizes):
+            dtype = next(dts)
             (a, b) = self._get_input(size1, size2, dtype)
             check(a, b)
             c = np.empty((np.asarray(a).size, np.asarray(b).size),

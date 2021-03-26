@@ -10,8 +10,11 @@ from .common import Opaque
 from .misc import unliteral
 from numba.core import errors, utils, types, config
 
+from numba.core.typeconv import Conversion
+
 
 _logger = logging.getLogger(__name__)
+
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -457,6 +460,20 @@ class MakeFunctionLiteral(Literal, Opaque):
     pass
 
 
+class _PickleableWeakRef(weakref.ref):
+    """
+    Allow a weakref to be pickled.
+
+    Note that if the object referred to is not kept alive elsewhere in the
+    pickle, the weakref will immediately expire after being constructed.
+    """
+    def __getnewargs__(self):
+        obj = self()
+        if obj is None:
+            raise ReferenceError("underlying object has vanished")
+        return (obj,)
+
+
 class WeakType(Type):
     """
     Base class for types parametered by a mortal object, to which only
@@ -464,7 +481,7 @@ class WeakType(Type):
     """
 
     def _store_object(self, obj):
-        self._wr = weakref.ref(obj)
+        self._wr = _PickleableWeakRef(obj)
 
     def _get_object(self):
         obj = self._wr()
@@ -540,6 +557,11 @@ class Dispatcher(WeakType, Callable, Dummy):
 
     def unify(self, context, other):
         return utils.unified_function_type((self, other), require_precise=False)
+
+    def can_convert_to(self, typingctx, other):
+        if isinstance(other, types.FunctionType):
+            if self.dispatcher.get_compile_result(other.signature):
+                return Conversion.safe
 
 
 class ObjModeDispatcher(Dispatcher):

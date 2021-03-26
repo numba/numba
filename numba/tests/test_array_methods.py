@@ -151,6 +151,9 @@ def np_frombuffer(b):
 def np_frombuffer_dtype(b):
     return np.frombuffer(b, dtype=np.complex64)
 
+def np_frombuffer_dtype_str(b):
+    return np.frombuffer(b, dtype='complex64')
+
 def np_frombuffer_allocated(shape):
     """
     np.frombuffer() on a Numba-allocated buffer.
@@ -513,6 +516,22 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_np_frombuffer_dtype(self):
         self.check_np_frombuffer(np_frombuffer_dtype)
 
+    def test_np_frombuffer_dtype_str(self):
+        self.check_np_frombuffer(np_frombuffer_dtype_str)
+
+    def test_np_frombuffer_dtype_non_const_str(self):
+        @jit(nopython=True)
+        def func(buf, dt):
+            np.frombuffer(buf, dtype=dt)
+
+        with self.assertRaises(TypingError) as raises:
+            func(bytearray(range(16)), 'int32')
+
+        excstr = str(raises.exception)
+        self.assertIn('No match', excstr)
+        self.assertIn('frombuffer(bytearray(uint8, 1d, C), dtype=unicode_type)',
+                      excstr)
+
     def check_layout_dependent_func(self, pyfunc, fac=np.arange):
         def is_same(a, b):
             return a.ctypes.data == b.ctypes.data
@@ -766,7 +785,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             check_ok(4)
             check_ok(5.5)
             check_ok(-3)
-            check_ok(np.complex(4, 4))
+            check_ok(complex(4, 4))
             check_ok(np.int8(0))
 
     def test_arange_2_arg(self):
@@ -791,8 +810,8 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             check_ok(-8, -1, pyfunc, cfunc)
             check_ok(4, 0.5, pyfunc, cfunc)
             check_ok(0.5, 4, pyfunc, cfunc)
-            check_ok(np.complex(1, 1), np.complex(4, 4), pyfunc, cfunc)
-            check_ok(np.complex(4, 4), np.complex(1, 1), pyfunc, cfunc)
+            check_ok(complex(1, 1), complex(4, 4), pyfunc, cfunc)
+            check_ok(complex(4, 4), complex(1, 1), pyfunc, cfunc)
             check_ok(3, None, pyfunc, cfunc)
 
         pyfunc = np_arange_1_dtype
@@ -826,7 +845,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             check_ok(0, -10, -2, pyfunc, cfunc)
             check_ok(0.5, 4, 2, pyfunc, cfunc)
             check_ok(0, 1, 0.1, pyfunc, cfunc)
-            check_ok(0, np.complex(4, 4), np.complex(1, 1), pyfunc, cfunc)
+            check_ok(0, complex(4, 4), complex(1, 1), pyfunc, cfunc)
             check_ok(3, 6, None, pyfunc, cfunc)
             check_ok(3, None, None, pyfunc, cfunc)
             check_ok(np.int8(0), np.int8(5), np.int8(1), pyfunc, cfunc)
@@ -860,7 +879,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             check_ok(0, -10, -2, np.float32)
             check_ok(0.5, 4, 2, None)
             check_ok(0, 1, 0.1, np.complex128)
-            check_ok(0, np.complex(4, 4), np.complex(1, 1), np.complex128)
+            check_ok(0, complex(4, 4), complex(1, 1), np.complex128)
             check_ok(3, 6, None, None)
             check_ok(3, None, None, None)
 
@@ -902,6 +921,16 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                         f(*inputs)
                     self.assertIn("Maximum allowed size exceeded",
                                 str(raises.exception))
+
+    def test_arange_accuracy(self):
+        # Checking arange reasonably replicates NumPy's algorithm
+        # see https://github.com/numba/numba/issues/6768
+        @jit(nopython=True)
+        def foo(step):
+            return np.arange(0, 1 + step, step)
+
+        x = 0.010101010101010102
+        self.assertPreciseEqual(foo(x), foo.py_func(x))
 
     def test_item(self):
         pyfunc = array_item

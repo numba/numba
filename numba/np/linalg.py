@@ -345,7 +345,7 @@ def call_xxdot(context, builder, conjugate, dtype,
                            [ll_char, ll_char, intp_t,    # kind, conjugate, n
                             ll_void_p, ll_void_p, ll_void_p,  # a, b, out
                             ])
-    fn = builder.module.get_or_insert_function(fnty, name="numba_xxdot")
+    fn = cgutils.get_or_insert_function(builder.module, fnty, "numba_xxdot")
 
     kind = get_blas_kind(dtype)
     kind_val = ir.Constant(ll_char, ord(kind))
@@ -369,7 +369,7 @@ def call_xxgemv(context, builder, do_trans,
                             ll_void_p, ll_void_p, intp_t,     # alpha, a, lda
                             ll_void_p, ll_void_p, ll_void_p,  # x, beta, y
                             ])
-    fn = builder.module.get_or_insert_function(fnty, name="numba_xxgemv")
+    fn = cgutils.get_or_insert_function(builder.module, fnty, "numba_xxgemv")
 
     dtype = m_type.dtype
     alpha = make_constant_slot(context, builder, dtype, 1.0)
@@ -410,7 +410,7 @@ def call_xxgemm(context, builder,
                             ll_void_p, intp_t, ll_void_p,  # b, ldb, beta
                             ll_void_p, intp_t,             # c, ldc
                             ])
-    fn = builder.module.get_or_insert_function(fnty, name="numba_xxgemm")
+    fn = cgutils.get_or_insert_function(builder.module, fnty, "numba_xxgemm")
 
     m, k = x_shapes
     _k, n = y_shapes
@@ -2605,41 +2605,29 @@ def _check_scalar_or_lt_2d_mat(a, func_name, la_prefix=True):
                               % interp, highlighting=False)
 
 
-def _get_as_array(x):
-    if not isinstance(x, types.Array):
-        @register_jitable
-        def asarray(x):
-            return np.array((x,))
-        return asarray
-    else:
-        @register_jitable
-        def asarray(x):
-            return x
-        return asarray
+@register_jitable
+def outer_impl_none(a, b, out):
+    aa = np.asarray(a)
+    bb = np.asarray(b)
+    return np.multiply(aa.ravel().reshape((aa.size, 1)),
+                        bb.ravel().reshape((1, bb.size)))
+
+
+@register_jitable
+def outer_impl_arr(a, b, out):
+    aa = np.asarray(a)
+    bb = np.asarray(b)
+    np.multiply(aa.ravel().reshape((aa.size, 1)),
+                bb.ravel().reshape((1, bb.size)),
+                out)
+    return out
 
 
 def _get_outer_impl(a, b, out):
-    a_arr = _get_as_array(a)
-    b_arr = _get_as_array(b)
-
     if out in (None, types.none):
-        @register_jitable
-        def outer_impl(a, b, out):
-            aa = a_arr(a)
-            bb = b_arr(b)
-            return np.multiply(aa.ravel().reshape((aa.size, 1)),
-                               bb.ravel().reshape((1, bb.size)))
-        return outer_impl
+        return outer_impl_none
     else:
-        @register_jitable
-        def outer_impl(a, b, out):
-            aa = a_arr(a)
-            bb = b_arr(b)
-            np.multiply(aa.ravel().reshape((aa.size, 1)),
-                        bb.ravel().reshape((1, bb.size)),
-                        out)
-            return out
-        return outer_impl
+        return outer_impl_arr
 
 
 @overload(np.outer)

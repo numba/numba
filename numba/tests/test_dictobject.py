@@ -912,6 +912,42 @@ class TestDictObject(MemoryLeakMixin, TestCase):
 
         self.assertEqual(foo(), [1, 2])
 
+    def test_024_unicode_getitem_keys(self):
+        # See issue #6135
+        @njit
+        def foo():
+            s = 'a\u1234'
+            d = {s[0] : 1}
+            return d['a']
+
+        self.assertEqual(foo(), foo.py_func())
+
+        @njit
+        def foo():
+            s = 'abc\u1234'
+            d = {s[:1] : 1}
+            return d['a']
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_issue6570_alignment_padding(self):
+        # Create a key type that is 12-bytes long on a 8-byte aligned system
+        # so that the a 4-byte padding is needed.
+        # If the 4-byte padding is not zero-filled, it will have garbage data
+        # that affects key matching in the lookup.
+        keyty = types.Tuple([types.uint64, types.float32])
+
+        @njit
+        def foo():
+            d = dictobject.new_dict(keyty, float64)
+            t1 = np.array([3], dtype=np.uint64)
+            t2 = np.array([5.67], dtype=np.float32)
+            v1 = np.array([10.23], dtype=np.float32)
+            d[(t1[0], t2[0])] = v1[0]
+            return (t1[0], t2[0]) in d
+
+        self.assertTrue(foo())
+
 
 class TestDictTypeCasting(TestCase):
     def check_good(self, fromty, toty):
@@ -1497,6 +1533,40 @@ class TestDictInferred(TestCase):
                 k2: {k2 + 2: k2 + v},
             },
         )
+
+    def test_comprehension_basic(self):
+        @njit
+        def foo():
+            return {i: 2 * i for i in range(10)}
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_comprehension_basic_mixed_type(self):
+        @njit
+        def foo():
+            return {i: float(j) for i, j in zip(range(10), range(10, 0, -1))}
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_comprehension_involved(self):
+        @njit
+        def foo():
+            a = {0: 'A', 1: 'B', 2: 'C'}
+            return {3 + i: a[i] for i in range(3)}
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_comprehension_fail_mixed_type(self):
+        @njit
+        def foo():
+            a = {0: 'A', 1: 'B', 2: 1j}
+            return {3 + i: a[i] for i in range(3)}
+
+        with self.assertRaises(TypingError) as e:
+            foo()
+
+        excstr = str(e.exception)
+        self.assertIn("Cannot cast complex128 to unicode_type", excstr)
 
 
 class TestNonCompiledInfer(TestCase):

@@ -104,8 +104,8 @@ class TestCudaConstantMemory(CUDATestCase):
                 "as we're adding to it, load as a double")
 
     def test_const_empty(self):
-        jcuconstEmpty = cuda.jit('void(float64[:])')(cuconstEmpty)
-        A = np.full(1, fill_value=-1, dtype=int)
+        jcuconstEmpty = cuda.jit('void(int64[:])')(cuconstEmpty)
+        A = np.full(1, fill_value=-1, dtype=np.int64)
         jcuconstEmpty[1, 1](A)
         self.assertTrue(np.all(A == 0))
 
@@ -134,18 +134,21 @@ class TestCudaConstantMemory(CUDATestCase):
         self.assertTrue(np.all(A == CONST3D))
 
         if not ENABLE_CUDASIM:
-            if cuda.runtime.get_version() in ((8, 0), (9, 0), (9, 1)):
+            # CUDA <= 11.1 uses two f32 loads to load the complex. CUDA >= 11.2
+            # uses a vector of 2x f32. The root cause of these codegen
+            # differences is not known, but must be accounted for in this test.
+            if cuda.runtime.get_version() > (11, 1):
                 complex_load = 'ld.const.v2.f32'
                 description = 'Load the complex as a vector of 2x f32'
             else:
                 complex_load = 'ld.const.f32'
-                description =  'load each half of the complex as f32'
+                description = 'load each half of the complex as f32'
 
             self.assertIn(complex_load, jcuconst3d.ptx, description)
 
     def test_const_record_empty(self):
-        jcuconstRecEmpty = cuda.jit('void(float64[:])')(cuconstRecEmpty)
-        A = np.full(1, fill_value=-1, dtype=int)
+        jcuconstRecEmpty = cuda.jit('void(int64[:])')(cuconstRecEmpty)
+        A = np.full(1, fill_value=-1, dtype=np.int64)
         jcuconstRecEmpty[1, 1](A)
         self.assertTrue(np.all(A == 0))
 
@@ -164,21 +167,19 @@ class TestCudaConstantMemory(CUDATestCase):
         B = np.zeros(2, dtype=int)
         jcuconst = cuda.jit(cuconstRec).specialize(A, B)
 
-        old_runtime = cuda.runtime.get_version() in ((8, 0), (9, 0), (9, 1))
+        nvvm70_runtime = cuda.runtime.get_version() >= (11, 2)
         windows = sys.platform.startswith('win')
 
-        if old_runtime:
+        if nvvm70_runtime:
             if windows:
-                # for some reason Win64 / Py3 / CUDA 9.1 decides to do two u32
-                # loads, and shifts and ors the values to get the float `x`
-                # field, then uses another ld.const.u32 to load the int `y` as
-                # a 32-bit value!
+                # Two ld.const.u32 as above, but using a bit-field insert to
+                # combine them
                 self.assertIn('ld.const.u32', jcuconst.ptx,
                               'load record fields as u32')
             else:
                 # Load of the x and y fields fused into a single instruction
-                self.assertIn('ld.const.v2.f64', jcuconst.ptx,
-                              'load record fields as vector of 2x f64')
+                self.assertIn('ld.const.v2.u64', jcuconst.ptx,
+                              'load record fields as vector of 2x u64')
         else:
             # In newer toolkits, constant values are all loaded 8 bits at a
             # time. Check that there are enough 8-bit loads for everything to
@@ -224,8 +225,8 @@ class TestCudaConstantMemory(CUDATestCase):
         E = np.zeros(2, dtype=np.float64)
         jcuconst = cuda.jit(cuconstRecAlign).specialize(A, B, C, D, E)
 
-        if rtver >= (10, 2):
-            # Code generation differs slightly in 10.2 onwards - the first
+        if rtver >= (10, 2) and rtver <= (11, 1):
+            # Code generation differs slightly in 10.2 - 11.1 - the first
             # bytes are loaded as individual bytes, so we'll check that
             # ld.const.u8 occurs at least four times (the first three bytes,
             # then the last byte by itself)

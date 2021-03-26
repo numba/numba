@@ -228,6 +228,14 @@ These variables influence what is printed out during compilation of
 
    Dump the native assembly code of compiled functions.
 
+.. envvar:: NUMBA_LLVM_PASS_TIMINGS
+
+    Set to ``1`` to enable recording of pass timings in LLVM;
+    e.g. ``NUMBA_LLVM_PASS_TIMINGS=1``.
+    See :ref:`developer-llvm-timings`.
+
+    *Default value*: ``0`` (Off)
+
 .. seealso::
    :ref:`numba-troubleshooting` and :ref:`architecture`.
 
@@ -247,6 +255,12 @@ Compilation options
 
    *Default value:* 1 (except on 32-bit Windows)
 
+.. envvar:: NUMBA_SLP_VECTORIZE
+
+   If set to non-zero, enable LLVM superword-level parallelism vectorization.
+
+   *Default value:* 1
+
 .. envvar:: NUMBA_ENABLE_AVX
 
    If set to non-zero, enable AVX optimizations in LLVM.  This is disabled
@@ -257,14 +271,6 @@ Compilation options
 
     If set to non-zero and Intel SVML is available, the use of SVML will be
     disabled.
-
-.. envvar:: NUMBA_COMPATIBILITY_MODE
-
-   If set to non-zero, compilation of JIT functions will never entirely
-   fail, but instead generate a fallback that simply interprets the
-   function.  This is only to be used if you are migrating a large
-   codebase from an old Numba version (before 0.12), and want to avoid
-   breaking everything at once.  Otherwise, please don't use this.
 
 .. envvar:: NUMBA_DISABLE_JIT
 
@@ -310,6 +316,38 @@ Compilation options
     Note: this is unrelated to the compilation cache.
 
     *Default value:* 128
+
+.. envvar:: NUMBA_LLVM_REFPRUNE_PASS
+
+    Turns on the LLVM pass level reference-count pruning pass and disables the
+    regex based implementation in Numba.
+
+    *Default value:* 1 (On)
+
+.. envvar:: NUMBA_LLVM_REFPRUNE_FLAGS
+
+    When ``NUMBA_LLVM_REFPRUNE_PASS`` is on, this allows configuration
+    of subpasses in the reference-count pruning LLVM pass.
+
+    Valid values are any combinations of the below separated by `,`
+    (case-insensitive):
+
+    - ``all``: enable all subpasses.
+    - ``per_bb``: enable per-basic-block level pruning, which is same as the
+      old regex based implementation.
+    - ``diamond``: enable inter-basic-block pruning that is a diamond shape
+      pattern, i.e. a single-entry single-exit CFG subgraph where has an incref
+      in the entry and a corresponding decref in the exit.
+    - ``fanout``: enable inter-basic-block pruning that has a fanout pattern,
+      i.e. a single-entry multiple-exit CFG subgraph where the entry has an
+      incref and every exit has a corresponding decref.
+    - ``fanout_raise``: same as ``fanout`` but allow subgraph exit nodes to be
+      raising an exception and not have a corresponding decref.
+
+    For example, ``all`` is the same as
+    ``per_bb, diamond, fanout, fanout_raise``
+
+    *Default value:* "all"
 
 
 .. _numba-envvars-caching:
@@ -370,6 +408,43 @@ GPU support
 
    If set, don't compile and execute code for the GPU, but use the CUDA
    Simulator instead. For debugging purposes.
+
+
+.. envvar:: NUMBA_CUDA_ARRAY_INTERFACE_SYNC
+
+   Whether to synchronize on streams provided by objects imported using the CUDA
+   Array Interface. This defaults to 1. If set to 0, then no synchronization
+   takes place, and the user of Numba (and other CUDA libraries) is responsible
+   for ensuring correctness with respect to synchronization on streams.
+
+.. envvar:: NUMBA_CUDA_LOG_LEVEL
+
+   For debugging purposes. If no other logging is configured, the value of this
+   variable is the logging level for CUDA API calls. The default value is
+   ``CRITICAL`` - to trace all API calls on standard error, set this to
+   ``DEBUG``.
+
+.. envvar:: NUMBA_CUDA_LOG_API_ARGS
+
+   By default the CUDA API call logs only give the names of functions called.
+   Setting this variable to 1 also includes the values of arguments to Driver
+   API calls in the logs.
+
+.. envvar:: NUMBA_NPY_RELAXED_STRIDES_CHECKING
+
+   By default arrays that inherit from ``numba.misc.dummyarray.Array`` (e.g.
+   CUDA and ROCm device arrays) compute their contiguity using relaxed strides
+   checking, which is the default mechanism used by NumPy since version 1.12
+   (see `NPY_RELAXED_STRIDES_CHECKING
+   <https://numpy.org/doc/stable/release/1.8.0-notes.html#npy-relaxed-strides-checking>`_).
+   Setting ``NUMBA_NPY_RELAXED_STRIDES_CHECKING=0`` reverts back to strict
+   strides checking. This option should not normally be needed, but is provided
+   in case it is needed to work around latent bugs related to strict strides
+   checking.
+
+   Strict strides checking is deprecated and may be removed in future. See
+   :ref:`deprecation-strict-strides`.
+
 
 Threading Control
 -----------------

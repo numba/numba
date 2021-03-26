@@ -43,15 +43,28 @@ class TargetOptions(object):
         if kws.pop('looplift', True):
             flags.set("enable_looplift")
 
-        if kws.pop('boundscheck', False):
-            flags.set("boundscheck")
-
         if kws.pop('_nrt', True):
             flags.set("nrt")
 
-        if kws.pop('debug', config.DEBUGINFO_DEFAULT):
+        debug_mode = kws.pop('debug', config.DEBUGINFO_DEFAULT)
+
+        # boundscheck is supplied
+        if 'boundscheck' in kws:
+            boundscheck = kws.pop("boundscheck")
+            if boundscheck is None and debug_mode:
+                # if it's None and debug is on then set it
+                flags.set("boundscheck")
+            else:
+                # irrespective of debug set it to the requested value
+                flags.set("boundscheck", boundscheck)
+        else:
+            # no boundscheck given, if debug mode, set it
+            if debug_mode:
+                flags.set("boundscheck")
+
+        if debug_mode:
             flags.set("debuginfo")
-            flags.set("boundscheck")
+
 
         if kws.pop('nogil', False):
             flags.set("release_gil")

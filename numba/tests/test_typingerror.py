@@ -211,7 +211,7 @@ class TestArgumentTypingError(unittest.TestCase):
             cfunc(1, foo, 1)
 
         expected=re.compile(("This error may have been caused by the following "
-                             "argument\(s\):\\n- argument 1:.*cannot determine "
+                             "argument\(s\):\\n- argument 1:.*Cannot determine "
                              "Numba type of "
                              "<class \'numba.tests.test_typingerror.Foo\'>"))
         self.assertTrue(expected.search(str(raises.exception)) is not None)

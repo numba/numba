@@ -285,8 +285,13 @@ RETURN_ARRAY_COPY:
     return NULL;
 }
 
+/**
+ * This function was renamed in 0.52.0 to specify that it acquires references.
+ * It used to steal the reference of the arystruct.
+ * Refer to https://github.com/numba/numba/pull/6446
+ */
 NUMBA_EXPORT_FUNC(PyObject *)
-NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
+NRT_adapt_ndarray_to_python_acqref(arystruct_t* arystruct, int ndim,
                             int writeable, PyArray_Descr *descr)
 {
     PyArrayObject *array;
@@ -311,9 +316,6 @@ NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
     if (arystruct->parent) {
         PyObject *obj = try_to_return_parent(arystruct, ndim, descr);
         if (obj) {
-            /* Release NRT reference to the numpy array */
-            if (arystruct->meminfo)
-                NRT_MemInfo_release(arystruct->meminfo);
             return obj;
         }
     }
@@ -325,8 +327,9 @@ NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
         /* SETITEM steals reference */
         PyTuple_SET_ITEM(args, 0, PyLong_FromVoidPtr(arystruct->meminfo));
         /*  Note: MemInfo_init() does not incref.  This function steals the
-         *        NRT reference.
+         *        NRT reference, which we need to acquire.
          */
+        NRT_MemInfo_acquire(arystruct->meminfo);
         if (MemInfo_init(miobj, args, NULL)) {
             return NULL;
         }

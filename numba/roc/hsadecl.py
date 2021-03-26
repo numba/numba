@@ -1,7 +1,8 @@
 from numba.core import types
-from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                         AbstractTemplate,
-                                         MacroTemplate, signature, Registry)
+from numba.core.typing.npydecl import parse_dtype, parse_shape
+from numba.core.typing.templates import (AttributeTemplate, AbstractTemplate,
+                                         CallableTemplate, ConcreteTemplate,
+                                         signature, Registry)
 from numba import roc
 
 registry = Registry()
@@ -107,8 +108,30 @@ class Hsa_ds_bpermute(_Hsa_ds_permuting):
 
 # hsa.shared submodule -------------------------------------------------------
 
-class Hsa_shared_array(MacroTemplate):
+@intrinsic
+class Hsa_shared_array(CallableTemplate):
     key = roc.shared.array
+
+    def generic(self):
+        def typer(shape, dtype):
+
+            # Only integer literals and tuples of integer literals are valid
+            # shapes
+            if isinstance(shape, types.Integer):
+                if not isinstance(shape, types.IntegerLiteral):
+                    return None
+            elif isinstance(shape, (types.Tuple, types.UniTuple)):
+                if any([not isinstance(s, types.IntegerLiteral) for s in shape]):
+                    return None
+            else:
+                return None
+
+            ndim = parse_shape(shape)
+            nb_dtype = parse_dtype(dtype)
+            if nb_dtype is not None and ndim is not None:
+                return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
+
+        return typer
 
 
 @intrinsic_attr
@@ -116,7 +139,7 @@ class HsaSharedTemplate(AttributeTemplate):
     key = types.Module(roc.shared)
 
     def resolve_array(self, mod):
-        return types.Macro(Hsa_shared_array)
+        return types.Function(Hsa_shared_array)
 
 
 # hsa.atomic submodule -------------------------------------------------------

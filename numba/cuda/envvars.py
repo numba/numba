@@ -29,4 +29,4 @@ def get_numba_envvar(envvar, default=None):
     if value is None:
         return get_numbapro_envvar('NUMBAPRO_' + envvar, default=default)
     else:
-        return default
+        return value

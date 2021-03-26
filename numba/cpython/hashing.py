@@ -264,7 +264,7 @@ if _py38_or_later:
         @register_jitable(locals={'x': types.uint64})
         def _PyHASH_XXROTATE(x):
             # Rotate left 13 bits
-            return ((x << types.uint64(13)) | (x >> types.uint64(16)))
+            return ((x << types.uint64(13)) | (x >> types.uint64(19)))
 
     # Python 3.7+ has literal_unroll, this means any homogeneous and
     # heterogeneous tuples can use the same alg and just be unrolled.

@@ -2,11 +2,6 @@
 This scripts specifies all PTX special objects.
 """
 import functools
-import llvmlite.llvmpy.core as lc
-import operator
-from numba.core.rewrites.macros import Macro
-from numba.core import types, typing, ir
-from .cudadrv import nvvm
 
 
 class Stub(object):
@@ -115,9 +110,9 @@ class grid(Stub):
     instantiating the kernel. If *ndim* is 1, a single integer is returned.
     If *ndim* is 2 or 3, a tuple of the given number of integers is returned.
 
-	Computation of the first integer is as follows::
+    Computation of the first integer is as follows::
 
-		cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
+        cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
 
     and is similar for the other two indices, but using the ``y`` and ``z``
     attributes.
@@ -195,6 +190,27 @@ class const(Stub):
 
 
 #-------------------------------------------------------------------------------
+# Cooperative groups
+
+class cg(Stub):
+    '''
+    Cooperative groups
+    '''
+
+    @stub_function
+    def this_grid():
+        '''
+        Get the current grid group.
+        '''
+
+    class GridGroup(Stub):
+        def sync():
+            '''
+            Synchronize the current grid group.
+            '''
+
+
+#-------------------------------------------------------------------------------
 # syncthreads
 
 class syncthreads(Stub):
@@ -242,7 +258,7 @@ class syncthreads_or(Stub):
 
 class syncwarp(Stub):
     '''
-    syncwarp(mask)
+    syncwarp(mask=0xFFFFFFFF)
 
     Synchronizes a masked subset of threads in a warp.
     '''
@@ -352,6 +368,7 @@ class ffs(Stub):
     Find the position of the least significant bit set to 1 in an integer.
     """
 
+
 #-------------------------------------------------------------------------------
 # comparison and selection instructions
 
@@ -363,6 +380,7 @@ class selp(Stub):
     operand.
     """
 
+
 #-------------------------------------------------------------------------------
 # single / double precision arithmetic
 
@@ -372,6 +390,15 @@ class fma(Stub):
 
     Perform the fused multiply-add operation.
     """
+
+
+class cbrt(Stub):
+    """"
+    cbrt(a)
+
+    Perform the cube root operation.
+    """
+
 
 #-------------------------------------------------------------------------------
 # atomic
@@ -386,6 +413,78 @@ class atomic(Stub):
 
         Perform atomic ary[idx] += val. Supported on int32, float32, and
         float64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """
+
+    class sub(Stub):
+        """sub(ary, idx, val)
+
+        Perform atomic ary[idx] -= val. Supported on int32, float32, and
+        float64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """
+
+    class and_(Stub):
+        """and_(ary, idx, val)
+
+        Perform atomic ary[idx] &= val. Supported on int32, int64, uint32 and
+        uint64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """
+
+    class or_(Stub):
+        """or_(ary, idx, val)
+
+        Perform atomic ary[idx] \|= val. Supported on int32, int64, uint32 and
+        uint64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """  # noqa: W605
+
+    class xor(Stub):
+        """xor(ary, idx, val)
+
+        Perform atomic ary[idx] ^= val. Supported on int32, int64, uint32 and
+        uint64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """
+
+    class inc(Stub):
+        """inc(ary, idx, val)
+
+        Perform atomic ary[idx] += 1 up to val, then reset to 0. Supported
+        on uint32, and uint64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """
+
+    class dec(Stub):
+        """dec(ary, idx, val)
+
+        Perform ary[idx] = (value if (array[idx] == 0) or
+        (array[idx] > value) else array[idx] - 1).
+
+        Supported on uint32, and uint64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """
+
+    class exch(Stub):
+        """exch(ary, idx, val)
+
+        Perform atomic ary[idx] = val. Supported on int32, int64, uint32 and
+        uint64 operands only.
 
         Returns the old value at the index location as if it is loaded
         atomically.

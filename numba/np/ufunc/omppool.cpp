@@ -137,15 +137,15 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 
     if(_DEBUG)
     {
-        printf("inner_ndim: %lu\n",inner_ndim);
-        printf("arg_len: %lu\n", arg_len);
-        printf("total: %ld\n", size);
+        printf("inner_ndim: %zu\n",inner_ndim);
+        printf("arg_len: %zu\n", arg_len);
+        printf("total: %td\n", size);
         printf("dimensions: ");
         for(size_t j = 0; j < arg_len; j++)
-            printf("%lu, ", ((size_t *)dimensions)[j]);
+            printf("%zu, ", ((size_t *)dimensions)[j]);
         printf("\nsteps: ");
         for(size_t j = 0; j < array_count; j++)
-            printf("%lu, ", steps[j]);
+            printf("%zu, ", steps[j]);
         printf("\n*args: ");
         for(size_t j = 0; j < array_count; j++)
             printf("%p, ", (void *)args[j]);
@@ -174,7 +174,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
                 printf("THREAD %p:", count_space);
                 printf("count_space: ");
                 for(size_t j = 0; j < arg_len; j++)
-                    printf("%ld, ", count_space[j]);
+                    printf("%zd, ", count_space[j]);
                 printf("\n");
             }
             for(size_t j = 0; j < array_count; j++)
@@ -186,10 +186,10 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 
                 if(0&&_DEBUG)
                 {
-                    printf("Index %lu\n", j);
+                    printf("Index %zu\n", j);
                     printf("-->Got base %p\n", (void *)base);
-                    printf("-->Got step %lu\n", step);
-                    printf("-->Got offset %ld\n", offset);
+                    printf("-->Got step %zu\n", step);
+                    printf("-->Got offset %td\n", offset);
                     printf("-->Got addr %p\n", (void *)array_arg_space[j]);
                 }
             }

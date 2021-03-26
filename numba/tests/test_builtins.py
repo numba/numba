@@ -515,11 +515,14 @@ class TestBuiltins(TestCase):
             1234,
             1,
             0,
+            10,
+            1000,
         ]
 
         large_inputs = [
             123456789,
             2222222,
+            1000000,
             ~0x0
         ]
 

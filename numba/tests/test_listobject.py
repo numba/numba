@@ -215,6 +215,20 @@ class TestGetitem(MemoryLeakMixin, TestCase):
                   ):
             self.assertEqual(foo((t(0))), 0)
 
+    def test_list_getitem_different_sized_int_index(self):
+        # Checks that the index type cast and ext/trunc to the
+        # type of the length is correct, both wraparound and
+        # direct index is tested via -1/0.
+
+        for ty in types.integer_domain:
+            @njit
+            def foo():
+                l = listobject.new_list(int32)
+                l.append(7)
+                return l[ty(0)], l[ty(-1)]
+
+            self.assertEqual(foo(), (7, 7))
+
 
 class TestGetitemSlice(MemoryLeakMixin, TestCase):
     """Test list getitem when indexing with slices. """

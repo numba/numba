@@ -609,7 +609,7 @@ def real_divmod(context, builder, x, y):
     module = builder.module
     fname = context.mangler(".numba.python.rem", [x.type])
     fnty = Type.function(floatty, (floatty, floatty, Type.pointer(floatty)))
-    fn = module.get_or_insert_function(fnty, fname)
+    fn = cgutils.get_or_insert_function(module, fnty, fname)
 
     if fn.is_declaration:
         fn.linkage = lc.LINKAGE_LINKONCE_ODR
@@ -995,7 +995,7 @@ def complex_power_impl(context, builder, sig, args):
                 types.complex128: "numba_cpow",
                 }[ty]
             fnty = Type.function(Type.void(), [pa.type] * 3)
-            cpow = module.get_or_insert_function(fnty, name=func_name)
+            cpow = cgutils.get_or_insert_function(module, fnty, func_name)
             builder.call(cpow, (pa, pb, pc))
 
     res = builder.load(pc)
@@ -1183,8 +1183,7 @@ def number_not_impl(context, builder, sig, args):
     res = builder.not_(istrue)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-
-@lower_builtin(bool, types.boolean)
+@lower_builtin(bool, types.Boolean)
 def bool_as_bool(context, builder, sig, args):
     [val] = args
     return val
@@ -1310,8 +1309,8 @@ def boolean_to_any(context, builder, fromty, toty, val):
     asint = builder.zext(val, Type.int())
     return context.cast(builder, asint, types.int32, toty)
 
-
 @lower_cast(types.IntegerLiteral, types.Boolean)
+@lower_cast(types.BooleanLiteral, types.Boolean)
 def literal_int_to_boolean(context, builder, fromty, toty, val):
     lit = context.get_constant_generic(
         builder,

@@ -77,7 +77,10 @@ class RewriteArrayExprs(rewrites.Rewrite):
         if ((expr_op in ('unary', 'binop')) and (
                 expr.fn in npydecl.supported_array_operators)):
             # It is an array operator that maps to a ufunc.
-            array_assigns[target_name] = instr
+            # check that all args have internal types
+            if all(self.typemap[var.name].is_internal
+                   for var in expr.list_vars()):
+                array_assigns[target_name] = instr
 
         elif ((expr_op == 'call') and (expr.func.name in self.typemap)):
             # It could be a match for a known ufunc call.
@@ -158,7 +161,7 @@ class RewriteArrayExprs(rewrites.Rewrite):
             self.array_assigns[instr.target.name] = new_instr
             for operand in self._get_operands(expr):
                 operand_name = operand.name
-                if operand_name in self.array_assigns:
+                if operand.is_temp and operand_name in self.array_assigns:
                     child_assign = self.array_assigns[operand_name]
                     child_expr = child_assign.value
                     child_operands = child_expr.list_vars()

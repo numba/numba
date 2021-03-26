@@ -357,7 +357,7 @@ NRT_MemInfo *NRT_MemInfo_new_varsize(size_t size)
         return NULL;
 
     mi = NRT_MemInfo_new(data, size, nrt_varsize_dtor, NULL);
-    NRT_Debug(nrt_debug_print("NRT_MemInfo_varsize_alloc size=%zu "
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_new_varsize size=%zu "
                               "-> meminfo=%p, data=%p\n", size, mi, data));
     return mi;
 }

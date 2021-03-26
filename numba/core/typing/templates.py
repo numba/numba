@@ -594,6 +594,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         Type the overloaded function by compiling the appropriate
         implementation for the given args.
         """
+        from numba.core.typed_passes import PreLowerStripPhis
+
         disp, new_args = self._get_impl(args, kws)
         if disp is None:
             return
@@ -633,10 +635,20 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             # situations that will succeed. For context see #5887.
             resolve = disp_type.dispatcher.get_call_template
             template, pysig, folded_args, kws = resolve(new_args, kws)
-            ir = inline_worker.run_untyped_passes(disp_type.dispatcher.py_func)
+            ir = inline_worker.run_untyped_passes(
+                disp_type.dispatcher.py_func, enable_ssa=True
+            )
 
-            typemap, return_type, calltypes = typed_passes.type_inference_stage(
+            (
+                typemap,
+                return_type,
+                calltypes,
+                _
+            ) = typed_passes.type_inference_stage(
                 self.context, ir, folded_args, None)
+            ir = PreLowerStripPhis()._strip_phi_nodes(ir)
+            ir._definitions = numba.core.ir_utils.build_definitions(ir.blocks)
+
             sig = Signature(return_type, folded_args, None)
             # this stores a load of info for the cost model function if supplied
             # it by default is None
@@ -1082,10 +1094,6 @@ def bound_function(template_key):
             return types.BoundFunction(MethodTemplate, ty)
         return attribute_resolver
     return wrapper
-
-
-class MacroTemplate(object):
-    pass
 
 
 # -----------------------------

@@ -312,8 +312,8 @@ class GUFuncBuilder(_BaseUFuncBuilder):
 
     @global_compiler_lock
     def build_ufunc(self):
-        dtypelist = []
-        ptrlist = []
+        type_list = []
+        func_list = []
         if not self.nb_func:
             raise TypeError("No definition")
 
@@ -322,19 +322,19 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         for sig in self._sigs:
             cres = self._cres[sig]
             dtypenums, ptr, env = self.build(cres)
-            dtypelist.append(dtypenums)
-            ptrlist.append(int(ptr))
+            type_list.append(dtypenums)
+            func_list.append(int(ptr))
             keepalive.append((cres.library, env))
 
-        datlist = [None] * len(ptrlist)
+        datalist = [None] * len(func_list)
 
-        inct = len(self.sin)
-        outct = len(self.sout)
+        nin = len(self.sin)
+        nout = len(self.sout)
 
         # Pass envs to fromfuncsig to bind to the lifetime of the ufunc object
         ufunc = _internal.fromfunc(
             self.py_func.__name__, self.py_func.__doc__,
-            ptrlist, dtypelist, inct, outct, datlist,
+            func_list, type_list, nin, nout, datalist,
             keepalive, self.identity, self.signature,
         )
         return ufunc

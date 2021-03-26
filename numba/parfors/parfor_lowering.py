@@ -677,7 +677,7 @@ def compute_def_once(loop_body, typemap):
     getattr_taken = {}
     module_assigns = {}
     compute_def_once_internal(loop_body, def_once, def_more, getattr_taken, typemap, module_assigns)
-    return def_once
+    return def_once, def_more
 
 def find_vars(var, varset):
     assert isinstance(var, ir.Var)
@@ -717,7 +717,7 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
 
 def find_setitems_block(setitems, itemsset, block, typemap):
     for inst in block.body:
-        if isinstance(inst, ir.StaticSetItem) or isinstance(inst, ir.SetItem):
+        if isinstance(inst, (ir.StaticSetItem, ir.SetItem)):
             setitems.add(inst.target.name)
             # If we store a non-mutable object into an array then that is safe to hoist.
             # If the stored object is mutable and you hoist then multiple entries in the
@@ -738,13 +738,25 @@ def find_setitems_body(setitems, itemsset, loop_body, typemap):
     for label, block in loop_body.items():
         find_setitems_block(setitems, itemsset, block, typemap)
 
+def empty_container_allocator_hoist(inst, dep_on_param, call_table, hoisted,
+                                    not_hoisted, typemap, stored_arrays):
+    if (isinstance(inst, ir.Assign) and
+        isinstance(inst.value, ir.Expr) and
+        inst.value.op == 'call' and
+        inst.value.func.name in call_table):
+        call_list = call_table[inst.value.func.name]
+        if call_list == ['empty', np]:
+            return _hoist_internal(inst, dep_on_param, call_table, hoisted,
+                                   not_hoisted, typemap, stored_arrays)
+    return False
+
 def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     dep_on_param = copy.copy(parfor_params)
     hoisted = []
     not_hoisted = []
 
     # Compute the set of variable defined exactly once in the loop body.
-    def_once = compute_def_once(loop_body, typemap)
+    def_once, def_more = compute_def_once(loop_body, typemap)
     (call_table, reverse_call_table) = get_call_table(wrapped_blocks)
 
     setitems = set()
@@ -753,11 +765,16 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     dep_on_param = list(set(dep_on_param).difference(setitems))
     if config.DEBUG_ARRAY_OPT >= 1:
         print("hoist - def_once:", def_once, "setitems:", setitems, "itemsset:", itemsset, "dep_on_param:", dep_on_param, "parfor_params:", parfor_params)
+    for si in setitems:
+        add_to_def_once_sets(si, def_once, def_more)
 
     for label, block in loop_body.items():
         new_block = []
         for inst in block.body:
-            if isinstance(inst, ir.Assign) and inst.target.name in def_once:
+            if empty_container_allocator_hoist(inst, dep_on_param, call_table,
+                                   hoisted, not_hoisted, typemap, itemsset):
+                continue
+            elif isinstance(inst, ir.Assign) and inst.target.name in def_once:
                 if _hoist_internal(inst, dep_on_param, call_table,
                                    hoisted, not_hoisted, typemap, itemsset):
                     # don't add this instruction to the block since it is
@@ -769,11 +786,14 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
                     print("parfor")
                     inst.dump()
                 for ib_inst in inst.init_block.body:
-                    if (isinstance(ib_inst, ir.Assign) and
+                    if empty_container_allocator_hoist(ib_inst, dep_on_param,
+                        call_table, hoisted, not_hoisted, typemap, itemsset):
+                        continue
+                    elif (isinstance(ib_inst, ir.Assign) and
                         ib_inst.target.name in def_once):
                         if _hoist_internal(ib_inst, dep_on_param, call_table,
                                            hoisted, not_hoisted, typemap, itemsset):
-                            # don't add this instuction to the block since it is hoisted
+                            # don't add this instruction to the block since it is hoisted
                             continue
                     new_init_block.append(ib_inst)
                 inst.init_block.body = new_init_block
@@ -1365,7 +1385,10 @@ def replace_var_with_array_in_block(vars, block, typemap, calltypes):
             const_assign = ir.Assign(const_node, const_var, inst.loc)
             new_block.append(const_assign)
 
-            setitem_node = ir.SetItem(inst.target, const_var, inst.value, inst.loc)
+            val_var = ir.Var(inst.target.scope, mk_unique_var("$val"), inst.loc)
+            typemap[val_var.name] = typemap[inst.target.name]
+            new_block.append(ir.Assign(inst.value, val_var, inst.loc))
+            setitem_node = ir.SetItem(inst.target, const_var, val_var, inst.loc)
             calltypes[setitem_node] = signature(
                 types.none, types.npytypes.Array(typemap[inst.target.name], 1, "C"), types.intp, typemap[inst.target.name])
             new_block.append(setitem_node)
@@ -1508,15 +1531,17 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     scheduling_fnty = lc.Type.function(
         intp_ptr_t, [uintp_t, sched_ptr_type, sched_ptr_type, uintp_t, sched_ptr_type, intp_t])
     if index_var_typ.signed:
-        do_scheduling = builder.module.get_or_insert_function(scheduling_fnty,
-                                                          name="do_scheduling_signed")
+        do_scheduling = cgutils.get_or_insert_function(builder.module,
+                                                       scheduling_fnty,
+                                                       "do_scheduling_signed")
     else:
-        do_scheduling = builder.module.get_or_insert_function(scheduling_fnty,
-                                                          name="do_scheduling_unsigned")
+        do_scheduling = cgutils.get_or_insert_function(builder.module,
+                                                       scheduling_fnty,
+                                                       "do_scheduling_unsigned")
 
-    get_num_threads = builder.module.get_or_insert_function(
-        lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
-        name="get_num_threads")
+    get_num_threads = cgutils.get_or_insert_function(
+        builder.module, lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
+        "get_num_threads")
 
     num_threads = builder.call(get_num_threads, [])
 
@@ -1624,13 +1649,13 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
             if i < num_inps:
                 # Scalar input, need to store the value in an array of size 1
                 typ = context.get_data_type(
-                    aty) if aty != types.boolean else lc.Type.int(1)
+                    aty) if not isinstance(aty, types.Boolean) else lc.Type.int(1)
                 ptr = cgutils.alloca_once(builder, typ)
                 builder.store(arg, ptr)
             else:
                 # Scalar output, must allocate
                 typ = context.get_data_type(
-                    aty) if aty != types.boolean else lc.Type.int(1)
+                    aty) if not isinstance(aty, types.Boolean) else lc.Type.int(1)
                 ptr = cgutils.alloca_once(builder, typ)
             builder.store(builder.bitcast(ptr, byte_ptr_t), dst)
 
@@ -1735,7 +1760,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     fnty = lc.Type.function(lc.Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                              intp_ptr_t, byte_ptr_t])
 
-    fn = builder.module.get_or_insert_function(fnty, name=wrapper_name)
+    fn = cgutils.get_or_insert_function(builder.module, fnty, wrapper_name)
     context.active_code_library.add_linking_library(info.library)
 
     if config.DEBUG_ARRAY_OPT:

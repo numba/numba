@@ -17,6 +17,9 @@ build:
     # optional dependency: required only when omp is chosen as the backend for
     # the threading layer
     - lib/libiomp5.dylib # [osx]
+  ignore_run_exports:
+    # tbb-devel triggers hard dependency on tbb, this is not the case.
+    - tbb     # [not (armv6l or armv7l or aarch64 or linux32)]
 
 requirements:
   # build and run dependencies are duplicated to avoid setuptools issues
@@ -32,28 +35,29 @@ requirements:
     - numpy
     - setuptools
     # On channel https://anaconda.org/numba/
-    - llvmlite >=0.33.0dev0,<0.34
-    # TBB devel version is to match TBB libs
-    - tbb-devel >=2019.5       # [not (armv6l or armv7l or aarch64 or linux32)]
+    - llvmlite >=0.37.0dev0,<0.37
+    # TBB devel version is to match TBB libs.
+    # 2020.3 is the last version with the "old" ABI
+    - tbb-devel >=2019.5,<=2020.3       # [not (armv6l or armv7l or aarch64 or linux32)]
   run:
     - python >=3.6
     - numpy >=1.15
     - setuptools
     # On channel https://anaconda.org/numba/
-    - llvmlite >=0.33.0dev0,<0.34
+    - llvmlite >=0.37.0dev0,<0.37
   run_constrained:
     # If TBB is present it must be at least version 2019.5 from Anaconda due to
-    # build flag issues triggering UB. It must also be <=2020.0 due to ABI
+    # build flag issues triggering UB. It must also be <=2020.3 due to ABI
     # changes in TBB, see https://github.com/numba/numba/pull/6096.
-    - tbb >=2019.5,<=2020.0    # [not (armv6l or armv7l or aarch64 or linux32)]
+    # 2020.3 is the last version with the "old" ABI
+    - tbb >=2019.5,<=2020.3    # [not (armv6l or armv7l or aarch64 or linux32)]
     # avoid confusion from openblas bugs
     - libopenblas !=0.3.6      # [x86_64]
-    # CUDA 8.0 or later is required for CUDA support
-    - cudatoolkit >=8.0
+    # CUDA 9.2 or later is required for CUDA support
+    - cudatoolkit >=9.2
     # scipy 1.0 or later
     - scipy >=1.0
-    # icc_rt > 2018.0.2, see https://github.com/numba/numba/issues/6100
-    - icc_rt >=2018.0.3
+
 test:
   requires:
     - jinja2
@@ -70,7 +74,7 @@ test:
     - {{ compiler('cxx') }}    # [not (win or armv6l or armv7l or aarch64)]
 
 about:
-  home: http://numba.pydata.org/
+  home: https://numba.pydata.org/
   license: BSD
   license_file: LICENSE
   summary: a just-in-time Python function compiler based on LLVM

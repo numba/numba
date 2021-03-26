@@ -8,7 +8,7 @@ class TestCudaMandel(unittest.TestCase):
         """
 
         @cuda.jit('(uint32, float64, float64, float64, '
-                   'float64, uint32, uint32, uint32)', device=True)
+                  'float64, uint32, uint32, uint32)', device=True)
         def mandel(tid, min_x, max_x, min_y, max_y, width, height, iters):
             pixel_size_x = (max_x - min_x) / width
             pixel_size_y = (max_y - min_y) / height

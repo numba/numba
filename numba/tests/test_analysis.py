@@ -5,7 +5,9 @@ import types as pytypes
 import numpy as np
 from numba.core.compiler import compile_isolated, run_frontend, Flags, StateDict
 from numba import jit, njit
-from numba.core import types, errors, ir, rewrites, ir_utils, utils
+from numba.core import types, errors, ir, rewrites, ir_utils, utils, cpu
+from numba.core import postproc
+from numba.core.inline_closurecall import InlineClosureCallPass
 from numba.tests.support import TestCase, MemoryLeakMixin, SerialMixin
 
 from numba.core.analysis import dead_branch_prune, rewrite_semantic_constants
@@ -61,10 +63,24 @@ class TestBranchPruneBase(MemoryLeakMixin, TestCase):
         before = func_ir.copy()
         if self._DEBUG:
             print("=" * 80)
+            print("before inline")
+            func_ir.dump()
+
+        # run closure inlining to ensure that nonlocals in closures are visible
+        inline_pass = InlineClosureCallPass(func_ir,
+                                            cpu.ParallelOptions(False),)
+        inline_pass.run()
+
+        # Remove all Dels, and re-run postproc
+        post_proc = postproc.PostProcessor(func_ir)
+        post_proc.run()
+
+        rewrite_semantic_constants(func_ir, args_tys)
+        if self._DEBUG:
+            print("=" * 80)
             print("before prune")
             func_ir.dump()
 
-        rewrite_semantic_constants(func_ir, args_tys)
         dead_branch_prune(func_ir, args_tys)
 
         after = func_ir
@@ -565,6 +581,44 @@ class TestBranchPrune(TestBranchPruneBase, SerialMixin):
                            types.float64, types.NoneType('none')),
                           [None, None],
                           np.zeros((2, 3)), 1.2, None)
+
+    def test_closure_and_nonlocal_can_prune(self):
+        # Closures must be inlined ahead of branch pruning in case nonlocal
+        # is used. See issue #6585.
+        def impl():
+            x = 1000
+
+            def closure():
+                nonlocal x
+                x = 0
+
+            closure()
+
+            if x == 0:
+                return True
+            else:
+                return False
+
+        self.assert_prune(impl, (), [False,],)
+
+    def test_closure_and_nonlocal_cannot_prune(self):
+        # Closures must be inlined ahead of branch pruning in case nonlocal
+        # is used. See issue #6585.
+        def impl(n):
+            x = 1000
+
+            def closure(t):
+                nonlocal x
+                x = t
+
+            closure(n)
+
+            if x == 0:
+                return True
+            else:
+                return False
+
+        self.assert_prune(impl, (types.int64,), [None,], 1)
 
 
 class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):

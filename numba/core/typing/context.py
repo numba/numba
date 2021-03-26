@@ -353,7 +353,11 @@ class BaseContext(object):
             return typeof(val, Purpose.argument)
         except ValueError:
             if numba.cuda.is_cuda_array(val):
-                return typeof(numba.cuda.as_cuda_array(val), Purpose.argument)
+                # There's no need to synchronize on a stream when we're only
+                # determining typing - synchronization happens at launch time,
+                # so eliding sync here is safe.
+                return typeof(numba.cuda.as_cuda_array(val, sync=False),
+                              Purpose.argument)
             else:
                 raise
 
