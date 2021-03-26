@@ -50,7 +50,7 @@ class _MetaTargetConfig(type):
             setattr(cls, name, make_prop(name, option))
 
     def find_options(cls, dct):
-        """Returns a new dict with all the items that is mapping to a
+        """Returns a new dict with all the items that are a mapping to an
         ``Option``.
         """
         return {k: v for k, v in dct.items() if isinstance(v, Option)}
@@ -64,7 +64,7 @@ class TargetConfig(metaclass=_MetaTargetConfig):
             self._values.update(copy_from._values)
 
     def __repr__(self):
-        # NOTE: defaulted options will be placed in the back and grouped inside
+        # NOTE: default options will be placed at the end and grouped inside
         #       a square bracket; i.e. [optname=optval, ...]
         args = []
         defs = []
