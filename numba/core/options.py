@@ -38,7 +38,7 @@ class TargetOptions:
         options : dict
         """
         opt = cls()
-        opt.apply(flags, options)
+        opt._apply(flags, options)
         opt.finalize(flags, options)
         return flags
 
