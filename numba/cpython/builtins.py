@@ -8,11 +8,16 @@ from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
-from numba.core.imputils import lower_builtin, lower_getattr, lower_getattr_generic, lower_cast, lower_constant, iternext_impl, call_getiter, call_iternext, impl_ret_borrowed, impl_ret_untracked, numba_typeref_ctor
+from numba.core.imputils import (lower_builtin, lower_getattr,
+                                 lower_getattr_generic, lower_cast,
+                                 lower_constant, iternext_impl,
+                                 call_getiter, call_iternext, impl_ret_borrowed,
+                                 impl_ret_untracked, numba_typeref_ctor)
 from numba.core import typing, types, utils, cgutils
 from numba.core.extending import overload, intrinsic
 from numba.core.typeconv import Conversion
 from numba.core.errors import TypingError
+from numba.misc.special import literal_unroll
 
 
 @overload(operator.truth)
@@ -601,6 +606,43 @@ def redirect_type_ctor(context, builder, sig, args):
                 context.make_tuple(builder, ctor_args, ()))
 
     return context.compile_internal(builder, call_ctor, sig, args)
+
+
+@overload(sum)
+def ol_sum(iterable, start=0):
+    # Cpython explicitly rejects strings, bytes and bytearrays
+    # https://github.com/python/cpython/blob/3.9/Python/bltinmodule.c#L2310-L2329 # noqa: E501
+    error = None
+    if isinstance(start, types.UnicodeType):
+        error = ('strings', '')
+    elif isinstance(start, types.Bytes):
+        error = ('bytes', 'b')
+    elif isinstance(start, types.ByteArray):
+        error = ('bytearray', 'b')
+
+    if error is not None:
+        msg = "sum() can't sum {} [use {}''.join(seq) instead]".format(*error)
+        raise TypingError(msg)
+
+    # if the container is homogeneous then it's relatively easy to handle.
+    if isinstance(iterable, (types.containers._HomogeneousTuple, types.List,
+                             types.ListType, types.Array, types.RangeType)):
+        iterator = iter
+    elif isinstance(iterable, (types.containers._HeterogeneousTuple)):
+        # if container is heterogeneous then literal unroll and hope for the
+        # best.
+        iterator = literal_unroll
+    else:
+        return None
+
+    def impl(iterable, start=0):
+        acc = start
+        for x in iterator(iterable):
+            # This most likely widens the type, this is expected Numba behaviour
+            acc = acc + x
+        return acc
+    return impl
+
 
 # ------------------------------------------------------------------------------
 # map, filter, reduce

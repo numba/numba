@@ -937,6 +937,7 @@ The following built-in functions are supported:
   a jitted function).
 * :func:`round`
 * :func:`sorted`: the ``key`` argument is not supported
+* :func:`sum`
 * :func:`type`: only the one-argument form, and only on some types
   (e.g. numbers and named tuples)
 * :func:`zip`
