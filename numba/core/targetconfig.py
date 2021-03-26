@@ -1,10 +1,28 @@
+"""
+This module contains utils for manipulating target configurations such as
+compiler flags.
+"""
+
 from types import MappingProxyType
 
 
 class Option:
+    """An option to be used in ``TargetConfig``.
+    """
     __slots__ = "_type", "_default", "_doc"
 
     def __init__(self, type, *, default, doc):
+        """
+        Parameters
+        ----------
+        type :
+            Type of the option value. It can be a callable.
+            The setter always calls ``self._type(value)``.
+        default :
+            The default value for the option.
+        doc : str
+            Docstring for the option.
+        """
         self._type = type
         self._default = default
         self._doc = doc
@@ -23,7 +41,19 @@ class Option:
 
 
 class _MetaTargetConfig(type):
+    """Metaclass for ``TargetConfig``.
+
+    When a subclass of ``TargetConfig`` is created, all ``Option`` defined
+    as class members will be parsed and corresponding getters, setters, and
+    delters will be inserted.
+    """
     def __init__(cls, name, bases, dct):
+        """Invoked when subclass is created.
+
+        Insert properties for each ``Option`` that are class members.
+        All the options will be grouped inside the ``.options`` class
+        attribute.
+        """
         # Gather options from base classes and class dict
         opts = {}
         # Reversed scan into the base classes to follow MRO ordering such that
@@ -31,6 +61,7 @@ class _MetaTargetConfig(type):
         for base_cls in reversed(bases):
             opts.update(base_cls.options)
         opts.update(cls.find_options(dct))
+        # Store the options into class attribute as a ready-only mapping.
         cls.options = MappingProxyType(opts)
 
         # Make properties for each of the options
@@ -57,7 +88,28 @@ class _MetaTargetConfig(type):
 
 
 class TargetConfig(metaclass=_MetaTargetConfig):
+    """Base class for ``TargetConfig``.
+
+    Subclass should fill class members with ``Option``. For example:
+
+    >>> class MyTargetConfig(TargetConfig):
+    >>>     a_bool_option = Option(type=bool, default=False, doc="a bool")
+    >>>     an_int_option = Option(type=int, default=0, doc="an int")
+
+    The metaclass will insert properties for each ``Option``. For exapmle:
+
+    >>> tc = MyTargetConfig()
+    >>> tc.a_bool_option = True  # invokes the setter
+    >>> print(tc.an_int_option)  # print the default
+    """
     def __init__(self, copy_from=None):
+        """
+        Parameters
+        ----------
+        copy_from : TargetConfig or None
+            if None, creates an empty ``TargetConfig``.
+            Otherwise, creates a copy.
+        """
         self._values = {}
         if copy_from is not None:
             assert isinstance(copy_from, TargetConfig)
@@ -105,13 +157,24 @@ class TargetConfig(metaclass=_MetaTargetConfig):
         return name in self._values
 
     def discard(self, name):
+        """Remove the option by name if it is defined.
+
+        After this, the value for the option will be set to its default value.
+        """
         self._guard_option(name)
         self._values.pop(name, None)
 
     def copy(self):
+        """Clone this instance.
+        """
         return type(self)(self)
 
     def summary(self):
+        """Returns a ``str`` that summarizes this instance.
+
+        In contrast to ``__repr__``, only options that are explicitly set will
+        be showed.
+        """
         args = []
         for k in self.options:
             msg = f"{k}={getattr(self, k)}"

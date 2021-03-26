@@ -181,6 +181,11 @@ atexit.register(_at_shutdown)
 
 
 class ConfigStack:
+    """A stack for tracking target configurations in the compiler.
+
+    It stores the stack in a thread-local class attribute. All instances in the
+    same thread will see the same stack.
+    """
     tls = threading.local()
 
     def __init__(self):

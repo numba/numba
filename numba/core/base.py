@@ -23,7 +23,6 @@ from numba.core.imputils import (user_function, user_generator,
                        RegistryLoader)
 from numba.cpython import builtins
 
-
 GENERIC_POINTER = Type.pointer(Type.int(8))
 PYOBJECT = GENERIC_POINTER
 void_ptr = GENERIC_POINTER
@@ -834,7 +833,6 @@ class BaseContext(object):
             codegen = self.codegen()
             library = codegen.create_library(impl.__name__)
             if flags is None:
-                from numba.core import utils
 
                 cstk = utils.ConfigStack()
                 flags = compiler.Flags()
