@@ -173,7 +173,7 @@ class TargetConfig(metaclass=_MetaTargetConfig):
         """Returns a ``str`` that summarizes this instance.
 
         In contrast to ``__repr__``, only options that are explicitly set will
-        be showed.
+        be shown.
         """
         args = []
         for k in self.options:
