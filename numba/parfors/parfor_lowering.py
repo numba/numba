@@ -165,7 +165,8 @@ def _lower_parfor_parallel(lowerer, parfor):
             )
 
             # Resolve dtype
-            dt = pfbdr.make_const_variable(cval=pfbdr._typingctx.resolve_value_type(reddtype), typ=types.DType(reddtype))
+            cval = pfbdr._typingctx.resolve_value_type(reddtype)
+            dt = pfbdr.make_const_variable(cval=cval, typ=types.DType(reddtype))
             # Add call to empty passing the size var tuple.
             empty_call = pfbdr.call(glbl_np_empty, args=[size_var, dt])
 
