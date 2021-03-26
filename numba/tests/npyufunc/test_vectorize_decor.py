@@ -129,12 +129,12 @@ class BaseVectorizeUnrecognizedArg(unittest.TestCase, CheckWarningsMixin):
         b = np.array([3.0], dtype=np.float32)
         sig = [float32(float32, float32)]
         args = with_sig and [sig] or []
-        with self.assertRaises(NameError) as raises:
+        with self.assertRaises(KeyError) as raises:
             f = vectorize(*args, target=target, nonexistent=2)(vector_add)
             f(a, b)
         self.assertIn("Unrecognized options", str(raises.exception))
 
-class TestVectorizeUnrecognizedArg(BaseVectorizeUnrecognizedArg):
+class _(BaseVectorizeUnrecognizedArg):
     def test_target_cpu_unrecognized_arg(self):
         self._test_target_unrecognized_arg('cpu')
 

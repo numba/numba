@@ -19,13 +19,8 @@ class TargetOptions:
     @classmethod
     def parse_as_flags(cls, flags, options):
         opt = cls()
-        # try:
         opt.apply(flags, options)
         opt.finalize(flags, options)
-        # except:
-        #     raise TypeError(f"failed in {opt}")
-        # finalized Flags(enable_looplift=True, enable_pyobject=True, enable_pyobject_looplift=True, boundscheck=None, nrt=True)
-        # print('finalized', flags.summary())
         return flags
 
     def apply(self, flags, options):
@@ -47,9 +42,9 @@ class TargetOptions:
         unused = set(options) - used
         if unused:
             # Unread options?
-            print(mappings)
-            print(self.__dict__)
-            raise NameError(f"Unrecognized options: {unused}. Known options are {mappings.keys()}")
+            m = (f"Unrecognized options: {unused}. "
+                 f"Known options are {mappings.keys()}")
+            raise KeyError(m)
 
 
 _mapping = TargetOptions.Mapping
