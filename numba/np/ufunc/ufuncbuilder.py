@@ -28,20 +28,13 @@ _options_mixin = include_default_options(
 class UFuncTargetOptions(_options_mixin, TargetOptions):
 
     def finalize(self, flags, options):
-        cstk = utils.ConfigStack()
         if not flags.is_set("enable_pyobject"):
             flags.enable_pyobject = True
 
         if not flags.is_set("enable_looplift"):
             flags.enable_looplift = True
 
-        if not flags.is_set("nrt"):
-            if cstk:
-                # inherit
-                top = cstk.top()
-                flags.nrt = top.nrt
-            else:
-                flags.nrt = True
+        flags.inherit_if_not_set("nrt", default=True)
 
         if not flags.is_set("debuginfo"):
             flags.debuginfo = config.DEBUGINFO_DEFAULT
@@ -51,11 +44,7 @@ class UFuncTargetOptions(_options_mixin, TargetOptions):
 
         flags.enable_pyobject_looplift = True
 
-        if not flags.is_set("fastmath"):
-            if cstk:
-                # inherit
-                top = cstk.top()
-                flags.fastmath = top.fastmath
+        flags.inherit_if_not_set("fastmath")
 
 
 class UFuncTarget(TargetDescriptor):

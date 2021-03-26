@@ -4,6 +4,7 @@ compiler flags.
 """
 
 from types import MappingProxyType
+from numba.core import utils
 
 
 class Option:
@@ -87,6 +88,14 @@ class _MetaTargetConfig(type):
         return {k: v for k, v in dct.items() if isinstance(v, Option)}
 
 
+class _NotSetType:
+    def __repr__(self):
+        return "<NotSet>"
+
+
+_NotSet = _NotSetType()
+
+
 class TargetConfig(metaclass=_MetaTargetConfig):
     """Base class for ``TargetConfig``.
 
@@ -163,6 +172,28 @@ class TargetConfig(metaclass=_MetaTargetConfig):
         """
         self._guard_option(name)
         self._values.pop(name, None)
+
+    def inherit_if_not_set(self, name, default=_NotSet):
+        """Inherit flag from ``ConfigStack``.
+
+        Parameters
+        ----------
+        name : str
+            Option name.
+        default : optional
+            When given, it overrides the default value.
+            It is only used when the flag is not defined locally and there is
+            no entry in the ``ConfigStack``.
+        """
+        self._guard_option(name)
+        if not self.is_set(name):
+            cstk = utils.ConfigStack()
+            if cstk:
+                # inherit
+                top = cstk.top()
+                setattr(self, name, getattr(top, name))
+            elif default is not _NotSet:
+                setattr(self, name, default)
 
     def copy(self):
         """Clone this instance.
