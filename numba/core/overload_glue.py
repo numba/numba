@@ -5,13 +5,15 @@ written in the "old" style of a separate typing and lowering implementation.
 import types as pytypes
 import textwrap
 
+from numba.core import errors
+
 
 class _OverloadWrapper(object):
     """This class does all the work of assembling and registering wrapped split
     implementations.
     """
 
-    def __init__(self, function=None):
+    def __init__(self, function):
         assert function is not None
         self._function = function
         self._BIND_TYPES = dict()
@@ -23,7 +25,7 @@ class _OverloadWrapper(object):
         self._build()
 
     def _stub_generator(self, nargs, body_func, kwargs=None):
-        """ This generates a function that takes "nargs" count of arguments
+        """This generates a function that takes "nargs" count of arguments
         and the presented kwargs, the "body_func" is the function that'll
         type the overloaded function and then work out which lowering to
         return"""
@@ -88,7 +90,7 @@ class _OverloadWrapper(object):
         return inner
 
     def _assemble(self):
-        """ Assembles the OverloadSelector definitions from the registered
+        """Assembles the OverloadSelector definitions from the registered
         typing to lowering map.
         """
         from numba.core.base import OverloadSelector
@@ -106,7 +108,8 @@ class _OverloadWrapper(object):
 
             def body(tyctx):
                 msg = f"No typer registered for {self._function}"
-                assert self._TYPER is not None, msg
+                if self._TYPER is None:
+                    raise errors.InternalError(msg)
                 typing = self._TYPER(tyctx)
                 sig = typing.apply(ol_args, ol_kwargs)
                 if sig is None:
@@ -118,7 +121,8 @@ class _OverloadWrapper(object):
                 lowering = self._selector.find(sig.args)
                 msg = (f"Could not find implementation to lower {sig} for ",
                        f"{self._function}")
-                assert lowering is not None, msg
+                if lowering is None:
+                    raise errors.InternalError(msg)
                 return sig, lowering
 
             stub = self._stub_generator(len(ol_args), body, ol_kwargs)
@@ -151,8 +155,8 @@ class _OverloadWrapper(object):
             return l['jit_wrapper_{}'.format(name)]
 
 
-class _Gluer():
-    """ This is a helper class to make sure that each concrete overload has only
+class _Gluer:
+    """This is a helper class to make sure that each concrete overload has only
     one wrapper as the code relies on the wrapper being a singleton."""
     def __init__(self):
         self._registered = dict()
