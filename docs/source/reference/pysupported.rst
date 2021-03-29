@@ -923,7 +923,7 @@ The following built-in functions are supported:
 * :func:`filter`
 * :class:`float`
 * :func:`hash` (see :ref:`pysupported-hashing` below)
-* :class:`int`: only the one-argument form
+* :class:`int`: only the one-argument form, and only for numeric type conversions (Integer, Float and Boolean), string parsing is not supported yet
 * :func:`iter`: only the one-argument form
 * :func:`len`
 * :func:`min`
