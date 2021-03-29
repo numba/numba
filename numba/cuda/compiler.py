@@ -29,6 +29,7 @@ from .cudadrv import nvvm, driver
 from .errors import missing_launch_config_msg, normalize_kernel_dimensions
 from .api import get_current_device
 from .args import wrap_arg
+from numba.cuda.cudadrv.driver import driver
 
 
 def _nvvm_options_type(x):
@@ -785,6 +786,21 @@ class _KernelConfiguration:
         self.blockdim = blockdim
         self.stream = stream
         self.sharedmem = sharedmem
+
+        num_blocks = griddim[0] * griddim[1] * griddim[2]
+        ctx = get_context()
+        smcount = ctx.device.MULTIPROCESSOR_COUNT
+
+        print (griddim)
+        print (blockdim)
+        print (smcount)
+
+        if num_blocks < 2 * smcount:
+            msg = ("Number of blocks ({blocks}) that are  < 2 * SM ({sm}) "
+                  "will generate inefficient kernel code.")
+            msg = msg.format(blocks=num_blocks, sm=2 * smcount)
+            #warn(msg, category=RuntimeWarning)
+            warn(msg)
 
     def __call__(self, *args):
         return self.dispatcher.call(args, self.griddim, self.blockdim,
