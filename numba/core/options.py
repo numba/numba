@@ -17,8 +17,8 @@ class TargetOptions:
             self.apply = apply
 
     def finalize(self, flags, options):
-        """Subclass can override this method to make target specific
-        customization of default flags.
+        """Subclasses can override this method to make target specific
+        customizations of default flags.
 
         Parameters
         ----------
