@@ -161,6 +161,9 @@ def get_np_ufunc_typ(func):
     for (k, v) in typing.npydecl.registry.globals:
         if k == func:
             return v
+    for (k, v) in typing.templates.builtin_registry.globals:
+        if k == func:
+            return v
     raise RuntimeError("type for func ", func, " not found")
 
 

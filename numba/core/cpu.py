@@ -247,7 +247,7 @@ class CPUTargetOptions(TargetOptions):
         "looplift": bool,
         "boundscheck": lambda X: bool(X) if X is not None else None,
         "debug": bool,
-        "_nrt": bool,
+        "_nrt": lambda X: False if X is False else utils.TriState,
         "no_rewrites": bool,
         "no_cpython_wrapper": bool,
         "no_cfunc_wrapper": bool,
