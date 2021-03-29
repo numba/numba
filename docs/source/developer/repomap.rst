@@ -152,6 +152,8 @@ Compiler Pipeline
 - :ghfile:`numba/core/pylowering.py` - Lowering of Numba IR in object mode
 - :ghfile:`numba/core/pythonapi.py` - LLVM IR code generation to interface with
   CPython API
+- :ghfile:`numba/core/targetconfig.py` - Utils for target configurations such
+  as compiler flags.
 
 
 Type Management

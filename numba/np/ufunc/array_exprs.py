@@ -379,7 +379,7 @@ def _lower_array_expr(lowerer, expr):
     # Follow the Numpy error model.  Note this also allows e.g. vectorizing
     # division (issue #1223).
     flags = compiler.Flags()
-    flags.set('error_model', 'numpy')
+    flags.error_model = 'numpy'
     cres = context.compile_subroutine(builder, impl, inner_sig, flags=flags,
                                       caching=False)
 

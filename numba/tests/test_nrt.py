@@ -29,7 +29,7 @@ from numba.core import cpu
 import unittest
 
 enable_nrt_flags = Flags()
-enable_nrt_flags.set("nrt")
+enable_nrt_flags.nrt = True
 
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'),
                              'linux only test')
