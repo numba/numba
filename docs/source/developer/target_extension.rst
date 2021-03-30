@@ -1,6 +1,3 @@
-
-.. _arch-stencil:
-
 =========================
 Notes on Target Extension
 =========================
@@ -62,3 +59,4 @@ In :meth:`numba.core.options.TargetOptions.finalize`,
 use :meth:`numba.core.targetconfig.TargetConfig.inherit_if_not_set`
 to request a compiler flag from the caller if it is not set for the current
 function.
+
