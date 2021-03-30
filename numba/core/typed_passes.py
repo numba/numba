@@ -289,6 +289,13 @@ class ParforPass(FunctionPass):
         """
         Convert data-parallel computations into Parfor nodes
         """
+        # Register lowerer for Parfor Node
+        from numba.parfors.parfor_lowering import _lower_parfor_parallel
+        if hasattr(state.targetctx, "lower_extensions"):
+            state.targetctx.lower_extensions[Parfor] = _lower_parfor_parallel
+        else:
+            raise AttributeError("target_context has no attribute 'lower_extensions'")
+
         # Ensure we have an IR and type information.
         assert state.func_ir
         parfor_pass = _parfor_ParforPass(state.func_ir,

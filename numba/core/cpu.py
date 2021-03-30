@@ -63,6 +63,9 @@ class CPUContext(BaseContext):
         import numba.typed.dictimpl
         import numba.experimental.function_type
 
+        # Add lower_extension attribute
+        self.lower_extensions = {}
+
     def load_additional_registries(self):
         # Add target specific implementations
         from numba.np import npyimpl
