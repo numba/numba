@@ -1,6 +1,7 @@
 import numpy as np
 import numpy.core.umath_tests as ut
 
+from collections import namedtuple
 from numba import void, float32, float64
 from numba import guvectorize
 from numba import cuda
@@ -224,6 +225,41 @@ class TestCUDAGufunc(CUDATestCase):
 
         msg = "cannot specify 'out' as both a positional and keyword argument"
         self.assertEqual(str(raises.exception), msg)
+
+    def check_tuple_arg(self, a, b):
+        @guvectorize([(float64[:], float64[:], float64[:])], '(n),(n)->()',
+                     target='cuda')
+        def gu_reduce(x, y, r):
+            s = 0
+            for i in range(len(x)):
+                s += x[i] * y[i]
+            r[0] = s
+
+        r = gu_reduce(a, b)
+        expected = np.sum(np.asarray(a) * np.asarray(b), axis=1)
+        np.testing.assert_equal(expected, r)
+
+    def test_tuple_of_tuple_arg(self):
+        a = ((1.0, 2.0, 3.0),
+             (4.0, 5.0, 6.0))
+        b = ((1.5, 2.5, 3.5),
+             (4.5, 5.5, 6.5))
+        self.check_tuple_arg(a, b)
+
+    def test_tuple_of_namedtuple_arg(self):
+        Point = namedtuple('Point', ('x', 'y', 'z'))
+        a = (Point(x=1.0, y=2.0, z=3.0),
+             Point(x=4.0, y=5.0, z=6.0))
+        b = (Point(x=1.5, y=2.5, z=3.5),
+             Point(x=4.5, y=5.5, z=6.5))
+        self.check_tuple_arg(a, b)
+
+    def test_tuple_of_array_arg(self):
+        a = (np.asarray((1.0, 2.0, 3.0)),
+             np.asarray((4.0, 5.0, 6.0)))
+        b = (np.asarray((1.5, 2.5, 3.5)),
+             np.asarray((4.5, 5.5, 6.5)))
+        self.check_tuple_arg(a, b)
 
 
 if __name__ == '__main__':
