@@ -294,7 +294,8 @@ class ParforPass(FunctionPass):
         if hasattr(state.targetctx, "lower_extensions"):
             state.targetctx.lower_extensions[Parfor] = _lower_parfor_parallel
         else:
-            raise AttributeError("target_context has no attribute 'lower_extensions'")
+            raise AttributeError("target_context has no attribute "
+                                 "'lower_extensions'")
 
         # Ensure we have an IR and type information.
         assert state.func_ir
