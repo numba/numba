@@ -411,7 +411,7 @@ def linspace_parallel_impl(return_type, *args):
     else:
         raise ValueError("parallel linspace with types {}".format(args))
 
-replace_functions_map = {
+swap_functions_map = {
     ('argmin', 'numpy'): lambda r,a: argmin_parallel_impl,
     ('argmax', 'numpy'): lambda r,a: argmax_parallel_impl,
     ('min', 'numpy'): min_parallel_impl,
@@ -1350,7 +1350,7 @@ class PreParforPass(object):
     implementations of numpy functions if available.
     """
     def __init__(self, func_ir, typemap, calltypes, typingctx, options,
-                 swapped={}, replace_functions_map=replace_functions_map):
+                 swapped={}, replace_functions_map=None):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
@@ -1358,6 +1358,8 @@ class PreParforPass(object):
         self.options = options
         # diagnostics
         self.swapped = swapped
+        if replace_functions_map is None:
+            replace_functions_map = swap_functions_map
         self.replace_functions_map = replace_functions_map
         self.stats = {
             'replaced_func': 0,

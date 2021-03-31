@@ -73,8 +73,6 @@ class BaseTest(TestCase):
 
             diagnostics = numba.parfors.parfor.ParforDiagnostics()
 
-            if swap_map is None:
-                swap_map = numba.parfors.parfor.replace_functions_map
             preparfor_pass = numba.parfors.parfor.PreParforPass(
                 tp.state.func_ir,
                 tp.state.typemap,
@@ -662,8 +660,8 @@ class TestPreParforPass(BaseTest):
         args = (arr,)
         argtypes = [typeof(x) for x in args]
 
-        swap_map = numba.parfors.parfor.replace_functions_map.copy()
-        swap_map.pop(("sum", "numpy"), None)
+        swap_map = numba.parfors.parfor.swap_functions_map.copy()
+        swap_map.pop(("sum", "numpy"))
         pre_pass = self.run_parfor_pre_pass(test_impl, argtypes, swap_map)
         self.assertEqual(pre_pass.stats["replaced_func"], 0)
         self.assertEqual(pre_pass.stats["replaced_dtype"], 0)
