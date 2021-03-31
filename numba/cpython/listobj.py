@@ -1125,16 +1125,14 @@ def ol_sorted(iterable, key=None, reverse=False):
 @overload(reversed)
 def list_reverse(A):
     """
-    reversed(list)
+    reversed for lists and arrays
     """
-    if isinstance(A, types.List):
+    def impl_reversed(A):
+        A_len = len(A)
+        for i in range(A_len):
+            yield A[A_len - 1 - i]
 
-        def impl_reversed(A):
-            A_len = len(A)
-            for i in range(A_len):
-                yield A[A_len - 1 - i]
-
-        return impl_reversed
+    return impl_reversed
 
 # -----------------------------------------------------------------------------
 # Implicit casting
