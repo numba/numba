@@ -1,9 +1,9 @@
-=========================
-Notes on Target Extension
-=========================
+==========================
+Notes on Target Extensions
+==========================
 
-.. warning:: All features and API described in this page are in-development and
-             may change without deprecation notice.
+.. warning:: All features and APIs described in this page are in-development and
+             may change at any time without deprecation notices being issued.
 
 
 Inheriting compiler flags from the caller
@@ -12,13 +12,13 @@ Inheriting compiler flags from the caller
 Compiler flags, i.e. options such as ``fastmath``, ``nrt`` in
 ``@jit(nrt=True, fastmath=True))`` are specified per-function but their
 effects are not well-defined---some flags affect the entire callgraph, some
-flags affect only the current function. Sometimes, it is necessary for callees
+flags affect only the current function. Sometimes it is necessary for callees
 to inherit flags from the caller; for example the ``fastmath`` flag should be
 infectious.
 
-To address the problem, the followings are needed:
+To address the problem, the following are needed:
 
-1. Better define the semantic for compiler flags. Preferably, all flags should
+1. Better definitions for the semantics of compiler flags. Preferably, all flags should
    limit their effect to the current function. (TODO)
 2. Allow compiler flags to be inherited from the caller. (Done)
 3. Consider compiler flags in function resolution. (TODO)
@@ -59,4 +59,3 @@ In :meth:`numba.core.options.TargetOptions.finalize`,
 use :meth:`numba.core.targetconfig.TargetConfig.inherit_if_not_set`
 to request a compiler flag from the caller if it is not set for the current
 function.
-
