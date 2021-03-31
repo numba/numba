@@ -278,6 +278,10 @@ def list_reverse(n):
     l.reverse()
     return l
 
+def list_reversed(n):
+    l = list(range(n))
+    return reversed(l)
+
 def list_add(m, n):
     a = list(range(0, m))
     b = list(range(100, 100 + n))
@@ -553,6 +557,9 @@ class TestLists(MemoryLeakMixin, TestCase):
 
     def test_reverse(self):
         self.check_unary_with_size(list_reverse)
+
+    def test_reversed(self):
+        self.check_unary_with_size(list_reversed)
 
     def test_contains(self):
         self.check_unary_with_size(list_contains)
