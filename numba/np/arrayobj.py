@@ -1573,18 +1573,16 @@ def numpy_rot90(arr, k=1):
     if arr.ndim < 2:
         raise ValueError('Input must be >= 2-d.')
 
-    axes_list = (1, 0, *range(2, arr.ndim))
-
     def impl(arr, k=1):
         k = k % 4
         if k == 0:
             return arr[:]
         elif k == 1:
-            return np.transpose(np.fliplr(arr), axes_list)
+            return np.swapaxes(np.fliplr(arr), 0, 1)
         elif k == 2:
             return np.flipud(np.fliplr(arr))
         elif k == 3:
-            return np.fliplr(np.transpose(arr, axes_list))
+            return np.fliplr(np.swapaxes(arr, 0, 1))
         else:
             raise AssertionError  # unreachable
 
