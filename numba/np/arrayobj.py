@@ -5266,3 +5266,31 @@ def ol_bool(arr):
                        "is ambiguous. Use a.any() or a.all()")
                 raise ValueError(msg)
         return impl
+
+
+@overload(np.swapaxes)
+def numpy_swapaxes(arr, axis1, axis2):
+    if not isinstance(axis1, (int, types.Integer)):
+        raise errors.TypingError('The second argument "axis1" must be an '
+                                 'integer')
+    if not isinstance(axis2, (int, types.Integer)):
+        raise errors.TypingError('The third argument "axis2" must be an '
+                                 'integer')
+    if not isinstance(arr, types.Array):
+        raise errors.TypingError('The first argument "arr" must be an array')
+
+    # create tuple list for transpose
+    axes_list = tuple(range(arr.ndim))
+
+    def impl(arr, axis1, axis2):
+        # to ensure tuple_setitem support of negative values
+        if axis1 < 0:
+            axis1 += arr.ndim
+        if axis2 < 0:
+            axis2 += arr.ndim
+
+        axes_tuple = tuple_setitem(axes_list, axis1, axis2)
+        axes_tuple = tuple_setitem(axes_tuple, axis2, axis1)
+        return np.transpose(arr, axes_tuple)
+
+    return impl
