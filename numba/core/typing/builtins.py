@@ -801,9 +801,16 @@ class NumberClassAttribute(AttributeTemplate):
                 sig = fnty.get_call_type(self.context, (val, types.DType(ty)),
                                          {})
                 return sig.return_type
+            elif isinstance(val, (types.Number, types.Boolean)):
+                 # Scalar constructor, e.g. np.int32(42)
+                 return ty
             else:
-                # Scalar constructor, e.g. np.int32(42)
-                return ty
+                # unsupported
+                msg = f"Casting {val} to {ty} directly is unsupported."
+                if isinstance(val, types.Array):
+                    # array casts are supported a different way.
+                    msg += f" Try doing '<array>.astype(np.{ty})' instead"
+                raise errors.TypingError(msg)
 
         return types.Function(make_callable_template(key=ty, typer=typer))
 
