@@ -31,7 +31,8 @@ def loop3(a, b, c):
     return s
 
 def range_rev(n):
-    return reversed(range(n))
+    rev_range = reversed(range(n))
+    return [val for val in rev_range]
 
 def range_len1(n):
     return len(range(n))
@@ -95,7 +96,9 @@ class TestRange(unittest.TestCase):
         pyfunc = range_rev
         cres = compile_isolated(pyfunc, [types.int64])
         cfunc = cres.entry_point
-        self.assertTrue(cfunc(5), pyfunc(5))
+        arglist = [5, 0, -5]
+        for arg in arglist:
+            self.assertEqual(cfunc(types.int64(arg)), pyfunc(types.int64(arg)))
 
 
     def test_range_len1(self):
