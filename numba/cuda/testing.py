@@ -22,6 +22,9 @@ class CUDATestCase(SerialMixin, TestCase):
     the context and destroy resources used by a normal CUDATestCase if any of
     its tests are run between tests from a CUDATestCase.
     """
+    def setUp(self):
+        # Disable warnings about low gpu utilization for test suite
+        config.LOW_OCCUPANCY_WARNINGS = 0
 
 
 class ContextResettingTestCase(CUDATestCase):

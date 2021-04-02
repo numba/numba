@@ -154,6 +154,11 @@ class _EnvReloader(object):
             "NUMBA_ALWAYS_WARN_UNINIT_VAR", int, 0,
         )
 
+        # whether to warn about kernels where the block size will
+        # result in a inefficient mapping to GPUs. On by default.
+        LOW_OCCUPANCY_WARNINGS = _readenv(
+            "NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS", int, 1)
+
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)
 

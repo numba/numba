@@ -467,6 +467,12 @@ GPU support
    Strict strides checking is deprecated and may be removed in future. See
    :ref:`deprecation-strict-strides`.
 
+.. envvar:: NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS
+
+   Enable warnings if the block size is too small relative to the number of
+   steraming multiprocessors (SM). If the block size is too small an inefficient
+   schedule will result and performance will suffer.
+
 
 Threading Control
 -----------------

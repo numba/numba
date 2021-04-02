@@ -9,6 +9,7 @@ import unittest
 import warnings
 from numba.tests.support import ignore_internal_warnings
 from numba.core.errors import NumbaPerformanceWarning
+from numba.tests.support import override_config
 
 
 def _get_matmulcore_gufunc(dtype=float32, max_blocksize=None):
@@ -198,14 +199,15 @@ class TestCUDAGufunc(CUDATestCase):
         b = np.random.rand(1024 * 1024 * 32).astype('float32')
         dist = np.zeros(a.shape[0]).astype('float32')
 
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', NumbaPerformanceWarning)
-            ignore_internal_warnings()
-            numba_dist_cuda(a, b, dist)
-            self.assertEqual(w[0].category, NumbaPerformanceWarning)
-            self.assertIn('Number of blocks', str(w[0].message))
-            self.assertIn('will generate inefficient kernel code',
-                          str(w[0].message))
+        with override_config('LOW_OCCUPANCY_WARNINGS', 1):
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter('always', NumbaPerformanceWarning)
+                ignore_internal_warnings()
+                numba_dist_cuda(a, b, dist)
+                self.assertEqual(w[0].category, NumbaPerformanceWarning)
+                self.assertIn('Number of blocks', str(w[0].message))
+                self.assertIn('will generate inefficient kernel code',
+                              str(w[0].message))
 
     def test_nopython_flag(self):
 

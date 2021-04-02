@@ -791,7 +791,7 @@ class _KernelConfiguration:
         ctx = get_context()
         smcount = ctx.device.MULTIPROCESSOR_COUNT
 
-        if num_blocks < 2 * smcount:
+        if (config.LOW_OCCUPANCY_WARNINGS) and (num_blocks < 2 * smcount):
             msg = ("Number of blocks ({blocks}) that are  < 2 * SM ({sm}) "
                    "will generate inefficient kernel code.")
             msg = msg.format(blocks=num_blocks, sm=2 * smcount)
