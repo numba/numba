@@ -32,7 +32,7 @@ def loop3(a, b, c):
 
 def range_rev(n):
     rev_range = reversed(range(n))
-    return [val for val in rev_range]
+    return list(rev_range)
 
 def range_len1(n):
     return len(range(n))
