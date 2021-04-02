@@ -684,7 +684,11 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         Returning a Dispatcher object.  The Dispatcher object is cached
         internally in `self._impl_cache`.
         """
-        flags = utils.ConfigStack().top()
+        cfgstk = utils.ConfigStack()
+        if cfgstk:
+            flags = cfgstk.top()
+        else:
+            flags = None
         cache_key = self.context, tuple(args), tuple(kws.items()), flags
         try:
             impl, args = self._impl_cache[cache_key]
