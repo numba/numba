@@ -768,8 +768,8 @@ class Interpreter(object):
 
     def op_FORMAT_VALUE(self, inst, value, res, strvar):
         """
-        FORMAT_VALUE(flags): flags argument specifies format spec which is not supported
-        yet. Currently, str() is simply called on the value.
+        FORMAT_VALUE(flags): flags argument specifies format spec which is not
+        supported yet. Currently, str() is simply called on the value.
         https://docs.python.org/3/library/dis.html#opcode-FORMAT_VALUE
         """
         value = self.get(value)
@@ -794,7 +794,9 @@ class Interpreter(object):
         prev = self.get(strings[0])
         for other, tmp in zip(strings[1:], tmps):
             other = self.get(other)
-            expr = ir.Expr.binop(operator.add, lhs=prev, rhs=other, loc=self.loc)
+            expr = ir.Expr.binop(
+                operator.add, lhs=prev, rhs=other, loc=self.loc
+            )
             self.store(expr, tmp)
             prev = self.get(tmp)
 
