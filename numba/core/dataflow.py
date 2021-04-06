@@ -179,7 +179,11 @@ class DataFlowAnalysis(object):
         """
         if inst.arg != 0:
             msg = "format spec in f-strings not supported yet"
-            raise UnsupportedError(msg, loc=self.get_debug_loc(inst.lineno))
+            raise UnsupportedError(
+                msg,
+                loc=Loc(filename=self.bytecode.func_id.filename,
+                line=inst.lineno)
+            )
         value = info.pop()
         strvar = info.make_temp()
         res = info.make_temp()
