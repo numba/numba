@@ -938,6 +938,23 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             for a in a_variations():
                 check(a)
 
+    def test_argmax_axis(self):
+        arr = np.arange(24).reshape(2, 3, 4) + 10
+        arr[0,1,1] += 100
+        arr[1,0,0] += 100
+
+        py_functions = [
+            lambda a, _axis=axis: np.argmax(a, axis=_axis)
+            for axis in [0, 1, 2, -1]
+        ]
+        c_functions = [
+            jit(nopython=True)(pyfunc) for pyfunc in py_functions
+        ]
+        self.assertPreciseEqual(
+            [pyfunc(arr) for pyfunc in py_functions],
+            [cfunc(arr) for cfunc in c_functions]
+        )
+
     @classmethod
     def install_generated_tests(cls):
         # These form a testing product where each of the combinations are tested
