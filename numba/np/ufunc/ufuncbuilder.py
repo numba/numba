@@ -3,11 +3,11 @@
 import inspect
 from contextlib import contextmanager
 
+from numba.core import config
 from numba.core.decorators import jit
 from numba.core.descriptors import TargetDescriptor
-from numba.core.options import TargetOptions
+from numba.core.options import TargetOptions, include_default_options
 from numba.core.registry import dispatcher_registry, cpu_target
-from numba.core.cpu import FastMathOptions
 from numba.core import utils, types, serialize, compiler, sigutils
 from numba.np.numpy_support import as_dtype
 from numba.np.ufunc import _internal
@@ -17,13 +17,34 @@ from numba.core.caching import FunctionCache, NullCache
 from numba.core.compiler_lock import global_compiler_lock
 
 
-class UFuncTargetOptions(TargetOptions):
-    OPTIONS = {
-        "nopython" : bool,
-        "forceobj" : bool,
-        "boundscheck": bool,
-        "fastmath" : FastMathOptions,
-    }
+_options_mixin = include_default_options(
+    "nopython",
+    "forceobj",
+    "boundscheck",
+    "fastmath",
+)
+
+
+class UFuncTargetOptions(_options_mixin, TargetOptions):
+
+    def finalize(self, flags, options):
+        if not flags.is_set("enable_pyobject"):
+            flags.enable_pyobject = True
+
+        if not flags.is_set("enable_looplift"):
+            flags.enable_looplift = True
+
+        flags.inherit_if_not_set("nrt", default=True)
+
+        if not flags.is_set("debuginfo"):
+            flags.debuginfo = config.DEBUGINFO_DEFAULT
+
+        if not flags.is_set("boundscheck"):
+            flags.boundscheck = flags.debuginfo
+
+        flags.enable_pyobject_looplift = True
+
+        flags.inherit_if_not_set("fastmath")
 
 
 class UFuncTarget(TargetDescriptor):
@@ -84,11 +105,12 @@ class UFuncDispatcher(serialize.ReduceMixin):
         flags = compiler.Flags()
         self.targetdescr.options.parse_as_flags(flags, topt)
 
-        flags.set("no_cpython_wrapper")
-        flags.set("error_model", "numpy")
+        flags.no_cpython_wrapper = True
+        flags.error_model = "numpy"
         # Disable loop lifting
-        # The feature requires a real python function
-        flags.unset("enable_looplift")
+        # The feature requires a real
+        #  python function
+        flags.enable_looplift = False
 
         return self._compile_core(sig, flags, locals)
 

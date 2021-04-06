@@ -1803,6 +1803,16 @@ class Interpreter(object):
                                       loc=self.loc)
             self.store(value=extendinst, name=res)
 
+    def op_MAP_ADD(self, inst, target, key, value, setitemvar, res):
+        target = self.get(target)
+        key = self.get(key)
+        value = self.get(value)
+        setitemattr = ir.Expr.getattr(target, '__setitem__', loc=self.loc)
+        self.store(value=setitemattr, name=setitemvar)
+        appendinst = ir.Expr.call(self.get(setitemvar), (key, value,), (),
+                                  loc=self.loc)
+        self.store(value=appendinst, name=res)
+
     def op_LOAD_ASSERTION_ERROR(self, inst, res):
         gv_fn = ir.Global("AssertionError", AssertionError, loc=self.loc)
         self.store(value=gv_fn, name=res)

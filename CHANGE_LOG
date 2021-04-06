@@ -3,8 +3,28 @@ Version 0.54.0
 
 In development
 
-Version 0.53.0 (04 February, 2021)
-----------------------------------
+Version 0.53.1 (25 March, 2021)
+-------------------------------
+
+This is a bugfix release for 0.53.0. It contains the following four
+pull-requests which fix two critical regressions and two build failures
+reported by the openSuSe team:
+
+* PR #6826 Fix regression on gufunc serialization
+* PR #6828 Fix regression in CUDA: Set stream in mapped and managed array
+  device_setup
+* PR #6837 Ignore warnings from packaging module when testing import behaviour.
+* PR #6851 set non-reported llvm timing values to 0.0
+
+Authors:
+
+* Ben Greiner
+* Graham Markall
+* Siu Kwan Lam
+* Stuart Archibald
+
+Version 0.53.0 (11 March, 2021)
+-------------------------------
 
 This release continues to add new features, bug fixes and stability improvements
 to Numba.
@@ -84,7 +104,8 @@ General Enhancements:
 * PR #6635: Try to resolve dynamic getitems as static post unroll transform.
   (Stuart Archibald)
 * PR #6636: Adds llvm_lock event (Siu Kwan Lam)
-* PR #6664: Adds tests for PR 5659
+* PR #6664: Adds tests for PR 5659 (Siu Kwan Lam)
+* PR #6680: Allow getattr to work in objmode output type spec (Siu Kwan Lam)
 
 Fixes:
 
@@ -125,6 +146,16 @@ Fixes:
 * PR #6654: Fix #6632 support alternative dtype string spellings (Stuart
   Archibald)
 * PR #6685: Add Python 3.9 to classifiers. (Stuart Archibald)
+* PR #6693: patch to compile _devicearray.cpp with c++11 (Valentin Haenel)
+* PR #6716: Consider assignment lhs live if used in rhs (Fixes #6715) (Ehsan
+  Totoni)
+* PR #6727: Avoid errors in array analysis for global tuples with non-int
+  (Ehsan Totoni)
+* PR #6733: Fix segfault and errors in #6668 (Siu Kwan Lam)
+* PR #6741: Enable SSA in IR inliner (Ehsan Totoni)
+* PR #6763: use an alternative constraint for the conda packages (Valentin
+  Haenel)
+* PR #6786: Fix gufunc kwargs support (Siu Kwan Lam)
 
 CUDA Enhancements/Fixes:
 
@@ -159,6 +190,7 @@ CUDA Enhancements/Fixes:
   platforms (Siu Kwan Lam)
 * PR #6666: CUDA: Add a function to query whether the runtime version is
   supported. (Graham Markall)
+* PR #6725: CUDA: Fix compile to PTX with debug for CUDA 11.2 (Graham Markall)
 
 Documentation Updates:
 

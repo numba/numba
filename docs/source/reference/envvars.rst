@@ -417,6 +417,57 @@ GPU support
    takes place, and the user of Numba (and other CUDA libraries) is responsible
    for ensuring correctness with respect to synchronization on streams.
 
+.. envvar:: NUMBA_CUDA_LOG_LEVEL
+
+   For debugging purposes. If no other logging is configured, the value of this
+   variable is the logging level for CUDA API calls. The default value is
+   ``CRITICAL`` - to trace all API calls on standard error, set this to
+   ``DEBUG``.
+
+.. envvar:: NUMBA_CUDA_LOG_API_ARGS
+
+   By default the CUDA API call logs only give the names of functions called.
+   Setting this variable to 1 also includes the values of arguments to Driver
+   API calls in the logs.
+
+.. envvar:: NUMBA_CUDA_DRIVER
+
+   Path of the directory in which the CUDA driver libraries are to be found.
+   Normally this should not need to be set as Numba can locate the driver in
+   standard locations. However, this variable can be used if the driver is in a
+   non-standard location.
+
+.. envvar:: NUMBA_CUDA_LOG_SIZE
+
+   Buffer size for logs produced by CUDA driver API operations. This defaults
+   to 1024 and should not normally need to be modified - however, if an error
+   in an API call produces a large amount of output that appears to be
+   truncated (perhaps due to multiple long function names, for example) then
+   this variable can be used to increase the buffer size and view the full
+   error message.
+
+.. envvar:: NUMBA_CUDA_VERBOSE_JIT_LOG
+
+   Whether the CUDA driver should produce verbose log messages. Defaults to 1,
+   indicating that verbose messaging is enabled. This should not need to be
+   modified under normal circumstances.
+
+.. envvar:: NUMBA_NPY_RELAXED_STRIDES_CHECKING
+
+   By default arrays that inherit from ``numba.misc.dummyarray.Array`` (e.g.
+   CUDA and ROCm device arrays) compute their contiguity using relaxed strides
+   checking, which is the default mechanism used by NumPy since version 1.12
+   (see `NPY_RELAXED_STRIDES_CHECKING
+   <https://numpy.org/doc/stable/release/1.8.0-notes.html#npy-relaxed-strides-checking>`_).
+   Setting ``NUMBA_NPY_RELAXED_STRIDES_CHECKING=0`` reverts back to strict
+   strides checking. This option should not normally be needed, but is provided
+   in case it is needed to work around latent bugs related to strict strides
+   checking.
+
+   Strict strides checking is deprecated and may be removed in future. See
+   :ref:`deprecation-strict-strides`.
+
+
 Threading Control
 -----------------
 

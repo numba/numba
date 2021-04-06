@@ -916,6 +916,20 @@ class TraceRunner(object):
         state.append(inst, items=items[::-1], size=count, res=dct)
         state.push(dct)
 
+    def op_MAP_ADD(self, state, inst):
+        # NOTE: https://docs.python.org/3/library/dis.html#opcode-MAP_ADD
+        # Python >= 3.8: TOS and TOS1 are value and key respectively
+        # Python < 3.8: TOS and TOS1 are key and value respectively
+        TOS = state.pop()
+        TOS1 = state.pop()
+        key, value = (TOS, TOS1) if PYVERSION < (3, 8) else (TOS1, TOS)
+        index = inst.arg
+        target = state.peek(index)
+        setitemvar = state.make_temp()
+        res = state.make_temp()
+        state.append(inst, target=target, key=key, value=value,
+                     setitemvar=setitemvar, res=res)
+
     def op_BUILD_SET(self, state, inst):
         count = inst.arg
         # Note: related python bug http://bugs.python.org/issue26020

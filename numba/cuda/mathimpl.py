@@ -1,7 +1,7 @@
 import math
 import operator
 from llvmlite import ir
-from numba.core import types, typing, utils
+from numba.core import types, typing, utils, cgutils
 from numba.core.imputils import Registry
 from numba.types import float32, float64, int64, uint64
 from numba.cuda import libdevice
@@ -43,6 +43,15 @@ unarys += [('atanh', 'atanhf', math.atanh)]
 unarys += [('tan', 'tanf', math.tan)]
 unarys += [('tanh', 'tanhf', math.tanh)]
 
+unarys_fastmath = {}
+unarys_fastmath['cosf'] = 'fast_cosf'
+unarys_fastmath['sinf'] = 'fast_sinf'
+unarys_fastmath['tanf'] = 'fast_tanf'
+unarys_fastmath['expf'] = 'fast_expf'
+unarys_fastmath['log2f'] = 'fast_log2f'
+unarys_fastmath['log10f'] = 'fast_log10f'
+unarys_fastmath['logf'] = 'fast_logf'
+
 binarys = []
 binarys += [('copysign', 'copysignf', math.copysign)]
 binarys += [('atan2', 'atan2f', math.atan2)]
@@ -52,11 +61,27 @@ binarys += [('hypot', 'hypotf', math.hypot)]
 if utils.PYVERSION >= (3, 7):
     binarys += [('remainder', 'remainderf', math.remainder)]
 
+binarys_fastmath = {}
+binarys_fastmath['powf'] = 'fast_powf'
+
 
 @lower(math.isinf, types.Integer)
 @lower(math.isnan, types.Integer)
 def math_isinf_isnan_int(context, builder, sig, args):
     return context.get_constant(types.boolean, 0)
+
+
+@lower(operator.truediv, types.float32, types.float32)
+def maybe_fast_truediv(context, builder, sig, args):
+    if context.fastmath:
+        sig = typing.signature(float32, float32, float32)
+        impl = context.get_function(libdevice.fast_fdividef, sig)
+        return impl(builder, args)
+    else:
+        with cgutils.if_zero(builder, args[1]):
+            context.error_model.fp_zero_division(builder, ("division by zero",))
+        res = builder.fdiv(*args)
+        return res
 
 
 @lower(math.isfinite, types.Integer)
@@ -76,7 +101,16 @@ def impl_boolean(key, ty, libfunc):
 
 def impl_unary(key, ty, libfunc):
     def lower_unary_impl(context, builder, sig, args):
-        libfunc_impl = context.get_function(libfunc, typing.signature(ty, ty))
+        actual_libfunc = libfunc
+        fast_replacement = None
+        if ty == float32 and context.fastmath:
+            fast_replacement = unarys_fastmath.get(libfunc.__name__)
+
+        if fast_replacement is not None:
+            actual_libfunc = getattr(libdevice, fast_replacement)
+
+        libfunc_impl = context.get_function(actual_libfunc,
+                                            typing.signature(ty, ty))
         return libfunc_impl(builder, args)
 
     lower(key, ty)(lower_unary_impl)
@@ -102,7 +136,15 @@ def impl_unary_int(key, ty, libfunc):
 
 def impl_binary(key, ty, libfunc):
     def lower_binary_impl(context, builder, sig, args):
-        libfunc_impl = context.get_function(libfunc,
+        actual_libfunc = libfunc
+        fast_replacement = None
+        if ty == float32 and context.fastmath:
+            fast_replacement = binarys_fastmath.get(libfunc.__name__)
+
+        if fast_replacement is not None:
+            actual_libfunc = getattr(libdevice, fast_replacement)
+
+        libfunc_impl = context.get_function(actual_libfunc,
                                             typing.signature(ty, ty, ty))
         return libfunc_impl(builder, args)
 

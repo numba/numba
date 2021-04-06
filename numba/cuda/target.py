@@ -1,8 +1,6 @@
 import re
-from llvmlite.llvmpy.core import (Type, Builder, LINKAGE_INTERNAL, Constant,
-                                  ICMP_EQ)
-import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
+from llvmlite import ir
 
 from numba.core import (typing, types, dispatcher, debuginfo, itanium_mangler,
                         cgutils)
@@ -118,7 +116,8 @@ class CUDATargetContext(BaseContext):
     def mangler(self, name, argtypes):
         return itanium_mangler.mangle(name, argtypes)
 
-    def prepare_cuda_kernel(self, codelib, fname, argtypes, debug):
+    def prepare_cuda_kernel(self, codelib, func_name, argtypes, debug,
+                            nvvm_options, max_registers=None):
         """
         Adapt a code library ``codelib`` with the numba compiled CUDA kernel
         with name ``fname`` and arguments ``argtypes`` for NVVM.
@@ -126,15 +125,29 @@ class CUDATargetContext(BaseContext):
         the kernel entry point for the given kernel.
 
         Returns the new code library and the wrapper function.
+
+        Parameters:
+
+        codelib:       The CodeLibrary containing the device function to wrap
+                       in a kernel call.
+        func_name:     The mangled name of the device function.
+        argtypes:      An iterable of the types of arguments to the kernel.
+        debug:         Whether to compile with debug.
+        nvvm_options:  Dict of NVVM options used when compiling the new library.
+        max_registers: The max_registers argument for the code library.
         """
-        library = self.codegen().create_library('')
+        kernel_name = itanium_mangler.prepend_namespace(func_name, ns='cudapy')
+        library = self.codegen().create_library(f'{codelib.name}_kernel_',
+                                                entry_name=kernel_name,
+                                                nvvm_options=nvvm_options,
+                                                max_registers=max_registers)
         library.add_linking_library(codelib)
-        wrapper = self.generate_kernel_wrapper(library, fname, argtypes,
-                                               debug=debug)
-        nvvm.fix_data_layout(library._final_module)
+        wrapper = self.generate_kernel_wrapper(library, kernel_name, func_name,
+                                               argtypes, debug)
         return library, wrapper
 
-    def generate_kernel_wrapper(self, library, fname, argtypes, debug):
+    def generate_kernel_wrapper(self, library, kernel_name, func_name,
+                                argtypes, debug):
         """
         Generate the kernel wrapper in the given ``library``.
         The function being wrapped have the name ``fname`` and argument types
@@ -142,22 +155,23 @@ class CUDATargetContext(BaseContext):
         """
         arginfo = self.get_arg_packer(argtypes)
         argtys = list(arginfo.argument_types)
-        wrapfnty = Type.function(Type.void(), argtys)
+        wrapfnty = ir.FunctionType(ir.VoidType(), argtys)
         wrapper_module = self.create_module("cuda.kernel.wrapper")
-        fnty = Type.function(Type.int(),
-                             [self.call_conv.get_return_type(types.pyobject)]
-                             + argtys)
-        func = wrapper_module.add_function(fnty, name=fname)
+        fnty = ir.FunctionType(ir.IntType(32),
+                               [self.call_conv.get_return_type(types.pyobject)]
+                               + argtys)
+        func = ir.Function(wrapper_module, fnty, func_name)
 
         prefixed = itanium_mangler.prepend_namespace(func.name, ns='cudapy')
-        wrapfn = wrapper_module.add_function(wrapfnty, name=prefixed)
-        builder = Builder(wrapfn.append_basic_block(''))
+        wrapfn = ir.Function(wrapper_module, wrapfnty, prefixed)
+        builder = ir.IRBuilder(wrapfn.append_basic_block(''))
 
         # Define error handling variables
         def define_error_gv(postfix):
-            gv = wrapper_module.add_global_variable(Type.int(),
-                                                    name=wrapfn.name + postfix)
-            gv.initializer = Constant.null(gv.type.pointee)
+            name = wrapfn.name + postfix
+            gv = cgutils.add_global_variable(wrapper_module, ir.IntType(32),
+                                             name)
+            gv.initializer = ir.Constant(gv.type.pointee, None)
             return gv
 
         gv_exc = define_error_gv("__errcode__")
@@ -178,7 +192,7 @@ class CUDATargetContext(BaseContext):
 
             with builder.if_then(builder.not_(status.is_python_exc)):
                 # User exception raised
-                old = Constant.null(gv_exc.type.pointee)
+                old = ir.Constant(gv_exc.type.pointee, None)
 
                 # Use atomic cmpxchg to prevent rewriting the error status
                 # Only the first error is recorded
@@ -188,13 +202,13 @@ class CUDATargetContext(BaseContext):
                                            'monotonic', 'monotonic')
                     changed = builder.extract_value(xchg, 1)
                 else:
-                    casfnty = lc.Type.function(old.type, [gv_exc.type, old.type,
-                                                          old.type])
+                    casfnty = ir.FunctionType(old.type, [gv_exc.type, old.type,
+                                                         old.type])
 
                     cas_hack = "___numba_atomic_i32_cas_hack"
-                    casfn = wrapper_module.add_function(casfnty, name=cas_hack)
+                    casfn = ir.Function(wrapper_module, casfnty, name=cas_hack)
                     xchg = builder.call(casfn, [gv_exc, old, status.code])
-                    changed = builder.icmp(ICMP_EQ, xchg, old)
+                    changed = builder.icmp_unsigned('==', xchg, old)
 
                 # If the xchange is successful, save the thread ID.
                 sreg = nvvmutils.SRegBuilder(builder)
@@ -227,12 +241,13 @@ class CUDATargetContext(BaseContext):
             self.get_constant(types.byte, i)
             for i in iter(arr.tobytes(order='A'))
         ]
-        constary = lc.Constant.array(Type.int(8), constvals)
+        constaryty = ir.ArrayType(ir.IntType(8), len(constvals))
+        constary = ir.Constant(constaryty, constvals)
 
         addrspace = nvvm.ADDRSPACE_CONSTANT
-        gv = lmod.add_global_variable(constary.type, name="_cudapy_cmem",
-                                      addrspace=addrspace)
-        gv.linkage = lc.LINKAGE_INTERNAL
+        gv = cgutils.add_global_variable(lmod, constary.type, "_cudapy_cmem",
+                                         addrspace=addrspace)
+        gv.linkage = 'internal'
         gv.global_constant = True
         gv.initializer = constary
 
@@ -242,8 +257,8 @@ class CUDATargetContext(BaseContext):
         gv.align = 2 ** (align - 1).bit_length()
 
         # Convert to generic address-space
-        conv = nvvmutils.insert_addrspace_conv(lmod, Type.int(8), addrspace)
-        addrspaceptr = gv.bitcast(Type.pointer(Type.int(8), addrspace))
+        conv = nvvmutils.insert_addrspace_conv(lmod, ir.IntType(8), addrspace)
+        addrspaceptr = gv.bitcast(ir.PointerType(ir.IntType(8), addrspace))
         genptr = builder.call(conv, [addrspaceptr])
 
         # Create array object
@@ -263,23 +278,22 @@ class CUDATargetContext(BaseContext):
         Unlike the parent version.  This returns a a pointer in the constant
         addrspace.
         """
-        text = Constant.stringz(string)
+        text = cgutils.make_bytearray(string.encode("utf-8") + b"\x00")
         name = '$'.join(["__conststring__",
                          itanium_mangler.mangle_identifier(string)])
         # Try to reuse existing global
         gv = mod.globals.get(name)
         if gv is None:
             # Not defined yet
-            gv = mod.add_global_variable(text.type, name=name,
-                                         addrspace=nvvm.ADDRSPACE_CONSTANT)
-            gv.linkage = LINKAGE_INTERNAL
+            gv = cgutils.add_global_variable(mod, text.type, name,
+                                             addrspace=nvvm.ADDRSPACE_CONSTANT)
+            gv.linkage = 'internal'
             gv.global_constant = True
             gv.initializer = text
 
         # Cast to a i8* pointer
         charty = gv.type.pointee.element
-        return Constant.bitcast(gv,
-                                charty.as_pointer(nvvm.ADDRSPACE_CONSTANT))
+        return gv.bitcast(charty.as_pointer(nvvm.ADDRSPACE_CONSTANT))
 
     def insert_string_const_addrspace(self, builder, string):
         """

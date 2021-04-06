@@ -13,6 +13,7 @@ from numba.np.numpy_support import (ufunc_find_matching_loop,
                              carray, farray, _ufunc_loop_sig)
 from numba.core.errors import TypingError, NumbaPerformanceWarning
 from numba import pndindex
+from numba.core.overload_glue import glue_typing
 
 registry = Registry()
 infer = registry.register
@@ -494,7 +495,7 @@ def _parse_nested_sequence(context, typ):
         return 0, typ
 
 
-@infer_global(np.array)
+@glue_typing(np.array)
 class NpArray(CallableTemplate):
     """
     Typing template for np.array().
@@ -514,9 +515,9 @@ class NpArray(CallableTemplate):
         return typer
 
 
-@infer_global(np.empty)
-@infer_global(np.zeros)
-@infer_global(np.ones)
+@glue_typing(np.empty)
+@glue_typing(np.zeros)
+@glue_typing(np.ones)
 class NdConstructor(CallableTemplate):
     """
     Typing template for np.empty(), .zeros(), .ones().
@@ -536,9 +537,9 @@ class NdConstructor(CallableTemplate):
         return typer
 
 
-@infer_global(np.empty_like)
-@infer_global(np.zeros_like)
-@infer_global(np.ones_like)
+@glue_typing(np.empty_like)
+@glue_typing(np.zeros_like)
+@glue_typing(np.ones_like)
 class NdConstructorLike(CallableTemplate):
     """
     Typing template for np.empty_like(), .zeros_like(), .ones_like().
@@ -566,7 +567,7 @@ class NdConstructorLike(CallableTemplate):
         return typer
 
 
-@infer_global(np.full)
+@glue_typing(np.full)
 class NdFull(CallableTemplate):
 
     def generic(self):
@@ -582,8 +583,7 @@ class NdFull(CallableTemplate):
 
         return typer
 
-
-@infer_global(np.full_like)
+@glue_typing(np.full_like)
 class NdFullLike(CallableTemplate):
 
     def generic(self):
@@ -607,7 +607,7 @@ class NdFullLike(CallableTemplate):
         return typer
 
 
-@infer_global(np.identity)
+@glue_typing(np.identity)
 class NdIdentity(AbstractTemplate):
 
     def generic(self, args, kws):
@@ -629,7 +629,7 @@ def _infer_dtype_from_inputs(inputs):
     return dtype
 
 
-@infer_global(np.linspace)
+@glue_typing(np.linspace)
 class NdLinspace(AbstractTemplate):
 
     def generic(self, args, kws):
@@ -653,7 +653,7 @@ class NdLinspace(AbstractTemplate):
         return signature(return_type, *args)
 
 
-@infer_global(np.frombuffer)
+@glue_typing(np.frombuffer)
 class NdFromBuffer(CallableTemplate):
 
     def generic(self):
@@ -672,7 +672,7 @@ class NdFromBuffer(CallableTemplate):
         return typer
 
 
-@infer_global(np.sort)
+@glue_typing(np.sort)
 class NdSort(CallableTemplate):
 
     def generic(self):
@@ -683,7 +683,7 @@ class NdSort(CallableTemplate):
         return typer
 
 
-@infer_global(np.asfortranarray)
+@glue_typing(np.asfortranarray)
 class AsFortranArray(CallableTemplate):
 
     def generic(self):
@@ -694,7 +694,7 @@ class AsFortranArray(CallableTemplate):
         return typer
 
 
-@infer_global(np.ascontiguousarray)
+@glue_typing(np.ascontiguousarray)
 class AsContiguousArray(CallableTemplate):
 
     def generic(self):
@@ -705,7 +705,7 @@ class AsContiguousArray(CallableTemplate):
         return typer
 
 
-@infer_global(np.copy)
+@glue_typing(np.copy)
 class NdCopy(CallableTemplate):
 
     def generic(self):
@@ -717,7 +717,7 @@ class NdCopy(CallableTemplate):
         return typer
 
 
-@infer_global(np.expand_dims)
+@glue_typing(np.expand_dims)
 class NdExpandDims(CallableTemplate):
 
     def generic(self):
@@ -747,21 +747,21 @@ class BaseAtLeastNdTemplate(AbstractTemplate):
         return signature(retty, *args)
 
 
-@infer_global(np.atleast_1d)
+@glue_typing(np.atleast_1d)
 class NdAtLeast1d(BaseAtLeastNdTemplate):
 
     def convert_array(self, a):
         return a.copy(ndim=max(a.ndim, 1))
 
 
-@infer_global(np.atleast_2d)
+@glue_typing(np.atleast_2d)
 class NdAtLeast2d(BaseAtLeastNdTemplate):
 
     def convert_array(self, a):
         return a.copy(ndim=max(a.ndim, 2))
 
 
-@infer_global(np.atleast_3d)
+@glue_typing(np.atleast_3d)
 class NdAtLeast3d(BaseAtLeastNdTemplate):
 
     def convert_array(self, a):
@@ -803,7 +803,7 @@ def _choose_concatenation_layout(arrays):
     return 'F' if all(a.layout == 'F' for a in arrays) else 'C'
 
 
-@infer_global(np.concatenate)
+@glue_typing(np.concatenate)
 class NdConcatenate(CallableTemplate):
 
     def generic(self):
@@ -825,7 +825,7 @@ class NdConcatenate(CallableTemplate):
         return typer
 
 
-@infer_global(np.stack)
+@glue_typing(np.stack)
 class NdStack(CallableTemplate):
 
     def generic(self):
@@ -863,17 +863,17 @@ class BaseStackTemplate(CallableTemplate):
         return typer
 
 
-@infer_global(np.hstack)
+@glue_typing(np.hstack)
 class NdStack(BaseStackTemplate):
     func_name = "np.hstack"
     ndim_min = 1
 
-@infer_global(np.vstack)
+@glue_typing(np.vstack)
 class NdStack(BaseStackTemplate):
     func_name = "np.vstack"
     ndim_min = 2
 
-@infer_global(np.dstack)
+@glue_typing(np.dstack)
 class NdStack(BaseStackTemplate):
     func_name = "np.dstack"
     ndim_min = 3
@@ -889,7 +889,7 @@ def _column_stack_dims(context, func_name, arrays):
     return 2
 
 
-@infer_global(np.column_stack)
+@glue_typing(np.column_stack)
 class NdColumnStack(CallableTemplate):
 
     def generic(self):
@@ -963,7 +963,7 @@ class MatMulTyperMixin(object):
             return a.dtype
 
 
-@infer_global(np.dot)
+@glue_typing(np.dot)
 class Dot(MatMulTyperMixin, CallableTemplate):
     func_name = "np.dot()"
 
@@ -976,7 +976,7 @@ class Dot(MatMulTyperMixin, CallableTemplate):
         return typer
 
 
-@infer_global(np.vdot)
+@glue_typing(np.vdot)
 class VDot(CallableTemplate):
 
     def generic(self):
@@ -1079,8 +1079,8 @@ class NdIndex(AbstractTemplate):
 
 # We use the same typing key for np.round() and np.around() to
 # re-use the implementations automatically.
-@infer_global(np.round)
-@infer_global(np.around, typing_key=np.round)
+@glue_typing(np.round)
+@glue_typing(np.around)
 class Round(AbstractTemplate):
 
     def generic(self, args, kws):
@@ -1111,7 +1111,7 @@ class Round(AbstractTemplate):
                 return signature(out, *args)
 
 
-@infer_global(np.where)
+@glue_typing(np.where)
 class Where(AbstractTemplate):
 
     def generic(self, args, kws):
@@ -1149,7 +1149,7 @@ class Where(AbstractTemplate):
                     return signature(retty, *args)
 
 
-@infer_global(np.sinc)
+@glue_typing(np.sinc)
 class Sinc(AbstractTemplate):
 
     def generic(self, args, kws):
@@ -1163,7 +1163,7 @@ class Sinc(AbstractTemplate):
             return signature(arg, arg)
 
 
-@infer_global(np.angle)
+@glue_typing(np.angle)
 class Angle(CallableTemplate):
     """
     Typing template for np.angle()
@@ -1187,7 +1187,7 @@ class Angle(CallableTemplate):
         return typer
 
 
-@infer_global(np.diag)
+@glue_typing(np.diag)
 class DiagCtor(CallableTemplate):
     """
     Typing template for np.diag()
@@ -1206,7 +1206,7 @@ class DiagCtor(CallableTemplate):
         return typer
 
 
-@infer_global(np.take)
+@glue_typing(np.take)
 class Take(AbstractTemplate):
 
     def generic(self, args, kws):
@@ -1229,7 +1229,7 @@ class Take(AbstractTemplate):
 # -----------------------------------------------------------------------------
 # Numba helpers
 
-@infer_global(carray)
+@glue_typing(carray)
 class NumbaCArray(CallableTemplate):
     layout = 'C'
 
@@ -1269,6 +1269,6 @@ class NumbaCArray(CallableTemplate):
         return typer
 
 
-@infer_global(farray)
+@glue_typing(farray)
 class NumbaFArray(NumbaCArray):
     layout = 'F'

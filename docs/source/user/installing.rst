@@ -229,14 +229,14 @@ vary with target operating system and hardware. The following lists them all
   * ``intel-openmp`` (OSX) - provides OpenMP library support for Numba's
     threading backend.
   * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support
-    into Numba's threading backend
+    into Numba's threading backend (version >= 2021 required).
 
 * Optional runtime are:
 
   * ``scipy`` - provides cython bindings used in Numba's ``np.linalg.*``
     support
   * ``tbb`` - provides the TBB runtime libraries used by Numba's TBB threading
-    backend
+    backend (version >= 2021 required).
   * ``jinja2`` - for "pretty" type annotation output (HTML) via the ``numba``
     CLI
   * ``cffi`` - permits use of CFFI bindings in Numba compiled functions

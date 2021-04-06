@@ -23,7 +23,6 @@ from numba.core.imputils import (user_function, user_generator,
                        RegistryLoader)
 from numba.cpython import builtins
 
-
 GENERIC_POINTER = Type.pointer(Type.int(8))
 PYOBJECT = GENERIC_POINTER
 void_ptr = GENERIC_POINTER
@@ -428,7 +427,7 @@ class BaseContext(object):
 
     def declare_function(self, module, fndesc):
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
-        fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
+        fn = cgutils.get_or_insert_function(module, fnty, fndesc.mangled_name)
         self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes, noalias=fndesc.noalias)
         if fndesc.inline:
             fn.attributes.add('alwaysinline')
@@ -436,7 +435,7 @@ class BaseContext(object):
 
     def declare_external_function(self, module, fndesc):
         fnty = self.get_external_function_type(fndesc)
-        fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
+        fn = cgutils.get_or_insert_function(module, fnty, fndesc.mangled_name)
         assert fn.is_declaration
         for ak, av in zip(fndesc.args, fn.args):
             av.name = "arg.%s" % ak
@@ -764,9 +763,9 @@ class BaseContext(object):
         """
         module = builder.function.module
         try:
-            gv = module.get_global_variable_named(name)
-        except LLVMException:
-            gv = module.add_global_variable(typ, name)
+            gv = module.globals[name]
+        except KeyError:
+            gv = cgutils.add_global_variable(module, typ, name)
             if dllimport and self.aot_mode and sys.platform == 'win32':
                 gv.storage_class = "dllimport"
         return gv
@@ -787,7 +786,7 @@ class BaseContext(object):
         mod = builder.module
         cstring = GENERIC_POINTER
         fnty = Type.function(Type.int(), [cstring])
-        puts = mod.get_or_insert_function(fnty, "puts")
+        puts = cgutils.get_or_insert_function(mod, fnty, "puts")
         return builder.call(puts, [text])
 
     def debug_print(self, builder, text):
@@ -802,7 +801,7 @@ class BaseContext(object):
         else:
             cstr = format_string
         fnty = Type.function(Type.int(), (GENERIC_POINTER,), var_arg=True)
-        fn = mod.get_or_insert_function(fnty, "printf")
+        fn = cgutils.get_or_insert_function(mod, fnty, "printf")
         return builder.call(fn, (cstr,) + tuple(args))
 
     def get_struct_type(self, struct):
@@ -834,10 +833,18 @@ class BaseContext(object):
             codegen = self.codegen()
             library = codegen.create_library(impl.__name__)
             if flags is None:
+
+                cstk = utils.ConfigStack()
                 flags = compiler.Flags()
-            flags.set('no_compile')
-            flags.set('no_cpython_wrapper')
-            flags.set('no_cfunc_wrapper')
+                if cstk:
+                    tls_flags = cstk.top()
+                    if tls_flags.is_set("nrt") and tls_flags.nrt:
+                        flags.nrt = True
+
+            flags.no_compile = True
+            flags.no_cpython_wrapper = True
+            flags.no_cfunc_wrapper = True
+
             cres = compiler.compile_internal(self.typing_context, self,
                                              library,
                                              impl, sig.args,
@@ -1087,7 +1094,7 @@ class BaseContext(object):
         addr = self.get_constant(types.uintp, intaddr).inttoptr(llvoidptr)
         # Use a unique name by embedding the address value
         symname = 'numba.dynamic.globals.{:x}'.format(intaddr)
-        gv = mod.add_global_variable(llvoidptr, name=symname)
+        gv = cgutils.add_global_variable(mod, llvoidptr, symname)
         # Use linkonce linkage to allow merging with other GV of the same name.
         # And, avoid optimization from assuming its value.
         gv.linkage = 'linkonce'
@@ -1122,7 +1129,7 @@ class BaseContext(object):
     def create_module(self, name):
         """Create a LLVM module
         """
-        return lc.Module(name)
+        return ir.Module(name)
 
     @property
     def active_code_library(self):
@@ -1147,6 +1154,24 @@ class BaseContext(object):
         for lib in libs:
             colib.add_linking_library(lib)
 
+    def get_ufunc_info(self, ufunc_key):
+        """Get the ufunc implementation for a given ufunc object.
+
+        The default implementation in BaseContext always raises a
+        ``NotImplementedError`` exception. Subclasses may raise ``KeyError``
+        to signal that the given ``ufunc_key`` is not available.
+
+        Parameters
+        ----------
+        ufunc_key : NumPy ufunc
+
+        Returns
+        -------
+        res : dict[str, callable]
+            A mapping of a NumPy ufunc type signature to a lower-level
+            implementation.
+        """
+        raise NotImplementedError(f"{self} does not support ufunc")
 
 class _wrap_impl(object):
     """

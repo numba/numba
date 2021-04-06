@@ -7,10 +7,10 @@ from llvmlite import ir
 class TestCudaConstString(unittest.TestCase):
     def test_const_string(self):
         # These imports are incompatible with CUDASIM
-        from numba.cuda.descriptor import CUDATargetDesc
+        from numba.cuda.descriptor import cuda_target
         from numba.cuda.cudadrv.nvvm import llvm_to_ptx, ADDRSPACE_CONSTANT
 
-        targetctx = CUDATargetDesc.targetctx
+        targetctx = cuda_target.targetctx
         mod = targetctx.create_module("")
         textstring = 'A Little Brown Fox'
         gv0 = targetctx.insert_const_string(mod, textstring)
@@ -26,7 +26,7 @@ class TestCudaConstString(unittest.TestCase):
         fnty = ir.FunctionType(ir.IntType(8).as_pointer(), [])
 
         # Using insert_const_string
-        fn = mod.add_function(fnty, name="test_insert_const_string")
+        fn = ir.Function(mod, fnty, "test_insert_const_string")
         builder = ir.IRBuilder(fn.append_basic_block())
         res = targetctx.insert_addrspace_conv(builder, gv0,
                                               addrspace=ADDRSPACE_CONSTANT)
@@ -37,7 +37,7 @@ class TestCudaConstString(unittest.TestCase):
         self.assertEqual(len(matches), 1)
 
         # Using insert_string_const_addrspace
-        fn = mod.add_function(fnty, name="test_insert_string_const_addrspace")
+        fn = ir.Function(mod, fnty, "test_insert_string_const_addrspace")
         builder = ir.IRBuilder(fn.append_basic_block())
         res = targetctx.insert_string_const_addrspace(builder, textstring)
         builder.ret(res)

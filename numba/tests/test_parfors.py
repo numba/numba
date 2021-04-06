@@ -72,18 +72,18 @@ class TestParforsBase(TestCase):
     def __init__(self, *args):
         # flags for njit()
         self.cflags = Flags()
-        self.cflags.set('nrt')
+        self.cflags.nrt = True
 
         # flags for njit(parallel=True)
         self.pflags = Flags()
-        self.pflags.set('auto_parallel', cpu.ParallelOptions(True))
-        self.pflags.set('nrt')
+        self.pflags.auto_parallel = cpu.ParallelOptions(True)
+        self.pflags.nrt = True
 
         # flags for njit(parallel=True, fastmath=True)
         self.fast_pflags = Flags()
-        self.fast_pflags.set('auto_parallel', cpu.ParallelOptions(True))
-        self.fast_pflags.set('nrt')
-        self.fast_pflags.set('fastmath', cpu.FastMathOptions(True))
+        self.fast_pflags.auto_parallel = cpu.ParallelOptions(True)
+        self.fast_pflags.nrt = True
+        self.fast_pflags.fastmath = cpu.FastMathOptions(True)
         super(TestParforsBase, self).__init__(*args)
 
     def _compile_this(self, func, sig, flags):
@@ -1839,6 +1839,14 @@ class TestParfors(TestParforsBase):
         x = np.ones((3,3))
         self.check(test_impl, x)
 
+    @skip_parfors_unsupported
+    def test_high_dimension1(self):
+        # issue6749
+        def test_impl(x):
+            return x * 5.0
+        x = np.ones((2, 2, 2, 2, 2, 15))
+        self.check(test_impl, x)
+
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
@@ -2792,6 +2800,41 @@ class TestPrange(TestPrangeBase):
 
         self.prange_tester(test_impl)
 
+    @skip_parfors_unsupported
+    def test_record_array_setitem(self):
+        # issue6704
+        state_dtype = np.dtype([('var', np.int32)])
+
+        def test_impl(states):
+            for i in range(1):
+                states[i]['var'] = 1
+
+        def comparer(a, b):
+            assert(a[0]['var'] == b[0]['var'])
+
+        self.prange_tester(test_impl,
+                           np.zeros(shape=1, dtype=state_dtype),
+                           check_arg_equality=[comparer])
+
+    @skip_parfors_unsupported
+    def test_record_array_setitem_yield_array(self):
+        state_dtype = np.dtype([('x', np.intp)])
+
+        def test_impl(states):
+            n = states.size
+            for i in range(states.size):
+                states["x"][i] = 7 + i
+            return states
+
+        states = np.zeros(10, dtype=state_dtype)
+
+        def comparer(a, b):
+            np.testing.assert_equal(a, b)
+
+        self.prange_tester(test_impl,
+                           states,
+                           check_arg_equality=[comparer])
+
 
 @skip_parfors_unsupported
 @x86_only
@@ -3363,6 +3406,19 @@ class TestParforsSlice(TestParforsBase):
         r = np.array([[0., 0., 0.], [0., 0., 1.]])
         self.assertPreciseEqual(f(r), f.py_func(r))
 
+    @skip_parfors_unsupported
+    def test_issue6774(self):
+        @njit(parallel=True)
+        def test_impl():
+            n = 5
+            na_mask = np.ones((n,))
+            result = np.empty((n - 1,))
+            for i in prange(len(result)):
+                result[i] = np.sum(na_mask[i:i + 1])
+            return result
+
+        self.check(test_impl)
+
 
 class TestParforsOptions(TestParforsBase):
 
@@ -3499,6 +3555,13 @@ class TestParforsMisc(TestParforsBase):
 
         with warnings.catch_warnings(record=True) as raised_warnings:
             warnings.simplefilter('always')
+            warnings.filterwarnings(action="ignore",
+                                    module="typeguard")
+            # Filter out warnings about TBB interface mismatch
+            warnings.filterwarnings(action='ignore',
+                                    message=r".*TBB_INTERFACE_VERSION.*",
+                                    category=numba.errors.NumbaWarning,
+                                    module=r'numba\.np\.ufunc\.parallel.*')
             cfunc()
 
         self.assertEqual(len(raised_warnings), 0)

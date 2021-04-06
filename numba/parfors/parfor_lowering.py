@@ -128,8 +128,8 @@ def _lower_parfor_parallel(lowerer, parfor):
                 ftype=get_np_ufunc_typ(np.empty),
                 args=(
                     types.UniTuple(types.intp, redarrdim),
-                    types.DType(reddtype),
                 ),
+                kws={'dtype': types.DType(reddtype)}
             )
 
             # Create var for outer dimension size of reduction array equal to number of threads.
@@ -164,8 +164,11 @@ def _lower_parfor_parallel(lowerer, parfor):
                 size_var_list, name='tuple_size_var',
             )
 
+            # Resolve dtype
+            cval = pfbdr._typingctx.resolve_value_type(reddtype)
+            dt = pfbdr.make_const_variable(cval=cval, typ=types.DType(reddtype))
             # Add call to empty passing the size var tuple.
-            empty_call = pfbdr.call(glbl_np_empty, args=[size_var])
+            empty_call = pfbdr.call(glbl_np_empty, args=[size_var, dt])
 
             redarr_var = pfbdr.assign(
                 rhs=empty_call, typ=redarrvar_typ, name="redarr",
@@ -185,8 +188,8 @@ def _lower_parfor_parallel(lowerer, parfor):
                         args=(
                             types.UniTuple(types.intp, redvar_typ.ndim),
                             reddtype,
-                            types.DType(reddtype),
                         ),
+                        kws={'dtype': types.DType(reddtype)},
                     )
 
                     # Then create a var with the identify value.
@@ -198,7 +201,7 @@ def _lower_parfor_parallel(lowerer, parfor):
 
                     # Then, call np.full with the shape of the reduction array and the identity value.
                     full_call = pfbdr.call(
-                        full_func_node, args=[redshape_var, init_val_var],
+                        full_func_node, args=[redshape_var, init_val_var, dt],
                     )
 
                     redtoset = pfbdr.assign(
@@ -242,9 +245,9 @@ def _lower_parfor_parallel(lowerer, parfor):
                 pfbdr.setitem(obj=redarr_var, index=index_var, val=redtoset)
 
     # compile parfor body as a separate function to be used with GUFuncWrapper
-    flags = copy.copy(parfor.flags)
-    flags.set('error_model', 'numpy')
-    # Can't get here unless  flags.set('auto_parallel', ParallelOptions(True))
+    flags = parfor.flags.copy()
+    flags.error_model = "numpy"
+    # Can't get here unless  flags.auto_parallel == ParallelOptions(True)
     index_var_typ = typemap[parfor.loop_nests[0].index_variable.name]
     # index variables should have the same type, check rest of indices
     for l in parfor.loop_nests[1:]:
@@ -717,7 +720,7 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
 
 def find_setitems_block(setitems, itemsset, block, typemap):
     for inst in block.body:
-        if isinstance(inst, ir.StaticSetItem) or isinstance(inst, ir.SetItem):
+        if isinstance(inst, (ir.StaticSetItem, ir.SetItem)):
             setitems.add(inst.target.name)
             # If we store a non-mutable object into an array then that is safe to hoist.
             # If the stored object is mutable and you hoist then multiple entries in the
@@ -1531,15 +1534,17 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     scheduling_fnty = lc.Type.function(
         intp_ptr_t, [uintp_t, sched_ptr_type, sched_ptr_type, uintp_t, sched_ptr_type, intp_t])
     if index_var_typ.signed:
-        do_scheduling = builder.module.get_or_insert_function(scheduling_fnty,
-                                                          name="do_scheduling_signed")
+        do_scheduling = cgutils.get_or_insert_function(builder.module,
+                                                       scheduling_fnty,
+                                                       "do_scheduling_signed")
     else:
-        do_scheduling = builder.module.get_or_insert_function(scheduling_fnty,
-                                                          name="do_scheduling_unsigned")
+        do_scheduling = cgutils.get_or_insert_function(builder.module,
+                                                       scheduling_fnty,
+                                                       "do_scheduling_unsigned")
 
-    get_num_threads = builder.module.get_or_insert_function(
-        lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
-        name="get_num_threads")
+    get_num_threads = cgutils.get_or_insert_function(
+        builder.module, lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
+        "get_num_threads")
 
     num_threads = builder.call(get_num_threads, [])
 
@@ -1758,7 +1763,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     fnty = lc.Type.function(lc.Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                              intp_ptr_t, byte_ptr_t])
 
-    fn = builder.module.get_or_insert_function(fnty, name=wrapper_name)
+    fn = cgutils.get_or_insert_function(builder.module, fnty, wrapper_name)
     context.active_code_library.add_linking_library(info.library)
 
     if config.DEBUG_ARRAY_OPT:

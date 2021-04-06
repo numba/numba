@@ -154,6 +154,13 @@ class TestSlicing(unittest.TestCase):
             self.assertEqual(got.shape, expect.shape)
             self.assertEqual(got.strides, expect.strides)
 
+    def test_issue_2766(self):
+        z = np.empty((1, 2, 3))
+        z = np.transpose(z, axes=(2, 0, 1))
+        arr = Array.from_desc(0, z.shape, z.strides, z.itemsize)
+        self.assertEqual(z.flags['C_CONTIGUOUS'], arr.flags['C_CONTIGUOUS'])
+        self.assertEqual(z.flags['F_CONTIGUOUS'], arr.flags['F_CONTIGUOUS'])
+
 
 class TestReshape(unittest.TestCase):
     def test_reshape_2d2d(self):
