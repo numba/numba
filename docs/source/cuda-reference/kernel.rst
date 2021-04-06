@@ -443,6 +443,11 @@ precision parts of the CUDA Toolkit documentation.
    the C api, but maps to the ``fma.rn.f32`` and ``fma.rn.f64`` (round-to-nearest-even)
    PTX instructions.
 
+.. function:: numba.cuda.cbrt (x)
+
+   Perform the cube root operation, x ** (1/3). Named after the functions
+   ``cbrt`` and ``cbrtf`` in the C api. Supports float32, and float64 arguments
+   only.
 
 Control Flow Instructions
 ~~~~~~~~~~~~~~~~~~~~~~~~~

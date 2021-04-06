@@ -98,10 +98,10 @@ of the llvmlite library::
 
 Then create an environment with the right dependencies::
 
-   $ conda create -n numbaenv python=3.6 llvmlite numpy scipy jinja2 cffi
+   $ conda create -n numbaenv python=3.8 llvmlite numpy scipy jinja2 cffi
 
 .. note::
-   This installs an environment based on Python 3.6, but you can of course
+   This installs an environment based on Python 3.8, but you can of course
    choose another version supported by Numba.  To test additional features,
    you may also need to install ``tbb`` and/or ``llvm-openmp`` and
    ``intel-openmp``.
@@ -118,12 +118,13 @@ Once the environment is activated, you have a dedicated Python with the
 required dependencies::
 
     $ python
-    Python 3.6.6 |Anaconda, Inc.| (default, Jun 28 2018, 11:07:29)
-    [GCC 4.2.1 Compatible Clang 4.0.1 (tags/RELEASE_401/final)] on darwin
+    Python 3.8.5 (default, Sep  4 2020, 07:30:14) 
+    [GCC 7.3.0] :: Anaconda, Inc. on linux
     Type "help", "copyright", "credits" or "license" for more information.
+
     >>> import llvmlite
     >>> llvmlite.__version__
-    '0.24.0'
+    '0.35.0'
 
 
 Building Numba

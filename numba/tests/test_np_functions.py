@@ -22,7 +22,7 @@ import unittest
 
 
 no_pyobj_flags = Flags()
-no_pyobj_flags.set("nrt")
+no_pyobj_flags.nrt = True
 
 
 def sinc(x):
@@ -39,6 +39,10 @@ def angle2(x, deg):
 
 def array_equal(a, b):
     return np.array_equal(a, b)
+
+
+def intersect1d(a, b):
+    return np.intersect1d(a, b)
 
 
 def append(arr, values, axis):
@@ -123,6 +127,14 @@ def flipud(a):
 
 def flip(a):
     return np.flip(a)
+
+
+def rot90(a):
+    return np.rot90(a)
+
+
+def rot90_k(a, k=1):
+    return np.rot90(a, k)
 
 
 def array_split(a, indices, axis=0):
@@ -587,6 +599,29 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             'Both arguments to "array_equals" must be array-like',
             str(raises.exception)
         )
+
+    def test_intersect1d(self):
+
+        def arrays():
+            yield [], []  # two empty arrays
+            yield [1], []  # empty right
+            yield [], [1]  # empty left
+            yield [1], [2]  # singletons no intersection
+            yield [1], [1]  # singletons one intersection
+            yield [1, 2], [1]
+            yield [1, 2, 2], [2, 2]
+            yield [1, 2], [2, 1]
+            yield [1, 2, 3], [1, 2, 3]
+
+        pyfunc = intersect1d
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for a, b in arrays():
+            a = np.array(a)
+            b = np.array(b)
+            expected = pyfunc(a, b)
+            got = cfunc(a, b)
+            self.assertPreciseEqual(expected, got)
 
     def test_count_nonzero(self):
 
@@ -2290,6 +2325,59 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         self.assertIn("Cannot np.flip on UniTuple", str(raises.exception))
 
+    def test_rot90_basic(self):
+        pyfunc = rot90
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(10).reshape(5, 2)
+            yield np.arange(20).reshape(5, 2, 2)
+            yield np.arange(64).reshape(2, 2, 2, 2, 2, 2)
+
+        for a in a_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+    def test_rot90_with_k_basic(self):
+        pyfunc = rot90_k
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(10).reshape(5, 2)
+            yield np.arange(20).reshape(5, 2, 2)
+            yield np.arange(64).reshape(2, 2, 2, 2, 2, 2)
+
+        for a in a_variations():
+            for k in range(-5, 6):
+                expected = pyfunc(a, k)
+                got = cfunc(a, k)
+                self.assertPreciseEqual(expected, got)
+
+    def test_rot90_exception(self):
+        pyfunc = rot90_k
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc")
+
+        self.assertIn('The first argument "arr" must be an array',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(4).reshape(2, 2), k="abc")
+
+        self.assertIn('The second argument "k" must be an integer',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(3))
+
+        self.assertIn("Input must be >= 2-d.", str(raises.exception))
+
     def _check_split(self, func):
         # Since np.split and np.array_split are very similar
         pyfunc = func
@@ -2624,7 +2712,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check = partial(self._check_output, pyfunc, cfunc)
 
         # passes (NumPy and Numba return 2.0)
-        y = np.array([True, False, True, True]).astype(np.int)
+        y = np.array([True, False, True, True]).astype(int)
         _check({'y': y})
 
         # fails (NumPy returns 1.5; Numba returns 2.0)

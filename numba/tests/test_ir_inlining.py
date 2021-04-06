@@ -1024,6 +1024,33 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
         dtype = 'int64'
         self.check(test_impl, dtype, inline_expect={'foo': True})
 
+    def test_inline_always_ssa(self):
+        """make sure IR inlining uses SSA properly. Test for #6721.
+        """
+
+        dummy_true = True
+
+        def foo(A):
+            return True
+
+        @overload(foo, inline="always")
+        def foo_overload(A):
+
+            def impl(A):
+                s = dummy_true
+                for i in range(len(A)):
+                    dummy = dummy_true
+                    if A[i]:
+                        dummy = A[i]
+                    s *= dummy
+                return s
+            return impl
+
+        def impl():
+            return foo(np.array([True, False, True]))
+
+        self.check(impl, block_count='SKIP', inline_expect={'foo': True})
+
 
 class TestOverloadMethsAttrsInlining(InliningBase):
     def setUp(self):

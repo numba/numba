@@ -95,13 +95,18 @@ def from_dtype(dtype):
     try:
         return FROM_DTYPE[dtype]
     except KeyError:
-        char = dtype.char
+        pass
 
+    try:
+        char = dtype.char
+    except AttributeError:
+        pass
+    else:
         if char in 'SU':
             return _from_str_dtype(dtype)
         if char in 'mM':
             return _from_datetime_dtype(dtype)
-        if char in 'V':
+        if char in 'V' and dtype.subdtype is not None:
             subtype = from_dtype(dtype.subdtype[0])
             return types.NestedArray(subtype, dtype.shape)
 
@@ -279,6 +284,7 @@ def supported_ufunc_loop(ufunc, loop):
     legacy and when implementing new ufuncs the ufunc_db should be preferred,
     as it allows for a more fine-grained incremental support.
     """
+    # NOTE: Assuming ufunc for the CPUContext
     from numba.np import ufunc_db
     loop_sig = loop.ufunc_sig
     try:
@@ -448,7 +454,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
 
     for candidate in ufunc.types:
         ufunc_inputs = candidate[:ufunc.nin]
-        ufunc_outputs = candidate[-ufunc.nout:]
+        ufunc_outputs = candidate[-ufunc.nout:] if ufunc.nout else []
         if 'O' in ufunc_inputs:
             # Skip object arrays
             continue

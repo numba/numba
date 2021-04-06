@@ -10,3 +10,5 @@ dependencies:
   - numpy
   - numpydoc
   - setuptools
+  # The following is needed to fix RTD.
+  - conda

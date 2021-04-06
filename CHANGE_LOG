@@ -1,3 +1,265 @@
+Version 0.54.0
+--------------
+
+In development
+
+Version 0.53.1 (25 March, 2021)
+-------------------------------
+
+This is a bugfix release for 0.53.0. It contains the following four
+pull-requests which fix two critical regressions and two build failures
+reported by the openSuSe team:
+
+* PR #6826 Fix regression on gufunc serialization
+* PR #6828 Fix regression in CUDA: Set stream in mapped and managed array
+  device_setup
+* PR #6837 Ignore warnings from packaging module when testing import behaviour.
+* PR #6851 set non-reported llvm timing values to 0.0
+
+Authors:
+
+* Ben Greiner
+* Graham Markall
+* Siu Kwan Lam
+* Stuart Archibald
+
+Version 0.53.0 (11 March, 2021)
+-------------------------------
+
+This release continues to add new features, bug fixes and stability improvements
+to Numba.
+
+Highlights of core changes:
+
+* Support for Python 3.9 (Stuart Archibald).
+* Function sub-typing (Lucio Fernandez-Arjona).
+* Initial support for dynamic ``gufuncs`` (i.e. from ``@guvectorize``)
+  (Guilherme Leobas).
+* Parallel Accelerator (``@njit(parallel=True)`` now supports Fortran ordered
+  arrays (Todd A. Anderson and Siu Kwan Lam).
+
+Intel also kindly sponsored research and development that lead to two new
+features:
+
+  * Exposing LLVM compilation pass timings for diagnostic purposes (Siu Kwan
+    Lam).
+  * An event system for broadcasting compiler events (Siu Kwan Lam).
+
+Highlights of changes for the CUDA target:
+
+* CUDA 11.2 onwards (versions of the toolkit using NVVM IR 1.6 / LLVM IR 7.0.1)
+  are now supported (Graham Markall).
+* A fast cube root function is added (Michael Collison).
+* Support for atomic ``xor``, increment, decrement, exchange, are added, and
+  compare-and-swap is extended to support 64-bit integers (Michael Collison).
+* Addition of ``cuda.is_supported_version()`` to check if the CUDA runtime
+  version is supported (Graham Markall).
+* The CUDA dispatcher now shares infrastructure with the CPU dispatcher,
+  improving launch times for lazily-compiled kernels (Graham Markall).
+* The CUDA Array Interface is updated to version 3, with support for streams
+  added (Graham Markall).
+* Tuples and ``namedtuples`` can now be passed to kernels (Graham Markall).
+* Initial support for Cooperative Groups is added, with support for Grid Groups
+  and Grid Sync (Graham Markall and Nick White).
+* Support for ``math.log2`` and ``math.remainder`` is added (Guilherme Leobas).
+
+General deprecation notices:
+
+* There are no new general deprecations.
+
+CUDA target deprecation notices:
+
+* CUDA support on macOS is deprecated with this release (it still works, it is
+  just unsupported).
+* The ``argtypes``, ``restypes``, and ``bind`` keyword arguments to the
+  ``cuda.jit`` decorator, deprecated since 0.51.0, are removed
+* The ``Device.COMPUTE_CAPABILITY`` property, deprecated since 2014, has been
+  removed (use ``compute_capability`` instead).
+* The ``to_host`` method of device arrays is removed (use ``copy_to_host``
+  instead).
+
+General Enhancements:
+
+* PR #4769: objmode complex type spelling (Siu Kwan Lam)
+* PR #5579: Function subtyping (Lucio Fernandez-Arjona)
+* PR #5659: Add support for parfors creating 'F'ortran layout Numpy arrays.
+  (Todd A. Anderson)
+* PR #5936: Improve array analysis for user-defined data types. (Todd A.
+  Anderson)
+* PR #5938: Initial support for dynamic gufuncs (Guilherme Leobas)
+* PR #5958: Making typed.List a typing Generic (Lucio Fernandez-Arjona)
+* PR #6334: Support attribute access from other modules (Farah Hariri)
+* PR #6373: Allow Dispatchers to be cached (Eric Wieser)
+* PR #6519: Avoid unnecessary ir.Del generation and removal (Ehsan Totoni)
+* PR #6545: Refactoring ParforDiagnostics (Elena Totmenina)
+* PR #6560: Add LLVM pass timer (Siu Kwan Lam)
+* PR #6573: Improve ``__str__`` for typed.List when invoked from IPython shell
+  (Amin Sadeghi)
+* PR #6575: Avoid temp variable assignments (Ehsan Totoni)
+* PR #6578: Add support for numpy ``intersect1d`` and basic test cases
+  (``@caljrobe``)
+* PR #6579: Python 3.9 support. (Stuart Archibald)
+* PR #6580: Store partial typing errors in compiler state (Ehsan Totoni)
+* PR #6626: A simple event system to broadcast compiler events (Siu Kwan Lam)
+* PR #6635: Try to resolve dynamic getitems as static post unroll transform.
+  (Stuart Archibald)
+* PR #6636: Adds llvm_lock event (Siu Kwan Lam)
+* PR #6664: Adds tests for PR 5659 (Siu Kwan Lam)
+* PR #6680: Allow getattr to work in objmode output type spec (Siu Kwan Lam)
+
+Fixes:
+
+* PR #6176: Remove references to deprecated numpy globals (Eric Wieser)
+* PR #6374: Use Python 3 style OSError handling (Eric Wieser)
+* PR #6402: Fix ``typed.Dict`` and ``typed.List`` crashing on parametrized types
+  (Andreas Sodeur)
+* PR #6403: Add ``types.ListType.key`` (Andreas Sodeur)
+* PR #6410: Fixes issue #6386 (Danny Weitekamp)
+* PR #6425: Fix unicode join for issue #6405 (Teugea Ioan-Teodor)
+* PR #6437: Don't pass reduction variables known in an outer parfor to inner
+  parfors when analyzing reductions. (Todd A. Anderson)
+* PR #6453: Keep original variable names in metadata to improve diagnostics
+  (Ehsan Totoni)
+* PR #6454: FIX: Fixes for literals (Eric Larson)
+* PR #6463: Bump llvmlite to 0.36 series (Stuart Archibald)
+* PR #6466: Remove the misspelling of finalize_dynamic_globals (Sergey
+  Pokhodenko)
+* PR #6489: Improve the error message for unsupported Buffer in Buffer
+  situation. (Stuart Archibald)
+* PR #6503: Add test to ensure Numba imports without warnings. (Stuart
+  Archibald)
+* PR #6508: Defer requirements to setup.py (Siu Kwan Lam)
+* PR #6521: Skip annotated jitclass test if typeguard is running. (Stuart
+  Archibald)
+* PR #6524: Fix typed.List return value (Lucio Fernandez-Arjona)
+* PR #6562: Correcting typo in numba sysinfo output (Nick Sutcliffe)
+* PR #6574: Run parfor fusion if 2 or more parfors (Ehsan Totoni)
+* PR #6582: Fix typed dict error with uninitialized padding bytes  (Siu Kwan
+  Lam)
+* PR #6584: Remove jitclass from ``__init__`` ``__all__``. (Stuart Archibald)
+* PR #6586: Run closure inlining ahead of branch pruning in case of nonlocal
+  (Stuart Archibald)
+* PR #6591: Fix inlineasm test failure. (Siu Kwan Lam)
+* PR #6622: Fix 6534, handle unpack of assign-like tuples. (Stuart Archibald)
+* PR #6652: Simplify PR-6334 (Siu Kwan Lam)
+* PR #6653: Fix get_numba_envvar (Siu Kwan Lam)
+* PR #6654: Fix #6632 support alternative dtype string spellings (Stuart
+  Archibald)
+* PR #6685: Add Python 3.9 to classifiers. (Stuart Archibald)
+* PR #6693: patch to compile _devicearray.cpp with c++11 (Valentin Haenel)
+* PR #6716: Consider assignment lhs live if used in rhs (Fixes #6715) (Ehsan
+  Totoni)
+* PR #6727: Avoid errors in array analysis for global tuples with non-int
+  (Ehsan Totoni)
+* PR #6733: Fix segfault and errors in #6668 (Siu Kwan Lam)
+* PR #6741: Enable SSA in IR inliner (Ehsan Totoni)
+* PR #6763: use an alternative constraint for the conda packages (Valentin
+  Haenel)
+* PR #6786: Fix gufunc kwargs support (Siu Kwan Lam)
+
+CUDA Enhancements/Fixes:
+
+* PR #5162: Specify synchronization semantics of CUDA Array Interface (Graham
+  Markall)
+* PR #6245: CUDA Cooperative grid groups (Graham Markall and Nick White)
+* PR #6333: Remove dead ``_Kernel.__call__`` (Graham Markall)
+* PR #6343: CUDA: Add support for passing tuples and namedtuples to kernels
+  (Graham Markall)
+* PR #6349: Refactor Dispatcher to remove unnecessary indirection (Graham
+  Markall)
+* PR #6358: Add log2 and remainder implementations for cuda (Guilherme Leobas)
+* PR #6376: Added a fixed seed in test_atomics.py for issue #6370 (Teugea
+  Ioan-Teodor)
+* PR #6377: CUDA: Fix various issues in test suite (Graham Markall)
+* PR #6409: Implement cuda atomic xor (Michael Collison)
+* PR #6422: CUDA: Remove deprecated items, expect CUDA 11.1 (Graham Markall)
+* PR #6427: Remove duplicate repeated definition of gufunc (Amit Kumar)
+* PR #6432: CUDA: Use ``_dispatcher.Dispatcher`` as base Dispatcher class
+  (Graham Markall)
+* PR #6447: CUDA: Add get_regs_per_thread method to Dispatcher (Graham Markall)
+* PR #6499: CUDA atomic increment, decrement, exchange and compare and swap
+  (Michael Collison)
+* PR #6510: CUDA: Make device array assignment synchronous where necessary
+  (Graham Markall)
+* PR #6517: CUDA: Add NVVM test of all 8-bit characters (Graham Markall)
+* PR #6567: Refactor llvm replacement code into separate function (Michael
+  Collison)
+* PR #6642: Testhound/cuda cuberoot (Michael Collison)
+* PR #6661: CUDA: Support NVVM70 / CUDA 11.2 (Graham Markall)
+* PR #6663: Fix error caused by missing "-static" libraries defined for some
+  platforms (Siu Kwan Lam)
+* PR #6666: CUDA: Add a function to query whether the runtime version is
+  supported. (Graham Markall)
+* PR #6725: CUDA: Fix compile to PTX with debug for CUDA 11.2 (Graham Markall)
+
+Documentation Updates:
+
+* PR #5740: Add FAQ entry on how to create a MWR. (Stuart Archibald)
+* PR #6346: DOC: add where to get dev builds from to FAQ  (Eyal Trabelsi)
+* PR #6418: docs: use https for homepage (``@imba-tjd``)
+* PR #6430: CUDA docs: Add RNG example with 3D grid and strided loops (Graham
+  Markall)
+* PR #6436: docs: remove typo in Deprecation Notices (Thibault Ballier)
+* PR #6440: Add note about performance of typed containers from the interpreter.
+  (Stuart Archibald)
+* PR #6457: Link to read the docs instead of numba homepage (Hannes Pahl)
+* PR #6470: Adding PyCon Sweden 2020 talk on numba (Ankit Mahato)
+* PR #6472: Document ``numba.extending.is_jitted`` (Stuart Archibald)
+* PR #6495: Fix typo in literal list docs. (Stuart Archibald)
+* PR #6501: Add doc entry on Numba's limited resources and how to help. (Stuart
+  Archibald)
+* PR #6502: Add CODEOWNERS file. (Stuart Archibald)
+* PR #6531: Update canonical URL. (Stuart Archibald)
+* PR #6544: Minor typo / grammar fixes to 5 minute guide (Ollin Boer Bohan)
+* PR #6599: docs: fix simple typo, consevatively -> conservatively (Tim Gates)
+* PR #6609: Recommend miniforge instead of c4aarch64 (Isuru Fernando)
+* PR #6671: Update environment creation example to python 3.8 (Lucio
+  Fernandez-Arjona)
+* PR #6676: Update hardware and software versions in various docs. (Stuart
+  Archibald)
+* PR #6682: Update deprecation notices for 0.53 (Stuart Archibald)
+
+CI/Infrastructure Updates:
+
+* PR #6458: Enable typeguard in CI (Siu Kwan Lam)
+* PR #6500: Update bug and feature request templates. (Stuart Archibald)
+* PR #6516: Fix RTD build by using conda. (Stuart Archibald)
+* PR #6587: Add zenodo badge (Siu Kwan Lam)
+
+Authors:
+
+* Amin Sadeghi
+* Amit Kumar
+* Andreas Sodeur
+* Ankit Mahato
+* Chris Barnes
+* Danny Weitekamp
+* Ehsan Totoni (core dev)
+* Eric Larson
+* Eric Wieser
+* Eyal Trabelsi
+* Farah Hariri
+* Graham Markall
+* Guilherme Leobas
+* Hannes Pahl
+* Isuru Fernando
+* Lucio Fernandez-Arjona
+* Michael Collison
+* Nick Sutcliffe
+* Nick White
+* Ollin Boer Bohan
+* Sergey Pokhodenko
+* Siu Kwan Lam (core dev)
+* Stuart Archibald (core dev)
+* Teugea Ioan-Teodor
+* Thibault Ballier
+* Tim Gates
+* Todd A. Anderson (core dev)
+* Valentin Haenel (core dev)
+* ``@caljrobe``
+* ``@imba-tjd``
+
+
 Version 0.52.0 (30 November, 2020)
 ----------------------------------
 

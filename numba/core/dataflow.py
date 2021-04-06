@@ -236,6 +236,16 @@ class DataFlowAnalysis(object):
         info.append(inst, items=items[::-1], size=count, res=dct)
         info.push(dct)
 
+    def op_MAP_ADD(self, info, inst):
+        key = info.pop()
+        value = info.pop()
+        index = inst.arg
+        target = info.peek(index)
+        setitemvar = info.make_temp()
+        res = info.make_temp()
+        info.append(inst, target=target, key=key, value=value,
+                     setitemvar=setitemvar, res=res)
+
     def op_BUILD_SET(self, info, inst):
         count = inst.arg
         # Note: related python bug http://bugs.python.org/issue26020
@@ -367,7 +377,13 @@ class DataFlowAnalysis(object):
         # Builds tuple from other tuples on the stack
         tuples = list(reversed([info.pop() for _ in range(inst.arg)]))
         temps = [info.make_temp() for _ in range(len(tuples) - 1)]
-        info.append(inst, tuples=tuples, temps=temps)
+        # if the unpack is assign-like, e.g. x = (*y,), it needs handling
+        # differently.
+        is_assign = len(tuples) == 1
+        if is_assign:
+            temps = [info.make_temp(),]
+
+        info.append(inst, tuples=tuples, temps=temps, is_assign=is_assign)
         # The result is in the last temp var
         info.push(temps[-1])
 
@@ -418,6 +434,8 @@ class DataFlowAnalysis(object):
         info.push(res)
 
     op_COMPARE_OP = _binaryop
+    op_IS_OP = _binaryop
+    op_CONTAINS_OP = _binaryop
 
     op_INPLACE_ADD = _binaryop
     op_INPLACE_SUBTRACT = _binaryop

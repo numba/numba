@@ -2,6 +2,7 @@ import numpy as np
 
 from io import StringIO
 from numba import cuda, float32, float64, int32, intp
+from numba.core.errors import NumbaDeprecationWarning
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import (skip_on_cudasim, skip_with_nvdisasm,
                                 skip_without_nvdisasm)
@@ -55,23 +56,43 @@ class TestInspect(CUDATestCase):
         # Signature in LLVM dict
         llvmirs = foo.inspect_llvm()
         self.assertEqual(2, len(llvmirs), )
-        self.assertIn((self.cc, (intp, intp)), llvmirs)
-        self.assertIn((self.cc, (float64, float64)), llvmirs)
+        self.assertIn((intp, intp), llvmirs)
+        self.assertIn((float64, float64), llvmirs)
 
         # Function name in LLVM
-        self.assertIn("foo", llvmirs[self.cc, (intp, intp)])
-        self.assertIn("foo", llvmirs[self.cc, (float64, float64)])
+        self.assertIn("foo", llvmirs[intp, intp])
+        self.assertIn("foo", llvmirs[float64, float64])
+
+        # Function name in LLVM using deprecated (cc, argtypes) pair for lookup
+        with self.assertWarns(NumbaDeprecationWarning) as warns:
+            self.assertIn("foo", llvmirs[self.cc, (intp, intp)])
+            self.assertIn("foo", llvmirs[self.cc, (float64, float64)])
+
+        self.assertEqual(len(warns.warnings), 2)
+        argtypes_only = "dicts returned by inspect functions should be keyed " \
+                        "on argument types only"
+        self.assertIn(argtypes_only, str(warns.warnings[0].message))
+        self.assertIn(argtypes_only, str(warns.warnings[1].message))
 
         asmdict = foo.inspect_asm()
 
-        # Signature in LLVM dict
+        # Signature in assembly dict
         self.assertEqual(2, len(asmdict), )
-        self.assertIn((self.cc, (intp, intp)), asmdict)
-        self.assertIn((self.cc, (float64, float64)), asmdict)
+        self.assertIn((intp, intp), asmdict)
+        self.assertIn((float64, float64), asmdict)
 
-        # NNVM inserted in PTX
-        self.assertIn("foo", asmdict[self.cc, (intp, intp)])
-        self.assertIn("foo", asmdict[self.cc, (float64, float64)])
+        # NVVM inserted in PTX
+        self.assertIn("foo", asmdict[intp, intp])
+        self.assertIn("foo", asmdict[float64, float64])
+
+        # NVVM inserted in PTX using deprecated (cc, argtypes) pair for lookup
+        with self.assertWarns(NumbaDeprecationWarning) as warns:
+            self.assertIn("foo", asmdict[self.cc, (intp, intp)])
+            self.assertIn("foo", asmdict[self.cc, (float64, float64)])
+
+        self.assertEqual(len(warns.warnings), 2)
+        self.assertIn(argtypes_only, str(warns.warnings[0].message))
+        self.assertIn(argtypes_only, str(warns.warnings[1].message))
 
     def _test_inspect_sass(self, kernel, name, sass):
         # Ensure function appears in output
@@ -123,6 +144,65 @@ class TestInspect(CUDATestCase):
             f.inspect_sass()
 
         self.assertIn('nvdisasm is required', str(raises.exception))
+
+    def test_inspect_llvm_deprecations(self):
+        @cuda.jit((float32[::1],))
+        def f(x):
+            x[0] = 0
+
+        with self.assertWarns(NumbaDeprecationWarning) as warns:
+            f.inspect_llvm(compute_capability=self.cc)
+
+        self.assertEqual(len(warns.warnings), 2)
+
+        msg = 'compute_capability has no effect on the LLVM IR'
+        self.assertIn(msg, str(warns.warnings[0]))
+        msg = 'inspect_llvm will always return a dict in future'
+        self.assertIn(msg, str(warns.warnings[1]))
+
+    def test_inspect_asm_deprecations(self):
+        @cuda.jit((float32[::1],))
+        def f(x):
+            x[0] = 0
+
+        with self.assertWarns(NumbaDeprecationWarning) as warns:
+            f.inspect_asm(compute_capability=self.cc)
+
+        self.assertEqual(len(warns.warnings), 2)
+
+        msg = 'The compute_capability kwarg is deprecated'
+        self.assertIn(msg, str(warns.warnings[0]))
+        msg = 'inspect_asm will always return a dict in future'
+        self.assertIn(msg, str(warns.warnings[1]))
+
+    @skip_without_nvdisasm('nvdisasm needed for inspect_sass()')
+    def test_inspect_sass_deprecations(self):
+        @cuda.jit((float32[::1],))
+        def f(x):
+            x[0] = 0
+
+        with self.assertWarns(NumbaDeprecationWarning) as warns:
+            f.inspect_sass(compute_capability=self.cc)
+
+        self.assertEqual(len(warns.warnings), 2)
+
+        msg = 'passing compute_capability has no effect on the SASS code'
+        self.assertIn(msg, str(warns.warnings[0]))
+        msg = 'inspect_sass will always return a dict in future'
+        self.assertIn(msg, str(warns.warnings[1]))
+
+    def test_ptx_deprecations(self):
+        @cuda.jit((float32[::1],))
+        def f(x):
+            x[0] = 0
+
+        with self.assertWarns(NumbaDeprecationWarning) as warns:
+            f.ptx
+
+        self.assertEqual(len(warns.warnings), 1)
+
+        msg = 'ptx will always return a dict in future'
+        self.assertIn(msg, str(warns.warnings[0]))
 
 
 if __name__ == '__main__':

@@ -180,10 +180,10 @@ class DeviceNDArrayBase(object):
         Example::
 
             import numpy as np
-            from numba import hsa
+            from numba import roc
 
             arr = np.arange(1000)
-            d_arr = hsa.to_device(arr)
+            d_arr = roc.to_device(arr)
 
             my_kernel[100, 100](d_arr)
 

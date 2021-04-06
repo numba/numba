@@ -801,6 +801,23 @@ range of possible failures. However, the dictionary can be safely read from
 multiple threads as long as the contents of the dictionary do not
 change during the parallel access.
 
+Dictionary comprehension
+''''''''''''''''''''''''
+
+Numba supports dictionary comprehension under the assumption that a
+``numba.typed.Dict`` instance can be created from the comprehension.  For
+example::
+
+  In [1]: from numba import njit
+
+  In [2]: @njit
+     ...: def foo(n):
+     ...:     return {i: i**2 for i in range(n)}
+     ...:
+
+  In [3]: foo(3)
+  Out[3]: DictType[int64,int64]<iv=None>({0: 0, 1: 1, 2: 4})
+
 .. _feature-dict-initial-value:
 
 Initial Values

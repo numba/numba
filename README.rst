@@ -32,12 +32,12 @@ https://numba.pydata.org
 Supported Platforms
 ===================
 
-* Operating systems and CPU:
+* Operating systems and CPUs:
 
   - Linux: x86 (32-bit), x86_64, ppc64le (POWER8 and 9), ARMv7 (32-bit),
     ARMv8 (64-bit)
   - Windows: x86, x86_64
-  - macOS: x86_64
+  - macOS: x86_64, (M1/Arm64, unofficial support only)
   - \*BSD: (unofficial support only)
 
 * (Optional) Accelerators and GPUs:
@@ -49,13 +49,13 @@ Supported Platforms
 Dependencies
 ============
 
-* Python versions: 3.6-3.8
-* llvmlite 0.35.*
+* Python versions: 3.6-3.9
+* llvmlite 0.36.*
 * NumPy >=1.15 (can build with 1.11 for ABI compatibility)
 
 Optionally:
 
-* Scipy >=1.0.0 (for ``numpy.linalg`` support)
+* SciPy >=1.0.0 (for ``numpy.linalg`` support)
 
 
 Installing
