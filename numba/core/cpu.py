@@ -63,6 +63,13 @@ class CPUContext(BaseContext):
         import numba.typed.dictimpl
         import numba.experimental.function_type
 
+        # Add lower_extension attribute
+        self.lower_extensions = {}
+        from numba.parfors.parfor_lowering import _lower_parfor_parallel
+        from numba.parfors.parfor import Parfor
+        # Specify how to lower Parfor nodes using the lower_extensions
+        self.lower_extensions[Parfor] = _lower_parfor_parallel
+
     def load_additional_registries(self):
         # Add target specific implementations
         from numba.np import npyimpl
