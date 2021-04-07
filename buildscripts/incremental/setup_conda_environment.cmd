@@ -32,7 +32,7 @@ if "%BUILD_DOC%" == "yes" (%CONDA_INSTALL% sphinx sphinx_rtd_theme pygments)
 @rem Install dependencies for code coverage (codecov.io)
 if "%RUN_COVERAGE%" == "yes" (%PIP_INSTALL% codecov)
 @rem Install TBB
-%CONDA_INSTALL% tbb tbb-devel
+%CONDA_INSTALL% -c numba tbb=2021 tbb-devel
 if %errorlevel% neq 0 exit /b %errorlevel%
 
 echo "DEBUG ENV:"

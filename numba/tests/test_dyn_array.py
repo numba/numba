@@ -1234,7 +1234,7 @@ class TestNdDiag(TestCase):
             dfunc = nrtjit(self.py_kw)
             dfunc(d, k=3)
 
-class TestNdArange(BaseTest):
+class TestLinspace(BaseTest):
 
     def test_linspace_2(self):
         def pyfunc(n, m):
@@ -1251,6 +1251,16 @@ class TestNdArange(BaseTest):
                             (-3j, 2+3j, 7), (2, 1, 0),
                             (1+0.5j, 1.5j, 5), (1, 1e100, 1)],
                            exact=False)
+
+    def test_linspace_accuracy(self):
+        # Checking linspace reasonably replicates NumPy's algorithm
+        # see https://github.com/numba/numba/issues/6768
+        @nrtjit
+        def foo(n, m, p):
+            return np.linspace(n, m, p)
+
+        n, m, p = 0.0, 1.0, 100
+        self.assertPreciseEqual(foo(n, m, p), foo.py_func(n, m, p))
 
 
 class TestNpyEmptyKeyword(TestCase):

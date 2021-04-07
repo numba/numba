@@ -239,12 +239,14 @@ class ProcessedPassTimings:
                     missing[k] = 0.0
             # parse timings
             n = r"\s*((?:[0-9]+\.)?[0-9]+)"
-            pat = f"\\s+{n}\\s*\\({n}%\\)" * (len(headers) - 1) + r"\s*(.*)"
+            pat = f"\\s+(?:{n}\\s*\\({n}%\\)|-+)" * (len(headers) - 1)
+            pat += r"\s*(.*)"
             for ln in line_iter:
                 m = re.match(pat, ln)
                 if m is not None:
                     raw_data = list(m.groups())
-                    data = {k: float(v) for k, v in zip(attrs, raw_data)}
+                    data = {k: float(v) if v is not None else 0.0
+                            for k, v in zip(attrs, raw_data)}
                     data.update(missing)
                     pass_name = raw_data[-1]
                     rec = PassTimingRecord(

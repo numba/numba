@@ -32,7 +32,7 @@ jobs:
     - script: |
         # use TBB
         call activate %CONDA_ENV%
-        conda install -y tbb tbb-devel
+        conda install -y -c numba tbb=2021 tbb-devel
       displayName: 'Add in TBB'
 
     - script: |

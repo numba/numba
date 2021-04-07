@@ -22,7 +22,7 @@ import unittest
 
 
 no_pyobj_flags = Flags()
-no_pyobj_flags.set("nrt")
+no_pyobj_flags.nrt = True
 
 
 def sinc(x):
@@ -127,6 +127,14 @@ def flipud(a):
 
 def flip(a):
     return np.flip(a)
+
+
+def rot90(a):
+    return np.rot90(a)
+
+
+def rot90_k(a, k=1):
+    return np.rot90(a, k)
 
 
 def array_split(a, indices, axis=0):
@@ -2316,6 +2324,59 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc((1, 2, 3))
 
         self.assertIn("Cannot np.flip on UniTuple", str(raises.exception))
+
+    def test_rot90_basic(self):
+        pyfunc = rot90
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(10).reshape(5, 2)
+            yield np.arange(20).reshape(5, 2, 2)
+            yield np.arange(64).reshape(2, 2, 2, 2, 2, 2)
+
+        for a in a_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+    def test_rot90_with_k_basic(self):
+        pyfunc = rot90_k
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(10).reshape(5, 2)
+            yield np.arange(20).reshape(5, 2, 2)
+            yield np.arange(64).reshape(2, 2, 2, 2, 2, 2)
+
+        for a in a_variations():
+            for k in range(-5, 6):
+                expected = pyfunc(a, k)
+                got = cfunc(a, k)
+                self.assertPreciseEqual(expected, got)
+
+    def test_rot90_exception(self):
+        pyfunc = rot90_k
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc")
+
+        self.assertIn('The first argument "arr" must be an array',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(4).reshape(2, 2), k="abc")
+
+        self.assertIn('The second argument "k" must be an integer',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(3))
+
+        self.assertIn("Input must be >= 2-d.", str(raises.exception))
 
     def _check_split(self, func):
         # Since np.split and np.array_split are very similar

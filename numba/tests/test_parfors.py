@@ -72,18 +72,18 @@ class TestParforsBase(TestCase):
     def __init__(self, *args):
         # flags for njit()
         self.cflags = Flags()
-        self.cflags.set('nrt')
+        self.cflags.nrt = True
 
         # flags for njit(parallel=True)
         self.pflags = Flags()
-        self.pflags.set('auto_parallel', cpu.ParallelOptions(True))
-        self.pflags.set('nrt')
+        self.pflags.auto_parallel = cpu.ParallelOptions(True)
+        self.pflags.nrt = True
 
         # flags for njit(parallel=True, fastmath=True)
         self.fast_pflags = Flags()
-        self.fast_pflags.set('auto_parallel', cpu.ParallelOptions(True))
-        self.fast_pflags.set('nrt')
-        self.fast_pflags.set('fastmath', cpu.FastMathOptions(True))
+        self.fast_pflags.auto_parallel = cpu.ParallelOptions(True)
+        self.fast_pflags.nrt = True
+        self.fast_pflags.fastmath = cpu.FastMathOptions(True)
         super(TestParforsBase, self).__init__(*args)
 
     def _compile_this(self, func, sig, flags):
@@ -2799,6 +2799,41 @@ class TestPrange(TestPrangeBase):
             return a
 
         self.prange_tester(test_impl)
+
+    @skip_parfors_unsupported
+    def test_record_array_setitem(self):
+        # issue6704
+        state_dtype = np.dtype([('var', np.int32)])
+
+        def test_impl(states):
+            for i in range(1):
+                states[i]['var'] = 1
+
+        def comparer(a, b):
+            assert(a[0]['var'] == b[0]['var'])
+
+        self.prange_tester(test_impl,
+                           np.zeros(shape=1, dtype=state_dtype),
+                           check_arg_equality=[comparer])
+
+    @skip_parfors_unsupported
+    def test_record_array_setitem_yield_array(self):
+        state_dtype = np.dtype([('x', np.intp)])
+
+        def test_impl(states):
+            n = states.size
+            for i in range(states.size):
+                states["x"][i] = 7 + i
+            return states
+
+        states = np.zeros(10, dtype=state_dtype)
+
+        def comparer(a, b):
+            np.testing.assert_equal(a, b)
+
+        self.prange_tester(test_impl,
+                           states,
+                           check_arg_equality=[comparer])
 
 
 @skip_parfors_unsupported

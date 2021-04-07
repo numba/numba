@@ -687,8 +687,12 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         cache_key = self.context, tuple(args), tuple(kws.items())
         try:
             impl, args = self._impl_cache[cache_key]
+            return impl, args
         except KeyError:
-            impl, args = self._build_impl(cache_key, args, kws)
+            # pass and try outside the scope so as to not have KeyError with a
+            # nested addition error in the case the _build_impl fails
+            pass
+        impl, args = self._build_impl(cache_key, args, kws)
         return impl, args
 
     def _build_impl(self, cache_key, args, kws):
