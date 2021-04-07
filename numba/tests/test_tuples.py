@@ -633,8 +633,7 @@ class TestTupleBuild(TestCase):
 
     def test_build_unpack(self):
         def check(p):
-            # using eval here since Python 2 doesn't even support the syntax
-            pyfunc = eval("lambda a: (1, *a)")
+            pyfunc = lambda a: (1, *a)
             cfunc = jit(nopython=True)(pyfunc)
             self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
@@ -643,10 +642,46 @@ class TestTupleBuild(TestCase):
         # Heterogeneous
         check((4, 5.5))
 
+    def test_build_unpack_assign_like(self):
+        # see #6534
+        def check(p):
+            pyfunc = lambda a: (*a,)
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        # Homogeneous
+        check((4, 5))
+        # Heterogeneous
+        check((4, 5.5))
+
+    def test_build_unpack_fail_on_list_assign_like(self):
+        # see #6534
+        def check(p):
+            pyfunc = lambda a: (*a,)
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        with self.assertRaises(errors.TypingError) as raises:
+            check([4, 5])
+
+        if utils.PYVERSION > (3, 8):
+            # Python 3.9 has a peephole rewrite due to large changes in tuple
+            # unpacking. It results in a tuple + list situation from the above
+            # so the error message reflects that. Catching this specific and
+            # seemingly rare sequence in the peephole rewrite is prohibitively
+            # hard. Should it be reported numerous times, revisit then.
+            msg1 = "No implementation of function"
+            self.assertIn(msg1, str(raises.exception))
+            msg2 = "add(Tuple()," # ignore the reflected list part, it's repr
+                                  # is quite volatile.
+            self.assertIn(msg2, str(raises.exception))
+        else:
+            msg = "Only tuples are supported when unpacking a single item"
+            self.assertIn(msg, str(raises.exception))
+
     def test_build_unpack_more(self):
         def check(p):
-            # using eval here since Python 2 doesn't even support the syntax
-            pyfunc = eval("lambda a: (1, *a, (1, 2), *a)")
+            pyfunc = lambda a: (1, *a, (1, 2), *a)
             cfunc = jit(nopython=True)(pyfunc)
             self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
@@ -657,11 +692,10 @@ class TestTupleBuild(TestCase):
 
     def test_build_unpack_call(self):
         def check(p):
-            # using eval here since Python 2 doesn't even support the syntax
             @jit
             def inner(*args):
                 return args
-            pyfunc = eval("lambda a: inner(1, *a)", locals())
+            pyfunc = lambda a: inner(1, *a)
             cfunc = jit(nopython=True)(pyfunc)
             self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
@@ -670,14 +704,12 @@ class TestTupleBuild(TestCase):
         # Heterogeneous
         check((4, 5.5))
 
-    @unittest.skipIf(utils.PYVERSION < (3, 6), "needs Python 3.6+")
     def test_build_unpack_call_more(self):
         def check(p):
-            # using eval here since Python 2 doesn't even support the syntax
             @jit
             def inner(*args):
                 return args
-            pyfunc = eval("lambda a: inner(1, *a, *(1, 2), *a)", locals())
+            pyfunc = lambda a: inner(1, *a, *(1, 2), *a)
             cfunc = jit(nopython=True)(pyfunc)
             self.assertPreciseEqual(cfunc(p), pyfunc(p))
 

@@ -13,8 +13,9 @@ from ctypes import c_void_p
 import numpy as np
 
 import numba
-from numba.cuda.cudadrv import driver as _driver
+from numba import _devicearray
 from numba.cuda.cudadrv import devices
+from numba.cuda.cudadrv import driver as _driver
 from numba.core import types
 from numba.np.unsafe.ndarray import to_fixed_tuple
 from numba.misc import dummyarray
@@ -55,7 +56,7 @@ def require_cuda_ndarray(obj):
         raise ValueError('require an cuda ndarray object')
 
 
-class DeviceNDArrayBase(object):
+class DeviceNDArrayBase(_devicearray.DeviceArray):
     """A on GPU NDArray representation
     """
     __cuda_memory__ = True
@@ -482,7 +483,10 @@ class DeviceNDArray(DeviceNDArrayBase):
         """
         :return: an `numpy.ndarray`, so copies to the host.
         """
-        return self.copy_to_host().__array__(dtype)
+        if dtype:
+            return self.copy_to_host().__array__(dtype)
+        else:
+            return self.copy_to_host().__array__()
 
     def __len__(self):
         return self.shape[0]
@@ -677,6 +681,7 @@ class MappedNDArray(DeviceNDArrayBase, np.ndarray):
 
     def device_setup(self, gpu_data, stream=0):
         self.gpu_data = gpu_data
+        self.stream = stream
 
 
 class ManagedNDArray(DeviceNDArrayBase, np.ndarray):
@@ -686,6 +691,7 @@ class ManagedNDArray(DeviceNDArrayBase, np.ndarray):
 
     def device_setup(self, gpu_data, stream=0):
         self.gpu_data = gpu_data
+        self.stream = stream
 
 
 def from_array_like(ary, stream=0, gpu_data=None):

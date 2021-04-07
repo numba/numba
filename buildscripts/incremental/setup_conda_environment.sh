@@ -31,35 +31,23 @@ fi
 source deactivate
 # Display root environment (for debugging)
 conda list
-# Clean up any left-over from a previous build
-# (note workaround for https://github.com/conda/conda/issues/2679:
-#  `conda env remove` issue)
-conda remove --all -q -y -n $CONDA_ENV
 
 # If VANILLA_INSTALL is yes, then only Python, NumPy and pip are installed, this
 # is to catch tests/code paths that require an optional package and are not
 # guarding against the possibility that it does not exist in the environment.
 # Create a base env first and then add to it...
-
-conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip
+# NOTE: gitpython is needed for CI testing to do the test slicing
+conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython
 
 # Activate first
 set +v
 source activate $CONDA_ENV
 set -v
 
-# gitpython needed for CI testing
-$CONDA_INSTALL gitpython
-
 # Install optional packages into activated env
 if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # Scipy, CFFI, jinja2, IPython and pygments are optional dependencies, but exercised in the test suite
-    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython pygments
-    if [[ "$PYTHON" == "3.8" &&  $(uname) == Darwin ]]; then
-        $PIP_INSTALL scipy
-    else
-        $CONDA_INSTALL ${EXTRA_CHANNELS}  scipy
-    fi
+    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython pygments scipy
 fi
 
 # Install the compiler toolchain
@@ -76,7 +64,7 @@ elif  [[ $(uname) == Darwin ]]; then
 fi
 
 # Install latest llvmlite build
-$CONDA_INSTALL -c numba llvmlite
+$CONDA_INSTALL -c numba/label/dev llvmlite
 
 # Install dependencies for building the documentation
 if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx=2.4.4 sphinx_rtd_theme pygments numpydoc; fi
@@ -86,7 +74,7 @@ if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi
 # Install SVML
 if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
 # Install Intel TBB parallel backend
-if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL tbb tbb-devel; fi
+if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL -c numba tbb=2021 tbb-devel; fi
 # Install pickle5
 if [ "$TEST_PICKLE5" == "yes" ]; then $PIP_INSTALL pickle5; fi
 # Install typeguard

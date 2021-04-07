@@ -846,7 +846,14 @@ class TraceRunner(object):
         # Builds tuple from other tuples on the stack
         tuples = list(reversed([state.pop() for _ in range(inst.arg)]))
         temps = [state.make_temp() for _ in range(len(tuples) - 1)]
-        state.append(inst, tuples=tuples, temps=temps)
+
+        # if the unpack is assign-like, e.g. x = (*y,), it needs handling
+        # differently.
+        is_assign = len(tuples) == 1
+        if is_assign:
+            temps = [state.make_temp(),]
+
+        state.append(inst, tuples=tuples, temps=temps, is_assign=is_assign)
         # The result is in the last temp var
         state.push(temps[-1])
 
@@ -908,6 +915,20 @@ class TraceRunner(object):
             items.append((k, v))
         state.append(inst, items=items[::-1], size=count, res=dct)
         state.push(dct)
+
+    def op_MAP_ADD(self, state, inst):
+        # NOTE: https://docs.python.org/3/library/dis.html#opcode-MAP_ADD
+        # Python >= 3.8: TOS and TOS1 are value and key respectively
+        # Python < 3.8: TOS and TOS1 are key and value respectively
+        TOS = state.pop()
+        TOS1 = state.pop()
+        key, value = (TOS, TOS1) if PYVERSION < (3, 8) else (TOS1, TOS)
+        index = inst.arg
+        target = state.peek(index)
+        setitemvar = state.make_temp()
+        res = state.make_temp()
+        state.append(inst, target=target, key=key, value=value,
+                     setitemvar=setitemvar, res=res)
 
     def op_BUILD_SET(self, state, inst):
         count = inst.arg

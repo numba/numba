@@ -56,7 +56,7 @@ def _declare_function(context, builder, name, sig, cargs,
     llargs = [context.get_value_type(t) for t in sig.args]
     fnty = Type.function(llretty, llargs)
     mangled = mangler(name, cargs)
-    fn = mod.get_or_insert_function(fnty, mangled)
+    fn = cgutils.get_or_insert_function(mod, fnty, mangled)
     fn.calling_convention = target.CC_SPIR_FUNC
     return fn
 
@@ -172,7 +172,7 @@ def activelanepermute_wavewidth_impl(context, builder, sig, args):
     name = "__hsail_activelanepermute_wavewidth_b{0}".format(bitwidth)
 
     fnty = Type.function(intbitwidth, [intbitwidth, i32, intbitwidth, i1])
-    fn = builder.module.get_or_insert_function(fnty, name=name)
+    fn = cgutils.get_or_insert_function(builder.module, fnty, name=name)
     fn.calling_convention = target.CC_SPIR_FUNC
 
     def cast(val):
@@ -264,7 +264,8 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace):
         lmod = builder.module
 
         # Create global variable in the requested address-space
-        gvmem = lmod.add_global_variable(laryty, symbol_name, addrspace)
+        gvmem = cgutils.add_global_variable(lmod, laryty, symbol_name,
+                                            addrspace)
 
         if elemcount <= 0:
             raise ValueError("array length <= 0")

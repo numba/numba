@@ -305,11 +305,11 @@ def mapped_array(*args, **kwargs):
     return device_array(*args, **kwargs)
 
 
-def pinned_array(shape, dtype=np.float, strides=None, order='C'):
+def pinned_array(shape, dtype=np.float_, strides=None, order='C'):
     return np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order)
 
 
-def managed_array(shape, dtype=np.float, strides=None, order='C'):
+def managed_array(shape, dtype=np.float_, strides=None, order='C'):
     return np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order)
 
 

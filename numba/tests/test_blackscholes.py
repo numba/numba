@@ -121,7 +121,7 @@ def randfloat(rand_var, low, high):
 class TestBlackScholes(TestCase):
     def test_array_expr(self):
         flags = Flags()
-        flags.set("enable_pyobject")
+        flags.enable_pyobject = True
 
         global cnd_array_jitted
         scalty = types.float64

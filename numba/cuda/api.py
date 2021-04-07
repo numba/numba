@@ -4,6 +4,7 @@ API that are reported to numba.cuda
 
 
 import contextlib
+import os
 
 import numpy as np
 
@@ -124,8 +125,8 @@ def to_device(obj, stream=0, copy=True, to=None):
 
 
 @require_context
-def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
-    """device_array(shape, dtype=np.float, strides=None, order='C', stream=0)
+def device_array(shape, dtype=np.float_, strides=None, order='C', stream=0):
+    """device_array(shape, dtype=np.float_, strides=None, order='C', stream=0)
 
     Allocate an empty device ndarray. Similar to :meth:`numpy.empty`.
     """
@@ -136,9 +137,9 @@ def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
 
 
 @require_context
-def managed_array(shape, dtype=np.float, strides=None, order='C', stream=0,
+def managed_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
                   attach_global=True):
-    """managed_array(shape, dtype=np.float, strides=None, order='C', stream=0,
+    """managed_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
                      attach_global=True)
 
     Allocate a np.ndarray with a buffer that is managed.
@@ -166,8 +167,8 @@ def managed_array(shape, dtype=np.float, strides=None, order='C', stream=0,
 
 
 @require_context
-def pinned_array(shape, dtype=np.float, strides=None, order='C'):
-    """pinned_array(shape, dtype=np.float, strides=None, order='C')
+def pinned_array(shape, dtype=np.float_, strides=None, order='C'):
+    """pinned_array(shape, dtype=np.float_, strides=None, order='C')
 
     Allocate an :class:`ndarray <numpy.ndarray>` with a buffer that is pinned
     (pagelocked).  Similar to :func:`np.empty() <numpy.empty>`.
@@ -182,9 +183,9 @@ def pinned_array(shape, dtype=np.float, strides=None, order='C'):
 
 
 @require_context
-def mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0,
+def mapped_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
                  portable=False, wc=False):
-    """mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0,
+    """mapped_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
                     portable=False, wc=False)
 
     Allocate a mapped ndarray with a buffer that is pinned and mapped on
@@ -245,14 +246,14 @@ def _prepare_shape_strides_dtype(shape, strides, dtype, order):
     if isinstance(strides, int):
         strides = (strides,)
     else:
-        if shape == ():
-            shape = (1,)
         strides = strides or _fill_stride_by_order(shape, dtype, order)
     return shape, strides, dtype
 
 
 def _fill_stride_by_order(shape, dtype, order):
     nd = len(shape)
+    if nd == 0:
+        return ()
     strides = [0] * nd
     if order == 'C':
         strides[-1] = dtype.itemsize
@@ -487,9 +488,16 @@ def detect():
     for dev in devlist:
         attrs = []
         cc = dev.compute_capability
-        attrs += [('compute capability', '%d.%d' % cc)]
-        attrs += [('pci device id', dev.PCI_DEVICE_ID)]
-        attrs += [('pci bus id', dev.PCI_BUS_ID)]
+        kernel_timeout = dev.KERNEL_EXEC_TIMEOUT
+        tcc = dev.TCC_DRIVER
+        fp32_to_fp64_ratio = dev.SINGLE_TO_DOUBLE_PRECISION_PERF_RATIO
+        attrs += [('Compute Capability', '%d.%d' % cc)]
+        attrs += [('PCI Device ID', dev.PCI_DEVICE_ID)]
+        attrs += [('PCI Bus ID', dev.PCI_BUS_ID)]
+        attrs += [('Watchdog', 'Enabled' if kernel_timeout else 'Disabled')]
+        if os.name == "nt":
+            attrs += [('Compute Mode', 'TCC' if tcc else 'WDDM')]
+        attrs += [('FP32/FP64 Performance Ratio', fp32_to_fp64_ratio)]
         if cc < (2, 0):
             support = '[NOT SUPPORTED: CC < 2.0]'
         else:
