@@ -68,7 +68,8 @@ class BaseTest(TestCase):
                 tp.state.calltypes,
                 _
             ) = typed_passes.type_inference_stage(
-                tp.state.typingctx, tp.state.func_ir, tp.state.args, None
+                tp.state.typingctx, tp.state.targetctx, tp.state.func_ir,
+                tp.state.args, None
             )
 
             typed_passes.PreLowerStripPhis().run_pass(tp.state)

@@ -38,6 +38,9 @@ class CPUContext(BaseContext):
     """
     allow_dynamic_globals = True
 
+    def __init__(self, typingctx, target='cpu'):
+        super().__init__(typingctx, target)
+
     # Overrides
     def create_module(self, name):
         return self._internal_codegen._create_empty_module(name)
