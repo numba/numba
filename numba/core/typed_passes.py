@@ -300,6 +300,7 @@ class ParforPass(FunctionPass):
                                          state.type_annotation.calltypes,
                                          state.return_type,
                                          state.typingctx,
+                                         state.targetctx,
                                          state.flags.auto_parallel,
                                          state.flags,
                                          state.metadata,

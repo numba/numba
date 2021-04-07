@@ -102,6 +102,7 @@ class BaseTest(TestCase):
             tp.state.calltypes,
             tp.state.return_type,
             tp.state.typingctx,
+            tp.state.targetctx,
             options,
             flags,
             tp.state.metadata,

@@ -1552,11 +1552,13 @@ class ParforPassStates:
     """
 
     def __init__(self, func_ir, typemap, calltypes, return_type, typingctx,
-                 options, flags, metadata, diagnostics=ParforDiagnostics()):
+                 targetctx,  options, flags, metadata,
+                 diagnostics=ParforDiagnostics()):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
         self.typingctx = typingctx
+        self.targetctx = targetctx
         self.return_type = return_type
         self.options = options
         self.diagnostics = diagnostics
@@ -2254,6 +2256,7 @@ class ConvertReducePass:
         reduce_f_ir = compile_to_numba_ir(fcode,
                                         pass_states.func_ir.func_id.func.__globals__,
                                         pass_states.typingctx,
+                                        pass_states.targetctx,
                                         (in_typ, in_typ),
                                         pass_states.typemap,
                                         pass_states.calltypes)
