@@ -190,7 +190,7 @@ def jit(signature_or_function=None, locals={}, cache=False,
 
 
 # Register the cpu token as using `jit` as the jitter
-jit_registry['cpu'] = jit
+jit_registry[hardware_registry['cpu']] = jit
 
 def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
     dispatcher = dispatcher_registry[hardware_registry[target]]

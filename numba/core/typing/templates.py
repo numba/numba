@@ -765,7 +765,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                 if not issubclass(target_hw, hardware_class):
                     msg = "No overloads exist for the requested hardware: {}."
 
-                jitter = decorators.jit_registry[target_hw_str.lower()]
+                hw = hardware_registry[target_hw_str.lower()]
+                jitter = decorators.jit_registry[hw]
 
         if jitter is None:
             raise ValueError("Cannot find a suitable jit decorator")
