@@ -9,7 +9,6 @@ from numba.core.descriptors import TargetDescriptor
 from numba.core.options import TargetOptions, include_default_options
 from numba.core.registry import cpu_target
 from numba.core.extending_hardware import dispatcher_registry, hardware_registry
-from numba.core.cpu import FastMathOptions
 from numba.core import utils, types, serialize, compiler, sigutils
 from numba.np.numpy_support import as_dtype
 from numba.np.ufunc import _internal

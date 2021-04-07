@@ -1,4 +1,3 @@
-import inspect
 import os
 import uuid
 import weakref
@@ -308,7 +307,8 @@ class _Intrinsic(ReduceMixin):
         from numba.core.typing.templates import (make_intrinsic_template,
                                                  infer_global)
 
-        template = make_intrinsic_template(self, self._defn, self._name, self._ctor_kwargs)
+        template = make_intrinsic_template(self, self._defn, self._name,
+                                           self._ctor_kwargs)
         infer(template)
         infer_global(self, types.Function(template))
 
@@ -537,4 +537,3 @@ def is_jitted(function):
     # don't want to export this so import locally
     from numba.core.dispatcher import Dispatcher
     return isinstance(function, Dispatcher)
-

@@ -250,7 +250,7 @@ class BaseLower(object):
         if self.genlower:
             raise UnsupportedError('generator as a first-class function type')
         self.context.create_cfunc_wrapper(self.library, self.fndesc,
-                                        self.env, self.call_helper)
+                                          self.env, self.call_helper)
 
     def setup_function(self, fndesc):
         # Setup function

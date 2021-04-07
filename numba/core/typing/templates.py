@@ -734,7 +734,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         else:
             # Hardware has been requested, see what it is...
             jitter = decorators.jit_registry.get(jitter_str, None)
-            from numba.core.extending_hardware import hardware_registry, Generic
+            from numba.core.extending_hardware import hardware_registry
+
             def report_unknown_hardware(msg):
                 raise ValueError(msg.format(jitter_str))
 
@@ -755,15 +756,14 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                         target_hw_str = k
                         break
                 else:
-                    msg =("InternalError: The hardware target for TOS is not ",
-                          "registered. Given target was {}.")
+                    msg = ("InternalError: The hardware target for TOS is not ",
+                           "registered. Given target was {}.")
                     report_unknown_hardware(msg)
-
 
                 # check that the requested hardware is in the hierarchy for the
                 # current frame's target.
                 if not issubclass(target_hw, hardware_class):
-                    msg =("No overloads exist for the requested hardware: {}.")
+                    msg = "No overloads exist for the requested hardware: {}."
 
                 jitter = decorators.jit_registry[target_hw_str.lower()]
 
@@ -890,9 +890,9 @@ class _IntrinsicTemplate(AbstractTemplate):
         """
         Type the intrinsic by the arguments.
         """
-        from numba.core.imputils import lower_builtin
         cache_key = self.context, args, tuple(kws.items())
-        from numba.core.extending_hardware import dispatcher_registry, hardware_registry
+        from numba.core.extending_hardware import dispatcher_registry
+        from numba.core.extending_hardware import hardware_registry
         hwstr = self.metadata.get('hardware', 'cpu')
         disp = dispatcher_registry[hardware_registry[hwstr]]
         tgtctx = disp.targetdescr.target_context

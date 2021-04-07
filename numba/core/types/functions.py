@@ -286,7 +286,8 @@ class BaseFunction(Callable):
         failures = _ResolutionFailures(context, self, args, kws,
                                        depth=self._depth)
 
-        from numba.core.extending_hardware import hardware_registry, current_target
+        from numba.core.extending_hardware import hardware_registry
+        from numba.core.extending_hardware import current_target
         if len(context.callstack._stack) > 0:
             target = context.callstack[0].target
         else:
@@ -297,18 +298,17 @@ class BaseFunction(Callable):
                 target_hw = v
                 break
         else:
-            msg =("InternalError: The hardware target for TOS is not "
-                    "registered. Given target was {}.")
+            msg = ("InternalError: The hardware target for TOS is not "
+                   "registered. Given target was {}.")
             raise ValueError(msg.format(target))
-
-
 
         # fish out templates that are specific to the target if a target is
         # specified
         DEFAULT_HARDWARE = 'cpu'
         usable = []
         for ix, temp_cls in enumerate(self.templates):
-            hw = temp_cls.metadata.get('hardware', DEFAULT_HARDWARE) # ? Need to do something about this
+            # ? Need to do something about this next line
+            hw = temp_cls.metadata.get('hardware', DEFAULT_HARDWARE)
             if hw is not None:
                 hw_clazz = hardware_registry[hw]
                 if hw_clazz in target_hw.__mro__:
