@@ -39,10 +39,10 @@ xoroshiro128p_type = from_dtype(xoroshiro128p_dtype)
 # cudasim, but also fallback-by-default will not be permitted in future. In
 # order to avoid the warning / future error, we explicitly specify that
 # object mode with loop lifting is acceptable when using the simulator.
-forceobj = looplift = config.ENABLE_CUDASIM
+_forceobj = _looplift = config.ENABLE_CUDASIM
 
 
-@jit(forceobj=forceobj, looplift=looplift)
+@jit(forceobj=_forceobj, looplift=_looplift)
 def init_xoroshiro128p_state(states, index, seed):
     '''Use SplitMix64 to generate an xoroshiro128p state from 64-bit seed.
 
@@ -68,7 +68,7 @@ def init_xoroshiro128p_state(states, index, seed):
     states[index]['s1'] = z
 
 
-@jit(forceobj=forceobj, looplift=looplift)
+@jit(forceobj=_forceobj, looplift=_looplift)
 def rotl(x, k):
     '''Left rotate x by k bits.'''
     x = uint64(x)
@@ -76,7 +76,7 @@ def rotl(x, k):
     return (x << k) | (x >> uint32(64 - k))
 
 
-@jit(forceobj=forceobj, looplift=looplift)
+@jit(forceobj=_forceobj, looplift=_looplift)
 def xoroshiro128p_next(states, index):
     '''Return the next random uint64 and advance the RNG in states[index].
 
@@ -98,7 +98,7 @@ def xoroshiro128p_next(states, index):
     return result
 
 
-@jit(forceobj=forceobj, looplift=looplift)
+@jit(forceobj=_forceobj, looplift=_looplift)
 def xoroshiro128p_jump(states, index):
     '''Advance the RNG in ``states[index]`` by 2**64 steps.
 
@@ -125,21 +125,21 @@ def xoroshiro128p_jump(states, index):
     states[index]['s1'] = s1
 
 
-@jit(forceobj=forceobj, looplift=looplift)
+@jit(forceobj=_forceobj, looplift=_looplift)
 def uint64_to_unit_float64(x):
     '''Convert uint64 to float64 value in the range [0.0, 1.0)'''
     x = uint64(x)
     return (x >> uint32(11)) * (float64(1) / (uint64(1) << uint32(53)))
 
 
-@jit(forceobj=forceobj, looplift=looplift)
+@jit(forceobj=_forceobj, looplift=_looplift)
 def uint64_to_unit_float32(x):
     '''Convert uint64 to float32 value in the range [0.0, 1.0)'''
     x = uint64(x)
     return float32(uint64_to_unit_float64(x))
 
 
-@jit(forceobj=forceobj, looplift=looplift)
+@jit(forceobj=_forceobj, looplift=_looplift)
 def xoroshiro128p_uniform_float32(states, index):
     '''Return a float32 in range [0.0, 1.0) and advance ``states[index]``.
 
@@ -153,7 +153,7 @@ def xoroshiro128p_uniform_float32(states, index):
     return uint64_to_unit_float32(xoroshiro128p_next(states, index))
 
 
-@jit(forceobj=forceobj, looplift=looplift)
+@jit(forceobj=_forceobj, looplift=_looplift)
 def xoroshiro128p_uniform_float64(states, index):
     '''Return a float64 in range [0.0, 1.0) and advance ``states[index]``.
 
@@ -171,7 +171,7 @@ TWO_PI_FLOAT32 = np.float32(2 * math.pi)
 TWO_PI_FLOAT64 = np.float64(2 * math.pi)
 
 
-@jit(forceobj=forceobj, looplift=looplift)
+@jit(forceobj=_forceobj, looplift=_looplift)
 def xoroshiro128p_normal_float32(states, index):
     '''Return a normally distributed float32 and advance ``states[index]``.
 
@@ -196,7 +196,7 @@ def xoroshiro128p_normal_float32(states, index):
     return z0
 
 
-@jit(forceobj=forceobj, looplift=looplift)
+@jit(forceobj=_forceobj, looplift=_looplift)
 def xoroshiro128p_normal_float64(states, index):
     '''Return a normally distributed float32 and advance ``states[index]``.
 
@@ -221,7 +221,7 @@ def xoroshiro128p_normal_float64(states, index):
     return z0
 
 
-@jit(forceobj=forceobj, looplift=looplift)
+@jit(forceobj=_forceobj, looplift=_looplift)
 def init_xoroshiro128p_states_cpu(states, seed, subsequence_start):
     n = states.shape[0]
     seed = uint64(seed)
