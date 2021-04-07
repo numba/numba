@@ -1800,40 +1800,26 @@ def np_clip(a, a_min, a_max, out=None):
     a_min_is_none = a_min is None or isinstance(a_min, types.NoneType)
     a_max_is_none = a_max is None or isinstance(a_max, types.NoneType)
 
-    if a_min_is_none and a_max_is_none:
-        def np_clip_impl(a, a_min, a_max, out=None):
-            # implementation for no bounds
+    def np_clip_impl(a, a_min, a_max, out=None):
+        if a_min_is_none and a_max_is_none:
             raise ValueError("array_clip: must set either max or min")
 
-    elif a_min_is_none:
-        def np_clip_impl(a, a_min, a_max, out=None):
-            # implementation for upper-bound only
-            ret = _alloc_out(a, out)
-            for index, val in np.ndenumerate(a):
+        ret = _alloc_out(a, out)
+
+        for index, val in np.ndenumerate(a):
+            if a_min_is_none:
                 if val > a_max:
                     ret[index] = a_max
                 else:
                     ret[index] = val
-            return ret
-
-    elif a_max_is_none:
-        def np_clip_impl(a, a_min, a_max, out=None):
-            # implementation for lower-bound only
-            ret = _alloc_out(a, out)
-            for index, val in np.ndenumerate(a):
+            elif a_max_is_none:
                 if val < a_min:
                     ret[index] = a_min
                 else:
                     ret[index] = val
-            return ret
-
-    else:
-        def np_clip_impl(a, a_min, a_max, out=None):
-            # implementation when both bounds defined
-            ret = _alloc_out(a, out)
-            for index, val in np.ndenumerate(a):
+            else:
                 ret[index] = min(max(val, a_min), a_max)
-            return ret
+        return ret
 
     return np_clip_impl
 
