@@ -4,13 +4,13 @@ from numba.core.registry import TargetRegistry, CPUDispatcher
 from threading import local as tls
 
 _active_context = tls()
-_active_context.default = 'cpu'
+_active_context_default = 'cpu'
 
 
 class hardware_target(object):
     def __init__(self, name):
         self._orig_target = getattr(_active_context, 'target',
-                                    _active_context.default)
+                                    _active_context_default)
         self.target = name
 
     def __enter__(self):
@@ -21,7 +21,7 @@ class hardware_target(object):
 
 
 def current_target():
-    return getattr(_active_context, 'target', _active_context.default)
+    return getattr(_active_context, 'target', _active_context_default)
 
 
 hardware_registry = TargetRegistry()
