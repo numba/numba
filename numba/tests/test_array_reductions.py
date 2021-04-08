@@ -945,15 +945,14 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         py_functions = [
             lambda a, _axis=axis: np.argmax(a, axis=_axis)
-            for axis in [0, 1, 2, -1]
+            for axis in [0, 1, 2, -1, -2, -3]
         ]
         c_functions = [
             jit(nopython=True)(pyfunc) for pyfunc in py_functions
         ]
-        self.assertPreciseEqual(
-            [pyfunc(arr) for pyfunc in py_functions],
-            [cfunc(arr) for cfunc in c_functions]
-        )
+        for (pyfunc, cfunc) in zip(py_functions, c_functions):
+            self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+        # TODO out of range axis tests
 
     @classmethod
     def install_generated_tests(cls):
