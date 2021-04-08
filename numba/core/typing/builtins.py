@@ -931,7 +931,8 @@ class Bool(AbstractTemplate):
 class Int(AbstractTemplate):
 
     def generic(self, args, kws):
-        assert not kws
+        if kws:
+            raise TypeError("int() only support for Integer, Float and Boolean")
 
         [arg] = args
 
@@ -939,6 +940,8 @@ class Int(AbstractTemplate):
             return signature(arg, arg)
         if isinstance(arg, (types.Float, types.Boolean)):
             return signature(types.intp, arg)
+
+        raise TypeError("int() only support for Integer, Float and Boolean")
 
 
 @infer_global(float)
