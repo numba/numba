@@ -704,75 +704,87 @@ def array_argmin(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(np.argmax, types.Array)
-@lower_builtin("array.argmax", types.Array)
-def array_argmax(context, builder, sig, args):
-    ty = sig.args[0].dtype
+@register_jitable
+def array_argmax_impl_datetime(arry):
+    if arry.size == 0:
+        raise ValueError("attempt to get argmax of an empty sequence")
+    it = np.nditer(arry)
+    max_value = next(it).take(0)
+    max_idx = 0
+    if _is_nat(max_value):
+        return max_idx
 
-    if (isinstance(ty, (types.NPDatetime, types.NPTimedelta))):
-        def array_argmax_impl(arry):
-            if arry.size == 0:
-                raise ValueError("attempt to get argmax of an empty sequence")
-            it = np.nditer(arry)
-            max_value = next(it).take(0)
-            max_idx = 0
-            if _is_nat(max_value):
-                return max_idx
-
-            idx = 1
-            for view in it:
-                v = view.item()
-                if _is_nat(v):
-                    if numpy_version >= (1, 18):
-                        return idx
-                    else:
-                        idx += 1
-                        continue
-                if v > max_value:
-                    max_value = v
-                    max_idx = idx
+    idx = 1
+    for view in it:
+        v = view.item()
+        if _is_nat(v):
+            if numpy_version >= (1, 18):
+                return idx
+            else:
                 idx += 1
-            return max_idx
+                continue
+        if v > max_value:
+            max_value = v
+            max_idx = idx
+        idx += 1
+    return max_idx
 
-    elif isinstance(ty, types.Float):
-        def array_argmax_impl(arry):
-            if arry.size == 0:
-                raise ValueError("attempt to get argmax of an empty sequence")
-            for v in arry.flat:
-                max_value = v
-                max_idx = 0
-                break
-            if np.isnan(max_value):
-                return max_idx
 
-            idx = 0
-            for v in arry.flat:
-                if np.isnan(v):
-                    return idx
-                if v > max_value:
-                    max_value = v
-                    max_idx = idx
-                idx += 1
-            return max_idx
+@register_jitable
+def array_argmax_impl_float(arry):
+    if arry.size == 0:
+        raise ValueError("attempt to get argmax of an empty sequence")
+    for v in arry.flat:
+        max_value = v
+        max_idx = 0
+        break
+    if np.isnan(max_value):
+        return max_idx
 
+    idx = 0
+    for v in arry.flat:
+        if np.isnan(v):
+            return idx
+        if v > max_value:
+            max_value = v
+            max_idx = idx
+        idx += 1
+    return max_idx
+
+
+@register_jitable
+def array_argmax_impl_generic(arry):
+    if arry.size == 0:
+        raise ValueError("attempt to get argmax of an empty sequence")
+    for v in arry.flat:
+        max_value = v
+        max_idx = 0
+        break
+
+    idx = 0
+    for v in arry.flat:
+        if v > max_value:
+            max_value = v
+            max_idx = idx
+        idx += 1
+    return max_idx
+
+
+@overload(np.argmax)
+@overload_method(types.Array, "argmax")
+def array_argmax(arr):
+    if isinstance(arr.dtype, (types.NPDatetime, types.NPTimedelta)):
+        flatten_impl = array_argmax_impl_datetime
+    elif isinstance(arr.dtype, types.Float):
+        flatten_impl = array_argmax_impl_float
     else:
-        def array_argmax_impl(arry):
-            if arry.size == 0:
-                raise ValueError("attempt to get argmax of an empty sequence")
-            for v in arry.flat:
-                max_value = v
-                max_idx = 0
-                break
+        flatten_impl = array_argmax_impl_generic
 
-            idx = 0
-            for v in arry.flat:
-                if v > max_value:
-                    max_value = v
-                    max_idx = idx
-                idx += 1
-            return max_idx
-    res = context.compile_internal(builder, array_argmax_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+    def array_argmax_impl(arr):
+        return flatten_impl(arr)
+
+    return array_argmax_impl
+
 
 
 @overload(np.all)

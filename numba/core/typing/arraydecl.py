@@ -777,7 +777,6 @@ for fName in ["var", "std"]:
 
 # Functions that return an index (intp)
 install_array_method("argmin", generic_index)
-install_array_method("argmax", generic_index)
 
 
 @infer_global(operator.eq)
