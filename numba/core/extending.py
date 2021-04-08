@@ -53,7 +53,7 @@ def type_callable(func):
 
 # By default, an *overload* does not have a cpython wrapper because it is not
 # callable from python.
-#_overload_default_jit_options = {'no_cpython_wrapper': True}
+_overload_default_jit_options = {'no_cpython_wrapper': True}
 
 
 def overload(func, jit_options={}, strict=True, inline='never',
@@ -113,7 +113,7 @@ def overload(func, jit_options={}, strict=True, inline='never',
     from numba.core.typing.templates import make_overload_template, infer_global
 
     # set default options
-    opts = {}#_overload_default_jit_options.copy()
+    opts = _overload_default_jit_options.copy()
     opts.update(jit_options)  # let user options override
 
     def decorate(overload_func):

@@ -730,7 +730,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         if jitter_str is None:
             # There is no hardware requested, use default, this preserves
             # original behaviour
-            jitter = jit
+            jitter = lambda *args, **kwargs: jit(*args, nopython=True, **kwargs)
         else:
             # Hardware has been requested, see what it is...
             jitter = decorators.jit_registry.get(jitter_str, None)
