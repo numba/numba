@@ -1,16 +1,25 @@
-import cmath
 import math
 import itertools
-import string
-import sys
-import textwrap
 
 import numpy as np
 
 from numba.cuda.testing import unittest, CUDATestCase
-from numba.core import types, utils
+from numba.core import types
 from numba import cuda
-from numba.tests.complex_usecases import *
+from numba.tests.complex_usecases import (real_usecase, imag_usecase,
+                                          conjugate_usecase, phase_usecase,
+                                          polar_as_complex_usecase,
+                                          rect_usecase, isnan_usecase,
+                                          isinf_usecase, isfinite_usecase,
+                                          exp_usecase, log_usecase,
+                                          log_base_usecase, log10_usecase,
+                                          sqrt_usecase, asin_usecase,
+                                          acos_usecase, atan_usecase,
+                                          cos_usecase, sin_usecase,
+                                          tan_usecase, acosh_usecase,
+                                          asinh_usecase, atanh_usecase,
+                                          cosh_usecase, sinh_usecase,
+                                          tanh_usecase)
 from numba.np import numpy_support
 
 
@@ -133,7 +142,8 @@ class TestCMath(BaseComplexTest):
 
     def check_predicate_func(self, pyfunc):
         self.run_unary(pyfunc,
-                       [types.boolean(tp) for tp in (types.complex128, types.complex64)],
+                       [types.boolean(tp)
+                        for tp in (types.complex128, types.complex64)],
                        self.basic_values())
 
     def check_unary_func(self, pyfunc, ulps=1, values=None,

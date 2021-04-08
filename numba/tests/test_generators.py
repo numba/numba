@@ -6,15 +6,14 @@ from numba.core.compiler import compile_isolated, Flags
 from numba import jit, njit
 from numba.core import types
 from numba.tests.support import TestCase, MemoryLeakMixin
-from numba import testing
 from numba.core.datamodel.testing import test_factory
 
 
 enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
+enable_pyobj_flags.enable_pyobject = True
 
 forceobj_flags = Flags()
-forceobj_flags.set("force_pyobject")
+forceobj_flags.force_pyobject = True
 
 no_pyobj_flags = Flags()
 
@@ -340,15 +339,6 @@ class TestGenerators(MemoryLeakMixin, TestCase):
         msg = ("Can't unify yield type from the following types: complex128, "
                "int%s, none")
         self.assertIn(msg % types.intp.bitwidth, str(e.exception))
-
-
-class TestGenExprs(MemoryLeakMixin, TestCase):
-    @testing.allow_interpreter_mode
-    def test_return_generator_expr(self):
-        pyfunc = return_generator_expr
-        cr = compile_isolated(pyfunc, ())
-        cfunc = cr.entry_point
-        self.assertEqual(sum(cfunc([1, 2, 3])), sum(pyfunc([1, 2, 3])))
 
 
 def nrt_gen0(ary):

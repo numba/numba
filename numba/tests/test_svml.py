@@ -19,6 +19,9 @@ needs_svml = unittest.skipUnless(config.USING_SVML,
 
 # a map of float64 vector lenghs with corresponding CPU architecture
 vlen2cpu = {2: 'nehalem', 4: 'haswell', 8: 'skylake-avx512'}
+# force LLVM to use AVX512 registers for vectorization
+# https://reviews.llvm.org/D67259
+vlen2cpu_features = {2: '', 4: '', 8: '-prefer-256-bit'}
 
 # K: SVML functions, V: python functions which are expected to be SIMD-vectorized
 # using SVML, explicit references to Python functions here are mostly for sake of
@@ -182,7 +185,7 @@ class TestSVMLGeneration(TestCase):
     def _inject_test(cls, dtype, mode, vlen, flags):
         # unsupported combinations
         if dtype.startswith('complex') and mode != 'numpy':
-            return 
+            return
         # TODO: address skipped tests below
         skipped = dtype.startswith('int') and vlen == 2
         args = (dtype, mode, vlen, flags)
@@ -192,7 +195,7 @@ class TestSVMLGeneration(TestCase):
             fn, contains, avoids = combo_svml_usecase(*args)
             # look for specific patters in the asm for a given target
             with override_env_config('NUMBA_CPU_NAME', vlen2cpu[vlen]), \
-                 override_env_config('NUMBA_CPU_FEATURES', ''):
+                 override_env_config('NUMBA_CPU_FEATURES', vlen2cpu_features[vlen]):
                 # recompile for overridden CPU
                 try:
                     jit = compile_isolated(fn, (numba.int64, ), flags=flags)
@@ -220,11 +223,11 @@ class TestSVMLGeneration(TestCase):
         flag_list = []  # create Flag class instances
         for ft in test_flags:
             flags = Flags()
-            flags.set('nrt')
-            flags.set('error_model', 'numpy')
+            flags.nrt = True
+            flags.error_model =  'numpy'
             flags.__name__ = '_'.join(ft+('usecase',))
             for f in ft:
-                flags.set(f, {
+                setattr(flags, f, {
                     'fastmath': cpu.FastMathOptions(True)
                 }.get(f, True))
             flag_list.append(flags)
@@ -263,12 +266,12 @@ class TestSVML(TestCase):
 
     def __init__(self, *args):
         self.flags = Flags()
-        self.flags.set('nrt')
+        self.flags.nrt = True
 
         # flags for njit(fastmath=True)
         self.fastflags = Flags()
-        self.fastflags.set('nrt')
-        self.fastflags.set('fastmath', cpu.FastMathOptions(True))
+        self.fastflags.nrt = True
+        self.fastflags.fastmath = cpu.FastMathOptions(True)
         super(TestSVML, self).__init__(*args)
 
     def compile(self, func, *args, **kwargs):
@@ -302,6 +305,9 @@ class TestSVML(TestCase):
         std_pattern = kwargs.pop('std_pattern', None)
         fast_pattern = kwargs.pop('fast_pattern', None)
         cpu_name = kwargs.pop('cpu_name', 'skylake-avx512')
+        # force LLVM to use AVX512 registers for vectorization
+        # https://reviews.llvm.org/D67259
+        cpu_features = kwargs.pop('cpu_features', '-prefer-256-bit')
 
         # python result
         py_expected = pyfunc(*self.copy_args(*args))
@@ -318,7 +324,7 @@ class TestSVML(TestCase):
 
         # look for specific patters in the asm for a given target
         with override_env_config('NUMBA_CPU_NAME', cpu_name), \
-             override_env_config('NUMBA_CPU_FEATURES', ''):
+             override_env_config('NUMBA_CPU_FEATURES', cpu_features):
             # recompile for overridden CPU
             jitstd, jitfast = self.compile(pyfunc, *args)
             if std_pattern:
@@ -374,9 +380,9 @@ class TestSVML(TestCase):
                          override_env_config('NUMBA_CPU_FEATURES', ''):
                         sig = (numba.int32,)
                         f = Flags()
-                        f.set('nrt')
+                        f.nrt = True
                         std = compile_isolated(math_sin_loop, sig, flags=f)
-                        f.set('fastmath', cpu.FastMathOptions(True))
+                        f.fastmath = cpu.FastMathOptions(True)
                         fast = compile_isolated(math_sin_loop, sig, flags=f)
                         fns = std, fast
 

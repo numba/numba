@@ -7,12 +7,10 @@ import abc
 import os.path
 
 from llvmlite import ir
+from numba.core import cgutils
 
-from numba.core.utils import add_metaclass
 
-
-@add_metaclass(abc.ABCMeta)
-class AbstractDIBuilder(object):
+class AbstractDIBuilder(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def mark_variable(self, builder, allocavalue, name, lltype, size, loc):
         """Emit debug info for the variable.
@@ -30,6 +28,12 @@ class AbstractDIBuilder(object):
         """Emit source location information for the given function.
         """
         pass
+
+    @abc.abstractmethod
+    def initialize(self):
+        """Initialize the debug info. An opportunity for the debuginfo to
+        prepare any necessary data structures.
+        """
 
     @abc.abstractmethod
     def finalize(self):
@@ -52,6 +56,9 @@ class DummyDIBuilder(AbstractDIBuilder):
     def mark_subprogram(self, function, name, loc):
         pass
 
+    def initialize(self):
+        pass
+
     def finalize(self):
         pass
 
@@ -66,6 +73,11 @@ class DIBuilder(AbstractDIBuilder):
         self.filepath = os.path.abspath(filepath)
         self.difile = self._di_file()
         self.subprograms = []
+        self.initialize()
+
+    def initialize(self):
+        # Create the compile unit now because it is referenced when
+        # constructing subprograms
         self.dicompileunit = self._di_compile_unit()
 
     def _var_type(self, lltype, size):
@@ -108,7 +120,7 @@ class DIBuilder(AbstractDIBuilder):
     def mark_variable(self, builder, allocavalue, name, lltype, size, loc):
         m = self.module
         fnty = ir.FunctionType(ir.VoidType(), [ir.MetaDataType()] * 3)
-        decl = m.get_or_insert_function(fnty, name='llvm.dbg.declare')
+        decl = cgutils.get_or_insert_function(m, fnty, 'llvm.dbg.declare')
 
         mdtype = self._var_type(lltype, size)
         name = name.replace('.', '$')    # for gdb to work correctly
@@ -135,7 +147,7 @@ class DIBuilder(AbstractDIBuilder):
         function.attributes.add('noinline')
 
     def finalize(self):
-        dbgcu = self.module.get_or_insert_named_metadata(self.DBG_CU_NAME)
+        dbgcu = cgutils.get_or_insert_named_metadata(self.module, self.DBG_CU_NAME)
         dbgcu.add(self.dicompileunit)
         self._set_module_flags()
 
@@ -147,7 +159,7 @@ class DIBuilder(AbstractDIBuilder):
         """Set the module flags metadata
         """
         module = self.module
-        mflags = module.get_or_insert_named_metadata('llvm.module.flags')
+        mflags = cgutils.get_or_insert_named_metadata(module, 'llvm.module.flags')
         # Set *require* behavior to warning
         # See http://llvm.org/docs/LangRef.html#module-flags-metadata
         require_warning_behavior = self._const_int(2)
@@ -302,6 +314,7 @@ class NvvmDIBuilder(DIBuilder):
     def _di_compile_unit(self):
         filepair = self._filepair()
         empty = self.module.add_metadata([self._const_int(0)])
+        sp_metadata = self.module.add_metadata(self.subprograms)
         return self.module.add_metadata([
             self._const_int(self.DI_Compile_unit),         # tag
             filepair,                   # source directory and file pair
@@ -374,3 +387,11 @@ class NvvmDIBuilder(DIBuilder):
             None,                    # original scope
         ])
 
+    def initialize(self):
+        pass
+
+    def finalize(self):
+        # We create the compile unit at this point because subprograms is
+        # populated and can be referred to by the compile unit.
+        self.dicompileunit = self._di_compile_unit()
+        super().finalize()

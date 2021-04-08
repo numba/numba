@@ -4,16 +4,18 @@ import functools
 import inspect
 import os
 import operator
-import threading
 import timeit
 import math
 import sys
 import traceback
 import weakref
 import warnings
+import threading
+import contextlib
+
 from types import ModuleType
 from importlib import import_module
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 import numpy as np
 
 from inspect import signature as pysignature # noqa: F401
@@ -24,76 +26,6 @@ from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
                                DEVELOPER_MODE) # noqa: F401
 from numba.core import types
 
-INT_TYPES = (int,)
-longint = int
-get_ident = threading.get_ident
-intern = sys.intern
-file_replace = os.replace
-asbyteint = int
-
-# ------------------------------------------------------------------------------
-# Start: Originally from `numba.six` under the following license
-
-"""Utilities for writing code that runs on Python 2 and 3"""
-
-# Copyright (c) 2010-2015 Benjamin Peterson
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
-
-def add_metaclass(metaclass):
-    """Class decorator for creating a class with a metaclass."""
-    def wrapper(cls):
-        orig_vars = cls.__dict__.copy()
-        slots = orig_vars.get('__slots__')
-        if slots is not None:
-            if isinstance(slots, str):
-                slots = [slots]
-            for slots_var in slots:
-                orig_vars.pop(slots_var)
-        orig_vars.pop('__dict__', None)
-        orig_vars.pop('__weakref__', None)
-        return metaclass(cls.__name__, cls.__bases__, orig_vars)
-    return wrapper
-
-
-def reraise(tp, value, tb=None):
-    if value is None:
-        value = tp()
-    if value.__traceback__ is not tb:
-        raise value.with_traceback(tb)
-    raise value
-
-
-def iteritems(d, **kw):
-    return iter(d.items(**kw))
-
-
-def itervalues(d, **kw):
-    return iter(d.values(**kw))
-
-
-get_function_globals = operator.attrgetter("__globals__")
-
-# End: Originally from `numba.six` under the following license
-# ------------------------------------------------------------------------------
-
 
 def erase_traceback(exc_value):
     """
@@ -102,6 +34,23 @@ def erase_traceback(exc_value):
     if exc_value.__traceback__ is not None:
         traceback.clear_frames(exc_value.__traceback__)
     return exc_value.with_traceback(None)
+
+
+def safe_relpath(path, start=os.curdir):
+    """
+    Produces a "safe" relative path, on windows relpath doesn't work across
+    drives as technically they don't share the same root.
+    See: https://bugs.python.org/issue7195 for details.
+    """
+    # find the drive letters for path and start and if they are not the same
+    # then don't use relpath!
+    drive_letter = lambda x: os.path.splitdrive(os.path.abspath(x))[0]
+    drive_path = drive_letter(path)
+    drive_start = drive_letter(start)
+    if drive_path != drive_start:
+        return os.path.abspath(path)
+    else:
+        return os.path.relpath(path, start=start)
 
 
 # Mapping between operator module functions and the corresponding built-in
@@ -129,7 +78,8 @@ BINOPS_TO_OPERATORS = {
     'is': operator.is_,
     'is not': operator.is_not,
     # This one has its args reversed!
-    'in': operator.contains
+    'in': operator.contains,
+    '@': operator.matmul,
 }
 
 INPLACE_BINOPS_TO_OPERATORS = {
@@ -145,6 +95,7 @@ INPLACE_BINOPS_TO_OPERATORS = {
     '^=': operator.ixor,
     '<<=': operator.ilshift,
     '>>=': operator.irshift,
+    '@=': operator.imatmul,
 }
 
 UNARY_BUITINS_TO_OPERATORS = {
@@ -198,9 +149,6 @@ OPERATORS_TO_BUILTINS = {
     operator.truth: 'is_true',
 }
 
-BINOPS_TO_OPERATORS['@'] = operator.matmul
-INPLACE_BINOPS_TO_OPERATORS['@='] = operator.imatmul
-
 
 _shutting_down = False
 
@@ -230,6 +178,43 @@ def shutting_down(globals=globals):
 # finalizer then register atexit to ensure this ordering.
 weakref.finalize(lambda: None, lambda: None)
 atexit.register(_at_shutdown)
+
+
+class ConfigStack:
+    """A stack for tracking target configurations in the compiler.
+
+    It stores the stack in a thread-local class attribute. All instances in the
+    same thread will see the same stack.
+    """
+    tls = threading.local()
+
+    def __init__(self):
+        tls = self.tls
+        try:
+            stk = tls.stack
+        except AttributeError:
+            tls.stack = stk = []
+        self._stk = stk
+
+    def push(self, data):
+        self._stk.append(data)
+
+    def pop(self):
+        return self._stk.pop()
+
+    def top(self):
+        return self._stk[-1]
+
+    def __len__(self):
+        return len(self._stk)
+
+    @contextlib.contextmanager
+    def enter(self, flags):
+        self.push(flags)
+        try:
+            yield
+        finally:
+            self.pop()
 
 
 class ConfigOptions(object):
@@ -350,7 +335,7 @@ def bit_length(intval):
     """
     Return the number of bits necessary to represent integer `intval`.
     """
-    assert isinstance(intval, INT_TYPES)
+    assert isinstance(intval, int)
     if intval >= 0:
         return len(bin(intval)) - 2
     else:
@@ -421,9 +406,6 @@ def benchmark(func, maxsec=1):
     return BenchmarkResult(func, records, number)
 
 
-RANGE_ITER_OBJECTS = (builtins.range,)
-
-
 # A dummy module for dynamically-generated functions
 _dynamic_modname = '<dynamic>'
 _dynamic_module = ModuleType(_dynamic_modname)
@@ -478,8 +460,7 @@ def unified_function_type(numba_types, require_precise=True):
 
     Parameters
     ----------
-    numba_types : tuple
-      Numba type instances.
+    numba_types : Sequence of numba Type instances.
     require_precise : bool
       If True, the returned Numba function type must be precise.
 
@@ -501,9 +482,10 @@ def unified_function_type(numba_types, require_precise=True):
     """
     from numba.core.errors import NumbaExperimentalFeatureWarning
 
-    if not (numba_types
-            and isinstance(numba_types[0],
-                           (types.Dispatcher, types.FunctionType))):
+    if not (isinstance(numba_types, Sequence) and
+            len(numba_types) > 0 and
+            isinstance(numba_types[0],
+                       (types.Dispatcher, types.FunctionType))):
         return
 
     warnings.warn("First-class function type feature is experimental",

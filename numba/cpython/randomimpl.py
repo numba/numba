@@ -60,7 +60,7 @@ def get_state_ptr(context, builder, name):
     assert name in ('py', 'np')
     func_name = "numba_get_%s_random_state" % name
     fnty = ir.FunctionType(rnd_state_ptr_t, ())
-    fn = builder.module.get_or_insert_function(fnty, func_name)
+    fn = cgutils.get_or_insert_function(builder.module, fnty, func_name)
     # These two attributes allow LLVM to hoist the function call
     # outside of loops.
     fn.attributes.add('readnone')
@@ -98,7 +98,8 @@ def get_rnd_shuffle(builder):
     Get the internal function to shuffle the MT taste.
     """
     fnty = ir.FunctionType(ir.VoidType(), (rnd_state_ptr_t,))
-    fn = builder.function.module.get_or_insert_function(fnty, "numba_rnd_shuffle")
+    fn = cgutils.get_or_insert_function(builder.function.module, fnty,
+                                        "numba_rnd_shuffle")
     fn.args[0].add_attribute("nocapture")
     return fn
 
@@ -211,7 +212,8 @@ def seed_impl(context, builder, sig, args):
 def _seed_impl(context, builder, sig, args, state_ptr):
     seed_value, = args
     fnty = ir.FunctionType(ir.VoidType(), (rnd_state_ptr_t, int32_t))
-    fn = builder.function.module.get_or_insert_function(fnty, "numba_rnd_init")
+    fn = cgutils.get_or_insert_function(builder.function.module, fnty,
+                                        "numba_rnd_init")
     builder.call(fn, (state_ptr, seed_value))
     return context.get_constant(types.none, None)
 
@@ -341,7 +343,8 @@ def _randrange_impl(context, builder, start, stop, step, state):
         context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
     fnty = ir.FunctionType(ty, [ty, cgutils.true_bit.type])
-    fn = builder.function.module.get_or_insert_function(fnty, "llvm.ctlz.%s" % ty)
+    fn = cgutils.get_or_insert_function(builder.function.module, fnty,
+                                        "llvm.ctlz.%s" % ty)
     # Since the upper bound is exclusive, we need to subtract one before
     # calculating the number of bits. This leads to a special case when
     # n == 1; there's only one possible result, so we don't need bits from
@@ -1052,8 +1055,8 @@ def poisson_impl(context, builder, sig, args):
             # For lambda >= 10.0, we switch to a more accurate
             # algorithm (see _random.c).
             fnty = ir.FunctionType(int64_t, (rnd_state_ptr_t, double))
-            fn = builder.function.module.get_or_insert_function(fnty,
-                                                                "numba_poisson_ptrs")
+            fn = cgutils.get_or_insert_function(builder.function.module, fnty,
+                                                "numba_poisson_ptrs")
             ret = builder.call(fn, (state_ptr, lam))
             builder.store(ret, retptr)
             builder.branch(bbend)

@@ -6,9 +6,11 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 from llvmlite import ir
 
+from numba import roc
 from numba.core.imputils import Registry
 from numba.core import types, cgutils
 from numba.core.itanium_mangler import mangle_c, mangle, mangle_type
+from numba.core.typing.npydecl import parse_dtype
 from numba.roc import target
 from numba.roc import stubs
 from numba.roc import hlc
@@ -54,7 +56,7 @@ def _declare_function(context, builder, name, sig, cargs,
     llargs = [context.get_value_type(t) for t in sig.args]
     fnty = Type.function(llretty, llargs)
     mangled = mangler(name, cargs)
-    fn = mod.get_or_insert_function(fnty, mangled)
+    fn = cgutils.get_or_insert_function(mod, fnty, mangled)
     fn.calling_convention = target.CC_SPIR_FUNC
     return fn
 
@@ -170,7 +172,7 @@ def activelanepermute_wavewidth_impl(context, builder, sig, args):
     name = "__hsail_activelanepermute_wavewidth_b{0}".format(bitwidth)
 
     fnty = Type.function(intbitwidth, [intbitwidth, i32, intbitwidth, i1])
-    fn = builder.module.get_or_insert_function(fnty, name=name)
+    fn = cgutils.get_or_insert_function(builder.module, fnty, name=name)
     fn.calling_convention = target.CC_SPIR_FUNC
 
     def cast(val):
@@ -234,16 +236,27 @@ def hsail_atomic_add_tuple(context, builder, sig, args):
     return builder.atomic_rmw("add", ptr, val, ordering='monotonic')
 
 
-@lower('hsail.smem.alloc', types.UniTuple, types.Any)
-def hsail_smem_alloc_array(context, builder, sig, args):
-    shape, dtype = args
+@lower(roc.shared.array, types.IntegerLiteral, types.Any)
+def hsail_smem_alloc_array_integer(context, builder, sig, args):
+    length = sig.args[0].literal_value
+    dtype = parse_dtype(sig.args[1])
+    return _generic_array(context, builder, shape=(length,), dtype=dtype,
+                          symbol_name='_hsapy_smem',
+                          addrspace=target.SPIR_LOCAL_ADDRSPACE)
+
+
+@lower(roc.shared.array, types.Tuple, types.Any)
+@lower(roc.shared.array, types.UniTuple, types.Any)
+def hsail_smem_alloc_array_tuple(context, builder, sig, args):
+    shape = [ s.literal_value for s in sig.args[0] ]
+    dtype = parse_dtype(sig.args[1])
     return _generic_array(context, builder, shape=shape, dtype=dtype,
                           symbol_name='_hsapy_smem',
                           addrspace=target.SPIR_LOCAL_ADDRSPACE)
 
 
 def _generic_array(context, builder, shape, dtype, symbol_name, addrspace):
-    elemcount = reduce(operator.mul, shape)
+    elemcount = reduce(operator.mul, shape, 1)
     lldtype = context.get_data_type(dtype)
     laryty = Type.array(lldtype, elemcount)
 
@@ -251,7 +264,8 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace):
         lmod = builder.module
 
         # Create global variable in the requested address-space
-        gvmem = lmod.add_global_variable(laryty, symbol_name, addrspace)
+        gvmem = cgutils.add_global_variable(lmod, laryty, symbol_name,
+                                            addrspace)
 
         if elemcount <= 0:
             raise ValueError("array length <= 0")
@@ -291,8 +305,8 @@ def _make_array(context, builder, dataptr, dtype, shape, layout='C'):
 
     context.populate_array(ary,
                            data=builder.bitcast(dataptr, ary.data.type),
-                           shape=cgutils.pack_array(builder, kshape),
-                           strides=cgutils.pack_array(builder, kstrides),
+                           shape=kshape,
+                           strides=kstrides,
                            itemsize=context.get_constant(types.intp, itemsize),
                            meminfo=None)
 

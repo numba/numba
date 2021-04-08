@@ -8,6 +8,7 @@ import numpy as np
 from numba import jit, typeof, TypingError
 from numba.core import utils
 from numba.tests.support import TestCase, MemoryLeakMixin
+from numba.core.types.functions import _header_lead
 import unittest
 
 
@@ -122,7 +123,7 @@ class TestSlices(MemoryLeakMixin, TestCase):
                 with self.assertRaises(TypingError) as numba_e:
                     cfunc(args, array)
                 self.assertIn(
-                    "Invalid use of Function",
+                    _header_lead,
                     str(numba_e.exception)
                 )
                 self.assertIn(

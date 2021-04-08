@@ -4,7 +4,6 @@ from collections import namedtuple, OrderedDict
 import inspect
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core import errors, config, transforms
-from numba.core.utils import add_metaclass
 from numba.core.tracing import event
 from numba.core.postproc import PostProcessor
 from numba.core.ir_utils import enforce_no_dels
@@ -26,8 +25,7 @@ class SimpleTimer(object):
         self.elapsed = timeit.default_timer() - self.ts
 
 
-@add_metaclass(ABCMeta)
-class CompilerPass(object):
+class CompilerPass(metaclass=ABCMeta):
     """ The base class for all compiler passes.
     """
 

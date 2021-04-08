@@ -858,37 +858,104 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
 
 
 @skip_parfors_unsupported
+@skip_no_tbb
+class TestTBBSpecificIssues(ThreadLayerTestHelper):
+
+    _DEBUG = False
+
+    @linux_only # os.fork required.
+    def test_fork_from_non_main_thread(self):
+        # See issue #5973 and PR #6208 for context.
+        runme = """if 1:
+            import threading
+            import numba
+            numba.config.THREADING_LAYER='tbb'
+            from numba import njit, prange, objmode
+            import os
+
+            e_running = threading.Event()
+            e_proceed = threading.Event()
+
+            def indirect():
+                e_running.set()
+                # wait for forker() to have forked
+                while not e_proceed.isSet():
+                    pass
+
+            def runner():
+                @njit(parallel=True, nogil=True)
+                def work():
+                    acc = 0
+                    for x in prange(10):
+                        acc += x
+                    with objmode():
+                        indirect()
+
+                    return acc
+
+                work()
+
+            def forker():
+                # wait for the jit function to say it's running
+                while not e_running.isSet():
+                    pass
+                # then fork
+                os.fork()
+                # now fork is done signal the runner to proceed to exit
+                e_proceed.set()
+
+            numba_runner = threading.Thread(target=runner,)
+            fork_runner =  threading.Thread(target=forker,)
+
+            threads = (numba_runner, fork_runner)
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+        """
+
+        cmdline = [sys.executable, '-c', runme]
+        out, err = self.run_cmd(cmdline)
+        # assert error message printed on stderr
+        msg_head = "Attempted to fork from a non-main thread, the TBB library"
+        self.assertIn(msg_head, err)
+
+        if self._DEBUG:
+            print("OUT:", out)
+            print("ERR:", err)
+
+
+@skip_parfors_unsupported
 class TestInitSafetyIssues(TestCase):
 
     _DEBUG = False
+
+    def run_cmd(self, cmdline):
+        popen = subprocess.Popen(cmdline,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE,)
+        # finish in _TEST_TIMEOUT seconds or kill it
+        timeout = threading.Timer(_TEST_TIMEOUT, popen.kill)
+        try:
+            timeout.start()
+            out, err = popen.communicate()
+            if popen.returncode != 0:
+                raise AssertionError(
+                    "process failed with code %s: stderr follows\n%s\n" %
+                    (popen.returncode, err.decode()))
+        finally:
+            timeout.cancel()
+        return out.decode(), err.decode()
 
     @linux_only # only linux can leak semaphores
     def test_orphaned_semaphore(self):
         # sys path injection and separate usecase module to make sure everything
         # is importable by children of multiprocessing
 
-        def run_cmd(cmdline):
-            popen = subprocess.Popen(cmdline,
-                                     stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE,)
-            # finish in _TEST_TIMEOUT seconds or kill it
-            timeout = threading.Timer(_TEST_TIMEOUT, popen.kill)
-            try:
-                timeout.start()
-                out, err = popen.communicate()
-                if popen.returncode != 0:
-                    raise AssertionError(
-                        "process failed with code %s: stderr follows\n%s\n" %
-                        (popen.returncode, err.decode()))
-            finally:
-                timeout.cancel()
-            return out.decode(), err.decode()
-
         test_file = os.path.join(os.path.dirname(__file__),
                                  "orphaned_semaphore_usecase.py")
-
         cmdline = [sys.executable, test_file]
-        out, err = run_cmd(cmdline)
+        out, err = self.run_cmd(cmdline)
 
         # assert no semaphore leaks reported on stderr
         self.assertNotIn("leaked semaphore", err)
@@ -896,6 +963,27 @@ class TestInitSafetyIssues(TestCase):
         if self._DEBUG:
             print("OUT:", out)
             print("ERR:", err)
+
+    def test_lazy_lock_init(self):
+        # checks based on https://github.com/numba/numba/pull/5724
+        # looking for "lazy" process lock initialisation so as to avoid setting
+        # a multiprocessing context as part of import.
+        for meth in ('fork', 'spawn', 'forkserver'):
+            # if a context is available on the host check it can be set as the
+            # start method in a separate process
+            try:
+                multiprocessing.get_context(meth)
+            except ValueError:
+                continue
+            cmd = ("import numba; import multiprocessing;"
+                   "multiprocessing.set_start_method('{}');"
+                   "print(multiprocessing.get_context().get_start_method())")
+            cmdline = [sys.executable, "-c", cmd.format(meth)]
+            out, err = self.run_cmd(cmdline)
+            if self._DEBUG:
+                print("OUT:", out)
+                print("ERR:", err)
+            self.assertIn(meth, out)
 
 
 @skip_parfors_unsupported

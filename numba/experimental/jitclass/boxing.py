@@ -84,7 +84,7 @@ def _specialize_box(typ):
         setter = _generate_setter(field)
         dct[field] = property(getter, setter)
     # Inject properties as class properties
-    for field, impdct in typ.jitprops.items():
+    for field, impdct in typ.jit_props.items():
         getter = None
         setter = None
         if 'get' in impdct:
@@ -101,6 +101,11 @@ def _specialize_box(typ):
                 (not (name.startswith('__') and name.endswith('__'))):
 
             dct[name] = _generate_method(name, func)
+
+    # Inject static methods as class members
+    for name, func in typ.static_methods.items():
+        dct[name] = _generate_method(name, func)
+
     # Create subclass
     subcls = type(typ.classname, (_box.Box,), dct)
     # Store to cache

@@ -31,10 +31,6 @@ from .enums import (
 from .hsadrv.driver import hsa as _hsadrv
 from .hsadrv import devicearray
 
-try:
-    long
-except NameError:
-    long = int
 
 class _AutoDeregister(object):
     def __init__(self, args):
@@ -75,8 +71,8 @@ def deregister(*args):
         else:
             raise TypeError(type(data))
 
-def device_array(shape, dtype=np.float, strides=None, order='C'):
-    """device_array(shape, dtype=np.float, strides=None, order='C')
+def device_array(shape, dtype=np.float_, strides=None, order='C'):
+    """device_array(shape, dtype=np.float_, strides=None, order='C')
 
     Allocate an empty device ndarray. Similar to :meth:`numpy.empty`.
     """
@@ -144,9 +140,9 @@ def _fill_stride_by_order(shape, dtype, order):
 
 def _prepare_shape_strides_dtype(shape, strides, dtype, order):
     dtype = np.dtype(dtype)
-    if isinstance(shape, (int, long)):
+    if isinstance(shape, int):
         shape = (shape,)
-    if isinstance(strides, (int, long)):
+    if isinstance(strides, int):
         strides = (strides,)
     else:
         if shape == ():
@@ -177,16 +173,16 @@ def _host_array(finegrain, shape, dtype, strides, order):
     return arr.view(type=devicearray.HostArray)
 
 
-def coarsegrain_array(shape, dtype=np.float, strides=None, order='C'):
-    """coarsegrain_array(shape, dtype=np.float, strides=None, order='C')
+def coarsegrain_array(shape, dtype=np.float_, strides=None, order='C'):
+    """coarsegrain_array(shape, dtype=np.float_, strides=None, order='C')
     Similar to np.empty().
     """
     return _host_array(finegrain=False, shape=shape, dtype=dtype,
                        strides=strides, order=order)
 
 
-def finegrain_array(shape, dtype=np.float, strides=None, order='C'):
-    """finegrain_array(shape, dtype=np.float, strides=None, order='C')
+def finegrain_array(shape, dtype=np.float_, strides=None, order='C'):
+    """finegrain_array(shape, dtype=np.float_, strides=None, order='C')
 
     Similar to np.empty().
     """

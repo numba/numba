@@ -5,6 +5,7 @@ Lowering implementation for object mode.
 
 import builtins
 import operator
+import inspect
 
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
@@ -75,10 +76,6 @@ class PyLower(BaseLower):
     def pre_lower(self):
         super(PyLower, self).pre_lower()
         self.init_pyapi()
-        # Pre-computed for later use
-        from numba.core.dispatcher import OmittedArg
-        self.omitted_typobj = self.pyapi.unserialize(
-            self.pyapi.serialize_object(OmittedArg))
 
     def post_lower(self):
         pass
@@ -170,6 +167,15 @@ class PyLower(BaseLower):
         else:
             raise NotImplementedError(type(inst), inst)
 
+    @utils.cached_property
+    def _omitted_typobj(self):
+        """Return a `OmittedArg` type instance as a LLVM value suitable for
+        testing at runtime.
+        """
+        from numba.core.dispatcher import OmittedArg
+        return self.pyapi.unserialize(
+            self.pyapi.serialize_object(OmittedArg))
+
     def lower_assign(self, inst):
         """
         The returned object must have a new reference
@@ -188,21 +194,28 @@ class PyLower(BaseLower):
         elif isinstance(value, ir.Yield):
             return self.lower_yield(value)
         elif isinstance(value, ir.Arg):
+            param = self.func_ir.func_id.pysig.parameters.get(value.name)
+
             obj = self.fnargs[value.index]
-            # When an argument is omitted, the dispatcher hands it as
-            # _OmittedArg(<default value>)
-            typobj = self.pyapi.get_type(obj)
             slot = cgutils.alloca_once_value(self.builder, obj)
-            is_omitted = self.builder.icmp_unsigned('==', typobj,
-                                                    self.omitted_typobj)
-            with self.builder.if_else(is_omitted, likely=False) as (omitted, present):
-                with present:
-                    self.incref(obj)
-                    self.builder.store(obj, slot)
-                with omitted:
-                    # The argument is omitted => get the default value
-                    obj = self.pyapi.object_getattr_string(obj, 'value')
-                    self.builder.store(obj, slot)
+            # Don't check for OmittedArg unless the argument has a default
+            if param is not None and param.default is inspect.Parameter.empty:
+                self.incref(obj)
+                self.builder.store(obj, slot)
+            else:
+                # When an argument is omitted, the dispatcher hands it as
+                # _OmittedArg(<default value>)
+                typobj = self.pyapi.get_type(obj)
+                is_omitted = self.builder.icmp_unsigned('==', typobj,
+                                                        self._omitted_typobj)
+                with self.builder.if_else(is_omitted, likely=False) as (omitted, present):
+                    with present:
+                        self.incref(obj)
+                        self.builder.store(obj, slot)
+                    with omitted:
+                        # The argument is omitted => get the default value
+                        obj = self.pyapi.object_getattr_string(obj, 'value')
+                        self.builder.store(obj, slot)
 
             return self.builder.load(slot)
         else:
@@ -259,9 +272,7 @@ class PyLower(BaseLower):
             elif expr.fn == operator.not_:
                 res = self.pyapi.object_not(value)
                 self.check_int_status(res)
-
-                longval = self.builder.zext(res, self.pyapi.long)
-                res = self.pyapi.bool_from_long(longval)
+                res = self.pyapi.bool_from_bool(res)
             elif expr.fn == operator.invert:
                 res = self.pyapi.number_invert(value)
             else:

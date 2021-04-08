@@ -128,6 +128,9 @@ def array_nanpercentile_global(arr, q):
 def array_ptp_global(a):
     return np.ptp(a)
 
+def array_ptp(a):
+    return a.ptp()
+
 def array_quantile_global(arr, q):
     return np.quantile(arr, q)
 
@@ -208,6 +211,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         arr = np.float64(['nan', -1.5, 2.5, 'nan', 3.0])
         check(arr)
         arr = np.float64(['nan', -1.5, 2.5, 'nan', 'inf', '-inf', 3.0])
+        check(arr)
+        arr = np.float64([5.0, 'nan', -1.5, 'nan'])
         check(arr)
         # Only NaNs
         arr = np.float64(['nan', 'nan'])
@@ -665,6 +670,15 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         # Test with a NaT
         arr[arr.size // 2] = 'NaT'
         self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
+        if 'median' not in pyfunc.__name__:
+            # Test with (val, NaT)^N (and with the random NaT from above)
+            # use a loop, there's some weird thing/bug with arr[1::2] = 'NaT'
+
+            # Further Numba has bug(s) relating to NaN/NaT handling in anything
+            # using a partition such as np.median
+            for x in range(1, len(arr), 2):
+                arr[x] = 'NaT'
+            self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
         # Test with all NaTs
         arr.fill(arrty.dtype('NaT'))
         self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
@@ -785,6 +799,17 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         for a in a_variations():
             check(a)
+
+    def test_ptp_method(self):
+        # checks wiring of np.ndarray.ptp() only, `np.ptp` test above checks
+        # the actual alg
+        pyfunc = array_ptp
+        cfunc = jit(nopython=True)(pyfunc)
+
+        a = np.arange(10)
+        expected = pyfunc(a)
+        got = cfunc(a)
+        self.assertPreciseEqual(expected, got)
 
     def test_ptp_complex(self):
         pyfunc = array_ptp_global
@@ -992,7 +1017,6 @@ class TestArrayReductionsExceptions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as e:
             cfunc(self.zero_size)
         self.assertIn(msg, str(e.exception))
-        self.disable_leak_check()
 
     @classmethod
     def install(cls):

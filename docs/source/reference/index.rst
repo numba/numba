@@ -13,5 +13,4 @@ Reference Manual
    numpysupported.rst
    pysemantics.rst
    fpsemantics.rst
-   python27-eol.rst
    deprecation.rst

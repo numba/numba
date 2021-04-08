@@ -710,65 +710,89 @@ for op, func in [(operator.eq, datetime_eq_datetime_impl),
 ########################################################################
 # datetime/timedelta fmax/fmin maximum/minimum support
 
-def datetime_max_impl(context, builder, sig, args):
-    # just a regular int64 max avoiding nats.
-    # note this could be optimizing relying on the actual value of NAT
-    # but as NumPy doesn't rely on this, this seems more resilient
-    in1, in2 = args
-    in1_not_nat = is_not_nat(builder, in1)
-    in2_not_nat = is_not_nat(builder, in2)
-    in1_ge_in2 = builder.icmp(lc.ICMP_SGE, in1, in2)
-    res = builder.select(in1_ge_in2, in1, in2)
-    res = builder.select(in1_not_nat, res, in2)
-    res = builder.select(in2_not_nat, res, in1)
+def _gen_datetime_max_impl(NAT_DOMINATES):
+    def datetime_max_impl(context, builder, sig, args):
+        # note this could be optimizing relying on the actual value of NAT
+        # but as NumPy doesn't rely on this, this seems more resilient
+        in1, in2 = args
+        in1_not_nat = is_not_nat(builder, in1)
+        in2_not_nat = is_not_nat(builder, in2)
+        in1_ge_in2 = builder.icmp(lc.ICMP_SGE, in1, in2)
+        res = builder.select(in1_ge_in2, in1, in2)
+        if NAT_DOMINATES and numpy_support.numpy_version >= (1, 18):
+            # NaT now dominates, like NaN
+            in1, in2 = in2, in1
+        res = builder.select(in1_not_nat, res, in2)
+        res = builder.select(in2_not_nat, res, in1)
 
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
+    return datetime_max_impl
 
+datetime_maximum_impl = _gen_datetime_max_impl(True)
+datetime_fmax_impl = _gen_datetime_max_impl(False)
 
-def datetime_min_impl(context, builder, sig, args):
-    # just a regular int64 min avoiding nats.
-    # note this could be optimizing relying on the actual value of NAT
-    # but as NumPy doesn't rely on this, this seems more resilient
-    in1, in2 = args
-    in1_not_nat = is_not_nat(builder, in1)
-    in2_not_nat = is_not_nat(builder, in2)
-    in1_le_in2 = builder.icmp(lc.ICMP_SLE, in1, in2)
-    res = builder.select(in1_le_in2, in1, in2)
-    res = builder.select(in1_not_nat, res, in2)
-    res = builder.select(in2_not_nat, res, in1)
+def _gen_datetime_min_impl(NAT_DOMINATES):
+    def datetime_min_impl(context, builder, sig, args):
+        # note this could be optimizing relying on the actual value of NAT
+        # but as NumPy doesn't rely on this, this seems more resilient
+        in1, in2 = args
+        in1_not_nat = is_not_nat(builder, in1)
+        in2_not_nat = is_not_nat(builder, in2)
+        in1_le_in2 = builder.icmp(lc.ICMP_SLE, in1, in2)
+        res = builder.select(in1_le_in2, in1, in2)
+        if NAT_DOMINATES and numpy_support.numpy_version >= (1, 18):
+            # NaT now dominates, like NaN
+            in1, in2 = in2, in1
+        res = builder.select(in1_not_nat, res, in2)
+        res = builder.select(in2_not_nat, res, in1)
 
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
+    return datetime_min_impl
 
+datetime_minimum_impl = _gen_datetime_min_impl(True)
+datetime_fmin_impl = _gen_datetime_min_impl(False)
 
-def timedelta_max_impl(context, builder, sig, args):
-    # just a regular int64 max avoiding nats.
-    # note this could be optimizing relying on the actual value of NAT
-    # but as NumPy doesn't rely on this, this seems more resilient
-    in1, in2 = args
-    in1_not_nat = is_not_nat(builder, in1)
-    in2_not_nat = is_not_nat(builder, in2)
-    in1_ge_in2 = builder.icmp(lc.ICMP_SGE, in1, in2)
-    res = builder.select(in1_ge_in2, in1, in2)
-    res = builder.select(in1_not_nat, res, in2)
-    res = builder.select(in2_not_nat, res, in1)
+def _gen_timedelta_max_impl(NAT_DOMINATES):
+    def timedelta_max_impl(context, builder, sig, args):
+        # note this could be optimizing relying on the actual value of NAT
+        # but as NumPy doesn't rely on this, this seems more resilient
+        in1, in2 = args
+        in1_not_nat = is_not_nat(builder, in1)
+        in2_not_nat = is_not_nat(builder, in2)
+        in1_ge_in2 = builder.icmp(lc.ICMP_SGE, in1, in2)
+        res = builder.select(in1_ge_in2, in1, in2)
+        if NAT_DOMINATES and numpy_support.numpy_version >= (1, 18):
+            # NaT now dominates, like NaN
+            in1, in2 = in2, in1
+        res = builder.select(in1_not_nat, res, in2)
+        res = builder.select(in2_not_nat, res, in1)
 
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
+    return timedelta_max_impl
 
+timedelta_maximum_impl = _gen_timedelta_max_impl(True)
+timedelta_fmax_impl = _gen_timedelta_max_impl(False)
 
-def timedelta_min_impl(context, builder, sig, args):
-    # just a regular int64 min avoiding nats.
-    # note this could be optimizing relying on the actual value of NAT
-    # but as NumPy doesn't rely on this, this seems more resilient
-    in1, in2 = args
-    in1_not_nat = is_not_nat(builder, in1)
-    in2_not_nat = is_not_nat(builder, in2)
-    in1_le_in2 = builder.icmp(lc.ICMP_SLE, in1, in2)
-    res = builder.select(in1_le_in2, in1, in2)
-    res = builder.select(in1_not_nat, res, in2)
-    res = builder.select(in2_not_nat, res, in1)
+def _gen_timedelta_min_impl(NAT_DOMINATES):
+    def timedelta_min_impl(context, builder, sig, args):
+        # note this could be optimizing relying on the actual value of NAT
+        # but as NumPy doesn't rely on this, this seems more resilient
+        in1, in2 = args
+        in1_not_nat = is_not_nat(builder, in1)
+        in2_not_nat = is_not_nat(builder, in2)
+        in1_le_in2 = builder.icmp(lc.ICMP_SLE, in1, in2)
+        res = builder.select(in1_le_in2, in1, in2)
+        if NAT_DOMINATES and numpy_support.numpy_version >= (1, 18):
+            # NaT now dominates, like NaN
+            in1, in2 = in2, in1
+        res = builder.select(in1_not_nat, res, in2)
+        res = builder.select(in2_not_nat, res, in1)
 
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
+    return timedelta_min_impl
 
+timedelta_minimum_impl = _gen_timedelta_min_impl(True)
+timedelta_fmin_impl = _gen_timedelta_min_impl(False)
 
 def _cast_to_timedelta(context, builder, val):
     temp = builder.alloca(TIMEDELTA64)

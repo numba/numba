@@ -1,58 +1,9 @@
 import numpy as np
 
-from numba.core.descriptors import TargetDescriptor
-from numba.core.options import TargetOptions
 from numba import cuda
-from numba.cuda import jit
 from numba.cuda.cudadrv import devicearray
-from .descriptor import CUDATargetDesc
 from numba.np.ufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
                                         GUFuncCallSteps)
-
-
-class CUDADispatcher(object):
-    targetdescr = CUDATargetDesc
-
-    def __init__(self, py_func, locals={}, targetoptions={}):
-        assert not locals
-        self.py_func = py_func
-        self.targetoptions = targetoptions
-        self.doc = py_func.__doc__
-        self._compiled = None
-
-    def compile(self, sig, locals={}, **targetoptions):
-        assert self._compiled is None
-        assert not locals
-        options = self.targetoptions.copy()
-        options.update(targetoptions)
-        kernel = jit(sig, **options)(self.py_func)
-        self._compiled = kernel
-        if hasattr(kernel, "_npm_context_"):
-            self._npm_context_ = kernel._npm_context_
-
-    @property
-    def compiled(self):
-        if self._compiled is None:
-            self._compiled = jit(self.py_func, **self.targetoptions)
-        return self._compiled
-
-    def __call__(self, *args, **kws):
-        return self.compiled(*args, **kws)
-
-    def disable_compile(self, val=True):
-        """Disable the compilation of new signatures at call time.
-        """
-        # Do nothing
-        pass
-
-    def configure(self, *args, **kws):
-        return self.compiled.configure(*args, **kws)
-
-    def __getitem__(self, *args):
-        return self.compiled.__getitem__(*args)
-
-    def __getattr__(self, key):
-        return getattr(self.compiled, key)
 
 
 class CUDAUFuncDispatcher(object):
@@ -147,6 +98,13 @@ class _CUDAGUFuncCallSteps(GUFuncCallSteps):
         return cuda.is_cuda_array(obj)
 
     def as_device_array(self, obj):
+        # We don't want to call as_cuda_array on objects that are already Numba
+        # device arrays, because this results in exporting the array as a
+        # Producer then importing it as a Consumer, which causes a
+        # synchronization on the array's stream (if it has one) by default.
+        # When we have a Numba device array, we can simply return it.
+        if devicearray.is_cuda_ndarray(obj):
+            return obj
         return cuda.as_cuda_array(obj)
 
     def to_device(self, hostary):
@@ -189,7 +147,7 @@ class CUDAGenerializedUFunc(GenerializedUFunc):
 
 class CUDAUFuncMechanism(UFuncMechanism):
     """
-    Provide OpenCL specialization
+    Provide CUDA specialization
     """
     DEFAULT_STREAM = 0
 
@@ -200,6 +158,13 @@ class CUDAUFuncMechanism(UFuncMechanism):
         return cuda.is_cuda_array(obj)
 
     def as_device_array(self, obj):
+        # We don't want to call as_cuda_array on objects that are already Numba
+        # device arrays, because this results in exporting the array as a
+        # Producer then importing it as a Consumer, which causes a
+        # synchronization on the array's stream (if it has one) by default.
+        # When we have a Numba device array, we can simply return it.
+        if devicearray.is_cuda_ndarray(obj):
+            return obj
         return cuda.as_cuda_array(obj)
 
     def to_device(self, hostary, stream):

@@ -75,6 +75,23 @@ Function arguments and global values will thusly be recognized as belonging
 to ``interval_type`` whenever they are instances of ``Interval``.
 
 
+Type inference for Python annotations
+-------------------------------------
+
+While ``typeof`` is used to infer the Numba type of Python objects,
+``as_numba_type`` is used to infer the Numba type of Python types.  For simple
+cases, we can simply register that the Python type ``Interval`` corresponds with
+the Numba type ``interval_type``::
+
+   from numba.extending import as_numba_type
+
+   as_numba_type.register(Interval, interval_type)
+
+Note that ``as_numba_type`` is only used to infer types from type annotations at
+compile time.  The ``typeof`` registry above is used to infer the type of
+objects at runtime.
+
+
 Type inference for operations
 -----------------------------
 
@@ -191,7 +208,7 @@ Implementing the constructor
 Now we want to implement the two-argument ``Interval`` constructor::
 
    from numba.extending import lower_builtin
-   from numba import cgutils
+   from numba.core import cgutils
 
    @lower_builtin(Interval, types.Float, types.Float)
    def impl_interval(context, builder, sig, args):
@@ -314,6 +331,8 @@ We have shown how to do the following tasks:
 * Define a singleton Numba type instance for a non-parametric type
 * Teach Numba how to infer the Numba type of Python values of a certain class,
   using ``typeof_impl.register``
+* Teach Numba how to infer the Numba type of the Python type itself, using
+  ``as_numba_type.register``
 * Define the data model for a Numba type using ``StructModel``
   and ``register_model``
 * Implementing a boxing function for a Numba type using the ``@box`` decorator

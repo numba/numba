@@ -1,7 +1,7 @@
 import math
 
-from numba import cuda, float32, float64, uint32, int64, uint64, from_dtype,\
-                  jit
+from numba import (cuda, float32, float64, uint32, int64, uint64, from_dtype,
+                   jit)
 
 import numpy as np
 
@@ -29,7 +29,8 @@ import numpy as np
 # using the CPU @jit decorator everywhere to create functions that work as
 # both CPU and CUDA device functions.
 
-xoroshiro128p_dtype = np.dtype([('s0', np.uint64), ('s1', np.uint64)], align=True)
+xoroshiro128p_dtype = np.dtype([('s0', np.uint64), ('s1', np.uint64)],
+                               align=True)
 xoroshiro128p_type = from_dtype(xoroshiro128p_dtype)
 
 
@@ -182,7 +183,8 @@ def xoroshiro128p_normal_float32(states, index):
 
     z0 = math.sqrt(-float32(2.0) * math.log(u1)) * math.cos(TWO_PI_FLOAT32 * u2)
     # discarding second normal value
-    # z1 = math.sqrt(-float32(2.0) * math.log(u1)) * math.sin(TWO_PI_FLOAT32 * u2)
+    # z1 = math.sqrt(-float32(2.0) * math.log(u1))
+    #                * math.sin(TWO_PI_FLOAT32 * u2)
     return z0
 
 
@@ -206,7 +208,8 @@ def xoroshiro128p_normal_float64(states, index):
 
     z0 = math.sqrt(-float64(2.0) * math.log(u1)) * math.cos(TWO_PI_FLOAT64 * u2)
     # discarding second normal value
-    # z1 = math.sqrt(-float64(2.0) * math.log(u1)) * math.sin(TWO_PI_FLOAT64 * u2)
+    # z1 = math.sqrt(-float64(2.0) * math.log(u1))
+    #                * math.sin(TWO_PI_FLOAT64 * u2)
     return z0
 
 

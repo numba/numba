@@ -16,11 +16,6 @@ from .error import HsaContextMismatchError
 from numba.misc import dummyarray
 from numba.np import numpy_support
 
-try:
-    long
-except NameError:
-    long = int
-
 
 def is_hsa_ndarray(obj):
     "Check if an object is a HSA ndarray"
@@ -40,7 +35,7 @@ def verify_hsa_ndarray_interface(obj):
     requires_attr('shape', tuple)
     requires_attr('strides', tuple)
     requires_attr('dtype', np.dtype)
-    requires_attr('size', (int, long))
+    requires_attr('size', int)
 
 
 def require_hsa_ndarray(obj):
@@ -69,9 +64,9 @@ class DeviceNDArrayBase(object):
         dgpu_data
             user provided device memory for the ndarray data buffer
         """
-        if isinstance(shape, (int, long)):
+        if isinstance(shape, int):
             shape = (shape,)
-        if isinstance(strides, (int, long)):
+        if isinstance(strides, int):
             strides = (strides,)
         self.ndim = len(shape)
         if len(strides) != self.ndim:
@@ -185,10 +180,10 @@ class DeviceNDArrayBase(object):
         Example::
 
             import numpy as np
-            from numba import hsa
+            from numba import roc
 
             arr = np.arange(1000)
-            d_arr = hsa.to_device(arr)
+            d_arr = roc.to_device(arr)
 
             my_kernel[100, 100](d_arr)
 

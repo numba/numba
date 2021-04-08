@@ -257,7 +257,10 @@ class StencilFunc(object):
                                                        const_index_vars[dim], loc)
                             new_body.append(ir.Assign(getitemcall, getitemvar, loc))
                             # Get the type of this particular part of the index tuple.
-                            one_index_typ = stmt_index_var_typ[dim]
+                            if isinstance(stmt_index_var_typ, types.ConstSized):
+                                one_index_typ = stmt_index_var_typ[dim]
+                            else:
+                                one_index_typ = stmt_index_var_typ[:]
                             # If the array is indexed with a slice then we
                             # have to add the index value with a call to
                             # slice_addition.
@@ -331,7 +334,7 @@ class StencilFunc(object):
                              "be the primary input array.")
 
         from numba.core import typed_passes
-        typemap, return_type, calltypes = typed_passes.type_inference_stage(
+        typemap, return_type, calltypes, _ = typed_passes.type_inference_stage(
                 self._typingctx,
                 self.kernel_ir,
                 argtys,

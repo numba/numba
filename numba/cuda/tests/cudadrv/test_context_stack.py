@@ -31,7 +31,10 @@ class TestContextAPI(CUDATestCase):
         cuda.close()
 
     def test_context_memory(self):
-        mem = cuda.current_context().get_memory_info()
+        try:
+            mem = cuda.current_context().get_memory_info()
+        except NotImplementedError:
+            self.skipTest('EMM Plugin does not implement get_memory_info()')
 
         self.assertIsInstance(mem.free, numbers.Number)
         self.assertEquals(mem.free, mem[0])

@@ -68,15 +68,17 @@ class TestSharedMemoryCreation(CUDATestCase):
         udt = cuda.jit((float32[:, :],))(udt_global_build_tuple)
         udt[1, 1](self.getarg2())
 
-    @skip_on_cudasim('Simulator does not perform macro expansion')
+    @skip_on_cudasim('Simulator does not prohibit lists for shared array shape')
     def test_global_build_list(self):
         with self.assertRaises(TypingError) as raises:
             cuda.jit((float32[:, :],))(udt_global_build_list)
 
-        self.assertIn("Invalid use of Function(<function shared.array",
+        self.assertIn("No implementation of function "
+                      "Function(<function shared.array",
                       str(raises.exception))
-        self.assertIn("with argument(s) of type(s): "
-                      "(dtype=class(float32), shape=list(int64)",
+        self.assertIn("found for signature:\n \n "
+                      ">>> array(shape=list(int64)<iv=[5, 6]>, "
+                      "dtype=class(float32)",
                       str(raises.exception))
 
     def test_global_constant_tuple(self):
@@ -89,10 +91,11 @@ class TestSharedMemoryCreation(CUDATestCase):
         with self.assertRaises(TypingError) as raises:
             cuda.jit((float32[:],))(udt_invalid_1)
 
-        self.assertIn("Invalid use of Function(<function shared.array",
+        self.assertIn("No implementation of function "
+                      "Function(<function shared.array",
                       str(raises.exception))
-        self.assertIn("with argument(s) of type(s): "
-                      "(dtype=class(float32), shape=float32)",
+        self.assertIn("found for signature:\n \n "
+                      ">>> array(shape=float32, dtype=class(float32))",
                       str(raises.exception))
 
     @skip_on_cudasim("Can't check for constants in simulator")
@@ -101,10 +104,12 @@ class TestSharedMemoryCreation(CUDATestCase):
         with self.assertRaises(TypingError) as raises:
             cuda.jit((float32[:, :],))(udt_invalid_2)
 
-        self.assertIn("Invalid use of Function(<function shared.array",
+        self.assertIn("No implementation of function "
+                      "Function(<function shared.array",
                       str(raises.exception))
-        self.assertIn("with argument(s) of type(s): (dtype=class(float32), "
-                      "shape=Tuple(Literal[int](1), array(float32, 1d, A)))",
+        self.assertIn("found for signature:\n \n "
+                      ">>> array(shape=Tuple(Literal[int](1), "
+                      "array(float32, 1d, A)), dtype=class(float32))",
                       str(raises.exception))
 
     @skip_on_cudasim("Can't check for constants in simulator")
@@ -113,10 +118,11 @@ class TestSharedMemoryCreation(CUDATestCase):
         with self.assertRaises(TypingError) as raises:
             cuda.jit((int32[:],))(udt_invalid_1)
 
-        self.assertIn("Invalid use of Function(<function shared.array",
+        self.assertIn("No implementation of function "
+                      "Function(<function shared.array",
                       str(raises.exception))
-        self.assertIn("with argument(s) of type(s): "
-                      "(dtype=class(float32), shape=int32)",
+        self.assertIn("found for signature:\n \n "
+                      ">>> array(shape=int32, dtype=class(float32))",
                       str(raises.exception))
 
     @skip_on_cudasim("Can't check for constants in simulator")
@@ -125,10 +131,12 @@ class TestSharedMemoryCreation(CUDATestCase):
         with self.assertRaises(TypingError) as raises:
             cuda.jit((int32[:],))(udt_invalid_3)
 
-        self.assertIn("Invalid use of Function(<function shared.array",
+        self.assertIn("No implementation of function "
+                      "Function(<function shared.array",
                       str(raises.exception))
-        self.assertIn("with argument(s) of type(s): (dtype=class(float32), "
-                      "shape=Tuple(Literal[int](1), int32))",
+        self.assertIn("found for signature:\n \n "
+                      ">>> array(shape=Tuple(Literal[int](1), int32), "
+                      "dtype=class(float32))",
                       str(raises.exception))
 
 

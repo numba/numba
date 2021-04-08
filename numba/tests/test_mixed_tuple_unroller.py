@@ -15,8 +15,10 @@ from numba.core.untyped_passes import (FixupArgs, TranslateByteCode,
                                        SimplifyCFG, IterLoopCanonicalization,
                                        LiteralUnroll, PreserveIR)
 from numba.core.typed_passes import (NopythonTypeInference, IRLegalization,
-                                     NoPythonBackend, PartialTypeInference)
+                                     NoPythonBackend, PartialTypeInference,
+                                     NativeLowering)
 from numba.core.ir_utils import (compute_cfg_from_blocks, flatten_labels)
+from numba.core.types.functions import _header_lead
 
 _X_GLOBAL = (10, 11)
 
@@ -107,6 +109,7 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
                 pm.add_pass(PreserveIR, "save IR for later inspection")
 
                 # lower
+                pm.add_pass(NativeLowering, "native lowering")
                 pm.add_pass(NoPythonBackend, "nopython mode backend")
 
                 # finalise the contents
@@ -648,7 +651,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             foo(tup1, tup2)
 
-        self.assertIn("Invalid use", str(raises.exception))
+        self.assertIn(_header_lead, str(raises.exception))
 
     def test_10(self):
         # dispatch on literals triggering @overload resolution
@@ -1166,7 +1169,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             foo()
 
-        self.assertIn("Invalid use of", str(raises.exception))
+        self.assertIn(_header_lead, str(raises.exception))
         self.assertIn("zip", str(raises.exception))
 
     def test_32(self):
@@ -1583,6 +1586,7 @@ class TestMore(TestCase):
         # literal_unroll
         bar()
 
+    @unittest.skip("inlining of foo doesn't have const prop so y isn't const")
     def test_inlined_unroll_list(self):
         @njit(inline='always')
         def foo(y):
@@ -1857,6 +1861,7 @@ class CapturingCompiler(CompilerBase):
                  "ensure IR is legal prior to lowering")
 
         # lower
+        add_pass(NativeLowering, "native lowering")
         add_pass(NoPythonBackend, "nopython mode backend")
         pm.finalize()
         return [pm]
@@ -1890,6 +1895,7 @@ class TestLiteralUnrollPassTriggering(TestCase):
 
     def test_literal_unroll_is_invoked_via_alias(self):
         alias = literal_unroll
+
         @njit(pipeline_class=CapturingCompiler)
         def foo():
             acc = 0

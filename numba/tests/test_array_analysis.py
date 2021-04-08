@@ -44,6 +44,11 @@ class ExampleClass3700(object):
         self.T = n + 1
 
 
+# test value for test_global_tuple
+GVAL = (1.2,)
+GVAL2 = (3, 4)
+
+
 class TestEquivSet(TestCase):
 
     """
@@ -390,6 +395,15 @@ class TestArrayAnalysis(TestCase):
         int_arr_typ = types.Array(types.intp, 1, 'C')
         self._compile_and_test(test_tup_arg,
             (types.Tuple((int_arr_typ, int_arr_typ)),), asserts=None)
+
+        def test_arr_in_tup(m):
+            A = np.ones(m)
+            S = (A,)
+            B = np.ones(len(S[0]))
+            return B
+
+        self._compile_and_test(test_arr_in_tup, (types.intp,),
+                               equivs=[self.with_equiv("A", "B")])
 
         T = namedtuple("T", ['a','b'])
         def test_namedtuple(n):
@@ -921,6 +935,16 @@ class TestArrayAnalysis(TestCase):
                                equivs=[self.with_equiv('a', 'c', 'e')],
                                asserts=None)
 
+        # make sure shape of a global tuple of ints is handled properly
+        def test_global_tuple():
+            a = np.ones(GVAL2)
+            b = np.ones(GVAL2)
+
+        self._compile_and_test(test_global_tuple, (),
+                               equivs=[self.with_equiv('a', 'b')],
+                               asserts=None)
+
+
 class TestArrayAnalysisParallelRequired(TestCase):
     """This is to just split out tests that need the parallel backend and
     therefore serialised execution.
@@ -1008,6 +1032,18 @@ class TestArrayAnalysisParallelRequired(TestCase):
         data = np.arange(10.)
         np.testing.assert_array_equal(test_impl(data), test_impl.py_func(data))
 
+    @skip_unsupported
+    def test_global_tuple(self):
+        """make sure a global tuple with non-integer values does not cause errors
+        (test for #6726).
+        """
+
+        def test_impl():
+            d = GVAL[0]
+            return d
+
+        self.assertEqual(njit(test_impl, parallel=True)(), test_impl())
+
 
 class TestArrayAnalysisInterface(TestCase):
     def test_analyze_op_call_interface(self):
@@ -1072,7 +1108,7 @@ class TestArrayAnalysisInterface(TestCase):
                 for i in prange(n):
                     S = np.arange(i)
                     A[i] = S.sum()
-                return A
+                return A + 1
 
             got = njit(parallel=True)(f)(10)
             executed_count = shared['counter']

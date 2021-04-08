@@ -10,7 +10,7 @@ import logging
 
 from numba.core.errors import DeprecationError, NumbaDeprecationWarning
 from numba.stencils.stencil import stencil
-from numba.core import config, sigutils, registry
+from numba.core import config, extending, sigutils, registry
 
 
 _logger = logging.getLogger(__name__)
@@ -23,8 +23,8 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "Signatures should be passed as the first "
                                  "positional argument.")
 
-def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
-        pipeline_class=None, boundscheck=False, **options):
+def jit(signature_or_function=None, locals={}, cache=False,
+        pipeline_class=None, boundscheck=None, **options):
     """
     This decorator is used to compile a Python function into native code.
 
@@ -41,7 +41,7 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
         Mapping of local variable names to Numba types. Used to override the
         types deduced by Numba's type inference engine.
 
-    target: str
+    target (deprecated): str
         Specifies the target platform to compile for. Valid targets are cpu,
         gpu, npyufunc, and cuda. Defaults to cpu.
 
@@ -84,15 +84,18 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
                 NOTE: This inlining is performed at the Numba IR level and is in
                 no way related to LLVM inlining.
 
-            boundscheck: bool
+            boundscheck: bool or None
                 Set to True to enable bounds checking for array indices. Out
                 of bounds accesses will raise IndexError. The default is to
-                not do bounds checking. If bounds checking is disabled, out of
-                bounds accesses can produce garbage results or segfaults.
+                not do bounds checking. If False, bounds checking is disabled,
+                out of bounds accesses can produce garbage results or segfaults.
                 However, enabling bounds checking will slow down typical
                 functions, so it is recommended to only use this flag for
                 debugging. You can also set the NUMBA_BOUNDSCHECK environment
-                variable to 0 or 1 to globally override this flag.
+                variable to 0 or 1 to globally override this flag. The default
+                value is None, which under normal execution equates to False,
+                but if debug is set to True then bounds checking will be
+                enabled.
 
     Returns
     --------
@@ -143,6 +146,13 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
         raise DeprecationError(_msg_deprecated_signature_arg.format('argtypes'))
     if 'restype' in options:
         raise DeprecationError(_msg_deprecated_signature_arg.format('restype'))
+    if options.get('nopython', False) and options.get('forceobj', False):
+        raise ValueError("Only one of 'nopython' or 'forceobj' can be True.")
+    if 'target' in options:
+        target = options.pop('target')
+        warnings.warn("The 'target' keyword argument is deprecated.", NumbaDeprecationWarning)
+    else:
+        target = options.pop('_target', 'cpu')
 
     options['boundscheck'] = boundscheck
 
@@ -179,6 +189,19 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
     dispatcher = registry.dispatcher_registry[target]
 
     def wrapper(func):
+        if extending.is_jitted(func):
+            raise TypeError(
+                "A jit decorator was called on an already jitted function "
+                f"{func}.  If trying to access the original python "
+                f"function, use the {func}.py_func attribute."
+            )
+
+        if not inspect.isfunction(func):
+            raise TypeError(
+                "The decorated object is not a function (got type "
+                f"{type(func)})."
+            )
+
         if config.ENABLE_CUDASIM and target == 'cuda':
             from numba import cuda
             return cuda.jit(func)
@@ -232,11 +255,12 @@ def njit(*args, **kws):
         warnings.warn('nopython is set for njit and is ignored', RuntimeWarning)
     if 'forceobj' in kws:
         warnings.warn('forceobj is set for njit and is ignored', RuntimeWarning)
+        del kws['forceobj']
     kws.update({'nopython': True})
     return jit(*args, **kws)
 
 
-def cfunc(sig, locals={}, cache=False, **options):
+def cfunc(sig, locals={}, cache=False, pipeline_class=None, **options):
     """
     This decorator is used to compile a Python function into a C callback
     usable with foreign C libraries.
@@ -251,7 +275,10 @@ def cfunc(sig, locals={}, cache=False, **options):
 
     def wrapper(func):
         from numba.core.ccallback import CFunc
-        res = CFunc(func, sig, locals=locals, options=options)
+        additional_args = {}
+        if pipeline_class is not None:
+            additional_args['pipeline_class'] = pipeline_class
+        res = CFunc(func, sig, locals=locals, options=options, **additional_args)
         if cache:
             res.enable_caching()
         res.compile()

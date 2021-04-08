@@ -2,7 +2,6 @@ import threading
 
 import numpy as np
 
-import numba as nb
 from numba import cuda
 from numba.cuda.testing import CUDATestCase, skip_unless_cudasim
 import numba.cuda.simulator as simulator
@@ -10,8 +9,6 @@ import unittest
 
 
 class TestCudaSimIssues(CUDATestCase):
-
-
     def test_record_access(self):
         backyard_type = [('statue', np.float64),
                          ('newspaper', np.float64, (6,))]
@@ -21,8 +18,6 @@ class TestCudaSimIssues(CUDATestCase):
                       ('backyard', backyard_type)]
 
         goose_np_type = np.dtype(goose_type, align=True)
-
-        goose_nb_type = nb.from_dtype(goose_np_type)
 
         @cuda.jit
         def simple_kernel(f):
@@ -36,9 +31,11 @@ class TestCudaSimIssues(CUDATestCase):
         np.testing.assert_equal(item[0]['backyard']['newspaper'][3], 5)
 
     def test_recarray_setting(self):
-        recordwith2darray = np.dtype([('i', np.int32), ('j', np.float32, (3, 2))])
+        recordwith2darray = np.dtype([('i', np.int32),
+                                      ('j', np.float32, (3, 2))])
         rec = np.recarray(2, dtype=recordwith2darray)
         rec[0]['i'] = 45
+
         @cuda.jit
         def simple_kernel(f):
             f[1] = f[0]
@@ -74,8 +71,8 @@ class TestCudaSimIssues(CUDATestCase):
                 if not isinstance(t, simulator.kernel.BlockThread):
                     continue
 
-                # join blockthreads with a short timeout to allow aborted threads
-                # to exit
+                # join blockthreads with a short timeout to allow aborted
+                # threads to exit
                 t.join(1)
                 if t.is_alive():
                     self.fail("Blocked kernel thread: %s" % t)
@@ -95,7 +92,6 @@ class TestCudaSimIssues(CUDATestCase):
         assign_with_sync[1, 3](x, y)
         np.testing.assert_array_equal(x, y)
         assert_no_blockthreads()
-
 
         with self.assertRaises(IndexError):
             assign_with_sync[1, 6](x, y)

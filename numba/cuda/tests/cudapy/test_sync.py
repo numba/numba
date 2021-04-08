@@ -1,13 +1,52 @@
 import numpy as np
 from numba import cuda, int32, float32
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 from numba.core.config import ENABLE_CUDASIM
 
 
-def useless_sync(ary):
+def useless_syncthreads(ary):
     i = cuda.grid(1)
     cuda.syncthreads()
     ary[i] = i
+
+
+def useless_syncwarp(ary):
+    i = cuda.grid(1)
+    cuda.syncwarp()
+    ary[i] = i
+
+
+def useless_syncwarp_with_mask(ary):
+    i = cuda.grid(1)
+    cuda.syncwarp(0xFFFF)
+    ary[i] = i
+
+
+def coop_syncwarp(res):
+    sm = cuda.shared.array(32, int32)
+    i = cuda.grid(1)
+
+    sm[i] = i
+    cuda.syncwarp()
+
+    if i < 16:
+        sm[i] = sm[i] + sm[i + 16]
+        cuda.syncwarp(0xFFFF)
+
+    if i < 8:
+        sm[i] = sm[i] + sm[i + 8]
+        cuda.syncwarp(0xFF)
+
+    if i < 4:
+        sm[i] = sm[i] + sm[i + 4]
+        cuda.syncwarp(0xF)
+
+    if i < 2:
+        sm[i] = sm[i] + sm[i + 2]
+        cuda.syncwarp(0x3)
+
+    if i == 0:
+        res[0] = sm[0] + sm[1]
 
 
 def simple_smem(ary):
@@ -70,15 +109,49 @@ def use_syncthreads_or(ary_in, ary_out):
     ary_out[i] = cuda.syncthreads_or(ary_in[i])
 
 
+def _safe_cc_check(cc):
+    if ENABLE_CUDASIM:
+        return True
+    else:
+        return cuda.get_current_device().compute_capability >= cc
+
 
 class TestCudaSync(CUDATestCase):
-    def test_useless_sync(self):
-        compiled = cuda.jit("void(int32[::1])")(useless_sync)
+    def _test_useless(self, kernel):
+        compiled = cuda.jit("void(int32[::1])")(kernel)
         nelem = 10
         ary = np.empty(nelem, dtype=np.int32)
         exp = np.arange(nelem, dtype=np.int32)
         compiled[1, nelem](ary)
-        self.assertTrue(np.all(ary == exp))
+        np.testing.assert_equal(ary, exp)
+
+    def test_useless_syncthreads(self):
+        self._test_useless(useless_syncthreads)
+
+    @skip_on_cudasim("syncwarp not implemented on cudasim")
+    def test_useless_syncwarp(self):
+        self._test_useless(useless_syncwarp)
+
+    @skip_on_cudasim("syncwarp not implemented on cudasim")
+    @unittest.skipUnless(_safe_cc_check((7, 0)),
+                         "Partial masks require CC 7.0 or greater")
+    def test_useless_syncwarp_with_mask(self):
+        self._test_useless(useless_syncwarp_with_mask)
+
+    @skip_on_cudasim("syncwarp not implemented on cudasim")
+    @unittest.skipUnless(_safe_cc_check((7, 0)),
+                         "Partial masks require CC 7.0 or greater")
+    def test_coop_syncwarp(self):
+        # coop_syncwarp computes the sum of all integers from 0 to 31 (496)
+        # using a single warp
+        expected = 496
+        nthreads = 32
+        nblocks = 1
+
+        compiled = cuda.jit("void(int32[::1])")(coop_syncwarp)
+        res = np.zeros(1, dtype=np.int32)
+        compiled[nblocks, nthreads](res)
+        np.testing.assert_equal(expected, res[0])
 
     def test_simple_smem(self):
         compiled = cuda.jit("void(int32[::1])")(simple_smem)

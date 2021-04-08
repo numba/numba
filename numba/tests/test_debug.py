@@ -47,8 +47,8 @@ def supported_parfor(n):
     return a
 
 force_parallel_flags = Flags()
-force_parallel_flags.set("auto_parallel", ParallelOptions(True))
-force_parallel_flags.set('nrt')
+force_parallel_flags.auto_parallel = ParallelOptions(True)
+force_parallel_flags.nrt = True
 
 class DebugTestBase(TestCase):
 
@@ -84,7 +84,7 @@ class DebugTestBase(TestCase):
 
     def _check_dump_llvm(self, out):
         self.assertIn('--LLVM DUMP', out)
-        if compiler.Flags.OPTIONS['auto_parallel'].enabled == False:
+        if compiler.Flags.options["auto_parallel"].default.enabled == False:
             self.assertIn('%"retval" = alloca', out)
 
     def _check_dump_func_opt_llvm(self, out):

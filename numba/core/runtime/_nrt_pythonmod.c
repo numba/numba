@@ -154,7 +154,7 @@ build_c_helpers_dict(void)
 #define declmethod(func) _declpointer(#func, &NRT_##func)
 
 declmethod(adapt_ndarray_from_python);
-declmethod(adapt_ndarray_to_python);
+declmethod(adapt_ndarray_to_python_acqref);
 declmethod(adapt_buffer_from_python);
 declmethod(meminfo_new_from_pyobject);
 declmethod(meminfo_as_pyobject);

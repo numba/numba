@@ -9,4 +9,13 @@ class Dim3(types.Type):
         super().__init__(name='Dim3')
 
 
+class GridGroup(types.Type):
+    """
+    The grid of all threads in a cooperative kernel launch.
+    """
+    def __init__(self):
+        super().__init__(name='GridGroup')
+
+
 dim3 = Dim3()
+grid_group = GridGroup()

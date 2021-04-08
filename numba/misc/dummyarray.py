@@ -7,6 +7,7 @@ import ctypes
 import numpy as np
 
 from numba import _helperlib
+from numba.core import config
 
 
 Extent = namedtuple("Extent", ["begin", "end"])
@@ -164,7 +165,48 @@ class Array(object):
         self.itemsize = itemsize
         self.size = functools.reduce(operator.mul, self.shape, 1)
         self.extent = self._compute_extent()
-        self.flags = self._compute_layout()
+        if config.NPY_RELAXED_STRIDES_CHECKING:
+            self.flags = self._relaxed_compute_layout()
+        else:
+            self.flags = self._compute_layout()
+
+    def _relaxed_compute_layout(self):
+        # The logic here is based on that in _UpdateContiguousFlags from
+        # numpy/core/src/multiarray/flagsobject.c in NumPy v1.19.1 (commit
+        # 13661ac70).
+        # https://github.com/numpy/numpy/blob/maintenance/1.19.x/numpy/core/src/multiarray/flagsobject.c#L123-L191
+
+        # Records have no dims, and we can treat them as contiguous
+        if not self.dims:
+            return {'C_CONTIGUOUS': True, 'F_CONTIGUOUS': True}
+
+        # If this is a broadcast array then it is not contiguous
+        if any([dim.stride == 0 for dim in self.dims]):
+            return {'C_CONTIGUOUS': False, 'F_CONTIGUOUS': False}
+
+        flags = {'C_CONTIGUOUS': True, 'F_CONTIGUOUS': True}
+
+        # Check C contiguity
+        sd = self.itemsize
+        for dim in reversed(self.dims):
+            if dim.size == 0:
+                # Contiguous by definition
+                return {'C_CONTIGUOUS': True, 'F_CONTIGUOUS': True}
+            if dim.size != 1:
+                if dim.stride != sd:
+                    flags['C_CONTIGUOUS'] = False
+                sd *= dim.size
+
+        # Check F contiguity
+        sd = self.itemsize
+        for dim in self.dims:
+            if dim.size != 1:
+                if dim.stride != sd:
+                    flags['F_CONTIGUOUS'] = False
+                    return flags
+                sd *= dim.size
+
+        return flags
 
     def _compute_layout(self):
         flags = {}

@@ -10,6 +10,11 @@ def is_signature(sig):
 
 
 def _parse_signature_string(signature_str):
+    """
+    Parameters
+    ----------
+    signature_str : str
+    """
     # Just eval signature_str using the types submodules as globals
     return eval(signature_str, {}, types.__dict__)
 
