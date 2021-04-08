@@ -772,7 +772,7 @@ def array_argmax_impl_generic(arry):
 
 @overload(np.argmax)
 @overload_method(types.Array, "argmax")
-def array_argmax(arr):
+def array_argmax(arr, axis=None):
     if isinstance(arr.dtype, (types.NPDatetime, types.NPTimedelta)):
         flatten_impl = array_argmax_impl_datetime
     elif isinstance(arr.dtype, types.Float):
@@ -780,11 +780,21 @@ def array_argmax(arr):
     else:
         flatten_impl = array_argmax_impl_generic
 
-    def array_argmax_impl(arr):
-        return flatten_impl(arr)
+    if is_nonelike(axis):
+        def array_argmax_impl(arr, axis=None):
+            return flatten_impl(arr)
+    else:
+        def array_argmax_impl(arr, axis=None):
+            if axis < 0:
+                axis = arr.ndim + axis
+            # TODO interpolate
+            length = len(arr)
+            out = np.empty(length, arr.dtype)
+            for i in range(length):
+                out[i] = flatten_impl(arr)
+            return out
 
     return array_argmax_impl
-
 
 
 @overload(np.all)
