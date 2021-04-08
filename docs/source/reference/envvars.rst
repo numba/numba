@@ -469,9 +469,14 @@ GPU support
 
 .. envvar:: NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS
 
-   Enable warnings if the block size is too small relative to the number of
+   Enable warnings if the grid size is too small relative to the number of
    steraming multiprocessors (SM). If the block size is too small an inefficient
-   schedule will result and performance will suffer.
+   schedule will result and performance will suffer. This option is on by default (1).
+
+   The heuristic checked is whether gridsize < 2 * (number of SMs). NOTE: The absence of
+   a warning does not imply a good gridsize relative to the number of SMs. Disabling
+   this warning will reduce the number of CUDA API calls, as the heuristic needs to
+   check the number of SMs for the device in the current context.
 
 
 Threading Control

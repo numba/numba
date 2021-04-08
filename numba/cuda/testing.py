@@ -23,8 +23,12 @@ class CUDATestCase(SerialMixin, TestCase):
     its tests are run between tests from a CUDATestCase.
     """
     def setUp(self):
+        self._low_occupancy_warnings = config.LOW_OCCUPANCY_WARNINGS
         # Disable warnings about low gpu utilization for test suite
         config.LOW_OCCUPANCY_WARNINGS = 0
+
+    def tearDown(self):
+        config.LOW_OCCUPANCY_WARNINGS = self._low_occupancy_warnings
 
 
 class ContextResettingTestCase(CUDATestCase):

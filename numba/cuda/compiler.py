@@ -787,15 +787,16 @@ class _KernelConfiguration:
         self.stream = stream
         self.sharedmem = sharedmem
 
-        num_blocks = griddim[0] * griddim[1] * griddim[2]
-        ctx = get_context()
-        smcount = ctx.device.MULTIPROCESSOR_COUNT
-
-        if (config.LOW_OCCUPANCY_WARNINGS) and (num_blocks < 2 * smcount):
-            msg = ("Number of blocks ({blocks}) that are  < 2 * SM ({sm}) "
-                   "will generate inefficient kernel code.")
-            msg = msg.format(blocks=num_blocks, sm=2 * smcount)
-            warn(NumbaPerformanceWarning(msg))
+        if config.LOW_OCCUPANCY_WARNINGS:
+            ctx = get_context()
+            smcount = ctx.device.MULTIPROCESSOR_COUNT
+            grid_size = griddim[0] * griddim[1] * griddim[2]
+            if grid_size < 2 * smcount:
+                msg = ("Grid size ({grid}) < 2 * SM count ({sm}) "
+                       "will likely result in GPU underutilization due"
+                       "to low occupancy.")
+                msg = msg.format(grid=grid_size, sm=2 * smcount)
+                warn(NumbaPerformanceWarning(msg))
 
     def __call__(self, *args):
         return self.dispatcher.call(args, self.griddim, self.blockdim,
