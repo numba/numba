@@ -23,7 +23,6 @@ from numba.core.imputils import (user_function, user_generator,
                        RegistryLoader)
 from numba.cpython import builtins
 
-
 GENERIC_POINTER = Type.pointer(Type.int(8))
 PYOBJECT = GENERIC_POINTER
 void_ptr = GENERIC_POINTER
@@ -834,10 +833,18 @@ class BaseContext(object):
             codegen = self.codegen()
             library = codegen.create_library(impl.__name__)
             if flags is None:
+
+                cstk = utils.ConfigStack()
                 flags = compiler.Flags()
-            flags.set('no_compile')
-            flags.set('no_cpython_wrapper')
-            flags.set('no_cfunc_wrapper')
+                if cstk:
+                    tls_flags = cstk.top()
+                    if tls_flags.is_set("nrt") and tls_flags.nrt:
+                        flags.nrt = True
+
+            flags.no_compile = True
+            flags.no_cpython_wrapper = True
+            flags.no_cfunc_wrapper = True
+
             cres = compiler.compile_internal(self.typing_context, self,
                                              library,
                                              impl, sig.args,

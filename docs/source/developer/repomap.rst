@@ -152,6 +152,8 @@ Compiler Pipeline
 - :ghfile:`numba/core/pylowering.py` - Lowering of Numba IR in object mode
 - :ghfile:`numba/core/pythonapi.py` - LLVM IR code generation to interface with
   CPython API
+- :ghfile:`numba/core/targetconfig.py` - Utils for target configurations such
+  as compiler flags.
 
 
 Type Management
@@ -221,6 +223,8 @@ Misc Support
   patterns in LLVM IR
 - :ghfile:`numba/core/utils.py` - Python 2 backports of Python 3 functionality
   (also imports local copy of ``six``)
+- :ghfile:`numba/core/overload_glue.py` - Functions for wrapping split typing
+  and lowering API use cases into overloads.
 - :ghfile:`numba/misc/appdirs.py` - Vendored package for determining application
   config directories on every platform
 - :ghfile:`numba/core/compiler_lock.py` - Global compiler lock because Numba's

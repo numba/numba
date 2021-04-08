@@ -411,7 +411,7 @@ def linspace_parallel_impl(return_type, *args):
     else:
         raise ValueError("parallel linspace with types {}".format(args))
 
-replace_functions_map = {
+swap_functions_map = {
     ('argmin', 'numpy'): lambda r,a: argmin_parallel_impl,
     ('argmax', 'numpy'): lambda r,a: argmax_parallel_impl,
     ('min', 'numpy'): min_parallel_impl,
@@ -1387,7 +1387,7 @@ class PreParforPass(object):
     implementations of numpy functions if available.
     """
     def __init__(self, func_ir, typemap, calltypes, typingctx, options,
-                 swapped={}):
+                 swapped={}, replace_functions_map=None):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
@@ -1395,6 +1395,9 @@ class PreParforPass(object):
         self.options = options
         # diagnostics
         self.swapped = swapped
+        if replace_functions_map is None:
+            replace_functions_map = swap_functions_map
+        self.replace_functions_map = replace_functions_map
         self.stats = {
             'replaced_func': 0,
             'replaced_dtype': 0,
@@ -1431,7 +1434,7 @@ class PreParforPass(object):
                         def replace_func():
                             func_def = get_definition(self.func_ir, expr.func)
                             callname = find_callname(self.func_ir, expr)
-                            repl_func = replace_functions_map.get(callname, None)
+                            repl_func = self.replace_functions_map.get(callname, None)
                             # Handle method on array type
                             if (repl_func is None and
                                 len(callname) == 2 and

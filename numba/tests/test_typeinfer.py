@@ -805,6 +805,7 @@ def get_func_typing_errs(func, arg_types):
     return_type = None
     _locals = {}
     flags = numba.core.compiler.Flags()
+    flags.nrt = True
 
     pipeline = TyperCompiler(
         typingctx, targetctx, library, arg_types, return_type, flags, _locals
@@ -817,20 +818,19 @@ class TestPartialTypingErrors(unittest.TestCase):
     """
     Make sure partial typing stores type errors in compiler state properly
     """
-
     def test_partial_typing_error(self):
         # example with type unification error
         def impl(flag):
             if flag:
                 a = 1
             else:
-                a = np.ones(3)
+                a = str(1)
             return a
 
         typing_errs = get_func_typing_errs(impl, (types.bool_,))
         self.assertTrue(isinstance(typing_errs, list) and len(typing_errs) == 1)
-        self.assertTrue(isinstance(typing_errs[0], errors.TypingError)
-            and "Cannot unify" in typing_errs[0].msg)
+        self.assertTrue(isinstance(typing_errs[0], errors.TypingError) and
+                        "Cannot unify" in typing_errs[0].msg)
 
 
 if __name__ == '__main__':

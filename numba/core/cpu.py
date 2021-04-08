@@ -10,7 +10,7 @@ from numba.core.callwrapper import PyCallWrapper
 from numba.core.base import BaseContext, PYOBJECT
 from numba.core import utils, types, config, cgutils, callconv, codegen, externals, fastmathpass, intrinsics
 from numba.core.utils import cached_property
-from numba.core.options import TargetOptions
+from numba.core.options import TargetOptions, include_default_options
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import global_compiler_lock
 import numba.core.entrypoints
@@ -62,6 +62,13 @@ class CPUContext(BaseContext):
         import numba.cpython.charseq
         import numba.typed.dictimpl
         import numba.experimental.function_type
+
+        # Add lower_extension attribute
+        self.lower_extensions = {}
+        from numba.parfors.parfor_lowering import _lower_parfor_parallel
+        from numba.parfors.parfor import Parfor
+        # Specify how to lower Parfor nodes using the lower_extensions
+        self.lower_extensions[Parfor] = _lower_parfor_parallel
 
     def load_additional_registries(self):
         # Add target specific implementations
@@ -239,24 +246,42 @@ class CPUContext(BaseContext):
 # ----------------------------------------------------------------------------
 # TargetOptions
 
-class CPUTargetOptions(TargetOptions):
-    OPTIONS = {
-        "nopython": bool,
-        "nogil": bool,
-        "forceobj": bool,
-        "looplift": bool,
-        "boundscheck": lambda X: bool(X) if X is not None else None,
-        "debug": bool,
-        "_nrt": bool,
-        "no_rewrites": bool,
-        "no_cpython_wrapper": bool,
-        "no_cfunc_wrapper": bool,
-        "fastmath": FastMathOptions,
-        "error_model": str,
-        "parallel": ParallelOptions,
-        "inline": InlineOptions,
-    }
+_options_mixin = include_default_options(
+    "nopython",
+    "forceobj",
+    "looplift",
+    "_nrt",
+    "debug",
+    "boundscheck",
+    "nogil",
+    "no_rewrites",
+    "no_cpython_wrapper",
+    "no_cfunc_wrapper",
+    "parallel",
+    "fastmath",
+    "error_model",
+    "inline",
+)
 
+class CPUTargetOptions(_options_mixin, TargetOptions):
+    def finalize(self, flags, options):
+        if not flags.is_set("enable_pyobject"):
+            flags.enable_pyobject = True
+
+        if not flags.is_set("enable_looplift"):
+            flags.enable_looplift = True
+
+        flags.inherit_if_not_set("nrt", default=True)
+
+        if not flags.is_set("debuginfo"):
+            flags.debuginfo = config.DEBUGINFO_DEFAULT
+
+        if not flags.is_set("boundscheck"):
+            flags.boundscheck = flags.debuginfo
+
+        flags.enable_pyobject_looplift = True
+
+        flags.inherit_if_not_set("fastmath")
 
 # ----------------------------------------------------------------------------
 # Internal

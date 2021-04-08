@@ -13,7 +13,7 @@ from numba.core import (types, typing, utils, funcdesc, serialize, config,
                         compiler, sigutils)
 from numba.core.typeconv.rules import default_type_manager
 from numba.core.compiler import (CompilerBase, DefaultPassBuilder,
-                                 compile_result, Flags)
+                                 compile_result, Flags, Option)
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.compiler_machinery import (LoweringPass, PassManager,
                                            register_pass)
@@ -31,8 +31,21 @@ from .api import get_current_device
 from .args import wrap_arg
 
 
+def _nvvm_options_type(x):
+    if x is None:
+        return None
+
+    else:
+        assert isinstance(x, dict)
+        return x
+
+
 class CUDAFlags(Flags):
-    OPTIONS = { **Flags.OPTIONS, **{'nvvm_options': None}}
+    nvvm_options = Option(
+        type=_nvvm_options_type,
+        default=None,
+        doc="NVVM options",
+    )
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
@@ -128,17 +141,17 @@ def compile_cuda(pyfunc, return_type, args, debug=False, inline=False,
 
     flags = CUDAFlags()
     # Do not compile (generate native code), just lower (to LLVM)
-    flags.set('no_compile')
-    flags.set('no_cpython_wrapper')
-    flags.set('no_cfunc_wrapper')
+    flags.no_compile = True
+    flags.no_cpython_wrapper = True
+    flags.no_cfunc_wrapper = True
     if debug:
-        flags.set('debuginfo')
+        flags.debuginfo = True
     if inline:
-        flags.set('forceinline')
+        flags.forceinline = True
     if fastmath:
-        flags.set('fastmath')
+        flags.fastmath = True
     if nvvm_options:
-        flags.set('nvvm_options', nvvm_options)
+        flags.nvvm_options = nvvm_options
 
     # Run compilation pipeline
     cres = compiler.compile_extra(typingctx=typingctx,

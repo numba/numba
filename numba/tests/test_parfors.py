@@ -72,18 +72,18 @@ class TestParforsBase(TestCase):
     def __init__(self, *args):
         # flags for njit()
         self.cflags = Flags()
-        self.cflags.set('nrt')
+        self.cflags.nrt = True
 
         # flags for njit(parallel=True)
         self.pflags = Flags()
-        self.pflags.set('auto_parallel', cpu.ParallelOptions(True))
-        self.pflags.set('nrt')
+        self.pflags.auto_parallel = cpu.ParallelOptions(True)
+        self.pflags.nrt = True
 
         # flags for njit(parallel=True, fastmath=True)
         self.fast_pflags = Flags()
-        self.fast_pflags.set('auto_parallel', cpu.ParallelOptions(True))
-        self.fast_pflags.set('nrt')
-        self.fast_pflags.set('fastmath', cpu.FastMathOptions(True))
+        self.fast_pflags.auto_parallel = cpu.ParallelOptions(True)
+        self.fast_pflags.nrt = True
+        self.fast_pflags.fastmath = cpu.FastMathOptions(True)
         super(TestParforsBase, self).__init__(*args)
 
     def _compile_this(self, func, sig, flags):

@@ -40,15 +40,15 @@ except ImportError:
 
 
 enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
+enable_pyobj_flags.enable_pyobject = True
 
 force_pyobj_flags = Flags()
-force_pyobj_flags.set("force_pyobject")
+force_pyobj_flags.force_pyobject = True
 
 no_pyobj_flags = Flags()
 
 nrt_flags = Flags()
-nrt_flags.set("nrt")
+nrt_flags.nrt = True
 
 
 tag = testing.make_tag_decorator(['important', 'long_running'])
