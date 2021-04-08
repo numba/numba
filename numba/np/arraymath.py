@@ -783,16 +783,36 @@ def array_argmax(arr, axis=None):
     if is_nonelike(axis):
         def array_argmax_impl(arr, axis=None):
             return flatten_impl(arr)
+    #elif axis.ndim == 1:
+    #    def array_argmax_impl(arr, axis=None):
+    #        if axis != 0: raise ValueError("...")
+    #        return flatten_impl(arr)
     else:
+        retty = arr.dtype
+
         def array_argmax_impl(arr, axis=None):
             if axis < 0:
                 axis = arr.ndim + axis
-            # TODO interpolate
-            length = len(arr)
-            out = np.empty(length, arr.dtype)
-            for i in range(length):
-                out[i] = flatten_impl(arr)
-            return out
+
+            # Make chosen axis the last axis:
+            new_axis_order = list(range(arr.ndim))
+            for i in range(axis):
+                new_axis_order[i] = i
+            for i in range(axis, arr.ndim - 1):
+                new_axis_order[i] = i + 1
+            new_axis_order[arr.ndim - 1] = axis
+            transposed_arr = arr.transpose(new_axis_order)
+
+            # Flatten along that axis; since we've transposed, we can just get
+            # batches off the overall flattened array.
+            m = transposed_arr.shape[-1]
+            raveled = transposed_arr.ravel()
+            out = np.empty(transposed_arr.size // m, retty)
+            for i in range(out.size):
+                out[i] = flatten_impl(raveled[i*m:(i+1) * m])
+
+            # Reshape based on axis we didn't flatten over:
+            return out.reshape(arr.shape[:-1])
 
     return array_argmax_impl
 
