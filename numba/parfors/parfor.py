@@ -2787,8 +2787,10 @@ class ParforPass(ParforPassStates):
         self._pre_run()
         # run stencil translation to parfor
         if self.options.stencil:
-            stencil_pass = StencilPass(self.func_ir, self.typemap, self.calltypes,
-                                            self.array_analysis, self.typingctx, self.flags)
+            stencil_pass = StencilPass(self.func_ir, self.typemap,
+                                       self.calltypes, self.array_analysis,
+                                       self.typingctx, self.targetctx,
+                                       self.flags)
             stencil_pass.run()
         if self.options.setitem:
             ConvertSetItemPass(self).run(self.func_ir.blocks)
