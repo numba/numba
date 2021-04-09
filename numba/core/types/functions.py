@@ -304,7 +304,7 @@ class BaseFunction(Callable):
 
         # fish out templates that are specific to the target if a target is
         # specified
-        DEFAULT_HARDWARE = 'cpu'
+        DEFAULT_HARDWARE = 'generic'
         usable = []
         for ix, temp_cls in enumerate(self.templates):
             # ? Need to do something about this next line
