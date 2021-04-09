@@ -380,6 +380,21 @@ def ptx_match_all_sync(context, builder, sig, args):
     return builder.call(func, (mask, value))
 
 
+@lower(stubs.activemask)
+def ptx_activemask(context, builder, sig, args):
+    activemask = ir.InlineAsm(ir.FunctionType(ir.IntType(32), []),
+                              "activemask.b32 $0;", '=r', side_effect=True)
+    return builder.call(activemask, [])
+
+
+@lower(stubs.lanemask_lt)
+def ptx_lanemask_lt(context, builder, sig, args):
+    activemask = ir.InlineAsm(ir.FunctionType(ir.IntType(32), []),
+                              "mov.u32 $0, %lanemask_lt;", '=r',
+                              side_effect=True)
+    return builder.call(activemask, [])
+
+
 @lower(stubs.popc, types.Any)
 def ptx_popc(context, builder, sig, args):
     return builder.ctpop(args[0])
@@ -810,6 +825,16 @@ def ptx_atomic_cas_tuple(context, builder, sig, args):
     else:
         raise TypeError('Unimplemented atomic compare_and_swap '
                         'with %s array' % dtype)
+
+
+# -----------------------------------------------------------------------------
+
+@lower(stubs.nanosleep, types.uint32)
+def ptx_nanosleep(context, builder, sig, args):
+    nanosleep = ir.InlineAsm(ir.FunctionType(ir.VoidType(), [ir.IntType(32)]),
+                             "nanosleep.u32 $0;", 'r', side_effect=True)
+    ns = args[0]
+    builder.call(nanosleep, [ns])
 
 
 # -----------------------------------------------------------------------------

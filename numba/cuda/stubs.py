@@ -309,6 +309,29 @@ class match_all_sync(Stub):
     _description_ = '<match_all_sync()>'
 
 
+class activemask(Stub):
+    '''
+    activemask()
+
+    Returns a 32-bit integer mask of all currently active threads in the
+    calling warp. The Nth bit is set if the Nth lane in the warp is active when
+    activemask() is called. Inactive threads are represented by 0 bits in the
+    returned mask. Threads which have exited the kernel are always marked as
+    inactive.
+    '''
+    _description_ = '<activemask()>'
+
+
+class lanemask_lt(Stub):
+    '''
+    lanemask_lt()
+
+    Returns a 32-bit integer mask of all lanes (including inactive ones) with
+    ID less than the current lane.
+    '''
+    _description_ = '<lanemask_lt()>'
+
+
 # -------------------------------------------------------------------------------
 # memory fences
 
@@ -552,3 +575,16 @@ class atomic(Stub):
 
         Returns the current value as if it is loaded atomically.
         """
+
+
+#-------------------------------------------------------------------------------
+# timers
+
+class nanosleep(Stub):
+    '''
+    nanosleep(ns)
+
+    Suspends the thread for a sleep duration approximately close to the delay
+    `ns`, specified in nanoseconds.
+    '''
+    _description_ = '<nansleep()>'

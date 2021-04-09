@@ -399,6 +399,19 @@ the GPU compute capability is below 7.x.
     all have the same value, otherwise it is 0. And pred is a boolean of whether
     or not all threads in the mask warp have the same warp.
 
+.. function:: numba.cuda.activemask()
+
+    Returns a 32-bit integer mask of all currently active threads in the
+    calling warp. The Nth bit is set if the Nth lane in the warp is active when
+    activemask() is called. Inactive threads are represented by 0 bits in the
+    returned mask. Threads which have exited the kernel are always marked as
+    inactive.
+
+.. function:: numba.cuda.lanemask_lt()
+
+    Returns a 32-bit integer mask of all lanes (including inactive ones) with
+    ID less than the current lane.
+
 
 Integer Intrinsics
 ~~~~~~~~~~~~~~~~~~
@@ -449,6 +462,7 @@ precision parts of the CUDA Toolkit documentation.
    ``cbrt`` and ``cbrtf`` in the C api. Supports float32, and float64 arguments
    only.
 
+
 Control Flow Instructions
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -464,3 +478,12 @@ semantics, please refer to the `relevant CUDA Toolkit documentation
 
     Select between two expressions, depending on the value of the first
     argument. Similar to LLVM's ``select`` instruction.
+
+
+Timer Intrinsics
+~~~~~~~~~~~~~~~~
+
+.. function:: numba.cuda.nanosleep(ns)
+
+    Suspends the thread for a sleep duration approximately close to the delay
+    ``ns``, specified in nanoseconds.
