@@ -897,6 +897,9 @@ class _IntrinsicTemplate(AbstractTemplate):
         hwstr = self.metadata.get('hardware', 'cpu')
         disp = dispatcher_registry[hardware_registry[hwstr]]
         tgtctx = disp.targetdescr.target_context
+        # In case the target has swapped, e.g. cuda borrowing cpu, refresh to
+        # populate.
+        tgtctx.refresh()
         reg = next(iter(tgtctx._registries))
         lower_builtin = reg.lower
         try:
