@@ -155,6 +155,26 @@ class TestCopyPropagate(unittest.TestCase):
         self.assertEqual(impl1(5), njit(impl1)(5))
         self.assertEqual(impl2(np.ones(3), 0, 5), njit(impl2)(np.ones(3), 0, 5))
         self.assertEqual(impl3(C(), 5), jit(forceobj=True)(impl3)(C(), 5))
+    
+    def test_input_ir_replace_temporaries(self):
+        """make sure Interpreter._remove_unused_temporaries() replaces instructions
+        in a binop when eliminating temporary variables. See issue 6895 for more
+        informations about this"""
+
+        def impl(array, i):
+            """The interpreter will create a temporary variable "$20binary_subscr.2"
+            for the expression array[i] that later will be assigned to "value".
+            When doing the copy propagation optimization and deleting the temporary
+            variable "$20binary_subscr.2", numba must replace its uses with "value"
+            """
+            if i < array.shape[0]:
+                if (value := array[i]) < 4.0:
+                    array[i] = 1.0  # this should work
+        
+        array = np.zeros((10), int)
+        pyfunc = impl
+        cfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(array, 1), cfunc(array, 1))
 
 
 if __name__ == "__main__":

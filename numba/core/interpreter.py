@@ -569,6 +569,16 @@ class Interpreter(object):
                     inst.value.value = replaced_var[inst.value.value.name]
                     new_body.append(inst)
                     continue
+
+                # iterate over RHS operands and replace them iff they
+                # are in replaced_var dict
+                if (isinstance(inst.value, ir.Expr)
+                        and inst.value.op == "binop"):
+                    for k in ('lhs', 'rhs'):
+                        v = inst.value._kws.get(k)
+                        if v.name in replaced_var:
+                            inst.value._kws[k] = replaced_var[v.name]
+
                 # eliminate temporary variables that are assigned to user
                 # variables right after creation. E.g.:
                 # $1 = f(); a = $1 -> a = f()
