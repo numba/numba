@@ -696,6 +696,9 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
     """
     if call_expr.op == 'call':
         args = list(call_expr.args)
+        if call_expr.vararg:
+            msg = "Calling a closure with *args is unsupported."
+            raise errors.UnsupportedError(msg, call_expr.loc)
     elif call_expr.op == 'getattr':
         args = [call_expr.value]
     elif ir_utils.is_operator_or_getitem(call_expr):
