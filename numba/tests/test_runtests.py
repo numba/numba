@@ -116,6 +116,23 @@ class TestCase(unittest.TestCase):
         # The tests must be equivalent
         self.assertEqual(sorted(full), sorted(sliced))
 
+    def test_gitdiff(self):
+        # Check for git
+        try:
+            subprocess.call("git", stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except FileNotFoundError as e:
+            self.skipTest("no git available")
+
+        # default
+        outs = self.get_testsuite_listing(['-g'])
+        self.assertNotIn("Git diff by common ancestor", outs)
+        # using ancestor
+        outs = self.get_testsuite_listing(['-g=ancestor'])
+        self.assertIn("Git diff by common ancestor", outs)
+        # misspelled ancestor
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.get_testsuite_listing(['-g=ancest'])
+
 
 if __name__ == '__main__':
     unittest.main()
