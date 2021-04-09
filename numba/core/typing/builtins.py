@@ -941,8 +941,8 @@ class Int(AbstractTemplate):
         if isinstance(arg, (types.Float, types.Boolean)):
             return signature(types.intp, arg)
 
+    if not isinstance(arg, types.Optional):
         raise TypeError("int() only support for Integer, Float and Boolean")
-
 
 @infer_global(float)
 class Float(AbstractTemplate):
