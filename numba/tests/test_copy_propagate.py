@@ -11,6 +11,7 @@ from numba.core.ir_utils import (copy_propagate, apply_copy_propagate,
                             get_name_var_table)
 from numba.core.typed_passes import type_inference_stage
 from numba.tests.test_ir_inlining import InlineTestPipeline
+from numba.tests.support import skip_unless_py38_or_later
 import numpy as np
 import unittest
 
@@ -156,23 +157,28 @@ class TestCopyPropagate(unittest.TestCase):
         self.assertEqual(impl2(np.ones(3), 0, 5), njit(impl2)(np.ones(3), 0, 5))
         self.assertEqual(impl3(C(), 5), jit(forceobj=True)(impl3)(C(), 5))
     
+    @skip_unless_py38_or_later
     def test_input_ir_replace_temporaries(self):
         """make sure Interpreter._remove_unused_temporaries() replaces instructions
         in a binop when eliminating temporary variables. See issue 6895 for more
-        informations about this"""
+        informations about this.
 
-        def impl(array, i):
-            """The interpreter will create a temporary variable "$20binary_subscr.2"
-            for the expression array[i] that later will be assigned to "value".
-            When doing the copy propagation optimization and deleting the temporary
-            variable "$20binary_subscr.2", numba must replace its uses with "value"
-            """
-            if i < array.shape[0]:
-                if (value := array[i]) < 4.0:
-                    array[i] = 1.0  # this should work
-        
+        The interpreter will create a temporary variable "$20binary_subscr.2"
+        for the expression array[i] that later will be assigned to "value".
+        When doing the copy propagation optimization and deleting the temporary
+        variable "$20binary_subscr.2", numba must replace its uses with "value"
+        """
+
+        s = '''
+def impl(array, i):
+    if i < array.shape[0]:
+        if (value := array[i]) < 4.0:
+            array[i] = 1.0  # this should work
+        '''
+        exec(s)
+
         array = np.zeros((10), int)
-        pyfunc = impl
+        pyfunc = locals()['impl']
         cfunc = njit(pyfunc)
         self.assertEqual(pyfunc(array, 1), cfunc(array, 1))
 

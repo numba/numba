@@ -63,6 +63,10 @@ skip_py38_or_later = unittest.skipIf(
     utils.PYVERSION >= (3, 8),
     "unsupported on py3.8 or later"
 )
+skip_unless_py38_or_later = unittest.skipIf(
+    utils.PYVERSION < (3, 8),
+    "unsupported on py3.7 or earlier"
+)
 skip_tryexcept_unsupported = unittest.skipIf(
     utils.PYVERSION < (3, 7),
     "try-except unsupported on py3.6 or earlier"
@@ -107,6 +111,7 @@ skip_ppc64le_issue6465 = unittest.skipIf(platform.machine() == 'ppc64le',
 skip_unless_py37_or_later = lambda reason: \
     unittest.skipIf(utils.PYVERSION < (3, 7),
     reason)
+
 
 try:
     import scipy.linalg.cython_lapack
