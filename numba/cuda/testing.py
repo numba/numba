@@ -22,6 +22,11 @@ class CUDATestCase(SerialMixin, TestCase):
     the context and destroy resources used by a normal CUDATestCase if any of
     its tests are run between tests from a CUDATestCase.
     """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._low_occupancy_warnings = config.LOW_OCCUPANCY_WARNINGS
+
     def setUp(self):
         self._low_occupancy_warnings = config.LOW_OCCUPANCY_WARNINGS
         # Disable warnings about low gpu utilization for test suite
