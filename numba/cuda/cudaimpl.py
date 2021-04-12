@@ -443,11 +443,24 @@ def ptx_clz(context, builder, sig, args):
         context.get_constant(types.boolean, 0))
 
 
-@lower(stubs.ffs, types.Any)
-def ptx_ffs(context, builder, sig, args):
-    return builder.cttz(
-        args[0],
-        context.get_constant(types.boolean, 0))
+@lower(stubs.ffs, types.i4)
+@lower(stubs.ffs, types.u4)
+def ptx_ffs_32(context, builder, sig, args):
+    fn = cgutils.get_or_insert_function(
+        builder.module,
+        ir.FunctionType(ir.IntType(32), (ir.IntType(32),)),
+        '__nv_ffs')
+    return builder.call(fn, args)
+
+
+@lower(stubs.ffs, types.i8)
+@lower(stubs.ffs, types.u8)
+def ptx_ffs_64(context, builder, sig, args):
+    fn = cgutils.get_or_insert_function(
+        builder.module,
+        ir.FunctionType(ir.IntType(32), (ir.IntType(64),)),
+        '__nv_ffsll')
+    return builder.call(fn, args)
 
 
 @lower(stubs.selp, types.Any, types.Any, types.Any)

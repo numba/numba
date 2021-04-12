@@ -338,34 +338,35 @@ class threadfence(Stub):
 
 class popc(Stub):
     """
-    popc(val)
+    popc(x)
 
-    Returns the number of set bits in the given value.
+    Returns the number of set bits in x.
     """
 
 
 class brev(Stub):
     """
-    brev(val)
+    brev(x)
 
-    Reverse the bitpattern of an integer value; for example 0b10110110
+    Returns the reverse of the bit pattern of x. For example, 0b10110110
     becomes 0b01101101.
     """
 
 
 class clz(Stub):
     """
-    clz(val)
+    clz(x)
 
-    Counts the number of leading zeros in a value.
+    Returns the number of leading zeros in z.
     """
 
 
 class ffs(Stub):
     """
-    ffs(val)
+    ffs(x)
 
-    Find the position of the least significant bit set to 1 in an integer.
+    Returns the position of the first (least significant) bit set to 1 in x,
+    where the least significant bit position is 1. ffs(0) returns 0.
     """
 
 
