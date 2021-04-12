@@ -572,12 +572,17 @@ class Interpreter(object):
 
                 # iterate over RHS operands and replace them iff they
                 # are in replaced_var dict
-                if (isinstance(inst.value, ir.Expr)
-                        and inst.value.op == "binop"):
-                    for k in ('lhs', 'rhs'):
-                        v = inst.value._kws.get(k)
-                        if v.name in replaced_var:
-                            inst.value._kws[k] = replaced_var[v.name]
+                if isinstance(inst.value, ir.Expr):
+                    for k, v in inst.value._kws.items():
+                        if isinstance(v, (tuple, list)):
+                            l = list(v)
+                            for i, e in enumerate(l):
+                                if e.name in replaced_var:
+                                    l[i] = replaced_var[e.name]
+                            inst.value._kws[k] = type(v)(l)
+                        elif isinstance(v, ir.Var):
+                            if v.name in replaced_var:
+                                inst.value._kws[k] = replaced_var[v.name]
 
                 # eliminate temporary variables that are assigned to user
                 # variables right after creation. E.g.:

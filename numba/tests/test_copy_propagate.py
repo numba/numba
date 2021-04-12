@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
+from unittest.case import skip
 from numba import jit, njit
 from numba.core import types, typing, ir, config, compiler, cpu
 from numba.core.registry import cpu_target
@@ -11,7 +12,7 @@ from numba.core.ir_utils import (copy_propagate, apply_copy_propagate,
                             get_name_var_table)
 from numba.core.typed_passes import type_inference_stage
 from numba.tests.test_ir_inlining import InlineTestPipeline
-from numba.tests.support import skip_unless_py38_or_later
+from numba.tests.support import skip_unless_py38_or_later, captured_stdout
 import numpy as np
 import unittest
 
@@ -157,6 +158,8 @@ class TestCopyPropagate(unittest.TestCase):
         self.assertEqual(impl2(np.ones(3), 0, 5), njit(impl2)(np.ones(3), 0, 5))
         self.assertEqual(impl3(C(), 5), jit(forceobj=True)(impl3)(C(), 5))
     
+
+class TestCopyPropagateWithWalrusOperator(unittest.TestCase):
     @skip_unless_py38_or_later
     def test_input_ir_replace_temporaries(self):
         """make sure Interpreter._remove_unused_temporaries() replaces instructions
@@ -169,11 +172,11 @@ class TestCopyPropagate(unittest.TestCase):
         variable "$20binary_subscr.2", numba must replace its uses with "value"
         """
 
-        s = '''
-def impl(array, i):
-    if i < array.shape[0]:
-        if (value := array[i]) < 4.0:
-            array[i] = 1.0  # this should work
+        s = \
+        '''def impl(array, i):
+            if i < array.shape[0]:
+                if (value := array[i]) < 4.0:
+                    array[i] = 1.0  # this should work
         '''
         exec(s)
 
@@ -182,6 +185,41 @@ def impl(array, i):
         cfunc = njit(pyfunc)
         self.assertEqual(pyfunc(array, 1), cfunc(array, 1))
 
+
+    @skip_unless_py38_or_later
+    def test_walhus_print(self):
+        s = \
+        '''def impl():
+               print(a:=3)
+        '''
+        exec(s)
+
+        pyfunc = locals()['impl']
+        cfunc = njit(pyfunc)
+        with captured_stdout() as py_stream:
+            pyfunc()
+
+        with captured_stdout() as c_stream:
+            cfunc()
+        self.assertEqual(py_stream.getvalue(), c_stream.getvalue())
+    
+    @skip_unless_py38_or_later
+    def test_walrus_len(self):
+        s = \
+        '''def impl(a):
+               if (n := len(a) > 3):
+                   return n
+               else:
+                   return n-1
+        '''
+        exec(s)
+
+        for sz in (2, 5):
+            a = np.zeros(sz) 
+            pyfunc = locals()['impl']
+            cfunc = njit(pyfunc)
+            self.assertEqual(pyfunc(a), cfunc(a))
+        
 
 if __name__ == "__main__":
     unittest.main()
