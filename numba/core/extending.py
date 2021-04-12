@@ -2,6 +2,7 @@ import os
 import uuid
 import weakref
 import collections
+import functools
 
 import numba
 from numba.core import types, errors, utils, config
@@ -280,6 +281,7 @@ class _Intrinsic(ReduceMixin):
     def __init__(self, name, defn):
         self._name = name
         self._defn = defn
+        functools.update_wrapper(self, defn)
 
     @property
     def _uuid(self):
