@@ -230,8 +230,10 @@ Unsupported Operations
 This section contains a non-exhaustive list of commonly encountered but
 currently unsupported features:
 
-#. Concurrent write operations on container types (i.e. lists, sets and
-   dictionaries) in a ``prange`` parallel region, e.g.::
+#. **Mutating a list is not threadsafe**
+
+   Concurrent write operations on container types (i.e. lists, sets and
+   dictionaries) in a ``prange`` parallel region are not threadsafe e.g.::
 
     @njit(parallel=True)
     def invalid():
@@ -244,9 +246,11 @@ currently unsupported features:
    violation as containers require thread-safety under mutation but this feature
    is not implemented.
 
-#. The use of the induction variable induced by a ``prange`` based loop in
+#. **Induction variables are not associated with thread ID**
+
+   The use of the induction variable induced by a ``prange`` based loop in
    conjunction with ``get_num_threads`` as a method of ensuring safe writes into
-   a pre-sized container, e.g.::
+   a pre-sized container is not valid e.g.::
 
     @njit(parallel=True)
     def invalid():
