@@ -182,7 +182,8 @@ class TestSharedMemoryCreation(CUDATestCase):
     @skip_on_cudasim("Can't check typing in simulator")
     def test_invalid_string_dtype(self):
         # Check that strings of invalid dtypes cause a typing error
-        with self.assertRaises(TypingError):
+        re = ".*Invalid NumPy dtype specified: 'int33'.*"
+        with self.assertRaisesRegex(TypingError, re):
             @cuda.jit(void(int32[::1]))
             def f(x):
                 s = cuda.shared.array(10, dtype='int33')
