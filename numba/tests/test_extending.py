@@ -1386,12 +1386,14 @@ class TestIntrinsic(TestCase):
                 # dummy value
 
             return sig, codegen
-        
+
         self.assertEqual("numba.tests.test_extending", void_func.__module__)
         self.assertEqual("void_func", void_func.__name__)
-        self.assertEqual("TestIntrinsic.test_docstring.<locals>.void_func", void_func.__qualname__)
+        self.assertEqual("TestIntrinsic.test_docstring.<locals>.void_func",
+                         void_func.__qualname__)
         self.assertDictEqual({'a': int}, void_func.__annotations__)
         self.assertEqual("void_func docstring", void_func.__doc__)
+
 
 class TestRegisterJitable(unittest.TestCase):
     def test_no_flags(self):
