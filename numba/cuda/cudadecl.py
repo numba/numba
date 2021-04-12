@@ -208,13 +208,13 @@ class Cuda_match_all_sync(ConcreteTemplate):
 @register
 class Cuda_activemask(ConcreteTemplate):
     key = cuda.activemask
-    cases = [signature(types.int32)]
+    cases = [signature(types.uint32)]
 
 
 @register
 class Cuda_lanemask_lt(ConcreteTemplate):
     key = cuda.lanemask_lt
-    cases = [signature(types.int32)]
+    cases = [signature(types.uint32)]
 
 
 @register
