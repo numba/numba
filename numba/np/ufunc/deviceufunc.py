@@ -96,11 +96,7 @@ class UFuncMechanism(object):
                 # Is scalar
                 self.scalarpos.append(i)
             else:
-                array = np.asarray(arg)
-                if array.dtype == np.object:
-                    fmt = "argument #%d has invalid type of %s"
-                    raise TypeError(fmt % (i + 1, type(arg) ))
-                self.arrays[i] = array
+                self.arrays[i] = np.asarray(arg)
 
     def _fill_argtypes(self):
         """
