@@ -783,10 +783,6 @@ def array_argmax(arr, axis=None):
     if is_nonelike(axis):
         def array_argmax_impl(arr, axis=None):
             return flatten_impl(arr)
-    #elif axis.ndim == 1:
-    #    def array_argmax_impl(arr, axis=None):
-    #        if axis != 0: raise ValueError("...")
-    #        return flatten_impl(arr)
     else:
         retty = arr.dtype
 
@@ -797,6 +793,13 @@ def array_argmax(arr, axis=None):
                 raise ValueError("More than 3 dimensions are not supported.")
             if axis < 0:
                 axis = arr.ndim + axis
+
+            if axis < 0 or axis >= arr.ndim:
+                raise ValueError("Axis is out of bounds")
+
+            # Short circuit 1-dimensional arrays:
+            if arr.ndim == 1:
+                return flatten_impl(arr)
 
             # Make chosen axis the last axis:
             if arr.ndim == 2:

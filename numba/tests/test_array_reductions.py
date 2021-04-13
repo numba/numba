@@ -938,21 +938,47 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             for a in a_variations():
                 check(a)
 
-    def test_argmax_axis(self):
-        arr = np.arange(24).reshape(2, 3, 4) + 10
-        arr[0,1,1] += 100
-        arr[1,0,0] += 100
+    def test_argmax_axis_1d_2d_3d(self):
+        arr1d = np.array([0, 20, 3, 4])
+        arr2d = np.arange(6).reshape(2, 3)
+        arr2d[0,1] += 100
 
-        py_functions = [
-            lambda a, _axis=axis: np.argmax(a, axis=_axis)
-            for axis in [0, 1, 2, -1, -2, -3]
-        ]
-        c_functions = [
-            jit(nopython=True)(pyfunc) for pyfunc in py_functions
-        ]
-        for (pyfunc, cfunc) in zip(py_functions, c_functions):
-            self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
-        # TODO out of range axis tests
+        arr3d = np.arange(24).reshape(2, 3, 4) + 10
+        arr3d[0,1,1] += 100
+        arr3d[1,0,0] += 100
+
+        for arr in [arr1d, arr2d, arr3d]:
+            axises = list(range(arr.ndim)) + [
+                -(i+1) for i in range(arr.ndim)
+            ]
+            py_functions = [
+                lambda a, _axis=axis: np.argmax(a, axis=_axis)
+                for axis in axises
+            ]
+            c_functions = [
+                jit(nopython=True)(pyfunc) for pyfunc in py_functions
+            ]
+            for (pyfunc, cfunc) in zip(py_functions, c_functions):
+                self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+
+    def test_argmax_axis_out_of_range(self):
+        arr1d = np.arange(6)
+        arr2d = np.arange(6).reshape(2, 3)
+
+        @jit(nopython=True)
+        def jitargmax(arr, axis):
+            return np.argmax(arr, axis)
+
+        def assert_raises(arr, axis):
+            with self.assertRaises(ValueError):
+                np.argmax(arr, axis)
+            with self.assertRaises(ValueError):
+                jitargmax(arr, axis)
+
+        assert_raises(arr1d, 1)
+        assert_raises(arr1d, -2)
+        assert_raises(arr2d, -3)
+        assert_raises(arr2d, 2)
 
     @classmethod
     def install_generated_tests(cls):
