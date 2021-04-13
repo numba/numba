@@ -274,7 +274,6 @@ The following methods of Numpy arrays are supported in their basic form
 
 * :meth:`~numpy.ndarray.all`
 * :meth:`~numpy.ndarray.any`
-* :meth:`~numpy.ndarray.argmax`
 * :meth:`~numpy.ndarray.argmin`
 * :meth:`~numpy.ndarray.conj`
 * :meth:`~numpy.ndarray.conjugate`
@@ -297,6 +296,7 @@ Other methods
 
 The following methods of Numpy arrays are supported:
 
+* :meth:`~numpy.ndarray.argmax` (``axis`` keyword argument supported).
 * :meth:`~numpy.ndarray.argsort` (``kind`` key word argument supported for
   values ``'quicksort'`` and ``'mergesort'``)
 * :meth:`~numpy.ndarray.astype` (only the 1-argument form)
@@ -335,6 +335,8 @@ The following methods of Numpy arrays are supported:
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
 * :meth:`~numpy.ndarray.__contains__` 
 
+Where applicable, the corresponding top-level Numpy functions (such as
+:func:`numpy.argmax`) are similarly supported.
 
 .. warning::
    Sorting may be slightly slower than Numpy's implementation.
