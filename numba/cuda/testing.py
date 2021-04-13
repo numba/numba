@@ -49,6 +49,20 @@ class ContextResettingTestCase(CUDATestCase):
         reset()
 
 
+def ensure_supported_ccs_initialized():
+    from numba.cuda import is_available as cuda_is_available
+    from numba.cuda.cudadrv import nvvm
+
+    if cuda_is_available():
+        # Ensure that cudart.so is loaded and the list of supported compute
+        # capabilities in the nvvm module is populated before a fork. This is
+        # needed because some compilation tests don't require a CUDA context,
+        # but do use NVVM, and it is required that libcudart.so should be
+        # loaded before a fork (note that the requirement is not explicitly
+        # documented).
+        nvvm.get_supported_ccs()
+
+
 def skip_on_cudasim(reason):
     """Skip this test if running on the CUDA simulator"""
     return unittest.skipIf(config.ENABLE_CUDASIM, reason)
