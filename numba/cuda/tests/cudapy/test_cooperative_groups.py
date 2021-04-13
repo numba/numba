@@ -111,9 +111,10 @@ class TestCudaCooperativeGroups(CUDATestCase):
         blockdim = 32
         griddim = A.shape[1] // blockdim
 
-        c_sequential_rows = cuda.jit(void(int32[:,::1]))(sequential_rows)
+        sig = (int32[:,::1],)
+        c_sequential_rows = cuda.jit(sig)(sequential_rows)
 
-        overload = c_sequential_rows.overloads[(int32[:,::1],)]
+        overload = c_sequential_rows.overloads[sig]
         mb = overload.max_cooperative_grid_blocks(blockdim)
         if griddim > mb:
             unittest.skip("GPU cannot support enough cooperative grid blocks")

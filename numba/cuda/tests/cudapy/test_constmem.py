@@ -236,14 +236,14 @@ class TestCudaConstantMemory(CUDATestCase):
             first_bytes = 'ld.const.v4.u8'
             first_bytes_msg = 'load the first three bytes as a vector'
 
-            self.assertIn( first_bytes, ptx, first_bytes_msg)
+            self.assertIn(first_bytes, ptx, first_bytes_msg)
 
-        self.assertIn( 'ld.const.u32', ptx, 'load the uint32 natively')
+        self.assertIn('ld.const.u32', ptx, 'load the uint32 natively')
 
         # On 10.2 and above, we already checked for loading the last byte by
         # itself - no need to repeat the check.
         if rtver < (10, 2):
-            self.assertIn( 'ld.const.u8', ptx, 'load the last byte by itself')
+            self.assertIn('ld.const.u8', ptx, 'load the last byte by itself')
 
 
 if __name__ == '__main__':
