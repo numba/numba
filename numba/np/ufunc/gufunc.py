@@ -4,6 +4,7 @@ from numba.np.ufunc.ufuncbuilder import GUFuncBuilder
 from numba.np.ufunc.sigparse import parse_signature
 from numba.np.numpy_support import ufunc_find_matching_loop
 from numba.core import serialize
+import functools
 
 
 class GUFunc(serialize.ReduceMixin):
@@ -27,6 +28,7 @@ class GUFunc(serialize.ReduceMixin):
         self.gufunc_builder = GUFuncBuilder(
             py_func, signature, identity, cache, targetoptions)
         self.__name__ = self.gufunc_builder.py_func.__name__
+        functools.update_wrapper(self, py_func)
 
     def _reduce_states(self):
         gb = self.gufunc_builder
@@ -75,10 +77,6 @@ class GUFunc(serialize.ReduceMixin):
     @property
     def is_dynamic(self):
         return self._is_dynamic
-
-    @property
-    def __doc__(self):
-        return self.ufunc.__doc__
 
     @property
     def nin(self):
