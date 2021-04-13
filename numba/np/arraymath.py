@@ -824,7 +824,7 @@ def array_argmax(arr, axis=None):
             assert transposed_arr.size % m == 0
             out = np.empty(transposed_arr.size // m, retty)
             for i in range(out.size):
-                out[i] = flatten_impl(raveled[i*m:(i+1) * m])
+                out[i] = flatten_impl(raveled[i * m:(i + 1) * m])
 
             # Reshape based on axis we didn't flatten over:
             return out.reshape(transposed_arr.shape[:-1])
