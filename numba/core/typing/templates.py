@@ -734,7 +734,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         else:
             # Hardware has been requested, see what it is...
             jitter = decorators.jit_registry.get(jitter_str, None)
-            from numba.core.extending_hardware import hardware_registry
+            from numba.core.extending_hardware import (hardware_registry,
+                                                       current_target)
 
             def report_unknown_hardware(msg):
                 raise ValueError(msg.format(jitter_str))
@@ -749,9 +750,12 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
                 # scan for the the current hardware target it's stuffed into the
                 # call stack at present, get that.
-                tos = self.context.callstack[0]
+                if len(self.context.callstack._stack) > 0:
+                    tos_target = self.context.callstack[0].target
+                else:
+                    tos_target = hardware_registry.get(current_target(), None)
                 for k, v in hardware_registry.items():
-                    if v == tos.target:
+                    if v == tos_target:
                         target_hw = v
                         target_hw_str = k
                         break

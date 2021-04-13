@@ -985,8 +985,9 @@ class Lower(BaseLower):
             )
         tname = expr.hardware
         if tname is not None:
-            from numba.core import registry
-            disp = registry.dispatcher_registry[tname]
+            from numba.core.extending_hardware import (dispatcher_registry,
+                                                       hardware_registry)
+            disp = dispatcher_registry[hardware_registry[tname]]
             hw_ctx = disp.targetdescr.target_context
             impl = hw_ctx.get_function(fnty, signature)
         else:
