@@ -535,6 +535,24 @@ class Interpreter(object):
         self._inject_call(eh.exception_check, 'exception_check',
                           '$exception_check')
 
+
+    from typing import Dict
+    def replace_dead_vars(self, replaced_var: Dict[str, ir.Var], value):
+        if isinstance(value, ir.Var):
+            if value.name in replaced_var:
+                return replaced_var[value.name]
+            return value
+        elif isinstance(value, (list, tuple)):
+            l = [self.replace_dead_vars(replaced_var, e) for e in value]
+            return type(value)(l)
+        elif isinstance(value, dict):
+            for k, v in value.items():
+                value[k] = self.replace_dead_vars(replaced_var, v)
+        else:
+            return value
+        #     raise ValueError(type(value))
+
+
     def _remove_unused_temporaries(self):
         """
         Remove assignments to unused temporary variables from the
@@ -572,17 +590,8 @@ class Interpreter(object):
 
                 # iterate over RHS operands and replace them iff they
                 # are in replaced_var dict
-                if isinstance(inst.value, ir.Expr):
-                    for k, v in inst.value._kws.items():
-                        if isinstance(v, (tuple, list)):
-                            l = list(v)
-                            for i, e in enumerate(l):
-                                if e.name in replaced_var:
-                                    l[i] = replaced_var[e.name]
-                            inst.value._kws[k] = type(v)(l)
-                        elif isinstance(v, ir.Var):
-                            if v.name in replaced_var:
-                                inst.value._kws[k] = replaced_var[v.name]
+                if len(replaced_var) and isinstance(inst.value, ir.Expr):
+                    self.replace_dead_vars(replaced_var, inst.value._kws)
 
                 # eliminate temporary variables that are assigned to user
                 # variables right after creation. E.g.:
