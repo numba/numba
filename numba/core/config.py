@@ -155,8 +155,8 @@ class _EnvReloader(object):
         )
 
         # Whether to warn about kernel launches where the grid size will
-        # underutilize the GPU due to low occupancy. On by default.
-        LOW_OCCUPANCY_WARNINGS = _readenv(
+        # under utilize the GPU due to low occupancy. On by default.
+        CUDA_LOW_OCCUPANCY_WARNINGS = _readenv(
             "NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS", int, 1)
 
         # Debug flag to control compiler debug print

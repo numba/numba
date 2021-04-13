@@ -25,15 +25,15 @@ class CUDATestCase(SerialMixin, TestCase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._low_occupancy_warnings = config.LOW_OCCUPANCY_WARNINGS
+        self._low_occupancy_warnings = config.CUDA_LOW_OCCUPANCY_WARNINGS
 
     def setUp(self):
-        self._low_occupancy_warnings = config.LOW_OCCUPANCY_WARNINGS
-        # Disable warnings about low gpu utilization for test suite
-        config.LOW_OCCUPANCY_WARNINGS = 0
+        self._low_occupancy_warnings = config.CUDA_LOW_OCCUPANCY_WARNINGS
+        # Disable warnings about low gpu utilization in the test suite
+        config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
 
     def tearDown(self):
-        config.LOW_OCCUPANCY_WARNINGS = self._low_occupancy_warnings
+        config.CUDA_LOW_OCCUPANCY_WARNINGS = self._low_occupancy_warnings
 
 
 class ContextResettingTestCase(CUDATestCase):

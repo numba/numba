@@ -200,7 +200,7 @@ class TestCUDAGufunc(CUDATestCase):
         b = np.random.rand(1024 * 1024 * 32).astype('float32')
         dist = np.zeros(a.shape[0]).astype('float32')
 
-        with override_config('LOW_OCCUPANCY_WARNINGS', 1):
+        with override_config('CUDA_LOW_OCCUPANCY_WARNINGS', 1):
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter('always', NumbaPerformanceWarning)
                 numba_dist_cuda(a, b, dist)
@@ -223,7 +223,7 @@ class TestCUDAGufunc(CUDATestCase):
             reshape((1024 * 1024, 128))
         dist = np.zeros_like(a)
 
-        with override_config('LOW_OCCUPANCY_WARNINGS', 1):
+        with override_config('CUDA_LOW_OCCUPANCY_WARNINGS', 1):
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter('always', NumbaPerformanceWarning)
                 numba_dist_cuda2(a, b, dist)

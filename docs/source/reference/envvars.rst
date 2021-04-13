@@ -470,12 +470,12 @@ GPU support
 .. envvar:: NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS
 
    Enable warnings if the grid size is too small relative to the number of
-   steraming multiprocessors (SM). This option is on by default (1).
+   streaming multiprocessors (SM). This option is on by default (default  value is 1).
 
-   The heuristic checked is whether gridsize < 2 * (number of SMs). NOTE: The absence of
+   The heuristic checked is whether ``gridsize < 2 * (number of SMs)``. NOTE: The absence of
    a warning does not imply a good gridsize relative to the number of SMs. Disabling
-   this warning will reduce the number of CUDA API calls, as the heuristic needs to
-   check the number of SMs for the device in the current context.
+   this warning will reduce the number of CUDA API calls (during JIT compilation), as the
+   heuristic needs to check the number of SMs for the device in the current context.
 
 
 Threading Control
