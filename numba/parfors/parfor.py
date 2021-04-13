@@ -343,17 +343,8 @@ def std_parallel_impl(return_type, arg):
         return in_arr.var() ** 0.5
     return std_1
 
-def arange_parallel_impl(return_type, *args):
-    dtype = as_dtype(return_type.dtype)
-
-    def arange_1(stop):
-        return np.arange(0, stop, 1, dtype)
-
-    def arange_2(start, stop):
-        return np.arange(start, stop, 1, dtype)
-
-    def arange_3(start, stop, step):
-        return np.arange(start, stop, step, dtype)
+def arange_parallel_impl(return_type, *args, non_kw_args_count=0, kwargs_list=[]):
+    ret_dtype = as_dtype(return_type.dtype)
 
     if any(isinstance(a, types.Complex) for a in args):
         def arange_4(start, stop, step, dtype):
@@ -377,16 +368,37 @@ def arange_parallel_impl(return_type, *args):
                 arr[i] = start + i * step
             return arr
 
-    if len(args) == 1:
-        return arange_1
-    elif len(args) == 2:
-        return arange_2
-    elif len(args) == 3:
-        return arange_3
-    elif len(args) == 4:
-        return arange_4
-    else:
+    impl_map = {
+        (1, ()): lambda stop: np.arange(0, stop, 1, ret_dtype),
+        (2, ()): lambda start, stop: np.arange(start, stop, 1, ret_dtype),
+        (3, ()): lambda start, stop, step: np.arange(start, stop, step, ret_dtype),
+        (4, ()): arange_4,
+        # yes, surprise, when 'stop' is not provided, then start is interpreted by Numpy like 'stop'
+        (0, ("start", )): lambda stop: np.arange(0, stop, 1, ret_dtype),
+        (0, ("dtype", "start", )): lambda stop, dtype: np.arange(0, stop, 1, dtype),
+        (0, ("start", "stop", )): lambda start, stop: np.arange(start, stop, 1, ret_dtype),
+        (0, ("start", "step", )): lambda start, step: np.arange(0, start, step, ret_dtype),
+        (0, ("dtype", "start", "stop", )): lambda start, stop, dtype: np.arange(start, stop, 1, dtype),
+        (0, ("dtype", "start", "step", )): lambda start, step, dtype: np.arange(0, start, step, dtype),
+        (0, ("start", "step", "stop", )): lambda start, stop, step: np.arange(start, stop, step, ret_dtype),
+        (0, ("dtype", "start", "step", "stop", )): arange_4,
+        (1, ("dtype", )): lambda stop, dtype: np.arange(0, stop, 1, dtype),
+        (1, ("stop", )): lambda start, stop: np.arange(start, stop, 1, ret_dtype),
+        (1, ("step", )): lambda stop, step: np.arange(0, stop, step, ret_dtype),
+        (1, ("step", "stop", )): lambda start, stop, step: np.arange(start, stop, step, ret_dtype),
+        (1, ("dtype", "step", )): lambda stop, step, dtype: np.arange(0, stop, step, dtype),
+        (1, ("dtype", "stop", )): lambda start, stop, dtype: np.arange(start, stop, 1, dtype),
+        (1, ("dtype", "step", "stop", )): arange_4,
+        (2, ("dtype", )): lambda start, stop, dtype: np.arange(start, stop, 1, dtype),
+        (2, ("step", )): lambda start, stop, step: np.arange(start, stop, step, ret_dtype),
+        (2, ("dtype", "step", )): lambda start, stop, step, dtype: np.arange(start, stop, step, dtype),
+        (3, ("dtype", )): arange_4,
+    }
+    map_key = (non_kw_args_count, tuple(sorted(kwargs_list)))
+    fun = impl_map.get(map_key, None)
+    if fun is None:
         raise ValueError("parallel arange with types {}".format(args))
+    return fun
 
 def linspace_parallel_impl(return_type, *args):
     dtype = as_dtype(return_type.dtype)
@@ -1447,9 +1459,12 @@ class PreParforPass(object):
                                     expr.args.insert(0, callname[1])
 
                             require(repl_func is not None)
-                            typs = tuple(self.typemap[x.name] for x in expr.args)
+                            typs = [self.typemap[x.name] for x in expr.args] + [self.typemap[x[1].name] for x in expr.kws]
                             try:
-                                new_func =  repl_func(lhs_typ, *typs)
+                                new_func =  repl_func(lhs_typ,
+                                                      *typs,
+                                                      non_kw_args_count=len(expr.args),
+                                                      kwargs_list=[kw[0] for kw in expr.kws])
                             except:
                                 new_func = None
                             require(new_func is not None)

@@ -18,7 +18,7 @@ from numpy.random import randn
 import operator
 from collections import defaultdict, namedtuple
 import copy
-from itertools import cycle, chain
+from itertools import cycle, chain, combinations
 
 import numba.parfors.parfor
 from numba import njit, prange, set_num_threads, get_num_threads, typeof
@@ -40,9 +40,11 @@ from numba.core.typed_passes import IRLegalization
 from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       override_env_config, linux_only, tag,
                       skip_parfors_unsupported, _32bit, needs_blas,
-                      needs_lapack, disabled_test, skip_unless_scipy)
+                      needs_lapack, disabled_test, skip_unless_scipy,
+                      create_temp_module)
 import cmath
 import unittest
+import textwrap
 
 
 x86_only = unittest.skipIf(platform.machine() not in ('i386', 'x86_64'), 'x86 only test')
@@ -905,6 +907,56 @@ class TestParfors(TestParforsBase):
             self.check(test_impl1, arg)
             self.check(test_impl2, 2, arg)
             self.check(test_impl3, 2, arg, 2)
+
+    @skip_parfors_unsupported
+    def test_arange_kws(self):
+        kw_list = ["start", "stop", "step", "dtype"]
+        kw_vals = [1, 7, 2, "np.int32"]
+        kws_subsets = list(chain.from_iterable(combinations(kw_list, r) for r in range(len(kw_list)+1)))
+        # these cases with "start" but without "stop" we can't process for now
+        kws_subsets.remove(("start", ))
+        kws_subsets.remove(("start", "dtype", ))
+
+        # have to generate code since we are not able to work with *args, **kwargs
+        source_lines = textwrap.dedent("""
+            import numpy as np
+            """)
+        func_number = 0
+
+        # go through all possible combinations of arguments
+        for kws in kws_subsets:
+            for args_count in range(len(kw_list) - len(kws)):
+                args = kw_vals[:args_count]
+
+                args_str = ""
+                for arg in args:
+                    args_str += f"{arg}, "
+                for kw in kws:
+                    args_str += f"{kw}={kw_vals[kw_list.index(kw)]}, "
+                if len(args_str) > 0:
+                    args_str = args_str[:-2]
+
+                source_lines += textwrap.dedent(f"""
+                    def test_arange_{func_number}():
+                        return np.arange({args_str})
+                    """)
+                func_number += 1
+
+        with create_temp_module(source_lines) as test_module:
+            for fn in range(func_number):
+                func = getattr(test_module, f"test_arange_{fn}")
+
+                # try to call Python func, possibly we got inconsistent set of args
+                try:
+                    py_output = func()
+                except:
+                    py_output = None
+
+                # if call of Python func was successful
+                if py_output is not None:
+                    jit_func = njit(parallel=True)(func)
+                    jit_output = jit_func()
+                    np.testing.assert_array_equal(jit_output, py_output)
 
     @skip_parfors_unsupported
     def test_linspace(self):
