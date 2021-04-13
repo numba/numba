@@ -235,6 +235,9 @@ def array_imag(a):
 def np_clip(a, a_min, a_max, out=None):
     return np.clip(a, a_min, a_max, out)
 
+def np_clip_kwargs(a, a_min, a_max, out=None):
+    return np.clip(a, a_min, a_max, out=out)
+
 def array_clip(a, a_min=None, a_max=None, out=None):
     return a.clip(a_min, a_max, out)
 
@@ -1339,7 +1342,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # TODO: scalars are not tested (issue #3469)
         for a in (np.linspace(-10, 10, 101),
                   np.linspace(-10, 10, 40).reshape(5, 2, 4)):
-            for pyfunc in [np_clip, array_clip]:
+            for pyfunc in [np_clip, np_clip_kwargs, array_clip]:
                 cfunc = jit(nopython=True)(pyfunc)
 
                 with self.assertRaises(ValueError):
