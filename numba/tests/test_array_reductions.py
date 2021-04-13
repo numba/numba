@@ -980,6 +980,15 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         assert_raises(arr2d, -3)
         assert_raises(arr2d, 2)
 
+    def test_argmax_method_axis(self):
+        arr2d = np.arange(6).reshape(2, 3)
+
+        def argmax(arr):
+            return arr2d.argmax(axis=0)
+
+        self.assertPreciseEqual(argmax(arr2d),
+                                jit(nopython=True)(argmax)(arr2d))
+
     @classmethod
     def install_generated_tests(cls):
         # These form a testing product where each of the combinations are tested
