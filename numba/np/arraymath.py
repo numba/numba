@@ -791,28 +791,40 @@ def array_argmax(arr, axis=None):
         retty = arr.dtype
 
         def array_argmax_impl(arr, axis=None):
+            if arr.ndim > 3:
+                # Transposing currently only works with literals, so can't
+                # calculate new axis order for arbitrary array dimensions.
+                raise ValueError("More than 3 dimensions are not supported.")
             if axis < 0:
                 axis = arr.ndim + axis
 
             # Make chosen axis the last axis:
-            new_axis_order = list(range(arr.ndim))
-            for i in range(axis):
-                new_axis_order[i] = i
-            for i in range(axis, arr.ndim - 1):
-                new_axis_order[i] = i + 1
-            new_axis_order[arr.ndim - 1] = axis
+            if arr.ndim == 2:
+                if axis == 0:
+                    new_axis_order = (1, 0)
+                else:
+                    new_axis_order = (0, 1)
+            if arr.ndim == 3:
+                if axis == 0:
+                    new_axis_order = (1, 2, 0)
+                elif axis == 1:
+                    new_axis_order = (0, 2, 1)
+                else:
+                    new_axis_order = (0, 1, 2)
             transposed_arr = arr.transpose(new_axis_order)
 
             # Flatten along that axis; since we've transposed, we can just get
             # batches off the overall flattened array.
             m = transposed_arr.shape[-1]
             raveled = transposed_arr.ravel()
+            assert raveled.size == arr.size
+            assert transposed_arr.size % m == 0
             out = np.empty(transposed_arr.size // m, retty)
             for i in range(out.size):
                 out[i] = flatten_impl(raveled[i*m:(i+1) * m])
 
             # Reshape based on axis we didn't flatten over:
-            return out.reshape(arr.shape[:-1])
+            return out.reshape(transposed_arr.shape[:-1])
 
     return array_argmax_impl
 
