@@ -1350,9 +1350,8 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                            array_clip_kwargs]:
                 cfunc = jit(nopython=True)(pyfunc)
 
-                with self.assertRaises(ValueError):
-                    pyfunc(a, None, None)
-                with self.assertRaises(ValueError):
+                msg = "array_clip: must set either max or min"
+                with self.assertRaisesRegex(ValueError, msg):
                     cfunc(a, None, None)
 
                 np.testing.assert_equal(pyfunc(a, 0, None), cfunc(a, 0, None))
