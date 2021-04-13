@@ -1776,6 +1776,19 @@ def array_flatten(context, builder, sig, args):
 
 @overload(np.clip)
 def np_clip(a, a_min, a_max, out=None):
+    if not type_can_asarray(a):
+        raise errors.TypingError('The argument "a" must be array-like')
+
+    if not isinstance(a_min, (types.NoneType, types.Number)):
+        raise errors.TypingError('The argument "a_min" must be a number')
+
+    if not isinstance(a_max, (types.NoneType, types.Number)):
+        raise errors.TypingError('The argument "a_max" must be a number')
+
+    if not isinstance(out, (types.NoneType, types.Array)):
+        msg = 'The argument "out" must be an array if it is provided'
+        raise errors.TypingError(msg)
+
     # TODO: support scalar a (issue #3469)
     a_min_is_none = a_min is None or isinstance(a_min, types.NoneType)
     a_max_is_none = a_max is None or isinstance(a_max, types.NoneType)

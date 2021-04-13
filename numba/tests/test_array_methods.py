@@ -1374,6 +1374,30 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                     lower_clip_result(a),
                     jit(nopython=True)(lower_clip_result)(a))
 
+    def test_clip_bad_array(self):
+        cfunc = jit(nopython=True)(np_clip)
+        msg = '.*The argument "a" must be array-like.*'
+        with self.assertRaisesRegex(TypingError, msg):
+            cfunc(None, 0, 10)
+
+    def test_clip_bad_min(self):
+        cfunc = jit(nopython=True)(np_clip)
+        msg = '.*The argument "a_min" must be a number.*'
+        with self.assertRaisesRegex(TypingError, msg):
+            cfunc(1, 'a', 10)
+
+    def test_clip_bad_max(self):
+        cfunc = jit(nopython=True)(np_clip)
+        msg = '.*The argument "a_max" must be a number.*'
+        with self.assertRaisesRegex(TypingError, msg):
+            cfunc(1, 1, 'b')
+
+    def test_clip_bad_out(self):
+        cfunc = jit(nopython=True)(np_clip)
+        msg = '.*The argument "out" must be an array if it is provided.*'
+        with self.assertRaisesRegex(TypingError, msg):
+            cfunc(5, 1, 10, out=6)
+
     def test_conj(self):
         for pyfunc in [array_conj, array_conjugate]:
             cfunc = jit(nopython=True)(pyfunc)
