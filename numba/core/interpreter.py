@@ -535,9 +535,7 @@ class Interpreter(object):
         self._inject_call(eh.exception_check, 'exception_check',
                           '$exception_check')
 
-
-    from typing import Dict
-    def replace_dead_vars(self, replaced_var: Dict[str, ir.Var], value):
+    def replace_dead_vars(self, replaced_var, value):
         if isinstance(value, ir.Var):
             if value.name in replaced_var:
                 return replaced_var[value.name]
@@ -550,8 +548,6 @@ class Interpreter(object):
                 value[k] = self.replace_dead_vars(replaced_var, v)
         else:
             return value
-        #     raise ValueError(type(value))
-
 
     def _remove_unused_temporaries(self):
         """
