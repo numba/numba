@@ -1774,26 +1774,6 @@ def array_flatten(context, builder, sig, args):
     return res
 
 
-def _alloc_out(a, X):
-    # dummy function that takes the arg we need to resolved (X)
-    # and the information needed to do so (a)
-    pass
-
-
-@overload(_alloc_out)
-def _alloc_out_impl(a, X):
-    # overload the dummy function to return empty_like(a) if X is None else X
-    # with type-specific implementations, in order to fully determine type of X
-    # https://github.com/numba/numba/pull/3468#issuecomment-437974147
-    if X is None or isinstance(X, types.NoneType):
-        def impl(a, X):
-            return np.empty_like(a)
-    else:
-        def impl(a, X):
-            return X
-    return impl
-
-
 @overload(np.clip)
 def np_clip(a, a_min, a_max, out=None):
     # TODO: support scalar a (issue #3469)
@@ -1804,7 +1784,7 @@ def np_clip(a, a_min, a_max, out=None):
         if a_min_is_none and a_max_is_none:
             raise ValueError("array_clip: must set either max or min")
 
-        ret = _alloc_out(a, out)
+        ret = np.empty_like(a) if out is None else out
 
         for index, val in np.ndenumerate(a):
             if a_min_is_none:
