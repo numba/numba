@@ -4097,6 +4097,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn('The third argument "axis2" is out of bounds for array'
                       ' of given dimension', str(raises.exception))
 
+
 class TestNPMachineParameters(TestCase):
     # tests np.finfo, np.iinfo, np.MachAr
 
