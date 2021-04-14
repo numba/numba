@@ -21,7 +21,7 @@ from numba.core.extending_hardware import (
     GPU,
     resolve_dispatcher_from_str,
 )
-from numba.core import utils, fastmathpass
+from numba.core import utils, fastmathpass, errors
 from numba.core.dispatcher import Dispatcher
 from numba.core.descriptors import TargetDescriptor
 from numba.core import cpu, typing, cgutils
@@ -533,7 +533,7 @@ class TestHardwareHierarchySelection(TestCase):
         # int, float and dummy constants are registered
         self.assertEqual(len(dpu_function_registry.constants), 3)
 
-    def test_invalid_target(self):
+    def test_invalid_target_jit(self):
 
         with self.assertRaises(ValueError) as raises:
             @njit(_target='invalid_silicon')
@@ -541,6 +541,27 @@ class TestHardwareHierarchySelection(TestCase):
                 pass
 
             foo()
+        msg = "No target is registered against 'invalid_silicon'"
+        self.assertIn(msg, str(raises.exception))
+
+    def test_invalid_target_overload(self):
+
+        def bar():
+            pass
+
+        # This is a typing error at present as it fails during typing when the
+        # overloads are walked.
+        with self.assertRaises(errors.TypingError) as raises:
+            @overload(bar, hardware='invalid_silicon')
+            def ol_bar():
+                return lambda : None
+
+            @njit
+            def foo():
+                bar()
+
+            foo()
+
         msg = "No target is registered against 'invalid_silicon'"
         self.assertIn(msg, str(raises.exception))
 

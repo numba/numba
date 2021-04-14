@@ -6,7 +6,21 @@ from threading import local as tls
 _active_context = tls()
 _active_context_default = 'cpu'
 
-hardware_registry = TargetRegistry()
+
+class HardwareRegistry(TargetRegistry):
+
+    def __getitem__(self, item):
+        try:
+            return super().__getitem__(item)
+        except KeyError:
+            msg = "No target is registered against '{}', known targets:\n{}"
+            known = '\n'.join([f"{k: <{10}} -> {v}"
+                               for k, v in hardware_registry.items()])
+            raise ValueError(msg.format(item, known)) from None
+
+
+hardware_registry = HardwareRegistry()
+
 
 class hardware_target(object):
     def __init__(self, name):
@@ -38,8 +52,8 @@ def get_local_target(context):
     else:
         target = hardware_registry.get(current_target(), None)
     if target is None:
-        msg = ("InternalError: The hardware target found is not "
-                "registered. Given target was {}.")
+        msg = ("The hardware target found is not registered."
+               "Given target was {}.")
         raise ValueError(msg.format(target))
     else:
         return target
@@ -47,14 +61,7 @@ def get_local_target(context):
 
 def resolve_target_str(target_str):
     """Resolves a target specified as a string to its Target class."""
-    try:
-        target_hw = hardware_registry[target_str]
-    except KeyError:
-        msg = "No target is registered against '{}', known targets:\n{}"
-        known = '\n'.join([f"{k: <{10}} -> {v}"
-                           for k, v in hardware_registry.items()])
-        raise ValueError(msg.format(target_str, known)) from None
-    return target_hw
+    return hardware_registry[target_str]
 
 
 def resolve_dispatcher_from_str(target_str):

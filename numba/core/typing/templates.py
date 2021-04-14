@@ -699,31 +699,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         impl, args = self._build_impl(cache_key, args, kws)
         return impl, args
 
-    def _build_impl(self, cache_key, args, kws):
-        """Build and cache the implementation.
-
-        Given the positional (`args`) and keyword arguments (`kws`), obtains
-        the `overload` implementation and wrap it in a Dispatcher object.
-        The expected argument types are returned for use by type-inference.
-        The expected argument types are only different from the given argument
-        types if there is an imprecise type in the given argument types.
-
-        Parameters
-        ----------
-        cache_key : hashable
-            The key used for caching the implementation.
-        args : Tuple[Type]
-            Types of positional argument.
-        kws : Dict[Type]
-            Types of keyword argument.
-
-        Returns
-        -------
-        disp, args :
-            On success, returns `(Dispatcher, Tuple[Type])`.
-            On failure, returns `(None, None)`.
-
-        """
+    def _get_jit_decorator(self):
+        """Gets a jit decorator suitable for the current target"""
         from numba.core import decorators
         from numba import jit
         jitter_str = self.metadata.get('hardware', None)
@@ -758,6 +735,35 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
         if jitter is None:
             raise ValueError("Cannot find a suitable jit decorator")
+
+        return jitter
+
+    def _build_impl(self, cache_key, args, kws):
+        """Build and cache the implementation.
+
+        Given the positional (`args`) and keyword arguments (`kws`), obtains
+        the `overload` implementation and wrap it in a Dispatcher object.
+        The expected argument types are returned for use by type-inference.
+        The expected argument types are only different from the given argument
+        types if there is an imprecise type in the given argument types.
+
+        Parameters
+        ----------
+        cache_key : hashable
+            The key used for caching the implementation.
+        args : Tuple[Type]
+            Types of positional argument.
+        kws : Dict[Type]
+            Types of keyword argument.
+
+        Returns
+        -------
+        disp, args :
+            On success, returns `(Dispatcher, Tuple[Type])`.
+            On failure, returns `(None, None)`.
+
+        """
+        jitter = self._get_jit_decorator()
 
         # Get the overload implementation for the given types
         ovf_result = self._overload_func(*args, **kws)
@@ -880,7 +886,6 @@ class _IntrinsicTemplate(AbstractTemplate):
         Type the intrinsic by the arguments.
         """
         cache_key = self.context, args, tuple(kws.items())
-        from numba.core.extending_hardware import dispatcher_registry
         from numba.core.extending_hardware import resolve_dispatcher_from_str
         hwstr = self.metadata.get('hardware', 'cpu')
         disp = resolve_dispatcher_from_str(hwstr)
