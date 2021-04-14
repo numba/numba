@@ -89,6 +89,8 @@ class FunctionDescriptor(object):
         if self.modname == _dynamic_modname:
             return _dynamic_module
         else:
+            # ensure module exist
+            __import__(self.modname)
             try:
                 return sys.modules[self.modname]
             except Exception:
