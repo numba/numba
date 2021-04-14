@@ -19,6 +19,7 @@ from numba.core.extending_hardware import (
     dispatcher_registry,
     hardware_target,
     GPU,
+    resolve_dispatcher_from_str,
 )
 from numba.core import utils, fastmathpass
 from numba.core.dispatcher import Dispatcher
@@ -532,6 +533,17 @@ class TestHardwareHierarchySelection(TestCase):
         # int, float and dummy constants are registered
         self.assertEqual(len(dpu_function_registry.constants), 3)
 
+    def test_invalid_target(self):
+
+        with self.assertRaises(ValueError) as raises:
+            @njit(_target='invalid_silicon')
+            def foo():
+                pass
+
+            foo()
+        msg = "No target is registered against 'invalid_silicon'"
+        self.assertIn(msg, str(raises.exception))
+
 
 class TestHardwareOffload(TestCase):
     """In this use case the CPU compilation pipeline is extended with a new
@@ -595,9 +607,7 @@ class TestHardwareOffload(TestCase):
                                     state.calltypes[call].args,
                                     {},
                                 )
-                                disp = dispatcher_registry[
-                                    hardware_registry[tname]
-                                ]
+                                disp = resolve_dispatcher_from_str(tname)
                                 # force compile check
                                 hw_ctx = disp.targetdescr.target_context
                                 hw_ctx.get_function(function, sig)

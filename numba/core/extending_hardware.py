@@ -6,6 +6,7 @@ from threading import local as tls
 _active_context = tls()
 _active_context_default = 'cpu'
 
+hardware_registry = TargetRegistry()
 
 class hardware_target(object):
     def __init__(self, name):
@@ -21,10 +22,45 @@ class hardware_target(object):
 
 
 def current_target():
+    """Returns the current target
+    """
     return getattr(_active_context, 'target', _active_context_default)
 
 
-hardware_registry = TargetRegistry()
+def get_local_target(context):
+    """
+    Gets the local target from the call stack if available and the TLS
+    override if not.
+    """
+    # TODO: Should this logic be reversed to prefer TLS override?
+    if len(context.callstack._stack) > 0:
+        target = context.callstack[0].target
+    else:
+        target = hardware_registry.get(current_target(), None)
+    if target is None:
+        msg = ("InternalError: The hardware target found is not "
+                "registered. Given target was {}.")
+        raise ValueError(msg.format(target))
+    else:
+        return target
+
+
+def resolve_target_str(target_str):
+    """Resolves a target specified as a string to its Target class."""
+    try:
+        target_hw = hardware_registry[target_str]
+    except KeyError:
+        msg = "No target is registered against '{}', known targets:\n{}"
+        known = '\n'.join([f"{k: <{10}} -> {v}"
+                           for k, v in hardware_registry.items()])
+        raise ValueError(msg.format(target_str, known)) from None
+    return target_hw
+
+
+def resolve_dispatcher_from_str(target_str):
+    """Returns the dispatcher associated with a target hardware string"""
+    target_hw = resolve_target_str(target_str)
+    return dispatcher_registry[target_hw]
 
 
 class JitDecorator(ABC):

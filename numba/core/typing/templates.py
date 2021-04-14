@@ -732,45 +732,29 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             # original behaviour
             jitter = lambda *args, **kwargs: jit(*args, nopython=True, **kwargs)
         else:
+            from numba.core.extending_hardware import (hardware_registry,
+                                                       get_local_target)
+
             # Hardware has been requested, see what it is...
             jitter = decorators.jit_registry.get(jitter_str, None)
-            from numba.core.extending_hardware import (hardware_registry,
-                                                       current_target)
-
-            def report_unknown_hardware(msg):
-                raise ValueError(msg.format(jitter_str))
 
             if jitter is None:
-                # No JIT known for hardware string
+                # No JIT known for hardware string, see if something is
+                # registered for the string and report if not.
                 hardware_class = hardware_registry.get(jitter_str, None)
                 if hardware_class is None:
                     msg = ("Unknown hardware target '{}', has it been ",
                            "registered?")
-                    report_unknown_hardware(msg)
+                    raise ValueError(msg.format(jitter_str))
 
-                # scan for the the current hardware target it's stuffed into the
-                # call stack at present, get that.
-                if len(self.context.callstack._stack) > 0:
-                    tos_target = self.context.callstack[0].target
-                else:
-                    tos_target = hardware_registry.get(current_target(), None)
-                for k, v in hardware_registry.items():
-                    if v == tos_target:
-                        target_hw = v
-                        target_hw_str = k
-                        break
-                else:
-                    msg = ("InternalError: The hardware target for TOS is not ",
-                           "registered. Given target was {}.")
-                    report_unknown_hardware(msg)
+                target_hw = get_local_target(self.context)
 
                 # check that the requested hardware is in the hierarchy for the
                 # current frame's target.
                 if not issubclass(target_hw, hardware_class):
                     msg = "No overloads exist for the requested hardware: {}."
 
-                hw = hardware_registry[target_hw_str.lower()]
-                jitter = decorators.jit_registry[hw]
+                jitter = decorators.jit_registry[target_hw]
 
         if jitter is None:
             raise ValueError("Cannot find a suitable jit decorator")
@@ -897,9 +881,9 @@ class _IntrinsicTemplate(AbstractTemplate):
         """
         cache_key = self.context, args, tuple(kws.items())
         from numba.core.extending_hardware import dispatcher_registry
-        from numba.core.extending_hardware import hardware_registry
+        from numba.core.extending_hardware import resolve_dispatcher_from_str
         hwstr = self.metadata.get('hardware', 'cpu')
-        disp = dispatcher_registry[hardware_registry[hwstr]]
+        disp = resolve_dispatcher_from_str(hwstr)
         tgtctx = disp.targetdescr.target_context
         # In case the target has swapped, e.g. cuda borrowing cpu, refresh to
         # populate.
