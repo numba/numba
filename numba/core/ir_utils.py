@@ -1303,7 +1303,7 @@ def simplify_CFG(blocks):
 
 
 arr_math = ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
-            'cumsum', 'cumprod', 'argmin', 'argsort',
+            'cumsum', 'cumprod', 'argmax', 'argmin', 'argsort',
             'nonzero', 'ravel']
 
 
