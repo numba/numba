@@ -65,18 +65,22 @@ class CPUContext(BaseContext):
         import numba.cpython.charseq
         import numba.typed.dictimpl
         import numba.experimental.function_type
+        import numba.experimental.jitclass
 
     def load_additional_registries(self):
         # Add target specific implementations
         from numba.np import npyimpl
         from numba.cpython import cmathimpl, mathimpl, printimpl, randomimpl
         from numba.misc import cffiimpl
+        from numba.experimental.jitclass.base import ClassBuilder as \
+            jitclassimpl
         self.install_registry(cmathimpl.registry)
         self.install_registry(cffiimpl.registry)
         self.install_registry(mathimpl.registry)
         self.install_registry(npyimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(randomimpl.registry)
+        self.install_registry(jitclassimpl.class_impl_registry)
 
         # load 3rd party extensions
         numba.core.entrypoints.init_all()

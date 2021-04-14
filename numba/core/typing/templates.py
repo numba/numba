@@ -892,8 +892,10 @@ class _IntrinsicTemplate(AbstractTemplate):
         tgtctx = disp.targetdescr.target_context
         # In case the target has swapped, e.g. cuda borrowing cpu, refresh to
         # populate.
+        registries = iter(tgtctx._registries)
+        # Pick a registry in which to install intrinsics
+        reg = next(registries)
         tgtctx.refresh()
-        reg = next(iter(tgtctx._registries))
         lower_builtin = reg.lower
         try:
             return self._impl_cache[cache_key]
