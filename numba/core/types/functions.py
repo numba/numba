@@ -308,8 +308,8 @@ class BaseFunction(Callable):
         order = [x[0] for x in sorted(usable, key=key)]
 
         if not order:
-            msg = ("Function resolution cannot find any matches for function"
-                   "{self.key[0]} for the current hardware: {target_hw}.")
+            msg = (f"Function resolution cannot find any matches for function"
+                   f" '{self.key[0]}' for the current hardware: '{target_hw}'.")
             raise errors.UnsupportedError(msg)
 
         self._depth += 1
@@ -345,11 +345,6 @@ class BaseFunction(Callable):
                             msg = 'No match.'
                         failures.add_error(temp, True, msg, uselit)
 
-        if len(failures) == 0:
-            msg = ("Function resolution ended with no failures or successful "
-                   "signature, this implies that type inference accepted the "
-                   "function but it is missing for the current hardware: {}")
-            raise errors.UnsupportedError(msg.format(target_hw))
         failures.raise_error()
 
     def get_call_signatures(self):

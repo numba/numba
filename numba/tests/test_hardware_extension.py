@@ -524,6 +524,31 @@ class TestHardwareHierarchySelection(TestCase):
         # CPU uses the generic one function ol_my_func1 and adds
         self.assertPreciseEqual(cpu_foo(), 8)
 
+    def test_no_specialisation_found(self):
+
+        def my_func(x):
+            pass
+
+        # only create a cuda specialisation
+        @overload(my_func, hardware='cuda')
+        def ol_my_func_cuda(x):
+            return lambda x: None
+
+        @djit(nopython=True)
+        def dpu_foo():
+            my_func(1)
+
+        with self.assertRaises(errors.TypingError) as raises:
+            dpu_foo()
+
+        msgs = ["Function resolution cannot find any matches for function",
+                "test_no_specialisation_found.<locals>.my_func",
+                "for the current hardware:",
+                "'numba.tests.test_hardware_extension.DPU'"]
+
+        for msg in msgs:
+            self.assertIn(msg, str(raises.exception))
+
     def test_dpu_registry(self):
         """Checks that the DPU registry only contains the things added"""
         self.assertFalse(dpu_function_registry.functions)
@@ -541,6 +566,7 @@ class TestHardwareHierarchySelection(TestCase):
                 pass
 
             foo()
+
         msg = "No target is registered against 'invalid_silicon'"
         self.assertIn(msg, str(raises.exception))
 
