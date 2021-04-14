@@ -5278,14 +5278,22 @@ def numpy_swapaxes(arr, axis1, axis2):
         raise errors.TypingError('The first argument "arr" must be an array')
 
     # create tuple list for transpose
-    axes_list = tuple(range(arr.ndim))
+    ndim = arr.ndim
+    axes_list = tuple(range(ndim))
 
     def impl(arr, axis1, axis2):
+        if axis1 >= ndim or abs(axis1) > ndim:
+            raise ValueError('The second argument "axis1" is out of bounds '
+                             'for array of given dimension')
+        if axis2 >= ndim or abs(axis2) > ndim:
+            raise ValueError('The third argument "axis2" is out of bounds '
+                             'for array of given dimension')
+
         # to ensure tuple_setitem support of negative values
         if axis1 < 0:
-            axis1 += arr.ndim
+            axis1 += ndim
         if axis2 < 0:
-            axis2 += arr.ndim
+            axis2 += ndim
 
         axes_tuple = tuple_setitem(axes_list, axis1, axis2)
         axes_tuple = tuple_setitem(axes_tuple, axis2, axis1)
