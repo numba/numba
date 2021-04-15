@@ -885,16 +885,40 @@ class _IntrinsicTemplate(AbstractTemplate):
         """
         Type the intrinsic by the arguments.
         """
-        cache_key = self.context, args, tuple(kws.items())
         from numba.core.extending_hardware import resolve_dispatcher_from_str
+        from numba.core.imputils import builtin_registry
+
+        cache_key = self.context, args, tuple(kws.items())
         hwstr = self.metadata.get('hardware', 'cpu')
         disp = resolve_dispatcher_from_str(hwstr)
         tgtctx = disp.targetdescr.target_context
+        # This is all workarounds...
+        # The issue is that whilst targets shouldn't care about which registry
+        # in which to register lowering implementations, the CUDA target
+        # "borrows" implementations from the CPU from specific registries. This
+        # means that if some impl is defined via @intrinsic, e.g. numba.*unsafe
+        # modules, _AND_ CUDA also makes use of the same impl, then it's
+        # required that the registry in use is one that CUDA borrows from. This
+        # leads to the following expression where by the CPU builtin_registry is
+        # used if it is in the target context as a known registry (i.e. the
+        # target installed it) and if it is not then it is assumed that the
+        # registries for the target are unbound to any other target and so it's
+        # fine to use any of them as a place to put lowering impls.
+        #
+        # NOTE: This will need subsequently fixing again when targets use solely
+        # the extension APIs to describe their implementation. The issue will be
+        # that the builtin_registry should contain _just_ the stack allocated
+        # implementations and low level target invariant things and should not
+        # be modified further. It should be acceptable to remove the `then`
+        # branch and just keep the `else`.
+        if builtin_registry in tgtctx._registries:
+            reg = builtin_registry
+        else:
+            # Pick a registry in which to install intrinsics
+            registries = iter(tgtctx._registries)
+            reg = next(registries)
         # In case the target has swapped, e.g. cuda borrowing cpu, refresh to
         # populate.
-        registries = iter(tgtctx._registries)
-        # Pick a registry in which to install intrinsics
-        reg = next(registries)
         tgtctx.refresh()
         lower_builtin = reg.lower
         try:
