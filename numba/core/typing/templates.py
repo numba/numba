@@ -911,15 +911,16 @@ class _IntrinsicTemplate(AbstractTemplate):
         # implementations and low level target invariant things and should not
         # be modified further. It should be acceptable to remove the `then`
         # branch and just keep the `else`.
+
+        # In case the target has swapped, e.g. cuda borrowing cpu, refresh to
+        # populate.
+        tgtctx.refresh()
         if builtin_registry in tgtctx._registries:
             reg = builtin_registry
         else:
             # Pick a registry in which to install intrinsics
             registries = iter(tgtctx._registries)
             reg = next(registries)
-        # In case the target has swapped, e.g. cuda borrowing cpu, refresh to
-        # populate.
-        tgtctx.refresh()
         lower_builtin = reg.lower
         try:
             return self._impl_cache[cache_key]
