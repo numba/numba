@@ -38,6 +38,9 @@ class CPUContext(BaseContext):
     """
     allow_dynamic_globals = True
 
+    def __init__(self, typingctx, target='cpu'):
+        super().__init__(typingctx, target)
+
     # Overrides
     def create_module(self, name):
         return self._internal_codegen._create_empty_module(name)
@@ -62,6 +65,7 @@ class CPUContext(BaseContext):
         import numba.cpython.charseq
         import numba.typed.dictimpl
         import numba.experimental.function_type
+        import numba.experimental.jitclass
 
         # Add lower_extension attribute
         self.lower_extensions = {}
@@ -75,12 +79,15 @@ class CPUContext(BaseContext):
         from numba.np import npyimpl
         from numba.cpython import cmathimpl, mathimpl, printimpl, randomimpl
         from numba.misc import cffiimpl
+        from numba.experimental.jitclass.base import ClassBuilder as \
+            jitclassimpl
         self.install_registry(cmathimpl.registry)
         self.install_registry(cffiimpl.registry)
         self.install_registry(mathimpl.registry)
         self.install_registry(npyimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(randomimpl.registry)
+        self.install_registry(jitclassimpl.class_impl_registry)
 
         # load 3rd party extensions
         numba.core.entrypoints.init_all()
@@ -171,14 +178,12 @@ class CPUContext(BaseContext):
         library.add_ir_module(wrapper_module)
 
     def create_cfunc_wrapper(self, library, fndesc, env, call_helper):
-
         wrapper_module = self.create_module("cfunc_wrapper")
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
         wrapper_callee = ir.Function(wrapper_module, fnty, fndesc.llvm_func_name)
 
         ll_argtypes = [self.get_value_type(ty) for ty in fndesc.argtypes]
         ll_return_type = self.get_value_type(fndesc.restype)
-
         wrapty = ir.FunctionType(ll_return_type, ll_argtypes)
         wrapfn = ir.Function(wrapper_module, wrapty, fndesc.llvm_cfunc_wrapper_name)
         builder = ir.IRBuilder(wrapfn.append_basic_block('entry'))

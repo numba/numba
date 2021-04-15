@@ -1790,7 +1790,7 @@ class TestUfuncOnContext(TestCase):
 
     def test_base_get_ufunc_info(self):
         # The BaseContext always raises NotImplementedError
-        targetctx = BaseContext(cpu_target.typing_context)
+        targetctx = BaseContext(cpu_target.typing_context, 'cpu')
         with self.assertRaises(NotImplementedError) as raises:
             targetctx.get_ufunc_info(np.add)
         self.assertRegex(

@@ -230,11 +230,14 @@ class BaseContext(object):
     # the function descriptor
     fndesc = None
 
-    def __init__(self, typing_context):
+    def __init__(self, typing_context, target):
         _load_global_helpers()
 
         self.address_size = utils.MACHINE_BITS
         self.typing_context = typing_context
+        from numba.core.extending_hardware import hardware_registry
+        self.target_name = target
+        self.target = hardware_registry[target]
 
         # A mapping of installed registries to their loaders
         self._registries = {}

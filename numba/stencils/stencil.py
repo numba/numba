@@ -336,6 +336,7 @@ class StencilFunc(object):
         from numba.core import typed_passes
         typemap, return_type, calltypes, _ = typed_passes.type_inference_stage(
                 self._typingctx,
+                self._targetctx,
                 self.kernel_ir,
                 argtys,
                 None,

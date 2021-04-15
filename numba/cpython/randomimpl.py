@@ -22,7 +22,7 @@ from numba.np import arrayobj
 POST_PY38 = utils.PYVERSION >= (3, 8)
 
 
-registry = Registry()
+registry = Registry('randomimpl')
 lower = registry.lower
 
 int32_t = ir.IntType(32)

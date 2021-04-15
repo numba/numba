@@ -259,6 +259,8 @@ class FunctionTemplate(ABC):
     # non-literals.
     # subclass overide-able
     prefer_literal = False
+    # metadata
+    metadata = {}
 
     def __init__(self, context):
         self.context = context
@@ -645,7 +647,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                 calltypes,
                 _
             ) = typed_passes.type_inference_stage(
-                self.context, ir, folded_args, None)
+                self.context, tgctx, ir, folded_args, None)
             ir = PreLowerStripPhis()._strip_phi_nodes(ir)
             ir._definitions = numba.core.ir_utils.build_definitions(ir.blocks)
 
@@ -675,6 +677,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                                                 'iinfo': iinfo}
         else:
             sig = disp_type.get_call_type(self.context, new_args, kws)
+            if sig is None: # can't resolve for this hardware
+                return None
             self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
         return sig
 
@@ -694,6 +698,45 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             pass
         impl, args = self._build_impl(cache_key, args, kws)
         return impl, args
+
+    def _get_jit_decorator(self):
+        """Gets a jit decorator suitable for the current target"""
+        from numba.core import decorators
+        from numba import jit
+        jitter_str = self.metadata.get('hardware', None)
+        if jitter_str is None:
+            # There is no hardware requested, use default, this preserves
+            # original behaviour
+            jitter = lambda *args, **kwargs: jit(*args, nopython=True, **kwargs)
+        else:
+            from numba.core.extending_hardware import (hardware_registry,
+                                                       get_local_target)
+
+            # Hardware has been requested, see what it is...
+            jitter = decorators.jit_registry.get(jitter_str, None)
+
+            if jitter is None:
+                # No JIT known for hardware string, see if something is
+                # registered for the string and report if not.
+                hardware_class = hardware_registry.get(jitter_str, None)
+                if hardware_class is None:
+                    msg = ("Unknown hardware target '{}', has it been ",
+                           "registered?")
+                    raise ValueError(msg.format(jitter_str))
+
+                target_hw = get_local_target(self.context)
+
+                # check that the requested hardware is in the hierarchy for the
+                # current frame's target.
+                if not issubclass(target_hw, hardware_class):
+                    msg = "No overloads exist for the requested hardware: {}."
+
+                jitter = decorators.jit_registry[target_hw]
+
+        if jitter is None:
+            raise ValueError("Cannot find a suitable jit decorator")
+
+        return jitter
 
     def _build_impl(self, cache_key, args, kws):
         """Build and cache the implementation.
@@ -720,7 +763,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             On failure, returns `(None, None)`.
 
         """
-        from numba import jit
+        jitter = self._get_jit_decorator()
 
         # Get the overload implementation for the given types
         ovf_result = self._overload_func(*args, **kws)
@@ -749,7 +792,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         if self._strict:
             self._validate_sigs(self._overload_func, pyfunc)
         # Make dispatcher
-        jitdecor = jit(nopython=True, **self._jit_options)
+        jitdecor = jitter(**self._jit_options)
         disp = jitdecor(pyfunc)
         # Make sure that the implementation can be fully compiled
         disp_type = types.Dispatcher(disp)
@@ -817,7 +860,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
 
 def make_overload_template(func, overload_func, jit_options, strict,
-                           inline, prefer_literal=False):
+                           inline, prefer_literal=False, **kwargs):
     """
     Make a template class for function *func* overloaded by *overload_func*.
     Compiler options are passed as a dictionary to *jit_options*.
@@ -828,7 +871,8 @@ def make_overload_template(func, overload_func, jit_options, strict,
     dct = dict(key=func, _overload_func=staticmethod(overload_func),
                _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options,
                _strict=strict, _inline=staticmethod(InlineOptions(inline)),
-               _inline_overloads={}, prefer_literal=prefer_literal)
+               _inline_overloads={}, prefer_literal=prefer_literal,
+               metadata=kwargs)
     return type(base)(name, (base,), dct)
 
 
@@ -841,25 +885,60 @@ class _IntrinsicTemplate(AbstractTemplate):
         """
         Type the intrinsic by the arguments.
         """
-        from numba.core.imputils import lower_builtin
+        from numba.core.extending_hardware import resolve_dispatcher_from_str
+        from numba.core.imputils import builtin_registry
 
         cache_key = self.context, args, tuple(kws.items())
+        hwstr = self.metadata.get('hardware', 'cpu')
+        disp = resolve_dispatcher_from_str(hwstr)
+        tgtctx = disp.targetdescr.target_context
+        # This is all workarounds...
+        # The issue is that whilst targets shouldn't care about which registry
+        # in which to register lowering implementations, the CUDA target
+        # "borrows" implementations from the CPU from specific registries. This
+        # means that if some impl is defined via @intrinsic, e.g. numba.*unsafe
+        # modules, _AND_ CUDA also makes use of the same impl, then it's
+        # required that the registry in use is one that CUDA borrows from. This
+        # leads to the following expression where by the CPU builtin_registry is
+        # used if it is in the target context as a known registry (i.e. the
+        # target installed it) and if it is not then it is assumed that the
+        # registries for the target are unbound to any other target and so it's
+        # fine to use any of them as a place to put lowering impls.
+        #
+        # NOTE: This will need subsequently fixing again when targets use solely
+        # the extension APIs to describe their implementation. The issue will be
+        # that the builtin_registry should contain _just_ the stack allocated
+        # implementations and low level target invariant things and should not
+        # be modified further. It should be acceptable to remove the `then`
+        # branch and just keep the `else`.
+
+        # In case the target has swapped, e.g. cuda borrowing cpu, refresh to
+        # populate.
+        tgtctx.refresh()
+        if builtin_registry in tgtctx._registries:
+            reg = builtin_registry
+        else:
+            # Pick a registry in which to install intrinsics
+            registries = iter(tgtctx._registries)
+            reg = next(registries)
+        lower_builtin = reg.lower
         try:
             return self._impl_cache[cache_key]
         except KeyError:
-            result = self._definition_func(self.context, *args, **kws)
-            if result is None:
-                return
-            [sig, imp] = result
-            pysig = utils.pysignature(self._definition_func)
-            # omit context argument from user function
-            parameters = list(pysig.parameters.values())[1:]
-            sig = sig.replace(pysig=pysig.replace(parameters=parameters))
-            self._impl_cache[cache_key] = sig
-            self._overload_cache[sig.args] = imp
-            # register the lowering
-            lower_builtin(imp, *sig.args)(imp)
-            return sig
+            pass
+        result = self._definition_func(self.context, *args, **kws)
+        if result is None:
+            return
+        [sig, imp] = result
+        pysig = utils.pysignature(self._definition_func)
+        # omit context argument from user function
+        parameters = list(pysig.parameters.values())[1:]
+        sig = sig.replace(pysig=pysig.replace(parameters=parameters))
+        self._impl_cache[cache_key] = sig
+        self._overload_cache[sig.args] = imp
+        # register the lowering
+        lower_builtin(imp, *sig.args)(imp)
+        return sig
 
     def get_impl_key(self, sig):
         """
@@ -884,7 +963,7 @@ class _IntrinsicTemplate(AbstractTemplate):
         return info
 
 
-def make_intrinsic_template(handle, defn, name):
+def make_intrinsic_template(handle, defn, name, kwargs):
     """
     Make a template class for a intrinsic handle *handle* defined by the
     function *defn*.  The *name* is used for naming the new template class.
@@ -892,7 +971,7 @@ def make_intrinsic_template(handle, defn, name):
     base = _IntrinsicTemplate
     name = "_IntrinsicTemplate_%s" % (name)
     dct = dict(key=handle, _definition_func=staticmethod(defn),
-               _impl_cache={}, _overload_cache={})
+               _impl_cache={}, _overload_cache={}, metadata=kwargs)
     return type(base)(name, (base,), dct)
 
 

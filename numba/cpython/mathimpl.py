@@ -18,7 +18,7 @@ from numba.core.typing import signature
 from numba.cpython.unsafe.numbers import trailing_zeros
 
 
-registry = Registry()
+registry = Registry('mathimpl')
 lower = registry.lower
 
 

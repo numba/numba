@@ -300,7 +300,7 @@ class ClassBuilder(object):
     A jitclass builder for a mutable jitclass.  This will register
     typing and implementation hooks to the given typing and target contexts.
     """
-    class_impl_registry = imputils.Registry()
+    class_impl_registry = imputils.Registry('jitclass builder')
     implemented_methods = set()
 
     def __init__(self, class_type, typingctx, targetctx):
