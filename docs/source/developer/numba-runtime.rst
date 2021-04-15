@@ -100,7 +100,8 @@ simplest way to know if the NRT is leaking.
 Debugging Leaks in C
 --------------------
 
-The start of `numba/runtime/nrt.h <https://github.com/numba/numba/blob/master/numba/runtime/nrt.h>`_
+The start of `numba/core/runtime/nrt.h
+<https://github.com/numba/numba/blob/master/numba/core/runtime/nrt.h>`_
 has these lines:
 
 .. code-block:: C
