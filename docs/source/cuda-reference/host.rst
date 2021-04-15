@@ -179,6 +179,13 @@ transfers and kernel execution. For further details on streams, see the `CUDA C
 Programming Guide Streams section
 <http://docs.nvidia.com/cuda/cuda-c-programming-guide/#streams>`_.
 
+Numba defaults to using the legacy default stream as the default stream. The
+per-thread default stream can be made the default stream by setting the
+environment variable ``NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM`` to ``1`` (see the
+:ref:`CUDA Environment Variables section <numba-envvars-gpu-support>`).
+Regardless of this setting, the objects representing the legacy and per-thread
+default streams can be constructed using the functions below.
+
 Streams are instances of :class:`numba.cuda.cudadrv.driver.Stream`:
 
 .. autoclass:: numba.cuda.cudadrv.driver.Stream

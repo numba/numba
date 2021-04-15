@@ -347,6 +347,10 @@ class _EnvReloader(object):
         # Whether to generate verbose log messages when JIT linking
         CUDA_VERBOSE_JIT_LOG = _readenv("NUMBA_CUDA_VERBOSE_JIT_LOG", int, 1)
 
+        # Whether the default stream is the per-thread default stream
+        CUDA_PER_THREAD_DEFAULT_STREAM = _readenv(
+            "NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM", int, 0)
+
         # Compute contiguity of device arrays using the relaxed strides
         # checking algorithm.
         NPY_RELAXED_STRIDES_CHECKING = _readenv(
