@@ -377,6 +377,15 @@ def unbox_slice(typ, obj, c):
     return NativeValue(sli._getvalue(), is_error=c.builder.not_(ok))
 
 
+@box(types.SliceType)
+def box_slice(typ, val, c):
+    sli = c.context.make_helper(c.builder, typ, val)
+    start = c.box(types.int64, sli.start)
+    stop = c.box(types.int64, sli.stop)
+    step = c.box(types.int64, sli.step)
+    return c.pyapi.slice_new(start, stop, step)
+
+
 @unbox(types.StringLiteral)
 def unbox_string_literal(typ, obj, c):
     # A string literal is a dummy value

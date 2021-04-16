@@ -683,6 +683,11 @@ class PythonAPI(object):
         stop = self.builder.load(pstop)
         step = self.builder.load(pstep)
         return cgutils.is_null(self.builder, res), start, stop, step
+    
+    def slice_new(self, start, stop, step):
+        fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="PySlice_New")
+        return self.builder.call(fn, (start, stop, step))
 
     #
     # List and sequence APIs
