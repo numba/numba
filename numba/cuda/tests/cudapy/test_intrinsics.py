@@ -363,12 +363,16 @@ class TestCudaIntrinsic(CUDATestCase):
         ary = np.zeros(1, dtype=np.int32)
         compiled[1, 1](ary, 0x00100000)
         self.assertEquals(ary[0], 21)
+        compiled[1, 1](ary, 0x80000000)
+        self.assertEquals(ary[0], 32)
 
     def test_ffs_u4(self):
         compiled = cuda.jit("void(int32[:], uint32)")(simple_ffs)
         ary = np.zeros(1, dtype=np.int32)
         compiled[1, 1](ary, 0x00100000)
         self.assertEquals(ary[0], 21)
+        compiled[1, 1](ary, 0x80000000)
+        self.assertEquals(ary[0], 32)
 
     def test_ffs_i4_1s(self):
         compiled = cuda.jit("void(int32[:], int32)")(simple_ffs)
@@ -388,6 +392,8 @@ class TestCudaIntrinsic(CUDATestCase):
         ary = np.zeros(1, dtype=np.int32)
         compiled[1, 1](ary, 0x000000000010000)
         self.assertEquals(ary[0], 17)
+        compiled[1, 1](ary, 0x100000000)
+        self.assertEquals(ary[0], 33)
 
     def test_simple_laneid(self):
         compiled = cuda.jit("void(int32[:])")(simple_laneid)
