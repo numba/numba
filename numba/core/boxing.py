@@ -363,6 +363,20 @@ def unbox_optional(typ, obj, c):
                        cleanup=cleanup)
 
 
+@box(types.SliceType)
+def box_slice(typ, val, c):
+    start = c.box(types.int64, c.builder.extract_value(val, 0))
+    stop = c.box(types.int64, c.builder.extract_value(val, 1))
+    # if typ.has_step:
+    step = c.box(types.int64, c.builder.extract_value(val, 2))
+    # else:
+    #     step = c.pyapi.get_null_object()
+
+    slice_val = c.pyapi.slice_new(start, stop, step)
+
+    return slice_val
+
+
 @unbox(types.SliceType)
 def unbox_slice(typ, obj, c):
     """

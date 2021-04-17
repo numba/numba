@@ -16,6 +16,9 @@ def slice_passing(sl):
     return sl.start, sl.stop, sl.step
 
 def slice_constructor(*args):
+    return slice(*args)
+
+def slice_constructor_tuple(*args):
     sl = slice(*args)
     return sl.start, sl.stop, sl.step
 
@@ -72,6 +75,7 @@ class TestSlices(MemoryLeakMixin, TestCase):
         maxnegint = -maxposint - 1
         a = np.arange(10)
         cfunc = jit(nopython=True)(slice_constructor)
+        cfunc_tuple = jit(nopython=True)(slice_constructor_tuple)
         cfunc_use = jit(nopython=True)(slice_construct_and_use)
         for args, expected in [
             ((None,), (0, maxposint, 1)),
@@ -89,11 +93,13 @@ class TestSlices(MemoryLeakMixin, TestCase):
             ((None, 5, -1), (maxposint, 5, -1)),
             ((10, 5, -1), (10, 5, -1)),
         ]:
-            got = cfunc(*args)
+            got = cfunc_tuple(*args)
             self.assertPreciseEqual(got, expected)
             usage = slice_construct_and_use(args, a)
             cusage = cfunc_use(args, a)
             self.assertPreciseEqual(usage, cusage)
+            box = cfunc(*args)
+            self.assertPreciseEqual((box.start, box.stop, box.step), expected)
 
     def test_slice_constructor_cases(self):
         """
