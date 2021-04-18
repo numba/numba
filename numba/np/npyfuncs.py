@@ -95,7 +95,7 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
                         for ty in call_argtys]
         fnty = lc.Type.function(lc.Type.void(), call_argltys)
         # Note: the function isn't pure here (it writes to its pointer args)
-        fn = mod.get_or_insert_function(fnty, name=func_name)
+        fn = cgutils.get_or_insert_function(mod, fnty, func_name)
         builder.call(fn, call_args)
         retval = builder.load(call_args[0])
     else:

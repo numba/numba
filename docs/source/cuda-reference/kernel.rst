@@ -58,7 +58,7 @@ creating a specialized instance:
 
 .. autoclass:: numba.cuda.compiler.Dispatcher
    :members: inspect_asm, inspect_llvm, inspect_sass, inspect_types,
-             specialize, specialized, extensions, forall
+             get_regs_per_thread, specialize, specialized, extensions, forall
 
 
 Intrinsic Attributes and Functions
@@ -215,6 +215,39 @@ Synchronization and Atomic Operations
     Returns the value of ``array[idx]`` before the storing the new value.
     Behaves like an atomic load.
 
+.. function:: numba.cuda.atomic.exch(array, idx, value)
+
+    Perform ``array[idx] = value``. Supports int32, uint32, int64,
+    and uint64 only. The ``idx`` argument can be an integer or a tuple of
+    integer indices for indexing into multi-dimensional arrays. The number
+    of elements in ``idx`` must match the number of dimensions of ``array``.
+
+    Returns the value of ``array[idx]`` before the storing the new value.
+    Behaves like an atomic load.
+
+.. function:: numba.cuda.atomic.inc(array, idx, value)
+
+    Perform ``array[idx] = (0 if array[idx] >= value else array[idx] + 1)``.
+    Supports uint32, and uint64 only. The ``idx`` argument can be an integer
+    or a tuple of integer indices for indexing into multi-dimensional arrays.
+    The number of elements in ``idx`` must match the number of dimensions of
+    ``array``.
+
+    Returns the value of ``array[idx]`` before the storing the new value.
+    Behaves like an atomic load.
+
+.. function:: numba.cuda.atomic.dec(array, idx, value)
+
+    Perform ``array[idx] =
+    (value if (array[idx] == 0) or (array[idx] > value) else array[idx] - 1)``.
+    Supports uint32, and uint64 only. The ``idx`` argument can be an integer
+    or a tuple of integer indices for indexing into multi-dimensional arrays.
+    The number of elements in ``idx`` must match the number of dimensions of
+    ``array``.
+
+    Returns the value of ``array[idx]`` before the storing the new value.
+    Behaves like an atomic load.
+
 .. function:: numba.cuda.atomic.max(array, idx, value)
 
     Perform ``array[idx] = max(array[idx], value)``. Support int32, int64,
@@ -366,6 +399,19 @@ the GPU compute capability is below 7.x.
     all have the same value, otherwise it is 0. And pred is a boolean of whether
     or not all threads in the mask warp have the same warp.
 
+.. function:: numba.cuda.activemask()
+
+    Returns a 32-bit integer mask of all currently active threads in the
+    calling warp. The Nth bit is set if the Nth lane in the warp is active when
+    activemask() is called. Inactive threads are represented by 0 bits in the
+    returned mask. Threads which have exited the kernel are always marked as
+    inactive.
+
+.. function:: numba.cuda.lanemask_lt()
+
+    Returns a 32-bit integer mask of all lanes (including inactive ones) with
+    ID less than the current lane.
+
 
 Integer Intrinsics
 ~~~~~~~~~~~~~~~~~~
@@ -410,6 +456,12 @@ precision parts of the CUDA Toolkit documentation.
    the C api, but maps to the ``fma.rn.f32`` and ``fma.rn.f64`` (round-to-nearest-even)
    PTX instructions.
 
+.. function:: numba.cuda.cbrt (x)
+
+   Perform the cube root operation, x ** (1/3). Named after the functions
+   ``cbrt`` and ``cbrtf`` in the C api. Supports float32, and float64 arguments
+   only.
+
 
 Control Flow Instructions
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -426,3 +478,12 @@ semantics, please refer to the `relevant CUDA Toolkit documentation
 
     Select between two expressions, depending on the value of the first
     argument. Similar to LLVM's ``select`` instruction.
+
+
+Timer Intrinsics
+~~~~~~~~~~~~~~~~
+
+.. function:: numba.cuda.nanosleep(ns)
+
+    Suspends the thread for a sleep duration approximately close to the delay
+    ``ns``, specified in nanoseconds.

@@ -71,8 +71,8 @@ def deregister(*args):
         else:
             raise TypeError(type(data))
 
-def device_array(shape, dtype=np.float, strides=None, order='C'):
-    """device_array(shape, dtype=np.float, strides=None, order='C')
+def device_array(shape, dtype=np.float_, strides=None, order='C'):
+    """device_array(shape, dtype=np.float_, strides=None, order='C')
 
     Allocate an empty device ndarray. Similar to :meth:`numpy.empty`.
     """
@@ -173,16 +173,16 @@ def _host_array(finegrain, shape, dtype, strides, order):
     return arr.view(type=devicearray.HostArray)
 
 
-def coarsegrain_array(shape, dtype=np.float, strides=None, order='C'):
-    """coarsegrain_array(shape, dtype=np.float, strides=None, order='C')
+def coarsegrain_array(shape, dtype=np.float_, strides=None, order='C'):
+    """coarsegrain_array(shape, dtype=np.float_, strides=None, order='C')
     Similar to np.empty().
     """
     return _host_array(finegrain=False, shape=shape, dtype=dtype,
                        strides=strides, order=order)
 
 
-def finegrain_array(shape, dtype=np.float, strides=None, order='C'):
-    """finegrain_array(shape, dtype=np.float, strides=None, order='C')
+def finegrain_array(shape, dtype=np.float_, strides=None, order='C'):
+    """finegrain_array(shape, dtype=np.float_, strides=None, order='C')
 
     Similar to np.empty().
     """

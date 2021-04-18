@@ -1,9 +1,12 @@
 import warnings
+import dis
 from itertools import product
 
 import numpy as np
 
 from numba import njit, typed, objmode, prange
+from numba.core.utils import PYVERSION
+from numba.core import ir_utils, ir
 from numba.core.errors import (
     UnsupportedError, CompilerError, NumbaPerformanceWarning, TypingError,
 )
@@ -761,6 +764,35 @@ class TestTryExceptOtherControlFlow(TestCase):
             "Does not support with-context that contain branches",
             str(raises.exception),
         )
+
+    @unittest.skipIf(PYVERSION < (3, 9), "Python 3.9+ only")
+    def test_reraise_opcode_unreachable(self):
+        # The opcode RERAISE was added in python 3.9, there should be no
+        # supported way to actually reach it. This test just checks that an
+        # exception is present to deal with if it is reached in a case known
+        # to produce this opcode.
+        def pyfunc():
+            try:
+                raise Exception
+            except Exception:
+                raise ValueError("ERROR")
+        for inst in dis.get_instructions(pyfunc):
+            if inst.opname == 'RERAISE':
+                break
+        else:
+            self.fail("expected RERAISE opcode not found")
+        func_ir = ir_utils.get_ir_of_code({}, pyfunc.__code__)
+        found = False
+        for lbl, blk in func_ir.blocks.items():
+            for stmt in blk.find_insts(ir.StaticRaise):
+                # don't worry about guarding this strongly, if the exec_args[0]
+                # is a string it'll either be "ERROR" or the guard message
+                # saying unreachable has been reached
+                msg = "Unreachable condition reached (op code RERAISE executed)"
+                if stmt.exc_args and msg in stmt.exc_args[0]:
+                    found = True
+        if not found:
+            self.fail("expected RERAISE unreachable message not found")
 
 
 @skip_tryexcept_unsupported

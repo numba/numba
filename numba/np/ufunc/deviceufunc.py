@@ -365,7 +365,8 @@ class DeviceVectorize(_BaseUFuncBuilder):
                 warnings.warn("nopython kwarg for cuda target is redundant",
                               RuntimeWarning)
             else:
-                fmt = "cuda vectorize target does not support option: '%s'"
+                fmt = "Unrecognized options. "
+                fmt += "cuda vectorize target does not support option: '%s'"
                 raise KeyError(fmt % opt)
         self.py_func = func
         self.identity = parse_identity(identity)

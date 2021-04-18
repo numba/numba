@@ -1,8 +1,10 @@
+import itertools
 import numpy as np
 from numba.cuda.cudadrv import devicearray
 from numba import cuda
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import skip_on_cudasim
+from numba.tests.support import override_config
 
 
 class TestCudaNDArray(CUDATestCase):
@@ -279,33 +281,6 @@ class TestCudaNDArray(CUDATestCase):
         self.assertTrue(np.all(d.copy_to_host() == a_f))
 
     def test_devicearray_broadcast_host_copy(self):
-        try:
-            broadcast_to = np.broadcast_to
-        except AttributeError:
-            # numpy<1.10 doesn't have broadcast_to. The following implements
-            # a limited broadcast_to that only works along already existing
-            # dimensions of length 1.
-            def broadcast_to(arr, new_shape):
-                new_strides = []
-                for new_length, length, stride in zip(
-                    new_shape, arr.shape, arr.strides
-                ):
-                    if length == 1 and new_length > 1:
-                        new_strides.append(0)
-                    elif new_length == length:
-                        new_strides.append(stride)
-                    else:
-                        raise ValueError(
-                            "cannot broadcast shape {} to shape {}"
-                            .format(arr.shape, new_shape)
-                        )
-                return np.ndarray(
-                    buffer=np.squeeze(arr),
-                    dtype=arr.dtype,
-                    shape=new_shape,
-                    strides=tuple(new_strides),
-                )
-
         broadsize = 4
         coreshape = (2, 3)
         coresize = np.prod(coreshape)
@@ -314,8 +289,8 @@ class TestCudaNDArray(CUDATestCase):
         for dim in range(len(coreshape)):
             newindex = (slice(None),) * dim + (np.newaxis,)
             broadshape = coreshape[:dim] + (broadsize,) + coreshape[dim:]
-            broad_c = broadcast_to(core_c[newindex], broadshape)
-            broad_f = broadcast_to(core_f[newindex], broadshape)
+            broad_c = np.broadcast_to(core_c[newindex], broadshape)
+            broad_f = np.broadcast_to(core_f[newindex], broadshape)
             dbroad_c = cuda.to_device(broad_c)
             dbroad_f = cuda.to_device(broad_f)
             np.testing.assert_array_equal(dbroad_c.copy_to_host(), broad_c)
@@ -342,6 +317,51 @@ class TestCudaNDArray(CUDATestCase):
         self.assertEqual(
             devicearray.errmsg_contiguous_buffer,
             str(e.exception))
+
+    @skip_on_cudasim('DeviceNDArray class not present in simulator')
+    def test_devicearray_relaxed_strides(self):
+        # From the reproducer in Issue #6824.
+
+        with override_config('NPY_RELAXED_STRIDES_CHECKING', 1):
+            # Construct a device array that is contiguous even though
+            # the strides for the first axis (800) are not equal to
+            # the strides * size (10 * 8 = 80) for the previous axis,
+            # because the first axis size is 1.
+            arr = devicearray.DeviceNDArray((1, 10), (800, 8), np.float64)
+
+            # Ensure we still believe the array to be contiguous because
+            # strides checking is relaxed.
+            self.assertTrue(arr.flags['C_CONTIGUOUS'])
+            self.assertTrue(arr.flags['F_CONTIGUOUS'])
+
+    @skip_on_cudasim('DeviceNDArray class not present in simulator')
+    def test_devicearray_strict_strides(self):
+        # From the reproducer in Issue #6824.
+
+        with override_config('NPY_RELAXED_STRIDES_CHECKING', 0):
+            # Construct a device array that is not contiguous because
+            # the strides for the first axis (800) are not equal to
+            # the strides * size (10 * 8 = 80) for the previous axis.
+            arr = devicearray.DeviceNDArray((1, 10), (800, 8), np.float64)
+
+            # Ensure we don't believe the array to be contiguous becase strides
+            # checking is strict.
+            self.assertFalse(arr.flags['C_CONTIGUOUS'])
+            self.assertFalse(arr.flags['F_CONTIGUOUS'])
+
+    def test_c_f_contiguity_matches_numpy(self):
+        # From the reproducer in Issue #4943.
+
+        shapes = ((1, 4), (4, 1))
+        orders = ('C', 'F')
+        with override_config('NPY_RELAXED_STRIDES_CHECKING', 1):
+            for shape, order in itertools.product(shapes, orders):
+                arr = np.ndarray(shape, order=order)
+                d_arr = cuda.to_device(arr)
+                self.assertEqual(arr.flags['C_CONTIGUOUS'],
+                                 d_arr.flags['C_CONTIGUOUS'])
+                self.assertEqual(arr.flags['F_CONTIGUOUS'],
+                                 d_arr.flags['F_CONTIGUOUS'])
 
     @skip_on_cudasim('Typing not done in the simulator')
     def test_devicearray_typing_order_simple_c(self):
@@ -406,6 +426,12 @@ class TestCudaNDArray(CUDATestCase):
         a = np.broadcast_to(np.array([1]), (10,))
         d = cuda.to_device(a)
         self.assertEqual(d._numba_type_.layout, 'A')
+
+    def test_bug6697(self):
+        ary = np.arange(10, dtype=np.int16)
+        dary = cuda.to_device(ary)
+        got = np.asarray(dary)
+        self.assertEqual(got.dtype, dary.dtype)
 
 
 class TestRecarray(CUDATestCase):

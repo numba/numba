@@ -76,9 +76,9 @@ complex128              c16              double-precision complex number
 Arrays
 ------
 
-The easy way to declare array types is to subscript an elementary type
-according to the number of dimensions.  For example a 1-dimension
-single-precision array::
+The easy way to declare :class:`~numba.types.Array` types is to subscript an
+elementary type according to the number of dimensions. For example a 
+1-dimension single-precision array::
 
    >>> numba.float32[:]
    array(float32, 1d, A)

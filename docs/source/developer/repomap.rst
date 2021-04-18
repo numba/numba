@@ -93,6 +93,8 @@ These define aspects of the public Numba interface.
   Numba IR
 - :ghfile:`numba/core/annotations/pretty_annotate.py` - Code highlighting of
   Numba functions and types (both ANSI terminal and HTML)
+- :ghfile:`numba/core/event.py` - A simple event system for applications to
+  listen to specific compiler events.
 
 
 Dispatching
@@ -101,10 +103,8 @@ Dispatching
 - :ghfile:`numba/core/dispatcher.py` - Dispatcher objects are compiled functions
   produced by ``@jit``.  A dispatcher has different implementations
   for different type signatures.
-- :ghfile:`numba/_dispatcher.{h,c}` - C interface to C++ dispatcher
-  implementation
-- :ghfile:`numba/_dispatcherimpl.cpp` - C++ dispatcher implementation (for
-  speed on common data types)
+- :ghfile:`numba/_dispatcher.cpp` - C++ dispatcher implementation (for speed on
+  common data types)
 
 
 Compiler Pipeline
@@ -152,6 +152,8 @@ Compiler Pipeline
 - :ghfile:`numba/core/pylowering.py` - Lowering of Numba IR in object mode
 - :ghfile:`numba/core/pythonapi.py` - LLVM IR code generation to interface with
   CPython API
+- :ghfile:`numba/core/targetconfig.py` - Utils for target configurations such
+  as compiler flags.
 
 
 Type Management
@@ -221,6 +223,8 @@ Misc Support
   patterns in LLVM IR
 - :ghfile:`numba/core/utils.py` - Python 2 backports of Python 3 functionality
   (also imports local copy of ``six``)
+- :ghfile:`numba/core/overload_glue.py` - Functions for wrapping split typing
+  and lowering API use cases into overloads.
 - :ghfile:`numba/misc/appdirs.py` - Vendored package for determining application
   config directories on every platform
 - :ghfile:`numba/core/compiler_lock.py` - Global compiler lock because Numba's
@@ -257,7 +261,8 @@ Misc Support
 - :ghfile:`numba/core/caching.py` - Disk cache for compiled functions
 - :ghfile:`numba/np/npdatetime.py` - Helper functions for implementing NumPy
   datetime64 support
-
+- :ghfile:`numba/misc/llvm_pass_timings.py` - Helper to record timings of
+  LLVM passes.
 
 Core Python Data Types
 ''''''''''''''''''''''

@@ -235,7 +235,7 @@ def round_impl_unary(context, builder, sig, args):
     llty = context.get_value_type(fltty)
     module = builder.module
     fnty = Type.function(llty, [llty])
-    fn = module.get_or_insert_function(fnty, name=_round_intrinsic(fltty))
+    fn = cgutils.get_or_insert_function(module, fnty, _round_intrinsic(fltty))
     res = builder.call(fn, args)
     # unary round() returns an int
     res = builder.fptosi(res, context.get_value_type(sig.return_type))
@@ -323,8 +323,11 @@ def number_constructor(context, builder, sig, args):
     """
     if isinstance(sig.return_type, types.Array):
         # Array constructor
-        impl = context.get_function(np.array, sig)
-        return impl(builder, args)
+        dt = sig.return_type.dtype
+        def foo(*arg_hack):
+            return np.array(arg_hack, dtype=dt)
+        res = context.compile_internal(builder, foo, sig, args)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
     else:
         # Scalar constructor
         [val] = args

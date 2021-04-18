@@ -24,5 +24,8 @@ Developer Manual
    caching.rst
    threading_implementation.rst
    literal.rst
+   llvm_timings.rst
    debugging.rst
+   event_api.rst
+   target_extension.rst
    roadmap.rst

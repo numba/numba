@@ -15,7 +15,7 @@ from numba.core.compiler import CompilerBase
 from numba.core.untyped_passes import (TranslateByteCode, FixupArgs,
                                        IRProcessing,)
 from numba.core.typed_passes import (NopythonTypeInference, DeadCodeElimination,
-                                     NoPythonBackend)
+                                     NoPythonBackend, NativeLowering)
 from numba.core.compiler_machinery import PassManager
 from numba.core.types.functions import _err_reasons as error_reasons
 
@@ -110,6 +110,7 @@ class TestMiscErrorHandling(unittest.TestCase):
                 pm.add_pass(DeadCodeElimination, "DCE")
                 # typing
                 pm.add_pass(NopythonTypeInference, "nopython frontend")
+                pm.add_pass(NativeLowering, "native lowering")
                 pm.add_pass(NoPythonBackend, "nopython mode backend")
                 pm.finalize()
                 return [pm]
@@ -300,7 +301,8 @@ class TestErrorMessages(unittest.TestCase):
             foo()
 
         excstr = str(raises.exception)
-        self.assertIn("Overload of function 'angle'", excstr)
+        self.assertIn("No implementation of function Function(<function angle",
+                      excstr)
 
     def test_overloadfunction_template_source(self):
         # hits _OverloadFunctionTemplate

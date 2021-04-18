@@ -7,18 +7,47 @@ from distutils.command.build_ext import build_ext
 from distutils.spawn import spawn
 
 from setuptools import Extension, find_packages, setup
-
 import versioneer
 
+_version_module = None
+try:
+    from packaging import version as _version_module
+except ImportError:
+    try:
+        from setuptools._vendor.packaging import version as _version_module
+    except ImportError:
+        pass
+
+
 min_python_version = "3.6"
+max_python_version = "3.10"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.15"
-min_llvmlite_version = "0.36.0.dev0"
-max_llvmlite_version = "0.37"
+min_llvmlite_version = "0.37.0.dev0"
+max_llvmlite_version = "0.38"
 
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
     sysconfig.get_config_vars()['Py_ENABLE_SHARED'] = 0
+
+
+def _guard_py_ver():
+    if _version_module is None:
+        return
+
+    parse = _version_module.parse
+
+    min_py = parse(min_python_version)
+    max_py = parse(max_python_version)
+    cur_py = parse('.'.join(map(str, sys.version_info[:3])))
+
+    if not min_py <= cur_py < max_py:
+        msg = ('Cannot install on Python version {}; only versions >={},<{} '
+               'are supported.')
+        raise RuntimeError(msg.format(cur_py, min_py, max_py))
+
+
+_guard_py_ver()
 
 
 class build_doc(build.build):
@@ -92,21 +121,14 @@ def is_building():
         # User forgot to give an argument probably, let setuptools handle that.
         return True
 
-    info_commands = ['--help-commands', '--name', '--version', '-V',
-                     '--fullname', '--author', '--author-email',
-                     '--maintainer', '--maintainer-email', '--contact',
-                     '--contact-email', '--url', '--license', '--description',
-                     '--long-description', '--platforms', '--classifiers',
-                     '--keywords', '--provides', '--requires', '--obsoletes']
-    # Add commands that do more than print info, but also don't need
-    # any build step.
-    info_commands.extend(['egg_info', 'install_egg_info', 'rotate'])
+    build_commands = ['build', 'build_py', 'build_ext', 'build_clib'
+                      'build_scripts', 'install', 'install_lib',
+                      'install_headers', 'install_scripts', 'install_data',
+                      'sdist', 'bdist', 'bdist_dumb', 'bdist_rpm',
+                      'bdist_wininst', 'check', 'build_doc', 'bdist_wheel',
+                      'bdist_egg', 'develop', 'easy_install', 'test']
+    return any(bc in sys.argv[1:] for bc in build_commands)
 
-    for command in info_commands:
-        if command in sys.argv[1:]:
-            return False
-
-    return True
 
 
 def get_ext_modules():
@@ -122,19 +144,25 @@ def get_ext_modules():
     # C API (include dirs, library dirs etc.)
     np_compile_args = np_misc.get_info('npymath')
 
+    ext_devicearray = Extension(name='numba._devicearray',
+                                sources=['numba/_devicearray.cpp'],
+                                depends=['numba/_pymodule.h',
+                                         'numba/_devicearray.h'],
+                                include_dirs=['numba'],
+                                extra_compile_args=['-std=c++11'],
+                                )
+
     ext_dynfunc = Extension(name='numba._dynfunc',
                             sources=['numba/_dynfuncmod.c'],
                             depends=['numba/_pymodule.h',
                                      'numba/_dynfunc.c'])
 
     ext_dispatcher = Extension(name="numba._dispatcher",
-                               sources=['numba/_dispatcher.c',
+                               sources=['numba/_dispatcher.cpp',
                                         'numba/_typeof.c',
                                         'numba/_hashtable.c',
-                                        'numba/_dispatcherimpl.cpp',
                                         'numba/core/typeconv/typeconv.cpp'],
                                depends=["numba/_pymodule.h",
-                                        "numba/_dispatcher.h",
                                         "numba/_typeof.h",
                                         "numba/_hashtable.h"],
                                **np_compile_args)
@@ -317,9 +345,10 @@ def get_ext_modules():
                                 depends=['numba/_pymodule.h'],
                                 include_dirs=["numba"])
 
-    ext_modules = [ext_dynfunc, ext_dispatcher, ext_helperlib, ext_typeconv,
-                   ext_np_ufunc, ext_npyufunc_num_threads, ext_mviewbuf,
-                   ext_nrt_python, ext_jitclass_box, ext_cuda_extras]
+    ext_modules = [ext_dynfunc, ext_dispatcher, ext_helperlib,
+                   ext_typeconv, ext_np_ufunc, ext_npyufunc_num_threads,
+                   ext_mviewbuf, ext_nrt_python, ext_jitclass_box,
+                   ext_cuda_extras, ext_devicearray]
 
     ext_modules += ext_np_ufunc_backends
 
@@ -349,6 +378,7 @@ metadata = dict(
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
         "Topic :: Software Development :: Compilers",
     ],
     package_data={
@@ -364,6 +394,7 @@ metadata = dict(
         "numba.cext": ["*.c", "*.h"],
         # numba gdb hook init command language file
         "numba.misc": ["cmdlang.gdb"],
+        "numba.typed": ["py.typed"],
     },
     scripts=["numba/pycc/pycc", "bin/numba"],
     author="Anaconda, Inc.",
@@ -372,7 +403,7 @@ metadata = dict(
     packages=packages,
     setup_requires=build_requires,
     install_requires=install_requires,
-    python_requires=">={}".format(min_python_version),
+    python_requires=">={},<{}".format(min_python_version, max_python_version),
     license="BSD",
     cmdclass=cmdclass,
 )

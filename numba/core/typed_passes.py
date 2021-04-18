@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from copy import copy
 import warnings
 
@@ -16,11 +16,20 @@ from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                                  check_and_legalize_ir, guard,
                                  dead_code_elimination, simplify_CFG,
-                                 get_definition, remove_dels,
+                                 get_definition,
                                  build_definitions, compute_cfg_from_blocks,
                                  is_operator_or_getitem)
 from numba.core import postproc
 from llvmlite import binding as llvm
+
+
+# Outputs of type inference pass
+_TypingResults = namedtuple("_TypingResults", [
+    "typemap",
+    "return_type",
+    "calltypes",
+    "typing_errors",
+])
 
 
 @contextmanager
@@ -49,13 +58,14 @@ def fallback_context(state, msg):
             raise
 
 
-def type_inference_stage(typingctx, interp, args, return_type, locals={},
-                         raise_errors=True):
+def type_inference_stage(typingctx, targetctx, interp, args, return_type,
+                         locals={}, raise_errors=True):
     if len(args) != interp.arg_count:
         raise TypeError("Mismatch number of argument types")
     warnings = errors.WarningsFixer(errors.NumbaWarning)
     infer = typeinfer.TypeInferer(typingctx, interp, warnings)
-    with typingctx.callstack.register(infer, interp.func_id, args):
+    with typingctx.callstack.register(targetctx.target, infer, interp.func_id,
+                                      args):
         # Seed argument types
         for index, (name, ty) in enumerate(zip(interp.arg_names, args)):
             infer.seed_argument(name, index, ty)
@@ -69,13 +79,14 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={},
             infer.seed_type(k, v)
 
         infer.build_constraint()
-        infer.propagate(raise_errors=raise_errors)
+        # return errors in case of partial typing
+        errs = infer.propagate(raise_errors=raise_errors)
         typemap, restype, calltypes = infer.unify(raise_errors=raise_errors)
 
     # Output all Numba warnings
     warnings.flush()
 
-    return typemap, restype, calltypes
+    return _TypingResults(typemap, restype, calltypes, errs)
 
 
 class BaseTypeInference(FunctionPass):
@@ -91,14 +102,17 @@ class BaseTypeInference(FunctionPass):
         with fallback_context(state, 'Function "%s" failed type inference'
                               % (state.func_id.func_name,)):
             # Type inference
-            typemap, return_type, calltypes = type_inference_stage(
+            typemap, return_type, calltypes, errs = type_inference_stage(
                 state.typingctx,
+                state.targetctx,
                 state.func_ir,
                 state.args,
                 state.return_type,
                 state.locals,
                 raise_errors=self._raise_errors)
             state.typemap = typemap
+            # save errors in case of partial typing
+            state.typing_errors = errs
             if self._raise_errors:
                 state.return_type = return_type
             state.calltypes = calltypes
@@ -247,7 +261,9 @@ class PreParforPass(FunctionPass):
         preparfor_pass = _parfor_PreParforPass(
             state.func_ir,
             state.type_annotation.typemap,
-            state.type_annotation.calltypes, state.typingctx,
+            state.type_annotation.calltypes,
+            state.typingctx,
+            state.targetctx,
             state.flags.auto_parallel,
             state.parfor_diagnostics.replaced_fns
         )
@@ -284,12 +300,12 @@ class ParforPass(FunctionPass):
                                          state.type_annotation.calltypes,
                                          state.return_type,
                                          state.typingctx,
+                                         state.targetctx,
                                          state.flags.auto_parallel,
                                          state.flags,
+                                         state.metadata,
                                          state.parfor_diagnostics)
         parfor_pass.run()
-
-        remove_dels(state.func_ir.blocks)
 
         # check the parfor pass worked and warn if it didn't
         has_parfor = False
@@ -347,8 +363,15 @@ class NativeLowering(LoweringPass):
         LoweringPass.__init__(self)
 
     def run_pass(self, state):
-        targetctx = state.targetctx
+        if state.library is None:
+            codegen = state.targetctx.codegen()
+            state.library = codegen.create_library(state.func_id.func_qualname)
+            # Enable object caching upfront, so that the library can
+            # be later serialized.
+            state.library.enable_object_caching()
+
         library = state.library
+        targetctx = state.targetctx
         interp = state.func_ir  # why is it called this?!
         typemap = state.typemap
         restype = state.return_type
@@ -397,9 +420,9 @@ class NativeLowering(LoweringPass):
                                            cfunc=None, env=env)
             else:
                 # Prepare for execution
-                cfunc = targetctx.get_executable(library, fndesc, env)
                 # Insert native function for use by other jitted-functions.
                 # We also register its library to allow for inlining.
+                cfunc = targetctx.get_executable(library, fndesc, env)
                 targetctx.insert_user_function(cfunc, fndesc, [library])
                 state['cr'] = _LowerResult(fndesc, call_helper,
                                            cfunc=cfunc, env=env)
@@ -407,6 +430,9 @@ class NativeLowering(LoweringPass):
             # capture pruning stats
             post_stats = llvm.passmanagers.dump_refprune_stats()
             metadata['prune_stats'] = post_stats - pre_stats
+
+            # Save the LLVM pass timings
+            metadata['llvm_pass_timings'] = library.recorded_timings
         return True
 
 
@@ -438,15 +464,6 @@ class NoPythonBackend(LoweringPass):
         """
         Back-end: Generate LLVM IR from Numba IR, compile to machine code
         """
-        if state.library is None:
-            codegen = state.targetctx.codegen()
-            state.library = codegen.create_library(state.func_id.func_qualname)
-            # Enable object caching upfront, so that the library can
-            # be later serialized.
-            state.library.enable_object_caching()
-
-        # TODO: Pull this out into the pipeline
-        NativeLowering().run_pass(state)
         lowered = state['cr']
         signature = typing.signature(state.return_type, *state.args)
 

@@ -257,7 +257,7 @@ class BlockManager(object):
         self._grid_dim = grid_dim
         self._block_dim = block_dim
         self._f = f
-        self.block_state = np.zeros(block_dim, dtype=np.bool)
+        self.block_state = np.zeros(block_dim, dtype=np.bool_)
 
     def run(self, grid_point, *args):
         # Create all threads

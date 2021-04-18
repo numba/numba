@@ -101,25 +101,25 @@ class TestLinker(CUDATestCase):
         something greater than the maximum."""
         compiled = cuda.jit(func_with_lots_of_registers)
         compiled = compiled.specialize(np.empty(32), *range(6))
-        self.assertGreater(compiled._func.get().attrs.regs, 57)
+        self.assertGreater(compiled.get_regs_per_thread(), 57)
 
     @require_context
     def test_set_registers_57(self):
         compiled = cuda.jit(max_registers=57)(func_with_lots_of_registers)
         compiled = compiled.specialize(np.empty(32), *range(6))
-        self.assertLessEqual(compiled._func.get().attrs.regs, 57)
+        self.assertLessEqual(compiled.get_regs_per_thread(), 57)
 
     @require_context
     def test_set_registers_38(self):
         compiled = cuda.jit(max_registers=38)(func_with_lots_of_registers)
         compiled = compiled.specialize(np.empty(32), *range(6))
-        self.assertLessEqual(compiled._func.get().attrs.regs, 38)
+        self.assertLessEqual(compiled.get_regs_per_thread(), 38)
 
     @require_context
     def test_set_registers_eager(self):
         sig = void(float64[::1], int64, int64, int64, int64, int64, int64)
         compiled = cuda.jit(sig, max_registers=38)(func_with_lots_of_registers)
-        self.assertLessEqual(compiled._func.get().attrs.regs, 38)
+        self.assertLessEqual(compiled.get_regs_per_thread(), 38)
 
 
 if __name__ == '__main__':

@@ -135,9 +135,14 @@ static PyTypeObject EnvironmentType = {
     0,                         /* tp_del */
     0,                         /* tp_version_tag */
     0,                         /* tp_finalize */
-#if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION > 7
+#if PY_MAJOR_VERSION == 3
+/* Python 3.8 has two slots, 3.9 has one. */
+#if PY_MINOR_VERSION > 7
     0,                         /* tp_vectorcall */
+#if PY_MINOR_VERSION == 8
     0,                         /* tp_print */
+#endif
+#endif
 #endif
 };
 
@@ -240,9 +245,14 @@ static PyTypeObject ClosureType = {
     0,                         /* tp_del */
     0,                         /* tp_version_tag */
     0,                         /* tp_finalize */
-#if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION > 7
+#if PY_MAJOR_VERSION == 3
+/* Python 3.8 has two slots, 3.9 has one. */
+#if PY_MINOR_VERSION > 7
     0,                         /* tp_vectorcall */
+#if PY_MINOR_VERSION == 8
     0,                         /* tp_print */
+#endif
+#endif
 #endif
 };
 
@@ -452,9 +462,14 @@ static PyTypeObject GeneratorType = {
     0,                                        /* tp_del */
     0,                                        /* tp_version_tag */
     0,                                        /* tp_finalize */
-#if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION > 7
-    0,                                        /* tp_vectorcall */
-    0,                                        /* tp_print */
+#if PY_MAJOR_VERSION == 3
+/* Python 3.8 has two slots, 3.9 has one. */
+#if PY_MINOR_VERSION > 7
+    0,                         /* tp_vectorcall */
+#if PY_MINOR_VERSION == 8
+    0,                         /* tp_print */
+#endif
+#endif
 #endif
 };
 

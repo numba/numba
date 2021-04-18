@@ -1,8 +1,3 @@
-"""
-From NumbaPro
-
-"""
-
 from collections import namedtuple, OrderedDict
 import dis
 import inspect

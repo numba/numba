@@ -53,6 +53,9 @@ from numba import experimental
 import numba.core.withcontexts
 from numba.core.withcontexts import objmode_context as objmode
 
+# Initialize hardware
+import numba.core.extending_hardware
+
 # Keep this for backward compatibility.
 test = runtests.main
 
@@ -66,7 +69,6 @@ __all__ = """
     njit
     stencil
     jit_module
-    jitclass
     typeof
     prange
     gdb

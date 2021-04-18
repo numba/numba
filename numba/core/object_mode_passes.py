@@ -20,11 +20,11 @@ class ObjectModeFrontEnd(FunctionPass):
         loop_flags = state.flags.copy()
         outer_flags = state.flags.copy()
         # Do not recursively loop lift
-        outer_flags.unset('enable_looplift')
-        loop_flags.unset('enable_looplift')
+        outer_flags.enable_looplift = False
+        loop_flags.enable_looplift = False
         if not state.flags.enable_pyobject_looplift:
-            loop_flags.unset('enable_pyobject')
-        loop_flags.unset('enable_ssa')
+            loop_flags.enable_pyobject = False
+        loop_flags.enable_ssa = False
 
         main, loops = transforms.loop_lifting(state.func_ir,
                                               typingctx=state.typingctx,

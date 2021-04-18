@@ -15,6 +15,7 @@ from copy import deepcopy
 
 import numba
 from numba import njit, stencil
+from numba.core.utils import PYVERSION
 from numba.core import types, registry
 from numba.core.compiler import compile_extra, Flags
 from numba.core.cpu import ParallelOptions
@@ -78,6 +79,7 @@ if not _32bit: # prevent compilation on unsupported 32bit targets
         return a + 1
 
 
+@unittest.skipIf(PYVERSION != (3, 7), "Run under 3.7 only, AST unstable")
 class TestStencilBase(unittest.TestCase):
 
     _numba_parallel_test_ = False
@@ -85,7 +87,7 @@ class TestStencilBase(unittest.TestCase):
     def __init__(self, *args):
         # flags for njit()
         self.cflags = Flags()
-        self.cflags.set('nrt')
+        self.cflags.nrt = True
 
         super(TestStencilBase, self).__init__(*args)
 
@@ -96,9 +98,9 @@ class TestStencilBase(unittest.TestCase):
 
     def compile_parallel(self, func, sig, **kws):
         flags = Flags()
-        flags.set('nrt')
+        flags.nrt = True
         options = True if not kws else kws
-        flags.set('auto_parallel', ParallelOptions(options))
+        flags.auto_parallel=ParallelOptions(options)
         return self._compile_this(func, sig, flags)
 
     def compile_njit(self, func, sig):

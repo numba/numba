@@ -300,7 +300,7 @@ class ClassBuilder(object):
     A jitclass builder for a mutable jitclass.  This will register
     typing and implementation hooks to the given typing and target contexts.
     """
-    class_impl_registry = imputils.Registry()
+    class_impl_registry = imputils.Registry('jitclass builder')
     implemented_methods = set()
 
     def __init__(self, class_type, typingctx, targetctx):
@@ -521,8 +521,7 @@ def imp_dtor(context, module, instance_type):
                                      [llvoidptr, llsize, llvoidptr])
 
     fname = "_Dtor.{0}".format(instance_type.name)
-    dtor_fn = module.get_or_insert_function(dtor_ftype,
-                                            name=fname)
+    dtor_fn = cgutils.get_or_insert_function(module, dtor_ftype, fname)
     if dtor_fn.is_declaration:
         # Define
         builder = llvmir.IRBuilder(dtor_fn.append_basic_block())

@@ -98,10 +98,10 @@ of the llvmlite library::
 
 Then create an environment with the right dependencies::
 
-   $ conda create -n numbaenv python=3.6 llvmlite numpy scipy jinja2 cffi
+   $ conda create -n numbaenv python=3.8 llvmlite numpy scipy jinja2 cffi
 
 .. note::
-   This installs an environment based on Python 3.6, but you can of course
+   This installs an environment based on Python 3.8, but you can of course
    choose another version supported by Numba.  To test additional features,
    you may also need to install ``tbb`` and/or ``llvm-openmp`` and
    ``intel-openmp``.
@@ -118,12 +118,13 @@ Once the environment is activated, you have a dedicated Python with the
 required dependencies::
 
     $ python
-    Python 3.6.6 |Anaconda, Inc.| (default, Jun 28 2018, 11:07:29)
-    [GCC 4.2.1 Compatible Clang 4.0.1 (tags/RELEASE_401/final)] on darwin
+    Python 3.8.5 (default, Sep  4 2020, 07:30:14) 
+    [GCC 7.3.0] :: Anaconda, Inc. on linux
     Type "help", "copyright", "credits" or "license" for more information.
+
     >>> import llvmlite
     >>> llvmlite.__version__
-    '0.24.0'
+    '0.35.0'
 
 
 Building Numba
@@ -206,6 +207,12 @@ standard ``logging`` module.  One can use the standard ways (i.e.
 in the test runner, there is a ``--log`` flag for convenience::
 
     $ python -m numba.runtests --log
+
+To enable :ref:`runtime type-checking <type_anno_check>`, set the environment
+variable ``NUMBA_USE_TYPEGUARD=1`` and use `runtests.py` from the source root
+instead. For example::
+
+    $ NUMBA_USE_TYPEGUARD=1 python runtests.py
 
 
 Development rules
@@ -336,6 +343,23 @@ to make sure. The Numba project's private build and test farm will actually
 exercise all the applicable tests on all the combinations noted above on real
 hardware!
 
+
+.. _type_anno_check:
+
+Type annotation and runtime type checking
+'''''''''''''''''''''''''''''''''''''''''
+
+Numba is slowly gaining type annotations. To facilitate the review of pull
+requests that are incrementally adding type annotations, the test suite uses
+`typeguard`_ to perform runtime type checking. This helps verify the validity
+of type annotations.
+
+To enable runtime type checking in the test suite, users can use
+`runtests.py`_ in the source root as the test runner and set environment
+variable ``NUMBA_USE_TYPEGUARD=1``. For example::
+
+    $ NUMBA_USE_TYPEGUARD=1 python runtests.py numba.tests
+
 Things that help with pull requests
 '''''''''''''''''''''''''''''''''''
 
@@ -349,6 +373,27 @@ this and it makes it very hard for reviewers to see what has changed.
 
 The core developers thank everyone for their cooperation with the above!
 
+Why is my pull request/issue seemingly being ignored?
+'''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+Numba is an open source project and like many similar projects it has limited
+resources. As a result, it is unfortunately necessary for the core developers to
+associate a priority with issues/pull requests (PR). A great way to move your
+issue/PR up the priority queue is to help out somewhere else in the project so
+as to free up core developer time. Examples of ways to help:
+
+* Perform an initial review on a PR. This often doesn't require compiler
+  engineering knowledge and just involves checking that the proposed patch is of
+  good quality, fixes the problem/implements the feature, is well tested and
+  documented.
+* Debug an issue, there are numerous issues which `"need triage" <https://github.com/numba/numba/issues?q=is%3Aissue+is%3Aopen+label%3Aneedtriage>`_
+  which essentially involves debugging the reported problem. Even if you cannot
+  get right to the bottom of a problem, leaving notes about what was discovered
+  for someone else is also helpful.
+* Answer questions/provide help for users on `discourse <https://numba.discourse.group/>`_
+  and/or `gitter.im <https://gitter.im/numba/numba>`_.
+
+The core developers thank everyone for their understanding with the above!
 
 Documentation
 -------------
@@ -413,3 +458,7 @@ and check out ``_build/html/index.html``.  To push updates to the Web site::
 then verify the repository under the ``gh-pages`` directory.  Make sure the
 ``CNAME`` file is present and contains a single line for ``numba.pydata.org``.
 Finally, use ``git push`` to update the website.
+
+
+.. _typeguard: https://typeguard.readthedocs.io/en/latest/
+.. _runtests.py: https://github.com/numba/numba/blob/master/runtests.py

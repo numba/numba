@@ -310,7 +310,7 @@ def set_field4(rec):
 recordtype = np.dtype([('a', np.float64),
                        ('b', np.int16),
                        ('c', np.complex64),
-                       ('d', (np.str, 5))])
+                       ('d', (np.str_, 5))])
 
 recordtype2 = np.dtype([('e', np.int32),
                         ('f', np.float64)], align=True)
@@ -858,7 +858,7 @@ class TestRecordDtype(unittest.TestCase):
         np.testing.assert_equal(expect, got)
 
     def test_record_dtype_with_titles_roundtrip(self):
-        recdtype = np.dtype([(("title a", 'a'), np.float), ('b', np.float)])
+        recdtype = np.dtype([(("title a", 'a'), np.float_), ('b', np.float_)])
         nbtype = numpy_support.from_dtype(recdtype)
         self.assertTrue(nbtype.is_title('title a'))
         self.assertFalse(nbtype.is_title('a'))
@@ -1103,6 +1103,26 @@ class TestRecordArrayGetItem(unittest.TestCase):
         self.assertIn("Field 'f' was not found in record with fields "
                       "('first', 'second')", str(raises.exception))
 
+    def test_literal_unroll_dynamic_to_static_getitem_transform(self):
+        # See issue #6634
+        keys = ('a', 'b', 'c')
+        n = 5
+
+        def pyfunc(rec):
+            x = np.zeros((n,))
+            for o in literal_unroll(keys):
+                x += rec[o]
+            return x
+
+        dt = np.float64
+        ldd = [np.arange(dt(n)) for x in keys]
+        ldk = [(x, np.float64,) for x in keys]
+        rec = np.rec.fromarrays(ldd, dtype=ldk)
+
+        expected = pyfunc(rec)
+        got = njit(pyfunc)(rec)
+        np.testing.assert_allclose(expected, got)
+
 
 class TestRecordArraySetItem(unittest.TestCase):
     """
@@ -1301,6 +1321,25 @@ class TestSubtyping(TestCase):
         self.assertEqual(len(foo.nopython_signatures), 2)
         self.assertEqual(foo(self.a_rec1) + 1, foo(self.ab_rec1))
         self.assertEqual(foo(self.ab_rec1, flag=1), self.ab_rec1[0] + k + 20)
+
+
+class TestRecordArrayExceptions(TestCase):
+
+    def test_nested_array_in_buffer_raises(self):
+        # see issue #6473
+        @njit()
+        def foo(x):
+            x["y"][0] = 1
+
+        dt = np.dtype([("y", (np.uint64, 5)),])
+        x = np.ones(1, dtype=dt)
+        with self.assertRaises(TypingError) as e:
+            foo(x)
+        ex1 = "The dtype of a Buffer type cannot itself be a Buffer type"
+        ex2 = "unsupported Buffer was: nestedarray(uint64, (5,))"
+        excstr = str(e.exception)
+        self.assertIn(ex1, excstr)
+        self.assertIn(ex2, excstr)
 
 
 if __name__ == '__main__':
