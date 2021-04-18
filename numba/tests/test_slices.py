@@ -19,6 +19,9 @@ def slice_constructor(*args):
     sl = slice(*args)
     return sl.start, sl.stop, sl.step
 
+def slice_return(*args):
+    return slice(*args)
+
 def slice_construct_and_use(args, l):
     sl = slice(*args)
     return l[sl]
@@ -63,6 +66,37 @@ class TestSlices(MemoryLeakMixin, TestCase):
         # Some member is neither integer nor None
         with self.assertRaises(TypeError):
             cfunc(slice(1.5, 1, 1))
+    
+    def test_slice_return(self):
+        pyfunc = slice_return
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Positive steps
+        cases = (
+            # (None, None, None),
+            (None, None, 12),
+            # (None, 9, None),
+            # (None, 9, 12),
+            # (None, -11, None),
+            # (None, -11, 12),
+            # (42, None, None),
+            # (42, None, 12),
+            # (42, 9, None),
+            # (42, 9, 12),
+            # (42, -11, None),
+            # (42, -11, 12),
+            # (-1, None, None),
+            # (-1, None, 12),
+            # (-1, 9, None),
+            # (-1, 9, 12),
+            # (-1, -11, None),
+            (-1, -11, 12),
+        )
+        for start, stop, step in cases:
+            expected = pyfunc(start, stop, step)
+            result = cfunc(start, stop, step)
+            print(result)
+            # self.assertEqual(expected, result)
 
     def test_slice_constructor(self):
         """
