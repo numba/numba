@@ -136,8 +136,8 @@ class CUDACompiler(CompilerBase):
 def compile_cuda(pyfunc, return_type, args, debug=False, inline=False,
                  fastmath=False, nvvm_options=None):
     from .descriptor import cuda_target
-    typingctx = cuda_target.typingctx
-    targetctx = cuda_target.targetctx
+    typingctx = cuda_target.typing_context
+    targetctx = cuda_target.target_context
 
     flags = CUDAFlags()
     # Do not compile (generate native code), just lower (to LLVM)
@@ -350,7 +350,7 @@ def compile_device_template(pyfunc, debug=False, inline=False, opt=True):
             }
             return info
 
-    typingctx = cuda_target.typingctx
+    typingctx = cuda_target.typing_context
     typingctx.insert_user_function(dft, device_function_template)
     return dft
 
@@ -361,8 +361,8 @@ def compile_device(pyfunc, return_type, args, inline=True, debug=False):
 
 def declare_device_function(name, restype, argtypes):
     from .descriptor import cuda_target
-    typingctx = cuda_target.typingctx
-    targetctx = cuda_target.targetctx
+    typingctx = cuda_target.typing_context
+    targetctx = cuda_target.target_context
     sig = typing.signature(restype, *argtypes)
     extfn = ExternFunction(name, sig)
 
@@ -837,7 +837,7 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
 
         from .descriptor import cuda_target
 
-        self.typingctx = cuda_target.typingctx
+        self.typingctx = cuda_target.typing_context
 
         self._tm = default_type_manager
 
