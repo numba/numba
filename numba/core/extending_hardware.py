@@ -80,6 +80,11 @@ class JitDecorator(ABC):
 class Target(ABC):
     """ Implements a hardware/pseudo-hardware target """
 
+    @classmethod
+    def inherits_from(cls, other):
+        """Returns True if this target inherits from 'other' False otherwise"""
+        return other in cls.__mro__
+
 
 class Generic(Target):
     """Mark the hardware target as generic, i.e. suitable for compilation on

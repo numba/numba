@@ -897,7 +897,7 @@ class _IntrinsicTemplate(AbstractTemplate):
         # get the local target
         target_hw = get_local_target(self.context)
         # make sure the target_hw is in the MRO for hw_clazz else bail
-        if hw_clazz not in target_hw.__mro__:
+        if not target_hw.inherits_from(hw_clazz):
             return None
         disp = dispatcher_registry[target_hw]
         tgtctx = disp.targetdescr.target_context
