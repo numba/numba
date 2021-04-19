@@ -885,12 +885,21 @@ class _IntrinsicTemplate(AbstractTemplate):
         """
         Type the intrinsic by the arguments.
         """
-        from numba.core.extending_hardware import resolve_dispatcher_from_str
+        from numba.core.extending_hardware import (get_local_target,
+                                                   resolve_target_str,
+                                                   dispatcher_registry)
         from numba.core.imputils import builtin_registry
 
         cache_key = self.context, args, tuple(kws.items())
-        hwstr = self.metadata.get('hardware', 'cpu')
-        disp = resolve_dispatcher_from_str(hwstr)
+        hwstr = self.metadata.get('hardware', 'generic')
+        # Get the class for the target declared by the function
+        hw_clazz = resolve_target_str(hwstr)
+        # get the local target
+        target_hw = get_local_target(self.context)
+        # make sure the target_hw is in the MRO for hw_clazz else bail
+        if hw_clazz not in target_hw.__mro__:
+            return None
+        disp = dispatcher_registry[target_hw]
         tgtctx = disp.targetdescr.target_context
         # This is all workarounds...
         # The issue is that whilst targets shouldn't care about which registry
