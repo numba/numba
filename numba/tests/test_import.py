@@ -27,18 +27,18 @@ class TestNumbaImport(TestCase):
         Importing top-level numba features should not import too many modules.
         """
         # A heuristic set of modules that shouldn't be imported immediately
-        blacklist = ['cffi',
-                     'distutils',
-                     'numba.cuda',
-                     'numba.cpython.mathimpl',
-                     'numba.cpython.randomimpl',
-                     'numba.tests',
-                     'numba.core.typing.collections',
-                     'numba.core.typing.listdecl',
-                     'numba.core.typing.npdatetime',
-                     ]
+        banlist = ['cffi',
+                   'distutils',
+                   'numba.cuda',
+                   'numba.cpython.mathimpl',
+                   'numba.cpython.randomimpl',
+                   'numba.tests',
+                   'numba.core.typing.collections',
+                   'numba.core.typing.listdecl',
+                   'numba.core.typing.npdatetime',
+                   ]
         # Sanity check the modules still exist...
-        for mod in blacklist:
+        for mod in banlist:
             if mod not in ('cffi',):
                 __import__(mod)
 
@@ -51,8 +51,62 @@ class TestNumbaImport(TestCase):
 
         out, _ = self.run_in_subproc(code)
         modlist = set(eval(out.strip()))
-        unexpected = set(blacklist) & set(modlist)
+        unexpected = set(banlist) & set(modlist)
         self.assertFalse(unexpected, "some modules unexpectedly imported")
+
+    def test_no_impl_import(self):
+        """
+        Tests that importing jit does not trigger import of modules containing
+        lowering implementations that would likely install things in the
+        builtins registry and have side effects impacting other targets
+        """
+        # None of these modules should be imported through the process of
+        # doing 'import numba' or 'from numba import njit'
+        banlist = ['numba.cpython.slicing',
+                   'numba.cpython.tupleobj',
+                   'numba.cpython.enumimpl',
+                   'numba.cpython.hashing',
+                   'numba.cpython.heapq',
+                   'numba.cpython.iterators',
+                   'numba.cpython.numbers',
+                   'numba.cpython.rangeobj',
+                   'numba.cpython.cmathimpl',
+                   'numba.cpython.mathimpl',
+                   'numba.cpython.printimpl',
+                   'numba.cpython.randomimpl',
+                   'numba.core.optional',
+                   'numba.misc.gdb_hook',
+                   'numba.misc.literal',
+                   'numba.misc.cffiimpl',
+                   'numba.np.linalg',
+                   'numba.np.polynomial',
+                   'numba.np.arraymath',
+                   'numba.np.npdatetime',
+                   'numba.np.npyimpl',
+                   'numba.typed.typeddict',
+                   'numba.typed.typedlist',
+                   'numba.experimental.jitclass.base',]
+
+        code1 = """if 1:
+            import sys
+            import numba
+            print(list(sys.modules))
+            """
+
+        code2 = """if 1:
+            import sys
+            from numba import njit
+            @njit
+            def foo():
+                pass
+            print(list(sys.modules))
+            """
+
+        for code in (code1, code2):
+            out, _ = self.run_in_subproc(code)
+            modlist = set(eval(out.strip()))
+            unexpected = set(banlist) & set(modlist)
+            self.assertFalse(unexpected, "some modules unexpectedly imported")
 
     def test_no_accidental_warnings(self):
         # checks that importing Numba isn't accidentally triggering warnings due
