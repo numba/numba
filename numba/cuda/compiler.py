@@ -240,7 +240,7 @@ class DeviceDispatcher(serialize.ReduceMixin):
         self.debug = debug
         self.inline = inline
         self.opt = opt
-        self._compileinfos = {}
+        self.overloads = {}
         name = getattr(pyfunc, '__name__', 'unknown')
         self.__name__ = f"{name} <CUDA device function>".format(name)
 
@@ -276,9 +276,9 @@ class DeviceDispatcher(serialize.ReduceMixin):
 
     @property
     def nopython_signatures(self):
-        # All _compileinfos are for nopython mode, because there is only
+        # All overloads are for nopython mode, because there is only
         # nopython mode in CUDA
-        return [info.signature for info in self._compileinfos.values()]
+        return [info.signature for info in self.overloads.values()]
 
     def get_overload(self, sig):
         # NOTE: This dispatcher seems to be used as the key for the dict of
@@ -295,11 +295,11 @@ class DeviceDispatcher(serialize.ReduceMixin):
 
         Returns the `CompileResult`.
         """
-        if args not in self._compileinfos:
+        if args not in self.overloads:
             cres = compile_cuda(self.py_func, None, args, debug=self.debug,
                                 inline=self.inline)
-            first_definition = not self._compileinfos
-            self._compileinfos[args] = cres
+            first_definition = not self.overloads
+            self.overloads[args] = cres
             libs = [cres.library]
 
             if first_definition:
@@ -310,7 +310,7 @@ class DeviceDispatcher(serialize.ReduceMixin):
                 cres.target_context.add_user_function(self, cres.fndesc, libs)
 
         else:
-            cres = self._compileinfos[args]
+            cres = self.overloads[args]
 
         return cres
 
@@ -330,7 +330,7 @@ class DeviceDispatcher(serialize.ReduceMixin):
         # the user attempts to inspect LLVM IR or PTX before the function has
         # been called for the given arguments from a jitted kernel.
         self.compile(args)
-        cres = self._compileinfos[args]
+        cres = self.overloads[args]
         return "\n\n".join([str(mod) for mod in cres.library.modules])
 
     def inspect_ptx(self, args, nvvm_options={}):
