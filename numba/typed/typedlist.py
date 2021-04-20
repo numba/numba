@@ -9,6 +9,7 @@ it should really quack like the CPython `list`.
 
 """
 
+import typing as pt
 from numba.core.types import ListType, TypeRef
 from numba.core.imputils import numba_typeref_ctor
 from numba.core import types, cgutils
