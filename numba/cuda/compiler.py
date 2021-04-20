@@ -25,7 +25,7 @@ from warnings import warn
 import numba
 from .cudadrv.devices import get_context
 from .cudadrv.libs import get_cudalib
-from .cudadrv import nvvm, driver
+from .cudadrv import driver
 from .errors import missing_launch_config_msg, normalize_kernel_dimensions
 from .api import get_current_device
 from .args import wrap_arg
@@ -260,8 +260,13 @@ class DeviceFunctionTemplate(serialize.ReduceMixin):
         Returns the `CompileResult`.
         """
         if args not in self._compileinfos:
+            nvvm_options = {
+                'opt': 3 if self.opt else 0,
+                'debug': self.debug,
+            }
+
             cres = compile_cuda(self.py_func, None, args, debug=self.debug,
-                                inline=self.inline)
+                                inline=self.inline, nvvm_options=nvvm_options)
             first_definition = not self._compileinfos
             self._compileinfos[args] = cres
             libs = [cres.library]
@@ -290,12 +295,8 @@ class DeviceFunctionTemplate(serialize.ReduceMixin):
         -------
         llvmir : str
         """
-        # Force a compilation to occur if none has yet - this can be needed if
-        # the user attempts to inspect LLVM IR or PTX before the function has
-        # been called for the given arguments from a jitted kernel.
-        self.compile(args)
-        cres = self._compileinfos[args]
-        return "\n\n".join([str(mod) for mod in cres.library.modules])
+        modules = self.compile(args).library.modules
+        return "\n\n".join([str(mod) for mod in modules])
 
     def inspect_ptx(self, args, nvvm_options={}):
         """Returns the PTX compiled for *args* for the currently active GPU
@@ -309,15 +310,15 @@ class DeviceFunctionTemplate(serialize.ReduceMixin):
         -------
         ptx : bytes
         """
-        llvmir = self.inspect_llvm(args)
-        # Make PTX
-        cuctx = get_context()
-        device = cuctx.device
-        cc = device.compute_capability
-        arch = nvvm.get_arch_option(*cc)
-        opt = 3 if self.opt else 0
-        ptx = nvvm.llvm_to_ptx(llvmir, opt=opt, arch=arch, **nvvm_options)
-        return ptx
+        msg = ('inspect_ptx for device functions is deprecated. Use '
+               'compile_ptx instead.')
+        warn(msg, category=NumbaDeprecationWarning)
+
+        if nvvm_options:
+            msg = ('nvvm_options are ignored. Use compile_ptx if you want to '
+                   'set NVVM options.')
+            warn(msg, category=NumbaDeprecationWarning)
+        return self.compile(args).library.get_asm_str().encode()
 
 
 def compile_device_template(pyfunc, debug=False, inline=False, opt=True):
