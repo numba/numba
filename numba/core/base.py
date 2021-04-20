@@ -271,19 +271,15 @@ class BaseContext(object):
         Refresh context with new declarations from known registries.
         Useful for third-party extensions.
         """
-        # Populate built-in registry
-        from numba.cpython import (slicing, tupleobj, enumimpl, hashing, heapq,
-                                   iterators, numbers, rangeobj)
-        from numba.core import optional
-        from numba.misc import gdb_hook, literal
-        from numba.np import linalg, polynomial, arraymath
-
-        try:
-            from numba.np import npdatetime
-        except NotImplementedError:
-            pass
-        self.install_registry(builtin_registry)
+        # load target specific registries
         self.load_additional_registries()
+
+        # Populate the builtin registry, this has to happen after loading
+        # additional registries as some of the "additional" registries write
+        # their implementations into the builtin_registry and would be missed if
+        # this ran first.
+        self.install_registry(builtin_registry)
+
         # Also refresh typing context, since @overload declarations can
         # affect it.
         self.typing_context.refresh()

@@ -75,6 +75,18 @@ class CPUContext(BaseContext):
         self.lower_extensions[Parfor] = _lower_parfor_parallel
 
     def load_additional_registries(self):
+        # Add implementations that work via import
+        from numba.cpython import (slicing, tupleobj, enumimpl, hashing, heapq,
+                                   iterators, numbers, rangeobj)
+        from numba.core import optional
+        from numba.misc import gdb_hook, literal
+        from numba.np import linalg, polynomial, arraymath
+
+        try:
+            from numba.np import npdatetime
+        except NotImplementedError:
+            pass
+
         # Add target specific implementations
         from numba.np import npyimpl
         from numba.cpython import cmathimpl, mathimpl, printimpl, randomimpl
