@@ -17,7 +17,6 @@ from numba.core import event
 from numba import _dynfunc, _helperlib
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.pythonapi import PythonAPI
-from numba.np import arrayobj
 from numba.core.imputils import (user_function, user_generator,
                        builtin_registry, impl_ret_borrowed,
                        RegistryLoader)
@@ -1004,12 +1003,14 @@ class BaseContext(object):
         return self._make_helper(builder, typ, ref=ref, kind='data')
 
     def make_array(self, typ):
+        from numba.np import arrayobj
         return arrayobj.make_array(typ)
 
     def populate_array(self, arr, **kwargs):
         """
         Populate array structure.
         """
+        from numba.np import arrayobj
         return arrayobj.populate_array(arr, **kwargs)
 
     def make_complex(self, builder, typ, value=None):

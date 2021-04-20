@@ -35,8 +35,6 @@ from numba.typed.typedobjectutils import (_as_bytes, _cast, _nonoptional,
                                           _sentry_safe_cast_default,
                                           _get_incref_decref,
                                           _get_equal, _container_get_data,)
-from numba.cpython.unicode import make_string_from_constant
-
 
 ll_dict_type = cgutils.voidptr_t
 ll_dictiter_type = cgutils.voidptr_t
@@ -1212,6 +1210,7 @@ def _str_items_mixed_values_to_tuple(tyctx, d):
         impl = cgctx.get_function('static_getitem',
                                   types.none(d, types.literal('dummy')))
         items = []
+        from numba.cpython.unicode import make_string_from_constant
         for k in range(len(keys)):
             item = impl(builder, (lld, k),)
             casted = cgctx.cast(builder, item, literal_tys[k], d.types[k])

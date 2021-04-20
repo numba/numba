@@ -1,5 +1,4 @@
 from numba.core import types, config
-from numba.experimental.jitclass.base import register_class_type, ClassBuilder
 
 
 def jitclass(cls_or_spec=None, spec=None):
@@ -73,6 +72,8 @@ def jitclass(cls_or_spec=None, spec=None):
         if config.DISABLE_JIT:
             return cls
         else:
+            from numba.experimental.jitclass.base import (register_class_type,
+                                                          ClassBuilder)
             return register_class_type(cls, spec, types.ClassType, ClassBuilder)
 
     if cls_or_spec is None:

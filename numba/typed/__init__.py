@@ -1,2 +1,2 @@
-from .typeddict import Dict
-from .typedlist import List
+from .api import Dict
+from .api import List
