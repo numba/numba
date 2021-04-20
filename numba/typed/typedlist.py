@@ -25,18 +25,6 @@ from numba.typed import api, listobject
 from numba.typed.api import List
 from numba.core.errors import TypingError, LoweringError
 from numba.core.typing.templates import Signature
-import typing as pt
-import sys
-
-if sys.version_info >= (3, 8):
-    T_co = pt.TypeVar('T_co', covariant=True)
-
-    class _Sequence(pt.Protocol[T_co]):
-        def __getitem__(self, i: int) -> T_co:
-            ...
-
-        def __len__(self) -> int:
-            ...
 
 
 DEFAULT_ALLOCATED = api.DEFAULT_ALLOCATED

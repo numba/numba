@@ -1,8 +1,21 @@
 from collections.abc import MutableMapping, MutableSequence
 import typing as pt
+import sys
 from numba.core import config
 from numba import typeof
 from numba.core.types import ListType, DictType
+
+
+if sys.version_info >= (3, 8):
+    T_co = pt.TypeVar('T_co', covariant=True)
+
+    class _Sequence(pt.Protocol[T_co]):
+        def __getitem__(self, i: int) -> T_co:
+            ...
+
+        def __len__(self) -> int:
+            ...
+
 
 T = pt.TypeVar('T')
 T_or_ListT = pt.Union[T, 'List[T]']
