@@ -59,13 +59,6 @@ class CPUContext(BaseContext):
         # Initialize NRT runtime
         rtsys.initialize(self)
 
-        # Initialize additional implementations
-        import numba.cpython.unicode
-        import numba.cpython.charseq
-        import numba.typed.dictimpl
-        import numba.experimental.function_type
-        import numba.experimental.jitclass
-
         # Add lower_extension attribute
         self.lower_extensions = {}
         from numba.parfors.parfor_lowering import _lower_parfor_parallel
@@ -76,12 +69,14 @@ class CPUContext(BaseContext):
     def load_additional_registries(self):
         # Add implementations that work via import
         from numba.cpython import (slicing, tupleobj, enumimpl, hashing, heapq,
-                                   iterators, numbers, rangeobj)
+                                   iterators, numbers, rangeobj, unicode,
+                                   charseq)
         from numba.core import optional
         from numba.misc import gdb_hook, literal
         from numba.np import linalg, polynomial, arraymath
-        from numba.typed import typeddict
-        from numba.typed import typedlist
+        from numba.typed import typeddict, dictimpl
+        from numba.typed import typedlist, listobject
+        from numba.experimental import jitclass, function_type
 
         try:
             from numba.np import npdatetime
