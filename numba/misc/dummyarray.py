@@ -326,6 +326,15 @@ class Array(object):
             else:
                 knownsize *= dim
 
+        # compute the missing dimension
+        if unknownidx >= 0:
+            if knownsize == 0 or self.size % knownsize != 0:
+                raise ValueError("cannot infer valid shape for unknown dimension")
+            else:
+                newdims = newdims[0:unknownidx] \
+                        + tuple((self.size // knownsize,)) \
+                        + newdims[unknownidx + 1:]
+
         newsize = functools.reduce(operator.mul, newdims, 1)
 
         if order == 'A':
