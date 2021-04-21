@@ -83,7 +83,7 @@ class Target(ABC):
     @classmethod
     def inherits_from(cls, other):
         """Returns True if this target inherits from 'other' False otherwise"""
-        return other in cls.__mro__
+        return issubclass(cls, other)
 
 
 class Generic(Target):
