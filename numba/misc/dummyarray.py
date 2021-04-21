@@ -314,6 +314,18 @@ class Array(object):
         if order not in 'CFA':
             raise ValueError('order not C|F|A')
 
+        # check for exactly one instance of -1 in newdims
+        unknownidx = -1
+        knownsize = 1
+        for i, dim in enumerate(newdims):
+            if dim < 0:
+                if unknownidx == -1:
+                    unknownidx = i
+                else:
+                    raise ValueError("can only specify one unknown dimension")
+            else:
+                knownsize *= dim
+
         newsize = functools.reduce(operator.mul, newdims, 1)
 
         if order == 'A':
