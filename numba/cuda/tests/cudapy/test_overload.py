@@ -1,8 +1,11 @@
 from numba import cuda
 from numba.core.extending import overload
-from numba.cuda.testing import (CUDATestCase, captured_cuda_stdout,
-                                skip_on_cudasim, unittest)
+from numba.cuda.testing import CUDATestCase, skip_on_cudasim, unittest
 
+import numpy as np
+
+
+# Dummy function definitions to overload
 
 def generic_func_1():
     pass
@@ -52,293 +55,235 @@ def hardware_overloaded_calls_hardware_overloaded():
     pass
 
 
+# To recognise which functions are resolved for a call, we identify each with a
+# prime number. Each function called multiplies a value by its prime (starting
+# with the value 1), and we can check that the result is as expected based on
+# the final value after all multiplications.
+
+GENERIC_FUNCTION_1 = 2
+CUDA_FUNCTION_1 = 3
+GENERIC_FUNCTION_2 = 5
+CUDA_FUNCTION_2 = 7
+GENERIC_CALLS_GENERIC = 11
+GENERIC_CALLS_CUDA = 13
+CUDA_CALLS_GENERIC = 17
+CUDA_CALLS_CUDA = 19
+GENERIC_HARDWARE_OL = 23
+CUDA_HARDWARE_OL = 29
+GENERIC_CALLS_HARDWARE_OL = 31
+CUDA_CALLS_HARDWARE_OL = 37
+GENERIC_HARDWARE_OL_CALLS_HARDWARE_OL = 41
+CUDA_HARDWARE_OL_CALLS_HARDWARE_OL = 43
+
+
+# Overload implementations
+
 @overload(generic_func_1, hardware='generic')
-def ol_generic_func_1():
-    def impl():
-        print("Generic function 1")
+def ol_generic_func_1(x):
+    def impl(x):
+        x[0] *= GENERIC_FUNCTION_1
     return impl
 
 
 @overload(cuda_func_1, hardware='cuda')
-def ol_cuda_func_1():
-    def impl():
-        print("CUDA function 1")
+def ol_cuda_func_1(x):
+    def impl(x):
+        x[0] *= CUDA_FUNCTION_1
     return impl
 
 
 @overload(generic_func_2, hardware='generic')
-def ol_generic_func_2():
-    def impl():
-        print("Generic function 2")
+def ol_generic_func_2(x):
+    def impl(x):
+        x[0] *= GENERIC_FUNCTION_2
     return impl
 
 
 @overload(cuda_func_2, hardware='cuda')
-def ol_cuda_func():
-    def impl():
-        print("CUDA function 2")
+def ol_cuda_func(x):
+    def impl(x):
+        x[0] *= CUDA_FUNCTION_2
     return impl
 
 
 @overload(generic_calls_generic, hardware='generic')
-def ol_generic_calls_generic():
-    def impl():
-        print("Generic calls generic")
-        generic_func_1()
+def ol_generic_calls_generic(x):
+    def impl(x):
+        x[0] *= GENERIC_CALLS_GENERIC
+        generic_func_1(x)
     return impl
 
 
 @overload(generic_calls_cuda, hardware='generic')
-def ol_generic_calls_cuda():
-    def impl():
-        print("Generic calls CUDA")
-        cuda_func_1()
+def ol_generic_calls_cuda(x):
+    def impl(x):
+        x[0] *= GENERIC_CALLS_CUDA
+        cuda_func_1(x)
     return impl
 
 
 @overload(cuda_calls_generic, hardware='cuda')
-def ol_cuda_calls_generic():
-    def impl():
-        print("CUDA calls generic")
-        generic_func_1()
+def ol_cuda_calls_generic(x):
+    def impl(x):
+        x[0] *= CUDA_CALLS_GENERIC
+        generic_func_1(x)
     return impl
 
 
 @overload(cuda_calls_cuda, hardware='cuda')
-def ol_cuda_calls_cuda():
-    def impl():
-        print("CUDA calls CUDA")
-        cuda_func_1()
+def ol_cuda_calls_cuda(x):
+    def impl(x):
+        x[0] *= CUDA_CALLS_CUDA
+        cuda_func_1(x)
     return impl
 
 
 @overload(hardware_overloaded, hardware='generic')
-def ol_hardware_overloaded_generic():
-    def impl():
-        print("Generic hardware overloaded function")
+def ol_hardware_overloaded_generic(x):
+    def impl(x):
+        x[0] *= GENERIC_HARDWARE_OL
     return impl
 
 
 @overload(hardware_overloaded, hardware='cuda')
-def ol_hardware_overloaded_cuda():
-    def impl():
-        print("CUDA hardware overloaded function")
+def ol_hardware_overloaded_cuda(x):
+    def impl(x):
+        x[0] *= CUDA_HARDWARE_OL
     return impl
 
 
 @overload(generic_calls_hardware_overloaded, hardware='generic')
-def ol_generic_calls_hardware_overloaded():
-    def impl():
-        print("Generic calls hardware overloaded")
-        hardware_overloaded()
+def ol_generic_calls_hardware_overloaded(x):
+    def impl(x):
+        x[0] *= GENERIC_CALLS_HARDWARE_OL
+        hardware_overloaded(x)
     return impl
 
 
 @overload(cuda_calls_hardware_overloaded, hardware='cuda')
-def ol_cuda_calls_hardware_overloaded():
-    def impl():
-        print("CUDA calls hardware overloaded")
-        hardware_overloaded()
+def ol_cuda_calls_hardware_overloaded(x):
+    def impl(x):
+        x[0] *= CUDA_CALLS_HARDWARE_OL
+        hardware_overloaded(x)
     return impl
 
 
 @overload(hardware_overloaded_calls_hardware_overloaded, hardware='generic')
-def ol_generic_calls_hardware_overloaded_generic():
-    def impl():
-        print("Generic hardware overloaded calls hardware overloaded")
-        hardware_overloaded()
+def ol_generic_calls_hardware_overloaded_generic(x):
+    def impl(x):
+        x[0] *= GENERIC_HARDWARE_OL_CALLS_HARDWARE_OL
+        hardware_overloaded(x)
     return impl
 
 
 @overload(hardware_overloaded_calls_hardware_overloaded, hardware='cuda')
-def ol_generic_calls_hardware_overloaded_cuda():
-    def impl():
-        print("CUDA hardware overloaded calls hardware overloaded")
-        hardware_overloaded()
+def ol_generic_calls_hardware_overloaded_cuda(x):
+    def impl(x):
+        x[0] *= CUDA_HARDWARE_OL_CALLS_HARDWARE_OL
+        hardware_overloaded(x)
     return impl
 
 
 @skip_on_cudasim('Overloading not supported in cudasim')
 class TestOverload(CUDATestCase):
+    def check_overload(self, kernel, expected):
+        x = np.ones(1, dtype=np.int32)
+        cuda.jit(kernel)[1, 1](x)
+        self.assertEqual(x[0], expected)
+
     def test_generic(self):
-        @cuda.jit
-        def call_kernel():
-            generic_func_1()
+        def kernel(x):
+            generic_func_1(x)
 
-        with captured_cuda_stdout() as stdout:
-            call_kernel[1, 1]()
-            cuda.synchronize()
-
-        out = stdout.getvalue()
-        self.assertIn('Generic function 1', out)
-        self.assertNotIn('Generic function 2', out)
-        self.assertNotIn('CUDA', out)
+        expected = GENERIC_FUNCTION_1
+        self.check_overload(kernel, expected)
 
     def test_cuda(self):
-        @cuda.jit
-        def call_kernel():
-            cuda_func_1()
+        def kernel(x):
+            cuda_func_1(x)
 
-        with captured_cuda_stdout() as stdout:
-            call_kernel[1, 1]()
-            cuda.synchronize()
-
-        out = stdout.getvalue()
-        self.assertIn('CUDA function 1', out)
-        self.assertNotIn('CUDA function 2', out)
-        self.assertNotIn('Generic', out)
+        expected = CUDA_FUNCTION_1
+        self.check_overload(kernel, expected)
 
     def test_generic_and_cuda(self):
-        @cuda.jit
-        def call_kernel():
-            generic_func_1()
-            cuda_func_1()
+        def kernel(x):
+            generic_func_1(x)
+            cuda_func_1(x)
 
-        with captured_cuda_stdout() as stdout:
-            call_kernel[1, 1]()
-            cuda.synchronize()
-
-        out = stdout.getvalue()
-        self.assertIn('Generic function 1', out)
-        self.assertIn('CUDA function 1', out)
-        self.assertNotIn('2', out)
+        expected = GENERIC_FUNCTION_1 * CUDA_FUNCTION_1
+        self.check_overload(kernel, expected)
 
     def test_call_two_generic_calls(self):
-        @cuda.jit
-        def call_kernel():
-            generic_func_1()
-            generic_func_2()
+        def kernel(x):
+            generic_func_1(x)
+            generic_func_2(x)
 
-        with captured_cuda_stdout() as stdout:
-            call_kernel[1, 1]()
-            cuda.synchronize()
-
-        out = stdout.getvalue()
-        self.assertIn('Generic function 1', out)
-        self.assertIn('Generic function 2', out)
+        expected = GENERIC_FUNCTION_1 * GENERIC_FUNCTION_2
+        self.check_overload(kernel, expected)
 
     def test_call_two_cuda_calls(self):
-        @cuda.jit
-        def call_kernel():
-            cuda_func_1()
-            cuda_func_2()
+        def kernel(x):
+            cuda_func_1(x)
+            cuda_func_2(x)
 
-        with captured_cuda_stdout() as stdout:
-            call_kernel[1, 1]()
-            cuda.synchronize()
-
-        out = stdout.getvalue()
-        self.assertIn('CUDA function 1', out)
-        self.assertIn('CUDA function 2', out)
+        expected = CUDA_FUNCTION_1 * CUDA_FUNCTION_2
+        self.check_overload(kernel, expected)
 
     def test_generic_calls_generic(self):
-        @cuda.jit
-        def call_kernel():
-            generic_calls_generic()
+        def kernel(x):
+            generic_calls_generic(x)
 
-        with captured_cuda_stdout() as stdout:
-            call_kernel[1, 1]()
-            cuda.synchronize()
-
-        out = stdout.getvalue()
-        self.assertIn("Generic calls generic", out)
-        self.assertIn("Generic function 1", out)
-        self.assertNotIn("CUDA", out)
+        expected = GENERIC_CALLS_GENERIC * GENERIC_FUNCTION_1
+        self.check_overload(kernel, expected)
 
     def test_generic_calls_cuda(self):
-        @cuda.jit
-        def call_kernel():
-            generic_calls_cuda()
+        def kernel(x):
+            generic_calls_cuda(x)
 
-        with captured_cuda_stdout() as stdout:
-            call_kernel[1, 1]()
-            cuda.synchronize()
-
-        out = stdout.getvalue()
-        self.assertIn("Generic calls CUDA", out)
-        self.assertIn("CUDA function 1", out)
+        expected = GENERIC_CALLS_CUDA * CUDA_FUNCTION_1
+        self.check_overload(kernel, expected)
 
     def test_cuda_calls_generic(self):
-        @cuda.jit
-        def call_kernel():
-            cuda_calls_generic()
+        def kernel(x):
+            cuda_calls_generic(x)
 
-        with captured_cuda_stdout() as stdout:
-            call_kernel[1, 1]()
-            cuda.synchronize()
-
-        out = stdout.getvalue()
-        self.assertIn("CUDA calls generic", out)
-        self.assertIn("Generic function 1", out)
+        expected = CUDA_CALLS_GENERIC * GENERIC_FUNCTION_1
+        self.check_overload(kernel, expected)
 
     def test_cuda_calls_cuda(self):
-        @cuda.jit
-        def call_kernel():
-            cuda_calls_cuda()
+        def kernel(x):
+            cuda_calls_cuda(x)
 
-        with captured_cuda_stdout() as stdout:
-            call_kernel[1, 1]()
-            cuda.synchronize()
-
-        out = stdout.getvalue()
-        self.assertIn("CUDA calls CUDA", out)
-        self.assertIn("CUDA function 1", out)
-        self.assertNotIn("Generic", out)
+        expected = CUDA_CALLS_CUDA * CUDA_FUNCTION_1
+        self.check_overload(kernel, expected)
 
     def test_call_hardware_overloaded(self):
-        @cuda.jit
-        def call_kernel():
-            hardware_overloaded()
+        def kernel(x):
+            hardware_overloaded(x)
 
-        with captured_cuda_stdout() as stdout:
-            call_kernel[1, 1]()
-            cuda.synchronize()
-
-        out = stdout.getvalue()
-        self.assertIn("CUDA hardware overloaded function", out)
-        self.assertNotIn("Generic hardware overloaded function", out)
+        expected = CUDA_HARDWARE_OL
+        self.check_overload(kernel, expected)
 
     def test_generic_calls_hardware_overloaded(self):
-        @cuda.jit
-        def call_kernel():
-            generic_calls_hardware_overloaded()
+        def kernel(x):
+            generic_calls_hardware_overloaded(x)
 
-        with captured_cuda_stdout() as stdout:
-            call_kernel[1, 1]()
-            cuda.synchronize()
-
-        out = stdout.getvalue()
-        self.assertIn("Generic calls hardware overloaded", out)
-        self.assertIn("CUDA hardware overloaded function", out)
-        self.assertNotIn("Generic hardware overloaded function", out)
+        expected = GENERIC_CALLS_HARDWARE_OL * CUDA_HARDWARE_OL
+        self.check_overload(kernel, expected)
 
     def test_cuda_calls_hardware_overloaded(self):
-        @cuda.jit
-        def call_kernel():
-            cuda_calls_hardware_overloaded()
+        def kernel(x):
+            cuda_calls_hardware_overloaded(x)
 
-        with captured_cuda_stdout() as stdout:
-            call_kernel[1, 1]()
-            cuda.synchronize()
-
-        out = stdout.getvalue()
-        self.assertIn("CUDA calls hardware overloaded", out)
-        self.assertIn("CUDA hardware overloaded function", out)
-        self.assertNotIn("Generic hardware overloaded function", out)
+        expected = CUDA_CALLS_HARDWARE_OL * CUDA_HARDWARE_OL
+        self.check_overload(kernel, expected)
 
     def test_hardware_overloaded_calls_hardware_overloaded(self):
-        @cuda.jit
-        def call_kernel():
-            hardware_overloaded_calls_hardware_overloaded()
+        def kernel(x):
+            hardware_overloaded_calls_hardware_overloaded(x)
 
-        with captured_cuda_stdout() as stdout:
-            call_kernel[1, 1]()
-            cuda.synchronize()
-
-        out = stdout.getvalue()
-        self.assertIn("CUDA hardware overloaded calls hardware overloaded", out)
-        self.assertIn("CUDA hardware overloaded function", out)
-        self.assertNotIn("Generic", out)
+        expected = CUDA_HARDWARE_OL_CALLS_HARDWARE_OL * CUDA_HARDWARE_OL
+        self.check_overload(kernel, expected)
 
 
 if __name__ == '__main__':
