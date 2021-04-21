@@ -1,10 +1,11 @@
 """
 Python wrapper that connects CPython interpreter to the numba dictobject.
 """
+from collections.abc import MutableMapping
 from numba.core.types import DictType, TypeRef
 from numba.core.imputils import numba_typeref_ctor
 from numba import njit, typeof
-from numba.core import types, errors, cgutils
+from numba.core import types, errors, config, cgutils
 from numba.core.extending import (
     overload_method,
     overload,
@@ -14,7 +15,7 @@ from numba.core.extending import (
     type_callable,
 )
 from numba.typed import dictobject
-from numba.typed.api import Dict
+# from numba.typed.api import Dict
 from numba.core.typing import signature
 
 
@@ -74,9 +75,139 @@ def _copy(d):
 
 
 def _from_meminfo_ptr(ptr, dicttype):
-    from .api import Dict
+    # from .api import Dict
     d = Dict(meminfo=ptr, dcttype=dicttype)
     return d
+
+
+class Dict(MutableMapping):
+    """A typed-dictionary usable in Numba compiled functions.
+
+    Implements the MutableMapping interface.
+    """
+
+    def __new__(cls, dcttype=None, meminfo=None):
+        if config.DISABLE_JIT:
+            return dict.__new__(dict)
+        else:
+            return object.__new__(cls)
+
+    @classmethod
+    def empty(cls, key_type, value_type):
+        """Create a new empty Dict with *key_type* and *value_type*
+        as the types for the keys and values of the dictionary respectively.
+        """
+        if config.DISABLE_JIT:
+            return dict()
+        else:
+            return cls(dcttype=DictType(key_type, value_type))
+
+    def __init__(self, **kwargs):
+        """
+        For users, the constructor does not take any parameters.
+        The keyword arguments are for internal use only.
+
+        Parameters
+        ----------
+        dcttype : numba.core.types.DictType; keyword-only
+            Used internally for the dictionary type.
+        meminfo : MemInfo; keyword-only
+            Used internally to pass the MemInfo object when boxing.
+        """
+        if kwargs:
+            self._dict_type, self._opaque = self._parse_arg(**kwargs)
+        else:
+            self._dict_type = None
+
+    def _parse_arg(self, dcttype, meminfo=None):
+        if not isinstance(dcttype, DictType):
+            raise TypeError('*dcttype* must be a DictType')
+
+        if meminfo is not None:
+            opaque = meminfo
+        else:
+            opaque = _make_dict(dcttype.key_type, dcttype.value_type)
+        return dcttype, opaque
+
+    @property
+    def _numba_type_(self):
+        if self._dict_type is None:
+            raise TypeError("invalid operation on untyped dictionary")
+        return self._dict_type
+
+    @property
+    def _typed(self):
+        """Returns True if the dictionary is typed.
+        """
+        return self._dict_type is not None
+
+    def _initialise_dict(self, key, value):
+        dcttype = types.DictType(typeof(key), typeof(value))
+        self._dict_type, self._opaque = self._parse_arg(dcttype)
+
+    def __getitem__(self, key):
+        if not self._typed:
+            raise KeyError(key)
+        else:
+            return _getitem(self, key)
+
+    def __setitem__(self, key, value):
+        if not self._typed:
+            self._initialise_dict(key, value)
+        return _setitem(self, key, value)
+
+    def __delitem__(self, key):
+        if not self._typed:
+            raise KeyError(key)
+        _delitem(self, key)
+
+    def __iter__(self):
+        if not self._typed:
+            return iter(())
+        else:
+            return iter(_iter(self))
+
+    def __len__(self):
+        if not self._typed:
+            return 0
+        else:
+            return _length(self)
+
+    def __contains__(self, key):
+        if len(self) == 0:
+            return False
+        else:
+            return _contains(self, key)
+
+    def __str__(self):
+        buf = []
+        for k, v in self.items():
+            buf.append("{}: {}".format(k, v))
+        return '{{{0}}}'.format(', '.join(buf))
+
+    def __repr__(self):
+        body = str(self)
+        prefix = str(self._dict_type)
+        return "{prefix}({body})".format(prefix=prefix, body=body)
+
+    def get(self, key, default=None):
+        if not self._typed:
+            return default
+        return _get(self, key, default)
+
+    def setdefault(self, key, default=None):
+        if not self._typed:
+            if default is not None:
+                self._initialise_dict(key, default)
+        return _setdefault(self, key, default)
+
+    def popitem(self):
+        if len(self) == 0:
+            raise KeyError('dictionary is empty')
+        return _popitem(self)
+
+    def copy(self):
+        return _copy(self)
 
 
 # XXX: should we have a better way to classmethod

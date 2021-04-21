@@ -32,7 +32,6 @@ from numba.typed.typedobjectutils import (_as_bytes, _cast, _nonoptional,
                                           _get_incref_decref,
                                           _container_get_data,
                                           _container_get_meminfo,)
-from numba.typed.api import DEFAULT_ALLOCATED
 from numba.cpython import listobj
 
 ll_list_type = cgutils.voidptr_t
@@ -48,6 +47,8 @@ _meminfo_listptr = types.MemInfoPointer(types.voidptr)
 INDEXTY = types.intp
 
 index_types = types.integer_domain
+
+DEFAULT_ALLOCATED = 0
 
 
 @register_model(ListType)
