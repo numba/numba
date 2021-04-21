@@ -898,7 +898,10 @@ class _IntrinsicTemplate(AbstractTemplate):
         target_hw = get_local_target(self.context)
         # make sure the target_hw is in the MRO for hw_clazz else bail
         if not target_hw.inherits_from(hw_clazz):
-            return None
+            msg = (f"Intrinsic being resolved on a target from which it does "
+                   f"not inherit. Local target is {target_hw}, declared "
+                   f"target class is {hw_clazz}.")
+            raise InternalError(msg)
         disp = dispatcher_registry[target_hw]
         tgtctx = disp.targetdescr.target_context
         # This is all workarounds...
