@@ -353,6 +353,10 @@ def array_contains(a, key):
     return key in a
 
 
+def swapaxes(a, a1, a2):
+    return np.swapaxes(a, a1, a2)
+
+
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
@@ -4039,6 +4043,59 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as e:
             cfunc(np.array([1, 2, 3, 4]), 'float32')
         self.assertIn("dtype must be a valid Numpy dtype", str(e.exception))
+
+    def test_swapaxes_basic(self):
+        pyfunc = swapaxes
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(10)
+            yield np.arange(10).reshape(2, 5)
+            yield np.arange(60).reshape(5, 4, 3)
+
+        for a in a_variations():
+            for a1 in range(-a.ndim, a.ndim):
+                for a2 in range(-a.ndim, a.ndim):
+                    expected = pyfunc(a, a1, a2)
+                    got = cfunc(a, a1, a2)
+                    self.assertPreciseEqual(expected, got)
+
+    def test_swapaxes_exception(self):
+        pyfunc = swapaxes
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc('abc', 0, 0)
+
+        self.assertIn('The first argument "arr" must be an array',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(4), 'abc', 0)
+
+        self.assertIn('The second argument "axis1" must be an integer',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(4), 0, 'abc')
+
+        self.assertIn('The third argument "axis2" must be an integer',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.arange(4), 1, 0)
+
+        self.assertIn('The second argument "axis1" is out of bounds for array'
+                      ' of given dimension', str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.arange(8).reshape(2, 4), 0, -3)
+
+        self.assertIn('The third argument "axis2" is out of bounds for array'
+                      ' of given dimension', str(raises.exception))
 
 
 class TestNPMachineParameters(TestCase):
