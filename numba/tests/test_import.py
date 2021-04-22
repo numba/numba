@@ -1,26 +1,11 @@
 import unittest
-import subprocess
-import sys
-
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, run_in_subprocess
 
 
 class TestNumbaImport(TestCase):
     """
     Test behaviour of importing Numba.
     """
-
-    def run_in_subproc(self, code, flags=None):
-        if flags is None:
-            flags = []
-        cmd = [sys.executable,] + flags + ["-c", code]
-        popen = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE)
-        out, err = popen.communicate()
-        if popen.returncode != 0:
-            msg = "process failed with code %s: stderr follows\n%s\n"
-            raise AssertionError(msg % (popen.returncode, err.decode()))
-        return out, err
 
     def test_laziness(self):
         """
@@ -49,7 +34,7 @@ class TestNumbaImport(TestCase):
             print(list(sys.modules))
             """
 
-        out, _ = self.run_in_subproc(code)
+        out, _ = run_in_subprocess(code)
         modlist = set(eval(out.strip()))
         unexpected = set(banlist) & set(modlist)
         self.assertFalse(unexpected, "some modules unexpectedly imported")
@@ -103,7 +88,7 @@ class TestNumbaImport(TestCase):
             """
 
         for code in (code1, code2):
-            out, _ = self.run_in_subproc(code)
+            out, _ = run_in_subprocess(code)
             modlist = set(eval(out.strip()))
             unexpected = set(banlist) & set(modlist)
             self.assertFalse(unexpected, "some modules unexpectedly imported")
@@ -115,12 +100,12 @@ class TestNumbaImport(TestCase):
         # See: https://github.com/numba/numba/issues/6831
         # bug in setuptools/packaging causing a deprecation warning
         flags = ["-Werror", "-Wignore::DeprecationWarning:packaging.version:"]
-        self.run_in_subproc(code, flags)
+        run_in_subprocess(code, flags)
 
     def test_import_star(self):
         # checks that "from numba import *" works.
         code = "from numba import *"
-        self.run_in_subproc(code)
+        run_in_subprocess(code)
 
 
 if __name__ == '__main__':

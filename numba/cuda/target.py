@@ -12,7 +12,6 @@ from numba.core.typing import cmathdecl
 from .cudadrv import nvvm
 from numba.cuda import codegen, nvvmutils
 from .decorators import jitdevice
-from numba.cpython import cmathimpl
 
 
 # -----------------------------------------------------------------------------
@@ -88,6 +87,7 @@ class CUDATargetContext(BaseContext):
         # registry is updated at import time.
         from numba.cpython import numbers, tupleobj, slicing # noqa: F401
         from numba.cpython import rangeobj # noqa: F401
+        from numba.cpython import cmathimpl
         from numba.np import arrayobj # noqa: F401
         from . import cudaimpl, printimpl, libdeviceimpl, mathimpl
         self.install_registry(cudaimpl.registry)
