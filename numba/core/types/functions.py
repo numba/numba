@@ -299,7 +299,7 @@ class BaseFunction(Callable):
             hw = temp_cls.metadata.get('hardware', DEFAULT_HARDWARE)
             if hw is not None:
                 hw_clazz = hardware_registry[hw]
-                if hw_clazz in target_hw.__mro__:
+                if target_hw.inherits_from(hw_clazz):
                     usable.append((temp_cls, hw_clazz, ix))
 
         # sort templates based on hardware specificity
