@@ -221,7 +221,7 @@ class TestReshape(unittest.TestCase):
         nparr = np.empty((4, 5))
         arr = Array.from_desc(0, nparr.shape, nparr.strides,
                               nparr.dtype.itemsize)
-        expect = nparr.reshape(5 * 4)
+        expect = nparr.reshape(-1)
         got = arr.reshape(-1)[0]
         self.assertEqual(got.shape, expect.shape)
         self.assertEqual(got.strides, expect.strides)
