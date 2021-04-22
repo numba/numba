@@ -1,4 +1,4 @@
-from numba import cuda
+from numba import cuda, njit
 from numba.core.extending import overload
 from numba.cuda.testing import CUDATestCase, skip_on_cudasim, unittest
 
@@ -191,6 +191,11 @@ class TestOverload(CUDATestCase):
         cuda.jit(kernel)[1, 1](x)
         self.assertEqual(x[0], expected)
 
+    def check_overload_cpu(self, kernel, expected):
+        x = np.ones(1, dtype=np.int32)
+        njit(kernel)(x)
+        self.assertEqual(x[0], expected)
+
     def test_generic(self):
         def kernel(x):
             generic_func_1(x)
@@ -282,8 +287,13 @@ class TestOverload(CUDATestCase):
         def kernel(x):
             hardware_overloaded_calls_hardware_overloaded(x)
 
+        # Check the CUDA overloads are used on CUDA
         expected = CUDA_HARDWARE_OL_CALLS_HARDWARE_OL * CUDA_HARDWARE_OL
         self.check_overload(kernel, expected)
+
+        # Also check that the CPU overloads are used on the CPU
+        expected = GENERIC_HARDWARE_OL_CALLS_HARDWARE_OL * GENERIC_HARDWARE_OL
+        self.check_overload_cpu(kernel, expected)
 
 
 if __name__ == '__main__':
