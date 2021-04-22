@@ -332,7 +332,7 @@ class Array(object):
                 raise ValueError("cannot infer valid shape for unknown dimension")
             else:
                 newdims = newdims[0:unknownidx] \
-                        + tuple((self.size // knownsize,)) \
+                        + (self.size // knownsize,) \
                         + newdims[unknownidx + 1:]
 
         newsize = functools.reduce(operator.mul, newdims, 1)
