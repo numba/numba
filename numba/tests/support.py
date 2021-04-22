@@ -147,7 +147,7 @@ class CompilationCache(object):
 
     def __init__(self):
         self.typingctx = typing.Context()
-        self.targetctx = cpu.CPUContext(self.typingctx)
+        self.targetctx = cpu.CPUContext(self.typingctx, 'cpu')
         self.cr_cache = {}
 
     def compile(self, func, args, return_type=None, flags=DEFAULT_FLAGS):

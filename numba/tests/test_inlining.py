@@ -55,8 +55,9 @@ class InlineTestPass(FunctionPass):
         for i, stmt in enumerate(block.body):
             if guard(find_callname,state.func_ir, stmt.value) is not None:
                 inline_closure_call(state.func_ir, {}, block, i, lambda: None,
-                    state.typingctx, (), state.type_annotation.typemap,
-                    state.type_annotation.calltypes)
+                                    state.typingctx, state.targetctx, (),
+                                    state.type_annotation.typemap,
+                                    state.type_annotation.calltypes)
                 break
         # also fix up the IR
         post_proc = postproc.PostProcessor(state.func_ir)
@@ -259,7 +260,7 @@ class TestInlining(TestCase):
                     if (guard(find_callname, state.func_ir, stmt.value)
                             is not None):
                         inline_closure_call(state.func_ir, {}, block, i,
-                            foo.py_func, state.typingctx,
+                            foo.py_func, state.typingctx, state.targetctx,
                             (state.type_annotation.typemap[stmt.value.args[0].name],),
                             state.type_annotation.typemap, state.calltypes)
                         break

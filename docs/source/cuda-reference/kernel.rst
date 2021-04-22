@@ -399,6 +399,19 @@ the GPU compute capability is below 7.x.
     all have the same value, otherwise it is 0. And pred is a boolean of whether
     or not all threads in the mask warp have the same warp.
 
+.. function:: numba.cuda.activemask()
+
+    Returns a 32-bit integer mask of all currently active threads in the
+    calling warp. The Nth bit is set if the Nth lane in the warp is active when
+    activemask() is called. Inactive threads are represented by 0 bits in the
+    returned mask. Threads which have exited the kernel are always marked as
+    inactive.
+
+.. function:: numba.cuda.lanemask_lt()
+
+    Returns a 32-bit integer mask of all lanes (including inactive ones) with
+    ID less than the current lane.
+
 
 Integer Intrinsics
 ~~~~~~~~~~~~~~~~~~
@@ -409,22 +422,23 @@ documentation
 <https://docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__INTRINSIC__INT.html>`_.
 
 
-.. function:: numba.cuda.popc
+.. function:: numba.cuda.popc(x)
 
-   Returns the number of set bits in the given value.
+   Returns the number of bits set in ``x``.
 
-.. function:: numba.cuda.brev
+.. function:: numba.cuda.brev(x)
 
-   Reverses the bit pattern of an integer value, for example 0b10110110
-   becomes 0b01101101.
+   Returns the reverse of the bit pattern of ``x``. For example, ``0b10110110``
+   becomes ``0b01101101``.
 
-.. function:: numba.cuda.clz
+.. function:: numba.cuda.clz(x)
 
-   Counts the number of leading zeros in a value.
+   Returns the number of leading zeros in ``x``.
 
-.. function:: numba.cuda.ffs
+.. function:: numba.cuda.ffs(x)
 
-   Find the position of the least significant bit set to 1 in an integer.
+   Returns the position of the first (least significant) bit set to 1 in ``x``,
+   where the least significant bit position is 1. ``ffs(0)`` returns 0.
 
 
 Floating Point Intrinsics
@@ -449,6 +463,7 @@ precision parts of the CUDA Toolkit documentation.
    ``cbrt`` and ``cbrtf`` in the C api. Supports float32, and float64 arguments
    only.
 
+
 Control Flow Instructions
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -464,3 +479,12 @@ semantics, please refer to the `relevant CUDA Toolkit documentation
 
     Select between two expressions, depending on the value of the first
     argument. Similar to LLVM's ``select`` instruction.
+
+
+Timer Intrinsics
+~~~~~~~~~~~~~~~~
+
+.. function:: numba.cuda.nanosleep(ns)
+
+    Suspends the thread for a sleep duration approximately close to the delay
+    ``ns``, specified in nanoseconds.

@@ -60,6 +60,9 @@ class CUDATargetContext(BaseContext):
     implement_powi_as_math_call = True
     strict_alignment = True
 
+    def __init__(self, typingctx, target='cuda'):
+        super().__init__(typingctx, target)
+
     @property
     def DIBuilder(self):
         if nvvm.NVVM().is_nvvm70:
