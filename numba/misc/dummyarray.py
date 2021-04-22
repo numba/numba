@@ -315,6 +315,7 @@ class Array(object):
             raise ValueError('order not C|F|A')
 
         # check for exactly one instance of -1 in newdims
+        # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/core/src/multiarray/shape.c#L470-L515   # noqa: E501
         unknownidx = -1
         knownsize = 1
         for i, dim in enumerate(newdims):
