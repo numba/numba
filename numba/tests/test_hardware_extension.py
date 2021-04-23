@@ -591,6 +591,96 @@ class TestHardwareHierarchySelection(TestCase):
         msg = "No target is registered against 'invalid_silicon'"
         self.assertIn(msg, str(raises.exception))
 
+    def test_intrinsic_selection(self):
+        """
+        Test to make sure that targets can share generic implementations and
+        cannot reach implementations that are not in their hardware hierarchy.
+        """
+
+        # NOTE: The actual operation performed by these functions is irrelevant
+        @intrinsic(hardware="generic")
+        def intrin_math_generic(tyctx, x, y):
+            sig = x(x, y)
+
+            def codegen(cgctx, builder, tyargs, llargs):
+                return builder.mul(*llargs)
+
+            return sig, codegen
+
+        @intrinsic(hardware="dpu")
+        def intrin_math_dpu(tyctx, x, y):
+            sig = x(x, y)
+
+            def codegen(cgctx, builder, tyargs, llargs):
+                return builder.sub(*llargs)
+
+            return sig, codegen
+
+        @intrinsic(hardware="cpu")
+        def intrin_math_cpu(tyctx, x, y):
+            sig = x(x, y)
+
+            def codegen(cgctx, builder, tyargs, llargs):
+                return builder.add(*llargs)
+
+            return sig, codegen
+
+        # CPU can use the CPU version
+        @njit
+        def cpu_foo_specific():
+            return intrin_math_cpu(3, 4)
+
+        self.assertEqual(cpu_foo_specific(), 7)
+
+        # CPU can use the 'generic' version
+        @njit
+        def cpu_foo_generic():
+            return intrin_math_generic(3, 4)
+
+        self.assertEqual(cpu_foo_generic(), 12)
+
+        # CPU cannot use the 'dpu' version
+        @njit
+        def cpu_foo_dpu():
+            return intrin_math_dpu(3, 4)
+
+        with self.assertRaises(errors.TypingError) as raises:
+            cpu_foo_dpu()
+
+        msgs = ["Function resolution cannot find any matches for function",
+                "intrinsic intrin_math_dpu",
+                "for the current hardware",]
+        for msg in msgs:
+            self.assertIn(msg, str(raises.exception))
+
+        # DPU can use the DPU version
+        @djit(nopython=True)
+        def dpu_foo_specific():
+            return intrin_math_dpu(3, 4)
+
+        self.assertEqual(dpu_foo_specific(), -1)
+
+        # DPU can use the 'generic' version
+        @djit(nopython=True)
+        def dpu_foo_generic():
+            return intrin_math_generic(3, 4)
+
+        self.assertEqual(dpu_foo_generic(), 12)
+
+        # DPU cannot use the 'cpu' version
+        @djit(nopython=True)
+        def dpu_foo_cpu():
+            return intrin_math_cpu(3, 4)
+
+        with self.assertRaises(errors.TypingError) as raises:
+            dpu_foo_cpu()
+
+        msgs = ["Function resolution cannot find any matches for function",
+                "intrinsic intrin_math_cpu",
+                "for the current hardware",]
+        for msg in msgs:
+            self.assertIn(msg, str(raises.exception))
+
 
 class TestHardwareOffload(TestCase):
     """In this use case the CPU compilation pipeline is extended with a new

@@ -1,7 +1,7 @@
 from numba.core import types, config, sigutils
 from numba.core.errors import DeprecationError
 from .compiler import (compile_device, declare_device_function, Dispatcher,
-                       compile_device_template)
+                       compile_device_dispatcher)
 from .simulator.kernel import FakeCUDAKernel
 
 
@@ -10,13 +10,16 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "positional argument.")
 
 
-def jitdevice(func, link=[], debug=None, inline=False, opt=True):
+def jitdevice(func, link=[], debug=None, inline=False, opt=True,
+              no_cpython_wrapper=None):
     """Wrapper for device-jit.
     """
+    # We ignore  the no_cpython_wrapper kwarg - it is passed by the callee when
+    # using overloads, but there is never a CPython wrapper for CUDA anyway.
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
     if link:
         raise ValueError("link keyword invalid for device function")
-    return compile_device_template(func, debug=debug, inline=inline, opt=opt)
+    return compile_device_dispatcher(func, debug=debug, inline=inline, opt=opt)
 
 
 def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
