@@ -29,6 +29,7 @@ from .cudadrv import nvvm, driver
 from .errors import missing_launch_config_msg, normalize_kernel_dimensions
 from .api import get_current_device
 from .args import wrap_arg
+from .descriptor import cuda_target
 
 
 def _nvvm_options_type(x):
@@ -852,6 +853,8 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
     # cases.
     _fold_args = False
 
+    targetdescr = cuda_target
+
     def __init__(self, py_func, sigs, targetoptions):
         self.py_func = py_func
         self.sigs = []
@@ -870,9 +873,7 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         self.targetoptions['extensions'] = \
             list(self.targetoptions.get('extensions', []))
 
-        from .descriptor import cuda_target
-
-        self.typingctx = cuda_target.typing_context
+        self.typingctx = self.targetdescr.typing_context
 
         self._tm = default_type_manager
 
