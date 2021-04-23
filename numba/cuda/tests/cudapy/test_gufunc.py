@@ -188,7 +188,7 @@ class TestCUDAGufunc(CUDATestCase):
 
     # Test inefficient use of the GPU where the inputs are all mapped onto a
     # single thread in a single block.
-    def test_inefficient_guvectorize(self):
+    def test_inefficient_launch_configuration(self):
         @guvectorize(['void(float32[:], float32[:], float32[:])'],
                      '(n),(n)->(n)', target='cuda')
         def numba_dist_cuda(a, b, dist):
@@ -196,20 +196,19 @@ class TestCUDAGufunc(CUDATestCase):
             for i in range(len):
                 dist[i] = a[i] * b[i]
 
-        a = np.random.rand(1024 * 1024 * 32).astype('float32')
-        b = np.random.rand(1024 * 1024 * 32).astype('float32')
+        a = np.random.rand(1024 * 32).astype('float32')
+        b = np.random.rand(1024 * 32).astype('float32')
         dist = np.zeros(a.shape[0]).astype('float32')
 
         with override_config('CUDA_LOW_OCCUPANCY_WARNINGS', 1):
             with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter('always', NumbaPerformanceWarning)
                 numba_dist_cuda(a, b, dist)
                 self.assertEqual(w[0].category, NumbaPerformanceWarning)
                 self.assertIn('Grid size', str(w[0].message))
                 self.assertIn('2 * SM count',
                               str(w[0].message))
 
-    def test_efficient_guvectorize(self):
+    def test_efficient_launch_configuration(self):
         @guvectorize(['void(float32[:], float32[:], float32[:])'],
                      '(n),(n)->(n)', nopython=True, target='cuda')
         def numba_dist_cuda2(a, b, dist):
@@ -217,15 +216,14 @@ class TestCUDAGufunc(CUDATestCase):
             for i in range(len):
                 dist[i] = a[i] * b[i]
 
-        a = np.random.rand(1024 * 1024 * 128).astype('float32').\
-            reshape((1024 * 1024, 128))
-        b = np.random.rand(1024 * 1024 * 128).astype('float32').\
-            reshape((1024 * 1024, 128))
+        a = np.random.rand(524288 * 2).astype('float32').\
+            reshape((524288, 2))
+        b = np.random.rand(524288 * 2).astype('float32').\
+            reshape((524288, 2))
         dist = np.zeros_like(a)
 
         with override_config('CUDA_LOW_OCCUPANCY_WARNINGS', 1):
             with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter('always', NumbaPerformanceWarning)
                 numba_dist_cuda2(a, b, dist)
                 self.assertEqual(len(w), 0)
 
