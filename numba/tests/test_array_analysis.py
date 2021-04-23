@@ -16,7 +16,8 @@ from numba.core import (
     registry,
     utils,
 )
-from numba.tests.support import TestCase, tag, skip_parfors_unsupported
+from numba.tests.support import (TestCase, tag, skip_parfors_unsupported,
+                                 skip_unless_scipy)
 from numba.parfors.array_analysis import EquivSet, ArrayAnalysis
 from numba.core.compiler import Compiler, Flags, PassManager
 from numba.core.ir_utils import remove_dead
@@ -625,6 +626,7 @@ class TestArrayAnalysis(TestCase):
                                        self.with_equiv('F', 'D'),],
                                idempotent=False)
 
+    @skip_unless_scipy
     def test_numpy_calls(self):
         def test_zeros(n):
             a = np.zeros(n)
