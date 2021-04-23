@@ -23,10 +23,6 @@ class CUDATestCase(SerialMixin, TestCase):
     its tests are run between tests from a CUDATestCase.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._low_occupancy_warnings = config.CUDA_LOW_OCCUPANCY_WARNINGS
-
     @classmethod
     def setUpClass(cls):
         # If the test class defines a setUp method, we need to run both
