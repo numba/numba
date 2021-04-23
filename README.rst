@@ -49,7 +49,7 @@ Supported Platforms
 Dependencies
 ============
 
-* Python versions: 3.6-3.9
+* Python versions: 3.7-3.9
 * llvmlite 0.36.*
 * NumPy >=1.15 (can build with 1.11 for ABI compatibility)
 
