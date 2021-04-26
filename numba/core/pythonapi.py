@@ -1631,31 +1631,42 @@ class ObjModeUtils:
         gv.initializer = gv.type.pointee(None)
         gv.linkage = 'internal'
 
+        if serialize.is_serialiable(fnty.dispatcher):
+            serialized_dispatcher = self.pyapi.serialize_object(
+                (fnty.dispatcher, tuple(argtypes)),
+            )
+            compile_args = self.pyapi.unserialize(serialized_dispatcher)
+            self.pyapi.err_clear()
+            failed_to_serialize = cgutils.is_null(builder, compile_args)
+            can_serialize = builder.not_(failed_to_serialize)
+        else:
+            can_serialize = cgutils.false_bit
+
         cached = builder.load(gv)
         with builder.if_then(cgutils.is_null(builder, cached)):
-            if serialize.is_serialiable(fnty.dispatcher):
-                cls = type(self)
-                compiler = self.pyapi.unserialize(
-                    self.pyapi.serialize_object(cls._call_objmode_dispatcher)
-                )
-                serialized_dispatcher = self.pyapi.serialize_object(
-                    (fnty.dispatcher, tuple(argtypes)),
-                )
-                compile_args = self.pyapi.unserialize(serialized_dispatcher)
-                callee = self.pyapi.call_function_objargs(
-                    compiler, [compile_args],
-                )
-                # Clean up
-                self.pyapi.decref(compiler)
-                self.pyapi.decref(compile_args)
-            else:
-                entry_pt = fnty.dispatcher.compile(tuple(argtypes))
-                callee = tyctx.add_dynamic_addr(
-                    builder, id(entry_pt), info="with_objectmode",
-                )
-            # Incref the dispatcher and cache it
-            self.pyapi.incref(callee)
-            builder.store(callee, gv)
+            with builder.if_else(can_serialize) as (label_can, label_not):
+                with label_can:
+                    cls = type(self)
+                    compiler = self.pyapi.unserialize(
+                        self.pyapi.serialize_object(cls._call_objmode_dispatcher)
+                    )
+                    callee = self.pyapi.call_function_objargs(
+                        compiler, [compile_args],
+                    )
+                    # Clean up
+                    self.pyapi.decref(compiler)
+                    self.pyapi.decref(compile_args)
+                    # Incref the dispatcher and cache it
+                    self.pyapi.incref(callee)
+                    builder.store(callee, gv)
+                with label_not:
+                    entry_pt = fnty.dispatcher.compile(tuple(argtypes))
+                    callee = tyctx.add_dynamic_addr(
+                        builder, id(entry_pt), info="with_objectmode",
+                    )
+                    # Incref the dispatcher and cache it
+                    self.pyapi.incref(callee)
+                    builder.store(callee, gv)
 
         callee = builder.load(gv)
         return callee
