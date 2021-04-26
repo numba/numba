@@ -7,9 +7,7 @@ import copyreg
 
 
 import pickle
-from cloudpickle import cloudpickle_fast
-
-cloudpickle = cloudpickle_fast
+from numba.cloudpickle import cloudpickle_fast as cloudpickle
 
 
 #
@@ -161,7 +159,7 @@ def is_serialiable(obj):
             return True
 
 
-class NumbaPickler(cloudpickle_fast.CloudPickler):
+class NumbaPickler(cloudpickle.CloudPickler):
     pass
 
 
