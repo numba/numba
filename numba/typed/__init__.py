@@ -14,4 +14,7 @@ def __getattr__(name):
         mod = importlib.import_module(modpath, __name__)
         return getattr(mod, name)
     else:
-        return importlib.import_module(f".{name}", __name__)
+        try:
+            return importlib.import_module(f".{name}", __name__)
+        except ModuleNotFoundError:
+            raise AttributeError
