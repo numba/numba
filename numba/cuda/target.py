@@ -90,7 +90,7 @@ class CUDATargetContext(BaseContext):
         from numba.cpython import cmathimpl
         from numba.np import arrayobj # noqa: F401
         try:
-            from numba.np import npdatetime
+            from numba.np import npdatetime # noqa: F401
         except NotImplementedError:
             pass
         from . import cudaimpl, printimpl, libdeviceimpl, mathimpl
