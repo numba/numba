@@ -11,7 +11,6 @@ from numba.core.typing import cmathdecl
 
 from .cudadrv import nvvm
 from numba.cuda import codegen, nvvmutils
-from numba.cpython import cmathimpl
 
 
 # -----------------------------------------------------------------------------
