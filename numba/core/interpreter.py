@@ -1123,11 +1123,10 @@ class Interpreter(object):
         self.current_block.append(ir.EnterWith(contextmanager=ctxmgr,
                                                begin=inst.offset,
                                                end=exitpt, loc=self.loc,))
-        # exitfn is None in py3.6
-        if exitfn is not None:
-            # Store exit fn
-            exit_fn_obj = ir.Const(None, loc=self.loc)
-            self.store(value=exit_fn_obj, name=exitfn)
+
+        # Store exit fn
+        exit_fn_obj = ir.Const(None, loc=self.loc)
+        self.store(value=exit_fn_obj, name=exitfn)
 
     def op_SETUP_EXCEPT(self, inst):
         # Removed since python3.8
