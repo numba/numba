@@ -15,7 +15,6 @@ from numba.core.extending import (
     type_callable,
 )
 from numba.typed import dictobject
-# from numba.typed.api import Dict
 from numba.core.typing import signature
 
 
@@ -75,7 +74,6 @@ def _copy(d):
 
 
 def _from_meminfo_ptr(ptr, dicttype):
-    # from .api import Dict
     d = Dict(meminfo=ptr, dcttype=dicttype)
     return d
 
