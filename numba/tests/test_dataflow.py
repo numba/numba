@@ -3,8 +3,7 @@ import warnings
 import unittest
 from numba.core.compiler import compile_isolated, Flags
 from numba.core import types, errors
-from numba.tests.support import (TestCase, CompilationCache,
-                                 skip_tryexcept_supported)
+from numba.tests.support import TestCase, CompilationCache
 
 
 enable_pyobj_flags = Flags()
@@ -197,14 +196,6 @@ class TestDataFlow(TestCase):
 
     def test_for_break_npm(self):
         self.test_for_break(no_pyobj_flags)
-
-    @skip_tryexcept_supported
-    def test_unsupported_op_code(self, flags=force_pyobj_flags):
-        pyfunc = unsupported_op_code
-        with self.assertRaises(errors.UnsupportedError) as raises:
-            compile_isolated(pyfunc, (), flags=flags)
-        msg="SETUP_EXCEPT"
-        self.assertIn(msg, str(raises.exception))
 
 
 if __name__ == '__main__':
