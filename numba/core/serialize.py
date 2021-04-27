@@ -159,8 +159,23 @@ def is_serialiable(obj):
             return True
 
 
+def _no_pickle(obj):
+    raise pickle.PicklingError(f"pickling of {type(obj)} is disabled")
+
+
+def disable_pickling(typ):
+    NumbaPickler.disabled_types.add(typ)
+    # The following is needed for Py3.7
+    NumbaPickler.dispatch_table[typ] = _no_pickle
+
+
 class NumbaPickler(cloudpickle.CloudPickler):
-    pass
+    disabled_types = set()
+
+    def reducer_override(self, obj):
+        if type(obj) in self.disabled_types:
+            _no_pickle(obj)  # noreturn
+        return super().reducer_override(obj)
 
 
 def _custom_reduce__custompickled(cp):
