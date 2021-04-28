@@ -365,15 +365,11 @@ def unbox_optional(typ, obj, c):
 
 @box(types.SliceType)
 def box_slice(typ, val, c):
-    start = c.box(types.int64, c.builder.extract_value(val, 0))
-    stop = c.box(types.int64, c.builder.extract_value(val, 1))
-    # if typ.has_step:
-    step = c.box(types.int64, c.builder.extract_value(val, 2))
-    # else:
-    #     step = c.pyapi.get_null_object()
-
+    sli = c.context.make_helper(c.builder, typ, val)
+    start = c.box(types.int64, sli.start)
+    stop = c.box(types.int64, sli.stop)
+    step = c.box(types.int64, sli.step)
     slice_val = c.pyapi.slice_new(start, stop, step)
-
     return slice_val
 
 
