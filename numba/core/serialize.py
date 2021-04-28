@@ -43,7 +43,7 @@ def _numba_unpickle(address, bytedata, hashed):
     try:
         obj = _unpickled_memo[key]
     except KeyError:
-        _unpickled_memo[key] = obj = pickle.loads(bytedata)
+        _unpickled_memo[key] = obj = cloudpickle.loads(bytedata)
     return obj
 
 
