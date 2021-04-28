@@ -100,6 +100,14 @@ def global_npy_int_tuple():
     return tup_npy_ints[0] + tup_npy_ints[1]
 
 
+_glbl_np_bool_T = np.bool_(True)
+_glbl_np_bool_F = np.bool_(False)
+
+
+def global_npy_bool():
+    return _glbl_np_bool_T, _glbl_np_bool_F
+
+
 class TestGlobals(unittest.TestCase):
 
     def check_global_ndarray(self, **jitargs):
@@ -216,6 +224,13 @@ class TestGlobals(unittest.TestCase):
 
     def test_global_npy_int_tuple(self):
         pyfunc = global_npy_int_tuple
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(), jitfunc())
+
+    def test_global_npy_bool(self):
+        # Test global NumPy bool
+        # See issue https://github.com/numba/numba/issues/6979
+        pyfunc = global_npy_bool
         jitfunc = njit(pyfunc)
         self.assertEqual(pyfunc(), jitfunc())
 
