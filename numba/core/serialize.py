@@ -7,7 +7,7 @@ import copyreg
 
 
 import pickle
-from numba.cloudpickle import cloudpickle_fast as cloudpickle
+from numba import cloudpickle
 
 
 #
@@ -164,15 +164,22 @@ def _no_pickle(obj):
 
 
 def disable_pickling(typ):
+    """This is called on types to disable pickling
+    """
     NumbaPickler.disabled_types.add(typ)
     # The following is needed for Py3.7
     NumbaPickler.dispatch_table[typ] = _no_pickle
+    # Return `typ` to allow use as a decorator
+    return typ
 
 
 class NumbaPickler(cloudpickle.CloudPickler):
     disabled_types = set()
+    """A set of types that pickling cannot is disabled.
+    """
 
     def reducer_override(self, obj):
+        # Overridden to disable pickling of certain types
         if type(obj) in self.disabled_types:
             _no_pickle(obj)  # noreturn
         return super().reducer_override(obj)
@@ -182,7 +189,7 @@ def _custom_reduce__custompickled(cp):
     return cp._reduce()
 
 
-NumbaPickler._dispatch_table[_CustomPickled] = _custom_reduce__custompickled
+NumbaPickler.dispatch_table[_CustomPickled] = _custom_reduce__custompickled
 
 
 class ReduceMixin(abc.ABC):

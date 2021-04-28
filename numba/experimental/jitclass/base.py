@@ -78,6 +78,7 @@ def _getargs(fn_sig):
     return args
 
 
+@disable_pickling
 class JitClassType(type):
     """
     The type of any jitclass.
@@ -121,9 +122,6 @@ class JitClassType(type):
         bind = cls._ctor_sig.bind(None, *args, **kwargs)
         bind.apply_defaults()
         return cls._ctor(*bind.args[1:], **bind.kwargs)
-
-
-disable_pickling(JitClassType)
 
 
 ##############################################################################
