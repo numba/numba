@@ -89,14 +89,14 @@ class FunctionDescriptor(object):
         if self.modname == _dynamic_modname:
             return _dynamic_module
         else:
-            # ensure module exist
-            __import__(self.modname)
             try:
-                return sys.modules[self.modname]
-            except Exception:
+                # ensure module exist
+                __import__(self.modname)            # can raise ImportError
+                return sys.modules[self.modname]    # can raise KeyError
+            except (ImportError, KeyError):
                 raise ModuleNotFoundError(
                     f"can't compile {self.qualname}: "
-                    f"import of module {self.modname} failed")
+                    f"import of module {self.modname} failed") from None
 
     def lookup_function(self):
         """
