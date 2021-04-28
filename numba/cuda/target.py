@@ -11,7 +11,6 @@ from numba.core.typing import cmathdecl
 
 from .cudadrv import nvvm
 from numba.cuda import codegen, nvvmutils
-from .decorators import jitdevice
 from numba.cpython import cmathimpl
 
 
@@ -39,6 +38,7 @@ class CUDATypingContext(typing.BaseContext):
                     raise ValueError('using cpu function on device '
                                      'but its compilation is disabled')
                 opt = val.targetoptions.get('opt', True)
+                from .decorators import jitdevice
                 jd = jitdevice(val, debug=val.targetoptions.get('debug'),
                                opt=opt)
                 # cache the device function for future use and to avoid
@@ -59,6 +59,9 @@ VALID_CHARS = re.compile(r'[^a-z0-9]', re.I)
 class CUDATargetContext(BaseContext):
     implement_powi_as_math_call = True
     strict_alignment = True
+
+    def __init__(self, typingctx, target='cuda'):
+        super().__init__(typingctx, target)
 
     @property
     def DIBuilder(self):

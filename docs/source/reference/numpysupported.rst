@@ -498,6 +498,7 @@ The following top-level functions are supported:
 * :func:`numpy.sort` (no optional arguments)
 * :func:`numpy.split`
 * :func:`numpy.stack`
+* :func:`numpy.swapaxes`
 * :func:`numpy.take` (only the 2 first arguments)
 * :func:`numpy.transpose`
 * :func:`numpy.trapz` (only the 3 first arguments)

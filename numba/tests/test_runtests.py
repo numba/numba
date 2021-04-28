@@ -4,6 +4,13 @@ import subprocess
 from numba import cuda
 import unittest
 
+try:
+    import git  # from gitpython package
+except ImportError:
+    has_gitpython = False
+else:
+    has_gitpython = True
+
 
 class TestCase(unittest.TestCase):
     """These test cases are meant to test the Numba test infrastructure itself.
@@ -121,6 +128,7 @@ class TestCase(unittest.TestCase):
         # The tests must be equivalent
         self.assertEqual(sorted(full), sorted(sliced))
 
+    @unittest.skipUnless(has_gitpython, "Requires gitpython")
     def test_gitdiff(self):
         # Check for git
         try:

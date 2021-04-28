@@ -543,8 +543,11 @@ class TestLowLevelExtending(TestCase):
         """
         test_ir = compiler.run_frontend(mk_func_test_impl)
         typingctx = cpu_target.typing_context
+        targetctx = cpu_target.target_context
         typingctx.refresh()
-        typing_res = type_inference_stage(typingctx, test_ir, (), None)
+        targetctx.refresh()
+        typing_res = type_inference_stage(typingctx, targetctx, test_ir, (),
+                                          None)
         self.assertTrue(
             any(
                 isinstance(a, types.MakeFunctionLiteral)

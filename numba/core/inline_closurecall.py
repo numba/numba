@@ -524,7 +524,7 @@ class InlineWorker(object):
         callee_ir = reconstruct_ssa(callee_ir)
         callee_ir._definitions = ir_utils.build_definitions(callee_ir.blocks)
         f_typemap, f_return_type, f_calltypes, _ = typed_passes.type_inference_stage(
-                self.typingctx, callee_ir, arg_typs, None)
+                self.typingctx, self.targetctx, callee_ir, arg_typs, None)
         callee_ir = PreLowerStripPhis()._strip_phi_nodes(callee_ir)
         callee_ir._definitions = ir_utils.build_definitions(callee_ir.blocks)
         canonicalize_array_math(callee_ir, f_typemap,
@@ -538,8 +538,8 @@ class InlineWorker(object):
 
 
 def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
-                        arg_typs=None, typemap=None, calltypes=None,
-                        work_list=None, callee_validator=None,
+                        targetctx=None, arg_typs=None, typemap=None,
+                        calltypes=None, work_list=None, callee_validator=None,
                         replace_freevars=True):
     """Inline the body of `callee` at its callsite (`i`-th instruction of `block`)
 
@@ -638,10 +638,10 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
         numba.core.analysis.dead_branch_prune(callee_ir, arg_typs)
         try:
             f_typemap, f_return_type, f_calltypes, _ = typed_passes.type_inference_stage(
-                    typingctx, callee_ir, arg_typs, None)
-        except Exception:
+                    typingctx, targetctx, callee_ir, arg_typs, None)
+        except Exception as e:
             f_typemap, f_return_type, f_calltypes, _ = typed_passes.type_inference_stage(
-                    typingctx, callee_ir, arg_typs, None)
+                    typingctx, targetctx, callee_ir, arg_typs, None)
             pass
         canonicalize_array_math(callee_ir, f_typemap,
                                 f_calltypes, typingctx)

@@ -29,6 +29,7 @@ from .cudadrv import nvvm, driver
 from .errors import missing_launch_config_msg, normalize_kernel_dimensions
 from .api import get_current_device
 from .args import wrap_arg
+from .descriptor import cuda_target
 
 
 def _nvvm_options_type(x):
@@ -136,8 +137,8 @@ class CUDACompiler(CompilerBase):
 def compile_cuda(pyfunc, return_type, args, debug=False, inline=False,
                  fastmath=False, nvvm_options=None):
     from .descriptor import cuda_target
-    typingctx = cuda_target.typingctx
-    targetctx = cuda_target.targetctx
+    typingctx = cuda_target.typing_context
+    targetctx = cuda_target.target_context
 
     flags = CUDAFlags()
     # Do not compile (generate native code), just lower (to LLVM)
@@ -232,7 +233,7 @@ def compile_ptx_for_current_device(pyfunc, args, debug=False, device=False,
                        fastmath=fastmath, cc=cc, opt=True)
 
 
-class DeviceFunctionTemplate(serialize.ReduceMixin):
+class DeviceDispatcher(serialize.ReduceMixin):
     """Unmaterialized device function
     """
     def __init__(self, pyfunc, debug, inline, opt):
@@ -240,7 +241,7 @@ class DeviceFunctionTemplate(serialize.ReduceMixin):
         self.debug = debug
         self.inline = inline
         self.opt = opt
-        self._compileinfos = {}
+        self.overloads = {}
         name = getattr(pyfunc, '__name__', 'unknown')
         self.__name__ = f"{name} <CUDA device function>".format(name)
 
@@ -249,7 +250,43 @@ class DeviceFunctionTemplate(serialize.ReduceMixin):
 
     @classmethod
     def _rebuild(cls, py_func, debug, inline):
-        return compile_device_template(py_func, debug=debug, inline=inline)
+        return compile_device_dispatcher(py_func, debug=debug, inline=inline)
+
+    def get_call_template(self, args, kws):
+        # Copied and simplified from _DispatcherBase.get_call_template.
+        """
+        Get a typing.ConcreteTemplate for this dispatcher and the given
+        *args* and *kws* types.  This allows to resolve the return type.
+
+        A (template, pysig, args, kws) tuple is returned.
+        """
+        # Ensure an overload is available
+        self.compile(tuple(args))
+
+        # Create function type for typing
+        func_name = self.py_func.__name__
+        name = "CallTemplate({0})".format(func_name)
+
+        # The `key` isn't really used except for diagnosis here,
+        # so avoid keeping a reference to `cfunc`.
+        call_template = typing.make_concrete_template(
+            name, key=func_name, signatures=self.nopython_signatures)
+        pysig = utils.pysignature(self.py_func)
+
+        return call_template, pysig, args, kws
+
+    @property
+    def nopython_signatures(self):
+        # All overloads are for nopython mode, because there is only
+        # nopython mode in CUDA
+        return [info.signature for info in self.overloads.values()]
+
+    def get_overload(self, sig):
+        # NOTE: This dispatcher seems to be used as the key for the dict of
+        # implementations elsewhere in Numba, so we return this dispatcher
+        # instead of a compiled entry point as in
+        # _DispatcherBase.get_overload().
+        return self
 
     def compile(self, args):
         """Compile the function for the given argument types.
@@ -259,11 +296,11 @@ class DeviceFunctionTemplate(serialize.ReduceMixin):
 
         Returns the `CompileResult`.
         """
-        if args not in self._compileinfos:
+        if args not in self.overloads:
             cres = compile_cuda(self.py_func, None, args, debug=self.debug,
                                 inline=self.inline)
-            first_definition = not self._compileinfos
-            self._compileinfos[args] = cres
+            first_definition = not self.overloads
+            self.overloads[args] = cres
             libs = [cres.library]
 
             if first_definition:
@@ -274,7 +311,7 @@ class DeviceFunctionTemplate(serialize.ReduceMixin):
                 cres.target_context.add_user_function(self, cres.fndesc, libs)
 
         else:
-            cres = self._compileinfos[args]
+            cres = self.overloads[args]
 
         return cres
 
@@ -294,7 +331,7 @@ class DeviceFunctionTemplate(serialize.ReduceMixin):
         # the user attempts to inspect LLVM IR or PTX before the function has
         # been called for the given arguments from a jitted kernel.
         self.compile(args)
-        cres = self._compileinfos[args]
+        cres = self.overloads[args]
         return "\n\n".join([str(mod) for mod in cres.library.modules])
 
     def inspect_ptx(self, args, nvvm_options={}):
@@ -320,20 +357,19 @@ class DeviceFunctionTemplate(serialize.ReduceMixin):
         return ptx
 
 
-def compile_device_template(pyfunc, debug=False, inline=False, opt=True):
-    """Create a DeviceFunctionTemplate object and register the object to
-    the CUDA typing context.
+def compile_device_dispatcher(pyfunc, debug=False, inline=False, opt=True):
+    """Create a DeviceDispatcher and register it to the CUDA typing context.
     """
     from .descriptor import cuda_target
 
-    dft = DeviceFunctionTemplate(pyfunc, debug=debug, inline=inline, opt=opt)
+    dispatcher = DeviceDispatcher(pyfunc, debug=debug, inline=inline, opt=opt)
 
     class device_function_template(AbstractTemplate):
-        key = dft
+        key = dispatcher
 
         def generic(self, args, kws):
             assert not kws
-            return dft.compile(args).signature
+            return dispatcher.compile(args).signature
 
         def get_template_info(cls):
             basepath = os.path.dirname(os.path.dirname(numba.__file__))
@@ -350,9 +386,9 @@ def compile_device_template(pyfunc, debug=False, inline=False, opt=True):
             }
             return info
 
-    typingctx = cuda_target.typingctx
-    typingctx.insert_user_function(dft, device_function_template)
-    return dft
+    typingctx = cuda_target.typing_context
+    typingctx.insert_user_function(dispatcher, device_function_template)
+    return dispatcher
 
 
 def compile_device(pyfunc, return_type, args, inline=True, debug=False):
@@ -361,8 +397,8 @@ def compile_device(pyfunc, return_type, args, inline=True, debug=False):
 
 def declare_device_function(name, restype, argtypes):
     from .descriptor import cuda_target
-    typingctx = cuda_target.typingctx
-    targetctx = cuda_target.targetctx
+    typingctx = cuda_target.typing_context
+    targetctx = cuda_target.target_context
     sig = typing.signature(restype, *argtypes)
     extfn = ExternFunction(name, sig)
 
@@ -817,6 +853,8 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
     # cases.
     _fold_args = False
 
+    targetdescr = cuda_target
+
     def __init__(self, py_func, sigs, targetoptions):
         self.py_func = py_func
         self.sigs = []
@@ -835,9 +873,7 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         self.targetoptions['extensions'] = \
             list(self.targetoptions.get('extensions', []))
 
-        from .descriptor import cuda_target
-
-        self.typingctx = cuda_target.typingctx
+        self.typingctx = self.targetdescr.typing_context
 
         self._tm = default_type_manager
 

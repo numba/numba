@@ -980,7 +980,15 @@ class Lower(BaseLower):
             argvals = self.fold_call_args(
                 fnty, signature, expr.args, expr.vararg, expr.kws,
             )
-        impl = self.context.get_function(fnty, signature)
+        tname = expr.hardware
+        if tname is not None:
+            from numba.core.extending_hardware import \
+                resolve_dispatcher_from_str
+            disp = resolve_dispatcher_from_str(tname)
+            hw_ctx = disp.targetdescr.target_context
+            impl = hw_ctx.get_function(fnty, signature)
+        else:
+            impl = self.context.get_function(fnty, signature)
         if signature.recvr:
             # The "self" object is passed as the function object
             # for bounded function

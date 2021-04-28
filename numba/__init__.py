@@ -53,6 +53,9 @@ from numba import experimental
 import numba.core.withcontexts
 from numba.core.withcontexts import objmode_context as objmode
 
+# Initialize hardware
+import numba.core.extending_hardware
+
 # Keep this for backward compatibility.
 test = runtests.main
 
@@ -123,8 +126,8 @@ def _ensure_critical_deps():
     from numba.np.numpy_support import numpy_version
     from numba.core.utils import PYVERSION
 
-    if PYVERSION < (3, 6):
-        raise ImportError("Numba needs Python 3.6 or greater")
+    if PYVERSION < (3, 7):
+        raise ImportError("Numba needs Python 3.7 or greater")
 
     if numpy_version < (1, 15):
         raise ImportError("Numba needs NumPy 1.15 or greater")
