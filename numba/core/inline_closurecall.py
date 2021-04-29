@@ -32,7 +32,6 @@ from numba.core.analysis import (
     compute_use_defs,
     compute_live_variables)
 from numba.core import postproc
-from numba.cpython.rangeobj import range_iter_len
 from numba.np.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
 import numpy as np
 import operator
@@ -1069,6 +1068,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
         # this doesn't work in objmode as it's effectively untyped
         if typed:
             len_func_var = ir.Var(scope, mk_unique_var("len_func"), loc)
+            from numba.cpython.rangeobj import range_iter_len
             stmts.append(_new_definition(func_ir, len_func_var,
                         ir.Global('range_iter_len', range_iter_len, loc=loc),
                         loc))

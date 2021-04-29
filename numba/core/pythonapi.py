@@ -169,7 +169,6 @@ class PythonAPI(object):
         """
         Note: Maybe called multiple times when lowering a function
         """
-        from numba.core import boxing
         self.context = context
         self.builder = builder
 

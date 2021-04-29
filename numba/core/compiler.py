@@ -6,7 +6,6 @@ from numba.core.tracing import event
 from numba.core import (utils, errors, typing, interpreter, bytecode, postproc,
                         config, callconv, cpu)
 from numba.parfors.parfor import ParforDiagnostics
-from numba.core.inline_closurecall import InlineClosureCallPass
 from numba.core.errors import CompilerError
 from numba.core.environment import lookup_environment
 
@@ -292,6 +291,7 @@ def run_frontend(func, inline_closures=False, emit_dels=False):
     bc = bytecode.ByteCode(func_id=func_id)
     func_ir = interp.interpret(bc)
     if inline_closures:
+        from numba.core.inline_closurecall import InlineClosureCallPass
         inline_pass = InlineClosureCallPass(func_ir, cpu.ParallelOptions(False),
                                             {}, False)
         inline_pass.run()
