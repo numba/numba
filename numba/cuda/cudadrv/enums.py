@@ -114,6 +114,22 @@ CU_MEMHOSTREGISTER_PORTABLE = 0x01
 CU_MEMHOSTREGISTER_DEVICEMAP = 0x02
 
 
+# If set, managed memory is accessible from all streams on all devices.
+CU_MEM_ATTACH_GLOBAL = 0x01
+
+# If set on a platform where the device attribute
+# cudaDevAttrConcurrentManagedAccess is zero, then managed memory is
+# only accessible on the host (unless explicitly attached to a stream
+# with cudaStreamAttachMemAsync, in which case it can be used in kernels
+# launched on that stream).
+CU_MEM_ATTACH_HOST = 0x02
+
+# If set on a platform where the device attribute
+# cudaDevAttrConcurrentManagedAccess is zero, then managed memory accesses
+# on the associated device must only be from a single stream.
+CU_MEM_ATTACH_SINGLE = 0x04
+
+
 # Default event flag
 CU_EVENT_DEFAULT = 0x0
 # Event uses blocking synchronization

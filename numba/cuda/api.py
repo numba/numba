@@ -4,11 +4,12 @@ API that are reported to numba.cuda
 
 
 import contextlib
+import os
 
 import numpy as np
 
 from .cudadrv import devicearray, devices, driver
-from .args import In, Out, InOut
+from numba.core import config
 
 
 # NDarray device helper
@@ -19,10 +20,13 @@ gpus = devices.gpus
 
 
 @require_context
-def from_cuda_array_interface(desc, owner=None):
+def from_cuda_array_interface(desc, owner=None, sync=True):
     """Create a DeviceNDArray from a cuda-array-interface description.
-    The *owner* is the owner of the underlying memory.
+    The ``owner`` is the owner of the underlying memory.
     The resulting DeviceNDArray will acquire a reference from it.
+
+    If ``sync`` is ``True``, then the imported stream (if present) will be
+    synchronized.
     """
     version = desc.get('version')
     # Mask introduced in version 1
@@ -43,23 +47,34 @@ def from_cuda_array_interface(desc, owner=None):
     devptr = driver.get_devptr_for_active_ctx(desc['data'][0])
     data = driver.MemoryPointer(
         current_context(), devptr, size=size, owner=owner)
+    stream_ptr = desc.get('stream', None)
+    if stream_ptr is not None:
+        stream = external_stream(stream_ptr)
+        if sync and config.CUDA_ARRAY_INTERFACE_SYNC:
+            stream.synchronize()
+    else:
+        stream = 0 # No "Numba default stream", not the CUDA default stream
     da = devicearray.DeviceNDArray(shape=shape, strides=strides,
-                                   dtype=dtype, gpu_data=data)
+                                   dtype=dtype, gpu_data=data,
+                                   stream=stream)
     return da
 
 
-def as_cuda_array(obj):
+def as_cuda_array(obj, sync=True):
     """Create a DeviceNDArray from any object that implements
     the :ref:`cuda array interface <cuda-array-interface>`.
 
     A view of the underlying GPU buffer is created.  No copying of the data
     is done.  The resulting DeviceNDArray will acquire a reference from `obj`.
+
+    If ``sync`` is ``True``, then the imported stream (if present) will be
+    synchronized.
     """
     if not is_cuda_array(obj):
         raise TypeError("*obj* doesn't implement the cuda array interface.")
     else:
         return from_cuda_array_interface(obj.__cuda_array_interface__,
-                                         owner=obj)
+                                         owner=obj, sync=sync)
 
 
 def is_cuda_array(obj):
@@ -110,8 +125,8 @@ def to_device(obj, stream=0, copy=True, to=None):
 
 
 @require_context
-def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
-    """device_array(shape, dtype=np.float, strides=None, order='C', stream=0)
+def device_array(shape, dtype=np.float_, strides=None, order='C', stream=0):
+    """device_array(shape, dtype=np.float_, strides=None, order='C', stream=0)
 
     Allocate an empty device ndarray. Similar to :meth:`numpy.empty`.
     """
@@ -122,8 +137,38 @@ def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
 
 
 @require_context
-def pinned_array(shape, dtype=np.float, strides=None, order='C'):
-    """pinned_array(shape, dtype=np.float, strides=None, order='C')
+def managed_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
+                  attach_global=True):
+    """managed_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
+                     attach_global=True)
+
+    Allocate a np.ndarray with a buffer that is managed.
+    Similar to np.empty().
+
+    Managed memory is supported on Linux, and is considered experimental on
+    Windows.
+
+    :param attach_global: A flag indicating whether to attach globally. Global
+                          attachment implies that the memory is accessible from
+                          any stream on any device. If ``False``, attachment is
+                          *host*, and memory is only accessible by devices
+                          with Compute Capability 6.0 and later.
+    """
+    shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
+                                                         order)
+    bytesize = driver.memory_size_from_info(shape, strides, dtype.itemsize)
+    buffer = current_context().memallocmanaged(bytesize,
+                                               attach_global=attach_global)
+    npary = np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
+                       buffer=buffer)
+    managedview = np.ndarray.view(npary, type=devicearray.ManagedNDArray)
+    managedview.device_setup(buffer, stream=stream)
+    return managedview
+
+
+@require_context
+def pinned_array(shape, dtype=np.float_, strides=None, order='C'):
+    """pinned_array(shape, dtype=np.float_, strides=None, order='C')
 
     Allocate an :class:`ndarray <numpy.ndarray>` with a buffer that is pinned
     (pagelocked).  Similar to :func:`np.empty() <numpy.empty>`.
@@ -138,9 +183,10 @@ def pinned_array(shape, dtype=np.float, strides=None, order='C'):
 
 
 @require_context
-def mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0,
+def mapped_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
                  portable=False, wc=False):
-    """mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0, portable=False, wc=False)
+    """mapped_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
+                    portable=False, wc=False)
 
     Allocate a mapped ndarray with a buffer that is pinned and mapped on
     to the device. Similar to np.empty()
@@ -200,14 +246,14 @@ def _prepare_shape_strides_dtype(shape, strides, dtype, order):
     if isinstance(strides, int):
         strides = (strides,)
     else:
-        if shape == ():
-            shape = (1,)
         strides = strides or _fill_stride_by_order(shape, dtype, order)
     return shape, strides, dtype
 
 
 def _fill_stride_by_order(shape, dtype, order):
     nd = len(shape)
+    if nd == 0:
+        return ()
     strides = [0] * nd
     if order == 'C':
         strides[-1] = dtype.itemsize
@@ -240,7 +286,7 @@ def _contiguous_strides_like_array(ary):
     # Stride permutation. E.g. a stride array (4, -2, 12) becomes
     # [(1, -2), (0, 4), (2, 12)]
     strideperm = [ x for x in enumerate(ary.strides) ]
-    strideperm.sort(key = lambda x: x[1])
+    strideperm.sort(key=lambda x: x[1])
 
     # Compute new strides using permutation
     strides = [0] * len(ary.strides)
@@ -299,6 +345,7 @@ def stream():
     """
     return current_context().create_stream()
 
+
 @require_context
 def default_stream():
     """
@@ -310,6 +357,7 @@ def default_stream():
     """
     return current_context().get_default_stream()
 
+
 @require_context
 def legacy_default_stream():
     """
@@ -317,12 +365,14 @@ def legacy_default_stream():
     """
     return current_context().get_legacy_default_stream()
 
+
 @require_context
 def per_thread_default_stream():
     """
     Get the per-thread default CUDA stream.
     """
     return current_context().get_per_thread_default_stream()
+
 
 @require_context
 def external_stream(ptr):
@@ -332,6 +382,7 @@ def external_stream(ptr):
     :type ptr: int
     """
     return current_context().create_external_stream(ptr)
+
 
 # Page lock
 @require_context
@@ -359,8 +410,8 @@ def mapped(*arylist, **kws):
     devarylist = []
     for ary in arylist:
         pm = current_context().mempin(ary, driver.host_pointer(ary),
-                                    driver.host_memory_size(ary),
-                                    mapped=True)
+                                      driver.host_memory_size(ary),
+                                      mapped=True)
         pmlist.append(pm)
         devary = devicearray.from_array_like(ary, gpu_data=pm, stream=stream)
         devarylist.append(devary)
@@ -385,7 +436,9 @@ def event(timing=True):
     evt = current_context().create_event(timing=timing)
     return evt
 
+
 event_elapsed_time = driver.event_elapsed_time
+
 
 # Device selection
 
@@ -435,9 +488,16 @@ def detect():
     for dev in devlist:
         attrs = []
         cc = dev.compute_capability
-        attrs += [('compute capability', '%d.%d' % cc)]
-        attrs += [('pci device id', dev.PCI_DEVICE_ID)]
-        attrs += [('pci bus id', dev.PCI_BUS_ID)]
+        kernel_timeout = dev.KERNEL_EXEC_TIMEOUT
+        tcc = dev.TCC_DRIVER
+        fp32_to_fp64_ratio = dev.SINGLE_TO_DOUBLE_PRECISION_PERF_RATIO
+        attrs += [('Compute Capability', '%d.%d' % cc)]
+        attrs += [('PCI Device ID', dev.PCI_DEVICE_ID)]
+        attrs += [('PCI Bus ID', dev.PCI_BUS_ID)]
+        attrs += [('Watchdog', 'Enabled' if kernel_timeout else 'Disabled')]
+        if os.name == "nt":
+            attrs += [('Compute Mode', 'TCC' if tcc else 'WDDM')]
+        attrs += [('FP32/FP64 Performance Ratio', fp32_to_fp64_ratio)]
         if cc < (2, 0):
             support = '[NOT SUPPORTED: CC < 2.0]'
         else:

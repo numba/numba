@@ -23,6 +23,10 @@
 #include "../core/runtime/nrt.h"
 #endif
 
+/* Defines hashsecret variables (see issue #6386) */
+int64_t _numba_hashsecret_siphash_k0;
+int64_t _numba_hashsecret_siphash_k1;
+int64_t _numba_hashsecret_djbx33a_suffix;
 
 /* NOTE: import_array() is macro, not a function.  It returns NULL on
    failure */
@@ -112,6 +116,16 @@ PYCC(pycc_init_) (PyObject *module, PyMethodDef *defs,
                                     env_def_t *envs,
                                     env_gv_t *envgvs)
 {
+    /* Aligns hashsecret with values in current python process so that
+     * hashes computed inside the pycc module are correct if imported
+     * by the current process. Imports in a new process get the right
+     * hash secret through:
+     * `numba.cpython.hashing._load_hashsecret`.
+     */
+    _numba_hashsecret_siphash_k0 = _Py_HashSecret.siphash.k0;
+    _numba_hashsecret_siphash_k1 = _Py_HashSecret.siphash.k1;
+    _numba_hashsecret_djbx33a_suffix = _Py_HashSecret.djbx33a.suffix;
+
     PyMethodDef *fdef;
     PyObject *modname = NULL;
     PyObject *docobj = NULL;

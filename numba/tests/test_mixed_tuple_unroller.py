@@ -15,7 +15,8 @@ from numba.core.untyped_passes import (FixupArgs, TranslateByteCode,
                                        SimplifyCFG, IterLoopCanonicalization,
                                        LiteralUnroll, PreserveIR)
 from numba.core.typed_passes import (NopythonTypeInference, IRLegalization,
-                                     NoPythonBackend, PartialTypeInference)
+                                     NoPythonBackend, PartialTypeInference,
+                                     NativeLowering)
 from numba.core.ir_utils import (compute_cfg_from_blocks, flatten_labels)
 from numba.core.types.functions import _header_lead
 
@@ -108,6 +109,7 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
                 pm.add_pass(PreserveIR, "save IR for later inspection")
 
                 # lower
+                pm.add_pass(NativeLowering, "native lowering")
                 pm.add_pass(NoPythonBackend, "nopython mode backend")
 
                 # finalise the contents
@@ -1859,6 +1861,7 @@ class CapturingCompiler(CompilerBase):
                  "ensure IR is legal prior to lowering")
 
         # lower
+        add_pass(NativeLowering, "native lowering")
         add_pass(NoPythonBackend, "nopython mode backend")
         pm.finalize()
         return [pm]

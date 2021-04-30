@@ -18,6 +18,7 @@ from numba.core import types, cgutils
 from numba.core.errors import TypingError
 from .arrayobj import make_array, _empty_nd_impl, array_copy
 from numba.np import numpy_support as np_support
+from numba.core.overload_glue import glue_lowering
 
 ll_char = ir.IntType(8)
 ll_char_p = ll_char.as_pointer()
@@ -345,7 +346,7 @@ def call_xxdot(context, builder, conjugate, dtype,
                            [ll_char, ll_char, intp_t,    # kind, conjugate, n
                             ll_void_p, ll_void_p, ll_void_p,  # a, b, out
                             ])
-    fn = builder.module.get_or_insert_function(fnty, name="numba_xxdot")
+    fn = cgutils.get_or_insert_function(builder.module, fnty, "numba_xxdot")
 
     kind = get_blas_kind(dtype)
     kind_val = ir.Constant(ll_char, ord(kind))
@@ -369,7 +370,7 @@ def call_xxgemv(context, builder, do_trans,
                             ll_void_p, ll_void_p, intp_t,     # alpha, a, lda
                             ll_void_p, ll_void_p, ll_void_p,  # x, beta, y
                             ])
-    fn = builder.module.get_or_insert_function(fnty, name="numba_xxgemv")
+    fn = cgutils.get_or_insert_function(builder.module, fnty, "numba_xxgemv")
 
     dtype = m_type.dtype
     alpha = make_constant_slot(context, builder, dtype, 1.0)
@@ -410,7 +411,7 @@ def call_xxgemm(context, builder,
                             ll_void_p, intp_t, ll_void_p,  # b, ldb, beta
                             ll_void_p, intp_t,             # c, ldc
                             ])
-    fn = builder.module.get_or_insert_function(fnty, name="numba_xxgemm")
+    fn = cgutils.get_or_insert_function(builder.module, fnty, "numba_xxgemm")
 
     m, k = x_shapes
     _k, n = y_shapes
@@ -520,7 +521,7 @@ def dot_2_vv(context, builder, sig, args, conjugate=False):
     return builder.load(out)
 
 
-@lower_builtin(np.dot, types.Array, types.Array)
+@glue_lowering(np.dot, types.Array, types.Array)
 def dot_2(context, builder, sig, args):
     """
     np.dot(a, b)
@@ -544,8 +545,7 @@ def dot_2(context, builder, sig, args):
 
 lower_builtin(operator.matmul, types.Array, types.Array)(dot_2)
 
-
-@lower_builtin(np.vdot, types.Array, types.Array)
+@glue_lowering(np.vdot, types.Array, types.Array)
 def vdot(context, builder, sig, args):
     """
     np.vdot(a, b)
@@ -724,8 +724,7 @@ def dot_3_mm(context, builder, sig, args):
                              out._getvalue())
 
 
-@lower_builtin(np.dot, types.Array, types.Array,
-               types.Array)
+@glue_lowering(np.dot, types.Array, types.Array, types.Array)
 def dot_3(context, builder, sig, args):
     """
     np.dot(a, b, out)

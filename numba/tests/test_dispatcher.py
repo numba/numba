@@ -1,4 +1,3 @@
-import errno
 import multiprocessing
 import os
 import platform
@@ -127,8 +126,6 @@ def check_access_is_preventable():
     tempdir = temp_directory('test_cache')
     test_dir = (os.path.join(tempdir, 'writable_test'))
     os.mkdir(test_dir)
-    # assume access prevention is not possible
-    ret = False
     # check a write is possible
     with open(os.path.join(test_dir, 'write_ok'), 'wt') as f:
         f.write('check1')
@@ -137,19 +134,18 @@ def check_access_is_preventable():
     try:
         with open(os.path.join(test_dir, 'write_forbidden'), 'wt') as f:
             f.write('check2')
-    except (OSError, IOError) as e:
+        # access prevention is not possible
+        return False
+    except PermissionError:
         # Check that the cause of the exception is due to access/permission
         # as per
         # https://github.com/conda/conda/blob/4.5.0/conda/gateways/disk/permissions.py#L35-L37  # noqa: E501
-        eno = getattr(e, 'errno', None)
-        if eno in (errno.EACCES, errno.EPERM):
-            # errno reports access/perm fail so access prevention via
-            # `chmod 500` works for this user.
-            ret = True
+        # errno reports access/perm fail so access prevention via
+        # `chmod 500` works for this user.
+        return True
     finally:
         os.chmod(test_dir, 0o775)
         shutil.rmtree(test_dir)
-    return ret
 
 
 _access_preventable = check_access_is_preventable()
@@ -1033,9 +1029,8 @@ class BaseCacheTest(TestCase):
             for fn in cached:
                 try:
                     os.unlink(fn)
-                except OSError as e:
-                    if e.errno != errno.ENOENT:
-                        raise
+                except FileNotFoundError:
+                    pass
         mod = import_dynamic(self.modname)
         self.assertEqual(mod.__file__.rstrip('co'), self.modfile)
         return mod
@@ -1044,9 +1039,7 @@ class BaseCacheTest(TestCase):
         try:
             return [fn for fn in os.listdir(self.cache_dir)
                     if not fn.endswith(('.pyc', ".pyo"))]
-        except OSError as e:
-            if e.errno != errno.ENOENT:
-                raise
+        except FileNotFoundError:
             return []
 
     def get_cache_mtimes(self):
@@ -1265,6 +1258,17 @@ class TestCache(BaseCacheUsecasesTest):
             f = mod.closure4
             self.assertPreciseEqual(f(3), 12) # 3 + 9 = 12
             self.check_pycache(5) # 1 nbi, 4 nbc
+
+    def test_first_class_function(self):
+        mod = self.import_module()
+        f = mod.first_class_function_usecase
+        self.assertEqual(f(mod.first_class_function_mul, 1), 1)
+        self.assertEqual(f(mod.first_class_function_mul, 10), 100)
+        self.assertEqual(f(mod.first_class_function_add, 1), 2)
+        self.assertEqual(f(mod.first_class_function_add, 10), 20)
+        # 1 + 1 + 1 nbi, 1 + 1 + 2 nbc - a separate cache for each call to `f`
+        # with a different callback.
+        self.check_pycache(7)
 
     def test_cache_reuse(self):
         mod = self.import_module()

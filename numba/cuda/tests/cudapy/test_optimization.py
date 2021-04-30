@@ -45,7 +45,7 @@ class TestOptimization(CUDATestCase):
         kernel[1, 1](x)
 
         # Grab the PTX for the one definition that has just been jitted
-        ptx = next(iter(kernel.inspect_asm()))[1]
+        ptx = next(iter(kernel.inspect_asm().items()))[1]
 
         for fragment in removed_by_opt:
             with self.subTest(fragment=fragment):

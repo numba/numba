@@ -47,7 +47,7 @@ class TestReduction(CUDATestCase):
         A = (np.arange(64, dtype=np.float64) + 1)
         expect = A.prod()
         got = prod_reduce(A, init=1)
-        self.assertTrue(np.allclose(expect, got))
+        np.testing.assert_allclose(expect, got)
 
     def test_max_reduce(self):
         max_reduce = cuda.Reduce(lambda a, b: max(a, b))

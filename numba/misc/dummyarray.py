@@ -7,6 +7,7 @@ import ctypes
 import numpy as np
 
 from numba import _helperlib
+from numba.core import config
 
 
 Extent = namedtuple("Extent", ["begin", "end"])
@@ -164,7 +165,48 @@ class Array(object):
         self.itemsize = itemsize
         self.size = functools.reduce(operator.mul, self.shape, 1)
         self.extent = self._compute_extent()
-        self.flags = self._compute_layout()
+        if config.NPY_RELAXED_STRIDES_CHECKING:
+            self.flags = self._relaxed_compute_layout()
+        else:
+            self.flags = self._compute_layout()
+
+    def _relaxed_compute_layout(self):
+        # The logic here is based on that in _UpdateContiguousFlags from
+        # numpy/core/src/multiarray/flagsobject.c in NumPy v1.19.1 (commit
+        # 13661ac70).
+        # https://github.com/numpy/numpy/blob/maintenance/1.19.x/numpy/core/src/multiarray/flagsobject.c#L123-L191
+
+        # Records have no dims, and we can treat them as contiguous
+        if not self.dims:
+            return {'C_CONTIGUOUS': True, 'F_CONTIGUOUS': True}
+
+        # If this is a broadcast array then it is not contiguous
+        if any([dim.stride == 0 for dim in self.dims]):
+            return {'C_CONTIGUOUS': False, 'F_CONTIGUOUS': False}
+
+        flags = {'C_CONTIGUOUS': True, 'F_CONTIGUOUS': True}
+
+        # Check C contiguity
+        sd = self.itemsize
+        for dim in reversed(self.dims):
+            if dim.size == 0:
+                # Contiguous by definition
+                return {'C_CONTIGUOUS': True, 'F_CONTIGUOUS': True}
+            if dim.size != 1:
+                if dim.stride != sd:
+                    flags['C_CONTIGUOUS'] = False
+                sd *= dim.size
+
+        # Check F contiguity
+        sd = self.itemsize
+        for dim in self.dims:
+            if dim.size != 1:
+                if dim.stride != sd:
+                    flags['F_CONTIGUOUS'] = False
+                    return flags
+                sd *= dim.size
+
+        return flags
 
     def _compute_layout(self):
         flags = {}
@@ -271,6 +313,28 @@ class Array(object):
             raise TypeError('unknown keyword arguments %s' % kws.keys())
         if order not in 'CFA':
             raise ValueError('order not C|F|A')
+
+        # check for exactly one instance of -1 in newdims
+        # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/core/src/multiarray/shape.c#L470-L515   # noqa: E501
+        unknownidx = -1
+        knownsize = 1
+        for i, dim in enumerate(newdims):
+            if dim < 0:
+                if unknownidx == -1:
+                    unknownidx = i
+                else:
+                    raise ValueError("can only specify one unknown dimension")
+            else:
+                knownsize *= dim
+
+        # compute the missing dimension
+        if unknownidx >= 0:
+            if knownsize == 0 or self.size % knownsize != 0:
+                raise ValueError("cannot infer valid shape for unknown dimension")
+            else:
+                newdims = newdims[0:unknownidx] \
+                        + (self.size // knownsize,) \
+                        + newdims[unknownidx + 1:]
 
         newsize = functools.reduce(operator.mul, newdims, 1)
 

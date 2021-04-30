@@ -3,6 +3,7 @@ from numba.cuda.testing import skip_on_cudasim
 from numba import cuda
 from numba.core import types
 from numba.cuda.testing import CUDATestCase
+import re
 import unittest
 
 
@@ -17,8 +18,10 @@ class TestCudaDebugInfo(CUDATestCase):
 
     def _check(self, fn, sig, expect):
         asm = self._getasm(fn, sig=sig)
-        assertfn = self.assertIn if expect else self.assertNotIn
-        assertfn('.section .debug_info {', asm, msg=asm)
+        re_section_dbginfo = re.compile(r"\.section\s+\.debug_info\s+{")
+        match = re_section_dbginfo.search(asm)
+        assertfn = self.assertIsNotNone if expect else self.assertIsNone
+        assertfn(match, msg=asm)
 
     def test_no_debuginfo_in_asm(self):
         @cuda.jit(debug=False)

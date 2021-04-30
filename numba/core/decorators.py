@@ -11,7 +11,12 @@ import logging
 from numba.core.errors import DeprecationError, NumbaDeprecationWarning
 from numba.stencils.stencil import stencil
 from numba.core import config, extending, sigutils, registry
+from numba.core.extending_hardware import (JitDecorator, hardware_registry,
+                                           dispatcher_registry,
+                                           resolve_dispatcher_from_str)
+from numba.core.registry import TargetRegistry
 
+jit_registry = TargetRegistry()
 
 _logger = logging.getLogger(__name__)
 
@@ -23,8 +28,9 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "Signatures should be passed as the first "
                                  "positional argument.")
 
+
 def jit(signature_or_function=None, locals={}, cache=False,
-        pipeline_class=None, boundscheck=False, **options):
+        pipeline_class=None, boundscheck=None, **options):
     """
     This decorator is used to compile a Python function into native code.
 
@@ -84,15 +90,18 @@ def jit(signature_or_function=None, locals={}, cache=False,
                 NOTE: This inlining is performed at the Numba IR level and is in
                 no way related to LLVM inlining.
 
-            boundscheck: bool
+            boundscheck: bool or None
                 Set to True to enable bounds checking for array indices. Out
                 of bounds accesses will raise IndexError. The default is to
-                not do bounds checking. If bounds checking is disabled, out of
-                bounds accesses can produce garbage results or segfaults.
+                not do bounds checking. If False, bounds checking is disabled,
+                out of bounds accesses can produce garbage results or segfaults.
                 However, enabling bounds checking will slow down typical
                 functions, so it is recommended to only use this flag for
                 debugging. You can also set the NUMBA_BOUNDSCHECK environment
-                variable to 0 or 1 to globally override this flag.
+                variable to 0 or 1 to globally override this flag. The default
+                value is None, which under normal execution equates to False,
+                but if debug is set to True then bounds checking will be
+                enabled.
 
     Returns
     --------
@@ -182,8 +191,12 @@ def jit(signature_or_function=None, locals={}, cache=False,
         return wrapper
 
 
+# Register the cpu token as using `jit` as the jitter
+jit_registry[hardware_registry['cpu']] = jit
+
 def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
-    dispatcher = registry.dispatcher_registry[target]
+
+    dispatcher = resolve_dispatcher_from_str(target)
 
     def wrapper(func):
         if extending.is_jitted(func):

@@ -1,5 +1,4 @@
 import numpy as np
-import time
 from numba import cuda, float64, void
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.core import config
@@ -11,6 +10,7 @@ if config.ENABLE_CUDASIM:
 else:
     tpb = 16
 SM_SIZE = tpb, tpb
+
 
 class TestCudaLaplace(CUDATestCase):
     def test_laplace_small(self):
@@ -38,7 +38,7 @@ class TestCudaLaplace(CUDATestCase):
 
             err_sm[ty, tx] = 0
             if j >= 1 and j < n - 1 and i >= 1 and i < m - 1:
-                Anew[j, i] = 0.25 * ( A[j, i + 1] + A[j, i - 1] \
+                Anew[j, i] = 0.25 * ( A[j, i + 1] + A[j, i - 1]
                                       + A[j - 1, i] + A[j + 1, i])
                 err_sm[ty, tx] = Anew[j, i] - A[j, i]
 
@@ -63,8 +63,6 @@ class TestCudaLaplace(CUDATestCase):
             if tx == 0 and ty == 0:
                 error[by, bx] = err_sm[0, 0]
 
-
-
         if config.ENABLE_CUDASIM:
             NN, NM = 4, 4
             iter_max = 20
@@ -76,7 +74,6 @@ class TestCudaLaplace(CUDATestCase):
         Anew = np.zeros((NN, NM), dtype=np.float64)
 
         n = NN
-        m = NM
 
         tol = 1.0e-6
         error = 1.0
@@ -85,7 +82,6 @@ class TestCudaLaplace(CUDATestCase):
             A[j, 0] = 1.0
             Anew[j, 0] = 1.0
 
-        timer = time.time()
         iter = 0
 
         blockdim = (tpb, tpb)
@@ -106,7 +102,6 @@ class TestCudaLaplace(CUDATestCase):
 
             derror_grid.copy_to_host(error_grid, stream=stream)
 
-
             # error_grid is available on host
             stream.synchronize()
 
@@ -118,8 +113,6 @@ class TestCudaLaplace(CUDATestCase):
             dAnew = tmp
 
             iter += 1
-
-        runtime = time.time() - timer
 
 
 if __name__ == '__main__':

@@ -9,6 +9,7 @@ from numba.tests.support import (
     redirect_c_stdout,
 )
 from numba.cuda.cuda_paths import get_conda_ctk
+from numba.cuda.cudadrv import devices, libs
 from numba.core import config
 from numba.tests.support import TestCase
 import unittest
@@ -34,6 +35,20 @@ class ContextResettingTestCase(CUDATestCase):
     def tearDown(self):
         from numba.cuda.cudadrv.devices import reset
         reset()
+
+
+def ensure_supported_ccs_initialized():
+    from numba.cuda import is_available as cuda_is_available
+    from numba.cuda.cudadrv import nvvm
+
+    if cuda_is_available():
+        # Ensure that cudart.so is loaded and the list of supported compute
+        # capabilities in the nvvm module is populated before a fork. This is
+        # needed because some compilation tests don't require a CUDA context,
+        # but do use NVVM, and it is required that libcudart.so should be
+        # loaded before a fork (note that the requirement is not explicitly
+        # documented).
+        nvvm.get_supported_ccs()
 
 
 def skip_on_cudasim(reason):
@@ -68,6 +83,38 @@ def skip_without_nvdisasm(reason):
 def skip_with_nvdisasm(reason):
     nvdisasm_path = shutil.which('nvdisasm')
     return unittest.skipIf(nvdisasm_path is not None, reason)
+
+
+def cc_X_or_above(major, minor):
+    if not config.ENABLE_CUDASIM:
+        cc = devices.get_context().device.compute_capability
+        return cc >= (major, minor)
+    else:
+        return True
+
+
+def skip_unless_cc_32(fn):
+    return unittest.skipUnless(cc_X_or_above(3, 2), "requires cc >= 3.2")(fn)
+
+
+def skip_unless_cc_50(fn):
+    return unittest.skipUnless(cc_X_or_above(5, 0), "requires cc >= 5.0")(fn)
+
+
+def skip_unless_cc_60(fn):
+    return unittest.skipUnless(cc_X_or_above(6, 0), "requires cc >= 6.0")(fn)
+
+
+def cudadevrt_missing():
+    try:
+        libs.check_static_lib('cudadevrt')
+    except FileNotFoundError:
+        return True
+    return False
+
+
+def skip_if_cudadevrt_missing(fn):
+    return unittest.skipIf(cudadevrt_missing(), 'cudadevrt missing')(fn)
 
 
 class CUDATextCapture(object):

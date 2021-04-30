@@ -543,12 +543,15 @@ class TestLowLevelExtending(TestCase):
         """
         test_ir = compiler.run_frontend(mk_func_test_impl)
         typingctx = cpu_target.typing_context
+        targetctx = cpu_target.target_context
         typingctx.refresh()
-        typemap, _, _ = type_inference_stage(typingctx, test_ir, (), None)
+        targetctx.refresh()
+        typing_res = type_inference_stage(typingctx, targetctx, test_ir, (),
+                                          None)
         self.assertTrue(
             any(
                 isinstance(a, types.MakeFunctionLiteral)
-                for a in typemap.values()
+                for a in typing_res.typemap.values()
             )
         )
 
@@ -1373,6 +1376,26 @@ class TestIntrinsic(TestCase):
         # the second rebuilt object is the same as the first
         second = pickle.loads(pickled)
         self.assertIs(rebuilt._defn, second._defn)
+
+    def test_docstring(self):
+
+        @intrinsic
+        def void_func(typingctx, a: int):
+            """void_func docstring"""
+            sig = types.void(types.int32)
+
+            def codegen(context, builder, signature, args):
+                pass  # do nothing, return None, should be turned into
+                # dummy value
+
+            return sig, codegen
+
+        self.assertEqual("numba.tests.test_extending", void_func.__module__)
+        self.assertEqual("void_func", void_func.__name__)
+        self.assertEqual("TestIntrinsic.test_docstring.<locals>.void_func",
+                         void_func.__qualname__)
+        self.assertDictEqual({'a': int}, void_func.__annotations__)
+        self.assertEqual("void_func docstring", void_func.__doc__)
 
 
 class TestRegisterJitable(unittest.TestCase):

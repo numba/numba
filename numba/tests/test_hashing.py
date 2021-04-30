@@ -54,7 +54,11 @@ class TestHashingSetup(TestCase):
         with warnings.catch_warnings(record=True) as warns:
             # Cause all warnings to always be triggered.
             warnings.simplefilter("always")
-            import numba
+            from numba import njit
+            @njit
+            def foo():
+                hash(1)
+            foo()
             assert len(warns) > 0
             expect = "FNV hashing is not implemented in Numba. See PEP 456"
             for w in warns:
@@ -75,7 +79,7 @@ class BaseTest(TestCase):
         cfunc = self.cfunc
         for val in list(values):
             nb_hash = cfunc(val)
-            self.assertIsInstance(nb_hash, utils.INT_TYPES)
+            self.assertIsInstance(nb_hash, int)
             try:
                 self.assertEqual(nb_hash, hash(val))
             except AssertionError as e:

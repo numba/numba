@@ -103,30 +103,30 @@ def init_gdb_codegen(cgctx, builder, signature, args,
 
     # insert getpid, getpid is always successful, call without concern!
     fnty = ir.FunctionType(int32_t, tuple())
-    getpid = mod.get_or_insert_function(fnty, "getpid")
+    getpid = cgutils.get_or_insert_function(mod, fnty, "getpid")
 
     # insert snprintf
     # int snprintf(char *str, size_t size, const char *format, ...);
     fnty = ir.FunctionType(
         int32_t, (char_ptr, intp_t, char_ptr), var_arg=True)
-    snprintf = mod.get_or_insert_function(fnty, "snprintf")
+    snprintf = cgutils.get_or_insert_function(mod, fnty, "snprintf")
 
     # insert fork
     fnty = ir.FunctionType(int32_t, tuple())
-    fork = mod.get_or_insert_function(fnty, "fork")
+    fork = cgutils.get_or_insert_function(mod, fnty, "fork")
 
     # insert execl
     fnty = ir.FunctionType(int32_t, (char_ptr, char_ptr), var_arg=True)
-    execl = mod.get_or_insert_function(fnty, "execl")
+    execl = cgutils.get_or_insert_function(mod, fnty, "execl")
 
     # insert sleep
     fnty = ir.FunctionType(int32_t, (int32_t,))
-    sleep = mod.get_or_insert_function(fnty, "sleep")
+    sleep = cgutils.get_or_insert_function(mod, fnty, "sleep")
 
     # insert break point
     fnty = ir.FunctionType(ir.VoidType(), tuple())
-    breakpoint = mod.get_or_insert_function(fnty,
-                                            "numba_gdb_breakpoint")
+    breakpoint = cgutils.get_or_insert_function(mod, fnty,
+                                                "numba_gdb_breakpoint")
 
     # do the work
     parent_pid = builder.call(getpid, tuple())
@@ -210,8 +210,8 @@ def gen_bp_impl():
         def codegen(cgctx, builder, signature, args):
             mod = builder.module
             fnty = ir.FunctionType(ir.VoidType(), tuple())
-            breakpoint = mod.get_or_insert_function(fnty,
-                                                    "numba_gdb_breakpoint")
+            breakpoint = cgutils.get_or_insert_function(mod, fnty,
+                                                        "numba_gdb_breakpoint")
             builder.call(breakpoint, tuple())
             return cgctx.get_constant(types.none, None)
         return function_sig, codegen

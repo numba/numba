@@ -1,5 +1,5 @@
 import numpy as np
-from numba import cuda, float32, int32
+from numba import cuda
 from numba.cuda.testing import unittest, CUDATestCase
 
 
@@ -31,6 +31,7 @@ class TestCudaSlicing(CUDATestCase):
         a = range(N)
         arr = cuda.device_array(len(a))
         arr[:] = cuda.to_device(a)
+
 
 if __name__ == '__main__':
     unittest.main()

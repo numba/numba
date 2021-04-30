@@ -11,8 +11,6 @@ from numba.misc.special import literal_unroll
 from numba.core.analysis import (dead_branch_prune, rewrite_semantic_constants,
                                  find_literally_calls, compute_cfg_from_blocks,
                                  compute_use_defs)
-from numba.core.inline_closurecall import (InlineClosureCallPass,
-                                           inline_closure_call)
 from numba.core.ir_utils import (guard, resolve_func_from_module, simplify_CFG,
                                  GuardException, convert_code_obj_to_function,
                                  mk_unique_var, build_definitions,
@@ -197,6 +195,7 @@ class InlineClosureLikes(FunctionPass):
         # no ability to resolve certain typed function calls in the array
         # inlining code, use this variable to indicate
         typed_pass = not isinstance(state.return_type, types.misc.PyObject)
+        from numba.core.inline_closurecall import InlineClosureCallPass
         inline_pass = InlineClosureCallPass(
             state.func_ir,
             state.flags.auto_parallel,
@@ -1356,6 +1355,7 @@ class IterLoopCanonicalization(FunctionPass):
         entry_block.body[idx + 1].value.value = call_get_range_var
 
         glbls = copy(func_ir.func_id.func.__globals__)
+        from numba.core.inline_closurecall import inline_closure_call
         inline_closure_call(func_ir, glbls, entry_block, idx, get_range,)
         kill = entry_block.body.index(assgn)
         entry_block.body.pop(kill)
@@ -1464,6 +1464,9 @@ class LiteralUnroll(FunctionPass):
         pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
         # do the unroll
         pm.add_pass(MixedContainerUnroller, "performs mixed container unroll")
+        # rewrite dynamic getitem to static getitem as it's possible some more
+        # getitems will now be statically resolvable
+        pm.add_pass(GenericRewrites, "Generic Rewrites")
         pm.finalize()
         pm.run(state)
         return True

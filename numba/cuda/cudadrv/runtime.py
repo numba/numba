@@ -7,6 +7,7 @@ really used in Numba except for querying the Runtime version.
 
 import ctypes
 import functools
+import sys
 
 from numba.core import config
 from numba.cuda.cudadrv.driver import ERROR_MAP, make_logger
@@ -112,6 +113,24 @@ class Runtime:
         major = rtver.value // 1000
         minor = (rtver.value - (major * 1000)) // 10
         return (major, minor)
+
+    def is_supported_version(self):
+        """
+        Returns True if the CUDA Runtime is a supported version.
+        """
+
+        return self.get_version() in self.supported_versions
+
+    @property
+    def supported_versions(self):
+        """A tuple of all supported CUDA toolkit versions. Versions are given in
+        the form ``(major_version, minor_version)``."""
+        if sys.platform not in ('linux', 'win32') or config.MACHINE_BITS != 64:
+            # Only 64-bit Linux and Windows are supported
+            return ()
+        return ((9, 2),
+                (10, 0), (10, 1), (10, 2),
+                (11, 0), (11, 1), (11, 2))
 
 
 runtime = Runtime()

@@ -16,7 +16,6 @@ import os
 import ctypes
 import weakref
 import functools
-import copy
 import warnings
 import logging
 import threading
@@ -24,7 +23,7 @@ import asyncio
 from itertools import product
 from abc import ABCMeta, abstractmethod
 from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
-                    c_void_p, c_float)
+                    c_void_p, c_float, c_uint)
 import contextlib
 import importlib
 import numpy as np
@@ -34,14 +33,11 @@ from numba import mviewbuf
 from numba.core import utils, serialize, config
 from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
-from .drvapi import cu_occupancy_b2d_size, cu_stream_callback_pyobj
+from .drvapi import cu_occupancy_b2d_size, cu_stream_callback_pyobj, cu_uuid
 from numba.cuda.cudadrv import enums, drvapi, _extras
-from numba.cuda.envvars import get_numba_envvar
 
 
-VERBOSE_JIT_LOG = int(get_numba_envvar('VERBOSE_CU_JIT_LOG', 1))
-MIN_REQUIRED_CC = (2, 0)
-SUPPORTS_IPC = sys.platform.startswith('linux')
+MIN_REQUIRED_CC = (3, 0)
 
 
 _py_decref = ctypes.pythonapi.Py_DecRef
@@ -94,7 +90,7 @@ class CudaAPIError(CudaDriverError):
 
 def find_driver():
 
-    envpath = get_numba_envvar('CUDA_DRIVER')
+    envpath = config.CUDA_DRIVER
 
     if envpath == '0':
         # Force fail
@@ -115,7 +111,7 @@ def find_driver():
         dldir = ['/usr/lib', '/usr/lib64']
         dlnames = ['libcuda.so', 'libcuda.so.1']
 
-    if envpath is not None:
+    if envpath:
         try:
             envpath = os.path.abspath(envpath)
         except ValueError:
@@ -192,7 +188,7 @@ def _getpid():
 ERROR_MAP = _build_reverse_error_map()
 
 MISSING_FUNCTION_ERRMSG = """driver missing function: %s.
-Requires CUDA 8.0 or above.
+Requires CUDA 9.2 or above.
 """
 
 
@@ -294,12 +290,23 @@ class Driver(object):
         return safe_call
 
     def _wrap_api_call(self, fname, libfn):
-        @functools.wraps(libfn)
+        def verbose_cuda_api_call(*args):
+            argstr = ", ".join([str(arg) for arg in args])
+            _logger.debug('call driver api: %s(%s)', libfn.__name__, argstr)
+            retcode = libfn(*args)
+            self._check_error(fname, retcode)
+
         def safe_cuda_api_call(*args):
             _logger.debug('call driver api: %s', libfn.__name__)
             retcode = libfn(*args)
             self._check_error(fname, retcode)
-        return safe_cuda_api_call
+
+        if config.CUDA_LOG_API_ARGS:
+            wrapper = verbose_cuda_api_call
+        else:
+            wrapper = safe_cuda_api_call
+
+        return functools.wraps(libfn)(wrapper)
 
     def _find_api(self, fname):
         # Try version 2
@@ -463,17 +470,30 @@ class Device(object):
         assert devnum == got_devnum.value, "Driver returned another device"
         self.id = got_devnum.value
         self.attributes = {}
+
         # Read compute capability
         cc_major = c_int()
         cc_minor = c_int()
         driver.cuDeviceComputeCapability(byref(cc_major), byref(cc_minor),
                                          self.id)
         self.compute_capability = (cc_major.value, cc_minor.value)
+
         # Read name
         bufsz = 128
         buf = (c_char * bufsz)()
         driver.cuDeviceGetName(buf, bufsz, self.id)
         self.name = buf.value
+
+        # Read UUID
+        uuid = cu_uuid()
+        driver.cuDeviceGetUuid(byref(uuid), self.id)
+        b = '%02x'
+        b2 = b * 2
+        b4 = b * 4
+        b6 = b * 6
+        fmt = f'GPU-{b4}-{b2}-{b2}-{b2}-{b6}'
+        self.uuid = fmt % tuple(bytes(uuid))
+
         self.primary_context = None
 
     def get_device_identity(self):
@@ -482,15 +502,6 @@ class Device(object):
             'pci_bus_id': self.PCI_BUS_ID,
             'pci_device_id': self.PCI_DEVICE_ID,
         }
-
-    @property
-    def COMPUTE_CAPABILITY(self):
-        """
-        For backward compatibility
-        """
-        warnings.warn("Deprecated attribute 'COMPUTE_CAPABILITY'; use lower "
-                      "case version", DeprecationWarning)
-        return self.compute_capability
 
     def __repr__(self):
         return "<CUDA device %d '%s'>" % (self.id, self.name)
@@ -789,6 +800,26 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
         else:
             return PinnedMemory(ctx, pointer, size, owner=owner,
                                 finalizer=finalizer)
+
+    def memallocmanaged(self, size, attach_global):
+        ptr = drvapi.cu_device_ptr()
+
+        def allocator():
+            flags = c_uint()
+            if attach_global:
+                flags = enums.CU_MEM_ATTACH_GLOBAL
+            else:
+                flags = enums.CU_MEM_ATTACH_HOST
+
+            driver.cuMemAllocManaged(byref(ptr), size, flags)
+
+        self._attempt_allocation(allocator)
+
+        finalizer = _alloc_finalizer(self, ptr, size)
+        ctx = weakref.proxy(self.context)
+        mem = ManagedMemory(ctx, ptr, size, finalizer=finalizer)
+        self.allocations[ptr.value] = mem
+        return mem.own()
 
     def reset(self):
         """Clears up all host memory (mapped and/or pinned) in the current
@@ -1115,6 +1146,9 @@ class Context(object):
     def memalloc(self, bytesize):
         return self.memory_manager.memalloc(bytesize)
 
+    def memallocmanaged(self, bytesize, attach_global=True):
+        return self.memory_manager.memallocmanaged(bytesize, attach_global)
+
     def memhostalloc(self, bytesize, mapped=False, portable=False, wc=False):
         return self.memory_manager.memhostalloc(bytesize, mapped, portable, wc)
 
@@ -1127,8 +1161,6 @@ class Context(object):
         """
         Returns a *IpcHandle* from a GPU allocation.
         """
-        if not SUPPORTS_IPC:
-            raise OSError('OS does not support CUDA IPC')
         return self.memory_manager.get_ipc_handle(memory)
 
     def open_ipc_handle(self, handle, size):
@@ -1232,7 +1264,7 @@ def load_module_image(context, image):
     """
     image must be a pointer
     """
-    logsz = int(get_numba_envvar('CUDA_LOG_SIZE', 1024))
+    logsz = config.CUDA_LOG_SIZE
 
     jitinfo = (c_char * logsz)()
     jiterrors = (c_char * logsz)()
@@ -1242,7 +1274,7 @@ def load_module_image(context, image):
         enums.CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES: c_void_p(logsz),
         enums.CU_JIT_ERROR_LOG_BUFFER: addressof(jiterrors),
         enums.CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES: c_void_p(logsz),
-        enums.CU_JIT_LOG_VERBOSE: c_void_p(VERBOSE_JIT_LOG),
+        enums.CU_JIT_LOG_VERBOSE: c_void_p(config.CUDA_VERBOSE_JIT_LOG),
     }
 
     option_keys = (drvapi.cu_jit_option * len(options))(*options.keys())
@@ -1659,7 +1691,7 @@ class AutoFreePointer(MemoryPointer):
 
 
 class MappedMemory(AutoFreePointer):
-    """A memory pointer that owns a buffer on the host that is mapped into
+    """A memory pointer that refers to a buffer on the host that is mapped into
     device memory.
 
     :param context: The context in which the pointer was mapped.
@@ -1736,6 +1768,41 @@ class PinnedMemory(mviewbuf.MemAlloc):
         return self
 
 
+class ManagedMemory(AutoFreePointer):
+    """A memory pointer that refers to a managed memory buffer (can be accessed
+    on both host and device).
+
+    :param context: The context in which the pointer was mapped.
+    :type context: Context
+    :param pointer: The address of the buffer.
+    :type pointer: ctypes.c_void_p
+    :param size: The size of the buffer in bytes.
+    :type size: int
+    :param owner: The owner is sometimes set by the internals of this class, or
+                  used for Numba's internal memory management. It should not be
+                  provided by an external user of the ``ManagedMemory`` class
+                  (e.g. from within an EMM Plugin); the default of `None`
+                  should always suffice.
+    :type owner: NoneType
+    :param finalizer: A function that is called when the buffer is to be freed.
+    :type finalizer: function
+    """
+
+    __cuda_memory__ = True
+
+    def __init__(self, context, pointer, size, owner=None, finalizer=None):
+        self.owned = owner
+        devptr = pointer
+        super().__init__(context, devptr, size, finalizer=finalizer)
+
+        # For buffer interface
+        self._buflen_ = self.size
+        self._bufptr_ = self.device_pointer.value
+
+    def own(self):
+        return ManagedOwnedPointer(weakref.proxy(self))
+
+
 class OwnedPointer(object):
     def __init__(self, memptr, view=None):
         self._mem = memptr
@@ -1768,6 +1835,10 @@ class OwnedPointer(object):
 
 
 class MappedOwnedPointer(OwnedPointer, mviewbuf.MemAlloc):
+    pass
+
+
+class ManagedOwnedPointer(OwnedPointer, mviewbuf.MemAlloc):
     pass
 
 
@@ -1828,8 +1899,8 @@ class Stream(object):
         callback will block later work in the stream and may block other
         callbacks from being executed.
 
-        Note: This function is marked as deprecated and may be replaced in a
-        future CUDA release.
+        Note: The driver function underlying this method is marked for
+        eventual deprecation and may be replaced in a future CUDA release.
 
         :param callback: Callback function with arguments (stream, status, arg).
         :param arg: User data to be passed to the callback function.
@@ -1991,35 +2062,6 @@ class Function(object):
             flag = enums.CU_FUNC_CACHE_PREFER_NONE
         driver.cuFuncSetCacheConfig(self.handle, flag)
 
-    def configure(self, griddim, blockdim, sharedmem=0, stream=0):
-        while len(griddim) < 3:
-            griddim += (1,)
-
-        while len(blockdim) < 3:
-            blockdim += (1,)
-
-        inst = copy.copy(self)  # shallow clone the object
-        inst.griddim = griddim
-        inst.blockdim = blockdim
-        inst.sharedmem = sharedmem
-        if stream:
-            inst.stream = stream
-        else:
-            inst.stream = 0
-        return inst
-
-    def __call__(self, *args):
-        '''
-        *args -- Must be either ctype objects of DevicePointer instances.
-        '''
-        if self.stream:
-            streamhandle = self.stream.handle
-        else:
-            streamhandle = None
-
-        launch_kernel(self.handle, self.griddim, self.blockdim,
-                      self.sharedmem, streamhandle, args)
-
     @property
     def device(self):
         return self.module.context.device
@@ -2043,9 +2085,13 @@ class Function(object):
                         maxthreads=maxtpb)
 
 
-def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args):
-    gx, gy, gz = griddim
-    bx, by, bz = blockdim
+def launch_kernel(cufunc_handle,
+                  gx, gy, gz,
+                  bx, by, bz,
+                  sharedmem,
+                  hstream,
+                  args,
+                  cooperative=False):
 
     param_vals = []
     for arg in args:
@@ -2056,27 +2102,39 @@ def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args):
 
     params = (c_void_p * len(param_vals))(*param_vals)
 
-    driver.cuLaunchKernel(cufunc_handle,
-                          gx, gy, gz,
-                          bx, by, bz,
-                          sharedmem,
-                          hstream,
-                          params,
-                          None)
+    if cooperative:
+        driver.cuLaunchCooperativeKernel(cufunc_handle,
+                                         gx, gy, gz,
+                                         bx, by, bz,
+                                         sharedmem,
+                                         hstream,
+                                         params)
+    else:
+        driver.cuLaunchKernel(cufunc_handle,
+                              gx, gy, gz,
+                              bx, by, bz,
+                              sharedmem,
+                              hstream,
+                              params,
+                              None)
 
 
 FILE_EXTENSION_MAP = {
     'o': enums.CU_JIT_INPUT_OBJECT,
     'ptx': enums.CU_JIT_INPUT_PTX,
     'a': enums.CU_JIT_INPUT_LIBRARY,
+    'lib': enums.CU_JIT_INPUT_LIBRARY,
     'cubin': enums.CU_JIT_INPUT_CUBIN,
     'fatbin': enums.CU_JIT_INPUT_FATBINAR,
 }
 
 
 class Linker(object):
-    def __init__(self, max_registers=0):
-        logsz = int(get_numba_envvar('CUDA_LOG_SIZE', 1024))
+    """
+    Links for current device if no CC given
+    """
+    def __init__(self, max_registers=0, cc=None):
+        logsz = config.CUDA_LOG_SIZE
         linkerinfo = (c_char * logsz)()
         linkererrors = (c_char * logsz)()
 
@@ -2090,7 +2148,14 @@ class Linker(object):
         if max_registers:
             options[enums.CU_JIT_MAX_REGISTERS] = c_void_p(max_registers)
 
-        raw_keys = list(options.keys()) + [enums.CU_JIT_TARGET_FROM_CUCONTEXT]
+        if cc is None:
+            # No option value is needed, but we need something as a placeholder
+            options[enums.CU_JIT_TARGET_FROM_CUCONTEXT] = 1
+        else:
+            cc_val = cc[0] * 10 + cc[1]
+            options[enums.CU_JIT_TARGET] = c_void_p(cc_val)
+
+        raw_keys = list(options.keys())
         raw_values = list(options.values())
         del options
 
@@ -2133,7 +2198,11 @@ class Linker(object):
         try:
             driver.cuLinkAddFile(self.handle, kind, pathbuf, 0, None, None)
         except CudaAPIError as e:
-            raise LinkerError("%s\n%s" % (e, self.error_log))
+            if e.code == enums.CUDA_ERROR_FILE_NOT_FOUND:
+                msg = f'{path} not found'
+            else:
+                msg = "%s\n%s" % (e, self.error_log)
+            raise LinkerError(msg)
 
     def add_file_guess_ext(self, path):
         ext = path.rsplit('.', 1)[1]

@@ -18,7 +18,7 @@ from numba.tests.matmul_usecase import (matmul_usecase, imatmul_usecase,
 Noflags = Flags()
 
 force_pyobj_flags = Flags()
-force_pyobj_flags.set("force_pyobject")
+force_pyobj_flags.force_pyobject = True
 
 
 def make_static_power(exp):
@@ -1248,7 +1248,7 @@ class TestMixedInts(TestCase):
         return control_unsigned
 
     def run_binary(self, pyfunc, control_func, operands, types,
-                   expected_type=utils.INT_TYPES, **assertPreciseEqualArgs):
+                   expected_type=int, **assertPreciseEqualArgs):
         for xt, yt in types:
             cr = compile_isolated(pyfunc, (xt, yt), flags=Noflags)
             cfunc = cr.entry_point
@@ -1265,7 +1265,7 @@ class TestMixedInts(TestCase):
                                         **assertPreciseEqualArgs)
 
     def run_unary(self, pyfunc, control_func, operands, types,
-                  expected_type=utils.INT_TYPES):
+                  expected_type=int):
         for xt in types:
             cr = compile_isolated(pyfunc, (xt,), flags=Noflags)
             cfunc = cr.entry_point
@@ -1280,7 +1280,7 @@ class TestMixedInts(TestCase):
                         % (x, xt, got, expected))
 
     def run_arith_binop(self, pyfunc, opname, samples,
-                        expected_type=utils.INT_TYPES):
+                        expected_type=int):
         self.run_binary(pyfunc, self.get_control_signed(opname),
                         samples, self.signed_pairs, expected_type)
         self.run_binary(pyfunc, self.get_control_unsigned(opname),

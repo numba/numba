@@ -21,15 +21,14 @@ class TestPinned(ContextResettingTestCase):
         self.assertTrue(np.allclose(A, A0))
 
     def test_pinned(self):
-        A = np.arange(2*1024*1024) # 16 MB
+        A = np.arange(2 * 1024 * 1024) # 16 MB
         with cuda.pinned(A):
             self._run_copies(A)
 
     def test_unpinned(self):
-        A = np.arange(2*1024*1024) # 16 MB
+        A = np.arange(2 * 1024 * 1024) # 16 MB
         self._run_copies(A)
 
 
 if __name__ == '__main__':
     unittest.main()
-

@@ -27,6 +27,16 @@ except ImportError:
     sys.path.insert(0, os.path.abspath('../..'))
     import numba
 
+
+on_rtd = os.environ.get('READTHEDOCS') == 'True'
+
+if on_rtd:
+    # The following is needed to fix RTD issue with numpydoc
+    # https://github.com/readthedocs/sphinx_rtd_theme/issues/766
+    from conda.cli.python_api import run_command as conda_cmd
+
+    conda_cmd("install", "-c", "conda-forge", "sphinx_rtd_theme>=0.5.1", "-y")
+
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
@@ -122,7 +132,7 @@ html_theme = 'sphinx_rtd_theme'
 # All sphinx_rtd_theme options. Default values commented out; uncomment to
 # change.
 html_theme_options = {
-    'canonical_url': 'https://numba.pydata.org/numba-doc/latest/index.html',
+    'canonical_url': 'https://numba.readthedocs.io/en/stable/',
     # 'logo_only': False,
     # 'display_version': True,
     # 'prev_next_buttons_location': 'bottom',

@@ -11,7 +11,7 @@ import numpy as np
 from numba import jit, njit, typeof
 from numba.core import errors
 from numba.tests.support import (TestCase, tag, needs_lapack, needs_blas,
-                                 _is_armv7l, skip_ppc64le_issue4026)
+                                 _is_armv7l)
 from .matmul_usecase import matmul_usecase
 import unittest
 
@@ -797,7 +797,6 @@ class TestLinalgInv(TestLinalgBase):
         np.testing.assert_allclose(expected, got)
 
 
-@skip_ppc64le_issue4026
 class TestLinalgCholesky(TestLinalgBase):
     """
     Tests for np.linalg.cholesky.

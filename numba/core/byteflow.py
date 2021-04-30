@@ -130,6 +130,9 @@ class Flow(object):
                         state.advance_pc()
                         # Must the new PC be a new block?
                         if self._is_implicit_new_block(state):
+                            # check if this is a with...as, abort if so
+                            self._guard_with_as(state)
+                            # else split
                             state.split_new_block()
                             break
                 _logger.debug("end state. edges=%s", state.outgoing_edges)
@@ -245,6 +248,19 @@ class Flow(object):
         else:
             return False
 
+    def _guard_with_as(self, state):
+        """Checks if the next instruction after a SETUP_WITH is something other
+        than a POP_TOP, if it is something else it'll be some sort of store
+        which is not supported (this corresponds to `with CTXMGR as VAR(S)`)."""
+        current_inst = state.get_inst()
+        if current_inst.opname == "SETUP_WITH":
+            next_op = self._bytecode[current_inst.next].opname
+            if next_op != "POP_TOP":
+                msg = ("The 'with (context manager) as "
+                       "(variable):' construct is not "
+                       "supported.")
+                raise UnsupportedError(msg)
+
 
 class TraceRunner(object):
     """Trace runner contains the states for the trace and the opcode dispatch.
@@ -270,6 +286,40 @@ class TraceRunner(object):
 
     def op_NOP(self, state, inst):
         state.append(inst)
+
+    def op_FORMAT_VALUE(self, state, inst):
+        """
+        FORMAT_VALUE(flags): flags argument specifies format spec which is
+        not supported yet. Currently, we just call str() on the value.
+        Pops a value from stack and pushes results back.
+        Required for supporting f-strings.
+        https://docs.python.org/3/library/dis.html#opcode-FORMAT_VALUE
+        """
+        if inst.arg != 0:
+            msg = "format spec in f-strings not supported yet"
+            raise UnsupportedError(msg, loc=self.get_debug_loc(inst.lineno))
+        value = state.pop()
+        strvar = state.make_temp()
+        res = state.make_temp()
+        state.append(inst, value=value, res=res, strvar=strvar)
+        state.push(res)
+
+    def op_BUILD_STRING(self, state, inst):
+        """
+        BUILD_STRING(count): Concatenates count strings from the stack and
+        pushes the resulting string onto the stack.
+        Required for supporting f-strings.
+        https://docs.python.org/3/library/dis.html#opcode-BUILD_STRING
+        """
+        count = inst.arg
+        strings = list(reversed([state.pop() for _ in range(count)]))
+        # corner case: f""
+        if count == 0:
+            tmps = [state.make_temp()]
+        else:
+            tmps = [state.make_temp() for _ in range(count - 1)]
+        state.append(inst, strings=strings, tmps=tmps)
+        state.push(tmps[-1])
 
     def op_POP_TOP(self, state, inst):
         state.pop()
@@ -657,16 +707,19 @@ class TraceRunner(object):
         cm = state.pop()    # the context-manager
 
         yielded = state.make_temp()
-        state.append(inst, contextmanager=cm)
+        exitfn = state.make_temp(prefix='setup_with_exitfn')
+        state.append(inst, contextmanager=cm, exitfn=exitfn)
 
-        state.push_block(
-            state.make_block(
-                kind='WITH_FINALLY',
-                end=inst.get_jump_target(),
+        # py39 doesn't have with-finally
+        if PYVERSION < (3, 9):
+            state.push_block(
+                state.make_block(
+                    kind='WITH_FINALLY',
+                    end=inst.get_jump_target(),
+                )
             )
-        )
 
-        state.push(cm)
+        state.push(exitfn)
         state.push(yielded)
 
         state.push_block(
@@ -843,7 +896,14 @@ class TraceRunner(object):
         # Builds tuple from other tuples on the stack
         tuples = list(reversed([state.pop() for _ in range(inst.arg)]))
         temps = [state.make_temp() for _ in range(len(tuples) - 1)]
-        state.append(inst, tuples=tuples, temps=temps)
+
+        # if the unpack is assign-like, e.g. x = (*y,), it needs handling
+        # differently.
+        is_assign = len(tuples) == 1
+        if is_assign:
+            temps = [state.make_temp(),]
+
+        state.append(inst, tuples=tuples, temps=temps, is_assign=is_assign)
         # The result is in the last temp var
         state.push(temps[-1])
 
@@ -853,6 +913,14 @@ class TraceRunner(object):
 
     def op_BUILD_TUPLE_UNPACK(self, state, inst):
         self._build_tuple_unpack(state, inst)
+
+    def op_LIST_TO_TUPLE(self, state, inst):
+        # "Pops a list from the stack and pushes a tuple containing the same
+        #  values."
+        tos = state.pop()
+        res = state.make_temp() # new tuple var
+        state.append(inst, const_list=tos, res=res)
+        state.push(res)
 
     def op_BUILD_CONST_KEY_MAP(self, state, inst):
         keys = state.pop()
@@ -878,6 +946,15 @@ class TraceRunner(object):
         state.append(inst, target=target, value=value, appendvar=appendvar,
                      res=res)
 
+    def op_LIST_EXTEND(self, state, inst):
+        value = state.pop()
+        index = inst.arg
+        target = state.peek(index)
+        extendvar = state.make_temp()
+        res = state.make_temp()
+        state.append(inst, target=target, value=value, extendvar=extendvar,
+                     res=res)
+
     def op_BUILD_MAP(self, state, inst):
         dct = state.make_temp()
         count = inst.arg
@@ -889,6 +966,20 @@ class TraceRunner(object):
         state.append(inst, items=items[::-1], size=count, res=dct)
         state.push(dct)
 
+    def op_MAP_ADD(self, state, inst):
+        # NOTE: https://docs.python.org/3/library/dis.html#opcode-MAP_ADD
+        # Python >= 3.8: TOS and TOS1 are value and key respectively
+        # Python < 3.8: TOS and TOS1 are key and value respectively
+        TOS = state.pop()
+        TOS1 = state.pop()
+        key, value = (TOS, TOS1) if PYVERSION < (3, 8) else (TOS1, TOS)
+        index = inst.arg
+        target = state.peek(index)
+        setitemvar = state.make_temp()
+        res = state.make_temp()
+        state.append(inst, target=target, key=key, value=value,
+                     setitemvar=setitemvar, res=res)
+
     def op_BUILD_SET(self, state, inst):
         count = inst.arg
         # Note: related python bug http://bugs.python.org/issue26020
@@ -896,6 +987,15 @@ class TraceRunner(object):
         res = state.make_temp()
         state.append(inst, items=items, res=res)
         state.push(res)
+
+    def op_SET_UPDATE(self, state, inst):
+        value = state.pop()
+        index = inst.arg
+        target = state.peek(index)
+        updatevar = state.make_temp()
+        res = state.make_temp()
+        state.append(inst, target=target, value=value, updatevar=updatevar,
+                     res=res)
 
     def op_GET_ITER(self, state, inst):
         value = state.pop()
@@ -934,6 +1034,8 @@ class TraceRunner(object):
         state.push(res)
 
     op_COMPARE_OP = _binaryop
+    op_IS_OP = _binaryop
+    op_CONTAINS_OP = _binaryop
 
     op_INPLACE_ADD = _binaryop
     op_INPLACE_SUBTRACT = _binaryop
@@ -1020,6 +1122,27 @@ class TraceRunner(object):
         res = state.make_temp()
         state.append(inst, res=res)
         state.push(res)
+
+    def op_LOAD_ASSERTION_ERROR(self, state, inst):
+        res = state.make_temp("assertion_error")
+        state.append(inst, res=res)
+        state.push(res)
+
+    def op_JUMP_IF_NOT_EXC_MATCH(self, state, inst):
+        # Tests whether the second value on the stack is an exception matching
+        # TOS, and jumps if it is not. Pops two values from the stack.
+        pred = state.make_temp("predicate")
+        tos = state.pop()
+        tos1 = state.pop()
+        state.append(inst, pred=pred, tos=tos, tos1=tos1)
+        state.fork(pc=inst.next)
+        state.fork(pc=inst.get_jump_target())
+
+    def op_RERAISE(self, state, inst):
+        # This isn't handled, but the state is set up anyway
+        exc = state.pop()
+        state.append(inst, exc=exc)
+        state.terminate()
 
     # NOTE: Please see notes in `interpreter.py` surrounding the implementation
     # of LOAD_METHOD and CALL_METHOD.

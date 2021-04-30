@@ -2,10 +2,6 @@
 This scripts specifies all PTX special objects.
 """
 import functools
-import llvmlite.llvmpy.core as lc
-import operator
-from numba.core import types, typing, ir
-from .cudadrv import nvvm
 
 
 class Stub(object):
@@ -114,9 +110,9 @@ class grid(Stub):
     instantiating the kernel. If *ndim* is 1, a single integer is returned.
     If *ndim* is 2 or 3, a tuple of the given number of integers is returned.
 
-	Computation of the first integer is as follows::
+    Computation of the first integer is as follows::
 
-		cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
+        cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
 
     and is similar for the other two indices, but using the ``y`` and ``z``
     attributes.
@@ -194,6 +190,27 @@ class const(Stub):
 
 
 #-------------------------------------------------------------------------------
+# Cooperative groups
+
+class cg(Stub):
+    '''
+    Cooperative groups
+    '''
+
+    @stub_function
+    def this_grid():
+        '''
+        Get the current grid group.
+        '''
+
+    class GridGroup(Stub):
+        def sync():
+            '''
+            Synchronize the current grid group.
+            '''
+
+
+#-------------------------------------------------------------------------------
 # syncthreads
 
 class syncthreads(Stub):
@@ -241,7 +258,7 @@ class syncthreads_or(Stub):
 
 class syncwarp(Stub):
     '''
-    syncwarp(mask)
+    syncwarp(mask=0xFFFFFFFF)
 
     Synchronizes a masked subset of threads in a warp.
     '''
@@ -292,6 +309,29 @@ class match_all_sync(Stub):
     _description_ = '<match_all_sync()>'
 
 
+class activemask(Stub):
+    '''
+    activemask()
+
+    Returns a 32-bit integer mask of all currently active threads in the
+    calling warp. The Nth bit is set if the Nth lane in the warp is active when
+    activemask() is called. Inactive threads are represented by 0 bits in the
+    returned mask. Threads which have exited the kernel are always marked as
+    inactive.
+    '''
+    _description_ = '<activemask()>'
+
+
+class lanemask_lt(Stub):
+    '''
+    lanemask_lt()
+
+    Returns a 32-bit integer mask of all lanes (including inactive ones) with
+    ID less than the current lane.
+    '''
+    _description_ = '<lanemask_lt()>'
+
+
 # -------------------------------------------------------------------------------
 # memory fences
 
@@ -321,35 +361,37 @@ class threadfence(Stub):
 
 class popc(Stub):
     """
-    popc(val)
+    popc(x)
 
-    Returns the number of set bits in the given value.
+    Returns the number of set bits in x.
     """
 
 
 class brev(Stub):
     """
-    brev(val)
+    brev(x)
 
-    Reverse the bitpattern of an integer value; for example 0b10110110
+    Returns the reverse of the bit pattern of x. For example, 0b10110110
     becomes 0b01101101.
     """
 
 
 class clz(Stub):
     """
-    clz(val)
+    clz(x)
 
-    Counts the number of leading zeros in a value.
+    Returns the number of leading zeros in z.
     """
 
 
 class ffs(Stub):
     """
-    ffs(val)
+    ffs(x)
 
-    Find the position of the least significant bit set to 1 in an integer.
+    Returns the position of the first (least significant) bit set to 1 in x,
+    where the least significant bit position is 1. ffs(0) returns 0.
     """
+
 
 #-------------------------------------------------------------------------------
 # comparison and selection instructions
@@ -362,6 +404,7 @@ class selp(Stub):
     operand.
     """
 
+
 #-------------------------------------------------------------------------------
 # single / double precision arithmetic
 
@@ -371,6 +414,15 @@ class fma(Stub):
 
     Perform the fused multiply-add operation.
     """
+
+
+class cbrt(Stub):
+    """"
+    cbrt(a)
+
+    Perform the cube root operation.
+    """
+
 
 #-------------------------------------------------------------------------------
 # atomic
@@ -395,6 +447,68 @@ class atomic(Stub):
 
         Perform atomic ary[idx] -= val. Supported on int32, float32, and
         float64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """
+
+    class and_(Stub):
+        """and_(ary, idx, val)
+
+        Perform atomic ary[idx] &= val. Supported on int32, int64, uint32 and
+        uint64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """
+
+    class or_(Stub):
+        """or_(ary, idx, val)
+
+        Perform atomic ary[idx] \|= val. Supported on int32, int64, uint32 and
+        uint64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """  # noqa: W605
+
+    class xor(Stub):
+        """xor(ary, idx, val)
+
+        Perform atomic ary[idx] ^= val. Supported on int32, int64, uint32 and
+        uint64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """
+
+    class inc(Stub):
+        """inc(ary, idx, val)
+
+        Perform atomic ary[idx] += 1 up to val, then reset to 0. Supported
+        on uint32, and uint64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """
+
+    class dec(Stub):
+        """dec(ary, idx, val)
+
+        Perform ary[idx] = (value if (array[idx] == 0) or
+        (array[idx] > value) else array[idx] - 1).
+
+        Supported on uint32, and uint64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """
+
+    class exch(Stub):
+        """exch(ary, idx, val)
+
+        Perform atomic ary[idx] = val. Supported on int32, int64, uint32 and
+        uint64 operands only.
 
         Returns the old value at the index location as if it is loaded
         atomically.
@@ -462,3 +576,16 @@ class atomic(Stub):
 
         Returns the current value as if it is loaded atomically.
         """
+
+
+#-------------------------------------------------------------------------------
+# timers
+
+class nanosleep(Stub):
+    '''
+    nanosleep(ns)
+
+    Suspends the thread for a sleep duration approximately close to the delay
+    `ns`, specified in nanoseconds.
+    '''
+    _description_ = '<nansleep()>'

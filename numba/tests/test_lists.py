@@ -17,10 +17,10 @@ from numba.core.extending import overload
 
 
 enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
+enable_pyobj_flags.enable_pyobject = True
 
 force_pyobj_flags = Flags()
-force_pyobj_flags.set("force_pyobject")
+force_pyobj_flags.force_pyobject = True
 
 Point = namedtuple('Point', ('a', 'b'))
 
@@ -394,21 +394,6 @@ class TestLists(MemoryLeakMixin, TestCase):
                                        types.int32, types.int32, types.int32))
         cfunc = cr.entry_point
         self.assertEqual(cfunc(1, 2, 3, 4, 5, 6), pyfunc(1, 2, 3, 4, 5, 6))
-
-    @testing.allow_interpreter_mode
-    def test_list_comprehension(self):
-        list_tests = [list_comprehension1,
-                      list_comprehension2,
-                      list_comprehension3,
-                      list_comprehension4,
-                      list_comprehension5,
-                      list_comprehension6]
-
-        for test in list_tests:
-            pyfunc = test
-            cr = compile_isolated(pyfunc, ())
-            cfunc = cr.entry_point
-            self.assertEqual(cfunc(), pyfunc())
 
     def check_unary_with_size(self, pyfunc, precise=True):
         cfunc = jit(nopython=True)(pyfunc)
