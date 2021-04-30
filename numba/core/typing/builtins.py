@@ -804,6 +804,15 @@ class NumberClassAttribute(AttributeTemplate):
             elif isinstance(val, (types.Number, types.Boolean)):
                  # Scalar constructor, e.g. np.int32(42)
                  return ty
+            elif isinstance(val, (types.NPDatetime, types.NPTimedelta)):
+                # Constructor cast from datetime-like, e.g.
+                # > np.int64(np.datetime64("2000-01-01"))
+                if ty.bitwidth == 64:
+                    return ty
+                else:
+                    msg = (f"Cannot cast {val} to {ty} as {ty} is not 64 bits "
+                           "wide.")
+                    raise errors.TypingError(msg)
             else:
                 # unsupported
                 msg = f"Casting {val} to {ty} directly is unsupported."

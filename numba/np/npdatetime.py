@@ -10,8 +10,9 @@ import llvmlite.llvmpy.core as lc
 
 from numba.core import types, cgutils
 from numba.core.imputils import (lower_builtin, lower_constant,
-                                    impl_ret_untracked)
+                                 impl_ret_untracked, lower_cast)
 from numba.np import npdatetime_helpers, numpy_support, npyfuncs
+from numba.extending import overload_method
 
 # datetime64 and timedelta64 use the same internal representation
 DATETIME64 = TIMEDELTA64 = Type.int(64)
@@ -812,3 +813,20 @@ def _cast_to_timedelta(context, builder, val):
 @lower_builtin(np.isnat, types.NPTimedelta)
 def _np_isnat_impl(context, builder, sig, args):
     return npyfuncs.np_datetime_isnat_impl(context, builder, sig, args)
+
+
+@lower_cast(types.NPDatetime, types.Integer)
+@lower_cast(types.NPTimedelta, types.Integer)
+def _cast_npdatetime_int64(context, builder, fromty, toty, val):
+    if toty.bitwidth != 64: # all date time types are 64 bit
+        msg = f"Cannot cast {fromty} to {toty} as {toty} is not 64 bits wide."
+        raise ValueError(msg)
+    return val
+
+
+@overload_method(types.NPTimedelta, '__hash__')
+@overload_method(types.NPDatetime, '__hash__')
+def ol_hash_npdatetime(inst):
+    def impl(inst):
+        return np.int64(inst)
+    return impl
