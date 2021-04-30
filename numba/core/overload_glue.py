@@ -13,9 +13,10 @@ class _OverloadWrapper(object):
     implementations.
     """
 
-    def __init__(self, function):
+    def __init__(self, function, typing_key=None):
         assert function is not None
         self._function = function
+        self._typing_key = typing_key
         self._BIND_TYPES = dict()
         self._selector = None
         self._TYPER = None
@@ -75,7 +76,11 @@ class _OverloadWrapper(object):
             # arg is the typing class
             self._TYPER = typing_class
             # HACK: This is a hack, infer_global maybe?
-            self._TYPER.key = self._function
+            if self._typing_key is None:
+                key = self._function
+            else:
+                key = self._typing_key
+            self._TYPER.key = key
             return typing_class
         return inner
 
@@ -143,7 +148,7 @@ class _OverloadWrapper(object):
             # is generated to match the number of arguments and kwargs.
             name = str(self._function)
             # This is to name the function with something vaguely identifiable
-            name = ''.join([x if x not in {'>','<',' ','-'} else '_'
+            name = ''.join([x if x not in {'>','<',' ','-','.'} else '_'
                             for x in name])
             gen = textwrap.dedent(("""
             def jit_wrapper_{}({}):
@@ -161,12 +166,16 @@ class _Gluer:
     def __init__(self):
         self._registered = dict()
 
-    def __call__(self, func):
-        if func in self._registered:
-            return self._registered[func]
+    def __call__(self, func, typing_key=None):
+        if typing_key is None:
+            key = func
         else:
-            wrapper = _OverloadWrapper(func)
-            self._registered[func] = wrapper
+            key = typing_key
+        if key in self._registered:
+            return self._registered[key]
+        else:
+            wrapper = _OverloadWrapper(func, typing_key=typing_key)
+            self._registered[key] = wrapper
             return wrapper
 
 
@@ -174,10 +183,11 @@ _overload_glue = _Gluer()
 del _Gluer
 
 
-def glue_typing(concrete_function):
+def glue_typing(concrete_function, typing_key=None):
     """This is a decorator for wrapping the typing part for a concrete function
     'concrete_function', it's a text-only replacement for '@infer_global'"""
-    return _overload_glue(concrete_function).wrap_typing()
+    return _overload_glue(concrete_function,
+                          typing_key=typing_key).wrap_typing()
 
 
 def glue_lowering(*args):
@@ -185,4 +195,4 @@ def glue_lowering(*args):
     a concrete function. 'args[0]' is the concrete_function, 'args[1:]' are the
     types the lowering will accept. This acts as a text-only replacement for
     '@lower/@lower_builtin'"""
-    return _overload_glue(args[0]).wrap_impl(*args[1:])
+    return _overload_glue(args[0], typing_key=args[0]).wrap_impl(*args[1:])
