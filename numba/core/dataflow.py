@@ -169,6 +169,44 @@ class DataFlowAnalysis(object):
         for st in reversed(stores):
             info.push(st)
 
+    def op_FORMAT_VALUE(self, info, inst):
+        """
+        FORMAT_VALUE(flags): flags argument specifies format spec which is
+        not supported yet. Currently, str() is simply called on the value.
+        Pops a value from stack and pushes results back.
+        Required for supporting f-strings.
+        https://docs.python.org/3/library/dis.html#opcode-FORMAT_VALUE
+        """
+        if inst.arg != 0:
+            msg = "format spec in f-strings not supported yet"
+            raise UnsupportedError(
+                msg,
+                loc=Loc(filename=self.bytecode.func_id.filename,
+                line=inst.lineno)
+            )
+        value = info.pop()
+        strvar = info.make_temp()
+        res = info.make_temp()
+        info.append(inst, value=value, res=res, strvar=strvar)
+        info.push(res)
+
+    def op_BUILD_STRING(self, info, inst):
+        """
+        BUILD_STRING(count): Concatenates count strings from the stack and
+        pushes the resulting string onto the stack.
+        Required for supporting f-strings.
+        https://docs.python.org/3/library/dis.html#opcode-BUILD_STRING
+        """
+        count = inst.arg
+        strings = list(reversed([info.pop() for _ in range(count)]))
+        # corner case: f""
+        if count == 0:
+            tmps = [info.make_temp()]
+        else:
+            tmps = [info.make_temp() for _ in range(count - 1)]
+        info.append(inst, strings=strings, tmps=tmps)
+        info.push(tmps[-1])
+
     def op_BUILD_TUPLE(self, info, inst):
         count = inst.arg
         items = list(reversed([info.pop() for _ in range(count)]))
@@ -201,6 +239,16 @@ class DataFlowAnalysis(object):
             items.append((k, v))
         info.append(inst, items=items[::-1], size=count, res=dct)
         info.push(dct)
+
+    def op_MAP_ADD(self, info, inst):
+        key = info.pop()
+        value = info.pop()
+        index = inst.arg
+        target = info.peek(index)
+        setitemvar = info.make_temp()
+        res = info.make_temp()
+        info.append(inst, target=target, key=key, value=value,
+                     setitemvar=setitemvar, res=res)
 
     def op_BUILD_SET(self, info, inst):
         count = inst.arg

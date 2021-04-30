@@ -84,7 +84,11 @@ the functionality of the selected device:
 
    .. attribute:: name
 
-      The name of the device (e.g. "GeForce GTX 970")
+      The name of the device (e.g. "GeForce GTX 970").
+
+   .. attribute:: uuid
+
+      The UUID of the device (e.g. "GPU-e6489c45-5b68-3b03-bab7-0e7c8e809643").
 
    .. method:: reset
 

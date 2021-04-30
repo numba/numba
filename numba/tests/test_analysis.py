@@ -15,7 +15,7 @@ from numba.core.analysis import dead_branch_prune, rewrite_semantic_constants
 _GLOBAL = 123
 
 enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
+enable_pyobj_flags.enable_pyobject = True
 
 
 def compile_to_ir(func):

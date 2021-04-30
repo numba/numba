@@ -1,4 +1,5 @@
 from itertools import product, cycle, permutations
+import gc
 import sys
 import warnings
 
@@ -489,8 +490,12 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             got = run(buf)
             self.assertPreciseEqual(got, expected)
             del expected
+            # Note gc.collect is due to references in `except ... as e` that
+            # aren't immediately cleared
+            gc.collect()
             self.assertEqual(sys.getrefcount(buf), old_refcnt + 1)
             del got
+            gc.collect()
             self.assertEqual(sys.getrefcount(buf), old_refcnt)
             self.memory_leak_teardown()
 
@@ -921,6 +926,16 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                         f(*inputs)
                     self.assertIn("Maximum allowed size exceeded",
                                 str(raises.exception))
+
+    def test_arange_accuracy(self):
+        # Checking arange reasonably replicates NumPy's algorithm
+        # see https://github.com/numba/numba/issues/6768
+        @jit(nopython=True)
+        def foo(step):
+            return np.arange(0, 1 + step, step)
+
+        x = 0.010101010101010102
+        self.assertPreciseEqual(foo(x), foo.py_func(x))
 
     def test_item(self):
         pyfunc = array_item

@@ -28,7 +28,7 @@ class CPUTarget(TargetDescriptor):
     @utils.cached_property
     def _toplevel_target_context(self):
         # Lazily-initialized top-level target context, for all threads
-        return cpu.CPUContext(self.typing_context)
+        return cpu.CPUContext(self.typing_context, self._target_name)
 
     @utils.cached_property
     def _toplevel_typing_context(self):
@@ -66,7 +66,7 @@ class CPUTarget(TargetDescriptor):
 
 
 # The global CPU target
-cpu_target = CPUTarget()
+cpu_target = CPUTarget('cpu')
 
 
 class CPUDispatcher(dispatcher.Dispatcher):
@@ -86,8 +86,11 @@ class TargetRegistry(utils.UniqueDict):
         initialization for some targets (e.g. gpu).
     """
     def __init__(self, *args, **kws):
-        super(TargetRegistry, self).__init__(*args, **kws)
         self.ondemand = utils.UniqueDict()
+        self.key_type = kws.pop('key_type', None)
+        self.value_type = kws.pop('value_type', None)
+        self._type_check = self.key_type or self.value_type
+        super(TargetRegistry, self).__init__(*args, **kws)
 
     def __getitem__(self, item):
         if item in self.ondemand:
@@ -95,6 +98,15 @@ class TargetRegistry(utils.UniqueDict):
             del self.ondemand[item]
         return super(TargetRegistry, self).__getitem__(item)
 
-
-dispatcher_registry = TargetRegistry()
-dispatcher_registry['cpu'] = CPUDispatcher
+    def __setitem__(self, key, value):
+        if self._type_check:
+            def check(x, ty_x):
+                if isinstance(ty_x, type):
+                    assert ty_x in x.__mro__, (x, ty_x)
+                else:
+                    assert isinstance(x, ty_x), (x, ty_x)
+            if self.key_type is not None:
+                check(key, self.key_type)
+            if self.value_type is not None:
+                check(value, self.value_type)
+        return super(TargetRegistry, self).__setitem__(key, value)

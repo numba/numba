@@ -104,7 +104,8 @@ def _gettyperecord_impl(typingctx, codepoint):
             ll_uchar_ptr,  # digit
             ll_ushort_ptr, # flags
         ])
-        fn = builder.module.get_or_insert_function(
+        fn = cgutils.get_or_insert_function(
+            builder.module,
             fnty, name="numba_gettyperecord")
         upper = cgutils.alloca_once(builder, ll_intc, name='upper')
         lower = cgutils.alloca_once(builder, ll_intc, name='lower')
@@ -164,7 +165,8 @@ def _PyUnicode_ExtendedCase(typingctx, index):
         ll_Py_UCS4 = context.get_value_type(_Py_UCS4)
         ll_intc = context.get_value_type(types.intc)
         fnty = lc.Type.function(ll_Py_UCS4, [ll_intc])
-        fn = builder.module.get_or_insert_function(
+        fn = cgutils.get_or_insert_function(
+            builder.module,
             fnty, name="numba_get_PyUnicode_ExtendedCase")
         return builder.call(fn, [args[0]])
 

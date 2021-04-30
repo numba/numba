@@ -282,7 +282,6 @@ class TestOperations(TestCase):
                "list(undefined)<iv=None>.")
         self.assertIn(msg, str(raises.exception))
 
-
     def test_in(self):
         pyfunc = in_usecase
         cr = compile_isolated(pyfunc,
@@ -290,6 +289,10 @@ class TestOperations(TestCase):
         tup = (4, 1, 5)
         for i in range(5):
             self.assertPreciseEqual(cr.entry_point(i, tup), pyfunc(i, tup))
+
+        # Test the empty case
+        cr = compile_isolated(pyfunc, [types.int64, types.Tuple([])])
+        self.assertPreciseEqual(cr.entry_point(1, ()), pyfunc(1, ()))
 
     def check_slice(self, pyfunc):
         tup = (4, 5, 6, 7)

@@ -161,6 +161,9 @@ def get_np_ufunc_typ(func):
     for (k, v) in typing.npydecl.registry.globals:
         if k == func:
             return v
+    for (k, v) in typing.templates.builtin_registry.globals:
+        if k == func:
+            return v
     raise RuntimeError("type for func ", func, " not found")
 
 
@@ -664,7 +667,13 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
         else:
             lives |= {v.name for v in stmt.list_vars()}
             if isinstance(stmt, ir.Assign):
-                lives.remove(lhs.name)
+                # make sure lhs is not used in rhs, e.g. a = g(a)
+                if isinstance(stmt.value, ir.Expr):
+                    rhs_vars = {v.name for v in stmt.value.list_vars()}
+                    if lhs.name not in rhs_vars:
+                        lives.remove(lhs.name)
+                else:
+                    lives.remove(lhs.name)
 
         new_body.append(stmt)
     new_body.reverse()
@@ -1631,8 +1640,8 @@ def find_const(func_ir, var):
     require(isinstance(var_def, (ir.Const, ir.Global, ir.FreeVar)))
     return var_def.value
 
-def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
-                        typemap=None, calltypes=None):
+def compile_to_numba_ir(mk_func, glbls, typingctx=None, targetctx=None,
+                        arg_typs=None, typemap=None, calltypes=None):
     """
     Compile a function or a make_function node to Numba IR.
 
@@ -1669,7 +1678,7 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
     # data structures typemap and calltypes
     if typingctx:
         f_typemap, f_return_type, f_calltypes, _ = typed_passes.type_inference_stage(
-                typingctx, f_ir, arg_typs, None)
+                typingctx, targetctx, f_ir, arg_typs, None)
         # remove argument entries like arg.a from typemap
         arg_names = [vname for vname in f_typemap if vname.startswith("arg.")]
         for a in arg_names:
