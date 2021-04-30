@@ -56,9 +56,6 @@ class GUFunc(serialize.ReduceMixin):
         self._frozen = frozen
         return self
 
-        # Because typeguard has problem with __name__ being a property
-        self.__name__ = self.gufunc_builder.py_func.__name__
-
     def __repr__(self):
         return f"<numba._GUFunc '{self.__name__}'>"
 
@@ -80,10 +77,6 @@ class GUFunc(serialize.ReduceMixin):
     @property
     def is_dynamic(self):
         return self._is_dynamic
-
-    @property
-    def __doc__(self):
-        return self.ufunc.__doc__
 
     @property
     def nin(self):

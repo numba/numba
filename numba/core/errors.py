@@ -8,7 +8,6 @@ import contextlib
 import os
 import sys
 import warnings
-import typing as pt
 from collections import defaultdict
 from functools import wraps
 from abc import abstractmethod

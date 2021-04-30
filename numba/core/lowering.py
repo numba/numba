@@ -44,6 +44,7 @@ class LowerFolder:
         lowerer = self._lowerer
         return cgutils.make_anonymous_struct(lowerer.builder, ())
 
+
 class BaseLower(object):
     """
     Lower IR to LLVM
@@ -710,7 +711,8 @@ class Lower(BaseLower):
                        for var, sigty in zip(pos_args, signature.args)]
         else:
             folder = LowerFolder(self, signature)
-            argvals = typing.FoldArguments(pysig, folder).fold(pos_args, dict(kw_args))
+            argvals = typing.FoldArguments(pysig, folder).fold(pos_args,
+                                                               dict(kw_args))
 
         return argvals
 

@@ -235,7 +235,8 @@ class FoldArguments:
                 ba.arguments[name] = out
             elif name in ba.arguments:
                 # Non-stararg, present
-                ba.arguments[name] = normal_handler(i, param, ba.arguments[name])
+                ba.arguments[name] = normal_handler(i, param,
+                                                    ba.arguments[name])
             else:
                 # Non-stararg, omitted
                 assert default is not param.empty
@@ -267,7 +268,8 @@ class SymbolFoldArguments(FoldArguments):
                 ba.arguments[name] = out
             elif name in ba.arguments:
                 # Non-stararg, present
-                ba.arguments[name] = normal_handler(i, param, ba.arguments[name])
+                ba.arguments[name] = normal_handler(i, param,
+                                                    ba.arguments[name])
             else:
                 # Non-stararg, omitted
                 assert default is not param.empty
@@ -275,7 +277,6 @@ class SymbolFoldArguments(FoldArguments):
         args = tuple(ba.arguments[param.name]
                      for param in pysig.parameters.values())
         return args
-
 
 
 def fold_arguments(pysig, args, kws, normal_handler, default_handler,
