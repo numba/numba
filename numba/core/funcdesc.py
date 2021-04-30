@@ -3,7 +3,7 @@ Function descriptors.
 """
 
 from collections import defaultdict
-import sys
+import importlib
 
 from numba.core import types, itanium_mangler
 from numba.core.utils import _dynamic_modname, _dynamic_module
@@ -91,9 +91,8 @@ class FunctionDescriptor(object):
         else:
             try:
                 # ensure module exist
-                __import__(self.modname)            # can raise ImportError
-                return sys.modules[self.modname]    # can raise KeyError
-            except (ImportError, KeyError):
+                return importlib.import_module(self.modname)
+            except ImportError:
                 raise ModuleNotFoundError(
                     f"can't compile {self.qualname}: "
                     f"import of module {self.modname} failed") from None

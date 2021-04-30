@@ -160,11 +160,11 @@ def is_serialiable(obj):
 
 
 def _no_pickle(obj):
-    raise pickle.PicklingError(f"pickling of {type(obj)} is disabled")
+    raise pickle.PicklingError(f"Pickling of {type(obj)} is unsupported")
 
 
 def disable_pickling(typ):
-    """This is called on types to disable pickling
+    """This is called on a type to disable pickling
     """
     NumbaPickler.disabled_types.add(typ)
     # The following is needed for Py3.7
