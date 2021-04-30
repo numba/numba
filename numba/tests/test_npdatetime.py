@@ -75,6 +75,8 @@ def neg_usecase(x):
 def abs_usecase(x):
     return abs(x)
 
+def hash_usecase(x):
+    return hash(x)
 
 def make_add_constant(const):
     def add_constant(x):
@@ -520,6 +522,20 @@ class TestTimedeltaArithmetic(TestCase):
         check(TD(-4, 'ms'))
         check(TD('NaT'))
         check(TD('NaT', 'ms'))
+
+    def test_hash(self):
+        f = self.jit(hash_usecase)
+        def check(a):
+            self.assertPreciseEqual(f(a), hash(a))
+
+        check(TD(3))
+        check(TD(-4))
+        check(TD(3, 'ms'))
+        check(TD(-4, 'ms'))
+        check(TD('NaT'))
+        check(TD('NaT', 'ms'))
+        check(DT('2000-01-01T01:02:03.002Z'))
+        check(DT('NaT'))
 
 
 class TestTimedeltaArithmeticNoPython(TestTimedeltaArithmetic):
