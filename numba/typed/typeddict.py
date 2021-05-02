@@ -1,7 +1,7 @@
 """
 Python wrapper that connects CPython interpreter to the numba dictobject.
 """
-from collections.abc import MutableMapping
+
 import typing as pt
 from numba.core.types import DictType, TypeRef
 from numba.core.imputils import numba_typeref_ctor
