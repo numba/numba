@@ -6,12 +6,13 @@ import os
 import operator
 import timeit
 import math
-import sys
 import traceback
 import weakref
 import warnings
+import threading
+import contextlib
+
 from types import ModuleType
-from importlib import import_module
 from collections.abc import Mapping, Sequence
 import numpy as np
 
@@ -175,6 +176,43 @@ def shutting_down(globals=globals):
 # finalizer then register atexit to ensure this ordering.
 weakref.finalize(lambda: None, lambda: None)
 atexit.register(_at_shutdown)
+
+
+class ConfigStack:
+    """A stack for tracking target configurations in the compiler.
+
+    It stores the stack in a thread-local class attribute. All instances in the
+    same thread will see the same stack.
+    """
+    tls = threading.local()
+
+    def __init__(self):
+        tls = self.tls
+        try:
+            stk = tls.stack
+        except AttributeError:
+            tls.stack = stk = []
+        self._stk = stk
+
+    def push(self, data):
+        self._stk.append(data)
+
+    def pop(self):
+        return self._stk.pop()
+
+    def top(self):
+        return self._stk[-1]
+
+    def __len__(self):
+        return len(self._stk)
+
+    @contextlib.contextmanager
+    def enter(self, flags):
+        self.push(flags)
+        try:
+            yield
+        finally:
+            self.pop()
 
 
 class ConfigOptions(object):
@@ -499,38 +537,3 @@ def unified_function_type(numba_types, require_precise=True):
         function = types.UndefinedFunctionType(mnargs, dispatchers)
 
     return function
-
-
-class _RedirectSubpackage(ModuleType):
-    """Redirect a subpackage to a subpackage.
-
-    This allows all references like:
-
-    >>> from numba.old_subpackage import module
-    >>> module.item
-
-    >>> import numba.old_subpackage.module
-    >>> numba.old_subpackage.module.item
-
-    >>> from numba.old_subpackage.module import item
-    """
-    def __init__(self, old_module_locals, new_module):
-        old_module = old_module_locals['__name__']
-        super().__init__(old_module)
-
-        new_mod_obj = import_module(new_module)
-
-        # Map all sub-modules over
-        for k, v in new_mod_obj.__dict__.items():
-            # Get attributes so that `subpackage.xyz` and
-            # `from subpackage import xyz` work
-            setattr(self, k, v)
-            if isinstance(v, ModuleType):
-                # Map modules into the interpreter so that
-                # `import subpackage.xyz` works
-                sys.modules[f"{old_module}.{k}"] = sys.modules[v.__name__]
-
-        # copy across dunders so that package imports work too
-        for attr, value in old_module_locals.items():
-            if attr.startswith('__') and attr.endswith('__'):
-                setattr(self, attr, value)

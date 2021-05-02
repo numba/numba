@@ -21,15 +21,12 @@ def set_visible_devices_and_check(q):
 if config.ENABLE_CUDASIM:
     SUPPORTED_VERSIONS = (-1, -1),
 else:
-    SUPPORTED_VERSIONS = ((9, 0), (9, 1), (9, 2),
+    SUPPORTED_VERSIONS = ((9, 2),
                           (10, 0), (10, 1), (10, 2),
                           (11, 0), (11, 1), (11, 2))
 
 
 class TestRuntime(unittest.TestCase):
-    def test_get_version(self):
-        self.assertIn(runtime.get_version(), SUPPORTED_VERSIONS)
-
     def test_is_supported_version_true(self):
         for v in SUPPORTED_VERSIONS:
             with patch.object(runtime, 'get_version', return_value=v):

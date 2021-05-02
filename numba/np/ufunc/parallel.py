@@ -20,9 +20,10 @@ import numpy as np
 
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
+from llvmlite import ir
 
 from numba.np.numpy_support import as_dtype
-from numba.core import types, config, errors
+from numba.core import types, cgutils, config, errors
 from numba.np.ufunc.wrappers import _wrapper_info
 from numba.np.ufunc import ufuncbuilder
 from numba.extending import overload
@@ -110,7 +111,7 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
     wrapperlib = ctx.codegen().create_library('parallelgufuncwrapper')
     mod = wrapperlib.create_ir_module('parallel.gufunc.wrapper')
     kernel_name = ".kernel.{}_{}".format(id(info.env), info.name)
-    lfunc = mod.add_function(fnty, name=kernel_name)
+    lfunc = ir.Function(mod, fnty, name=kernel_name)
 
     bb_entry = lfunc.append_basic_block('')
 
@@ -134,22 +135,22 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
 
     parallel_for_ty = lc.Type.function(lc.Type.void(),
                                        [byte_ptr_t] * 5 + [intp_t, ] * 3)
-    parallel_for = mod.get_or_insert_function(parallel_for_ty,
-                                              name='numba_parallel_for')
+    parallel_for = cgutils.get_or_insert_function(mod, parallel_for_ty,
+                                                  'numba_parallel_for')
 
     # Reference inner-function and link
     innerfunc_fnty = lc.Type.function(
         lc.Type.void(),
         [byte_ptr_ptr_t, intp_ptr_t, intp_ptr_t, byte_ptr_t],
     )
-    tmp_voidptr = mod.get_or_insert_function(
-        innerfunc_fnty, name=info.name,
-    )
+    tmp_voidptr = cgutils.get_or_insert_function(mod, innerfunc_fnty,
+                                                 info.name,)
     wrapperlib.add_linking_library(info.library)
 
-    get_num_threads = builder.module.get_or_insert_function(
+    get_num_threads = cgutils.get_or_insert_function(
+        builder.module,
         lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
-        name="get_num_threads")
+        "get_num_threads")
 
     num_threads = builder.call(get_num_threads, [])
 
@@ -347,7 +348,7 @@ def _check_tbb_version_compatible():
         elif _IS_OSX:
             libtbb_name = 'libtbb.dylib'
         elif _IS_LINUX:
-            libtbb_name = 'libtbb.so.2'
+            libtbb_name = 'libtbb.so.12'
         else:
             raise ValueError("Unknown operating system")
         libtbb = CDLL(libtbb_name)
@@ -355,13 +356,13 @@ def _check_tbb_version_compatible():
         version_func.argtypes = []
         version_func.restype = c_int
         tbb_iface_ver = version_func()
-        if tbb_iface_ver < 11005: # magic number from TBB
+        if tbb_iface_ver < 12010: # magic number from TBB
             msg = ("The TBB threading layer requires TBB "
-                   "version 2019.5 or later i.e., "
-                   "TBB_INTERFACE_VERSION >= 11005. Found "
+                   "version 2021 update 1 or later i.e., "
+                   "TBB_INTERFACE_VERSION >= 12010. Found "
                    "TBB_INTERFACE_VERSION = %s. The TBB "
-                   "threading layer is disabled.")
-            problem = errors.NumbaWarning(msg % tbb_iface_ver)
+                   "threading layer is disabled.") % tbb_iface_ver
+            problem = errors.NumbaWarning(msg)
             warnings.warn(problem)
             raise ImportError("Problem with TBB. Reason: %s" % msg)
     except (ValueError, OSError) as e:

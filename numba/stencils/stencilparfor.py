@@ -29,12 +29,14 @@ def _compute_last_ind(dim_size, index_const):
         return dim_size
 
 class StencilPass(object):
-    def __init__(self, func_ir, typemap, calltypes, array_analysis, typingctx, flags):
+    def __init__(self, func_ir, typemap, calltypes, array_analysis, typingctx,
+                 targetctx, flags):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
         self.array_analysis = array_analysis
         self.typingctx = typingctx
+        self.targetctx = targetctx
         self.flags = flags
 
     def run(self):
@@ -400,7 +402,8 @@ class StencilPass(object):
         def get_start_ind(s_length):
             return abs(min(s_length, 0))
         f_ir = compile_to_numba_ir(get_start_ind, {}, self.typingctx,
-                                 (types.intp,), self.typemap, self.calltypes)
+                                   self.targetctx, (types.intp,), self.typemap,
+                                   self.calltypes)
         assert len(f_ir.blocks) == 1
         block = f_ir.blocks.popitem()[1]
         replace_arg_nodes(block, [start_length])
@@ -635,8 +638,8 @@ class StencilPass(object):
             slice_type = self.typemap[slice_var.name]
             arg_typs = (slice_type, types.intp,)
         _globals = self.func_ir.func_id.func.__globals__
-        f_ir = compile_to_numba_ir(f, _globals, self.typingctx, arg_typs,
-                                    self.typemap, self.calltypes)
+        f_ir = compile_to_numba_ir(f, _globals, self.typingctx, self.targetctx,
+                                   arg_typs, self.typemap, self.calltypes)
         _, block = f_ir.blocks.popitem()
         replace_arg_nodes(block, args)
         new_index = block.body[-2].value.value
@@ -670,7 +673,8 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
         rewrites.rewrite_registry.apply('before-inference', tp.state)
 
         tp.state.typemap, tp.state.return_type, tp.state.calltypes, _ = type_inference_stage(
-            tp.state.typingctx, tp.state.func_ir, tp.state.args, None)
+            tp.state.typingctx, tp.state.targetctx, tp.state.func_ir,
+            tp.state.args, None)
 
         type_annotations.TypeAnnotation(
             func_ir=tp.state.func_ir,

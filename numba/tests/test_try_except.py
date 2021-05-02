@@ -11,9 +11,8 @@ from numba.core.errors import (
     UnsupportedError, CompilerError, NumbaPerformanceWarning, TypingError,
 )
 from numba.tests.support import (
-    TestCase, unittest, captured_stdout, skip_tryexcept_unsupported,
-    skip_tryexcept_supported, MemoryLeakMixin, skip_parfors_unsupported,
-    skip_unless_scipy,
+    TestCase, unittest, captured_stdout, MemoryLeakMixin,
+    skip_parfors_unsupported, skip_unless_scipy,
 )
 
 
@@ -21,7 +20,6 @@ class MyError(Exception):
     pass
 
 
-@skip_tryexcept_unsupported
 class TestTryBareExcept(TestCase):
     """Test the following pattern:
 
@@ -381,7 +379,6 @@ class TestTryBareExcept(TestCase):
         )
 
 
-@skip_tryexcept_unsupported
 class TestTryExceptCaught(TestCase):
     def test_catch_exception(self):
         @njit
@@ -517,7 +514,6 @@ class TestTryExceptCaught(TestCase):
         self.assertEqual(udt(2), 0.5)
 
 
-@skip_tryexcept_unsupported
 class TestTryExceptNested(TestCase):
     "Tests for complicated nesting"
 
@@ -611,38 +607,6 @@ class TestTryExceptNested(TestCase):
             )
 
 
-@skip_tryexcept_supported
-class TestTryExceptUnsupported(TestCase):
-
-    msg_pattern = "'try' block not supported until python3.7 or later"
-
-    def check(self, call, *args):
-        with self.assertRaises(UnsupportedError) as raises:
-            call(*args)
-        self.assertIn(self.msg_pattern, str(raises.exception))
-
-    def test_try_except(self):
-        @njit
-        def foo(x):
-            try:
-                if x:
-                    raise MyError
-            except:   # noqa: E722
-                pass
-        self.check(foo, True)
-
-    def test_try_finally(self):
-        @njit
-        def foo(x):
-            try:
-                if x:
-                    raise MyError
-            finally:
-                pass
-        self.check(foo, True)
-
-
-@skip_tryexcept_unsupported
 class TestTryExceptRefct(MemoryLeakMixin, TestCase):
     def test_list_direct_raise(self):
         @njit
@@ -710,7 +674,6 @@ class TestTryExceptRefct(MemoryLeakMixin, TestCase):
         )
 
 
-@skip_tryexcept_unsupported
 class TestTryExceptOtherControlFlow(TestCase):
     def test_yield(self):
         @njit
@@ -795,7 +758,6 @@ class TestTryExceptOtherControlFlow(TestCase):
             self.fail("expected RERAISE unreachable message not found")
 
 
-@skip_tryexcept_unsupported
 @skip_parfors_unsupported
 class TestTryExceptParfors(TestCase):
 

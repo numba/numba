@@ -1534,6 +1534,40 @@ class TestDictInferred(TestCase):
             },
         )
 
+    def test_comprehension_basic(self):
+        @njit
+        def foo():
+            return {i: 2 * i for i in range(10)}
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_comprehension_basic_mixed_type(self):
+        @njit
+        def foo():
+            return {i: float(j) for i, j in zip(range(10), range(10, 0, -1))}
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_comprehension_involved(self):
+        @njit
+        def foo():
+            a = {0: 'A', 1: 'B', 2: 'C'}
+            return {3 + i: a[i] for i in range(3)}
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_comprehension_fail_mixed_type(self):
+        @njit
+        def foo():
+            a = {0: 'A', 1: 'B', 2: 1j}
+            return {3 + i: a[i] for i in range(3)}
+
+        with self.assertRaises(TypingError) as e:
+            foo()
+
+        excstr = str(e.exception)
+        self.assertIn("Cannot cast complex128 to unicode_type", excstr)
+
 
 class TestNonCompiledInfer(TestCase):
     def test_check_untyped_dict_ops(self):

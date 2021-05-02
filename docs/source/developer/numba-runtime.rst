@@ -90,7 +90,7 @@ To debug reference leaks in NRT MemInfo, each MemInfo python object has a
 ``.refcount`` attribute for inspection.  To get the MemInfo from a ndarray
 allocated by NRT, use the ``.base`` attribute.
 
-To debug memory leaks in NRT, the ``numba.runtime.rtsys`` defines
+To debug memory leaks in NRT, the ``numba.core.runtime.rtsys`` defines
 ``.get_allocation_stats()``.  It returns a namedtuple containing the
 number of allocation and deallocation since the start of the program.
 Checking that the allocation and deallocation counters are matching is the
@@ -100,7 +100,8 @@ simplest way to know if the NRT is leaking.
 Debugging Leaks in C
 --------------------
 
-The start of `numba/runtime/nrt.h <https://github.com/numba/numba/blob/master/numba/runtime/nrt.h>`_
+The start of `numba/core/runtime/nrt.h
+<https://github.com/numba/numba/blob/master/numba/core/runtime/nrt.h>`_
 has these lines:
 
 .. code-block:: C
