@@ -11,12 +11,12 @@ import logging
 from numba.core.errors import DeprecationError, NumbaDeprecationWarning
 from numba.stencils.stencil import stencil
 from numba.core import config, extending, sigutils, registry
-from numba.core.extending_hardware import (JitDecorator, hardware_registry,
-                                           dispatcher_registry,
-                                           resolve_dispatcher_from_str)
-from numba.core.registry import TargetRegistry
+from numba.core.target_extension import (JitDecorator, target_registry,
+                                         dispatcher_registry,
+                                         resolve_dispatcher_from_str)
+from numba.core.registry import DelayedRegistry
 
-jit_registry = TargetRegistry()
+jit_registry = DelayedRegistry()
 
 _logger = logging.getLogger(__name__)
 
@@ -192,7 +192,7 @@ def jit(signature_or_function=None, locals={}, cache=False,
 
 
 # Register the cpu token as using `jit` as the jitter
-jit_registry[hardware_registry['cpu']] = jit
+jit_registry[target_registry['cpu']] = jit
 
 def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
 

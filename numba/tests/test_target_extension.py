@@ -1,9 +1,9 @@
-"""This tests the hardware extension API to ensure that rudimentary expected
-behaviours are present and correct. It uses a piece of fake hardware, the
-Dummy Processing Unit (DPU) to do this. The DPU borrows a lot from the CPU but
-is part of the GPU class of hardware. The DPU target has deliberately strange
-implementations of fundamental operations so as to make it identifiable in
-testing."""
+"""This tests the target extension API to ensure that rudimentary expected
+behaviours are present and correct. It uses a piece of fake hardware as a
+target, the Dummy Processing Unit (DPU), to do this. The DPU borrows a lot from
+the CPU but is part of the GPU class of target. The DPU target has deliberately
+strange implementations of fundamental operations so as to make it identifiable
+in testing."""
 
 import unittest
 from numba.tests.support import TestCase
@@ -13,11 +13,11 @@ import operator
 import numpy as np
 from numba import njit, types
 from numba.extending import overload, intrinsic
-from numba.core.extending_hardware import (
+from numba.core.target_extension import (
     JitDecorator,
-    hardware_registry,
+    target_registry,
     dispatcher_registry,
-    hardware_target,
+    target_override,
     GPU,
     resolve_dispatcher_from_str,
 )
@@ -42,17 +42,17 @@ from numba.core.compiler import CompilerBase, DefaultPassBuilder
 from numba.core.compiler_machinery import FunctionPass, register_pass
 from numba.core.typed_passes import PreLowerStripPhis
 
-# Define a new target, this hardware extends GPU, this places the DPU in the
-# hardware hierarchy as a type of GPU.
+# Define a new target, this target extends GPU, this places the DPU in the
+# target hierarchy as a type of GPU.
 
 
 class DPU(GPU):
     ...
 
 
-# register the dpu hardware hierarchy token in the hardware registry, this
+# register the dpu target hierarchy token in the target registry, this
 # permits lookup and reference in userspace by the string "dpu"
-hardware_registry["dpu"] = DPU
+target_registry["dpu"] = DPU
 
 # Create a JIT DPU codegen for the DPU target
 
@@ -316,7 +316,7 @@ class DPUDispatcher(Dispatcher):
 
 # Register a dispatcher for the DPU target, a lot of the code uses this
 # internally to work out what to do RE compilation
-dispatcher_registry[hardware_registry["dpu"]] = DPUDispatcher
+dispatcher_registry[target_registry["dpu"]] = DPUDispatcher
 
 # Implement a dispatcher for the DPU target
 
@@ -340,7 +340,7 @@ class djit(JitDecorator):
         """
         Returns the dispatcher
         """
-        return dispatcher_registry[hardware_registry["dpu"]]
+        return dispatcher_registry[target_registry["dpu"]]
 
     def dispatcher_wrapper(self):
         disp = self.get_dispatcher()
@@ -363,7 +363,7 @@ class djit(JitDecorator):
 
 # add it to the decorator registry, this is so e.g. @overload can look up a
 # JIT function to do the compilation work.
-decorators.jit_registry[hardware_registry["dpu"]] = djit
+decorators.jit_registry[target_registry["dpu"]] = djit
 
 # The DPU target "knows" nothing, add in some primitives for basic things...
 
@@ -399,7 +399,7 @@ def const_float(context, builder, ty, pyval):
 
 
 # The DPU actually subtracts when it's asked to 'add'!
-@intrinsic(hardware="dpu")
+@intrinsic(target="dpu")
 def intrin_add(tyctx, x, y):
     sig = x(x, y)
 
@@ -410,7 +410,7 @@ def intrin_add(tyctx, x, y):
 
 
 # Use extending.overload API to register 'add', call the dpu specific intrinsic
-@overload(operator.add, hardware="dpu")
+@overload(operator.add, target="dpu")
 def ol_add(x, y):
     if isinstance(x, types.Integer) and isinstance(y, types.Integer):
 
@@ -420,8 +420,8 @@ def ol_add(x, y):
         return impl
 
 
-class TestHardwareHierarchySelection(TestCase):
-    """This tests that the hardware hierarchy is scanned in the right order,
+class TestTargetHierarchySelection(TestCase):
+    """This tests that the target hierarchy is scanned in the right order,
     that appropriate functions are selected based on what's available and that
     the DPU target is distinctly different to the CPU"""
 
@@ -430,7 +430,7 @@ class TestHardwareHierarchySelection(TestCase):
             pass
 
         # Can be used by both CPU and DPU
-        @overload(my_func, hardware="generic")
+        @overload(my_func, target="generic")
         def ol_my_func1(x):
             def impl(x):
                 return 1 + x
@@ -453,7 +453,7 @@ class TestHardwareHierarchySelection(TestCase):
             pass
 
         # Can be used by both CPU and DPU
-        @overload(my_func, hardware="generic")
+        @overload(my_func, target="generic")
         def ol_my_func1(x):
             def impl(x):
                 return 1 + x
@@ -461,7 +461,7 @@ class TestHardwareHierarchySelection(TestCase):
             return impl
 
         # Should be used by the DPU if there's no dpu specific one
-        @overload(my_func, hardware="gpu")
+        @overload(my_func, target="gpu")
         def ol_my_func2(x):
             def impl(x):
                 return 10 + x
@@ -487,7 +487,7 @@ class TestHardwareHierarchySelection(TestCase):
             pass
 
         # Can be used by both CPU and DPU
-        @overload(my_func, hardware="generic")
+        @overload(my_func, target="generic")
         def ol_my_func1(x):
             def impl(x):
                 return 1 + x
@@ -495,7 +495,7 @@ class TestHardwareHierarchySelection(TestCase):
             return impl
 
         # Should be used by the DPU if there's no dpu specific one
-        @overload(my_func, hardware="gpu")
+        @overload(my_func, target="gpu")
         def ol_my_func2(x):
             def impl(x):
                 return 10 + x
@@ -503,7 +503,7 @@ class TestHardwareHierarchySelection(TestCase):
             return impl
 
         # Should be used by the DPU only
-        @overload(my_func, hardware="dpu")
+        @overload(my_func, target="dpu")
         def ol_my_func3(x):
             def impl(x):
                 return 100 + x
@@ -530,7 +530,7 @@ class TestHardwareHierarchySelection(TestCase):
             pass
 
         # only create a cuda specialisation
-        @overload(my_func, hardware='cuda')
+        @overload(my_func, target='cuda')
         def ol_my_func_cuda(x):
             return lambda x: None
 
@@ -543,8 +543,8 @@ class TestHardwareHierarchySelection(TestCase):
 
         msgs = ["Function resolution cannot find any matches for function",
                 "test_no_specialisation_found.<locals>.my_func",
-                "for the current hardware:",
-                "'numba.tests.test_hardware_extension.DPU'"]
+                "for the current target:",
+                "'numba.tests.test_target_extension.DPU'"]
 
         for msg in msgs:
             self.assertIn(msg, str(raises.exception))
@@ -578,7 +578,7 @@ class TestHardwareHierarchySelection(TestCase):
         # This is a typing error at present as it fails during typing when the
         # overloads are walked.
         with self.assertRaises(errors.TypingError) as raises:
-            @overload(bar, hardware='invalid_silicon')
+            @overload(bar, target='invalid_silicon')
             def ol_bar():
                 return lambda : None
 
@@ -594,11 +594,11 @@ class TestHardwareHierarchySelection(TestCase):
     def test_intrinsic_selection(self):
         """
         Test to make sure that targets can share generic implementations and
-        cannot reach implementations that are not in their hardware hierarchy.
+        cannot reach implementations that are not in their target hierarchy.
         """
 
         # NOTE: The actual operation performed by these functions is irrelevant
-        @intrinsic(hardware="generic")
+        @intrinsic(target="generic")
         def intrin_math_generic(tyctx, x, y):
             sig = x(x, y)
 
@@ -607,7 +607,7 @@ class TestHardwareHierarchySelection(TestCase):
 
             return sig, codegen
 
-        @intrinsic(hardware="dpu")
+        @intrinsic(target="dpu")
         def intrin_math_dpu(tyctx, x, y):
             sig = x(x, y)
 
@@ -616,7 +616,7 @@ class TestHardwareHierarchySelection(TestCase):
 
             return sig, codegen
 
-        @intrinsic(hardware="cpu")
+        @intrinsic(target="cpu")
         def intrin_math_cpu(tyctx, x, y):
             sig = x(x, y)
 
@@ -649,7 +649,7 @@ class TestHardwareHierarchySelection(TestCase):
 
         msgs = ["Function resolution cannot find any matches for function",
                 "intrinsic intrin_math_dpu",
-                "for the current hardware",]
+                "for the current target",]
         for msg in msgs:
             self.assertIn(msg, str(raises.exception))
 
@@ -677,12 +677,12 @@ class TestHardwareHierarchySelection(TestCase):
 
         msgs = ["Function resolution cannot find any matches for function",
                 "intrinsic intrin_math_cpu",
-                "for the current hardware",]
+                "for the current target",]
         for msg in msgs:
             self.assertIn(msg, str(raises.exception))
 
 
-class TestHardwareOffload(TestCase):
+class TestTargetOffload(TestCase):
     """In this use case the CPU compilation pipeline is extended with a new
      compilation pass that runs just prior to lowering. The pass looks for
      function calls and when it finds one it sees if there's a DPU function
@@ -696,7 +696,7 @@ class TestHardwareOffload(TestCase):
         _DEBUG = False
 
         # This is the DPU function for sin, it'll return a pi-like constant
-        @overload(np.sin, hardware="dpu")
+        @overload(np.sin, target="dpu")
         def ol_np_sin_DPU(x):
             def dpu_sin_impl(x):
                 return 314159.0
@@ -735,9 +735,9 @@ class TestHardwareOffload(TestCase):
                         function = state.typemap[call.func.name]
                         tname = "dpu"
 
-                        # Note: `hardware_target` context driven compilation can
+                        # Note: `target_override` context driven compilation can
                         # be done here, the DPU target is in use.
-                        with hardware_target(tname):
+                        with target_override(tname):
                             try:
                                 sig = function.get_call_type(
                                     state.typingctx,
@@ -766,11 +766,11 @@ class TestHardwareOffload(TestCase):
                             )
 
                             # All is good, so switch IR node for one targeting
-                            # this hardware. Should generate this, but for now
+                            # this target. Should generate this, but for now
                             # just mutate as:
                             # ir.Expr.call(call.func, call.args, call.kws,
-                            #              call.loc, hardware='dpu')
-                            call.hardware = tname
+                            #              call.loc, target='dpu')
+                            call.target = tname
                             mutated = True
                 # return True if the IR was mutated, False if not.
                 return mutated

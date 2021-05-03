@@ -980,10 +980,9 @@ class Lower(BaseLower):
             argvals = self.fold_call_args(
                 fnty, signature, expr.args, expr.vararg, expr.kws,
             )
-        tname = expr.hardware
+        tname = expr.target
         if tname is not None:
-            from numba.core.extending_hardware import \
-                resolve_dispatcher_from_str
+            from numba.core.target_extension import resolve_dispatcher_from_str
             disp = resolve_dispatcher_from_str(tname)
             hw_ctx = disp.targetdescr.target_context
             impl = hw_ctx.get_function(fnty, signature)

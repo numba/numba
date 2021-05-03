@@ -53,8 +53,8 @@ from numba import experimental
 import numba.core.withcontexts
 from numba.core.withcontexts import objmode_context as objmode
 
-# Initialize hardware
-import numba.core.extending_hardware
+# Initialize target extensions
+import numba.core.target_extension
 
 # Initialize typed containers
 import numba.typed
