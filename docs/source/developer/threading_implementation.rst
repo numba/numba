@@ -201,7 +201,6 @@ The general pattern for using ``get_num_threads`` in code generation is
        lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
        name="get_num_threads")
 
-
    num_threads = builder.call(get_num_threads, [])
 
    with cgutils.if_unlikely(builder, builder.icmp_signed('<=', num_threads,
