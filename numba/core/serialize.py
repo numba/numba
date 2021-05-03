@@ -52,7 +52,7 @@ def dumps(obj):
     """
     pickler = NumbaPickler
     with io.BytesIO() as buf:
-        p = pickler(buf)
+        p = pickler(buf, protocol=4)
         p.dump(obj)
         pickled = buf.getvalue()
 
