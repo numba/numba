@@ -94,6 +94,12 @@ def _getitem(l, i):
 
 
 @njit
+def _iter(l):
+    for i in range(len(l)):
+        yield l[i]
+
+
+@njit
 def _contains(l, item):
     return item in l
 
@@ -369,8 +375,10 @@ class List(MutableSequence, pt.Generic[T]):
             return _getitem(self, i)
 
     def __iter__(self) -> pt.Iterator[T]:
-        for i in range(len(self)):
-            yield self[i]
+        if not self._typed:
+            return iter([])
+        else:
+            return _iter(self)
 
     def __contains__(self, item: T) -> bool:  # type: ignore[override]
         return _contains(self, item)
