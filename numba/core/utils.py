@@ -558,6 +558,9 @@ class _RedirectSubpackage(ModuleType):
         old_module = old_module_locals['__name__']
         super().__init__(old_module)
 
+        self.__old_module_states = {}
+        self.__new_module = new_module
+
         new_mod_obj = import_module(new_module)
 
         # Map all sub-modules over
@@ -573,4 +576,10 @@ class _RedirectSubpackage(ModuleType):
         # copy across dunders so that package imports work too
         for attr, value in old_module_locals.items():
             if attr.startswith('__') and attr.endswith('__'):
-                setattr(self, attr, value)
+                if attr != "__builtins__":
+                    setattr(self, attr, value)
+                    self.__old_module_states[attr] = value
+
+    def __reduce__(self):
+        args = (self.__old_module_states, self.__new_module)
+        return _RedirectSubpackage, args
