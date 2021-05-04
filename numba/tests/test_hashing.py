@@ -54,7 +54,11 @@ class TestHashingSetup(TestCase):
         with warnings.catch_warnings(record=True) as warns:
             # Cause all warnings to always be triggered.
             warnings.simplefilter("always")
-            import numba
+            from numba import njit
+            @njit
+            def foo():
+                hash(1)
+            foo()
             assert len(warns) > 0
             expect = "FNV hashing is not implemented in Numba. See PEP 456"
             for w in warns:

@@ -8,11 +8,11 @@ import unittest
 
 
 looplift_flags = Flags()
-looplift_flags.set("enable_pyobject")
-looplift_flags.set("enable_looplift")
+looplift_flags.enable_pyobject = True
+looplift_flags.enable_looplift = True
 
 pyobject_looplift_flags = looplift_flags.copy()
-pyobject_looplift_flags.set("enable_pyobject_looplift")
+pyobject_looplift_flags.enable_pyobject_looplift = True
 
 
 def lift1(x):

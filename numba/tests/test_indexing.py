@@ -13,10 +13,10 @@ from numba.core.types import intp, ellipsis, slice2_type, slice3_type
 
 
 enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
+enable_pyobj_flags.enable_pyobject = True
 
 Noflags = Flags()
-Noflags.set("nrt")
+Noflags.nrt = True
 
 
 def slicing_1d_usecase(a, start, stop, step):

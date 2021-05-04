@@ -406,3 +406,9 @@ def tuple_index(tup, value):
         raise ValueError("tuple.index(x): x not in tuple")
 
     return tuple_index_impl
+
+
+@overload(operator.contains)
+def in_seq_empty_tuple(x, y):
+    if isinstance(x, types.Tuple) and not x.types:
+        return lambda x, y: False

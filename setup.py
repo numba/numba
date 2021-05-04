@@ -19,7 +19,7 @@ except ImportError:
         pass
 
 
-min_python_version = "3.6"
+min_python_version = "3.7"
 max_python_version = "3.10"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.15"
@@ -128,7 +128,6 @@ def is_building():
                       'bdist_wininst', 'check', 'build_doc', 'bdist_wheel',
                       'bdist_egg', 'develop', 'easy_install', 'test']
     return any(bc in sys.argv[1:] for bc in build_commands)
-
 
 
 def get_ext_modules():
@@ -375,7 +374,6 @@ metadata = dict(
         "Operating System :: OS Independent",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",

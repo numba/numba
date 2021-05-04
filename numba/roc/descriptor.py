@@ -4,7 +4,7 @@ from .target import HSATargetContext, HSATypingContext
 
 
 class HSATargetOptions(TargetOptions):
-    OPTIONS = {}
+    pass
 
 
 class HSATargetDesc(TargetDescriptor):

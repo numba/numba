@@ -29,15 +29,15 @@ iswindows = sys.platform.startswith('win32')
 # of array expressions.
 
 enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
-enable_pyobj_flags.set("no_rewrites")
+enable_pyobj_flags.enable_pyobject = True
+enable_pyobj_flags.no_rewrites = True
 
 no_pyobj_flags = Flags()
-no_pyobj_flags.set("no_rewrites")
+no_pyobj_flags.no_rewrites = True
 
 enable_nrt_flags = Flags()
-enable_nrt_flags.set("nrt")
-enable_nrt_flags.set("no_rewrites")
+enable_nrt_flags.nrt = True
+enable_nrt_flags.no_rewrites = True
 
 
 def _unimplemented(func):
@@ -1790,7 +1790,7 @@ class TestUfuncOnContext(TestCase):
 
     def test_base_get_ufunc_info(self):
         # The BaseContext always raises NotImplementedError
-        targetctx = BaseContext(cpu_target.typing_context)
+        targetctx = BaseContext(cpu_target.typing_context, 'cpu')
         with self.assertRaises(NotImplementedError) as raises:
             targetctx.get_ufunc_info(np.add)
         self.assertRegex(
