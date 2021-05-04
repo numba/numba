@@ -3,11 +3,15 @@ def initialize_all():
     import numba.cuda.models  # noqa: F401
 
     from numba import cuda
+    from numba.cuda.compiler import Dispatcher
     from numba.core import decorators
-    from numba.core.extending_hardware import hardware_registry
+    from numba.core.extending_hardware import (hardware_registry,
+                                               dispatcher_registry)
 
     def cuda_jit_device(*args, **kwargs):
         kwargs['device'] = True
         return cuda.jit(*args, **kwargs)
 
-    decorators.jit_registry[hardware_registry["cuda"]] = cuda_jit_device
+    cuda_hw = hardware_registry["cuda"]
+    decorators.jit_registry[cuda_hw] = cuda_jit_device
+    dispatcher_registry[cuda_hw] = Dispatcher
