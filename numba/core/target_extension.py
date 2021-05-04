@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from numba.core.registry import DelayedRegistry, CPUDispatcher
-
+from numba.core.decorators import jit
 from threading import local as tls
+
 
 _active_context = tls()
 _active_context_default = 'cpu'
@@ -19,7 +20,11 @@ class _TargetRegistry(DelayedRegistry):
             raise ValueError(msg.format(item, known)) from None
 
 
+# Registry mapping target name strings to Target classes
 target_registry = _TargetRegistry()
+
+# Registry mapping Target classes the @jit decorator for that target
+jit_registry = DelayedRegistry()
 
 
 class target_override(object):
@@ -131,4 +136,9 @@ target_registry['ROCm'] = ROCm
 target_registry['npyufunc'] = NPyUfunc
 
 dispatcher_registry = DelayedRegistry(key_type=Target)
-dispatcher_registry[target_registry['cpu']] = CPUDispatcher
+
+
+# Register the cpu target token with its dispatcher and jit
+cpu_target = target_registry['cpu']
+dispatcher_registry[cpu_target] = CPUDispatcher
+jit_registry[cpu_target] = jit

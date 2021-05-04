@@ -701,19 +701,20 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
     def _get_jit_decorator(self):
         """Gets a jit decorator suitable for the current target"""
-        from numba.core import decorators
-        from numba import jit
+
         jitter_str = self.metadata.get('target', None)
         if jitter_str is None:
+            from numba import jit
             # There is no target requested, use default, this preserves
             # original behaviour
             jitter = lambda *args, **kwargs: jit(*args, nopython=True, **kwargs)
         else:
             from numba.core.target_extension import (target_registry,
-                                                     get_local_target)
+                                                     get_local_target,
+                                                     jit_registry)
 
             # target has been requested, see what it is...
-            jitter = decorators.jit_registry.get(jitter_str, None)
+            jitter = jit_registry.get(jitter_str, None)
 
             if jitter is None:
                 # No JIT known for target string, see if something is
@@ -731,7 +732,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                 if not issubclass(target_hw, target_class):
                     msg = "No overloads exist for the requested target: {}."
 
-                jitter = decorators.jit_registry[target_hw]
+                jitter = jit_registry[target_hw]
 
         if jitter is None:
             raise ValueError("Cannot find a suitable jit decorator")

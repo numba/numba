@@ -17,6 +17,7 @@ from numba.core.target_extension import (
     JitDecorator,
     target_registry,
     dispatcher_registry,
+    jit_registry,
     target_override,
     GPU,
     resolve_dispatcher_from_str,
@@ -28,7 +29,7 @@ from numba.core import cpu, typing, cgutils
 from numba.core.base import BaseContext
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.utils import cached_property
-from numba.core import callconv, decorators
+from numba.core import callconv
 from numba.core.codegen import CPUCodegen, JITCodeLibrary
 from numba.core.callwrapper import PyCallWrapper
 from numba.core.imputils import RegistryLoader, Registry
@@ -363,7 +364,7 @@ class djit(JitDecorator):
 
 # add it to the decorator registry, this is so e.g. @overload can look up a
 # JIT function to do the compilation work.
-decorators.jit_registry[target_registry["dpu"]] = djit
+jit_registry[target_registry["dpu"]] = djit
 
 # The DPU target "knows" nothing, add in some primitives for basic things...
 
