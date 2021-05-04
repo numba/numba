@@ -314,6 +314,28 @@ class Array(object):
         if order not in 'CFA':
             raise ValueError('order not C|F|A')
 
+        # check for exactly one instance of -1 in newdims
+        # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/core/src/multiarray/shape.c#L470-L515   # noqa: E501
+        unknownidx = -1
+        knownsize = 1
+        for i, dim in enumerate(newdims):
+            if dim < 0:
+                if unknownidx == -1:
+                    unknownidx = i
+                else:
+                    raise ValueError("can only specify one unknown dimension")
+            else:
+                knownsize *= dim
+
+        # compute the missing dimension
+        if unknownidx >= 0:
+            if knownsize == 0 or self.size % knownsize != 0:
+                raise ValueError("cannot infer valid shape for unknown dimension")
+            else:
+                newdims = newdims[0:unknownidx] \
+                        + (self.size // knownsize,) \
+                        + newdims[unknownidx + 1:]
+
         newsize = functools.reduce(operator.mul, newdims, 1)
 
         if order == 'A':
