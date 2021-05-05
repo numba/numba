@@ -12,6 +12,6 @@ def initialize_all():
         kwargs['device'] = True
         return cuda.jit(*args, **kwargs)
 
-    cuda_hw = target_registry["cuda"]
-    jit_registry[cuda_hw] = cuda_jit_device
-    dispatcher_registry[cuda_hw] = Dispatcher
+    cuda_target = target_registry["cuda"]
+    jit_registry[cuda_target] = cuda_jit_device
+    dispatcher_registry[cuda_target] = Dispatcher
