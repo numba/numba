@@ -68,12 +68,12 @@ class CPUContext(BaseContext):
 
     def load_additional_registries(self):
         # Add implementations that work via import
-        from numba.cpython import (slicing, tupleobj, enumimpl, hashing, heapq,
-                                   iterators, numbers, rangeobj, unicode,
-                                   charseq, setobj)
+        from numba.cpython import (builtins, charseq, enumimpl, hashing, heapq,
+                                   iterators, listobj, numbers, rangeobj,
+                                   setobj, slicing, tupleobj, unicode,)
         from numba.core import optional
         from numba.misc import gdb_hook, literal
-        from numba.np import linalg, polynomial, arraymath
+        from numba.np import linalg, polynomial, arraymath, arrayobj
         from numba.typed import typeddict, dictimpl
         from numba.typed import typedlist, listobject
         from numba.experimental import jitclass, function_type
