@@ -70,7 +70,7 @@ class CPUContext(BaseContext):
         # Add implementations that work via import
         from numba.cpython import (slicing, tupleobj, enumimpl, hashing, heapq,
                                    iterators, numbers, rangeobj, unicode,
-                                   charseq)
+                                   charseq, setobj)
         from numba.core import optional
         from numba.misc import gdb_hook, literal
         from numba.np import linalg, polynomial, arraymath
