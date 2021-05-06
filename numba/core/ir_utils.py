@@ -7,22 +7,17 @@ import numpy
 
 import types as pytypes
 import collections
-import operator
 import warnings
-
-from llvmlite import ir as lir
 
 import numba
 from numba.core.extending import _Intrinsic
-from numba.core import types, utils, typing, ir, analysis, postproc, rewrites, config, cgutils
-from numba.core.typing.templates import (signature, infer_global,
-                                         AbstractTemplate)
-from numba.core.imputils import impl_ret_untracked
+from numba.core import types, typing, ir, analysis, postproc, rewrites, config
+from numba.core.typing.templates import signature
 from numba.core.analysis import (compute_live_map, compute_use_defs,
-                            compute_cfg_from_blocks)
+                                 compute_cfg_from_blocks)
 from numba.core.errors import (TypingError, UnsupportedError,
-                               NumbaPendingDeprecationWarning, NumbaWarning,
-                               feedback_details, CompilerError)
+                               NumbaPendingDeprecationWarning,
+                               CompilerError)
 
 import copy
 
@@ -101,7 +96,7 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc, lhs_typ):
         typemap[typ_var.name] = types.functions.NumberClass(dtype)
     # assuming str(dtype) returns valid np dtype string
     dtype_str = str(dtype)
-    if dtype_str=='bool':
+    if dtype_str == 'bool':
         # empty doesn't like 'bool' sometimes (e.g. kmeans example)
         dtype_str = 'bool_'
     np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
@@ -109,10 +104,9 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc, lhs_typ):
     alloc_call = ir.Expr.call(attr_var, [size_var, typ_var], (), loc)
     if calltypes:
         calltypes[alloc_call] = typemap[attr_var.name].get_call_type(
-            typing.Context(), [size_typ, types.functions.NumberClass(dtype)], {})
-    # signature(
-    #    types.npytypes.Array(dtype, ndims, 'C'), size_typ,
-    #    types.functions.NumberClass(dtype))
+            typing.Context(),
+            [size_typ, types.functions.NumberClass(dtype)],
+            {})
 
     if lhs_typ.layout == 'F':
         empty_c_typ = lhs_typ.copy(layout='C')
@@ -122,8 +116,10 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc, lhs_typ):
         empty_c_assign = ir.Assign(alloc_call, empty_c_var, loc)
 
         # attr call: asfortranarray = getattr(g_np_var, asfortranarray)
-        asfortranarray_attr_call = ir.Expr.getattr(g_np_var, "asfortranarray", loc)
-        afa_attr_var = ir.Var(scope, mk_unique_var("$asfortran_array_attr"), loc)
+        asfortranarray_attr_call = ir.Expr.getattr(g_np_var, "asfortranarray",
+                                                   loc)
+        afa_attr_var = ir.Var(scope, mk_unique_var("$asfortran_array_attr"),
+                              loc)
         if typemap:
             typemap[afa_attr_var.name] = get_np_ufunc_typ(numpy.asfortranarray)
         afa_attr_assign = ir.Assign(asfortranarray_attr_call, afa_attr_var, loc)

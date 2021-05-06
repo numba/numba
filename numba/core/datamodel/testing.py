@@ -126,9 +126,9 @@ class NotSupportAsDataMixin(object):
 
         undef_value = ir.Constant(self.datamodel.get_value_type(), None)
         with self.assertRaises(NotImplementedError):
-            data = self.datamodel.as_data(builder, undef_value)
+            self.datamodel.as_data(builder, undef_value)
         with self.assertRaises(NotImplementedError):
-            rev_data = self.datamodel.from_data(builder, undef_value)
+            self.datamodel.from_data(builder, undef_value)
 
 
 class DataModelTester_SupportAsDataMixin(DataModelTester,

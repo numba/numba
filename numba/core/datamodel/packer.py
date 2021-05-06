@@ -3,7 +3,6 @@ from collections import deque
 from numba.core import types, cgutils
 
 
-
 class DataPacker(object):
     """
     A helper to pack a number of typed arguments into a data structure.
@@ -36,7 +35,8 @@ class DataPacker(object):
         res = []
         for i, i_formal in enumerate(self._pack_map):
             elem_ptr = cgutils.gep_inbounds(builder, ptr, 0, i)
-            val = self._models[i_formal].load_from_data_pointer(builder, elem_ptr)
+            val = self._models[i_formal].load_from_data_pointer(builder,
+                                                                elem_ptr)
             if formal_list is None:
                 res.append((self._fe_types[i_formal], val))
             else:
@@ -156,6 +156,7 @@ _APPEND_NEXT_VALUE = 2
 _APPEND_EMPTY_TUPLE = 3
 _POP = 4
 
+
 class _Unflattener(object):
     """
     An object used to unflatten nested sequences after a given pattern
@@ -172,6 +173,7 @@ class _Unflattener(object):
         (an iterable of nested sequences).
         """
         code = []
+
         def rec(iterable):
             for i in iterable:
                 if isinstance(i, (tuple, list)):

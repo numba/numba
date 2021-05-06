@@ -44,4 +44,3 @@ class DataModelManager(object):
         dmm = DataModelManager()
         dmm._handlers = self._handlers.copy()
         return dmm
-

@@ -100,7 +100,6 @@ class BaseGeneratorLower(object):
         # Structure index #0: the initial resume index (0 == start of generator)
         resume_index = self.context.get_constant(types.int32, 0)
         # Structure index #1: the function arguments
-        argsty = retty.elements[1]
         statesty = retty.elements[2]
 
         lower.debug_print("# low_init_func incref")
@@ -132,7 +131,8 @@ class BaseGeneratorLower(object):
         yielded value).
         """
         lower.setup_function(self.gendesc)
-        lower.debug_print("# lower_next_func: {0}".format(self.gendesc.unique_name))
+        name = self.gendesc.unique_name
+        lower.debug_print("# lower_next_func: {0}".format(name))
         assert self.gendesc.argtypes[0] == self.gentype
         builder = lower.builder
         function = lower.function
@@ -159,7 +159,7 @@ class BaseGeneratorLower(object):
         # Add prologue switch to resume blocks
         builder.position_at_end(prologue)
         # First Python block is also the resume point on first next() call
-        first_block = self.resume_blocks[0] = lower.blkmap[lower.firstblk]
+        self.resume_blocks[0] = lower.blkmap[lower.firstblk]
 
         # Create front switch to resume points
         switch = builder.switch(builder.load(self.resume_index_ptr),
@@ -204,6 +204,7 @@ class BaseGeneratorLower(object):
         if config.DEBUG_JIT:
             self.context.debug_print(builder, "DEBUGJIT: {0}".format(msg))
 
+
 class GeneratorLower(BaseGeneratorLower):
     """
     Support class for lowering nopython generators.
@@ -232,6 +233,7 @@ class GeneratorLower(BaseGeneratorLower):
         self.debug_print(builder, "# generator: finalize end")
         builder.ret_void()
 
+
 class PyGeneratorLower(BaseGeneratorLower):
     """
     Support class for lowering object mode generators.
@@ -248,14 +250,15 @@ class PyGeneratorLower(BaseGeneratorLower):
             arg_types=(types.pyobject,) * self.func_ir.arg_count,
             state_types=(types.pyobject,) * len(self.geninfo.state_vars),
             has_finalizer=True,
-            )
+        )
 
     def box_generator_struct(self, lower, gen_struct):
         """
         Box the raw *gen_struct* as a Python object.
         """
         gen_ptr = cgutils.alloca_once_value(lower.builder, gen_struct)
-        return lower.pyapi.from_native_generator(gen_ptr, self.gentype, lower.envarg)
+        return lower.pyapi.from_native_generator(gen_ptr, self.gentype,
+                                                 lower.envarg)
 
     def init_generator_state(self, lower):
         """

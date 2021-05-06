@@ -9,7 +9,7 @@ import itertools
 from llvmlite import ir
 
 from numba.core import types, cgutils
-from numba.core.base import PYOBJECT, GENERIC_POINTER
+from numba.core.base import GENERIC_POINTER
 
 
 TryStatus = namedtuple('TryStatus', ['in_try', 'excinfo'])
@@ -29,15 +29,18 @@ Status = namedtuple("Status",
                      "is_python_exc",
                      # If the function errored with a user exception
                      "is_user_exc",
-                     # The pointer to the exception info structure (for user exceptions)
+                     # The pointer to the exception info structure
+                     # (for user exceptions)
                      "excinfoptr",
                      ))
 
 int32_t = ir.IntType(32)
 errcode_t = int32_t
 
+
 def _const_int(code):
     return ir.Constant(errcode_t, code)
+
 
 RETCODE_OK = _const_int(0)
 RETCODE_EXC = _const_int(-1)
@@ -48,8 +51,6 @@ RETCODE_STOPIT = _const_int(-3)
 FIRST_USEREXC = 1
 
 RETCODE_USEREXC = _const_int(FIRST_USEREXC)
-
-
 
 
 class BaseCallConv(object):
@@ -317,6 +318,7 @@ class _MinimalCallHelper(object):
             msg = "unknown error %d in native function" % exc_id
             return SystemError, (msg,)
 
+
 # The structure type constructed by PythonAPI.serialize_uncached()
 # i.e a {i8* pickle_buf, i32 pickle_bufsz, i8* hash_buf}
 excinfo_t = ir.LiteralStructType([GENERIC_POINTER, int32_t, GENERIC_POINTER])
@@ -386,8 +388,8 @@ class CPUCallConv(BaseCallConv):
                         func_name=None):
         try_info = getattr(builder, '_in_try_block', False)
         self.set_static_user_exc(builder, exc, exc_args=exc_args,
-                                   loc=loc, func_name=func_name)
-        trystatus = self.check_try_status(builder)
+                                 loc=loc, func_name=func_name)
+        self.check_try_status(builder)
         if try_info:
             # This is a hack for old-style impl.
             # We will branch directly to the exception handler.
@@ -625,7 +627,7 @@ class NumpyErrorModel(ErrorModel):
 error_models = {
     'python': PythonErrorModel,
     'numpy': NumpyErrorModel,
-    }
+}
 
 
 def create_error_model(model_name, context):

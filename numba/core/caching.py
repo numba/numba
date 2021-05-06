@@ -228,7 +228,8 @@ class _InTreeCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
     def __init__(self, py_func, py_file):
         self._py_file = py_file
         self._lineno = py_func.__code__.co_firstlineno
-        self._cache_path = os.path.join(os.path.dirname(self._py_file), '__pycache__')
+        self._cache_path = os.path.join(os.path.dirname(self._py_file),
+                                        '__pycache__')
 
     def get_cache_path(self):
         return self._cache_path
@@ -735,4 +736,3 @@ def make_library_cache(prefix):
         _impl_class = CustomCodeLibraryCacheImpl
 
     return LibraryCache
-

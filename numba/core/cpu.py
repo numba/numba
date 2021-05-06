@@ -1,4 +1,3 @@
-import sys
 import platform
 
 import llvmlite.binding as ll
@@ -7,16 +6,16 @@ from llvmlite import ir
 
 from numba import _dynfunc
 from numba.core.callwrapper import PyCallWrapper
-from numba.core.base import BaseContext, PYOBJECT
-from numba.core import utils, types, config, cgutils, callconv, codegen, externals, fastmathpass, intrinsics
+from numba.core.base import BaseContext
+from numba.core import (utils, types, config, cgutils, callconv, codegen,
+                        externals, fastmathpass, intrinsics)
 from numba.core.utils import cached_property
 from numba.core.options import TargetOptions, include_default_options
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import global_compiler_lock
 import numba.core.entrypoints
-from numba.core.cpu_options import (ParallelOptions, FastMathOptions,
-                                    InlineOptions)
 from numba.np import ufunc_db
+
 
 # Keep those structures in sync with _dynfunc.c.
 
@@ -68,18 +67,19 @@ class CPUContext(BaseContext):
 
     def load_additional_registries(self):
         # Add implementations that work via import
-        from numba.cpython import (slicing, tupleobj, enumimpl, hashing, heapq,
-                                   iterators, numbers, rangeobj, unicode,
-                                   charseq)
-        from numba.core import optional
-        from numba.misc import gdb_hook, literal
-        from numba.np import linalg, polynomial, arraymath
-        from numba.typed import typeddict, dictimpl
-        from numba.typed import typedlist, listobject
-        from numba.experimental import jitclass, function_type
+        from numba.cpython import (slicing, tupleobj, enumimpl,  # noqa: F401
+                                   hashing, heapq, iterators,   # noqa: F401
+                                   numbers, rangeobj, unicode,  # noqa: F401
+                                   charseq)  # noqa: F401
+        from numba.core import optional  # noqa: F401
+        from numba.misc import gdb_hook, literal  # noqa: F401
+        from numba.np import linalg, polynomial, arraymath  # noqa: F401
+        from numba.typed import typeddict, dictimpl  # noqa: F401
+        from numba.typed import typedlist, listobject  # noqa: F401
+        from numba.experimental import jitclass, function_type  # noqa: F401
 
         try:
-            from numba.np import npdatetime
+            from numba.np import npdatetime  # noqa: F401
         except NotImplementedError:
             pass
 
@@ -164,7 +164,6 @@ class CPUContext(BaseContext):
 
         return dictobject.build_map(self, builder, dict_type, item_types, items)
 
-
     def post_lowering(self, mod, library):
         if self.fastmath:
             fastmathpass.rewrite_module(mod, self.fastmath)
@@ -180,7 +179,8 @@ class CPUContext(BaseContext):
                                release_gil=False):
         wrapper_module = self.create_module("wrapper")
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
-        wrapper_callee = ir.Function(wrapper_module, fnty, fndesc.llvm_func_name)
+        wrapper_callee = ir.Function(wrapper_module, fnty,
+                                     fndesc.llvm_func_name)
         builder = PyCallWrapper(self, wrapper_module, wrapper_callee,
                                 fndesc, env, call_helper=call_helper,
                                 release_gil=release_gil)
@@ -190,12 +190,14 @@ class CPUContext(BaseContext):
     def create_cfunc_wrapper(self, library, fndesc, env, call_helper):
         wrapper_module = self.create_module("cfunc_wrapper")
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
-        wrapper_callee = ir.Function(wrapper_module, fnty, fndesc.llvm_func_name)
+        wrapper_callee = ir.Function(wrapper_module, fnty,
+                                     fndesc.llvm_func_name)
 
         ll_argtypes = [self.get_value_type(ty) for ty in fndesc.argtypes]
         ll_return_type = self.get_value_type(fndesc.restype)
         wrapty = ir.FunctionType(ll_return_type, ll_argtypes)
-        wrapfn = ir.Function(wrapper_module, wrapty, fndesc.llvm_cfunc_wrapper_name)
+        wrapfn = ir.Function(wrapper_module, wrapty,
+                             fndesc.llvm_cfunc_wrapper_name)
         builder = ir.IRBuilder(wrapfn.append_basic_block('entry'))
 
         status, out = self.call_conv.call_function(
@@ -231,8 +233,9 @@ class CPUContext(BaseContext):
             an execution environment (from _dynfunc)
         """
         # Code generation
-        baseptr = library.get_pointer_to_function(fndesc.llvm_func_name)
-        fnptr = library.get_pointer_to_function(fndesc.llvm_cpython_wrapper_name)
+        library.get_pointer_to_function(fndesc.llvm_func_name)
+        wrapper_name = fndesc.llvm_cpython_wrapper_name
+        fnptr = library.get_pointer_to_function(wrapper_name)
 
         # Note: we avoid reusing the original docstring to avoid encoding
         # issues on Python 2, see issue #1908
@@ -278,6 +281,7 @@ _options_mixin = include_default_options(
     "inline",
 )
 
+
 class CPUTargetOptions(_options_mixin, TargetOptions):
     def finalize(self, flags, options):
         if not flags.is_set("enable_pyobject"):
@@ -297,6 +301,7 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
         flags.enable_pyobject_looplift = True
 
         flags.inherit_if_not_set("fastmath")
+
 
 # ----------------------------------------------------------------------------
 # Internal

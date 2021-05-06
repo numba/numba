@@ -5,7 +5,6 @@ import copy
 import inspect
 import os
 import re
-import sys
 import textwrap
 from io import StringIO
 
@@ -89,10 +88,11 @@ class TypeAnnotation(object):
                         atype = 'XXX Lifted Loop XXX'
                         found_lifted_loop = False
                     elif (isinstance(inst.value, ir.Expr) and
-                            inst.value.op ==  'call'):
+                            inst.value.op == 'call'):
                         atype = self.calltypes[inst.value]
                     elif (isinstance(inst.value, ir.Const) and
-                            isinstance(inst.value.value, numba.core.dispatcher.LiftedLoop)):
+                            isinstance(inst.value.value,
+                                       numba.core.dispatcher.LiftedLoop)):
                         atype = 'XXX Lifted Loop XXX'
                         found_lifted_loop = True
                     else:
@@ -169,8 +169,6 @@ class TypeAnnotation(object):
                     idents[line] = ['&nbsp;' * amount for amount in ir_id]
                 this_func[key] = idents
 
-
-
         try:
             from jinja2 import Template
         except ImportError:
@@ -205,9 +203,10 @@ class TypeAnnotation(object):
             indent_len = len(_getindent(line))
             func_data['ir_indent'][num].append(indent_len)
 
-        func_key = (self.func_id.filename + ':' + str(self.func_id.firstlineno + 1),
-                    self.signature)
-        if self.lifted_from is not None and self.lifted_from[1]['num_lifted_loops'] > 0:
+        func_key = (self.func_id.filename + ':' + str(self.func_id.firstlineno
+                                                      + 1), self.signature)
+        if (self.lifted_from is not None
+                and self.lifted_from[1]['num_lifted_loops'] > 0):
             # This is a lifted loop function that is being compiled. Get the
             # numba ir for lines in loop function to use for annotating
             # original python function that the loop was lifted from.
@@ -221,16 +220,18 @@ class TypeAnnotation(object):
                     add_ir_line(func_data, line)
                     if line.strip().endswith('pyobject'):
                         func_data['python_tags'][num] = 'object_tag'
-                        # If any pyobject line is found, make sure original python
-                        # line that was marked as a lifted loop start line is tagged
-                        # as an object line instead. Lifted loop start lines should
-                        # only be marked as lifted loop lines if the lifted loop
-                        # was successfully compiled in nopython mode.
-                        func_data['python_tags'][self.lifted_from[0]] = 'object_tag'
+                        # If any pyobject line is found, make sure original
+                        # python line that was marked as a lifted loop start
+                        # line is tagged as an object line instead. Lifted loop
+                        # start lines should only be marked as lifted loop
+                        # lines if the lifted loop was successfully compiled in
+                        # nopython mode.
+                        line = self.lifted_from[0]
+                        func_data['python_tags'][line] = 'object_tag'
 
-            # We're done with this lifted loop, so decrement lifted loop counter.
-            # When lifted loop counter hits zero, that means we're ready to write
-            # out annotations to html file.
+            # We're done with this lifted loop, so decrement lifted loop
+            # counter.  When lifted loop counter hits zero, that means we're
+            # ready to write out annotations to html file.
             self.lifted_from[1]['num_lifted_loops'] -= 1
 
         elif func_key not in TypeAnnotation.func_data.keys():
@@ -238,8 +239,8 @@ class TypeAnnotation(object):
             func_data = TypeAnnotation.func_data[func_key]
 
             for i, loop in enumerate(self.lifted):
-                # Make sure that when we process each lifted loop function later,
-                # we'll know where it originally came from.
+                # Make sure that when we process each lifted loop function
+                # later, we'll know where it originally came from.
                 loop.lifted_from = (lifted_lines[i], func_data)
             func_data['num_lifted_loops'] = self.num_lifted_loops
 
@@ -252,8 +253,9 @@ class TypeAnnotation(object):
             func_data['ir_indent'] = {}
 
             for num in line_nums:
-                func_data['python_lines'].append((num, python_source[num].strip()))
-                indent_len = len(_getindent(python_source[num]))
+                source = python_source[num]
+                func_data['python_lines'].append((num, source.strip()))
+                indent_len = len(_getindent(source))
                 func_data['python_indent'][num] = indent_len
                 func_data['python_tags'][num] = ''
                 func_data['ir_lines'][num] = []
@@ -266,7 +268,6 @@ class TypeAnnotation(object):
                     elif line.strip().endswith('pyobject'):
                         func_data['python_tags'][num] = 'object_tag'
         return self.func_data
-
 
     def __str__(self):
         return self.annotate()

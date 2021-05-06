@@ -749,7 +749,6 @@ class UnionModel(StructModel):
         super(UnionModel, self).__init__(dmm, fe_type, members)
 
 
-
 @register_default(types.Pair)
 class PairModel(StructModel):
     def __init__(self, dmm, fe_type):
@@ -797,7 +796,7 @@ class ListIterModel(StructModel):
             # original list object)
             ('meminfo', types.MemInfoPointer(payload_type)),
             ('index', types.EphemeralPointer(types.intp)),
-            ]
+        ]
         super(ListIterModel, self).__init__(dmm, fe_type, members)
 
 
@@ -833,6 +832,7 @@ class SetPayloadModel(StructModel):
         ]
         super(SetPayloadModel, self).__init__(dmm, fe_type, members)
 
+
 @register_default(types.Set)
 class SetModel(StructModel):
     def __init__(self, dmm, fe_type):
@@ -845,6 +845,7 @@ class SetModel(StructModel):
         ]
         super(SetModel, self).__init__(dmm, fe_type, members)
 
+
 @register_default(types.SetIter)
 class SetIterModel(StructModel):
     def __init__(self, dmm, fe_type):
@@ -855,7 +856,7 @@ class SetIterModel(StructModel):
             ('meminfo', types.MemInfoPointer(payload_type)),
             # The index into the entries table
             ('index', types.EphemeralPointer(types.intp)),
-            ]
+        ]
         super(SetIterModel, self).__init__(dmm, fe_type, members)
 
 
@@ -925,6 +926,7 @@ class OptionalModel(StructModel):
             valid = get_valid(value)
             data = self.get(builder, value, "data")
             return builder.select(valid, data, ir.Constant(data.type, None))
+
         def get_valid(value):
             return self.get(builder, value, "valid")
 
@@ -1044,7 +1046,6 @@ class CContiguousFlatIter(StructModel):
     def __init__(self, dmm, fe_type, need_indices):
         assert fe_type.array_type.layout == 'C'
         array_type = fe_type.array_type
-        dtype = array_type.dtype
         ndim = array_type.ndim
         members = [('array', array_type),
                    ('stride', types.intp),
@@ -1061,10 +1062,11 @@ class FlatIter(StructModel):
         array_type = fe_type.array_type
         dtype = array_type.dtype
         ndim = array_type.ndim
-        members = [('array', array_type),
-                   ('pointers', types.EphemeralArray(types.CPointer(dtype), ndim)),
-                   ('indices', types.EphemeralArray(types.intp, ndim)),
-                   ('exhausted', types.EphemeralPointer(types.boolean)),
+        members = [
+            ('array', array_type),
+            ('pointers', types.EphemeralArray(types.CPointer(dtype), ndim)),
+            ('indices', types.EphemeralArray(types.intp, ndim)),
+            ('exhausted', types.EphemeralPointer(types.boolean)),
         ]
         super(FlatIter, self).__init__(dmm, fe_type, members)
 
@@ -1226,12 +1228,14 @@ def handle_numpy_flat_type(dmm, ty):
     else:
         return FlatIter(dmm, ty)
 
+
 @register_default(types.NumpyNdEnumerateType)
 def handle_numpy_ndenumerate_type(dmm, ty):
     if ty.array_type.layout == 'C':
         return CContiguousFlatIter(dmm, ty, need_indices=True)
     else:
         return FlatIter(dmm, ty)
+
 
 @register_default(types.BoundFunction)
 def handle_bound_function(dmm, ty):
@@ -1258,7 +1262,8 @@ class NdIter(StructModel):
             member_name = 'index%d' % i
             if kind == 'flat':
                 # A single index into the flattened array
-                members.append((member_name, types.EphemeralPointer(types.intp)))
+                members.append((member_name,
+                                types.EphemeralPointer(types.intp)))
             elif kind in ('scalar', 'indexed', '0d'):
                 # Nothing required
                 pass
@@ -1374,4 +1379,3 @@ class StructRefModel(StructModel):
             ("meminfo", types.MemInfoPointer(dtype)),
         ]
         super().__init__(dmm, fe_typ, members)
-

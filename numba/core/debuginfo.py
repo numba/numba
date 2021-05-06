@@ -147,7 +147,8 @@ class DIBuilder(AbstractDIBuilder):
         function.attributes.add('noinline')
 
     def finalize(self):
-        dbgcu = cgutils.get_or_insert_named_metadata(self.module, self.DBG_CU_NAME)
+        dbgcu = cgutils.get_or_insert_named_metadata(self.module,
+                                                     self.DBG_CU_NAME)
         dbgcu.add(self.dicompileunit)
         self._set_module_flags()
 
@@ -159,7 +160,8 @@ class DIBuilder(AbstractDIBuilder):
         """Set the module flags metadata
         """
         module = self.module
-        mflags = cgutils.get_or_insert_named_metadata(module, 'llvm.module.flags')
+        mflags = cgutils.get_or_insert_named_metadata(module,
+                                                      'llvm.module.flags')
         # Set *require* behavior to warning
         # See http://llvm.org/docs/LangRef.html#module-flags-metadata
         require_warning_behavior = self._const_int(2)
@@ -314,7 +316,7 @@ class NvvmDIBuilder(DIBuilder):
     def _di_compile_unit(self):
         filepair = self._filepair()
         empty = self.module.add_metadata([self._const_int(0)])
-        sp_metadata = self.module.add_metadata(self.subprograms)
+        self.module.add_metadata(self.subprograms)
         return self.module.add_metadata([
             self._const_int(self.DI_Compile_unit),         # tag
             filepair,                   # source directory and file pair

@@ -3,16 +3,14 @@ Define @jit and related decorators.
 """
 
 
-import sys
 import warnings
 import inspect
 import logging
 
 from numba.core.errors import DeprecationError, NumbaDeprecationWarning
-from numba.stencils.stencil import stencil
-from numba.core import config, extending, sigutils, registry
-from numba.core.extending_hardware import (JitDecorator, hardware_registry,
-                                           dispatcher_registry,
+from numba.stencils.stencil import stencil  # noqa: F401
+from numba.core import config, extending, sigutils
+from numba.core.extending_hardware import (hardware_registry,
                                            resolve_dispatcher_from_str)
 from numba.core.registry import TargetRegistry
 
@@ -156,7 +154,8 @@ def jit(signature_or_function=None, locals={}, cache=False,
         raise ValueError("Only one of 'nopython' or 'forceobj' can be True.")
     if 'target' in options:
         target = options.pop('target')
-        warnings.warn("The 'target' keyword argument is deprecated.", NumbaDeprecationWarning)
+        warnings.warn("The 'target' keyword argument is deprecated.",
+                      NumbaDeprecationWarning)
     else:
         target = options.pop('_target', 'cpu')
 
@@ -193,6 +192,7 @@ def jit(signature_or_function=None, locals={}, cache=False,
 
 # Register the cpu token as using `jit` as the jitter
 jit_registry[hardware_registry['cpu']] = jit
+
 
 def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
 
@@ -288,7 +288,8 @@ def cfunc(sig, locals={}, cache=False, pipeline_class=None, **options):
         additional_args = {}
         if pipeline_class is not None:
             additional_args['pipeline_class'] = pipeline_class
-        res = CFunc(func, sig, locals=locals, options=options, **additional_args)
+        res = CFunc(func, sig, locals=locals, options=options,
+                    **additional_args)
         if cache:
             res.enable_caching()
         res.compile()
@@ -317,5 +318,6 @@ def jit_module(**kwargs):
     for name, obj in module.__dict__.items():
         if inspect.isfunction(obj) and inspect.getmodule(obj) == module:
             _logger.debug("Auto decorating function {} from module {} with jit "
-                          "and options: {}".format(obj, module.__name__, kwargs))
+                          "and options: {}".format(obj, module.__name__,
+                                                   kwargs))
             module.__dict__[name] = jit(obj, **kwargs)

@@ -5,7 +5,8 @@ This module implements code highlighting of numba function annotations.
 from warnings import warn
 
 warn("The pretty_annotate functionality is experimental and might change API",
-         FutureWarning)
+     FutureWarning)
+
 
 def hllines(code, style):
     try:
@@ -36,6 +37,7 @@ def htlines(code, style):
     res = highlight(code, pylex, hf)
     return res.splitlines()
 
+
 def get_ansi_template():
     try:
         from jinja2 import Template
@@ -60,8 +62,8 @@ def get_ansi_template():
                 {%- endif -%}
             {%- endfor -%}
     {%- endfor -%}
-    """)
-    return ansi_template
+                    """) #noqa: E501
+
 
 def get_html_template():
     try:
@@ -83,7 +85,7 @@ def get_html_template():
             /* override JupyterLab style */
             .annotation_table td {
                 text-align: left;
-                background-color: transparent; 
+                background-color: transparent;
                 padding: 1px;
             }
 
@@ -93,7 +95,7 @@ def get_html_template():
 
             .annotation_table code
             {
-                background-color: transparent; 
+                background-color: transparent;
                 white-space: normal;
             }
 
@@ -210,7 +212,7 @@ def get_html_template():
 
 def reform_code(annotation):
     """
-    Extract the code from the Numba annotation datastructure. 
+    Extract the code from the Numba annotation datastructure.
 
     Pygments can only highlight full multi-line strings, the Numba
     annotation is list of single lines, with indentation removed.

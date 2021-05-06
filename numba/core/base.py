@@ -1,26 +1,22 @@
-from collections import namedtuple, defaultdict
+from collections import defaultdict
 import copy
-import os
 import sys
 from itertools import permutations, takewhile
 from contextlib import contextmanager
 
-import numpy as np
-
 from llvmlite import ir as llvmir
-import llvmlite.llvmpy.core as lc
-from llvmlite.llvmpy.core import Type, Constant, LLVMException
+from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.binding as ll
 
-from numba.core import types, utils, typing, datamodel, debuginfo, funcdesc, config, cgutils, imputils
+from numba.core import (types, utils, datamodel, debuginfo, funcdesc,
+                        config, cgutils, imputils)
 from numba.core import event
 from numba import _dynfunc, _helperlib
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.pythonapi import PythonAPI
 from numba.core.imputils import (user_function, user_generator,
-                       builtin_registry, impl_ret_borrowed,
-                       RegistryLoader)
-from numba.cpython import builtins
+                                 builtin_registry, impl_ret_borrowed,
+                                 RegistryLoader)
 
 GENERIC_POINTER = Type.pointer(Type.int(8))
 PYOBJECT = GENERIC_POINTER
@@ -426,7 +422,8 @@ class BaseContext(object):
     def declare_function(self, module, fndesc):
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
         fn = cgutils.get_or_insert_function(module, fnty, fndesc.mangled_name)
-        self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes, noalias=fndesc.noalias)
+        self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes,
+                                         noalias=fndesc.noalias)
         if fndesc.inline:
             fn.attributes.add('alwaysinline')
         return fn
@@ -516,7 +513,8 @@ class BaseContext(object):
             impl = self._get_constants.find((ty,))
             return impl(self, builder, ty, val)
         except NotImplementedError:
-            raise NotImplementedError("Cannot lower constant of type '%s'" % (ty,))
+            fmt = "Cannot lower constant of type '%s'"
+            raise NotImplementedError(fmt % (ty,))
 
     def get_constant(self, ty, val):
         """
@@ -554,11 +552,13 @@ class BaseContext(object):
         except NotImplementedError:
             pass
         if isinstance(fn, types.Type):
-            # It's a type instance => try to find a definition for the type class
+            # It's a type instance => try to find a definition for the type
+            # class
             try:
                 return self.get_function(type(fn), sig)
             except NotImplementedError:
-                # Raise exception for the type instance, for a better error message
+                # Raise exception for the type instance, for a better error
+                # message
                 pass
 
         # Automatically refresh the context to load new registries if we are
@@ -567,7 +567,8 @@ class BaseContext(object):
             self.refresh()
             return self.get_function(fn, sig, _firstcall=False)
 
-        raise NotImplementedError("No definition for lowering %s%s" % (key, sig))
+        fmt = "No definition for lowering %s%s"
+        raise NotImplementedError(fmt % (key, sig))
 
     def get_generator_desc(self, genty):
         """
@@ -599,11 +600,12 @@ class BaseContext(object):
             # XXX We shouldn't have to retype this
             attrty = self.typing_context.resolve_module_constants(typ, attr)
             if attrty is None or isinstance(attrty, types.Dummy):
-                # No implementation required for dummies (functions, modules...),
-                # which are dealt with later
+                # No implementation required for dummies (functions,
+                # modules...), which are dealt with later
                 return None
             else:
                 pyval = getattr(typ.pymod, attr)
+
                 def imp(context, builder, typ, val, attr):
                     llval = self.get_constant_generic(builder, attrty, pyval)
                     return impl_ret_borrowed(context, builder, attrty, llval)
@@ -622,7 +624,8 @@ class BaseContext(object):
         except NotImplementedError:
             pass
 
-        raise NotImplementedError("No definition for lowering %s.%s" % (typ, attr))
+        fmt = "No definition for lowering %s.%s"
+        raise NotImplementedError(fmt % (typ, attr))
 
     def get_setattr(self, attr, sig):
         """
@@ -895,7 +898,8 @@ class BaseContext(object):
         Given the function descriptor of an internally compiled function,
         emit a call to that function with the given arguments.
         """
-        status, res = self.call_internal_no_propagate(builder, fndesc, sig, args)
+        status, res = self.call_internal_no_propagate(builder, fndesc, sig,
+                                                      args)
         with cgutils.if_unlikely(builder, status.is_error):
             self.call_conv.return_status_propagate(builder, status)
 
@@ -981,7 +985,8 @@ class BaseContext(object):
         Get a helper class for the given *typ*.
         """
         # XXX handle all types: complex, array, etc.
-        # XXX should it be a method on the model instead? this would allow a default kind...
+        # XXX should it be a method on the model instead? this would allow a
+        # default kind...
         return cgutils.create_struct_proxy(typ, kind)
 
     def _make_helper(self, builder, typ, value=None, ref=None, kind='value'):
@@ -1042,14 +1047,16 @@ class BaseContext(object):
                 (typ.layout not in 'FC' or ary.nbytes > size_limit)):
             # get pointer from the ary
             dataptr = ary.ctypes.data
-            data = self.add_dynamic_addr(builder, dataptr, info=str(type(dataptr)))
-            rt_addr = self.add_dynamic_addr(builder, id(ary), info=str(type(ary)))
+            data = self.add_dynamic_addr(builder, dataptr,
+                                         info=str(type(dataptr)))
+            rt_addr = self.add_dynamic_addr(builder, id(ary),
+                                            info=str(type(ary)))
         else:
             # Handle data: reify the flattened array in "C" or "F" order as a
             # global array of bytes.
             flat = ary.flatten(order=typ.layout)
-            # Note: we use `bytearray(flat.data)` instead of `bytearray(flat)` to
-            #       workaround issue #1850 which is due to numpy issue #3147
+            # Note: we use `bytearray(flat.data)` instead of `bytearray(flat)`
+            # to workaround issue #1850 which is due to numpy issue #3147
             consts = Constant.array(Type.int(8), bytearray(flat.data))
             data = cgutils.global_constant(builder, ".const.array.data", consts)
             # Ensure correct data alignment (issue #1933)
@@ -1129,7 +1136,7 @@ class BaseContext(object):
     def create_module(self, name):
         """Create a LLVM module
         """
-        return ir.Module(name)
+        return llvmir.Module(name)
 
     @property
     def active_code_library(self):
@@ -1173,6 +1180,7 @@ class BaseContext(object):
         """
         raise NotImplementedError(f"{self} does not support ufunc")
 
+
 class _wrap_impl(object):
     """
     A wrapper object to call an implementation function with some predefined
@@ -1196,6 +1204,7 @@ class _wrap_impl(object):
 
     def __repr__(self):
         return "<wrapped %s>" % repr(self._callable)
+
 
 def _has_loc(fn):
     """Does function *fn* take ``loc`` argument?

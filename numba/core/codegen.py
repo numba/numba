@@ -6,7 +6,6 @@ import ctypes
 import html
 import textwrap
 
-import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.passes as lp
 import llvmlite.binding as ll
 import llvmlite.ir as llvmir
@@ -57,7 +56,7 @@ def _parse_refprune_flags():
 def dump(header, body, lang):
     if config.HIGHLIGHT_DUMPS:
         try:
-            import pygments
+            import pygments  # noqa: F401
         except ImportError:
             msg = "Please install pygments to see highlighted dumps"
             raise ValueError(msg)
@@ -70,6 +69,7 @@ def dump(header, body, lang):
 
             lexer_map = {'llvm': llvm_lexer, 'asm': gas_lexer}
             lexer = lexer_map[lang]
+
             def printer(arg):
                 print(highlight(arg, lexer(),
                       Terminal256Formatter(style=by_colorscheme())))
@@ -111,19 +111,19 @@ class _CFG(object):
         import json
         import inspect
         from llvmlite import binding as ll
-        from numba.typed import List
+        from numba.typed import List  # noqa: F401
         from types import SimpleNamespace
         from collections import defaultdict
 
         _default = False
         _highlight = SimpleNamespace(incref=_default,
-                                    decref=_default,
-                                    returns=_default,
-                                    raises=_default,
-                                    meminfo=_default,
-                                    branches=_default,
-                                    llvm_intrin_calls=_default,
-                                    function_calls=_default,)
+                                     decref=_default,
+                                     returns=_default,
+                                     raises=_default,
+                                     meminfo=_default,
+                                     branches=_default,
+                                     llvm_intrin_calls=_default,
+                                     function_calls=_default,)
         _interleave = SimpleNamespace(python=_default, lineinfo=_default)
 
         def parse_config(_config, kwarg):
@@ -484,9 +484,11 @@ class _CFG(object):
                 key_tab.append(('<tr><td BGCOLOR="{}" BORDER="0" ALIGN="center"'
                                 '>{}</td></tr>').format(v, k))
             # The first < and last > are DOT syntax, rest is DOT HTML.
-            f.node("Key", label=('<<table BORDER="1" CELLBORDER="1" '
-                    'CELLPADDING="2" CELLSPACING="1"><tr><td BORDER="0">'
-                    'Key:</td></tr>{}</table>>').format(''.join(key_tab)))
+            table = ('<<table BORDER="1" CELLBORDER="1" ' 'CELLPADDING="2"'
+                     'CELLSPACING="1"><tr><td BORDER="0">'
+                     'Key:</td></tr>{}</table>>')
+            label = table.format(''.join(key_tab))
+            f.node("Key", label=label)
 
         # Render if required
         if filename is not None or view is not None:
@@ -656,8 +658,8 @@ class CPUCodeLibrary(CodeLibrary):
         # Enforce data layout to enable layout-specific optimizations
         ll_module.data_layout = self._codegen._data_layout
         with self._codegen._function_pass_manager(ll_module) as fpm:
-            # Run function-level optimizations to reduce memory usage and improve
-            # module-level optimization.
+            # Run function-level optimizations to reduce memory usage and
+            # improve module-level optimization.
             for func in ll_module.functions:
                 k = f"Function passes on {func.name!r}"
                 with self._recorded_timings.record(k):
@@ -867,12 +869,15 @@ class CPUCodeLibrary(CodeLibrary):
                 for sym in symbols:
                     if not sym.name:
                         continue
+                    info = sym['st_info']
+                    typ = descriptions.describe_symbol_type(info['type'])
+                    bind = descriptions.describe_symbol_bind(info['bind'])
                     print("    - %r: size=%d, value=0x%x, type=%s, bind=%s"
                           % (sym.name.decode(),
                              sym['st_size'],
                              sym['st_value'],
-                             descriptions.describe_symbol_type(sym['st_info']['type']),
-                             descriptions.describe_symbol_bind(sym['st_info']['bind']),
+                             typ,
+                             bind
                              ))
         print()
 
@@ -1023,7 +1028,8 @@ class RuntimeLinker(object):
                 if engine.is_symbol_defined(gv.name):
                     continue
                 # Allocate a memory space for the pointer
-                abortfn = rtsys.library.get_pointer_to_function("nrt_unresolved_abort")
+                fname = "nrt_unresolved_abort"
+                abortfn = rtsys.library.get_pointer_to_function(fname)
                 ptr = ctypes.c_void_p(abortfn)
                 engine.add_global_mapping(gv, ctypes.addressof(ptr))
                 self._unresolved[sym] = ptr
@@ -1113,7 +1119,7 @@ class JitEngine(object):
     get_function_address = _proxy(ll.ExecutionEngine.get_function_address)
     get_global_value_address = _proxy(
         ll.ExecutionEngine.get_global_value_address
-        )
+    )
 
 
 class Codegen(metaclass=ABCMeta):
@@ -1193,8 +1199,9 @@ class CPUCodegen(Codegen):
                                                     cost="cheap")
         self._mpm_full = self._module_pass_manager()
 
-        self._engine.set_object_cache(self._library_class._object_compiled_hook,
-                                      self._library_class._object_getbuffer_hook)
+        self._engine.set_object_cache(
+            self._library_class._object_compiled_hook,
+            self._library_class._object_getbuffer_hook)
 
     def _create_empty_module(self, name):
         ir_module = llvmir.Module(cgutils.normalize_ir_text(name))
@@ -1277,7 +1284,7 @@ class CPUCodegen(Codegen):
             raise RuntimeError(
                 "LLVM will produce incorrect floating-point code "
                 "in the current locale %s.\nPlease read "
-                "https://numba.pydata.org/numba-doc/latest/user/faq.html#llvm-locale-bug "
+                "https://numba.pydata.org/numba-doc/latest/user/faq.html#llvm-locale-bug "  # noqa: E501
                 "for more information."
                 % (loc,))
         raise AssertionError("Unexpected IR:\n%s\n" % (ir_out,))
