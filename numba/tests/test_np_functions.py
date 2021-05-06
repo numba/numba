@@ -1097,6 +1097,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertTypingError():
             cfunc([1,2], 1, side='right')
 
+        # Test unordered values
+        a = np.array([0.29769574, 0.71649186, 0.20475563])
+        v = np.array(
+            [
+                [0.18847123, 0.39659508],
+                [0.56220006, 0.57428752],
+                [0.86720994, 0.44522637],
+            ]
+        )
+        check(a, v)
+
     def test_digitize(self):
         pyfunc = digitize
         cfunc = jit(nopython=True)(pyfunc)
