@@ -4,6 +4,7 @@ written in the "old" style of a separate typing and lowering implementation.
 """
 import types as pytypes
 import textwrap
+from collections import defaultdict
 
 from numba.core import errors
 
@@ -72,15 +73,17 @@ class _OverloadWrapper(object):
         Use this to replace @infer_global, it records the decorated function
         as a typer for the argument `concrete_function`.
         """
+        # HACK: This is a hack, infer_global maybe?
+        if self._typing_key is None:
+            key = self._function
+        else:
+            key = self._typing_key
+
         def inner(typing_class):
-            # arg is the typing class
             self._TYPER = typing_class
-            # HACK: This is a hack, infer_global maybe?
-            if self._typing_key is None:
-                key = self._function
-            else:
-                key = self._typing_key
             self._TYPER.key = key
+            _no_defer.add(key)
+            self._build()
             return typing_class
         return inner
 
@@ -89,6 +92,8 @@ class _OverloadWrapper(object):
         Use this to replace @lower*, it records the decorated function as the
         lowering implementation
         """
+        assert self._TYPER is not None
+
         def inner(lowerer):
             self._BIND_TYPES[args] = lowerer
             return lowerer
@@ -99,6 +104,17 @@ class _OverloadWrapper(object):
         typing to lowering map.
         """
         from numba.core.base import OverloadSelector
+
+        if self._typing_key is None:
+            key = self._function
+        else:
+            key = self._typing_key
+
+        deferred = _deferred_lowering[key]
+        for cb in deferred:
+            cb()
+        deferred.clear()
+
         self._selector = OverloadSelector()
         msg = f"No entries in the typing->lowering map for {self._function}"
         assert self._BIND_TYPES, msg
@@ -183,6 +199,9 @@ _overload_glue = _Gluer()
 del _Gluer
 
 
+_no_defer = set()
+
+
 def glue_typing(concrete_function, typing_key=None):
     """This is a decorator for wrapping the typing part for a concrete function
     'concrete_function', it's a text-only replacement for '@infer_global'"""
@@ -190,9 +209,26 @@ def glue_typing(concrete_function, typing_key=None):
                           typing_key=typing_key).wrap_typing()
 
 
+_deferred_lowering = defaultdict(list)
+
+
 def glue_lowering(*args):
     """This is a decorator for wrapping the implementation (lowering) part for
     a concrete function. 'args[0]' is the concrete_function, 'args[1:]' are the
     types the lowering will accept. This acts as a text-only replacement for
     '@lower/@lower_builtin'"""
-    return _overload_glue(args[0], typing_key=args[0]).wrap_impl(*args[1:])
+
+    def wrap(fn):
+        d = _deferred_lowering
+        key = args[0]
+
+        def real_call():
+            glue = _overload_glue(args[0], typing_key=key)
+            return glue.wrap_impl(*args[1:])(fn)
+
+        if key in _no_defer:
+            real_call()
+        else:
+            d[key].append(real_call)
+        return fn
+    return wrap
