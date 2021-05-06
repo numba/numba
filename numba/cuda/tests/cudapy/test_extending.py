@@ -89,45 +89,73 @@ def cuda_Interval_width(context, builder, sig, arg):
 
 
 @njit
-def inside_interval(interval, x):
-    """Tests attribute access"""
-    return interval.lo <= x < interval.hi
-
-
-@njit
 def interval_width(interval):
-    """Tests property access"""
     return interval.width
 
 
 @njit
 def sum_intervals(i, j):
-    """Tests the Interval constructor"""
     return Interval(i.lo + j.lo, i.hi + j.hi)
 
 
-@skip_on_cudasim('Dispatcher objects not used in the simulator')
+@skip_on_cudasim('Extensions not supported in the simulator')
 class TestExtending(CUDATestCase):
-    def test_simple(self):
+    def test_attributes(self):
         @cuda.jit
-        def kernel(arr):
-            x = Interval(1.0, 3.0)
-            arr[0] = x.hi + x.lo
-            arr[1] = x.width
-            arr[2] = inside_interval(x, 2.5)
-            arr[3] = inside_interval(x, 3.5)
-            arr[4] = interval_width(x)
+        def f(r, x):
+            iv = Interval(x[0], x[1])
+            r[0] = iv.lo
+            r[1] = iv.hi
 
-            y = Interval(7.5, 9.0)
-            z = sum_intervals(x, y)
-            arr[5] = z.lo
-            arr[6] = z.hi
+        x = np.asarray((1.5, 2.5))
+        r = np.zeros_like(x)
 
-        out = np.zeros(7)
+        f[1, 1](r, x)
 
-        kernel[1, 1](out)
+        np.testing.assert_equal(r, x)
 
-        np.testing.assert_allclose(out, [ 4,   2,   1,   0,   2,   8.5, 12 ])
+    def test_property(self):
+        @cuda.jit
+        def f(r, x):
+            iv = Interval(x[0], x[1])
+            r[0] = iv.width
+
+        x = np.asarray((1.5, 2.5))
+        r = np.zeros(1)
+
+        f[1, 1](r, x)
+
+        np.testing.assert_allclose(r[0], x[1] - x[0])
+
+    def test_extension_type_as_arg(self):
+        @cuda.jit
+        def f(r, x):
+            iv = Interval(x[0], x[1])
+            r[0] = interval_width(iv)
+
+        x = np.asarray((1.5, 2.5))
+        r = np.zeros(1)
+
+        f[1, 1](r, x)
+
+        np.testing.assert_allclose(r[0], x[1] - x[0])
+
+    def test_extension_type_as_retvalue(self):
+        @cuda.jit
+        def f(r, x):
+            iv1 = Interval(x[0], x[1])
+            iv2 = Interval(x[2], x[3])
+            iv_sum = sum_intervals(iv1, iv2)
+            r[0] = iv_sum.lo
+            r[1] = iv_sum.hi
+
+        x = np.asarray((1.5, 2.5, 3.0, 4.0))
+        r = np.zeros(2)
+
+        f[1, 1](r, x)
+
+        expected = np.asarray((x[0] + x[2], x[1] + x[3]))
+        np.testing.assert_allclose(r, expected)
 
 
 if __name__ == '__main__':
