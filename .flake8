@@ -31,7 +31,6 @@ exclude =
     numba/core/inline_closurecall.py
     numba/core/ir_utils.py
     numba/core/pylowering.py
-    numba/python_utils.py
     numba/parfors/parfor.py
     numba/misc/numba_entry.py
     numba/stencils/stencilparfor.py
@@ -50,7 +49,6 @@ exclude =
     numba/core/typeconv/rules.py
     numba/core/typeconv/castgraph.py
     numba/core/rewrites/registry.py
-    numba/core/rewrites/macros.py
     numba/core/rewrites/static_binop.py
     numba/core/rewrites/ir_print.py
     numba/core/types/abstract.py
@@ -103,10 +101,8 @@ exclude =
     numba/tests/test_inlining.py
     numba/tests/test_array_manipulation.py
     numba/tests/test_dummyarray.py
-    numba/tests/test_smart_array.py
     numba/tests/test_linalg.py
     numba/tests/test_threadsafety.py
-    numba/tests/test_utils.py
     numba/tests/cfunc_cache_usecases.py
     numba/tests/enum_usecases.py
     numba/tests/test_func_lifetime.py
@@ -132,7 +128,6 @@ exclude =
     numba/tests/test_intwidth.py
     numba/tests/test_remove_dead.py
     numba/tests/serialize_usecases.py
-    numba/tests/test_del.py
     numba/tests/test_gil.py
     numba/tests/cffi_usecases.py
     numba/tests/test_slices.py
@@ -178,7 +173,6 @@ exclude =
     numba/tests/test_stencils.py
     numba/tests/test_annotations.py
     numba/tests/cache_usecases.py
-    numba/tests/true_div_usecase.py
     numba/tests/test_dataflow.py
     numba/tests/test_tuples.py
     numba/tests/test_svml.py
@@ -274,7 +268,6 @@ exclude =
     numba/roc/hsadrv/driver.py
     numba/roc/hsadrv/devices.py
     numba/roc/hsadrv/devicearray.py
-    numba/testing/ddt.py
     numba/testing/loader.py
     numba/testing/notebook.py
     numba/testing/main.py
