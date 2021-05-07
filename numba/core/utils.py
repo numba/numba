@@ -300,10 +300,9 @@ if PYVERSION > (3, 7):
     from functools import cached_property
 else:
     from threading import RLock
-    from types import GenericAlias
 
     # The following cached_property() implementation is adapted from CPython:
-    # https://github.com/python/cpython/blob/3.10/Lib/functools.py#L927-L981
+    # https://github.com/python/cpython/blob/3.8/Lib/functools.py#L924-L976
 
     ###########################################################################
     ### cached_property() - computed once per instance, cached as attribute
@@ -357,8 +356,6 @@ else:
                             )
                             raise TypeError(msg) from None
             return val
-
-        __class_getitem__ = classmethod(GenericAlias)
 
 
 def runonce(fn):
