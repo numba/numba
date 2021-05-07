@@ -13,6 +13,7 @@ from numba.core.typing.templates import (CallableTemplate, signature,
                                          infer_global, AbstractTemplate)
 from numba.core.imputils import lower_builtin
 from numba.core.extending import register_jitable
+from numba.misc.special import literal_unroll
 import numba
 
 import operator
@@ -34,7 +35,7 @@ class StencilFuncLowerer(object):
 @register_jitable
 def raise_if_incompatible_array_sizes(a, *args):
     ashape = a.shape
-    for arg in args:
+    for arg in literal_unroll(args):
         if a.ndim != arg.ndim:
             raise ValueError("Secondary stencil array does not have same number "
                              " of dimensions as the first stencil input.")
