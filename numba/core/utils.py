@@ -296,28 +296,69 @@ class UniqueDict(dict):
         super(UniqueDict, self).__setitem__(key, value)
 
 
-# Django's cached_property
-# see https://docs.djangoproject.com/en/dev/ref/utils/#django.utils.functional.cached_property    # noqa: E501
+if PYVERSION > (3, 7):
+    from functools import cached_property
+else:
+    from threading import RLock
+    from types import GenericAlias
 
-from functools import cached_property
+    # The following cached_property() implementation is adapted from CPython:
+    # https://github.com/python/cpython/blob/3.10/Lib/functools.py#L927-L981
 
-class cached_propertyX(object):
-    """
-    Decorator that converts a method with a single self argument into a
-    property cached on the instance.
+    ###########################################################################
+    ### cached_property() - computed once per instance, cached as attribute
+    ###########################################################################
 
-    Optional ``name`` argument allows you to make cached properties of other
-    methods. (e.g.  url = cached_property(get_absolute_url, name='url') )
-    """
-    def __init__(self, func, name=None):
-        self.func = func
-        self.name = name or func.__name__
+    _NOT_FOUND = object()
 
-    def __get__(self, instance, type=None):
-        if instance is None:
-            return self
-        res = instance.__dict__[self.name] = self.func(instance)
-        return res
+    class cached_property:
+        def __init__(self, func):
+            self.func = func
+            self.attrname = None
+            self.__doc__ = func.__doc__
+            self.lock = RLock()
+
+        def __set_name__(self, owner, name):
+            if self.attrname is None:
+                self.attrname = name
+            elif name != self.attrname:
+                raise TypeError(
+                    "Cannot assign the same cached_property to two different names " # noqa: E501
+                    f"({self.attrname!r} and {name!r})."
+                )
+
+        def __get__(self, instance, owner=None):
+            if instance is None:
+                return self
+            if self.attrname is None:
+                raise TypeError(
+                    "Cannot use cached_property instance without calling __set_name__ on it.") # noqa: E501
+            try:
+                cache = instance.__dict__
+            except AttributeError:  # not all objects have __dict__ (e.g. class defines slots) # noqa: E501
+                msg = (
+                    f"No '__dict__' attribute on {type(instance).__name__!r} "
+                    f"instance to cache {self.attrname!r} property."
+                )
+                raise TypeError(msg) from None
+            val = cache.get(self.attrname, _NOT_FOUND)
+            if val is _NOT_FOUND:
+                with self.lock:
+                    # check if another thread filled cache while we awaited lock
+                    val = cache.get(self.attrname, _NOT_FOUND)
+                    if val is _NOT_FOUND:
+                        val = self.func(instance)
+                        try:
+                            cache[self.attrname] = val
+                        except TypeError:
+                            msg = (
+                                f"The '__dict__' attribute on {type(instance).__name__!r} instance "    # noqa: E501
+                                f"does not support item assignment for caching {self.attrname!r} property." # noqa: E501
+                            )
+                            raise TypeError(msg) from None
+            return val
+
+        __class_getitem__ = classmethod(GenericAlias)
 
 
 def runonce(fn):
