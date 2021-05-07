@@ -299,7 +299,9 @@ class UniqueDict(dict):
 # Django's cached_property
 # see https://docs.djangoproject.com/en/dev/ref/utils/#django.utils.functional.cached_property    # noqa: E501
 
-class cached_property(object):
+from functools import cached_property
+
+class cached_propertyX(object):
     """
     Decorator that converts a method with a single self argument into a
     property cached on the instance.
