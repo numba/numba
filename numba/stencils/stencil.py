@@ -35,6 +35,15 @@ class StencilFuncLowerer(object):
 @register_jitable
 def raise_if_incompatible_array_sizes(a, *args):
     ashape = a.shape
+
+    # We need literal_unroll here because the stencil might take
+    # multiple input arrays with different types that are not compatible
+    # (e.g. values as float[:] and flags as bool[:])
+    # When more than three total arrays are given, the second and third
+    # are iterated over in the loop below. Without literal_unroll, their
+    # types have to match.
+    # An example failing signature without literal_unroll might be
+    # (float[:], float[:], bool[:]) (Just (float[:], bool[:]) wouldn't fail)
     for arg in literal_unroll(args):
         if a.ndim != arg.ndim:
             raise ValueError("Secondary stencil array does not have same number "
