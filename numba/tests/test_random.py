@@ -1353,7 +1353,7 @@ class TestRandomDirichlet(BaseTest):
         """
         Test dirichlet(alpha, size=int)
         """
-        cfunc = nb.jit(nopython=True)(numpy_dirichlet)
+        cfunc = jit(nopython=True)(numpy_dirichlet)
         alpha = self.alpha
         size=10
         res = cfunc(alpha, size)
@@ -1372,7 +1372,7 @@ class TestRandomDirichlet(BaseTest):
         """
         Test dirichlet(alpha, size=tuple)
         """
-        cfunc = nb.jit(nopython=True)(numpy_dirichlet)
+        cfunc = jit(nopython=True)(numpy_dirichlet)
         alpha = self.alpha
         size=(10,10)
         res = cfunc(alpha, size)
