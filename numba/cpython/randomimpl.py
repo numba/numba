@@ -1563,5 +1563,9 @@ def dirichlet(alpha, size=None):
             out = np.zeros(size + (len(alpha),), dtype)
             dirichlet_arr(alpha, out)
             return out
-
+        
+    else:
+        raise TypeError("np.random.dirichlet(): size should be int or "
+                        "tuple or None, got %s" % (size,))
+        
     return dirichlet_impl
