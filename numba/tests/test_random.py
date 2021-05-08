@@ -61,6 +61,9 @@ def numpy_multinomial2(n, pvals):
 def numpy_multinomial3(n, pvals, size):
     return np.random.multinomial(n, pvals=pvals, size=size)
 
+def numpy_dirichlet(alpha, size):
+    return np.random.dirichlet(alpha, size=size)
+
 def numpy_check_rand(seed, a, b):
     np.random.seed(seed)
     expected = np.random.random((a, b))
@@ -1290,7 +1293,99 @@ class TestRandomMultinomial(BaseTest):
         for sample in res.reshape((-1, res.shape[-1])):
             self._check_sample(n, pvals, sample)
 
-
+            
+class TestRandomDirichlet(BaseTest):
+    alpha = np.array([1, 1, 1, 2], dtype=np.float64)
+    
+    def _check_sample(self, alpha, size, sample):
+        '''Check output properties'''
+        if not size is None:
+            
+            if type(size) is tuple:
+                self.assertIsInstance(sample, np.ndarray)
+                self.assertEqual(sample.shape, size + (len(alpha),))
+                self.assertEqual(sample.dtype, np.dtype(np.float64))
+                '''Check statistical properties'''
+                self.assertAlmostEqual(sample.sum(), np.prod(size), places=5)
+                for val in np.nditer(sample):
+                    self.assertGreaterEqual(val, 0)
+                    self.assertLessEqual(val, 1)
+            
+            if type(size) is int:
+                self.assertIsInstance(sample, np.ndarray)
+                self.assertEqual(sample.shape, (size, len(alpha)))
+                self.assertEqual(sample.dtype, np.dtype(np.float64))
+                '''Check statistical properties'''
+                self.assertAlmostEqual(sample.sum(), size, places=5)
+                for val in np.nditer(sample):
+                    self.assertGreaterEqual(val, 0)
+                    self.assertLessEqual(val, 1)                
+        else:
+            self.assertIsInstance(sample, np.ndarray)
+            self.assertEqual(sample.size, len(alpha))
+            self.assertEqual(sample.dtype, np.dtype(np.float64))
+            '''Check statistical properties'''
+            self.assertAlmostEqual(sample.sum(), 1, places=5)
+            for val in np.nditer(sample):
+                self.assertGreaterEqual(val, 0)
+                self.assertLessEqual(val, 1)
+    
+    def test_dirichlet_none(self):
+        """
+        Test dirichlet(alpha, size=None)
+        """
+        cfunc = jit(nopython=True)(numpy_dirichlet)
+        alpha = self.alpha
+        size = None
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        # pvals as list
+        pvals = list(alpha)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        # A case with extreme probabilities
+        n = 1000000
+        alpha = np.array([1, 1, n // 100, 1], dtype=np.float64)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        
+    def test_dirichlet_int(self):
+        """
+        Test dirichlet(alpha, size=int)
+        """
+        cfunc = nb.jit(nopython=True)(numpy_dirichlet)
+        alpha = self.alpha
+        size=10
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        # pvals as list
+        pvals = list(alpha)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        # A case with extreme probabilities
+        n = 1000000
+        alpha = np.array([1, 1, n // 100, 1], dtype=np.float64)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        
+    def test_dirichlet_tuple(self):
+        """
+        Test dirichlet(alpha, size=tuple)
+        """
+        cfunc = nb.jit(nopython=True)(numpy_dirichlet)
+        alpha = self.alpha
+        size=(10,10)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        # pvals as list
+        pvals = list(alpha)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        # A case with extreme probabilities
+        n = 1000000
+        alpha = np.array([1, 1, n // 100, 1], dtype=np.float64)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
 
 @jit(nopython=True, nogil=True)
 def py_extract_randomness(seed, out):
