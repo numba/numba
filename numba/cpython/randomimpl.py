@@ -1506,3 +1506,35 @@ def multinomial(n, pvals, size=None):
                         "tuple or None, got %s" % (size,))
 
     return multinomial_impl
+
+# ------------------------------------------------------------------------
+# np.random.dirichlet
+
+@overload(np.random.dirichlet)
+def dirichlet(alpha, size=None):
+
+    @register_jitable
+    def dirichlet_arr(alpha):
+        #Gamma distribution method to generate a Dirichlet distribution
+        out = alpha
+        out = np.array([np.random.gamma(a, 1) for a in out])
+        out /= out.sum()
+        return out
+
+    if not isinstance(alpha, (types.Sequence, types.Array)):
+        raise TypeError("np.random.dirichlet(): alpha should be an "
+                        "array or sequence, got %s" % (alpha,))
+
+    if size in (None, types.none):
+        if isinstance(alpha, (types.UniTuple, types.List)):
+            def dirichlet_impl(alpha, size=None):
+                send = np.array(alpha)
+                return dirichlet_arr(send)
+        else:
+            def dirichlet_impl(alpha, size=None):
+                return dirichlet_arr(alpha)
+
+    else:
+        raise TypeError("size not supported")
+
+    return dirichlet_impl
