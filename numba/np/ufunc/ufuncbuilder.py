@@ -25,6 +25,7 @@ _options_mixin = include_default_options(
     "boundscheck",
     "fastmath",
     "target_backend",
+    "writable_args"
 )
 
 
@@ -254,7 +255,8 @@ class _BaseUFuncBuilder(object):
 
 class UFuncBuilder(_BaseUFuncBuilder):
 
-    def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
+    def __init__(self, py_func, identity=None, cache=False, targetoptions={},
+                 writable_args=()):
         if is_jitted(py_func):
             py_func = py_func.py_func
         self.py_func = py_func
@@ -264,6 +266,7 @@ class UFuncBuilder(_BaseUFuncBuilder):
                            **targetoptions)(py_func)
         self._sigs = []
         self._cres = {}
+        self.writable_args = writable_args
 
     def _finalize_signature(self, cres, args, return_type):
         '''Slated for deprecation, use ufuncbuilder._finalize_ufunc_signature()
@@ -305,7 +308,7 @@ class UFuncBuilder(_BaseUFuncBuilder):
             ufunc = _internal.fromfunc(
                 self.py_func.__name__, self.py_func.__doc__,
                 ptrlist, dtypelist, inct, outct, datlist,
-                keepalive, self.identity,
+                keepalive, self.identity, self.writable_args
             )
 
             return ufunc
@@ -321,7 +324,7 @@ class GUFuncBuilder(_BaseUFuncBuilder):
 
     # TODO handle scalar
     def __init__(self, py_func, signature, identity=None, cache=False,
-                 targetoptions={}):
+                 targetoptions={}, writable_args=()):
         self.py_func = py_func
         self.identity = parse_identity(identity)
         self.nb_func = jit(_target='npyufunc', cache=cache)(py_func)
@@ -331,6 +334,7 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         self.cache = cache
         self._sigs = []
         self._cres = {}
+        self.writable_args = writable_args
 
     def _finalize_signature(self, cres, args, return_type):
         if not cres.objectmode and cres.signature.return_type != types.void:
@@ -366,7 +370,7 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         ufunc = _internal.fromfunc(
             self.py_func.__name__, self.py_func.__doc__,
             func_list, type_list, nin, nout, datalist,
-            keepalive, self.identity, self.signature,
+            keepalive, self.identity, self.signature, self.writable_args
         )
         return ufunc
 

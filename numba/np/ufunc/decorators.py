@@ -19,6 +19,10 @@ class _BaseVectorize(object):
         return kwargs.pop('cache', False)
 
     @classmethod
+    def get_writable_args(cls, kwargs):
+        return kwargs.pop('writable_args', ())
+
+    @classmethod
     def get_target_implementation(cls, kwargs):
         target = kwargs.pop('target', 'cpu')
         try:
@@ -35,7 +39,9 @@ class Vectorize(_BaseVectorize):
         identity = cls.get_identity(kws)
         cache = cls.get_cache(kws)
         imp = cls.get_target_implementation(kws)
-        return imp(func, identity=identity, cache=cache, targetoptions=kws)
+        writable_args = cls.get_writable_args(kws)
+        return imp(func, identity=identity, cache=cache, targetoptions=kws,
+                   writable_args=writable_args)
 
 
 class GUVectorize(_BaseVectorize):
@@ -46,13 +52,15 @@ class GUVectorize(_BaseVectorize):
         identity = cls.get_identity(kws)
         cache = cls.get_cache(kws)
         imp = cls.get_target_implementation(kws)
+        writable_args = cls.get_writable_args(kws)
         if imp is gufunc.GUFunc:
             is_dyn = kws.pop('is_dynamic', False)
             return imp(func, signature, identity=identity, cache=cache,
-                       is_dynamic=is_dyn, targetoptions=kws)
+                       is_dynamic=is_dyn, targetoptions=kws,
+                       writable_args=writable_args)
         else:
             return imp(func, signature, identity=identity, cache=cache,
-                       targetoptions=kws)
+                       targetoptions=kws, writable_args=writable_args)
 
 
 def vectorize(ftylist_or_function=(), **kws):
@@ -89,6 +97,8 @@ def vectorize(ftylist_or_function=(), **kws):
     cache: bool
         Turns on caching.
 
+    writable_args: tuple
+        a tuple of indices of input variables that are writable.
 
     Returns
     --------
@@ -154,6 +164,9 @@ def guvectorize(*args, **kwargs):
 
     cache: bool
         Turns on caching.
+
+    writable_args: tuple
+        a tuple of indices of input variables that are writable.
 
     target: str
             A string for code generation target.  Defaults to "cpu".
