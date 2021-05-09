@@ -1414,7 +1414,7 @@ def choice(a, size=None, replace=True):
                     raise ValueError("Cannot take a larger sample than "
                                      "population when 'replace=False'")
                 # Get a permuted copy of the source array
-                # we need this implementation in order to get the 
+                # we need this implementation in order to get the
                 # np.random.choice inside numba to match the output
                 # of np.random.choice outside numba when np.random.seed
                 # is set to the same value
@@ -1512,14 +1512,14 @@ def multinomial(n, pvals, size=None):
 
 @overload(np.random.dirichlet)
 def dirichlet(alpha, size=None):
-    
+
     dtype = np.float64
-    
+
     @register_jitable
     def dirichlet_arr(alpha, out):
-        
+
         #Gamma distribution method to generate a Dirichlet distribution
-        
+
         a_len = len(alpha)
         size = out.size
         flat = out.flat
@@ -1532,14 +1532,14 @@ def dirichlet(alpha, size=None):
             exp /= exp.sum()
             for j, v in enumerate(exp):
                 flat[i+j] = v.item()
-                
+
     if not isinstance(alpha, (types.Sequence, types.Array)):
         raise TypeError("np.random.dirichlet(): alpha should be an "
                         "array or sequence, got %s" % (alpha,))
 
     if not isinstance(alpha, types.Array):
         alpha = np.array(alpha)
-        
+
     if size in (None, types.none):
         def dirichlet_impl(alpha, size=None):
             out = np.zeros(len(alpha), dtype)
@@ -1554,7 +1554,7 @@ def dirichlet(alpha, size=None):
             out = np.zeros((size, len(alpha)), dtype)
             dirichlet_arr(alpha, out)
             return out
-        
+
     elif isinstance(size, types.BaseTuple):
         def dirichlet_impl(alpha, size=None):
             """
@@ -1563,9 +1563,9 @@ def dirichlet(alpha, size=None):
             out = np.zeros(size + (len(alpha),), dtype)
             dirichlet_arr(alpha, out)
             return out
-        
+
     else:
         raise TypeError("np.random.dirichlet(): size should be int or "
                         "tuple or None, got %s" % (size,))
-        
+
     return dirichlet_impl

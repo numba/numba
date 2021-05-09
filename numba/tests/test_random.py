@@ -1293,14 +1293,14 @@ class TestRandomMultinomial(BaseTest):
         for sample in res.reshape((-1, res.shape[-1])):
             self._check_sample(n, pvals, sample)
 
-            
+
 class TestRandomDirichlet(BaseTest):
     alpha = np.array([1, 1, 1, 2], dtype=np.float64)
-    
+
     def _check_sample(self, alpha, size, sample):
         '''Check output properties'''
         if not size is None:
-            
+
             if type(size) is tuple:
                 self.assertIsInstance(sample, np.ndarray)
                 self.assertEqual(sample.shape, size + (len(alpha),))
@@ -1310,7 +1310,7 @@ class TestRandomDirichlet(BaseTest):
                 for val in np.nditer(sample):
                     self.assertGreaterEqual(val, 0)
                     self.assertLessEqual(val, 1)
-            
+
             if type(size) is int:
                 self.assertIsInstance(sample, np.ndarray)
                 self.assertEqual(sample.shape, (size, len(alpha)))
@@ -1319,7 +1319,7 @@ class TestRandomDirichlet(BaseTest):
                 self.assertAlmostEqual(sample.sum(), size, places=5)
                 for val in np.nditer(sample):
                     self.assertGreaterEqual(val, 0)
-                    self.assertLessEqual(val, 1)                
+                    self.assertLessEqual(val, 1)
         else:
             self.assertIsInstance(sample, np.ndarray)
             self.assertEqual(sample.size, len(alpha))
@@ -1329,7 +1329,7 @@ class TestRandomDirichlet(BaseTest):
             for val in np.nditer(sample):
                 self.assertGreaterEqual(val, 0)
                 self.assertLessEqual(val, 1)
-    
+
     def test_dirichlet_none(self):
         """
         Test dirichlet(alpha, size=None)
@@ -1348,7 +1348,7 @@ class TestRandomDirichlet(BaseTest):
         alpha = np.array([1, 1, n // 100, 1], dtype=np.float64)
         res = cfunc(alpha, size)
         self._check_sample(alpha, size, res)
-        
+
     def test_dirichlet_int(self):
         """
         Test dirichlet(alpha, size=int)
@@ -1367,7 +1367,7 @@ class TestRandomDirichlet(BaseTest):
         alpha = np.array([1, 1, n // 100, 1], dtype=np.float64)
         res = cfunc(alpha, size)
         self._check_sample(alpha, size, res)
-        
+
     def test_dirichlet_tuple(self):
         """
         Test dirichlet(alpha, size=tuple)
