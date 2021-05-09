@@ -39,9 +39,7 @@ class Vectorize(_BaseVectorize):
         identity = cls.get_identity(kws)
         cache = cls.get_cache(kws)
         imp = cls.get_target_implementation(kws)
-        writable_args = cls.get_writable_args(kws)
-        return imp(func, identity=identity, cache=cache, targetoptions=kws,
-                   writable_args=writable_args)
+        return imp(func, identity=identity, cache=cache, targetoptions=kws)
 
 
 class GUVectorize(_BaseVectorize):
@@ -97,8 +95,6 @@ def vectorize(ftylist_or_function=(), **kws):
     cache: bool
         Turns on caching.
 
-    writable_args: tuple
-        a tuple of indices of input variables that are writable.
 
     Returns
     --------

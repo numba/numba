@@ -255,8 +255,7 @@ class _BaseUFuncBuilder(object):
 
 class UFuncBuilder(_BaseUFuncBuilder):
 
-    def __init__(self, py_func, identity=None, cache=False, targetoptions={},
-                 writable_args=()):
+    def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
         if is_jitted(py_func):
             py_func = py_func.py_func
         self.py_func = py_func
@@ -266,7 +265,6 @@ class UFuncBuilder(_BaseUFuncBuilder):
                            **targetoptions)(py_func)
         self._sigs = []
         self._cres = {}
-        self.writable_args = writable_args
 
     def _finalize_signature(self, cres, args, return_type):
         '''Slated for deprecation, use ufuncbuilder._finalize_ufunc_signature()
@@ -308,7 +306,7 @@ class UFuncBuilder(_BaseUFuncBuilder):
             ufunc = _internal.fromfunc(
                 self.py_func.__name__, self.py_func.__doc__,
                 ptrlist, dtypelist, inct, outct, datlist,
-                keepalive, self.identity, self.writable_args
+                keepalive, self.identity,
             )
 
             return ufunc
