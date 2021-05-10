@@ -190,7 +190,6 @@ exclude =
     numba/tests/test_array_analysis.py
     numba/tests/test_serialize.py
     numba/tests/test_iteration.py
-    numba/tests/test_runtests.py
     numba/tests/test_recarray_usecases.py
     numba/tests/test_target_overloadselector.py
     numba/tests/test_compile_cache.py
