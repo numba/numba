@@ -16,20 +16,6 @@ register_global = registry.register_global
 register_number_classes(register_global)
 
 
-class GridFunction(CallableTemplate):
-    def generic(self):
-        def typer(ndim):
-            val = ndim.literal_value
-            if val == 1:
-                restype = types.int32
-            elif val in (2, 3):
-                restype = types.UniTuple(types.int32, val)
-            else:
-                raise ValueError('argument can only be 1, 2, 3')
-            return signature(restype, types.int32)
-        return typer
-
-
 class Cuda_array_decl(CallableTemplate):
     def generic(self):
         def typer(shape, dtype):
