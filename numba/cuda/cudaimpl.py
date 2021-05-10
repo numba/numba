@@ -51,11 +51,6 @@ def cuda_laneid(context, builder, sig, args):
     return nvvmutils.call_sreg(builder, 'laneid')
 
 
-@lower_attr(types.Module(cuda), 'warpsize')
-def cuda_warpsize(context, builder, sig, args):
-    return nvvmutils.call_sreg(builder, 'warpsize')
-
-
 @lower_attr(dim3, 'x')
 def dim3_x(context, builder, sig, args):
     return builder.extract_value(args, 0)

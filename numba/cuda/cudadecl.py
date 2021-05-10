@@ -443,9 +443,6 @@ class CudaModuleTemplate(AttributeTemplate):
     def resolve_gridDim(self, mod):
         return dim3
 
-    def resolve_warpsize(self, mod):
-        return types.int32
-
     def resolve_laneid(self, mod):
         return types.int32
 

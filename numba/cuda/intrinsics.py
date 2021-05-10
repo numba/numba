@@ -1,8 +1,9 @@
 from llvmlite import ir
 
-from numba import types
+from numba import cuda, types
 from numba.core import cgutils
 from numba.core.typing import signature
+from numba.core.extending import overload_attribute
 from numba.cuda import nvvmutils
 from numba.cuda.extending import intrinsic
 
@@ -98,6 +99,27 @@ def gridsize(typingctx, ndim):
                 return cgutils.pack_array(builder, (nx, ny, nz))
 
     return sig, codegen
+
+
+@intrinsic
+def _warpsize(typingctx):
+    sig = signature(types.int32)
+
+    def codegen(context, builder, sig, args):
+        return nvvmutils.call_sreg(builder, 'warpsize')
+
+    return sig, codegen
+
+
+@overload_attribute(types.Module(cuda), 'warpsize')
+def cuda_warpsize(mod):
+    '''
+    The size of a warp. All architectures implemented to date have a warp size
+    of 32.
+    '''
+    def get(mod):
+        return _warpsize()
+    return get
 
 
 #-------------------------------------------------------------------------------
