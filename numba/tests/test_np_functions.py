@@ -1098,12 +1098,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc([1,2], 1, side='right')
 
         # Test unordered values
-        a = np.array([0.29769574, 0.71649186, 0.20475563])
+        a = np.array([1, 2, 0])
         v = np.array(
             [
-                [0.18847123, 0.39659508],
-                [0.56220006, 0.57428752],
-                [0.86720994, 0.44522637],
+                [5, 4],
+                [6, 7],
+                [2, 1],
+                [0, 3],
             ]
         )
         check(a, v)
