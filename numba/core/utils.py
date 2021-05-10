@@ -303,6 +303,7 @@ else:
 
     # The following cached_property() implementation is adapted from CPython:
     # https://github.com/python/cpython/blob/3.8/Lib/functools.py#L924-L976
+    # commit SHA: 12b714391e485d0150b343b114999bae4a0d34dd
 
     ###########################################################################
     ### cached_property() - computed once per instance, cached as attribute
