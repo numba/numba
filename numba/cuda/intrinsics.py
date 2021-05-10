@@ -133,16 +133,11 @@ def _syncthreads_predicate(typingctx, predicate, fname):
     if predicate.bitwidth > 32:
         return None
 
-    sig = signature(types.i4, predicate)
+    sig = signature(types.i4, types.i4)
 
     def codegen(context, builder, sig, args):
         fnty = ir.FunctionType(ir.IntType(32), (ir.IntType(32),))
         sync = cgutils.get_or_insert_function(builder.module, fnty, fname)
-
-        # Cast predicate if necessary
-        if sig.args[0].bitwidth < 32:
-            args = [context.cast(builder, args[0], sig.args[0], types.int32)]
-
         return builder.call(sync, args)
 
     return sig, codegen
