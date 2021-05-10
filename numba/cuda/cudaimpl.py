@@ -91,35 +91,6 @@ def ptx_sync_group(context, builder, sig, args):
 
 # -----------------------------------------------------------------------------
 
-
-def _nthreads_for_dim(builder, dim):
-    ntid = nvvmutils.call_sreg(builder, f"ntid.{dim}")
-    nctaid = nvvmutils.call_sreg(builder, f"nctaid.{dim}")
-    return builder.mul(ntid, nctaid)
-
-
-@lower(cuda.gridsize, types.int32)
-def cuda_gridsize(context, builder, sig, args):
-    restype = sig.return_type
-    nx = _nthreads_for_dim(builder, 'x')
-
-    if restype == types.int32:
-        return nx
-    elif isinstance(restype, types.UniTuple):
-        ny = _nthreads_for_dim(builder, 'y')
-
-        if restype.count == 2:
-            return cgutils.pack_array(builder, (nx, ny))
-        elif restype.count == 3:
-            nz = _nthreads_for_dim(builder, 'z')
-            return cgutils.pack_array(builder, (nx, ny, nz))
-
-    # Fallthrough to here indicates unexpected return type or tuple length
-    raise ValueError('Unexpected return type %s of cuda.gridsize' % restype)
-
-
-# -----------------------------------------------------------------------------
-
 @lower(cuda.const.array_like, types.Array)
 def cuda_const_array_like(context, builder, sig, args):
     # This is a no-op because CUDATargetContext.make_constant_array already

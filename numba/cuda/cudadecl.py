@@ -30,11 +30,6 @@ class GridFunction(CallableTemplate):
         return typer
 
 
-@register
-class Cuda_gridsize(GridFunction):
-    key = cuda.gridsize
-
-
 class Cuda_array_decl(CallableTemplate):
     def generic(self):
         def typer(shape, dtype):
@@ -470,9 +465,6 @@ class CudaAtomicTemplate(AttributeTemplate):
 @register_attr
 class CudaModuleTemplate(AttributeTemplate):
     key = types.Module(cuda)
-
-    def resolve_gridsize(self, mod):
-        return types.Function(Cuda_gridsize)
 
     def resolve_cg(self, mod):
         return types.Module(cuda.cg)

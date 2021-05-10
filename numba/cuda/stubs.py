@@ -102,24 +102,6 @@ class laneid(Stub):
     _description_ = '<laneid>'
 
 
-class gridsize(Stub):
-    '''gridsize(ndim)
-
-    Return the absolute size (or shape) in threads of the entire grid of
-    blocks. *ndim* should correspond to the number of dimensions declared when
-    instantiating the kernel. If *ndim* is 1, a single integer is returned.
-    If *ndim* is 2 or 3, a tuple of the given number of integers is returned.
-
-    Computation of the first integer is as follows::
-
-        cuda.blockDim.x * cuda.gridDim.x
-
-    and is similar for the other two indices, but using the ``y`` and ``z``
-    attributes.
-    '''
-    _description_ = '<gridsize(ndim)>'
-
-
 #-------------------------------------------------------------------------------
 # Array creation
 
