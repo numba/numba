@@ -1382,8 +1382,7 @@ class TestRandomDirichlet(BaseTest):
         res = cfunc(alpha, size)
         self._check_sample(alpha, size, res)
         # A case with extreme probabilities
-        n = 1000000
-        alpha = np.array([1, 1, n // 100, 1], dtype=np.float64)
+        alpha = np.array([1, 1, 10000, 1], dtype=np.float64)
         res = cfunc(alpha, size)
         self._check_sample(alpha, size, res)
 
