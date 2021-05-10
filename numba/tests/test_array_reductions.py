@@ -938,6 +938,33 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             for a in a_variations():
                 check(a)
 
+    def test_nanstd_nanvar_ddof(self):
+        def check(arr, ddof):
+            self.assertPreciseEqual(pyfunc(arr, ddof=ddof), cfunc(arr, ddof=ddof), **kwargs)
+
+        for pyfunc in [np.nanvar, np.nanstd]:
+            cfunc = jit(nopython=True)(pyfunc)
+            for ddof in [-1, 0, 1]:
+                arr = np.float64([1.0, 2.0, 0.0, -0.0, 1.0, -1.5])
+                check(arr, ddof=ddof)
+                arr = np.float64([-0.0, -1.5])
+                check(arr, ddof=ddof)
+                arr = np.float64([-1.5, 2.5, 'inf'])
+                check(arr, ddof=ddof)
+                arr = np.float64([-1.5, 2.5, '-inf'])
+                check(arr, ddof=ddof)
+                arr = np.float64([-1.5, 2.5, 'inf', '-inf'])
+                check(arr, ddof=ddof)
+                arr = np.float64(['nan', -1.5, 2.5, 'nan', 3.0])
+                check(arr, ddof=ddof)
+                arr = np.float64(['nan', -1.5, 2.5, 'nan', 'inf', '-inf', 3.0])
+                check(arr, ddof=ddof)
+                arr = np.float64([5.0, 'nan', -1.5, 'nan'])
+                check(arr, ddof=ddof)
+                # Only NaNs
+                arr = np.float64(['nan', 'nan'])
+                check(arr, ddof=ddof)
+
     @classmethod
     def install_generated_tests(cls):
         # These form a testing product where each of the combinations are tested
