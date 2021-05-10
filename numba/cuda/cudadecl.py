@@ -31,11 +31,6 @@ class GridFunction(CallableTemplate):
 
 
 @register
-class Cuda_grid(GridFunction):
-    key = cuda.grid
-
-
-@register
 class Cuda_gridsize(GridFunction):
     key = cuda.gridsize
 
@@ -475,9 +470,6 @@ class CudaAtomicTemplate(AttributeTemplate):
 @register_attr
 class CudaModuleTemplate(AttributeTemplate):
     key = types.Module(cuda)
-
-    def resolve_grid(self, mod):
-        return types.Function(Cuda_grid)
 
     def resolve_gridsize(self, mod):
         return types.Function(Cuda_gridsize)
