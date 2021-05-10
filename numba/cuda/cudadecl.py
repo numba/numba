@@ -75,30 +75,6 @@ class Cuda_const_array_like(CallableTemplate):
 
 
 @register
-class Cuda_syncthreads(ConcreteTemplate):
-    key = cuda.syncthreads
-    cases = [signature(types.none)]
-
-
-@register
-class Cuda_syncthreads_count(ConcreteTemplate):
-    key = cuda.syncthreads_count
-    cases = [signature(types.i4, types.i4)]
-
-
-@register
-class Cuda_syncthreads_and(ConcreteTemplate):
-    key = cuda.syncthreads_and
-    cases = [signature(types.i4, types.i4)]
-
-
-@register
-class Cuda_syncthreads_or(ConcreteTemplate):
-    key = cuda.syncthreads_or
-    cases = [signature(types.i4, types.i4)]
-
-
-@register
 class Cuda_threadfence_device(ConcreteTemplate):
     key = cuda.threadfence
     cases = [signature(types.none)]
@@ -507,18 +483,6 @@ class CudaModuleTemplate(AttributeTemplate):
 
     def resolve_cbrt(self, mod):
         return types.Function(Cuda_cbrt)
-
-    def resolve_syncthreads(self, mod):
-        return types.Function(Cuda_syncthreads)
-
-    def resolve_syncthreads_count(self, mod):
-        return types.Function(Cuda_syncthreads_count)
-
-    def resolve_syncthreads_and(self, mod):
-        return types.Function(Cuda_syncthreads_and)
-
-    def resolve_syncthreads_or(self, mod):
-        return types.Function(Cuda_syncthreads_or)
 
     def resolve_threadfence(self, mod):
         return types.Function(Cuda_threadfence_device)

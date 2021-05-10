@@ -153,44 +153,6 @@ def ptx_lmem_alloc_array(context, builder, sig, args):
                           can_dynsized=False)
 
 
-@lower(stubs.syncthreads)
-def ptx_syncthreads(context, builder, sig, args):
-    assert not args
-    fname = 'llvm.nvvm.barrier0'
-    lmod = builder.module
-    fnty = ir.FunctionType(ir.VoidType(), ())
-    sync = cgutils.get_or_insert_function(lmod, fnty, fname)
-    builder.call(sync, ())
-    return context.get_dummy_value()
-
-
-@lower(stubs.syncthreads_count, types.i4)
-def ptx_syncthreads_count(context, builder, sig, args):
-    fname = 'llvm.nvvm.barrier0.popc'
-    lmod = builder.module
-    fnty = ir.FunctionType(ir.IntType(32), (ir.IntType(32),))
-    sync = cgutils.get_or_insert_function(lmod, fnty, fname)
-    return builder.call(sync, args)
-
-
-@lower(stubs.syncthreads_and, types.i4)
-def ptx_syncthreads_and(context, builder, sig, args):
-    fname = 'llvm.nvvm.barrier0.and'
-    lmod = builder.module
-    fnty = ir.FunctionType(ir.IntType(32), (ir.IntType(32),))
-    sync = cgutils.get_or_insert_function(lmod, fnty, fname)
-    return builder.call(sync, args)
-
-
-@lower(stubs.syncthreads_or, types.i4)
-def ptx_syncthreads_or(context, builder, sig, args):
-    fname = 'llvm.nvvm.barrier0.or'
-    lmod = builder.module
-    fnty = ir.FunctionType(ir.IntType(32), (ir.IntType(32),))
-    sync = cgutils.get_or_insert_function(lmod, fnty, fname)
-    return builder.call(sync, args)
-
-
 @lower(stubs.threadfence_block)
 def ptx_threadfence_block(context, builder, sig, args):
     assert not args

@@ -1,9 +1,14 @@
+from llvmlite import ir
+
 from numba import types
 from numba.core import cgutils
 from numba.core.typing import signature
 from numba.cuda import nvvmutils
 from numba.cuda.extending import intrinsic
 
+
+#-------------------------------------------------------------------------------
+# Grid functions
 
 def _type_grid_function(ndim):
     val = ndim.literal_value
@@ -93,3 +98,87 @@ def gridsize(typingctx, ndim):
                 return cgutils.pack_array(builder, (nx, ny, nz))
 
     return sig, codegen
+
+
+#-------------------------------------------------------------------------------
+# syncthreads
+
+@intrinsic
+def syncthreads(typingctx):
+    '''
+    Synchronize all threads in the same thread block.  This function implements
+    the same pattern as barriers in traditional multi-threaded programming: this
+    function waits until all threads in the block call it, at which point it
+    returns control to all its callers.
+    '''
+    sig = signature(types.none)
+
+    def codegen(context, builder, sig, args):
+        fname = 'llvm.nvvm.barrier0'
+        lmod = builder.module
+        fnty = ir.FunctionType(ir.VoidType(), ())
+        sync = cgutils.get_or_insert_function(lmod, fnty, fname)
+        builder.call(sync, ())
+        return context.get_dummy_value()
+
+    return sig, codegen
+
+
+def _syncthreads_predicate(typingctx, predicate, fname):
+    if not isinstance(predicate, types.Integer):
+        return None
+
+    # Don't allow larger ints to be downcast automatically - force the user to
+    # think about what they want instead
+    if predicate.bitwidth > 32:
+        return None
+
+    sig = signature(types.i4, predicate)
+
+    def codegen(context, builder, sig, args):
+        fnty = ir.FunctionType(ir.IntType(32), (ir.IntType(32),))
+        sync = cgutils.get_or_insert_function(builder.module, fnty, fname)
+
+        # Cast predicate if necessary
+        if sig.args[0].bitwidth < 32:
+            args = [context.cast(builder, args[0], sig.args[0], types.int32)]
+
+        return builder.call(sync, args)
+
+    return sig, codegen
+
+
+@intrinsic
+def syncthreads_count(typingctx, predicate):
+    '''
+    syncthreads_count(predicate)
+
+    An extension to numba.cuda.syncthreads where the return value is a count
+    of the threads where predicate is true.
+    '''
+    fname = 'llvm.nvvm.barrier0.popc'
+    return _syncthreads_predicate(typingctx, predicate, fname)
+
+
+@intrinsic
+def syncthreads_and(typingctx, predicate):
+    '''
+    syncthreads_and(predicate)
+
+    An extension to numba.cuda.syncthreads where 1 is returned if predicate is
+    true for all threads or 0 otherwise.
+    '''
+    fname = 'llvm.nvvm.barrier0.and'
+    return _syncthreads_predicate(typingctx, predicate, fname)
+
+
+@intrinsic
+def syncthreads_or(typingctx, predicate):
+    '''
+    syncthreads_or(predicate)
+
+    An extension to numba.cuda.syncthreads where 1 is returned if predicate is
+    true for any thread or 0 otherwise.
+    '''
+    fname = 'llvm.nvvm.barrier0.or'
+    return _syncthreads_predicate(typingctx, predicate, fname)

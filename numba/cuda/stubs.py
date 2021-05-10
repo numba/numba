@@ -174,49 +174,6 @@ class cg(Stub):
             '''
 
 
-#-------------------------------------------------------------------------------
-# syncthreads
-
-class syncthreads(Stub):
-    '''
-    Synchronize all threads in the same thread block.  This function implements
-    the same pattern as barriers in traditional multi-threaded programming: this
-    function waits until all threads in the block call it, at which point it
-    returns control to all its callers.
-    '''
-    _description_ = '<syncthreads()>'
-
-
-class syncthreads_count(Stub):
-    '''
-    syncthreads_count(predictate)
-
-    An extension to numba.cuda.syncthreads where the return value is a count
-    of the threads where predicate is true.
-    '''
-    _description_ = '<syncthreads_count()>'
-
-
-class syncthreads_and(Stub):
-    '''
-    syncthreads_and(predictate)
-
-    An extension to numba.cuda.syncthreads where 1 is returned if predicate is
-    true for all threads or 0 otherwise.
-    '''
-    _description_ = '<syncthreads_and()>'
-
-
-class syncthreads_or(Stub):
-    '''
-    syncthreads_or(predictate)
-
-    An extension to numba.cuda.syncthreads where 1 is returned if predicate is
-    true for any thread or 0 otherwise.
-    '''
-    _description_ = '<syncthreads_or()>'
-
-
 # -------------------------------------------------------------------------------
 # warp level operations
 
