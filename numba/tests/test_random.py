@@ -1414,6 +1414,9 @@ class TestRandomDirichlet(BaseTest):
         size = (3j, 1)
         with self.assertTypingError():
             cfunc(alpha, size)
+        size = (3j, 3j)
+        with self.assertTypingError():
+            cfunc(alpha, size)
 
 @jit(nopython=True, nogil=True)
 def py_extract_randomness(seed, out):

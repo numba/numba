@@ -1535,7 +1535,7 @@ def dirichlet(alpha, size=None):
                 flat[i+k] /= norm
 
     if not isinstance(alpha, (types.Sequence, types.Array)):
-        raise TypingError("np.random.dirichlet(): alpha should be an "
+        raise TypeError("np.random.dirichlet(): alpha should be an "
                           "array or sequence, got %s" % (alpha,))
 
     if size in (None, types.none):
@@ -1562,9 +1562,12 @@ def dirichlet(alpha, size=None):
                 out = np.empty(size + (len(alpha),))
                 dirichlet_arr(alpha, out)
                 return out
+        else:
+            raise TypeError("np.random.dirichlet(): size should be int or "
+                              "tuple of ints or None, got %s" % (size,))           
 
     else:
-        raise TypingError("np.random.dirichlet(): size should be int or "
+        raise TypeError("np.random.dirichlet(): size should be int or "
                           "tuple of ints or None, got %s" % (size,))
 
     return dirichlet_impl
