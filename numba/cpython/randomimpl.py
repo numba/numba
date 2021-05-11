@@ -1554,7 +1554,7 @@ def dirichlet(alpha, size=None):
             return out
 
     elif isinstance(size, types.UniTuple):
-        if size is types.UniTuple(types.int64, len(size)):
+        if size is types.UniTuple(types.intp, len(size)):
             def dirichlet_impl(alpha, size=None):
                 """
                 dirichlet(..., size=tuple)
