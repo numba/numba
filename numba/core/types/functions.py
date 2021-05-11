@@ -279,37 +279,37 @@ class BaseFunction(Callable):
         return self._impl_keys[sig.args]
 
     def get_call_type(self, context, args, kws):
-        from numba.core.extending_hardware import (hardware_registry,
-                                                   get_local_target)
+        from numba.core.target_extension import (target_registry,
+                                                 get_local_target)
 
         prefer_lit = [True, False]    # old behavior preferring literal
         prefer_not = [False, True]    # new behavior preferring non-literal
         failures = _ResolutionFailures(context, self, args, kws,
                                        depth=self._depth)
 
-        # get the current target hardware
+        # get the current target target
         target_hw = get_local_target(context)
 
         # fish out templates that are specific to the target if a target is
         # specified
-        DEFAULT_HARDWARE = 'generic'
+        DEFAULT_TARGET = 'generic'
         usable = []
         for ix, temp_cls in enumerate(self.templates):
             # ? Need to do something about this next line
-            hw = temp_cls.metadata.get('hardware', DEFAULT_HARDWARE)
+            hw = temp_cls.metadata.get('target', DEFAULT_TARGET)
             if hw is not None:
-                hw_clazz = hardware_registry[hw]
+                hw_clazz = target_registry[hw]
                 if target_hw.inherits_from(hw_clazz):
                     usable.append((temp_cls, hw_clazz, ix))
 
-        # sort templates based on hardware specificity
+        # sort templates based on target specificity
         def key(x):
             return target_hw.__mro__.index(x[1])
         order = [x[0] for x in sorted(usable, key=key)]
 
         if not order:
             msg = (f"Function resolution cannot find any matches for function"
-                   f" '{self.key[0]}' for the current hardware: '{target_hw}'.")
+                   f" '{self.key[0]}' for the current target: '{target_hw}'.")
             raise errors.UnsupportedError(msg)
 
         self._depth += 1

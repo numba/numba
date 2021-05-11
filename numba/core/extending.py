@@ -112,8 +112,8 @@ def overload(func, jit_options={}, strict=True, inline='never',
     allow for more control (e.g. disabling non-literal types).
 
     **kwargs prescribes additional arguments passed through to the overload
-    template. The only accepted key at present is 'hardware' which is a string
-    corresponding to the hardware that this overload should target.
+    template. The only accepted key at present is 'target' which is a string
+    corresponding to the target that this overload should be bound against.
     """
     from numba.core.typing.templates import make_overload_template, infer_global
 
@@ -121,7 +121,7 @@ def overload(func, jit_options={}, strict=True, inline='never',
     opts = _overload_default_jit_options.copy()
     opts.update(jit_options)  # let user options override
 
-    # TODO: abort now if the kwarg 'hardware' relates to unregistered hardware,
+    # TODO: abort now if the kwarg 'target' relates to an unregistered target,
     # this requires sorting out the circular imports first.
 
     def decorate(overload_func):
