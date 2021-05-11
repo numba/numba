@@ -1296,40 +1296,29 @@ class TestRandomMultinomial(BaseTest):
 
 class TestRandomDirichlet(BaseTest):
     alpha = np.array([1, 1, 1, 2], dtype=np.float64)
-
+    
     def _check_sample(self, alpha, size, sample):
-        '''Check output properties'''
-        if not size is None:
-
-            if type(size) is tuple:
-                self.assertIsInstance(sample, np.ndarray)
-                self.assertEqual(sample.shape, size + (len(alpha),))
-                self.assertEqual(sample.dtype, np.dtype(np.float64))
-                '''Check statistical properties'''
-                self.assertAlmostEqual(sample.sum(), np.prod(size), places=5)
-                for val in np.nditer(sample):
-                    self.assertGreaterEqual(val, 0)
-                    self.assertLessEqual(val, 1)
-
-            if type(size) is int:
-                self.assertIsInstance(sample, np.ndarray)
-                self.assertEqual(sample.shape, (size, len(alpha)))
-                self.assertEqual(sample.dtype, np.dtype(np.float64))
-                '''Check statistical properties'''
-                self.assertAlmostEqual(sample.sum(), size, places=5)
-                for val in np.nditer(sample):
-                    self.assertGreaterEqual(val, 0)
-                    self.assertLessEqual(val, 1)
-        else:
-            self.assertIsInstance(sample, np.ndarray)
+        
+        '''Check output structure'''
+        self.assertIsInstance(sample, np.ndarray)
+        self.assertEqual(sample.dtype, np.float64)
+        if size is None:
             self.assertEqual(sample.size, len(alpha))
-            self.assertEqual(sample.dtype, np.dtype(np.float64))
-            '''Check statistical properties'''
+        elif type(size) is int:
+            self.assertEqual(sample.shape, (size, len(alpha)))
+        else:
+            self.assertEqual(sample.shape, size + (len(alpha),))
+            
+        '''Check statistical properties'''
+        for val in np.nditer(sample):
+            self.assertGreaterEqual(val, 0)
+            self.assertLessEqual(val, 1)
+        if size is None:
             self.assertAlmostEqual(sample.sum(), 1, places=5)
-            for val in np.nditer(sample):
-                self.assertGreaterEqual(val, 0)
-                self.assertLessEqual(val, 1)
-
+        else:
+            for totals in np.nditer(sample.sum(axis=-1)):
+                self.assertAlmostEqual(totals, 1, places=5)
+    
     def test_dirichlet_none(self):
         """
         Test dirichlet(alpha, size=None)
@@ -1339,15 +1328,22 @@ class TestRandomDirichlet(BaseTest):
         size = None
         res = cfunc(alpha, size)
         self._check_sample(alpha, size, res)
-        # pvals as list
-        pvals = list(alpha)
+        # pvals as tuple
+        pvals = tuple(alpha)
         res = cfunc(alpha, size)
         self._check_sample(alpha, size, res)
         # A case with extreme probabilities
         alpha = np.array([1, 1, 10000, 1], dtype=np.float64)
         res = cfunc(alpha, size)
         self._check_sample(alpha, size, res)
-
+        # A case with noninteger probabilities
+        alpha = np.array([1, 1, 1.5, 1], dtype=np.float64)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        alpha = tuple(alpha)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        
     def test_dirichlet_int(self):
         """
         Test dirichlet(alpha, size=int)
@@ -1357,15 +1353,22 @@ class TestRandomDirichlet(BaseTest):
         size=10
         res = cfunc(alpha, size)
         self._check_sample(alpha, size, res)
-        # pvals as list
-        pvals = list(alpha)
+        # pvals as tuple
+        pvals = tuple(alpha)
         res = cfunc(alpha, size)
         self._check_sample(alpha, size, res)
         # A case with extreme probabilities
         alpha = np.array([1, 1, 10000, 1], dtype=np.float64)
         res = cfunc(alpha, size)
         self._check_sample(alpha, size, res)
-
+        # A case with noninteger probabilities
+        alpha = np.array([1, 1, 1.5, 1], dtype=np.float64)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        alpha = tuple(alpha)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        
     def test_dirichlet_tuple(self):
         """
         Test dirichlet(alpha, size=tuple)
@@ -1375,14 +1378,37 @@ class TestRandomDirichlet(BaseTest):
         size=(10,10)
         res = cfunc(alpha, size)
         self._check_sample(alpha, size, res)
-        # pvals as list
-        pvals = list(alpha)
+        # pvals as tuple
+        pvals = tuple(alpha)
         res = cfunc(alpha, size)
         self._check_sample(alpha, size, res)
         # A case with extreme probabilities
         alpha = np.array([1, 1, 10000, 1], dtype=np.float64)
         res = cfunc(alpha, size)
         self._check_sample(alpha, size, res)
+        # A case with noninteger probabilities
+        alpha = np.array([1, 1, 1.5, 1], dtype=np.float64)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        alpha = tuple(alpha)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)        
+        
+    def test_dirichlet_exceptions(self):
+        cfunc = jit(nopython=True)(numpy_dirichlet)
+        alpha = tuple((0,1,1))
+        self.assertRaises(ValueError, cfunc, alpha, 1)
+        alpha = self.alpha
+        size = True
+        self.assertRaises(TypingError, cfunc, alpha, size)
+        size = 3j
+        self.assertRaises(TypingError, cfunc, alpha, size)
+        size = 1.5
+        self.assertRaises(TypingError, cfunc, alpha, size)
+        size = (1.5, 1)
+        self.assertRaises(TypingError, cfunc, alpha, size)
+        size = (3j, 1)
+        self.assertRaises(TypingError, cfunc, alpha, size)
 
 @jit(nopython=True, nogil=True)
 def py_extract_randomness(seed, out):

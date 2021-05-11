@@ -1513,36 +1513,34 @@ def multinomial(n, pvals, size=None):
 @overload(np.random.dirichlet)
 def dirichlet(alpha, size=None):
 
-    dtype = np.float64
-
     @register_jitable
     def dirichlet_arr(alpha, out):
 
-        #Gamma distribution method to generate a Dirichlet distribution
+        # Gamma distribution method to generate a Dirichlet distribution
+
+        for a_val in iter(alpha):
+            if a_val <= 0:
+                raise ValueError('dirichlet: alpha must be > 0.0')
 
         a_len = len(alpha)
         size = out.size
         flat = out.flat
         for i in range(0, size, a_len):
-            exp = np.zeros(len(alpha), dtype=np.float64)
-            #calculate gamma random numbers per alpha specifications
+            # calculate gamma random numbers per alpha specifications
+            norm = 0  # use this to normalize every the group total to 1
             for k, w in enumerate(alpha):
-                exp[k] = np.random.gamma(w, 1)
-            #normalize sum to 1
-            exp /= exp.sum()
-            for j, v in enumerate(exp):
-                flat[i+j] = v.item()
+                flat[i+k] = np.random.gamma(w, 1)
+                norm += flat[i+k].item()
+            for k, w in enumerate(alpha):
+                flat[i+k] /= norm
 
     if not isinstance(alpha, (types.Sequence, types.Array)):
-        raise TypeError("np.random.dirichlet(): alpha should be an "
-                        "array or sequence, got %s" % (alpha,))
-
-    if not isinstance(alpha, types.Array):
-        alpha = np.array(alpha)
+        raise TypingError("np.random.dirichlet(): alpha should be an "
+                          "array or sequence, got %s" % (alpha,))
 
     if size in (None, types.none):
         def dirichlet_impl(alpha, size=None):
-            out = np.zeros(len(alpha), dtype)
+            out = np.empty(len(alpha))
             dirichlet_arr(alpha, out)
             return out
 
@@ -1551,21 +1549,22 @@ def dirichlet(alpha, size=None):
             """
             dirichlet(..., size=int)
             """
-            out = np.zeros((size, len(alpha)), dtype)
+            out = np.empty((size, len(alpha)))
             dirichlet_arr(alpha, out)
             return out
 
-    elif isinstance(size, types.BaseTuple):
-        def dirichlet_impl(alpha, size=None):
-            """
-            dirichlet(..., size=tuple)
-            """
-            out = np.zeros(size + (len(alpha),), dtype)
-            dirichlet_arr(alpha, out)
-            return out
+    elif isinstance(size, types.UniTuple):
+        if size is types.UniTuple(types.int64, len(size)):
+            def dirichlet_impl(alpha, size=None):
+                """
+                dirichlet(..., size=tuple)
+                """
+                out = np.empty(size + (len(alpha),))
+                dirichlet_arr(alpha, out)
+                return out
 
     else:
-        raise TypeError("np.random.dirichlet(): size should be int or "
-                        "tuple or None, got %s" % (size,))
+        raise TypingError("np.random.dirichlet(): size should be int or "
+                          "tuple of ints or None, got %s" % (size,))
 
     return dirichlet_impl
