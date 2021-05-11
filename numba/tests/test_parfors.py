@@ -1384,6 +1384,22 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countNonParforArrayAccesses(test_impl, (types.intp,)), 0)
 
     @skip_parfors_unsupported
+    def test_parfor_array_access_lower_slice(self):
+        for ts in [slice(1, 3, None), slice(2, None, None), slice(None, 2, -1),
+                   slice(None, None, None), slice(None, None, -2)]:
+
+            def test_impl(n):
+                X = np.ones((n, 3))
+                y = 0
+                for i in numba.prange(n):
+                    y += X[i, ts].sum()
+                return y
+
+            n = 211
+            self.check(test_impl, n)
+            self.assertEqual(countNonParforArrayAccesses(test_impl, (types.intp,)), 0)
+
+    @skip_parfors_unsupported
     @disabled_test # Test itself is problematic, see #3155
     def test_parfor_hoist_setitem(self):
         # Make sure that read of out is not hoisted.
