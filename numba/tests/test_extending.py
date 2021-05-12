@@ -5,6 +5,7 @@ import pickle
 import multiprocessing
 import ctypes
 import warnings
+import time
 from distutils.version import LooseVersion
 import re
 
@@ -1818,6 +1819,7 @@ class TestCachingOverloadObjmode(TestCase):
             with override_config("DEBUG_CACHE", '1'):
                 # Test in local process to populate the cache.
                 self.check_objmode_cache_ndarray()
+                time.sleep(1)
                 # Run in new process to use the cache in a fresh process.
                 res = run_in_new_process_in_cache_dir(
                     self.check_objmode_cache_ndarray_check_cache, cache_dir
