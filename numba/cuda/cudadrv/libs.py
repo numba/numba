@@ -81,7 +81,7 @@ def test(_platform=None, print_paths=True):
     failed = False
 
     # Checks for dynamic libraries
-    libs = 'cublas cusparse cufft curand nvvm cudart'.split()
+    libs = 'nvvm cudart'.split()
     for lib in libs:
         path = get_cudalib(lib, _platform)
         print('Finding {} from {}'.format(lib, _get_source_variable(lib)))
