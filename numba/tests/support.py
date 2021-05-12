@@ -832,19 +832,20 @@ def run_in_new_process_in_cache_dir(func, cache_dir, verbose=True):
     ctx = mp.get_context('spawn')
     qout = ctx.Queue()
     with override_env_config('NUMBA_CACHE_DIR', cache_dir):
-        proc = ctx.Process(target=_remote_runner, args=[func, qout])
-        proc.start()
-        proc.join()
-        stdout = qout.get_nowait()
-        stderr = qout.get_nowait()
-        if verbose and stdout.strip():
-            print()
-            print('STDOUT'.center(80, '-'))
-            print(stdout)
-        if verbose and stderr.strip():
-            print(file=sys.stderr)
-            print('STDERR'.center(80, '-'), file=sys.stderr)
-            print(stderr, file=sys.stderr)
+        with override_env_config('NUMBA_DEBUG_CACHE', '1'):
+            proc = ctx.Process(target=_remote_runner, args=[func, qout])
+            proc.start()
+            proc.join()
+            stdout = qout.get_nowait()
+            stderr = qout.get_nowait()
+            if verbose and stdout.strip():
+                print()
+                print('STDOUT'.center(80, '-'))
+                print(stdout)
+            if verbose and stderr.strip():
+                print(file=sys.stderr)
+                print('STDERR'.center(80, '-'), file=sys.stderr)
+                print(stderr, file=sys.stderr)
     return {
         'exitcode': proc.exitcode,
         'stdout': stdout,

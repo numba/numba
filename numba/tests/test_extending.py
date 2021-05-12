@@ -1815,12 +1815,13 @@ class TestCachingOverloadObjmode(TestCase):
         # Env is missing after cache load.
         cache_dir = temp_directory(self.__class__.__name__)
         with override_config("CACHE_DIR", cache_dir):
-            # Test in local process to populate the cache.
-            self.check_objmode_cache_ndarray()
-            # Run in new process to use the cache in a fresh process.
-            res = run_in_new_process_in_cache_dir(
-                self.check_objmode_cache_ndarray_check_cache, cache_dir
-            )
+            with override_config("DEBUG_CACHE", '1'):
+                # Test in local process to populate the cache.
+                self.check_objmode_cache_ndarray()
+                # Run in new process to use the cache in a fresh process.
+                res = run_in_new_process_in_cache_dir(
+                    self.check_objmode_cache_ndarray_check_cache, cache_dir
+                )
         self.assertEqual(res['exitcode'], 0)
 
 
