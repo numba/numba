@@ -1271,6 +1271,8 @@ def np_median(a):
 
 @register_jitable
 def _collect_percentiles_inner(a, q):
+    #TODO: This needs rewriting to be closer to NumPy, particularly the nan/inf
+    # handling which is generally subject to algorithmic changes.
     n = len(a)
 
     if n == 1:
