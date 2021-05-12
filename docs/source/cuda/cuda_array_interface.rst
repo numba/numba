@@ -516,10 +516,10 @@ The following Python libraries have adopted the CUDA Array Interface:
 - `DALI: the NVIDIA Data Loading Library <https://github.com/NVIDIA/DALI>`_ :
 
     - `TensorGPU objects
-      <https://docs.nvidia.com/deeplearning/dali/master-user-guide/docs/data_types.html#nvidia.dali.backend.TensorGPU>`_
+      <https://docs.nvidia.com/deeplearning/dali/user-guide/docs/data_types.html#nvidia.dali.backend.TensorGPU>`_
       expose the CUDA Array Interface.
     - `The External Source operator
-      <https://docs.nvidia.com/deeplearning/dali/master-user-guide/docs/supported_ops.html#nvidia.dali.fn.external_source>`_
+      <https://docs.nvidia.com/deeplearning/dali/user-guide/docs/supported_ops.html#nvidia.dali.fn.external_source>`_
       consumes objects exporting the CUDA Array Interface.
 - The RAPIDS stack:
 
