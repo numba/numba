@@ -25,6 +25,7 @@ def _find_valid_path(options):
 def _get_libdevice_path_decision():
     options = [
         ('Conda environment', get_conda_ctk()),
+        ('Conda environment (NVIDIA package)', get_nvidia_libdevice_ctk()),
         ('CUDA_HOME', get_cuda_home('nvvm', 'libdevice')),
         ('System', get_system_ctk('nvvm', 'libdevice')),
         ('Debian package', get_debian_pkg_libdevice()),
@@ -45,6 +46,7 @@ def _nvvm_lib_dir():
 def _get_nvvm_path_decision():
     options = [
         ('Conda environment', get_conda_ctk()),
+        ('Conda environment (NVIDIA package)', get_nvidia_nvvm_ctk()),
         ('CUDA_HOME', get_cuda_home(*_nvvm_lib_dir())),
         ('System', get_system_ctk(*_nvvm_lib_dir())),
     ]
@@ -80,6 +82,7 @@ def _cudalib_path():
 def _get_cudalib_dir_path_decision():
     options = [
         ('Conda environment', get_conda_ctk()),
+        ('Conda environment (NVIDIA package)', get_nvidia_cudalib_ctk()),
         ('CUDA_HOME', get_cuda_home(_cudalib_path())),
         ('System', get_system_ctk(_cudalib_path())),
     ]
@@ -116,6 +119,43 @@ def get_conda_ctk():
         return
     # Use the directory name of the max path
     return os.path.dirname(max(paths))
+
+
+def get_nvidia_nvvm_ctk():
+    """Return path to directory containing the NVVM shared library.
+    """
+    is_conda_env = os.path.exists(os.path.join(sys.prefix, 'conda-meta'))
+    if not is_conda_env:
+        return
+    # Asssume the existence of NVVM to imply cudatoolkit installed
+    libdir = os.path.join(sys.prefix, 'nvvm', 'lib64')
+    if not os.path.exists(libdir) or not os.path.isdir(libdir):
+        return
+    paths = find_lib('nvvm', libdir=libdir)
+    if not paths:
+        return
+    # Use the directory name of the max path
+    return os.path.dirname(max(paths))
+
+
+def get_nvidia_libdevice_ctk():
+    """Return path to directory containing the libdevice library.
+    """
+    nvvm_ctk = get_nvidia_nvvm_ctk()
+    if not nvvm_ctk:
+        return
+    nvvm_dir = os.path.dirname(nvvm_ctk)
+    return os.path.join(nvvm_dir, 'libdevice')
+
+
+def get_nvidia_cudalib_ctk():
+    """Return path to directory containing the shared libraries of cudatoolkit.
+    """
+    nvvm_ctk = get_nvidia_nvvm_ctk()
+    if not nvvm_ctk:
+        return
+    env_dir = os.path.dirname(os.path.dirname(nvvm_ctk))
+    return os.path.join(env_dir, 'lib')
 
 
 def get_cuda_home(*subdirs):
