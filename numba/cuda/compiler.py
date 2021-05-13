@@ -241,7 +241,7 @@ def compile_ptx_for_current_device(pyfunc, args, debug=False, lineinfo=False,
     the current device's compute capabilility. This calls :func:`compile_ptx`
     with an appropriate ``cc`` value for the current device."""
     cc = get_current_device().compute_capability
-    return compile_ptx(pyfunc, args, debug=-debug, lineinfo=lineinfo,
+    return compile_ptx(pyfunc, args, debug=debug, lineinfo=lineinfo,
                        device=device, fastmath=fastmath, cc=cc, opt=True)
 
 
