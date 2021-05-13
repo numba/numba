@@ -6,6 +6,7 @@ from numba.core import types
 from .templates import (ConcreteTemplate, AbstractTemplate, AttributeTemplate,
                         CallableTemplate, Registry, signature)
 from numba.np.numpy_support import numpy_version
+from numba.core.overload_glue import glue_typing
 
 
 registry = Registry()
@@ -91,11 +92,11 @@ class ConcreteRandomTemplate(RandomTemplate):
         return RandomTemplate.array_typer(self, concrete_scalar_typer, size)
 
 
-@infer_global(random.getrandbits, typing_key="random.getrandbits")
+@glue_typing(random.getrandbits, typing_key="random.getrandbits")
 class Random_getrandbits(ConcreteTemplate):
     cases = [signature(types.uint64, types.int32)]
 
-@infer_global(random.random, typing_key="random.random")
+@glue_typing(random.random, typing_key="random.random")
 @infer_global(np.random.random, typing_key="np.random.random")
 class Random_random(ConcreteRandomTemplate):
     cases = [signature(types.float64)]
@@ -120,7 +121,7 @@ if numpy_version >= (1, 17):
     )(Random_random)
 
 
-@infer_global(random.randint, typing_key="random.randint")
+@glue_typing(random.randint, typing_key="random.randint")
 class Random_randint(ConcreteTemplate):
     cases = [signature(tp, tp, tp) for tp in _int_types]
 
@@ -135,14 +136,14 @@ class Random_randint(ConcreteRandomTemplate):
         return typer
 
 
-@infer_global(random.randrange, typing_key="random.randrange")
+@glue_typing(random.randrange, typing_key="random.randrange")
 class Random_randrange(ConcreteTemplate):
     cases = [signature(tp, tp) for tp in _int_types]
     cases += [signature(tp, tp, tp) for tp in _int_types]
     cases += [signature(tp, tp, tp, tp) for tp in _int_types]
 
-@infer_global(random.seed, typing_key="random.seed")
-@infer_global(np.random.seed, typing_key="np.random.seed")
+@glue_typing(random.seed, typing_key="random.seed")
+@glue_typing(np.random.seed, typing_key="np.random.seed")
 class Random_seed(ConcreteTemplate):
     cases = [signature(types.void, types.uint32)]
 
@@ -243,14 +244,14 @@ class Random_ternary_distribution(ConcreteRandomTemplate):
 @infer_global(np.random.uniform, typing_key="np.random.uniform")
 @infer_global(np.random.vonmises, typing_key="np.random.vonmises")
 @infer_global(np.random.wald, typing_key="np.random.wald")
-@infer_global(random.betavariate, typing_key="random.betavariate")
-@infer_global(random.gammavariate, typing_key="random.gammavariate")
-@infer_global(random.gauss, typing_key="random.gauss")
-@infer_global(random.lognormvariate, typing_key="random.lognormvariate")
-@infer_global(random.normalvariate, typing_key="random.normalvariate")
-@infer_global(random.uniform, typing_key="random.uniform")
-@infer_global(random.vonmisesvariate, typing_key="random.vonmisesvariate")
-@infer_global(random.weibullvariate, typing_key="random.weibullvariate")
+@glue_typing(random.betavariate, typing_key="random.betavariate")
+@glue_typing(random.gammavariate, typing_key="random.gammavariate")
+@glue_typing(random.gauss, typing_key="random.gauss")
+@glue_typing(random.lognormvariate, typing_key="random.lognormvariate")
+@glue_typing(random.normalvariate, typing_key="random.normalvariate")
+@glue_typing(random.uniform, typing_key="random.uniform")
+@glue_typing(random.vonmisesvariate, typing_key="random.vonmisesvariate")
+@glue_typing(random.weibullvariate, typing_key="random.weibullvariate")
 class Random_binary_distribution(ConcreteRandomTemplate):
     cases = [signature(tp, tp, tp) for tp in _float_types]
 
@@ -266,8 +267,8 @@ class Random_binary_distribution(ConcreteRandomTemplate):
 @infer_global(np.random.standard_gamma, typing_key="np.random.standard_gamma")
 @infer_global(np.random.standard_t, typing_key="np.random.standard_t")
 @infer_global(np.random.weibull, typing_key="np.random.weibull")
-@infer_global(random.expovariate, typing_key="random.expovariate")
-@infer_global(random.paretovariate, typing_key="random.paretovariate")
+@glue_typing(random.expovariate, typing_key="random.expovariate")
+@glue_typing(random.paretovariate, typing_key="random.paretovariate")
 class Random_unary_distribution(ConcreteRandomTemplate):
     cases = [signature(tp, tp) for tp in _float_types]
 
@@ -292,7 +293,7 @@ class Random_nullary_distribution(ConcreteRandomTemplate):
         return typer
 
 
-@infer_global(random.triangular, typing_key="random.triangular")
+@glue_typing(random.triangular, typing_key="random.triangular")
 class Random_triangular(ConcreteTemplate):
     cases = [signature(tp, tp, tp) for tp in _float_types]
     cases += [signature(tp, tp, tp, tp) for tp in _float_types]

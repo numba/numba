@@ -267,10 +267,6 @@ class BaseLower(object):
             self.context.debug_print(self.builder, "DEBUGJIT: {0}".format(msg))
 
 
-# Dictionary mapping instruction class to its lowering function.
-lower_extensions = {}
-
-
 class Lower(BaseLower):
     GeneratorLower = generators.GeneratorLower
 
@@ -438,10 +434,11 @@ class Lower(BaseLower):
             self.lower_static_try_raise(inst)
 
         else:
-            for _class, func in lower_extensions.items():
-                if isinstance(inst, _class):
-                    func(self, inst)
-                    return
+            if hasattr(self.context, "lower_extensions"):
+                for _class, func in self.context.lower_extensions.items():
+                    if isinstance(inst, _class):
+                        func(self, inst)
+                        return
             raise NotImplementedError(type(inst))
 
     def lower_setitem(self, target_var, index_var, value_var, signature):
@@ -983,7 +980,14 @@ class Lower(BaseLower):
             argvals = self.fold_call_args(
                 fnty, signature, expr.args, expr.vararg, expr.kws,
             )
-        impl = self.context.get_function(fnty, signature)
+        tname = expr.target
+        if tname is not None:
+            from numba.core.target_extension import resolve_dispatcher_from_str
+            disp = resolve_dispatcher_from_str(tname)
+            hw_ctx = disp.targetdescr.target_context
+            impl = hw_ctx.get_function(fnty, signature)
+        else:
+            impl = self.context.get_function(fnty, signature)
         if signature.recvr:
             # The "self" object is passed as the function object
             # for bounded function

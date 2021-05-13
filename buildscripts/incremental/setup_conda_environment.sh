@@ -37,7 +37,8 @@ conda list
 # guarding against the possibility that it does not exist in the environment.
 # Create a base env first and then add to it...
 # NOTE: gitpython is needed for CI testing to do the test slicing
-conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython
+# NOTE: pyyaml is used to ensure that the Azure CI config is valid
+conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
 
 # Activate first
 set +v
@@ -74,7 +75,7 @@ if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi
 # Install SVML
 if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
 # Install Intel TBB parallel backend
-if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL tbb tbb-devel; fi
+if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL -c numba tbb=2021 tbb-devel; fi
 # Install pickle5
 if [ "$TEST_PICKLE5" == "yes" ]; then $PIP_INSTALL pickle5; fi
 # Install typeguard

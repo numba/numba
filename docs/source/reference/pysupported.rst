@@ -312,6 +312,11 @@ supported:
 * ``.upper()``
 * ``.zfill()``
 
+Regular string literals (e.g. ``"ABC"``) as well as f-strings without format specs
+(e.g. ``"ABC_{a+1}"``)
+that only use string and integer variables (types with ``str()`` overload)
+are supported in :term:`nopython mode`.
+
 Additional operations as well as support for Python 2 strings / Python 3 bytes
 will be added in a future version of Numba.  Python 2 Unicode objects will
 likely never be supported.
@@ -395,7 +400,6 @@ than to act as a token to permit the use of this feature. Example use:
 .. warning::
     The following restrictions apply to the use of :func:`literal_unroll`:
 
-    * This feature is only available for Python versions >= 3.6.
     * :func:`literal_unroll` can only be used on tuples and constant lists of
       compile time constants, e.g. ``[1, 2j, 3, "a"]`` and the list not being
       mutated.

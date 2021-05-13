@@ -306,3 +306,74 @@ In 0.54.0:
 - ``ptx`` and the inspection methods will always return a dict.
 - Support for indexing into the results of these methods using ``(cc,
   argtypes)`` will be removed.
+
+
+.. _deprecation-strict-strides:
+
+Deprecation of strict strides checking when computing contiguity
+================================================================
+
+The contiguity of device arrays (the ``'C_CONTIGUOUS'`` and ``'F_CONTIGUOUS'``
+elements of the flags of a device array) are computed using relaxed strides
+checking, which matches the default in NumPy since Version 1.12. A config
+variable, :envvar:`NUMBA_NPY_RELAXED_STRIDES_CHECKING`, is provided to force
+computation of these flags using strict strides checking.
+
+This flag is provided to work around any bugs that may be exposed by strict
+strides checking, and will be removed in future.
+
+Schedule
+--------
+
+In 0.54.0:
+
+- Relaxed strides checking will become the default.
+- Strict strides checking will be deprecated.
+
+In 0.55.0:
+
+- Strict strides checking will be removed, if there are no reports of bugs
+  related to relaxed strides checking in 0.54.0 onwards. This plan will be
+  re-examined if bugs related to relaxed strides checking are reported, but may
+  not necessarily change as a result.
+
+
+Deprecation of the ``inspect_ptx()`` method
+===========================================
+
+The undocumented ``inspect_ptx()`` method of functions decorated with
+``@cuda.jit(device=True)`` is sometimes used to compile a Python function to
+PTX for use outside of Numba. An interface for this specific purpose is
+provided in the :func:`compile_ptx() <numba.cuda.compile_ptx>` function.
+``inspect_ptx()`` has one or two longstanding issues and presents a maintenance
+burden for upcoming changes in the CUDA target, so it is deprecated and will be
+removed in favor of the use of :func:`compile_ptx() <numba.cuda.compile_ptx>`.
+
+Recommendations
+---------------
+
+Replace any code that compiles device functions to PTX using the following
+pattern:
+
+.. code-block:: python
+
+    @cuda.jit(signature, device=True)
+    def func(args):
+        ...
+
+    ptx_code = func.inspect_ptx(nvvm_options=nvvm_options).decode()
+
+with:
+
+.. code-block:: python
+
+    def func(args):
+        ...
+
+    ptx_code, return_type = compile_ptx(func, signature, device=True, nvvm_options=nvvm_options)
+
+Schedule
+--------
+
+- In Numba 0.54: ``inspect_ptx()`` will be deprecated.
+- In Numba 0.55: ``inspect_ptx()`` will be removed.

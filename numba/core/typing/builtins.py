@@ -797,12 +797,20 @@ class NumberClassAttribute(AttributeTemplate):
         def typer(val):
             if isinstance(val, (types.BaseTuple, types.Sequence)):
                 # Array constructor, e.g. np.int32([1, 2])
-                sig = self.context.resolve_function_type(
-                    np.array, (val,), {'dtype': types.DType(ty)})
+                fnty = self.context.resolve_value_type(np.array)
+                sig = fnty.get_call_type(self.context, (val, types.DType(ty)),
+                                         {})
                 return sig.return_type
+            elif isinstance(val, (types.Number, types.Boolean)):
+                 # Scalar constructor, e.g. np.int32(42)
+                 return ty
             else:
-                # Scalar constructor, e.g. np.int32(42)
-                return ty
+                # unsupported
+                msg = f"Casting {val} to {ty} directly is unsupported."
+                if isinstance(val, types.Array):
+                    # array casts are supported a different way.
+                    msg += f" Try doing '<array>.astype(np.{ty})' instead"
+                raise errors.TypingError(msg)
 
         return types.Function(make_callable_template(key=ty, typer=typer))
 

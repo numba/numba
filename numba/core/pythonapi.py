@@ -169,7 +169,6 @@ class PythonAPI(object):
         """
         Note: Maybe called multiple times when lowering a function
         """
-        from numba.core import boxing
         self.context = context
         self.builder = builder
 
@@ -1217,9 +1216,10 @@ class PythonAPI(object):
             cgutils.voidptr_t,
             [cgutils.voidptr_t, cgutils.voidptr_t],
             )
-        fn = mod.get_or_insert_function(
+        fn = cgutils.get_or_insert_function(
+            mod,
             fnty,
-            name="NRT_meminfo_new_from_pyobject",
+            "NRT_meminfo_new_from_pyobject",
             )
         fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
         fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
@@ -1232,9 +1232,10 @@ class PythonAPI(object):
             self.pyobj,
             [cgutils.voidptr_t]
         )
-        fn = mod.get_or_insert_function(
+        fn = cgutils.get_or_insert_function(
+            mod,
             fnty,
-            name='NRT_meminfo_as_pyobject',
+            'NRT_meminfo_as_pyobject',
         )
         fn.return_value.add_attribute("noalias")
         return self.builder.call(fn, [miptr])
@@ -1245,9 +1246,10 @@ class PythonAPI(object):
             cgutils.voidptr_t,
             [self.pyobj]
         )
-        fn = mod.get_or_insert_function(
+        fn = cgutils.get_or_insert_function(
+            mod,
             fnty,
-            name='NRT_meminfo_from_pyobject',
+            'NRT_meminfo_from_pyobject',
         )
         fn.return_value.add_attribute("noalias")
         return self.builder.call(fn, [miobj])
@@ -1272,7 +1274,7 @@ class PythonAPI(object):
     # ------ utils -----
 
     def _get_function(self, fnty, name):
-        return self.module.get_or_insert_function(fnty, name=name)
+        return cgutils.get_or_insert_function(self.module, fnty, name)
 
     def alloca_obj(self):
         return self.builder.alloca(self.pyobj)
@@ -1628,6 +1630,20 @@ class ObjModeUtils:
         gv.initializer = gv.type.pointee(None)
         gv.linkage = 'internal'
 
+        # Make a basic-block to common exit
+        bb_end = builder.append_basic_block("bb_end")
+
+        if serialize.is_serialiable(fnty.dispatcher):
+            serialized_dispatcher = self.pyapi.serialize_object(
+                (fnty.dispatcher, tuple(argtypes)),
+            )
+            compile_args = self.pyapi.unserialize(serialized_dispatcher)
+            # unserialize (unpickling) can fail
+            failed_unser = cgutils.is_null(builder, compile_args)
+            with builder.if_then(failed_unser):
+                # early exit. `gv` is still null.
+                builder.branch(bb_end)
+
         cached = builder.load(gv)
         with builder.if_then(cgutils.is_null(builder, cached)):
             if serialize.is_serialiable(fnty.dispatcher):
@@ -1635,10 +1651,6 @@ class ObjModeUtils:
                 compiler = self.pyapi.unserialize(
                     self.pyapi.serialize_object(cls._call_objmode_dispatcher)
                 )
-                serialized_dispatcher = self.pyapi.serialize_object(
-                    (fnty.dispatcher, tuple(argtypes)),
-                )
-                compile_args = self.pyapi.unserialize(serialized_dispatcher)
                 callee = self.pyapi.call_function_objargs(
                     compiler, [compile_args],
                 )
@@ -1653,7 +1665,10 @@ class ObjModeUtils:
             # Incref the dispatcher and cache it
             self.pyapi.incref(callee)
             builder.store(callee, gv)
-
+        # Jump to the exit block
+        builder.branch(bb_end)
+        # Define the exit block
+        builder.position_at_end(bb_end)
         callee = builder.load(gv)
         return callee
 

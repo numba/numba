@@ -487,6 +487,7 @@ The following top-level functions are supported:
 * :func:`numpy.roll` (only the 2 first arguments; second argument ``shift``
   must be an integer)
 * :func:`numpy.roots`
+* :func:`numpy.rot90` (only the 2 first arguments)
 * :func:`numpy.round_`
 * :func:`numpy.searchsorted` (only the 3 first arguments)
 * :func:`numpy.select` (only using homogeneous lists or tuples for the first
@@ -497,6 +498,7 @@ The following top-level functions are supported:
 * :func:`numpy.sort` (no optional arguments)
 * :func:`numpy.split`
 * :func:`numpy.stack`
+* :func:`numpy.swapaxes`
 * :func:`numpy.take` (only the 2 first arguments)
 * :func:`numpy.transpose`
 * :func:`numpy.trapz` (only the 3 first arguments)
