@@ -694,6 +694,13 @@ class Cache(_Cache):
         codebytes = self._py_func.__code__.co_code
         if self._py_func.__closure__ is not None:
             cvars = tuple([x.cell_contents for x in self._py_func.__closure__])
+            def fixup(x):
+                import types
+                if isinstance(x, types.FunctionType):
+                    return (x.__code__, x.__qualname__, x.__module__)
+                else:
+                    return x
+            cvars = tuple(map(fixup, cvars))
             cvarbytes = dumps(cvars)
         else:
             cvarbytes = b''
