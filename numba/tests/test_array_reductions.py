@@ -4,6 +4,7 @@ import numpy as np
 
 from numba import jit, typeof
 from numba.core.compiler import compile_isolated
+from numba.np.numpy_support import numpy_version
 from numba.tests.support import TestCase, MemoryLeakMixin, tag
 import unittest
 
@@ -457,13 +458,16 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         q = np.array(1)
         _check(a, q)
 
-        a = True
-        q = False
-        _check(a, q)
+        if numpy_version < (1, 20):
+            # NumPy 1.20+ rewrites the interpolation part of percentile/quantile
+            # to use np.subtract which doesn't support bools.
+            a = True
+            q = False
+            _check(a, q)
 
-        a = np.array([False, True, True])
-        q = a
-        _check(a, q)
+            a = np.array([False, True, True])
+            q = a
+            _check(a, q)
 
         a = 5
         q = q_upper_bound / 2
