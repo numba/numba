@@ -254,6 +254,10 @@ class _FreshVarHandler(_BaseHandler):
             if len(defmap) == 0:
                 newtarget = assign.target
                 _logger.debug("first assign: %s", newtarget)
+
+                # add this variable if it's not in scope
+                if newtarget.name not in scope.localvars:
+                    scope.define(newtarget.name, assign.loc)
             else:
                 newtarget = scope.redefine(assign.target.name, loc=assign.loc)
             assign = ir.Assign(
