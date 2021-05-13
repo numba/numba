@@ -1129,7 +1129,7 @@ class BaseContext(object):
     def create_module(self, name):
         """Create a LLVM module
         """
-        return ir.Module(name)
+        return llvmir.Module(name)
 
     @property
     def active_code_library(self):
