@@ -4243,6 +4243,7 @@ def np_asarray_chkfinite(a, dtype=None):
 #   - and also, for NumPy >= 1.20, translated from implementations in
 #   https://github.com/numpy/numpy/blob/156cd054e007b05d4ac4829e10a369d19dd2b0b1/numpy/lib/function_base.py#L2655-L3065  # noqa: E501
 
+
 @register_jitable
 def np_bartlett_impl(M):
     if numpy_version >= (1, 20):
@@ -4264,7 +4265,6 @@ def np_blackman_impl(M):
         n = np.arange(M)
         return (0.42 - 0.5 * np.cos(2.0 * np.pi * n / (M - 1)) +
                 0.08 * np.cos(4.0 * np.pi * n / (M - 1)))
-
 
 
 @register_jitable
