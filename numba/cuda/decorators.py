@@ -55,6 +55,11 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                 enabled. When ``True``, ``-opt=3`` is passed to NVVM. When
                 ``False``, ``-opt=0`` is passed to NVVM. Defaults to ``True``.
     :type opt: bool
+
+    In addition to the above parameters the keyword ``lineinfo=True`` may
+    be passed. This generates a line mapping between source code and assembly
+    code. This enables inspection of the source code in NVIDIA profiling tools
+    and correlation with statistical program counter sampling.
     """
 
     if link and config.ENABLE_CUDASIM:
