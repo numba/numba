@@ -395,9 +395,12 @@ class InlineWorker(object):
         var_dict = {}
         for var in callee_scope.localvars._con.values():
             if not (var.name in callee_freevars):
-                new_var = scope.redefine(mk_unique_var(var.name), loc=var.loc)
+                new_var = scope.redefine(var.name, loc=var.loc)
                 var_dict[var.name] = new_var
         self.debug_print("var_dict = ", var_dict)
+        #    replace scope in callee blocks
+        for blk in callee_blocks.values():
+            blk.scope = scope
         replace_vars(callee_blocks, var_dict)
         self.debug_print("After local var rename")
         _debug_dump(callee_ir)
