@@ -176,6 +176,9 @@ class _EnvReloader(object):
         # (up to and including IR generation)
         DEBUG_FRONTEND = _readenv("NUMBA_DEBUG_FRONTEND", int, 0)
 
+        # Enable debug prints in nrtdynmod
+        DEBUG_NRT = _readenv("NUMBA_DEBUG_NRT", int, 0)
+
         # How many recently deserialized functions to retain regardless
         # of external references
         FUNCTION_CACHE_SIZE = _readenv("NUMBA_FUNCTION_CACHE_SIZE", int, 128)

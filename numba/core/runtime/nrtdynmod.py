@@ -3,14 +3,12 @@ Dynamically generate the NRT module
 """
 
 
-from numba.core.config import MACHINE_BITS
+from numba.core import config
 from numba.core import types, cgutils
 from llvmlite import ir, binding
 
-# Flag to enable debug print in NRT_incref and NRT_decref
-_debug_print = True
 
-_word_type = ir.IntType(MACHINE_BITS)
+_word_type = ir.IntType(config.MACHINE_BITS)
 _pointer_type = ir.PointerType(ir.IntType(8))
 
 _meminfo_struct_type = ir.LiteralStructType([
@@ -55,7 +53,7 @@ def _define_nrt_incref(module, atomic_incr):
         builder.ret_void()
 
     word_ptr = builder.bitcast(ptr, atomic_incr.args[0].type)
-    if _debug_print:
+    if config.DEBUG_NRT:
         cgutils.printf(builder, "*** NRT_Incref %zu [%p]\n", builder.load(word_ptr),
                        ptr)
     builder.call(atomic_incr, [word_ptr])
@@ -89,7 +87,7 @@ def _define_nrt_decref(module, atomic_decr):
 
     word_ptr = builder.bitcast(ptr, atomic_decr.args[0].type)
 
-    if _debug_print:
+    if config.DEBUG_NRT:
         cgutils.printf(builder, "*** NRT_Decref %zu [%p]\n", builder.load(word_ptr),
                        ptr)
     newrefct = builder.call(atomic_decr,
