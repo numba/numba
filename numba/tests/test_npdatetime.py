@@ -524,6 +524,28 @@ class TestTimedeltaArithmetic(TestCase):
         check(TD('NaT', 'ms'))
 
     def test_hash(self):
+
+        print('debug'.center(80, '-'))
+        print("TD('NaT')", TD('NaT'))
+        print("np.int64(TD('NaT'))", np.int64(TD('NaT')))
+        print("hash(np.timedelta64('NaT')) == 0",
+              hash(np.timedelta64('NaT')) == 0)
+        print("hash(np.timedelta64('NaT'))", hash(np.timedelta64('NaT')))
+        print("hash(np.timedelta64('NaT')) == 0",
+              hash(np.timedelta64('NaT')) == 0)
+        print("np.int64(np.iinfo(np.int64).min)",
+              np.int64(np.iinfo(np.int64).min))
+        print("hash(np.int64(np.iinfo(np.int64).min))",
+              hash(np.int64(np.iinfo(np.int64).min)))
+        print("np.int64(np.iinfo(np.int64).min) == np.timedelta64('NaT')",
+              np.int64(np.iinfo(np.int64).min) == \
+              np.int64(np.timedelta64('NaT')))
+        print("np.timedelta64(0x200000000)", np.timedelta64(0x200000000))
+        print("np.int64(0x200000000)", np.int64(0x200000000))
+        print("hash(np.timedelta64(0x200000000))",
+              hash(np.timedelta64(0x200000000)))
+        print("hash(np.int64(0x200000000))", hash(np.int64(0x200000000)))
+
         f = self.jit(hash_usecase)
         def check(a):
             self.assertPreciseEqual(f(a), hash(a))
