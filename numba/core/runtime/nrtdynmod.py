@@ -8,7 +8,7 @@ from numba.core import types, cgutils
 from llvmlite import ir, binding
 
 # Flag to enable debug print in NRT_incref and NRT_decref
-_debug_print = False
+_debug_print = True
 
 _word_type = ir.IntType(MACHINE_BITS)
 _pointer_type = ir.PointerType(ir.IntType(8))
@@ -54,10 +54,11 @@ def _define_nrt_incref(module, atomic_incr):
     with cgutils.if_unlikely(builder, is_null):
         builder.ret_void()
 
+    word_ptr = builder.bitcast(ptr, atomic_incr.args[0].type)
     if _debug_print:
-        cgutils.printf(builder, "*** NRT_Incref %zu [%p]\n", builder.load(ptr),
+        cgutils.printf(builder, "*** NRT_Incref %zu [%p]\n", builder.load(word_ptr),
                        ptr)
-    builder.call(atomic_incr, [builder.bitcast(ptr, atomic_incr.args[0].type)])
+    builder.call(atomic_incr, [word_ptr])
     builder.ret_void()
 
 
@@ -79,17 +80,20 @@ def _define_nrt_decref(module, atomic_decr):
     with cgutils.if_unlikely(builder, is_null):
         builder.ret_void()
 
-    if _debug_print:
-        cgutils.printf(builder, "*** NRT_Decref %zu [%p]\n", builder.load(ptr),
-                       ptr)
 
     # For memory fence usage, see https://llvm.org/docs/Atomics.html
 
     # A release fence is used before the relevant write operation.
     # No-op on x86.  On POWER, it lowers to lwsync.
     builder.fence("release")
+
+    word_ptr = builder.bitcast(ptr, atomic_decr.args[0].type)
+
+    if _debug_print:
+        cgutils.printf(builder, "*** NRT_Decref %zu [%p]\n", builder.load(word_ptr),
+                       ptr)
     newrefct = builder.call(atomic_decr,
-                            [builder.bitcast(ptr, atomic_decr.args[0].type)])
+                            [word_ptr])
 
     refct_eq_0 = builder.icmp_unsigned("==", newrefct,
                                        ir.Constant(newrefct.type, 0))
