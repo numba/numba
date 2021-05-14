@@ -234,9 +234,9 @@ class BaseContext(object):
 
         self.address_size = utils.MACHINE_BITS
         self.typing_context = typing_context
-        from numba.core.extending_hardware import hardware_registry
+        from numba.core.target_extension import target_registry
         self.target_name = target
-        self.target = hardware_registry[target]
+        self.target = target_registry[target]
 
         # A mapping of installed registries to their loaders
         self._registries = {}
