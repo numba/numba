@@ -97,7 +97,7 @@ class Random_getrandbits(ConcreteTemplate):
     cases = [signature(types.uint64, types.int32)]
 
 @glue_typing(random.random, typing_key="random.random")
-@infer_global(np.random.random, typing_key="np.random.random")
+@glue_typing(np.random.random, typing_key="np.random.random")
 class Random_random(ConcreteRandomTemplate):
     cases = [signature(types.float64)]
 
@@ -107,15 +107,15 @@ class Random_random(ConcreteRandomTemplate):
         return typer
 
 if numpy_version >= (1, 17):
-    infer_global(
+    glue_typing(
         np.random.random_sample,
         typing_key="np.random.random_sample",
     )(Random_random)
-    infer_global(
+    glue_typing(
         np.random.sample,
         typing_key="np.random.sample",
     )(Random_random)
-    infer_global(
+    glue_typing(
         np.random.ranf,
         typing_key="np.random.ranf",
     )(Random_random)
@@ -125,7 +125,7 @@ if numpy_version >= (1, 17):
 class Random_randint(ConcreteTemplate):
     cases = [signature(tp, tp, tp) for tp in _int_types]
 
-@infer_global(np.random.randint, typing_key="np.random.randint")
+@glue_typing(np.random.randint, typing_key="np.random.randint")
 class Random_randint(ConcreteRandomTemplate):
     cases = [signature(tp, tp) for tp in _int_types]
     cases += [signature(tp, tp, tp) for tp in _int_types]
@@ -152,9 +152,9 @@ class Random_seed(ConcreteTemplate):
 # Distributions
 #
 
-@infer_global(np.random.geometric, typing_key="np.random.geometric")
-@infer_global(np.random.logseries, typing_key="np.random.logseries")
-@infer_global(np.random.zipf, typing_key="np.random.zipf")
+@glue_typing(np.random.geometric, typing_key="np.random.geometric")
+@glue_typing(np.random.logseries, typing_key="np.random.logseries")
+@glue_typing(np.random.zipf, typing_key="np.random.zipf")
 class Numpy_geometric(ConcreteRandomTemplate):
     cases = [signature(types.int64, tp) for tp in _float_types]
 
@@ -163,8 +163,8 @@ class Numpy_geometric(ConcreteRandomTemplate):
             return self.array_typer(size)(a)
         return typer
 
-@infer_global(np.random.binomial, typing_key="np.random.binomial")
-@infer_global(np.random.negative_binomial,
+@glue_typing(np.random.binomial, typing_key="np.random.binomial")
+@glue_typing(np.random.negative_binomial,
                           typing_key="np.random.negative_binomial")
 class Numpy_negative_binomial(ConcreteRandomTemplate):
     cases = [signature(types.int64, types.int64, tp) for tp in _float_types]
@@ -174,7 +174,7 @@ class Numpy_negative_binomial(ConcreteRandomTemplate):
             return self.array_typer(size)(n, p)
         return typer
 
-@infer_global(np.random.poisson, typing_key="np.random.poisson")
+@glue_typing(np.random.poisson, typing_key="np.random.poisson")
 class Numpy_poisson(ConcreteRandomTemplate):
     cases = [signature(types.int64, tp) for tp in _float_types]
     cases += [signature(types.int64)]
@@ -184,8 +184,8 @@ class Numpy_poisson(ConcreteRandomTemplate):
             return self.array_typer(size)(lam)
         return typer
 
-@infer_global(np.random.exponential, typing_key="np.random.exponential")
-@infer_global(np.random.rayleigh, typing_key="np.random.rayleigh")
+@glue_typing(np.random.exponential, typing_key="np.random.exponential")
+@glue_typing(np.random.rayleigh, typing_key="np.random.rayleigh")
 class Numpy_exponential(ConcreteRandomTemplate):
     cases = [signature(tp, tp) for tp in _float_types]
     cases += [signature(tp) for tp in _float_types]
@@ -195,7 +195,7 @@ class Numpy_exponential(ConcreteRandomTemplate):
             return self.array_typer(size)(scale)
         return typer
 
-@infer_global(np.random.hypergeometric, typing_key="np.random.hypergeometric")
+@glue_typing(np.random.hypergeometric, typing_key="np.random.hypergeometric")
 class Numpy_hypergeometric(ConcreteRandomTemplate):
     cases = [signature(tp, tp, tp, tp) for tp in _int_types]
 
@@ -204,10 +204,10 @@ class Numpy_hypergeometric(ConcreteRandomTemplate):
             return self.array_typer(size)(ngood, nbad, nsample)
         return typer
 
-@infer_global(np.random.laplace, typing_key="np.random.laplace")
-@infer_global(np.random.logistic, typing_key="np.random.logistic")
-@infer_global(np.random.lognormal, typing_key="np.random.lognormal")
-@infer_global(np.random.normal, typing_key="np.random.normal")
+@glue_typing(np.random.laplace, typing_key="np.random.laplace")
+@glue_typing(np.random.logistic, typing_key="np.random.logistic")
+@glue_typing(np.random.lognormal, typing_key="np.random.lognormal")
+@glue_typing(np.random.normal, typing_key="np.random.normal")
 class Numpy_normal(ConcreteRandomTemplate):
     cases = [signature(tp, tp, tp) for tp in _float_types]
     cases += [signature(tp, tp) for tp in _float_types]
@@ -218,7 +218,7 @@ class Numpy_normal(ConcreteRandomTemplate):
             return self.array_typer(size)(loc, scale)
         return typer
 
-@infer_global(np.random.gamma, typing_key="np.random.gamma")
+@glue_typing(np.random.gamma, typing_key="np.random.gamma")
 class Numpy_gamma(ConcreteRandomTemplate):
     cases = [signature(tp, tp, tp) for tp in _float_types]
     cases += [signature(tp, tp) for tp in _float_types]
@@ -228,7 +228,7 @@ class Numpy_gamma(ConcreteRandomTemplate):
             return self.array_typer(size)(shape, scale)
         return typer
 
-@infer_global(np.random.triangular, typing_key="np.random.triangular")
+@glue_typing(np.random.triangular, typing_key="np.random.triangular")
 class Random_ternary_distribution(ConcreteRandomTemplate):
     cases = [signature(tp, tp, tp, tp) for tp in _float_types]
 
@@ -238,12 +238,12 @@ class Random_ternary_distribution(ConcreteRandomTemplate):
         return typer
 
 
-@infer_global(np.random.beta, typing_key="np.random.beta")
-@infer_global(np.random.f, typing_key="np.random.f")
-@infer_global(np.random.gumbel, typing_key="np.random.gumbel")
-@infer_global(np.random.uniform, typing_key="np.random.uniform")
-@infer_global(np.random.vonmises, typing_key="np.random.vonmises")
-@infer_global(np.random.wald, typing_key="np.random.wald")
+@glue_typing(np.random.beta, typing_key="np.random.beta")
+@glue_typing(np.random.f, typing_key="np.random.f")
+@glue_typing(np.random.gumbel, typing_key="np.random.gumbel")
+@glue_typing(np.random.uniform, typing_key="np.random.uniform")
+@glue_typing(np.random.vonmises, typing_key="np.random.vonmises")
+@glue_typing(np.random.wald, typing_key="np.random.wald")
 @glue_typing(random.betavariate, typing_key="random.betavariate")
 @glue_typing(random.gammavariate, typing_key="random.gammavariate")
 @glue_typing(random.gauss, typing_key="random.gauss")
@@ -261,12 +261,12 @@ class Random_binary_distribution(ConcreteRandomTemplate):
         return typer
 
 
-@infer_global(np.random.chisquare, typing_key="np.random.chisquare")
-@infer_global(np.random.pareto, typing_key="np.random.pareto")
-@infer_global(np.random.power, typing_key="np.random.power")
-@infer_global(np.random.standard_gamma, typing_key="np.random.standard_gamma")
-@infer_global(np.random.standard_t, typing_key="np.random.standard_t")
-@infer_global(np.random.weibull, typing_key="np.random.weibull")
+@glue_typing(np.random.chisquare, typing_key="np.random.chisquare")
+@glue_typing(np.random.pareto, typing_key="np.random.pareto")
+@glue_typing(np.random.power, typing_key="np.random.power")
+@glue_typing(np.random.standard_gamma, typing_key="np.random.standard_gamma")
+@glue_typing(np.random.standard_t, typing_key="np.random.standard_t")
+@glue_typing(np.random.weibull, typing_key="np.random.weibull")
 @glue_typing(random.expovariate, typing_key="random.expovariate")
 @glue_typing(random.paretovariate, typing_key="random.paretovariate")
 class Random_unary_distribution(ConcreteRandomTemplate):
@@ -278,12 +278,10 @@ class Random_unary_distribution(ConcreteRandomTemplate):
         return typer
 
 
-@infer_global(np.random.standard_cauchy,
-                          typing_key="np.random.standard_cauchy")
-@infer_global(np.random.standard_normal,
-                          typing_key="np.random.standard_normal")
-@infer_global(np.random.standard_exponential,
-                          typing_key="np.random.standard_exponential")
+@glue_typing(np.random.standard_cauchy, typing_key="np.random.standard_cauchy")
+@glue_typing(np.random.standard_normal, typing_key="np.random.standard_normal")
+@glue_typing(np.random.standard_exponential,
+             typing_key="np.random.standard_exponential")
 class Random_nullary_distribution(ConcreteRandomTemplate):
     cases = [signature(tp) for tp in _float_types]
 

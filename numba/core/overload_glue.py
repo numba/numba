@@ -74,15 +74,21 @@ class _OverloadWrapper(object):
         Use this to replace @infer_global, it records the decorated function
         as a typer for the argument `concrete_function`.
         """
-        # HACK: This is a hack, infer_global maybe?
         if self._typing_key is None:
             key = self._function
         else:
             key = self._typing_key
 
         def inner(typing_class):
-            self._TYPER = typing_class
-            self._TYPER.key = key
+            # Note that two templates could be used for the same function, to
+            # avoid @infer_global etc the typing template is copied. This is to
+            # ensure there's a 1:1 relationship between the typing templates and
+            # their keys.
+            clazz_dict = dict(typing_class.__dict__)
+            clazz_dict['key'] = key
+            cloned = type(f"cloned_template_for_{key}", typing_class.__bases__,
+                          clazz_dict)
+            self._TYPER = cloned
             _overload_glue.add_no_defer(key)
             self._build()
             return typing_class
