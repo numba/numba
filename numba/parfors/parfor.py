@@ -32,7 +32,6 @@ from numba.core.typing.templates import infer_global, AbstractTemplate
 from numba.stencils.stencilparfor import StencilPass
 from numba.core.extending import register_jitable
 
-
 from numba.core.ir_utils import (
     mk_unique_var,
     next_label,
@@ -75,7 +74,10 @@ from numba.core.ir_utils import (
     index_var_of_get_setitem,
     set_index_var_of_get_setitem,
     find_potential_aliases,
-    replace_var_names)
+    replace_var_names,
+    enforce_single_scope,
+    legalize_single_scope,
+)
 
 from numba.core.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
@@ -2784,6 +2786,7 @@ class ParforPass(ParforPassStates):
     def run(self):
         """run parfor conversion pass: replace Numpy calls
         with Parfors when possible and optimize the IR."""
+        enforce_single_scope(self.func_ir)
         self._pre_run()
         # run stencil translation to parfor
         if self.options.stencil:
@@ -2875,12 +2878,14 @@ class ParforPass(ParforPassStates):
                             new_block.append(ir_print)
                 block.body = new_block
 
+        enforce_single_scope(self.func_ir)
         if self.func_ir.is_generator:
             fix_generator_types(self.func_ir.generator_info, self.return_type,
                                 self.typemap)
         if sequential_parfor_lowering:
             lower_parfor_sequential(
                 self.typingctx, self.func_ir, self.typemap, self.calltypes, self.metadata)
+            enforce_single_scope(self.func_ir)
         else:
             # prepare for parallel lowering
             # add parfor params to parfors here since lowering is destructive
@@ -2896,6 +2901,7 @@ class ParforPass(ParforPassStates):
             # Validate parameters:
             for p in parfors:
                 p.validate_params(self.typemap)
+            enforce_single_scope(self.func_ir)
 
             if config.DEBUG_ARRAY_OPT_STATS:
                 name = self.func_ir.func_id.func_qualname
@@ -2909,6 +2915,7 @@ class ParforPass(ParforPassStates):
                 else:
                     print('Function {} has no Parfor.'.format(name))
 
+        enforce_single_scope(self.func_ir)
         return
 
     def _find_mask(self, arr_def):
@@ -3255,12 +3262,17 @@ def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes, metadata):
                               ir_utils.find_max_label(func_ir.blocks))
     parfor_found = False
     new_blocks = {}
+    enforce_single_scope(func_ir)
+    scope = next(iter(func_ir.blocks.values())).scope
     for (block_label, block) in func_ir.blocks.items():
         block_label, parfor_found = _lower_parfor_sequential_block(
-            block_label, block, new_blocks, typemap, calltypes, parfor_found)
+            block_label, block, new_blocks, typemap, calltypes, parfor_found,
+            scope=scope)
         # old block stays either way
         new_blocks[block_label] = block
+        assert legalize_single_scope(new_blocks)
     func_ir.blocks = new_blocks
+    enforce_single_scope(func_ir)
     # rename only if parfor found and replaced (avoid test_flow_control error)
     if parfor_found:
         func_ir.blocks = rename_labels(func_ir.blocks)
@@ -3269,14 +3281,27 @@ def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes, metadata):
     dprint_func_ir(func_ir, "after parfor sequential simplify")
 
 
+def _transfer_scope(old_block, new_scope):
+    old_scope = old_block.scope
+    if old_scope is new_scope:
+        return old_block
+    var_dict = {}
+    for var in old_scope.localvars._con.values():
+        new_var = new_scope.redefine(var.name, loc=var.loc)
+        var_dict[var.name] = new_var
+    # replace scope
+    new_block = old_block#.copy()
+    new_block.scope = new_scope
+    return new_block
+
 def _lower_parfor_sequential_block(
         block_label,
         block,
         new_blocks,
         typemap,
         calltypes,
-        parfor_found):
-    scope = block.scope
+        parfor_found,
+        scope):
     i = _find_first_parfor(block.body)
     while i != -1:
         parfor_found = True
@@ -3289,11 +3314,13 @@ def _lower_parfor_sequential_block(
         # previous block jump to parfor init block
         init_label = next_label()
         prev_block.body.append(ir.Jump(init_label, loc))
-        new_blocks[init_label] = inst.init_block
+        new_blocks[init_label] = _transfer_scope(inst.init_block, scope)
         new_blocks[block_label] = prev_block
+        assert legalize_single_scope(new_blocks)
         block_label = next_label()
 
         ndims = len(inst.loop_nests)
+
         for i in range(ndims):
             loopnest = inst.loop_nests[i]
             # create range block for loop
@@ -3333,8 +3360,10 @@ def _lower_parfor_sequential_block(
         # add parfor body to blocks
         for (l, b) in inst.loop_body.items():
             l, parfor_found = _lower_parfor_sequential_block(
-                l, b, new_blocks, typemap, calltypes, parfor_found)
-            new_blocks[l] = b
+                l, b, new_blocks, typemap, calltypes, parfor_found,
+                scope=scope)
+
+            new_blocks[l] = _transfer_scope(b, scope)
         i = _find_first_parfor(block.body)
     return block_label, parfor_found
 

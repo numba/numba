@@ -2179,12 +2179,28 @@ def enforce_no_phis(func_ir):
             raise CompilerError(msg, loc=phis[0].loc)
 
 
+def legalize_single_scope(blocks):
+    num_of_scope = len({blk.scope for blk in blocks.values()})
+    if num_of_scope == 1:
+        return True
+    else:
+        # for k, blk in blocks.items():
+        #     print('   -', k, hex(id(blk.scope)))
+        return False
+
+
+def enforce_single_scope(func_ir):
+    if not legalize_single_scope(func_ir.blocks):
+        raise CompilerError("Illegal IR, multiple scopes")
+
+
 def check_and_legalize_ir(func_ir):
     """
     This checks that the IR presented is legal
     """
     enforce_no_phis(func_ir)
     enforce_no_dels(func_ir)
+    enforce_single_scope(func_ir)
     # postprocess and emit ir.Dels
     post_proc = postproc.PostProcessor(func_ir)
     post_proc.run(True)

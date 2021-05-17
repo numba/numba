@@ -6,7 +6,7 @@ from numba.core.compiler_lock import global_compiler_lock
 from numba.core import errors, config, transforms
 from numba.core.tracing import event
 from numba.core.postproc import PostProcessor
-from numba.core.ir_utils import enforce_no_dels
+from numba.core.ir_utils import enforce_no_dels, legalize_single_scope
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -294,6 +294,12 @@ class PassManager(object):
         # emitted ir.Dels.
         if isinstance(pss, FunctionPass):
             enforce_no_dels(internal_state.func_ir)
+
+        # Check the func_ir only has exactly one Scope instance
+        if not legalize_single_scope(internal_state.func_ir.blocks):
+            raise errors.CompilerError(
+                f"multiple scope in func_ir detected in {pss}",
+            )
 
         if self._ENFORCING:
             # TODO: Add in self consistency enforcement for
