@@ -23,21 +23,8 @@ class CUDATestCase(SerialMixin, TestCase):
     its tests are run between tests from a CUDATestCase.
     """
 
-    @classmethod
-    def setUpClass(cls):
-        # If the test class defines a setUp method, we need to run both
-        # CUDATestCase.setUp (to disable low occupancy warnings) and its setUp
-        if cls is not CUDATestCase and cls.setUp is not CUDATestCase.setUp:
-            cls_setUp = cls.setUp
-
-            def setUp_both(self, *args, **kwargs):
-                # Call our setUp first so that low occupancy warnings are
-                # disabled before anything else happens
-                CUDATestCase.setUp(self)
-                return cls_setUp(self, *args, **kwargs)
-            cls.setUp = setUp_both
-
     def setUp(self):
+        super().setUp()
         self._low_occupancy_warnings = config.CUDA_LOW_OCCUPANCY_WARNINGS
         # Disable warnings about low gpu utilization in the test suite
         config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
