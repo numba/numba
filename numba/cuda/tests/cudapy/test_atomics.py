@@ -458,6 +458,7 @@ def atomic_compare_and_swap(res, old, ary, fill_val):
 
 class TestCudaAtomics(CUDATestCase):
     def setUp(self):
+        super().setUp()
         np.random.seed(0)
 
     def test_atomic_add(self):

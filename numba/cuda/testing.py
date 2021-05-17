@@ -24,7 +24,6 @@ class CUDATestCase(SerialMixin, TestCase):
     """
 
     def setUp(self):
-        super().setUp()
         self._low_occupancy_warnings = config.CUDA_LOW_OCCUPANCY_WARNINGS
         # Disable warnings about low gpu utilization in the test suite
         config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
