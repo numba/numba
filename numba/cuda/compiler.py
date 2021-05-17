@@ -830,7 +830,7 @@ class _KernelConfiguration:
             grid_size = griddim[0] * griddim[1] * griddim[2]
             if grid_size < 2 * smcount:
                 msg = ("Grid size ({grid}) < 2 * SM count ({sm}) "
-                       "will likely result in GPU under utilization due"
+                       "will likely result in GPU under utilization due "
                        "to low occupancy.")
                 msg = msg.format(grid=grid_size, sm=2 * smcount)
                 warn(NumbaPerformanceWarning(msg))
