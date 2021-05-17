@@ -57,8 +57,6 @@ def print_varargs(context, builder, sig, args):
     It dispatches to the appropriate 'print' implementations above
     depending on the detected real types in the signature."""
 
-    vprint = nvvmutils.declare_vprint(builder.module)
-
     formats = []
     values = []
 
@@ -68,11 +66,5 @@ def print_varargs(context, builder, sig, args):
         values.extend(argvals)
 
     rawfmt = " ".join(formats) + "\n"
-    fmt = context.insert_string_const_addrspace(builder, rawfmt)
-    array = cgutils.make_anonymous_struct(builder, values)
-    arrayptr = cgutils.alloca_once_value(builder, array)
-
-    vprint = nvvmutils.declare_vprint(builder.module)
-    builder.call(vprint, (fmt, builder.bitcast(arrayptr, voidptr)))
-
+    context.printf(builder, rawfmt, *values)
     return context.get_dummy_value()

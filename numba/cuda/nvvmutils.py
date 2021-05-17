@@ -190,7 +190,7 @@ def declare_string(builder, value):
     return builder.call(conv, [charptr])
 
 
-def declare_vprint(lmod):
+def declare_vprintf(lmod):
     voidptrty = ir.PointerType(ir.IntType(8))
     # NOTE: the second argument to vprintf() points to the variable-length
     # array of arguments (after the format)

@@ -5,7 +5,7 @@ from llvmlite import ir
 from numba.core import (typing, types, dispatcher, debuginfo, itanium_mangler,
                         cgutils)
 from numba.core.utils import cached_property
-from numba.core.base import BaseContext
+from numba.core.base import BaseContext, GENERIC_POINTER
 from numba.core.callconv import MinimalCallConv
 from numba.core.typing import cmathdecl
 
@@ -53,7 +53,6 @@ class CUDATypingContext(typing.BaseContext):
 
 
 VALID_CHARS = re.compile(r'[^a-z0-9]', re.I)
-
 
 class CUDATargetContext(BaseContext):
     implement_powi_as_math_call = True
@@ -306,6 +305,25 @@ class CUDATargetContext(BaseContext):
         # Cast to a i8* pointer
         charty = gv.type.pointee.element
         return gv.bitcast(charty.as_pointer(nvvm.ADDRSPACE_CONSTANT))
+
+    def print_string(self, builder, text):
+        return self.printf(builder, "%s\n", text)
+
+    def debug_print(self, builder, text):
+        cstr = self.insert_string_const_addrspace(builder, str(text))
+        self.print_string(builder, cstr)
+
+    def printf(self, builder, format_string, *args):
+        if isinstance(format_string, str):
+            fmt = self.insert_string_const_addrspace(builder, format_string)
+        else:
+            fmt = format_string
+
+        array = cgutils.make_anonymous_struct(builder, list(args))
+        arrayptr = cgutils.alloca_once_value(builder, array)
+
+        vprintf = nvvmutils.declare_vprintf(builder.module)
+        return builder.call(vprintf, (fmt, builder.bitcast(arrayptr, GENERIC_POINTER)))
 
     def insert_string_const_addrspace(self, builder, string):
         """
