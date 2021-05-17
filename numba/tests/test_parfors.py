@@ -1399,6 +1399,17 @@ class TestParfors(TestParforsBase):
             self.check(test_impl, n)
             self.assertEqual(countNonParforArrayAccesses(test_impl, (types.intp,)), 0)
 
+            X = np.ones((211, 3))
+
+            def test_impl(X):
+                y = 0
+                for i in numba.prange(X.shape[0]):
+                    y += X[i, ts].sum()
+                return y
+
+            self.check(test_impl, X)
+            self.assertEqual(countNonParforArrayAccesses(test_impl, (types.float64[:, :],)), 0)
+
     @skip_parfors_unsupported
     @disabled_test # Test itself is problematic, see #3155
     def test_parfor_hoist_setitem(self):
