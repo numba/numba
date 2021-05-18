@@ -1,8 +1,7 @@
 from functools import singledispatch
 from llvmlite import ir
-from numba.core import types, cgutils
+from numba.core import types
 from numba.core.imputils import Registry
-from numba.cuda import nvvmutils
 
 registry = Registry()
 lower = registry.lower

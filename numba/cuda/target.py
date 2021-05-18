@@ -54,6 +54,7 @@ class CUDATypingContext(typing.BaseContext):
 
 VALID_CHARS = re.compile(r'[^a-z0-9]', re.I)
 
+
 class CUDATargetContext(BaseContext):
     implement_powi_as_math_call = True
     strict_alignment = True
@@ -323,7 +324,9 @@ class CUDATargetContext(BaseContext):
         arrayptr = cgutils.alloca_once_value(builder, array)
 
         vprintf = nvvmutils.declare_vprintf(builder.module)
-        return builder.call(vprintf, (fmt, builder.bitcast(arrayptr, GENERIC_POINTER)))
+
+        voidptr = builder.bitcast(arrayptr, GENERIC_POINTER)
+        return builder.call(vprintf, (fmt, voidptr))
 
     def insert_string_const_addrspace(self, builder, string):
         """
