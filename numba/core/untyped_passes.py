@@ -16,7 +16,9 @@ from numba.core.ir_utils import (guard, resolve_func_from_module, simplify_CFG,
                                  mk_unique_var, build_definitions,
                                  replace_var_names, get_name_var_table,
                                  compile_to_numba_ir, get_definition,
-                                 find_max_label, rename_labels)
+                                 find_max_label, rename_labels,
+                                 legalize_single_scope,
+                                 )
 from numba.core.ssa import reconstruct_ssa
 from numba.core import interpreter
 
@@ -1093,6 +1095,8 @@ class MixedContainerUnroller(FunctionPass):
         if not literal_unroll_info:
             return False
 
+        assert legalize_single_scope(state.func_ir.blocks)
+
         # 1. Validate loops, must not have any calls to literal_unroll
         for test_lbl, test_loop in literal_unroll_info.items():
             for ref_lbl, ref_loop in literal_unroll_info.items():
@@ -1105,7 +1109,11 @@ class MixedContainerUnroller(FunctionPass):
 
         # 2. Do the unroll, get a loop and process it!
         lbl, info = literal_unroll_info.popitem()
+
+        assert legalize_single_scope(state.func_ir.blocks)
         self.unroll_loop(state, info)
+
+        assert legalize_single_scope(state.func_ir.blocks)
 
         # 3. Rebuild the state, the IR has taken a hammering
         func_ir.blocks = simplify_CFG(func_ir.blocks)
@@ -1210,17 +1218,22 @@ class MixedContainerUnroller(FunctionPass):
 
         # 6. Patch in the unrolled body and fix up
         blks = state.func_ir.blocks
+        assert legalize_single_scope(blks)
+        the_scope = next(iter(blks.values())).scope
+
         orig_lbl = tuple(this_loop_body)
 
         replace, *delete = orig_lbl
         unroll, header_block = unrolled_body, this_loop.header
         unroll_lbl = [x for x in sorted(unroll.blocks.keys())]
-        blks[replace] = unroll.blocks[unroll_lbl[0]]
+        blks[replace] = _transfer_scope(unroll.blocks[unroll_lbl[0]], the_scope)
         [blks.pop(d) for d in delete]
         for k in unroll_lbl[1:]:
-            blks[k] = unroll.blocks[k]
+            blks[k] = _transfer_scope(unroll.blocks[k], the_scope)
         # stitch up the loop predicate true -> new loop body jump
         blks[header_block].body[-1].truebr = replace
+
+        assert legalize_single_scope(blks)
 
     def run_pass(self, state):
         mutated = False
@@ -1531,3 +1544,17 @@ class ReconstructSSA(FunctionPass):
                 typ = locals_dict[parent]
                 for derived in redefs:
                     locals_dict[derived] = typ
+
+
+def _transfer_scope(old_block, new_scope):
+    old_scope = old_block.scope
+    if old_scope is new_scope:
+        return old_block
+    var_dict = {}
+    for var in old_scope.localvars._con.values():
+        new_var = new_scope.redefine(var.name, loc=var.loc)
+        var_dict[var.name] = new_var
+    # replace scope
+    new_block = old_block#.copy()
+    new_block.scope = new_scope
+    return new_block
