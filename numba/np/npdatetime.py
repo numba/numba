@@ -830,7 +830,7 @@ def _cast_npdatetime_int64(context, builder, fromty, toty, val):
 def ol_hash_npdatetime(inst):
     if IS_32BITS:
         def impl(inst):
-            hi = (np.int64(inst) & 0xffffffff00000000)
+            hi = (np.int64(inst) & 0xffffffff00000000) >> 32
             lo = (np.int64(inst) & 0x00000000ffffffff)
             ret = lo + (1000003) * hi
             if ret == -1:
