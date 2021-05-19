@@ -1126,6 +1126,53 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         return types.BoundFunction(MethodTemplate, typ)
 
 
+class _OverloadClassMethodTemplate(_OverloadMethodTemplate):
+
+    @classmethod
+    def do_class_init(cls):
+        """
+        Register generic method implementation.
+        """
+        from numba.core.imputils import lower_builtin
+        attr = cls._attr
+
+        # print(">>>", cls.key, attr)
+
+        @lower_builtin((cls.key, attr), cls.key, types.VarArg(types.Any))
+        def method_impl(context, builder, sig, args):
+            typ = sig.args[0]
+            typing_context = context.typing_context
+            fnty = cls._get_function_type(typing_context, typ)
+            sig = cls._get_signature(typing_context, fnty, sig.args, {})
+            call = context.get_function(fnty, sig)
+            # Link dependent library
+            context.add_linking_libs(getattr(call, 'libs', ()))
+            return call(builder, args)
+
+    def _resolve(self, typ, attr):
+        if self._attr != attr:
+            return None
+
+        class MethodTemplate(AbstractTemplate):
+            key = (self.key, attr)
+            _inline = self._inline
+            _overload_func = staticmethod(self._overload_func)
+            _inline_overloads = self._inline_overloads
+            prefer_literal = self.prefer_literal
+
+            def generic(_, args, kws):
+                args = (typ,) + tuple(args)
+                fnty = self._get_function_type(self.context, typ)
+                sig = self._get_signature(self.context, fnty, args, kws)
+                sig = sig.replace(pysig=utils.pysignature(self._overload_func))
+                for template in fnty.templates:
+                    self._inline_overloads.update(template._inline_overloads)
+                if sig is not None:
+                    return sig.as_method()
+
+        return types.BoundFunction(MethodTemplate, typ)
+
+
 def make_overload_attribute_template(typ, attr, overload_func, inline,
                                      prefer_literal=False,
                                      base=_OverloadAttributeTemplate):
@@ -1155,6 +1202,19 @@ def make_overload_method_template(typ, attr, overload_func, inline,
     return make_overload_attribute_template(
         typ, attr, overload_func, inline=inline,
         base=_OverloadMethodTemplate, prefer_literal=prefer_literal,
+    )
+
+
+def make_overload_classmethod_template(typ, attr, overload_func, inline,
+                                       prefer_literal=False):
+    """
+    Make a template class for classmethod *attr* of *typ* overloaded by
+    *overload_func*.
+    """
+    from numba.core import types
+    return make_overload_attribute_template(
+        types.TypeRef(typ), attr, overload_func, inline=inline,
+        base=_OverloadClassMethodTemplate, prefer_literal=prefer_literal,
     )
 
 

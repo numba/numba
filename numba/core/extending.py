@@ -232,6 +232,22 @@ def overload_method(typ, attr, **kwargs):
     return decorate
 
 
+def overload_classmethod(typ, attr, **kwargs):
+    from numba.core.typing.templates import make_overload_classmethod_template
+
+    def decorate(overload_func):
+        template = make_overload_classmethod_template(
+            typ, attr, overload_func,
+            inline=kwargs.get('inline', 'never'),
+            prefer_literal=kwargs.get('prefer_literal', False)
+        )
+        infer_getattr(template)
+        overload(overload_func, **kwargs)(overload_func)
+        return overload_func
+
+    return decorate
+
+
 def make_attribute_wrapper(typeclass, struct_attr, python_attr):
     """
     Make an automatic attribute wrapper exposing member named *struct_attr*
