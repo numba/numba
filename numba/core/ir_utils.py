@@ -2180,19 +2180,11 @@ def enforce_no_phis(func_ir):
 
 
 def legalize_single_scope(blocks):
-    return True
     num_of_scope = len({blk.scope for blk in blocks.values()})
     if num_of_scope == 1:
         return True
     else:
-        # for k, blk in blocks.items():
-        #     print('   -', k, hex(id(blk.scope)))
         return False
-
-
-def enforce_single_scope(func_ir):
-    if not legalize_single_scope(func_ir.blocks):
-        raise CompilerError("Illegal IR, multiple scopes")
 
 
 def check_and_legalize_ir(func_ir):
@@ -2201,7 +2193,6 @@ def check_and_legalize_ir(func_ir):
     """
     enforce_no_phis(func_ir)
     enforce_no_dels(func_ir)
-    enforce_single_scope(func_ir)
     # postprocess and emit ir.Dels
     post_proc = postproc.PostProcessor(func_ir)
     post_proc.run(True)
@@ -2291,10 +2282,16 @@ def fix_scopes(blocks):
                 scope.localvars.define(var.name, var)
 
 
-def check_scopes(blocks):
-    for k, blk in blocks.items():
-        scope = blk.scope
-        for inst in blk.body:
-            for var in inst.list_vars():
-                assert var.name in blk.scope.localvars, f"bad var {var} in {inst}"
+def transfer_scope(old_block, new_scope):
+    old_scope = old_block.scope
+    if old_scope is new_scope:
+        return old_block
+    var_dict = {}
+    for var in old_scope.localvars._con.values():
+        new_var = new_scope.redefine(var.name, loc=var.loc)
+        var_dict[var.name] = new_var
+    # replace scope
+    new_block = old_block
+    new_block.scope = new_scope
+    return new_block
 

@@ -35,8 +35,8 @@ from numba.core.ir_utils import (
     get_unused_var_name,
     find_potential_aliases,
     is_const_call,
-    enforce_single_scope,
     fix_scopes,
+    transfer_scope,
 )
 from numba.core.analysis import compute_use_defs, compute_live_map, compute_dead_maps, compute_cfg_from_blocks
 from numba.core.typing import signature
@@ -889,7 +889,6 @@ def _create_gufunc_for_parfor_body(
     The IR is scanned for the sentinel assignment where that basic block is split and the IR
     for the parfor body inserted.
     '''
-    enforce_single_scope(lowerer.func_ir)
     if config.DEBUG_ARRAY_OPT >= 1:
         print("starting _create_gufunc_for_parfor_body")
 
@@ -1345,21 +1344,7 @@ def _create_gufunc_for_parfor_body(
                 # Add all the parfor loop body blocks to the gufunc function's
                 # IR.
                 for (l, b) in loop_body.items():
-
-                    def transfer_scope(old_block, new_scope):
-                        old_scope = old_block.scope
-                        var_dict = {}
-                        for var in old_scope.localvars._con.values():
-                            new_var = new_scope.redefine(var.name, loc=var.loc)
-                            var_dict[var.name] = new_var
-                        # replace scope
-
-                        new_block = old_block.copy()
-                        new_block.scope = new_scope
-                        return new_block
-
                     gufunc_ir.blocks[l] = transfer_scope(b, scope)
-
                 body_last_label = max(loop_body.keys())
                 gufunc_ir.blocks[new_label] = block
                 gufunc_ir.blocks[label] = prev_block
@@ -1372,8 +1357,6 @@ def _create_gufunc_for_parfor_body(
             continue
         break
 
-
-    enforce_single_scope(gufunc_ir)
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_ir last dump before renaming")
         gufunc_ir.dump()
@@ -1393,7 +1376,6 @@ def _create_gufunc_for_parfor_body(
             print("No aliases found so adding noalias flag.")
         flags.noalias = True
 
-    enforce_single_scope(gufunc_ir)
     fix_scopes(gufunc_ir.blocks)
     kernel_func = compiler.compile_ir(
         typingctx,
@@ -1403,7 +1385,6 @@ def _create_gufunc_for_parfor_body(
         types.none,
         flags,
         locals)
-
 
     flags.noalias = old_alias
 
@@ -1813,4 +1794,3 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         builder.store(builder.load(only_elem_ptr), lowerer.getvar(k))
 
     context.active_code_library.add_linking_library(cres.library)
-

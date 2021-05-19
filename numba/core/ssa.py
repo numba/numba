@@ -255,9 +255,6 @@ class _FreshVarHandler(_BaseHandler):
                 newtarget = assign.target
                 _logger.debug("first assign: %s", newtarget)
                 assert newtarget.name in scope.localvars
-                # add this variable if it's not in scope
-                if newtarget.name not in scope.localvars:
-                    scope.define(newtarget.name, assign.loc)
             else:
                 newtarget = scope.redefine(assign.target.name, loc=assign.loc)
             assign = ir.Assign(

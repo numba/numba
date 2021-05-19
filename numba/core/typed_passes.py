@@ -18,8 +18,7 @@ from numba.core.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                                  dead_code_elimination, simplify_CFG,
                                  get_definition,
                                  build_definitions, compute_cfg_from_blocks,
-                                 is_operator_or_getitem,
-                                 enforce_single_scope)
+                                 is_operator_or_getitem)
 from numba.core import postproc
 from llvmlite import binding as llvm
 
@@ -307,7 +306,7 @@ class ParforPass(FunctionPass):
                                          state.metadata,
                                          state.parfor_diagnostics)
         parfor_pass.run()
-        enforce_single_scope(state.func_ir)
+
         # check the parfor pass worked and warn if it didn't
         has_parfor = False
         for blk in state.func_ir.blocks.values():

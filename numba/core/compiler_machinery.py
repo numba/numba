@@ -295,12 +295,6 @@ class PassManager(object):
         if isinstance(pss, FunctionPass):
             enforce_no_dels(internal_state.func_ir)
 
-        # Check the func_ir only has exactly one Scope instance
-        if not legalize_single_scope(internal_state.func_ir.blocks):
-            raise errors.CompilerError(
-                f"multiple scope in func_ir detected in {pss}",
-            )
-
         if self._ENFORCING:
             # TODO: Add in self consistency enforcement for
             # `func_ir._definitions` etc
@@ -310,7 +304,11 @@ class PassManager(object):
                 else:  # CFG level changes rebuild CFG
                     internal_state.func_ir.blocks = transforms.canonicalize_cfg(
                         internal_state.func_ir.blocks)
-
+            # Check the func_ir only has exactly one Scope instance
+            if not legalize_single_scope(internal_state.func_ir.blocks):
+                raise errors.CompilerError(
+                    f"multiple scope in func_ir detected in {pss}",
+                )
         # inject runtimes
         pt = pass_timings(init_time.elapsed, pass_time.elapsed,
                           finalize_time.elapsed)
