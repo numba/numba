@@ -1365,14 +1365,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                                         cfunc(a, -5, 5, cout))
                 np.testing.assert_equal(pyout, cout)
 
-                # This test exhibits undefined behaviour since min > max, but
-                # we'll make sure it's consistent with NumPy, which computes
-                # min(max(val, a_min), a_max) since 1.17. Prior to that min and
-                # max were the other way round, so we're not consistent with
-                # older NumPy versions.
-                if numpy_version > (1, 16):
-                    np.testing.assert_equal(pyfunc(a, 8, 5), cfunc(a, 8, 5))
-
                 # verifies that type-inference is working on the return value
                 # this used to trigger issue #3489
                 def lower_clip_result(a):
