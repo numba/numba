@@ -39,19 +39,19 @@ def cuda_calls_cuda():
     pass
 
 
-def hardware_overloaded():
+def target_overloaded():
     pass
 
 
-def generic_calls_hardware_overloaded():
+def generic_calls_target_overloaded():
     pass
 
 
-def cuda_calls_hardware_overloaded():
+def cuda_calls_target_overloaded():
     pass
 
 
-def hardware_overloaded_calls_hardware_overloaded():
+def target_overloaded_calls_target_overloaded():
     pass
 
 
@@ -68,45 +68,45 @@ GENERIC_CALLS_GENERIC = 11
 GENERIC_CALLS_CUDA = 13
 CUDA_CALLS_GENERIC = 17
 CUDA_CALLS_CUDA = 19
-GENERIC_HARDWARE_OL = 23
-CUDA_HARDWARE_OL = 29
-GENERIC_CALLS_HARDWARE_OL = 31
-CUDA_CALLS_HARDWARE_OL = 37
-GENERIC_HARDWARE_OL_CALLS_HARDWARE_OL = 41
-CUDA_HARDWARE_OL_CALLS_HARDWARE_OL = 43
+GENERIC_TARGET_OL = 23
+CUDA_TARGET_OL = 29
+GENERIC_CALLS_TARGET_OL = 31
+CUDA_CALLS_TARGET_OL = 37
+GENERIC_TARGET_OL_CALLS_TARGET_OL = 41
+CUDA_TARGET_OL_CALLS_TARGET_OL = 43
 
 
 # Overload implementations
 
-@overload(generic_func_1, hardware='generic')
+@overload(generic_func_1, target='generic')
 def ol_generic_func_1(x):
     def impl(x):
         x[0] *= GENERIC_FUNCTION_1
     return impl
 
 
-@overload(cuda_func_1, hardware='cuda')
+@overload(cuda_func_1, target='cuda')
 def ol_cuda_func_1(x):
     def impl(x):
         x[0] *= CUDA_FUNCTION_1
     return impl
 
 
-@overload(generic_func_2, hardware='generic')
+@overload(generic_func_2, target='generic')
 def ol_generic_func_2(x):
     def impl(x):
         x[0] *= GENERIC_FUNCTION_2
     return impl
 
 
-@overload(cuda_func_2, hardware='cuda')
+@overload(cuda_func_2, target='cuda')
 def ol_cuda_func(x):
     def impl(x):
         x[0] *= CUDA_FUNCTION_2
     return impl
 
 
-@overload(generic_calls_generic, hardware='generic')
+@overload(generic_calls_generic, target='generic')
 def ol_generic_calls_generic(x):
     def impl(x):
         x[0] *= GENERIC_CALLS_GENERIC
@@ -114,7 +114,7 @@ def ol_generic_calls_generic(x):
     return impl
 
 
-@overload(generic_calls_cuda, hardware='generic')
+@overload(generic_calls_cuda, target='generic')
 def ol_generic_calls_cuda(x):
     def impl(x):
         x[0] *= GENERIC_CALLS_CUDA
@@ -122,7 +122,7 @@ def ol_generic_calls_cuda(x):
     return impl
 
 
-@overload(cuda_calls_generic, hardware='cuda')
+@overload(cuda_calls_generic, target='cuda')
 def ol_cuda_calls_generic(x):
     def impl(x):
         x[0] *= CUDA_CALLS_GENERIC
@@ -130,7 +130,7 @@ def ol_cuda_calls_generic(x):
     return impl
 
 
-@overload(cuda_calls_cuda, hardware='cuda')
+@overload(cuda_calls_cuda, target='cuda')
 def ol_cuda_calls_cuda(x):
     def impl(x):
         x[0] *= CUDA_CALLS_CUDA
@@ -138,49 +138,49 @@ def ol_cuda_calls_cuda(x):
     return impl
 
 
-@overload(hardware_overloaded, hardware='generic')
-def ol_hardware_overloaded_generic(x):
+@overload(target_overloaded, target='generic')
+def ol_target_overloaded_generic(x):
     def impl(x):
-        x[0] *= GENERIC_HARDWARE_OL
+        x[0] *= GENERIC_TARGET_OL
     return impl
 
 
-@overload(hardware_overloaded, hardware='cuda')
-def ol_hardware_overloaded_cuda(x):
+@overload(target_overloaded, target='cuda')
+def ol_target_overloaded_cuda(x):
     def impl(x):
-        x[0] *= CUDA_HARDWARE_OL
+        x[0] *= CUDA_TARGET_OL
     return impl
 
 
-@overload(generic_calls_hardware_overloaded, hardware='generic')
-def ol_generic_calls_hardware_overloaded(x):
+@overload(generic_calls_target_overloaded, target='generic')
+def ol_generic_calls_target_overloaded(x):
     def impl(x):
-        x[0] *= GENERIC_CALLS_HARDWARE_OL
-        hardware_overloaded(x)
+        x[0] *= GENERIC_CALLS_TARGET_OL
+        target_overloaded(x)
     return impl
 
 
-@overload(cuda_calls_hardware_overloaded, hardware='cuda')
-def ol_cuda_calls_hardware_overloaded(x):
+@overload(cuda_calls_target_overloaded, target='cuda')
+def ol_cuda_calls_target_overloaded(x):
     def impl(x):
-        x[0] *= CUDA_CALLS_HARDWARE_OL
-        hardware_overloaded(x)
+        x[0] *= CUDA_CALLS_TARGET_OL
+        target_overloaded(x)
     return impl
 
 
-@overload(hardware_overloaded_calls_hardware_overloaded, hardware='generic')
-def ol_generic_calls_hardware_overloaded_generic(x):
+@overload(target_overloaded_calls_target_overloaded, target='generic')
+def ol_generic_calls_target_overloaded_generic(x):
     def impl(x):
-        x[0] *= GENERIC_HARDWARE_OL_CALLS_HARDWARE_OL
-        hardware_overloaded(x)
+        x[0] *= GENERIC_TARGET_OL_CALLS_TARGET_OL
+        target_overloaded(x)
     return impl
 
 
-@overload(hardware_overloaded_calls_hardware_overloaded, hardware='cuda')
-def ol_generic_calls_hardware_overloaded_cuda(x):
+@overload(target_overloaded_calls_target_overloaded, target='cuda')
+def ol_generic_calls_target_overloaded_cuda(x):
     def impl(x):
-        x[0] *= CUDA_HARDWARE_OL_CALLS_HARDWARE_OL
-        hardware_overloaded(x)
+        x[0] *= CUDA_TARGET_OL_CALLS_TARGET_OL
+        target_overloaded(x)
     return impl
 
 
@@ -262,37 +262,37 @@ class TestOverload(CUDATestCase):
         expected = CUDA_CALLS_CUDA * CUDA_FUNCTION_1
         self.check_overload(kernel, expected)
 
-    def test_call_hardware_overloaded(self):
+    def test_call_target_overloaded(self):
         def kernel(x):
-            hardware_overloaded(x)
+            target_overloaded(x)
 
-        expected = CUDA_HARDWARE_OL
+        expected = CUDA_TARGET_OL
         self.check_overload(kernel, expected)
 
-    def test_generic_calls_hardware_overloaded(self):
+    def test_generic_calls_target_overloaded(self):
         def kernel(x):
-            generic_calls_hardware_overloaded(x)
+            generic_calls_target_overloaded(x)
 
-        expected = GENERIC_CALLS_HARDWARE_OL * CUDA_HARDWARE_OL
+        expected = GENERIC_CALLS_TARGET_OL * CUDA_TARGET_OL
         self.check_overload(kernel, expected)
 
-    def test_cuda_calls_hardware_overloaded(self):
+    def test_cuda_calls_target_overloaded(self):
         def kernel(x):
-            cuda_calls_hardware_overloaded(x)
+            cuda_calls_target_overloaded(x)
 
-        expected = CUDA_CALLS_HARDWARE_OL * CUDA_HARDWARE_OL
+        expected = CUDA_CALLS_TARGET_OL * CUDA_TARGET_OL
         self.check_overload(kernel, expected)
 
-    def test_hardware_overloaded_calls_hardware_overloaded(self):
+    def test_target_overloaded_calls_target_overloaded(self):
         def kernel(x):
-            hardware_overloaded_calls_hardware_overloaded(x)
+            target_overloaded_calls_target_overloaded(x)
 
         # Check the CUDA overloads are used on CUDA
-        expected = CUDA_HARDWARE_OL_CALLS_HARDWARE_OL * CUDA_HARDWARE_OL
+        expected = CUDA_TARGET_OL_CALLS_TARGET_OL * CUDA_TARGET_OL
         self.check_overload(kernel, expected)
 
         # Also check that the CPU overloads are used on the CPU
-        expected = GENERIC_HARDWARE_OL_CALLS_HARDWARE_OL * GENERIC_HARDWARE_OL
+        expected = GENERIC_TARGET_OL_CALLS_TARGET_OL * GENERIC_TARGET_OL
         self.check_overload_cpu(kernel, expected)
 
 

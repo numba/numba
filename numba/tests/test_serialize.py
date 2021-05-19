@@ -8,7 +8,7 @@ from numba.core.errors import TypingError
 from numba.tests.support import TestCase, tag
 from .serialize_usecases import *
 import unittest
-from numba.core.extending_hardware import resolve_dispatcher_from_str
+from numba.core.target_extension import resolve_dispatcher_from_str
 
 
 class TestDispatcherPickling(TestCase):

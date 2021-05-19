@@ -90,16 +90,13 @@ class UFuncMechanism(object):
         Get all arguments in array form
         """
         for i, arg in enumerate(self.args):
-            if isinstance(arg, np.ndarray):
-                self.arrays[i] = arg
-            elif self.is_device_array(arg):
+            if self.is_device_array(arg):
                 self.arrays[i] = self.as_device_array(arg)
             elif isinstance(arg, (int, float, complex, np.number)):
                 # Is scalar
                 self.scalarpos.append(i)
             else:
-                raise TypeError("argument #%d has invalid type of %s" \
-                % (i + 1, type(arg) ))
+                self.arrays[i] = np.asarray(arg)
 
     def _fill_argtypes(self):
         """
@@ -107,7 +104,7 @@ class UFuncMechanism(object):
         """
         for i, ary in enumerate(self.arrays):
             if ary is not None:
-                self.argtypes[i] = ary.dtype
+                self.argtypes[i] = np.asarray(ary).dtype
 
     def _resolve_signature(self):
         """Resolve signature.
