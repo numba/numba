@@ -1551,8 +1551,11 @@ def array_T(context, builder, typ, value):
         ret = make_array(typ)(context, builder)
         shapes = cgutils.unpack_tuple(builder, ary.shape, typ.ndim)
         strides = cgutils.unpack_tuple(builder, ary.strides, typ.ndim)
+        llvm_type = context.get_value_type(typ.dtype)
+        data_ptr = builder.alloca(llvm_type, ary.nitems)
+        cgutils.memcpy(builder, data_ptr, ary.data, ary.nitems)
         populate_array(ret,
-                       data=ary.data,
+                       data=data_ptr,
                        shape=cgutils.pack_array(builder, shapes[::-1]),
                        strides=cgutils.pack_array(builder, strides[::-1]),
                        itemsize=ary.itemsize,

@@ -1004,7 +1004,7 @@ class Lower(BaseLower):
             return self.lower_binop(resty, expr, expr.fn)
         elif expr.op == 'inplace_binop':
             lty = self.typeof(expr.lhs.name)
-            if lty.mutable and self.fndesc.noalias:
+            if lty.mutable:
                 return self.lower_binop(resty, expr, expr.fn)
             else:
                 # inplace operators on non-mutable types reuse the same
