@@ -2292,19 +2292,17 @@ def fixup_var_define_in_scope(blocks):
                 scope.localvars.define(var.name, var)
 
 
-def transfer_scope(old_block, new_scope):
+def transfer_scope(block, scope):
     """Transfer the ir.Block to use the given ir.Scope.
     """
-    old_scope = old_block.scope
-    if old_scope is new_scope:
+    old_scope = block.scope
+    if old_scope is scope:
         # bypass if the block is already using the given scope
-        return old_block
+        return block
     # Ensure variables are defined in the new scope
-    var_dict = {}
     for var in old_scope.localvars._con.values():
-        new_var = new_scope.redefine(var.name, loc=var.loc)
-        var_dict[var.name] = new_var
+        if var.name not in scope.localvars:
+            scope.localvars.define(var.name, var)
     # replace scope
-    new_block = old_block
-    new_block.scope = new_scope
-    return new_block
+    block.scope = scope
+    return block
