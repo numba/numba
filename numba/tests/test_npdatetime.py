@@ -528,15 +528,6 @@ class TestTimedeltaArithmetic(TestCase):
         def check(a):
             self.assertPreciseEqual(f(a), hash(a))
 
-        print(f(TD(3)), hash(TD(3)))
-        print(f(TD(-4)), hash(TD(-4)))
-        print(f(TD(3, 'ms')), hash(TD(3, 'ms')))
-        print(f(TD(-4, 'ms')), hash(TD(-4, 'ms')))
-        print(f(TD('NaT')), hash(TD('NaT')))
-        print(f(TD('NaT', 'ms')), hash(TD('NaT', 'ms')))
-        print(f(DT('2000-01-01T01:02:03.002Z')), hash(DT('2000-01-01T01:02:03.002Z')))
-        print(f(DT('NaT')), hash(DT('NaT')))
-
         check(TD(3))
         check(TD(-4))
         check(TD(3, 'ms'))
