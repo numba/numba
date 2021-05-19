@@ -827,16 +827,19 @@ def _cast_npdatetime_int64(context, builder, fromty, toty, val):
 
 @overload_method(types.NPTimedelta, '__hash__')
 @overload_method(types.NPDatetime, '__hash__')
-def ol_hash_npdatetime(inst):
+def ol_hash_npdatetime(x):
     if IS_32BITS:
-        def impl(inst):
-            hi = (np.int64(inst) & 0xffffffff00000000) >> 32
-            lo = (np.int64(inst) & 0x00000000ffffffff)
+        def impl(x):
+            x = np.int64(x)
+            if x < 2**31 - 1:  # x < LONG_MAX
+                return x
+            hi = (np.int64(x) & 0xffffffff00000000)
+            lo = (np.int64(x) & 0x00000000ffffffff)
             ret = lo + (1000003) * hi
             if ret == -1:
                 ret = -2
             return np.int32(ret)
     else:
-        def impl(inst):
-            return np.int64(inst)
+        def impl(x):
+            return np.int64(x)
     return impl
