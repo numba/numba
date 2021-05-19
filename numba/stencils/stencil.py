@@ -736,6 +736,8 @@ class StencilFunc(object):
 
         # Compile the combined stencil function with the replaced loop
         # body in it.
+        from numba.core.ir_utils import fix_scopes
+        fix_scopes(stencil_ir.blocks)
         new_func = compiler.compile_ir(
             self._typingctx,
             self._targetctx,

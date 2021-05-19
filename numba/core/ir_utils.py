@@ -2180,6 +2180,7 @@ def enforce_no_phis(func_ir):
 
 
 def legalize_single_scope(blocks):
+    return True
     num_of_scope = len({blk.scope for blk in blocks.values()})
     if num_of_scope == 1:
         return True
@@ -2272,3 +2273,20 @@ def convert_code_obj_to_function(code_obj, caller_ir):
     # create the function and return it
     return _create_function_from_code_obj(fcode, func_env, func_arg, func_clo,
                                           glbls)
+
+
+def fix_scopes(blocks):
+    used_var = {}
+    for blk in blocks.values():
+        scope = blk.scope
+        for inst in blk.body:
+            # if isinstance(inst, ir.Assign):
+            for var in inst.list_vars():
+                used_var[var] = inst
+    # Note: not all blocks share a single scope even though they should.
+    for blk in blocks.values():
+        scope = blk.scope
+        for var, inst in used_var.items():
+            # add this variable if it's not in scope
+            if var.name not in scope.localvars:
+                scope.localvars.define(var.name, var)

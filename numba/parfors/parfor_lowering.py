@@ -36,6 +36,7 @@ from numba.core.ir_utils import (
     find_potential_aliases,
     is_const_call,
     enforce_single_scope,
+    fix_scopes,
 )
 from numba.core.analysis import compute_use_defs, compute_live_map, compute_dead_maps, compute_cfg_from_blocks
 from numba.core.typing import signature
@@ -1393,6 +1394,7 @@ def _create_gufunc_for_parfor_body(
         flags.noalias = True
 
     enforce_single_scope(gufunc_ir)
+    fix_scopes(gufunc_ir.blocks)
     kernel_func = compiler.compile_ir(
         typingctx,
         targetctx,
