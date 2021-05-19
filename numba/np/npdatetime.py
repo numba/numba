@@ -13,6 +13,7 @@ from numba.core.imputils import (lower_builtin, lower_constant,
                                  impl_ret_untracked, lower_cast)
 from numba.np import npdatetime_helpers, numpy_support, npyfuncs
 from numba.extending import overload_method
+from numba.core.config import IS_32BITS
 
 # datetime64 and timedelta64 use the same internal representation
 DATETIME64 = TIMEDELTA64 = Type.int(64)
@@ -827,6 +828,15 @@ def _cast_npdatetime_int64(context, builder, fromty, toty, val):
 @overload_method(types.NPTimedelta, '__hash__')
 @overload_method(types.NPDatetime, '__hash__')
 def ol_hash_npdatetime(inst):
-    def impl(inst):
-        return np.int64(inst)
+    if IS_32BITS:
+        def impl(inst):
+            hi = (np.int64(inst) & 0xffffffff00000000)
+            lo = (np.int64(inst) & 0x00000000ffffffff)
+            ret = lo + (1000003) * hi
+            if ret == -1:
+                ret = -2
+            return np.int32(ret)
+    else:
+        def impl(inst):
+            return np.int64(inst)
     return impl
