@@ -20,6 +20,8 @@ exclude =
     *.c
     *.h
     __init__.py
+    # Ignore vendored files
+    numba/cloudpickle/*
     # Grandfather in existing failing files.  This list should shrink over time
     numba/stencils/stencil.py
     numba/core/transforms.py
@@ -188,7 +190,6 @@ exclude =
     numba/tests/test_array_analysis.py
     numba/tests/test_serialize.py
     numba/tests/test_iteration.py
-    numba/tests/test_runtests.py
     numba/tests/test_recarray_usecases.py
     numba/tests/test_target_overloadselector.py
     numba/tests/test_compile_cache.py

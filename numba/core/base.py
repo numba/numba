@@ -17,7 +17,6 @@ from numba.core import event
 from numba import _dynfunc, _helperlib
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.pythonapi import PythonAPI
-from numba.np import arrayobj
 from numba.core.imputils import (user_function, user_generator,
                        builtin_registry, impl_ret_borrowed,
                        RegistryLoader)
@@ -230,11 +229,14 @@ class BaseContext(object):
     # the function descriptor
     fndesc = None
 
-    def __init__(self, typing_context):
+    def __init__(self, typing_context, target):
         _load_global_helpers()
 
         self.address_size = utils.MACHINE_BITS
         self.typing_context = typing_context
+        from numba.core.target_extension import target_registry
+        self.target_name = target
+        self.target = target_registry[target]
 
         # A mapping of installed registries to their loaders
         self._registries = {}
@@ -268,19 +270,15 @@ class BaseContext(object):
         Refresh context with new declarations from known registries.
         Useful for third-party extensions.
         """
-        # Populate built-in registry
-        from numba.cpython import (slicing, tupleobj, enumimpl, hashing, heapq,
-                                   iterators, numbers, rangeobj)
-        from numba.core import optional
-        from numba.misc import gdb_hook, literal
-        from numba.np import linalg, polynomial, arraymath
-
-        try:
-            from numba.np import npdatetime
-        except NotImplementedError:
-            pass
-        self.install_registry(builtin_registry)
+        # load target specific registries
         self.load_additional_registries()
+
+        # Populate the builtin registry, this has to happen after loading
+        # additional registries as some of the "additional" registries write
+        # their implementations into the builtin_registry and would be missed if
+        # this ran first.
+        self.install_registry(builtin_registry)
+
         # Also refresh typing context, since @overload declarations can
         # affect it.
         self.typing_context.refresh()
@@ -1005,12 +1003,14 @@ class BaseContext(object):
         return self._make_helper(builder, typ, ref=ref, kind='data')
 
     def make_array(self, typ):
+        from numba.np import arrayobj
         return arrayobj.make_array(typ)
 
     def populate_array(self, arr, **kwargs):
         """
         Populate array structure.
         """
+        from numba.np import arrayobj
         return arrayobj.populate_array(arr, **kwargs)
 
     def make_complex(self, builder, typ, value=None):

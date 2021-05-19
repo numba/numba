@@ -4,12 +4,13 @@ import pickle
 import numpy as np
 import numpy.core.umath_tests as ut
 
-from numba import void, float32, jit, guvectorize
+from numba import void, float32, int64, jit, guvectorize
 from numba.np.ufunc import GUVectorize
 from numba.tests.support import tag, TestCase
 
 
 def matmulcore(A, B, C):
+    """docstring for matmulcore"""
     m, n = A.shape
     n, p = B.shape
     for i in range(m):
@@ -82,6 +83,18 @@ class TestGUFunc(TestCase):
         out_kw = np.zeros_like(y)
         my_cumsum(x, out=out_kw, axis=0)
         np.testing.assert_equal(out_kw, expected)
+    
+    def test_docstring(self):
+        @guvectorize([(int64[:], int64, int64[:])], '(n),()->(n)')
+        def gufunc(x, y, res):
+            "docstring for gufunc"
+            for i in range(x.shape[0]):
+                res[i] = x[i] + y
+        
+        self.assertEqual("numba.tests.npyufunc.test_gufunc", gufunc.__module__)
+        self.assertEqual("gufunc", gufunc.__name__)
+        self.assertEqual("TestGUFunc.test_docstring.<locals>.gufunc", gufunc.__qualname__)
+        self.assertEqual("docstring for gufunc", gufunc.__doc__)
 
 
 class TestGUFuncParallel(TestGUFunc):
@@ -347,7 +360,7 @@ class TestGUVectorizePickling(TestCase):
         cloned(arr, out=got)
         self.assertPreciseEqual(expect, got)
 
-    def test_pickle_gufunc_dyanmic_initialized(self):
+    def test_pickle_gufunc_dynamic_initialized(self):
         """Dynamic gufunc prepopulated before pickling.
 
         Once unpickled, we disable compilation to verify that the gufunc

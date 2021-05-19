@@ -96,6 +96,8 @@ Some limitations of the simulator include:
   is, testing equality, less than, greater than, and basic mathematical 
   operations are supported, but many other operations, such as the in-place 
   operators and bit operators are not.
+* The :func:`ffs() <numba.cuda.ffs>` function only works correctly for values
+  that can be represented using 32-bit integers.
 
 Obviously, the speed of the simulator is also much lower than that of a real
 device. It may be necessary to reduce the size of input data and the size of the

@@ -7,7 +7,8 @@ from numba.core import config
 from numba.core.decorators import jit
 from numba.core.descriptors import TargetDescriptor
 from numba.core.options import TargetOptions, include_default_options
-from numba.core.registry import dispatcher_registry, cpu_target
+from numba.core.registry import cpu_target
+from numba.core.target_extension import dispatcher_registry, target_registry
 from numba.core import utils, types, serialize, compiler, sigutils
 from numba.np.numpy_support import as_dtype
 from numba.np.ufunc import _internal
@@ -49,6 +50,9 @@ class UFuncTargetOptions(_options_mixin, TargetOptions):
 
 class UFuncTarget(TargetDescriptor):
     options = UFuncTargetOptions
+
+    def __init__(self):
+        super().__init__('ufunc')
 
     @property
     def typing_context(self):
@@ -155,7 +159,7 @@ class UFuncDispatcher(serialize.ReduceMixin):
                 return cres
 
 
-dispatcher_registry['npyufunc'] = UFuncDispatcher
+dispatcher_registry[target_registry['npyufunc']] = UFuncDispatcher
 
 
 # Utility functions
