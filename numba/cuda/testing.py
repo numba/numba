@@ -39,8 +39,6 @@ class ContextResettingTestCase(CUDATestCase):
     to be internal implementation details (such as the state of allocations and
     deallocations, etc.).
     """
-    def setUp(self):
-        super().setUp()
 
     def tearDown(self):
         super().tearDown()
