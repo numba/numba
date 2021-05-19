@@ -35,7 +35,7 @@ from numba.core.ir_utils import (
     get_unused_var_name,
     find_potential_aliases,
     is_const_call,
-    fix_scopes,
+    fixup_var_define_in_scope,
     transfer_scope,
 )
 from numba.core.analysis import compute_use_defs, compute_live_map, compute_dead_maps, compute_cfg_from_blocks
@@ -1376,7 +1376,7 @@ def _create_gufunc_for_parfor_body(
             print("No aliases found so adding noalias flag.")
         flags.noalias = True
 
-    fix_scopes(gufunc_ir.blocks)
+    fixup_var_define_in_scope(gufunc_ir.blocks)
     kernel_func = compiler.compile_ir(
         typingctx,
         targetctx,

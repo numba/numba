@@ -2180,6 +2180,8 @@ def enforce_no_phis(func_ir):
 
 
 def legalize_single_scope(blocks):
+    """Check the given mapping of ir.Block for containing a single scope.
+    """
     num_of_scope = len({blk.scope for blk in blocks.values()})
     if num_of_scope == 1:
         return True
@@ -2266,7 +2268,13 @@ def convert_code_obj_to_function(code_obj, caller_ir):
                                           glbls)
 
 
-def fix_scopes(blocks):
+def fixup_var_define_in_scope(blocks):
+    """Fixes the mapping of ir.Block to ensure all ir.Var are defined in all
+    scope.
+
+    Note: This is a workaround.
+    """
+    # Scan for all used variables
     used_var = {}
     for blk in blocks.values():
         scope = blk.scope
@@ -2274,18 +2282,24 @@ def fix_scopes(blocks):
             for var in inst.list_vars():
                 used_var[var] = inst
     # Note: not all blocks share a single scope even though they should.
+    # Ensure the scope of each block defines all used variables.
     for blk in blocks.values():
         scope = blk.scope
         for var, inst in used_var.items():
             # add this variable if it's not in scope
             if var.name not in scope.localvars:
+                # Note: using a internal method to reuse the same
                 scope.localvars.define(var.name, var)
 
 
 def transfer_scope(old_block, new_scope):
+    """Transfer the ir.Block to use the given ir.Scope.
+    """
     old_scope = old_block.scope
     if old_scope is new_scope:
+        # bypass if the block is already using the given scope
         return old_block
+    # Ensure variables are defined in the new scope
     var_dict = {}
     for var in old_scope.localvars._con.values():
         new_var = new_scope.redefine(var.name, loc=var.loc)
@@ -2294,4 +2308,3 @@ def transfer_scope(old_block, new_scope):
     new_block = old_block
     new_block.scope = new_scope
     return new_block
-

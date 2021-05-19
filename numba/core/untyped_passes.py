@@ -17,7 +17,7 @@ from numba.core.ir_utils import (guard, resolve_func_from_module, simplify_CFG,
                                  replace_var_names, get_name_var_table,
                                  compile_to_numba_ir, get_definition,
                                  find_max_label, rename_labels,
-                                 transfer_scope,
+                                 transfer_scope, fixup_var_define_in_scope,
                                  )
 from numba.core.ssa import reconstruct_ssa
 from numba.core import interpreter
@@ -209,8 +209,7 @@ class InlineClosureLikes(FunctionPass):
         post_proc = postproc.PostProcessor(state.func_ir)
         post_proc.run()
 
-        from numba.core.ir_utils import fix_scopes
-        fix_scopes(state.func_ir.blocks)
+        fixup_var_define_in_scope(state.func_ir.blocks)
 
         if config.DEBUG or config.DUMP_IR:
             name = state.func_ir.func_id.func_qualname
