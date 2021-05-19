@@ -2280,7 +2280,6 @@ def fix_scopes(blocks):
     for blk in blocks.values():
         scope = blk.scope
         for inst in blk.body:
-            # if isinstance(inst, ir.Assign):
             for var in inst.list_vars():
                 used_var[var] = inst
     # Note: not all blocks share a single scope even though they should.
@@ -2290,3 +2289,12 @@ def fix_scopes(blocks):
             # add this variable if it's not in scope
             if var.name not in scope.localvars:
                 scope.localvars.define(var.name, var)
+
+
+def check_scopes(blocks):
+    for k, blk in blocks.items():
+        scope = blk.scope
+        for inst in blk.body:
+            for var in inst.list_vars():
+                assert var.name in blk.scope.localvars, f"bad var {var} in {inst}"
+

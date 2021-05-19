@@ -209,6 +209,9 @@ class InlineClosureLikes(FunctionPass):
         post_proc = postproc.PostProcessor(state.func_ir)
         post_proc.run()
 
+        from numba.core.ir_utils import fix_scopes
+        fix_scopes(state.func_ir.blocks)
+
         if config.DEBUG or config.DUMP_IR:
             name = state.func_ir.func_id.func_qualname
             print(("IR DUMP: %s" % name).center(80, "-"))
