@@ -832,7 +832,7 @@ def ol_hash_npdatetime(x):
         def impl(x):
             x = np.int64(x)
             if x < 2**31 - 1:  # x < LONG_MAX
-                return x
+                return np.int32(x)
             hi = (np.int64(x) & 0xffffffff00000000)
             lo = (np.int64(x) & 0x00000000ffffffff)
             ret = lo + (1000003) * hi
