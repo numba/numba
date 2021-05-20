@@ -583,6 +583,7 @@ class CallConstraint(object):
 
         # Resolve call type
         if isinstance(fnty, types.TypeRef):
+            # Unwrap TypeRef
             fnty = fnty.instance_type
         try:
             sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
