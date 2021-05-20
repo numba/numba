@@ -1136,8 +1136,6 @@ class _OverloadClassMethodTemplate(_OverloadMethodTemplate):
         from numba.core.imputils import lower_builtin
         attr = cls._attr
 
-        # print(">>>", cls.key, attr)
-
         @lower_builtin((cls.key, attr), cls.key, types.VarArg(types.Any))
         def method_impl(context, builder, sig, args):
             typ = sig.args[0]
