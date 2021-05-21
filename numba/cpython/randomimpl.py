@@ -1300,6 +1300,8 @@ for typing_key, arity in [
 
         # ... and populate it in natural order
         *mod, fname = typing_key.split('.')
+        # Module must be numpy.random
+        assert mod == ['np', 'random']
         np_func = getattr(np.random, fname)
         fnty = context.typing_context.resolve_value_type(np_func)
         resolved_sig = fnty.get_call_type(context.typing_context,
