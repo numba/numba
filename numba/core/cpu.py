@@ -77,11 +77,7 @@ class CPUContext(BaseContext):
         from numba.typed import typeddict, dictimpl
         from numba.typed import typedlist, listobject
         from numba.experimental import jitclass, function_type
-
-        try:
-            from numba.np import npdatetime
-        except NotImplementedError:
-            pass
+        from numba.np import npdatetime
 
         # Add target specific implementations
         from numba.np import npyimpl
