@@ -32,5 +32,6 @@ labels: task
 
 * [ ] tag X.Y+1.0dev0 to start new development cycle on `master`
 * [ ] update llvmlite dependency spec to match next version via PR to `master`
-* [ ] update release checklist template
+* [ ] update release checklist template with any additional bullet points that
+      may have arisen during the release
 * [ ] close milestone (and then close this release issue)
