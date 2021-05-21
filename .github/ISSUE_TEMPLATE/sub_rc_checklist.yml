@@ -11,7 +11,7 @@ labels: task
 
 * [ ] cherry-pick items from the X.Y.Z milestone into a PR
 * [ ] merge change log modifications and cherry-picks to X.Y release branch
-* [ ] https://github.com/numba/numba/pull/XXXX
+  * [ ] https://github.com/numba/numba/pull/XXXX
 * [ ] annotated tag X.Y.Z on release branch (no `v` prefix)
 * [ ] build and upload conda packages on buildfarm (check "upload")
 * [ ] build wheels (`$PYTHON_VERSIONS`) on the buildfarm
