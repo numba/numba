@@ -10,7 +10,7 @@ class TestCudaConstString(unittest.TestCase):
         from numba.cuda.descriptor import cuda_target
         from numba.cuda.cudadrv.nvvm import llvm_to_ptx, ADDRSPACE_CONSTANT
 
-        targetctx = cuda_target.targetctx
+        targetctx = cuda_target.target_context
         mod = targetctx.create_module("")
         textstring = 'A Little Brown Fox'
         gv0 = targetctx.insert_const_string(mod, textstring)

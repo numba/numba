@@ -1573,18 +1573,16 @@ def numpy_rot90(arr, k=1):
     if arr.ndim < 2:
         raise ValueError('Input must be >= 2-d.')
 
-    axes_list = (1, 0, *range(2, arr.ndim))
-
     def impl(arr, k=1):
         k = k % 4
         if k == 0:
             return arr[:]
         elif k == 1:
-            return np.transpose(np.fliplr(arr), axes_list)
+            return np.swapaxes(np.fliplr(arr), 0, 1)
         elif k == 2:
             return np.flipud(np.fliplr(arr))
         elif k == 3:
-            return np.fliplr(np.transpose(arr, axes_list))
+            return np.fliplr(np.swapaxes(arr, 0, 1))
         else:
             raise AssertionError  # unreachable
 
@@ -1801,6 +1799,56 @@ def array_flatten(context, builder, sig, args):
     res = context.compile_internal(builder, imp, sig, args)
     res = impl_ret_new_ref(context, builder, sig.return_type, res)
     return res
+
+
+@overload(np.clip)
+def np_clip(a, a_min, a_max, out=None):
+    if not type_can_asarray(a):
+        raise errors.TypingError('The argument "a" must be array-like')
+
+    if not isinstance(a_min, (types.NoneType, types.Number)):
+        raise errors.TypingError('The argument "a_min" must be a number')
+
+    if not isinstance(a_max, (types.NoneType, types.Number)):
+        raise errors.TypingError('The argument "a_max" must be a number')
+
+    if not isinstance(out, (types.NoneType, types.Array)):
+        msg = 'The argument "out" must be an array if it is provided'
+        raise errors.TypingError(msg)
+
+    # TODO: support scalar a (issue #3469)
+    a_min_is_none = a_min is None or isinstance(a_min, types.NoneType)
+    a_max_is_none = a_max is None or isinstance(a_max, types.NoneType)
+
+    def np_clip_impl(a, a_min, a_max, out=None):
+        if a_min_is_none and a_max_is_none:
+            raise ValueError("array_clip: must set either max or min")
+
+        ret = np.empty_like(a) if out is None else out
+
+        for index, val in np.ndenumerate(a):
+            if a_min_is_none:
+                if val > a_max:
+                    ret[index] = a_max
+                else:
+                    ret[index] = val
+            elif a_max_is_none:
+                if val < a_min:
+                    ret[index] = a_min
+                else:
+                    ret[index] = val
+            else:
+                ret[index] = min(max(val, a_min), a_max)
+        return ret
+
+    return np_clip_impl
+
+
+@overload_method(types.Array, 'clip')
+def array_clip(a, a_min=None, a_max=None, out=None):
+    def impl(a, a_min=None, a_max=None, out=None):
+        return np.clip(a, a_min, a_max, out)
+    return impl
 
 
 def _change_dtype(context, builder, oldty, newty, ary):
@@ -5266,3 +5314,39 @@ def ol_bool(arr):
                        "is ambiguous. Use a.any() or a.all()")
                 raise ValueError(msg)
         return impl
+
+
+@overload(np.swapaxes)
+def numpy_swapaxes(arr, axis1, axis2):
+    if not isinstance(axis1, (int, types.Integer)):
+        raise errors.TypingError('The second argument "axis1" must be an '
+                                 'integer')
+    if not isinstance(axis2, (int, types.Integer)):
+        raise errors.TypingError('The third argument "axis2" must be an '
+                                 'integer')
+    if not isinstance(arr, types.Array):
+        raise errors.TypingError('The first argument "arr" must be an array')
+
+    # create tuple list for transpose
+    ndim = arr.ndim
+    axes_list = tuple(range(ndim))
+
+    def impl(arr, axis1, axis2):
+        if axis1 >= ndim or abs(axis1) > ndim:
+            raise ValueError('The second argument "axis1" is out of bounds '
+                             'for array of given dimension')
+        if axis2 >= ndim or abs(axis2) > ndim:
+            raise ValueError('The third argument "axis2" is out of bounds '
+                             'for array of given dimension')
+
+        # to ensure tuple_setitem support of negative values
+        if axis1 < 0:
+            axis1 += ndim
+        if axis2 < 0:
+            axis2 += ndim
+
+        axes_tuple = tuple_setitem(axes_list, axis1, axis2)
+        axes_tuple = tuple_setitem(axes_tuple, axis2, axis1)
+        return np.transpose(arr, axes_tuple)
+
+    return impl

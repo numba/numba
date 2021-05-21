@@ -16,7 +16,6 @@ from numba.core.compiler_lock import global_compiler_lock
 import numba.core.entrypoints
 from numba.core.cpu_options import (ParallelOptions, FastMathOptions,
                                     InlineOptions)
-from numba.cpython import setobj, listobj
 from numba.np import ufunc_db
 
 # Keep those structures in sync with _dynfunc.c.
@@ -38,6 +37,9 @@ class CPUContext(BaseContext):
     """
     allow_dynamic_globals = True
 
+    def __init__(self, typingctx, target='cpu'):
+        super().__init__(typingctx, target)
+
     # Overrides
     def create_module(self, name):
         return self._internal_codegen._create_empty_module(name)
@@ -57,23 +59,39 @@ class CPUContext(BaseContext):
         # Initialize NRT runtime
         rtsys.initialize(self)
 
-        # Initialize additional implementations
-        import numba.cpython.unicode
-        import numba.cpython.charseq
-        import numba.typed.dictimpl
-        import numba.experimental.function_type
+        # Add lower_extension attribute
+        self.lower_extensions = {}
+        from numba.parfors.parfor_lowering import _lower_parfor_parallel
+        from numba.parfors.parfor import Parfor
+        # Specify how to lower Parfor nodes using the lower_extensions
+        self.lower_extensions[Parfor] = _lower_parfor_parallel
 
     def load_additional_registries(self):
+        # Add implementations that work via import
+        from numba.cpython import (builtins, charseq, enumimpl, hashing, heapq,
+                                   iterators, listobj, numbers, rangeobj,
+                                   setobj, slicing, tupleobj, unicode,)
+        from numba.core import optional
+        from numba.misc import gdb_hook, literal
+        from numba.np import linalg, polynomial, arraymath, arrayobj
+        from numba.typed import typeddict, dictimpl
+        from numba.typed import typedlist, listobject
+        from numba.experimental import jitclass, function_type
+        from numba.np import npdatetime
+
         # Add target specific implementations
         from numba.np import npyimpl
         from numba.cpython import cmathimpl, mathimpl, printimpl, randomimpl
         from numba.misc import cffiimpl
+        from numba.experimental.jitclass.base import ClassBuilder as \
+            jitclassimpl
         self.install_registry(cmathimpl.registry)
         self.install_registry(cffiimpl.registry)
         self.install_registry(mathimpl.registry)
         self.install_registry(npyimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(randomimpl.registry)
+        self.install_registry(jitclassimpl.class_impl_registry)
 
         # load 3rd party extensions
         numba.core.entrypoints.init_all()
@@ -127,12 +145,14 @@ class CPUContext(BaseContext):
         """
         Build a list from the Numba *list_type* and its initial *items*.
         """
+        from numba.cpython import listobj
         return listobj.build_list(self, builder, list_type, items)
 
     def build_set(self, builder, set_type, items):
         """
         Build a set from the Numba *set_type* and its initial *items*.
         """
+        from numba.cpython import setobj
         return setobj.build_set(self, builder, set_type, items)
 
     def build_map(self, builder, dict_type, item_types, items):
@@ -164,14 +184,12 @@ class CPUContext(BaseContext):
         library.add_ir_module(wrapper_module)
 
     def create_cfunc_wrapper(self, library, fndesc, env, call_helper):
-
         wrapper_module = self.create_module("cfunc_wrapper")
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
         wrapper_callee = ir.Function(wrapper_module, fnty, fndesc.llvm_func_name)
 
         ll_argtypes = [self.get_value_type(ty) for ty in fndesc.argtypes]
         ll_return_type = self.get_value_type(fndesc.restype)
-
         wrapty = ir.FunctionType(ll_return_type, ll_argtypes)
         wrapfn = ir.Function(wrapper_module, wrapty, fndesc.llvm_cfunc_wrapper_name)
         builder = ir.IRBuilder(wrapfn.append_basic_block('entry'))

@@ -63,14 +63,6 @@ skip_py38_or_later = unittest.skipIf(
     utils.PYVERSION >= (3, 8),
     "unsupported on py3.8 or later"
 )
-skip_tryexcept_unsupported = unittest.skipIf(
-    utils.PYVERSION < (3, 7),
-    "try-except unsupported on py3.6 or earlier"
-)
-skip_tryexcept_supported = unittest.skipIf(
-    utils.PYVERSION >= (3, 7),
-    "try-except supported on py3.7 or later"
-)
 
 _msg = "SciPy needed for test"
 skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
@@ -103,10 +95,6 @@ skip_ppc64le_issue6465 = unittest.skipIf(platform.machine() == 'ppc64le',
                                          ("Hits: 'mismatch in size of "
                                           "parameter area' in "
                                           "LowerCall_64SVR4"))
-
-skip_unless_py37_or_later = lambda reason: \
-    unittest.skipIf(utils.PYVERSION < (3, 7),
-    reason)
 
 try:
     import scipy.linalg.cython_lapack
@@ -147,7 +135,7 @@ class CompilationCache(object):
 
     def __init__(self):
         self.typingctx = typing.Context()
-        self.targetctx = cpu.CPUContext(self.typingctx)
+        self.targetctx = cpu.CPUContext(self.typingctx, 'cpu')
         self.cr_cache = {}
 
     def compile(self, func, args, return_type=None, flags=DEFAULT_FLAGS):
@@ -934,3 +922,21 @@ def create_temp_module(source_lines, **jit_options):
         sys.modules.pop(temp_module_name, None)
         sys.path.remove(tempdir)
         shutil.rmtree(tempdir)
+
+
+def run_in_subprocess(code, flags=None):
+    """Run a snippet of Python code in a subprocess with flags, if any are
+    given.
+
+    Returns the stdout and stderr of the subprocess after its termination.
+    """
+    if flags is None:
+        flags = []
+    cmd = [sys.executable,] + flags + ["-c", code]
+    popen = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+    out, err = popen.communicate()
+    if popen.returncode != 0:
+        msg = "process failed with code %s: stderr follows\n%s\n"
+        raise AssertionError(msg % (popen.returncode, err.decode()))
+    return out, err

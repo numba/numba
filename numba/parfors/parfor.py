@@ -1386,12 +1386,13 @@ class PreParforPass(object):
     """Preprocessing for the Parfor pass. It mostly inlines parallel
     implementations of numpy functions if available.
     """
-    def __init__(self, func_ir, typemap, calltypes, typingctx, options,
-                 swapped={}, replace_functions_map=None):
+    def __init__(self, func_ir, typemap, calltypes, typingctx, targetctx,
+                 options, swapped={}, replace_functions_map=None):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
         self.typingctx = typingctx
+        self.targetctx = targetctx
         self.options = options
         # diagnostics
         self.swapped = swapped
@@ -1465,8 +1466,8 @@ class PreParforPass(object):
                                 g[check.name] = check.func
                             # inline the parallel implementation
                             new_blocks, _ = inline_closure_call(self.func_ir, g,
-                                            block, i, new_func, self.typingctx, typs,
-                                            self.typemap, self.calltypes, work_list)
+                                            block, i, new_func, self.typingctx, self.targetctx,
+                                            typs, self.typemap, self.calltypes, work_list)
                             call_table = get_call_table(new_blocks, topological_ordering=False)
 
                             # find the prange in the new blocks and record it for use in diagnostics
@@ -1551,11 +1552,13 @@ class ParforPassStates:
     """
 
     def __init__(self, func_ir, typemap, calltypes, return_type, typingctx,
-                 options, flags, metadata, diagnostics=ParforDiagnostics()):
+                 targetctx,  options, flags, metadata,
+                 diagnostics=ParforDiagnostics()):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
         self.typingctx = typingctx
+        self.targetctx = targetctx
         self.return_type = return_type
         self.options = options
         self.diagnostics = diagnostics
@@ -2253,6 +2256,7 @@ class ConvertReducePass:
         reduce_f_ir = compile_to_numba_ir(fcode,
                                         pass_states.func_ir.func_id.func.__globals__,
                                         pass_states.typingctx,
+                                        pass_states.targetctx,
                                         (in_typ, in_typ),
                                         pass_states.typemap,
                                         pass_states.calltypes)
@@ -2783,8 +2787,10 @@ class ParforPass(ParforPassStates):
         self._pre_run()
         # run stencil translation to parfor
         if self.options.stencil:
-            stencil_pass = StencilPass(self.func_ir, self.typemap, self.calltypes,
-                                            self.array_analysis, self.typingctx, self.flags)
+            stencil_pass = StencilPass(self.func_ir, self.typemap,
+                                       self.calltypes, self.array_analysis,
+                                       self.typingctx, self.targetctx,
+                                       self.flags)
             stencil_pass.run()
         if self.options.setitem:
             ConvertSetItemPass(self).run(self.func_ir.blocks)

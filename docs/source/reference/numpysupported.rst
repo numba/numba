@@ -276,6 +276,7 @@ The following methods of Numpy arrays are supported in their basic form
 * :meth:`~numpy.ndarray.any`
 * :meth:`~numpy.ndarray.argmax`
 * :meth:`~numpy.ndarray.argmin`
+* :meth:`~numpy.ndarray.clip`
 * :meth:`~numpy.ndarray.conj`
 * :meth:`~numpy.ndarray.conjugate`
 * :meth:`~numpy.ndarray.cumprod`
@@ -498,6 +499,7 @@ The following top-level functions are supported:
 * :func:`numpy.sort` (no optional arguments)
 * :func:`numpy.split`
 * :func:`numpy.stack`
+* :func:`numpy.swapaxes`
 * :func:`numpy.take` (only the 2 first arguments)
 * :func:`numpy.transpose`
 * :func:`numpy.trapz` (only the 3 first arguments)

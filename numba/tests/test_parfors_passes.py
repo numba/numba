@@ -68,7 +68,8 @@ class BaseTest(TestCase):
                 tp.state.calltypes,
                 _
             ) = typed_passes.type_inference_stage(
-                tp.state.typingctx, tp.state.func_ir, tp.state.args, None
+                tp.state.typingctx, tp.state.targetctx, tp.state.func_ir,
+                tp.state.args, None
             )
 
             typed_passes.PreLowerStripPhis().run_pass(tp.state)
@@ -80,6 +81,7 @@ class BaseTest(TestCase):
                 tp.state.typemap,
                 tp.state.calltypes,
                 tp.state.typingctx,
+                tp.state.targetctx,
                 options,
                 swapped=diagnostics.replaced_fns,
                 replace_functions_map=swap_map,
@@ -100,6 +102,7 @@ class BaseTest(TestCase):
             tp.state.calltypes,
             tp.state.return_type,
             tp.state.typingctx,
+            tp.state.targetctx,
             options,
             flags,
             tp.state.metadata,

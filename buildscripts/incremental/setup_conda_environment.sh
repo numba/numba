@@ -37,7 +37,8 @@ conda list
 # guarding against the possibility that it does not exist in the environment.
 # Create a base env first and then add to it...
 # NOTE: gitpython is needed for CI testing to do the test slicing
-conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython
+# NOTE: pyyaml is used to ensure that the Azure CI config is valid
+conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
 
 # Activate first
 set +v

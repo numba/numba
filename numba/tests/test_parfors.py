@@ -333,7 +333,7 @@ def example_kmeans_test(A, numCenter, numIter, init_centroids):
 
 def get_optimized_numba_ir(test_func, args, **kws):
     typingctx = typing.Context()
-    targetctx = cpu.CPUContext(typingctx)
+    targetctx = cpu.CPUContext(typingctx, 'cpu')
     test_ir = compiler.run_frontend(test_func)
     if kws:
         options = cpu.ParallelOptions(kws)
@@ -354,8 +354,8 @@ def get_optimized_numba_ir(test_func, args, **kws):
         rewrites.rewrite_registry.apply('before-inference', tp.state)
 
         tp.state.typemap, tp.state.return_type, tp.state.calltypes, _ = \
-        typed_passes.type_inference_stage(tp.state.typingctx, tp.state.func_ir,
-            tp.state.args, None)
+        typed_passes.type_inference_stage(tp.state.typingctx,
+            tp.state.targetctx, tp.state.func_ir, tp.state.args, None)
 
         type_annotations.TypeAnnotation(
             func_ir=tp.state.func_ir,
@@ -371,7 +371,7 @@ def get_optimized_numba_ir(test_func, args, **kws):
 
         preparfor_pass = numba.parfors.parfor.PreParforPass(
             tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
-            tp.state.typingctx, options,
+            tp.state.typingctx, tp.state.targetctx, options,
             swapped=diagnostics.replaced_fns)
         preparfor_pass.run()
 
@@ -380,8 +380,8 @@ def get_optimized_numba_ir(test_func, args, **kws):
         flags = compiler.Flags()
         parfor_pass = numba.parfors.parfor.ParforPass(
             tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
-            tp.state.return_type, tp.state.typingctx, options,
-            flags, tp.state.metadata, diagnostics=diagnostics)
+            tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
+            options, flags, tp.state.metadata, diagnostics=diagnostics)
         parfor_pass.run()
         test_ir._definitions = build_definitions(test_ir.blocks)
 
