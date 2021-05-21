@@ -26,7 +26,7 @@ labels: task
 
 ### Post release
 
-* [ ] cherry-pick change-log modifications to main branch (`master`)
+* [ ] cherry-pick change-log modifications to main branch (`master`) via PR
 * [ ] update release checklist template
 * [ ] ping Anaconda Distro team to trigger a build for `defaults` (FINAL ONLY)
 * [ ] close milestone (and then close this release issue)
