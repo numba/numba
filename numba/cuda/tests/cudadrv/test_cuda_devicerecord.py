@@ -86,7 +86,7 @@ class TestCudaDeviceRecordWithRecord(TestCudaDeviceRecord):
     Tests the DeviceRecord class with np.record host types
     """
     def setUp(self):
-        CUDATestCase.setUp()
+        CUDATestCase.setUp(self)
         self._create_data(np.recarray)
 
 
