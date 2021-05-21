@@ -1130,7 +1130,7 @@ class BaseContext(object):
         """Create a LLVM module
         
         The default implementation in BaseContext always raises a
-        ``NotImplementedError`` exception. SubClass should implement 
+        ``NotImplementedError`` exception. Subclass should implement 
         this method.
         """
         raise NotImplementedError
