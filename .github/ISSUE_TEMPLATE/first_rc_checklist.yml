@@ -1,7 +1,7 @@
 ---
 name: First Release Candidate Checklist (maintainer only)
 about: Checklist template for the first release of every series
-title: Numba X.Y.Zrc0 Checklist (FIXME)
+title: Numba X.Y.Zrc1 Checklist (FIXME)
 labels: task
 
 ---
@@ -12,7 +12,7 @@ labels: task
 * [ ] merge to master:
     - [ ] "remaining Pull-Requests from milestone"
 * [ ] merge change log changes
-    - [ ] "PR with changelog entries
+    - [ ] "PR with changelog entries"
 * [ ] Create X.Y release branch
 * [ ] pin llvmlite to `>=0.A.0rc1,<0.A+1.0`
 * [ ] annotated tag X.Y.Zrc0 on release branch
