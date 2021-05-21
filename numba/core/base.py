@@ -1128,8 +1128,12 @@ class BaseContext(object):
 
     def create_module(self, name):
         """Create a LLVM module
+        
+        The default implementation in BaseContext always raises a
+        ``NotImplementedError`` exception. SubClass should implement 
+        this method.
         """
-        return llvmir.Module(name)
+        raise NotImplementedError
 
     @property
     def active_code_library(self):
