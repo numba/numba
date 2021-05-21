@@ -841,5 +841,7 @@ def ol_hash_npdatetime(x):
             return np.int32(ret)
     else:
         def impl(x):
+            if np.int64(x) == -1:
+                return np.int64(-2)
             return np.int64(x)
     return impl
