@@ -92,7 +92,7 @@ def wrap_index(typingctx, idx, size):
 
     Both idx and size have to be Integer types.
     size should be from the array size vars that array_analysis
-    adds and the bidwidth should match the platform maximum.
+    adds and the bitwidth should match the platform maximum.
     """
     require(isinstance(idx, types.scalars.Integer))
     require(isinstance(size, types.scalars.Integer))
