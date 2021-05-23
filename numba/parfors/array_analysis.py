@@ -115,8 +115,8 @@ def wrap_index(typingctx, idx, size):
         neg_size = builder.neg(size)
         zero = llvmlite.ir.Constant(ll_unified_ty, 0)
         # If idx is unsigned then these signed comparisons will fail in those
-        # cases where the idx has the highest bit set, namely more than 2**31
-        # on 32-bit platforms and 2**63 on 64-bit platforms.
+        # cases where the idx has the highest bit set, namely more than 2**63
+        # on 64-bit platforms.
         idx_negative = builder.icmp_signed("<", idx, zero)
         pos_oversize = builder.icmp_signed(">=", idx, size)
         neg_oversize = builder.icmp_signed("<=", idx, neg_size)
