@@ -190,7 +190,7 @@ class ConfigStack:
 
     @classmethod
     def top_or_none(cls):
-        """Get the TOS of return None if no config is set.
+        """Get the TOS or return None if no config is set.
         """
         self = cls()
         if self:
