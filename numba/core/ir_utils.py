@@ -2265,10 +2265,12 @@ def convert_code_obj_to_function(code_obj, caller_ir):
 
 
 def fixup_var_define_in_scope(blocks):
-    """Fixes the mapping of ir.Block to ensure all ir.Var are defined in all
-    scope.
+    """Fixes the mapping of ir.Block to ensure all referenced ir.Var are
+    defined in every scope used by the function. Such that looking up a variable
+    from any scope in this function will not fail.
 
-    Note: This is a workaround.
+    Note: This is a workaround. Ideally, all the blocks should refer to the
+    same ir.Scope, but that property is not maintained by all the passes.
     """
     # Scan for all used variables
     used_var = {}
