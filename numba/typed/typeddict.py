@@ -208,7 +208,6 @@ class Dict(MutableMapping):
         return _copy(self)
 
 
-# XXX: should we have a better way to classmethod
 @overload_classmethod(types.DictType, 'empty')
 def typeddict_empty(cls, key_type, value_type):
     if cls.instance_type is not DictType:

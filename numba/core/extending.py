@@ -245,6 +245,22 @@ def overload_classmethod(typ, attr, **kwargs):
 
 
     Similar to ``overload_method``.
+
+
+    Here is an example implementing a classmethod on array types to call
+    ``np.arange()``::
+
+        @overload_classmethod(types.Array, "make")
+        def ov_make(cls, nitems):
+            def impl(cls, nitems):
+                return np.arange(nitems)
+            return impl
+
+    The above code will allow the following code to work in jit-compiled code::
+
+        @njit
+        def foo(n):
+            return types.Array.make(n)
     """
     return _overload_method_common(types.TypeRef(typ), attr, **kwargs)
 

@@ -443,7 +443,6 @@ class List(MutableSequence, pt.Generic[T]):
         return "{prefix}({body})".format(prefix=prefix, body=body)
 
 
-# XXX: should we have a better way to classmethod
 @overload_classmethod(ListType, 'empty_list')
 def typedlist_empty(cls, item_type, allocated=DEFAULT_ALLOCATED):
     if cls.instance_type is not ListType:
