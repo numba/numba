@@ -2182,11 +2182,7 @@ def enforce_no_phis(func_ir):
 def legalize_single_scope(blocks):
     """Check the given mapping of ir.Block for containing a single scope.
     """
-    num_of_scope = len({blk.scope for blk in blocks.values()})
-    if num_of_scope == 1:
-        return True
-    else:
-        return False
+    return len({blk.scope for blk in blocks.values()}) == 1
 
 
 def check_and_legalize_ir(func_ir):
