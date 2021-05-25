@@ -310,6 +310,12 @@ class _EnvReloader(object):
 
         # CUDA Configs
 
+        # Whether to warn about kernel launches where a host array
+        # is used a parameter, forcing a copy to and from the device.
+        # On by default.
+        CUDA_WARN_ON_HOST_MEMORY_LAUNCH = _readenv(
+            "NUMBA_CUDA_WARN_ON_HOST_MEMORY_LAUNCH", int, 1)
+
         # Force CUDA compute capability to a specific version
         FORCE_CUDA_CC = _readenv("NUMBA_FORCE_CUDA_CC", _parse_cc, None)
 
