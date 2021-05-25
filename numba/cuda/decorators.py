@@ -55,7 +55,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                 enabled. When ``True``, ``-opt=3`` is passed to NVVM. When
                 ``False``, ``-opt=0`` is passed to NVVM. Defaults to ``True``.
     :type opt: bool
-    :param lineinfo: If true, generate a line mapping between source code and
+    :param lineinfo: If True, generate a line mapping between source code and
        assembly code. This enables inspection of the source code in NVIDIA
        profiling tools and correlation with program counter sampling.
     :type lineinfo: bool
