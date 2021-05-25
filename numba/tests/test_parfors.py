@@ -2835,6 +2835,20 @@ class TestPrange(TestPrangeBase):
                            states,
                            check_arg_equality=[comparer])
 
+    @skip_parfors_unsupported
+    def test_issue7501(self):
+        def test_impl(size, case):
+            result = np.zeros((size,))
+            if case == 1:
+                for i in prange(size):
+                    result[i] += 1
+            else:
+                for i in prange(size):
+                    result[i] += 2
+            return result[0]
+
+        self.prange_tester(test_impl, 3, 1)
+
 
 @skip_parfors_unsupported
 @x86_only
