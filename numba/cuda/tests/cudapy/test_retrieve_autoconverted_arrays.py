@@ -32,6 +32,7 @@ recordtype = np.dtype(
 
 class TestRetrieveAutoconvertedArrays(CUDATestCase):
     def setUp(self):
+        super().setUp()
         self.set_array_to_three = cuda.jit(set_array_to_three)
         self.set_array_to_three_nocopy = nocopy(cuda.jit(set_array_to_three))
         self.set_record_to_three = cuda.jit(set_record_to_three)

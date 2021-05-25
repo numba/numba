@@ -29,6 +29,7 @@ from .cudadrv import driver
 from .errors import missing_launch_config_msg, normalize_kernel_dimensions
 from .api import get_current_device
 from .args import wrap_arg
+from numba.core.errors import NumbaPerformanceWarning
 from .descriptor import cuda_target
 
 
@@ -844,6 +845,17 @@ class _KernelConfiguration:
         self.blockdim = blockdim
         self.stream = stream
         self.sharedmem = sharedmem
+
+        if config.CUDA_LOW_OCCUPANCY_WARNINGS:
+            ctx = get_context()
+            smcount = ctx.device.MULTIPROCESSOR_COUNT
+            grid_size = griddim[0] * griddim[1] * griddim[2]
+            if grid_size < 2 * smcount:
+                msg = ("Grid size ({grid}) < 2 * SM count ({sm}) "
+                       "will likely result in GPU under utilization due "
+                       "to low occupancy.")
+                msg = msg.format(grid=grid_size, sm=2 * smcount)
+                warn(NumbaPerformanceWarning(msg))
 
     def __call__(self, *args):
         return self.dispatcher.call(args, self.griddim, self.blockdim,
