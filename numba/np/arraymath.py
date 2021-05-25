@@ -3087,7 +3087,7 @@ def scalar_sinc(context, builder, sig, args):
     def scalar_sinc_impl(val):
         if val == 0.e0: # to match np impl
             val = 1e-20
-        val *= np.pi  # np sinc is the normalised variant
+        val *= np.pi # np sinc is the normalised variant
         return np.sin(val) / val
     res = context.compile_internal(builder, scalar_sinc_impl, sig, args,
                                    locals=dict(c=scalar_dtype))
