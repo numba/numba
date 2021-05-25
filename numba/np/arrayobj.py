@@ -3477,10 +3477,12 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
         )
 
     dtype = arrtype.dtype
-    args = (allocsize, context.get_dummy_value())
+    align_val = context.get_preferred_array_alignment(dtype)
+    align = context.get_constant(types.uint32, align_val)
+    args = (allocsize, align)
 
-    mip = types.MemInfoPointer(dtype)
-    argtypes = signature(mip, types.intp, types.TypeRef(dtype))
+    mip = types.MemInfoPointer(types.voidptr)
+    argtypes = signature(mip, types.intp, types.uint32)
     meminfo = context.compile_internal(builder, _call_allocator, argtypes, args)
     data = context.nrt.meminfo_data(builder, meminfo)
 
@@ -3499,30 +3501,31 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
 
 
 @overload_classmethod(types.Array, "_allocate")
-def _ol_array_allocate(cls, allocsize, dtype):
-    def impl(cls, allocsize, dtype):
-        return intrin_alloc(allocsize, dtype)
+def _ol_array_allocate(cls, allocsize, align):
+    """Implements a Numba-only classmethod on the array type.
+    """
+    def impl(cls, allocsize, align):
+        return intrin_alloc(allocsize, align)
     return impl
 
 
-def _call_allocator(size, dtype):
+def _call_allocator(size, align):
     """Trampoline to call intrinsic for allocation
     """
-    return types.Array._allocate(size, dtype)
+    return types.Array._allocate(size, align)
 
 
 @intrinsic
-def intrin_alloc(typingctx, allocsize, dtype):
+def intrin_alloc(typingctx, allocsize, align):
     """Intrinsic to call into the allocator for Array
     """
     def codegen(context, builder, signature, args):
-        [allocsize, dtype] = args
-        align = context.get_preferred_array_alignment(dtype)
+        [allocsize, align] = args
         meminfo = context.nrt.meminfo_alloc_aligned(builder, allocsize, align)
         return meminfo
 
-    mip = types.MemInfoPointer(dtype.instance_type)
-    sig = signature(mip, allocsize, dtype)
+    mip = types.MemInfoPointer(types.voidptr)    # return untyped pointer
+    sig = signature(mip, allocsize, align)
     return sig, codegen
 
 
