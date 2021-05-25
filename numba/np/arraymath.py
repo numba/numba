@@ -951,7 +951,7 @@ def np_nanvar(a, ddof=0):
         if count <= 0:
             return np.inf
         # np.divide() doesn't raise ZeroDivisionError
-        return np.divide(ssd, (count))
+        return np.divide(ssd, count)
 
     return nanvar_impl
 
