@@ -3475,27 +3475,12 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
              " the maximum possible size.",)
         )
 
-    align = context.get_preferred_array_alignment(arrtype.dtype)
-
-    # meminfo = context.nrt.meminfo_alloc_aligned(builder, size=allocsize,
-    #                                             align=align)
-    # data = context.nrt.meminfo_data(builder, meminfo)
-
-    def call_allocator(size, align, dtype):
-        return intrin_alloc(size, align, dtype)
-
     dtype = arrtype.dtype
-    args = (
-        allocsize,
-        context.get_constant(types.uint32, align),
-        context.get_dummy_value(),
-    )
+    args = (allocsize, context.get_dummy_value())
 
     mip = types.MemInfoPointer(dtype)
-    argtypes = typing.signature(
-        mip, types.intp, types.uint32, types.TypeRef(dtype),
-    )
-    meminfo = context.compile_internal(builder, call_allocator, argtypes, args)
+    argtypes = signature(mip, types.intp, types.TypeRef(dtype))
+    meminfo = context.compile_internal(builder, _call_allocator, argtypes, args)
     data = context.nrt.meminfo_data(builder, meminfo)
 
     intp_t = context.get_value_type(types.intp)
@@ -3512,17 +3497,24 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
     return ary
 
 
-@intrinsic
-def intrin_alloc(typingctx, allocsize, align, dtype):
-    from numba.core import typing
+def _call_allocator(size, dtype):
+    """Trampoline to call intrinsic for allocation
+    """
+    return intrin_alloc(size, dtype)
 
+
+@intrinsic
+def intrin_alloc(typingctx, allocsize, dtype):
+    """Intrinsic to call into the allocator for Array
+    """
     def codegen(context, builder, signature, args):
-        [allocsize, align, _] = args
+        [allocsize, dtype] = args
+        align = context.get_preferred_array_alignment(dtype)
         meminfo = context.nrt.meminfo_alloc_aligned(builder, allocsize, align)
         return meminfo
 
     mip = types.MemInfoPointer(dtype.instance_type)
-    sig = typing.signature(mip, allocsize, align, dtype)
+    sig = signature(mip, allocsize, dtype)
     return sig, codegen
 
 
