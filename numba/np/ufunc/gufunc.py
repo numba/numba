@@ -3,9 +3,11 @@ from numba.core import types
 from numba.np.ufunc.ufuncbuilder import GUFuncBuilder
 from numba.np.ufunc.sigparse import parse_signature
 from numba.np.numpy_support import ufunc_find_matching_loop
+from numba.core import serialize
+import functools
 
 
-class GUFunc(object):
+class GUFunc(serialize.ReduceMixin):
     """
     Dynamic generalized universal function (GUFunc)
     intended to act like a normal Numpy gufunc, but capable
@@ -18,6 +20,7 @@ class GUFunc(object):
         self.ufunc = None
         self._frozen = False
         self._is_dynamic = is_dynamic
+        self._identity = identity
 
         # GUFunc cannot inherit from GUFuncBuilder because "identity"
         # is a property of GUFunc. Thus, we hold a reference to a GUFuncBuilder
@@ -25,6 +28,33 @@ class GUFunc(object):
         self.gufunc_builder = GUFuncBuilder(
             py_func, signature, identity, cache, targetoptions)
         self.__name__ = self.gufunc_builder.py_func.__name__
+        functools.update_wrapper(self, py_func)
+
+    def _reduce_states(self):
+        gb = self.gufunc_builder
+        dct = dict(
+            py_func=gb.py_func,
+            signature=gb.signature,
+            identity=self._identity,
+            cache=gb.cache,
+            is_dynamic=self._is_dynamic,
+            targetoptions=gb.targetoptions,
+            typesigs=gb._sigs,
+            frozen=self._frozen,
+        )
+        return dct
+
+    @classmethod
+    def _rebuild(cls, py_func, signature, identity, cache, is_dynamic,
+                 targetoptions, typesigs, frozen):
+        self = cls(py_func=py_func, signature=signature, identity=identity,
+                   cache=cache, is_dynamic=is_dynamic,
+                   targetoptions=targetoptions)
+        for sig in typesigs:
+            self.add(sig)
+        self.build_ufunc()
+        self._frozen = frozen
+        return self
 
     def __repr__(self):
         return f"<numba._GUFunc '{self.__name__}'>"
@@ -47,10 +77,6 @@ class GUFunc(object):
     @property
     def is_dynamic(self):
         return self._is_dynamic
-
-    @property
-    def __doc__(self):
-        return self.ufunc.__doc__
 
     @property
     def nin(self):

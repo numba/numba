@@ -35,12 +35,9 @@ from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
 from .drvapi import cu_occupancy_b2d_size, cu_stream_callback_pyobj, cu_uuid
 from numba.cuda.cudadrv import enums, drvapi, _extras
-from numba.cuda.envvars import get_numba_envvar
 
 
-VERBOSE_JIT_LOG = int(get_numba_envvar('VERBOSE_CU_JIT_LOG', 1))
-MIN_REQUIRED_CC = (2, 0)
-SUPPORTS_IPC = sys.platform.startswith('linux')
+MIN_REQUIRED_CC = (3, 0)
 
 
 _py_decref = ctypes.pythonapi.Py_DecRef
@@ -93,7 +90,7 @@ class CudaAPIError(CudaDriverError):
 
 def find_driver():
 
-    envpath = get_numba_envvar('CUDA_DRIVER')
+    envpath = config.CUDA_DRIVER
 
     if envpath == '0':
         # Force fail
@@ -114,7 +111,7 @@ def find_driver():
         dldir = ['/usr/lib', '/usr/lib64']
         dlnames = ['libcuda.so', 'libcuda.so.1']
 
-    if envpath is not None:
+    if envpath:
         try:
             envpath = os.path.abspath(envpath)
         except ValueError:
@@ -1164,8 +1161,6 @@ class Context(object):
         """
         Returns a *IpcHandle* from a GPU allocation.
         """
-        if not SUPPORTS_IPC:
-            raise OSError('OS does not support CUDA IPC')
         return self.memory_manager.get_ipc_handle(memory)
 
     def open_ipc_handle(self, handle, size):
@@ -1269,7 +1264,7 @@ def load_module_image(context, image):
     """
     image must be a pointer
     """
-    logsz = int(get_numba_envvar('CUDA_LOG_SIZE', 1024))
+    logsz = config.CUDA_LOG_SIZE
 
     jitinfo = (c_char * logsz)()
     jiterrors = (c_char * logsz)()
@@ -1279,7 +1274,7 @@ def load_module_image(context, image):
         enums.CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES: c_void_p(logsz),
         enums.CU_JIT_ERROR_LOG_BUFFER: addressof(jiterrors),
         enums.CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES: c_void_p(logsz),
-        enums.CU_JIT_LOG_VERBOSE: c_void_p(VERBOSE_JIT_LOG),
+        enums.CU_JIT_LOG_VERBOSE: c_void_p(config.CUDA_VERBOSE_JIT_LOG),
     }
 
     option_keys = (drvapi.cu_jit_option * len(options))(*options.keys())
@@ -2139,7 +2134,7 @@ class Linker(object):
     Links for current device if no CC given
     """
     def __init__(self, max_registers=0, cc=None):
-        logsz = int(get_numba_envvar('CUDA_LOG_SIZE', 1024))
+        logsz = config.CUDA_LOG_SIZE
         linkerinfo = (c_char * logsz)()
         linkererrors = (c_char * logsz)()
 

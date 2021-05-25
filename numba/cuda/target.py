@@ -11,8 +11,6 @@ from numba.core.typing import cmathdecl
 
 from .cudadrv import nvvm
 from numba.cuda import codegen, nvvmutils
-from .decorators import jitdevice
-from numba.cpython import cmathimpl
 
 
 # -----------------------------------------------------------------------------
@@ -39,6 +37,7 @@ class CUDATypingContext(typing.BaseContext):
                     raise ValueError('using cpu function on device '
                                      'but its compilation is disabled')
                 opt = val.targetoptions.get('opt', True)
+                from .decorators import jitdevice
                 jd = jitdevice(val, debug=val.targetoptions.get('debug'),
                                opt=opt)
                 # cache the device function for future use and to avoid
@@ -59,6 +58,9 @@ VALID_CHARS = re.compile(r'[^a-z0-9]', re.I)
 class CUDATargetContext(BaseContext):
     implement_powi_as_math_call = True
     strict_alignment = True
+
+    def __init__(self, typingctx, target='cuda'):
+        super().__init__(typingctx, target)
 
     @property
     def DIBuilder(self):
@@ -81,6 +83,13 @@ class CUDATargetContext(BaseContext):
         self._target_data = ll.create_target_data(nvvm.default_data_layout)
 
     def load_additional_registries(self):
+        # side effect of import needed for numba.cpython.*, the builtins
+        # registry is updated at import time.
+        from numba.cpython import numbers, tupleobj, slicing # noqa: F401
+        from numba.cpython import rangeobj, unicode # noqa: F401
+        from numba.cpython import cmathimpl
+        from numba.np import arrayobj # noqa: F401
+        from numba.np import npdatetime # noqa: F401
         from . import cudaimpl, printimpl, libdeviceimpl, mathimpl
         self.install_registry(cudaimpl.registry)
         self.install_registry(printimpl.registry)

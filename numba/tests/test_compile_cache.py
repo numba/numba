@@ -15,7 +15,7 @@ class TestCompileCache(unittest.TestCase):
     @contextmanager
     def _context_builder_sig_args(self):
         typing_context = typing.Context()
-        context = cpu.CPUContext(typing_context)
+        context = cpu.CPUContext(typing_context, 'cpu')
         lib = context.codegen().create_library('testing')
         with context.push_code_library(lib):
             module = ir.Module("test_module")
