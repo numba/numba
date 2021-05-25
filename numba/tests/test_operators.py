@@ -18,7 +18,7 @@ from numba.tests.matmul_usecase import (matmul_usecase, imatmul_usecase,
 Noflags = Flags()
 
 force_pyobj_flags = Flags()
-force_pyobj_flags.set("force_pyobject")
+force_pyobj_flags.force_pyobject = True
 
 
 def make_static_power(exp):

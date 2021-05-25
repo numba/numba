@@ -57,6 +57,11 @@ def stencil_multiple_input_kernel_var(a, b, w):
                 b[0, 1] + b[1, 0] + b[0, -1] + b[-1, 0])
 
 
+@stencil
+def stencil_multiple_input_mixed_types_2d(a, b, f):
+    return a[0, 0] if f[0, 0] else b[0, 0]
+
+
 @stencil(standard_indexing=("b",))
 def stencil_with_standard_indexing_1d(a, b):
     return a[-1] * b[0] + a[0] * b[1]
@@ -87,7 +92,7 @@ class TestStencilBase(unittest.TestCase):
     def __init__(self, *args):
         # flags for njit()
         self.cflags = Flags()
-        self.cflags.set('nrt')
+        self.cflags.nrt = True
 
         super(TestStencilBase, self).__init__(*args)
 
@@ -98,9 +103,9 @@ class TestStencilBase(unittest.TestCase):
 
     def compile_parallel(self, func, sig, **kws):
         flags = Flags()
-        flags.set('nrt')
+        flags.nrt = True
         options = True if not kws else kws
-        flags.set('auto_parallel', ParallelOptions(options))
+        flags.auto_parallel=ParallelOptions(options)
         return self._compile_this(func, sig, flags)
 
     def compile_njit(self, func, sig):
@@ -360,6 +365,28 @@ class TestStencil(TestStencilBase):
             w = 0.25
             C = stencil_multiple_input_kernel_var(A, B, w)
             return C
+        self.check(test_impl_seq, test_seq, n)
+
+    @skip_unsupported
+    def test_stencil_mixed_types(self):
+        def test_impl_seq(n):
+            A = np.arange(n ** 2).reshape((n, n))
+            B = n ** 2 - np.arange(n ** 2).reshape((n, n))
+            S = np.eye(n, dtype=np.bool_)
+            O = np.zeros((n, n), dtype=A.dtype)
+            for i in range(0, n):
+                for j in range(0, n):
+                    O[i, j] = A[i, j] if S[i, j] else B[i, j]
+            return O
+
+        def test_seq(n):
+            A = np.arange(n ** 2).reshape((n, n))
+            B = n ** 2 - np.arange(n ** 2).reshape((n, n))
+            S = np.eye(n, dtype=np.bool_)
+            O = stencil_multiple_input_mixed_types_2d(A, B, S)
+            return O
+
+        n = 3
         self.check(test_impl_seq, test_seq, n)
 
     @skip_unsupported

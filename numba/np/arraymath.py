@@ -27,6 +27,7 @@ from numba.np.linalg import ensure_blas
 
 from numba.core.extending import intrinsic
 from numba.core.errors import RequireLiteralValue, TypingError
+from numba.core.overload_glue import glue_lowering
 
 
 def _check_blas():
@@ -2985,19 +2986,22 @@ def _np_round_float(context, builder, tp, val):
     return builder.call(fn, (val,))
 
 
-@lower_builtin(np.round, types.Float)
+@glue_lowering(np.around, types.Float)
+@glue_lowering(np.round, types.Float)
 def scalar_round_unary_float(context, builder, sig, args):
     res = _np_round_float(context, builder, sig.args[0], args[0])
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(np.round, types.Integer)
+@glue_lowering(np.around, types.Integer)
+@glue_lowering(np.round, types.Integer)
 def scalar_round_unary_integer(context, builder, sig, args):
     res = args[0]
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(np.round, types.Complex)
+@glue_lowering(np.around, types.Complex)
+@glue_lowering(np.round, types.Complex)
 def scalar_round_unary_complex(context, builder, sig, args):
     fltty = sig.args[0].underlying_float
     z = context.make_complex(builder, sig.args[0], args[0])
@@ -3007,8 +3011,10 @@ def scalar_round_unary_complex(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(np.round, types.Float, types.Integer)
-@lower_builtin(np.round, types.Integer, types.Integer)
+@glue_lowering(np.around, types.Float, types.Integer)
+@glue_lowering(np.round, types.Float, types.Integer)
+@glue_lowering(np.around, types.Integer, types.Integer)
+@glue_lowering(np.round, types.Integer, types.Integer)
 def scalar_round_binary_float(context, builder, sig, args):
     def round_ndigits(x, ndigits):
         if math.isinf(x) or math.isnan(x):
@@ -3039,7 +3045,8 @@ def scalar_round_binary_float(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(np.round, types.Complex, types.Integer)
+@glue_lowering(np.around, types.Complex, types.Integer)
+@glue_lowering(np.round, types.Complex, types.Integer)
 def scalar_round_binary_complex(context, builder, sig, args):
     def round_ndigits(z, ndigits):
         return complex(np.round(z.real, ndigits),
@@ -3049,7 +3056,8 @@ def scalar_round_binary_complex(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(np.round, types.Array, types.Integer, types.Array)
+@glue_lowering(np.around, types.Array, types.Integer, types.Array)
+@glue_lowering(np.round, types.Array, types.Integer, types.Array)
 def array_round(context, builder, sig, args):
     def array_round_impl(arr, decimals, out):
         if arr.shape != out.shape:
@@ -3062,7 +3070,7 @@ def array_round(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@lower_builtin(np.sinc, types.Array)
+@glue_lowering(np.sinc, types.Array)
 def array_sinc(context, builder, sig, args):
     def array_sinc_impl(arr):
         out = np.zeros_like(arr)
@@ -3073,7 +3081,7 @@ def array_sinc(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@lower_builtin(np.sinc, types.Number)
+@glue_lowering(np.sinc, types.Number)
 def scalar_sinc(context, builder, sig, args):
     scalar_dtype = sig.return_type
 
@@ -3087,8 +3095,8 @@ def scalar_sinc(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(np.angle, types.Number)
-@lower_builtin(np.angle, types.Number, types.Boolean)
+@glue_lowering(np.angle, types.Number)
+@glue_lowering(np.angle, types.Number, types.Boolean)
 def scalar_angle_kwarg(context, builder, sig, args):
     deg_mult = sig.return_type(180 / np.pi)
 
@@ -3106,8 +3114,8 @@ def scalar_angle_kwarg(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(np.angle, types.Array)
-@lower_builtin(np.angle, types.Array, types.Boolean)
+@glue_lowering(np.angle, types.Array)
+@glue_lowering(np.angle, types.Array, types.Boolean)
 def array_angle_kwarg(context, builder, sig, args):
     ret_dtype = sig.return_type.dtype
 
@@ -3127,7 +3135,7 @@ def array_angle_kwarg(context, builder, sig, args):
 
 @lower_builtin(np.nonzero, types.Array)
 @lower_builtin("array.nonzero", types.Array)
-@lower_builtin(np.where, types.Array)
+@glue_lowering(np.where, types.Array)
 def array_nonzero(context, builder, sig, args):
     aryty = sig.args[0]
     # Return type is a N-tuple of 1D C-contiguous arrays
@@ -3267,7 +3275,7 @@ array_array_scalar_where = partial(_where_inner, impl=_where_y_scalar)
 array_scalar_array_where = partial(_where_inner, impl=_where_x_scalar)
 
 
-@lower_builtin(np.where, types.Any, types.Any, types.Any)
+@glue_lowering(np.where, types.Any, types.Any, types.Any)
 def any_where(context, builder, sig, args):
     cond, x, y = sig.args
 

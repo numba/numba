@@ -1,5 +1,6 @@
 import numpy as np
 
+from collections import namedtuple
 from numba import vectorize
 from numba import cuda, int32, float32, float64
 from numba.cuda.testing import skip_on_cudasim
@@ -178,6 +179,47 @@ class TestCUDAVectorize(CUDATestCase):
         got = dx.copy_to_host()
         expect = x + x
         np.testing.assert_equal(got, expect)
+
+    def check_tuple_arg(self, a, b):
+        @vectorize(sig, target='cuda')
+        def vector_add(a, b):
+            return a + b
+
+        r = vector_add(a, b)
+        np.testing.assert_equal(np.asarray(a) + np.asarray(b), r)
+
+    def test_tuple_arg(self):
+        a = (1.0, 2.0, 3.0)
+        b = (4.0, 5.0, 6.0)
+        self.check_tuple_arg(a, b)
+
+    def test_namedtuple_arg(self):
+        Point = namedtuple('Point', ('x', 'y', 'z'))
+        a = Point(x=1.0, y=2.0, z=3.0)
+        b = Point(x=4.0, y=5.0, z=6.0)
+        self.check_tuple_arg(a, b)
+
+    def test_tuple_of_array_arg(self):
+        arr = np.arange(10, dtype=np.int32)
+        a = (arr, arr + 1)
+        b = (arr + 2, arr + 2)
+        self.check_tuple_arg(a, b)
+
+    def test_tuple_of_namedtuple_arg(self):
+        Point = namedtuple('Point', ('x', 'y', 'z'))
+        a = (Point(x=1.0, y=2.0, z=3.0), Point(x=1.5, y=2.5, z=3.5))
+        b = (Point(x=4.0, y=5.0, z=6.0), Point(x=4.5, y=5.5, z=6.5))
+        self.check_tuple_arg(a, b)
+
+    def test_namedtuple_of_array_arg(self):
+        xs1 = np.arange(10, dtype=np.int32)
+        ys1 = xs1 + 2
+        xs2 = np.arange(10, dtype=np.int32) * 2
+        ys2 = xs2 + 1
+        Points = namedtuple('Points', ('xs', 'ys'))
+        a = Points(xs=xs1, ys=ys1)
+        b = Points(xs=xs2, ys=ys2)
+        self.check_tuple_arg(a, b)
 
 
 if __name__ == '__main__':

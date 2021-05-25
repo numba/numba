@@ -139,12 +139,12 @@ class _ModuleCompiler(object):
 
         # Generate IR for all exported functions
         flags = Flags()
-        flags.set("no_compile")
+        flags.no_compile = True
         if not self.export_python_wrap:
-            flags.set("no_cpython_wrapper")
-            flags.set("no_cfunc_wrapper")
+            flags.no_cpython_wrapper = True
+            flags.no_cfunc_wrapper = True
         if self.use_nrt:
-            flags.set("nrt")
+            flags.nrt = True
             # Compile NRT helpers
             nrt_module, _ = nrtdynmod.create_nrt_module(self.context)
             library.add_ir_module(nrt_module)

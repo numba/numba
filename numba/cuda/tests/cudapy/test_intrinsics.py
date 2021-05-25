@@ -1,7 +1,7 @@
 import itertools
 import numpy as np
 import re
-from numba import cuda
+from numba import cuda, int64
 from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 
 
@@ -185,7 +185,7 @@ class TestCudaIntrinsic(CUDATestCase):
 
     @skip_on_cudasim('Tests PTX emission')
     def test_selp(self):
-        sig = 'void(i8[:], i8, i8[:])'
+        sig = (int64[:], int64, int64[:])
         cu_branching_with_ifs = cuda.jit(sig)(branching_with_ifs)
         cu_branching_with_selps = cuda.jit(sig)(branching_with_selps)
 
@@ -198,13 +198,13 @@ class TestCudaIntrinsic(CUDATestCase):
 
         a = np.arange(n, dtype=np.int64)
         cu_branching_with_ifs[n, 1](a, b, c)
-        ptx = cu_branching_with_ifs.inspect_asm()
+        ptx = cu_branching_with_ifs.inspect_asm(sig)
         self.assertEqual(2, len(re.findall(r'\s+bra\s+', ptx)))
         np.testing.assert_array_equal(a, expected, err_msg='branching')
 
         a = np.arange(n, dtype=np.int64)
         cu_branching_with_selps[n, 1](a, b, c)
-        ptx = cu_branching_with_selps.inspect_asm()
+        ptx = cu_branching_with_selps.inspect_asm(sig)
         self.assertEqual(0, len(re.findall(r'\s+bra\s+', ptx)))
         np.testing.assert_array_equal(a, expected, err_msg='selp')
 
@@ -362,32 +362,38 @@ class TestCudaIntrinsic(CUDATestCase):
         compiled = cuda.jit("void(int32[:], int32)")(simple_ffs)
         ary = np.zeros(1, dtype=np.int32)
         compiled[1, 1](ary, 0x00100000)
-        self.assertEquals(ary[0], 20)
+        self.assertEquals(ary[0], 21)
+        compiled[1, 1](ary, 0x80000000)
+        self.assertEquals(ary[0], 32)
 
     def test_ffs_u4(self):
         compiled = cuda.jit("void(int32[:], uint32)")(simple_ffs)
         ary = np.zeros(1, dtype=np.int32)
         compiled[1, 1](ary, 0x00100000)
-        self.assertEquals(ary[0], 20)
+        self.assertEquals(ary[0], 21)
+        compiled[1, 1](ary, 0x80000000)
+        self.assertEquals(ary[0], 32)
 
     def test_ffs_i4_1s(self):
         compiled = cuda.jit("void(int32[:], int32)")(simple_ffs)
         ary = np.zeros(1, dtype=np.int32)
         compiled[1, 1](ary, 0xFFFFFFFF)
-        self.assertEquals(ary[0], 0)
+        self.assertEquals(ary[0], 1)
 
     def test_ffs_i4_0s(self):
         compiled = cuda.jit("void(int32[:], int32)")(simple_ffs)
         ary = np.zeros(1, dtype=np.int32)
         compiled[1, 1](ary, 0x0)
-        self.assertEquals(ary[0], 32, "CUDA semantics")
+        self.assertEquals(ary[0], 0)
 
     @skip_on_cudasim('only get given a Python "int", assumes 32 bits')
     def test_ffs_i8(self):
         compiled = cuda.jit("void(int32[:], int64)")(simple_ffs)
         ary = np.zeros(1, dtype=np.int32)
         compiled[1, 1](ary, 0x000000000010000)
-        self.assertEquals(ary[0], 16)
+        self.assertEquals(ary[0], 17)
+        compiled[1, 1](ary, 0x100000000)
+        self.assertEquals(ary[0], 33)
 
     def test_simple_laneid(self):
         compiled = cuda.jit("void(int32[:])")(simple_laneid)

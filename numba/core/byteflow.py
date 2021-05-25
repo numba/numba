@@ -130,6 +130,9 @@ class Flow(object):
                         state.advance_pc()
                         # Must the new PC be a new block?
                         if self._is_implicit_new_block(state):
+                            # check if this is a with...as, abort if so
+                            self._guard_with_as(state)
+                            # else split
                             state.split_new_block()
                             break
                 _logger.debug("end state. edges=%s", state.outgoing_edges)
@@ -245,6 +248,19 @@ class Flow(object):
         else:
             return False
 
+    def _guard_with_as(self, state):
+        """Checks if the next instruction after a SETUP_WITH is something other
+        than a POP_TOP, if it is something else it'll be some sort of store
+        which is not supported (this corresponds to `with CTXMGR as VAR(S)`)."""
+        current_inst = state.get_inst()
+        if current_inst.opname == "SETUP_WITH":
+            next_op = self._bytecode[current_inst.next].opname
+            if next_op != "POP_TOP":
+                msg = ("The 'with (context manager) as "
+                       "(variable):' construct is not "
+                       "supported.")
+                raise UnsupportedError(msg)
+
 
 class TraceRunner(object):
     """Trace runner contains the states for the trace and the opcode dispatch.
@@ -270,6 +286,40 @@ class TraceRunner(object):
 
     def op_NOP(self, state, inst):
         state.append(inst)
+
+    def op_FORMAT_VALUE(self, state, inst):
+        """
+        FORMAT_VALUE(flags): flags argument specifies format spec which is
+        not supported yet. Currently, we just call str() on the value.
+        Pops a value from stack and pushes results back.
+        Required for supporting f-strings.
+        https://docs.python.org/3/library/dis.html#opcode-FORMAT_VALUE
+        """
+        if inst.arg != 0:
+            msg = "format spec in f-strings not supported yet"
+            raise UnsupportedError(msg, loc=self.get_debug_loc(inst.lineno))
+        value = state.pop()
+        strvar = state.make_temp()
+        res = state.make_temp()
+        state.append(inst, value=value, res=res, strvar=strvar)
+        state.push(res)
+
+    def op_BUILD_STRING(self, state, inst):
+        """
+        BUILD_STRING(count): Concatenates count strings from the stack and
+        pushes the resulting string onto the stack.
+        Required for supporting f-strings.
+        https://docs.python.org/3/library/dis.html#opcode-BUILD_STRING
+        """
+        count = inst.arg
+        strings = list(reversed([state.pop() for _ in range(count)]))
+        # corner case: f""
+        if count == 0:
+            tmps = [state.make_temp()]
+        else:
+            tmps = [state.make_temp() for _ in range(count - 1)]
+        state.append(inst, strings=strings, tmps=tmps)
+        state.push(tmps[-1])
 
     def op_POP_TOP(self, state, inst):
         state.pop()

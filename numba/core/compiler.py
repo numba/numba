@@ -6,7 +6,6 @@ from numba.core.tracing import event
 from numba.core import (utils, errors, typing, interpreter, bytecode, postproc,
                         config, callconv, cpu)
 from numba.parfors.parfor import ParforDiagnostics
-from numba.core.inline_closurecall import InlineClosureCallPass
 from numba.core.errors import CompilerError
 from numba.core.environment import lookup_environment
 
@@ -33,46 +32,111 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
 
 from numba.core.object_mode_passes import (ObjectModeFrontEnd,
                                            ObjectModeBackEnd)
+from numba.core.targetconfig import TargetConfig, Option
 
 
-class Flags(utils.ConfigOptions):
-    # These options are all false by default, but the defaults are
-    # different with the @jit decorator (see targets.options.TargetOptions).
-
-    OPTIONS = {
-        # Enable loop-lifting
-        'enable_looplift': False,
-        # Enable pyobject mode (in general)
-        'enable_pyobject': False,
-        # Enable pyobject mode inside lifted loops
-        'enable_pyobject_looplift': False,
-        # Enable SSA:
-        'enable_ssa': True,
-        # Force pyobject mode inside the whole function
-        'force_pyobject': False,
-        # Release GIL inside the native function
-        'release_gil': False,
-        'no_compile': False,
-        'debuginfo': False,
-        'boundscheck': False,
-        'forceinline': False,
-        'no_cpython_wrapper': False,
-        'no_cfunc_wrapper': False,
-        # Enable automatic parallel optimization, can be fine-tuned by taking
-        # a dictionary of sub-options instead of a boolean, see parfor.py for
-        # detail.
-        'auto_parallel': cpu.ParallelOptions(False),
-        'nrt': False,
-        'no_rewrites': False,
-        'error_model': 'python',
-        'fastmath': cpu.FastMathOptions(False),
-        'noalias': False,
-        'inline': cpu.InlineOptions('never'),
-    }
+class Flags(TargetConfig):
+    enable_looplift = Option(
+        type=bool,
+        default=False,
+        doc="Enable loop-lifting",
+    )
+    enable_pyobject = Option(
+        type=bool,
+        default=False,
+        doc="Enable pyobject mode (in general)",
+    )
+    enable_pyobject_looplift = Option(
+        type=bool,
+        default=False,
+        doc="Enable pyobject mode inside lifted loops",
+    )
+    enable_ssa = Option(
+        type=bool,
+        default=True,
+        doc="Enable SSA",
+    )
+    force_pyobject = Option(
+        type=bool,
+        default=False,
+        doc="Force pyobject mode inside the whole function",
+    )
+    release_gil = Option(
+        type=bool,
+        default=False,
+        doc="Release GIL inside the native function",
+    )
+    no_compile = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    debuginfo = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    boundscheck = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    forceinline = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    no_cpython_wrapper = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    no_cfunc_wrapper = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    auto_parallel = Option(
+        type=cpu.ParallelOptions,
+        default=cpu.ParallelOptions(False),
+        doc="""Enable automatic parallel optimization, can be fine-tuned by
+taking a dictionary of sub-options instead of a boolean, see parfor.py for
+detail""",
+    )
+    nrt = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    no_rewrites = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    error_model = Option(
+        type=str,
+        default="python",
+        doc="TODO",
+    )
+    fastmath = Option(
+        type=cpu.FastMathOptions,
+        default=cpu.FastMathOptions(False),
+        doc="TODO",
+    )
+    noalias = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    inline = Option(
+        type=cpu.InlineOptions,
+        default=cpu.InlineOptions("never"),
+        doc="TODO",
+    )
 
 
 DEFAULT_FLAGS = Flags()
-DEFAULT_FLAGS.set('nrt')
+DEFAULT_FLAGS.nrt = True
 
 
 CR_FIELDS = ["typing_context",
@@ -206,7 +270,7 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
     """
     from numba.core.registry import cpu_target
     typingctx = typing.Context()
-    targetctx = cpu.CPUContext(typingctx)
+    targetctx = cpu.CPUContext(typingctx, target='cpu')
     # Register the contexts in case for nested @jit or @overload calls
     with cpu_target.nested_context(typingctx, targetctx):
         return compile_extra(typingctx, targetctx, func, args, return_type,
@@ -227,6 +291,7 @@ def run_frontend(func, inline_closures=False, emit_dels=False):
     bc = bytecode.ByteCode(func_id=func_id)
     func_ir = interp.interpret(bc)
     if inline_closures:
+        from numba.core.inline_closurecall import InlineClosureCallPass
         inline_pass = InlineClosureCallPass(func_ir, cpu.ParallelOptions(False),
                                             {}, False)
         inline_pass.run()
@@ -372,41 +437,43 @@ class CompilerBase(object):
         """
         Populate and run compiler pipeline
         """
-        pms = self.define_pipelines()
-        for pm in pms:
-            pipeline_name = pm.pipeline_name
-            func_name = "%s.%s" % (self.state.func_id.modname,
-                                   self.state.func_id.func_qualname)
+        with utils.ConfigStack().enter(self.state.flags.copy()):
+            pms = self.define_pipelines()
+            for pm in pms:
+                pipeline_name = pm.pipeline_name
+                func_name = "%s.%s" % (self.state.func_id.modname,
+                                       self.state.func_id.func_qualname)
 
-            event("Pipeline: %s for %s" % (pipeline_name, func_name))
-            self.state.metadata['pipeline_times'] = {pipeline_name:
-                                                     pm.exec_times}
-            is_final_pipeline = pm == pms[-1]
-            res = None
-            try:
-                pm.run(self.state)
-                if self.state.cr is not None:
+                event("Pipeline: %s for %s" % (pipeline_name, func_name))
+                self.state.metadata['pipeline_times'] = {pipeline_name:
+                                                         pm.exec_times}
+                is_final_pipeline = pm == pms[-1]
+                res = None
+                try:
+                    pm.run(self.state)
+                    if self.state.cr is not None:
+                        break
+                except _EarlyPipelineCompletion as e:
+                    res = e.result
                     break
-            except _EarlyPipelineCompletion as e:
-                res = e.result
-                break
-            except Exception as e:
-                self.state.status.fail_reason = e
-                if is_final_pipeline:
-                    raise e
-        else:
-            raise CompilerError("All available pipelines exhausted")
+                except Exception as e:
+                    self.state.status.fail_reason = e
+                    if is_final_pipeline:
+                        raise e
+            else:
+                raise CompilerError("All available pipelines exhausted")
 
-        # Pipeline is done, remove self reference to release refs to user code
-        self.state.pipeline = None
+            # Pipeline is done, remove self reference to release refs to user
+            # code
+            self.state.pipeline = None
 
-        # organise a return
-        if res is not None:
-            # Early pipeline completion
-            return res
-        else:
-            assert self.state.cr is not None
-            return self.state.cr
+            # organise a return
+            if res is not None:
+                # Early pipeline completion
+                return res
+            else:
+                assert self.state.cr is not None
+                return self.state.cr
 
     def _compile_bytecode(self):
         """
