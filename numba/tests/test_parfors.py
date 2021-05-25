@@ -2840,10 +2840,10 @@ class TestPrange(TestPrangeBase):
         def test_impl(size, case):
             result = np.zeros((size,))
             if case == 1:
-                for i in prange(size):
+                for i in range(size):
                     result[i] += 1
             else:
-                for i in prange(size):
+                for i in range(size):
                     result[i] += 2
             return result[0]
 
