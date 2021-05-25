@@ -840,16 +840,6 @@ class _KernelConfiguration:
                                     self.stream, self.sharedmem)
 
 
-class StopUsingCCDict(dict):
-    def __getitem__(self, key):
-        if len(key) > 1 and isinstance(key[0], tuple):
-            msg = "dicts returned by inspect functions should be keyed on " \
-                  "argument types only"
-            warn(msg, category=NumbaDeprecationWarning)
-            return super().__getitem__(key[1])
-        return super().__getitem__(key)
-
-
 class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
     '''
     CUDA Dispatcher object. When configured and called, the dispatcher will
@@ -1051,23 +1041,6 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         """
         return len(self.sigs) == 1 and not self._can_compile
 
-    @property
-    def definition(self):
-        warn('Use overloads instead of definition',
-             category=NumbaDeprecationWarning)
-        # There is a single definition only when the dispatcher has been
-        # specialized.
-        if not self.specialized:
-            raise ValueError("Dispatcher needs to be specialized to get the "
-                             "single definition")
-        return next(iter(self.overloads.values()))
-
-    @property
-    def definitions(self):
-        warn('Use overloads instead of definitions',
-             category=NumbaDeprecationWarning)
-        return self.overloads
-
     def get_regs_per_thread(self, signature=None):
         '''
         Returns the number of registers used by each thread in this kernel for
@@ -1080,12 +1053,12 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
                  kernel for the given signature and current device.
         '''
         if signature is not None:
-            return self.definitions[signature.args].regs_per_thread
+            return self.overloads[signature.args].regs_per_thread
         if self.specialized:
-            return self.definition.regs_per_thread
+            return next(iter(self.overloads.values())).regs_per_thread
         else:
-            return {sig: defn.regs_per_thread
-                    for sig, defn in self.definitions.items()}
+            return {sig: overload.regs_per_thread
+                    for sig, overload in self.overloads.items()}
 
     def compile(self, sig):
         '''
@@ -1114,89 +1087,55 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
             self.sigs.append(sig)
         return kernel
 
-    def inspect_llvm(self, signature=None, compute_capability=None):
+    def inspect_llvm(self, signature=None):
         '''
         Return the LLVM IR for this kernel.
 
         :param signature: A tuple of argument types.
-        :param compute_capability: Deprecated: accepted but ignored, provided
-                                   only for backwards compatibility.
         :return: The LLVM IR for the given signature, or a dict of LLVM IR
-                 for all previously-encountered signatures. If the dispatcher
-                 is specialized, the IR for the single specialization is
-                 returned even if no signature was provided.
+                 for all previously-encountered signatures.
 
         '''
-        if compute_capability is not None:
-            warn('passing compute_capability has no effect on the LLVM IR',
-                 category=NumbaDeprecationWarning)
         if signature is not None:
             return self.overloads[signature].inspect_llvm()
-        elif self.specialized:
-            warn('inspect_llvm will always return a dict in future',
-                 category=NumbaDeprecationWarning)
-            return next(iter(self.overloads.values())).inspect_llvm()
         else:
-            return StopUsingCCDict((sig, defn.inspect_llvm())
-                                   for sig, defn in self.overloads.items())
+            return {sig: overload.inspect_llvm()
+                    for sig, overload in self.overloads.items()}
 
-    def inspect_asm(self, signature=None, compute_capability=None):
+    def inspect_asm(self, signature=None):
         '''
         Return this kernel's PTX assembly code for for the device in the
         current context.
 
         :param signature: A tuple of argument types.
-        :param compute_capability: Deprecated: accepted but ignored, provided
-                                   only for backwards compatibility.
         :return: The PTX code for the given signature, or a dict of PTX codes
-                 for all previously-encountered signatures. If the dispatcher
-                 is specialized, the PTX code for the single specialization is
-                 returned even if no signature was provided.
+                 for all previously-encountered signatures.
         '''
-        if compute_capability is not None:
-            msg = 'The compute_capability kwarg is deprecated'
-            warn(msg, category=NumbaDeprecationWarning)
-
-        cc = compute_capability or get_current_device().compute_capability
+        cc = get_current_device().compute_capability
         if signature is not None:
             return self.overloads[signature].inspect_asm(cc)
-        elif self.specialized:
-            warn('inspect_asm will always return a dict in future',
-                 category=NumbaDeprecationWarning)
-            return next(iter(self.overloads.values())).inspect_asm(cc)
         else:
-            return StopUsingCCDict((sig, defn.inspect_asm(cc))
-                                   for sig, defn in self.overloads.items())
+            return {sig: overload.inspect_asm(cc)
+                    for sig, overload in self.overloads.items()}
 
-    def inspect_sass(self, signature=None, compute_capability=None):
+    def inspect_sass(self, signature=None):
         '''
         Return this kernel's SASS assembly code for for the device in the
         current context.
 
         :param signature: A tuple of argument types.
-        :param compute_capability: Deprecated: accepted but ignored, provided
-                                   only for backwards compatibility.
         :return: The SASS code for the given signature, or a dict of SASS codes
-                 for all previously-encountered signatures. If the dispatcher
-                 is specialized, the SASS code for the single specialization is
-                 returned even if no signature was provided.
+                 for all previously-encountered signatures.
 
         SASS for the device in the current context is returned.
 
         Requires nvdisasm to be available on the PATH.
         '''
-        if compute_capability is not None:
-            warn('passing compute_capability has no effect on the SASS code',
-                 category=NumbaDeprecationWarning)
         if signature is not None:
             return self.overloads[signature].inspect_sass()
-        elif self.specialized:
-            warn('inspect_sass will always return a dict in future',
-                 category=NumbaDeprecationWarning)
-            return next(iter(self.overloads.values())).inspect_sass()
         else:
-            return StopUsingCCDict((sig, defn.inspect_sass())
-                                   for sig, defn in self.overloads.items())
+            return {sig: defn.inspect_sass()
+                    for sig, defn in self.overloads.items()}
 
     def inspect_types(self, file=None):
         '''
@@ -1212,13 +1151,7 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
 
     @property
     def ptx(self):
-        if self.specialized:
-            warn('ptx will always return a dict in future',
-                 category=NumbaDeprecationWarning)
-            return next(iter(self.overloads.values())).ptx
-        else:
-            return StopUsingCCDict((sig, defn.ptx)
-                                   for sig, defn in self.overloads.items())
+        return {sig: overload.ptx for sig, overload in self.overloads.items()}
 
     def bind(self):
         for defn in self.overloads.values():
