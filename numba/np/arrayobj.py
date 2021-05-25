@@ -32,6 +32,7 @@ from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
 from numba.core.overload_glue import glue_lowering
+from numba.core.extending import overload_classmethod
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
@@ -3497,10 +3498,17 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
     return ary
 
 
+@overload_classmethod(types.Array, "_allocate")
+def _ol_array_allocate(cls, allocsize, dtype):
+    def impl(cls, allocsize, dtype):
+        return intrin_alloc(allocsize, dtype)
+    return impl
+
+
 def _call_allocator(size, dtype):
     """Trampoline to call intrinsic for allocation
     """
-    return intrin_alloc(size, dtype)
+    return types.Array._allocate(size, dtype)
 
 
 @intrinsic
