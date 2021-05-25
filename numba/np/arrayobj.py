@@ -3479,10 +3479,12 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
     dtype = arrtype.dtype
     align_val = context.get_preferred_array_alignment(dtype)
     align = context.get_constant(types.uint32, align_val)
-    args = (allocsize, align)
+    args = (context.get_dummy_value(), allocsize, align)
 
     mip = types.MemInfoPointer(types.voidptr)
-    argtypes = signature(mip, types.intp, types.uint32)
+    arytypeclass = types.TypeRef(type(arrtype))
+    argtypes = signature(mip, arytypeclass, types.intp, types.uint32)
+
     meminfo = context.compile_internal(builder, _call_allocator, argtypes, args)
     data = context.nrt.meminfo_data(builder, meminfo)
 
@@ -3509,10 +3511,10 @@ def _ol_array_allocate(cls, allocsize, align):
     return impl
 
 
-def _call_allocator(size, align):
+def _call_allocator(arrtype, size, align):
     """Trampoline to call intrinsic for allocation
     """
-    return types.Array._allocate(size, align)
+    return arrtype._allocate(size, align)
 
 
 @intrinsic
