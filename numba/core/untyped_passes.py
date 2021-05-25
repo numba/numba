@@ -16,7 +16,9 @@ from numba.core.ir_utils import (guard, resolve_func_from_module, simplify_CFG,
                                  mk_unique_var, build_definitions,
                                  replace_var_names, get_name_var_table,
                                  compile_to_numba_ir, get_definition,
-                                 find_max_label, rename_labels)
+                                 find_max_label, rename_labels,
+                                 transfer_scope, fixup_var_define_in_scope,
+                                 )
 from numba.core.ssa import reconstruct_ssa
 from numba.core import interpreter
 
@@ -206,6 +208,8 @@ class InlineClosureLikes(FunctionPass):
         # Remove all Dels, and re-run postproc
         post_proc = postproc.PostProcessor(state.func_ir)
         post_proc.run()
+
+        fixup_var_define_in_scope(state.func_ir.blocks)
 
         if config.DEBUG or config.DUMP_IR:
             name = state.func_ir.func_id.func_qualname
@@ -1210,15 +1214,16 @@ class MixedContainerUnroller(FunctionPass):
 
         # 6. Patch in the unrolled body and fix up
         blks = state.func_ir.blocks
+        the_scope = next(iter(blks.values())).scope
         orig_lbl = tuple(this_loop_body)
 
         replace, *delete = orig_lbl
         unroll, header_block = unrolled_body, this_loop.header
         unroll_lbl = [x for x in sorted(unroll.blocks.keys())]
-        blks[replace] = unroll.blocks[unroll_lbl[0]]
+        blks[replace] = transfer_scope(unroll.blocks[unroll_lbl[0]], the_scope)
         [blks.pop(d) for d in delete]
         for k in unroll_lbl[1:]:
-            blks[k] = unroll.blocks[k]
+            blks[k] = transfer_scope(unroll.blocks[k], the_scope)
         # stitch up the loop predicate true -> new loop body jump
         blks[header_block].body[-1].truebr = replace
 

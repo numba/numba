@@ -736,6 +736,7 @@ class StencilFunc(object):
 
         # Compile the combined stencil function with the replaced loop
         # body in it.
+        ir_utils.fixup_var_define_in_scope(stencil_ir.blocks)
         new_func = compiler.compile_ir(
             self._typingctx,
             self._targetctx,

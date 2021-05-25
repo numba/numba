@@ -17,7 +17,27 @@ import llvmlite.ir.values as liv
 import numba
 from numba.parfors import parfor
 from numba.core import types, ir, config, compiler, lowering, sigutils, cgutils
-from numba.core.ir_utils import add_offset_to_labels, replace_var_names, remove_dels, legalize_names, mk_unique_var, rename_labels, get_name_var_table, visit_vars_inner, get_definition, guard, find_callname, get_call_table, is_pure, get_np_ufunc_typ, get_unused_var_name, find_potential_aliases, is_const_call
+from numba.core.ir_utils import (
+    add_offset_to_labels,
+    replace_var_names,
+    remove_dels,
+    legalize_names,
+    mk_unique_var,
+    rename_labels,
+    get_name_var_table,
+    visit_vars_inner,
+    get_definition,
+    guard,
+    find_callname,
+    get_call_table,
+    is_pure,
+    get_np_ufunc_typ,
+    get_unused_var_name,
+    find_potential_aliases,
+    is_const_call,
+    fixup_var_define_in_scope,
+    transfer_scope,
+)
 from numba.core.analysis import compute_use_defs, compute_live_map, compute_dead_maps, compute_cfg_from_blocks
 from numba.core.typing import signature
 from numba.parfors.parfor import print_wrapped, ensure_parallel_support
@@ -869,7 +889,6 @@ def _create_gufunc_for_parfor_body(
     The IR is scanned for the sentinel assignment where that basic block is split and the IR
     for the parfor body inserted.
     '''
-
     if config.DEBUG_ARRAY_OPT >= 1:
         print("starting _create_gufunc_for_parfor_body")
 
@@ -1212,7 +1231,6 @@ def _create_gufunc_for_parfor_body(
         print("gufunc_func = ", type(gufunc_func), "\n", gufunc_func)
     # Get the IR for the gufunc outline.
     gufunc_ir = compiler.run_frontend(gufunc_func)
-
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_ir dump ", type(gufunc_ir))
         gufunc_ir.dump()
@@ -1231,7 +1249,6 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_ir dump after renaming ")
         gufunc_ir.dump()
-
     gufunc_param_types = [types.npytypes.Array(
             index_var_typ, 1, "C")] + param_types
     if config.DEBUG_ARRAY_OPT:
@@ -1327,7 +1344,7 @@ def _create_gufunc_for_parfor_body(
                 # Add all the parfor loop body blocks to the gufunc function's
                 # IR.
                 for (l, b) in loop_body.items():
-                    gufunc_ir.blocks[l] = b
+                    gufunc_ir.blocks[l] = transfer_scope(b, scope)
                 body_last_label = max(loop_body.keys())
                 gufunc_ir.blocks[new_label] = block
                 gufunc_ir.blocks[label] = prev_block
@@ -1358,6 +1375,8 @@ def _create_gufunc_for_parfor_body(
         if config.DEBUG_ARRAY_OPT:
             print("No aliases found so adding noalias flag.")
         flags.noalias = True
+
+    fixup_var_define_in_scope(gufunc_ir.blocks)
     kernel_func = compiler.compile_ir(
         typingctx,
         targetctx,
