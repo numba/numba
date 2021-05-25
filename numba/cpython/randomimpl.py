@@ -1530,13 +1530,13 @@ def dirichlet(alpha, size=None):
             norm = 0  # use this to normalize every the group total to 1
             for k, w in enumerate(alpha):
                 flat[i+k] = np.random.gamma(w, 1)
-                norm += flat[i+k].item()
+                norm += flat[i + k].item()
             for k, w in enumerate(alpha):
-                flat[i+k] /= norm
+                flat[i + k] /= norm
 
     if not isinstance(alpha, (types.Sequence, types.Array)):
         raise TypeError("np.random.dirichlet(): alpha should be an "
-                          "array or sequence, got %s" % (alpha,))
+                        "array or sequence, got %s" % (alpha,))
 
     if size in (None, types.none):
         def dirichlet_impl(alpha, size=None):
@@ -1564,10 +1564,10 @@ def dirichlet(alpha, size=None):
                 return out
         else:
             raise TypeError("np.random.dirichlet(): size should be int or "
-                              "tuple of ints or None, got %s" % (size,))           
+                            "tuple of ints or None, got %s" % size)
 
     else:
         raise TypeError("np.random.dirichlet(): size should be int or "
-                          "tuple of ints or None, got %s" % (size,))
+                        "tuple of ints or None, got %s" % size)
 
     return dirichlet_impl
