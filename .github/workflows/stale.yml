@@ -15,6 +15,6 @@ jobs:
             needed. Otherwise, please respond with any updates and confirm that
             this issue still needs to be addressed.
           stale-issue-label: 'stale'
-          exempt-issue-labels: 'bug,bug - failure to compile,bug - ice,bug - incorrect behaviour,bug - memory leak,bug - miscompile,bug - regression,bug - segfault,performance - compile time,performance - run time,performance,feature_request,enhancement,task,good first issue,good second issue,Blocked awaiting long term feature,Numba 1.0'
+          any-of-labels: 'question,needtriage,more info needed'
           days-before-issue-stale: 30
           days-before-issue-close: -1
