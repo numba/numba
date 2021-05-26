@@ -1105,7 +1105,10 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         if self._attr != attr:
             return None
 
-        assert isinstance(typ, self.key)
+        if isinstance(typ, types.TypeRef):
+            assert typ == self.key
+        else:
+            assert isinstance(typ, self.key)
 
         class MethodTemplate(AbstractTemplate):
             key = (self.key, attr)
