@@ -970,9 +970,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             return np.argmax(arr, axis)
 
         def assert_raises(arr, axis):
-            with self.assertRaises(ValueError):
-                np.argmax(arr, axis)
-            with self.assertRaises(ValueError):
+            with self.assertRaisesRegex(ValueError, "axis.*out of bounds"):
+                jitargmax.py_func(arr, axis)
+            with self.assertRaisesRegex(ValueError, "axis.*out of bounds"):
                 jitargmax(arr, axis)
 
         assert_raises(arr1d, 1)

@@ -795,7 +795,7 @@ def array_argmax(arr, axis=None):
                 axis = arr.ndim + axis
 
             if axis < 0 or axis >= arr.ndim:
-                raise ValueError("Axis is out of bounds")
+                raise ValueError("axis is out of bounds")
 
             # Short circuit 1-dimensional arrays:
             if arr.ndim == 1:
