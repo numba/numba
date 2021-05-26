@@ -1359,7 +1359,10 @@ class TestRandomDirichlet(BaseTest):
     def test_dirichlet_exceptions(self):
         cfunc = jit(nopython=True)(numpy_dirichlet)
         alpha = tuple((0, 1, 1))
-        self.assertRaises(ValueError, cfunc, alpha, 1)
+        with self.assertRaises(ValueError) as raises:
+            cfunc(alpha, 1)
+        self.assertIn("dirichlet: alpha must be > 0.0", str(raises.exception))
+        
         alpha = self.alpha
         sizes = (True, 3j, 1.5, (1.5, 1), (3j, 1), (3j, 3j), (np.int8(3), np.int64(7)))
         for size in sizes:
