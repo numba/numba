@@ -186,7 +186,6 @@ exclude =
     numba/tests/test_buffer_protocol.py
     numba/tests/test_casting.py
     numba/tests/test_lists.py
-    numba/tests/test_blackscholes.py
     numba/tests/test_array_analysis.py
     numba/tests/test_serialize.py
     numba/tests/test_iteration.py
