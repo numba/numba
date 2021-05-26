@@ -7,7 +7,6 @@ import random
 import subprocess
 import sys
 import threading
-import itertools
 
 import numpy as np
 
@@ -16,7 +15,6 @@ from numba import jit, _helperlib
 from numba.core import types
 from numba.core.compiler import compile_isolated
 from numba.tests.support import TestCase, compile_function, tag
-from numba.core.errors import TypingError
 
 
 # State size of the Mersenne Twister
@@ -26,7 +24,6 @@ N = 624
 def get_py_state_ptr():
     return _helperlib.rnd_get_py_state_ptr()
 
-
 def get_np_state_ptr():
     return _helperlib.rnd_get_np_state_ptr()
 
@@ -34,54 +31,38 @@ def get_np_state_ptr():
 def numpy_randint1(a):
     return np.random.randint(a)
 
-
 def numpy_randint2(a, b):
     return np.random.randint(a, b)
-
 
 def random_randint(a, b):
     return random.randint(a, b)
 
-
 def random_randrange1(a):
     return random.randrange(a)
-
 
 def random_randrange2(a, b):
     return random.randrange(a, b)
 
-
 def random_randrange3(a, b, c):
     return random.randrange(a, b, c)
-
 
 def numpy_choice1(a):
     return np.random.choice(a)
 
-
 def numpy_choice2(a, size):
     return np.random.choice(a, size=size)
-
 
 def numpy_choice3(a, size, replace):
     return np.random.choice(a, size=size, replace=replace)
 
-
 def numpy_multinomial2(n, pvals):
     return np.random.multinomial(n, pvals)
-
 
 def numpy_multinomial3(n, pvals, size):
     return np.random.multinomial(n, pvals=pvals, size=size)
 
-
 def numpy_dirichlet(alpha, size):
     return np.random.dirichlet(alpha, size=size)
-
-
-def numpy_dirichlet_default(alpha):
-    return np.random.dirichlet(alpha)
-
 
 def numpy_check_rand(seed, a, b):
     np.random.seed(seed)
@@ -90,7 +71,6 @@ def numpy_check_rand(seed, a, b):
     got = np.random.rand(a, b)
     return expected, got
 
-
 def numpy_check_randn(seed, a, b):
     np.random.seed(seed)
     expected = np.random.standard_normal((a, b))
@@ -98,29 +78,21 @@ def numpy_check_randn(seed, a, b):
     got = np.random.randn(a, b)
     return expected, got
 
-
 def jit_with_args(name, argstring):
-    code = (
-        """def func(%(argstring)s):
+    code = """def func(%(argstring)s):
         return %(name)s(%(argstring)s)
-"""
-        % locals()
-    )
+""" % locals()
     pyfunc = compile_function("func", code, globals())
     return jit(nopython=True)(pyfunc)
-
 
 def jit_nullary(name):
     return jit_with_args(name, "")
 
-
 def jit_unary(name):
     return jit_with_args(name, "a")
 
-
 def jit_binary(name):
     return jit_with_args(name, "a, b")
-
 
 def jit_ternary(name):
     return jit_with_args(name, "a, b, c")
@@ -144,7 +116,6 @@ def _copy_py_state(r, ptr):
     _helperlib.rnd_set_state(ptr, (index, list(ints)))
     return ints, index
 
-
 def _copy_np_state(r, ptr):
     """
     Copy state of Numpy random *r* to Numba state *ptr*.
@@ -153,14 +124,13 @@ def _copy_np_state(r, ptr):
     _helperlib.rnd_set_state(ptr, (index, [int(x) for x in ints]))
     return ints, index
 
-
 def sync_to_numpy(r):
     _ver, mt_st, _gauss_next = r.getstate()
     mt_pos = mt_st[-1]
     mt_ints = mt_st[:-1]
     assert len(mt_ints) == 624
 
-    np_st = ("MT19937", np.array(mt_ints, dtype="uint32"), mt_pos)
+    np_st = ('MT19937', np.array(mt_ints, dtype='uint32'), mt_pos)
     if _gauss_next is None:
         np_st += (0, 0.0)
     else:
@@ -168,20 +138,19 @@ def sync_to_numpy(r):
 
     np.random.set_state(np_st)
 
-
 # Pure Python equivalents of some of the Numpy distributions, using
 # Python's basic generators.
-
 
 def py_chisquare(r, df):
     return 2.0 * r.gammavariate(df / 2.0, 1.0)
 
-
 def py_f(r, num, denom):
-    return (py_chisquare(r, num) * denom) / (py_chisquare(r, denom) * num)
+    return ((py_chisquare(r, num) * denom) /
+            (py_chisquare(r, denom) * num))
 
 
 class BaseTest(TestCase):
+
     def _follow_cpython(self, ptr, seed=2):
         r = random.Random(seed)
         _copy_py_state(r, ptr)
@@ -227,7 +196,7 @@ class TestInternals(BaseTest):
         # We use the same integer seeding as Numpy
         # (CPython is different: it treats the integer as a byte array)
         r = np.random.RandomState()
-        for i in [0, 1, 125, 2 ** 32 - 5]:
+        for i in [0, 1, 125, 2**32 - 5]:
             # Need to cast to a C-sized int (for Numpy <= 1.7)
             r.seed(np.uint32(i))
             st = r.get_state()
@@ -274,7 +243,7 @@ class TestRandom(BaseTest):
         """
         # Our seed() mimicks Numpy's.
         r = np.random.RandomState()
-        for i in [0, 1, 125, 2 ** 32 - 1]:
+        for i in [0, 1, 125, 2**32 - 1]:
             # Need to cast to a C-sized int (for Numpy <= 1.7)
             r.seed(np.uint32(i))
             seedfunc(i)
@@ -296,7 +265,7 @@ class TestRandom(BaseTest):
     def _check_random_sized(self, seedfunc, randomfunc):
         # Our seed() mimicks Numpy's.
         r = np.random.RandomState()
-        for i in [0, 1, 125, 2 ** 32 - 1]:
+        for i in [0, 1, 125, 2**32 - 1]:
             # Need to cast to a C-sized int (for Numpy <= 1.7)
             r.seed(np.uint32(i))
             seedfunc(i)
@@ -344,23 +313,15 @@ class TestRandom(BaseTest):
     # C functions which use x87.
     # On some distributions, the errors seem to accumulate dramatically.
 
-    def _check_dist(
-        self, func, pyfunc, argslist, niters=3, prec="double", ulps=12, pydtype=None
-    ):
+    def _check_dist(self, func, pyfunc, argslist, niters=3,
+                    prec='double', ulps=12, pydtype=None):
         assert len(argslist)
         for args in argslist:
             results = [func(*args) for i in range(niters)]
-            pyresults = [
-                (pyfunc(*args, dtype=pydtype) if pydtype else pyfunc(*args))
-                for i in range(niters)
-            ]
-            self.assertPreciseEqual(
-                results,
-                pyresults,
-                prec=prec,
-                ulps=ulps,
-                msg="for arguments %s" % (args,),
-            )
+            pyresults = [(pyfunc(*args, dtype=pydtype) if pydtype else pyfunc(*args))
+                         for i in range(niters)]
+            self.assertPreciseEqual(results, pyresults, prec=prec, ulps=ulps,
+                                    msg="for arguments %s" % (args,))
 
     def _check_gauss(self, func2, func1, func0, ptr):
         """
@@ -369,12 +330,9 @@ class TestRandom(BaseTest):
         # Our implementation follows Numpy's.
         r = self._follow_numpy(ptr)
         if func2 is not None:
-            self._check_dist(
-                func2,
-                r.normal,
-                [(1.0, 1.0), (2.0, 0.5), (-2.0, 0.5)],
-                niters=N // 2 + 10,
-            )
+            self._check_dist(func2, r.normal,
+                             [(1.0, 1.0), (2.0, 0.5), (-2.0, 0.5)],
+                             niters=N // 2 + 10)
         if func1 is not None:
             self._check_dist(func1, r.normal, [(0.5,)])
         if func0 is not None:
@@ -386,27 +344,22 @@ class TestRandom(BaseTest):
     def test_random_normalvariate(self):
         # normalvariate() is really an alias to gauss() in Numba
         # (not in Python, though - they use different algorithms)
-        self._check_gauss(
-            jit_binary("random.normalvariate"), None, None, get_py_state_ptr()
-        )
+        self._check_gauss(jit_binary("random.normalvariate"), None, None,
+                          get_py_state_ptr())
 
     def test_numpy_normal(self):
-        self._check_gauss(
-            jit_binary("np.random.normal"),
-            jit_unary("np.random.normal"),
-            jit_nullary("np.random.normal"),
-            get_np_state_ptr(),
-        )
+        self._check_gauss(jit_binary("np.random.normal"),
+                          jit_unary("np.random.normal"),
+                          jit_nullary("np.random.normal"),
+                          get_np_state_ptr())
 
     def test_numpy_standard_normal(self):
-        self._check_gauss(
-            None, None, jit_nullary("np.random.standard_normal"), get_np_state_ptr()
-        )
+        self._check_gauss(None, None, jit_nullary("np.random.standard_normal"),
+                          get_np_state_ptr())
 
     def test_numpy_randn(self):
-        self._check_gauss(
-            None, None, jit_nullary("np.random.randn"), get_np_state_ptr()
-        )
+        self._check_gauss(None, None, jit_nullary("np.random.randn"),
+                          get_np_state_ptr())
 
     def _check_lognormvariate(self, func2, func1, func0, ptr):
         """
@@ -415,29 +368,23 @@ class TestRandom(BaseTest):
         # Our implementation follows Numpy's.
         r = self._follow_numpy(ptr)
         if func2 is not None:
-            self._check_dist(
-                func2,
-                r.lognormal,
-                [(1.0, 1.0), (2.0, 0.5), (-2.0, 0.5)],
-                niters=N // 2 + 10,
-            )
+            self._check_dist(func2, r.lognormal,
+                             [(1.0, 1.0), (2.0, 0.5), (-2.0, 0.5)],
+                             niters=N // 2 + 10)
         if func1 is not None:
             self._check_dist(func1, r.lognormal, [(0.5,)])
         if func0 is not None:
             self._check_dist(func0, r.lognormal, [()])
 
     def test_random_lognormvariate(self):
-        self._check_lognormvariate(
-            jit_binary("random.lognormvariate"), None, None, get_py_state_ptr()
-        )
+        self._check_lognormvariate(jit_binary("random.lognormvariate"),
+                                   None, None, get_py_state_ptr())
 
     def test_numpy_lognormal(self):
-        self._check_lognormvariate(
-            jit_binary("np.random.lognormal"),
-            jit_unary("np.random.lognormal"),
-            jit_nullary("np.random.lognormal"),
-            get_np_state_ptr(),
-        )
+        self._check_lognormvariate(jit_binary("np.random.lognormal"),
+                                   jit_unary("np.random.lognormal"),
+                                   jit_nullary("np.random.lognormal"),
+                                   get_np_state_ptr())
 
     def _check_randrange(self, func1, func2, func3, ptr, max_width, is_numpy, tp=None):
         """
@@ -454,16 +401,18 @@ class TestRandom(BaseTest):
             rr = self._follow_numpy(ptr).randint
         else:
             rr = self._follow_cpython(ptr).randrange
-        widths = [
-            w for w in [1, 5, 8, 5000, 2 ** 40, 2 ** 62 + 2 ** 61] if w < max_width
-        ]
+        widths = [w for w in [1, 5, 8, 5000, 2**40, 2**62 + 2**61] if w < max_width]
         pydtype = tp if is_numpy else None
         for width in widths:
-            self._check_dist(func1, rr, [(width,)], niters=10, pydtype=pydtype)
-            self._check_dist(func2, rr, [(-2, 2 + width)], niters=10, pydtype=pydtype)
+            self._check_dist(func1, rr, [(width,)], niters=10,
+                            pydtype=pydtype)
+            self._check_dist(func2, rr, [(-2, 2 +width)], niters=10,
+                            pydtype=pydtype)
             if func3 is not None:
-                self.assertPreciseEqual(func3(-2, 2 + width, 6), rr(-2, 2 + width, 6))
-                self.assertPreciseEqual(func3(2 + width, 2, -3), rr(2 + width, 2, -3))
+                self.assertPreciseEqual(func3(-2, 2 + width, 6),
+                                        rr(-2, 2 + width, 6))
+                self.assertPreciseEqual(func3(2 + width, 2, -3),
+                                        rr(2 + width, 2, -3))
         # Empty ranges
         self.assertRaises(ValueError, func1, 0)
         self.assertRaises(ValueError, func1, -5)
@@ -474,35 +423,21 @@ class TestRandom(BaseTest):
             self.assertRaises(ValueError, func3, 7, 5, 1)
 
     def test_random_randrange(self):
-        for tp, max_width in [(types.int64, 2 ** 63), (types.int32, 2 ** 31)]:
+        for tp, max_width in [(types.int64, 2**63), (types.int32, 2**31)]:
             cr1 = compile_isolated(random_randrange1, (tp,))
             cr2 = compile_isolated(random_randrange2, (tp, tp))
             cr3 = compile_isolated(random_randrange3, (tp, tp, tp))
-            self._check_randrange(
-                cr1.entry_point,
-                cr2.entry_point,
-                cr3.entry_point,
-                get_py_state_ptr(),
-                max_width,
-                False,
-            )
+            self._check_randrange(cr1.entry_point, cr2.entry_point,
+                                  cr3.entry_point, get_py_state_ptr(),
+                                  max_width, False)
 
     def test_numpy_randint(self):
-        for tp, np_tp, max_width in [
-            (types.int64, np.int64, 2 ** 63),
-            (types.int32, np.int32, 2 ** 31),
-        ]:
+        for tp, np_tp, max_width in [(types.int64, np.int64, 2**63),
+                                     (types.int32, np.int32, 2**31)]:
             cr1 = compile_isolated(numpy_randint1, (tp,))
             cr2 = compile_isolated(numpy_randint2, (tp, tp))
-            self._check_randrange(
-                cr1.entry_point,
-                cr2.entry_point,
-                None,
-                get_np_state_ptr(),
-                max_width,
-                True,
-                np_tp,
-            )
+            self._check_randrange(cr1.entry_point, cr2.entry_point,
+                                  None, get_np_state_ptr(), max_width, True, np_tp)
 
     def _check_randint(self, func, ptr, max_width):
         """
@@ -515,7 +450,7 @@ class TestRandom(BaseTest):
         self.assertEqual(len(ints), len(set(ints)), ints)
 
         r = self._follow_cpython(ptr)
-        for args in [(1, 5), (13, 5000), (20, 2 ** 62 + 2 ** 61)]:
+        for args in [(1, 5), (13, 5000), (20, 2**62 + 2**61)]:
             if args[1] > max_width:
                 continue
             self._check_dist(func, r.randint, [args], niters=10)
@@ -524,7 +459,7 @@ class TestRandom(BaseTest):
         self.assertRaises(ValueError, func, 5, 2)
 
     def test_random_randint(self):
-        for tp, max_width in [(types.int64, 2 ** 63), (types.int32, 2 ** 31)]:
+        for tp, max_width in [(types.int64, 2**63), (types.int32, 2**31)]:
             cr = compile_isolated(random_randint, (tp, tp))
             self._check_randint(cr.entry_point, get_py_state_ptr(), max_width)
 
@@ -534,7 +469,8 @@ class TestRandom(BaseTest):
         """
         # Our implementation follows Python's.
         r = self._follow_cpython(ptr)
-        self._check_dist(func, r.uniform, [(1.5, 1e6), (-2.5, 1e3), (1.5, -2.5)])
+        self._check_dist(func, r.uniform,
+                         [(1.5, 1e6), (-2.5, 1e3), (1.5, -2.5)])
 
     def test_random_uniform(self):
         self._check_uniform(jit_binary("random.uniform"), get_py_state_ptr())
@@ -549,15 +485,14 @@ class TestRandom(BaseTest):
         # Our implementation follows Python's.
         r = self._follow_cpython(ptr)
         if func2 is not None:
-            self._check_dist(func2, r.triangular, [(1.5, 3.5), (-2.5, 1.5), (1.5, 1.5)])
+            self._check_dist(func2, r.triangular,
+                             [(1.5, 3.5), (-2.5, 1.5), (1.5, 1.5)])
         self._check_dist(func3, r.triangular, [(1.5, 3.5, 2.2)])
 
     def test_random_triangular(self):
-        self._check_triangular(
-            jit_binary("random.triangular"),
-            jit_ternary("random.triangular"),
-            get_py_state_ptr(),
-        )
+        self._check_triangular(jit_binary("random.triangular"),
+                               jit_ternary("random.triangular"),
+                               get_py_state_ptr())
 
     def test_numpy_triangular(self):
         triangular = jit_ternary("np.random.triangular")
@@ -571,9 +506,8 @@ class TestRandom(BaseTest):
         # Our implementation follows Python's.
         r = self._follow_cpython(ptr)
         if func2 is not None:
-            self._check_dist(
-                func2, r.gammavariate, [(0.5, 2.5), (1.0, 1.5), (1.5, 3.5)]
-            )
+            self._check_dist(func2, r.gammavariate,
+                             [(0.5, 2.5), (1.0, 1.5), (1.5, 3.5)])
         if func1 is not None:
             self.assertPreciseEqual(func1(1.5), r.gammavariate(1.5, 1.0))
         # Invalid inputs
@@ -587,19 +521,16 @@ class TestRandom(BaseTest):
             self.assertRaises(ValueError, func1, -0.5)
 
     def test_random_gammavariate(self):
-        self._check_gammavariate(
-            jit_binary("random.gammavariate"), None, get_py_state_ptr()
-        )
+        self._check_gammavariate(jit_binary("random.gammavariate"), None,
+                                 get_py_state_ptr())
 
     def test_numpy_gamma(self):
-        self._check_gammavariate(
-            jit_binary("np.random.gamma"),
-            jit_unary("np.random.gamma"),
-            get_np_state_ptr(),
-        )
-        self._check_gammavariate(
-            None, jit_unary("np.random.standard_gamma"), get_np_state_ptr()
-        )
+        self._check_gammavariate(jit_binary("np.random.gamma"),
+                                 jit_unary("np.random.gamma"),
+                                 get_np_state_ptr())
+        self._check_gammavariate(None,
+                                 jit_unary("np.random.standard_gamma"),
+                                 get_np_state_ptr())
 
     def _check_betavariate(self, func, ptr):
         """
@@ -628,14 +559,12 @@ class TestRandom(BaseTest):
         self._check_dist(func, r.vonmisesvariate, [(0.5, 2.5)])
 
     def test_random_vonmisesvariate(self):
-        self._check_vonmisesvariate(
-            jit_binary("random.vonmisesvariate"), get_py_state_ptr()
-        )
+        self._check_vonmisesvariate(jit_binary("random.vonmisesvariate"),
+                                    get_py_state_ptr())
 
     def test_numpy_vonmises(self):
-        self._check_vonmisesvariate(
-            jit_binary("np.random.vonmises"), get_np_state_ptr()
-        )
+        self._check_vonmisesvariate(jit_binary("np.random.vonmises"),
+                                    get_np_state_ptr())
 
     def _check_expovariate(self, func, ptr):
         """
@@ -645,9 +574,8 @@ class TestRandom(BaseTest):
         r = self._follow_numpy(ptr)
         for lambd in (0.2, 0.5, 1.5):
             for i in range(3):
-                self.assertPreciseEqual(
-                    func(lambd), r.exponential(1 / lambd), prec="double"
-                )
+                self.assertPreciseEqual(func(lambd), r.exponential(1 / lambd),
+                                        prec='double')
 
     def test_random_expovariate(self):
         self._check_expovariate(jit_unary("random.expovariate"), get_py_state_ptr())
@@ -663,16 +591,14 @@ class TestRandom(BaseTest):
             self._check_dist(func0, r.exponential, [()])
 
     def test_numpy_exponential(self):
-        self._check_exponential(
-            jit_unary("np.random.exponential"),
-            jit_nullary("np.random.exponential"),
-            get_np_state_ptr(),
-        )
+        self._check_exponential(jit_unary("np.random.exponential"),
+                                jit_nullary("np.random.exponential"),
+                                get_np_state_ptr())
 
     def test_numpy_standard_exponential(self):
-        self._check_exponential(
-            None, jit_nullary("np.random.standard_exponential"), get_np_state_ptr()
-        )
+        self._check_exponential(None,
+                                jit_nullary("np.random.standard_exponential"),
+                                get_np_state_ptr())
 
     def _check_paretovariate(self, func, ptr):
         """
@@ -700,17 +626,16 @@ class TestRandom(BaseTest):
             self._check_dist(func2, r.weibullvariate, [(0.5, 2.5)])
         if func1 is not None:
             for i in range(3):
-                self.assertPreciseEqual(func1(2.5), r.weibullvariate(1.0, 2.5))
+                self.assertPreciseEqual(func1(2.5),
+                                        r.weibullvariate(1.0, 2.5))
 
     def test_random_weibullvariate(self):
-        self._check_weibullvariate(
-            jit_binary("random.weibullvariate"), None, get_py_state_ptr()
-        )
+        self._check_weibullvariate(jit_binary("random.weibullvariate"),
+                                   None, get_py_state_ptr())
 
     def test_numpy_weibull(self):
-        self._check_weibullvariate(
-            None, jit_unary("np.random.weibull"), get_np_state_ptr()
-        )
+        self._check_weibullvariate(None, jit_unary("np.random.weibull"),
+                                   get_np_state_ptr())
 
     def test_numpy_binomial(self):
         # We follow Numpy's algorithm up to n*p == 30
@@ -740,14 +665,15 @@ class TestRandom(BaseTest):
     def test_numpy_chisquare(self):
         chisquare = jit_unary("np.random.chisquare")
         r = self._follow_cpython(get_np_state_ptr())
-        self._check_dist(
-            chisquare, functools.partial(py_chisquare, r), [(1.5,), (2.5,)]
-        )
+        self._check_dist(chisquare,
+                         functools.partial(py_chisquare, r),
+                         [(1.5,), (2.5,)])
 
     def test_numpy_f(self):
         f = jit_binary("np.random.f")
         r = self._follow_cpython(get_np_state_ptr())
-        self._check_dist(f, functools.partial(py_f, r), [(0.5, 1.5), (1.5, 0.8)])
+        self._check_dist(f, functools.partial(py_f, r),
+                         [(0.5, 1.5), (1.5, 0.8)])
 
     def test_numpy_geometric(self):
         geom = jit_unary("np.random.geometric")
@@ -769,7 +695,7 @@ class TestRandom(BaseTest):
         r = [geom(0.01) for i in range(N)]
         self.assertTrue([i for i in r if i > 50])  # likely
         r = [geom(1e-15) for i in range(N)]
-        self.assertTrue([i for i in r if i > 2 ** 32])  # likely
+        self.assertTrue([i for i in r if i > 2**32])  # likely
 
     def test_numpy_gumbel(self):
         gumbel = jit_binary("np.random.gumbel")
@@ -780,9 +706,9 @@ class TestRandom(BaseTest):
         # Our implementation follows Numpy's up to nsamples = 10.
         hg = jit_ternary("np.random.hypergeometric")
         r = self._follow_numpy(get_np_state_ptr())
-        self._check_dist(
-            hg, r.hypergeometric, [(1000, 5000, 10), (5000, 1000, 10)], niters=30
-        )
+        self._check_dist(hg, r.hypergeometric,
+                         [(1000, 5000, 10), (5000, 1000, 10)],
+                         niters=30)
         # Sanity checks
         r = [hg(1000, 1000, 100) for i in range(100)]
         self.assertTrue(all(x >= 0 and x <= 100 for x in r), r)
@@ -797,44 +723,32 @@ class TestRandom(BaseTest):
 
     def test_numpy_laplace(self):
         r = self._follow_numpy(get_np_state_ptr())
-        self._check_dist(
-            jit_binary("np.random.laplace"), r.laplace, [(0.0, 1.0), (-1.5, 3.5)]
-        )
-        self._check_dist(jit_unary("np.random.laplace"), r.laplace, [(0.0,), (-1.5,)])
+        self._check_dist(jit_binary("np.random.laplace"), r.laplace,
+                         [(0.0, 1.0), (-1.5, 3.5)])
+        self._check_dist(jit_unary("np.random.laplace"), r.laplace,
+                         [(0.0,), (-1.5,)])
         self._check_dist(jit_nullary("np.random.laplace"), r.laplace, [()])
 
     def test_numpy_logistic(self):
         r = self._follow_numpy(get_np_state_ptr())
-        self._check_dist(
-            jit_binary("np.random.logistic"), r.logistic, [(0.0, 1.0), (-1.5, 3.5)]
-        )
-        self._check_dist(jit_unary("np.random.logistic"), r.logistic, [(0.0,), (-1.5,)])
+        self._check_dist(jit_binary("np.random.logistic"), r.logistic,
+                         [(0.0, 1.0), (-1.5, 3.5)])
+        self._check_dist(jit_unary("np.random.logistic"), r.logistic,
+                         [(0.0,), (-1.5,)])
         self._check_dist(jit_nullary("np.random.logistic"), r.logistic, [()])
 
     def test_numpy_logseries(self):
         r = self._follow_numpy(get_np_state_ptr())
         logseries = jit_unary("np.random.logseries")
-        self._check_dist(
-            logseries, r.logseries, [(0.1,), (0.99,), (0.9999,)], niters=50
-        )
+        self._check_dist(logseries, r.logseries,
+                         [(0.1,), (0.99,), (0.9999,)],
+                         niters=50)
         # Numpy's logseries overflows on 32-bit builds, so instead
         # hardcode Numpy's (correct) output on 64-bit builds.
         r = self._follow_numpy(get_np_state_ptr(), seed=1)
-        self.assertEqual(
-            [logseries(0.9999999999999) for i in range(10)],
-            [
-                2022733531,
-                77296,
-                30,
-                52204,
-                9341294,
-                703057324,
-                413147702918,
-                1870715907,
-                16009330,
-                738,
-            ],
-        )
+        self.assertEqual([logseries(0.9999999999999) for i in range(10)],
+                         [2022733531, 77296, 30, 52204, 9341294, 703057324,
+                          413147702918, 1870715907, 16009330, 738])
         self.assertRaises(ValueError, logseries, 0.0)
         self.assertRaises(ValueError, logseries, -0.1)
         self.assertRaises(ValueError, logseries, 1.1)
@@ -843,26 +757,23 @@ class TestRandom(BaseTest):
         r = self._follow_numpy(get_np_state_ptr())
         poisson = jit_unary("np.random.poisson")
         # Our implementation follows Numpy's.
-        self._check_dist(
-            poisson, r.poisson, [(0.0,), (0.5,), (2.0,), (10.0,), (900.5,)], niters=50
-        )
+        self._check_dist(poisson, r.poisson,
+                         [(0.0,), (0.5,), (2.0,), (10.0,), (900.5,)],
+                         niters=50)
         self.assertRaises(ValueError, poisson, -0.1)
 
     def test_numpy_negative_binomial(self):
         self._follow_numpy(get_np_state_ptr(), 0)
         negbin = jit_binary("np.random.negative_binomial")
-        self.assertEqual(
-            [negbin(10, 0.9) for i in range(10)], [2, 3, 1, 5, 2, 1, 0, 1, 0, 0]
-        )
-        self.assertEqual(
-            [negbin(10, 0.1) for i in range(10)],
-            [55, 71, 56, 57, 56, 56, 34, 55, 101, 67],
-        )
-        self.assertEqual(
-            [negbin(1000, 0.1) for i in range(10)],
-            [9203, 8640, 9081, 9292, 8938, 9165, 9149, 8774, 8886, 9117],
-        )
-        m = np.mean([negbin(1000000000, 0.1) for i in range(50)])
+        self.assertEqual([negbin(10, 0.9) for i in range(10)],
+                         [2, 3, 1, 5, 2, 1, 0, 1, 0, 0])
+        self.assertEqual([negbin(10, 0.1) for i in range(10)],
+                         [55, 71, 56, 57, 56, 56, 34, 55, 101, 67])
+        self.assertEqual([negbin(1000, 0.1) for i in range(10)],
+                         [9203, 8640, 9081, 9292, 8938,
+                          9165, 9149, 8774, 8886, 9117])
+        m = np.mean([negbin(1000000000, 0.1)
+                     for i in range(50)])
         self.assertGreater(m, 9e9 * 0.99)
         self.assertLess(m, 9e9 * 1.01)
         self.assertRaises(ValueError, negbin, 0, 0.5)
@@ -873,7 +784,8 @@ class TestRandom(BaseTest):
     def test_numpy_power(self):
         r = self._follow_numpy(get_np_state_ptr())
         power = jit_unary("np.random.power")
-        self._check_dist(power, r.power, [(0.1,), (0.5,), (0.9,), (6.0,)])
+        self._check_dist(power, r.power,
+                         [(0.1,), (0.5,), (0.9,), (6.0,)])
         self.assertRaises(ValueError, power, 0.0)
         self.assertRaises(ValueError, power, -0.1)
 
@@ -881,7 +793,8 @@ class TestRandom(BaseTest):
         r = self._follow_numpy(get_np_state_ptr())
         rayleigh1 = jit_unary("np.random.rayleigh")
         rayleigh0 = jit_nullary("np.random.rayleigh")
-        self._check_dist(rayleigh1, r.rayleigh, [(0.1,), (0.8,), (25.0,), (1e3,)])
+        self._check_dist(rayleigh1, r.rayleigh,
+                         [(0.1,), (0.8,), (25.,), (1e3,)])
         self._check_dist(rayleigh0, r.rayleigh, [()])
         self.assertRaises(ValueError, rayleigh1, 0.0)
         self.assertRaises(ValueError, rayleigh1, -0.1)
@@ -958,22 +871,15 @@ class TestRandom(BaseTest):
             from numba.tests import test_random
             func = getattr(test_random, %(func_name)r)
             print(func(*%(func_args)r))
-            """ % (
-            locals()
-        )
+            """ % (locals())
         numbers = set()
         for i in range(3):
-            popen = subprocess.Popen(
-                [sys.executable, "-c", code],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
+            popen = subprocess.Popen([sys.executable, "-c", code],
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             out, err = popen.communicate()
             if popen.returncode != 0:
-                raise AssertionError(
-                    "process failed with code %s: stderr follows\n%s\n"
-                    % (popen.returncode, err.decode())
-                )
+                raise AssertionError("process failed with code %s: stderr follows\n%s\n"
+                                     % (popen.returncode, err.decode()))
             numbers.add(float(out.strip()))
         self.assertEqual(len(numbers), 3, numbers)
 
@@ -1002,11 +908,9 @@ class TestRandom(BaseTest):
             # Permutation should not modify its argument
             self.assertPreciseEqual(a, b)
         # Check multi-dimensional arrays
-        arrs = [
-            np.arange(10).reshape(2, 5),
-            np.arange(27).reshape(3, 3, 3),
-            np.arange(36).reshape(2, 3, 3, 2),
-        ]
+        arrs = [np.arange(10).reshape(2, 5),
+                np.arange(27).reshape(3, 3, 3),
+                np.arange(36).reshape(2, 3, 3, 2)]
         for a in arrs:
             b = a.copy()
             self.assertPreciseEqual(func(a), r.permutation(a))
@@ -1020,7 +924,7 @@ class TestRandomArrays(BaseTest):
 
     def _compile_array_dist(self, funcname, nargs):
         qualname = "np.random.%s" % (funcname,)
-        argstring = ", ".join("abcd"[:nargs])
+        argstring = ', '.join('abcd'[:nargs])
         return jit_with_args(qualname, argstring)
 
     def _check_array_dist(self, funcname, scalar_args):
@@ -1035,9 +939,10 @@ class TestRandomArrays(BaseTest):
             expected = pyfunc(*args)
             got = cfunc(*args)
             # Numpy may return int32s where we return int64s, adjust
-            if expected.dtype == np.dtype("int32") and got.dtype == np.dtype("int64"):
+            if (expected.dtype == np.dtype('int32')
+                and got.dtype == np.dtype('int64')):
                 expected = expected.astype(got.dtype)
-            self.assertPreciseEqual(expected, got, prec="double", ulps=5)
+            self.assertPreciseEqual(expected, got, prec='double', ulps=5)
 
     def test_numpy_randint(self):
         cfunc = self._compile_array_dist("randint", 3)
@@ -1046,7 +951,7 @@ class TestRandomArrays(BaseTest):
         res = cfunc(low, high, size)
         self.assertIsInstance(res, np.ndarray)
         self.assertEqual(res.shape, size)
-        self.assertIn(res.dtype, (np.dtype("int32"), np.dtype("int64")))
+        self.assertIn(res.dtype, (np.dtype('int32'), np.dtype('int64')))
         self.assertTrue(np.all(res >= low))
         self.assertTrue(np.all(res < high))
         # Crude statistical tests
@@ -1061,7 +966,7 @@ class TestRandomArrays(BaseTest):
         res = cfunc(size)
         self.assertIsInstance(res, np.ndarray)
         self.assertEqual(res.shape, size)
-        self.assertEqual(res.dtype, np.dtype("float64"))
+        self.assertEqual(res.dtype, np.dtype('float64'))
         # Results are within expected bounds
         self.assertTrue(np.all(res >= 0.0))
         self.assertTrue(np.all(res < 1.0))
@@ -1325,7 +1230,6 @@ class TestRandomMultinomial(BaseTest):
     """
     Test np.random.multinomial.
     """
-
     # A biased dice
     pvals = np.array([1, 1, 1, 2, 3, 1], dtype=np.float64)
     pvals /= pvals.sum()
@@ -1336,7 +1240,7 @@ class TestRandomMultinomial(BaseTest):
         """
         self.assertIsInstance(sample, np.ndarray)
         self.assertEqual(sample.shape, (len(pvals),))
-        self.assertIn(sample.dtype, (np.dtype("int32"), np.dtype("int64")))
+        self.assertIn(sample.dtype, (np.dtype('int32'), np.dtype('int64')))
         # Statistical properties
         self.assertEqual(sample.sum(), n)
         for p, nexp in zip(pvals, sample):
@@ -1395,7 +1299,7 @@ class TestRandomDirichlet(BaseTest):
 
     def _check_sample(self, alpha, size, sample):
 
-        """Check output structure"""
+        '''Check output structure'''
         self.assertIsInstance(sample, np.ndarray)
         self.assertEqual(sample.dtype, np.float64)
         if size is None:
@@ -1405,7 +1309,7 @@ class TestRandomDirichlet(BaseTest):
         else:
             self.assertEqual(sample.shape, size + (len(alpha),))
 
-        """Check statistical properties"""
+        '''Check statistical properties'''
         for val in np.nditer(sample):
             self.assertGreaterEqual(val, 0)
             self.assertLessEqual(val, 1)
@@ -1415,53 +1319,104 @@ class TestRandomDirichlet(BaseTest):
             for totals in np.nditer(sample.sum(axis=-1)):
                 self.assertAlmostEqual(totals, 1, places=5)
 
-    def test_dirichlet_default(self):
-        """
-        Test dirichlet(alpha, size=None)
-        """
-        cfunc = jit(nopython=True)(numpy_dirichlet_default)
-        alphas = (
-            self.alpha,
-            tuple(self.alpha),
-            np.array([1, 1, 10000, 1], dtype=np.float64),
-            np.array([1, 1, 1.5, 1], dtype=np.float64),
-        )
-        for alpha in alphas:
-            res = cfunc(alpha)
-            self._check_sample(alpha, None, res)
-
-    def test_dirichlet(self):
+    def test_dirichlet_none(self):
         """
         Test dirichlet(alpha, size=None)
         """
         cfunc = jit(nopython=True)(numpy_dirichlet)
-        sizes = (None, (10,), (10, 10))
-        alphas = (
-            self.alpha,
-            tuple(self.alpha),
-            np.array([1, 1, 10000, 1], dtype=np.float64),
-            np.array([1, 1, 1.5, 1], dtype=np.float64),
-        )
+        alpha = self.alpha
+        size = None
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        # pvals as tuple
+        pvals = tuple(alpha)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        # A case with extreme probabilities
+        alpha = np.array([1, 1, 10000, 1], dtype=np.float64)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        # A case with noninteger probabilities
+        alpha = np.array([1, 1, 1.5, 1], dtype=np.float64)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        alpha = tuple(alpha)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
 
-        for alpha, size in itertools.product(alphas, sizes):
-            res = cfunc(alpha, size)
-            self._check_sample(alpha, size, res)
+    def test_dirichlet_int(self):
+        """
+        Test dirichlet(alpha, size=int)
+        """
+        cfunc = jit(nopython=True)(numpy_dirichlet)
+        alpha = self.alpha
+        size=10
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        # pvals as tuple
+        pvals = tuple(alpha)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        # A case with extreme probabilities
+        alpha = np.array([1, 1, 10000, 1], dtype=np.float64)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        # A case with noninteger probabilities
+        alpha = np.array([1, 1, 1.5, 1], dtype=np.float64)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        alpha = tuple(alpha)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+
+    def test_dirichlet_tuple(self):
+        """
+        Test dirichlet(alpha, size=tuple)
+        """
+        cfunc = jit(nopython=True)(numpy_dirichlet)
+        alpha = self.alpha
+        size=(10,10)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        # pvals as tuple
+        pvals = tuple(alpha)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        # A case with extreme probabilities
+        alpha = np.array([1, 1, 10000, 1], dtype=np.float64)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        # A case with noninteger probabilities
+        alpha = np.array([1, 1, 1.5, 1], dtype=np.float64)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
+        alpha = tuple(alpha)
+        res = cfunc(alpha, size)
+        self._check_sample(alpha, size, res)
 
     def test_dirichlet_exceptions(self):
         cfunc = jit(nopython=True)(numpy_dirichlet)
-        alpha = tuple((0, 1, 1))
+        alpha = tuple((0,1,1))
         self.assertRaises(ValueError, cfunc, alpha, 1)
         alpha = self.alpha
-        sizes = (True, 3j, 1.5, (1.5, 1), (3j, 1), (3j, 3j), (np.int8(3), np.int64(7)))
-        for size in sizes:
-            with self.assertRaises(TypingError) as raises:
-                cfunc(alpha, size)
-            self.assertIn(
-                "np.random.dirichlet(): size should be int or "
-                "tuple of ints or None, got",
-                str(raises.exception),
-            )
-
+        size = True
+        with self.assertTypingError():
+            cfunc(alpha, size)
+        size = 3j
+        with self.assertTypingError():
+            cfunc(alpha, size)
+        size = 1.5
+        with self.assertTypingError():
+            cfunc(alpha, size)
+        size = (1.5, 1)
+        with self.assertTypingError():
+            cfunc(alpha, size)
+        size = (3j, 1)
+        with self.assertTypingError():
+            cfunc(alpha, size)
+        size = (3j, 3j)
+        with self.assertTypingError():
+            cfunc(alpha, size)
 
 @jit(nopython=True, nogil=True)
 def py_extract_randomness(seed, out):
@@ -1470,9 +1425,7 @@ def py_extract_randomness(seed, out):
     for i in range(out.size):
         out[i] = random.getrandbits(32)
 
-
 _randint_limit = 1 << 32
-
 
 @jit(nopython=True, nogil=True)
 def np_extract_randomness(seed, out):
@@ -1481,6 +1434,7 @@ def np_extract_randomness(seed, out):
     s = 0
     for i in range(out.size):
         out[i] = np.random.randint(_randint_limit)
+
 
 
 class ConcurrencyBaseTest(TestCase):
@@ -1543,15 +1497,15 @@ class TestThreads(ConcurrencyBaseTest):
         Run *nthreads* threads extracting randomness with the given *seed*
         (no seeding if 0).
         """
-        results = [
-            self._get_output(self._extract_iterations) for i in range(nthreads + 1)
-        ]
+        results = [self._get_output(self._extract_iterations)
+                   for i in range(nthreads + 1)]
 
         def target(i):
             # The PRNG will be seeded in thread
             extract_randomness(seed=seed, out=results[i])
 
-        threads = [threading.Thread(target=target, args=(i,)) for i in range(nthreads)]
+        threads = [threading.Thread(target=target, args=(i,))
+                   for i in range(nthreads)]
 
         for th in threads:
             th.start()
@@ -1599,7 +1553,7 @@ class TestThreads(ConcurrencyBaseTest):
         self.check_implicit_initialization(np_extract_randomness)
 
 
-@unittest.skipIf(os.name == "nt", "Windows is not affected by fork() issues")
+@unittest.skipIf(os.name == 'nt', "Windows is not affected by fork() issues")
 class TestProcesses(ConcurrencyBaseTest):
     """
     Check the PRNG behaves well in child processes.
@@ -1608,6 +1562,7 @@ class TestProcesses(ConcurrencyBaseTest):
     # Avoid nested multiprocessing AssertionError
     # ("daemonic processes are not allowed to have children")
     _numba_parallel_test_ = False
+
 
     def extract_in_processes(self, nprocs, extract_randomness):
         """
@@ -1632,12 +1587,13 @@ class TestProcesses(ConcurrencyBaseTest):
                 q.put(e)
                 raise
 
-        if hasattr(multiprocessing, "get_context"):
+        if hasattr(multiprocessing, 'get_context'):
             # The test works only in fork context.
-            mpc = multiprocessing.get_context("fork")
+            mpc = multiprocessing.get_context('fork')
         else:
             mpc = multiprocessing
-        procs = [mpc.Process(target=target) for i in range(nprocs)]
+        procs = [mpc.Process(target=target)
+                 for i in range(nprocs)]
         for p in procs:
             p.start()
         # Need to dequeue before joining, otherwise the large size of the
