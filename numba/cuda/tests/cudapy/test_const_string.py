@@ -1,10 +1,12 @@
 import re
-from numba.cuda.testing import unittest, skip_on_cudasim
+import numpy as np
+from numba import cuda
+from numba.cuda.testing import unittest, skip_on_cudasim, CUDATestCase
 from llvmlite import ir
 
 
 @skip_on_cudasim("This is testing CUDA backend code generation")
-class TestCudaConstString(unittest.TestCase):
+class TestConstStringCodegen(unittest.TestCase):
     def test_const_string(self):
         # These imports are incompatible with CUDASIM
         from numba.cuda.descriptor import cuda_target
@@ -50,6 +52,28 @@ class TestCudaConstString(unittest.TestCase):
         matches = list(re.findall(r"\.const.*__conststring__", ptx))
 
         self.assertEqual(len(matches), 1)
+
+
+class TestConstString(CUDATestCase):
+    def test_assign_const_string(self):
+        # Inspired by the reproducer from Issue #7041.
+
+        @cuda.jit
+        def str_assign(arr):
+            i = cuda.grid(1)
+            if i < len(arr):
+                arr[i] = "XYZ"
+
+        n_strings = 8
+        arr = np.zeros(n_strings + 1, dtype="<U12")
+        str_assign[1, n_strings](arr)
+
+        # Expected result, e.g.:
+        #     ['XYZ' 'XYZ' 'XYZ' 'XYZ' 'XYZ' 'XYZ' 'XYZ' 'XYZ' '']
+        expected = np.zeros_like(arr)
+        expected[:-1] = 'XYZ'
+
+        np.testing.assert_equal(arr, expected)
 
 
 if __name__ == '__main__':

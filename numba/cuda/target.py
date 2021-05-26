@@ -86,7 +86,7 @@ class CUDATargetContext(BaseContext):
         # side effect of import needed for numba.cpython.*, the builtins
         # registry is updated at import time.
         from numba.cpython import numbers, tupleobj, slicing # noqa: F401
-        from numba.cpython import rangeobj, unicode # noqa: F401
+        from numba.cpython import charseq, rangeobj, unicode # noqa: F401
         from numba.cpython import cmathimpl
         from numba.np import arrayobj # noqa: F401
         from numba.np import npdatetime # noqa: F401
