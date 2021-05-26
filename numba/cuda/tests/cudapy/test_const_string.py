@@ -72,7 +72,7 @@ class TestConstString(CUDATestCase):
         #     ['XYZ' 'XYZ' 'XYZ' 'XYZ' 'XYZ' 'XYZ' 'XYZ' 'XYZ' '']
         expected = np.zeros_like(arr)
         expected[:-1] = 'XYZ'
-
+        expected[-1] = ''
         np.testing.assert_equal(arr, expected)
 
 
