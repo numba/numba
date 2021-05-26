@@ -12,8 +12,7 @@ import numpy as np
 from llvmlite import ir
 
 from numba.core.extending import overload, register_jitable
-from numba.core.imputils import (Registry, impl_ret_untracked,
-                                    impl_ret_new_ref)
+from numba.core.imputils import Registry, impl_ret_untracked, impl_ret_new_ref
 from numba.core.typing import signature
 from numba import _helperlib
 from numba.core import types, utils, cgutils
@@ -23,13 +22,17 @@ from numba.core.overload_glue import glue_lowering
 POST_PY38 = utils.PYVERSION >= (3, 8)
 
 
-registry = Registry('randomimpl')
+registry = Registry("randomimpl")
 lower = registry.lower
 
 int32_t = ir.IntType(32)
 int64_t = ir.IntType(64)
+
+
 def const_int(x):
     return ir.Constant(int32_t, x)
+
+
 double = ir.DoubleType()
 
 N = 624
@@ -37,19 +40,22 @@ N_const = ir.Constant(int32_t, N)
 
 
 # This is the same struct as rnd_state_t in _random.c.
-rnd_state_t = ir.LiteralStructType([
-    # index
-    int32_t,
-    # mt[N]
-    ir.ArrayType(int32_t, N),
-    # has_gauss
-    int32_t,
-    # gauss
-    double,
-    # is_initialized
-    int32_t,
-    ])
+rnd_state_t = ir.LiteralStructType(
+    [
+        # index
+        int32_t,
+        # mt[N]
+        ir.ArrayType(int32_t, N),
+        # has_gauss
+        int32_t,
+        # gauss
+        double,
+        # is_initialized
+        int32_t,
+    ]
+)
 rnd_state_ptr_t = ir.PointerType(rnd_state_t)
+
 
 def get_state_ptr(context, builder, name):
     """
@@ -58,49 +64,56 @@ def get_state_ptr(context, builder, name):
     If the state isn't initialized, it is lazily initialized with
     system entropy.
     """
-    assert name in ('py', 'np')
+    assert name in ("py", "np")
     func_name = "numba_get_%s_random_state" % name
     fnty = ir.FunctionType(rnd_state_ptr_t, ())
     fn = cgutils.get_or_insert_function(builder.module, fnty, func_name)
     # These two attributes allow LLVM to hoist the function call
     # outside of loops.
-    fn.attributes.add('readnone')
-    fn.attributes.add('nounwind')
+    fn.attributes.add("readnone")
+    fn.attributes.add("nounwind")
     return builder.call(fn, ())
+
 
 def get_py_state_ptr(context, builder):
     """
     Get a pointer to the thread-local Python random state.
     """
-    return get_state_ptr(context, builder, 'py')
+    return get_state_ptr(context, builder, "py")
+
 
 def get_np_state_ptr(context, builder):
     """
     Get a pointer to the thread-local Numpy random state.
     """
-    return get_state_ptr(context, builder, 'np')
+    return get_state_ptr(context, builder, "np")
 
 
 # Accessors
 def get_index_ptr(builder, state_ptr):
     return cgutils.gep_inbounds(builder, state_ptr, 0, 0)
 
+
 def get_array_ptr(builder, state_ptr):
     return cgutils.gep_inbounds(builder, state_ptr, 0, 1)
+
 
 def get_has_gauss_ptr(builder, state_ptr):
     return cgutils.gep_inbounds(builder, state_ptr, 0, 2)
 
+
 def get_gauss_ptr(builder, state_ptr):
     return cgutils.gep_inbounds(builder, state_ptr, 0, 3)
+
 
 def get_rnd_shuffle(builder):
     """
     Get the internal function to shuffle the MT taste.
     """
     fnty = ir.FunctionType(ir.VoidType(), (rnd_state_ptr_t,))
-    fn = cgutils.get_or_insert_function(builder.function.module, fnty,
-                                        "numba_rnd_shuffle")
+    fn = cgutils.get_or_insert_function(
+        builder.function.module, fnty, "numba_rnd_shuffle"
+    )
     fn.args[0].add_attribute("nocapture")
     return fn
 
@@ -111,7 +124,7 @@ def get_next_int32(context, builder, state_ptr):
     """
     idxptr = get_index_ptr(builder, state_ptr)
     idx = builder.load(idxptr)
-    need_reshuffle = builder.icmp_unsigned('>=', idx, N_const)
+    need_reshuffle = builder.icmp_unsigned(">=", idx, N_const)
     with cgutils.if_unlikely(builder, need_reshuffle):
         fn = get_rnd_shuffle(builder)
         builder.call(fn, (state_ptr,))
@@ -123,12 +136,15 @@ def get_next_int32(context, builder, state_ptr):
     builder.store(idx, idxptr)
     # Tempering
     y = builder.xor(y, builder.lshr(y, const_int(11)))
-    y = builder.xor(y, builder.and_(builder.shl(y, const_int(7)),
-                                    const_int(0x9d2c5680)))
-    y = builder.xor(y, builder.and_(builder.shl(y, const_int(15)),
-                                    const_int(0xefc60000)))
+    y = builder.xor(
+        y, builder.and_(builder.shl(y, const_int(7)), const_int(0x9D2C5680))
+    )
+    y = builder.xor(
+        y, builder.and_(builder.shl(y, const_int(15)), const_int(0xEFC60000))
+    )
     y = builder.xor(y, builder.lshr(y, const_int(18)))
     return y
+
 
 def get_next_double(context, builder, state_ptr):
     """
@@ -143,13 +159,16 @@ def get_next_double(context, builder, state_ptr):
     b = builder.uitofp(b, double)
     return builder.fdiv(
         builder.fadd(b, builder.fmul(a, ir.Constant(double, 67108864.0))),
-        ir.Constant(double, 9007199254740992.0))
+        ir.Constant(double, 9007199254740992.0),
+    )
+
 
 def get_next_int(context, builder, state_ptr, nbits, is_numpy):
     """
     Get the next integer with width *nbits*.
     """
     c32 = ir.Constant(nbits.type, 32)
+
     def get_shifted_int(nbits):
         shift = builder.sub(c32, nbits)
         y = get_next_int32(context, builder, state_ptr)
@@ -164,7 +183,7 @@ def get_next_int(context, builder, state_ptr, nbits, is_numpy):
 
     ret = cgutils.alloca_once_value(builder, ir.Constant(int64_t, 0))
 
-    is_32b = builder.icmp_unsigned('<=', nbits, c32)
+    is_32b = builder.icmp_unsigned("<=", nbits, c32)
     with builder.if_else(is_32b) as (ifsmall, iflarge):
         with ifsmall:
             low = get_shifted_int(nbits)
@@ -180,7 +199,8 @@ def get_next_int(context, builder, state_ptr, nbits, is_numpy):
                 high = get_shifted_int(builder.sub(nbits, c32))
             total = builder.add(
                 builder.zext(low, int64_t),
-                builder.shl(builder.zext(high, int64_t), ir.Constant(int64_t, 32)))
+                builder.shl(builder.zext(high, int64_t), ir.Constant(int64_t, 32)),
+            )
             builder.store(total, ret)
 
     return builder.load(ret)
@@ -193,36 +213,37 @@ def _fill_defaults(context, builder, sig, args, defaults):
     """
     ty = sig.return_type
     llty = context.get_data_type(ty)
-    args = tuple(args) + tuple(ir.Constant(llty, d) for d in defaults[len(args):])
+    args = tuple(args) + tuple(ir.Constant(llty, d) for d in defaults[len(args) :])
     sig = signature(*(ty,) * (len(args) + 1))
     return sig, args
 
 
 @glue_lowering("random.seed", types.uint32)
 def seed_impl(context, builder, sig, args):
-    res =  _seed_impl(context, builder, sig, args, get_state_ptr(context,
-                                                                 builder, "py"))
+    res = _seed_impl(context, builder, sig, args, get_state_ptr(context, builder, "py"))
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @glue_lowering("np.random.seed", types.uint32)
 def seed_impl(context, builder, sig, args):
-    res = _seed_impl(context, builder, sig, args, get_state_ptr(context,
-                                                               builder, "np"))
+    res = _seed_impl(context, builder, sig, args, get_state_ptr(context, builder, "np"))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 def _seed_impl(context, builder, sig, args, state_ptr):
-    seed_value, = args
+    (seed_value,) = args
     fnty = ir.FunctionType(ir.VoidType(), (rnd_state_ptr_t, int32_t))
-    fn = cgutils.get_or_insert_function(builder.function.module, fnty,
-                                        "numba_rnd_init")
+    fn = cgutils.get_or_insert_function(builder.function.module, fnty, "numba_rnd_init")
     builder.call(fn, (state_ptr, seed_value))
     return context.get_constant(types.none, None)
+
 
 @glue_lowering("random.random")
 def random_impl(context, builder, sig, args):
     state_ptr = get_state_ptr(context, builder, "py")
     res = get_next_double(context, builder, state_ptr)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @lower("np.random.random")
 @lower("np.random.random_sample")
@@ -259,14 +280,16 @@ def _gauss_pair_impl(_random):
         while True:
             x1 = 2.0 * _random() - 1.0
             x2 = 2.0 * _random() - 1.0
-            r2 = x1*x1 + x2*x2
+            r2 = x1 * x1 + x2 * x2
             if r2 < 1.0 and r2 != 0.0:
                 break
 
         # Box-Muller transform
         f = math.sqrt(-2.0 * math.log(r2) / r2)
         return f * x1, f * x2
+
     return compute_gauss_pair
+
 
 def _gauss_impl(context, builder, sig, args, state):
     # The type for all computations (either float or double)
@@ -274,8 +297,7 @@ def _gauss_impl(context, builder, sig, args, state):
     llty = context.get_data_type(ty)
 
     state_ptr = get_state_ptr(context, builder, state)
-    _random = {"py": random.random,
-               "np": np.random.random}[state]
+    _random = {"py": random.random, "np": np.random.random}[state]
 
     ret = cgutils.alloca_once(builder, llty, name="result")
 
@@ -290,10 +312,9 @@ def _gauss_impl(context, builder, sig, args, state):
         with otherwise:
             # if not has_gauss: compute a pair of numbers using the Box-Muller
             # transform; keep one and return the other
-            pair = context.compile_internal(builder,
-                                            _gauss_pair_impl(_random),
-                                            signature(types.UniTuple(ty, 2)),
-                                            ())
+            pair = context.compile_internal(
+                builder, _gauss_pair_impl(_random), signature(types.UniTuple(ty, 2)), ()
+            )
 
             first, second = cgutils.unpack_tuple(builder, pair, 2)
             builder.store(first, gauss_ptr)
@@ -301,12 +322,12 @@ def _gauss_impl(context, builder, sig, args, state):
             builder.store(const_int(1), has_gauss_ptr)
 
     mu, sigma = args
-    return builder.fadd(mu,
-                        builder.fmul(sigma, builder.load(ret)))
+    return builder.fadd(mu, builder.fmul(sigma, builder.load(ret)))
+
 
 @glue_lowering("random.getrandbits", types.Integer)
 def getrandbits_impl(context, builder, sig, args):
-    nbits, = args
+    (nbits,) = args
     too_large = builder.icmp_unsigned(">=", nbits, const_int(65))
     too_small = builder.icmp_unsigned("==", nbits, const_int(0))
     with cgutils.if_unlikely(builder, builder.or_(too_large, too_small)):
@@ -326,26 +347,27 @@ def _randrange_impl(context, builder, start, stop, step, state):
     # n = stop - start
     builder.store(builder.sub(stop, start), nptr)
 
-    with builder.if_then(builder.icmp_signed('<', step, zero)):
+    with builder.if_then(builder.icmp_signed("<", step, zero)):
         # n = (n + step + 1) // step
         w = builder.add(builder.add(builder.load(nptr), step), one)
         n = builder.sdiv(w, step)
         builder.store(n, nptr)
-    with builder.if_then(builder.icmp_signed('>', step, one)):
+    with builder.if_then(builder.icmp_signed(">", step, one)):
         # n = (n + step - 1) // step
         w = builder.sub(builder.add(builder.load(nptr), step), one)
         n = builder.sdiv(w, step)
         builder.store(n, nptr)
 
     n = builder.load(nptr)
-    with cgutils.if_unlikely(builder, builder.icmp_signed('<=', n, zero)):
+    with cgutils.if_unlikely(builder, builder.icmp_signed("<=", n, zero)):
         # n <= 0
         msg = "empty range for randrange()"
         context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
     fnty = ir.FunctionType(ty, [ty, cgutils.true_bit.type])
-    fn = cgutils.get_or_insert_function(builder.function.module, fnty,
-                                        "llvm.ctlz.%s" % ty)
+    fn = cgutils.get_or_insert_function(
+        builder.function.module, fnty, "llvm.ctlz.%s" % ty
+    )
     # Since the upper bound is exclusive, we need to subtract one before
     # calculating the number of bits. This leads to a special case when
     # n == 1; there's only one possible result, so we don't need bits from
@@ -368,7 +390,7 @@ def _randrange_impl(context, builder, start, stop, step, state):
         builder.position_at_end(bbwhile)
         r = get_next_int(context, builder, state_ptr, nbits, state == "np")
         r = builder.trunc(r, ty)
-        too_large = builder.icmp_signed('>=', r, n)
+        too_large = builder.icmp_signed(">=", r, n)
         builder.cbranch(too_large, bbwhile, bbend)
 
         builder.position_at_end(bbend)
@@ -376,7 +398,7 @@ def _randrange_impl(context, builder, start, stop, step, state):
 
     if state == "np":
         # Handle n == 1 case, per previous comment.
-        with builder.if_else(builder.icmp_signed('==', n, one)) as (is_one, is_not_one):
+        with builder.if_else(builder.icmp_signed("==", n, one)) as (is_one, is_not_one):
             with is_one:
                 builder.store(zero, rptr)
             with is_not_one:
@@ -389,11 +411,12 @@ def _randrange_impl(context, builder, start, stop, step, state):
 
 @glue_lowering("random.randrange", types.Integer)
 def randrange_impl_1(context, builder, sig, args):
-    stop, = args
+    (stop,) = args
     start = ir.Constant(stop.type, 0)
     step = ir.Constant(stop.type, 1)
     res = _randrange_impl(context, builder, start, stop, step, "py")
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @glue_lowering("random.randrange", types.Integer, types.Integer)
 def randrange_impl_2(context, builder, sig, args):
@@ -402,12 +425,13 @@ def randrange_impl_2(context, builder, sig, args):
     res = _randrange_impl(context, builder, start, stop, step, "py")
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@glue_lowering("random.randrange", types.Integer,
-               types.Integer, types.Integer)
+
+@glue_lowering("random.randrange", types.Integer, types.Integer, types.Integer)
 def randrange_impl_3(context, builder, sig, args):
     start, stop, step = args
     res = _randrange_impl(context, builder, start, stop, step, "py")
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @glue_lowering("random.randint", types.Integer, types.Integer)
 def randint_impl_1(context, builder, sig, args):
@@ -417,13 +441,15 @@ def randint_impl_1(context, builder, sig, args):
     res = _randrange_impl(context, builder, start, stop, step, "py")
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 @lower("np.random.randint", types.Integer)
 def randint_impl_2(context, builder, sig, args):
-    stop, = args
+    (stop,) = args
     start = ir.Constant(stop.type, 0)
     step = ir.Constant(stop.type, 1)
     res = _randrange_impl(context, builder, start, stop, step, "np")
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @lower("np.random.randint", types.Integer, types.Integer)
 def randrange_impl_2(context, builder, sig, args):
@@ -432,15 +458,18 @@ def randrange_impl_2(context, builder, sig, args):
     res = _randrange_impl(context, builder, start, stop, step, "np")
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 @glue_lowering("random.uniform", types.Float, types.Float)
 def uniform_impl(context, builder, sig, args):
     res = uniform_impl(context, builder, sig, args, "py")
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 @lower("np.random.uniform", types.Float, types.Float)
 def uniform_impl(context, builder, sig, args):
     res = uniform_impl(context, builder, sig, args, "np")
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 def uniform_impl(context, builder, sig, args, state):
     state_ptr = get_state_ptr(context, builder, state)
@@ -448,6 +477,7 @@ def uniform_impl(context, builder, sig, args, state):
     width = builder.fsub(b, a)
     r = get_next_double(context, builder, state_ptr)
     return builder.fadd(a, builder.fmul(width, r))
+
 
 @glue_lowering("random.triangular", types.Float, types.Float)
 def triangular_impl_2(context, builder, sig, args):
@@ -464,10 +494,11 @@ def triangular_impl_2(context, builder, sig, args):
             low, high = high, low
         return low + (high - low) * math.sqrt(u * c)
 
-    res = context.compile_internal(builder, triangular_impl_2,
-                                    signature(*(fltty,) * 4),
-                                    (randval, low, high))
+    res = context.compile_internal(
+        builder, triangular_impl_2, signature(*(fltty,) * 4), (randval, low, high)
+    )
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @glue_lowering("random.triangular", types.Float, types.Float, types.Float)
 def triangular_impl_3(context, builder, sig, args):
@@ -475,12 +506,13 @@ def triangular_impl_3(context, builder, sig, args):
     res = _triangular_impl_3(context, builder, sig, low, high, mode, "py")
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower("np.random.triangular", types.Float,
-           types.Float, types.Float)
+
+@lower("np.random.triangular", types.Float, types.Float, types.Float)
 def triangular_impl_3(context, builder, sig, args):
     low, mode, high = args
     res = _triangular_impl_3(context, builder, sig, low, high, mode, "np")
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 def _triangular_impl_3(context, builder, sig, low, high, mode, state):
     fltty = sig.return_type
@@ -498,15 +530,16 @@ def _triangular_impl_3(context, builder, sig, low, high, mode, state):
             low, high = high, low
         return low + (high - low) * math.sqrt(u * c)
 
-    return context.compile_internal(builder, triangular_impl_3,
-                                    signature(*(fltty,) * 5),
-                                    (randval, low, high, mode))
+    return context.compile_internal(
+        builder, triangular_impl_3, signature(*(fltty,) * 5), (randval, low, high, mode)
+    )
 
 
 @glue_lowering("random.gammavariate", types.Float, types.Float)
 def gammavariate_impl(context, builder, sig, args):
     res = _gammavariate_impl(context, builder, sig, args, random.random)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @lower("np.random.standard_gamma", types.Float)
 @lower("np.random.gamma", types.Float)
@@ -515,6 +548,7 @@ def gammavariate_impl(context, builder, sig, args):
     sig, args = _fill_defaults(context, builder, sig, args, (None, 1.0))
     res = _gammavariate_impl(context, builder, sig, args, np.random.random)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 def _gammavariate_impl(context, builder, sig, args, _random):
     _exp = math.exp
@@ -534,7 +568,7 @@ def _gammavariate_impl(context, builder, sig, args, _random):
         # Warning: a few older sources define the gamma distribution in terms
         # of alpha > -1.0
         if alpha <= 0.0 or beta <= 0.0:
-            raise ValueError('gammavariate: alpha and beta must be > 0.0')
+            raise ValueError("gammavariate: alpha and beta must be > 0.0")
 
         if alpha > 1.0:
             # Uses R.C.H. Cheng, "The generation of Gamma
@@ -546,14 +580,14 @@ def _gammavariate_impl(context, builder, sig, args, _random):
 
             while 1:
                 u1 = _random()
-                if not 1e-7 < u1 < .9999999:
+                if not 1e-7 < u1 < 0.9999999:
                     continue
                 u2 = 1.0 - _random()
-                v = _log(u1/(1.0-u1))/ainv
-                x = alpha*_exp(v)
-                z = u1*u1*u2
-                r = bbb+ccc*v-x
-                if r + SG_MAGICCONST - 4.5*z >= 0.0 or r >= _log(z):
+                v = _log(u1 / (1.0 - u1)) / ainv
+                x = alpha * _exp(v)
+                z = u1 * u1 * u2
+                r = bbb + ccc * v - x
+                if r + SG_MAGICCONST - 4.5 * z >= 0.0 or r >= _log(z):
                     return x * beta
 
         elif alpha == 1.0:
@@ -569,16 +603,16 @@ def _gammavariate_impl(context, builder, sig, args, _random):
                     u = _random()
                 return -_log(u) * beta
 
-        else:   # alpha is between 0 and 1 (exclusive)
+        else:  # alpha is between 0 and 1 (exclusive)
             # Uses ALGORITHM GS of Statistical Computing - Kennedy & Gentle
             while 1:
                 u = _random()
-                b = (_e + alpha)/_e
-                p = b*u
+                b = (_e + alpha) / _e
+                p = b * u
                 if p <= 1.0:
-                    x = p ** (1.0/alpha)
+                    x = p ** (1.0 / alpha)
                 else:
-                    x = -_log((b-p)/alpha)
+                    x = -_log((b - p) / alpha)
                 u1 = _random()
                 if p > 1.0:
                     if u1 <= x ** (alpha - 1.0):
@@ -587,38 +621,34 @@ def _gammavariate_impl(context, builder, sig, args, _random):
                     break
             return x * beta
 
-    return context.compile_internal(builder, gammavariate_impl,
-                                    sig, args)
+    return context.compile_internal(builder, gammavariate_impl, sig, args)
 
 
 @glue_lowering("random.betavariate", types.Float, types.Float)
 def betavariate_impl(context, builder, sig, args):
-    res = _betavariate_impl(context, builder, sig, args,
-                             random.gammavariate)
+    res = _betavariate_impl(context, builder, sig, args, random.gammavariate)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower("np.random.beta",
-           types.Float, types.Float)
+
+@lower("np.random.beta", types.Float, types.Float)
 def betavariate_impl(context, builder, sig, args):
-    res = _betavariate_impl(context, builder, sig, args,
-                             np.random.gamma)
+    res = _betavariate_impl(context, builder, sig, args, np.random.gamma)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 def _betavariate_impl(context, builder, sig, args, gamma):
-
     def betavariate_impl(alpha, beta):
         """Beta distribution.  Taken from CPython.
         """
         # This version due to Janne Sinkkonen, and matches all the std
         # texts (e.g., Knuth Vol 2 Ed 3 pg 134 "the beta distribution").
-        y = gamma(alpha, 1.)
+        y = gamma(alpha, 1.0)
         if y == 0.0:
             return 0.0
         else:
-            return y / (y + gamma(beta, 1.))
+            return y / (y + gamma(beta, 1.0))
 
-    return context.compile_internal(builder, betavariate_impl,
-                                    sig, args)
+    return context.compile_internal(builder, betavariate_impl, sig, args)
 
 
 @glue_lowering("random.expovariate", types.Float)
@@ -636,9 +666,9 @@ def expovariate_impl(context, builder, sig, args):
         # possibility of taking the log of zero.
         return -_log(1.0 - _random()) / lambd
 
-    res = context.compile_internal(builder, expovariate_impl,
-                                    sig, args)
+    res = context.compile_internal(builder, expovariate_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @lower("np.random.exponential", types.Float)
 def exponential_impl(context, builder, sig, args):
@@ -648,9 +678,9 @@ def exponential_impl(context, builder, sig, args):
     def exponential_impl(scale):
         return -_log(1.0 - _random()) * scale
 
-    res = context.compile_internal(builder, exponential_impl,
-                                    sig, args)
+    res = context.compile_internal(builder, exponential_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @lower("np.random.standard_exponential")
 @lower("np.random.exponential")
@@ -661,24 +691,24 @@ def exponential_impl(context, builder, sig, args):
     def exponential_impl():
         return -_log(1.0 - _random())
 
-    res = context.compile_internal(builder, exponential_impl,
-                                    sig, args)
+    res = context.compile_internal(builder, exponential_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @lower("np.random.lognormal")
 @lower("np.random.lognormal", types.Float)
 @lower("np.random.lognormal", types.Float, types.Float)
 def np_lognormal_impl(context, builder, sig, args):
     sig, args = _fill_defaults(context, builder, sig, args, (0.0, 1.0))
-    res = _lognormvariate_impl(context, builder, sig, args,
-                                np.random.normal)
+    res = _lognormvariate_impl(context, builder, sig, args, np.random.normal)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@glue_lowering("random.lognormvariate",
-           types.Float, types.Float)
+
+@glue_lowering("random.lognormvariate", types.Float, types.Float)
 def lognormvariate_impl(context, builder, sig, args):
     res = _lognormvariate_impl(context, builder, sig, args, random.gauss)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 def _lognormvariate_impl(context, builder, sig, args, _gauss):
     _exp = math.exp
@@ -686,8 +716,7 @@ def _lognormvariate_impl(context, builder, sig, args, _gauss):
     def lognormvariate_impl(mu, sigma):
         return _exp(_gauss(mu, sigma))
 
-    return context.compile_internal(builder, lognormvariate_impl,
-                                    sig, args)
+    return context.compile_internal(builder, lognormvariate_impl, sig, args)
 
 
 @glue_lowering("random.paretovariate", types.Float)
@@ -698,11 +727,11 @@ def paretovariate_impl(context, builder, sig, args):
         """Pareto distribution.  Taken from CPython."""
         # Jain, pg. 495
         u = 1.0 - _random()
-        return 1.0 / u ** (1.0/alpha)
+        return 1.0 / u ** (1.0 / alpha)
 
-    res = context.compile_internal(builder, paretovariate_impl,
-                                    sig, args)
+    res = context.compile_internal(builder, paretovariate_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @lower("np.random.pareto", types.Float)
 def pareto_impl(context, builder, sig, args):
@@ -711,13 +740,13 @@ def pareto_impl(context, builder, sig, args):
     def pareto_impl(alpha):
         # Same as paretovariate() - 1.
         u = 1.0 - _random()
-        return 1.0 / u ** (1.0/alpha) - 1
+        return 1.0 / u ** (1.0 / alpha) - 1
 
     res = context.compile_internal(builder, pareto_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@glue_lowering("random.weibullvariate",
-           types.Float, types.Float)
+
+@glue_lowering("random.weibullvariate", types.Float, types.Float)
 def weibullvariate_impl(context, builder, sig, args):
     _random = random.random
     _log = math.log
@@ -726,11 +755,11 @@ def weibullvariate_impl(context, builder, sig, args):
         """Weibull distribution.  Taken from CPython."""
         # Jain, pg. 499; bug fix courtesy Bill Arms
         u = 1.0 - _random()
-        return alpha * (-_log(u)) ** (1.0/beta)
+        return alpha * (-_log(u)) ** (1.0 / beta)
 
-    res = context.compile_internal(builder, weibullvariate_impl,
-                                    sig, args)
+    res = context.compile_internal(builder, weibullvariate_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @lower("np.random.weibull", types.Float)
 def weibull_impl(context, builder, sig, args):
@@ -740,22 +769,23 @@ def weibull_impl(context, builder, sig, args):
     def weibull_impl(beta):
         # Same as weibullvariate(1.0, beta)
         u = 1.0 - _random()
-        return (-_log(u)) ** (1.0/beta)
+        return (-_log(u)) ** (1.0 / beta)
 
     res = context.compile_internal(builder, weibull_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@glue_lowering("random.vonmisesvariate",
-           types.Float, types.Float)
+
+@glue_lowering("random.vonmisesvariate", types.Float, types.Float)
 def vonmisesvariate_impl(context, builder, sig, args):
     res = _vonmisesvariate_impl(context, builder, sig, args, random.random)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower("np.random.vonmises",
-           types.Float, types.Float)
+
+@lower("np.random.vonmises", types.Float, types.Float)
 def vonmisesvariate_impl(context, builder, sig, args):
     res = _vonmisesvariate_impl(context, builder, sig, args, np.random.random)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 def _vonmisesvariate_impl(context, builder, sig, args, _random):
     _exp = math.exp
@@ -805,8 +835,7 @@ def _vonmisesvariate_impl(context, builder, sig, args, _random):
 
         return theta
 
-    return context.compile_internal(builder, vonmisesvariate_impl,
-                                    sig, args)
+    return context.compile_internal(builder, vonmisesvariate_impl, sig, args)
 
 
 @lower("np.random.binomial", types.Integer, types.Float)
@@ -870,7 +899,6 @@ def binomial_impl(context, builder, sig, args):
 
 @lower("np.random.chisquare", types.Float)
 def chisquare_impl(context, builder, sig, args):
-
     def chisquare_impl(df):
         return 2.0 * np.random.standard_gamma(df / 2.0)
 
@@ -880,10 +908,8 @@ def chisquare_impl(context, builder, sig, args):
 
 @lower("np.random.f", types.Float, types.Float)
 def f_impl(context, builder, sig, args):
-
     def f_impl(num, denom):
-        return ((np.random.chisquare(num) * denom) /
-                (np.random.chisquare(denom) * num))
+        return (np.random.chisquare(num) * denom) / (np.random.chisquare(denom) * num)
 
     res = context.compile_internal(builder, f_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -928,8 +954,7 @@ def gumbel_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower("np.random.hypergeometric", types.Integer,
-           types.Integer, types.Integer)
+@lower("np.random.hypergeometric", types.Integer, types.Integer, types.Integer)
 def hypergeometric_impl(context, builder, sig, args):
     _random = np.random.random
     _floor = math.floor
@@ -987,6 +1012,7 @@ def logistic_impl(context, builder, sig, args):
     sig, args = _fill_defaults(context, builder, sig, args, (0.0, 1.0))
     res = context.compile_internal(builder, logistic_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @lower("np.random.logseries", types.Float)
 def logseries_impl(context, builder, sig, args):
@@ -1046,14 +1072,15 @@ def poisson_impl(context, builder, sig, args):
     bbend = builder.append_basic_block("bbend")
 
     if len(args) == 1:
-        lam, = args
-        big_lam = builder.fcmp_ordered('>=', lam, ir.Constant(double, 10.0))
+        (lam,) = args
+        big_lam = builder.fcmp_ordered(">=", lam, ir.Constant(double, 10.0))
         with builder.if_then(big_lam):
             # For lambda >= 10.0, we switch to a more accurate
             # algorithm (see _random.c).
             fnty = ir.FunctionType(int64_t, (rnd_state_ptr_t, double))
-            fn = cgutils.get_or_insert_function(builder.function.module, fnty,
-                                                "numba_poisson_ptrs")
+            fn = cgutils.get_or_insert_function(
+                builder.function.module, fnty, "numba_poisson_ptrs"
+            )
             ret = builder.call(fn, (state_ptr, lam))
             builder.store(ret, retptr)
             builder.branch(bbend)
@@ -1100,12 +1127,10 @@ def poisson_impl(context, builder, sig, args):
 
 @lower("np.random.power", types.Float)
 def power_impl(context, builder, sig, args):
-
     def power_impl(a):
         if a <= 0.0:
             raise ValueError("power(): a <= 0")
-        return math.pow(1 - math.exp(-np.random.standard_exponential()),
-                        1./a)
+        return math.pow(1 - math.exp(-np.random.standard_exponential()), 1.0 / a)
 
     res = context.compile_internal(builder, power_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -1139,7 +1164,6 @@ def cauchy_impl(context, builder, sig, args):
 
 @lower("np.random.standard_t", types.Float)
 def standard_t_impl(context, builder, sig, args):
-
     def standard_t_impl(df):
         N = np.random.standard_normal()
         G = np.random.standard_gamma(df / 2.0)
@@ -1152,7 +1176,6 @@ def standard_t_impl(context, builder, sig, args):
 
 @lower("np.random.wald", types.Float, types.Float)
 def wald_impl(context, builder, sig, args):
-
     def wald_impl(mean, scale):
         if mean <= 0.0:
             raise ValueError("wald(): mean <= 0")
@@ -1193,6 +1216,7 @@ def zipf_impl(context, builder, sig, args):
     res = context.compile_internal(builder, zipf_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 def do_shuffle_impl(arr, rng):
 
     if not isinstance(arr, types.Buffer):
@@ -1204,13 +1228,16 @@ def do_shuffle_impl(arr, rng):
         rand = random.randrange
 
     if arr.ndim == 1:
+
         def impl(arr):
             i = arr.shape[0] - 1
             while i > 0:
                 j = rand(i + 1)
                 arr[i], arr[j] = arr[j], arr[i]
                 i -= 1
+
     else:
+
         def impl(arr):
             i = arr.shape[0] - 1
             while i > 0:
@@ -1220,26 +1247,33 @@ def do_shuffle_impl(arr, rng):
 
     return impl
 
+
 @overload(random.shuffle)
 def shuffle_impl(arr):
     return do_shuffle_impl(arr, "py")
+
 
 @overload(np.random.shuffle)
 def shuffle_impl(arr):
     return do_shuffle_impl(arr, "np")
 
+
 @overload(np.random.permutation)
 def permutation_impl(x):
     if isinstance(x, types.Integer):
+
         def permutation_impl(x):
             y = np.arange(x)
             np.random.shuffle(y)
             return y
+
     elif isinstance(x, types.Array):
+
         def permutation_impl(x):
             arr_copy = x.copy()
             np.random.shuffle(arr_copy)
             return arr_copy
+
     else:
         permutation_impl = None
     return permutation_impl
@@ -1284,7 +1318,7 @@ for typing_key, arity in [
     ("np.random.wald", 3),
     ("np.random.weibull", 2),
     ("np.random.zipf", 2),
-    ]:
+]:
 
     @lower(typing_key, *(types.Any,) * arity)
     def random_arr(context, builder, sig, args, typing_key=typing_key):
@@ -1311,6 +1345,7 @@ for typing_key, arity in [
 # ------------------------------------------------------------------------
 # Irregular aliases: np.random.rand, np.random.randn
 
+
 @overload(np.random.rand)
 def rand(*size):
     if len(size) == 0:
@@ -1324,6 +1359,7 @@ def rand(*size):
             return np.random.random(size)
 
     return rand_impl
+
 
 @overload(np.random.randn)
 def randn(*size):
@@ -1342,6 +1378,7 @@ def randn(*size):
 
 # ------------------------------------------------------------------------
 # np.random.choice
+
 
 @overload(np.random.choice)
 def choice(a, size=None, replace=True):
@@ -1380,10 +1417,12 @@ def choice(a, size=None, replace=True):
             return a_i
 
     else:
-        raise TypeError("np.random.choice() first argument should be "
-                        "int or array, got %s" % (a,))
+        raise TypeError(
+            "np.random.choice() first argument should be " "int or array, got %s" % (a,)
+        )
 
     if size in (None, types.none):
+
         def choice_impl(a, size=None, replace=True):
             """
             choice() implementation returning a single sample
@@ -1394,6 +1433,7 @@ def choice(a, size=None, replace=True):
             return getitem(a, i)
 
     else:
+
         def choice_impl(a, size=None, replace=True):
             """
             choice() implementation returning an array of samples
@@ -1411,8 +1451,10 @@ def choice(a, size=None, replace=True):
                 # (`size` can be an arbitrary int or tuple of ints)
                 out = np.empty(size, dtype)
                 if out.size > n:
-                    raise ValueError("Cannot take a larger sample than "
-                                     "population when 'replace=False'")
+                    raise ValueError(
+                        "Cannot take a larger sample than "
+                        "population when 'replace=False'"
+                    )
                 # Get a permuted copy of the source array
                 # we need this implementation in order to get the
                 # np.random.choice inside numba to match the output
@@ -1429,6 +1471,7 @@ def choice(a, size=None, replace=True):
 
 # ------------------------------------------------------------------------
 # np.random.multinomial
+
 
 @overload(np.random.multinomial)
 def multinomial(n, pvals, size=None):
@@ -1467,14 +1510,18 @@ def multinomial(n, pvals, size=None):
                 fl[i + plen - 1] = n_experiments
 
     if not isinstance(n, types.Integer):
-        raise TypeError("np.random.multinomial(): n should be an "
-                        "integer, got %s" % (n,))
+        raise TypeError(
+            "np.random.multinomial(): n should be an " "integer, got %s" % (n,)
+        )
 
     if not isinstance(pvals, (types.Sequence, types.Array)):
-        raise TypeError("np.random.multinomial(): pvals should be an "
-                        "array or sequence, got %s" % (pvals,))
+        raise TypeError(
+            "np.random.multinomial(): pvals should be an "
+            "array or sequence, got %s" % (pvals,)
+        )
 
     if size in (None, types.none):
+
         def multinomial_impl(n, pvals, size=None):
             """
             multinomial(..., size=None)
@@ -1484,6 +1531,7 @@ def multinomial(n, pvals, size=None):
             return out
 
     elif isinstance(size, types.Integer):
+
         def multinomial_impl(n, pvals, size=None):
             """
             multinomial(..., size=int)
@@ -1493,6 +1541,7 @@ def multinomial(n, pvals, size=None):
             return out
 
     elif isinstance(size, types.BaseTuple):
+
         def multinomial_impl(n, pvals, size=None):
             """
             multinomial(..., size=tuple)
@@ -1502,17 +1551,20 @@ def multinomial(n, pvals, size=None):
             return out
 
     else:
-        raise TypeError("np.random.multinomial(): size should be int or "
-                        "tuple or None, got %s" % (size,))
+        raise TypeError(
+            "np.random.multinomial(): size should be int or "
+            "tuple or None, got %s" % (size,)
+        )
 
     return multinomial_impl
+
 
 # ------------------------------------------------------------------------
 # np.random.dirichlet
 
+
 @overload(np.random.dirichlet)
 def dirichlet(alpha, size=None):
-
     @register_jitable
     def dirichlet_arr(alpha, out):
 
@@ -1520,7 +1572,7 @@ def dirichlet(alpha, size=None):
 
         for a_val in iter(alpha):
             if a_val <= 0:
-                raise ValueError('dirichlet: alpha must be > 0.0')
+                raise ValueError("dirichlet: alpha must be > 0.0")
 
         a_len = len(alpha)
         size = out.size
@@ -1529,22 +1581,26 @@ def dirichlet(alpha, size=None):
             # calculate gamma random numbers per alpha specifications
             norm = 0  # use this to normalize every the group total to 1
             for k, w in enumerate(alpha):
-                flat[i+k] = np.random.gamma(w, 1)
+                flat[i + k] = np.random.gamma(w, 1)
                 norm += flat[i + k].item()
             for k, w in enumerate(alpha):
                 flat[i + k] /= norm
 
     if not isinstance(alpha, (types.Sequence, types.Array)):
-        raise TypeError("np.random.dirichlet(): alpha should be an "
-                        "array or sequence, got %s" % (alpha,))
+        raise TypeError(
+            "np.random.dirichlet(): alpha should be an "
+            "array or sequence, got %s" % (alpha,)
+        )
 
     if size in (None, types.none):
+
         def dirichlet_impl(alpha, size=None):
             out = np.empty(len(alpha))
             dirichlet_arr(alpha, out)
             return out
 
     elif isinstance(size, types.Integer):
+
         def dirichlet_impl(alpha, size=None):
             """
             dirichlet(..., size=int)
@@ -1553,8 +1609,9 @@ def dirichlet(alpha, size=None):
             dirichlet_arr(alpha, out)
             return out
 
-    elif isinstance(size, types.UniTuple):
-        if size is types.UniTuple(types.intp, len(size)):
+    elif isinstance(size, (types.UniTuple)):
+        if isinstance(size, (types.UniTuple)) and isinstance(size.dtype, types.Integer):
+
             def dirichlet_impl(alpha, size=None):
                 """
                 dirichlet(..., size=tuple)
@@ -1562,12 +1619,17 @@ def dirichlet(alpha, size=None):
                 out = np.empty(size + (len(alpha),))
                 dirichlet_arr(alpha, out)
                 return out
+
         else:
-            raise TypeError("np.random.dirichlet(): size should be int or "
-                            "tuple of ints or None, got %s" % size)
+            raise TypeError(
+                "np.random.dirichlet(): size should be int or "
+                "tuple of ints or None, got %s" % size
+            )
 
     else:
-        raise TypeError("np.random.dirichlet(): size should be int or "
-                        "tuple of ints or None, got %s" % size)
+        raise TypeError(
+            "np.random.dirichlet(): size should be int or "
+            "tuple of ints or None, got %s" % size
+        )
 
     return dirichlet_impl
