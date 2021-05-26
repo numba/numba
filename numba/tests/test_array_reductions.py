@@ -980,6 +980,17 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         assert_raises(arr2d, -3)
         assert_raises(arr2d, 2)
 
+    def test_argmax_axis_must_be_integer(self):
+        arr = np.arange(6)
+
+        @jit(nopython=True)
+        def jitargmax(arr, axis):
+            return np.argmax(arr, axis)
+
+        with self.assertTypingError() as e:
+            jitargmax(arr, "foo")
+        self.assertIn("axis must be an integer", str(e.exception))
+
     def test_argmax_method_axis(self):
         arr2d = np.arange(6).reshape(2, 3)
 

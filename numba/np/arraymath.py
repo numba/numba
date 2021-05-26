@@ -784,6 +784,7 @@ def array_argmax(arr, axis=None):
         def array_argmax_impl(arr, axis=None):
             return flatten_impl(arr)
     else:
+        _check_is_integer(axis, "axis")
         retty = arr.dtype
 
         def array_argmax_impl(arr, axis=None):
