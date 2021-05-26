@@ -513,6 +513,14 @@ The following Python libraries have adopted the CUDA Array Interface:
 - `ArrayViews <https://github.com/xnd-project/arrayviews>`_
 - `JAX <https://jax.readthedocs.io/en/latest/index.html>`_
 - `PyCUDA <https://documen.tician.de/pycuda/tutorial.html#interoperability-with-other-libraries-using-the-cuda-array-interface>`_
+- `DALI: the NVIDIA Data Loading Library <https://github.com/NVIDIA/DALI>`_ :
+
+    - `TensorGPU objects
+      <https://docs.nvidia.com/deeplearning/dali/user-guide/docs/data_types.html#nvidia.dali.backend.TensorGPU>`_
+      expose the CUDA Array Interface.
+    - `The External Source operator
+      <https://docs.nvidia.com/deeplearning/dali/user-guide/docs/supported_ops.html#nvidia.dali.fn.external_source>`_
+      consumes objects exporting the CUDA Array Interface.
 - The RAPIDS stack:
 
     - `cuDF <https://rapidsai.github.io/projects/cudf/en/0.11.0/10min-cudf-cupy.html>`_

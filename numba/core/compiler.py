@@ -6,7 +6,6 @@ from numba.core.tracing import event
 from numba.core import (utils, errors, typing, interpreter, bytecode, postproc,
                         config, callconv, cpu)
 from numba.parfors.parfor import ParforDiagnostics
-from numba.core.inline_closurecall import InlineClosureCallPass
 from numba.core.errors import CompilerError
 from numba.core.environment import lookup_environment
 
@@ -271,7 +270,7 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
     """
     from numba.core.registry import cpu_target
     typingctx = typing.Context()
-    targetctx = cpu.CPUContext(typingctx)
+    targetctx = cpu.CPUContext(typingctx, target='cpu')
     # Register the contexts in case for nested @jit or @overload calls
     with cpu_target.nested_context(typingctx, targetctx):
         return compile_extra(typingctx, targetctx, func, args, return_type,
@@ -292,6 +291,7 @@ def run_frontend(func, inline_closures=False, emit_dels=False):
     bc = bytecode.ByteCode(func_id=func_id)
     func_ir = interp.interpret(bc)
     if inline_closures:
+        from numba.core.inline_closurecall import InlineClosureCallPass
         inline_pass = InlineClosureCallPass(func_ir, cpu.ParallelOptions(False),
                                             {}, False)
         inline_pass.run()

@@ -9,7 +9,7 @@ from numba import jit, typeof
 from numba.core import types
 from numba.core.compiler import compile_isolated
 from numba.core.errors import TypingError, LoweringError
-from numba.np.numpy_support import as_dtype
+from numba.np.numpy_support import as_dtype, numpy_version
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeak,
                                  MemoryLeakMixin, tag, needs_blas)
 import unittest
@@ -232,6 +232,19 @@ def array_real(a):
 
 def array_imag(a):
     return np.imag(a)
+
+def np_clip(a, a_min, a_max, out=None):
+    return np.clip(a, a_min, a_max, out)
+
+def np_clip_kwargs(a, a_min, a_max, out=None):
+    return np.clip(a, a_min, a_max, out=out)
+
+def array_clip(a, a_min=None, a_max=None, out=None):
+    return a.clip(a_min, a_max, out)
+
+def array_clip_kwargs(a, a_min=None, a_max=None, out=None):
+    return a.clip(a_min, a_max, out=out)
+
 
 def array_conj(a):
     return a.conj()
@@ -1343,6 +1356,61 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         x, y = np.meshgrid(x, x)
         z = x + 1j*y
         np.testing.assert_equal(pyfunc(z), cfunc(z))
+
+    def test_clip(self):
+        # TODO: scalars are not tested (issue #3469)
+        for a in (np.linspace(-10, 10, 101),
+                  np.linspace(-10, 10, 40).reshape(5, 2, 4)):
+            for pyfunc in [np_clip, np_clip_kwargs, array_clip,
+                           array_clip_kwargs]:
+                cfunc = jit(nopython=True)(pyfunc)
+
+                msg = "array_clip: must set either max or min"
+                with self.assertRaisesRegex(ValueError, msg):
+                    cfunc(a, None, None)
+
+                np.testing.assert_equal(pyfunc(a, 0, None), cfunc(a, 0, None))
+                np.testing.assert_equal(pyfunc(a, None, 0), cfunc(a, None, 0))
+
+                np.testing.assert_equal(pyfunc(a, -5, 5), cfunc(a, -5, 5))
+
+                pyout = np.empty_like(a)
+                cout = np.empty_like(a)
+                np.testing.assert_equal(pyfunc(a, -5, 5, pyout),
+                                        cfunc(a, -5, 5, cout))
+                np.testing.assert_equal(pyout, cout)
+
+                # verifies that type-inference is working on the return value
+                # this used to trigger issue #3489
+                def lower_clip_result(a):
+                    return np.expm1(cfunc(a, -5, 5))
+                np.testing.assert_almost_equal(
+                    lower_clip_result(a),
+                    jit(nopython=True)(lower_clip_result)(a))
+
+    def test_clip_bad_array(self):
+        cfunc = jit(nopython=True)(np_clip)
+        msg = '.*The argument "a" must be array-like.*'
+        with self.assertRaisesRegex(TypingError, msg):
+            cfunc(None, 0, 10)
+
+    def test_clip_bad_min(self):
+        cfunc = jit(nopython=True)(np_clip)
+        msg = '.*The argument "a_min" must be a number.*'
+        with self.assertRaisesRegex(TypingError, msg):
+            cfunc(1, 'a', 10)
+
+    def test_clip_bad_max(self):
+        cfunc = jit(nopython=True)(np_clip)
+        msg = '.*The argument "a_max" must be a number.*'
+        with self.assertRaisesRegex(TypingError, msg):
+            cfunc(1, 1, 'b')
+
+    def test_clip_bad_out(self):
+        cfunc = jit(nopython=True)(np_clip)
+        msg = '.*The argument "out" must be an array if it is provided.*'
+        with self.assertRaisesRegex(TypingError, msg):
+            cfunc(5, 1, 10, out=6)
 
     def test_conj(self):
         for pyfunc in [array_conj, array_conjugate]:

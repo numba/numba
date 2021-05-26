@@ -1160,6 +1160,20 @@ class TestBogusContext(BaseTestWithLifting):
             str(raises.exception),
             )
 
+    def test_with_as_fails_gracefully(self):
+        @njit
+        def foo():
+            with open('') as f:
+                pass
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            foo()
+
+        excstr = str(raises.exception)
+        msg = ("The 'with (context manager) as (variable):' construct is not "
+               "supported.")
+        self.assertIn(msg, excstr)
+
 
 if __name__ == '__main__':
     unittest.main()
