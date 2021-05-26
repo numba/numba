@@ -68,7 +68,6 @@ class TargetContextAwareBuilder(Builder):
                             fastmath=ll_flags, attrs=attrs)
 
 
-
 class BaseLower(object):
     """
     Lower IR to LLVM
