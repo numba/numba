@@ -958,8 +958,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             c_functions = [
                 jit(nopython=True)(pyfunc) for pyfunc in py_functions
             ]
-            for (pyfunc, cfunc) in zip(py_functions, c_functions):
-                self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+            for cfunc in c_functions:
+                self.assertPreciseEqual(cfunc.py_func(arr), cfunc(arr))
 
     def test_argmax_axis_out_of_range(self):
         arr1d = np.arange(6)
