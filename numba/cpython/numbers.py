@@ -15,6 +15,8 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
 from numba.core import typing, types, utils, errors, cgutils, optional
 from numba.core.extending import intrinsic, overload_method
 from numba.cpython.unsafe.numbers import viewer
+from numba.core.overload_glue import glue_lowering
+
 
 def _int_arith_flags(rettype):
     """
@@ -157,7 +159,7 @@ def _int_divmod_impl(context, builder, sig, args, zerodiv_message):
     return quot, rem
 
 
-@lower_builtin(divmod, types.Integer, types.Integer)
+@glue_lowering(divmod, types.Integer, types.Integer)
 def int_divmod_impl(context, builder, sig, args):
     quot, rem = _int_divmod_impl(context, builder, sig, args,
                                  "integer divmod by zero")
@@ -187,8 +189,8 @@ def int_truediv_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(operator.mod, types.Integer, types.Integer)
-@lower_builtin(operator.imod, types.Integer, types.Integer)
+@glue_lowering(operator.mod, types.Integer, types.Integer)
+@glue_lowering(operator.imod, types.Integer, types.Integer)
 def int_rem_impl(context, builder, sig, args):
     quot, rem = _int_divmod_impl(context, builder, sig, args,
                                  "integer modulo by zero")
@@ -519,12 +521,12 @@ lower_builtin(operator.pos, types.boolean)(bool_unary_positive_impl)
 def _implement_integer_operators():
     ty = types.Integer
 
-    lower_builtin(operator.add, ty, ty)(int_add_impl)
-    lower_builtin(operator.iadd, ty, ty)(int_add_impl)
-    lower_builtin(operator.sub, ty, ty)(int_sub_impl)
-    lower_builtin(operator.isub, ty, ty)(int_sub_impl)
-    lower_builtin(operator.mul, ty, ty)(int_mul_impl)
-    lower_builtin(operator.imul, ty, ty)(int_mul_impl)
+    glue_lowering(operator.add, ty, ty)(int_add_impl)
+    glue_lowering(operator.iadd, ty, ty)(int_add_impl)
+    glue_lowering(operator.sub, ty, ty)(int_sub_impl)
+    glue_lowering(operator.isub, ty, ty)(int_sub_impl)
+    glue_lowering(operator.mul, ty, ty)(int_mul_impl)
+    glue_lowering(operator.imul, ty, ty)(int_mul_impl)
     lower_builtin(operator.eq, ty, ty)(int_eq_impl)
     lower_builtin(operator.ne, ty, ty)(int_ne_impl)
 
@@ -732,7 +734,7 @@ def real_divmod_func_body(context, builder, vx, wx):
     return builder.load(pfloordiv), builder.load(pmod)
 
 
-@lower_builtin(divmod, types.Float, types.Float)
+@glue_lowering(divmod, types.Float, types.Float)
 def real_divmod_impl(context, builder, sig, args, loc=None):
     x, y = args
     quot = cgutils.alloca_once(builder, x.type, name="quot")
@@ -890,18 +892,18 @@ def real_sign_impl(context, builder, sig, args):
 
 ty = types.Float
 
-lower_builtin(operator.add, ty, ty)(real_add_impl)
-lower_builtin(operator.iadd, ty, ty)(real_add_impl)
-lower_builtin(operator.sub, ty, ty)(real_sub_impl)
-lower_builtin(operator.isub, ty, ty)(real_sub_impl)
-lower_builtin(operator.mul, ty, ty)(real_mul_impl)
-lower_builtin(operator.imul, ty, ty)(real_mul_impl)
+glue_lowering(operator.add, ty, ty)(real_add_impl)
+glue_lowering(operator.iadd, ty, ty)(real_add_impl)
+glue_lowering(operator.sub, ty, ty)(real_sub_impl)
+glue_lowering(operator.isub, ty, ty)(real_sub_impl)
+glue_lowering(operator.mul, ty, ty)(real_mul_impl)
+glue_lowering(operator.imul, ty, ty)(real_mul_impl)
 lower_builtin(operator.floordiv, ty, ty)(real_floordiv_impl)
 lower_builtin(operator.ifloordiv, ty, ty)(real_floordiv_impl)
 lower_builtin(operator.truediv, ty, ty)(real_div_impl)
 lower_builtin(operator.itruediv, ty, ty)(real_div_impl)
-lower_builtin(operator.mod, ty, ty)(real_mod_impl)
-lower_builtin(operator.imod, ty, ty)(real_mod_impl)
+glue_lowering(operator.mod, ty, ty)(real_mod_impl)
+glue_lowering(operator.imod, ty, ty)(real_mod_impl)
 lower_builtin(operator.pow, ty, ty)(real_power_impl)
 lower_builtin(operator.ipow, ty, ty)(real_power_impl)
 lower_builtin(pow, ty, ty)(real_power_impl)
@@ -1144,12 +1146,12 @@ def complex_abs_impl(context, builder, sig, args):
 
 ty = types.Complex
 
-lower_builtin(operator.add, ty, ty)(complex_add_impl)
-lower_builtin(operator.iadd, ty, ty)(complex_add_impl)
-lower_builtin(operator.sub, ty, ty)(complex_sub_impl)
-lower_builtin(operator.isub, ty, ty)(complex_sub_impl)
-lower_builtin(operator.mul, ty, ty)(complex_mul_impl)
-lower_builtin(operator.imul, ty, ty)(complex_mul_impl)
+glue_lowering(operator.add, ty, ty)(complex_add_impl)
+glue_lowering(operator.iadd, ty, ty)(complex_add_impl)
+glue_lowering(operator.sub, ty, ty)(complex_sub_impl)
+glue_lowering(operator.isub, ty, ty)(complex_sub_impl)
+glue_lowering(operator.mul, ty, ty)(complex_mul_impl)
+glue_lowering(operator.imul, ty, ty)(complex_mul_impl)
 lower_builtin(operator.truediv, ty, ty)(complex_div_impl)
 lower_builtin(operator.itruediv, ty, ty)(complex_div_impl)
 lower_builtin(operator.neg, ty)(complex_negate_impl)

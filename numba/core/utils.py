@@ -229,6 +229,12 @@ class ConfigStack:
             self.pop()
 
 
+def current_target_config():
+    """ Shortcut function for getting the current target configuration.
+    """
+    return ConfigStack().top_or_none()
+
+
 class ConfigOptions(object):
     OPTIONS = {}
 
