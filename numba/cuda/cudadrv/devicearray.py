@@ -783,9 +783,9 @@ def auto_device(obj, stream=0, copy=True):
                 if (
                     not isinstance(obj, DeviceNDArray)
                     and isinstance(obj, np.ndarray)
-                    ):
-                    msg = ("Host array used in CUDA kernel will incur copy overhead"
-                       "to/from device.")
+                ):
+                    msg = ("Host array used in CUDA kernel will incur copy "
+                           "overhead to/from device.")
                     warn(NumbaPerformanceWarning(msg))
             devobj.copy_to_device(obj, stream=stream)
         return devobj, True

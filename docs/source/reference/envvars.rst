@@ -478,6 +478,11 @@ GPU support
    heuristic needs to check the number of SMs available on the device in the
    current context.
 
+.. envvar:: CUDA_WARN_ON_HOST_MEMORY_LAUNCH
+
+   Enable warnings if a kernel is launched with host memory which forces a copy to and
+   from the device. This option is on by default (default value is 1).
+
 
 Threading Control
 -----------------
