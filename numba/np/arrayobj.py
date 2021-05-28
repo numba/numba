@@ -5177,6 +5177,9 @@ def array_to_array(context, builder, fromty, toty, val):
 @lower_cast(types.Array, types.Float)
 @lower_cast(types.Array, types.Integer)
 @lower_cast(types.Array, types.Complex)
+@lower_cast(types.Array, types.Boolean)
+@lower_cast(types.Array, types.NPTimedelta)
+@lower_cast(types.Array, types.NPDatetime)
 def array0d_to_scalar(context, builder, fromty, toty, val):
     def impl(a):
         # a is an array(T, 0d, O), T is type, O is order

@@ -89,16 +89,25 @@ class TestCasting(unittest.TestCase):
         def inner(x):
             return x.dtype.type(x)
         
-        types = (np.float32, np.float64, np.int64, np.complex64, np.complex128)
+        types = (np.bool_, np.float32, np.float64, np.int64,
+                 np.complex64, np.complex128)
         
         for T in types: 
             x = np.array(12.3, dtype=T)
             self.assertEqual(inner(x), x[()])
 
-        # check complex as well
+        # check complex
         ca = np.array(2j+3, dtype=np.complex64)
         self.assertEqual(inner(ca), ca[()])
 
+        # check timedelta64
+        ct = np.array(np.timedelta64(3, 'h'))
+        self.assertEqual(inner(ct), ct[()])
+
+        # check datetime64
+        cd = np.array(np.datetime64('2016-01-01'))
+        self.assertEqual(inner(cd), cd[()])
+    
     def test_array_to_scalar(self):
         """
         Ensure that a TypingError exception is raised if
