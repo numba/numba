@@ -582,6 +582,42 @@ Initialization
 
 * :func:`numpy.random.seed`: with an integer argument only
 
+.. warning::
+   Calling :func:`numpy.random.seed` from non-Numba code (or from :term:`object mode`
+   code) will seed the NumPy random generator, not the Numba random generator.
+   To poperly seed the Numba random generator, see example below.
+
+.. code-block:: python
+
+  from numba import njit
+  import numpy as np
+
+  @njit
+  def seed(a):
+      np.random.seed(a)
+
+  @njit
+  def rand():
+      return np.random.rand()
+
+
+  # Uncorrect seeding
+  np.random.seed(1234)
+  print(rand())
+
+  np.random.seed(1234)
+  print(rand())
+
+  # Correct seeding
+  seed(1234)
+  print(rand())
+
+  seed(1234)
+  print(rand())
+
+
+
+
 Simple random data
 ''''''''''''''''''
 

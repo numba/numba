@@ -1156,9 +1156,39 @@ startup with entropy drawn from the operating system.
 * :func:`random.vonmisesvariate`
 * :func:`random.weibullvariate`
 
-.. note::
+.. warning::
    Calling :func:`random.seed` from non-Numba code (or from :term:`object mode`
    code) will seed the Python random generator, not the Numba random generator.
+   To poperly seed the Numba random generator, see example below.
+
+.. code-block:: python
+
+  from numba import njit
+  import random
+
+  @njit
+  def seed(a):
+      random.seed(a)
+
+  @njit
+  def rand():
+      return random.random()
+
+
+  # Uncorrect seeding
+  random.seed(1234)
+  print(rand())
+
+  random.seed(1234)
+  print(rand())
+
+  # Correct seeding
+  seed(1234)
+  print(rand())
+
+  seed(1234)
+  print(rand())
+
 
 .. note::
    Since version 0.28.0, the generator is thread-safe and fork-safe.  Each
