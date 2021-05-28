@@ -87,11 +87,17 @@ class TestCasting(unittest.TestCase):
     def test_0darrayT_to_T(self):
         @njit
         def inner(x):
-            return T(x)
+            return x.dtype.type(x)
         
-        for T in (np.float32, np.int64):
+        types = (np.float32, np.float64, np.int64, np.complex64, np.complex128)
+        
+        for T in types: 
             x = np.array(12.3, dtype=T)
             self.assertEqual(inner(x), x[()])
+
+        # check complex as well
+        ca = np.array(2j+3, dtype=np.complex64)
+        self.assertEqual(inner(ca), ca[()])
 
     def test_array_to_scalar(self):
         """
