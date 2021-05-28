@@ -1159,7 +1159,7 @@ startup with entropy drawn from the operating system.
 .. warning::
    Calling :func:`random.seed` from non-Numba code (or from :term:`object mode`
    code) will seed the Python random generator, not the Numba random generator.
-   To poperly seed the Numba random generator, see example below.
+   To properly seed the Numba random generator, see example below.
 
 .. code-block:: python
 
