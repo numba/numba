@@ -117,7 +117,8 @@ def to_device(obj, stream=0, copy=True, to=None):
         hary = d_ary.copy_to_host(stream=stream)
     """
     if to is None:
-        to, new = devicearray.auto_device(obj, stream=stream, copy=copy)
+        to, new = devicearray.auto_device(obj, stream=stream, copy=copy,
+                                          user_explicit=True)
         return to
     if copy:
         to.copy_to_device(obj, stream=stream)

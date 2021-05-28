@@ -30,11 +30,11 @@ class CUDATestCase(SerialMixin, TestCase):
         # Disable warnings about low gpu utilization in the test suite
         config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
         # Disable warnings about host arrays in the test suite
-        config.CUDA_WARN_ON_HOST_MEMORY_LAUNCH = 0
+        config.CUDA_WARN_ON_IMPLICIT_COPY = 0
 
     def tearDown(self):
         config.CUDA_LOW_OCCUPANCY_WARNINGS = self._low_occupancy_warnings
-        config.CUDA_WARN_ON_HOST_MEMORY_LAUNCH = \
+        config.CUDA_WARN_ON_IMPLICIT_COPY = \
             self._warn_on_host_memory_launch
 
 

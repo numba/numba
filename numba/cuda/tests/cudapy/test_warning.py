@@ -39,7 +39,7 @@ class TestWarnings(CUDATestCase):
 
         N = 10
         arr_f32 = np.zeros(N, dtype=np.float32)
-        with override_config('CUDA_WARN_ON_HOST_MEMORY_LAUNCH', 1):
+        with override_config('CUDA_WARN_ON_IMPLICIT_COPY', 1):
             with warnings.catch_warnings(record=True) as w:
                 foo[1, N](arr_f32, N)
 
@@ -56,7 +56,7 @@ class TestWarnings(CUDATestCase):
         N = 10
         ary = cuda.pinned_array(N, dtype=np.float32)
 
-        with override_config('CUDA_WARN_ON_HOST_MEMORY_LAUNCH', 1):
+        with override_config('CUDA_WARN_ON_IMPLICIT_COPY', 1):
             with warnings.catch_warnings(record=True) as w:
                 foo[1, N](ary, N)
 
@@ -73,7 +73,7 @@ class TestWarnings(CUDATestCase):
         N = 10
         ary = cuda.mapped_array(N, dtype=np.float32)
 
-        with override_config('CUDA_WARN_ON_HOST_MEMORY_LAUNCH', 1):
+        with override_config('CUDA_WARN_ON_IMPLICIT_COPY', 1):
             with warnings.catch_warnings(record=True) as w:
                 foo[1, N](ary, N)
 
@@ -87,7 +87,7 @@ class TestWarnings(CUDATestCase):
         N = 10
         ary = cuda.managed_array(N, dtype=np.float32)
 
-        with override_config('CUDA_WARN_ON_HOST_MEMORY_LAUNCH', 1):
+        with override_config('CUDA_WARN_ON_IMPLICIT_COPY', 1):
             with warnings.catch_warnings(record=True) as w:
                 foo[1, N](ary, N)
 
@@ -101,7 +101,7 @@ class TestWarnings(CUDATestCase):
         N = 10
         ary = cuda.device_array(N, dtype=np.float32)
 
-        with override_config('CUDA_WARN_ON_HOST_MEMORY_LAUNCH', 1):
+        with override_config('CUDA_WARN_ON_IMPLICIT_COPY', 1):
             with warnings.catch_warnings(record=True) as w:
                 foo[1, N](ary, N)
 
