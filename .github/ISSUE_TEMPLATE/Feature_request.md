@@ -23,3 +23,5 @@ Please include details of the feature you would like to see, why you would
 like to see it/the use case.
 
 -->
+
+## Any hints on how to implement the requested feature?

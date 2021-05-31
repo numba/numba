@@ -33,3 +33,12 @@ Here's some guidelines to help the review process go smoothly.
 Many thanks in advance for your cooperation!
 
 -->
+
+## Reference issue
+<!-- You can link to a specific issue using the github syntax #<issue number>  -->
+
+## What does this implement/fix?
+<!--Please explain your changes.-->
+
+## Additional information
+<!--Any additional information you think is important.-->
