@@ -471,7 +471,6 @@ The following top-level functions are supported:
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
 * :func:`numpy.kaiser`
-* :func:`numpy.isclose`
 * :func:`numpy.iscomplex`
 * :func:`numpy.iscomplexobj`
 * :func:`numpy.isneginf`
