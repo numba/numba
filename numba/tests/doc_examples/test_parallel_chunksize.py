@@ -10,7 +10,11 @@ class ChunksizeExamplesTest(unittest.TestCase):
     def test_chunksize_manual(self):
         with captured_stdout():
             # magictoken.ex_chunksize_manual.begin
-            from numba import njit, prange, set_parallel_chunksize, get_parallel_chunksize
+            from numba import (njit,
+                               prange,
+                               set_parallel_chunksize,
+                               get_parallel_chunksize,
+                              )
 
             @njit(parallel=True)
             def func1(n):
