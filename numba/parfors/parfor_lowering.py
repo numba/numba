@@ -1555,16 +1555,19 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         builder.store(stop, builder.gep(dim_stops,
                                         [context.get_constant(types.uintp, i)]))
 
-    get_chunksize = builder.module.get_or_insert_function(
+    get_chunksize = cgutils.get_or_insert_function(
+        builder.module,
         lc.Type.function(uintp_t, []),
         name="get_parallel_chunksize")
 
-    set_chunksize = builder.module.get_or_insert_function(
+    set_chunksize = cgutils.get_or_insert_function(
+        builder.module,
         lc.Type.function(lc.Type.void(), [uintp_t]),
         name="set_parallel_chunksize")
 
     get_num_threads = cgutils.get_or_insert_function(
-        builder.module, lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
+        builder.module,
+        lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
         "get_num_threads")
 
     num_threads = builder.call(get_num_threads, [])
@@ -1578,7 +1581,10 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                                                    "This likely indicates a bug in Numba.",))
 
     get_sched_size_fnty = lc.Type.function(uintp_t, [uintp_t, uintp_t, intp_ptr_t, intp_ptr_t])
-    get_sched_size = builder.module.get_or_insert_function(get_sched_size_fnty, name="get_sched_size")
+    get_sched_size = cgutils.get_or_insert_function(
+        builder.module,
+        get_sched_size_fnty,
+        name="get_sched_size")
     num_divisions = builder.call(get_sched_size, [num_threads,
                                                   context.get_constant(types.uintp, num_dim),
                                                   dim_starts,
