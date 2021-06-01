@@ -29,6 +29,7 @@ from .cudadrv import driver
 from .errors import missing_launch_config_msg, normalize_kernel_dimensions
 from .api import get_current_device
 from .args import wrap_arg
+from numba.core.errors import NumbaPerformanceWarning
 from .descriptor import cuda_target
 
 
@@ -134,8 +135,8 @@ class CUDACompiler(CompilerBase):
 
 
 @global_compiler_lock
-def compile_cuda(pyfunc, return_type, args, debug=False, inline=False,
-                 fastmath=False, nvvm_options=None):
+def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
+                 inline=False, fastmath=False, nvvm_options=None):
     from .descriptor import cuda_target
     typingctx = cuda_target.typing_context
     targetctx = cuda_target.target_context
@@ -145,7 +146,11 @@ def compile_cuda(pyfunc, return_type, args, debug=False, inline=False,
     flags.no_compile = True
     flags.no_cpython_wrapper = True
     flags.no_cfunc_wrapper = True
-    if debug:
+    if debug or lineinfo:
+        # Note both debug and lineinfo turn on debug information in the
+        # compiled code, but we keep them separate arguments in case we
+        # later want to overload some other behavior on the debug flag.
+        # In particular, -opt=3 is not supported with -g.
         flags.debuginfo = True
     if inline:
         flags.forceinline = True
@@ -170,22 +175,29 @@ def compile_cuda(pyfunc, return_type, args, debug=False, inline=False,
     return cres
 
 
-def compile_kernel(pyfunc, args, link, debug=False, inline=False,
-                   fastmath=False, extensions=[], max_registers=None, opt=True):
-    return _Kernel(pyfunc, args, link, debug=debug, inline=inline,
-                   fastmath=fastmath, extensions=extensions,
+def compile_kernel(pyfunc, args, link, debug=False, lineinfo=False,
+                   inline=False, fastmath=False, extensions=[],
+                   max_registers=None, opt=True):
+    return _Kernel(pyfunc, args, link, debug=debug, lineinfo=lineinfo,
+                   inline=inline, fastmath=fastmath, extensions=extensions,
                    max_registers=max_registers, opt=opt)
 
 
 @global_compiler_lock
-def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
-                cc=None, opt=True):
+def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
+                fastmath=False, cc=None, opt=True):
     """Compile a Python function to PTX for a given set of argument types.
 
     :param pyfunc: The Python function to compile.
     :param args: A tuple of argument types to compile for.
     :param debug: Whether to include debug info in the generated PTX.
     :type debug: bool
+    :param lineinfo: Whether to include a line mapping from the generated PTX
+                     to the source code. Usually this is used with optimized
+                     code (since debug mode would automatically include this),
+                     so we want debug info in the LLVM but only the line
+                     mapping in the final PTX.
+    :type lineinfo: bool
     :param device: Whether to compile a device function. Defaults to ``False``,
                    to compile global kernel functions.
     :type device: bool
@@ -202,11 +214,12 @@ def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
     """
     nvvm_options = {
         'debug': debug,
+        'lineinfo': lineinfo,
         'fastmath': fastmath,
         'opt': 3 if opt else 0
     }
 
-    cres = compile_cuda(pyfunc, None, args, debug=debug,
+    cres = compile_cuda(pyfunc, None, args, debug=debug, lineinfo=lineinfo,
                         nvvm_options=nvvm_options)
     resty = cres.signature.return_type
     if device:
@@ -223,14 +236,14 @@ def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
     return ptx, resty
 
 
-def compile_ptx_for_current_device(pyfunc, args, debug=False, device=False,
-                                   fastmath=False, opt=True):
+def compile_ptx_for_current_device(pyfunc, args, debug=False, lineinfo=False,
+                                   device=False, fastmath=False, opt=True):
     """Compile a Python function to PTX for a given set of argument types for
     the current device's compute capabilility. This calls :func:`compile_ptx`
     with an appropriate ``cc`` value for the current device."""
     cc = get_current_device().compute_capability
-    return compile_ptx(pyfunc, args, debug=-debug, device=device,
-                       fastmath=fastmath, cc=cc, opt=True)
+    return compile_ptx(pyfunc, args, debug=debug, lineinfo=lineinfo,
+                       device=device, fastmath=fastmath, cc=cc, opt=True)
 
 
 class DeviceDispatcher(serialize.ReduceMixin):
@@ -392,8 +405,10 @@ def compile_device_dispatcher(pyfunc, debug=False, inline=False, opt=True):
     return dispatcher
 
 
-def compile_device(pyfunc, return_type, args, inline=True, debug=False):
-    return DeviceFunction(pyfunc, return_type, args, inline=True, debug=False)
+def compile_device(pyfunc, return_type, args, inline=True, debug=False,
+                   lineinfo=False):
+    return DeviceFunction(pyfunc, return_type, args, inline=True, debug=False,
+                          lineinfo=False)
 
 
 def declare_device_function(name, restype, argtypes):
@@ -416,14 +431,16 @@ def declare_device_function(name, restype, argtypes):
 
 class DeviceFunction(serialize.ReduceMixin):
 
-    def __init__(self, pyfunc, return_type, args, inline, debug):
+    def __init__(self, pyfunc, return_type, args, inline, debug, lineinfo):
         self.py_func = pyfunc
         self.return_type = return_type
         self.args = args
         self.inline = True
         self.debug = False
+        self.lineinfo = False
         cres = compile_cuda(self.py_func, self.return_type, self.args,
-                            debug=self.debug, inline=self.inline)
+                            debug=self.debug, inline=self.inline,
+                            lineinfo=self.lineinfo)
         self.cres = cres
 
         class device_function_template(ConcreteTemplate):
@@ -437,11 +454,12 @@ class DeviceFunction(serialize.ReduceMixin):
 
     def _reduce_states(self):
         return dict(py_func=self.py_func, return_type=self.return_type,
-                    args=self.args, inline=self.inline, debug=self.debug)
+                    args=self.args, inline=self.inline, debug=self.debug,
+                    lineinfo=self.lineinfo)
 
     @classmethod
-    def _rebuild(cls, py_func, return_type, args, inline, debug):
-        return cls(py_func, return_type, args, inline, debug)
+    def _rebuild(cls, py_func, return_type, args, inline, debug, lineinfo):
+        return cls(py_func, return_type, args, inline, debug, lineinfo)
 
     def __repr__(self):
         fmt = "<DeviceFunction py_func={0} signature={1}>"
@@ -506,17 +524,20 @@ class _Kernel(serialize.ReduceMixin):
     '''
 
     @global_compiler_lock
-    def __init__(self, py_func, argtypes, link=None, debug=False, inline=False,
-                 fastmath=False, extensions=None, max_registers=None, opt=True):
+    def __init__(self, py_func, argtypes, link=None, debug=False,
+                 lineinfo=False, inline=False, fastmath=False, extensions=None,
+                 max_registers=None, opt=True):
         super().__init__()
 
         self.py_func = py_func
         self.argtypes = argtypes
         self.debug = debug
+        self.lineinfo = lineinfo
         self.extensions = extensions or []
 
         cres = compile_cuda(self.py_func, types.void, self.argtypes,
                             debug=self.debug,
+                            lineinfo=self.lineinfo,
                             inline=inline,
                             fastmath=fastmath)
         fname = cres.fndesc.llvm_func_name
@@ -524,6 +545,7 @@ class _Kernel(serialize.ReduceMixin):
 
         nvvm_options = {
             'debug': self.debug,
+            'lineinfo': self.lineinfo,
             'fastmath': fastmath,
             'opt': 3 if opt else 0
         }
@@ -558,7 +580,7 @@ class _Kernel(serialize.ReduceMixin):
 
     @classmethod
     def _rebuild(cls, cooperative, name, argtypes, codelibrary, link, debug,
-                 call_helper, extensions):
+                 lineinfo, call_helper, extensions):
         """
         Rebuild an instance.
         """
@@ -572,6 +594,7 @@ class _Kernel(serialize.ReduceMixin):
         instance._type_annotation = None
         instance._codelibrary = codelibrary
         instance.debug = debug
+        instance.lineinfo = lineinfo
         instance.call_helper = call_helper
         instance.extensions = extensions
         return instance
@@ -586,8 +609,8 @@ class _Kernel(serialize.ReduceMixin):
         """
         return dict(cooperative=self.cooperative, name=self.entry_name,
                     argtypes=self.argtypes, codelibrary=self.codelibrary,
-                    debug=self.debug, call_helper=self.call_helper,
-                    extensions=self.extensions)
+                    debug=self.debug, lineinfo=self.lineinfo,
+                    call_helper=self.call_helper, extensions=self.extensions)
 
     def bind(self):
         """
@@ -822,6 +845,17 @@ class _KernelConfiguration:
         self.blockdim = blockdim
         self.stream = stream
         self.sharedmem = sharedmem
+
+        if config.CUDA_LOW_OCCUPANCY_WARNINGS:
+            ctx = get_context()
+            smcount = ctx.device.MULTIPROCESSOR_COUNT
+            grid_size = griddim[0] * griddim[1] * griddim[2]
+            if grid_size < 2 * smcount:
+                msg = ("Grid size ({grid}) < 2 * SM count ({sm}) "
+                       "will likely result in GPU under utilization due "
+                       "to low occupancy.")
+                msg = msg.format(grid=grid_size, sm=2 * smcount)
+                warn(NumbaPerformanceWarning(msg))
 
     def __call__(self, *args):
         return self.dispatcher.call(args, self.griddim, self.blockdim,

@@ -32,7 +32,6 @@ from numba.core.typing.templates import infer_global, AbstractTemplate
 from numba.stencils.stencilparfor import StencilPass
 from numba.core.extending import register_jitable
 
-
 from numba.core.ir_utils import (
     mk_unique_var,
     next_label,
@@ -75,7 +74,9 @@ from numba.core.ir_utils import (
     index_var_of_get_setitem,
     set_index_var_of_get_setitem,
     find_potential_aliases,
-    replace_var_names)
+    replace_var_names,
+    transfer_scope,
+)
 
 from numba.core.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
@@ -3255,9 +3256,11 @@ def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes, metadata):
                               ir_utils.find_max_label(func_ir.blocks))
     parfor_found = False
     new_blocks = {}
+    scope = next(iter(func_ir.blocks.values())).scope
     for (block_label, block) in func_ir.blocks.items():
         block_label, parfor_found = _lower_parfor_sequential_block(
-            block_label, block, new_blocks, typemap, calltypes, parfor_found)
+            block_label, block, new_blocks, typemap, calltypes, parfor_found,
+            scope=scope)
         # old block stays either way
         new_blocks[block_label] = block
     func_ir.blocks = new_blocks
@@ -3275,8 +3278,8 @@ def _lower_parfor_sequential_block(
         new_blocks,
         typemap,
         calltypes,
-        parfor_found):
-    scope = block.scope
+        parfor_found,
+        scope):
     i = _find_first_parfor(block.body)
     while i != -1:
         parfor_found = True
@@ -3289,7 +3292,7 @@ def _lower_parfor_sequential_block(
         # previous block jump to parfor init block
         init_label = next_label()
         prev_block.body.append(ir.Jump(init_label, loc))
-        new_blocks[init_label] = inst.init_block
+        new_blocks[init_label] = transfer_scope(inst.init_block, scope)
         new_blocks[block_label] = prev_block
         block_label = next_label()
 
@@ -3333,8 +3336,9 @@ def _lower_parfor_sequential_block(
         # add parfor body to blocks
         for (l, b) in inst.loop_body.items():
             l, parfor_found = _lower_parfor_sequential_block(
-                l, b, new_blocks, typemap, calltypes, parfor_found)
-            new_blocks[l] = b
+                l, b, new_blocks, typemap, calltypes, parfor_found,
+                scope=scope)
+            new_blocks[l] = transfer_scope(b, scope)
         i = _find_first_parfor(block.body)
     return block_label, parfor_found
 

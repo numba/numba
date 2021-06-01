@@ -197,10 +197,28 @@ def overload_attribute(typ, attr, **kwargs):
     return decorate
 
 
+def _overload_method_common(typ, attr, **kwargs):
+    """Common code for overload_method and overload_classmethod
+    """
+    from numba.core.typing.templates import make_overload_method_template
+
+    def decorate(overload_func):
+        template = make_overload_method_template(
+            typ, attr, overload_func,
+            inline=kwargs.get('inline', 'never'),
+            prefer_literal=kwargs.get('prefer_literal', False)
+        )
+        infer_getattr(template)
+        overload(overload_func, **kwargs)(overload_func)
+        return overload_func
+
+    return decorate
+
+
 def overload_method(typ, attr, **kwargs):
     """
     A decorator marking the decorated function as typing and implementing
-    attribute *attr* for the given Numba type in nopython mode.
+    method *attr* for the given Numba type in nopython mode.
 
     *kwargs* are passed to the underlying `@overload` call.
 
@@ -217,19 +235,34 @@ def overload_method(typ, attr, **kwargs):
                     return res
                 return take_impl
     """
-    from numba.core.typing.templates import make_overload_method_template
+    return _overload_method_common(typ, attr, **kwargs)
 
-    def decorate(overload_func):
-        template = make_overload_method_template(
-            typ, attr, overload_func,
-            inline=kwargs.get('inline', 'never'),
-            prefer_literal=kwargs.get('prefer_literal', False)
-        )
-        infer_getattr(template)
-        overload(overload_func, **kwargs)(overload_func)
-        return overload_func
 
-    return decorate
+def overload_classmethod(typ, attr, **kwargs):
+    """
+    A decorator marking the decorated function as typing and implementing
+    classmethod *attr* for the given Numba type in nopython mode.
+
+
+    Similar to ``overload_method``.
+
+
+    Here is an example implementing a classmethod on the Array type to call
+    ``np.arange()``::
+
+        @overload_classmethod(types.Array, "make")
+        def ov_make(cls, nitems):
+            def impl(cls, nitems):
+                return np.arange(nitems)
+            return impl
+
+    The above code will allow the following to work in jit-compiled code::
+
+        @njit
+        def foo(n):
+            return types.Array.make(n)
+    """
+    return _overload_method_common(types.TypeRef(typ), attr, **kwargs)
 
 
 def make_attribute_wrapper(typeclass, struct_attr, python_attr):
