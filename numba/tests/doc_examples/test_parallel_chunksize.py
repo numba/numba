@@ -14,7 +14,7 @@ class ChunksizeExamplesTest(unittest.TestCase):
                                prange,
                                set_parallel_chunksize,
                                get_parallel_chunksize,
-                              )
+                               )
 
             @njit(parallel=True)
             def func1(n):
