@@ -585,7 +585,7 @@ Initialization
 .. warning::
    Calling :func:`numpy.random.seed` from interpreted code (including from :term:`object mode`
    code) will seed the NumPy random generator, not the Numba random generator.
-   To properly seed the Numba random generator, see example below.
+   To seed the Numba random generator, see the example below.
 
 .. code-block:: python
 
