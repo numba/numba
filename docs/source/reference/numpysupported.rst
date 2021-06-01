@@ -583,7 +583,7 @@ Initialization
 * :func:`numpy.random.seed`: with an integer argument only
 
 .. warning::
-   Calling :func:`numpy.random.seed` from non-Numba code (or from :term:`object mode`
+   Calling :func:`numpy.random.seed` from interpreted code (including from :term:`object mode`
    code) will seed the NumPy random generator, not the Numba random generator.
    To properly seed the Numba random generator, see example below.
 
