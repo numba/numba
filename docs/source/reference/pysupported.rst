@@ -1175,7 +1175,7 @@ startup with entropy drawn from the operating system.
       return random.random()
 
 
-  # Uncorrect seeding
+  # Incorrect seeding
   random.seed(1234)
   print(rand())
 
