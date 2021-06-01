@@ -477,6 +477,7 @@ The following top-level functions are supported:
 * :func:`numpy.histogram` (only the 3 first arguments)
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
+* :func:`numpy.isclose`
 * :func:`numpy.kaiser`
 * :func:`numpy.iscomplex`
 * :func:`numpy.iscomplexobj`
