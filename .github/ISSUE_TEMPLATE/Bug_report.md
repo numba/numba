@@ -6,12 +6,22 @@ about: Report a bug. Not for asking general questions - see below.
 
 <!--
 
-Thanks for opening an issue! To help the Numba team handle your information
-efficiently, please first ensure that there is no other issue present that
-already describes the issue you have
+Thanks for opening an issue!
+To help the Numba team handle your information efficiently,
+please first check this issue via [Gitter](https://gitter.im/numba/numba) and make sure it was a bug on Numba or not.
+
+Then you should ensure that there is no other issue present that already describes the issue you have
 (search at https://github.com/numba/numba/issues?&q=is%3Aissue).
 
+Before submitting a bug report please ensure that you can check off these boxes:
+
 -->
+
+- [ ] I have checked via Gitter and make sure it is a bug on Numba.
+- [ ] I have tried using the latest released version of Numba (most recent is
+ visible in the change log (https://github.com/numba/numba/blob/master/CHANGE_LOG).
+- [ ] I have included a self contained code sample to reproduce the problem.
+  i.e. it's possible to run as 'python bug.py'.
 
 <!--
 
