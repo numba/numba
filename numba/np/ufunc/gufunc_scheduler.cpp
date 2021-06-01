@@ -91,10 +91,10 @@ public:
     void print() const {
         unsigned i;
         for(i = 0; i < start.size(); ++i) {
-            printf("%ld ", start[i]);
+            printf("%ld ", (int64)start[i]);
         }
         for(i = 0; i < end.size(); ++i) {
-            printf("%ld ", end[i]);
+            printf("%ld ", (int64)end[i]);
         }
     }
 };
