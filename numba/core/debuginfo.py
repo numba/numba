@@ -216,7 +216,7 @@ class DIBuilder(AbstractDIBuilder):
 
     def _di_compile_unit(self):
         return self.module.add_debug_info('DICompileUnit', {
-            'language': ir.DIToken('DW_LANG_Python'),
+            'language': ir.DIToken('DW_LANG_C_plus_plus'),
             'file': self.difile,
             'producer': 'Numba',
             'runtimeVersion': 0,
