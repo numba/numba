@@ -177,8 +177,8 @@ class BaseGeneratorLower(object):
         """
         fnty = Type.function(Type.void(),
                              [self.context.get_value_type(self.gentype)])
-        function = lower.module.get_or_insert_function(
-            fnty, name=self.gendesc.llvm_finalizer_name)
+        function = cgutils.get_or_insert_function(
+            lower.module, fnty, self.gendesc.llvm_finalizer_name)
         entry_block = function.append_basic_block('entry')
         builder = Builder(entry_block)
 

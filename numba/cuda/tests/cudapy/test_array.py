@@ -22,6 +22,13 @@ class TestCudaArray(CUDATestCase):
         self.assertEqual(x.shape, hx.shape)
         self.assertEqual(x.size, hx.size)
 
+    def test_null_shape(self):
+        null_shape = ()
+        shape1 = cuda.device_array(()).shape
+        shape2 = cuda.device_array_like(np.ndarray(())).shape
+        self.assertEqual(shape1, null_shape)
+        self.assertEqual(shape2, null_shape)
+
     def test_gpu_array_strided(self):
 
         @cuda.jit('void(double[:])')
@@ -224,14 +231,14 @@ class TestCudaArray(CUDATestCase):
             with self.subTest(like_func=like_func):
                 self._test_array_like_view(like_func, view, d_view)
 
-    @skip_on_cudasim('Kernel definitions not created in the simulator')
+    @skip_on_cudasim('Kernel overloads not created in the simulator')
     def test_issue_4628(self):
         # CUDA Device arrays were reported as always being typed with 'A' order
         # so launching the kernel with a host array and then a device array
-        # resulted in two definitions being compiled - one for 'C' order from
+        # resulted in two overloads being compiled - one for 'C' order from
         # the host array, and one for 'A' order from the device array. With the
         # resolution of this issue, the order of the device array is also 'C',
-        # so after the kernel launches there should only be one definition of
+        # so after the kernel launches there should only be one overload of
         # the function.
         @cuda.jit
         def func(A, out):
@@ -246,7 +253,7 @@ class TestCudaArray(CUDATestCase):
         func[1, 128](a, result)
         func[1, 128](d_a, result)
 
-        self.assertEqual(1, len(func.definitions))
+        self.assertEqual(1, len(func.overloads))
 
 
 if __name__ == '__main__':

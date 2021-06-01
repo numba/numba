@@ -95,7 +95,7 @@ workitem per workgroup) is often crucial:
 * On the software side, the workgroup size determines how many threads
   share a given area of :ref:`shared memory <roc-shared-memory>`.
 * On the hardware side, the workgroup size must be large enough for full
-   occupation of execution units.
+  occupation of execution units.
 
 Multi-dimensional workgroup and grid
 ---------------------------------------

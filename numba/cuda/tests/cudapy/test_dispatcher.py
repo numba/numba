@@ -2,7 +2,6 @@ import numpy as np
 import threading
 
 from numba import cuda, float32, float64, int32, int64, void
-from numba.core.errors import NumbaDeprecationWarning
 from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 import math
 
@@ -272,26 +271,6 @@ class TestDispatcher(CUDATestCase):
         regs_per_thread = pi_sin_array.get_regs_per_thread()
         self.assertIsInstance(regs_per_thread, int)
         self.assertGreater(regs_per_thread, 0)
-
-    def test_deprecated_definitions(self):
-        @cuda.jit(void(int64[::1]))
-        def foo(x):
-            x[0] = 0
-
-        with self.assertWarns(NumbaDeprecationWarning) as warns:
-            foo.definition
-
-        self.assertEqual(len(warns.warnings), 1)
-        s = str(warns.warnings[0])
-        self.assertIn('Use overloads instead of definition', s)
-        self.assertNotIn('definitions', s)
-
-        with self.assertWarns(NumbaDeprecationWarning) as warns:
-            foo.definitions
-
-        self.assertEqual(len(warns.warnings), 1)
-        s = str(warns.warnings[0])
-        self.assertIn('Use overloads instead of definitions', s)
 
 
 if __name__ == '__main__':

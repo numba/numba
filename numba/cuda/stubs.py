@@ -309,6 +309,29 @@ class match_all_sync(Stub):
     _description_ = '<match_all_sync()>'
 
 
+class activemask(Stub):
+    '''
+    activemask()
+
+    Returns a 32-bit integer mask of all currently active threads in the
+    calling warp. The Nth bit is set if the Nth lane in the warp is active when
+    activemask() is called. Inactive threads are represented by 0 bits in the
+    returned mask. Threads which have exited the kernel are always marked as
+    inactive.
+    '''
+    _description_ = '<activemask()>'
+
+
+class lanemask_lt(Stub):
+    '''
+    lanemask_lt()
+
+    Returns a 32-bit integer mask of all lanes (including inactive ones) with
+    ID less than the current lane.
+    '''
+    _description_ = '<lanemask_lt()>'
+
+
 # -------------------------------------------------------------------------------
 # memory fences
 
@@ -338,34 +361,35 @@ class threadfence(Stub):
 
 class popc(Stub):
     """
-    popc(val)
+    popc(x)
 
-    Returns the number of set bits in the given value.
+    Returns the number of set bits in x.
     """
 
 
 class brev(Stub):
     """
-    brev(val)
+    brev(x)
 
-    Reverse the bitpattern of an integer value; for example 0b10110110
+    Returns the reverse of the bit pattern of x. For example, 0b10110110
     becomes 0b01101101.
     """
 
 
 class clz(Stub):
     """
-    clz(val)
+    clz(x)
 
-    Counts the number of leading zeros in a value.
+    Returns the number of leading zeros in z.
     """
 
 
 class ffs(Stub):
     """
-    ffs(val)
+    ffs(x)
 
-    Find the position of the least significant bit set to 1 in an integer.
+    Returns the position of the first (least significant) bit set to 1 in x,
+    where the least significant bit position is 1. ffs(0) returns 0.
     """
 
 
@@ -472,7 +496,7 @@ class atomic(Stub):
         """dec(ary, idx, val)
 
         Perform ary[idx] = (value if (array[idx] == 0) or
-                            (array[idx] > value) else array[idx] - 1).
+        (array[idx] > value) else array[idx] - 1).
 
         Supported on uint32, and uint64 operands only.
 
@@ -552,3 +576,16 @@ class atomic(Stub):
 
         Returns the current value as if it is loaded atomically.
         """
+
+
+#-------------------------------------------------------------------------------
+# timers
+
+class nanosleep(Stub):
+    '''
+    nanosleep(ns)
+
+    Suspends the thread for a sleep duration approximately close to the delay
+    `ns`, specified in nanoseconds.
+    '''
+    _description_ = '<nansleep()>'

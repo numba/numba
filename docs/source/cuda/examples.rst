@@ -52,7 +52,7 @@ memory::
         ty = cuda.threadIdx.y
         bpg = cuda.gridDim.x    # blocks per grid
 
-        if x >= C.shape[0] and y >= C.shape[1]:
+        if x >= C.shape[0] or y >= C.shape[1]:
             # Quit if (x, y) is outside of valid C boundary
             return
 

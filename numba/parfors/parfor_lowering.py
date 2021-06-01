@@ -18,7 +18,27 @@ import llvmlite.binding as ll
 import numba
 from numba.parfors import parfor
 from numba.core import types, ir, config, compiler, lowering, sigutils, cgutils
-from numba.core.ir_utils import add_offset_to_labels, replace_var_names, remove_dels, legalize_names, mk_unique_var, rename_labels, get_name_var_table, visit_vars_inner, get_definition, guard, find_callname, get_call_table, is_pure, get_np_ufunc_typ, get_unused_var_name, find_potential_aliases, is_const_call
+from numba.core.ir_utils import (
+    add_offset_to_labels,
+    replace_var_names,
+    remove_dels,
+    legalize_names,
+    mk_unique_var,
+    rename_labels,
+    get_name_var_table,
+    visit_vars_inner,
+    get_definition,
+    guard,
+    find_callname,
+    get_call_table,
+    is_pure,
+    get_np_ufunc_typ,
+    get_unused_var_name,
+    find_potential_aliases,
+    is_const_call,
+    fixup_var_define_in_scope,
+    transfer_scope,
+)
 from numba.core.analysis import compute_use_defs, compute_live_map, compute_dead_maps, compute_cfg_from_blocks
 from numba.core.typing import signature
 from numba.parfors.parfor import print_wrapped, ensure_parallel_support
@@ -139,8 +159,8 @@ def _lower_parfor_parallel(lowerer, parfor):
                 ftype=get_np_ufunc_typ(np.empty),
                 args=(
                     types.UniTuple(types.intp, redarrdim),
-                    types.DType(reddtype),
                 ),
+                kws={'dtype': types.DType(reddtype)}
             )
 
             # Create var for outer dimension size of reduction array equal to number of threads.
@@ -175,8 +195,11 @@ def _lower_parfor_parallel(lowerer, parfor):
                 size_var_list, name='tuple_size_var',
             )
 
+            # Resolve dtype
+            cval = pfbdr._typingctx.resolve_value_type(reddtype)
+            dt = pfbdr.make_const_variable(cval=cval, typ=types.DType(reddtype))
             # Add call to empty passing the size var tuple.
-            empty_call = pfbdr.call(glbl_np_empty, args=[size_var])
+            empty_call = pfbdr.call(glbl_np_empty, args=[size_var, dt])
 
             redarr_var = pfbdr.assign(
                 rhs=empty_call, typ=redarrvar_typ, name="redarr",
@@ -196,8 +219,8 @@ def _lower_parfor_parallel(lowerer, parfor):
                         args=(
                             types.UniTuple(types.intp, redvar_typ.ndim),
                             reddtype,
-                            types.DType(reddtype),
                         ),
+                        kws={'dtype': types.DType(reddtype)},
                     )
 
                     # Then create a var with the identify value.
@@ -209,7 +232,7 @@ def _lower_parfor_parallel(lowerer, parfor):
 
                     # Then, call np.full with the shape of the reduction array and the identity value.
                     full_call = pfbdr.call(
-                        full_func_node, args=[redshape_var, init_val_var],
+                        full_func_node, args=[redshape_var, init_val_var, dt],
                     )
 
                     redtoset = pfbdr.assign(
@@ -253,9 +276,9 @@ def _lower_parfor_parallel(lowerer, parfor):
                 pfbdr.setitem(obj=redarr_var, index=index_var, val=redtoset)
 
     # compile parfor body as a separate function to be used with GUFuncWrapper
-    flags = copy.copy(parfor.flags)
-    flags.set('error_model', 'numpy')
-    # Can't get here unless  flags.set('auto_parallel', ParallelOptions(True))
+    flags = parfor.flags.copy()
+    flags.error_model = "numpy"
+    # Can't get here unless  flags.auto_parallel == ParallelOptions(True)
     index_var_typ = typemap[parfor.loop_nests[0].index_variable.name]
     # index variables should have the same type, check rest of indices
     for l in parfor.loop_nests[1:]:
@@ -488,9 +511,6 @@ def _lower_parfor_parallel(lowerer, parfor):
 
     if config.DEBUG_ARRAY_OPT:
         print("_lower_parfor_parallel done")
-
-# A work-around to prevent circular imports
-lowering.lower_extensions[parfor.Parfor] = _lower_parfor_parallel
 
 
 def _create_shape_signature(
@@ -730,7 +750,7 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
 
 def find_setitems_block(setitems, itemsset, block, typemap):
     for inst in block.body:
-        if isinstance(inst, ir.StaticSetItem) or isinstance(inst, ir.SetItem):
+        if isinstance(inst, (ir.StaticSetItem, ir.SetItem)):
             setitems.add(inst.target.name)
             # If we store a non-mutable object into an array then that is safe to hoist.
             # If the stored object is mutable and you hoist then multiple entries in the
@@ -880,7 +900,6 @@ def _create_gufunc_for_parfor_body(
     The IR is scanned for the sentinel assignment where that basic block is split and the IR
     for the parfor body inserted.
     '''
-
     if config.DEBUG_ARRAY_OPT >= 1:
         print("starting _create_gufunc_for_parfor_body")
 
@@ -1225,7 +1244,6 @@ def _create_gufunc_for_parfor_body(
         print("gufunc_func = ", type(gufunc_func), "\n", gufunc_func)
     # Get the IR for the gufunc outline.
     gufunc_ir = compiler.run_frontend(gufunc_func)
-
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_ir dump ", type(gufunc_ir))
         gufunc_ir.dump()
@@ -1244,7 +1262,6 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_ir dump after renaming ")
         gufunc_ir.dump()
-
     gufunc_param_types = [types.npytypes.Array(
             index_var_typ, 1, "C")] + param_types
     if config.DEBUG_ARRAY_OPT:
@@ -1340,7 +1357,7 @@ def _create_gufunc_for_parfor_body(
                 # Add all the parfor loop body blocks to the gufunc function's
                 # IR.
                 for (l, b) in loop_body.items():
-                    gufunc_ir.blocks[l] = b
+                    gufunc_ir.blocks[l] = transfer_scope(b, scope)
                 body_last_label = max(loop_body.keys())
                 gufunc_ir.blocks[new_label] = block
                 gufunc_ir.blocks[label] = prev_block
@@ -1371,6 +1388,8 @@ def _create_gufunc_for_parfor_body(
         if config.DEBUG_ARRAY_OPT:
             print("No aliases found so adding noalias flag.")
         flags.noalias = True
+
+    fixup_var_define_in_scope(gufunc_ir.blocks)
     kernel_func = compiler.compile_ir(
         typingctx,
         targetctx,
@@ -1544,9 +1563,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         lc.Type.function(lc.Type.void(), [uintp_t]),
         name="set_parallel_chunksize")
 
-    get_num_threads = builder.module.get_or_insert_function(
-        lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
-        name="get_num_threads")
+    get_num_threads = cgutils.get_or_insert_function(
+        builder.module, lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
+        "get_num_threads")
 
     num_threads = builder.call(get_num_threads, [])
     current_chunksize = builder.call(get_chunksize, [])
@@ -1574,11 +1593,13 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     scheduling_fnty = lc.Type.function(
         intp_ptr_t, [uintp_t, intp_ptr_t, intp_ptr_t, uintp_t, sched_ptr_type, intp_t])
     if index_var_typ.signed:
-        do_scheduling = builder.module.get_or_insert_function(scheduling_fnty,
-                                                          name="do_scheduling_signed")
+        do_scheduling = cgutils.get_or_insert_function(builder.module,
+                                                       scheduling_fnty,
+                                                       name="do_scheduling_signed")
     else:
-        do_scheduling = builder.module.get_or_insert_function(scheduling_fnty,
-                                                          name="do_scheduling_unsigned")
+        do_scheduling = cgutils.get_or_insert_function(builder.module,
+                                                       scheduling_fnty,
+                                                       name="do_scheduling_unsigned")
 
     builder.call(
         do_scheduling, [
@@ -1758,7 +1779,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     fnty = lc.Type.function(lc.Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                              intp_ptr_t, byte_ptr_t])
 
-    fn = builder.module.get_or_insert_function(fnty, name=wrapper_name)
+    fn = cgutils.get_or_insert_function(builder.module, fnty, wrapper_name)
     context.active_code_library.add_linking_library(info.library)
 
     if config.DEBUG_ARRAY_OPT:

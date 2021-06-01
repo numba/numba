@@ -312,6 +312,11 @@ supported:
 * ``.upper()``
 * ``.zfill()``
 
+Regular string literals (e.g. ``"ABC"``) as well as f-strings without format specs
+(e.g. ``"ABC_{a+1}"``)
+that only use string and integer variables (types with ``str()`` overload)
+are supported in :term:`nopython mode`.
+
 Additional operations as well as support for Python 2 strings / Python 3 bytes
 will be added in a future version of Numba.  Python 2 Unicode objects will
 likely never be supported.
@@ -395,7 +400,6 @@ than to act as a token to permit the use of this feature. Example use:
 .. warning::
     The following restrictions apply to the use of :func:`literal_unroll`:
 
-    * This feature is only available for Python versions >= 3.6.
     * :func:`literal_unroll` can only be used on tuples and constant lists of
       compile time constants, e.g. ``[1, 2j, 3, "a"]`` and the list not being
       mutated.
@@ -795,6 +799,23 @@ threads will potentially corrupt memory, causing a
 range of possible failures. However, the dictionary can be safely read from
 multiple threads as long as the contents of the dictionary do not
 change during the parallel access.
+
+Dictionary comprehension
+''''''''''''''''''''''''
+
+Numba supports dictionary comprehension under the assumption that a
+``numba.typed.Dict`` instance can be created from the comprehension.  For
+example::
+
+  In [1]: from numba import njit
+
+  In [2]: @njit
+     ...: def foo(n):
+     ...:     return {i: i**2 for i in range(n)}
+     ...:
+
+  In [3]: foo(3)
+  Out[3]: DictType[int64,int64]<iv=None>({0: 0, 1: 1, 2: 4})
 
 .. _feature-dict-initial-value:
 

@@ -13,6 +13,7 @@ from numba.core.typing.templates import (CallableTemplate, signature,
                                          infer_global, AbstractTemplate)
 from numba.core.imputils import lower_builtin
 from numba.core.extending import register_jitable
+from numba.misc.special import literal_unroll
 import numba
 
 import operator
@@ -34,7 +35,16 @@ class StencilFuncLowerer(object):
 @register_jitable
 def raise_if_incompatible_array_sizes(a, *args):
     ashape = a.shape
-    for arg in args:
+
+    # We need literal_unroll here because the stencil might take
+    # multiple input arrays with different types that are not compatible
+    # (e.g. values as float[:] and flags as bool[:])
+    # When more than three total arrays are given, the second and third
+    # are iterated over in the loop below. Without literal_unroll, their
+    # types have to match.
+    # An example failing signature without literal_unroll might be
+    # (float[:], float[:], bool[:]) (Just (float[:], bool[:]) wouldn't fail)
+    for arg in literal_unroll(args):
         if a.ndim != arg.ndim:
             raise ValueError("Secondary stencil array does not have same number "
                              " of dimensions as the first stencil input.")
@@ -336,6 +346,7 @@ class StencilFunc(object):
         from numba.core import typed_passes
         typemap, return_type, calltypes, _ = typed_passes.type_inference_stage(
                 self._typingctx,
+                self._targetctx,
                 self.kernel_ir,
                 argtys,
                 None,
@@ -725,6 +736,7 @@ class StencilFunc(object):
 
         # Compile the combined stencil function with the replaced loop
         # body in it.
+        ir_utils.fixup_var_define_in_scope(stencil_ir.blocks)
         new_func = compiler.compile_ir(
             self._typingctx,
             self._targetctx,

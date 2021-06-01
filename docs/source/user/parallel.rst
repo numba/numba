@@ -224,6 +224,45 @@ give an equivalence parallel implementation using :func:`~numba.guvectorize`,
 it would require a pervasive change that rewrites the code to extract kernel
 computation that can be parallelized, which was both tedious and challenging.
 
+Unsupported Operations
+======================
+
+This section contains a non-exhaustive list of commonly encountered but
+currently unsupported features:
+
+#. **Mutating a list is not threadsafe**
+
+   Concurrent write operations on container types (i.e. lists, sets and
+   dictionaries) in a ``prange`` parallel region are not threadsafe e.g.::
+
+    @njit(parallel=True)
+    def invalid():
+        z = []
+        for i in prange(10000):
+            z.append(i)
+        return z
+
+   It is highly likely that the above will result in corruption or an access
+   violation as containers require thread-safety under mutation but this feature
+   is not implemented.
+
+#. **Induction variables are not associated with thread ID**
+
+   The use of the induction variable induced by a ``prange`` based loop in
+   conjunction with ``get_num_threads`` as a method of ensuring safe writes into
+   a pre-sized container is not valid e.g.::
+
+    @njit(parallel=True)
+    def invalid():
+        n = get_num_threads()
+        z = [0 for _ in range(n)]
+        for i in prange(100):
+            z[i % n] += i
+        return z
+
+   The above can on occasion appear to work, but it does so by luck. There's no
+   guarantee about which indexes are assigned to which executing threads or the
+   order in which the loop iterations execute.
 
 .. _numba-parallel-diagnostics:
 

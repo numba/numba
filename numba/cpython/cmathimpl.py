@@ -14,7 +14,7 @@ from numba.core import types, cgutils
 from numba.core.typing import signature
 from numba.cpython import builtins, mathimpl
 
-registry = Registry()
+registry = Registry('cmathimpl')
 lower = registry.lower
 
 

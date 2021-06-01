@@ -9,9 +9,7 @@ from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref
 from .common import Opaque
 from .misc import unliteral
 from numba.core import errors, utils, types, config
-
 from numba.core.typeconv import Conversion
-
 
 _logger = logging.getLogger(__name__)
 
@@ -281,12 +279,42 @@ class BaseFunction(Callable):
         return self._impl_keys[sig.args]
 
     def get_call_type(self, context, args, kws):
+        from numba.core.target_extension import (target_registry,
+                                                 get_local_target)
+
         prefer_lit = [True, False]    # old behavior preferring literal
         prefer_not = [False, True]    # new behavior preferring non-literal
         failures = _ResolutionFailures(context, self, args, kws,
                                        depth=self._depth)
+
+        # get the current target target
+        target_hw = get_local_target(context)
+
+        # fish out templates that are specific to the target if a target is
+        # specified
+        DEFAULT_TARGET = 'generic'
+        usable = []
+        for ix, temp_cls in enumerate(self.templates):
+            # ? Need to do something about this next line
+            hw = temp_cls.metadata.get('target', DEFAULT_TARGET)
+            if hw is not None:
+                hw_clazz = target_registry[hw]
+                if target_hw.inherits_from(hw_clazz):
+                    usable.append((temp_cls, hw_clazz, ix))
+
+        # sort templates based on target specificity
+        def key(x):
+            return target_hw.__mro__.index(x[1])
+        order = [x[0] for x in sorted(usable, key=key)]
+
+        if not order:
+            msg = (f"Function resolution cannot find any matches for function"
+                   f" '{self.key[0]}' for the current target: '{target_hw}'.")
+            raise errors.UnsupportedError(msg)
+
         self._depth += 1
-        for temp_cls in self.templates:
+
+        for temp_cls in order:
             temp = temp_cls(context)
             # The template can override the default and prefer literal args
             choice = prefer_lit if temp.prefer_literal else prefer_not
@@ -317,10 +345,6 @@ class BaseFunction(Callable):
                             msg = 'No match.'
                         failures.add_error(temp, True, msg, uselit)
 
-        if len(failures) == 0:
-            raise AssertionError("Internal Error. "
-                                 "Function resolution ended with no failures "
-                                 "or successful signature")
         failures.raise_error()
 
     def get_call_signatures(self):

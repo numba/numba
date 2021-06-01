@@ -8,7 +8,7 @@ from numba.core.compiler import Flags
 from numba.tests.support import TestCase, CompilationCache, MemoryLeakMixin
 
 no_pyobj_flags = Flags()
-no_pyobj_flags.set("nrt")
+no_pyobj_flags.nrt = True
 
 
 def heapify(x):

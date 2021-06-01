@@ -8,10 +8,10 @@ from numba.tests import usecases
 from numba.tests.support import TestCase, tag
 
 enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
+enable_pyobj_flags.enable_pyobject = True
 
 force_pyobj_flags = Flags()
-force_pyobj_flags.set("force_pyobject")
+force_pyobj_flags.force_pyobject = True
 
 
 class TestUsecases(TestCase):
@@ -164,7 +164,7 @@ class TestUsecases(TestCase):
         self.assertEqual(pyfunc(test_str, 0, 3), cfunc(test_str, 0, 3))
         self.assertEqual(pyfunc(test_str, 1, 5), cfunc(test_str, 1, 5))
         self.assertEqual(pyfunc(test_str, 2, 3), cfunc(test_str, 2, 3))
-        
+
     def test_string_conversion(self):
         pyfunc = usecases.string_conversion
 

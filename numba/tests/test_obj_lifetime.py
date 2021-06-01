@@ -10,10 +10,10 @@ from numba.core import types
 from numba.tests.support import TestCase
 
 enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
+enable_pyobj_flags.enable_pyobject = True
 
 forceobj_flags = Flags()
-forceobj_flags.set("force_pyobject")
+forceobj_flags.force_pyobject = True
 
 no_pyobj_flags = Flags()
 

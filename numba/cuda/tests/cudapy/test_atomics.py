@@ -458,6 +458,7 @@ def atomic_compare_and_swap(res, old, ary, fill_val):
 
 class TestCudaAtomics(CUDATestCase):
     def setUp(self):
+        super().setUp()
         np.random.seed(0)
 
     def test_atomic_add(self):
@@ -544,7 +545,8 @@ class TestCudaAtomics(CUDATestCase):
         if config.ENABLE_CUDASIM:
             return
 
-        asm = kernel.inspect_asm()
+        # Use the first (and only) definition
+        asm = next(iter(kernel.inspect_asm().values()))
         if cc_X_or_above(6, 0):
             if shared:
                 self.assertIn('atom.shared.add.f64', asm)
@@ -1375,9 +1377,9 @@ class TestCudaAtomics(CUDATestCase):
     # Tests for atomic nanmin/nanmax
 
     # nanmax tests
-    def check_atomic_nanmax(self, dtype, lo, hi):
+    def check_atomic_nanmax(self, dtype, lo, hi, init_val):
         vals = np.random.randint(lo, hi, size=(32, 32)).astype(dtype)
-        vals[1::2] = np.nan
+        vals[1::2] = init_val
         res = np.zeros(1, dtype=vals.dtype)
         cuda_func = cuda.jit(atomic_nanmax)
         cuda_func[32, 32](res, vals)
@@ -1385,24 +1387,30 @@ class TestCudaAtomics(CUDATestCase):
         np.testing.assert_equal(res, gold)
 
     def test_atomic_nanmax_int32(self):
-        self.check_atomic_nanmax(dtype=np.int32, lo=-65535, hi=65535)
+        self.check_atomic_nanmax(dtype=np.int32, lo=-65535, hi=65535,
+                                 init_val=0)
 
     def test_atomic_nanmax_uint32(self):
-        self.check_atomic_nanmax(dtype=np.uint32, lo=0, hi=65535)
+        self.check_atomic_nanmax(dtype=np.uint32, lo=0, hi=65535,
+                                 init_val=0)
 
     @skip_unless_cc_32
     def test_atomic_nanmax_int64(self):
-        self.check_atomic_nanmax(dtype=np.int64, lo=-65535, hi=65535)
+        self.check_atomic_nanmax(dtype=np.int64, lo=-65535, hi=65535,
+                                 init_val=0)
 
     @skip_unless_cc_32
     def test_atomic_nanmax_uint64(self):
-        self.check_atomic_nanmax(dtype=np.uint64, lo=0, hi=65535)
+        self.check_atomic_nanmax(dtype=np.uint64, lo=0, hi=65535,
+                                 init_val=0)
 
     def test_atomic_nanmax_float32(self):
-        self.check_atomic_nanmax(dtype=np.float32, lo=-65535, hi=65535)
+        self.check_atomic_nanmax(dtype=np.float32, lo=-65535, hi=65535,
+                                 init_val=np.nan)
 
     def test_atomic_nanmax_double(self):
-        self.check_atomic_nanmax(dtype=np.float64, lo=-65535, hi=65535)
+        self.check_atomic_nanmax(dtype=np.float64, lo=-65535, hi=65535,
+                                 init_val=np.nan)
 
     def test_atomic_nanmax_double_shared(self):
         vals = np.random.randint(0, 32, size=32).astype(np.float64)
@@ -1427,9 +1435,9 @@ class TestCudaAtomics(CUDATestCase):
         np.testing.assert_equal(res, gold)
 
     # nanmin tests
-    def check_atomic_nanmin(self, dtype, lo, hi):
+    def check_atomic_nanmin(self, dtype, lo, hi, init_val):
         vals = np.random.randint(lo, hi, size=(32, 32)).astype(dtype)
-        vals[1::2] = np.nan
+        vals[1::2] = init_val
         res = np.array([65535], dtype=vals.dtype)
         cuda_func = cuda.jit(atomic_nanmin)
         cuda_func[32, 32](res, vals)
@@ -1438,24 +1446,30 @@ class TestCudaAtomics(CUDATestCase):
         np.testing.assert_equal(res, gold)
 
     def test_atomic_nanmin_int32(self):
-        self.check_atomic_nanmin(dtype=np.int32, lo=-65535, hi=65535)
+        self.check_atomic_nanmin(dtype=np.int32, lo=-65535, hi=65535,
+                                 init_val=0)
 
     def test_atomic_nanmin_uint32(self):
-        self.check_atomic_nanmin(dtype=np.uint32, lo=0, hi=65535)
+        self.check_atomic_nanmin(dtype=np.uint32, lo=0, hi=65535,
+                                 init_val=0)
 
     @skip_unless_cc_32
     def test_atomic_nanmin_int64(self):
-        self.check_atomic_nanmin(dtype=np.int64, lo=-65535, hi=65535)
+        self.check_atomic_nanmin(dtype=np.int64, lo=-65535, hi=65535,
+                                 init_val=0)
 
     @skip_unless_cc_32
     def test_atomic_nanmin_uint64(self):
-        self.check_atomic_nanmin(dtype=np.uint64, lo=0, hi=65535)
+        self.check_atomic_nanmin(dtype=np.uint64, lo=0, hi=65535,
+                                 init_val=0)
 
     def test_atomic_nanmin_float(self):
-        self.check_atomic_nanmin(dtype=np.float32, lo=-65535, hi=65535)
+        self.check_atomic_nanmin(dtype=np.float32, lo=-65535, hi=65535,
+                                 init_val=np.nan)
 
     def test_atomic_nanmin_double(self):
-        self.check_atomic_nanmin(dtype=np.float64, lo=-65535, hi=65535)
+        self.check_atomic_nanmin(dtype=np.float64, lo=-65535, hi=65535,
+                                 init_val=np.nan)
 
     def test_atomic_nanmin_double_shared(self):
         vals = np.random.randint(0, 32, size=32).astype(np.float64)

@@ -1,5 +1,5 @@
 from math import sqrt
-from numba import cuda, float32, void
+from numba import cuda, float32, uint32, void
 from numba.cuda import compile_ptx, compile_ptx_for_current_device
 
 from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
@@ -88,6 +88,26 @@ class TestCompileToPTX(unittest.TestCase):
         ptx, resty = compile_ptx(f, [], debug=True)
         self.check_debug_info(ptx)
 
+    def check_line_info(self, ptx):
+        # A .file directive should be produced and include the name of the
+        # source. The path and whitespace may vary, so we accept anything
+        # ending in the filename of this module.
+        self.assertRegex(ptx, '\\.file.*test_compiler.py"')
+
+    def test_device_function_with_line_info(self):
+        def f():
+            pass
+
+        ptx, resty = compile_ptx(f, [], device=True, lineinfo=True)
+        self.check_line_info(ptx)
+
+    def test_kernel_with_line_info(self):
+        def f():
+            pass
+
+        ptx, resty = compile_ptx(f, [], lineinfo=True)
+        self.check_line_info(ptx)
+
 
 @skip_on_cudasim('Compilation unsupported in the simulator')
 class TestCompileToPTXForCurrentDevice(CUDATestCase):
@@ -104,6 +124,31 @@ class TestCompileToPTXForCurrentDevice(CUDATestCase):
         cc = cuda.cudadrv.nvvm.find_closest_arch(device_cc)
         target = f'.target sm_{cc[0]}{cc[1]}'
         self.assertIn(target, ptx)
+
+
+@skip_on_cudasim('Compilation unsupported in the simulator')
+class TestCompileOnlyTests(unittest.TestCase):
+    '''For tests where we can only check correctness by examining the compiler
+    output rather than observing the effects of execution.'''
+
+    def test_nanosleep(self):
+        def use_nanosleep(x):
+            # Sleep for a constant time
+            cuda.nanosleep(32)
+            # Sleep for a variable time
+            cuda.nanosleep(x)
+
+        ptx, resty = compile_ptx(use_nanosleep, (uint32,), cc=(7, 0))
+
+        nanosleep_count = 0
+        for line in ptx.split('\n'):
+            if 'nanosleep.u32' in line:
+                nanosleep_count += 1
+
+        expected = 2
+        self.assertEqual(expected, nanosleep_count,
+                         (f'Got {nanosleep_count} nanosleep instructions, '
+                          f'expected {expected}'))
 
 
 if __name__ == '__main__':

@@ -276,6 +276,7 @@ The following methods of Numpy arrays are supported in their basic form
 * :meth:`~numpy.ndarray.any`
 * :meth:`~numpy.ndarray.argmax`
 * :meth:`~numpy.ndarray.argmin`
+* :meth:`~numpy.ndarray.clip`
 * :meth:`~numpy.ndarray.conj`
 * :meth:`~numpy.ndarray.conjugate`
 * :meth:`~numpy.ndarray.cumprod`
@@ -487,6 +488,7 @@ The following top-level functions are supported:
 * :func:`numpy.roll` (only the 2 first arguments; second argument ``shift``
   must be an integer)
 * :func:`numpy.roots`
+* :func:`numpy.rot90` (only the 2 first arguments)
 * :func:`numpy.round_`
 * :func:`numpy.searchsorted` (only the 3 first arguments)
 * :func:`numpy.select` (only using homogeneous lists or tuples for the first
@@ -497,6 +499,7 @@ The following top-level functions are supported:
 * :func:`numpy.sort` (no optional arguments)
 * :func:`numpy.split`
 * :func:`numpy.stack`
+* :func:`numpy.swapaxes`
 * :func:`numpy.take` (only the 2 first arguments)
 * :func:`numpy.transpose`
 * :func:`numpy.trapz` (only the 3 first arguments)
@@ -608,6 +611,7 @@ Distributions
 * :func:`numpy.random.beta`
 * :func:`numpy.random.binomial`
 * :func:`numpy.random.chisquare`
+* :func:`numpy.random.dirichlet`
 * :func:`numpy.random.exponential`
 * :func:`numpy.random.f`
 * :func:`numpy.random.gamma`
