@@ -601,7 +601,7 @@ Initialization
       return np.random.rand()
 
 
-  # Uncorrect seeding
+  # Incorrect seeding
   np.random.seed(1234)
   print(rand())
 
