@@ -110,10 +110,16 @@ def array_nansum(arr):
 def array_nanprod(arr):
     return np.nanprod(arr)
 
-def array_nanstd(arr, ddof=0):
+def array_nanstd1(arr):
+    return np.nanstd(arr)
+
+def array_nanstd2(arr, ddof):
     return np.nanstd(arr, ddof=ddof)
 
-def array_nanvar(arr, ddof=0):
+def array_nanvar1(arr):
+    return np.nanvar(arr)
+
+def array_nanvar2(arr, ddof=0):
     return np.nanvar(arr, ddof=ddof)
 
 def array_nanmedian_global(arr):
@@ -290,14 +296,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_reduction_basic(array_nanprod)
 
     def test_nanstd_basic(self):
-        pyfunc = array_nanstd
-        self.check_reduction_basic(pyfunc, ddof=0)
-        self.check_ddof(pyfunc)
+        self.check_reduction_basic(array_nanstd1)
 
     def test_nanvar_basic(self):
-        pyfunc = array_nanvar
-        self.check_reduction_basic(pyfunc, prec='double')
-        self.check_ddof(pyfunc)
+        self.check_reduction_basic(array_nanvar1, prec='double')
 
     def check_ddof(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
@@ -999,7 +1001,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         reduction_funcs_rspace = [array_argmin, array_argmin_global,
                                   array_argmax, array_argmax_global]
 
-        reduction_funcs += [array_nanmean, array_nanstd, array_nanvar]
+        reduction_funcs += [array_nanmean, array_nanstd1, array_nanvar1]
         reduction_funcs += [array_nanprod]
 
         dtypes_to_test = [np.int32, np.float32, np.bool_, np.complex64]

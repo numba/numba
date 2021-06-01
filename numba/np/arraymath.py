@@ -938,10 +938,11 @@ def np_nanvar(a, ddof=0):
     if not isinstance(a, types.Array):
         return
 
-    if not isinstance(ddof, (types.Integer, types.Float, types.NoneType)):
-        return
-
     isnan = get_isnan(a.dtype)
+
+    #FIXME: ddof is not evaluated to types.Integer when its omitted
+    if not (isinstance(ddof,int) or isinstance(ddof,types.Omitted)):
+        return
 
     def nanvar_impl(a, ddof=0):
         # Compute the mean
@@ -958,8 +959,6 @@ def np_nanvar(a, ddof=0):
 @overload(np.nanstd)
 def np_nanstd(a, ddof=0):
     if not isinstance(a, types.Array):
-        return
-    if not isinstance(ddof, (types.Integer, types.Float, types.NoneType)):
         return
 
     def nanstd_impl(a, ddof=0):
