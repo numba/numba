@@ -949,7 +949,7 @@ def np_nanvar(a, ddof=0):
         ssd, count = compute_sum_of_square_diffs(a, isnan)
         count = count - ddof
         if count <= 0:
-            return np.inf
+            return np.nan
         # np.divide() doesn't raise ZeroDivisionError
         return np.divide(ssd, count)
 
@@ -960,7 +960,7 @@ def np_nanvar(a, ddof=0):
 def np_nanstd(a, ddof=0):
     if not isinstance(a, types.Array):
         return
-
+    
     def nanstd_impl(a, ddof=0):
         return np.nanvar(a, ddof) ** 0.5
 
