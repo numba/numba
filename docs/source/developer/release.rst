@@ -1,5 +1,5 @@
 Numba Release Checklist Templates
-==================================
+=================================
 
 The goal of the Numba release process -- from a high level perspective -- is to
 publish source and binary artifacts that correspond to a given version
