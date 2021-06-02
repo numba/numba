@@ -441,7 +441,7 @@ def _write_chrome_trace(rec):
         ph = 'B' if rec.is_start else 'E'
         pid = pid
         tid = tid
-        ts = ts
+        ts = ts * 1e6 # in microseconds
         name = data['name']
         args = data
         ev = dict(
