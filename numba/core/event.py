@@ -24,6 +24,8 @@ Applications can register callbacks that are listening for specific events using
 of ``Listener`` that defines custom actions on occurrence of the specific event.
 """
 
+import json
+import atexit
 import abc
 import enum
 import time
@@ -43,6 +45,7 @@ class EventStatus(enum.Enum):
 _builtin_kinds = frozenset([
     "numba:compiler_lock",
     "numba:compile",
+    "numba:run_pass",
     "numba:llvm_lock",
 ])
 
@@ -423,3 +426,37 @@ def trigger_event(kind, data=None):
 
         start_event(kind, data=data)
         yield
+
+
+listener = RecordingListener()
+register("numba:run_pass", listener)
+
+
+def _write_chrome_trace(rec):
+    import os
+    import threading
+
+    pid = os.getpid()
+    tid = threading.get_native_id()
+    evs = []
+    for ts, rec in rec.buffer:
+        data = rec.data
+        cat = str(rec.kind)
+        ph = 'B' if rec.is_start else 'E'
+        pid = pid
+        tid = tid
+        ts = ts
+        name = data['name']
+        args = data
+        ev = dict(
+            cat=cat, pid=pid, tid=tid, ts=ts, ph=ph, name=name, args=args,
+        )
+        evs.append(ev)
+    return evs
+
+
+@atexit.register
+def _():
+    with open("perf.json", "w") as out:
+        evs = _write_chrome_trace(listener)
+        json.dump(evs, out)
