@@ -3,7 +3,7 @@ import copy
 import warnings
 from numba.core.tracing import event
 
-from numba.core import (utils, errors, interpreter, bytecode, postproc,
+from numba.core import (utils, errors, typing, interpreter, bytecode, postproc,
                         config, callconv, cpu)
 from numba.parfors.parfor import ParforDiagnostics
 from numba.core.errors import CompilerError
@@ -269,10 +269,8 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
     Good for testing.
     """
     from numba.core.registry import cpu_target
-    # typingctx = typing.Context()
-    # targetctx = cpu.CPUContext(typingctx, target='cpu')
-    typingctx = cpu_target.typing_context
-    targetctx = cpu_target.target_context
+    typingctx = typing.Context()
+    targetctx = cpu.CPUContext(typingctx, target='cpu')
     # Register the contexts in case for nested @jit or @overload calls
     with cpu_target.nested_context(typingctx, targetctx):
         return compile_extra(typingctx, targetctx, func, args, return_type,
