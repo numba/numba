@@ -428,10 +428,6 @@ def trigger_event(kind, data=None):
         yield
 
 
-listener = RecordingListener()
-register("numba:run_pass", listener)
-
-
 def _write_chrome_trace(rec):
     import os
     import threading
@@ -455,8 +451,12 @@ def _write_chrome_trace(rec):
     return evs
 
 
-@atexit.register
-def _():
-    with open("perf.json", "w") as out:
-        evs = _write_chrome_trace(listener)
-        json.dump(evs, out)
+if False:
+    listener = RecordingListener()
+    register("numba:run_pass", listener)
+
+    @atexit.register
+    def _():
+        with open("perf.json", "w") as out:
+            evs = _write_chrome_trace(listener)
+            json.dump(evs, out)
