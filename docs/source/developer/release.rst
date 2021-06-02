@@ -30,10 +30,11 @@ This is for the first/primary release candidate for minor release i.e. the
 first release of every series. It is special, because during this release, the
 release branch will have to be created. Release candidate indexing begins at 1.
 
-.. literalinclude:: first_rc_checklist.yml
+.. literalinclude:: ../../../.github/ISSUE_TEMPLATE/first_rc_checklist.md
     :language: md
     :lines: 9-
 
+Open a release checklist: https://github.com/numba/numba/issues/new?template=first_rc_checklist.md
 
 Subsequent Release Candidates, Final Releases and Patch Releases
 ----------------------------------------------------------------
@@ -41,6 +42,8 @@ Subsequent Release Candidates, Final Releases and Patch Releases
 Releases subsequent to the first release in a series usually involves a series
 of cherry-picks, the recipe is therefore slightly different.
 
-.. literalinclude:: sub_rc_checklist.yml
+.. literalinclude:: ../../../.github/ISSUE_TEMPLATE/sub_rc_checklist.md
     :language: md
     :lines: 9-
+
+Open a release checklist: https://github.com/numba/numba/issues/new?template=sub_rc_checklist.md
