@@ -10,7 +10,7 @@ from numba.tests.support import (TestCase, override_config, override_env_config,
                       captured_stdout, forbid_codegen, skip_parfors_unsupported,
                       needs_blas)
 from numba import jit
-from numba.core import types, compiler
+from numba.core import types, compiler, config
 from numba.core.compiler import compile_isolated, Flags
 from numba.core.cpu import ParallelOptions
 from numba.core.errors import NumbaPerformanceWarning
@@ -90,7 +90,14 @@ class DebugTestBase(TestCase):
     def _check_dump_func_opt_llvm(self, out):
         self.assertIn('--FUNCTION OPTIMIZED DUMP %s' % self.func_name, out)
         # allocas have been optimized away
-        self.assertIn('add nsw i64 %arg.tmp0, %arg.tmp1', out)
+        if config.IS_32BITS:
+            # in 32bit, the RHS is extended from i32
+            self.assertIn('sext i32 %arg.tmp1 to i64', out)
+            # the RHS is a different register
+            self.assertIn('add nsw i64 %arg.tmp0,', out)
+        else:
+            self.assertIn('add nsw i64 %arg.tmp0, %arg.tmp1', out)
+
 
     def _check_dump_optimized_llvm(self, out):
         self.assertIn('--OPTIMIZED DUMP %s' % self.func_name, out)
