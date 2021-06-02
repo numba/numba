@@ -7,6 +7,9 @@ from numba import guvectorize
 from numba import cuda
 from numba.cuda.testing import skip_on_cudasim, CUDATestCase
 import unittest
+import warnings
+from numba.core.errors import NumbaPerformanceWarning
+from numba.tests.support import override_config
 
 
 def _get_matmulcore_gufunc(dtype=float32, max_blocksize=None):
@@ -183,6 +186,47 @@ class TestCUDAGufunc(CUDATestCase):
         B = np.zeros_like(A)
         copy2d(A, out=B)
         self.assertTrue(np.allclose(A, B))
+
+    # Test inefficient use of the GPU where the inputs are all mapped onto a
+    # single thread in a single block.
+    def test_inefficient_launch_configuration(self):
+        @guvectorize(['void(float32[:], float32[:], float32[:])'],
+                     '(n),(n)->(n)', target='cuda')
+        def numba_dist_cuda(a, b, dist):
+            len = a.shape[0]
+            for i in range(len):
+                dist[i] = a[i] * b[i]
+
+        a = np.random.rand(1024 * 32).astype('float32')
+        b = np.random.rand(1024 * 32).astype('float32')
+        dist = np.zeros(a.shape[0]).astype('float32')
+
+        with override_config('CUDA_LOW_OCCUPANCY_WARNINGS', 1):
+            with warnings.catch_warnings(record=True) as w:
+                numba_dist_cuda(a, b, dist)
+                self.assertEqual(w[0].category, NumbaPerformanceWarning)
+                self.assertIn('Grid size', str(w[0].message))
+                self.assertIn('2 * SM count',
+                              str(w[0].message))
+
+    def test_efficient_launch_configuration(self):
+        @guvectorize(['void(float32[:], float32[:], float32[:])'],
+                     '(n),(n)->(n)', nopython=True, target='cuda')
+        def numba_dist_cuda2(a, b, dist):
+            len = a.shape[0]
+            for i in range(len):
+                dist[i] = a[i] * b[i]
+
+        a = np.random.rand(524288 * 2).astype('float32').\
+            reshape((524288, 2))
+        b = np.random.rand(524288 * 2).astype('float32').\
+            reshape((524288, 2))
+        dist = np.zeros_like(a)
+
+        with override_config('CUDA_LOW_OCCUPANCY_WARNINGS', 1):
+            with warnings.catch_warnings(record=True) as w:
+                numba_dist_cuda2(a, b, dist)
+                self.assertEqual(len(w), 0)
 
     def test_nopython_flag(self):
 

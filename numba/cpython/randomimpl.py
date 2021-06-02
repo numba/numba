@@ -224,10 +224,10 @@ def random_impl(context, builder, sig, args):
     res = get_next_double(context, builder, state_ptr)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower("np.random.random")
-@lower("np.random.random_sample")
-@lower("np.random.sample")
-@lower("np.random.ranf")
+@glue_lowering("np.random.random")
+@glue_lowering("np.random.random_sample")
+@glue_lowering("np.random.sample")
+@glue_lowering("np.random.ranf")
 def random_impl(context, builder, sig, args):
     state_ptr = get_state_ptr(context, builder, "np")
     res = get_next_double(context, builder, state_ptr)
@@ -241,10 +241,10 @@ def gauss_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower("np.random.standard_normal")
-@lower("np.random.normal")
-@lower("np.random.normal", types.Float)
-@lower("np.random.normal", types.Float, types.Float)
+@glue_lowering("np.random.standard_normal")
+@glue_lowering("np.random.normal")
+@glue_lowering("np.random.normal", types.Float)
+@glue_lowering("np.random.normal", types.Float, types.Float)
 def np_gauss_impl(context, builder, sig, args):
     sig, args = _fill_defaults(context, builder, sig, args, (0.0, 1.0))
     res = _gauss_impl(context, builder, sig, args, "np")
@@ -417,7 +417,7 @@ def randint_impl_1(context, builder, sig, args):
     res = _randrange_impl(context, builder, start, stop, step, "py")
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower("np.random.randint", types.Integer)
+@glue_lowering("np.random.randint", types.Integer)
 def randint_impl_2(context, builder, sig, args):
     stop, = args
     start = ir.Constant(stop.type, 0)
@@ -425,7 +425,7 @@ def randint_impl_2(context, builder, sig, args):
     res = _randrange_impl(context, builder, start, stop, step, "np")
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower("np.random.randint", types.Integer, types.Integer)
+@glue_lowering("np.random.randint", types.Integer, types.Integer)
 def randrange_impl_2(context, builder, sig, args):
     start, stop = args
     step = ir.Constant(start.type, 1)
@@ -437,7 +437,7 @@ def uniform_impl(context, builder, sig, args):
     res = uniform_impl(context, builder, sig, args, "py")
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower("np.random.uniform", types.Float, types.Float)
+@glue_lowering("np.random.uniform", types.Float, types.Float)
 def uniform_impl(context, builder, sig, args):
     res = uniform_impl(context, builder, sig, args, "np")
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -475,7 +475,7 @@ def triangular_impl_3(context, builder, sig, args):
     res = _triangular_impl_3(context, builder, sig, low, high, mode, "py")
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower("np.random.triangular", types.Float,
+@glue_lowering("np.random.triangular", types.Float,
            types.Float, types.Float)
 def triangular_impl_3(context, builder, sig, args):
     low, mode, high = args
@@ -508,9 +508,9 @@ def gammavariate_impl(context, builder, sig, args):
     res = _gammavariate_impl(context, builder, sig, args, random.random)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower("np.random.standard_gamma", types.Float)
-@lower("np.random.gamma", types.Float)
-@lower("np.random.gamma", types.Float, types.Float)
+@glue_lowering("np.random.standard_gamma", types.Float)
+@glue_lowering("np.random.gamma", types.Float)
+@glue_lowering("np.random.gamma", types.Float, types.Float)
 def gammavariate_impl(context, builder, sig, args):
     sig, args = _fill_defaults(context, builder, sig, args, (None, 1.0))
     res = _gammavariate_impl(context, builder, sig, args, np.random.random)
@@ -597,7 +597,7 @@ def betavariate_impl(context, builder, sig, args):
                              random.gammavariate)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower("np.random.beta",
+@glue_lowering("np.random.beta",
            types.Float, types.Float)
 def betavariate_impl(context, builder, sig, args):
     res = _betavariate_impl(context, builder, sig, args,
@@ -640,7 +640,7 @@ def expovariate_impl(context, builder, sig, args):
                                     sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower("np.random.exponential", types.Float)
+@glue_lowering("np.random.exponential", types.Float)
 def exponential_impl(context, builder, sig, args):
     _random = np.random.random
     _log = math.log
@@ -652,8 +652,8 @@ def exponential_impl(context, builder, sig, args):
                                     sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower("np.random.standard_exponential")
-@lower("np.random.exponential")
+@glue_lowering("np.random.standard_exponential")
+@glue_lowering("np.random.exponential")
 def exponential_impl(context, builder, sig, args):
     _random = np.random.random
     _log = math.log
@@ -665,9 +665,9 @@ def exponential_impl(context, builder, sig, args):
                                     sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower("np.random.lognormal")
-@lower("np.random.lognormal", types.Float)
-@lower("np.random.lognormal", types.Float, types.Float)
+@glue_lowering("np.random.lognormal")
+@glue_lowering("np.random.lognormal", types.Float)
+@glue_lowering("np.random.lognormal", types.Float, types.Float)
 def np_lognormal_impl(context, builder, sig, args):
     sig, args = _fill_defaults(context, builder, sig, args, (0.0, 1.0))
     res = _lognormvariate_impl(context, builder, sig, args,
@@ -704,7 +704,7 @@ def paretovariate_impl(context, builder, sig, args):
                                     sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower("np.random.pareto", types.Float)
+@glue_lowering("np.random.pareto", types.Float)
 def pareto_impl(context, builder, sig, args):
     _random = np.random.random
 
@@ -732,7 +732,7 @@ def weibullvariate_impl(context, builder, sig, args):
                                     sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower("np.random.weibull", types.Float)
+@glue_lowering("np.random.weibull", types.Float)
 def weibull_impl(context, builder, sig, args):
     _random = np.random.random
     _log = math.log
@@ -751,7 +751,7 @@ def vonmisesvariate_impl(context, builder, sig, args):
     res = _vonmisesvariate_impl(context, builder, sig, args, random.random)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower("np.random.vonmises",
+@glue_lowering("np.random.vonmises",
            types.Float, types.Float)
 def vonmisesvariate_impl(context, builder, sig, args):
     res = _vonmisesvariate_impl(context, builder, sig, args, np.random.random)
@@ -809,7 +809,7 @@ def _vonmisesvariate_impl(context, builder, sig, args, _random):
                                     sig, args)
 
 
-@lower("np.random.binomial", types.Integer, types.Float)
+@glue_lowering("np.random.binomial", types.Integer, types.Float)
 def binomial_impl(context, builder, sig, args):
     intty = sig.return_type
     _random = np.random.random
@@ -868,7 +868,7 @@ def binomial_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower("np.random.chisquare", types.Float)
+@glue_lowering("np.random.chisquare", types.Float)
 def chisquare_impl(context, builder, sig, args):
 
     def chisquare_impl(df):
@@ -878,7 +878,7 @@ def chisquare_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower("np.random.f", types.Float, types.Float)
+@glue_lowering("np.random.f", types.Float, types.Float)
 def f_impl(context, builder, sig, args):
 
     def f_impl(num, denom):
@@ -889,7 +889,7 @@ def f_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower("np.random.geometric", types.Float)
+@glue_lowering("np.random.geometric", types.Float)
 def geometric_impl(context, builder, sig, args):
     _random = np.random.random
     intty = sig.return_type
@@ -915,7 +915,7 @@ def geometric_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower("np.random.gumbel", types.Float, types.Float)
+@glue_lowering("np.random.gumbel", types.Float, types.Float)
 def gumbel_impl(context, builder, sig, args):
     _random = np.random.random
     _log = math.log
@@ -928,7 +928,7 @@ def gumbel_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower("np.random.hypergeometric", types.Integer,
+@glue_lowering("np.random.hypergeometric", types.Integer,
            types.Integer, types.Integer)
 def hypergeometric_impl(context, builder, sig, args):
     _random = np.random.random
@@ -954,9 +954,9 @@ def hypergeometric_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower("np.random.laplace")
-@lower("np.random.laplace", types.Float)
-@lower("np.random.laplace", types.Float, types.Float)
+@glue_lowering("np.random.laplace")
+@glue_lowering("np.random.laplace", types.Float)
+@glue_lowering("np.random.laplace", types.Float, types.Float)
 def laplace_impl(context, builder, sig, args):
     _random = np.random.random
     _log = math.log
@@ -973,9 +973,9 @@ def laplace_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower("np.random.logistic")
-@lower("np.random.logistic", types.Float)
-@lower("np.random.logistic", types.Float, types.Float)
+@glue_lowering("np.random.logistic")
+@glue_lowering("np.random.logistic", types.Float)
+@glue_lowering("np.random.logistic", types.Float, types.Float)
 def logistic_impl(context, builder, sig, args):
     _random = np.random.random
     _log = math.log
@@ -988,7 +988,7 @@ def logistic_impl(context, builder, sig, args):
     res = context.compile_internal(builder, logistic_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower("np.random.logseries", types.Float)
+@glue_lowering("np.random.logseries", types.Float)
 def logseries_impl(context, builder, sig, args):
     intty = sig.return_type
     _random = np.random.random
@@ -1019,7 +1019,7 @@ def logseries_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower("np.random.negative_binomial", types.int64, types.Float)
+@glue_lowering("np.random.negative_binomial", types.int64, types.Float)
 def negative_binomial_impl(context, builder, sig, args):
     _gamma = np.random.gamma
     _poisson = np.random.poisson
@@ -1036,8 +1036,8 @@ def negative_binomial_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower("np.random.poisson")
-@lower("np.random.poisson", types.Float)
+@glue_lowering("np.random.poisson")
+@glue_lowering("np.random.poisson", types.Float)
 def poisson_impl(context, builder, sig, args):
     state_ptr = get_np_state_ptr(context, builder)
 
@@ -1098,7 +1098,7 @@ def poisson_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower("np.random.power", types.Float)
+@glue_lowering("np.random.power", types.Float)
 def power_impl(context, builder, sig, args):
 
     def power_impl(a):
@@ -1111,8 +1111,8 @@ def power_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower("np.random.rayleigh")
-@lower("np.random.rayleigh", types.Float)
+@glue_lowering("np.random.rayleigh")
+@glue_lowering("np.random.rayleigh", types.Float)
 def rayleigh_impl(context, builder, sig, args):
     _random = np.random.random
 
@@ -1126,7 +1126,7 @@ def rayleigh_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower("np.random.standard_cauchy")
+@glue_lowering("np.random.standard_cauchy")
 def cauchy_impl(context, builder, sig, args):
     _gauss = np.random.standard_normal
 
@@ -1137,7 +1137,7 @@ def cauchy_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower("np.random.standard_t", types.Float)
+@glue_lowering("np.random.standard_t", types.Float)
 def standard_t_impl(context, builder, sig, args):
 
     def standard_t_impl(df):
@@ -1150,7 +1150,7 @@ def standard_t_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower("np.random.wald", types.Float, types.Float)
+@glue_lowering("np.random.wald", types.Float, types.Float)
 def wald_impl(context, builder, sig, args):
 
     def wald_impl(mean, scale):
@@ -1172,7 +1172,7 @@ def wald_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower("np.random.zipf", types.Float)
+@glue_lowering("np.random.zipf", types.Float)
 def zipf_impl(context, builder, sig, args):
     _random = np.random.random
     intty = sig.return_type
@@ -1286,7 +1286,7 @@ for typing_key, arity in [
     ("np.random.zipf", 2),
     ]:
 
-    @lower(typing_key, *(types.Any,) * arity)
+    @glue_lowering(typing_key, *(types.Any,) * arity)
     def random_arr(context, builder, sig, args, typing_key=typing_key):
 
         arrty = sig.return_type
@@ -1299,7 +1299,14 @@ for typing_key, arity in [
         arr = arrayobj._empty_nd_impl(context, builder, arrty, shapes)
 
         # ... and populate it in natural order
-        scalar_impl = context.get_function(typing_key, scalar_sig)
+        *mod, fname = typing_key.split('.')
+        # Module must be numpy.random
+        assert mod == ['np', 'random']
+        np_func = getattr(np.random, fname)
+        fnty = context.typing_context.resolve_value_type(np_func)
+        resolved_sig = fnty.get_call_type(context.typing_context,
+                                          scalar_sig.args, {})
+        scalar_impl = context.get_function(fnty, resolved_sig)
         with cgutils.for_range(builder, arr.nitems) as loop:
             val = scalar_impl(builder, scalar_args)
             ptr = cgutils.gep(builder, arr.data, loop.index)

@@ -46,7 +46,7 @@ normal launch - the grid must be no larger than the maximum number of active
 blocks on the device on which it is launched. To get maximum grid size for a
 cooperative launch of a kernel with a given block size and dynamic shared
 memory requirement, use the ``max_cooperative_grid_blocks()`` method of kernel
-definitions:
+overloads:
 
 .. automethod:: numba.cuda.compiler._Kernel.max_cooperative_grid_blocks
 
@@ -105,7 +105,7 @@ The maximum grid size for ``sequential_rows`` can be enquired using:
 
 .. code-block:: python
 
-   defn = sequential_rows.definition
-   max_blocks = defn.max_cooperative_grid_blocks(blockdim)
+   overload = sequential_rows.overloads[(int32[:,::1],)
+   max_blocks = overload.max_cooperative_grid_blocks(blockdim)
    print(max_blocks)
    # 1152 (e.g. on Quadro RTX 8000 with Numba 0.52.1 and CUDA 11.0)

@@ -188,6 +188,18 @@ class ConfigStack:
     """
     tls = threading.local()
 
+    @classmethod
+    def top_or_none(cls):
+        """Get the TOS or return None if no config is set.
+        """
+        self = cls()
+        if self:
+            flags = self.top()
+        else:
+            # Note: should this be the default flag for the target instead?
+            flags = None
+        return flags
+
     def __init__(self):
         tls = self.tls
         try:
@@ -215,6 +227,12 @@ class ConfigStack:
             yield
         finally:
             self.pop()
+
+
+def current_target_config():
+    """ Shortcut function for getting the current target configuration.
+    """
+    return ConfigStack().top_or_none()
 
 
 class ConfigOptions(object):
