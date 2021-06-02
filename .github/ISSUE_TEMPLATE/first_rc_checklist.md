@@ -15,7 +15,7 @@ labels: task
     - [ ] "PR with changelog entries"
 * [ ] Create X.Y release branch
 * [ ] pin llvmlite to `>=0.A.0rc1,<0.A+1.0`
-* [ ] annotated tag X.Y.Zrc0 on release branch
+* [ ] annotated tag X.Y.Zrc1 on release branch
 * [ ] build and upload conda packages on buildfarm (check "upload")
 * [ ] build wheels (`$PYTHON_VERSIONS`) on the buildfarm
 * [ ] upload wheels and sdist to PyPI (upload from `ci_artifacts`)
