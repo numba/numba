@@ -292,6 +292,8 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
 
         flags.inherit_if_not_set("fastmath")
 
+        flags.inherit_if_not_set("error_model", default="python")
+
 # ----------------------------------------------------------------------------
 # Internal
 
