@@ -849,7 +849,7 @@ def iscomplexobj(x):
 
 @overload(np.isrealobj)
 def isrealobj(x):
-    # Return True if x is a not complex type or an array of complex numbers.
+    # Return True if x is not a complex type.
     # Implementation based on NumPy
     # https://github.com/numpy/numpy/blob/ccfbcc1cd9a4035a467f2e982a565ab27de25b6b/numpy/lib/type_check.py#L290-L322
     def impl(x):
