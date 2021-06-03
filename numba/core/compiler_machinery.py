@@ -285,6 +285,9 @@ class PassManager(object):
 
         import numba.core.event as ev
         from pprint import pformat
+        import traceback as tb
+
+        stack = "".join(tb.format_stack())
 
         qualname = internal_state.func_id.func_qualname
 
@@ -295,6 +298,7 @@ class PassManager(object):
             flags=pformat(internal_state.flags.values()),
             args=str(internal_state.args),
             return_type=str(internal_state.return_type),
+            stack=stack,
         )
         with ev.trigger_event("numba:run_pass", data=ev_details):
             with SimpleTimer() as init_time:
