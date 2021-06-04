@@ -95,17 +95,24 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
     if typemap:
         typemap[attr_var.name] = get_np_ufunc_typ(numpy.empty)
     attr_assign = ir.Assign(empty_attr_call, attr_var, loc)
+     # Assume str(dtype) returns a valid type
+    dtype_str = str(dtype)
     # alloc call: lhs = empty_attr(size_var, typ_var)
     typ_var = ir.Var(scope, mk_unique_var("$np_typ_var"), loc)
     if typemap:
         typemap[typ_var.name] = types.functions.NumberClass(dtype)
-    # assuming str(dtype) returns valid np dtype string
-    dtype_str = str(dtype)
-    if dtype_str=='bool':
-        # empty doesn't like 'bool' sometimes (e.g. kmeans example)
-        dtype_str = 'bool_'
-    np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
-    typ_var_assign = ir.Assign(np_typ_getattr, typ_var, loc)
+    # If dtype is a datetime/timedelta with a unit,
+    # then it won't return a valid type and instead can be created
+    # with a string. i.e. "datetime64[ns]")
+    if isinstance(dtype, (types.NPDatetime, types.NPTimedelta)) and dtype.unit != '':
+        typename_const = ir.Const(dtype_str, loc)
+        typ_var_assign = ir.Assign(typename_const, typ_var, loc)
+    else:
+        if dtype_str=='bool':
+            # empty doesn't like 'bool' sometimes (e.g. kmeans example)
+            dtype_str = 'bool_'
+        np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
+        typ_var_assign = ir.Assign(np_typ_getattr, typ_var, loc)
     alloc_call = ir.Expr.call(attr_var, [size_var, typ_var], (), loc)
     if calltypes:
         calltypes[alloc_call] = typemap[attr_var.name].get_call_type(
