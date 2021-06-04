@@ -28,6 +28,7 @@ from numba.np.linalg import ensure_blas
 from numba.core.extending import intrinsic
 from numba.core.errors import RequireLiteralValue, TypingError
 from numba.core.overload_glue import glue_lowering
+from numba.cpython.unsafe.tuple import tuple_setitem
 
 
 def _check_blas():
@@ -787,6 +788,8 @@ def array_argmax(arr, axis=None):
         _check_is_integer(axis, "axis")
         retty = arr.dtype
 
+        tuple_buffer = tuple(range(arr.ndim))
+
         def array_argmax_impl(arr, axis=None):
             if arr.ndim > 3:
                 # Transposing currently only works with literals, so can't
@@ -803,19 +806,11 @@ def array_argmax(arr, axis=None):
                 return flatten_impl(arr)
 
             # Make chosen axis the last axis:
-            if arr.ndim == 2:
-                if axis == 0:
-                    new_axis_order = (1, 0)
-                else:
-                    new_axis_order = (0, 1)
-            if arr.ndim == 3:
-                if axis == 0:
-                    new_axis_order = (1, 2, 0)
-                elif axis == 1:
-                    new_axis_order = (0, 2, 1)
-                else:
-                    new_axis_order = (0, 1, 2)
-            transposed_arr = arr.transpose(new_axis_order)
+            tmp = tuple_buffer
+            for i in range(axis, arr.ndim - 1):
+                tmp = tuple_setitem(tmp, i, i + 1)
+            transpose_index = tuple_setitem(tmp, arr.ndim - 1, axis)
+            transposed_arr = arr.transpose(transpose_index)
 
             # Flatten along that axis; since we've transposed, we can just get
             # batches off the overall flattened array.
