@@ -6,6 +6,7 @@ import numpy as np
 
 from numba.core import errors, types
 from numba.core.typing.templates import signature
+from numba.np import npdatetime_helpers
 
 
 # re-export
@@ -429,6 +430,17 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                     new_outputs.append(out)
             return new_outputs
 
+        def make_datetime_specific(outputs, dt_unit, td_unit):
+            new_outputs = []
+            for out in outputs:
+                if isinstance(out, types.NPDatetime) and out.unit == "":
+                    unit = npdatetime_helpers.combine_datetime_timedelta_units(
+                        dt_unit, td_unit)
+                    new_outputs.append(types.NPDatetime(unit))
+                else:
+                    new_outputs.append(out)
+            return new_outputs
+
         if ufunc_inputs == 'mm':
             if all(inp.unit == inputs[0].unit for inp in inputs):
                 # Case with operation on same units. Operations on different
@@ -439,6 +451,20 @@ def ufunc_find_matching_loop(ufunc, arg_types):
             else:
                 return outputs
             return new_outputs
+        elif ufunc_inputs == 'mM':
+            # case where the left operand has timedelta type
+            # and the right operand has datetime
+            td_unit = inputs[0].unit
+            dt_unit = inputs[1].unit
+            return make_datetime_specific(outputs, dt_unit, td_unit)
+
+        elif ufunc_inputs == 'Mm':
+            # case where the right operand has timedelta type
+            # and the left operand has datetime
+            dt_unit = inputs[0].unit
+            td_unit = inputs[1].unit
+            return make_datetime_specific(outputs, dt_unit, td_unit)
+
         elif ufunc_inputs[0] == 'm':
             # case where the left operand has timedelta type
             unit = inputs[0].unit
@@ -486,9 +512,10 @@ def ufunc_find_matching_loop(ufunc, arg_types):
             try:
                 inputs = choose_types(input_types, ufunc_inputs)
                 outputs = choose_types(output_types, ufunc_outputs)
-                # if the left operand or both are timedeltas, then the output
+                # if the left operand or both are timedeltas, or we have
+                # 1 datetime and 1 timedelta, then the output
                 # units need to be determined.
-                if ufunc_inputs[0] == 'm':
+                if ufunc_inputs[0] == 'm' or ufunc_inputs == 'Mm':
                     outputs = set_output_dt_units(inputs, outputs, ufunc_inputs)
 
             except NotImplementedError:
