@@ -5,6 +5,8 @@ import numbers
 import importlib
 import sys
 import re
+import traceback
+import multiprocessing as mp
 from itertools import chain, combinations
 
 import numba
@@ -182,6 +184,18 @@ class TestSVMLGeneration(TestCase):
     asm_filter = re.compile('|'.join(['\$[a-z_]\w+,']+list(svml_funcs)))
 
     @classmethod
+    def mp_runner(cls, testname, outqueue):
+        method = getattr(cls, testname)
+        try:
+            ok, msg = method()
+        except Exception:
+            msg = traceback.format_exc()
+            ok = False
+        else:
+            fmt = None
+        outqueue.put({'status': ok, 'msg': msg})
+
+    @classmethod
     def _inject_test(cls, dtype, mode, vlen, flags):
         # unsupported combinations
         if dtype.startswith('complex') and mode != 'numpy':
@@ -190,8 +204,8 @@ class TestSVMLGeneration(TestCase):
         skipped = dtype.startswith('int') and vlen == 2
         sig = (numba.int64,)
         # unit test body template
-        @unittest.skipUnless(not skipped, "Not implemented")
-        def test_template(self):
+        @staticmethod
+        def run_template():
             fn, contains, avoids = combo_svml_usecase(dtype, mode, vlen,
                                                       flags['fastmath'],
                                                       flags['name'])
@@ -207,16 +221,35 @@ class TestSVMLGeneration(TestCase):
             asm = jitted_fn.inspect_asm(sig)
             missed = [pattern for pattern in contains if not pattern in asm]
             found = [pattern for pattern in avoids if pattern in asm]
-            self.assertTrue(not missed and not found,
-                "While expecting %s and not %s,\n"
-                "it contains:\n%s\n"
-                "when compiling %s" % (str(missed), str(found), '\n'.join(
-                    [line for line in asm.split('\n')
-                     if cls.asm_filter.search(line) and not '"' in line]),
-                     fn.__doc__))
+            ok = not missed and not found
+            detail = '\n'.join(
+                [line for line in asm.split('\n')
+                 if cls.asm_filter.search(line) and not '"' in line])
+            msg = (
+                f"While expecting {missed} and not {found},\n"
+                f"it contains:\n{detail}\n"
+                f"when compiling {fn.__doc__}"
+            )
+            return ok, msg
         # inject it into the class
-        setattr(cls, "test_" + usecase_name(dtype, mode, vlen, flags['name']),
-                test_template)
+        postfix = usecase_name(dtype, mode, vlen, flags['name'])
+        testname = f"run_{postfix}"
+        setattr(cls, testname, run_template)
+
+        @unittest.skipUnless(not skipped, "Not implemented")
+        def test_runner(self):
+            ctx = mp.get_context("spawn")
+            q = ctx.Queue()
+            p = ctx.Process(target=type(self).mp_runner, args=[testname, q])
+            p.start()
+            p.join()
+            self.assertEqual(p.exitcode, 0, msg="process ended unexpectedly")
+            out = q.get()
+            status = out['status']
+            msg = out['msg']
+            self.assertTrue(status, msg=msg)
+
+        setattr(cls, f"test_{postfix}", test_runner)
 
     @classmethod
     def autogenerate(cls):
