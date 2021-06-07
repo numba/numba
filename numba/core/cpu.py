@@ -162,6 +162,8 @@ class CPUContext(BaseContext):
 
 
     def post_lowering(self, mod, library):
+        if self.fastmath:
+            fastmathpass.rewrite_module(mod, self.fastmath)
 
         if self.is32bit:
             # 32-bit machine needs to replace all 64-bit div/rem to avoid
@@ -291,6 +293,8 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
         flags.enable_pyobject_looplift = True
 
         flags.inherit_if_not_set("fastmath")
+
+        flags.inherit_if_not_set("error_model", default="python")
 
 # ----------------------------------------------------------------------------
 # Internal
