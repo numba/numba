@@ -268,10 +268,10 @@ API Reference
 
 .. py:data:: numba.config.NUMBA_DEFAULT_NUM_THREADS
 
-   The number of CPU cores on the system (as determined by
-   ``multiprocessing.cpu_count()``). This is the default value for
-   :obj:`numba.config.NUMBA_NUM_THREADS` unless the
-   :envvar:`NUMBA_NUM_THREADS` environment variable is set.
+   The number of usable CPU cores on the system (as determined by either
+   ``len(os.sched_getaffinity(0))`` or ``multiprocessing.cpu_count()``).
+   This is the default value for :obj:`numba.config.NUMBA_NUM_THREADS` unless
+   the :envvar:`NUMBA_NUM_THREADS` environment variable is set.
 
 .. autofunction:: numba.set_num_threads
 
