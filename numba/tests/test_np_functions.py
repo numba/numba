@@ -101,6 +101,34 @@ def machar(*args):
     return np.MachAr()
 
 
+def iscomplex(x):
+    return np.iscomplex(x)
+
+
+def iscomplexobj(x):
+    return np.iscomplexobj(x)
+
+
+def isscalar(x):
+    return np.isscalar(x)
+
+
+def isreal(x):
+    return np.isreal(x)
+
+
+def isrealobj(x):
+    return np.isrealobj(x)
+
+
+def isneginf(x, out=None):
+    return np.isneginf(x, out)
+
+
+def isposinf(x, out=None):
+    return np.isposinf(x, out)
+
+
 def isnat(x):
     return np.isnat(x)
 
@@ -809,6 +837,97 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             with self.assertRaises(ValueError) as raises:
                 cfunc(arr, n)
             self.assertIn("order must be non-negative", str(raises.exception))
+
+    def test_isscalar(self):
+        def values():
+            yield 3
+            yield np.asarray([3])
+            yield (3,)
+            yield 3j
+            yield 'numba'
+            yield int(10)
+            yield np.int16(12345)
+            yield 4.234
+            yield True
+            yield None
+
+        pyfunc = isscalar
+        cfunc = jit(nopython=True)(pyfunc)
+        for x in values():
+            expected = pyfunc(x)
+            got = cfunc(x)
+            self.assertEqual(expected, got, x)
+
+    def test_isobj_functions(self):
+        def values():
+            yield 1
+            yield 1 + 0j
+            yield np.asarray([3, 1 + 0j, True])
+            yield "hello world"
+
+        @jit(nopython=True)
+        def optional_fn(x, cond, cfunc):
+            y = x if cond else None
+            return cfunc(y)
+
+        pyfuncs = [iscomplexobj, isrealobj]
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+            for x in values():
+                expected = pyfunc(x)
+                got = cfunc(x)
+                self.assertEqual(expected, got)
+
+                # optional type
+                expected_optional = optional_fn.py_func(x, True, pyfunc)
+                got_optional = optional_fn(x, True, cfunc)
+                self.assertEqual(expected_optional, got_optional)
+
+                # none type
+                expected_none = optional_fn.py_func(x, False, pyfunc)
+                got_none = optional_fn(x, False, cfunc)
+                self.assertEqual(expected_none, got_none)
+
+            self.assertEqual(len(cfunc.signatures), 8)
+
+    def test_is_real_or_complex(self):
+        def values():
+            yield np.array([1 + 1j, 1 + 0j, 4.5, 3, 2, 2j])
+            yield np.array([1, 2, 3])
+            yield 3
+            yield 12j
+            yield 1 + 4j
+            yield 10 + 0j
+            yield (1 + 4j, 2 + 0j)
+            yield np.array([[1, 2], [3, 4], [5, 6], [7, 8]])
+
+        pyfuncs = [iscomplex, isreal]
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+            for x in values():
+                expected = pyfunc(x)
+                got = cfunc(x)
+                self.assertPreciseEqual(expected, got)
+
+    def test_isneg_or_ispos_inf(self):
+        def values():
+            yield np.NINF, None
+            yield np.inf, None
+            yield np.PINF, None
+            yield np.asarray([-np.inf, 0., np.inf]), None
+            yield np.NINF, np.zeros(1, dtype=np.bool)
+            yield np.inf, np.zeros(1, dtype=np.bool)
+            yield np.PINF, np.zeros(1, dtype=np.bool)
+            yield np.NINF, np.empty(12)
+            yield np.asarray([-np.inf, 0., np.inf]), np.zeros(3, dtype=np.bool)
+
+        pyfuncs = [isneginf, isposinf]
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+            for x, out in values():
+                expected = pyfunc(x, out)
+                got = cfunc(x, out)
+                self.assertPreciseEqual(expected, got)
 
     def bincount_sequences(self):
         """
