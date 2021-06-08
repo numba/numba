@@ -302,21 +302,21 @@ class BitwiseShiftOperation(ConcreteTemplate):
     unsafe_casting = False
 
 
-@infer_global(operator.lshift)
+@glue_typing(operator.lshift)
 class BitwiseLeftShift(BitwiseShiftOperation):
     pass
 
-@infer_global(operator.ilshift)
+@glue_typing(operator.ilshift)
 class BitwiseLeftShift(BitwiseShiftOperation):
     pass
 
 
-@infer_global(operator.rshift)
+@glue_typing(operator.rshift)
 class BitwiseRightShift(BitwiseShiftOperation):
     pass
 
 
-@infer_global(operator.irshift)
+@glue_typing(operator.irshift)
 class BitwiseRightShift(BitwiseShiftOperation):
     pass
 

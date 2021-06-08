@@ -530,10 +530,10 @@ def _implement_integer_operators():
     lower_builtin(operator.eq, ty, ty)(int_eq_impl)
     lower_builtin(operator.ne, ty, ty)(int_ne_impl)
 
-    lower_builtin(operator.lshift, ty, ty)(int_shl_impl)
-    lower_builtin(operator.ilshift, ty, ty)(int_shl_impl)
-    lower_builtin(operator.rshift, ty, ty)(int_shr_impl)
-    lower_builtin(operator.irshift, ty, ty)(int_shr_impl)
+    glue_lowering(operator.lshift, ty, ty)(int_shl_impl)
+    glue_lowering(operator.ilshift, ty, ty)(int_shl_impl)
+    glue_lowering(operator.rshift, ty, ty)(int_shr_impl)
+    glue_lowering(operator.irshift, ty, ty)(int_shr_impl)
 
     lower_builtin(operator.neg, ty)(int_negate_impl)
     lower_builtin(operator.pos, ty)(int_positive_impl)
