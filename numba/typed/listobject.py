@@ -28,6 +28,7 @@ from numba.core.types import (
 from numba.core.imputils import impl_ret_borrowed, RefType
 from numba.core.errors import TypingError
 from numba.core import typing
+from numba.core.overload_glue import glue_lowering
 from numba.typed.typedobjectutils import (_as_bytes, _cast, _nonoptional,
                                           _get_incref_decref,
                                           _container_get_data,
@@ -214,7 +215,7 @@ def _list_set_method_table(typingctx, lp, itemty):
     return sig, codegen
 
 
-@lower_builtin(operator.is_, types.ListType, types.ListType)
+@glue_lowering(operator.is_, types.ListType, types.ListType)
 def list_is(context, builder, sig, args):
     a_meminfo = _container_get_meminfo(context, builder, sig.args[0], args[0])
     b_meminfo = _container_get_meminfo(context, builder, sig.args[1], args[1])

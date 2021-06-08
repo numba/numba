@@ -1,10 +1,10 @@
 import operator
 
 from numba.core import types, typing, cgutils
+from numba.core.overload_glue import glue_lowering
 
-from numba.core.imputils import (lower_cast, lower_builtin,
-                                 lower_getattr_generic, impl_ret_untracked,
-                                 lower_setattr_generic)
+from numba.core.imputils import (lower_cast, lower_getattr_generic,
+                                 impl_ret_untracked, lower_setattr_generic)
 
 
 def always_return_true_impl(context, builder, sig, args):
@@ -36,11 +36,11 @@ def optional_is_none(context, builder, sig, args):
 
 
 # None is/not None
-lower_builtin(operator.is_, types.none, types.none)(always_return_true_impl)
+glue_lowering(operator.is_, types.none, types.none)(always_return_true_impl)
 
 # Optional is None
-lower_builtin(operator.is_, types.Optional, types.none)(optional_is_none)
-lower_builtin(operator.is_, types.none, types.Optional)(optional_is_none)
+glue_lowering(operator.is_, types.Optional, types.none)(optional_is_none)
+glue_lowering(operator.is_, types.none, types.Optional)(optional_is_none)
 
 
 @lower_getattr_generic(types.Optional)

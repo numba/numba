@@ -17,6 +17,7 @@ from numba.core.utils import cached_property
 from numba.misc import quicksort
 from numba.cpython import slicing
 from numba import literal_unroll
+from numba.core.overload_glue import glue_lowering
 
 
 def get_list_payload(context, builder, list_type, value):
@@ -755,7 +756,7 @@ def list_mul_inplace(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # Comparisons
 
-@lower_builtin(operator.is_, types.List, types.List)
+@glue_lowering(operator.is_, types.List, types.List)
 def list_is(context, builder, sig, args):
     a = ListInstance(context, builder, sig.args[0], args[0])
     b = ListInstance(context, builder, sig.args[1], args[1])

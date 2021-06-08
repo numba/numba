@@ -2549,7 +2549,7 @@ def constant_bytes(context, builder, ty, pyval):
 # Comparisons
 
 
-@lower_builtin(operator.is_, types.Array, types.Array)
+@glue_lowering(operator.is_, types.Array, types.Array)
 def array_is(context, builder, sig, args):
     aty, bty = sig.args
     if aty != bty:

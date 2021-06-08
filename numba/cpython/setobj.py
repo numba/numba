@@ -18,6 +18,7 @@ from numba.core.utils import cached_property
 from numba.misc import quicksort
 from numba.cpython import slicing
 from numba.extending import intrinsic
+from numba.core.overload_glue import glue_lowering
 
 
 def get_payload_struct(context, builder, set_type, ptr):
@@ -1454,7 +1455,7 @@ def set_gt(context, builder, sig, args):
 
     return context.compile_internal(builder, gt_impl, sig, args)
 
-@lower_builtin(operator.is_, types.Set, types.Set)
+@glue_lowering(operator.is_, types.Set, types.Set)
 def set_is(context, builder, sig, args):
     a = SetInstance(context, builder, sig.args[0], args[0])
     b = SetInstance(context, builder, sig.args[1], args[1])

@@ -8,6 +8,7 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_constant, impl_ret_untracked)
 from numba.core import types
 from numba.core.extending import overload_method
+from numba.core.overload_glue import glue_lowering
 
 
 @lower_builtin(operator.eq, types.EnumMember, types.EnumMember)
@@ -19,7 +20,7 @@ def enum_eq(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(operator.is_, types.EnumMember, types.EnumMember)
+@glue_lowering(operator.is_, types.EnumMember, types.EnumMember)
 def enum_is(context, builder, sig, args):
     tu, tv = sig.args
     u, v = args
