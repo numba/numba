@@ -405,7 +405,10 @@ unary_math_int_impl(math.degrees, degrees_float_impl)
 @lower(math.pow, types.Float, types.Float)
 @lower(math.pow, types.Float, types.Integer)
 def pow_impl(context, builder, sig, args):
-    impl = context.get_function(operator.pow, sig)
+    tyctx = context.typing_context
+    fnty = tyctx.resolve_value_type(operator.pow)
+    sig = fnty.get_call_type(tyctx, sig.args, {})
+    impl = context.get_function(fnty, sig)
     return impl(builder, args)
 
 # -----------------------------------------------------------------------------

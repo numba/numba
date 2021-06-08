@@ -249,10 +249,10 @@ def int_power_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(operator.pow, types.Integer, types.IntegerLiteral)
-@lower_builtin(operator.ipow, types.Integer, types.IntegerLiteral)
-@lower_builtin(operator.pow, types.Float, types.IntegerLiteral)
-@lower_builtin(operator.ipow, types.Float, types.IntegerLiteral)
+@glue_lowering(operator.pow, types.Integer, types.IntegerLiteral)
+@glue_lowering(operator.ipow, types.Integer, types.IntegerLiteral)
+@glue_lowering(operator.pow, types.Float, types.IntegerLiteral)
+@glue_lowering(operator.ipow, types.Float, types.IntegerLiteral)
 def static_power_impl(context, builder, sig, args):
     """
     a ^ b, where a is an integer or real, and b a constant integer
@@ -538,18 +538,18 @@ def _implement_integer_operators():
     lower_builtin(operator.neg, ty)(int_negate_impl)
     lower_builtin(operator.pos, ty)(int_positive_impl)
 
-    lower_builtin(operator.pow, ty, ty)(int_power_impl)
-    lower_builtin(operator.ipow, ty, ty)(int_power_impl)
-    lower_builtin(pow, ty, ty)(int_power_impl)
+    glue_lowering(operator.pow, ty, ty)(int_power_impl)
+    glue_lowering(operator.ipow, ty, ty)(int_power_impl)
+    glue_lowering(pow, ty, ty)(int_power_impl)
 
     for ty in types.unsigned_domain:
         lower_builtin(operator.lt, ty, ty)(int_ult_impl)
         lower_builtin(operator.le, ty, ty)(int_ule_impl)
         lower_builtin(operator.gt, ty, ty)(int_ugt_impl)
         lower_builtin(operator.ge, ty, ty)(int_uge_impl)
-        lower_builtin(operator.pow, types.Float, ty)(int_power_impl)
-        lower_builtin(operator.ipow, types.Float, ty)(int_power_impl)
-        lower_builtin(pow, types.Float, ty)(int_power_impl)
+        glue_lowering(operator.pow, types.Float, ty)(int_power_impl)
+        glue_lowering(operator.ipow, types.Float, ty)(int_power_impl)
+        glue_lowering(pow, types.Float, ty)(int_power_impl)
         lower_builtin(abs, ty)(uint_abs_impl)
 
     lower_builtin(operator.lt, types.IntegerLiteral, types.IntegerLiteral)(int_slt_impl)
@@ -561,9 +561,9 @@ def _implement_integer_operators():
         lower_builtin(operator.le, ty, ty)(int_sle_impl)
         lower_builtin(operator.gt, ty, ty)(int_sgt_impl)
         lower_builtin(operator.ge, ty, ty)(int_sge_impl)
-        lower_builtin(operator.pow, types.Float, ty)(int_power_impl)
-        lower_builtin(operator.ipow, types.Float, ty)(int_power_impl)
-        lower_builtin(pow, types.Float, ty)(int_power_impl)
+        glue_lowering(operator.pow, types.Float, ty)(int_power_impl)
+        glue_lowering(operator.ipow, types.Float, ty)(int_power_impl)
+        glue_lowering(pow, types.Float, ty)(int_power_impl)
         lower_builtin(abs, ty)(int_abs_impl)
 
 def _implement_bitwise_operators():
@@ -904,9 +904,9 @@ glue_lowering(operator.truediv, ty, ty)(real_div_impl)
 glue_lowering(operator.itruediv, ty, ty)(real_div_impl)
 glue_lowering(operator.mod, ty, ty)(real_mod_impl)
 glue_lowering(operator.imod, ty, ty)(real_mod_impl)
-lower_builtin(operator.pow, ty, ty)(real_power_impl)
-lower_builtin(operator.ipow, ty, ty)(real_power_impl)
-lower_builtin(pow, ty, ty)(real_power_impl)
+glue_lowering(operator.pow, ty, ty)(real_power_impl)
+glue_lowering(operator.ipow, ty, ty)(real_power_impl)
+glue_lowering(pow, ty, ty)(real_power_impl)
 
 lower_builtin(operator.eq, ty, ty)(real_eq_impl)
 lower_builtin(operator.ne, ty, ty)(real_ne_impl)
@@ -959,9 +959,9 @@ for cls in (types.Float, types.Integer):
     lower_builtin("complex.conjugate", cls)(real_conjugate_impl)
 
 
-@lower_builtin(operator.pow, types.Complex, types.Complex)
-@lower_builtin(operator.ipow, types.Complex, types.Complex)
-@lower_builtin(pow, types.Complex, types.Complex)
+@glue_lowering(operator.pow, types.Complex, types.Complex)
+@glue_lowering(operator.ipow, types.Complex, types.Complex)
+@glue_lowering(pow, types.Complex, types.Complex)
 def complex_power_impl(context, builder, sig, args):
     [ca, cb] = args
     ty = sig.args[0]

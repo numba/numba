@@ -249,7 +249,7 @@ class DivMod(ConcreteTemplate):
     cases = [signature(types.UniTuple(ty, 2), ty, ty) for ty in _tys]
 
 
-@infer_global(operator.pow)
+@glue_typing(operator.pow)
 class BinOpPower(ConcreteTemplate):
     cases = list(integer_binop_cases)
     # Ensure that float32 ** int doesn't go through DP computations
@@ -263,7 +263,7 @@ class BinOpPower(ConcreteTemplate):
               for op in sorted(types.complex_domain)]
 
 
-@infer_global(operator.ipow)
+@glue_typing(operator.ipow)
 class BinOpPower(ConcreteTemplate):
     cases = list(integer_binop_cases)
     # Ensure that float32 ** int doesn't go through DP computations
@@ -277,7 +277,7 @@ class BinOpPower(ConcreteTemplate):
               for op in sorted(types.complex_domain)]
 
 
-@infer_global(pow)
+@glue_typing(pow)
 class PowerBuiltin(BinOpPower):
     # TODO add 3 operand version
     pass
