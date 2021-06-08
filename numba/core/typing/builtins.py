@@ -433,7 +433,7 @@ class CmpOpGe(OrderedCmpOp):
 
 
 # more specific overloads should be registered first
-@infer_global(operator.eq)
+@glue_typing(operator.eq)
 class ConstOpEq(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
@@ -442,17 +442,17 @@ class ConstOpEq(AbstractTemplate):
             return signature(types.boolean, arg1, arg2)
 
 
-@infer_global(operator.ne)
+@glue_typing(operator.ne)
 class ConstOpNotEq(ConstOpEq):
     pass
 
 
-@infer_global(operator.eq)
+@glue_typing(operator.eq)
 class CmpOpEq(UnorderedCmpOp):
     pass
 
 
-@infer_global(operator.ne)
+@glue_typing(operator.ne)
 class CmpOpNe(UnorderedCmpOp):
     pass
 

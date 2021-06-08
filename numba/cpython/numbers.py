@@ -508,8 +508,8 @@ def bool_unary_positive_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-lower_builtin(operator.eq, types.boolean, types.boolean)(int_eq_impl)
-lower_builtin(operator.ne, types.boolean, types.boolean)(int_ne_impl)
+glue_lowering(operator.eq, types.boolean, types.boolean)(int_eq_impl)
+glue_lowering(operator.ne, types.boolean, types.boolean)(int_ne_impl)
 glue_lowering(operator.lt, types.boolean, types.boolean)(int_ult_impl)
 glue_lowering(operator.le, types.boolean, types.boolean)(int_ule_impl)
 glue_lowering(operator.gt, types.boolean, types.boolean)(int_ugt_impl)
@@ -527,8 +527,8 @@ def _implement_integer_operators():
     glue_lowering(operator.isub, ty, ty)(int_sub_impl)
     glue_lowering(operator.mul, ty, ty)(int_mul_impl)
     glue_lowering(operator.imul, ty, ty)(int_mul_impl)
-    lower_builtin(operator.eq, ty, ty)(int_eq_impl)
-    lower_builtin(operator.ne, ty, ty)(int_ne_impl)
+    glue_lowering(operator.eq, ty, ty)(int_eq_impl)
+    glue_lowering(operator.ne, ty, ty)(int_ne_impl)
 
     glue_lowering(operator.lshift, ty, ty)(int_shl_impl)
     glue_lowering(operator.ilshift, ty, ty)(int_shl_impl)
@@ -908,8 +908,8 @@ glue_lowering(operator.pow, ty, ty)(real_power_impl)
 glue_lowering(operator.ipow, ty, ty)(real_power_impl)
 glue_lowering(pow, ty, ty)(real_power_impl)
 
-lower_builtin(operator.eq, ty, ty)(real_eq_impl)
-lower_builtin(operator.ne, ty, ty)(real_ne_impl)
+glue_lowering(operator.eq, ty, ty)(real_eq_impl)
+glue_lowering(operator.ne, ty, ty)(real_ne_impl)
 glue_lowering(operator.lt, ty, ty)(real_lt_impl)
 glue_lowering(operator.le, ty, ty)(real_le_impl)
 glue_lowering(operator.gt, ty, ty)(real_gt_impl)
@@ -1158,8 +1158,8 @@ glue_lowering(operator.neg, ty)(complex_negate_impl)
 glue_lowering(operator.pos, ty)(complex_positive_impl)
 # Complex modulo is deprecated in python3
 
-lower_builtin(operator.eq, ty, ty)(complex_eq_impl)
-lower_builtin(operator.ne, ty, ty)(complex_ne_impl)
+glue_lowering(operator.eq, ty, ty)(complex_eq_impl)
+glue_lowering(operator.ne, ty, ty)(complex_ne_impl)
 
 lower_builtin(abs, ty)(complex_abs_impl)
 

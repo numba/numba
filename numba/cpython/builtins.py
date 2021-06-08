@@ -84,10 +84,11 @@ def bool_is_impl(context, builder, sig, args):
     arg1_type, arg2_type = sig.args
     _arg1 = context.cast(builder, arg1, arg1_type, types.boolean)
     _arg2 = context.cast(builder, arg2, arg2_type, types.boolean)
-    eq_impl = context.get_function(
-        operator.eq,
-        typing.signature(types.boolean, types.boolean, types.boolean)
-    )
+    tyctx = context.typing_context
+    fnty = tyctx.resolve_value_type(operator.eq)
+    forced_sig = typing.signature(types.boolean, types.boolean, types.boolean)
+    sig = fnty.get_call_type(tyctx, forced_sig.args, {})
+    eq_impl = context.get_function(fnty, sig)
     return eq_impl(builder, (_arg1, _arg2))
 
 
