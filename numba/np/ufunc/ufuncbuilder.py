@@ -159,6 +159,18 @@ class UFuncDispatcher(serialize.ReduceMixin):
 
                     return cres
 
+                # Compile
+                args, return_type = sigutils.normalize_signature(sig)
+                cres = compiler.compile_extra(typingctx, targetctx,
+                                              self.py_func, args=args,
+                                              return_type=return_type,
+                                              flags=flags, locals=locals)
+
+                # cache lookup failed before so safe to save
+                self.cache.save_overload(sig, cres)
+
+                return cres
+
 
 dispatcher_registry[target_registry['npyufunc']] = UFuncDispatcher
 

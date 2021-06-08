@@ -3,7 +3,6 @@ import operator
 from functools import partial
 
 from llvmlite.llvmpy.core import Constant, Type, Builder
-from llvmlite import ir as llvm_ir
 
 from numba.core import (typing, utils, types, ir, debuginfo, funcdesc,
                         generators, config, ir_utils, cgutils, removerefctpass)
@@ -14,58 +13,6 @@ from numba.core.environment import Environment
 
 
 _VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
-
-
-class TargetContextAwareBuilder(Builder):
-    """Same as a llvmlite builder, but pays attention to the target context
-    and injects flags into instructions based on the current compilation flags.
-    These flags are locally overridable if desired.
-    """
-    def fadd(self, lhs, rhs, name='', flags=()):
-        if flags:
-            ll_flags = flags
-        else:
-            ll_flags = utils.current_target_config().fastmath.flags
-        return super().fadd(lhs, rhs, name=name, flags=tuple(ll_flags))
-
-    def fsub(self, lhs, rhs, name='', flags=()):
-        if flags:
-            ll_flags = flags
-        else:
-            ll_flags = utils.current_target_config().fastmath.flags
-        return super().fsub(lhs, rhs, name=name, flags=tuple(ll_flags))
-
-    def fmul(self, lhs, rhs, name='', flags=()):
-        if flags:
-            ll_flags = flags
-        else:
-            ll_flags = utils.current_target_config().fastmath.flags
-        return super().fmul(lhs, rhs, name=name, flags=tuple(ll_flags))
-
-    def fdiv(self, lhs, rhs, name='', flags=()):
-        if flags:
-            ll_flags = flags
-        else:
-            ll_flags = utils.current_target_config().fastmath.flags
-        return super().fdiv(lhs, rhs, name=name, flags=tuple(ll_flags))
-
-    def frem(self, lhs, rhs, name='', flags=()):
-        if flags:
-            ll_flags = flags
-        else:
-            ll_flags = utils.current_target_config().fastmath.flags
-        return super().frem(lhs, rhs, name=name, flags=tuple(ll_flags))
-
-    def call(self, fn, args, name='', cconv=None, tail=False, fastmath=(),
-             attrs=()):
-        ll_flags = fastmath
-        # only mark floating point functions as fast
-        if isinstance(fn.function_type.return_type, (llvm_ir.types.FloatType,
-                                                     llvm_ir.types.DoubleType)):
-            if not fastmath:
-                ll_flags = utils.current_target_config().fastmath.flags
-        return super().call(fn, args, name=name, cconv=cconv, tail=tail,
-                            fastmath=ll_flags, attrs=attrs)
 
 
 class BaseLower(object):
@@ -309,7 +256,7 @@ class BaseLower(object):
         # Setup function
         self.function = self.context.declare_function(self.module, fndesc)
         self.entry_block = self.function.append_basic_block('entry')
-        self.builder = TargetContextAwareBuilder(self.entry_block)
+        self.builder = Builder(self.entry_block)
         self.call_helper = self.call_conv.init_call_helper(self.builder)
 
     def typeof(self, varname):

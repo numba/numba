@@ -4,7 +4,6 @@ import numpy as np
 import operator
 
 from numba.core import types, errors
-from numba.core.overload_glue import glue_typing
 from numba import prange
 from numba.parfors.parfor import internal_prange
 
@@ -173,43 +172,43 @@ class BinOp(ConcreteTemplate):
     cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
 
 
-@glue_typing(operator.add)
+@infer_global(operator.add)
 class BinOpAdd(BinOp):
     pass
 
 
-@glue_typing(operator.iadd)
+@infer_global(operator.iadd)
 class BinOpAdd(BinOp):
     pass
 
 
-@glue_typing(operator.sub)
+@infer_global(operator.sub)
 class BinOpSub(BinOp):
     pass
 
 
-@glue_typing(operator.isub)
+@infer_global(operator.isub)
 class BinOpSub(BinOp):
     pass
 
 
-@glue_typing(operator.mul)
+@infer_global(operator.mul)
 class BinOpMul(BinOp):
     pass
 
 
-@glue_typing(operator.imul)
+@infer_global(operator.imul)
 class BinOpMul(BinOp):
     pass
 
 
-@glue_typing(operator.mod)
+@infer_global(operator.mod)
 class BinOpMod(ConcreteTemplate):
     cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
 
-@glue_typing(operator.imod)
+@infer_global(operator.imod)
 class BinOpMod(ConcreteTemplate):
     cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
@@ -243,7 +242,7 @@ class BinOpFloorDiv(ConcreteTemplate):
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
 
-@glue_typing(divmod)
+@infer_global(divmod)
 class DivMod(ConcreteTemplate):
     _tys = machine_ints + sorted(types.real_domain)
     cases = [signature(types.UniTuple(ty, 2), ty, ty) for ty in _tys]
