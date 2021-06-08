@@ -518,12 +518,12 @@ class CmpOpIdentity(AbstractTemplate):
         return signature(types.boolean, lhs, rhs)
 
 
-@infer_global(operator.is_)
+@glue_typing(operator.is_)
 class CmpOpIs(CmpOpIdentity):
     pass
 
 
-@infer_global(operator.is_not)
+@glue_typing(operator.is_not)
 class CmpOpIsNot(CmpOpIdentity):
     pass
 

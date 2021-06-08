@@ -13,6 +13,7 @@ from numba.core import typing, types, utils, cgutils
 from numba.core.extending import overload, intrinsic
 from numba.core.typeconv import Conversion
 from numba.core.errors import TypingError
+from numba.core.overload_glue import glue_lowering
 
 
 @overload(operator.truth)
@@ -23,7 +24,7 @@ def ol_truth(val):
         return impl
 
 
-@lower_builtin(operator.is_not, types.Any, types.Any)
+@glue_lowering(operator.is_not, types.Any, types.Any)
 def generic_is_not(context, builder, sig, args):
     """
     Implement `x is not y` as `not (x is y)`.
@@ -32,7 +33,7 @@ def generic_is_not(context, builder, sig, args):
     return builder.not_(is_impl(builder, args))
 
 
-@lower_builtin(operator.is_, types.Any, types.Any)
+@glue_lowering(operator.is_, types.Any, types.Any)
 def generic_is(context, builder, sig, args):
     """
     Default implementation for `x is y`
@@ -57,7 +58,7 @@ def generic_is(context, builder, sig, args):
         return cgutils.false_bit
 
 
-@lower_builtin(operator.is_, types.Opaque, types.Opaque)
+@glue_lowering(operator.is_, types.Opaque, types.Opaque)
 def opaque_is(context, builder, sig, args):
     """
     Implementation for `x is y` for Opaque types.
@@ -73,7 +74,7 @@ def opaque_is(context, builder, sig, args):
         return cgutils.false_bit
 
 
-@lower_builtin(operator.is_, types.Boolean, types.Boolean)
+@glue_lowering(operator.is_, types.Boolean, types.Boolean)
 def bool_is_impl(context, builder, sig, args):
     """
     Implementation for `x is y` for types derived from types.Boolean
