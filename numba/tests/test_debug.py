@@ -90,7 +90,7 @@ class DebugTestBase(TestCase):
     def _check_dump_func_opt_llvm(self, out):
         self.assertIn('--FUNCTION OPTIMIZED DUMP %s' % self.func_name, out)
         # allocas have been optimized away
-        self.assertIn('add nsw i64 %arg.tmp0, %arg.tmp1', out)
+        self.assertIn('add nsw i64 %arg.somearg, 1', out)
 
     def _check_dump_optimized_llvm(self, out):
         self.assertIn('--OPTIMIZED DUMP %s' % self.func_name, out)
