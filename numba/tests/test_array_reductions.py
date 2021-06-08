@@ -938,16 +938,16 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             for a in a_variations():
                 check(a)
 
-    def test_argmax_axis_1d_2d_3d(self):
+    def test_argmax_axis_1d_2d_4d(self):
         arr1d = np.array([0, 20, 3, 4])
         arr2d = np.arange(6).reshape(2, 3)
         arr2d[0,1] += 100
 
-        arr3d = np.arange(24).reshape(2, 3, 4) + 10
-        arr3d[0,1,1] += 100
-        arr3d[1,0,0] += 100
+        arr4d = np.arange(120).reshape(2, 3, 4, 5) + 10
+        arr4d[0,1,1,2] += 100
+        arr4d[1,0,0,0] += 100
 
-        for arr in [arr1d, arr2d, arr3d]:
+        for arr in [arr1d, arr2d, arr4d]:
             axises = list(range(arr.ndim)) + [
                 -(i+1) for i in range(arr.ndim)
             ]

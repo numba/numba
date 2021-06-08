@@ -791,10 +791,6 @@ def array_argmax(arr, axis=None):
         tuple_buffer = tuple(range(arr.ndim))
 
         def array_argmax_impl(arr, axis=None):
-            if arr.ndim > 3:
-                # Transposing currently only works with literals, so can't
-                # calculate new axis order for arbitrary array dimensions.
-                raise ValueError("More than 3 dimensions are not supported.")
             if axis < 0:
                 axis = arr.ndim + axis
 
