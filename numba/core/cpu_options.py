@@ -44,11 +44,18 @@ class FastMathOptions(object):
     def __repr__(self):
         return f"FastMathOptions({self.flags})"
 
+    def __eq__(self, other):
+        if type(other) is type(self):
+            return self.flags == other.flags
+        return NotImplemented
+
 
 class ParallelOptions(object):
     """
     Options for controlling auto parallelization.
     """
+    __slots__ = ("enabled", "comprehension", "reduction", "inplace_binop",
+                 "setitem", "numpy", "stencil", "fusion", "prange")
 
     def __init__(self, value):
         if isinstance(value, bool):
@@ -87,6 +94,16 @@ class ParallelOptions(object):
         else:
             msg = "Expect parallel option to be either a bool or a dict"
             raise ValueError(msg)
+
+    def _get_values(self):
+        """Get values as dictionary.
+        """
+        return {k: getattr(self, k) for k in self.__slots__}
+
+    def __eq__(self, other):
+        if type(other) is type(self):
+            return self._get_values() == other._get_values()
+        return NotImplemented
 
 
 class InlineOptions(object):
@@ -137,3 +154,8 @@ class InlineOptions(object):
         The raw value
         """
         return self._inline
+
+    def __eq__(self, other):
+        if type(other) is type(self):
+            return self.value == other.value
+        return NotImplemented

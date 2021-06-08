@@ -95,6 +95,9 @@ class Numpy_rules_ufunc(AbstractTemplate):
         return self.key
 
     def generic(self, args, kws):
+        # First, strip optional types, ufunc loops are typed on concrete types
+        args = [x.type if isinstance(x, types.Optional) else x for x in args]
+
         ufunc = self.ufunc
         base_types, explicit_outputs, ndims, layout = self._handle_inputs(
             ufunc, args, kws)

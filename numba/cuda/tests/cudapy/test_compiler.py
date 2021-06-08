@@ -88,6 +88,26 @@ class TestCompileToPTX(unittest.TestCase):
         ptx, resty = compile_ptx(f, [], debug=True)
         self.check_debug_info(ptx)
 
+    def check_line_info(self, ptx):
+        # A .file directive should be produced and include the name of the
+        # source. The path and whitespace may vary, so we accept anything
+        # ending in the filename of this module.
+        self.assertRegex(ptx, '\\.file.*test_compiler.py"')
+
+    def test_device_function_with_line_info(self):
+        def f():
+            pass
+
+        ptx, resty = compile_ptx(f, [], device=True, lineinfo=True)
+        self.check_line_info(ptx)
+
+    def test_kernel_with_line_info(self):
+        def f():
+            pass
+
+        ptx, resty = compile_ptx(f, [], lineinfo=True)
+        self.check_line_info(ptx)
+
 
 @skip_on_cudasim('Compilation unsupported in the simulator')
 class TestCompileToPTXForCurrentDevice(CUDATestCase):

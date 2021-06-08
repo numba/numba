@@ -458,6 +458,7 @@ def atomic_compare_and_swap(res, old, ary, fill_val):
 
 class TestCudaAtomics(CUDATestCase):
     def setUp(self):
+        super().setUp()
         np.random.seed(0)
 
     def test_atomic_add(self):
@@ -544,7 +545,8 @@ class TestCudaAtomics(CUDATestCase):
         if config.ENABLE_CUDASIM:
             return
 
-        asm = kernel.inspect_asm()
+        # Use the first (and only) definition
+        asm = next(iter(kernel.inspect_asm().values()))
         if cc_X_or_above(6, 0):
             if shared:
                 self.assertIn('atom.shared.add.f64', asm)
