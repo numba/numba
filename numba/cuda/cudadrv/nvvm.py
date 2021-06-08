@@ -264,6 +264,9 @@ class CompilationUnit(object):
             if options.pop('debug'):
                 opts.append('-g')
 
+        if options.pop('lineinfo', False):
+            opts.append('-generate-line-info')
+
         if 'opt' in options:
             opts.append('-opt=%d' % options.pop('opt'))
 

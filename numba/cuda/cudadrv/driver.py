@@ -2133,7 +2133,7 @@ class Linker(object):
     """
     Links for current device if no CC given
     """
-    def __init__(self, max_registers=0, cc=None):
+    def __init__(self, max_registers=0, lineinfo=False, cc=None):
         logsz = config.CUDA_LOG_SIZE
         linkerinfo = (c_char * logsz)()
         linkererrors = (c_char * logsz)()
@@ -2147,6 +2147,8 @@ class Linker(object):
         }
         if max_registers:
             options[enums.CU_JIT_MAX_REGISTERS] = c_void_p(max_registers)
+        if lineinfo:
+            options[enums.CU_JIT_GENERATE_LINE_INFO] = c_void_p(1)
 
         if cc is None:
             # No option value is needed, but we need something as a placeholder
