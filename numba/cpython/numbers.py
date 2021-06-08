@@ -168,8 +168,8 @@ def int_divmod_impl(context, builder, sig, args):
                               (builder.load(quot), builder.load(rem)))
 
 
-@lower_builtin(operator.floordiv, types.Integer, types.Integer)
-@lower_builtin(operator.ifloordiv, types.Integer, types.Integer)
+@glue_lowering(operator.floordiv, types.Integer, types.Integer)
+@glue_lowering(operator.ifloordiv, types.Integer, types.Integer)
 def int_floordiv_impl(context, builder, sig, args):
     quot, rem = _int_divmod_impl(context, builder, sig, args,
                                  "integer division by zero")
@@ -898,8 +898,8 @@ glue_lowering(operator.sub, ty, ty)(real_sub_impl)
 glue_lowering(operator.isub, ty, ty)(real_sub_impl)
 glue_lowering(operator.mul, ty, ty)(real_mul_impl)
 glue_lowering(operator.imul, ty, ty)(real_mul_impl)
-lower_builtin(operator.floordiv, ty, ty)(real_floordiv_impl)
-lower_builtin(operator.ifloordiv, ty, ty)(real_floordiv_impl)
+glue_lowering(operator.floordiv, ty, ty)(real_floordiv_impl)
+glue_lowering(operator.ifloordiv, ty, ty)(real_floordiv_impl)
 glue_lowering(operator.truediv, ty, ty)(real_div_impl)
 glue_lowering(operator.itruediv, ty, ty)(real_div_impl)
 glue_lowering(operator.mod, ty, ty)(real_mod_impl)
