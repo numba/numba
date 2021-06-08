@@ -412,22 +412,22 @@ class UnorderedCmpOp(ConcreteTemplate):
         signature(types.boolean, op, op) for op in sorted(types.complex_domain)]
 
 
-@infer_global(operator.lt)
+@glue_typing(operator.lt)
 class CmpOpLt(OrderedCmpOp):
     pass
 
 
-@infer_global(operator.le)
+@glue_typing(operator.le)
 class CmpOpLe(OrderedCmpOp):
     pass
 
 
-@infer_global(operator.gt)
+@glue_typing(operator.gt)
 class CmpOpGt(OrderedCmpOp):
     pass
 
 
-@infer_global(operator.ge)
+@glue_typing(operator.ge)
 class CmpOpGe(OrderedCmpOp):
     pass
 
