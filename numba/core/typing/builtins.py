@@ -215,7 +215,7 @@ class BinOpMod(ConcreteTemplate):
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
 
-@infer_global(operator.truediv)
+@glue_typing(operator.truediv)
 class BinOpTrueDiv(ConcreteTemplate):
     cases = [signature(types.float64, op1, op2)
              for op1, op2 in itertools.product(machine_ints, machine_ints)]
@@ -223,7 +223,7 @@ class BinOpTrueDiv(ConcreteTemplate):
     cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
 
 
-@infer_global(operator.itruediv)
+@glue_typing(operator.itruediv)
 class BinOpTrueDiv(ConcreteTemplate):
     cases = [signature(types.float64, op1, op2)
              for op1, op2 in itertools.product(machine_ints, machine_ints)]
