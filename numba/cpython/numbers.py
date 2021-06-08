@@ -514,8 +514,8 @@ lower_builtin(operator.lt, types.boolean, types.boolean)(int_ult_impl)
 lower_builtin(operator.le, types.boolean, types.boolean)(int_ule_impl)
 lower_builtin(operator.gt, types.boolean, types.boolean)(int_ugt_impl)
 lower_builtin(operator.ge, types.boolean, types.boolean)(int_uge_impl)
-lower_builtin(operator.neg, types.boolean)(bool_negate_impl)
-lower_builtin(operator.pos, types.boolean)(bool_unary_positive_impl)
+glue_lowering(operator.neg, types.boolean)(bool_negate_impl)
+glue_lowering(operator.pos, types.boolean)(bool_unary_positive_impl)
 
 
 def _implement_integer_operators():
@@ -535,8 +535,8 @@ def _implement_integer_operators():
     glue_lowering(operator.rshift, ty, ty)(int_shr_impl)
     glue_lowering(operator.irshift, ty, ty)(int_shr_impl)
 
-    lower_builtin(operator.neg, ty)(int_negate_impl)
-    lower_builtin(operator.pos, ty)(int_positive_impl)
+    glue_lowering(operator.neg, ty)(int_negate_impl)
+    glue_lowering(operator.pos, ty)(int_positive_impl)
 
     glue_lowering(operator.pow, ty, ty)(int_power_impl)
     glue_lowering(operator.ipow, ty, ty)(int_power_impl)
@@ -917,8 +917,8 @@ lower_builtin(operator.ge, ty, ty)(real_ge_impl)
 
 lower_builtin(abs, ty)(real_abs_impl)
 
-lower_builtin(operator.neg, ty)(real_negate_impl)
-lower_builtin(operator.pos, ty)(real_positive_impl)
+glue_lowering(operator.neg, ty)(real_negate_impl)
+glue_lowering(operator.pos, ty)(real_positive_impl)
 
 del ty
 
@@ -1154,8 +1154,8 @@ glue_lowering(operator.mul, ty, ty)(complex_mul_impl)
 glue_lowering(operator.imul, ty, ty)(complex_mul_impl)
 glue_lowering(operator.truediv, ty, ty)(complex_div_impl)
 glue_lowering(operator.itruediv, ty, ty)(complex_div_impl)
-lower_builtin(operator.neg, ty)(complex_negate_impl)
-lower_builtin(operator.pos, ty)(complex_positive_impl)
+glue_lowering(operator.neg, ty)(complex_negate_impl)
+glue_lowering(operator.pos, ty)(complex_positive_impl)
 # Complex modulo is deprecated in python3
 
 lower_builtin(operator.eq, ty, ty)(complex_eq_impl)
@@ -1213,9 +1213,9 @@ def complex_as_bool(context, builder, sig, args):
 
 
 for ty in (types.Integer, types.Float, types.Complex):
-    lower_builtin(operator.not_, ty)(number_not_impl)
+    glue_lowering(operator.not_, ty)(number_not_impl)
 
-lower_builtin(operator.not_, types.boolean)(number_not_impl)
+glue_lowering(operator.not_, types.boolean)(number_not_impl)
 
 
 #------------------------------------------------------------------------------

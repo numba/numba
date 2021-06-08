@@ -381,17 +381,17 @@ class UnaryOp(ConcreteTemplate):
     cases += [signature(types.intp, types.boolean)]
 
 
-@infer_global(operator.neg)
+@glue_typing(operator.neg)
 class UnaryNegate(UnaryOp):
     pass
 
 
-@infer_global(operator.pos)
+@glue_typing(operator.pos)
 class UnaryPositive(UnaryOp):
    pass
 
 
-@infer_global(operator.not_)
+@glue_typing(operator.not_)
 class UnaryNot(ConcreteTemplate):
     cases = [signature(types.boolean, types.boolean)]
     cases += [signature(types.boolean, op) for op in sorted(types.signed_domain)]
