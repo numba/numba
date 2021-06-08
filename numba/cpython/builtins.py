@@ -48,7 +48,10 @@ def generic_is(context, builder, sig, args):
             else:
                 # fallbacks to `==`
                 try:
-                    eq_impl = context.get_function(operator.eq, sig)
+                    tyctx = context.typing_context
+                    fnty = tyctx.resolve_value_type(operator.eq)
+                    new_sig = fnty.get_call_type(tyctx, sig.args, {})
+                    eq_impl = context.get_function(fnty, new_sig)
                 except NotImplementedError:
                     # no `==` implemented for this type
                     return cgutils.false_bit
@@ -94,8 +97,8 @@ def bool_is_impl(context, builder, sig, args):
 
 
 # keep types.IntegerLiteral, as otherwise there's ambiguity between this and int_eq_impl
-@lower_builtin(operator.eq, types.Literal, types.Literal)
-@lower_builtin(operator.eq, types.IntegerLiteral, types.IntegerLiteral)
+@glue_lowering(operator.eq, types.Literal, types.Literal)
+@glue_lowering(operator.eq, types.IntegerLiteral, types.IntegerLiteral)
 def const_eq_impl(context, builder, sig, args):
     arg1, arg2 = sig.args
     val = 0
@@ -106,8 +109,8 @@ def const_eq_impl(context, builder, sig, args):
 
 
 # keep types.IntegerLiteral, as otherwise there's ambiguity between this and int_ne_impl
-@lower_builtin(operator.ne, types.Literal, types.Literal)
-@lower_builtin(operator.ne, types.IntegerLiteral, types.IntegerLiteral)
+@glue_lowering(operator.ne, types.Literal, types.Literal)
+@glue_lowering(operator.ne, types.IntegerLiteral, types.IntegerLiteral)
 def const_ne_impl(context, builder, sig, args):
     arg1, arg2 = sig.args
     val = 0
