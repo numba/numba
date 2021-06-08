@@ -136,6 +136,7 @@ class BaseContext(object):
         self._registries = {}
         # Typing declarations extracted from the registries or other sources
         self._functions = defaultdict(list)
+        self._overload_attributes = defaultdict(dict)
         self._attributes = defaultdict(list)
         self._globals = utils.UniqueDict()
         self.tm = rules.default_type_manager
@@ -246,10 +247,20 @@ class BaseContext(object):
             # XXX fold this into the __call__ attribute logic?
             return func.get_call_type(self, args, kws)
 
-    def _get_attribute_templates(self, typ):
+    def _get_attribute_templates(self, typ, attr):
         """
         Get matching AttributeTemplates for the Numba type.
         """
+        # check the overload templates first (fast path for overload cases)
+        if typ in self._overload_attributes:
+            if attr in self._overload_attributes[typ]:
+                yield self._overload_attributes[typ][attr]
+        else:
+            for cls in type(typ).__mro__:
+                if cls in self._overload_attributes:
+                    if attr in self._overload_attributes[cls]:
+                        yield self._overload_attributes[cls][attr]
+
         if typ in self._attributes:
             for attrinfo in self._attributes[typ]:
                 yield attrinfo
@@ -284,7 +295,7 @@ class BaseContext(object):
                 return attrty
 
     def find_matching_getattr_template(self, typ, attr):
-        for template in self._get_attribute_templates(typ):
+        for template in self._get_attribute_templates(typ, attr):
             return_type = template.resolve(typ, attr)
             if return_type is not None:
                 return {
@@ -298,7 +309,7 @@ class BaseContext(object):
         to the given *value* type.
         A function signature is returned, or None if resolution failed.
         """
-        for attrinfo in self._get_attribute_templates(target):
+        for attrinfo in self._get_attribute_templates(target, attr):
             expectedty = attrinfo.resolve(target, attr)
             # NOTE: convertibility from *value* to *expectedty* is left to
             # the caller.
@@ -487,7 +498,10 @@ class BaseContext(object):
 
     def insert_attributes(self, at):
         key = at.key
-        self._attributes[key].append(at)
+        if hasattr(at, "_attr"):
+            self._overload_attributes[key][at._attr] = at
+        else:
+            self._attributes[key].append(at)
 
     def insert_function(self, ft):
         key = ft.key
