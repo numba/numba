@@ -29,7 +29,10 @@ def generic_is_not(context, builder, sig, args):
     """
     Implement `x is not y` as `not (x is y)`.
     """
-    is_impl = context.get_function(operator.is_, sig)
+    tyctx = context.typing_context
+    fnty = tyctx.resolve_value_type(operator.is_)
+    new_sig = fnty.get_call_type(tyctx, sig.args, {})
+    is_impl = context.get_function(fnty, new_sig)
     return builder.not_(is_impl(builder, args))
 
 
@@ -199,7 +202,11 @@ def do_minmax(context, builder, argtys, args, cmpop):
         acc = context.cast(builder, acc, accty, ty)
         v = context.cast(builder, v, vty, ty)
         cmpsig = typing.signature(types.boolean, ty, ty)
-        ge = context.get_function(cmpop, cmpsig)
+
+        tyctx = context.typing_context
+        fnty = tyctx.resolve_value_type(cmpop)
+        sig = fnty.get_call_type(tyctx, cmpsig.args, {})
+        ge = context.get_function(fnty, sig)
         pred = ge(builder, (v, acc))
         res = builder.select(pred, v, acc)
         return ty, res
