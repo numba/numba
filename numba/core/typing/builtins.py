@@ -327,32 +327,32 @@ class BitwiseLogicOperation(BinOp):
     unsafe_casting = False
 
 
-@infer_global(operator.and_)
+@glue_typing(operator.and_)
 class BitwiseAnd(BitwiseLogicOperation):
     pass
 
 
-@infer_global(operator.iand)
+@glue_typing(operator.iand)
 class BitwiseAnd(BitwiseLogicOperation):
     pass
 
 
-@infer_global(operator.or_)
+@glue_typing(operator.or_)
 class BitwiseOr(BitwiseLogicOperation):
     pass
 
 
-@infer_global(operator.ior)
+@glue_typing(operator.ior)
 class BitwiseOr(BitwiseLogicOperation):
     pass
 
 
-@infer_global(operator.xor)
+@glue_typing(operator.xor)
 class BitwiseXor(BitwiseLogicOperation):
     pass
 
 
-@infer_global(operator.ixor)
+@glue_typing(operator.ixor)
 class BitwiseXor(BitwiseLogicOperation):
     pass
 
@@ -361,7 +361,7 @@ class BitwiseXor(BitwiseLogicOperation):
 # for unsigned numbers, as that would change the result.
 # (i.e. ~np.int8(0) == 255 but ~np.int32(0) == 4294967295).
 
-@infer_global(operator.invert)
+@glue_typing(operator.invert)
 class BitwiseInvert(ConcreteTemplate):
     # Note Numba follows the Numpy semantics of returning a bool,
     # while Python returns an int.  This makes it consistent with
