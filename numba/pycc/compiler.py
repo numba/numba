@@ -139,12 +139,12 @@ class _ModuleCompiler(object):
 
         # Generate IR for all exported functions
         flags = Flags()
-        flags.set("no_compile")
+        flags.no_compile = True
         if not self.export_python_wrap:
-            flags.set("no_cpython_wrapper")
-            flags.set("no_cfunc_wrapper")
+            flags.no_cpython_wrapper = True
+            flags.no_cfunc_wrapper = True
         if self.use_nrt:
-            flags.set("nrt")
+            flags.nrt = True
             # Compile NRT helpers
             nrt_module, _ = nrtdynmod.create_nrt_module(self.context)
             library.add_ir_module(nrt_module)
@@ -232,7 +232,7 @@ class _ModuleCompiler(object):
             name = entry.symbol
             llvm_func_name = self._mangle_method_symbol(name)
             fnty = self.exported_function_types[entry]
-            lfunc = llvm_module.add_function(fnty, name=llvm_func_name)
+            lfunc = ir.Function(llvm_module, fnty, llvm_func_name)
 
             method_name = self.context.insert_const_string(llvm_module, name)
             method_def_const = lc.Constant.struct((method_name,
@@ -244,8 +244,9 @@ class _ModuleCompiler(object):
         sentinel = lc.Constant.struct([NULL, NULL, ZERO, NULL])
         method_defs.append(sentinel)
         method_array_init = lc.Constant.array(self.method_def_ty, method_defs)
-        method_array = llvm_module.add_global_variable(method_array_init.type,
-                                                       '.module_methods')
+        method_array = cgutils.add_global_variable(llvm_module,
+                                                   method_array_init.type,
+                                                   '.module_methods')
         method_array.initializer = method_array_init
         method_array.linkage = lc.LINKAGE_INTERNAL
         method_array_ptr = lc.Constant.gep(method_array, [ZERO, ZERO])
@@ -296,7 +297,7 @@ class _ModuleCompiler(object):
             fnty = ir.FunctionType(lt._int32,
                                    [modobj.type, self.method_def_ptr,
                                     self.env_def_ptr, envgv_array.type])
-            fn = llvm_module.add_function(fnty, self.external_init_function)
+            fn = ir.Function(llvm_module, fnty, self.external_init_function)
             return builder.call(fn, [modobj, method_array, env_array,
                                      envgv_array])
         else:
@@ -391,7 +392,7 @@ class ModuleCompiler(_ModuleCompiler):
     def _emit_python_wrapper(self, llvm_module):
         # Figure out the Python C API module creation function, and
         # get a LLVM function for it.
-        create_module_fn = llvm_module.add_function(*self.module_create_definition)
+        create_module_fn = ir.Function(llvm_module, *self.module_create_definition)
         create_module_fn.linkage = lc.LINKAGE_EXTERNAL
 
         # Define a constant string for the module name.
@@ -405,8 +406,9 @@ class ModuleCompiler(_ModuleCompiler):
              lc.Constant.null(lt._pyobject_head_p),         # m_copy
             )
         )
-        mod_def_base = llvm_module.add_global_variable(mod_def_base_init.type,
-                                                       '.module_def_base')
+        mod_def_base = cgutils.add_global_variable(llvm_module,
+                                                   mod_def_base_init.type,
+                                                   '.module_def_base')
         mod_def_base.initializer = mod_def_base_init
         mod_def_base.linkage = lc.LINKAGE_INTERNAL
 
@@ -426,13 +428,13 @@ class ModuleCompiler(_ModuleCompiler):
         )
 
         # Define a constant string for the module name.
-        mod_def = llvm_module.add_global_variable(mod_def_init.type,
-                                                  '.module_def')
+        mod_def = cgutils.add_global_variable(llvm_module, mod_def_init.type,
+                                              '.module_def')
         mod_def.initializer = mod_def_init
         mod_def.linkage = lc.LINKAGE_INTERNAL
 
         # Define the module initialization function.
-        mod_init_fn = llvm_module.add_function(*self.module_init_definition)
+        mod_init_fn = ir.Function(llvm_module, *self.module_init_definition)
         entry = mod_init_fn.append_basic_block('Entry')
         builder = lc.Builder(entry)
         pyapi = self.context.get_python_api(builder)

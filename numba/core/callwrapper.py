@@ -1,5 +1,6 @@
 from llvmlite.llvmpy.core import Type, Builder, Constant
 import llvmlite.llvmpy.core as lc
+from llvmlite import ir
 
 from numba.core import types, config, cgutils
 
@@ -105,7 +106,7 @@ class PyCallWrapper(object):
         # (see CPython's methodobject.h)
         pyobj = self.context.get_argument_type(types.pyobject)
         wrapty = Type.function(pyobj, [pyobj, pyobj, pyobj])
-        wrapper = self.module.add_function(wrapty, name=wrapname)
+        wrapper = ir.Function(self.module, wrapty, name=wrapname)
 
         builder = Builder(wrapper.append_basic_block('entry'))
 

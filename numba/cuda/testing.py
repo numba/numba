@@ -23,6 +23,14 @@ class CUDATestCase(SerialMixin, TestCase):
     its tests are run between tests from a CUDATestCase.
     """
 
+    def setUp(self):
+        self._low_occupancy_warnings = config.CUDA_LOW_OCCUPANCY_WARNINGS
+        # Disable warnings about low gpu utilization in the test suite
+        config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
+
+    def tearDown(self):
+        config.CUDA_LOW_OCCUPANCY_WARNINGS = self._low_occupancy_warnings
+
 
 class ContextResettingTestCase(CUDATestCase):
     """
@@ -33,8 +41,23 @@ class ContextResettingTestCase(CUDATestCase):
     """
 
     def tearDown(self):
+        super().tearDown()
         from numba.cuda.cudadrv.devices import reset
         reset()
+
+
+def ensure_supported_ccs_initialized():
+    from numba.cuda import is_available as cuda_is_available
+    from numba.cuda.cudadrv import nvvm
+
+    if cuda_is_available():
+        # Ensure that cudart.so is loaded and the list of supported compute
+        # capabilities in the nvvm module is populated before a fork. This is
+        # needed because some compilation tests don't require a CUDA context,
+        # but do use NVVM, and it is required that libcudart.so should be
+        # loaded before a fork (note that the requirement is not explicitly
+        # documented).
+        nvvm.get_supported_ccs()
 
 
 def skip_on_cudasim(reason):
@@ -92,6 +115,8 @@ def skip_unless_cc_60(fn):
 
 
 def cudadevrt_missing():
+    if config.ENABLE_CUDASIM:
+        return False
     try:
         libs.check_static_lib('cudadevrt')
     except FileNotFoundError:

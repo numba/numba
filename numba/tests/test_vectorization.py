@@ -23,8 +23,8 @@ class TestVectorization(TestCase):
             "NUMBA_CPU_NAME", "skylake-avx512"
         ), override_env_config("NUMBA_CPU_FEATURES", ""):
             _flags = Flags()
-            _flags.set('fastmath', FastMathOptions(fastmath))
-            _flags.set('nrt', True)
+            _flags.fastmath = FastMathOptions(fastmath)
+            _flags.nrt = True
             jitted = compile_isolated(func, args_tuple, flags=_flags)
             return jitted.library.get_llvm_str()
 

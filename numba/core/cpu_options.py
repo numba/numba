@@ -16,7 +16,9 @@ class FastMathOptions(object):
             'contract', 'afn', 'reassoc',
         }
 
-        if value is True:
+        if isinstance(value, FastMathOptions):
+            self.flags = value.flags.copy()
+        elif value is True:
             self.flags = {'fast'}
         elif value is False:
             self.flags = set()
@@ -72,6 +74,16 @@ class ParallelOptions(object):
             if value:
                 msg = "Unrecognized parallel options: %s" % value.keys()
                 raise NameError(msg)
+        elif isinstance(value, ParallelOptions):
+            self.enabled = value.enabled
+            self.comprehension = value.comprehension
+            self.reduction = value.reduction
+            self.inplace_binop = value.inplace_binop
+            self.setitem = value.setitem
+            self.numpy = value.numpy
+            self.stencil = value.stencil
+            self.fusion = value.fusion
+            self.prange = value.prange
         else:
             msg = "Expect parallel option to be either a bool or a dict"
             raise ValueError(msg)

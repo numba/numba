@@ -128,7 +128,7 @@ class Runtime:
         if sys.platform not in ('linux', 'win32') or config.MACHINE_BITS != 64:
             # Only 64-bit Linux and Windows are supported
             return ()
-        return ((9, 0), (9, 1), (9, 2),
+        return ((9, 2),
                 (10, 0), (10, 1), (10, 2),
                 (11, 0), (11, 1), (11, 2))
 

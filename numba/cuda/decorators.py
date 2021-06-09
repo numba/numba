@@ -1,7 +1,7 @@
 from numba.core import types, config, sigutils
 from numba.core.errors import DeprecationError
 from .compiler import (compile_device, declare_device_function, Dispatcher,
-                       compile_device_template)
+                       compile_device_dispatcher)
 from .simulator.kernel import FakeCUDAKernel
 
 
@@ -10,13 +10,16 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "positional argument.")
 
 
-def jitdevice(func, link=[], debug=None, inline=False, opt=True):
+def jitdevice(func, link=[], debug=None, inline=False, opt=True,
+              no_cpython_wrapper=None):
     """Wrapper for device-jit.
     """
+    # We ignore  the no_cpython_wrapper kwarg - it is passed by the callee when
+    # using overloads, but there is never a CPython wrapper for CUDA anyway.
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
     if link:
         raise ValueError("link keyword invalid for device function")
-    return compile_device_template(func, debug=debug, inline=inline, opt=opt)
+    return compile_device_dispatcher(func, debug=debug, inline=inline, opt=opt)
 
 
 def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
@@ -52,6 +55,10 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                 enabled. When ``True``, ``-opt=3`` is passed to NVVM. When
                 ``False``, ``-opt=0`` is passed to NVVM. Defaults to ``True``.
     :type opt: bool
+    :param lineinfo: If True, generate a line mapping between source code and
+       assembly code. This enables inspection of the source code in NVIDIA
+       profiling tools and correlation with program counter sampling.
+    :type lineinfo: bool
     """
 
     if link and config.ENABLE_CUDASIM:
@@ -76,8 +83,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
     if sigutils.is_signature(func_or_sig):
         if config.ENABLE_CUDASIM:
             def jitwrapper(func):
-                return FakeCUDAKernel(func, device=device, fastmath=fastmath,
-                                      debug=debug)
+                return FakeCUDAKernel(func, device=device, fastmath=fastmath)
             return jitwrapper
 
         argtypes, restype = sigutils.normalize_signature(func_or_sig)
@@ -106,7 +112,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             if config.ENABLE_CUDASIM:
                 def autojitwrapper(func):
                     return FakeCUDAKernel(func, device=device,
-                                          fastmath=fastmath, debug=debug)
+                                          fastmath=fastmath)
             else:
                 def autojitwrapper(func):
                     return jit(func, device=device, debug=debug, opt=opt, **kws)
@@ -116,7 +122,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
         else:
             if config.ENABLE_CUDASIM:
                 return FakeCUDAKernel(func_or_sig, device=device,
-                                      fastmath=fastmath, debug=debug)
+                                      fastmath=fastmath)
             elif device:
                 return jitdevice(func_or_sig, debug=debug, opt=opt, **kws)
             else:

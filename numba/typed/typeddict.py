@@ -2,18 +2,17 @@
 Python wrapper that connects CPython interpreter to the numba dictobject.
 """
 from collections.abc import MutableMapping
-
-from numba.core.types import DictType, TypeRef
+from numba.core.types import DictType
 from numba.core.imputils import numba_typeref_ctor
 from numba import njit, typeof
 from numba.core import types, errors, config, cgutils
 from numba.core.extending import (
-    overload_method,
     overload,
     box,
     unbox,
     NativeValue,
     type_callable,
+    overload_classmethod,
 )
 from numba.typed import dictobject
 from numba.core.typing import signature
@@ -209,8 +208,7 @@ class Dict(MutableMapping):
         return _copy(self)
 
 
-# XXX: should we have a better way to classmethod
-@overload_method(TypeRef, 'empty')
+@overload_classmethod(types.DictType, 'empty')
 def typeddict_empty(cls, key_type, value_type):
     if cls.instance_type is not DictType:
         return
@@ -260,27 +258,59 @@ def box_dicttype(typ, val, c):
 def unbox_dicttype(typ, val, c):
     context = c.context
 
-    miptr = c.pyapi.object_getattr_string(val, '_opaque')
+    # Check that `type(val) is Dict`
+    dict_type = c.pyapi.unserialize(c.pyapi.serialize_object(Dict))
+    valtype = c.pyapi.object_type(val)
+    same_type = c.builder.icmp_unsigned("==", valtype, dict_type)
 
-    mip_type = types.MemInfoPointer(types.voidptr)
-    native = c.unbox(mip_type, miptr)
+    with c.builder.if_else(same_type) as (then, orelse):
+        with then:
+            miptr = c.pyapi.object_getattr_string(val, '_opaque')
 
-    mi = native.value
+            mip_type = types.MemInfoPointer(types.voidptr)
+            native = c.unbox(mip_type, miptr)
 
-    argtypes = mip_type, typeof(typ)
+            mi = native.value
 
-    def convert(mi, typ):
-        return dictobject._from_meminfo(mi, typ)
+            argtypes = mip_type, typeof(typ)
 
-    sig = signature(typ, *argtypes)
-    nil_typeref = context.get_constant_null(argtypes[1])
-    args = (mi, nil_typeref)
-    is_error, dctobj = c.pyapi.call_jit_code(convert , sig, args)
-    # decref here because we are stealing a reference.
-    c.context.nrt.decref(c.builder, typ, dctobj)
+            def convert(mi, typ):
+                return dictobject._from_meminfo(mi, typ)
 
-    c.pyapi.decref(miptr)
-    return NativeValue(dctobj, is_error=is_error)
+            sig = signature(typ, *argtypes)
+            nil_typeref = context.get_constant_null(argtypes[1])
+            args = (mi, nil_typeref)
+            is_error, dctobj = c.pyapi.call_jit_code(convert , sig, args)
+            # decref here because we are stealing a reference.
+            c.context.nrt.decref(c.builder, typ, dctobj)
+
+            c.pyapi.decref(miptr)
+            bb_unboxed = c.builder.basic_block
+
+        with orelse:
+            # Raise error on incorrect type
+            c.pyapi.err_format(
+                "PyExc_TypeError",
+                "can't unbox a %S as a %S",
+                valtype, dict_type,
+            )
+            bb_else = c.builder.basic_block
+
+    # Phi nodes to gather the output
+    dctobj_res = c.builder.phi(dctobj.type)
+    is_error_res = c.builder.phi(is_error.type)
+
+    dctobj_res.add_incoming(dctobj, bb_unboxed)
+    dctobj_res.add_incoming(dctobj.type(None), bb_else)
+
+    is_error_res.add_incoming(is_error, bb_unboxed)
+    is_error_res.add_incoming(cgutils.true_bit, bb_else)
+
+    # cleanup
+    c.pyapi.decref(dict_type)
+    c.pyapi.decref(valtype)
+
+    return NativeValue(dctobj_res, is_error=is_error_res)
 
 
 @type_callable(DictType)

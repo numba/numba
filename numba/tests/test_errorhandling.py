@@ -301,7 +301,8 @@ class TestErrorMessages(unittest.TestCase):
             foo()
 
         excstr = str(raises.exception)
-        self.assertIn("Overload of function 'angle'", excstr)
+        self.assertIn("No implementation of function Function(<function angle",
+                      excstr)
 
     def test_overloadfunction_template_source(self):
         # hits _OverloadFunctionTemplate
