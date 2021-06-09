@@ -565,7 +565,7 @@ class Dispatcher(WeakType, Callable, Dummy):
         A strong reference to the underlying numba.dispatcher.Dispatcher
         instance.
         """
-        return self._get_object()
+        return self._get_object()._get_dispatcher_for_current_target()
 
     def get_overload(self, sig):
         """

@@ -221,6 +221,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
     """
 
     __numba__ = "py_func"
+    _siblings = weakref.WeakKeyDictionary()
 
     def __init__(self, arg_count, py_func, pysig, can_fallback,
                  exact_match_required):
@@ -856,8 +857,8 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         self._type = types.Dispatcher(self)
         self.typingctx.insert_global(self, self._type)
 
-        # Remember the sibling dispatchers
-        self._siblings = Siblings()
+        # Remember target restriction
+        self._required_target_backend = targetoptions.get('target_backend')
 
     def dump(self, tab=''):
         print(f'{tab}DUMP {type(self).__name__}[{self.py_func.__name__}'
@@ -924,6 +925,10 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         return self
 
     def compile(self, sig):
+        disp = self._get_dispatcher_for_current_target()
+        if disp is not self:
+            return disp.compile(sig)
+
         with ExitStack() as scope:
             cres = None
 
@@ -1056,17 +1061,43 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
             cres = tuple(self.overloads.values())[0]
             return types.FunctionType(cres.signature)
 
-    def _call_tls_target(self, args, kwargs):
+    def _get_siblings_cache(self):
+        if self not in self._siblings:
+            self._siblings[self] = Siblings()
+        return self._siblings[self]
+
+    def _share_siblings_cache(self, siblings):
+        self._siblings[self] = siblings
+
+    def _get_retarget_dispatcher(self):
         # Check TLS target configuration
         tc = TargetConfig()
         retarget = tc.get()
         # Check cache
-        siblings = self._siblings
+        siblings = self._get_siblings_cache()
         disp = siblings.load_cache(retarget)
         if disp is None:
-            # make new
             disp = retarget(self)
+            required_target = self._required_target_backend
+            if required_target is not None:
+                tb = disp.targetoptions['target_backend']
+                if tb != required_target:
+                    m = f"{tb} != {required_target}"
+                    raise errors.CompilerError(m)
+            # share the sibling cache
+            disp._share_siblings_cache(siblings)
             siblings.save_cache(retarget, disp)
+        return disp
+
+    def _get_dispatcher_for_current_target(self):
+        tc = TargetConfig()
+        if tc:
+            return self._get_retarget_dispatcher()
+        else:
+            return self
+
+    def _call_tls_target(self, args, kwargs):
+        disp = self._get_retarget_dispatcher()
         # Call the new dispatcher
         return disp(*args, **kwargs)
 
