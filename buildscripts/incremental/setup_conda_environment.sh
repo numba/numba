@@ -38,7 +38,7 @@ conda list
 # Create a base env first and then add to it...
 # NOTE: gitpython is needed for CI testing to do the test slicing
 # NOTE: pyyaml is used to ensure that the Azure CI config is valid
-conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
+conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml gcc_linux-64=7.3 gxx_linux-64=7.3
 
 # Activate first
 set +v
@@ -56,7 +56,7 @@ if [[ $(uname) == Linux ]]; then
     if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
         $CONDA_INSTALL gcc_linux-32 gxx_linux-32
     else
-        $CONDA_INSTALL gcc_linux-64 gxx_linux-64
+        $CONDA_INSTALL gcc_linux-64=7.3 gxx_linux-64=7.3
     fi
 elif  [[ $(uname) == Darwin ]]; then
     $CONDA_INSTALL clang_osx-64 clangxx_osx-64
