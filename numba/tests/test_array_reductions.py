@@ -306,6 +306,36 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def test_nanvar_ddof(self):
         self.check_ddof(array_nanvar_ddof)
+    
+    def check_ddof(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(arr, ddof):
+            expected = pyfunc(arr, ddof)
+            got = cfunc(arr, ddof)
+
+            self.assertPreciseEqual(got, expected, prec='double')
+
+        ddof_lst = [-1, 0, 1]
+        for ddof in ddof_lst:
+            arr = np.float64([1.0, 2.0, 0.0, -0.0, 1.0, -1.5])
+            check(arr, ddof)
+            arr = np.float64([-0.0, -1.5])
+            check(arr, ddof)
+            arr = np.float64([-1.5, 2.5, 'inf'])
+            check(arr, ddof)
+            arr = np.float64([-1.5, 2.5, '-inf'])
+            check(arr, ddof)
+            arr = np.float64([-1.5, 2.5, 'inf', '-inf'])
+            check(arr, ddof)
+            arr = np.float64(['nan', -1.5, 2.5, 'nan', 3.0])
+            check(arr, ddof)
+            arr = np.float64(['nan', -1.5, 2.5, 'nan', 'inf', '-inf', 3.0])
+            check(arr, ddof)
+            arr = np.float64([5.0, 'nan', -1.5, 'nan'])
+            check(arr, ddof)
+        # Only NaNs
+        arr = np.float64(['nan', 'nan'])
+        check(arr, ddof)
 
     def check_median_basic(self, pyfunc, array_variations):
         cfunc = jit(nopython=True)(pyfunc)
