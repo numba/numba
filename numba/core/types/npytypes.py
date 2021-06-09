@@ -46,8 +46,7 @@ class UnicodeCharSeq(Type):
         return self.count
 
     def can_convert_to(self, typingctx, other):
-        if isinstance(other, UnicodeCharSeq) and \
-                self.count <= other.count:
+        if isinstance(other, UnicodeCharSeq):
             return Conversion.safe
 
     def can_convert_from(self, typingctx, other):

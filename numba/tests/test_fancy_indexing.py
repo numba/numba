@@ -187,6 +187,8 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
             (np.zeros(3, dtype=np.int64), np.array(3, dtype=np.int64)),
             (np.zeros(3, dtype=np.float64), np.array(1, dtype=np.int64)),  # coercing
             (np.zeros(5, dtype='<U3'), np.array('abc')),  # UnicodeCharSeq
+            (np.zeros((3,), dtype='<U3'), np.array('a')),
+            (np.array(['abc','def','ghi'], dtype='<U3'), np.array('WXYZ', dtype='<U4')),
             (np.zeros(3, dtype=complex), np.array(2+3j, dtype=complex)),  # complex
         ]
 

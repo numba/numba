@@ -5174,6 +5174,7 @@ def array_to_array(context, builder, fromty, toty, val):
     return val
 
 
+@lower_cast(types.Array, types.UnicodeCharSeq)
 @lower_cast(types.Array, types.Float)
 @lower_cast(types.Array, types.Integer)
 @lower_cast(types.Array, types.Complex)
