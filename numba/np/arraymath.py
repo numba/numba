@@ -922,13 +922,12 @@ def np_nanmean(a):
 @register_jitable
 def compute_sum_of_square_diffs(a, isnan):
     m = np.nanmean(a)
-    ssd = np.zeros(1)
+    ssd = 0.0
     count = 0
     for view in np.nditer(a):
         v = view.item()
-        print(v)
         if not isnan(v):
-            val = (v.item() - m)
+            val = (v - m)
             ssd += np.real(val * np.conj(val))
             count += 1
     return ssd.item(), count

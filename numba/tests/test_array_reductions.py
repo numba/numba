@@ -205,7 +205,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(pyfunc(arr), cfunc(arr), **kwargs)
 
         arr = np.float64([1.0, 2.0, 0.0, -0.0, 1.0, -1.5])
-        arr = np.random.uniform(-100,100,1000)
         check(arr)
         arr = np.float64([-0.0, -1.5])
         check(arr)
@@ -299,44 +298,44 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_nanstd_basic(self):
         self.check_reduction_basic(array_nanstd_basic)
 
-    def test_nanvar_basic(self):
-        self.check_reduction_basic(array_nanvar_basic, prec='double')
-    
     def test_nanstd_ddof(self):
         self.check_ddof(array_nanstd_ddof)
 
+    def test_nanvar_basic(self):
+        self.check_reduction_basic(array_nanvar_basic, prec='double')
+
     def test_nanvar_ddof(self):
         self.check_ddof(array_nanvar_ddof)
-
 
     def check_ddof(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
         def check(arr, ddof):
             expected = pyfunc(arr, ddof)
             got = cfunc(arr, ddof)
-            
+
             self.assertPreciseEqual(got, expected, prec='double')
 
-        def check_normal_case(i):
-            arr = np.random.uniform(-i,i,i)
-            ddof_lst = np.random.randint(-i//2,i//2,5)
-            nan_ids = np.random.choice(i,i//2,replace=False)
-            arr[nan_ids] = np.nan
-            for ddof in ddof_lst:
-                check(arr, ddof)
-        # import pdb;pdb.set_trace()
-        for i in [100,1000]:
-            check_normal_case(i)
-
-        def check_edge_case():
-            arr = [np.array([1.0, 15.0, 10, np.inf, 10])]
-            arr += [np.array([np.nan, np.nan])]
-            arr += [np.array([np.inf, np.NINF])]
-            ddof = np.random.randint(-100,100)
-            for a in arr:
-                check(a, ddof)
-
-        check_edge_case()
+        ddof_lst = [-1, 0, 1]
+        for ddof in ddof_lst:
+            arr = np.float64([1.0, 2.0, 0.0, -0.0, 1.0, -1.5])
+            check(arr, ddof)
+            arr = np.float64([-0.0, -1.5])
+            check(arr, ddof)
+            arr = np.float64([-1.5, 2.5, 'inf'])
+            check(arr, ddof)
+            arr = np.float64([-1.5, 2.5, '-inf'])
+            check(arr, ddof)
+            arr = np.float64([-1.5, 2.5, 'inf', '-inf'])
+            check(arr, ddof)
+            arr = np.float64(['nan', -1.5, 2.5, 'nan', 3.0])
+            check(arr, ddof)
+            arr = np.float64(['nan', -1.5, 2.5, 'nan', 'inf', '-inf', 3.0])
+            check(arr, ddof)
+            arr = np.float64([5.0, 'nan', -1.5, 'nan'])
+            check(arr, ddof)
+        # Only NaNs
+        arr = np.float64(['nan', 'nan'])
+        check(arr, ddof)
 
 
     def check_median_basic(self, pyfunc, array_variations):
