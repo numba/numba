@@ -110,16 +110,16 @@ def array_nansum(arr):
 def array_nanprod(arr):
     return np.nanprod(arr)
 
-def array_nanstd1(arr):
+def array_nanstd_basic(arr):
     return np.nanstd(arr)
 
-def array_nanstd2(arr, ddof):
+def array_nanstd_ddof(arr, ddof=0):
     return np.nanstd(arr, ddof=ddof)
 
-def array_nanvar1(arr):
+def array_nanvar_basic(arr):
     return np.nanvar(arr)
 
-def array_nanvar2(arr, ddof=0):
+def array_nanvar_ddof(arr, ddof=0):
     return np.nanvar(arr, ddof=ddof)
 
 def array_nanmedian_global(arr):
@@ -205,6 +205,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(pyfunc(arr), cfunc(arr), **kwargs)
 
         arr = np.float64([1.0, 2.0, 0.0, -0.0, 1.0, -1.5])
+        arr = np.random.uniform(-100,100,1000)
         check(arr)
         arr = np.float64([-0.0, -1.5])
         check(arr)
@@ -296,33 +297,36 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_reduction_basic(array_nanprod)
 
     def test_nanstd_basic(self):
-        self.check_reduction_basic(array_nanstd1)
+        self.check_reduction_basic(array_nanstd_basic)
 
     def test_nanvar_basic(self):
-        self.check_reduction_basic(array_nanvar1, prec='double')
+        self.check_reduction_basic(array_nanvar_basic, prec='double')
+    
+    def test_nanstd_ddof(self):
+        self.check_ddof(array_nanstd_ddof)
+
+    def test_nanvar_ddof(self):
+        self.check_ddof(array_nanvar_ddof)
+
 
     def check_ddof(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
         def check(arr, ddof):
             expected = pyfunc(arr, ddof)
             got = cfunc(arr, ddof)
-            self.assertPreciseEqual(got, expected)
-        
-        def check_int(i):
-            arr = np.random.randint(-i,i,i)
-            ddof = np.random.randint(-i,i,5)
-            arr[np.random.choice(arr.size,arr.size//2,replace=False)] = np.nan
-            check(arr, ddof)
+            
+            self.assertPreciseEqual(got, expected, prec='double')
 
-        def check_float(arr, ddof):
+        def check_normal_case(i):
             arr = np.random.uniform(-i,i,i)
-            ddof = np.random.randint(-i,i,5)
-            arr[np.random.choice(arr.size,arr.size//2,replace=False)] = np.nan
-            check(arr, ddof)
-
-        for i in [10,100,1000]:
-            check_int(i)
-            check_float(i)
+            ddof_lst = np.random.randint(-i//2,i//2,5)
+            nan_ids = np.random.choice(i,i//2,replace=False)
+            arr[nan_ids] = np.nan
+            for ddof in ddof_lst:
+                check(arr, ddof)
+        # import pdb;pdb.set_trace()
+        for i in [100,1000]:
+            check_normal_case(i)
 
         def check_edge_case():
             arr = [np.array([1.0, 15.0, 10, np.inf, 10])]
@@ -1001,7 +1005,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         reduction_funcs_rspace = [array_argmin, array_argmin_global,
                                   array_argmax, array_argmax_global]
 
-        reduction_funcs += [array_nanmean, array_nanstd1, array_nanvar1]
+        reduction_funcs += [array_nanmean, array_nanstd_basic, array_nanvar_basic]
         reduction_funcs += [array_nanprod]
 
         dtypes_to_test = [np.int32, np.float32, np.bool_, np.complex64]

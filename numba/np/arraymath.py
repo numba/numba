@@ -922,15 +922,16 @@ def np_nanmean(a):
 @register_jitable
 def compute_sum_of_square_diffs(a, isnan):
     m = np.nanmean(a)
-    ssd = 0.0
+    ssd = np.zeros(1)
     count = 0
     for view in np.nditer(a):
         v = view.item()
+        print(v)
         if not isnan(v):
             val = (v.item() - m)
             ssd += np.real(val * np.conj(val))
             count += 1
-    return ssd, count
+    return ssd.item(), count
 
 
 @overload(np.nanvar)
@@ -940,8 +941,10 @@ def np_nanvar(a, ddof=0):
 
     isnan = get_isnan(a.dtype)
 
-    #FIXME: ddof is not evaluated to types.Integer when its omitted
-    if not (isinstance(ddof,int) or isinstance(ddof,types.Omitted)):
+    #FIXME: ddof is evaluated to types.Integer when np_nanvar is called
+    #  from other function. But, to int when np_nanvar called directly
+    ddof_types = (int, float, types.Integer, types.Float, types.Omitted)
+    if not isinstance(ddof, ddof_types):
         return
 
     def nanvar_impl(a, ddof=0):
@@ -951,6 +954,7 @@ def np_nanvar(a, ddof=0):
         if count <= 0:
             return np.nan
         # np.divide() doesn't raise ZeroDivisionError
+        # print("ssd = ", ssd, ";count = ", count)
         return np.divide(ssd, count)
 
     return nanvar_impl
@@ -960,7 +964,7 @@ def np_nanvar(a, ddof=0):
 def np_nanstd(a, ddof=0):
     if not isinstance(a, types.Array):
         return
-    
+
     def nanstd_impl(a, ddof=0):
         return np.nanvar(a, ddof) ** 0.5
 
