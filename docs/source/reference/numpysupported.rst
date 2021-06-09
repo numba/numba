@@ -472,6 +472,13 @@ The following top-level functions are supported:
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
 * :func:`numpy.kaiser`
+* :func:`numpy.iscomplex`
+* :func:`numpy.iscomplexobj`
+* :func:`numpy.isneginf`
+* :func:`numpy.isposinf`
+* :func:`numpy.isreal`
+* :func:`numpy.isrealobj`
+* :func:`numpy.isscalar`
 * :func:`numpy.interp` (only the 3 first arguments; requires NumPy >= 1.10)
 * :func:`numpy.intersect1d` (only first 2 arguments, ar1 and ar2)
 * :func:`numpy.linspace` (only the 3-argument form)

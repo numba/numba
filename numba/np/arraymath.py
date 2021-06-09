@@ -812,6 +812,86 @@ def get_isnan(dtype):
         return _trivial_isnan
 
 
+@overload(np.iscomplex)
+def np_iscomplex(x):
+    if type_can_asarray(x):
+        # NumPy uses asanyarray here!
+        return lambda x: np.asarray(x).imag != 0
+    return None
+
+
+@overload(np.isreal)
+def np_isreal(x):
+    if type_can_asarray(x):
+        # NumPy uses asanyarray here!
+        return lambda x: np.asarray(x).imag == 0
+    return None
+
+
+@overload(np.iscomplexobj)
+def iscomplexobj(x):
+    # Implementation based on NumPy
+    # https://github.com/numpy/numpy/blob/d9b1e32cb8ef90d6b4a47853241db2a28146a57d/numpy/lib/type_check.py#L282-L320
+    dt = determine_dtype(x)
+    if isinstance(x, types.Optional):
+        dt = determine_dtype(x.type)
+    iscmplx = np.issubdtype(dt, np.complexfloating)
+
+    if isinstance(x, types.Optional):
+        def impl(x):
+            if x is None:
+                return False
+            return iscmplx
+    else:
+        def impl(x):
+            return iscmplx
+    return impl
+
+
+@overload(np.isrealobj)
+def isrealobj(x):
+    # Return True if x is not a complex type.
+    # Implementation based on NumPy
+    # https://github.com/numpy/numpy/blob/ccfbcc1cd9a4035a467f2e982a565ab27de25b6b/numpy/lib/type_check.py#L290-L322
+    def impl(x):
+        return not np.iscomplexobj(x)
+    return impl
+
+
+@overload(np.isscalar)
+def np_isscalar(num):
+    res = isinstance(num, (types.Number, types.UnicodeType, types.Boolean))
+
+    def impl(num):
+        return res
+    return impl
+
+
+def is_np_inf_impl(x, out, fn):
+
+    # if/else branch should be unified after PR #5606 is merged
+    if is_nonelike(out):
+        def impl(x, out=None):
+            return np.logical_and(np.isinf(x), fn(np.signbit(x)))
+    else:
+        def impl(x, out=None):
+            return np.logical_and(np.isinf(x), fn(np.signbit(x)), out)
+
+    return impl
+
+
+@overload(np.isneginf)
+def isneginf(x, out=None):
+    fn = register_jitable(lambda x: x)
+    return is_np_inf_impl(x, out, fn)
+
+
+@overload(np.isposinf)
+def isposinf(x, out=None):
+    fn = register_jitable(lambda x: ~x)
+    return is_np_inf_impl(x, out, fn)
+
+
 @register_jitable
 def less_than(a, b):
     return a < b
@@ -922,12 +1002,13 @@ def np_nanmean(a):
 @register_jitable
 def compute_sum_of_square_diffs(a, isnan):
     m = np.nanmean(a)
-    ssd = 0.0
+    ssd = np.zeros(1)
     count = 0
     for view in np.nditer(a):
         v = view.item()
+        print(v)
         if not isnan(v):
-            val = (v - m)
+            val = (v.item() - m)
             ssd += np.real(val * np.conj(val))
             count += 1
     return ssd.item(), count
@@ -957,17 +1038,6 @@ def np_nanvar(a, ddof=0):
         return np.divide(ssd, count)
 
     return nanvar_impl
-
-
-@overload(np.nanstd)
-def np_nanstd(a, ddof=0):
-    if not isinstance(a, types.Array):
-        return
-
-    def nanstd_impl(a, ddof=0):
-        return np.nanvar(a, ddof) ** 0.5
-
-    return nanstd_impl
 
 
 @overload(np.nansum)
@@ -4358,6 +4428,173 @@ _i0B = np.array([
     4.94060238822496958910E-10,
     3.39623202570838634515E-9,
     2.26666899049817806459E-8,
+    2.04891858946906374183E-7,
+    2.89137052083475648297E-6,
+    6.88975834691682398426E-5,
+    3.36911647825569408990E-3,
+    8.04490411014108831608E-1,
+])
+
+
+@register_jitable
+def _chbevl(x, vals):
+    b0 = vals[0]
+    b1 = 0.0
+
+    for i in range(1, len(vals)):
+        b2 = b1
+        b1 = b0
+        b0 = x * b1 - b2 + vals[i]
+
+    return 0.5 * (b0 - b2)
+
+
+@register_jitable
+def _i0(x):
+    if x < 0:
+        x = -x
+    if x <= 8.0:
+        y = (0.5 * x) - 2.0
+        return np.exp(x) * _chbevl(y, _i0A)
+
+    return np.exp(x) * _chbevl(32.0 / x - 2.0, _i0B) / np.sqrt(x)
+
+
+@register_jitable
+def _i0n(n, alpha, beta):
+    y = np.empty_like(n, dtype=np.float_)
+    t = _i0(np.float_(beta))
+    for i in range(len(y)):
+        y[i] = _i0(beta * np.sqrt(1 - ((n[i] - alpha) / alpha)**2.0)) / t
+
+    return y
+
+
+@overload(np.kaiser)
+def np_kaiser(M, beta):
+    if not isinstance(M, types.Integer):
+        raise TypingError('M must be an integer')
+
+    if not isinstance(beta, (types.Integer, types.Float)):
+        raise TypingError('beta must be an integer or float')
+
+    def np_kaiser_impl(M, beta):
+        if M < 1:
+            return np.array((), dtype=np.float_)
+        if M == 1:
+            return np.ones(1, dtype=np.float_)
+
+        n = np.arange(0, M)
+        alpha = (M - 1) / 2.0
+
+        return _i0n(n, alpha, beta)
+
+    return np_kaiser_impl
+
+
+@register_jitable
+def _cross_operation(a, b, out):
+
+    def _cross_preprocessing(x):
+        x0 = x[..., 0]
+        x1 = x[..., 1]
+        if x.shape[-1] == 3:
+            x2 = x[..., 2]
+        else:
+            x2 = np.multiply(x.dtype.type(0), x0)
+        return x0, x1, x2
+
+    a0, a1, a2 = _cross_preprocessing(a)
+    b0, b1, b2 = _cross_preprocessing(b)
+
+    cp0 = np.multiply(a1, b2) - np.multiply(a2, b1)
+    cp1 = np.multiply(a2, b0) - np.multiply(a0, b2)
+    cp2 = np.multiply(a0, b1) - np.multiply(a1, b0)
+
+    out[..., 0] = cp0
+    out[..., 1] = cp1
+    out[..., 2] = cp2
+
+
+@generated_jit
+def _cross_impl(a, b):
+    dtype = np.promote_types(as_dtype(a.dtype), as_dtype(b.dtype))
+    if a.ndim == 1 and b.ndim == 1:
+        def impl(a, b):
+            cp = np.empty((3,), dtype)
+            _cross_operation(a, b, cp)
+            return cp
+    else:
+        def impl(a, b):
+            shape = np.add(a[..., 0], b[..., 0]).shape
+            cp = np.empty(shape + (3,), dtype)
+            _cross_operation(a, b, cp)
+            return cp
+    return impl
+
+
+@overload(np.cross)
+def np_cross(a, b):
+    if not type_can_asarray(a) or not type_can_asarray(b):
+        raise TypingError("Inputs must be array-like.")
+
+    def impl(a, b):
+        a_ = np.asarray(a)
+        b_ = np.asarray(b)
+        if a_.shape[-1] not in (2, 3) or b_.shape[-1] not in (2, 3):
+            raise ValueError((
+                "Incompatible dimensions for cross product\n"
+                "(dimension must be 2 or 3)"
+            ))
+
+        if a_.shape[-1] == 3 or b_.shape[-1] == 3:
+            return _cross_impl(a_, b_)
+        else:
+            raise ValueError((
+                "Dimensions for both inputs is 2.\n"
+                "Please replace your numpy.cross(a, b) call with "
+                "a call to `cross2d(a, b)` from `numba.np.extensions`."
+            ))
+    return impl
+
+
+@register_jitable
+def _cross2d_operation(a, b):
+
+    def _cross_preprocessing(x):
+        x0 = x[..., 0]
+        x1 = x[..., 1]
+        return x0, x1
+
+    a0, a1 = _cross_preprocessing(a)
+    b0, b1 = _cross_preprocessing(b)
+
+    cp = np.multiply(a0, b1) - np.multiply(a1, b0)
+    # If ndim of a and b is 1, cp is a scalar.
+    # In this case np.cross returns a 0-D array, containing the scalar.
+    # np.asarray is used to reconcile this case, without introducing
+    # overhead in the case where cp is an actual N-D array.
+    # (recall that np.asarray does not copy existing arrays)
+    return np.asarray(cp)
+
+
+@generated_jit
+def cross2d(a, b):
+    if not type_can_asarray(a) or not type_can_asarray(b):
+        raise TypingError("Inputs must be array-like.")
+
+    def impl(a, b):
+        a_ = np.asarray(a)
+        b_ = np.asarray(b)
+        if a_.shape[-1] != 2 or b_.shape[-1] != 2:
+            raise ValueError((
+                "Incompatible dimensions for 2D cross product\n"
+                "(dimension must be 2 for both inputs)"
+            ))
+        return _cross2d_operation(a_, b_)
+
+    return impl
+8,
     2.04891858946906374183E-7,
     2.89137052083475648297E-6,
     6.88975834691682398426E-5,

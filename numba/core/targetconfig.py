@@ -147,13 +147,6 @@ class TargetConfig(metaclass=_MetaTargetConfig):
         else:
             return NotImplemented
 
-    def __ne__(self, other):
-        eq = self.__eq__(other)
-        if eq is NotImplemented:
-            return NotImplemented
-        else:
-            return eq
-
     def values(self):
         """Returns a dict of all the values
         """
