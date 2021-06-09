@@ -1003,7 +1003,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         reduction_funcs_rspace = [array_argmin, array_argmin_global,
                                   array_argmax, array_argmax_global]
 
-        reduction_funcs += [array_nanmean, array_nanstd, array_nanvar]
+        reduction_funcs += [array_nanmean, array_nanstd_basic, array_nanvar_basic]
         reduction_funcs += [array_nanprod]
 
         dtypes_to_test = [np.int32, np.float32, np.bool_, np.complex64]
