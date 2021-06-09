@@ -1039,6 +1039,7 @@ def np_nanvar(a, ddof=0):
 
     return nanvar_impl
 
+
 @overload(np.nanstd)
 def np_nanstd(a, ddof=0):
     if not isinstance(a, types.Array):
