@@ -107,7 +107,6 @@ class TestCasting(unittest.TestCase):
         # check datetime64
         cd = np.array(np.datetime64('2016-01-01'))
         self.assertEqual(inner(cd), cd[()])
-    
     def test_array_to_scalar(self):
         """
         Ensure that a TypingError exception is raised if
