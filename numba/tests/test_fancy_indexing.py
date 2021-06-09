@@ -181,47 +181,20 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         pyfunc = setitem_usecase
         cfunc = jit(nopython=True)(pyfunc)
 
-        x1 = np.zeros(3)
-        v1 = np.array(3.14)
-        exp1 = pyfunc(x1.copy(), 0, v1)
-        got1 = cfunc(x1.copy(), 0, v1)
-        self.assertPreciseEqual(exp1, got1)
+        inps = [
+            (np.zeros(3), np.array(3.14)),
+            (np.zeros(2), np.array(2)),
+            (np.zeros(3, dtype=np.int64), np.array(3, dtype=np.int64)),
+            (np.zeros(3, dtype=np.float64), np.array(1, dtype=np.int64)),  # coercing
+            (np.zeros(5, dtype='<U3'), np.array('abc')),  # UnicodeCharSeq
+            (np.zeros(3, dtype=complex), np.array(2+3j, dtype=complex)),  # complex
+        ]
 
-        exp2 = pyfunc(x1.copy(), 2, v1)
-        got2 = cfunc(x1.copy(), 2, v1)
-        self.assertPreciseEqual(exp2, got2)
-
-        # --------------
-        x2 = np.zeros(3, dtype=np.int64)
-        v2 = np.array(3, dtype=np.int64)
-        exp3 = pyfunc(x2.copy(), 0, v2)
-        got3 = cfunc(x2.copy(), 0, v2)
-        self.assertPreciseEqual(exp3, got3)
-
-        # --------------
-        # coercing
-        x_f64 = np.zeros(3, dtype=np.float64)
-        v_i64 = np.array(1, dtype=np.int64)
-        exp4 = pyfunc(x_f64.copy(), 0, v_i64)
-        got4 = cfunc(x_f64.copy(), 0, v_i64)
-        self.assertPreciseEqual(exp4, got4)
-
-        # --------------
-        # UnicodeCharSeq
-        x_ucs = np.zeros(5, dtype='<U3')
-        v_ucs = np.array('abc')
-        exp5 = pyfunc(x_ucs.copy(), 0, v_ucs)
-        got5 = cfunc(x_ucs.copy(), 0, v_ucs)
-        self.assertPreciseEqual(exp5, got5)
-
-        # --------------
-        # Complex
-        x_cp = np.zeros(3, dtype=np.complex)
-        v_cp = np.array(2+3j, dtype=np.complex)
-        exp5 = pyfunc(x_cp.copy(), 0, v_cp)
-        got5 = cfunc(x_cp.copy(), 0, v_cp)
-        self.assertPreciseEqual(exp5, got5)
-
+        for x1, v in inps:
+            x2 = x1.copy()
+            pyfunc(x1, 0, v)
+            cfunc(x2, 0, v)
+            self.assertPreciseEqual(x1, x2)
 
     def test_np_take(self):
         # shorter version of array.take test in test_array_methods
