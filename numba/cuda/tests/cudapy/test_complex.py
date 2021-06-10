@@ -27,7 +27,7 @@ def compile_scalar_func(pyfunc, argtypes, restype):
     # First compile a scalar device function
     assert not any(isinstance(tp, types.Array) for tp in argtypes)
     assert not isinstance(restype, types.Array)
-    device_func = cuda.jit(restype(*argtypes), device=True)(pyfunc)
+    device_func = cuda.jit(pyfunc)
 
     kernel_types = [types.Array(tp, 1, "C")
                     for tp in [restype] + list(argtypes)]
