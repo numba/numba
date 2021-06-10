@@ -9,7 +9,7 @@ import unittest
 class TestCudaVectorizeDeviceCall(CUDATestCase):
     def test_cuda_vectorize_device_call(self):
 
-        @cuda.jit(float32(float32, float32, float32), device=True)
+        @cuda.jit
         def cu_device_fn(x, y, z):
             return x ** y / z
 

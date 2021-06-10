@@ -11,9 +11,13 @@ def __vectorized_{name}({args}, __out__):
 
 
 class CUDAVectorize(deviceufunc.DeviceVectorize):
+    def __init__(self, func, **kwargs):
+        super().__init__(func, **kwargs)
+        self.dispatcher = cuda.jit(func)
+
     def _compile_core(self, sig):
-        cudevfn = cuda.jit(sig, device=True, inline=True)(self.pyfunc)
-        return cudevfn, cudevfn.cres.signature.return_type
+        cres = self.dispatcher.compile_device(sig.args)
+        return self.dispatcher, cres.signature.return_type
 
     def _get_globals(self, corefn):
         glbl = self.pyfunc.__globals__.copy()

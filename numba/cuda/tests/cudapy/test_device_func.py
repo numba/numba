@@ -12,7 +12,7 @@ class TestDeviceFunc(CUDATestCase):
 
     def test_use_add2f(self):
 
-        @cuda.jit("float32(float32, float32)", device=True)
+        @cuda.jit(device=True)
         def add2f(a, b):
             return a + b
 
@@ -31,7 +31,7 @@ class TestDeviceFunc(CUDATestCase):
 
     def test_indirect_add2f(self):
 
-        @cuda.jit("float32(float32, float32)", device=True)
+        @cuda.jit(device=True)
         def add2f(a, b):
             return a + b
 
