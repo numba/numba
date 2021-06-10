@@ -48,6 +48,10 @@ def __gufunc_{name}({args}):
 
 
 class CUDAGUFuncVectorize(deviceufunc.DeviceGUFuncVectorize):
+    def __init__(self, func, sig, **kwargs):
+        super().__init__(func, sig)
+        self.dispatcher = cuda.jit(func)
+
     def build_ufunc(self):
         engine = deviceufunc.GUFuncEngine(self.inputsig, self.outputsig)
         return dispatcher.CUDAGenerializedUFunc(kernelmap=self.kernelmap,
@@ -61,8 +65,7 @@ class CUDAGUFuncVectorize(deviceufunc.DeviceGUFuncVectorize):
         return _gufunc_stager_source
 
     def _get_globals(self, sig):
-        corefn = cuda.jit(sig, device=True)(self.pyfunc)
         glbls = self.py_func.__globals__.copy()
         glbls.update({'__cuda__': cuda,
-                      '__core__': corefn})
+                      '__core__': self.dispatcher})
         return glbls
