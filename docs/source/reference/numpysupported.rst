@@ -401,9 +401,9 @@ The following reduction functions are supported:
 * :func:`numpy.nanquantile` (only the 2 first arguments, requires NumPy >= 1.15,
   complex dtypes unsupported)
 * :func:`numpy.nanprod` (only the first argument)
-* :func:`numpy.nanstd` (only the first argument)
+* :func:`numpy.nanstd` (only the first argument and ddof)
 * :func:`numpy.nansum` (only the first argument)
-* :func:`numpy.nanvar` (only the first argument)
+* :func:`numpy.nanvar` (only the first argument and ddof)
 * :func:`numpy.percentile` (only the 2 first arguments, requires NumPy >= 1.10,
   complex dtypes unsupported)
 * :func:`numpy.quantile` (only the 2 first arguments, requires NumPy >= 1.15,
