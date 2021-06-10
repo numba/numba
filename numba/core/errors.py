@@ -745,6 +745,9 @@ def new_error_context(fmt_, *args, **kwargs):
     except NumbaError as e:
         e.add_context(_format_msg(fmt_, args, kwargs))
         raise
+    except AssertionError:
+        # Let assertion error pass through for shorter traceback in debugging
+        raise
     except Exception as e:
         newerr = errcls(e).add_context(_format_msg(fmt_, args, kwargs))
         tb = sys.exc_info()[2] if numba.core.config.FULL_TRACEBACKS else None

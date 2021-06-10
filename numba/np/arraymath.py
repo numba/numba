@@ -812,6 +812,86 @@ def get_isnan(dtype):
         return _trivial_isnan
 
 
+@overload(np.iscomplex)
+def np_iscomplex(x):
+    if type_can_asarray(x):
+        # NumPy uses asanyarray here!
+        return lambda x: np.asarray(x).imag != 0
+    return None
+
+
+@overload(np.isreal)
+def np_isreal(x):
+    if type_can_asarray(x):
+        # NumPy uses asanyarray here!
+        return lambda x: np.asarray(x).imag == 0
+    return None
+
+
+@overload(np.iscomplexobj)
+def iscomplexobj(x):
+    # Implementation based on NumPy
+    # https://github.com/numpy/numpy/blob/d9b1e32cb8ef90d6b4a47853241db2a28146a57d/numpy/lib/type_check.py#L282-L320
+    dt = determine_dtype(x)
+    if isinstance(x, types.Optional):
+        dt = determine_dtype(x.type)
+    iscmplx = np.issubdtype(dt, np.complexfloating)
+
+    if isinstance(x, types.Optional):
+        def impl(x):
+            if x is None:
+                return False
+            return iscmplx
+    else:
+        def impl(x):
+            return iscmplx
+    return impl
+
+
+@overload(np.isrealobj)
+def isrealobj(x):
+    # Return True if x is not a complex type.
+    # Implementation based on NumPy
+    # https://github.com/numpy/numpy/blob/ccfbcc1cd9a4035a467f2e982a565ab27de25b6b/numpy/lib/type_check.py#L290-L322
+    def impl(x):
+        return not np.iscomplexobj(x)
+    return impl
+
+
+@overload(np.isscalar)
+def np_isscalar(num):
+    res = isinstance(num, (types.Number, types.UnicodeType, types.Boolean))
+
+    def impl(num):
+        return res
+    return impl
+
+
+def is_np_inf_impl(x, out, fn):
+
+    # if/else branch should be unified after PR #5606 is merged
+    if is_nonelike(out):
+        def impl(x, out=None):
+            return np.logical_and(np.isinf(x), fn(np.signbit(x)))
+    else:
+        def impl(x, out=None):
+            return np.logical_and(np.isinf(x), fn(np.signbit(x)), out)
+
+    return impl
+
+
+@overload(np.isneginf)
+def isneginf(x, out=None):
+    fn = register_jitable(lambda x: x)
+    return is_np_inf_impl(x, out, fn)
+
+
+@overload(np.isposinf)
+def isposinf(x, out=None):
+    fn = register_jitable(lambda x: ~x)
+    return is_np_inf_impl(x, out, fn)
+
+
 @register_jitable
 def less_than(a, b):
     return a < b

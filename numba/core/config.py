@@ -154,6 +154,11 @@ class _EnvReloader(object):
             "NUMBA_ALWAYS_WARN_UNINIT_VAR", int, 0,
         )
 
+        # Whether to warn about kernel launches where the grid size will
+        # under utilize the GPU due to low occupancy. On by default.
+        CUDA_LOW_OCCUPANCY_WARNINGS = _readenv(
+            "NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS", int, 1)
+
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)
 
@@ -175,6 +180,9 @@ class _EnvReloader(object):
         # Enable debugging of front-end operation
         # (up to and including IR generation)
         DEBUG_FRONTEND = _readenv("NUMBA_DEBUG_FRONTEND", int, 0)
+
+        # Enable debug prints in nrtdynmod
+        DEBUG_NRT = _readenv("NUMBA_DEBUG_NRT", int, 0)
 
         # How many recently deserialized functions to retain regardless
         # of external references

@@ -62,6 +62,7 @@ ptx2 = '''
 @skip_on_cudasim('CUDA Driver API unsupported in the simulator')
 class TestCudaDriver(CUDATestCase):
     def setUp(self):
+        super().setUp()
         self.assertTrue(len(devices.gpus) > 0)
         self.context = devices.get_context()
         device = self.context.device
@@ -72,6 +73,7 @@ class TestCudaDriver(CUDATestCase):
             self.ptx = ptx1
 
     def tearDown(self):
+        super().tearDown()
         del self.context
 
     def test_cuda_driver_basic(self):

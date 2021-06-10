@@ -1801,6 +1801,56 @@ def array_flatten(context, builder, sig, args):
     return res
 
 
+@overload(np.clip)
+def np_clip(a, a_min, a_max, out=None):
+    if not type_can_asarray(a):
+        raise errors.TypingError('The argument "a" must be array-like')
+
+    if not isinstance(a_min, (types.NoneType, types.Number)):
+        raise errors.TypingError('The argument "a_min" must be a number')
+
+    if not isinstance(a_max, (types.NoneType, types.Number)):
+        raise errors.TypingError('The argument "a_max" must be a number')
+
+    if not isinstance(out, (types.NoneType, types.Array)):
+        msg = 'The argument "out" must be an array if it is provided'
+        raise errors.TypingError(msg)
+
+    # TODO: support scalar a (issue #3469)
+    a_min_is_none = a_min is None or isinstance(a_min, types.NoneType)
+    a_max_is_none = a_max is None or isinstance(a_max, types.NoneType)
+
+    def np_clip_impl(a, a_min, a_max, out=None):
+        if a_min_is_none and a_max_is_none:
+            raise ValueError("array_clip: must set either max or min")
+
+        ret = np.empty_like(a) if out is None else out
+
+        for index, val in np.ndenumerate(a):
+            if a_min_is_none:
+                if val > a_max:
+                    ret[index] = a_max
+                else:
+                    ret[index] = val
+            elif a_max_is_none:
+                if val < a_min:
+                    ret[index] = a_min
+                else:
+                    ret[index] = val
+            else:
+                ret[index] = min(max(val, a_min), a_max)
+        return ret
+
+    return np_clip_impl
+
+
+@overload_method(types.Array, 'clip')
+def array_clip(a, a_min=None, a_max=None, out=None):
+    def impl(a, a_min=None, a_max=None, out=None):
+        return np.clip(a, a_min, a_max, out)
+    return impl
+
+
 def _change_dtype(context, builder, oldty, newty, ary):
     """
     Attempt to fix up *ary* for switching from *oldty* to *newty*.

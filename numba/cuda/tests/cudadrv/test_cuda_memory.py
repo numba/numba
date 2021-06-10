@@ -10,6 +10,7 @@ from numba.cuda.testing import skip_on_cudasim
 @skip_on_cudasim('CUDA Memory API unsupported in the simulator')
 class TestCudaMemory(ContextResettingTestCase):
     def setUp(self):
+        super().setUp()
         self.context = devices.get_context()
 
     def tearDown(self):
@@ -97,6 +98,7 @@ class TestCudaMemory(ContextResettingTestCase):
 
 class TestCudaMemoryFunctions(ContextResettingTestCase):
     def setUp(self):
+        super().setUp()
         self.context = devices.get_context()
 
     def tearDown(self):

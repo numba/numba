@@ -688,7 +688,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         Returning a Dispatcher object.  The Dispatcher object is cached
         internally in `self._impl_cache`.
         """
-        cache_key = self.context, tuple(args), tuple(kws.items())
+        flags = utils.ConfigStack.top_or_none()
+        cache_key = self.context, tuple(args), tuple(kws.items()), flags
         try:
             impl, args = self._impl_cache[cache_key]
             return impl, args
@@ -1104,7 +1105,10 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         if self._attr != attr:
             return None
 
-        assert isinstance(typ, self.key)
+        if isinstance(typ, types.TypeRef):
+            assert typ == self.key
+        else:
+            assert isinstance(typ, self.key)
 
         class MethodTemplate(AbstractTemplate):
             key = (self.key, attr)
