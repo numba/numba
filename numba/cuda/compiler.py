@@ -1231,6 +1231,10 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         for _, defn in self.overloads.items():
             defn.inspect_types(file=file)
 
+    def inspect_ptx(self, args):
+        # XXX: Need to warn here
+        return self.compile_device(args).library.get_asm_str().encode()
+
     @property
     def ptx(self):
         return {sig: overload.ptx for sig, overload in self.overloads.items()}

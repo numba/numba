@@ -35,7 +35,7 @@ class TestDeviceFunc(CUDATestCase):
         def add2f(a, b):
             return a + b
 
-        @cuda.jit("float32(float32, float32)", device=True)
+        @cuda.jit(device=True)
         def indirect(a, b):
             return add2f(a, b)
 
@@ -113,7 +113,7 @@ class TestDeviceFunc(CUDATestCase):
             return x + y
 
         args = (int32, int32)
-        cres = foo.compile(args)
+        cres = foo.compile_device(args)
 
         fname = cres.fndesc.mangled_name
         # Verify that the function name has "foo" in it as in the python name
