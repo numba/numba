@@ -956,6 +956,9 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         typingctx = cuda_target.typing_context
         typingctx.insert_user_function(dispatcher, function_template)
 
+        name = getattr(py_func, '__name__', 'unknown')
+        self.__name__ = f"{name} <CUDA device function>".format(name)
+
     def get_call_template(self, args, kws):
         # Copied and simplified from _DispatcherBase.get_call_template.
         """
