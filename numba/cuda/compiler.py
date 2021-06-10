@@ -18,6 +18,7 @@ from numba.core.compiler_lock import global_compiler_lock
 from numba.core.compiler_machinery import (LoweringPass, PassManager,
                                            register_pass)
 from numba.core.dispatcher import OmittedArg
+from numba.core.errors import NumbaDeprecationWarning
 from numba.core.typed_passes import IRLegalization, NativeLowering
 from numba.core.typing.typeof import Purpose, typeof
 from warnings import warn
@@ -1231,8 +1232,17 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         for _, defn in self.overloads.items():
             defn.inspect_types(file=file)
 
-    def inspect_ptx(self, args):
+    def inspect_ptx(self, args, nvvm_options={}):
         # XXX: Need to warn here
+        msg = ('inspect_ptx for device functions is deprecated. Use '
+               'compile_ptx instead.')
+        warn(msg, category=NumbaDeprecationWarning)
+
+        if nvvm_options:
+            msg = ('nvvm_options are ignored. Use compile_ptx if you want to '
+                   'set NVVM options.')
+            warn(msg, category=NumbaDeprecationWarning)
+
         return self.compile_device(args).library.get_asm_str().encode()
 
     @property

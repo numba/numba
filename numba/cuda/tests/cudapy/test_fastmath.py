@@ -138,7 +138,7 @@ class TestFastMathOption(CUDATestCase):
 
     def test_device(self):
         # fastmath option is ignored for device function
-        @cuda.jit("float32(float32, float32)", device=True)
+        @cuda.jit(device=True)
         def foo(a, b):
             return a / b
 
