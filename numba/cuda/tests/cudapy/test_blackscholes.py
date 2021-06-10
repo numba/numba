@@ -64,7 +64,7 @@ class TestBlackScholes(CUDATestCase):
             black_scholes(callResultNumpy, putResultNumpy, stockPrice,
                           optionStrike, optionYears, RISKFREE, VOLATILITY)
 
-        @cuda.jit(double(double), device=True, inline=True)
+        @cuda.jit(device=True, inline=True)
         def cnd_cuda(d):
             K = 1.0 / (1.0 + 0.2316419 * math.fabs(d))
             ret_val = (RSQRT2PI * math.exp(-0.5 * d * d) *

@@ -18,7 +18,6 @@ from numba.core.compiler_lock import global_compiler_lock
 from numba.core.compiler_machinery import (LoweringPass, PassManager,
                                            register_pass)
 from numba.core.dispatcher import OmittedArg
-from numba.core.errors import NumbaDeprecationWarning
 from numba.core.typed_passes import IRLegalization, NativeLowering
 from numba.core.typing.typeof import Purpose, typeof
 from warnings import warn
@@ -246,163 +245,163 @@ def compile_ptx_for_current_device(pyfunc, args, debug=False, lineinfo=False,
                        device=device, fastmath=fastmath, cc=cc, opt=True)
 
 
-class DeviceDispatcher(serialize.ReduceMixin):
-    """Unmaterialized device function
-    """
-    def __init__(self, pyfunc, debug, inline, opt):
-        self.py_func = pyfunc
-        self.debug = debug
-        self.inline = inline
-        self.opt = opt
-        self.overloads = {}
-        name = getattr(pyfunc, '__name__', 'unknown')
-        self.__name__ = f"{name} <CUDA device function>".format(name)
-
-    def _reduce_states(self):
-        return dict(py_func=self.py_func, debug=self.debug, inline=self.inline)
-
-    @classmethod
-    def _rebuild(cls, py_func, debug, inline):
-        return compile_device_dispatcher(py_func, debug=debug, inline=inline)
-
-    def get_call_template(self, args, kws):
-        # Copied and simplified from _DispatcherBase.get_call_template.
-        """
-        Get a typing.ConcreteTemplate for this dispatcher and the given
-        *args* and *kws* types.  This allows to resolve the return type.
-
-        A (template, pysig, args, kws) tuple is returned.
-        """
-        # Ensure an overload is available
-        self.compile(tuple(args))
-
-        # Create function type for typing
-        func_name = self.py_func.__name__
-        name = "CallTemplate({0})".format(func_name)
-
-        # The `key` isn't really used except for diagnosis here,
-        # so avoid keeping a reference to `cfunc`.
-        call_template = typing.make_concrete_template(
-            name, key=func_name, signatures=self.nopython_signatures)
-        pysig = utils.pysignature(self.py_func)
-
-        return call_template, pysig, args, kws
-
-    @property
-    def nopython_signatures(self):
-        # All overloads are for nopython mode, because there is only
-        # nopython mode in CUDA
-        return [info.signature for info in self.overloads.values()]
-
-    def get_overload(self, sig):
-        # NOTE: This dispatcher seems to be used as the key for the dict of
-        # implementations elsewhere in Numba, so we return this dispatcher
-        # instead of a compiled entry point as in
-        # _DispatcherBase.get_overload().
-        return self
-
-    def compile(self, args):
-        """Compile the function for the given argument types.
-
-        Each signature is compiled once by caching the compiled function inside
-        this object.
-
-        Returns the `CompileResult`.
-        """
-        if args not in self.overloads:
-            nvvm_options = {
-                'opt': 3 if self.opt else 0,
-                'debug': self.debug,
-            }
-
-            cres = compile_cuda(self.py_func, None, args, debug=self.debug,
-                                inline=self.inline, nvvm_options=nvvm_options)
-            first_definition = not self.overloads
-            self.overloads[args] = cres
-            libs = [cres.library]
-
-            if first_definition:
-                # First definition
-                cres.target_context.insert_user_function(self, cres.fndesc,
-                                                         libs)
-            else:
-                cres.target_context.add_user_function(self, cres.fndesc, libs)
-
-        else:
-            cres = self.overloads[args]
-
-        return cres
-
-    def inspect_llvm(self, args):
-        """Returns the LLVM-IR text compiled for *args*.
-
-        Parameters
-        ----------
-        args: tuple[Type]
-            Argument types.
-
-        Returns
-        -------
-        llvmir : str
-        """
-        modules = self.compile(args).library.modules
-        return "\n\n".join([str(mod) for mod in modules])
-
-    def inspect_ptx(self, args, nvvm_options={}):
-        """Returns the PTX compiled for *args* for the currently active GPU
-
-        Parameters
-        ----------
-        args: tuple[Type]
-            Argument types.
-
-        Returns
-        -------
-        ptx : bytes
-        """
-        msg = ('inspect_ptx for device functions is deprecated. Use '
-               'compile_ptx instead.')
-        warn(msg, category=NumbaDeprecationWarning)
-
-        if nvvm_options:
-            msg = ('nvvm_options are ignored. Use compile_ptx if you want to '
-                   'set NVVM options.')
-            warn(msg, category=NumbaDeprecationWarning)
-        return self.compile(args).library.get_asm_str().encode()
-
-
-def compile_device_dispatcher(pyfunc, debug=False, inline=False, opt=True):
-    """Create a DeviceDispatcher and register it to the CUDA typing context.
-    """
-    from .descriptor import cuda_target
-
-    dispatcher = DeviceDispatcher(pyfunc, debug=debug, inline=inline, opt=opt)
-
-    class device_function_template(AbstractTemplate):
-        key = dispatcher
-
-        def generic(self, args, kws):
-            assert not kws
-            return dispatcher.compile(args).signature
-
-        def get_template_info(cls):
-            basepath = os.path.dirname(os.path.dirname(numba.__file__))
-            code, firstlineno = inspect.getsourcelines(pyfunc)
-            path = inspect.getsourcefile(pyfunc)
-            sig = str(utils.pysignature(pyfunc))
-            info = {
-                'kind': "overload",
-                'name': getattr(cls.key, '__name__', "unknown"),
-                'sig': sig,
-                'filename': utils.safe_relpath(path, start=basepath),
-                'lines': (firstlineno, firstlineno + len(code) - 1),
-                'docstring': pyfunc.__doc__
-            }
-            return info
-
-    typingctx = cuda_target.typing_context
-    typingctx.insert_user_function(dispatcher, device_function_template)
-    return dispatcher
+#class DeviceDispatcher(serialize.ReduceMixin):
+#    """Unmaterialized device function
+#    """
+#    def __init__(self, pyfunc, debug, inline, opt):
+#        self.py_func = pyfunc
+#        self.debug = debug
+#        self.inline = inline
+#        self.opt = opt
+#        self.overloads = {}
+#        name = getattr(pyfunc, '__name__', 'unknown')
+#        self.__name__ = f"{name} <CUDA device function>".format(name)
+#
+#    def _reduce_states(self):
+#        return dict(py_func=self.py_func, debug=self.debug, inline=self.inline)
+#
+#    @classmethod
+#    def _rebuild(cls, py_func, debug, inline):
+#        return compile_device_dispatcher(py_func, debug=debug, inline=inline)
+#
+#    def get_call_template(self, args, kws):
+#        # Copied and simplified from _DispatcherBase.get_call_template.
+#        """
+#        Get a typing.ConcreteTemplate for this dispatcher and the given
+#        *args* and *kws* types.  This allows to resolve the return type.
+#
+#        A (template, pysig, args, kws) tuple is returned.
+#        """
+#        # Ensure an overload is available
+#        self.compile(tuple(args))
+#
+#        # Create function type for typing
+#        func_name = self.py_func.__name__
+#        name = "CallTemplate({0})".format(func_name)
+#
+#        # The `key` isn't really used except for diagnosis here,
+#        # so avoid keeping a reference to `cfunc`.
+#        call_template = typing.make_concrete_template(
+#            name, key=func_name, signatures=self.nopython_signatures)
+#        pysig = utils.pysignature(self.py_func)
+#
+#        return call_template, pysig, args, kws
+#
+#    @property
+#    def nopython_signatures(self):
+#        # All overloads are for nopython mode, because there is only
+#        # nopython mode in CUDA
+#        return [info.signature for info in self.overloads.values()]
+#
+#    def get_overload(self, sig):
+#        # NOTE: This dispatcher seems to be used as the key for the dict of
+#        # implementations elsewhere in Numba, so we return this dispatcher
+#        # instead of a compiled entry point as in
+#        # _DispatcherBase.get_overload().
+#        return self
+#
+#    def compile(self, args):
+#        """Compile the function for the given argument types.
+#
+#        Each signature is compiled once by caching the compiled function inside
+#        this object.
+#
+#        Returns the `CompileResult`.
+#        """
+#        if args not in self.overloads:
+#            nvvm_options = {
+#                'opt': 3 if self.opt else 0,
+#                'debug': self.debug,
+#            }
+#
+#            cres = compile_cuda(self.py_func, None, args, debug=self.debug,
+#                                inline=self.inline, nvvm_options=nvvm_options)
+#            first_definition = not self.overloads
+#            self.overloads[args] = cres
+#            libs = [cres.library]
+#
+#            if first_definition:
+#                # First definition
+#                cres.target_context.insert_user_function(self, cres.fndesc,
+#                                                         libs)
+#            else:
+#                cres.target_context.add_user_function(self, cres.fndesc, libs)
+#
+#        else:
+#            cres = self.overloads[args]
+#
+#        return cres
+#
+#    def inspect_llvm(self, args):
+#        """Returns the LLVM-IR text compiled for *args*.
+#
+#        Parameters
+#        ----------
+#        args: tuple[Type]
+#            Argument types.
+#
+#        Returns
+#        -------
+#        llvmir : str
+#        """
+#        modules = self.compile(args).library.modules
+#        return "\n\n".join([str(mod) for mod in modules])
+#
+#    def inspect_ptx(self, args, nvvm_options={}):
+#        """Returns the PTX compiled for *args* for the currently active GPU
+#
+#        Parameters
+#        ----------
+#        args: tuple[Type]
+#            Argument types.
+#
+#        Returns
+#        -------
+#        ptx : bytes
+#        """
+#        msg = ('inspect_ptx for device functions is deprecated. Use '
+#               'compile_ptx instead.')
+#        warn(msg, category=NumbaDeprecationWarning)
+#
+#        if nvvm_options:
+#            msg = ('nvvm_options are ignored. Use compile_ptx if you want to '
+#                   'set NVVM options.')
+#            warn(msg, category=NumbaDeprecationWarning)
+#        return self.compile(args).library.get_asm_str().encode()
+#
+#
+#def compile_device_dispatcher(pyfunc, debug=False, inline=False, opt=True):
+#    """Create a DeviceDispatcher and register it to the CUDA typing context.
+#    """
+#    from .descriptor import cuda_target
+#
+#    dispatcher = DeviceDispatcher(pyfunc, debug=debug, inline=inline, opt=opt)
+#
+#    class device_function_template(AbstractTemplate):
+#        key = dispatcher
+#
+#        def generic(self, args, kws):
+#            assert not kws
+#            return dispatcher.compile(args).signature
+#
+#        def get_template_info(cls):
+#            basepath = os.path.dirname(os.path.dirname(numba.__file__))
+#            code, firstlineno = inspect.getsourcelines(pyfunc)
+#            path = inspect.getsourcefile(pyfunc)
+#            sig = str(utils.pysignature(pyfunc))
+#            info = {
+#                'kind': "overload",
+#                'name': getattr(cls.key, '__name__', "unknown"),
+#                'sig': sig,
+#                'filename': utils.safe_relpath(path, start=basepath),
+#                'lines': (firstlineno, firstlineno + len(code) - 1),
+#                'docstring': pyfunc.__doc__
+#            }
+#            return info
+#
+#    typingctx = cuda_target.typing_context
+#    typingctx.insert_user_function(dispatcher, device_function_template)
+#    return dispatcher
 
 
 def compile_device(pyfunc, return_type, args, inline=True, debug=False,
@@ -929,6 +928,33 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
             self.compile(sigs[0])
             self._can_compile = False
 
+        dispatcher = self
+
+        class function_template(AbstractTemplate):
+            key = dispatcher
+
+            def generic(self, args, kws):
+                assert not kws
+                return dispatcher.compile_device(args).signature
+
+            def get_template_info(cls):
+                basepath = os.path.dirname(os.path.dirname(numba.__file__))
+                code, firstlineno = inspect.getsourcelines(py_func)
+                path = inspect.getsourcefile(py_func)
+                sig = str(utils.pysignature(py_func))
+                info = {
+                    'kind': "overload",
+                    'name': getattr(cls.key, '__name__', "unknown"),
+                    'sig': sig,
+                    'filename': utils.safe_relpath(path, start=basepath),
+                    'lines': (firstlineno, firstlineno + len(code) - 1),
+                    'docstring': py_func.__doc__
+                }
+                return info
+
+        typingctx = cuda_target.typing_context
+        typingctx.insert_user_function(dispatcher, function_template)
+
     def configure(self, griddim, blockdim, stream=0, sharedmem=0):
         griddim, blockdim = normalize_kernel_dimensions(griddim, blockdim)
         return _KernelConfiguration(self, griddim, blockdim, stream, sharedmem)
@@ -1088,7 +1114,7 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         specialized for the given signature.
         '''
         argtypes, return_type = sigutils.normalize_signature(sig)
-        assert return_type is None or return_type == types.none
+        #assert return_type is None or return_type == types.none
         if self.specialized:
             return next(iter(self.overloads.values()))
         else:
@@ -1108,6 +1134,40 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
             kernel.bind()
             self.sigs.append(sig)
         return kernel
+
+    def compile_device(self, args):
+        """Compile the function for the given argument types.
+
+        Each signature is compiled once by caching the compiled function inside
+        this object.
+
+        Returns the `CompileResult`.
+        """
+        if args not in self.overloads:
+            opt = self.targetoptions.get('opt', True)
+            debug = self.targetoptions.get('debug', False)
+            nvvm_options = {
+                'opt': 3 if opt else 0,
+                'debug': debug,
+            }
+
+            cres = compile_cuda(self.py_func, None, args, debug=debug,
+                                inline=False, nvvm_options=nvvm_options)
+            first_definition = not self.overloads
+            self.overloads[args] = cres
+            libs = [cres.library]
+
+            if first_definition:
+                # First definition
+                cres.target_context.insert_user_function(self, cres.fndesc,
+                                                         libs)
+            else:
+                cres.target_context.add_user_function(self, cres.fndesc, libs)
+
+        else:
+            cres = self.overloads[args]
+
+        return cres
 
     def inspect_llvm(self, signature=None):
         '''
