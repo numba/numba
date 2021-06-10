@@ -27,23 +27,22 @@ class CUDATypingContext(typing.BaseContext):
         self.install_registry(libdevicedecl.registry)
 
     def resolve_value_type(self, val):
-        # treat dispatcher object as another device function
         if isinstance(val, dispatcher.Dispatcher):
+            # Re-wrap the Python function with a CUDA dispatcher
             try:
-                # use cached device function
-                val = val.__cudajitdevice
+                # Use cached CUDA dispatcher if possible
+                val = val.__cudadispatcher
             except AttributeError:
                 if not val._can_compile:
                     raise ValueError('using cpu function on device '
                                      'but its compilation is disabled')
-                opt = val.targetoptions.get('opt', True)
-                from .decorators import jitdevice
-                jd = jitdevice(val, debug=val.targetoptions.get('debug'),
-                               opt=opt)
-                # cache the device function for future use and to avoid
-                # duplicated copy of the same function.
-                val.__cudajitdevice = jd
-                val = jd
+                from numba.cuda.compiler import Dispatcher
+                cd = Dispatcher(val.py_func, [],
+                                targetoptions=val.targetoptions)
+                # Cache the Dispatcher for future use and to avoid duplicated
+                # copy of the same function.
+                val.__cudadispatcher = cd
+                val = cd
 
         # continue with parent logic
         return super(CUDATypingContext, self).resolve_value_type(val)
