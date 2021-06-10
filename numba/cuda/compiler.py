@@ -956,6 +956,36 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         typingctx = cuda_target.typing_context
         typingctx.insert_user_function(dispatcher, function_template)
 
+    def get_call_template(self, args, kws):
+        # Copied and simplified from _DispatcherBase.get_call_template.
+        """
+        Get a typing.ConcreteTemplate for this dispatcher and the given
+        *args* and *kws* types.  This allows to resolve the return type.
+
+        A (template, pysig, args, kws) tuple is returned.
+        """
+        # Ensure an overload is available
+        self.compile_device(tuple(args))
+
+        # Create function type for typing
+        func_name = self.py_func.__name__
+        name = "CallTemplate({0})".format(func_name)
+
+        # The `key` isn't really used except for diagnosis here,
+        # so avoid keeping a reference to `cfunc`.
+        call_template = typing.make_concrete_template(
+            name, key=func_name, signatures=self.nopython_signatures)
+        pysig = utils.pysignature(self.py_func)
+
+        return call_template, pysig, args, kws
+
+    def get_overload(self, sig):
+        # NOTE: This dispatcher seems to be used as the key for the dict of
+        # implementations elsewhere in Numba, so we return this dispatcher
+        # instead of a compiled entry point as in
+        # _DispatcherBase.get_overload().
+        return self
+
     def configure(self, griddim, blockdim, stream=0, sharedmem=0):
         griddim, blockdim = normalize_kernel_dimensions(griddim, blockdim)
         return _KernelConfiguration(self, griddim, blockdim, stream, sharedmem)
@@ -1056,7 +1086,7 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
     @property
     def nopython_signatures(self):
         # Based on _DispatcherBase.nopython_signatures
-        return [kernel.signature for kernel in self.overloads.values()]
+        return [overload.signature for overload in self.overloads.values()]
 
     def specialize(self, *args):
         '''
