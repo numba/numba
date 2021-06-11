@@ -15,7 +15,7 @@ SM_SIZE = tpb, tpb
 class TestCudaLaplace(CUDATestCase):
     def test_laplace_small(self):
 
-        @cuda.jit(float64(float64, float64), device=True, inline=True)
+        @cuda.jit(device=True, inline=True)
         def get_max(a, b):
             if a > b:
                 return a
