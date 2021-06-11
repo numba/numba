@@ -1309,11 +1309,15 @@ class Lower(BaseLower):
         aptr = cgutils.alloca_once(self.builder, lltype,
                                    name=name, zfill=False)
         if is_uservar:
+            # If it's an arg set the location as the function definition line
+            if name in self.func_ir.arg_names:
+                loc = self.loc.with_lineno(self.func_ir.loc.line)
+            else:
+                loc = self.loc
             # Emit debug info for user variable
             sizeof = self.context.get_abi_sizeof(lltype)
             self.debuginfo.mark_variable(self.builder, aptr, name=name,
-                                         lltype=lltype, size=sizeof,
-                                         loc=self.loc)
+                                         lltype=lltype, size=sizeof, loc=loc)
         return aptr
 
     def incref(self, typ, val):
