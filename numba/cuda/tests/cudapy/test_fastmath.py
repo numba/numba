@@ -137,7 +137,9 @@ class TestFastMathOption(CUDATestCase):
             self.fail("Divide in fastmath should not throw ZeroDivisionError")
 
     def test_device(self):
-        # fastmath option is ignored for device function
+        # Device functions inherit the fastmath flag from the calling kernel -
+        # the presence or absence of fastmath flag on the called function is
+        # ignored.
         @cuda.jit(device=True)
         def foo(a, b):
             return a / b
