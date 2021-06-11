@@ -49,7 +49,7 @@ def __gufunc_{name}({args}):
 
 class CUDAGUFuncVectorize(deviceufunc.DeviceGUFuncVectorize):
     def __init__(self, func, sig, **kwargs):
-        super().__init__(func, sig)
+        super().__init__(func, sig, **kwargs)
         self.dispatcher = cuda.jit(func)
 
     def build_ufunc(self):
