@@ -108,7 +108,10 @@ def find_driver():
     else:
         # Assume to be *nix like
         dlloader = ctypes.CDLL
-        dldir = ['/usr/lib', '/usr/lib64']
+        # Check for WSL lib location first, as on a WSL system, this contains
+        # the correct library - /usr/lib[64] may also contain a version of
+        # the library that won't work correctly.
+        dldir = ['/usr/lib/wsl/lib', '/usr/lib', '/usr/lib64']
         dlnames = ['libcuda.so', 'libcuda.so.1']
 
     if envpath:
