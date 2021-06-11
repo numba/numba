@@ -407,6 +407,9 @@ def compile_ptx_for_current_device(pyfunc, args, debug=False, lineinfo=False,
 
 def compile_device(pyfunc, return_type, args, inline=True, debug=False,
                    lineinfo=False):
+    msg = ("Eager compilation of device functions is deprecated. Use "
+           "compile_ptx to get PTX code for a device function if needed.")
+    warn(NumbaDeprecationWarning(msg))
     return DeviceFunction(pyfunc, return_type, args, inline=True, debug=False,
                           lineinfo=False)
 

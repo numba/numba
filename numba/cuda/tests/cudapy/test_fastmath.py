@@ -140,7 +140,7 @@ class TestFastMathOption(CUDATestCase):
         # Device functions inherit the fastmath flag from the calling kernel -
         # the presence or absence of fastmath flag on the called function is
         # ignored.
-        @cuda.jit(device=True)
+        @cuda.jit("float32(float32, float32)", device=True)
         def foo(a, b):
             return a / b
 

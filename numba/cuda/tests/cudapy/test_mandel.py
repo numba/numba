@@ -2,8 +2,6 @@ from numba import cuda
 from numba.cuda.testing import unittest
 
 
-@unittest.skip('Compile device function for specific signature should use '
-               'compile_ptx')
 class TestCudaMandel(unittest.TestCase):
     def test_mandel(self):
         """Just make sure we can compile this

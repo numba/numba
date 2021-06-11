@@ -1,6 +1,6 @@
 from numba.core import config, sigutils
 from numba.core.errors import DeprecationError
-from .compiler import declare_device_function, Dispatcher
+from .compiler import compile_device, declare_device_function, Dispatcher
 from .simulator.kernel import FakeCUDAKernel
 
 
@@ -98,14 +98,14 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             targetoptions['fastmath'] = fastmath
             return Dispatcher(func, [func_or_sig], targetoptions=targetoptions)
 
-        #def device_jit(func):
-        #    return compile_device(func, restype, argtypes, inline=inline,
-        #                          debug=debug)
+        def device_jit(func):
+            return compile_device(func, restype, argtypes, inline=inline,
+                                  debug=debug)
 
-        #if device:
-        #    return device_jit
-        #else:
-        return kernel_jit
+        if device:
+            return device_jit
+        else:
+            return kernel_jit
     else:
         if func_or_sig is None:
             if config.ENABLE_CUDASIM:
