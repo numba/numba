@@ -130,7 +130,7 @@ class TestDeviceFunc(CUDATestCase):
             return x + y
 
         args = (int32, int32)
-        cres = foo.compile(args)
+        cres = foo.compile_device(args)
 
         fname = cres.fndesc.mangled_name
         # Verify that the function name has "foo" in it as in the python name

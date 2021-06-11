@@ -1216,7 +1216,14 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
 
         '''
         if signature is not None:
-            return self.overloads[signature].inspect_llvm()
+            overload = self.overloads[signature]
+            if isinstance(overload, _Kernel):
+                # Overload is a kernel
+                return overload.inspect_llvm()
+            else:
+                # Overload is a device function
+                modules = overload.library.modules
+                return "\n\n".join([str(mod) for mod in modules])
         else:
             return {sig: overload.inspect_llvm()
                     for sig, overload in self.overloads.items()}
