@@ -9,18 +9,6 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "positional argument.")
 
 
-#def jitdevice(func, link=[], debug=None, inline=False, opt=True,
-#              no_cpython_wrapper=None):
-#    """Wrapper for device-jit.
-#    """
-#    # We ignore  the no_cpython_wrapper kwarg - it is passed by the callee when
-#    # using overloads, but there is never a CPython wrapper for CUDA anyway.
-#    debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
-#    if link:
-#        raise ValueError("link keyword invalid for device function")
-#    return compile_device_dispatcher(func, debug=debug, inline=inline, opt=opt)
-
-
 def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
         opt=True, **kws):
     """
@@ -87,9 +75,6 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
 
         argtypes, restype = sigutils.normalize_signature(func_or_sig)
 
-        #if restype and not device and restype != types.void:
-        #    raise TypeError("CUDA kernel must have void return type.")
-
         def kernel_jit(func):
             targetoptions = kws.copy()
             targetoptions['debug'] = debug
@@ -122,8 +107,6 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             if config.ENABLE_CUDASIM:
                 return FakeCUDAKernel(func_or_sig, device=device,
                                       fastmath=fastmath)
-            #elif device:
-            #    return jitdevice(func_or_sig, debug=debug, opt=opt, **kws)
             else:
                 targetoptions = kws.copy()
                 targetoptions['debug'] = debug
