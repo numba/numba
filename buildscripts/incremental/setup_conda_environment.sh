@@ -82,7 +82,7 @@ if [ "$TEST_PICKLE5" == "yes" ]; then $PIP_INSTALL pickle5; fi
 if [ "$RUN_TYPEGUARD" == "yes" ]; then $CONDA_INSTALL conda-forge::typeguard; fi
 
 # environment dump for debug
-echo "DEBUG ENV:"
-echo "-------------------------------------------------------------------------"
-conda env export
-echo "-------------------------------------------------------------------------"
+# echo "DEBUG ENV:"
+# echo "-------------------------------------------------------------------------"
+# conda env export
+# echo "-------------------------------------------------------------------------"
