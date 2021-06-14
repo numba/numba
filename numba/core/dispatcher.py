@@ -1236,6 +1236,8 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                 return cres.entry_point
 
     def _get_dispatcher_for_current_target(self):
+        # Lifted code do not honor the target switch currently.
+        # No work has been done to check if this can be allowed.
         return self
 
 
