@@ -779,6 +779,7 @@ def array_argmax(context, builder, sig, args):
 @overload_method(types.Array, "all")
 def np_all(a):
     def flat_all(a):
+        a = np.asarray(a)
         for v in np.nditer(a):
             if not v.item():
                 return False
@@ -791,6 +792,7 @@ def np_all(a):
 @overload_method(types.Array, "any")
 def np_any(a):
     def flat_any(a):
+        a = np.asarray(a)
         for v in np.nditer(a):
             if v.item():
                 return True
