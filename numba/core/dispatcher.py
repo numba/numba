@@ -1235,6 +1235,9 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                     self.add_overload(cres)
                 return cres.entry_point
 
+    def _get_dispatcher_for_current_target(self):
+        return self
+
 
 class LiftedLoop(LiftedCode):
     def _pre_compile(self, args, return_type, flags):
