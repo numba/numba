@@ -35,7 +35,7 @@ if "%RUN_COVERAGE%" == "yes" (%PIP_INSTALL% codecov)
 %CONDA_INSTALL% -c numba tbb=2021 tbb-devel
 if %errorlevel% neq 0 exit /b %errorlevel%
 
-REM echo "DEBUG ENV:"
-REM echo "-------------------------------------------------------------------------"
-REM conda env export
-REM echo "-------------------------------------------------------------------------"
+echo "DEBUG ENV:"
+echo "-------------------------------------------------------------------------"
+conda env export
+echo "-------------------------------------------------------------------------"
