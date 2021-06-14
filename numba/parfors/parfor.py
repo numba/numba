@@ -32,7 +32,6 @@ from numba.core.typing.templates import infer_global, AbstractTemplate
 from numba.stencils.stencilparfor import StencilPass
 from numba.core.extending import register_jitable
 
-
 from numba.core.ir_utils import (
     mk_unique_var,
     next_label,
@@ -75,7 +74,9 @@ from numba.core.ir_utils import (
     index_var_of_get_setitem,
     set_index_var_of_get_setitem,
     find_potential_aliases,
-    replace_var_names)
+    replace_var_names,
+    transfer_scope,
+)
 
 from numba.core.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
@@ -411,7 +412,7 @@ def linspace_parallel_impl(return_type, *args):
     else:
         raise ValueError("parallel linspace with types {}".format(args))
 
-replace_functions_map = {
+swap_functions_map = {
     ('argmin', 'numpy'): lambda r,a: argmin_parallel_impl,
     ('argmax', 'numpy'): lambda r,a: argmax_parallel_impl,
     ('min', 'numpy'): min_parallel_impl,
@@ -1386,15 +1387,19 @@ class PreParforPass(object):
     """Preprocessing for the Parfor pass. It mostly inlines parallel
     implementations of numpy functions if available.
     """
-    def __init__(self, func_ir, typemap, calltypes, typingctx, options,
-                 swapped={}):
+    def __init__(self, func_ir, typemap, calltypes, typingctx, targetctx,
+                 options, swapped={}, replace_functions_map=None):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
         self.typingctx = typingctx
+        self.targetctx = targetctx
         self.options = options
         # diagnostics
         self.swapped = swapped
+        if replace_functions_map is None:
+            replace_functions_map = swap_functions_map
+        self.replace_functions_map = replace_functions_map
         self.stats = {
             'replaced_func': 0,
             'replaced_dtype': 0,
@@ -1431,7 +1436,7 @@ class PreParforPass(object):
                         def replace_func():
                             func_def = get_definition(self.func_ir, expr.func)
                             callname = find_callname(self.func_ir, expr)
-                            repl_func = replace_functions_map.get(callname, None)
+                            repl_func = self.replace_functions_map.get(callname, None)
                             # Handle method on array type
                             if (repl_func is None and
                                 len(callname) == 2 and
@@ -1462,8 +1467,8 @@ class PreParforPass(object):
                                 g[check.name] = check.func
                             # inline the parallel implementation
                             new_blocks, _ = inline_closure_call(self.func_ir, g,
-                                            block, i, new_func, self.typingctx, typs,
-                                            self.typemap, self.calltypes, work_list)
+                                            block, i, new_func, self.typingctx, self.targetctx,
+                                            typs, self.typemap, self.calltypes, work_list)
                             call_table = get_call_table(new_blocks, topological_ordering=False)
 
                             # find the prange in the new blocks and record it for use in diagnostics
@@ -1548,11 +1553,13 @@ class ParforPassStates:
     """
 
     def __init__(self, func_ir, typemap, calltypes, return_type, typingctx,
-                 options, flags, metadata, diagnostics=ParforDiagnostics()):
+                 targetctx,  options, flags, metadata,
+                 diagnostics=ParforDiagnostics()):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
         self.typingctx = typingctx
+        self.targetctx = targetctx
         self.return_type = return_type
         self.options = options
         self.diagnostics = diagnostics
@@ -1689,6 +1696,10 @@ class ConvertInplaceBinop:
         return self.pass_states.typingctx.resolve_function_type(fnty, tuple(args), {})
 
 
+def get_index_var(x):
+    return x.index if isinstance(x, ir.SetItem) else x.index_var
+
+
 class ConvertSetItemPass:
     """Parfor subpass to convert setitem on Arrays
     """
@@ -1713,11 +1724,10 @@ class ConvertSetItemPass:
             new_body = []
             equiv_set = pass_states.array_analysis.get_equiv_set(label)
             for instr in block.body:
-                if isinstance(instr, ir.StaticSetItem) or isinstance(instr, ir.SetItem):
+                if isinstance(instr, (ir.StaticSetItem, ir.SetItem)):
                     loc = instr.loc
                     target = instr.target
-                    index = (instr.index if isinstance(instr, ir.SetItem)
-                             else instr.index_var)
+                    index = get_index_var(instr)
                     value = instr.value
                     target_typ = pass_states.typemap[target.name]
                     index_typ = pass_states.typemap[index.name]
@@ -2247,6 +2257,7 @@ class ConvertReducePass:
         reduce_f_ir = compile_to_numba_ir(fcode,
                                         pass_states.func_ir.func_id.func.__globals__,
                                         pass_states.typingctx,
+                                        pass_states.targetctx,
                                         (in_typ, in_typ),
                                         pass_states.typemap,
                                         pass_states.calltypes)
@@ -2777,8 +2788,10 @@ class ParforPass(ParforPassStates):
         self._pre_run()
         # run stencil translation to parfor
         if self.options.stencil:
-            stencil_pass = StencilPass(self.func_ir, self.typemap, self.calltypes,
-                                            self.array_analysis, self.typingctx, self.flags)
+            stencil_pass = StencilPass(self.func_ir, self.typemap,
+                                       self.calltypes, self.array_analysis,
+                                       self.typingctx, self.targetctx,
+                                       self.flags)
             stencil_pass.run()
         if self.options.setitem:
             ConvertSetItemPass(self).run(self.func_ir.blocks)
@@ -3243,9 +3256,11 @@ def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes, metadata):
                               ir_utils.find_max_label(func_ir.blocks))
     parfor_found = False
     new_blocks = {}
+    scope = next(iter(func_ir.blocks.values())).scope
     for (block_label, block) in func_ir.blocks.items():
         block_label, parfor_found = _lower_parfor_sequential_block(
-            block_label, block, new_blocks, typemap, calltypes, parfor_found)
+            block_label, block, new_blocks, typemap, calltypes, parfor_found,
+            scope=scope)
         # old block stays either way
         new_blocks[block_label] = block
     func_ir.blocks = new_blocks
@@ -3263,8 +3278,8 @@ def _lower_parfor_sequential_block(
         new_blocks,
         typemap,
         calltypes,
-        parfor_found):
-    scope = block.scope
+        parfor_found,
+        scope):
     i = _find_first_parfor(block.body)
     while i != -1:
         parfor_found = True
@@ -3277,7 +3292,7 @@ def _lower_parfor_sequential_block(
         # previous block jump to parfor init block
         init_label = next_label()
         prev_block.body.append(ir.Jump(init_label, loc))
-        new_blocks[init_label] = inst.init_block
+        new_blocks[init_label] = transfer_scope(inst.init_block, scope)
         new_blocks[block_label] = prev_block
         block_label = next_label()
 
@@ -3321,8 +3336,9 @@ def _lower_parfor_sequential_block(
         # add parfor body to blocks
         for (l, b) in inst.loop_body.items():
             l, parfor_found = _lower_parfor_sequential_block(
-                l, b, new_blocks, typemap, calltypes, parfor_found)
-            new_blocks[l] = b
+                l, b, new_blocks, typemap, calltypes, parfor_found,
+                scope=scope)
+            new_blocks[l] = transfer_scope(b, scope)
         i = _find_first_parfor(block.body)
     return block_label, parfor_found
 
@@ -3435,9 +3451,9 @@ def get_parfor_outputs(parfor, parfor_params):
     outputs = []
     for blk in parfor.loop_body.values():
         for stmt in blk.body:
-            if isinstance(stmt, ir.SetItem):
-                if stmt.index.name == parfor.index_var.name:
-                    outputs.append(stmt.target.name)
+            if (isinstance(stmt, (ir.StaticSetItem, ir.SetItem)) and
+                get_index_var(stmt).name == parfor.index_var.name):
+                outputs.append(stmt.target.name)
     # make sure these written arrays are in parfor parameters (live coming in)
     outputs = list(set(outputs) & set(parfor_params))
     return sorted(outputs)
@@ -4135,8 +4151,8 @@ def remove_dead_parfor(parfor, lives, lives_n_aliases, arg_aliases, alias_map, f
             alias_lives = in_lives & alias_set
             for v in alias_lives:
                 in_lives |= alias_map[v]
-            if (isinstance(stmt, ir.SetItem) and
-                stmt.index.name == parfor.index_var.name and
+            if (isinstance(stmt, (ir.StaticSetItem, ir.SetItem)) and
+                get_index_var(stmt).name == parfor.index_var.name and
                 stmt.target.name not in in_lives and
                 stmt.target.name not in arg_aliases):
                 continue
@@ -4173,8 +4189,9 @@ def _update_parfor_get_setitems(block_body, index_var, alias_map,
     replace getitems of a previously set array in a block of parfor loop body
     """
     for stmt in block_body:
-        if (isinstance(stmt, ir.SetItem) and stmt.index.name ==
-                index_var.name and stmt.target.name not in lives):
+        if (isinstance(stmt, (ir.StaticSetItem, ir.SetItem)) and
+            get_index_var(stmt).name == index_var.name and
+            stmt.target.name not in lives):
             # saved values of aliases of SetItem target array are invalid
             for w in alias_map.get(stmt.target.name, []):
                 saved_values.pop(w, None)

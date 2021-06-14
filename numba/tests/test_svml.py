@@ -223,11 +223,11 @@ class TestSVMLGeneration(TestCase):
         flag_list = []  # create Flag class instances
         for ft in test_flags:
             flags = Flags()
-            flags.set('nrt')
-            flags.set('error_model', 'numpy')
+            flags.nrt = True
+            flags.error_model =  'numpy'
             flags.__name__ = '_'.join(ft+('usecase',))
             for f in ft:
-                flags.set(f, {
+                setattr(flags, f, {
                     'fastmath': cpu.FastMathOptions(True)
                 }.get(f, True))
             flag_list.append(flags)
@@ -266,12 +266,12 @@ class TestSVML(TestCase):
 
     def __init__(self, *args):
         self.flags = Flags()
-        self.flags.set('nrt')
+        self.flags.nrt = True
 
         # flags for njit(fastmath=True)
         self.fastflags = Flags()
-        self.fastflags.set('nrt')
-        self.fastflags.set('fastmath', cpu.FastMathOptions(True))
+        self.fastflags.nrt = True
+        self.fastflags.fastmath = cpu.FastMathOptions(True)
         super(TestSVML, self).__init__(*args)
 
     def compile(self, func, *args, **kwargs):
@@ -380,9 +380,9 @@ class TestSVML(TestCase):
                          override_env_config('NUMBA_CPU_FEATURES', ''):
                         sig = (numba.int32,)
                         f = Flags()
-                        f.set('nrt')
+                        f.nrt = True
                         std = compile_isolated(math_sin_loop, sig, flags=f)
-                        f.set('fastmath', cpu.FastMathOptions(True))
+                        f.fastmath = cpu.FastMathOptions(True)
                         fast = compile_isolated(math_sin_loop, sig, flags=f)
                         fns = std, fast
 

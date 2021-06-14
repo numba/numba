@@ -18,7 +18,7 @@ from numba.core.typing import signature
 from numba.cpython.unsafe.numbers import trailing_zeros
 
 
-registry = Registry()
+registry = Registry('mathimpl')
 lower = registry.lower
 
 
@@ -251,8 +251,8 @@ def isfinite_int_impl(context, builder, sig, args):
 def copysign_float_impl(context, builder, sig, args):
     lty = args[0].type
     mod = builder.module
-    fn = mod.get_or_insert_function(lc.Type.function(lty, (lty, lty)),
-                                    'llvm.copysign.%s' % lty.intrinsic_name)
+    fn = cgutils.get_or_insert_function(mod, lc.Type.function(lty, (lty, lty)),
+                                        'llvm.copysign.%s' % lty.intrinsic_name)
     res = builder.call(fn, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -271,7 +271,7 @@ def frexp_impl(context, builder, sig, args):
         "float": "numba_frexpf",
         "double": "numba_frexp",
         }[str(fltty)]
-    fn = builder.module.get_or_insert_function(fnty, name=fname)
+    fn = cgutils.get_or_insert_function(builder.module, fnty, fname)
     res = builder.call(fn, (val, expptr))
     res = cgutils.make_anonymous_struct(builder, (res, builder.load(expptr)))
     return impl_ret_untracked(context, builder, sig.return_type, res)

@@ -22,7 +22,7 @@ import unittest
 
 
 no_pyobj_flags = Flags()
-no_pyobj_flags.set("nrt")
+no_pyobj_flags.nrt = True
 
 
 def sinc(x):
@@ -101,6 +101,34 @@ def machar(*args):
     return np.MachAr()
 
 
+def iscomplex(x):
+    return np.iscomplex(x)
+
+
+def iscomplexobj(x):
+    return np.iscomplexobj(x)
+
+
+def isscalar(x):
+    return np.isscalar(x)
+
+
+def isreal(x):
+    return np.isreal(x)
+
+
+def isrealobj(x):
+    return np.isrealobj(x)
+
+
+def isneginf(x, out=None):
+    return np.isneginf(x, out)
+
+
+def isposinf(x, out=None):
+    return np.isposinf(x, out)
+
+
 def isnat(x):
     return np.isnat(x)
 
@@ -127,6 +155,14 @@ def flipud(a):
 
 def flip(a):
     return np.flip(a)
+
+
+def rot90(a):
+    return np.rot90(a)
+
+
+def rot90_k(a, k=1):
+    return np.rot90(a, k)
 
 
 def array_split(a, indices, axis=0):
@@ -343,6 +379,10 @@ def np_asarray_chkfinite(a, dtype=None):
 
 def array_contains(a, key):
     return key in a
+
+
+def swapaxes(a, a1, a2):
+    return np.swapaxes(a, a1, a2)
 
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
@@ -797,6 +837,97 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             with self.assertRaises(ValueError) as raises:
                 cfunc(arr, n)
             self.assertIn("order must be non-negative", str(raises.exception))
+
+    def test_isscalar(self):
+        def values():
+            yield 3
+            yield np.asarray([3])
+            yield (3,)
+            yield 3j
+            yield 'numba'
+            yield int(10)
+            yield np.int16(12345)
+            yield 4.234
+            yield True
+            yield None
+
+        pyfunc = isscalar
+        cfunc = jit(nopython=True)(pyfunc)
+        for x in values():
+            expected = pyfunc(x)
+            got = cfunc(x)
+            self.assertEqual(expected, got, x)
+
+    def test_isobj_functions(self):
+        def values():
+            yield 1
+            yield 1 + 0j
+            yield np.asarray([3, 1 + 0j, True])
+            yield "hello world"
+
+        @jit(nopython=True)
+        def optional_fn(x, cond, cfunc):
+            y = x if cond else None
+            return cfunc(y)
+
+        pyfuncs = [iscomplexobj, isrealobj]
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+            for x in values():
+                expected = pyfunc(x)
+                got = cfunc(x)
+                self.assertEqual(expected, got)
+
+                # optional type
+                expected_optional = optional_fn.py_func(x, True, pyfunc)
+                got_optional = optional_fn(x, True, cfunc)
+                self.assertEqual(expected_optional, got_optional)
+
+                # none type
+                expected_none = optional_fn.py_func(x, False, pyfunc)
+                got_none = optional_fn(x, False, cfunc)
+                self.assertEqual(expected_none, got_none)
+
+            self.assertEqual(len(cfunc.signatures), 8)
+
+    def test_is_real_or_complex(self):
+        def values():
+            yield np.array([1 + 1j, 1 + 0j, 4.5, 3, 2, 2j])
+            yield np.array([1, 2, 3])
+            yield 3
+            yield 12j
+            yield 1 + 4j
+            yield 10 + 0j
+            yield (1 + 4j, 2 + 0j)
+            yield np.array([[1, 2], [3, 4], [5, 6], [7, 8]])
+
+        pyfuncs = [iscomplex, isreal]
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+            for x in values():
+                expected = pyfunc(x)
+                got = cfunc(x)
+                self.assertPreciseEqual(expected, got)
+
+    def test_isneg_or_ispos_inf(self):
+        def values():
+            yield np.NINF, None
+            yield np.inf, None
+            yield np.PINF, None
+            yield np.asarray([-np.inf, 0., np.inf]), None
+            yield np.NINF, np.zeros(1, dtype=np.bool)
+            yield np.inf, np.zeros(1, dtype=np.bool)
+            yield np.PINF, np.zeros(1, dtype=np.bool)
+            yield np.NINF, np.empty(12)
+            yield np.asarray([-np.inf, 0., np.inf]), np.zeros(3, dtype=np.bool)
+
+        pyfuncs = [isneginf, isposinf]
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+            for x, out in values():
+                expected = pyfunc(x, out)
+                got = cfunc(x, out)
+                self.assertPreciseEqual(expected, got)
 
     def bincount_sequences(self):
         """
@@ -2316,6 +2447,59 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc((1, 2, 3))
 
         self.assertIn("Cannot np.flip on UniTuple", str(raises.exception))
+
+    def test_rot90_basic(self):
+        pyfunc = rot90
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(10).reshape(5, 2)
+            yield np.arange(20).reshape(5, 2, 2)
+            yield np.arange(64).reshape(2, 2, 2, 2, 2, 2)
+
+        for a in a_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+    def test_rot90_with_k_basic(self):
+        pyfunc = rot90_k
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(10).reshape(5, 2)
+            yield np.arange(20).reshape(5, 2, 2)
+            yield np.arange(64).reshape(2, 2, 2, 2, 2, 2)
+
+        for a in a_variations():
+            for k in range(-5, 6):
+                expected = pyfunc(a, k)
+                got = cfunc(a, k)
+                self.assertPreciseEqual(expected, got)
+
+    def test_rot90_exception(self):
+        pyfunc = rot90_k
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc")
+
+        self.assertIn('The first argument "arr" must be an array',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(4).reshape(2, 2), k="abc")
+
+        self.assertIn('The second argument "k" must be an integer',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(3))
+
+        self.assertIn("Input must be >= 2-d.", str(raises.exception))
 
     def _check_split(self, func):
         # Since np.split and np.array_split are very similar
@@ -3978,6 +4162,59 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as e:
             cfunc(np.array([1, 2, 3, 4]), 'float32')
         self.assertIn("dtype must be a valid Numpy dtype", str(e.exception))
+
+    def test_swapaxes_basic(self):
+        pyfunc = swapaxes
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(10)
+            yield np.arange(10).reshape(2, 5)
+            yield np.arange(60).reshape(5, 4, 3)
+
+        for a in a_variations():
+            for a1 in range(-a.ndim, a.ndim):
+                for a2 in range(-a.ndim, a.ndim):
+                    expected = pyfunc(a, a1, a2)
+                    got = cfunc(a, a1, a2)
+                    self.assertPreciseEqual(expected, got)
+
+    def test_swapaxes_exception(self):
+        pyfunc = swapaxes
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc('abc', 0, 0)
+
+        self.assertIn('The first argument "arr" must be an array',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(4), 'abc', 0)
+
+        self.assertIn('The second argument "axis1" must be an integer',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(4), 0, 'abc')
+
+        self.assertIn('The third argument "axis2" must be an integer',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.arange(4), 1, 0)
+
+        self.assertIn('The second argument "axis1" is out of bounds for array'
+                      ' of given dimension', str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.arange(8).reshape(2, 4), 0, -3)
+
+        self.assertIn('The third argument "axis2" is out of bounds for array'
+                      ' of given dimension', str(raises.exception))
 
 
 class TestNPMachineParameters(TestCase):

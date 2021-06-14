@@ -25,7 +25,7 @@ from numba.core.extending import overload, intrinsic
 from numba.core import errors
 from numba.cpython import builtins
 
-registry = Registry()
+registry = Registry('npyimpl')
 lower = registry.lower
 
 
@@ -232,6 +232,10 @@ def _build_array(context, builder, array_ty, input_types, inputs):
     given the target context, builder, output array type, and a list of
     _ArrayHelper instances.
     """
+    # First, strip optional types, ufunc loops are typed on concrete types
+    input_types = [x.type if isinstance(x, types.Optional) else x
+                   for x in input_types]
+
     intp_ty = context.get_value_type(types.intp)
     def make_intp_const(val):
         return context.get_constant(types.intp, val)
@@ -448,7 +452,7 @@ def _ufunc_db_function(ufunc):
             super(_KernelImpl, self).__init__(context, builder, outer_sig)
             loop = ufunc_find_matching_loop(
                 ufunc, outer_sig.args + tuple(_unpack_output_types(ufunc, outer_sig)))
-            self.fn = ufunc_db.get_ufunc_info(ufunc).get(loop.ufunc_sig)
+            self.fn = context.get_ufunc_info(ufunc).get(loop.ufunc_sig)
             self.inner_sig = _ufunc_loop_sig(loop.outputs, loop.inputs)
 
             if self.fn is None:
@@ -539,7 +543,7 @@ def array_positive_impl(context, builder, sig, args):
 
 def _register_ufuncs():
     kernels = {}
-
+    # NOTE: Assuming ufunc implementation for the CPUContext.
     for ufunc in ufunc_db.get_ufuncs():
         kernels[ufunc] = register_ufunc_kernel(ufunc, _ufunc_db_function(ufunc))
 

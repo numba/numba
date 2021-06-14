@@ -5,7 +5,7 @@ Installation
 Compatibility
 -------------
 
-Numba is compatible with Python 3.6 or later, and Numpy versions 1.15 or later.
+Numba is compatible with Python 3.7 or later, and Numpy versions 1.15 or later.
 
 Our supported platforms are:
 
@@ -229,14 +229,14 @@ vary with target operating system and hardware. The following lists them all
   * ``intel-openmp`` (OSX) - provides OpenMP library support for Numba's
     threading backend.
   * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support
-    into Numba's threading backend
+    into Numba's threading backend (version >= 2021 required).
 
 * Optional runtime are:
 
   * ``scipy`` - provides cython bindings used in Numba's ``np.linalg.*``
     support
   * ``tbb`` - provides the TBB runtime libraries used by Numba's TBB threading
-    backend
+    backend (version >= 2021 required).
   * ``jinja2`` - for "pretty" type annotation output (HTML) via the ``numba``
     CLI
   * ``cffi`` - permits use of CFFI bindings in Numba compiled functions
@@ -260,7 +260,7 @@ vary with target operating system and hardware. The following lists them all
     information on obtaining and installing.
   * ``graphviz`` - for some CFG inspection functionality.
   * ``pickle5`` - provides Python 3.8 pickling features for faster pickling in
-    Python 3.6 and 3.7.
+    Python 3.7.
   * ``typeguard`` - used by ``runtests.py`` for
     :ref:`runtime type-checking <type_anno_check>`.
 

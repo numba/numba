@@ -865,34 +865,64 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
 
     @linux_only # os.fork required.
     def test_fork_from_non_main_thread(self):
-        # See issue #5973 and PR #6208 for context.
+        # See issue #5973 and PR #6208 for original context.
+        # See issue #6963 for context on the following comments:
+        #
+        # Important things to note:
+        # 1. Compilation of code containing an objmode block will result in the
+        #    use of and `ObjModeLiftedWith` as the dispatcher. This inherits
+        #    from `LiftedCode` which handles the serialization. In that
+        #    serialization is a call to uuid.uuid1() which causes a fork_exec in
+        #    CPython internals.
+        # 2. The selected parallel backend thread pool is started during the
+        #    compilation of a function that has `parallel=True`.
+        # 3. The TBB backend can handle forks from the main thread, it will
+        #    safely reinitialise after so doing. If a fork occurs from a
+        #    non-main thread it will warn and the state is invalid in the child
+        #    process.
+        #
+        # Due to 1. and 2. the `obj_mode_func` function separated out and is
+        # `njit` decorated. This means during type inference of `work` it will
+        # trigger a standard compilation of the function and the thread pools
+        # won't have started yet as the parallelisation compiler passes for
+        # `work` won't yet have run. This mitigates the fork() call from 1.
+        # occuring after 2. The result of this is that 3. can be tested using
+        # the threading etc herein with the state being known as the above
+        # described, i.e. the TBB threading layer has not experienced a fork().
+
         runme = """if 1:
             import threading
             import numba
             numba.config.THREADING_LAYER='tbb'
             from numba import njit, prange, objmode
+            from numba.core.serialize import PickleCallableByPath
             import os
 
             e_running = threading.Event()
             e_proceed = threading.Event()
 
-            def indirect():
+            def indirect_core():
                 e_running.set()
                 # wait for forker() to have forked
                 while not e_proceed.isSet():
                     pass
 
+            indirect = PickleCallableByPath(indirect_core)
+
+            @njit
+            def obj_mode_func():
+                with objmode():
+                    indirect()
+
+            @njit(parallel=True, nogil=True)
+            def work():
+                acc = 0
+                for x in prange(10):
+                    acc += x
+                obj_mode_func()
+                return acc
+
             def runner():
-                @njit(parallel=True, nogil=True)
-                def work():
-                    acc = 0
-                    for x in prange(10):
-                        acc += x
-                    with objmode():
-                        indirect()
-
-                    return acc
-
                 work()
 
             def forker():

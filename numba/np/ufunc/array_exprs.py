@@ -77,7 +77,10 @@ class RewriteArrayExprs(rewrites.Rewrite):
         if ((expr_op in ('unary', 'binop')) and (
                 expr.fn in npydecl.supported_array_operators)):
             # It is an array operator that maps to a ufunc.
-            array_assigns[target_name] = instr
+            # check that all args have internal types
+            if all(self.typemap[var.name].is_internal
+                   for var in expr.list_vars()):
+                array_assigns[target_name] = instr
 
         elif ((expr_op == 'call') and (expr.func.name in self.typemap)):
             # It could be a match for a known ufunc call.
@@ -376,7 +379,7 @@ def _lower_array_expr(lowerer, expr):
     # Follow the Numpy error model.  Note this also allows e.g. vectorizing
     # division (issue #1223).
     flags = compiler.Flags()
-    flags.set('error_model', 'numpy')
+    flags.error_model = 'numpy'
     cres = context.compile_subroutine(builder, impl, inner_sig, flags=flags,
                                       caching=False)
 

@@ -6,7 +6,7 @@ from numba.core.compiler_lock import global_compiler_lock
 from numba.core import errors, config, transforms
 from numba.core.tracing import event
 from numba.core.postproc import PostProcessor
-from numba.core.ir_utils import enforce_no_dels
+from numba.core.ir_utils import enforce_no_dels, legalize_single_scope
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -304,7 +304,11 @@ class PassManager(object):
                 else:  # CFG level changes rebuild CFG
                     internal_state.func_ir.blocks = transforms.canonicalize_cfg(
                         internal_state.func_ir.blocks)
-
+            # Check the func_ir has exactly one Scope instance
+            if not legalize_single_scope(internal_state.func_ir.blocks):
+                raise errors.CompilerError(
+                    f"multiple scope in func_ir detected in {pss}",
+                )
         # inject runtimes
         pt = pass_timings(init_time.elapsed, pass_time.elapsed,
                           finalize_time.elapsed)

@@ -766,6 +766,40 @@ class Interpreter(object):
                                           loc=self.loc)
             self.store(expr, st)
 
+    def op_FORMAT_VALUE(self, inst, value, res, strvar):
+        """
+        FORMAT_VALUE(flags): flags argument specifies format spec which is not
+        supported yet. Currently, str() is simply called on the value.
+        https://docs.python.org/3/library/dis.html#opcode-FORMAT_VALUE
+        """
+        value = self.get(value)
+        strgv = ir.Global("str", str, loc=self.loc)
+        self.store(value=strgv, name=strvar)
+        call = ir.Expr.call(self.get(strvar), (value,), (), loc=self.loc)
+        self.store(value=call, name=res)
+
+    def op_BUILD_STRING(self, inst, strings, tmps):
+        """
+        BUILD_STRING(count): Concatenates count strings.
+        Required for supporting f-strings.
+        https://docs.python.org/3/library/dis.html#opcode-BUILD_STRING
+        """
+        count = inst.arg
+        # corner case: f""
+        if count == 0:
+            const = ir.Const("", loc=self.loc)
+            self.store(const, tmps[-1])
+            return
+
+        prev = self.get(strings[0])
+        for other, tmp in zip(strings[1:], tmps):
+            other = self.get(other)
+            expr = ir.Expr.binop(
+                operator.add, lhs=prev, rhs=other, loc=self.loc
+            )
+            self.store(expr, tmp)
+            prev = self.get(tmp)
+
     def op_BUILD_SLICE(self, inst, start, stop, step, res, slicevar):
         start = self.get(start)
         stop = self.get(stop)
@@ -1089,11 +1123,10 @@ class Interpreter(object):
         self.current_block.append(ir.EnterWith(contextmanager=ctxmgr,
                                                begin=inst.offset,
                                                end=exitpt, loc=self.loc,))
-        # exitfn is None in py3.6
-        if exitfn is not None:
-            # Store exit fn
-            exit_fn_obj = ir.Const(None, loc=self.loc)
-            self.store(value=exit_fn_obj, name=exitfn)
+
+        # Store exit fn
+        exit_fn_obj = ir.Const(None, loc=self.loc)
+        self.store(value=exit_fn_obj, name=exitfn)
 
     def op_SETUP_EXCEPT(self, inst):
         # Removed since python3.8
@@ -1802,6 +1835,16 @@ class Interpreter(object):
             extendinst = ir.Expr.call(self.get(extendvar), (value,), (),
                                       loc=self.loc)
             self.store(value=extendinst, name=res)
+
+    def op_MAP_ADD(self, inst, target, key, value, setitemvar, res):
+        target = self.get(target)
+        key = self.get(key)
+        value = self.get(value)
+        setitemattr = ir.Expr.getattr(target, '__setitem__', loc=self.loc)
+        self.store(value=setitemattr, name=setitemvar)
+        appendinst = ir.Expr.call(self.get(setitemvar), (key, value,), (),
+                                  loc=self.loc)
+        self.store(value=appendinst, name=res)
 
     def op_LOAD_ASSERTION_ERROR(self, inst, res):
         gv_fn = ir.Global("AssertionError", AssertionError, loc=self.loc)

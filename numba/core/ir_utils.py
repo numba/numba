@@ -161,6 +161,9 @@ def get_np_ufunc_typ(func):
     for (k, v) in typing.npydecl.registry.globals:
         if k == func:
             return v
+    for (k, v) in typing.templates.builtin_registry.globals:
+        if k == func:
+            return v
     raise RuntimeError("type for func ", func, " not found")
 
 
@@ -664,7 +667,13 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
         else:
             lives |= {v.name for v in stmt.list_vars()}
             if isinstance(stmt, ir.Assign):
-                lives.remove(lhs.name)
+                # make sure lhs is not used in rhs, e.g. a = g(a)
+                if isinstance(stmt.value, ir.Expr):
+                    rhs_vars = {v.name for v in stmt.value.list_vars()}
+                    if lhs.name not in rhs_vars:
+                        lives.remove(lhs.name)
+                else:
+                    lives.remove(lhs.name)
 
         new_body.append(stmt)
     new_body.reverse()
@@ -1631,8 +1640,8 @@ def find_const(func_ir, var):
     require(isinstance(var_def, (ir.Const, ir.Global, ir.FreeVar)))
     return var_def.value
 
-def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
-                        typemap=None, calltypes=None):
+def compile_to_numba_ir(mk_func, glbls, typingctx=None, targetctx=None,
+                        arg_typs=None, typemap=None, calltypes=None):
     """
     Compile a function or a make_function node to Numba IR.
 
@@ -1669,7 +1678,7 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
     # data structures typemap and calltypes
     if typingctx:
         f_typemap, f_return_type, f_calltypes, _ = typed_passes.type_inference_stage(
-                typingctx, f_ir, arg_typs, None)
+                typingctx, targetctx, f_ir, arg_typs, None)
         # remove argument entries like arg.a from typemap
         arg_names = [vname for vname in f_typemap if vname.startswith("arg.")]
         for a in arg_names:
@@ -2170,6 +2179,12 @@ def enforce_no_phis(func_ir):
             raise CompilerError(msg, loc=phis[0].loc)
 
 
+def legalize_single_scope(blocks):
+    """Check the given mapping of ir.Block for containing a single scope.
+    """
+    return len({blk.scope for blk in blocks.values()}) == 1
+
+
 def check_and_legalize_ir(func_ir):
     """
     This checks that the IR presented is legal
@@ -2247,3 +2262,45 @@ def convert_code_obj_to_function(code_obj, caller_ir):
     # create the function and return it
     return _create_function_from_code_obj(fcode, func_env, func_arg, func_clo,
                                           glbls)
+
+
+def fixup_var_define_in_scope(blocks):
+    """Fixes the mapping of ir.Block to ensure all referenced ir.Var are
+    defined in every scope used by the function. Such that looking up a variable
+    from any scope in this function will not fail.
+
+    Note: This is a workaround. Ideally, all the blocks should refer to the
+    same ir.Scope, but that property is not maintained by all the passes.
+    """
+    # Scan for all used variables
+    used_var = {}
+    for blk in blocks.values():
+        scope = blk.scope
+        for inst in blk.body:
+            for var in inst.list_vars():
+                used_var[var] = inst
+    # Note: not all blocks share a single scope even though they should.
+    # Ensure the scope of each block defines all used variables.
+    for blk in blocks.values():
+        scope = blk.scope
+        for var, inst in used_var.items():
+            # add this variable if it's not in scope
+            if var.name not in scope.localvars:
+                # Note: using a internal method to reuse the same
+                scope.localvars.define(var.name, var)
+
+
+def transfer_scope(block, scope):
+    """Transfer the ir.Block to use the given ir.Scope.
+    """
+    old_scope = block.scope
+    if old_scope is scope:
+        # bypass if the block is already using the given scope
+        return block
+    # Ensure variables are defined in the new scope
+    for var in old_scope.localvars._con.values():
+        if var.name not in scope.localvars:
+            scope.localvars.define(var.name, var)
+    # replace scope
+    block.scope = scope
+    return block

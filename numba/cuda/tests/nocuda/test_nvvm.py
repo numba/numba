@@ -1,7 +1,6 @@
-from numba.cuda.compiler import compile_kernel
 from numba.cuda.cudadrv import nvvm
-from numba.cuda.testing import skip_on_cudasim, SerialMixin
-from numba.core import types, utils
+from numba.cuda.testing import skip_on_cudasim
+from numba.core import utils
 
 from llvmlite import ir
 from llvmlite import binding as llvm
@@ -19,21 +18,7 @@ missing_align = "call void @llvm.memset.p0i8.i64(" \
 @skip_on_cudasim('libNVVM not supported in simulator')
 @unittest.skipIf(utils.MACHINE_BITS == 32, "CUDA not support for 32-bit")
 @unittest.skipIf(not nvvm.is_available(), "No libNVVM")
-class TestNvvmWithoutCuda(SerialMixin, unittest.TestCase):
-    def test_nvvm_llvm_to_ptx(self):
-        """
-        A simple test to exercise nvvm.llvm_to_ptx()
-        to trigger issues with mismatch NVVM API.
-        """
-
-        def foo(x):
-            x[0] = 123
-
-        cukern = compile_kernel(foo, args=(types.int32[::1],), link=())
-        llvmir = cukern._func.ptx.llvmir
-        ptx = nvvm.llvm_to_ptx(llvmir)
-        self.assertIn("foo", ptx.decode('ascii'))
-
+class TestNvvmWithoutCuda(unittest.TestCase):
     def test_nvvm_memset_fixup_for_34(self):
         """
         Test llvm.memset changes in llvm7.

@@ -62,13 +62,17 @@ def findAssign(func_ir, var):
 class TestCopyPropagate(unittest.TestCase):
     def test1(self):
         typingctx = typing.Context()
-        targetctx = cpu.CPUContext(typingctx)
+        targetctx = cpu.CPUContext(typingctx, 'cpu')
         test_ir = compiler.run_frontend(test_will_propagate)
         with cpu_target.nested_context(typingctx, targetctx):
             typingctx.refresh()
             targetctx.refresh()
             args = (types.int64, types.int64, types.int64)
-            typemap, return_type, calltypes, _ = type_inference_stage(typingctx, test_ir, args, None)
+            typemap, return_type, calltypes, _ = type_inference_stage(typingctx,
+                                                                      targetctx,
+                                                                      test_ir,
+                                                                      args,
+                                                                      None)
             type_annotation = type_annotations.TypeAnnotation(
                 func_ir=test_ir,
                 typemap=typemap,
@@ -79,19 +83,25 @@ class TestCopyPropagate(unittest.TestCase):
                 return_type=return_type,
                 html_output=config.HTML)
             in_cps, out_cps = copy_propagate(test_ir.blocks, typemap)
-            apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(test_ir.blocks), typemap, calltypes)
+            apply_copy_propagate(test_ir.blocks, in_cps,
+                                 get_name_var_table(test_ir.blocks), typemap,
+                                 calltypes)
 
             self.assertFalse(findAssign(test_ir, "x1"))
 
     def test2(self):
         typingctx = typing.Context()
-        targetctx = cpu.CPUContext(typingctx)
+        targetctx = cpu.CPUContext(typingctx, 'cpu')
         test_ir = compiler.run_frontend(test_wont_propagate)
         with cpu_target.nested_context(typingctx, targetctx):
             typingctx.refresh()
             targetctx.refresh()
             args = (types.int64, types.int64, types.int64)
-            typemap, return_type, calltypes, _ = type_inference_stage(typingctx, test_ir, args, None)
+            typemap, return_type, calltypes, _ = type_inference_stage(typingctx,
+                                                                      targetctx,
+                                                                      test_ir,
+                                                                      args,
+                                                                      None)
             type_annotation = type_annotations.TypeAnnotation(
                 func_ir=test_ir,
                 typemap=typemap,

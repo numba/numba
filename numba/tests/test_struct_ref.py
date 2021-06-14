@@ -283,6 +283,7 @@ class TestStructRefCaching(MemoryLeakMixin, TestCase):
         self._cache_override = override_config('CACHE_DIR', self._cache_dir)
         self._cache_override.__enter__()
         warnings.simplefilter("error")
+        warnings.filterwarnings(action="ignore", module="typeguard")
 
     def tearDown(self):
         self._cache_override.__exit__(None, None, None)

@@ -197,7 +197,7 @@ The general pattern for using ``get_num_threads`` in code generation is
 
    import llvmlite.llvmpy.core as lc
 
-   get_num_threads = builder.module.get_or_insert_function(
+   get_num_threads = cgutils.get_or_insert_function(builder.module
        lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
        name="get_num_threads")
 
