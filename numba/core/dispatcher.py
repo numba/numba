@@ -9,6 +9,7 @@ import uuid
 import weakref
 from contextlib import ExitStack
 import threading
+import abc
 
 from numba import _dispatcher
 from numba.core import (
@@ -221,7 +222,6 @@ class _DispatcherBase(_dispatcher.Dispatcher):
     """
 
     __numba__ = "py_func"
-    _siblings = weakref.WeakKeyDictionary()
 
     def __init__(self, arg_count, py_func, pysig, can_fallback,
                  exact_match_required):
@@ -769,21 +769,27 @@ class _MemoMixin:
         self._recent.append(self)
 
 
-class Siblings:
+class RetargetCache:
+    """Cache for retargeted dispatcher.
+
+    The key is the original dispatcher.
+    """
+    container_type = dict
+
     def __init__(self):
-        self._cache = {}
+        self._cache = self.container_type()
         self._stat_hit = 0
         self._stat_miss = 0
 
-    def save_cache(self, key, new_disp):
+    def save_cache(self, orig_disp, new_disp):
         """Save a dispatcher associated with the given key.
         """
-        self._cache[key] = new_disp
+        self._cache[orig_disp] = new_disp
 
-    def load_cache(self, key):
+    def load_cache(self, orig_disp):
         """Load a dispatcher associated with the given key.
         """
-        out = self._cache.get(key)
+        out = self._cache.get(orig_disp)
         if out is None:
             self._stat_miss += 1
         else:
@@ -799,6 +805,65 @@ class Siblings:
         """Returns stats regarding cache hit/miss.
         """
         return {'hit': self._stat_hit, 'miss': self._stat_miss}
+
+
+class BaseRetarget(abc.ABC):
+    """Abstract base class for retargeting logic.
+    """
+    @abc.abstractmethod
+    def check_compatible(self, orig_disp):
+        """Check that the retarget is compatible.
+
+        This method does not return anything meaningful (e.g. None)
+        Incompatibility is signalled via raising an exception.
+        """
+        pass
+
+    @abc.abstractmethod
+    def retarget(self, orig_disp):
+        """Retarget the givern dispatcher and returns a new dispatcher-like
+        callable. Or, return the original dispatcher if the the target_backend
+        will not change.
+        """
+        pass
+
+
+class BasicRetarget(BaseRetarget):
+    """Retarget to a new backend.
+    """
+    def __init__(self):
+        self.cache = RetargetCache()
+
+    @abc.abstractproperty
+    def output_target(self):
+        """This is used in `.check_compatible()`
+        """
+        pass
+
+    def check_compatible(self, orig_disp):
+        """
+        This implementation checks that
+        `self.output_target == orig_disp._required_target_backend`
+        """
+        required_target = orig_disp._required_target_backend
+        output_target = self.output_target
+        if required_target is not None:
+            if output_target != required_target:
+                m = f"{output_target} != {required_target}"
+                raise errors.CompilerError(m)
+
+    def retarget(self, orig_disp):
+        cache = self.cache
+        cached = cache.load_cache(orig_disp)
+        opts = orig_disp.targetoptions
+        if opts.get('target_backend') == self.output_target:
+            return orig_disp
+        if cached is None:
+            out = self.compile_retarget(orig_disp)
+            cache.save_cache(orig_disp, out)
+        else:
+            out = cached
+        return out
 
 
 class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
@@ -1061,32 +1126,12 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
             cres = tuple(self.overloads.values())[0]
             return types.FunctionType(cres.signature)
 
-    def _get_siblings_cache(self):
-        if self not in self._siblings:
-            self._siblings[self] = Siblings()
-        return self._siblings[self]
-
-    def _share_siblings_cache(self, siblings):
-        self._siblings[self] = siblings
-
     def _get_retarget_dispatcher(self):
         # Check TLS target configuration
         tc = TargetConfig()
         retarget = tc.get()
-        # Check cache
-        siblings = self._get_siblings_cache()
-        disp = siblings.load_cache(retarget)
-        if disp is None:
-            disp = retarget(self)
-            required_target = self._required_target_backend
-            if required_target is not None:
-                tb = disp.targetoptions['target_backend']
-                if tb != required_target:
-                    m = f"{tb} != {required_target}"
-                    raise errors.CompilerError(m)
-            # share the sibling cache
-            disp._share_siblings_cache(siblings)
-            siblings.save_cache(retarget, disp)
+        retarget.check_compatible(self)
+        disp = retarget.retarget(self)
         return disp
 
     def _get_dispatcher_for_current_target(self):
