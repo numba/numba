@@ -7,7 +7,7 @@ import sys
 import types as pytypes
 import uuid
 import weakref
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 import threading
 
 from numba import _dispatcher
@@ -47,6 +47,18 @@ class TargetConfig:
 
     def __len__(self):
         return len(self._stack)
+
+    @classmethod
+    @contextmanager
+    def switch_target(cls, retarget):
+        tc = cls()
+        tc.push(retarget)
+        _dispatcher.set_use_tls_target_stack(True)
+        try:
+            yield
+        finally:
+            tc.pop()
+            _dispatcher.set_use_tls_target_stack(False)
 
 
 class OmittedArg(object):
