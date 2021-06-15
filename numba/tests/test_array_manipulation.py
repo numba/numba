@@ -48,6 +48,10 @@ def numpy_array_reshape(arr, newshape):
     return np.reshape(arr, newshape)
 
 
+def numpy_broadcast_to(arr, shape):
+    return np.broadcast_to(arr, shape)
+
+
 def flatten_array(a):
     return a.flatten()
 
@@ -753,6 +757,61 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         val = np.array([-1e100])
         _assert_raises(arr, val)
+
+    def test_broadcast_to(self):
+        pyfunc = numpy_broadcast_to
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Tests taken from
+        # https://github.com/numpy/numpy/blob/75f852edf94a7293e7982ad516bee314d7187c2d/numpy/lib/tests/test_stride_tricks.py#L234-L257  # noqa: E501
+        data = [
+            [np.array(0), (0,)],
+            [np.array(0), (1,)],
+            [np.array(0), (3,)],
+            [np.ones(1), (1,)],
+            [np.ones(1), (2,)],
+            [np.ones(1), (1, 2, 3)],
+            [np.arange(3), (3,)],
+            [np.arange(3), (1, 3)],
+            [np.arange(3), (2, 3)],
+            # test if shape is not a tuple
+            [np.ones(0), 0],
+            [np.ones(1), 1],
+            [np.ones(1), 2],
+            # these cases with size 0 are strange, but they reproduce the behavior
+            # of broadcasting with ufuncs (see test_same_as_ufunc above)
+            [np.ones(1), (0,)],
+            [np.ones((1, 2)), (0, 2)],
+            [np.ones((2, 1)), (2, 0)],
+        ]
+        for input_array, shape in data:
+            expected = pyfunc(input_array, shape)
+            got = cfunc(input_array, shape)
+            self.assertPreciseEqual(got, expected)
+
+    def test_broadcast_to_raises(self):
+        pyfunc = numpy_broadcast_to
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Tests taken from
+        # https://github.com/numpy/numpy/blob/75f852edf94a7293e7982ad516bee314d7187c2d/numpy/lib/tests/test_stride_tricks.py#L260-L276  # noqa: E501
+        data = [
+            [(0,), (), TypingError],
+            [(1,), (), TypingError],
+            [(3,), (), TypingError],
+            [(3,), (1,), ValueError],  # operands could not be broadcast together with remapped shapes
+            [(3,), (2,), ValueError],
+            [(3,), (4,), ValueError],
+            [(1, 2), (2, 1), ValueError],
+            [(1, 1), (1,), ValueError],
+            [(1,), -1, ValueError],
+            [(1,), (-1,), ValueError],
+            [(1, 2), (-1, 2), ValueError],
+        ]
+        for orig_shape, target_shape, err in data:
+            arr = np.zeros(orig_shape)
+            with self.assertRaises(err) as raises:
+                cfunc(arr, target_shape)
 
 
     def test_shape(self):

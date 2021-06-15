@@ -1303,6 +1303,45 @@ def _broadcast_to_shape(context, builder, arrtype, arr, target_shape):
     return new_arrtype, new_arr
 
 
+@intrinsic
+def _numpy_broadcast_to(typingctx, array, shape):
+    ret = types.Array(array.dtype, shape.count, array.layout, readonly=True)
+    sig = ret(array, shape)
+
+    def codegen(context, builder, sig, args):
+        src, shape_ = args
+        srcty = sig.args[0]
+
+        src = make_array(srcty)(context, builder, src)
+        shape_ = cgutils.unpack_tuple(builder, shape_)
+        _, dest = _broadcast_to_shape(context, builder, srcty, src, shape_,)
+
+        res = dest._getvalue()
+        return impl_ret_borrowed(context, builder, sig.return_type, res)
+    return sig, codegen
+
+
+@overload(np.broadcast_to)
+def numpy_broadcast_to(array, shape):
+    if isinstance(shape, types.UniTuple):
+        def impl(array, shape):
+            for size in shape:
+                if size < 0:
+                    raise ValueError('all elements of broadcast shape must be'
+                                     'non-negative')
+            return _numpy_broadcast_to(array, shape)
+    elif isinstance(shape, types.Number):
+        def impl(array, shape):
+            if shape < 0:
+                raise ValueError('all elements of broadcast shape must be non-'
+                                 'negative')
+            return _numpy_broadcast_to(array, (shape,))
+    else:
+        msg = 'The argument "shape" must be a tuple or scalar. Got %s' % shape
+        raise errors.TypingError(msg)
+    return impl
+
+
 def fancy_setslice(context, builder, sig, args, index_types, indices):
     """
     Implement slice assignment for arrays.  This implementation works for
@@ -1327,6 +1366,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         index_shape = indexer.get_shape()
         src = make_array(srcty)(context, builder, src)
         # Broadcast source array to shape
+        breakpoint()
         srcty, src = _broadcast_to_shape(context, builder, srcty, src,
                                          index_shape)
         src_shapes = cgutils.unpack_tuple(builder, src.shape)
