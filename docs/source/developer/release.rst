@@ -1,5 +1,5 @@
-Numba Release Checklist Templates
-=================================
+Numba Release Process
+=====================
 
 The goal of the Numba release process -- from a high level perspective -- is to
 publish source and binary artifacts that correspond to a given version
@@ -14,13 +14,13 @@ the maintainers during the release process and helps to ensure that all tasks
 are completed in the correct order and that no tasks are accidentally omitted.
 
 If new or additional items do appear during release, please do remember to add
-them to the checklist templates. Note also, that the release process itself is
-always a work in progress. This means, some of the information here may be
-outdated. If you detect this, please do remember to submit a pull-request to
+them to the checklist templates. Also note that the release process itself is
+always a work in progress. This means that some of the information here may be
+outdated. If you notice this please do remember to submit a pull-request to
 update this document.
 
-All release checklists are available as Gitub issue templates, so to create a
-new release checklist, simply open a new issue and select the correct template.
+All release checklists are available as Gitub issue templates. To create a new
+release checklist simply open a new issue and select the correct template.
 
 
 Primary Release Candidate Checklist
@@ -34,7 +34,7 @@ release branch will have to be created. Release candidate indexing begins at 1.
     :language: md
     :lines: 9-
 
-Open a release checklist: https://github.com/numba/numba/issues/new?template=first_rc_checklist.md
+`Open a primary release checklist <https://github.com/numba/numba/issues/new?template=first_rc_checklist.md>`_.
 
 Subsequent Release Candidates, Final Releases and Patch Releases
 ----------------------------------------------------------------
@@ -46,4 +46,4 @@ of cherry-picks, the recipe is therefore slightly different.
     :language: md
     :lines: 9-
 
-Open a release checklist: https://github.com/numba/numba/issues/new?template=sub_rc_checklist.md
+`Open a subsequent release checklist <https://github.com/numba/numba/issues/new?template=sub_rc_checklist.md>`_.

@@ -13,7 +13,7 @@ labels: task
     - [ ] "remaining Pull-Requests from milestone"
 * [ ] merge change log changes
     - [ ] "PR with changelog entries"
-* [ ] Create X.Y release branch
+* [ ] create X.Y release branch
 * [ ] pin llvmlite to `>=0.A.0rc1,<0.A+1.0`
 * [ ] annotated tag X.Y.Zrc1 on release branch
 * [ ] build and upload conda packages on buildfarm (check "upload")
