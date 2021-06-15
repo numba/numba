@@ -273,10 +273,10 @@ class Lower(BaseLower):
 
     def init(self):
         super().init()
-        # find all singlely assigned variable
-        self._find_singlely_assigned_variable()
+        # find all singly assigned variables
+        self._find_singly_assigned_variable()
 
-    def _find_singlely_assigned_variable(self):
+    def _find_singly_assigned_variable(self):
         func_ir = self.func_ir
         blocks = func_ir.blocks
 
@@ -297,14 +297,14 @@ class Lower(BaseLower):
                 for var in vl:
                     var_use_map[var].add(blk)
 
-            # Keep only variable that are defined locally and used locally
+            # Keep only variables that are defined locally and used locally
             for var in var_assign_map:
                 if len(var_assign_map[var]) == 1:
-                    # Usemap do not keep locally defined variables.
+                    # Usemap does not keep locally defined variables.
                     if len(var_use_map[var]) == 0:
                         sav.add(var)
 
-        self._singlely_assigned_vars = sav
+        self._singly_assigned_vars = sav
         self._blk_local_varmap = {}
 
     def pre_block(self, block):
@@ -1275,17 +1275,15 @@ class Lower(BaseLower):
 
     def _alloca_var(self, name, fetype):
         """
-        Ensure the given variable has an allocated stack slot.
+        Ensure the given variable has an allocated stack slot (if needed).
         """
         if name in self.varmap:
             # quit early
             return
 
         llty = self.context.get_value_type(fetype)
-        # find if name is used in multiple blocks
-        if name in self._singlely_assigned_vars:
-            pass
-        else:
+        # If the name is used in multiple blocks...
+        if name not in self._singly_assigned_vars:
             # If not already defined, allocate it
             ptr = self.alloca_lltype(name, llty)
             # Remember the pointer
@@ -1296,7 +1294,7 @@ class Lower(BaseLower):
         Get a pointer to the given variable's slot.
         """
         assert name not in self._blk_local_varmap
-        assert name not in self._singlely_assigned_vars
+        assert name not in self._singly_assigned_vars
         return self.varmap[name]
 
     def loadvar(self, name):
@@ -1317,7 +1315,7 @@ class Lower(BaseLower):
         self._alloca_var(name, fetype)
 
         # Store variable
-        if name in self._singlely_assigned_vars:
+        if name in self._singly_assigned_vars:
             self._blk_local_varmap[name] = value
         else:
             # Clean up existing value stored in the variable
@@ -1344,8 +1342,8 @@ class Lower(BaseLower):
 
         # Out-of-order
         if name not in self._blk_local_varmap:
-            if name in self._singlely_assigned_vars:
-                self._singlely_assigned_vars.discard(name)
+            if name in self._singly_assigned_vars:
+                self._singly_assigned_vars.discard(name)
 
         # Define if not already (may happen if the variable is deleted
         # at the beginning of a loop, but only set later in the loop)
