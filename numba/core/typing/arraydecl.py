@@ -180,7 +180,7 @@ class SetItemBuffer(AbstractTemplate):
             return
 
         idx = out.index
-        res = out.result
+        res = out.result # res is the result type of the access ary[idx]
         if isinstance(res, types.Array):
             # Indexing produces an array
             if isinstance(val, types.Array):
@@ -192,7 +192,7 @@ class SetItemBuffer(AbstractTemplate):
             elif isinstance(val, types.Sequence):
                 if (res.ndim == 1 and
                     self.context.can_convert(val.dtype, res.dtype)):
-                    # Allow assignement of sequence to 1d array
+                    # Allow assignment of sequence to 1d array
                     res = val
                 else:
                     # NOTE: sequence-to-array broadcasting is unsupported
@@ -214,6 +214,10 @@ class SetItemBuffer(AbstractTemplate):
                     return signature(types.none, newary, idx, res)
                 else:
                     return
+            res = val
+        elif isinstance(val, types.Array) and val.ndim == 0 \
+            and self.context.can_convert(val.dtype, res):
+            # val is an array(T, 0d, O), where T is the type of res, O is order
             res = val
         else:
             return

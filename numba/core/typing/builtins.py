@@ -805,12 +805,17 @@ class NumberClassAttribute(AttributeTemplate):
                  # Scalar constructor, e.g. np.int32(42)
                  return ty
             else:
-                # unsupported
-                msg = f"Casting {val} to {ty} directly is unsupported."
-                if isinstance(val, types.Array):
-                    # array casts are supported a different way.
-                    msg += f" Try doing '<array>.astype(np.{ty})' instead"
-                raise errors.TypingError(msg)
+                if (isinstance(val, types.Array) and val.ndim == 0 and
+                    val.dtype == ty):
+                    # This is 0d array -> scalar degrading
+                    return ty
+                else:
+                    # unsupported
+                    msg = f"Casting {val} to {ty} directly is unsupported."
+                    if isinstance(val, types.Array):
+                        # array casts are supported a different way.
+                        msg += f" Try doing '<array>.astype(np.{ty})' instead"
+                    raise errors.TypingError(msg)
 
         return types.Function(make_callable_template(key=ty, typer=typer))
 
