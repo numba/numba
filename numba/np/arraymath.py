@@ -28,6 +28,7 @@ from numba.np.linalg import ensure_blas
 from numba.core.extending import intrinsic
 from numba.core.errors import RequireLiteralValue, TypingError
 from numba.core.overload_glue import glue_lowering
+from numba.cpython.unsafe.tuple import tuple_setitem
 
 
 def _check_blas():
@@ -704,75 +705,123 @@ def array_argmin(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(np.argmax, types.Array)
-@lower_builtin("array.argmax", types.Array)
-def array_argmax(context, builder, sig, args):
-    ty = sig.args[0].dtype
+@register_jitable
+def array_argmax_impl_datetime(arry):
+    if arry.size == 0:
+        raise ValueError("attempt to get argmax of an empty sequence")
+    it = np.nditer(arry)
+    max_value = next(it).take(0)
+    max_idx = 0
+    if _is_nat(max_value):
+        return max_idx
 
-    if (isinstance(ty, (types.NPDatetime, types.NPTimedelta))):
-        def array_argmax_impl(arry):
-            if arry.size == 0:
-                raise ValueError("attempt to get argmax of an empty sequence")
-            it = np.nditer(arry)
-            max_value = next(it).take(0)
-            max_idx = 0
-            if _is_nat(max_value):
-                return max_idx
-
-            idx = 1
-            for view in it:
-                v = view.item()
-                if _is_nat(v):
-                    if numpy_version >= (1, 18):
-                        return idx
-                    else:
-                        idx += 1
-                        continue
-                if v > max_value:
-                    max_value = v
-                    max_idx = idx
+    idx = 1
+    for view in it:
+        v = view.item()
+        if _is_nat(v):
+            if numpy_version >= (1, 18):
+                return idx
+            else:
                 idx += 1
-            return max_idx
+                continue
+        if v > max_value:
+            max_value = v
+            max_idx = idx
+        idx += 1
+    return max_idx
 
-    elif isinstance(ty, types.Float):
-        def array_argmax_impl(arry):
-            if arry.size == 0:
-                raise ValueError("attempt to get argmax of an empty sequence")
-            for v in arry.flat:
-                max_value = v
-                max_idx = 0
-                break
-            if np.isnan(max_value):
-                return max_idx
 
-            idx = 0
-            for v in arry.flat:
-                if np.isnan(v):
-                    return idx
-                if v > max_value:
-                    max_value = v
-                    max_idx = idx
-                idx += 1
-            return max_idx
+@register_jitable
+def array_argmax_impl_float(arry):
+    if arry.size == 0:
+        raise ValueError("attempt to get argmax of an empty sequence")
+    for v in arry.flat:
+        max_value = v
+        max_idx = 0
+        break
+    if np.isnan(max_value):
+        return max_idx
 
+    idx = 0
+    for v in arry.flat:
+        if np.isnan(v):
+            return idx
+        if v > max_value:
+            max_value = v
+            max_idx = idx
+        idx += 1
+    return max_idx
+
+
+@register_jitable
+def array_argmax_impl_generic(arry):
+    if arry.size == 0:
+        raise ValueError("attempt to get argmax of an empty sequence")
+    for v in arry.flat:
+        max_value = v
+        max_idx = 0
+        break
+
+    idx = 0
+    for v in arry.flat:
+        if v > max_value:
+            max_value = v
+            max_idx = idx
+        idx += 1
+    return max_idx
+
+
+@overload(np.argmax)
+@overload_method(types.Array, "argmax")
+def array_argmax(arr, axis=None):
+    if isinstance(arr.dtype, (types.NPDatetime, types.NPTimedelta)):
+        flatten_impl = array_argmax_impl_datetime
+    elif isinstance(arr.dtype, types.Float):
+        flatten_impl = array_argmax_impl_float
     else:
-        def array_argmax_impl(arry):
-            if arry.size == 0:
-                raise ValueError("attempt to get argmax of an empty sequence")
-            for v in arry.flat:
-                max_value = v
-                max_idx = 0
-                break
+        flatten_impl = array_argmax_impl_generic
 
-            idx = 0
-            for v in arry.flat:
-                if v > max_value:
-                    max_value = v
-                    max_idx = idx
-                idx += 1
-            return max_idx
-    res = context.compile_internal(builder, array_argmax_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+    if is_nonelike(axis):
+        def array_argmax_impl(arr, axis=None):
+            return flatten_impl(arr)
+    else:
+        _check_is_integer(axis, "axis")
+        retty = arr.dtype
+
+        tuple_buffer = tuple(range(arr.ndim))
+
+        def array_argmax_impl(arr, axis=None):
+            if axis < 0:
+                axis = arr.ndim + axis
+
+            if axis < 0 or axis >= arr.ndim:
+                raise ValueError("axis is out of bounds")
+
+            # Short circuit 1-dimensional arrays:
+            if arr.ndim == 1:
+                return flatten_impl(arr)
+
+            # Make chosen axis the last axis:
+            tmp = tuple_buffer
+            for i in range(axis, arr.ndim - 1):
+                tmp = tuple_setitem(tmp, i, i + 1)
+            transpose_index = tuple_setitem(tmp, arr.ndim - 1, axis)
+            transposed_arr = arr.transpose(transpose_index)
+
+            # Flatten along that axis; since we've transposed, we can just get
+            # batches off the overall flattened array.
+            m = transposed_arr.shape[-1]
+            raveled = transposed_arr.ravel()
+            assert raveled.size == arr.size
+            assert transposed_arr.size % m == 0
+            out = np.empty(transposed_arr.size // m, retty)
+            for i in range(out.size):
+                out[i] = flatten_impl(raveled[i * m:(i + 1) * m])
+
+            # Reshape based on axis we didn't flatten over:
+            return out.reshape(transposed_arr.shape[:-1])
+
+    return array_argmax_impl
 
 
 @overload(np.all)
