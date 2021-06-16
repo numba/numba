@@ -1,4 +1,11 @@
+"""
+Implement utils for supporting retargeting of dispatchers.
+
+The API defined in this file is not stable yet and might be changed without
+notice or deprecation warnings.
+"""
 import abc
+import weakref
 
 from numba.core import errors
 
@@ -6,9 +13,9 @@ from numba.core import errors
 class RetargetCache:
     """Cache for retargeted dispatcher.
 
-    The key is the original dispatcher.
+    The cache uses the original dispatcher as the key.
     """
-    container_type = dict
+    container_type = weakref.WeakKeyDictionary
 
     def __init__(self):
         self._cache = self.container_type()
@@ -63,14 +70,35 @@ class BaseRetarget(abc.ABC):
 
 
 class BasicRetarget(BaseRetarget):
-    """Retarget to a new backend.
+    """A basic retargeting implementation for a single output target.
+
+    This class has two abstract methods/properties that subclasses must define.
+
+    - `output_target` must return output target name.
+    - `compile_retarget` must define the logic to retarget the given dispatcher.
+
+    By default, this class uses `RetargetCache` as the internal cache. This
+    can be modified by overriding the `.cache_type` class attribute.
+
     """
+    cache_type = RetargetCache
+
     def __init__(self):
-        self.cache = RetargetCache()
+        self.cache = self.cache_type()
 
     @abc.abstractproperty
-    def output_target(self):
-        """This is used in `.check_compatible()`
+    def output_target(self) -> str:
+        """Returns the output target name.
+
+        See numba/tests/test_retargeting.py for example
+        """
+        pass
+
+    @abc.abstractmethod
+    def compile_retarget(self, orig_disp):
+        """Returns the retargeted dispatcher.
+
+        See numba/tests/test_retargeting.py for example
         """
         pass
 
@@ -87,11 +115,17 @@ class BasicRetarget(BaseRetarget):
                 raise errors.CompilerError(m)
 
     def retarget(self, orig_disp):
+        """Apply retargeting to orig_disp.
+
+        The retargeted dispatchers are cached for future use.
+        """
         cache = self.cache
         cached = cache.load_cache(orig_disp)
         opts = orig_disp.targetoptions
+        # Skip if the original dispatcher is targeting the same output target
         if opts.get('target_backend') == self.output_target:
             return orig_disp
+        # No cache?
         if cached is None:
             out = self.compile_retarget(orig_disp)
             cache.save_cache(orig_disp, out)
