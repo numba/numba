@@ -4,6 +4,7 @@ import numpy as np
 
 from numba import jit, typeof
 from numba.core.compiler import compile_isolated
+from numba.np.numpy_support import numpy_version
 from numba.tests.support import TestCase, MemoryLeakMixin, tag
 import unittest
 
@@ -356,7 +357,14 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         def check(a, q, abs_tol=1e-12):
             expected = pyfunc(a, q)
             got = cfunc(a, q)
-            self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
+            # NOTE: inf/nan is not checked, seems to be susceptible to upstream
+            # changes
+            finite = np.isfinite(expected)
+            if np.all(finite):
+                self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
+            else:
+                self.assertPreciseEqual(got[finite], expected[finite],
+                                        abs_tol=abs_tol)
 
         a = self.random.randn(27).reshape(3, 3, 3)
         q = np.linspace(0, q_upper_bound, 14)[::-1]
@@ -414,7 +422,14 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         def check(a, q, abs_tol=1e-14):
             expected = pyfunc(a, q)
             got = cfunc(a, q)
-            self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
+            # NOTE: inf/nan is not checked, seems to be susceptible to upstream
+            # changes
+            finite = np.isfinite(expected)
+            if np.all(finite):
+                self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
+            else:
+                self.assertPreciseEqual(got[finite], expected[finite],
+                                        abs_tol=abs_tol)
 
         def convert_to_float_and_check(a, q, abs_tol=1e-14):
             expected = pyfunc(a, q).astype(np.float64)
@@ -443,13 +458,16 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         q = np.array(1)
         _check(a, q)
 
-        a = True
-        q = False
-        _check(a, q)
+        if numpy_version < (1, 20):
+            # NumPy 1.20+ rewrites the interpolation part of percentile/quantile
+            # to use np.subtract which doesn't support bools.
+            a = True
+            q = False
+            _check(a, q)
 
-        a = np.array([False, True, True])
-        q = a
-        _check(a, q)
+            a = np.array([False, True, True])
+            q = a
+            _check(a, q)
 
         a = 5
         q = q_upper_bound / 2

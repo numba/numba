@@ -1400,6 +1400,8 @@ def np_median(a):
 
 @register_jitable
 def _collect_percentiles_inner(a, q):
+    #TODO: This needs rewriting to be closer to NumPy, particularly the nan/inf
+    # handling which is generally subject to algorithmic changes.
     n = len(a)
 
     if n == 1:
@@ -4367,32 +4369,51 @@ def np_asarray_chkfinite(a, dtype=None):
 #   - translated from the numpy implementations found in:
 #   https://github.com/numpy/numpy/blob/v1.16.1/numpy/lib/function_base.py#L2543-L3233    # noqa: E501
 #   at commit: f1c4c758e1c24881560dd8ab1e64ae750
+#   - and also, for NumPy >= 1.20, translated from implementations in
+#   https://github.com/numpy/numpy/blob/156cd054e007b05d4ac4829e10a369d19dd2b0b1/numpy/lib/function_base.py#L2655-L3065  # noqa: E501
 
 
 @register_jitable
 def np_bartlett_impl(M):
-    n = np.arange(M)
-    return np.where(np.less_equal(n, (M - 1) / 2.0), 2.0 * n / (M - 1),
-                    2.0 - 2.0 * n / (M - 1))
+    if numpy_version >= (1, 20):
+        n = np.arange(1. - M, M, 2)
+        return np.where(np.less_equal(n, 0), 1 + n / (M - 1), 1 - n / (M - 1))
+    else:
+        n = np.arange(M)
+        return np.where(np.less_equal(n, (M - 1) / 2.0), 2.0 * n / (M - 1),
+                        2.0 - 2.0 * n / (M - 1))
 
 
 @register_jitable
 def np_blackman_impl(M):
-    n = np.arange(M)
-    return (0.42 - 0.5 * np.cos(2.0 * np.pi * n / (M - 1)) +
-            0.08 * np.cos(4.0 * np.pi * n / (M - 1)))
+    if numpy_version >= (1, 20):
+        n = np.arange(1. - M, M, 2)
+        return (0.42 + 0.5 * np.cos(np.pi * n / (M - 1)) +
+                0.08 * np.cos(2.0 * np.pi * n / (M - 1)))
+    else:
+        n = np.arange(M)
+        return (0.42 - 0.5 * np.cos(2.0 * np.pi * n / (M - 1)) +
+                0.08 * np.cos(4.0 * np.pi * n / (M - 1)))
 
 
 @register_jitable
 def np_hamming_impl(M):
-    n = np.arange(M)
-    return 0.54 - 0.46 * np.cos(2.0 * np.pi * n / (M - 1))
+    if numpy_version >= (1, 20):
+        n = np.arange(1 - M, M, 2)
+        return 0.54 + 0.46 * np.cos(np.pi * n / (M - 1))
+    else:
+        n = np.arange(M)
+        return 0.54 - 0.46 * np.cos(2.0 * np.pi * n / (M - 1))
 
 
 @register_jitable
 def np_hanning_impl(M):
-    n = np.arange(M)
-    return 0.5 - 0.5 * np.cos(2.0 * np.pi * n / (M - 1))
+    if numpy_version >= (1, 20):
+        n = np.arange(1 - M, M, 2)
+        return 0.5 + 0.5 * np.cos(np.pi * n / (M - 1))
+    else:
+        n = np.arange(M)
+        return 0.5 - 0.5 * np.cos(2.0 * np.pi * n / (M - 1))
 
 
 def window_generator(func):
