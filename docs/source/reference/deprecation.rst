@@ -397,7 +397,7 @@ device function, then a device function should be compiled.
 
 The first two cases cannot be differentiated in the absence of the ``device``
 kwarg - without it, it will not be clear from a signature alone whether a device
-function or global kernel should be compiled. In order to resolve, this, support
+function or global kernel should be compiled. In order to resolve this, support
 for eager compilation of device functions will be removed. Eager compilation
 with the ``@cuda.jit`` decorator will in future always imply the immediate
 compilation of a global kernel.
