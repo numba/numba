@@ -603,7 +603,7 @@ find_named_args(Dispatcher *self, PyObject **pargs, PyObject **pkws)
 
 
 /*
- * Management of thread-local random state.
+ * Management of thread-local
  */
 
 #ifdef _MSC_VER

@@ -566,7 +566,7 @@ class Dispatcher(WeakType, Callable, Dummy):
         instance.
         """
         disp = self._get_object()
-        # TODO: stable interface to avoid the dynamic check here
+        # TODO: improve interface to avoid the dynamic check here
         if hasattr(disp, "_get_dispatcher_for_current_target"):
             return disp._get_dispatcher_for_current_target()
         else:
