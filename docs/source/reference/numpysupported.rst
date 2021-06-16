@@ -472,6 +472,13 @@ The following top-level functions are supported:
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
 * :func:`numpy.kaiser`
+* :func:`numpy.iscomplex`
+* :func:`numpy.iscomplexobj`
+* :func:`numpy.isneginf`
+* :func:`numpy.isposinf`
+* :func:`numpy.isreal`
+* :func:`numpy.isrealobj`
+* :func:`numpy.isscalar`
 * :func:`numpy.interp` (only the 3 first arguments; requires NumPy >= 1.10)
 * :func:`numpy.intersect1d` (only first 2 arguments, ar1 and ar2)
 * :func:`numpy.linspace` (only the 3-argument form)
@@ -582,6 +589,42 @@ Initialization
 
 * :func:`numpy.random.seed`: with an integer argument only
 
+.. warning::
+   Calling :func:`numpy.random.seed` from interpreted code (including from :term:`object mode`
+   code) will seed the NumPy random generator, not the Numba random generator.
+   To seed the Numba random generator, see the example below.
+
+.. code-block:: python
+
+  from numba import njit
+  import numpy as np
+
+  @njit
+  def seed(a):
+      np.random.seed(a)
+
+  @njit
+  def rand():
+      return np.random.rand()
+
+
+  # Incorrect seeding
+  np.random.seed(1234)
+  print(rand())
+
+  np.random.seed(1234)
+  print(rand())
+
+  # Correct seeding
+  seed(1234)
+  print(rand())
+
+  seed(1234)
+  print(rand())
+
+
+
+
 Simple random data
 ''''''''''''''''''
 
@@ -611,6 +654,7 @@ Distributions
 * :func:`numpy.random.beta`
 * :func:`numpy.random.binomial`
 * :func:`numpy.random.chisquare`
+* :func:`numpy.random.dirichlet`
 * :func:`numpy.random.exponential`
 * :func:`numpy.random.f`
 * :func:`numpy.random.gamma`

@@ -23,6 +23,14 @@ class CUDATestCase(SerialMixin, TestCase):
     its tests are run between tests from a CUDATestCase.
     """
 
+    def setUp(self):
+        self._low_occupancy_warnings = config.CUDA_LOW_OCCUPANCY_WARNINGS
+        # Disable warnings about low gpu utilization in the test suite
+        config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
+
+    def tearDown(self):
+        config.CUDA_LOW_OCCUPANCY_WARNINGS = self._low_occupancy_warnings
+
 
 class ContextResettingTestCase(CUDATestCase):
     """
@@ -33,6 +41,7 @@ class ContextResettingTestCase(CUDATestCase):
     """
 
     def tearDown(self):
+        super().tearDown()
         from numba.cuda.cudadrv.devices import reset
         reset()
 

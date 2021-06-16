@@ -106,6 +106,7 @@ class TestRecordDtype(CUDATestCase):
         self.samplerec2darr = np.recarray(1, dtype=recordwith2darray)[0]
 
     def setUp(self):
+        super().setUp()
         self._createSampleArrays()
 
         ary = self.sample1d

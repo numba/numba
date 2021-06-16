@@ -154,6 +154,11 @@ class _EnvReloader(object):
             "NUMBA_ALWAYS_WARN_UNINIT_VAR", int, 0,
         )
 
+        # Whether to warn about kernel launches where the grid size will
+        # under utilize the GPU due to low occupancy. On by default.
+        CUDA_LOW_OCCUPANCY_WARNINGS = _readenv(
+            "NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS", int, 1)
+
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)
 
@@ -362,7 +367,12 @@ class _EnvReloader(object):
         DISABLE_HSA = _readenv("NUMBA_DISABLE_HSA", int, 0)
 
         # The default number of threads to use.
-        NUMBA_DEFAULT_NUM_THREADS = max(1, multiprocessing.cpu_count())
+        NUMBA_DEFAULT_NUM_THREADS = max(
+            1,
+            len(os.sched_getaffinity(0))
+            if hasattr(os, "sched_getaffinity")
+            else multiprocessing.cpu_count(),
+        )
 
         # Numba thread pool size (defaults to number of CPUs on the system).
         _NUMBA_NUM_THREADS = _readenv("NUMBA_NUM_THREADS", int,
