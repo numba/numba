@@ -456,7 +456,7 @@ GPU support
 
    When set to 1, the default stream is the per-thread default stream. When set
    to 0, the default stream is the legacy default stream. This defaults to 0,
-   for the legacy default stream, and may default to 1 in a future release of
+   for the legacy default stream. It may default to 1 in a future release of
    Numba. See `Stream Synchronization Behavior
    <https://docs.nvidia.com/cuda/cuda-runtime-api/stream-sync-behavior.html>`_
    for an explanation of the legacy and per-thread default streams.
