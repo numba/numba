@@ -105,7 +105,8 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                                   debug=debug)
 
         if device:
-            msg = ("Eager compilation of device functions is deprecated")
+            msg = ("Eager compilation of device functions is deprecated "
+                   "(this occurs when a signature is provided)")
             warn(NumbaDeprecationWarning(msg))
             return device_jit
         else:
