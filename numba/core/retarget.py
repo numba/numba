@@ -1,8 +1,8 @@
 """
 Implement utils for supporting retargeting of dispatchers.
 
-The API defined in this file is not stable yet and might be changed without
-notice or deprecation warnings.
+WARNING: Features defined in this file is experimental. The API may change
+         without notice.
 """
 import abc
 import weakref

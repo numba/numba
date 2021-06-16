@@ -21,10 +21,18 @@ from numba.core.typing.typeof import Purpose, typeof
 from numba.core.bytecode import get_code_object
 from numba.core.caching import NullCache, FunctionCache
 from numba.core import entrypoints
+from numba.core.retarget import BaseRetarget
 import numba.core.event as ev
 
 
 class TargetConfig:
+    """The target configuration stack.
+
+    Uses the BORG pattern and stores states in threadlocal storage.
+
+    WARNING: features associate with this class is experimental. The API
+    may change without notice.
+    """
     _tls = threading.local()
 
     def __init__(self):
@@ -36,28 +44,43 @@ class TargetConfig:
 
         self._stack = tls_stack
 
-    def push(self, state):
+    def _push(self, state):
+        """Push to the stack
+        """
         self._stack.append(state)
 
-    def pop(self):
+    def _pop(self):
+        """Pop from the stack
+        """
         return self._stack.pop()
 
     def get(self):
+        """Get the current target on the top of the stack.
+
+        May raise IndexError if the stack is empty. User should check the size
+        of the stack beforehand.
+        """
         return self._stack[-1]
 
     def __len__(self):
+        """Size of the stack
+        """
         return len(self._stack)
 
     @classmethod
     @contextmanager
-    def switch_target(cls, retarget):
+    def switch_target(cls, retarget: BaseRetarget):
+        """Pushes a new retarget handler, a instance of
+        `numba.core.retarget.BaseRetarget`, onto the target-config stack
+        for the duration of the context-manager.
+        """
         tc = cls()
-        tc.push(retarget)
+        tc._push(retarget)
         _dispatcher.set_use_tls_target_stack(True)
         try:
             yield
         finally:
-            tc.pop()
+            tc._pop()
             _dispatcher.set_use_tls_target_stack(False)
 
 
@@ -1041,6 +1064,8 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
             return types.FunctionType(cres.signature)
 
     def _get_retarget_dispatcher(self):
+        """Returns a dispatcher for the retarget request.
+        """
         # Check TLS target configuration
         tc = TargetConfig()
         retarget = tc.get()
@@ -1049,6 +1074,9 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         return disp
 
     def _get_dispatcher_for_current_target(self):
+        """Returns a dispatcher for the current target registered in `TargetConfig`.
+        Self is returned if no target is specified.
+        """
         tc = TargetConfig()
         if tc:
             return self._get_retarget_dispatcher()
@@ -1056,6 +1084,8 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
             return self
 
     def _call_tls_target(self, args, kwargs):
+        """This is called when the C dispatch logic see a retarget request.
+        """
         disp = self._get_retarget_dispatcher()
         # Call the new dispatcher
         return disp(*args, **kwargs)
