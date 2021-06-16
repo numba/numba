@@ -335,7 +335,7 @@ The following methods of Numpy arrays are supported:
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
 * :meth:`~numpy.ndarray.__contains__` 
 
-Where applicable, the corresponding top-level Numpy functions (such as
+Where applicable, the corresponding top-level NumPy functions (such as
 :func:`numpy.argmax`) are similarly supported.
 
 .. warning::

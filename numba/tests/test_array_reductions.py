@@ -944,16 +944,16 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         arr2d[0,1] += 100
 
         arr4d = np.arange(120).reshape(2, 3, 4, 5) + 10
-        arr4d[0,1,1,2] += 100
-        arr4d[1,0,0,0] += 100
+        arr4d[0, 1, 1, 2] += 100
+        arr4d[1, 0, 0, 0] -= 51
 
         for arr in [arr1d, arr2d, arr4d]:
-            axises = list(range(arr.ndim)) + [
+            axes = list(range(arr.ndim)) + [
                 -(i+1) for i in range(arr.ndim)
             ]
             py_functions = [
                 lambda a, _axis=axis: np.argmax(a, axis=_axis)
-                for axis in axises
+                for axis in axes
             ]
             c_functions = [
                 jit(nopython=True)(pyfunc) for pyfunc in py_functions
