@@ -1,16 +1,18 @@
 import unittest
-
 from contextlib import contextmanager
 
 from numba import njit
-from numba.core import errors
+from numba.core import errors, cpu, utils, typing
+from numba.core.descriptors import TargetDescriptor
 from numba.core.dispatcher import TargetConfig
 from numba.core.retarget import BasicRetarget
+from numba.core.extending import overload
 from numba.core.target_extension import (
     dispatcher_registry,
     CPUDispatcher,
     CPU,
     target_registry,
+    jit_registry,
 )
 
 
@@ -25,13 +27,85 @@ class CustomCPU(CPU):
     pass
 
 
+# Nested contexts to help with isolatings bits of compilations
+class _NestedContext(object):
+    _typing_context = None
+    _target_context = None
+
+    @contextmanager
+    def nested(self, typing_context, target_context):
+        old_nested = self._typing_context, self._target_context
+        try:
+            self._typing_context = typing_context
+            self._target_context = target_context
+            yield
+        finally:
+            self._typing_context, self._target_context = old_nested
+
+
+# Implement a CustomCPU TargetDescriptor, this one borrows bits from the CPU
+class CustomTargetDescr(TargetDescriptor):
+    options = cpu.CPUTargetOptions
+    _nested = _NestedContext()
+
+    @utils.cached_property
+    def _toplevel_target_context(self):
+        # Lazily-initialized top-level target context, for all threads
+        return cpu.CPUContext(self.typing_context, self._target_name)
+
+    @utils.cached_property
+    def _toplevel_typing_context(self):
+        # Lazily-initialized top-level typing context, for all threads
+        return typing.Context()
+
+    @property
+    def target_context(self):
+        """
+        The target context for DPU targets.
+        """
+        nested = self._nested._target_context
+        if nested is not None:
+            return nested
+        else:
+            return self._toplevel_target_context
+
+    @property
+    def typing_context(self):
+        """
+        The typing context for CPU targets.
+        """
+        nested = self._nested._typing_context
+        if nested is not None:
+            return nested
+        else:
+            return self._toplevel_typing_context
+
+    def nested_context(self, typing_context, target_context):
+        """
+        A context manager temporarily replacing the contexts with the
+        given ones, for the current thread of execution.
+        """
+        return self._nested.nested(typing_context, target_context)
+
+
+custom_target = CustomTargetDescr(CUSTOM_TARGET)
+
+
 class CustomCPUDispatcher(CPUDispatcher):
-    pass
+    targetdescr = custom_target
 
 
 target_registry[CUSTOM_TARGET] = CustomCPU
 dispatcher_registry[target_registry[CUSTOM_TARGET]] = CustomCPUDispatcher
 
+
+def custom_jit(*args, **kwargs):
+    assert 'target' not in kwargs
+    assert '_target' not in kwargs
+    return njit(*args, _target=CUSTOM_TARGET, **kwargs)
+
+
+jit_registry[target_registry[CUSTOM_TARGET]] = custom_jit
 
 # ------------ For switching target ------------
 
@@ -167,3 +241,38 @@ class TestRetargeting(unittest.TestCase):
         with self.check_retarget_error():
             with self.switch_target():
                 foo(123)
+
+    def test_case5(self):
+        """
+        Tests overload resolution with target switching
+        """
+
+        def overloaded_func(x):
+            pass
+
+        @overload(overloaded_func, target=CUSTOM_TARGET)
+        def ol_overloaded_func_custom_target(x):
+            def impl(x):
+                return 62830
+            return impl
+
+        @overload(overloaded_func, target='cpu')
+        def ol_overloaded_func_cpu(x):
+            def impl(x):
+                return 31415
+            return impl
+
+        @njit
+        def flex_resolve_overload(x):
+            return
+
+        @njit
+        def foo(x):
+            return x + overloaded_func(x)
+
+        r = foo(123)
+        self.assertEqual(r, 123 + 31415)
+
+        with self.switch_target():
+            r = foo(123)
+            self.assertEqual(r, 123 + 62830)
