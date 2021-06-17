@@ -12,7 +12,7 @@ import ctypes
 import operator
 import numpy as np
 from numba import njit, types
-from numba.extending import overload, intrinsic
+from numba.extending import overload, intrinsic, overload_classmethod
 from numba.core.target_extension import (
     JitDecorator,
     target_registry,
@@ -681,6 +681,43 @@ class TestTargetHierarchySelection(TestCase):
                 "for the current target",]
         for msg in msgs:
             self.assertIn(msg, str(raises.exception))
+
+    def test_overload_allocation(self):
+
+        import logging
+        logger = logging.basicConfig(level=logging.DEBUG)
+
+
+        @overload_classmethod(types.Array, '_allocate', target='dpu', nopython=True)
+        def _ol_arr_allocate_dpu(cls, allocsize, align):
+            print("DPU ALLOC")
+            def impl(cls, allocsize, align):
+                return 1
+            return impl
+
+        @overload(np.empty, target='dpu', nopython=True)
+        def ol_empty_impl(n):
+            print("DPU EMPTY")
+            def impl(n):
+                #return 17 # WORKS
+                return types.Array._allocate(n, 7) # FAILS
+            return impl
+
+        def buffer_func():
+            pass
+
+        @overload(buffer_func, target='dpu', nopython=True)
+        def ol_buffer_func_impl():
+            def impl():
+                return np.empty(10)
+            return impl
+
+
+        @djit(nopython=True)
+        def foo():
+            return buffer_func()
+
+        print("RESULT:", foo())
 
 
 class TestTargetOffload(TestCase):
