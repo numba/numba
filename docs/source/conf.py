@@ -340,4 +340,4 @@ _autogenerate()
 
 
 def setup(app):
-    app.add_stylesheet('rtd-overrides.css')
+    app.add_css_file('rtd-overrides.css')
