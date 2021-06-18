@@ -60,6 +60,7 @@ and typing *operations* (or *functions*) on known value types.
    ``numba.float64``).
 
 .. decorator:: as_numba_type.register
+   :noindex:
 
    Register the decorated function as a type inference function used by
    ``as_numba_type`` when trying to infer the Numba type of a Python type.
