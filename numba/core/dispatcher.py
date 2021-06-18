@@ -30,7 +30,7 @@ class TargetConfig:
 
     Uses the BORG pattern and stores states in threadlocal storage.
 
-    WARNING: features associate with this class is experimental. The API
+    WARNING: features associated with this class are experimental. The API
     may change without notice.
     """
     _tls = threading.local()
@@ -55,9 +55,9 @@ class TargetConfig:
         return self._stack.pop()
 
     def get(self):
-        """Get the current target on the top of the stack.
+        """Get the current target from the top of the stack.
 
-        May raise IndexError if the stack is empty. User should check the size
+        May raise IndexError if the stack is empty. Users should check the size
         of the stack beforehand.
         """
         return self._stack[-1]
@@ -70,7 +70,7 @@ class TargetConfig:
     @classmethod
     @contextmanager
     def switch_target(cls, retarget: BaseRetarget):
-        """Pushes a new retarget handler, a instance of
+        """Pushes a new retarget handler, an instance of
         `numba.core.retarget.BaseRetarget`, onto the target-config stack
         for the duration of the context-manager.
         """
@@ -1075,7 +1075,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
 
     def _get_dispatcher_for_current_target(self):
         """Returns a dispatcher for the current target registered in `TargetConfig`.
-        Self is returned if no target is specified.
+        `self` is returned if no target is specified.
         """
         tc = TargetConfig()
         if tc:
@@ -1084,7 +1084,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
             return self
 
     def _call_tls_target(self, *args, **kwargs):
-        """This is called when the C dispatch logic see a retarget request.
+        """This is called when the C dispatcher logic sees a retarget request.
         """
         disp = self._get_retarget_dispatcher()
         # Call the new dispatcher
@@ -1225,7 +1225,7 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                 return cres.entry_point
 
     def _get_dispatcher_for_current_target(self):
-        # Lifted code do not honor the target switch currently.
+        # Lifted code does not honor the target switch currently.
         # No work has been done to check if this can be allowed.
         return self
 

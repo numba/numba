@@ -1,7 +1,7 @@
 """
 Implement utils for supporting retargeting of dispatchers.
 
-WARNING: Features defined in this file is experimental. The API may change
+WARNING: Features defined in this file are experimental. The API may change
          without notice.
 """
 import abc
@@ -11,7 +11,7 @@ from numba.core import errors
 
 
 class RetargetCache:
-    """Cache for retargeted dispatcher.
+    """Cache for retargeted dispatchers.
 
     The cache uses the original dispatcher as the key.
     """
@@ -62,8 +62,8 @@ class BaseRetarget(abc.ABC):
 
     @abc.abstractmethod
     def retarget(self, orig_disp):
-        """Retarget the givern dispatcher and returns a new dispatcher-like
-        callable. Or, return the original dispatcher if the the target_backend
+        """Retargets the given dispatcher and returns a new dispatcher-like
+        callable. Or, returns the original dispatcher if the the target_backend
         will not change.
         """
         pass
@@ -90,7 +90,7 @@ class BasicRetarget(BaseRetarget):
     def output_target(self) -> str:
         """Returns the output target name.
 
-        See numba/tests/test_retargeting.py for example
+        See numba/tests/test_retargeting.py for example usage.
         """
         pass
 
@@ -98,7 +98,7 @@ class BasicRetarget(BaseRetarget):
     def compile_retarget(self, orig_disp):
         """Returns the retargeted dispatcher.
 
-        See numba/tests/test_retargeting.py for example
+        See numba/tests/test_retargeting.py for example usage.
         """
         pass
 

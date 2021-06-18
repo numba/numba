@@ -296,7 +296,7 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
 
         flags.inherit_if_not_set("fastmath")
 
-        # Add "target_backend" as a option that inherit from the caller
+        # Add "target_backend" as a option that inherits from the caller
         flags.inherit_if_not_set("target_backend")
 
 # ----------------------------------------------------------------------------
