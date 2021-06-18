@@ -646,14 +646,13 @@ Dispatcher_call(Dispatcher *self, PyObject *args, PyObject *kws)
     // Check TLS target stack
     if (use_tls_target_stack) {
         raii_use_tls_target_stack turn_off(false);
+        PyObject * meth_call_tls_target;
+        meth_call_tls_target = PyObject_GetAttrString((PyObject*)self,
+                                                      "_call_tls_target");
+        if (!meth_call_tls_target) return NULL;
         // Transfer control to self._call_tls_target
-        if (kws)
-            retval = PyObject_CallMethod((PyObject*)self,
-                                          "_call_tls_target", "OO", args, kws);
-        else
-
-            retval = PyObject_CallMethod((PyObject*)self,
-                                          "_call_tls_target", "O{}", args);
+        retval = PyObject_Call(meth_call_tls_target, args, kws);
+        Py_DECREF(meth_call_tls_target);
         return retval;
     }
 
@@ -971,8 +970,14 @@ static PyObject *set_use_tls_target_stack(PyObject *self, PyObject *args)
     int val;
     if (!PyArg_ParseTuple(args, "p", &val))
         return NULL;
+    bool old = use_tls_target_stack;
     use_tls_target_stack = val;
-    Py_RETURN_NONE;
+    // return the old value
+    if (old) {
+        Py_RETURN_TRUE;
+    } else {
+        Py_RETURN_FALSE;
+    }
 }
 
 static PyMethodDef ext_methods[] = {

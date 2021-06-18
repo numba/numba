@@ -1083,7 +1083,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         else:
             return self
 
-    def _call_tls_target(self, args, kwargs):
+    def _call_tls_target(self, *args, **kwargs):
         """This is called when the C dispatch logic see a retarget request.
         """
         disp = self._get_retarget_dispatcher()

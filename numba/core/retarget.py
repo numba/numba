@@ -111,7 +111,8 @@ class BasicRetarget(BaseRetarget):
         output_target = self.output_target
         if required_target is not None:
             if output_target != required_target:
-                m = f"{output_target} != {required_target}"
+                m = ("The output target does match the required target: "
+                     f"{output_target} != {required_target}.")
                 raise errors.CompilerError(m)
 
     def retarget(self, orig_disp):
@@ -120,11 +121,11 @@ class BasicRetarget(BaseRetarget):
         The retargeted dispatchers are cached for future use.
         """
         cache = self.cache
-        cached = cache.load_cache(orig_disp)
         opts = orig_disp.targetoptions
         # Skip if the original dispatcher is targeting the same output target
         if opts.get('target_backend') == self.output_target:
             return orig_disp
+        cached = cache.load_cache(orig_disp)
         # No cache?
         if cached is None:
             out = self.compile_retarget(orig_disp)
