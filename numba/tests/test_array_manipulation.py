@@ -796,22 +796,25 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         # Tests taken from
         # https://github.com/numpy/numpy/blob/75f852edf94a7293e7982ad516bee314d7187c2d/numpy/lib/tests/test_stride_tricks.py#L260-L276  # noqa: E501
         data = [
-            [(0,), (), TypingError],
-            [(1,), (), TypingError],
-            [(3,), (), TypingError],
-            [(3,), (1,), ValueError],  # operands could not be broadcast together with remapped shapes
-            [(3,), (2,), ValueError],
-            [(3,), (4,), ValueError],
-            [(1, 2), (2, 1), ValueError],
-            [(1, 1), (1,), ValueError],
-            [(1,), -1, ValueError],
-            [(1,), (-1,), ValueError],
-            [(1, 2), (-1, 2), ValueError],
+            [(0,), (), TypingError, 'The argument "shape" must be a tuple or an integer.'],
+            [(1,), (), TypingError, 'The argument "shape" must be a tuple or an integer.'],
+            [(3,), (), TypingError, 'The argument "shape" must be a tuple or an integer.'],
+            # [(3,), (1,), ValueError, 'operands could not be broadcast together with remapped shapes'],
+            # [(3,), (2,), ValueError, 'operands could not be broadcast together with remapped shapes'],
+            # [(3,), (4,), ValueError, 'operands could not be broadcast together with remapped shapes'],
+            # [(1, 2), (2, 1), ValueError, 'operands could not be broadcast together with remapped shapes'],
+            [(1, 1), (1,), ValueError, 'input operand has more dimensions than allowed by the axis remapping'],
+            [(2, 2), (3,), ValueError, 'input operand has more dimensions than allowed by the axis remapping'],
+            [(1,), -1, ValueError, 'all elements of broadcast shape must be non-negative'],
+            [(1,), (-1,), ValueError, 'all elements of broadcast shape must be non-negative'],
+            [(1, 2), (-1, 2), ValueError, 'all elements of broadcast shape must be non-negative'],
         ]
-        for orig_shape, target_shape, err in data:
+        for orig_shape, target_shape, err, msg in data:
+            self.disable_leak_check()
             arr = np.zeros(orig_shape)
             with self.assertRaises(err) as raises:
                 cfunc(arr, target_shape)
+            self.assertIn(msg, str(raises.exception))
 
 
     def test_shape(self):

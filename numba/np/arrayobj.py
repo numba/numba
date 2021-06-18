@@ -1321,23 +1321,30 @@ def _numpy_broadcast_to(typingctx, array, shape):
     return sig, codegen
 
 
+@register_jitable
+def _can_broadcast(array, dest_shape):
+    orig_shape = array.shape
+    if len(orig_shape) > len(dest_shape):
+        raise ValueError('input operand has more dimensions than allowed '
+                         'by the axis remapping')
+    for size in dest_shape:
+        if size < 0:
+            raise ValueError('all elements of broadcast shape must be '
+                             'non-negative')
+
+
 @overload(np.broadcast_to)
 def numpy_broadcast_to(array, shape):
     if isinstance(shape, types.UniTuple):
         def impl(array, shape):
-            for size in shape:
-                if size < 0:
-                    raise ValueError('all elements of broadcast shape must be'
-                                     'non-negative')
+            _can_broadcast(array, shape)
             return _numpy_broadcast_to(array, shape)
-    elif isinstance(shape, types.Number):
+    elif isinstance(shape, types.Integer):
         def impl(array, shape):
-            if shape < 0:
-                raise ValueError('all elements of broadcast shape must be non-'
-                                 'negative')
-            return _numpy_broadcast_to(array, (shape,))
+            return np.broadcast_to(array, (shape,))
     else:
-        msg = 'The argument "shape" must be a tuple or scalar. Got %s' % shape
+        msg = ('The argument "shape" must be a tuple or an integer. '
+               'Got %s' % shape)
         raise errors.TypingError(msg)
     return impl
 
@@ -1366,7 +1373,6 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         index_shape = indexer.get_shape()
         src = make_array(srcty)(context, builder, src)
         # Broadcast source array to shape
-        breakpoint()
         srcty, src = _broadcast_to_shape(context, builder, srcty, src,
                                          index_shape)
         src_shapes = cgutils.unpack_tuple(builder, src.shape)
