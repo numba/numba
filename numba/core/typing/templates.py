@@ -1034,10 +1034,41 @@ class _OverloadAttributeTemplate(AttributeTemplate):
     A base class of templates for @overload_attribute functions.
     """
     is_method = False
+    _my_init = False
 
     def __init__(self, context):
         super(_OverloadAttributeTemplate, self).__init__(context)
         self.context = context
+
+        if not self._my_init:
+            self._init_once()
+            self._my_init = True
+
+    def _get_the_right_registry(self):
+        from numba.core.target_extension import (get_local_target,
+                                                 resolve_target_str,
+                                                 dispatcher_registry)
+        hwstr = self.metadata.get('target', 'generic')
+        # Get the class for the target declared by the function
+        hw_clazz = resolve_target_str(hwstr)
+        # get the local target
+        target_hw = get_local_target(self.context)
+        # make sure the target_hw is in the MRO for hw_clazz else bail
+        if not target_hw.inherits_from(hw_clazz):
+            msg = (f"Intrinsic being resolved on a target from which it does "
+                   f"not inherit. Local target is {target_hw}, declared "
+                   f"target class is {hw_clazz}.")
+            raise InternalError(msg)
+        disp = dispatcher_registry[target_hw]
+        tgtctx = disp.targetdescr.target_context
+        tgtctx.refresh()
+        if builtin_registry in tgtctx._registries:
+            reg = builtin_registry
+        else:
+            # Pick a registry in which to install intrinsics
+            registries = iter(tgtctx._registries)
+            reg = next(registries)
+        return reg
 
     @classmethod
     def do_class_init(cls):
@@ -1046,6 +1077,20 @@ class _OverloadAttributeTemplate(AttributeTemplate):
         """
         from numba.core.imputils import lower_getattr
         attr = cls._attr
+
+        @lower_getattr(cls.key, attr)
+        def getattr_impl(context, builder, typ, value):
+            typingctx = context.typing_context
+            fnty = cls._get_function_type(typingctx, typ)
+            sig = cls._get_signature(typingctx, fnty, (typ,), {})
+            call = context.get_function(fnty, sig)
+            return call(builder, (value,))
+
+    def _init_once(self):
+        cls = type(self)
+        attr = cls._attr
+
+        lower_getattr = self._get_the_right_registry().lower_getattr
 
         @lower_getattr(cls.key, attr)
         def getattr_impl(context, builder, typ, value):
@@ -1087,19 +1132,26 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         """
         Register generic method implementation.
         """
-        from numba.core.imputils import lower_builtin
-        attr = cls._attr
+        # attr = cls._attr
 
-        @lower_builtin((cls.key, attr), cls.key, types.VarArg(types.Any))
-        def method_impl(context, builder, sig, args):
-            typ = sig.args[0]
-            typing_context = context.typing_context
-            fnty = cls._get_function_type(typing_context, typ)
-            sig = cls._get_signature(typing_context, fnty, sig.args, {})
-            call = context.get_function(fnty, sig)
-            # Link dependent library
-            context.add_linking_libs(getattr(call, 'libs', ()))
-            return call(builder, args)
+    def _init_once(self):
+        attr = self._attr
+
+        try:
+            lower_builtin = self._get_the_right_registry().lower
+        except InternalError:
+            pass
+        else:
+            @lower_builtin((self.key, attr), self.key, types.VarArg(types.Any))
+            def method_impl(context, builder, sig, args):
+                typ = sig.args[0]
+                typing_context = context.typing_context
+                fnty = self._get_function_type(typing_context, typ)
+                sig = self._get_signature(typing_context, fnty, sig.args, {})
+                call = context.get_function(fnty, sig)
+                # Link dependent library
+                context.add_linking_libs(getattr(call, 'libs', ()))
+                return call(builder, args)
 
     def _resolve(self, typ, attr):
         if self._attr != attr:
@@ -1132,7 +1184,8 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
 
 def make_overload_attribute_template(typ, attr, overload_func, inline,
                                      prefer_literal=False,
-                                     base=_OverloadAttributeTemplate):
+                                     base=_OverloadAttributeTemplate,
+                                     **kwargs):
     """
     Make a template class for attribute *attr* of *typ* overloaded by
     *overload_func*.
@@ -1145,13 +1198,14 @@ def make_overload_attribute_template(typ, attr, overload_func, inline,
                _inline_overloads={},
                _overload_func=staticmethod(overload_func),
                prefer_literal=prefer_literal,
+               metadata=kwargs,
                )
     obj = type(base)(name, (base,), dct)
     return obj
 
 
 def make_overload_method_template(typ, attr, overload_func, inline,
-                                  prefer_literal=False):
+                                  prefer_literal=False, **kwargs):
     """
     Make a template class for method *attr* of *typ* overloaded by
     *overload_func*.
@@ -1159,6 +1213,7 @@ def make_overload_method_template(typ, attr, overload_func, inline,
     return make_overload_attribute_template(
         typ, attr, overload_func, inline=inline,
         base=_OverloadMethodTemplate, prefer_literal=prefer_literal,
+        **kwargs,
     )
 
 

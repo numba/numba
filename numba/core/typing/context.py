@@ -284,7 +284,36 @@ class BaseContext(object):
                 return attrty
 
     def find_matching_getattr_template(self, typ, attr):
-        for template in self._get_attribute_templates(typ):
+
+        templates = list(self._get_attribute_templates(typ))
+
+        from numba.core.target_extension import (target_registry,
+                                                 get_local_target)
+
+        # get the current target target
+        target_hw = get_local_target(self)
+
+        # fish out templates that are specific to the target if a target is
+        # specified
+        DEFAULT_TARGET = 'generic'
+        usable = []
+        for ix, temp_cls in enumerate(templates):
+            # ? Need to do something about this next line
+            md = getattr(temp_cls, "metaddata", {})
+            hw = md.get('target', DEFAULT_TARGET)
+            if hw is not None:
+                hw_clazz = target_registry[hw]
+                if target_hw.inherits_from(hw_clazz):
+                    usable.append((temp_cls, hw_clazz, ix))
+
+        # sort templates based on target specificity
+        def key(x):
+            return target_hw.__mro__.index(x[1])
+
+        order = [x[0] for x in sorted(usable, key=key)]
+
+        for template in order:
+
             return_type = template.resolve(typ, attr)
             if return_type is not None:
                 return {
