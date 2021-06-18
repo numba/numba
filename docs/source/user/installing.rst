@@ -266,7 +266,7 @@ vary with target operating system and hardware. The following lists them all
 
 * To build the documentation:
 
-  * ``sphinx``
+  * ``sphinx`` - version 4.0 or greater required.
   * ``pygments``
   * ``sphinx_rtd_theme``
   * ``numpydoc``

@@ -413,7 +413,8 @@ Main documentation
 This documentation is under the ``docs`` directory of the `Numba repository`_.
 It is built with `Sphinx <http://sphinx-doc.org/>`_ and
 `numpydoc <https://numpydoc.readthedocs.io/>`_, which are available using
-conda or pip; i.e. ``conda install sphinx numpydoc``.
+conda or pip; i.e. ``conda install sphinx=4 numpydoc`` (``sphinx`` version 4.0
+or greater is required).
 
 To build the documentation, you need the bootstrap theme::
 
