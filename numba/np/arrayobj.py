@@ -1323,14 +1323,34 @@ def _numpy_broadcast_to(typingctx, array, shape):
 
 @register_jitable
 def _can_broadcast(array, dest_shape):
-    orig_shape = array.shape
-    if len(orig_shape) > len(dest_shape):
+    src_shape = array.shape
+    src_ndim = len(src_shape)
+    dest_ndim = len(dest_shape)
+    if src_ndim > dest_ndim:
         raise ValueError('input operand has more dimensions than allowed '
                          'by the axis remapping')
     for size in dest_shape:
         if size < 0:
             raise ValueError('all elements of broadcast shape must be '
                              'non-negative')
+
+    # based on _broadcast_onto function on numba/np/npyimpl.py
+    src_index = 0
+    dest_index = dest_ndim - src_ndim
+    while src_index < src_ndim:
+        src_dim = src_shape[src_index]
+        dest_dim = dest_shape[dest_index]
+        # possible cases for (src_dim, dest_dim):
+        #  * (1, 1)   -> Ok
+        #  * (>1, 1)  -> Error!
+        #  * (>1, >1) -> src_dim == dest_dim else error!
+        #  * (1, >1)  -> Ok
+        if src_dim == dest_dim or src_dim == 1:
+            src_index += 1
+            dest_index += 1
+        else:
+            raise ValueError('operands could not be broadcast together '
+                             'with remapped shapes')
 
 
 @overload(np.broadcast_to)
