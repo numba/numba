@@ -778,14 +778,14 @@ def np_real_cbrt_impl(context, builder, sig, args):
 
     @register_jitable(fastmath=True)
     def cbrt(x):
-        if np.isnan(x):
-            return np.nan
-        elif x < 0:
+        if x < 0:
             return -np.power(-x, 1.0 / 3.0)
         else:
             return np.power(x, 1.0 / 3.0)
 
     def _cbrt(x):
+        if np.isnan(x):
+            return np.nan
         return cbrt(x)
 
     return context.compile_internal(builder, _cbrt, sig, args)
