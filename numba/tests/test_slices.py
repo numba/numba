@@ -185,22 +185,27 @@ class TestSlices(MemoryLeakMixin, TestCase):
             str(e.exception)
         )
 
-    def test_slice_constant_lowering(self):
-        for ts in [slice(1, 3, None), slice(2, None, None), slice(None, 2, -1),
-                   slice(None, None, None), slice(None, None, -2)]:
-            test_tuple = (1, 2, 3, 4)
+    def test_slice_from_constant(self):
+        test_tuple = (1, 2, 3, 4)
+
+        for ts in itertools.product(
+            [None, 1, 2, 3], [None, 1, 2, 3], [None, 1, 2, -1, -2]
+        ):
+            ts = slice(*ts)
 
             @jit(nopython=True)
             def test_fn():
                 return test_tuple[ts]
 
-            assert test_fn() == test_tuple[ts]
+            self.assertEqual(test_fn(), test_fn.py_func())
 
     def test_literal_slice_distinct(self):
         sl1 = types.misc.SliceLiteral(slice(1, None, None))
         sl2 = types.misc.SliceLiteral(slice(None, None, None))
+        sl3 = types.misc.SliceLiteral(slice(1, None, None))
 
-        assert sl1 != sl2
+        self.assertNotEqual(sl1, sl2)
+        self.assertEqual(sl1, sl3)
 
 
 if __name__ == '__main__':

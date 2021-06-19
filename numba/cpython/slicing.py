@@ -150,8 +150,13 @@ def get_defaults(context):
 
 @lower_builtin(slice, types.VarArg(types.Any))
 def slice_constructor_impl(context, builder, sig, args):
-    default_start_pos, default_start_neg, default_stop_pos, default_stop_neg, default_step = \
-        [context.get_constant(types.intp, x) for x in get_defaults(context)]
+    (
+        default_start_pos,
+        default_start_neg,
+        default_stop_pos,
+        default_stop_neg,
+        default_step,
+    ) = [context.get_constant(types.intp, x) for x in get_defaults(context)]
 
     slice_args = [None] * 3
 
@@ -239,8 +244,13 @@ def make_slice_from_constant(context, builder, ty, pyval):
     sli = context.make_helper(builder, ty)
     lty = context.get_value_type(types.intp)
 
-    default_start_pos, default_start_neg, default_stop_pos, default_stop_neg, default_step = \
-        [context.get_constant(types.intp, x) for x in get_defaults(context)]
+    (
+        default_start_pos,
+        default_start_neg,
+        default_stop_pos,
+        default_stop_neg,
+        default_step,
+    ) = [context.get_constant(types.intp, x) for x in get_defaults(context)]
 
     step = pyval.step
     if step is None:

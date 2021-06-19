@@ -336,7 +336,8 @@ class SliceLiteral(Literal, SliceType):
 
     @property
     def key(self):
-        return self.name
+        sl = self.literal_value
+        return sl.start, sl.stop, sl.step
 
 
 Literal.ctor_map[slice] = SliceLiteral

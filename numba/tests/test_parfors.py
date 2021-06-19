@@ -3439,16 +3439,16 @@ class TestParforsSlice(TestParforsBase):
                    slice(None, None, None), slice(None, None, -2)]:
 
             def test_impl(n):
-                X = np.ones((n, 3))
+                X = np.arange(n * 4).reshape((n, 4))
                 y = 0
                 for i in numba.prange(n):
                     y += X[i, ts].sum()
                 return y
 
-            n = 211
+            n = 10
             self.check(test_impl, n)
 
-            X = np.ones((211, 3))
+            X = np.arange(n * 4).reshape((n, 4))
 
             def test_impl(X):
                 y = 0
