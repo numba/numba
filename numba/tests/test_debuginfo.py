@@ -182,6 +182,19 @@ class TestDebugInfoEmission(TestCase):
             dilocation_info = metadata_definition_map[k]
             self.assertIn(f'line: {line_no}', dilocation_info)
 
+        expr = r'.*!DILocalVariable\(name: "a",.*line: ([0-9]+),.*'
+        match_local_var_a = re.compile(expr)
+        for entry in metadata_definition_map.values():
+            matched = match_local_var_a.match(entry)
+            if matched:
+                groups = matched.groups()
+                self.assertEqual(len(groups), 1)
+                dbg_line = int(groups[0])
+                self.assertEqual(dbg_line, pysrc_line_start)
+                break
+        else:
+            self.fail('Assertion on DILocalVariable not made')
+
 
 if __name__ == '__main__':
     unittest.main()
