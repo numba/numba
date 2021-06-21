@@ -5222,6 +5222,33 @@ def array_to_array(context, builder, fromty, toty, val):
     return val
 
 
+@lower_cast(types.Array, types.UnicodeCharSeq)
+@lower_cast(types.Array, types.Float)
+@lower_cast(types.Array, types.Integer)
+@lower_cast(types.Array, types.Complex)
+@lower_cast(types.Array, types.Boolean)
+@lower_cast(types.Array, types.NPTimedelta)
+@lower_cast(types.Array, types.NPDatetime)
+def array0d_to_scalar(context, builder, fromty, toty, val):
+    def impl(a):
+        # a is an array(T, 0d, O), T is type, O is order
+        return a.take(0)
+
+    sig = signature(toty, fromty)
+    res = context.compile_internal(builder, impl, sig, [val])
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+@lower_cast(types.Array, types.UnicodeCharSeq)
+def array_to_unichrseq(context, builder, fromty, toty, val):
+    def impl(a):
+        return str(a[()])
+
+    sig = signature(toty, fromty)
+    res = context.compile_internal(builder, impl, sig, [val])
+    return impl_ret_borrowed(context, builder, sig.return_type, res)
+
+
 # ------------------------------------------------------------------------------
 # Stride tricks
 
