@@ -292,7 +292,7 @@ Platform support
 ''''''''''''''''
 
 Every commit to the master branch is automatically tested on all of the
-platforms Numba supports. This includes ARMv7, ARMv8, POWER8, and NVIDIA GPUs.
+platforms Numba supports. This includes ARMv8, POWER8, and NVIDIA GPUs.
 The build system however is internal to Anaconda, so we also use
 `Azure <https://dev.azure.com/numba/numba/_build>`_ to provide public continuous
 integration information for as many combinations as can be supported by the
