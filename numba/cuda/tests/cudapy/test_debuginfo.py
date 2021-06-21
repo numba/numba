@@ -98,7 +98,7 @@ class TestCudaDebugInfo(CUDATestCase):
 
     def test_debug_function_calls_internal_impl(self):
         # Calling a function in a module generated from an implementation
-        # internal to Numba reqires multiple modules to be compiled with NVVM -
+        # internal to Numba requires multiple modules to be compiled with NVVM -
         # the internal implementation, and the caller. This example uses two
         # modules because the `in (2, 3)` is implemented with:
         #
@@ -107,8 +107,8 @@ class TestCudaDebugInfo(CUDATestCase):
         #     int
         # )
         #
-        # This is condensed from the reproducer from c200chromebook in Issue
-        # #5311.
+        # This is condensed from this reproducer in Issue 5311:
+        # https://github.com/numba/numba/issues/5311#issuecomment-674206587
 
         @cuda.jit((types.int32[:], types.int32[:]), debug=True)
         def f(inp, outp):

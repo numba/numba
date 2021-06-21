@@ -554,8 +554,9 @@ class _Kernel(serialize.ReduceMixin):
         args = cres.signature.args
 
         tgt_ctx = cres.target_context
-        filename = cres.type_annotation.filename
-        linenum = int(cres.type_annotation.linenum)
+        code = self.py_func.__code__
+        filename = code.co_filename
+        linenum = code.co_firstlineno
         lib, kernel = tgt_ctx.prepare_cuda_kernel(cres.library, fname, args,
                                                   debug, nvvm_options,
                                                   filename, linenum,
