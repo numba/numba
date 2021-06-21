@@ -86,21 +86,26 @@ class TestDebugInfoEmission(TestCase):
     def test_DILocation(self):
         """ Tests that DILocation information is reasonable.
         """
-
         @njit(debug=True, error_model='numpy')
-        def foo(a):
-            b = a + 1.23
+        def foo(a, z):
+            b = a + 1
             c = a * 2.34
-            d = b / c
+            e = b / c
+            if a > z:
+                d = (a, b, c, z)
+            else:
+                d = (z, b, c, a)
             print(d)
-            return d
+            return b, c, d, e
 
         # the above produces LLVM like:
         # define function() {
         # entry:
         #   alloca
         #   store 0 to alloca
-        #   <arithmetic for doing the operations on b, c, d>
+        #   <arithmetic for doing the operations on b, c, e>
+        #   fcmp for a > z
+        #   select version of d
         #   setup for print
         #   branch
         # other_labels:
@@ -113,12 +118,9 @@ class TestDebugInfoEmission(TestCase):
         # * that the !dbg entries are monotonically increasing in value with
         #   source line number
 
-        metadata = self._get_metadata(foo, sig=(types.float64,))
-        full_ir = self._get_llvmir(foo, sig=(types.float64,))
-
-        llvm.initialize()
-        llvm.initialize_native_target()
-        llvm.initialize_native_asmprinter()
+        sig = (types.float64, types.float64)
+        metadata = self._get_metadata(foo, sig=sig)
+        full_ir = self._get_llvmir(foo, sig=sig)
 
         module = llvm.parse_assembly(full_ir)
 
@@ -177,11 +179,22 @@ class TestDebugInfoEmission(TestCase):
         # Pull out metadata entries referred to by the llvm line end !dbg
         # check they match the python source, the +2 is for the @njit decorator
         # and the function definition line.
-        pyln_range = range(pysrc_line_start + 2, pysrc_line_start + len(pysrc))
-        for (k, line_no) in zip(sorted(line2dbg), pyln_range):
+        offsets = [0, # b = a + 1
+                   1, # a * 2.34
+                   2, # e = b / c
+                   3, # select on a > z
+                   7, # print(d), there's a jump because this is the phi of d
+                   ]
+        pyln_range = [pysrc_line_start + 2 + x for x in offsets]
+
+        # do the check
+        for (k, line_no) in zip(sorted(line2dbg, key=lambda x: int(x[1:])),
+                                pyln_range):
             dilocation_info = metadata_definition_map[k]
             self.assertIn(f'line: {line_no}', dilocation_info)
 
+        # Check that variable "a" is declared as on the same line as function
+        # definition.
         expr = r'.*!DILocalVariable\(name: "a",.*line: ([0-9]+),.*'
         match_local_var_a = re.compile(expr)
         for entry in metadata_definition_map.values():
