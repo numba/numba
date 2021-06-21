@@ -244,8 +244,8 @@ This feature will be moved with respect to this schedule:
 * The target kwarg will be removed in version 0.54.0.
 
 
-Deprecation of the role of compute capability for CUDA inspection methods
-=========================================================================
+Removal of the role of compute capability for CUDA inspection methods
+=====================================================================
 
 The following methods of the :class:`Dispatcher
 <numba.cuda.compiler.Dispatcher>` class:
@@ -254,27 +254,24 @@ The following methods of the :class:`Dispatcher
 - :meth:`inspect_llvm <numba.cuda.compiler.Dispatcher.inspect_llvm>`
 - :meth:`inspect_sass <numba.cuda.compiler.Dispatcher.inspect_sass>`
 
-accept a kwarg called ``compute_capability``. This kwarg is deprecated - it is
-ignored and accepted for backwards compatibility only. The use of the kwarg was
-already problematic, as in most cases the returned values pertain to the device
-in the current context, instead of the requested compute capability.
+accepted a kwarg called ``compute_capability``. This kwarg is now removed as it
+was problematic - in most cases the returned values erroneously pertained to
+the device in the current context, instead of the requested compute capability.
 
-When ``compute_capability`` is not provided, these methods return a dict of
-variants, which was keyed by a ``(compute_capability, argtypes)`` tuple. The
-dict is now only keyed by argument types, and items in the dict are for the
-device in the current context. For backwards compatibility, the returned dict is
-temporarily a subclass that will also allow indexing by ``(compute_capability,
-argtypes)`` as well as by ``argtypes`` only.
+These methods return a dict of variants, which was previously keyed by a
+``(compute_capability, argtypes)`` tuple. The dict is now only keyed by
+argument types, and items in the dict are for the device in the current
+context.
 
 For specialized Dispatchers (those whose kernels were eagerly compiled by
-providing a signature), the methods return only one variant, instead of a dict
-of variants. For consistency with the CPU target and for support for multiple
-signatures to be added to the CUDA target, these methods will always return a
-dict in future.
+providing a signature), the methods previously returned only one variant,
+instead of a dict of variants. For consistency with the CPU target and for
+support for multiple signatures to be added to the CUDA target, these methods
+now always return a dict.
 
-The :meth:`ptx <numba.cuda.compiler.Dispatcher.ptx>` property also returns one
+The :meth:`ptx <numba.cuda.compiler.Dispatcher.ptx>` property also returned one
 variant directly for specialized Dispatchers, and a dict for un-specialized
-Dispatchers. It too will always return a dict in future.
+Dispatchers. It now always returns a dict
 
 Recommendations
 ---------------
@@ -286,26 +283,27 @@ Update calls to these methods such that:
 - The ``compute_capability`` kwarg is not passed to them.
 - Any use of their results indexes into them using only a tuple of argument
   types.
-- For specialized Dispatchers, check whether the result is a dict and index into
-  it accordingly if so.
+- With specialized Dispatchers, ensure that the returned dict is indexed into
+  using the appropriate signature.
 
 Schedule
 --------
 
 In 0.53.0:
 
-- The ``compute_capability`` kwarg is deprecated.
-- Returned values from the inspection methods will support indexing by
+- The ``compute_capability`` kwarg was deprecated.
+- Returned values from the inspection methods supported indexing by
   ``(compute_capability, argtypes)`` and ``argtypes``.
-- Specialized dispatchers and will return a single variant from these methods
-  and the ``ptx`` property rather than a dict, but will produce a warning.
+- The inspection methods and ``ptx`` property of specialized dispatchers returned
+  their result for a single variant, rather than a dict, and produced a
+  warning.
 
 In 0.54.0:
 
-- The ``compute_capability`` kwarg will be removed.
-- ``ptx`` and the inspection methods will always return a dict.
+- The ``compute_capability`` kwarg has been removed.
+- ``ptx`` and the inspection methods always return a dict.
 - Support for indexing into the results of these methods using ``(cc,
-  argtypes)`` will be removed.
+  argtypes)`` has been removed.
 
 
 .. _deprecation-strict-strides:
@@ -336,3 +334,44 @@ In 0.55.0:
   related to relaxed strides checking in 0.54.0 onwards. This plan will be
   re-examined if bugs related to relaxed strides checking are reported, but may
   not necessarily change as a result.
+
+
+Deprecation of the ``inspect_ptx()`` method
+===========================================
+
+The undocumented ``inspect_ptx()`` method of functions decorated with
+``@cuda.jit(device=True)`` is sometimes used to compile a Python function to
+PTX for use outside of Numba. An interface for this specific purpose is
+provided in the :func:`compile_ptx() <numba.cuda.compile_ptx>` function.
+``inspect_ptx()`` has one or two longstanding issues and presents a maintenance
+burden for upcoming changes in the CUDA target, so it is deprecated and will be
+removed in favor of the use of :func:`compile_ptx() <numba.cuda.compile_ptx>`.
+
+Recommendations
+---------------
+
+Replace any code that compiles device functions to PTX using the following
+pattern:
+
+.. code-block:: python
+
+    @cuda.jit(signature, device=True)
+    def func(args):
+        ...
+
+    ptx_code = func.inspect_ptx(nvvm_options=nvvm_options).decode()
+
+with:
+
+.. code-block:: python
+
+    def func(args):
+        ...
+
+    ptx_code, return_type = compile_ptx(func, signature, device=True, nvvm_options=nvvm_options)
+
+Schedule
+--------
+
+- In Numba 0.54: ``inspect_ptx()`` will be deprecated.
+- In Numba 0.55: ``inspect_ptx()`` will be removed.

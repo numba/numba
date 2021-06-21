@@ -895,16 +895,19 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
             import numba
             numba.config.THREADING_LAYER='tbb'
             from numba import njit, prange, objmode
+            from numba.core.serialize import PickleCallableByPath
             import os
 
             e_running = threading.Event()
             e_proceed = threading.Event()
 
-            def indirect():
+            def indirect_core():
                 e_running.set()
                 # wait for forker() to have forked
                 while not e_proceed.isSet():
                     pass
+
+            indirect = PickleCallableByPath(indirect_core)
 
             @njit
             def obj_mode_func():

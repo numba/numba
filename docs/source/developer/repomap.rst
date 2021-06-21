@@ -263,6 +263,7 @@ Misc Support
   datetime64 support
 - :ghfile:`numba/misc/llvm_pass_timings.py` - Helper to record timings of
   LLVM passes.
+- :ghfile:`numba/cloudpickle` - Vendored cloudpickle subpackage
 
 Core Python Data Types
 ''''''''''''''''''''''

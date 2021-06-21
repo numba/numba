@@ -32,7 +32,6 @@ from numba.core.analysis import (
     compute_use_defs,
     compute_live_variables)
 from numba.core import postproc
-from numba.cpython.rangeobj import range_iter_len
 from numba.np.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
 import numpy as np
 import operator
@@ -396,7 +395,7 @@ class InlineWorker(object):
         var_dict = {}
         for var in callee_scope.localvars._con.values():
             if not (var.name in callee_freevars):
-                new_var = scope.redefine(mk_unique_var(var.name), loc=var.loc)
+                new_var = scope.redefine(var.name, loc=var.loc)
                 var_dict[var.name] = new_var
         self.debug_print("var_dict = ", var_dict)
         replace_vars(callee_blocks, var_dict)
@@ -1069,6 +1068,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
         # this doesn't work in objmode as it's effectively untyped
         if typed:
             len_func_var = ir.Var(scope, mk_unique_var("len_func"), loc)
+            from numba.cpython.rangeobj import range_iter_len
             stmts.append(_new_definition(func_ir, len_func_var,
                         ir.Global('range_iter_len', range_iter_len, loc=loc),
                         loc))

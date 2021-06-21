@@ -274,8 +274,8 @@ The following methods of Numpy arrays are supported in their basic form
 
 * :meth:`~numpy.ndarray.all`
 * :meth:`~numpy.ndarray.any`
-* :meth:`~numpy.ndarray.argmax`
 * :meth:`~numpy.ndarray.argmin`
+* :meth:`~numpy.ndarray.clip`
 * :meth:`~numpy.ndarray.conj`
 * :meth:`~numpy.ndarray.conjugate`
 * :meth:`~numpy.ndarray.cumprod`
@@ -297,6 +297,7 @@ Other methods
 
 The following methods of Numpy arrays are supported:
 
+* :meth:`~numpy.ndarray.argmax` (``axis`` keyword argument supported).
 * :meth:`~numpy.ndarray.argsort` (``kind`` key word argument supported for
   values ``'quicksort'`` and ``'mergesort'``)
 * :meth:`~numpy.ndarray.astype` (only the 1-argument form)
@@ -335,6 +336,8 @@ The following methods of Numpy arrays are supported:
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
 * :meth:`~numpy.ndarray.__contains__` 
 
+Where applicable, the corresponding top-level NumPy functions (such as
+:func:`numpy.argmax`) are similarly supported.
 
 .. warning::
    Sorting may be slightly slower than Numpy's implementation.
@@ -389,24 +392,24 @@ The following reduction functions are supported:
 
 * :func:`numpy.diff` (only the 2 first arguments)
 * :func:`numpy.median` (only the first argument)
-* :func:`numpy.nancumprod` (only the first argument, requires NumPy >= 1.12))
-* :func:`numpy.nancumsum` (only the first argument, requires NumPy >= 1.12))
+* :func:`numpy.nancumprod` (only the first argument)
+* :func:`numpy.nancumsum` (only the first argument)
 * :func:`numpy.nanmax` (only the first argument)
 * :func:`numpy.nanmean` (only the first argument)
 * :func:`numpy.nanmedian` (only the first argument)
 * :func:`numpy.nanmin` (only the first argument)
-* :func:`numpy.nanpercentile` (only the 2 first arguments,
-  requires NumPy >= 1.11, complex dtypes unsupported)
-* :func:`numpy.nanquantile` (only the 2 first arguments, requires NumPy >= 1.15,
-  complex dtypes unsupported)
+* :func:`numpy.nanpercentile` (only the 2 first arguments, complex dtypes
+  unsupported)
+* :func:`numpy.nanquantile` (only the 2 first arguments, complex dtypes
+  unsupported)
 * :func:`numpy.nanprod` (only the first argument)
 * :func:`numpy.nanstd` (only the first argument)
 * :func:`numpy.nansum` (only the first argument)
 * :func:`numpy.nanvar` (only the first argument)
-* :func:`numpy.percentile` (only the 2 first arguments, requires NumPy >= 1.10,
-  complex dtypes unsupported)
-* :func:`numpy.quantile` (only the 2 first arguments, requires NumPy >= 1.15,
-  complex dtypes unsupported)
+* :func:`numpy.percentile` (only the 2 first arguments, complex dtypes
+  unsupported)
+* :func:`numpy.quantile` (only the 2 first arguments, complex dtypes
+  unsupported)
 
 Other functions
 ---------------
@@ -471,7 +474,14 @@ The following top-level functions are supported:
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
 * :func:`numpy.kaiser`
-* :func:`numpy.interp` (only the 3 first arguments; requires NumPy >= 1.10)
+* :func:`numpy.iscomplex`
+* :func:`numpy.iscomplexobj`
+* :func:`numpy.isneginf`
+* :func:`numpy.isposinf`
+* :func:`numpy.isreal`
+* :func:`numpy.isrealobj`
+* :func:`numpy.isscalar`
+* :func:`numpy.interp` (only the 3 first arguments)
 * :func:`numpy.intersect1d` (only first 2 arguments, ar1 and ar2)
 * :func:`numpy.linspace` (only the 3-argument form)
 * :class:`numpy.ndenumerate`
@@ -581,6 +591,42 @@ Initialization
 
 * :func:`numpy.random.seed`: with an integer argument only
 
+.. warning::
+   Calling :func:`numpy.random.seed` from interpreted code (including from :term:`object mode`
+   code) will seed the NumPy random generator, not the Numba random generator.
+   To seed the Numba random generator, see the example below.
+
+.. code-block:: python
+
+  from numba import njit
+  import numpy as np
+
+  @njit
+  def seed(a):
+      np.random.seed(a)
+
+  @njit
+  def rand():
+      return np.random.rand()
+
+
+  # Incorrect seeding
+  np.random.seed(1234)
+  print(rand())
+
+  np.random.seed(1234)
+  print(rand())
+
+  # Correct seeding
+  seed(1234)
+  print(rand())
+
+  seed(1234)
+  print(rand())
+
+
+
+
 Simple random data
 ''''''''''''''''''
 
@@ -610,6 +656,7 @@ Distributions
 * :func:`numpy.random.beta`
 * :func:`numpy.random.binomial`
 * :func:`numpy.random.chisquare`
+* :func:`numpy.random.dirichlet`
 * :func:`numpy.random.exponential`
 * :func:`numpy.random.f`
 * :func:`numpy.random.gamma`

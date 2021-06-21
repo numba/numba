@@ -95,6 +95,9 @@ class Numpy_rules_ufunc(AbstractTemplate):
         return self.key
 
     def generic(self, args, kws):
+        # First, strip optional types, ufunc loops are typed on concrete types
+        args = [x.type if isinstance(x, types.Optional) else x for x in args]
+
         ufunc = self.ufunc
         base_types, explicit_outputs, ndims, layout = self._handle_inputs(
             ufunc, args, kws)
@@ -387,7 +390,7 @@ def _numpy_redirect(fname):
     infer_global(numpy_function, types.Function(cls))
 
 for func in ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
-             'cumsum', 'cumprod', 'argmin', 'argmax', 'argsort',
+             'cumsum', 'cumprod', 'argmin', 'argsort',
              'nonzero', 'ravel']:
     _numpy_redirect(func)
 

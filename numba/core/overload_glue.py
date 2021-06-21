@@ -4,6 +4,8 @@ written in the "old" style of a separate typing and lowering implementation.
 """
 import types as pytypes
 import textwrap
+from threading import RLock
+from collections import defaultdict
 
 from numba.core import errors
 
@@ -13,9 +15,10 @@ class _OverloadWrapper(object):
     implementations.
     """
 
-    def __init__(self, function):
+    def __init__(self, function, typing_key=None):
         assert function is not None
         self._function = function
+        self._typing_key = typing_key
         self._BIND_TYPES = dict()
         self._selector = None
         self._TYPER = None
@@ -71,11 +74,23 @@ class _OverloadWrapper(object):
         Use this to replace @infer_global, it records the decorated function
         as a typer for the argument `concrete_function`.
         """
+        if self._typing_key is None:
+            key = self._function
+        else:
+            key = self._typing_key
+
         def inner(typing_class):
-            # arg is the typing class
-            self._TYPER = typing_class
-            # HACK: This is a hack, infer_global maybe?
-            self._TYPER.key = self._function
+            # Note that two templates could be used for the same function, to
+            # avoid @infer_global etc the typing template is copied. This is to
+            # ensure there's a 1:1 relationship between the typing templates and
+            # their keys.
+            clazz_dict = dict(typing_class.__dict__)
+            clazz_dict['key'] = key
+            cloned = type(f"cloned_template_for_{key}", typing_class.__bases__,
+                          clazz_dict)
+            self._TYPER = cloned
+            _overload_glue.add_no_defer(key)
+            self._build()
             return typing_class
         return inner
 
@@ -84,6 +99,8 @@ class _OverloadWrapper(object):
         Use this to replace @lower*, it records the decorated function as the
         lowering implementation
         """
+        assert self._TYPER is not None
+
         def inner(lowerer):
             self._BIND_TYPES[args] = lowerer
             return lowerer
@@ -94,6 +111,14 @@ class _OverloadWrapper(object):
         typing to lowering map.
         """
         from numba.core.base import OverloadSelector
+
+        if self._typing_key is None:
+            key = self._function
+        else:
+            key = self._typing_key
+
+        _overload_glue.flush_deferred_lowering(key)
+
         self._selector = OverloadSelector()
         msg = f"No entries in the typing->lowering map for {self._function}"
         assert self._BIND_TYPES, msg
@@ -143,7 +168,7 @@ class _OverloadWrapper(object):
             # is generated to match the number of arguments and kwargs.
             name = str(self._function)
             # This is to name the function with something vaguely identifiable
-            name = ''.join([x if x not in {'>','<',' ','-'} else '_'
+            name = ''.join([x if x not in {'>','<',' ','-','.'} else '_'
                             for x in name])
             gen = textwrap.dedent(("""
             def jit_wrapper_{}({}):
@@ -160,24 +185,62 @@ class _Gluer:
     one wrapper as the code relies on the wrapper being a singleton."""
     def __init__(self):
         self._registered = dict()
+        self._lock = RLock()
+        # `_no_defer` stores keys that should not defer lowering because typing
+        # is already provided.
+        self._no_defer = set()
+        # `_deferred` stores lowering that must be deferred because the typing
+        # has not been provided.
+        self._deferred = defaultdict(list)
 
-    def __call__(self, func):
-        if func in self._registered:
-            return self._registered[func]
-        else:
-            wrapper = _OverloadWrapper(func)
-            self._registered[func] = wrapper
-            return wrapper
+    def __call__(self, func, typing_key=None):
+        with self._lock:
+            if typing_key is None:
+                key = func
+            else:
+                key = typing_key
+            if key in self._registered:
+                return self._registered[key]
+            else:
+                wrapper = _OverloadWrapper(func, typing_key=typing_key)
+                self._registered[key] = wrapper
+                return wrapper
+
+    def defer_lowering(self, key, lower_fn):
+        """Defer lowering of the given key and lowering function.
+        """
+        with self._lock:
+            if key in self._no_defer:
+                # Key is marked as no defer, register lowering now
+                lower_fn()
+            else:
+                # Defer
+                self._deferred[key].append(lower_fn)
+
+    def add_no_defer(self, key):
+        """Stop lowering to be deferred for the given key.
+        """
+        with self._lock:
+            self._no_defer.add(key)
+
+    def flush_deferred_lowering(self, key):
+        """Flush the deferred lowering for the given key.
+        """
+        with self._lock:
+            deferred = self._deferred.pop(key, [])
+            for cb in deferred:
+                cb()
 
 
 _overload_glue = _Gluer()
 del _Gluer
 
 
-def glue_typing(concrete_function):
+def glue_typing(concrete_function, typing_key=None):
     """This is a decorator for wrapping the typing part for a concrete function
     'concrete_function', it's a text-only replacement for '@infer_global'"""
-    return _overload_glue(concrete_function).wrap_typing()
+    return _overload_glue(concrete_function,
+                          typing_key=typing_key).wrap_typing()
 
 
 def glue_lowering(*args):
@@ -185,4 +248,14 @@ def glue_lowering(*args):
     a concrete function. 'args[0]' is the concrete_function, 'args[1:]' are the
     types the lowering will accept. This acts as a text-only replacement for
     '@lower/@lower_builtin'"""
-    return _overload_glue(args[0]).wrap_impl(*args[1:])
+
+    def wrap(fn):
+        key = args[0]
+
+        def real_call():
+            glue = _overload_glue(args[0], typing_key=key)
+            return glue.wrap_impl(*args[1:])(fn)
+
+        _overload_glue.defer_lowering(key, real_call)
+        return fn
+    return wrap

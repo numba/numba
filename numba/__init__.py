@@ -53,8 +53,11 @@ from numba import experimental
 import numba.core.withcontexts
 from numba.core.withcontexts import objmode_context as objmode
 
-# Initialize hardware
-import numba.core.extending_hardware
+# Initialize target extensions
+import numba.core.target_extension
+
+# Initialize typed containers
+import numba.typed
 
 # Keep this for backward compatibility.
 test = runtests.main
@@ -209,6 +212,3 @@ config.USING_SVML = _try_enable_svml()
 # SVML state to "no SVML". See https://github.com/numba/numba/issues/4689 for
 # context.
 # ---------------------- WARNING WARNING WARNING ----------------------------
-
-# Initialize typed containers
-import numba.typed

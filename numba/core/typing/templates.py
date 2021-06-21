@@ -677,7 +677,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                                                 'iinfo': iinfo}
         else:
             sig = disp_type.get_call_type(self.context, new_args, kws)
-            if sig is None: # can't resolve for this hardware
+            if sig is None: # can't resolve for this target
                 return None
             self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
         return sig
@@ -688,7 +688,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         Returning a Dispatcher object.  The Dispatcher object is cached
         internally in `self._impl_cache`.
         """
-        cache_key = self.context, tuple(args), tuple(kws.items())
+        flags = utils.ConfigStack.top_or_none()
+        cache_key = self.context, tuple(args), tuple(kws.items()), flags
         try:
             impl, args = self._impl_cache[cache_key]
             return impl, args
@@ -701,37 +702,38 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
     def _get_jit_decorator(self):
         """Gets a jit decorator suitable for the current target"""
-        from numba.core import decorators
-        from numba import jit
-        jitter_str = self.metadata.get('hardware', None)
+
+        jitter_str = self.metadata.get('target', None)
         if jitter_str is None:
-            # There is no hardware requested, use default, this preserves
+            from numba import jit
+            # There is no target requested, use default, this preserves
             # original behaviour
             jitter = lambda *args, **kwargs: jit(*args, nopython=True, **kwargs)
         else:
-            from numba.core.extending_hardware import (hardware_registry,
-                                                       get_local_target)
+            from numba.core.target_extension import (target_registry,
+                                                     get_local_target,
+                                                     jit_registry)
 
-            # Hardware has been requested, see what it is...
-            jitter = decorators.jit_registry.get(jitter_str, None)
+            # target has been requested, see what it is...
+            jitter = jit_registry.get(jitter_str, None)
 
             if jitter is None:
-                # No JIT known for hardware string, see if something is
+                # No JIT known for target string, see if something is
                 # registered for the string and report if not.
-                hardware_class = hardware_registry.get(jitter_str, None)
-                if hardware_class is None:
-                    msg = ("Unknown hardware target '{}', has it been ",
+                target_class = target_registry.get(jitter_str, None)
+                if target_class is None:
+                    msg = ("Unknown target '{}', has it been ",
                            "registered?")
                     raise ValueError(msg.format(jitter_str))
 
                 target_hw = get_local_target(self.context)
 
-                # check that the requested hardware is in the hierarchy for the
+                # check that the requested target is in the hierarchy for the
                 # current frame's target.
-                if not issubclass(target_hw, hardware_class):
-                    msg = "No overloads exist for the requested hardware: {}."
+                if not issubclass(target_hw, target_class):
+                    msg = "No overloads exist for the requested target: {}."
 
-                jitter = decorators.jit_registry[target_hw]
+                jitter = jit_registry[target_hw]
 
         if jitter is None:
             raise ValueError("Cannot find a suitable jit decorator")
@@ -885,13 +887,13 @@ class _IntrinsicTemplate(AbstractTemplate):
         """
         Type the intrinsic by the arguments.
         """
-        from numba.core.extending_hardware import (get_local_target,
-                                                   resolve_target_str,
-                                                   dispatcher_registry)
+        from numba.core.target_extension import (get_local_target,
+                                                 resolve_target_str,
+                                                 dispatcher_registry)
         from numba.core.imputils import builtin_registry
 
         cache_key = self.context, args, tuple(kws.items())
-        hwstr = self.metadata.get('hardware', 'generic')
+        hwstr = self.metadata.get('target', 'generic')
         # Get the class for the target declared by the function
         hw_clazz = resolve_target_str(hwstr)
         # get the local target
@@ -1103,7 +1105,10 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         if self._attr != attr:
             return None
 
-        assert isinstance(typ, self.key)
+        if isinstance(typ, types.TypeRef):
+            assert typ == self.key
+        else:
+            assert isinstance(typ, self.key)
 
         class MethodTemplate(AbstractTemplate):
             key = (self.key, attr)

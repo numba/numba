@@ -188,6 +188,18 @@ class ConfigStack:
     """
     tls = threading.local()
 
+    @classmethod
+    def top_or_none(cls):
+        """Get the TOS or return None if no config is set.
+        """
+        self = cls()
+        if self:
+            flags = self.top()
+        else:
+            # Note: should this be the default flag for the target instead?
+            flags = None
+        return flags
+
     def __init__(self):
         tls = self.tls
         try:
@@ -296,26 +308,67 @@ class UniqueDict(dict):
         super(UniqueDict, self).__setitem__(key, value)
 
 
-# Django's cached_property
-# see https://docs.djangoproject.com/en/dev/ref/utils/#django.utils.functional.cached_property    # noqa: E501
+if PYVERSION > (3, 7):
+    from functools import cached_property
+else:
+    from threading import RLock
 
-class cached_property(object):
-    """
-    Decorator that converts a method with a single self argument into a
-    property cached on the instance.
+    # The following cached_property() implementation is adapted from CPython:
+    # https://github.com/python/cpython/blob/3.8/Lib/functools.py#L924-L976
+    # commit SHA: 12b714391e485d0150b343b114999bae4a0d34dd
 
-    Optional ``name`` argument allows you to make cached properties of other
-    methods. (e.g.  url = cached_property(get_absolute_url, name='url') )
-    """
-    def __init__(self, func, name=None):
-        self.func = func
-        self.name = name or func.__name__
+    ###########################################################################
+    ### cached_property() - computed once per instance, cached as attribute
+    ###########################################################################
 
-    def __get__(self, instance, type=None):
-        if instance is None:
-            return self
-        res = instance.__dict__[self.name] = self.func(instance)
-        return res
+    _NOT_FOUND = object()
+
+    class cached_property:
+        def __init__(self, func):
+            self.func = func
+            self.attrname = None
+            self.__doc__ = func.__doc__
+            self.lock = RLock()
+
+        def __set_name__(self, owner, name):
+            if self.attrname is None:
+                self.attrname = name
+            elif name != self.attrname:
+                raise TypeError(
+                    "Cannot assign the same cached_property to two different names " # noqa: E501
+                    f"({self.attrname!r} and {name!r})."
+                )
+
+        def __get__(self, instance, owner=None):
+            if instance is None:
+                return self
+            if self.attrname is None:
+                raise TypeError(
+                    "Cannot use cached_property instance without calling __set_name__ on it.") # noqa: E501
+            try:
+                cache = instance.__dict__
+            except AttributeError:  # not all objects have __dict__ (e.g. class defines slots) # noqa: E501
+                msg = (
+                    f"No '__dict__' attribute on {type(instance).__name__!r} "
+                    f"instance to cache {self.attrname!r} property."
+                )
+                raise TypeError(msg) from None
+            val = cache.get(self.attrname, _NOT_FOUND)
+            if val is _NOT_FOUND:
+                with self.lock:
+                    # check if another thread filled cache while we awaited lock
+                    val = cache.get(self.attrname, _NOT_FOUND)
+                    if val is _NOT_FOUND:
+                        val = self.func(instance)
+                        try:
+                            cache[self.attrname] = val
+                        except TypeError:
+                            msg = (
+                                f"The '__dict__' attribute on {type(instance).__name__!r} instance "    # noqa: E501
+                                f"does not support item assignment for caching {self.attrname!r} property." # noqa: E501
+                            )
+                            raise TypeError(msg) from None
+            return val
 
 
 def runonce(fn):
@@ -558,6 +611,9 @@ class _RedirectSubpackage(ModuleType):
         old_module = old_module_locals['__name__']
         super().__init__(old_module)
 
+        self.__old_module_states = {}
+        self.__new_module = new_module
+
         new_mod_obj = import_module(new_module)
 
         # Map all sub-modules over
@@ -573,4 +629,10 @@ class _RedirectSubpackage(ModuleType):
         # copy across dunders so that package imports work too
         for attr, value in old_module_locals.items():
             if attr.startswith('__') and attr.endswith('__'):
-                setattr(self, attr, value)
+                if attr != "__builtins__":
+                    setattr(self, attr, value)
+                    self.__old_module_states[attr] = value
+
+    def __reduce__(self):
+        args = (self.__old_module_states, self.__new_module)
+        return _RedirectSubpackage, args

@@ -1,13 +1,14 @@
 from abc import ABC, abstractmethod
-from numba.core.registry import TargetRegistry, CPUDispatcher
-
+from numba.core.registry import DelayedRegistry, CPUDispatcher
+from numba.core.decorators import jit
 from threading import local as tls
+
 
 _active_context = tls()
 _active_context_default = 'cpu'
 
 
-class HardwareRegistry(TargetRegistry):
+class _TargetRegistry(DelayedRegistry):
 
     def __getitem__(self, item):
         try:
@@ -15,14 +16,20 @@ class HardwareRegistry(TargetRegistry):
         except KeyError:
             msg = "No target is registered against '{}', known targets:\n{}"
             known = '\n'.join([f"{k: <{10}} -> {v}"
-                               for k, v in hardware_registry.items()])
+                               for k, v in target_registry.items()])
             raise ValueError(msg.format(item, known)) from None
 
 
-hardware_registry = HardwareRegistry()
+# Registry mapping target name strings to Target classes
+target_registry = _TargetRegistry()
+
+# Registry mapping Target classes the @jit decorator for that target
+jit_registry = DelayedRegistry()
 
 
-class hardware_target(object):
+class target_override(object):
+    """Context manager to temporarily override the current target with that
+       prescribed."""
     def __init__(self, name):
         self._orig_target = getattr(_active_context, 'target',
                                     _active_context_default)
@@ -50,9 +57,9 @@ def get_local_target(context):
     if len(context.callstack._stack) > 0:
         target = context.callstack[0].target
     else:
-        target = hardware_registry.get(current_target(), None)
+        target = target_registry.get(current_target(), None)
     if target is None:
-        msg = ("The hardware target found is not registered."
+        msg = ("The target found is not registered."
                "Given target was {}.")
         raise ValueError(msg.format(target))
     else:
@@ -61,11 +68,11 @@ def get_local_target(context):
 
 def resolve_target_str(target_str):
     """Resolves a target specified as a string to its Target class."""
-    return hardware_registry[target_str]
+    return target_registry[target_str]
 
 
 def resolve_dispatcher_from_str(target_str):
-    """Returns the dispatcher associated with a target hardware string"""
+    """Returns the dispatcher associated with a target string"""
     target_hw = resolve_target_str(target_str)
     return dispatcher_registry[target_hw]
 
@@ -78,7 +85,7 @@ class JitDecorator(ABC):
 
 
 class Target(ABC):
-    """ Implements a hardware/pseudo-hardware target """
+    """ Implements a target """
 
     @classmethod
     def inherits_from(cls, other):
@@ -87,46 +94,51 @@ class Target(ABC):
 
 
 class Generic(Target):
-    """Mark the hardware target as generic, i.e. suitable for compilation on
-    any target. All hardware must inherit from this.
+    """Mark the target as generic, i.e. suitable for compilation on
+    any target. All must inherit from this.
     """
 
 
 class CPU(Generic):
-    """Mark the hardware target as CPU.
+    """Mark the target as CPU.
     """
 
 
 class GPU(Generic):
-    """Mark the hardware target as GPU, i.e. suitable for compilation on a GPU
+    """Mark the target as GPU, i.e. suitable for compilation on a GPU
     target.
     """
 
 
 class CUDA(GPU):
-    """Mark the hardware target as CUDA.
+    """Mark the target as CUDA.
     """
 
 
 class ROCm(GPU):
-    """Mark the hardware target as ROCm.
+    """Mark the target as ROCm.
     """
 
 
 class NPyUfunc(Target):
-    """Mark the hardware target as a ufunc
+    """Mark the target as a ufunc
     """
 
 
-hardware_registry['generic'] = Generic
-hardware_registry['CPU'] = CPU
-hardware_registry['cpu'] = CPU
-hardware_registry['GPU'] = GPU
-hardware_registry['gpu'] = GPU
-hardware_registry['CUDA'] = CUDA
-hardware_registry['cuda'] = CUDA
-hardware_registry['ROCm'] = ROCm
-hardware_registry['npyufunc'] = NPyUfunc
+target_registry['generic'] = Generic
+target_registry['CPU'] = CPU
+target_registry['cpu'] = CPU
+target_registry['GPU'] = GPU
+target_registry['gpu'] = GPU
+target_registry['CUDA'] = CUDA
+target_registry['cuda'] = CUDA
+target_registry['ROCm'] = ROCm
+target_registry['npyufunc'] = NPyUfunc
 
-dispatcher_registry = TargetRegistry(key_type=Target)
-dispatcher_registry[hardware_registry['cpu']] = CPUDispatcher
+dispatcher_registry = DelayedRegistry(key_type=Target)
+
+
+# Register the cpu target token with its dispatcher and jit
+cpu_target = target_registry['cpu']
+dispatcher_registry[cpu_target] = CPUDispatcher
+jit_registry[cpu_target] = jit
