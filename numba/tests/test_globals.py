@@ -1,5 +1,6 @@
 import numpy as np
 from numba import jit, njit
+from numba.extending import register_jitable
 from numba.tests import usecases
 import unittest
 
@@ -104,7 +105,12 @@ _glbl_np_bool_T = np.bool_(True)
 _glbl_np_bool_F = np.bool_(False)
 
 
+@register_jitable # consumer function
+def _sink(*args):
+    pass
+
 def global_npy_bool():
+    _sink(_glbl_np_bool_T, _glbl_np_bool_F)
     return _glbl_np_bool_T, _glbl_np_bool_F
 
 
