@@ -471,6 +471,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check(arr, np.int32)
         check(arr, np.float32)
         check(arr, np.complex128)
+        check(arr, "float32")
 
         # F-contiguous
         arr = np.arange(24, dtype=np.int8).reshape((3, 8)).T

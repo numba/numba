@@ -405,7 +405,6 @@ class BoundFunction(Callable, Opaque):
         literal_e = None
         nonliteral_e = None
         out = None
-
         choice = [True, False] if template.prefer_literal else [False, True]
         for uselit in choice:
             if uselit:
@@ -442,7 +441,10 @@ class BoundFunction(Callable, Opaque):
                                 raise exc
                         nonliteral_e = exc
                     else:
-                        break
+                        # If out returns None don't break as we may need to use
+                        # a literal.
+                        if out is not None:
+                            break
 
         if out is None and (nonliteral_e is not None or literal_e is not None):
             header = "- Resolution failure for {} arguments:\n{}\n"
