@@ -20,6 +20,7 @@ from numba.core import types
 from numba.np.unsafe.ndarray import to_fixed_tuple
 from numba.misc import dummyarray
 from numba.np import numpy_support
+from numba.cuda.api_util import prepare_shape_strides_dtype
 
 try:
     lru_cache = getattr(functools, 'lru_cache')(None)
@@ -408,6 +409,85 @@ class DeviceRecord(DeviceNDArrayBase):
         """
         return numpy_support.from_dtype(self.dtype)
 
+    @devices.require_context
+    def __getitem__(self, item):
+        return self._do_getitem(item)
+
+    def _do_getitem(self, item, stream=0):
+        stream = self._default_stream(stream)
+        typ, offset = self.dtype.fields[item]
+        newdata = self.gpu_data.view(offset)
+
+        if typ.shape == ():
+            hostary = np.empty(1, dtype=typ)
+            _driver.device_to_host(dst=hostary, src=newdata,
+                                   size=typ.itemsize,
+                                   stream=stream)
+            return hostary[0]
+        else:
+            # subarray case
+            shape, strides, dtype = prepare_shape_strides_dtype(typ.shape,
+                                                                None,
+                                                                typ, 'C')
+            return DeviceNDArray(shape=shape, strides=strides,
+                                 dtype=dtype, gpu_data=newdata,
+                                 stream=stream)
+
+    @devices.require_context
+    def __setitem__(self, key, value):
+        return self._do_setitem(key, value)
+
+    def setitem(self, key, value, stream=0):
+        """Do `__setitem__(key, value)` with CUDA stream
+        """
+        return self._do_setitem(key, value, stream=stream)
+
+    def _do_setitem(self, key, value, stream=0):
+
+        stream = self._default_stream(stream)
+
+        # If the record didn't have a default stream, and the user didn't
+        # provide# a stream, then we will use the default stream for the
+        # assignment # kernel and synchronize on it.
+        synchronous = not stream
+        if synchronous:
+            ctx = devices.get_context()
+            stream = ctx.get_default_stream()
+
+        # (1) prepare LHS
+
+        typ, offset = self.dtype.fields[key]
+
+        if typ.shape == ():
+            newdata = self.gpu_data.view(offset)
+
+            lhs = type(self)(dtype=typ, stream=stream, gpu_data=newdata)
+
+            # (2) prepare RHS
+
+            rhs, _ = auto_device(lhs.dtype.type(value), stream=stream)
+
+            if rhs.dtype.itemsize > lhs.dtype.itemsize:
+                err_str = """Can't assign record of size %s
+                             to self record of size %s"""
+                raise ValueError(err_str % (rhs.dtype.itemsize,
+                                            lhs.dtype.itemsize))
+
+            # (3) do the copy
+
+            _driver.device_to_device(lhs, rhs, rhs.dtype.itemsize, stream)
+
+            if synchronous:
+                stream.synchronize()
+        else:
+            #subarray case
+            shape, strides, dtype = prepare_shape_strides_dtype(typ.shape,
+                                                                None,
+                                                                typ, 'C')
+            return DeviceNDArray(shape=shape, strides=strides,
+                                 dtype=dtype, gpu_data=newdata,
+                                 stream=stream)
+
 
 @lru_cache
 def _assign_kernel(ndim):
@@ -550,7 +630,11 @@ class DeviceNDArray(DeviceNDArrayBase):
         if len(extents) == 1:
             newdata = self.gpu_data.view(*extents[0])
 
-            if not arr.is_array:
+            # Check for structured array type (record)
+            if self.dtype.names is not None:
+                return DeviceRecord(dtype=self.dtype, stream=stream,
+                                    gpu_data=newdata)
+            elif not arr.is_array:
                 # Element indexing
                 hostary = np.empty(1, dtype=self.dtype)
                 _driver.device_to_host(dst=hostary, src=newdata,
