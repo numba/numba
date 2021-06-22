@@ -1,5 +1,6 @@
 import numpy as np
 from numba import jit, njit
+from numba.extending import register_jitable
 from numba.tests import usecases
 import unittest
 
@@ -98,6 +99,19 @@ def global_float_tuple():
 
 def global_npy_int_tuple():
     return tup_npy_ints[0] + tup_npy_ints[1]
+
+
+_glbl_np_bool_T = np.bool_(True)
+_glbl_np_bool_F = np.bool_(False)
+
+
+@register_jitable # consumer function
+def _sink(*args):
+    pass
+
+def global_npy_bool():
+    _sink(_glbl_np_bool_T, _glbl_np_bool_F)
+    return _glbl_np_bool_T, _glbl_np_bool_F
 
 
 class TestGlobals(unittest.TestCase):
@@ -216,6 +230,13 @@ class TestGlobals(unittest.TestCase):
 
     def test_global_npy_int_tuple(self):
         pyfunc = global_npy_int_tuple
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(), jitfunc())
+
+    def test_global_npy_bool(self):
+        # Test global NumPy bool
+        # See issue https://github.com/numba/numba/issues/6979
+        pyfunc = global_npy_bool
         jitfunc = njit(pyfunc)
         self.assertEqual(pyfunc(), jitfunc())
 
