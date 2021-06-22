@@ -162,6 +162,13 @@ class TestRetargeting(unittest.TestCase):
             yield
         self.assertIn(f"{CUSTOM_TARGET} != cpu", str(raises.exception))
 
+    def check_non_empty_cache(self):
+        # Retargeting occurred. The cache must NOT be empty
+        stats = self.retarget.cache.stats()
+        # Because multiple function compilation is trigged, we don't not
+        # precisely how many cache hit/miss there are.
+        self.assertGreater(stats['hit'] + stats['miss'], 0)
+
     def test_case0(self):
         fixed_target = self.functions["fixed_target"]
         flex_target = self.functions["flex_target"]
@@ -174,6 +181,9 @@ class TestRetargeting(unittest.TestCase):
 
         r = foo(123)
         self.assertEqual(r, 123 + 10 + 1000)
+        # No retargeting occurred. The cache must be empty
+        stats = self.retarget.cache.stats()
+        self.assertEqual(stats, dict(hit=0, miss=0))
 
     def test_case1(self):
         flex_target = self.functions["flex_target"]
@@ -186,6 +196,7 @@ class TestRetargeting(unittest.TestCase):
         with self.switch_target():
             r = foo(123)
         self.assertEqual(r, 123 + 1000)
+        self.check_non_empty_cache()
 
     def test_case2(self):
         """
@@ -276,3 +287,5 @@ class TestRetargeting(unittest.TestCase):
         with self.switch_target():
             r = foo(123)
             self.assertEqual(r, 123 + 62830)
+
+        self.check_non_empty_cache()
