@@ -471,11 +471,8 @@ class Device(object):
         self.attributes = {}
 
         # Read compute capability
-        cc_major = c_int()
-        cc_minor = c_int()
-        driver.cuDeviceComputeCapability(byref(cc_major), byref(cc_minor),
-                                         self.id)
-        self.compute_capability = (cc_major.value, cc_minor.value)
+        self.compute_capability = (self.COMPUTE_CAPABILITY_MAJOR,
+                                   self.COMPUTE_CAPABILITY_MINOR)
 
         # Read name
         bufsz = 128
