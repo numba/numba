@@ -309,17 +309,16 @@ class Driver(object):
         return functools.wraps(libfn)(wrapper)
 
     def _find_api(self, fname):
-        # Try version 2
-        try:
-            return getattr(self.lib, fname + "_v2")
-        except AttributeError:
-            pass
+        if config.CUDA_PER_THREAD_DEFAULT_STREAM:
+            variants = ('_v2_ptds', '_v2_ptsz', '_ptds', '_ptsz', '_v2', '')
+        else:
+            variants = ('_v2', '')
 
-        # Try regular
-        try:
-            return getattr(self.lib, fname)
-        except AttributeError:
-            pass
+        for variant in variants:
+            try:
+                return getattr(self.lib, f'{fname}{variant}')
+            except AttributeError:
+                pass
 
         # Not found.
         # Delay missing function error to use
@@ -472,11 +471,8 @@ class Device(object):
         self.attributes = {}
 
         # Read compute capability
-        cc_major = c_int()
-        cc_minor = c_int()
-        driver.cuDeviceComputeCapability(byref(cc_major), byref(cc_minor),
-                                         self.id)
-        self.compute_capability = (cc_major.value, cc_minor.value)
+        self.compute_capability = (self.COMPUTE_CAPABILITY_MAJOR,
+                                   self.COMPUTE_CAPABILITY_MINOR)
 
         # Read name
         bufsz = 128
