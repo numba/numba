@@ -299,7 +299,7 @@ class BaseContext(object):
         usable = []
         for ix, temp_cls in enumerate(templates):
             # ? Need to do something about this next line
-            md = getattr(temp_cls, "metaddata", {})
+            md = getattr(temp_cls, "metadata", {})
             hw = md.get('target', DEFAULT_TARGET)
             if hw is not None:
                 hw_clazz = target_registry[hw]
@@ -313,7 +313,6 @@ class BaseContext(object):
         order = [x[0] for x in sorted(usable, key=key)]
 
         for template in order:
-
             return_type = template.resolve(typ, attr)
             if return_type is not None:
                 return {
