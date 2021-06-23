@@ -105,6 +105,8 @@ Dispatching
   for different type signatures.
 - :ghfile:`numba/_dispatcher.cpp` - C++ dispatcher implementation (for speed on
   common data types)
+- :ghfile:`numba/core/retarget.py` - Support for dispatcher objects to switch
+  target via a specific with-context.
 
 
 Compiler Pipeline
