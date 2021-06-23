@@ -340,12 +340,15 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
             cls = LiftedWith
         return cls(func_ir, typingctx, targetctx, myflags, locals, **kwargs)
 
+    # find where with-contexts regions are
+    withs = find_setupwiths(func_ir.blocks)
+    if not withs:
+        return func_ir, []
+
     postproc.PostProcessor(func_ir).run()  # ensure we have variable lifetime
     assert func_ir.variable_lifetime
     vlt = func_ir.variable_lifetime
     blocks = func_ir.blocks.copy()
-    # find where with-contexts regions are
-    withs = find_setupwiths(blocks)
     cfg = vlt.cfg
     _legalize_withs_cfg(withs, cfg, blocks)
     # For each with-regions, mutate them according to

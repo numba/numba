@@ -595,7 +595,6 @@ class MakeFunctionToJitFunction(FunctionPass):
                                 ok = all([isinstance(getdef(x), ir.Const)
                                           for x in kw_default.items])
                             if not ok:
-                                print("NOT OK")
                                 continue
 
                             pyfunc = convert_code_obj_to_function(node, func_ir)

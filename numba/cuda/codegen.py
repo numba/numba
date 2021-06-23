@@ -98,31 +98,51 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         return str(self._module)
 
     def get_asm_str(self, cc=None):
+        return self._join_ptxes(self._get_ptxes(cc=cc))
+
+    def _get_ptxes(self, cc=None):
         if not cc:
             ctx = devices.get_context()
             device = ctx.device
             cc = device.compute_capability
 
-        ptx = self._ptx_cache.get(cc, None)
-        if ptx:
-            return ptx
+        ptxes = self._ptx_cache.get(cc, None)
+        if ptxes:
+            return ptxes
 
         arch = nvvm.get_arch_option(*cc)
         options = self._nvvm_options.copy()
         options['arch'] = arch
 
         irs = [str(mod) for mod in self.modules]
-        ptx = nvvm.llvm_to_ptx(irs, **options)
-        ptx = ptx.decode().strip('\x00').strip()
+
+        if options.get('debug', False):
+            # If we're compiling with debug, we need to compile modules with
+            # NVVM one at a time, because it does not support multiple modules
+            # with debug enabled:
+            # https://docs.nvidia.com/cuda/nvvm-ir-spec/index.html#source-level-debugging-support
+            ptxes = [nvvm.llvm_to_ptx(ir, **options) for ir in irs]
+        else:
+            # Otherwise, we compile all modules with NVVM at once because this
+            # results in better optimization than separate compilation.
+            ptxes = [nvvm.llvm_to_ptx(irs, **options)]
+
+        # Sometimes the result from NVVM contains trailing whitespace and
+        # nulls, which we strip so that the assembly dump looks a little
+        # tidier.
+        ptxes = [x.decode().strip('\x00').strip() for x in ptxes]
 
         if config.DUMP_ASSEMBLY:
             print(("ASSEMBLY %s" % self._name).center(80, '-'))
-            print(ptx)
+            print(self._join_ptxes(ptxes))
             print('=' * 80)
 
-        self._ptx_cache[cc] = ptx
+        self._ptx_cache[cc] = ptxes
 
-        return ptx
+        return ptxes
+
+    def _join_ptxes(self, ptxes):
+        return "\n\n".join(ptxes)
 
     def get_cubin(self, cc=None):
         if cc is None:
@@ -134,11 +154,14 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         if cubin:
             return cubin
 
-        ptx = self.get_asm_str(cc=cc)
         linker = driver.Linker(max_registers=self._max_registers, cc=cc)
-        linker.add_ptx(ptx.encode())
+
+        ptxes = self._get_ptxes(cc=cc)
+        for ptx in ptxes:
+            linker.add_ptx(ptx.encode())
         for path in self._linking_files:
             linker.add_file_guess_ext(path)
+
         cubin_buf, size = linker.complete()
 
         # We take a copy of the cubin because it's owned by the linker
@@ -230,9 +253,14 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         #
         # See also discussion on PR #890:
         # https://github.com/numba/numba/pull/890
+        #
+        # We don't adjust the linkage of functions when compiling for debug -
+        # because the device functions are in separate modules, we need them to
+        # be externally visible.
         for library in self._linking_libraries:
             for fn in library._module.functions:
-                if not fn.is_declaration:
+                if (not fn.is_declaration and
+                        not self._nvvm_options.get('debug', False)):
                     fn.linkage = 'linkonce_odr'
 
         self._finalized = True

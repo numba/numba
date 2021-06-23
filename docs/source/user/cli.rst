@@ -112,15 +112,6 @@ Example output::
     CUDA driver library cannot be found or no CUDA enabled devices are present.
     Error class: <class 'numba.cuda.cudadrv.error.CudaSupportError'>
 
-    __ROC Information__
-    ROC available                                 : False
-    Error initialising ROC due to                 : No ROC toolchains found.
-    No HSA Agents found, encountered exception when searching:
-    Error at driver init: 
-
-    HSA is not currently supported on this platform (darwin).
-    :
-
     __SVML Information__
     SVML state, config.USING_SVML                 : False
     SVML library found and loaded                 : False

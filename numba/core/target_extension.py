@@ -115,11 +115,6 @@ class CUDA(GPU):
     """
 
 
-class ROCm(GPU):
-    """Mark the target as ROCm.
-    """
-
-
 class NPyUfunc(Target):
     """Mark the target as a ufunc
     """
@@ -132,7 +127,6 @@ target_registry['GPU'] = GPU
 target_registry['gpu'] = GPU
 target_registry['CUDA'] = CUDA
 target_registry['cuda'] = CUDA
-target_registry['ROCm'] = ROCm
 target_registry['npyufunc'] = NPyUfunc
 
 dispatcher_registry = DelayedRegistry(key_type=Target)

@@ -85,7 +85,7 @@ class DebugTestBase(TestCase):
     def _check_dump_llvm(self, out):
         self.assertIn('--LLVM DUMP', out)
         if compiler.Flags.options["auto_parallel"].default.enabled == False:
-            self.assertIn('%"retval" = alloca', out)
+            self.assertRegex(out, r'store i64 %\"\.\d", i64\* %"retptr"', out)
 
     def _check_dump_func_opt_llvm(self, out):
         self.assertIn('--FUNCTION OPTIMIZED DUMP %s' % self.func_name, out)

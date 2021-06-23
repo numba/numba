@@ -86,7 +86,7 @@ __all__ = """
 
 
 _min_llvmlite_version = (0, 33, 0)
-_min_llvm_version = (9, 0, 0)
+_min_llvm_version = (11, 0, 0)
 
 def _ensure_llvm():
     """

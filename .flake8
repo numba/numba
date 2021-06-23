@@ -236,42 +236,6 @@ exclude =
     numba/core/typing/cffi_utils.py
     numba/core/typing/npdatetime.py
     numba/core/annotations/type_annotations.py
-    numba/roc/mathdecl.py
-    numba/roc/compiler.py
-    numba/roc/hsadecl.py
-    numba/roc/dispatch.py
-    numba/roc/hsaimpl.py
-    numba/roc/api.py
-    numba/roc/gcn_occupancy.py
-    numba/roc/stubs.py
-    numba/roc/vectorizers.py
-    numba/roc/decorators.py
-    numba/roc/hlc/config.py
-    numba/roc/hlc/common.py
-    numba/roc/hlc/hlc.py
-    numba/roc/hlc/libhlc.py
-    numba/roc/tests/hsapy/test_atomics.py
-    numba/roc/tests/hsapy/test_ufuncbuilding.py
-    numba/roc/tests/hsapy/test_autojit.py
-    numba/roc/tests/hsapy/test_intrinsics.py
-    numba/roc/tests/hsapy/test_simple.py
-    numba/roc/tests/hsapy/test_compiler.py
-    numba/roc/tests/hsapy/test_positioning.py
-    numba/roc/tests/hsapy/test_scan.py
-    numba/roc/tests/hsapy/test_reduction.py
-    numba/roc/tests/hsapy/test_memory.py
-    numba/roc/tests/hsapy/run_far_branch.py
-    numba/roc/tests/hsapy/test_math.py
-    numba/roc/tests/hsapy/test_large_code.py
-    numba/roc/tests/hsapy/test_occupancy.py
-    numba/roc/tests/hsadrv/test_driver.py
-    numba/roc/hsadrv/enums.py
-    numba/roc/hsadrv/error.py
-    numba/roc/hsadrv/enums_ext.py
-    numba/roc/hsadrv/drvapi.py
-    numba/roc/hsadrv/driver.py
-    numba/roc/hsadrv/devices.py
-    numba/roc/hsadrv/devicearray.py
     numba/testing/ddt.py
     numba/testing/loader.py
     numba/testing/notebook.py
@@ -282,7 +246,6 @@ exclude =
     numba/parfors/parfor_lowering.py
     numba/np/ufunc/array_exprs.py
     numba/np/ufunc/decorators.py
-    numba/roc/servicelib/service.py
     numba/core/datamodel/models.py
     numba/core/datamodel/packer.py
     numba/core/datamodel/testing.py
