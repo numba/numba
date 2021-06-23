@@ -1,5 +1,8 @@
-import re
 import inspect
+import os
+import re
+import subprocess
+import sys
 
 from numba.tests.support import TestCase, override_config
 from numba import jit, njit
@@ -50,6 +53,11 @@ class TestDebugInfo(TestCase):
             def bar(x):
                 return x
             self._check(bar, sig=(types.int32,), expect=False)
+
+
+# some tests need clean environments to hide optimisation default states
+_exec_cond = os.environ.get('SUBPROC_TEST', None) == '1'
+needs_subprocess = unittest.skipUnless(_exec_cond, "needs subprocess harness")
 
 
 class TestDebugInfoEmission(TestCase):
@@ -179,11 +187,11 @@ class TestDebugInfoEmission(TestCase):
         # Pull out metadata entries referred to by the llvm line end !dbg
         # check they match the python source, the +2 is for the @njit decorator
         # and the function definition line.
-        offsets = [0, # b = a + 1
-                   1, # a * 2.34
-                   2, # e = b / c
-                   3, # select on a > z
-                   7, # print(d), there's a jump because this is the phi of d
+        offsets = [0,  # b = a + 1
+                   1,  # a * 2.34
+                   2,  # e = b / c
+                   3,  # select on a > z
+                   7,  # print(d), there's a jump because this is the phi of d
                    ]
         pyln_range = [pysrc_line_start + 2 + x for x in offsets]
 
@@ -207,6 +215,82 @@ class TestDebugInfoEmission(TestCase):
                 break
         else:
             self.fail('Assertion on DILocalVariable not made')
+
+    @needs_subprocess
+    def test_DILocation_entry_blk_impl(self):
+        """ This tests that the unconditional jump emitted at the tail of
+        the entry block has no debug metadata associated with it. In practice,
+        if this is not the case, it manifests as the prologue_end being
+        associated with the end_sequence or similar (due to the way code gen
+        works for the entry block)."""
+
+        with override_config('OPT', 0):
+            # NOTE: This has to be declared and compiled under the override
+            # ctx manager, this is because a codegen is created at decoration
+            # point and it will get the default OPT (3) if not declared with the
+            # override in place.
+            @njit(debug=True)
+            def foo(a):
+                b = a + 1
+                c = b * 2.34
+                d = (a, 10 * c)
+                return d
+            foo(123)
+
+        full_ir = foo.inspect_llvm(foo.signatures[0])
+        # The above produces LLVM like:
+        #
+        # define function() {
+        # entry:
+        #   alloca
+        #   store 0 to alloca
+        #   unconditional jump to body:
+        #
+        # body:
+        # ... <elided>
+        # }
+
+        module = llvm.parse_assembly(full_ir)
+        name = foo.overloads[foo.signatures[0]].fndesc.mangled_name
+        funcs = [x for x in module.functions if x.name == name]
+        self.assertEqual(len(funcs), 1)
+        func = funcs[0]
+        blocks = [x for x in func.blocks]
+        self.assertEqual(len(blocks), 2)
+        entry_block, body_block = blocks
+
+        # Assert that the tail of the entry block is an unconditional jump to
+        # the body block and that the jump has no associated debug info.
+        entry_instr = [x for x in entry_block.instructions]
+        ujmp = entry_instr[-1]
+        self.assertEqual(ujmp.opcode, 'br')
+        ujmp_operands = [x for x in ujmp.operands]
+        self.assertEqual(len(ujmp_operands), 1)
+        target_data = ujmp_operands[0]
+        target = str(target_data).split(':')[0].strip()
+        # check the unconditional jump target is to the body block
+        self.assertEqual(target, body_block.name)
+        # check the uncondition jump instr itself has no metadata
+        self.assertTrue(str(ujmp).endswith(target))
+
+    def test_DILocation_entry_blk(self):
+        # Test runner for test_DILocation_entry_blk_impl, needs a subprocess
+        # as jitting literally anything at any point in the lifetime of the
+        # process ends up with a codegen at opt 3. This is not amenable to this
+        # test!
+        themod = self.__module__
+        thecls = type(self).__name__
+        injected_method = f'{themod}.{thecls}.test_DILocation_entry_blk_impl'
+        cmd = [sys.executable, '-m', 'numba.runtests', injected_method]
+        env_copy = os.environ.copy()
+        env_copy['SUBPROC_TEST'] = '1'
+        status = subprocess.run(cmd, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, timeout=60, check=True,
+                                env=env_copy, universal_newlines=True)
+        self.assertEqual(status.returncode, 0)
+        self.assertIn('OK', status.stderr       )
+        self.assertTrue('FAIL' not in status.stderr)
+        self.assertTrue('ERROR' not in status.stderr)
 
 
 if __name__ == '__main__':

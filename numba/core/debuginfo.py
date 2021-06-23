@@ -5,9 +5,21 @@ Implements helpers to build LLVM debuginfo.
 
 import abc
 import os.path
+from contextlib import contextmanager
 
 from llvmlite import ir
 from numba.core import cgutils
+
+@contextmanager
+def suspend_emission(builder):
+    """Suspends the emission of debug_metadata for the duration of the context
+    managed block."""
+    ref = builder.debug_metadata
+    builder.debug_metadata = None
+    try:
+        yield
+    finally:
+        builder.debug_metadata = ref
 
 
 class AbstractDIBuilder(metaclass=abc.ABCMeta):

@@ -190,9 +190,12 @@ class BaseLower(object):
         self.extract_function_arguments()
         entry_block_tail = self.lower_function_body()
 
-        # Close tail of entry block
-        self.builder.position_at_end(entry_block_tail)
-        self.builder.branch(self.blkmap[self.firstblk])
+        # Close tail of entry block, do not emit debug metadata else the
+        # unconditional jump gets associated with the metadata from the function
+        # body end.
+        with debuginfo.suspend_emission(self.builder):
+            self.builder.position_at_end(entry_block_tail)
+            self.builder.branch(self.blkmap[self.firstblk])
 
     def lower_function_body(self):
         """
@@ -1281,10 +1284,11 @@ class Lower(BaseLower):
             # quit early
             return
 
-        llty = self.context.get_value_type(fetype)
-        # If the name is used in multiple blocks...
-        if name not in self._singly_assigned_vars:
+        # If the name is used in multiple blocks or lowering with debuginfo...
+        flags = utils.ConfigStack.top_or_none()
+        if (name not in self._singly_assigned_vars) or flags.debuginfo:
             # If not already defined, allocate it
+            llty = self.context.get_value_type(fetype)
             ptr = self.alloca_lltype(name, llty)
             # Remember the pointer
             self.varmap[name] = ptr
@@ -1293,15 +1297,18 @@ class Lower(BaseLower):
         """
         Get a pointer to the given variable's slot.
         """
-        assert name not in self._blk_local_varmap
-        assert name not in self._singly_assigned_vars
+        flags = utils.ConfigStack.top_or_none()
+        if not flags.debuginfo:
+            assert name not in self._blk_local_varmap
+            assert name not in self._singly_assigned_vars
         return self.varmap[name]
 
     def loadvar(self, name):
         """
         Load the given variable's value.
         """
-        if name in self._blk_local_varmap:
+        flags = utils.ConfigStack.top_or_none()
+        if name in self._blk_local_varmap and not flags.debuginfo:
             return self._blk_local_varmap[name]
         ptr = self.getvar(name)
         return self.builder.load(ptr)
@@ -1315,7 +1322,8 @@ class Lower(BaseLower):
         self._alloca_var(name, fetype)
 
         # Store variable
-        if name in self._singly_assigned_vars:
+        flags = utils.ConfigStack.top_or_none()
+        if name in self._singly_assigned_vars and not flags.debuginfo:
             self._blk_local_varmap[name] = value
         else:
             # Clean up existing value stored in the variable
@@ -1339,9 +1347,10 @@ class Lower(BaseLower):
         Delete the given variable.
         """
         fetype = self.typeof(name)
+        flags = utils.ConfigStack.top_or_none()
 
         # Out-of-order
-        if name not in self._blk_local_varmap:
+        if name not in self._blk_local_varmap and not flags.debuginfo:
             if name in self._singly_assigned_vars:
                 self._singly_assigned_vars.discard(name)
 
@@ -1349,7 +1358,7 @@ class Lower(BaseLower):
         # at the beginning of a loop, but only set later in the loop)
         self._alloca_var(name, fetype)
 
-        if name in self._blk_local_varmap:
+        if name in self._blk_local_varmap and not flags.debuginfo:
             llval = self._blk_local_varmap[name]
             self.decref(fetype, llval)
         else:

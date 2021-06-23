@@ -9,7 +9,7 @@ import functools
 
 from llvmlite import ir
 
-from numba.core import utils, types, config
+from numba.core import utils, types, config, debuginfo
 import numba.core.datamodel
 
 
@@ -370,21 +370,18 @@ def alloca_once(builder, ty, size=None, name='', zfill=False):
     """
     if isinstance(size, int):
         size = ir.Constant(intp_t, size)
-    # suspend dwarf emission else it links up python source lines with alloca in
-    # the entry block as well as their actual location and it makes the debug
-    # info "jump about".
-    ref = builder.debug_metadata
-    builder.debug_metadata = None
-    with builder.goto_entry_block():
-        ptr = builder.alloca(ty, size=size, name=name)
-        # Always zero-fill at init-site.  This is safe.
-        builder.store(ptr.type.pointee(None), ptr)
-    # Also zero-fill at the use-site
-    if zfill:
-        builder.store(ptr.type.pointee(None), ptr)
-    # continue with dwarf emission
-    builder.debug_metadata = ref
-    return ptr
+    # suspend debug metadata emission else it links up python source lines with
+    # alloca in the entry block as well as their actual location and it makes
+    # the debug info "jump about".
+    with debuginfo.suspend_emission(builder):
+        with builder.goto_entry_block():
+            ptr = builder.alloca(ty, size=size, name=name)
+            # Always zero-fill at init-site.  This is safe.
+            builder.store(ptr.type.pointee(None), ptr)
+        # Also zero-fill at the use-site
+        if zfill:
+            builder.store(ptr.type.pointee(None), ptr)
+        return ptr
 
 
 def sizeof(builder, ptr_type):
