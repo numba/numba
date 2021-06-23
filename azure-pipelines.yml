@@ -26,7 +26,7 @@ jobs:
 - template: buildscripts/azure/azure-linux-macos.yml
   parameters:
     name: Linux
-    vmImage: ubuntu-16.04
+    vmImage: ubuntu-18.04
     matrix:
       py37_np115_32bit:
         # 32 bit linux only has np 1.15
