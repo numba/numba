@@ -8,6 +8,7 @@ NOTES:
 * Minimum python version raised to 3.7.
 * NumPy version 1.20 supported.
 * Minimum supported NumPy version raised to 1.17.
+* Moved ROCm target to "unmaintained" status.
 
 Version 0.53.1 (25 March, 2021)
 -------------------------------
