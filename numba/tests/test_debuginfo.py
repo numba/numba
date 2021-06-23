@@ -95,25 +95,19 @@ class TestDebugInfoEmission(TestCase):
         """ Tests that DILocation information is reasonable.
         """
         @njit(debug=True, error_model='numpy')
-        def foo(a, z):
-            b = a + 1
+        def foo(a):
+            b = a + 1.23
             c = a * 2.34
-            e = b / c
-            if a > z:
-                d = (a, b, c, z)
-            else:
-                d = (z, b, c, a)
+            d = b / c
             print(d)
-            return b, c, d, e
+            return d
 
         # the above produces LLVM like:
         # define function() {
         # entry:
         #   alloca
         #   store 0 to alloca
-        #   <arithmetic for doing the operations on b, c, e>
-        #   fcmp for a > z
-        #   select version of d
+        #   <arithmetic for doing the operations on b, c, d>
         #   setup for print
         #   branch
         # other_labels:
@@ -126,7 +120,7 @@ class TestDebugInfoEmission(TestCase):
         # * that the !dbg entries are monotonically increasing in value with
         #   source line number
 
-        sig = (types.float64, types.float64)
+        sig = (types.float64,)
         metadata = self._get_metadata(foo, sig=sig)
         full_ir = self._get_llvmir(foo, sig=sig)
 
@@ -189,9 +183,8 @@ class TestDebugInfoEmission(TestCase):
         # and the function definition line.
         offsets = [0,  # b = a + 1
                    1,  # a * 2.34
-                   2,  # e = b / c
-                   3,  # select on a > z
-                   7,  # print(d), there's a jump because this is the phi of d
+                   2,  # d = b / c
+                   3,  # print(d)
                    ]
         pyln_range = [pysrc_line_start + 2 + x for x in offsets]
 
