@@ -245,7 +245,7 @@ class TestCC(BasePYCCTest):
         self.check_compile_for_cpu("host")
 
     @unittest.skipIf(sys.platform == 'darwin' and
-                     utils.PYVERSION == (3, 8),
+                     utils.PYVERSION in ((3, 8), (3, 7)),
                      'distutils incorrectly using gcc on python 3.8 builds')
     def test_compile_helperlib(self):
         with self.check_cc_compiled(self._test_module.cc_helperlib) as lib:
