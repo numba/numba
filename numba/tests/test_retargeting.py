@@ -165,7 +165,7 @@ class TestRetargeting(unittest.TestCase):
     def check_non_empty_cache(self):
         # Retargeting occurred. The cache must NOT be empty
         stats = self.retarget.cache.stats()
-        # Because multiple function compilation is trigged, we don't not
+        # Because multiple function compilations are triggered, we don't know
         # precisely how many cache hit/miss there are.
         self.assertGreater(stats['hit'] + stats['miss'], 0)
 
