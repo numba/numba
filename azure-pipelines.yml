@@ -28,10 +28,10 @@ jobs:
     name: Linux
     vmImage: ubuntu-18.04
     matrix:
-      py37_np115_32bit:
+      py37_np117_32bit:
         # 32 bit linux only has np 1.15
         PYTHON: '3.7'
-        NUMPY: '1.15'
+        NUMPY: '1.17'
         CONDA_ENV: azure_ci
         BITS32: yes
         TEST_START_INDEX: 2
