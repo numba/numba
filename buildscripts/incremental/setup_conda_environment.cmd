@@ -22,7 +22,7 @@ call deactivate
 @rem Display root environment (for debugging)
 conda list
 @rem Scipy, CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
-conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip scipy jinja2 ipython gitpython pyyaml
+conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip scipy jinja2 ipython gitpython=3.1.17 pyyaml
 
 call activate %CONDA_ENV%
 @rem Install latest llvmlite build

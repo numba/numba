@@ -41,9 +41,9 @@ conda list
 # NOTE: 32 bit linux... do not install NumPy, there's no conda package for >1.15
 # so it has to come from pip later
 if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]]; then
-    conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON pip gitpython pyyaml
+    conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON pip gitpython=3.1.17 pyyaml
 else
-    conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
+    conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython=3.1.17 pyyaml
 fi
 
 # Activate first
@@ -77,8 +77,7 @@ fi
 
 # If on 32bit linux, now pip install NumPy and SciPy (no conda package)
 if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
-    $PIP_INSTALL numpy==$NUMPY
-    $PIP_INSTALL scipy
+    $PIP_INSTALL numpy==$NUMPY scipy
 fi
 
 # Install latest llvmlite build
