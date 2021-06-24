@@ -284,11 +284,10 @@ class BaseContext(object):
                 return attrty
 
     def find_matching_getattr_template(self, typ, attr):
-
-        templates = list(self._get_attribute_templates(typ))
-
         from numba.core.target_extension import (target_registry,
                                                  get_local_target)
+
+        templates = list(self._get_attribute_templates(typ))
 
         # get the current target target
         target_hw = get_local_target(self)
@@ -298,7 +297,6 @@ class BaseContext(object):
         DEFAULT_TARGET = 'generic'
         usable = []
         for ix, temp_cls in enumerate(templates):
-            # ? Need to do something about this next line
             md = getattr(temp_cls, "metadata", {})
             hw = md.get('target', DEFAULT_TARGET)
             if hw is not None:

@@ -13,7 +13,11 @@ from types import MethodType, FunctionType
 
 import numba
 from numba.core import types, utils
-from numba.core.errors import TypingError, InternalError
+from numba.core.errors import (
+    TypingError,
+    InternalError,
+    InternalTargetMismatchError,
+)
 from numba.core.cpu_options import InlineOptions
 
 # info store for inliner callback functions e.g. cost model
@@ -887,23 +891,13 @@ class _IntrinsicTemplate(AbstractTemplate):
         """
         Type the intrinsic by the arguments.
         """
-        from numba.core.target_extension import (get_local_target,
-                                                 resolve_target_str,
+        from numba.core.target_extension import (_get_local_target_checked,
                                                  dispatcher_registry)
         from numba.core.imputils import builtin_registry
 
         cache_key = self.context, args, tuple(kws.items())
         hwstr = self.metadata.get('target', 'generic')
-        # Get the class for the target declared by the function
-        hw_clazz = resolve_target_str(hwstr)
-        # get the local target
-        target_hw = get_local_target(self.context)
-        # make sure the target_hw is in the MRO for hw_clazz else bail
-        if not target_hw.inherits_from(hw_clazz):
-            msg = (f"Intrinsic being resolved on a target from which it does "
-                   f"not inherit. Local target is {target_hw}, declared "
-                   f"target class is {hw_clazz}.")
-            raise InternalError(msg)
+        target_hw = _get_local_target_checked(self.context, hwstr, "intrinsic")
         disp = dispatcher_registry[target_hw]
         tgtctx = disp.targetdescr.target_context
         # This is all workarounds...
@@ -990,27 +984,11 @@ def make_intrinsic_template(handle, defn, name, kwargs):
 
 
 class AttributeTemplate(object):
-    _initialized = False
-
     def __init__(self, context):
-        self._lazy_class_init()
         self.context = context
 
     def resolve(self, value, attr):
         return self._resolve(value, attr)
-
-    @classmethod
-    def _lazy_class_init(cls):
-        if not cls._initialized:
-            cls.do_class_init()
-            cls._initialized = True
-
-    @classmethod
-    def do_class_init(cls):
-        """
-        Class-wide initialization.  Can be overridden by subclasses to
-        register permanent typing or target hooks.
-        """
 
     def _resolve(self, value, attr):
         fn = getattr(self, "resolve_%s" % attr, None)
@@ -1034,31 +1012,20 @@ class _OverloadAttributeTemplate(AttributeTemplate):
     A base class of templates for @overload_attribute functions.
     """
     is_method = False
-    _my_init = False
 
     def __init__(self, context):
         super(_OverloadAttributeTemplate, self).__init__(context)
         self.context = context
+        self._init_once()
 
-        if not self._my_init:
-            self._init_once()
-            self._my_init = True
-
-    def _get_the_right_registry(self):
-        from numba.core.target_extension import (get_local_target,
-                                                 resolve_target_str,
+    def _get_target_registry(self):
+        """Returns the registry for the current target
+        """
+        from numba.core.target_extension import (_get_local_target_checked,
                                                  dispatcher_registry)
         hwstr = self.metadata.get('target', 'generic')
-        # Get the class for the target declared by the function
-        hw_clazz = resolve_target_str(hwstr)
-        # get the local target
-        target_hw = get_local_target(self.context)
-        # make sure the target_hw is in the MRO for hw_clazz else bail
-        if not target_hw.inherits_from(hw_clazz):
-            msg = (f"Intrinsic being resolved on a target from which it does "
-                   f"not inherit. Local target is {target_hw}, declared "
-                   f"target class is {hw_clazz}.")
-            raise InternalError(msg)
+        target_hw = _get_local_target_checked(self.context, hwstr, "attribute")
+        # Get resgistry for the current hardware
         disp = dispatcher_registry[target_hw]
         tgtctx = disp.targetdescr.target_context
         tgtctx.refresh()
@@ -1070,27 +1037,11 @@ class _OverloadAttributeTemplate(AttributeTemplate):
             reg = next(registries)
         return reg
 
-    @classmethod
-    def do_class_init(cls):
-        """
-        Register attribute implementation.
-        """
-        from numba.core.imputils import lower_getattr
-        attr = cls._attr
-
-        @lower_getattr(cls.key, attr)
-        def getattr_impl(context, builder, typ, value):
-            typingctx = context.typing_context
-            fnty = cls._get_function_type(typingctx, typ)
-            sig = cls._get_signature(typingctx, fnty, (typ,), {})
-            call = context.get_function(fnty, sig)
-            return call(builder, (value,))
-
     def _init_once(self):
         cls = type(self)
         attr = cls._attr
 
-        lower_getattr = self._get_the_right_registry().lower_getattr
+        lower_getattr = self._get_target_registry().lower_getattr
 
         @lower_getattr(cls.key, attr)
         def getattr_impl(context, builder, typ, value):
@@ -1127,21 +1078,20 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
     """
     is_method = True
 
-    @classmethod
-    def do_class_init(cls):
-        """
-        Register generic method implementation.
-        """
-        # attr = cls._attr
-
     def _init_once(self):
+        """
+        Overriding parent definition
+        """
         attr = self._attr
 
         try:
-            lower_builtin = self._get_the_right_registry().lower
-        except InternalError:
+            registry = self._get_target_registry()
+        except InternalTargetMismatchError:
+            # Target mismatch. Do not register attribute lookup here.
             pass
         else:
+            lower_builtin = registry.lower
+
             @lower_builtin((self.key, attr), self.key, types.VarArg(types.Any))
             def method_impl(context, builder, sig, args):
                 typ = sig.args[0]
