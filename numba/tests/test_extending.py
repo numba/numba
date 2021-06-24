@@ -21,6 +21,7 @@ from numba.tests.support import (
     temp_directory,
     override_config,
     run_in_new_process_in_cache_dir,
+    skip_if_typeguard,
 )
 from numba.core.errors import LoweringError
 import unittest
@@ -1162,6 +1163,7 @@ def _assert_cache_stats(cfunc, expect_hit, expect_misses):
         raise AssertionError("cache not used")
 
 
+@skip_if_typeguard
 class TestOverloadMethodCaching(TestCase):
     # Nested multiprocessing.Pool raises AssertionError:
     # "daemonic processes are not allowed to have children"
@@ -1759,6 +1761,7 @@ def with_objmode_cache_ov_example(x):
     pass
 
 
+@skip_if_typeguard
 class TestCachingOverloadObjmode(TestCase):
     """Test caching of the use of overload implementations that use
     `with objmode`
