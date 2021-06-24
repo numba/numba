@@ -77,8 +77,7 @@ fi
 
 # If on 32bit linux, now pip install NumPy and SciPy (no conda package)
 if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
-    $PIP_INSTALL numpy==$NUMPY
-    $PIP_INSTALL scipy
+    $PIP_INSTALL numpy==$NUMPY scipy
 fi
 
 # Install latest llvmlite build
