@@ -33,3 +33,6 @@ Here's some guidelines to help the review process go smoothly.
 Many thanks in advance for your cooperation!
 
 -->
+
+## Reference an existing issue
+<!-- You can link to an existing issue using the github syntax #<issue number>  -->
