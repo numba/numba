@@ -141,8 +141,20 @@ class Numpy_rules_ufunc(AbstractTemplate):
                 output_type = types.Array
                 if array_ufunc_type is not None:
                     output_type = array_ufunc_type.__array_ufunc__(ufunc, "__call__", *args, **kws)
-                    # Eventually better error handling!  FIX ME!
-                    assert(output_type is not None)
+                    if output_type is NotImplemented:
+                        msg = (f"unsupported use of ufunc {ufunc} on "
+                               f"{array_ufunc_type}")
+                        # raise TypeError here because
+                        # NumpyRulesArrayOperator.generic is capturing
+                        # TypingError
+                        raise TypeError(msg)
+                    elif not issubclass(output_type, types.Array):
+                        msg = (f"ufunc {ufunc} on {array_ufunc_type}"
+                               f"cannot return non-array {output_type}")
+                        # raise TypeError here because
+                        # NumpyRulesArrayOperator.generic is capturing
+                        # TypingError
+                        raise TypeError(msg)
 
                 ret_tys = [output_type(dtype=ret_ty, ndim=ndims, layout=layout)
                            for ret_ty in ret_tys]

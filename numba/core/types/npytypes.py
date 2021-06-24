@@ -420,9 +420,8 @@ class Array(Buffer):
     Type class for Numpy arrays.
     """
 
-    def __init__(self, dtype, ndim, layout, py_type=np.ndarray, readonly=False,
-                 name=None, aligned=True):
-        self.py_type = py_type
+    def __init__(self, dtype, ndim, layout, readonly=False, name=None,
+                 aligned=True):
         if readonly:
             self.mutable = False
         if (not aligned or
@@ -453,8 +452,9 @@ class Array(Buffer):
             layout = self.layout
         if readonly is None:
             readonly = not self.mutable
-        return Array(dtype=dtype, ndim=ndim, layout=layout, readonly=readonly,
-                     aligned=self.aligned)
+        cls = type(self)
+        return cls(dtype=dtype, ndim=ndim, layout=layout, readonly=readonly,
+                   aligned=self.aligned)
 
     @property
     def key(self):
@@ -490,6 +490,12 @@ class Array(Buffer):
 
     def is_precise(self):
         return self.dtype.is_precise()
+
+    @property
+    def box_type(self):
+        """Returns the Python type to box to.
+        """
+        return np.ndarray
 
 
 class ArrayCTypes(Type):
