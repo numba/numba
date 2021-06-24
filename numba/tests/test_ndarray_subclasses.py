@@ -271,11 +271,11 @@ class TestNdarraySubclasses(TestCase):
             coverted = myarray(buf.shape, buf.dtype, buf)
             return coverted + coverted
 
-        buf = np.arange(4)
+        buf = np.arange(4, dtype=np.float32)
         with self.assertRaises(TypingError) as raises:
             foo(buf)
         self.assertIn(
-            "unsupported use of ufunc <ufunc 'add'> on MyArray(1, int64, C)",
+            "unsupported use of ufunc <ufunc 'add'> on MyArray(1, float32, C)",
             str(raises.exception),
         )
 
