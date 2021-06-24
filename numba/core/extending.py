@@ -207,7 +207,7 @@ def _overload_method_common(typ, attr, **kwargs):
         template = make_overload_method_template(
             typ, attr, overload_func,
             inline=copied_kwargs.pop('inline', 'never'),
-            prefer_literal=copied_kwargs.get('prefer_literal', False),
+            prefer_literal=copied_kwargs.pop('prefer_literal', False),
             **copied_kwargs,
         )
         infer_getattr(template)
