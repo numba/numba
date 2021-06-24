@@ -34,8 +34,7 @@ class CUDATestCase(SerialMixin, TestCase):
 
     def tearDown(self):
         config.CUDA_LOW_OCCUPANCY_WARNINGS = self._low_occupancy_warnings
-        config.CUDA_WARN_ON_IMPLICIT_COPY = \
-            self._warn_on_implicit_copy
+        config.CUDA_WARN_ON_IMPLICIT_COPY = self._warn_on_implicit_copy
 
 
 class ContextResettingTestCase(CUDATestCase):

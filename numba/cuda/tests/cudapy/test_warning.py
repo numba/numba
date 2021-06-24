@@ -1,7 +1,7 @@
 import numpy as np
 from numba import cuda
 from numba.cuda.testing import CUDATestCase, skip_on_cudasim
-from numba.tests.support import override_config
+from numba.tests.support import linux_only, override_config
 from numba.core.errors import NumbaPerformanceWarning
 import warnings
 
@@ -79,6 +79,7 @@ class TestWarnings(CUDATestCase):
 
         self.assertEqual(len(w), 0)
 
+    @linux_only
     def test_nowarn_on_managed_array(self):
         @cuda.jit
         def foo(r, x):
