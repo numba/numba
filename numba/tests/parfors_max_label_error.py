@@ -49,6 +49,7 @@ class MyCustomTarget(BasicRetarget):
 
 retarget = MyCustomTarget()
 
+
 # ------------ Functions being tested ------------
 @njit
 def f(a):
