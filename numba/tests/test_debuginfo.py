@@ -217,18 +217,10 @@ class TestDebugInfoEmission(TestCase):
         associated with the end_sequence or similar (due to the way code gen
         works for the entry block)."""
 
-        with override_config('OPT', 0):
-            # NOTE: This has to be declared and compiled under the override
-            # ctx manager, this is because a codegen is created at decoration
-            # point and it will get the default OPT (3) if not declared with the
-            # override in place.
-            @njit(debug=True)
-            def foo(a):
-                b = a + 1
-                c = b * 2.34
-                d = (a, 10 * c)
-                return d
-            foo(123)
+        @njit(debug=True)
+        def foo(a):
+            return a + 1
+        foo(123)
 
         full_ir = foo.inspect_llvm(foo.signatures[0])
         # The above produces LLVM like:
@@ -277,11 +269,16 @@ class TestDebugInfoEmission(TestCase):
         cmd = [sys.executable, '-m', 'numba.runtests', injected_method]
         env_copy = os.environ.copy()
         env_copy['SUBPROC_TEST'] = '1'
+        # This test relies on the CFG not being simplified as it checks the jump
+        # from the entry block to the first basic block. Force OPT as 0, if set
+        # via the env var the targetmachine and various pass managers all end up
+        # at OPT 0 and the IR is minimally transformed prior to lowering to ELF.
+        env_copy['NUMBA_OPT'] = '0'
         status = subprocess.run(cmd, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, timeout=60, check=True,
+                                stderr=subprocess.PIPE, timeout=60,
                                 env=env_copy, universal_newlines=True)
         self.assertEqual(status.returncode, 0)
-        self.assertIn('OK', status.stderr       )
+        self.assertIn('OK', status.stderr)
         self.assertTrue('FAIL' not in status.stderr)
         self.assertTrue('ERROR' not in status.stderr)
 
