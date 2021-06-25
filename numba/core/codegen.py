@@ -1213,12 +1213,14 @@ class CPUCodegen(Codegen):
             # This knocks loops into rotated form early to reduce the likelihood
             # of vectorization failing due to unknown PHI nodes.
             pm.add_loop_rotate_pass()
-            # This helps the refprune pass which can only deal with arguments to
-            # NRT function pairs that are literally the same i.e. it doesn't
-            # attempt to resolve arguments by tracing through the IR etc.
-            # Instcombine resolves a lot of this, it only runs as part of the
-            # cheap pass as the full opt pass will likely include it anyway.
-            pm.add_instruction_combining_pass()
+            # LLVM 11 added LFTR to the IV Simplification pass, this interacted
+            # badly with the existing use of the InstructionCombiner here and
+            # ended up with PHI nodes that prevented vectorization from
+            # working. The desired vectorization effects can be achieved
+            # with this in LLVM 11 (and also < 11) but at a potentially
+            # slightly higher cost:
+            pm.add_licm_pass()
+            pm.add_cfg_simplification_pass()
         if config.LLVM_REFPRUNE_PASS:
             pm.add_refprune_pass(_parse_refprune_flags())
         return pm

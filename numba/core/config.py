@@ -355,6 +355,10 @@ class _EnvReloader(object):
         # Whether to generate verbose log messages when JIT linking
         CUDA_VERBOSE_JIT_LOG = _readenv("NUMBA_CUDA_VERBOSE_JIT_LOG", int, 1)
 
+        # Whether the default stream is the per-thread default stream
+        CUDA_PER_THREAD_DEFAULT_STREAM = _readenv(
+            "NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM", int, 0)
+
         # Compute contiguity of device arrays using the relaxed strides
         # checking algorithm.
         NPY_RELAXED_STRIDES_CHECKING = _readenv(
@@ -367,7 +371,12 @@ class _EnvReloader(object):
         DISABLE_HSA = _readenv("NUMBA_DISABLE_HSA", int, 0)
 
         # The default number of threads to use.
-        NUMBA_DEFAULT_NUM_THREADS = max(1, multiprocessing.cpu_count())
+        NUMBA_DEFAULT_NUM_THREADS = max(
+            1,
+            len(os.sched_getaffinity(0))
+            if hasattr(os, "sched_getaffinity")
+            else multiprocessing.cpu_count(),
+        )
 
         # Numba thread pool size (defaults to number of CPUs on the system).
         _NUMBA_NUM_THREADS = _readenv("NUMBA_NUM_THREADS", int,

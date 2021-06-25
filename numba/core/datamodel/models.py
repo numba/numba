@@ -1077,6 +1077,7 @@ class UniTupleIter(StructModel):
         super(UniTupleIter, self).__init__(dmm, fe_type, members)
 
 
+@register_default(types.misc.SliceLiteral)
 @register_default(types.SliceType)
 class SliceModel(StructModel):
     def __init__(self, dmm, fe_type):

@@ -89,6 +89,8 @@ class DefaultOptions:
     error_model = _mapping("error_model")
     inline = _mapping("inline")
 
+    target_backend = _mapping("target_backend")
+
 
 def include_default_options(*args):
     """Returns a mixin class with a subset of the options

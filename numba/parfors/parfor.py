@@ -2302,6 +2302,11 @@ class ConvertLoopPass:
                         and isinstance(inst.value, ir.Expr)
                         and inst.value.op == 'call'
                         and self._is_parallel_loop(inst.value.func.name, call_table)):
+                    # Here we've found a parallel loop, either prange or pndindex.
+                    # We create a parfor from this loop and then overwrite the contents
+                    # of the original loop header block to contain this parfor and then
+                    # a jump to the original loop exit block.  Other blocks in the
+                    # original loop are discarded.
                     body_labels = [ l for l in loop.body if
                                     l in blocks and l != loop.header ]
                     args = inst.value.args
@@ -2540,19 +2545,17 @@ class ConvertLoopPass:
                                     equiv_set,
                                     ("prange", loop_kind, loop_replacing),
                                     pass_states.flags, races=races)
-                    # add parfor to entry block's jump target
-                    jump = blocks[entry].body[-1]
-                    jump.target = list(loop.exits)[0]
-                    blocks[jump.target].body.insert(0, parfor)
+
+                    blocks[loop.header].body = [parfor, ir.Jump(list(loop.exits)[0], loc)]
                     self.rewritten.append(dict(
                         old_loop=loop,
                         new=parfor,
                         reason='loop',
                     ))
                     # remove loop blocks from top level dict
-                    blocks.pop(loop.header)
                     for l in body_labels:
-                        blocks.pop(l)
+                        if l != loop.header:
+                            blocks.pop(l)
                     if config.DEBUG_ARRAY_OPT >= 1:
                         print("parfor from loop")
                         parfor.dump()
