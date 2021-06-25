@@ -285,11 +285,11 @@ class TestNdarraySubclasses(TestCase):
         """
         @njit
         def foo(a):
-            b = a + np.arange(a.size)
+            b = a + np.arange(a.size, dtype=np.float64)
             c = a + 1j
             return b, c
 
-        buf = np.arange(4)
+        buf = np.arange(4, dtype=np.float64)
         a = myarray(buf.shape, buf.dtype, buf)
 
         expected = foo.py_func(a)
