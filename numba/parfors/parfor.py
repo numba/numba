@@ -1571,7 +1571,7 @@ class ParforPassStates:
             self.typingctx, self.func_ir, self.typemap, self.calltypes,
         )
 
-        ir_utils._max_label = max(func_ir.blocks.keys())
+        ir_utils._the_max_label.update(max(func_ir.blocks.keys()))
         self.flags = flags
         self.metadata = metadata
         if "parfors" not in metadata:
@@ -2781,9 +2781,9 @@ class ParforPass(ParforPassStates):
     def _pre_run(self):
         # run array analysis, a pre-requisite for parfor translation
         self.array_analysis.run(self.func_ir.blocks)
-        # NOTE: Prepare _max_label. See #6102
-        ir_utils._max_label = max(ir_utils._max_label,
-                                  ir_utils.find_max_label(self.func_ir.blocks))
+        # NOTE: Prepare _the_max_label. See #6102
+        ir_utils._the_max_label.update(
+            ir_utils.find_max_label(self.func_ir.blocks))
 
     def run(self):
         """run parfor conversion pass: replace Numpy calls
@@ -3255,8 +3255,7 @@ def _find_func_var(typemap, func, avail_vars, loc):
 
 
 def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes, metadata):
-    ir_utils._max_label = max(ir_utils._max_label,
-                              ir_utils.find_max_label(func_ir.blocks))
+    ir_utils._the_max_label.update(ir_utils.find_max_label(func_ir.blocks))
     parfor_found = False
     new_blocks = {}
     scope = next(iter(func_ir.blocks.values())).scope
