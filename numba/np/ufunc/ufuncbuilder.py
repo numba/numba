@@ -141,23 +141,24 @@ class UFuncDispatcher(serialize.ReduceMixin):
 
         # Use cache and compiler in a critical section
         with global_compiler_lock:
-            with store_overloads_on_success():
-                # attempt look up of existing
-                cres = self.cache.load_overload(sig, targetctx)
-                if cres is not None:
+            with utils.ConfigStack().enter(flags.copy()):
+                with store_overloads_on_success():
+                    # attempt look up of existing
+                    cres = self.cache.load_overload(sig, targetctx)
+                    if cres is not None:
+                        return cres
+
+                    # Compile
+                    args, return_type = sigutils.normalize_signature(sig)
+                    cres = compiler.compile_extra(typingctx, targetctx,
+                                                  self.py_func, args=args,
+                                                  return_type=return_type,
+                                                  flags=flags, locals=locals)
+
+                    # cache lookup failed before so safe to save
+                    self.cache.save_overload(sig, cres)
+
                     return cres
-
-                # Compile
-                args, return_type = sigutils.normalize_signature(sig)
-                cres = compiler.compile_extra(typingctx, targetctx,
-                                              self.py_func, args=args,
-                                              return_type=return_type,
-                                              flags=flags, locals=locals)
-
-                # cache lookup failed before so safe to save
-                self.cache.save_overload(sig, cres)
-
-                return cres
 
 
 dispatcher_registry[target_registry['npyufunc']] = UFuncDispatcher
