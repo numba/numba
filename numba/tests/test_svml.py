@@ -240,7 +240,8 @@ class TestSVMLGeneration(TestCase):
             q = ctx.Queue()
             p = ctx.Process(target=type(self).mp_runner, args=[testname, q])
             p.start()
-            p.join()
+            # timeout to avoid hanging and long enough to avoid bailing too early
+            p.join(timeout=10)
             self.assertEqual(p.exitcode, 0, msg="process ended unexpectedly")
             out = q.get()
             status = out['status']
