@@ -5,6 +5,7 @@ Test Numpy Subclassing features
 import builtins
 import unittest
 from numbers import Number
+from functools import wraps
 
 import numpy as np
 from llvmlite import ir
@@ -20,7 +21,7 @@ from numba.extending import (intrinsic, lower_builtin, overload_classmethod,
                              register_jitable)
 from numba.np import numpy_support
 
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, MemoryLeakMixin
 
 # A quick util to allow logging within jit code
 
@@ -36,6 +37,15 @@ def _do_log(*args):
 def log(*args):
     with objmode():
         _do_log(*args)
+
+
+def use_logger(fn):
+    @wraps(fn)
+    def core(*args, **kwargs):
+        global _logger
+        _logger = []
+        return fn(*args, **kwargs)
+    return core
 
 
 class myarray(np.ndarray):
@@ -151,8 +161,9 @@ def box_array(typ, val, c):
     assert c.context.enable_nrt
     np_dtype = numpy_support.as_dtype(typ.dtype)
     dtypeptr = c.env_manager.read_const(c.env_manager.add_const(np_dtype))
-    # Steals NRT ref
     newary = c.pyapi.nrt_adapt_ndarray_to_python(typ, val, dtypeptr)
+    # Steals NRT ref
+    c.context.nrt.decref(c.builder, typ, val)
     return newary
 
 
@@ -178,16 +189,24 @@ def allocator_MyArray(typingctx, allocsize, align):
 
         mod = builder.module
         u32 = ir.IntType(32)
-        fnty = ir.FunctionType(cgutils.voidptr_t, [cgutils.intp_t, u32])
+        voidptr = cgutils.voidptr_t
+
+        get_alloc_fnty = ir.FunctionType(voidptr, ())
+        get_alloc_fn = cgutils.get_or_insert_function(
+            mod, get_alloc_fnty, name="NRT_get_sample_external_allocator"
+        )
+        ext_alloc = builder.call(get_alloc_fn, ())
+
+        fnty = ir.FunctionType(voidptr, [cgutils.intp_t, u32, voidptr])
         fn = cgutils.get_or_insert_function(
-            mod, fnty, name="NRT_MemInfo_alloc_safe_aligned"
+            mod, fnty, name="NRT_MemInfo_alloc_safe_aligned_external"
         )
         fn.return_value.add_attribute("noalias")
         if isinstance(align, builtins.int):
             align = context.get_constant(types.uint32, align)
         else:
             assert align.type == u32, "align must be a uint32"
-        call = builder.call(fn, [size, align])
+        call = builder.call(fn, [size, align, ext_alloc])
         call.name = "allocate_MyArray"
         return call
 
@@ -196,11 +215,7 @@ def allocator_MyArray(typingctx, allocsize, align):
     return sig, impl
 
 
-class TestNdarraySubclasses(TestCase):
-
-    def setUp(self):
-        global _logger
-        _logger = []
+class TestNdarraySubclasses(MemoryLeakMixin, TestCase):
 
     def test_myarray_return(self):
         """This test `types.Array.box_type`
@@ -254,6 +269,8 @@ class TestNdarraySubclasses(TestCase):
 
     @unittest.expectedFailure
     def test_myarray_asarray(self):
+        self.disable_leak_check()
+
         @njit
         def foo(buf):
             coverted = myarray(buf.shape, buf.dtype, buf)
@@ -279,6 +296,7 @@ class TestNdarraySubclasses(TestCase):
             str(raises.exception),
         )
 
+    @use_logger
     def test_myarray_allocator_override(self):
         """
         Checks that our custom allocator is used

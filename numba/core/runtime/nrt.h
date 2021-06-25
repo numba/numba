@@ -246,4 +246,10 @@ VISIBILITY_HIDDEN void nrt_debug_print(char *fmt, ...);
  */
 VISIBILITY_HIDDEN const NRT_api_functions* NRT_get_api(void);
 
+
+/*
+ * Get a sample external allocator for testing
+ */
+VISIBILITY_HIDDEN NRT_ExternalAllocator* NRT_get_sample_external_allocator(void);
+
 #endif /* NUMBA_NRT_H_ */

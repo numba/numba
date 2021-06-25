@@ -321,6 +321,7 @@ void NRT_dealloc(NRT_MemInfo *mi) {
     NRT_Debug(nrt_debug_print("NRT_dealloc meminfo: %p external_allocator: %p\n", mi, mi->external_allocator));
     if (mi->external_allocator) {
         mi->external_allocator->free(mi, mi->external_allocator->opaque_data);
+        TheMSys.atomic_inc(&TheMSys.stats_free);
     } else {
         NRT_Free(mi);
     }
@@ -486,6 +487,44 @@ void NRT_Free(void *ptr) {
     NRT_Debug(nrt_debug_print("NRT_Free %p\n", ptr));
     TheMSys.allocator.free(ptr);
     TheMSys.atomic_inc(&TheMSys.stats_free);
+}
+
+/*
+ * Sample external allocator implementation for internal testing.
+ */
+
+static int sample_external_opaque_data = 0xabacad;
+
+static
+void* sample_external_malloc(size_t size, void* opaque_data) {
+    if (opaque_data != &sample_external_opaque_data) return NULL;
+    return TheMSys.allocator.malloc(size);
+}
+
+static
+void* sample_external_realloc(void *ptr, size_t new_size, void *opaque_data) {
+    if (opaque_data != &sample_external_opaque_data) return NULL;
+    return TheMSys.allocator.realloc(ptr, new_size);
+}
+
+static
+void sample_external_free(void *ptr, void* opaque_data) {
+    TheMSys.allocator.free(ptr);
+}
+
+static NRT_ExternalAllocator sample_external_allocator = {
+    // malloc
+    sample_external_malloc,
+    // realloc
+    sample_external_realloc,
+    // free
+    sample_external_free,
+    // opaque_data
+    &sample_external_opaque_data
+};
+
+NRT_ExternalAllocator* NRT_get_sample_external_allocator() {
+    return &sample_external_allocator;
 }
 
 /*
