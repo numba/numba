@@ -88,7 +88,7 @@ class BaseLower(object):
         self.pyapi = None
         self.debuginfo.mark_subprogram(function=self.builder.function,
                                        name=self.fndesc.qualname,
-                                       loc=self.func_ir.loc)
+                                       line=self.func_ir.loc.line)
 
     def post_lower(self):
         """
@@ -357,7 +357,7 @@ class Lower(BaseLower):
 
     def lower_inst(self, inst):
         # Set debug location for all subsequent LL instructions
-        self.debuginfo.mark_location(self.builder, self.loc)
+        self.debuginfo.mark_location(self.builder, self.loc.line)
         self.debug_print(str(inst))
         if isinstance(inst, ir.Assign):
             ty = self.typeof(inst.target.name)
@@ -1386,7 +1386,8 @@ class Lower(BaseLower):
             # Emit debug info for user variable
             sizeof = self.context.get_abi_sizeof(lltype)
             self.debuginfo.mark_variable(self.builder, aptr, name=name,
-                                         lltype=lltype, size=sizeof, loc=loc)
+                                         lltype=lltype, size=sizeof,
+                                         loc=loc.line)
         return aptr
 
     def incref(self, typ, val):

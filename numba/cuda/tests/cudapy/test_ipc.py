@@ -10,8 +10,6 @@ from numba.cuda.testing import (skip_on_cudasim, skip_under_cuda_memcheck,
                                 ContextResettingTestCase, ForeignArray)
 import unittest
 
-has_mp_get_context = hasattr(mp, 'get_context')
-
 
 def core_ipc_handle_test(the_work, result_queue):
     try:
@@ -79,7 +77,6 @@ def ipc_array_test(ipcarr, result_queue):
 
 
 @skip_under_cuda_memcheck('Hangs cuda-memcheck')
-@unittest.skipUnless(has_mp_get_context, "requires multiprocessing.get_context")
 @skip_on_cudasim('Ipc not available in CUDASIM')
 class TestIpcMemory(ContextResettingTestCase):
     def test_ipc_handle(self):
@@ -229,7 +226,6 @@ def staged_ipc_array_test(ipcarr, device_num, result_queue):
 
 
 @skip_under_cuda_memcheck('Hangs cuda-memcheck')
-@unittest.skipUnless(has_mp_get_context, "requires multiprocessing.get_context")
 @skip_on_cudasim('Ipc not available in CUDASIM')
 class TestIpcStaged(ContextResettingTestCase):
     def test_staged(self):

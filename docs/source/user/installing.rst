@@ -15,7 +15,6 @@ Our supported platforms are:
 * OS X 10.9 and later (64-bit and unofficial support on M1/Arm64)
 * \*BSD (unofficial support only)
 * NVIDIA GPUs of compute capability 3.0 and later
-* AMD ROC dGPUs (linux only and not for AMD Carrizo or Kaveri APU)
 * ARMv7 (32-bit little-endian, such as Raspberry Pi 2 and 3)
 * ARMv8 (64-bit little-endian, such as the NVIDIA Jetson)
 
@@ -68,22 +67,6 @@ To use CUDA with Numba installed by `pip`, you need to install the `CUDA SDK
 <https://developer.nvidia.com/cuda-downloads>`_ from NVIDIA.  Please refer to
 :ref:`cudatoolkit-lookup` for details. Numba can also detect CUDA libraries
 installed system-wide on Linux.
-
-Enabling AMD ROCm GPU Support
------------------------------
-
-The `ROCm Platform <https://rocm.github.io/>`_ allows GPU computing with AMD
-GPUs on Linux.  To enable ROCm support in Numba,  conda is required, so begin
-with an Anaconda or Miniconda installation with Numba 0.40 or later installed.
-Then:
-
-1. Follow the `ROCm installation instructions <https://rocm.github.io/install.html>`_.
-2. Install ``roctools`` conda package from the ``numba`` channel::
-
-    $ conda install -c numba roctools
-
-See the `roc-examples <https://github.com/numba/roc-examples>`_ repository for
-sample notebooks.
 
 
 .. _numba-install-armv7:

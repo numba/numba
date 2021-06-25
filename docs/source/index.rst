@@ -27,13 +27,6 @@ with Numba, we suggest you start with the :doc:`User manual <user/index>`.
 
 
 .. toctree::
-   :caption: For ROCm users
-   :maxdepth: 2
-
-   roc/index.rst
-
-
-.. toctree::
    :caption: For advanced users & developers
    :maxdepth: 2
 
