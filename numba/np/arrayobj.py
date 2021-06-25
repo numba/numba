@@ -3504,7 +3504,7 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
 
 @overload_classmethod(types.Array, "_allocate")
 def _ol_array_allocate(cls, allocsize, align):
-    """Implements a Numba-only classmethod on the array type.
+    """Implements a Numba-only default target (cpu) classmethod on the array type.
     """
     def impl(cls, allocsize, align):
         return intrin_alloc(allocsize, align)
@@ -3512,7 +3512,7 @@ def _ol_array_allocate(cls, allocsize, align):
 
 
 def _call_allocator(arrtype, size, align):
-    """Trampoline to call intrinsic for allocation
+    """Trampoline to call the intrinsic used for allocation
     """
     return arrtype._allocate(size, align)
 

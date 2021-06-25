@@ -713,8 +713,7 @@ class TestTargetHierarchySelection(TestCase):
         @overload(np.empty, target='dpu', nopython=True)
         def ol_empty_impl(n):
             def impl(n):
-                # return 17 # WORKS
-                return types.Array._allocate(n, 7) # FAILS
+                return types.Array._allocate(n, 7)
             return impl
 
         def buffer_func():

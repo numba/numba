@@ -652,7 +652,7 @@ class InternalError(NumbaError):
 
 
 class InternalTargetMismatchError(InternalError):
-    """For target mismatch error occurred internally within the compiler.
+    """For signalling a target mismatch error occurred internally within the compiler.
     """
     def __init__(self, kind, target_hw, hw_clazz):
         msg = (f"{kind.title()} being resolved on a target from which it does "
