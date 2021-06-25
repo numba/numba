@@ -79,8 +79,8 @@ def resolve_dispatcher_from_str(target_str):
 
 
 def _get_local_target_checked(tyctx, hwstr, reason):
-    """Returns the local target if it is compatible against the given target
-    name during a type resolution; otherwise, raise exception.
+    """Returns the local target if it is compatible with the given target
+    name during a type resolution; otherwise, raises an exception.
 
     Parameters
     ----------

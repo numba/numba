@@ -376,8 +376,8 @@ def _lower_array_expr(lowerer, expr):
             inner_sig_args.append(argty)
     inner_sig = outer_sig.return_type.dtype(*inner_sig_args)
 
-    flags = utils.ConfigStack().top_or_none() or compiler.Flags()
-    flags = flags.copy() # make sure it's a clone or a fresh instance
+    flags = utils.ConfigStack().top_or_none()
+    flags = compiler.Flags() if flags is None else flags.copy() # make sure it's a clone or a fresh instance
     # Follow the Numpy error model.  Note this also allows e.g. vectorizing
     # division (issue #1223).
     flags.error_model = 'numpy'

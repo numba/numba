@@ -3433,6 +3433,32 @@ class TestParforsSlice(TestParforsBase):
 
         self.check(test_impl)
 
+    @skip_parfors_unsupported
+    def test_parfor_array_access_lower_slice(self):
+        for ts in [slice(1, 3, None), slice(2, None, None), slice(None, 2, -1),
+                   slice(None, None, None), slice(None, None, -2)]:
+
+            def test_impl(n):
+                X = np.arange(n * 4).reshape((n, 4))
+                y = 0
+                for i in numba.prange(n):
+                    y += X[i, ts].sum()
+                return y
+
+            n = 10
+            self.check(test_impl, n)
+
+            X = np.arange(n * 4).reshape((n, 4))
+
+            def test_impl(X):
+                y = 0
+                for i in numba.prange(X.shape[0]):
+                    y += X[i, ts].sum()
+                return y
+
+            self.check(test_impl, X)
+
+
 
 class TestParforsOptions(TestParforsBase):
 

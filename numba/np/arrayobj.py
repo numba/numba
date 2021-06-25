@@ -2495,7 +2495,7 @@ def record_setattr(context, builder, sig, args, attr):
 
 
 @lower_builtin('static_getitem', types.Record, types.StringLiteral)
-def record_getitem(context, builder, sig, args):
+def record_static_getitem_str(context, builder, sig, args):
     """
     Record.__getitem__ redirects to getattr()
     """
@@ -2503,8 +2503,20 @@ def record_getitem(context, builder, sig, args):
     return impl(context, builder, sig.args[0], args[0], args[1])
 
 
+@lower_builtin('static_getitem', types.Record, types.IntegerLiteral)
+def record_static_getitem_int(context, builder, sig, args):
+    """
+    Record.__getitem__ redirects to getattr()
+    """
+    idx = sig.args[1].literal_value
+    fields = list(sig.args[0].fields)
+    ll_field = context.insert_const_string(builder.module, fields[idx])
+    impl = context.get_getattr(sig.args[0], ll_field)
+    return impl(context, builder, sig.args[0], args[0], fields[idx])
+
+
 @lower_builtin('static_setitem', types.Record, types.StringLiteral, types.Any)
-def record_setitem(context, builder, sig, args):
+def record_static_setitem_str(context, builder, sig, args):
     """
     Record.__setitem__ redirects to setattr()
     """
@@ -2512,6 +2524,20 @@ def record_setitem(context, builder, sig, args):
     rec, idx, val = args
     getattr_sig = signature(sig.return_type, recty, valty)
     impl = context.get_setattr(idx, getattr_sig)
+    assert impl is not None
+    return impl(builder, (rec, val))
+
+
+@lower_builtin('static_setitem', types.Record, types.IntegerLiteral, types.Any)
+def record_static_setitem_int(context, builder, sig, args):
+    """
+    Record.__setitem__ redirects to setattr()
+    """
+    recty, _, valty = sig.args
+    rec, idx, val = args
+    getattr_sig = signature(sig.return_type, recty, valty)
+    fields = list(sig.args[0].fields)
+    impl = context.get_setattr(fields[idx], getattr_sig)
     assert impl is not None
     return impl(builder, (rec, val))
 
@@ -3504,7 +3530,7 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
 
 @overload_classmethod(types.Array, "_allocate")
 def _ol_array_allocate(cls, allocsize, align):
-    """Implements a Numba-only classmethod on the array type.
+    """Implements a Numba-only default target (cpu) classmethod on the array type.
     """
     def impl(cls, allocsize, align):
         return intrin_alloc(allocsize, align)
@@ -3512,7 +3538,7 @@ def _ol_array_allocate(cls, allocsize, align):
 
 
 def _call_allocator(arrtype, size, align):
-    """Trampoline to call intrinsic for allocation
+    """Trampoline to call the intrinsic used for allocation
     """
     return arrtype._allocate(size, align)
 

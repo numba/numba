@@ -469,9 +469,7 @@ class TestTargetHierarchySelection(TestCase):
 
         # DPU chooses the ol_my_func2 as it's most specific, and DPU subtracts
         # for addition, so 10 + x -> 10 - 7 -> 3
-        from numba.core.target_extension import target_override
-        with target_override('dpu'):
-            self.assertPreciseEqual(dpu_foo(), 3)
+        self.assertPreciseEqual(dpu_foo(), 3)
         # CPU uses the generic one function ol_my_func1 and adds
         self.assertPreciseEqual(cpu_foo(), 8)
 
@@ -531,10 +529,8 @@ class TestTargetHierarchySelection(TestCase):
         def dpu_foo():
             my_func(1)
 
-        from numba.core.target_extension import target_override
-        with target_override('dpu'):
-            with self.assertRaises(errors.TypingError) as raises:
-                dpu_foo()
+        with self.assertRaises(errors.TypingError) as raises:
+            dpu_foo()
 
         msgs = ["Function resolution cannot find any matches for function",
                 "test_no_specialisation_found.<locals>.my_func",
@@ -704,23 +700,22 @@ class TestTargetHierarchySelection(TestCase):
             return sig, codegen
 
         @overload_classmethod(types.Array, '_allocate', target='dpu',
-                              nopython=True)
+                              jit_options={'nopython':True})
         def _ol_arr_allocate_dpu(cls, allocsize, align):
             def impl(cls, allocsize, align):
                 return intrin_alloc(allocsize, align)
             return impl
 
-        @overload(np.empty, target='dpu', nopython=True)
+        @overload(np.empty, target='dpu', jit_options={'nopython':True})
         def ol_empty_impl(n):
             def impl(n):
-                # return 17 # WORKS
-                return types.Array._allocate(n, 7) # FAILS
+                return types.Array._allocate(n, 7)
             return impl
 
         def buffer_func():
             pass
 
-        @overload(buffer_func, target='dpu', nopython=True)
+        @overload(buffer_func, target='dpu', jit_options={'nopython':True})
         def ol_buffer_func_impl():
             def impl():
                 return np.empty(10)
