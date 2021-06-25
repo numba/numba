@@ -191,8 +191,6 @@ class TestSVMLGeneration(TestCase):
         except Exception:
             msg = traceback.format_exc()
             ok = False
-        else:
-            fmt = None
         outqueue.put({'status': ok, 'msg': msg})
 
     @classmethod
