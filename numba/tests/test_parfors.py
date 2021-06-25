@@ -1840,6 +1840,35 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, x)
 
     @skip_parfors_unsupported
+    def test_multi_defined_array(self):
+        # Make sure that different conflicting definitions of e
+        # prevent fusion.
+        def test_impl(a, b):
+            d = a * 2
+            e = a
+            for j in range(2):
+                e = e * 3
+                d = d * 2
+                if j < 1:
+                    if e[0] > 0:
+                        e = b
+                    else:
+                        e = a
+            return e
+
+        a = np.ones(7, dtype=np.int64)
+        b = np.ones(10, dtype=np.int64)
+        self.check(test_impl, a, b)
+
+    @skip_parfors_unsupported
+    def test_tuple_arg(self):
+        def test_impl(x):
+            y = np.zeros(x)
+            return y
+
+        self.check(test_impl, (5,5))
+
+    @skip_parfors_unsupported
     def test_high_dimension1(self):
         # issue6749
         def test_impl(x):
@@ -2799,6 +2828,26 @@ class TestPrange(TestPrangeBase):
             return a
 
         self.prange_tester(test_impl)
+
+    @skip_parfors_unsupported
+    def test_multi_defined_array_index(self):
+        # issue6597
+        def test_impl(a, b, c):
+            n_rows = b.shape[0]
+            for x in range(1):
+                i_row = 0
+                for _ in range(n_rows):
+                    bi = b[i_row]
+                    c[:] = a[i_row, :bi]
+                    i_row += 1
+                    if i_row >= n_rows:
+                        i_row -= n_rows
+            return c
+
+        a = np.arange(10).reshape((10, 1))
+        b = np.ones(10, dtype=np.int64)
+        c = np.ones(1, dtype=np.int64)
+        self.prange_tester(test_impl, a, b, c, patch_instance=[0])
 
     @skip_parfors_unsupported
     def test_record_array_setitem(self):

@@ -1944,12 +1944,13 @@ class ConvertNumpyPass:
                         elif isinstance(expr, ir.Expr) and expr.op == 'arrayexpr':
                             new_instr = self._arrayexpr_to_parfor(
                                 equiv_set, lhs, expr, avail_vars)
-                            self.rewritten.append(dict(
-                                old=instr,
-                                new=new_instr,
-                                reason='arrayexpr',
-                            ))
-                            instr = new_instr
+                            if new_instr is not None:
+                                self.rewritten.append(dict(
+                                    old=instr,
+                                    new=new_instr,
+                                    reason='arrayexpr',
+                                ))
+                                instr = new_instr
                     avail_vars.append(lhs.name)
                 new_body.append(instr)
             block.body = new_body
@@ -1989,6 +1990,12 @@ class ConvertNumpyPass:
 
         # generate loopnests and size variables from lhs correlations
         size_vars = equiv_set.get_shape(lhs)
+        if config.DEBUG_ARRAY_OPT >= 2:
+            print("arrayexpr_to_parfor:", lhs, size_vars, arrayexpr)
+        # If the lhs of an arrayexpr somehow has no shape variable then don't
+        # convert to a parfor.
+        if size_vars is None:
+            return None
         index_vars, loopnests = _mk_parfor_loops(pass_states.typemap, size_vars, scope, loc)
 
         # generate init block and body
