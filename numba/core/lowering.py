@@ -1387,7 +1387,7 @@ class Lower(BaseLower):
             sizeof = self.context.get_abi_sizeof(lltype)
             self.debuginfo.mark_variable(self.builder, aptr, name=name,
                                          lltype=lltype, size=sizeof,
-                                         loc=loc.line)
+                                         line=loc.line)
         return aptr
 
     def incref(self, typ, val):
