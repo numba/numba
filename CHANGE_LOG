@@ -176,6 +176,7 @@ Pull-Requests:
 * PR `#7143 <https://github.com/numba/numba/pull/7143>`_: Update version checks in __init__ for np 1.17 (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#7145 <https://github.com/numba/numba/pull/7145>`_: Fix mainline (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#7146 <https://github.com/numba/numba/pull/7146>`_: Fix `inline_closurecall` may not be imported (`Siu Kwan Lam <https://github.com/sklam>`_)
+
 Total PRs: 164
 
 Authors:
