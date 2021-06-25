@@ -25,11 +25,16 @@ class CUDATestCase(SerialMixin, TestCase):
 
     def setUp(self):
         self._low_occupancy_warnings = config.CUDA_LOW_OCCUPANCY_WARNINGS
+        self._warn_on_implicit_copy = config.CUDA_WARN_ON_IMPLICIT_COPY
+
         # Disable warnings about low gpu utilization in the test suite
         config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
+        # Disable warnings about host arrays in the test suite
+        config.CUDA_WARN_ON_IMPLICIT_COPY = 0
 
     def tearDown(self):
         config.CUDA_LOW_OCCUPANCY_WARNINGS = self._low_occupancy_warnings
+        config.CUDA_WARN_ON_IMPLICIT_COPY = self._warn_on_implicit_copy
 
 
 class ContextResettingTestCase(CUDATestCase):

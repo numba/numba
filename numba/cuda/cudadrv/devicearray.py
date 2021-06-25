@@ -16,10 +16,12 @@ import numba
 from numba import _devicearray
 from numba.cuda.cudadrv import devices
 from numba.cuda.cudadrv import driver as _driver
-from numba.core import types
+from numba.core import types, config
 from numba.np.unsafe.ndarray import to_fixed_tuple
 from numba.misc import dummyarray
 from numba.np import numpy_support
+from numba.core.errors import NumbaPerformanceWarning
+from warnings import warn
 
 try:
     lru_cache = getattr(functools, 'lru_cache')(None)
@@ -608,7 +610,7 @@ class DeviceNDArray(DeviceNDArrayBase):
 
         # (2) prepare RHS
 
-        rhs, _ = auto_device(value, stream=stream)
+        rhs, _ = auto_device(value, stream=stream, user_explicit=True)
         if rhs.ndim > lhs.ndim:
             raise ValueError("Can't assign %s-D array to %s-D self" % (
                 rhs.ndim,
@@ -751,7 +753,7 @@ def sentry_contiguous(ary):
         raise ValueError(errmsg_contiguous_buffer)
 
 
-def auto_device(obj, stream=0, copy=True):
+def auto_device(obj, stream=0, copy=True, user_explicit=False):
     """
     Create a DeviceRecord or DeviceArray like obj and optionally copy data from
     host to device. If obj already represents device memory, it is returned and
@@ -777,6 +779,15 @@ def auto_device(obj, stream=0, copy=True):
             sentry_contiguous(obj)
             devobj = from_array_like(obj, stream=stream)
         if copy:
+            if config.CUDA_WARN_ON_IMPLICIT_COPY:
+                if (
+                    not user_explicit and
+                    (not isinstance(obj, DeviceNDArray)
+                     and isinstance(obj, np.ndarray))
+                ):
+                    msg = ("Host array used in CUDA kernel will incur "
+                           "copy overhead to/from device.")
+                    warn(NumbaPerformanceWarning(msg))
             devobj.copy_to_device(obj, stream=stream)
         return devobj, True
 
