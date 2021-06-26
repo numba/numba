@@ -4124,6 +4124,8 @@ class TestParforsDiagnostics(TestParforsBase):
         diagnostics = cpfunc.metadata['parfor_diagnostics']
         self.assert_diagnostics(diagnostics, hoisted_allocations=1)
 
+    def add_more_test(self):
+        pass
 
 if __name__ == "__main__":
     unittest.main()
