@@ -99,6 +99,10 @@ VISIBILITY_HIDDEN
 NRT_MemInfo* NRT_MemInfo_new(void *data, size_t size,
                              NRT_dtor_function dtor, void *dtor_info);
 
+/*
+ * The `external_allocator` is for experimental API to customize the allocator.
+ * Set to NULL to use the default builtin allocator.
+ */
 VISIBILITY_HIDDEN
 void NRT_MemInfo_init(NRT_MemInfo *mi, void *data, size_t size,
                       NRT_dtor_function dtor, void *dtor_info,
@@ -144,6 +148,10 @@ NRT_MemInfo *NRT_MemInfo_alloc_aligned(size_t size, unsigned align);
 VISIBILITY_HIDDEN
 NRT_MemInfo *NRT_MemInfo_alloc_safe_aligned(size_t size, unsigned align);
 
+/*
+ * Experimental.
+ * A variation to use an external allocator.
+ */
 NRT_MemInfo *NRT_MemInfo_alloc_safe_aligned_external(size_t size, unsigned align, NRT_ExternalAllocator *allocator);
 
 /*
@@ -184,7 +192,9 @@ void* NRT_MemInfo_data(NRT_MemInfo* mi);
 VISIBILITY_HIDDEN
 size_t NRT_MemInfo_size(NRT_MemInfo* mi);
 
+
 /*
+ * Experimental.
  * Returns the external allocator
  */
 VISIBILITY_HIDDEN
@@ -224,6 +234,12 @@ void NRT_MemInfo_dump(NRT_MemInfo *mi, FILE *out);
  * Allocate memory of `size` bytes.
  */
 VISIBILITY_HIDDEN void* NRT_Allocate(size_t size);
+
+/*
+ * Experimental
+ *
+ * An alternative allocator that allows using an external allocator.
+ */
 VISIBILITY_HIDDEN void* NRT_Allocate_External(size_t size, NRT_ExternalAllocator *allocator);
 
 /*
