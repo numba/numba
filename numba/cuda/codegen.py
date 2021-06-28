@@ -258,10 +258,13 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         # because the device functions are in separate modules, we need them to
         # be externally visible.
         for library in self._linking_libraries:
-            for fn in library._module.functions:
-                if (not fn.is_declaration and
-                        not self._nvvm_options.get('debug', False)):
-                    fn.linkage = 'linkonce_odr'
+            for mod in library.modules:
+                for fn in mod.functions:
+                    if not fn.is_declaration:
+                        if self._nvvm_options.get('debug', False):
+                            fn.linkage = 'external'
+                        else:
+                            fn.linkage = 'linkonce_odr'
 
         self._finalized = True
 
