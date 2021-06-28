@@ -11,7 +11,7 @@ Features
 * All NumPy functions can now be overloaded for different hardwar targets
 
 Deprecations
------------
+------------
 
 * Moved ROCm target to "unmaintained" status, and moved all functionaliy to a
   seperate repo at: https://github.com/numba/numba-rocm
