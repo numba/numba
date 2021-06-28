@@ -57,7 +57,8 @@ def next_label():
     return _max_label
 
 
-def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc, lhs_typ):
+def mk_alloc(typingctx, typemap, calltypes, lhs, size_var, dtype, scope, loc,
+             lhs_typ):
     """generate an array allocation with np.empty() and return list of nodes.
     size_var can be an int variable or tuple of int variables.
     lhs_typ is the type of the array being allocated.
@@ -112,7 +113,7 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc, lhs_typ):
     if lhs_typ.layout == 'F':
         if calltypes:
             cac = typemap[attr_var.name].get_call_type(
-                typing.Context(), [size_typ, types.functions.NumberClass(dtype)], {})
+                typingctx, [size_typ, types.functions.NumberClass(dtype)], {})
             # By default, all calls to "empty" are typed as returning a standard
             # Numpy ndarray.  If we are allocating a ndarray subclass here then
             # just change the return type to be that of the subclass.
@@ -135,7 +136,7 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc, lhs_typ):
         asfortranarray_call = ir.Expr.call(afa_attr_var, [empty_c_var], (), loc)
         if calltypes:
             calltypes[asfortranarray_call] = typemap[afa_attr_var.name].get_call_type(
-                typing.Context(), [empty_c_typ], {})
+                typingctx, [empty_c_typ], {})
 
         asfortranarray_assign = ir.Assign(asfortranarray_call, lhs, loc)
 
@@ -144,7 +145,7 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc, lhs_typ):
     else:
         if calltypes:
             cac = typemap[attr_var.name].get_call_type(
-                typing.Context(), [size_typ, types.functions.NumberClass(dtype)], {})
+                typingctx, [size_typ, types.functions.NumberClass(dtype)], {})
             # By default, all calls to "empty" are typed as returning a standard
             # Numpy ndarray.  If we are allocating a ndarray subclass here then
             # just change the return type to be that of the subclass.
