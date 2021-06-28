@@ -60,7 +60,7 @@ def null_comparer(a, b):
     """
     pass
 
-class TestParforsBase(TestCase):
+class TestParforsBase(TestCase, MemoryLeakMixin):
     """
     Base class for testing parfors.
     Provides functions for compilation and three way comparison between
@@ -197,6 +197,28 @@ class TestParforsBase(TestCase):
             np.testing.assert_almost_equal(parfor_fastmath_output, py_expected,
                                            **kwargs)
 
+    def check(self, pyfunc, *args, **kwargs):
+        """Checks that pyfunc compiles for *args under parallel=True and njit
+        and asserts that all version execute and produce the same result"""
+        cfunc, cpfunc = self.compile_all(pyfunc, *args)
+        self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
+
+    def check_variants(self, impl, arg_gen, **kwargs):
+        """Run self.check(impl, ...) on array data generated from arg_gen.
+        """
+        for args in arg_gen():
+            with self.subTest(list(map(typeof, args))):
+                self.check(impl, *args, **kwargs)
+
+    def count_parfors_variants(self, impl, arg_gen, **kwargs):
+        """Run self.countParfors(impl, ...) on array types generated from
+        arg_gen.
+        """
+        for args in arg_gen():
+            with self.subTest(list(map(typeof, args))):
+                argtys = tuple(map(typeof, args))
+                # At least one parfors
+                self.assertGreaterEqual(countParfors(impl, argtys), 1)
 
     def check_scheduling(self, cres, scheduler_type):
         # make sure parfor set up scheduling
@@ -209,6 +231,37 @@ class TestParforsBase(TestCase):
                 raise ValueError(msg % scheduler_type)
 
         self.assertIn(scheduler_str, cres.library.get_llvm_str())
+
+    def gen_linspace(self, n, ct):
+        """Make *ct* sample 1D arrays of length *n* using np.linspace().
+        """
+        def gen():
+            yield np.linspace(0, 1, n)
+            yield np.linspace(2, 1, n)
+            yield np.linspace(1, 2, n)
+
+        src = cycle(gen())
+        return [next(src) for i in range(ct)]
+
+    def gen_linspace_variants(self, ct):
+        """Make 1D, 2D, 3D variants of the data in C and F orders
+        """
+        # 1D
+        yield self.gen_linspace(10, ct=ct)
+
+        # 2D
+        arr2ds = [x.reshape((2, 3))
+                  for x in self.gen_linspace(n=2 * 3, ct=ct)]
+        yield arr2ds
+        # Fortran order
+        yield [np.asfortranarray(x) for x in arr2ds]
+
+        # 3D
+        arr3ds = [x.reshape((2, 3, 4))
+                  for x in self.gen_linspace(n=2 * 3 * 4, ct=ct)]
+        yield arr3ds
+        # Fortran order
+        yield [np.asfortranarray(x) for x in arr3ds]
 
     def _filter_mod(self, mod, magicstr, checkstr=None):
         """ helper function to filter out modules by name"""
@@ -518,190 +571,15 @@ class TestPipeline(object):
         self.state.metadata = {}
 
 
-class TestParfors(TestParforsBase):
+class TestParforBasic(TestParforsBase):
+    """Smoke tests for the parfors transforms. These tests check the most basic
+    functionality"""
 
     def __init__(self, *args):
         TestParforsBase.__init__(self, *args)
         # these are used in the mass of simple tests
         m = np.reshape(np.arange(12.), (3, 4))
         self.simple_args = [np.arange(3.), np.arange(4.), m, m.T]
-
-    def check(self, pyfunc, *args, **kwargs):
-        cfunc, cpfunc = self.compile_all(pyfunc, *args)
-        self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
-
-    def gen_linspace(self, n, ct):
-        """Make *ct* sample 1D arrays of length *n* using np.linspace().
-        """
-        def gen():
-            yield np.linspace(0, 1, n)
-            yield np.linspace(2, 1, n)
-            yield np.linspace(1, 2, n)
-
-        src = cycle(gen())
-        return [next(src) for i in range(ct)]
-
-    def gen_linspace_variants(self, ct):
-        """Make 1D, 2D, 3D variants of the data in C and F orders
-        """
-        # 1D
-        yield self.gen_linspace(10, ct=ct)
-
-        # 2D
-        arr2ds = [x.reshape((2, 3))
-                  for x in self.gen_linspace(n=2 * 3, ct=ct)]
-        yield arr2ds
-        # Fortran order
-        yield [np.asfortranarray(x) for x in arr2ds]
-
-        # 3D
-        arr3ds = [x.reshape((2, 3, 4))
-                  for x in self.gen_linspace(n=2 * 3 * 4, ct=ct)]
-        yield arr3ds
-        # Fortran order
-        yield [np.asfortranarray(x) for x in arr3ds]
-
-    def check_variants(self, impl, arg_gen, **kwargs):
-        """Run self.check(impl, ...) on array data generated from arg_gen.
-        """
-        for args in arg_gen():
-            with self.subTest(list(map(typeof, args))):
-                self.check(impl, *args, **kwargs)
-
-    def count_parfors_variants(self, impl, arg_gen, **kwargs):
-        """Run self.countParfors(impl, ...) on array types generated from
-        arg_gen.
-        """
-        for args in arg_gen():
-            with self.subTest(list(map(typeof, args))):
-                argtys = tuple(map(typeof, args))
-                # At least one parfors
-                self.assertGreaterEqual(countParfors(impl, argtys), 1)
-
-    @skip_parfors_unsupported
-    def test_arraymap(self):
-        def test_impl(a, x, y):
-            return a * x + y
-
-        self.check_variants(test_impl, lambda: self.gen_linspace_variants(3))
-
-    @skip_parfors_unsupported
-    @needs_blas
-    def test_mvdot(self):
-        def test_impl(a, v):
-            return np.dot(a, v)
-
-        A = np.linspace(0, 1, 20).reshape(2, 10)
-        v = np.linspace(2, 1, 10)
-
-        self.check(test_impl, A, v)
-
-    @skip_parfors_unsupported
-    def test_0d_broadcast(self):
-        def test_impl():
-            X = np.array(1)
-            Y = np.ones((10, 12))
-            return np.sum(X + Y)
-        self.check(test_impl)
-        self.assertEqual(countParfors(test_impl, ()), 1)
-
-    @skip_parfors_unsupported
-    def test_2d_parfor(self):
-        def test_impl():
-            X = np.ones((10, 12))
-            Y = np.zeros((10, 12))
-            return np.sum(X + Y)
-        self.check(test_impl)
-        self.assertEqual(countParfors(test_impl, ()), 1)
-
-    @skip_parfors_unsupported
-    def test_nd_parfor(self):
-        def case1():
-            X = np.ones((10, 12))
-            Y = np.zeros((10, 12))
-            yield (X, Y)
-
-        data_gen = lambda: chain(case1(), self.gen_linspace_variants(2))
-
-        def test_impl(X, Y):
-            return np.sum(X + Y)
-
-        self.check_variants(test_impl, data_gen)
-        self.count_parfors_variants(test_impl, data_gen)
-
-    @skip_parfors_unsupported
-    def test_pi(self):
-        def test_impl(n):
-            x = 2 * np.random.ranf(n) - 1
-            y = 2 * np.random.ranf(n) - 1
-            return 4 * np.sum(x**2 + y**2 < 1) / n
-
-        self.check(test_impl, 100000, decimal=1)
-        self.assertEqual(countParfors(test_impl, (types.int64, )), 1)
-        self.assertEqual(countArrays(test_impl, (types.intp,)), 0)
-
-    @skip_parfors_unsupported
-    def test_fuse_argmin_argmax_max_min(self):
-        for op in [np.argmin, np.argmax, np.min, np.max]:
-            def test_impl(n):
-                A = np.ones(n)
-                C = op(A)
-                B = A.sum()
-                return B + C
-            self.check(test_impl, 256)
-            self.assertEqual(countParfors(test_impl, (types.int64, )), 1)
-            self.assertEqual(countArrays(test_impl, (types.intp,)), 0)
-
-    @skip_parfors_unsupported
-    def test_blackscholes(self):
-        # blackscholes takes 5 1D float array args
-        args = (numba.float64[:], ) * 5
-        self.assertEqual(countParfors(blackscholes_impl, args), 1)
-
-    @skip_parfors_unsupported
-    @needs_blas
-    def test_logistic_regression(self):
-        args = (numba.float64[:], numba.float64[:,:], numba.float64[:],
-                numba.int64)
-        self.assertEqual(countParfors(lr_impl, args), 2)
-        self.assertEqual(countArrayAllocs(lr_impl, args), 1)
-
-    @skip_parfors_unsupported
-    def test_kmeans(self):
-        np.random.seed(0)
-        N = 1024
-        D = 10
-        centers = 3
-        A = np.random.ranf((N, D))
-        init_centroids = np.random.ranf((centers, D))
-        self.check(example_kmeans_test, A, centers, 3, init_centroids,
-                                                                    decimal=1)
-        # TODO: count parfors after k-means fusion is working
-        # requires recursive parfor counting
-        arg_typs = (types.Array(types.float64, 2, 'C'), types.intp, types.intp,
-                    types.Array(types.float64, 2, 'C'))
-        self.assertEqual(
-            countNonParforArrayAccesses(example_kmeans_test, arg_typs), 0)
-
-    @unittest.skipIf(not _32bit, "Only impacts 32 bit hardware")
-    @needs_blas
-    def test_unsupported_combination_raises(self):
-        """
-        This test is in place until issues with the 'parallel'
-        target on 32 bit hardware are fixed.
-        """
-        with self.assertRaises(errors.UnsupportedParforsError) as raised:
-            @njit(parallel=True)
-            def ddot(a, v):
-                return np.dot(a, v)
-
-            A = np.linspace(0, 1, 20).reshape(2, 10)
-            v = np.linspace(2, 1, 10)
-            ddot(A, v)
-
-        msg = ("The 'parallel' target is not currently supported on 32 bit "
-               "hardware")
-        self.assertIn(msg, str(raised.exception))
 
     @skip_parfors_unsupported
     def test_simple01(self):
@@ -873,14 +751,77 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, *self.simple_args)
 
+
+class TestParforNumericalMisc(TestParforsBase):
+    """ Miscellaneous 'classical' numerical tests """
+
     @skip_parfors_unsupported
-    def test_np_func_direct_import(self):
-        from numpy import ones  # import here becomes FreeVar
+    def test_pi(self):
         def test_impl(n):
-            A = ones(n)
-            return A[0]
-        n = 111
-        self.check(test_impl, n)
+            x = 2 * np.random.ranf(n) - 1
+            y = 2 * np.random.ranf(n) - 1
+            return 4 * np.sum(x**2 + y**2 < 1) / n
+
+        self.check(test_impl, 100000, decimal=1)
+        self.assertEqual(countParfors(test_impl, (types.int64, )), 1)
+        self.assertEqual(countArrays(test_impl, (types.intp,)), 0)
+
+    @skip_parfors_unsupported
+    def test_blackscholes(self):
+        # blackscholes takes 5 1D float array args
+        args = (numba.float64[:], ) * 5
+        self.assertEqual(countParfors(blackscholes_impl, args), 1)
+
+    @skip_parfors_unsupported
+    @needs_blas
+    def test_logistic_regression(self):
+        args = (numba.float64[:], numba.float64[:,:], numba.float64[:],
+                numba.int64)
+        self.assertEqual(countParfors(lr_impl, args), 2)
+        self.assertEqual(countArrayAllocs(lr_impl, args), 1)
+
+    @skip_parfors_unsupported
+    def test_kmeans(self):
+        np.random.seed(0)
+        N = 1024
+        D = 10
+        centers = 3
+        A = np.random.ranf((N, D))
+        init_centroids = np.random.ranf((centers, D))
+        self.check(example_kmeans_test, A, centers, 3, init_centroids,
+                                                                    decimal=1)
+        # TODO: count parfors after k-means fusion is working
+        # requires recursive parfor counting
+        arg_typs = (types.Array(types.float64, 2, 'C'), types.intp, types.intp,
+                    types.Array(types.float64, 2, 'C'))
+        self.assertEqual(
+            countNonParforArrayAccesses(example_kmeans_test, arg_typs), 0)
+
+
+class TestParforNumPy(TestParforsBase):
+    """Tests NumPy functionality under parfors"""
+    @skip_parfors_unsupported
+    @needs_blas
+    def test_mvdot(self):
+        def test_impl(a, v):
+            return np.dot(a, v)
+
+        A = np.linspace(0, 1, 20).reshape(2, 10)
+        v = np.linspace(2, 1, 10)
+
+        self.check(test_impl, A, v)
+
+    @skip_parfors_unsupported
+    def test_fuse_argmin_argmax_max_min(self):
+        for op in [np.argmin, np.argmax, np.min, np.max]:
+            def test_impl(n):
+                A = np.ones(n)
+                C = op(A)
+                B = A.sum()
+                return B + C
+            self.check(test_impl, 256)
+            self.assertEqual(countParfors(test_impl, (types.int64, )), 1)
+            self.assertEqual(countArrays(test_impl, (types.intp,)), 0)
 
     @skip_parfors_unsupported
     def test_np_random_func_direct_import(self):
@@ -919,19 +860,6 @@ class TestParfors(TestParforsBase):
             self.check(test_impl1, 2, arg)
             self.check(test_impl2, 2, arg, 30)
 
-    @skip_parfors_unsupported
-    def test_size_assertion(self):
-        def test_impl(m, n):
-            A = np.ones(m)
-            B = np.ones(n)
-            return np.sum(A + B)
-
-        self.check(test_impl, 10, 10)
-        with self.assertRaises(AssertionError) as raises:
-            cfunc = njit(parallel=True)(test_impl)
-            cfunc(10, 9)
-        msg = "Sizes of A, B do not match"
-        self.assertIn(msg, str(raises.exception))
 
     @skip_parfors_unsupported
     def test_mean(self):
@@ -990,22 +918,6 @@ class TestParfors(TestParforsBase):
         self.count_parfors_variants(test_impl, data_gen)
 
     @skip_parfors_unsupported
-    def test_issue4963_globals(self):
-        def test_impl():
-            buf = np.zeros((_GLOBAL_INT_FOR_TESTING1, _GLOBAL_INT_FOR_TESTING2))
-            return buf
-        self.check(test_impl)
-
-    @skip_parfors_unsupported
-    def test_issue4963_freevars(self):
-        _FREEVAR_INT_FOR_TESTING1 = 17
-        _FREEVAR_INT_FOR_TESTING2 = 5
-        def test_impl():
-            buf = np.zeros((_FREEVAR_INT_FOR_TESTING1, _FREEVAR_INT_FOR_TESTING2))
-            return buf
-        self.check(test_impl)
-
-    @skip_parfors_unsupported
     def test_random_parfor(self):
         """
         Test function with only a random call to make sure a random function
@@ -1052,65 +964,6 @@ class TestParfors(TestParforsBase):
         py_output = test_impl(n)
         self.assertEqual(parfor_output, py_output)
         self.assertEqual(countParfors(test_impl, (types.int64, )), 0)
-
-    @skip_parfors_unsupported
-    def test_cfg(self):
-        # from issue #2477
-        def test_impl(x, is_positive, N):
-            for i in numba.prange(2):
-                for j in range( i*N//2, (i+1)*N//2 ):
-                    is_positive[j] = 0
-                    if x[j] > 0:
-                        is_positive[j] = 1
-
-            return is_positive
-
-        N = 100
-        x = np.random.rand(N)
-        is_positive = np.zeros(N)
-        self.check(test_impl, x, is_positive, N)
-
-    @skip_parfors_unsupported
-    def test_reduce(self):
-        def test_impl(A):
-            init_val = 10
-            return reduce(lambda a,b: min(a, b), A, init_val)
-
-        n = 211
-        A = np.random.ranf(n)
-        self.check(test_impl, A)
-        A = np.random.randint(10, size=n).astype(np.int32)
-        self.check(test_impl, A)
-
-        # test checking the number of arguments for the reduce function
-        def test_impl():
-            g = lambda x: x ** 2
-            return reduce(g, np.array([1, 2, 3, 4, 5]), 2)
-        with self.assertTypingError():
-            self.check(test_impl)
-
-        # test checking reduction over bitarray masked arrays
-        n = 160
-        A = np.random.randint(10, size=n).astype(np.int32)
-        def test_impl(A):
-            return np.sum(A[A>=3])
-        self.check(test_impl, A)
-        # TODO: this should fuse
-        # self.assertTrue(countParfors(test_impl, (numba.float64[:],)) == 1)
-
-        def test_impl(A):
-            B = A[:,0]
-            return np.sum(A[B>=3,1])
-        self.check(test_impl, A.reshape((16,10)))
-        # TODO: this should also fuse
-        #self.assertTrue(countParfors(test_impl, (numba.float64[:,:],)) == 1)
-
-        def test_impl(A):
-            B = A[:,0]
-            return np.sum(A[B>=3,1:2])
-        self.check(test_impl, A.reshape((16,10)))
-        # this doesn't fuse due to mixed indices
-        self.assertEqual(countParfors(test_impl, (numba.float64[:,:],)), 2)
 
     @skip_parfors_unsupported
     def test_min(self):
@@ -1189,18 +1042,38 @@ class TestParfors(TestParforsBase):
         self.count_parfors_variants(test_impl2, data_gen)
 
     @skip_parfors_unsupported
-    def test_use_of_reduction_var1(self):
-        def test_impl():
-            acc = 0
-            for i in prange(1):
-                acc = cmath.sqrt(acc)
-            return acc
+    def test_argmax(self):
+        def test_impl1(A):
+            return A.argmax()
 
-        # checks that invalid use of reduction variable is detected
-        msg = ("Use of reduction variable acc in an unsupported reduction function.")
-        with self.assertRaises(ValueError) as e:
-            pcfunc = self.compile_parallel(test_impl, ())
-        self.assertIn(msg, str(e.exception))
+        def test_impl2(A):
+            return np.argmax(A)
+
+        n = 211
+        A = np.array([1., 0., 3., 2., 3.])
+        B = np.random.randint(10, size=n).astype(np.int32)
+        C = np.random.ranf((n, n))  # test multi-dimensional array
+        self.check(test_impl1, A)
+        self.check(test_impl1, B)
+        self.check(test_impl1, C)
+        self.check(test_impl2, A)
+        self.check(test_impl2, B)
+        self.check(test_impl2, C)
+
+        # checks that 0d array input raises
+        msg = 'attempt to get argmax of an empty sequence'
+        for impl in (test_impl1, test_impl2):
+            pcfunc = self.compile_parallel(impl, (types.int64[:],))
+            with self.assertRaises(ValueError) as e:
+                pcfunc.entry_point(np.array([], dtype=np.int64))
+            self.assertIn(msg, str(e.exception))
+
+        # Test variants
+        data_gen = lambda: self.gen_linspace_variants(1)
+        self.check_variants(test_impl1, data_gen)
+        self.count_parfors_variants(test_impl1, data_gen)
+        self.check_variants(test_impl2, data_gen)
+        self.count_parfors_variants(test_impl2, data_gen)
 
     @skip_parfors_unsupported
     def test_argmin(self):
@@ -1237,38 +1110,255 @@ class TestParfors(TestParforsBase):
         self.count_parfors_variants(test_impl2, data_gen)
 
     @skip_parfors_unsupported
-    def test_argmax(self):
-        def test_impl1(A):
-            return A.argmax()
+    def test_ndarray_fill(self):
+        def test_impl(x):
+            x.fill(7.0)
+            return x
+        x = np.zeros(10)
+        self.check(test_impl, x)
+        argty = (types.Array(types.float64, 1, 'C'),)
+        self.assertEqual(countParfors(test_impl, argty), 1)
 
-        def test_impl2(A):
-            return np.argmax(A)
+    @skip_parfors_unsupported
+    def test_ndarray_fill2d(self):
+        def test_impl(x):
+            x.fill(7.0)
+            return x
+        x = np.zeros((2,2))
+        self.check(test_impl, x)
+        argty = (types.Array(types.float64, 2, 'C'),)
+        self.assertEqual(countParfors(test_impl, argty), 1)
+
+    @skip_parfors_unsupported
+    def test_reshape_with_neg_one(self):
+        # issue3314
+        def test_impl(a, b):
+            result_matrix = np.zeros((b, b, 1), dtype=np.float64)
+            sub_a = a[0:b]
+            a = sub_a.size
+            b = a / 1
+            z = sub_a.reshape(-1, 1)
+            result_data = sub_a / z
+            result_matrix[:,:,0] = result_data
+            return result_matrix
+
+        a = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
+                   7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
+        b = 3
+
+        self.check(test_impl, a, b)
+
+    @skip_parfors_unsupported
+    def test_reshape_with_large_neg(self):
+        # issue3314
+        def test_impl(a, b):
+            result_matrix = np.zeros((b, b, 1), dtype=np.float64)
+            sub_a = a[0:b]
+            a = sub_a.size
+            b = a / 1
+            z = sub_a.reshape(-1307, 1)
+            result_data = sub_a / z
+            result_matrix[:,:,0] = result_data
+            return result_matrix
+
+        a = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
+                   7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
+        b = 3
+
+        self.check(test_impl, a, b)
+
+    @skip_parfors_unsupported
+    def test_reshape_with_too_many_neg_one(self):
+        # issue3314
+        with self.assertRaises(errors.UnsupportedRewriteError) as raised:
+            @njit(parallel=True)
+            def test_impl(a, b):
+                rm = np.zeros((b, b, 1), dtype=np.float64)
+                sub_a = a[0:b]
+                a = sub_a.size
+                b = a / 1
+                z = sub_a.reshape(-1, -1)
+                result_data = sub_a / z
+                rm[:,:,0] = result_data
+                return rm
+
+            a = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
+                       7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
+            b = 3
+            test_impl(a, b)
+
+        msg = ("The reshape API may only include one negative argument.")
+        self.assertIn(msg, str(raised.exception))
+
+    @skip_parfors_unsupported
+    def test_0d_array(self):
+        def test_impl(n):
+            return np.sum(n) + np.prod(n) + np.min(n) + np.max(n) + np.var(n)
+        self.check(test_impl, np.array(7), check_scheduling=False)
+
+
+class TestParfors(TestParforsBase):
+    """ Tests cpython, reduction and various parfors features"""
+
+    def __init__(self, *args):
+        TestParforsBase.__init__(self, *args)
+
+    @skip_parfors_unsupported
+    def test_arraymap(self):
+        def test_impl(a, x, y):
+            return a * x + y
+
+        self.check_variants(test_impl, lambda: self.gen_linspace_variants(3))
+
+    @skip_parfors_unsupported
+    def test_0d_broadcast(self):
+        def test_impl():
+            X = np.array(1)
+            Y = np.ones((10, 12))
+            return np.sum(X + Y)
+        self.check(test_impl)
+        self.assertEqual(countParfors(test_impl, ()), 1)
+
+    @skip_parfors_unsupported
+    def test_2d_parfor(self):
+        def test_impl():
+            X = np.ones((10, 12))
+            Y = np.zeros((10, 12))
+            return np.sum(X + Y)
+        self.check(test_impl)
+        self.assertEqual(countParfors(test_impl, ()), 1)
+
+    @skip_parfors_unsupported
+    def test_nd_parfor(self):
+        def case1():
+            X = np.ones((10, 12))
+            Y = np.zeros((10, 12))
+            yield (X, Y)
+
+        data_gen = lambda: chain(case1(), self.gen_linspace_variants(2))
+
+        def test_impl(X, Y):
+            return np.sum(X + Y)
+
+        self.check_variants(test_impl, data_gen)
+        self.count_parfors_variants(test_impl, data_gen)
+
+    @unittest.skipIf(not _32bit, "Only impacts 32 bit hardware")
+    @needs_blas
+    def test_unsupported_combination_raises(self):
+        """
+        This test is in place until issues with the 'parallel'
+        target on 32 bit hardware are fixed.
+        """
+        with self.assertRaises(errors.UnsupportedParforsError) as raised:
+            @njit(parallel=True)
+            def ddot(a, v):
+                return np.dot(a, v)
+
+            A = np.linspace(0, 1, 20).reshape(2, 10)
+            v = np.linspace(2, 1, 10)
+            ddot(A, v)
+
+        msg = ("The 'parallel' target is not currently supported on 32 bit "
+               "hardware")
+        self.assertIn(msg, str(raised.exception))
+
+    @skip_parfors_unsupported
+    def test_np_func_direct_import(self):
+        from numpy import ones  # import here becomes FreeVar
+        def test_impl(n):
+            A = ones(n)
+            return A[0]
+        n = 111
+        self.check(test_impl, n)
+
+    @skip_parfors_unsupported
+    def test_size_assertion(self):
+        def test_impl(m, n):
+            A = np.ones(m)
+            B = np.ones(n)
+            return np.sum(A + B)
+
+        self.check(test_impl, 10, 10)
+        with self.assertRaises(AssertionError) as raises:
+            cfunc = njit(parallel=True)(test_impl)
+            cfunc(10, 9)
+        msg = "Sizes of A, B do not match"
+        self.assertIn(msg, str(raises.exception))
+
+    @skip_parfors_unsupported
+    def test_cfg(self):
+        # from issue #2477
+        def test_impl(x, is_positive, N):
+            for i in numba.prange(2):
+                for j in range( i*N//2, (i+1)*N//2 ):
+                    is_positive[j] = 0
+                    if x[j] > 0:
+                        is_positive[j] = 1
+
+            return is_positive
+
+        N = 100
+        x = np.random.rand(N)
+        is_positive = np.zeros(N)
+        self.check(test_impl, x, is_positive, N)
+
+    @skip_parfors_unsupported
+    def test_reduce(self):
+        def test_impl(A):
+            init_val = 10
+            return reduce(lambda a,b: min(a, b), A, init_val)
 
         n = 211
-        A = np.array([1., 0., 3., 2., 3.])
-        B = np.random.randint(10, size=n).astype(np.int32)
-        C = np.random.ranf((n, n))  # test multi-dimensional array
-        self.check(test_impl1, A)
-        self.check(test_impl1, B)
-        self.check(test_impl1, C)
-        self.check(test_impl2, A)
-        self.check(test_impl2, B)
-        self.check(test_impl2, C)
+        A = np.random.ranf(n)
+        self.check(test_impl, A)
+        A = np.random.randint(10, size=n).astype(np.int32)
+        self.check(test_impl, A)
 
-        # checks that 0d array input raises
-        msg = 'attempt to get argmax of an empty sequence'
-        for impl in (test_impl1, test_impl2):
-            pcfunc = self.compile_parallel(impl, (types.int64[:],))
-            with self.assertRaises(ValueError) as e:
-                pcfunc.entry_point(np.array([], dtype=np.int64))
-            self.assertIn(msg, str(e.exception))
+        # test checking the number of arguments for the reduce function
+        def test_impl():
+            g = lambda x: x ** 2
+            return reduce(g, np.array([1, 2, 3, 4, 5]), 2)
+        with self.assertTypingError():
+            self.check(test_impl)
 
-        # Test variants
-        data_gen = lambda: self.gen_linspace_variants(1)
-        self.check_variants(test_impl1, data_gen)
-        self.count_parfors_variants(test_impl1, data_gen)
-        self.check_variants(test_impl2, data_gen)
-        self.count_parfors_variants(test_impl2, data_gen)
+        # test checking reduction over bitarray masked arrays
+        n = 160
+        A = np.random.randint(10, size=n).astype(np.int32)
+        def test_impl(A):
+            return np.sum(A[A>=3])
+        self.check(test_impl, A)
+        # TODO: this should fuse
+        # self.assertTrue(countParfors(test_impl, (numba.float64[:],)) == 1)
+
+        def test_impl(A):
+            B = A[:,0]
+            return np.sum(A[B>=3,1])
+        self.check(test_impl, A.reshape((16,10)))
+        # TODO: this should also fuse
+        #self.assertTrue(countParfors(test_impl, (numba.float64[:,:],)) == 1)
+
+        def test_impl(A):
+            B = A[:,0]
+            return np.sum(A[B>=3,1:2])
+        self.check(test_impl, A.reshape((16,10)))
+        # this doesn't fuse due to mixed indices
+        self.assertEqual(countParfors(test_impl, (numba.float64[:,:],)), 2)
+
+
+    @skip_parfors_unsupported
+    def test_use_of_reduction_var1(self):
+        def test_impl():
+            acc = 0
+            for i in prange(1):
+                acc = cmath.sqrt(acc)
+            return acc
+
+        # checks that invalid use of reduction variable is detected
+        msg = ("Use of reduction variable acc in an unsupported reduction function.")
+        with self.assertRaises(ValueError) as e:
+            pcfunc = self.compile_parallel(test_impl, ())
+        self.assertIn(msg, str(e.exception))
 
     @skip_parfors_unsupported
     def test_parfor_array_access1(self):
@@ -1589,93 +1679,6 @@ class TestParfors(TestParforsBase):
         self.check(test_impl)
 
     @skip_parfors_unsupported
-    def test_reshape_with_neg_one(self):
-        # issue3314
-        def test_impl(a, b):
-            result_matrix = np.zeros((b, b, 1), dtype=np.float64)
-            sub_a = a[0:b]
-            a = sub_a.size
-            b = a / 1
-            z = sub_a.reshape(-1, 1)
-            result_data = sub_a / z
-            result_matrix[:,:,0] = result_data
-            return result_matrix
-
-        a = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
-                   7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
-        b = 3
-
-        self.check(test_impl, a, b)
-
-    @skip_parfors_unsupported
-    def test_reshape_with_large_neg(self):
-        # issue3314
-        def test_impl(a, b):
-            result_matrix = np.zeros((b, b, 1), dtype=np.float64)
-            sub_a = a[0:b]
-            a = sub_a.size
-            b = a / 1
-            z = sub_a.reshape(-1307, 1)
-            result_data = sub_a / z
-            result_matrix[:,:,0] = result_data
-            return result_matrix
-
-        a = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
-                   7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
-        b = 3
-
-        self.check(test_impl, a, b)
-
-    @skip_parfors_unsupported
-    def test_reshape_with_too_many_neg_one(self):
-        # issue3314
-        with self.assertRaises(errors.UnsupportedRewriteError) as raised:
-            @njit(parallel=True)
-            def test_impl(a, b):
-                rm = np.zeros((b, b, 1), dtype=np.float64)
-                sub_a = a[0:b]
-                a = sub_a.size
-                b = a / 1
-                z = sub_a.reshape(-1, -1)
-                result_data = sub_a / z
-                rm[:,:,0] = result_data
-                return rm
-
-            a = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
-                       7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
-            b = 3
-            test_impl(a, b)
-
-        msg = ("The reshape API may only include one negative argument.")
-        self.assertIn(msg, str(raised.exception))
-
-    @skip_parfors_unsupported
-    def test_ndarray_fill(self):
-        def test_impl(x):
-            x.fill(7.0)
-            return x
-        x = np.zeros(10)
-        self.check(test_impl, x)
-        argty = (types.Array(types.float64, 1, 'C'),)
-        self.assertEqual(countParfors(test_impl, argty), 1)
-
-    @skip_parfors_unsupported
-    def test_ndarray_fill2d(self):
-        def test_impl(x):
-            x.fill(7.0)
-            return x
-        x = np.zeros((2,2))
-        self.check(test_impl, x)
-        argty = (types.Array(types.float64, 2, 'C'),)
-        self.assertEqual(countParfors(test_impl, argty), 1)
-
-    @skip_parfors_unsupported
-    def test_0d_array(self):
-        def test_impl(n):
-            return np.sum(n) + np.prod(n) + np.min(n) + np.max(n) + np.var(n)
-        self.check(test_impl, np.array(7), check_scheduling=False)
-
-    @skip_parfors_unsupported
     def test_array_analysis_optional_def(self):
         def test_impl(x, half):
             size = len(x)
@@ -1848,7 +1851,7 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, x)
 
 
-class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
+class TestParforsLeaks(TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
         cfunc, cpfunc = self.compile_all(pyfunc, *args)
         self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
@@ -2044,7 +2047,7 @@ class TestPrangeBase(TestParforsBase):
         return raised_warnings
 
 
-class TestPrange(TestPrangeBase):
+class TestPrangeBasic(TestPrangeBase):
     """ Tests Prange """
 
     @skip_parfors_unsupported
@@ -2430,6 +2433,10 @@ class TestPrange(TestPrangeBase):
                            scheduler_type='unsigned',
                            check_fastmath=True)
 
+
+class TestPrangeSpecific(TestPrangeBase):
+    """ Tests specific features/problems found under prange"""
+
     @skip_parfors_unsupported
     def test_prange_two_instances_same_reduction_var(self):
         # issue4922 - multiple uses of same reduction variable
@@ -2579,26 +2586,6 @@ class TestPrange(TestPrangeBase):
                 if reciprocal_inst.match(x):
                     break
             self.assertTrue(fadd_inst.match(splitted[i + 1]))
-
-    @skip_parfors_unsupported
-    def test_kde_example(self):
-        def test_impl(X):
-            # KDE example
-            b = 0.5
-            points = np.array([-1.0, 2.0, 5.0])
-            N = points.shape[0]
-            n = X.shape[0]
-            exps = 0
-            for i in range(n):
-                p = X[i]
-                d = (-(p - points)**2) / (2 * b**2)
-                m = np.min(d)
-                exps += m - np.log(b * N) + np.log(np.sum(np.exp(d - m)))
-            return exps
-
-        n = 128
-        X = np.random.ranf(n)
-        self.prange_tester(test_impl, X)
 
     @skip_parfors_unsupported
     def test_parfor_alias1(self):
@@ -2848,6 +2835,26 @@ class TestPrange(TestPrangeBase):
             return result[0]
 
         self.prange_tester(test_impl, 3, 1)
+
+    @skip_parfors_unsupported
+    def test_kde_example(self):
+        def test_impl(X):
+            # KDE example
+            b = 0.5
+            points = np.array([-1.0, 2.0, 5.0])
+            N = points.shape[0]
+            n = X.shape[0]
+            exps = 0
+            for i in range(n):
+                p = X[i]
+                d = (-(p - points)**2) / (2 * b**2)
+                m = np.min(d)
+                exps += m - np.log(b * N) + np.log(np.sum(np.exp(d - m)))
+            return exps
+
+        n = 128
+        X = np.random.ranf(n)
+        self.prange_tester(test_impl, X)
 
 
 @skip_parfors_unsupported
@@ -3360,80 +3367,6 @@ class TestParforsSlice(TestParforsBase):
         self.check(test_impl, np.arange(3))
 
     @skip_parfors_unsupported
-    def test_issue5942_1(self):
-        # issue5942: tests statement reordering of
-        # aliased arguments.
-        def test_impl(gg, gg_next):
-            gs = gg.shape
-            d = gs[0]
-            for i_gg in prange(d):
-                gg_next[i_gg, :]  = gg[i_gg, :]
-                gg_next[i_gg, 0] += 1
-
-            return gg_next
-
-        d = 4
-        k = 2
-
-        gg      = np.zeros((d, k), dtype = np.int32)
-        gg_next = np.zeros((d, k), dtype = np.int32)
-        self.check(test_impl, gg, gg_next)
-
-    @skip_parfors_unsupported
-    def test_issue5942_2(self):
-        # issue5942: tests statement reordering
-        def test_impl(d, k):
-            gg      = np.zeros((d, k), dtype = np.int32)
-            gg_next = np.zeros((d, k), dtype = np.int32)
-
-            for i_gg in prange(d):
-                for n in range(k):
-                    gg[i_gg, n] = i_gg
-                gg_next[i_gg, :]  = gg[i_gg, :]
-                gg_next[i_gg, 0] += 1
-
-            return gg_next
-
-        d = 4
-        k = 2
-
-        self.check(test_impl, d, k)
-
-    @skip_parfors_unsupported
-    @skip_unless_scipy
-    def test_issue6102(self):
-        # The problem is originally observed on Python3.8 because of the
-        # changes in how loops are represented in 3.8 bytecode.
-        @njit(parallel=True)
-        def f(r):
-            for ir in prange(r.shape[0]):
-                dist = np.inf
-                tr = np.array([0, 0, 0], dtype=np.float32)
-                for i in [1, 0, -1]:
-                    dist_t = np.linalg.norm(r[ir, :] + i)
-                    if dist_t < dist:
-                        dist = dist_t
-                        tr = np.array([i, i, i], dtype=np.float32)
-                r[ir, :] += tr
-            return r
-
-        r = np.array([[0., 0., 0.], [0., 0., 1.]])
-        self.assertPreciseEqual(f(r), f.py_func(r))
-
-    @skip_parfors_unsupported
-    def test_issue6774(self):
-        @njit(parallel=True)
-        def test_impl():
-            n = 5
-            na_mask = np.ones((n,))
-            result = np.empty((n - 1,))
-            for i in prange(len(result)):
-                result[i] = np.sum(na_mask[i:i + 1])
-            return result
-
-        self.check(test_impl)
-
-    @skip_parfors_unsupported
     def test_parfor_array_access_lower_slice(self):
         for ts in [slice(1, 3, None), slice(2, None, None), slice(None, 2, -1),
                    slice(None, None, None), slice(None, None, -2)]:
@@ -3571,6 +3504,7 @@ class TestParforsBitMask(TestParforsBase):
         with self.assertRaises(AssertionError) as raises:
             self.check(test_impl, a, b, c)
         self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
+
 
 class TestParforsMisc(TestParforsBase):
     """
@@ -3947,6 +3881,96 @@ class TestParforsMisc(TestParforsBase):
             find_maxima_3D_jit(args),
             find_maxima_3D_jit.py_func(args),
         )
+
+    @skip_parfors_unsupported
+    def test_issue5942_1(self):
+        # issue5942: tests statement reordering of
+        # aliased arguments.
+        def test_impl(gg, gg_next):
+            gs = gg.shape
+            d = gs[0]
+            for i_gg in prange(d):
+                gg_next[i_gg, :]  = gg[i_gg, :]
+                gg_next[i_gg, 0] += 1
+
+            return gg_next
+
+        d = 4
+        k = 2
+
+        gg      = np.zeros((d, k), dtype = np.int32)
+        gg_next = np.zeros((d, k), dtype = np.int32)
+        self.check(test_impl, gg, gg_next)
+
+    @skip_parfors_unsupported
+    def test_issue5942_2(self):
+        # issue5942: tests statement reordering
+        def test_impl(d, k):
+            gg      = np.zeros((d, k), dtype = np.int32)
+            gg_next = np.zeros((d, k), dtype = np.int32)
+
+            for i_gg in prange(d):
+                for n in range(k):
+                    gg[i_gg, n] = i_gg
+                gg_next[i_gg, :]  = gg[i_gg, :]
+                gg_next[i_gg, 0] += 1
+
+            return gg_next
+
+        d = 4
+        k = 2
+
+        self.check(test_impl, d, k)
+
+    @skip_parfors_unsupported
+    @skip_unless_scipy
+    def test_issue6102(self):
+        # The problem is originally observed on Python3.8 because of the
+        # changes in how loops are represented in 3.8 bytecode.
+        @njit(parallel=True)
+        def f(r):
+            for ir in prange(r.shape[0]):
+                dist = np.inf
+                tr = np.array([0, 0, 0], dtype=np.float32)
+                for i in [1, 0, -1]:
+                    dist_t = np.linalg.norm(r[ir, :] + i)
+                    if dist_t < dist:
+                        dist = dist_t
+                        tr = np.array([i, i, i], dtype=np.float32)
+                r[ir, :] += tr
+            return r
+
+        r = np.array([[0., 0., 0.], [0., 0., 1.]])
+        self.assertPreciseEqual(f(r), f.py_func(r))
+
+    @skip_parfors_unsupported
+    def test_issue6774(self):
+        @njit(parallel=True)
+        def test_impl():
+            n = 5
+            na_mask = np.ones((n,))
+            result = np.empty((n - 1,))
+            for i in prange(len(result)):
+                result[i] = np.sum(na_mask[i:i + 1])
+            return result
+
+        self.check(test_impl)
+
+    @skip_parfors_unsupported
+    def test_issue4963_globals(self):
+        def test_impl():
+            buf = np.zeros((_GLOBAL_INT_FOR_TESTING1, _GLOBAL_INT_FOR_TESTING2))
+            return buf
+        self.check(test_impl)
+
+    @skip_parfors_unsupported
+    def test_issue4963_freevars(self):
+        _FREEVAR_INT_FOR_TESTING1 = 17
+        _FREEVAR_INT_FOR_TESTING2 = 5
+        def test_impl():
+            buf = np.zeros((_FREEVAR_INT_FOR_TESTING1, _FREEVAR_INT_FOR_TESTING2))
+            return buf
+        self.check(test_impl)
 
 
 @skip_parfors_unsupported
