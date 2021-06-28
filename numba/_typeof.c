@@ -968,6 +968,10 @@ typeof_typecode(PyObject *dispatcher, PyObject *val)
     else if (tyobj == &PyArray_Type) {
         return typecode_ndarray(dispatcher, (PyArrayObject*)val);
     }
+    /* Subtype of CUDA device array */
+    else if (PyType_IsSubtype(tyobj, &DeviceArrayType)) {
+        return typecode_devicendarray(dispatcher, val);
+    }
     /* Subtypes of Array handling */
     else if (PyType_IsSubtype(tyobj, &PyArray_Type)) {
         /* By default, Numba will treat all numpy.ndarray subtypes as if they
@@ -1023,9 +1027,6 @@ typeof_typecode(PyObject *dispatcher, PyObject *val)
         if (!no_subtype_attr) {
             return typecode_ndarray(dispatcher, (PyArrayObject*)val);
         }
-    }
-    else if (PyType_IsSubtype(tyobj, &DeviceArrayType)) {
-        return typecode_devicendarray(dispatcher, val);
     }
 
     return typecode_using_fingerprint(dispatcher, val);
