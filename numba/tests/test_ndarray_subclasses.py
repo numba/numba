@@ -193,7 +193,7 @@ def allocator_MyArray(typingctx, allocsize, align):
 
         get_alloc_fnty = ir.FunctionType(voidptr, ())
         get_alloc_fn = cgutils.get_or_insert_function(
-            mod, get_alloc_fnty, name="NRT_get_sample_external_allocator"
+            mod, get_alloc_fnty, name="_nrt_get_sample_external_allocator"
         )
         ext_alloc = builder.call(get_alloc_fn, ())
 

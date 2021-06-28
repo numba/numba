@@ -248,8 +248,9 @@ VISIBILITY_HIDDEN const NRT_api_functions* NRT_get_api(void);
 
 
 /*
+ * FOR INTERNAL USE ONLY.
  * Get a sample external allocator for testing
  */
-VISIBILITY_HIDDEN NRT_ExternalAllocator* NRT_get_sample_external_allocator(void);
+VISIBILITY_HIDDEN NRT_ExternalAllocator* _nrt_get_sample_external_allocator(void);
 
 #endif /* NUMBA_NRT_H_ */

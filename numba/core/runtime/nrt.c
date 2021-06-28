@@ -523,7 +523,7 @@ static NRT_ExternalAllocator sample_external_allocator = {
     &sample_external_opaque_data
 };
 
-NRT_ExternalAllocator* NRT_get_sample_external_allocator() {
+NRT_ExternalAllocator* _nrt_get_sample_external_allocator() {
     return &sample_external_allocator;
 }
 
