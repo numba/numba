@@ -316,6 +316,15 @@ RETURN_ARRAY_COPY:
 }
 
 /**
+ * This function is used during the boxing of ndarray type.
+ * `arystruct` is a structure containing essential information from the
+ *             unboxed array.
+ * `retty` is the NumPy subclass type this function should return.
+ *         This is related to `numba.core.types.Array.box_type`.
+ * `ndim` is the number of dimension of the array.
+ * `writeable` corresponds to the "writable" flag in NumPy ndarray.
+ * `descr` is the NumPy.
+ *
  * This function was renamed in 0.52.0 to specify that it acquires references.
  * It used to steal the reference of the arystruct.
  * Refer to https://github.com/numba/numba/pull/6446
