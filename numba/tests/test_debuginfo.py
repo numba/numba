@@ -213,9 +213,9 @@ class TestDebugInfoEmission(TestCase):
     def test_DILocation_entry_blk_impl(self):
         """ This tests that the unconditional jump emitted at the tail of
         the entry block has no debug metadata associated with it. In practice,
-        if this is not the case, it manifests as the prologue_end being
-        associated with the end_sequence or similar (due to the way code gen
-        works for the entry block)."""
+        if debug metadata is associated with it, it manifests as the
+        prologue_end being associated with the end_sequence or similar (due to
+        the way code gen works for the entry block)."""
 
         @njit(debug=True)
         def foo(a):
