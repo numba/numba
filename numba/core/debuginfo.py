@@ -5,9 +5,21 @@ Implements helpers to build LLVM debuginfo.
 
 import abc
 import os.path
+from contextlib import contextmanager
 
 from llvmlite import ir
 from numba.core import cgutils
+
+@contextmanager
+def suspend_emission(builder):
+    """Suspends the emission of debug_metadata for the duration of the context
+    managed block."""
+    ref = builder.debug_metadata
+    builder.debug_metadata = None
+    try:
+        yield
+    finally:
+        builder.debug_metadata = ref
 
 
 class AbstractDIBuilder(metaclass=abc.ABCMeta):
@@ -216,7 +228,7 @@ class DIBuilder(AbstractDIBuilder):
 
     def _di_compile_unit(self):
         return self.module.add_debug_info('DICompileUnit', {
-            'language': ir.DIToken('DW_LANG_Python'),
+            'language': ir.DIToken('DW_LANG_C_plus_plus'),
             'file': self.difile,
             'producer': 'Numba',
             'runtimeVersion': 0,

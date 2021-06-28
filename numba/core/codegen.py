@@ -1209,7 +1209,9 @@ class CPUCodegen(Codegen):
         cost = kwargs.pop("cost", None)
         with self._pass_manager_builder(**kwargs) as pmb:
             pmb.populate(pm)
-        if cost is not None and cost == "cheap":
+        # If config.OPT==0 do not include these extra passes to help with
+        # vectorization.
+        if cost is not None and cost == "cheap" and config.OPT != 0:
             # This knocks loops into rotated form early to reduce the likelihood
             # of vectorization failing due to unknown PHI nodes.
             pm.add_loop_rotate_pass()

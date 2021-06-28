@@ -29,6 +29,7 @@ class BaseLower(object):
         self.call_conv = context.call_conv
         self.generator_info = func_ir.generator_info
         self.metadata = metadata
+        self.flags = utils.ConfigStack.top_or_none()
 
         # Initialize LLVM
         self.module = self.library.create_ir_module(self.fndesc.unique_name)
@@ -190,9 +191,12 @@ class BaseLower(object):
         self.extract_function_arguments()
         entry_block_tail = self.lower_function_body()
 
-        # Close tail of entry block
-        self.builder.position_at_end(entry_block_tail)
-        self.builder.branch(self.blkmap[self.firstblk])
+        # Close tail of entry block, do not emit debug metadata else the
+        # unconditional jump gets associated with the metadata from the function
+        # body end.
+        with debuginfo.suspend_emission(self.builder):
+            self.builder.position_at_end(entry_block_tail)
+            self.builder.branch(self.blkmap[self.firstblk])
 
     def lower_function_body(self):
         """
@@ -275,6 +279,14 @@ class Lower(BaseLower):
         super().init()
         # find all singly assigned variables
         self._find_singly_assigned_variable()
+
+    @property
+    def _disable_sroa_like_opt(self):
+        """Flags that the SROA like optimisation that Numba performs (which
+        prevent alloca and subsequent load/store for locals) should be disabled.
+        Currently, this is conditional solely on the presence of a request for
+        the emission of debug information."""
+        return False if self.flags is None else self.flags.debuginfo
 
     def _find_singly_assigned_variable(self):
         func_ir = self.func_ir
@@ -1281,10 +1293,11 @@ class Lower(BaseLower):
             # quit early
             return
 
-        llty = self.context.get_value_type(fetype)
-        # If the name is used in multiple blocks...
-        if name not in self._singly_assigned_vars:
+        # If the name is used in multiple blocks or lowering with debuginfo...
+        if ((name not in self._singly_assigned_vars) or
+                self._disable_sroa_like_opt):
             # If not already defined, allocate it
+            llty = self.context.get_value_type(fetype)
             ptr = self.alloca_lltype(name, llty)
             # Remember the pointer
             self.varmap[name] = ptr
@@ -1293,15 +1306,16 @@ class Lower(BaseLower):
         """
         Get a pointer to the given variable's slot.
         """
-        assert name not in self._blk_local_varmap
-        assert name not in self._singly_assigned_vars
+        if not self._disable_sroa_like_opt:
+            assert name not in self._blk_local_varmap
+            assert name not in self._singly_assigned_vars
         return self.varmap[name]
 
     def loadvar(self, name):
         """
         Load the given variable's value.
         """
-        if name in self._blk_local_varmap:
+        if name in self._blk_local_varmap and not self._disable_sroa_like_opt:
             return self._blk_local_varmap[name]
         ptr = self.getvar(name)
         return self.builder.load(ptr)
@@ -1315,7 +1329,8 @@ class Lower(BaseLower):
         self._alloca_var(name, fetype)
 
         # Store variable
-        if name in self._singly_assigned_vars:
+        if (name in self._singly_assigned_vars and
+                not self._disable_sroa_like_opt):
             self._blk_local_varmap[name] = value
         else:
             # Clean up existing value stored in the variable
@@ -1341,7 +1356,8 @@ class Lower(BaseLower):
         fetype = self.typeof(name)
 
         # Out-of-order
-        if name not in self._blk_local_varmap:
+        if (name not in self._blk_local_varmap and
+                not self._disable_sroa_like_opt):
             if name in self._singly_assigned_vars:
                 self._singly_assigned_vars.discard(name)
 
@@ -1349,7 +1365,7 @@ class Lower(BaseLower):
         # at the beginning of a loop, but only set later in the loop)
         self._alloca_var(name, fetype)
 
-        if name in self._blk_local_varmap:
+        if name in self._blk_local_varmap and not self._disable_sroa_like_opt:
             llval = self._blk_local_varmap[name]
             self.decref(fetype, llval)
         else:
@@ -1369,11 +1385,16 @@ class Lower(BaseLower):
         aptr = cgutils.alloca_once(self.builder, lltype,
                                    name=name, zfill=False)
         if is_uservar:
+            # If it's an arg set the location as the function definition line
+            if name in self.func_ir.arg_names:
+                loc = self.loc.with_lineno(self.func_ir.loc.line)
+            else:
+                loc = self.loc
             # Emit debug info for user variable
             sizeof = self.context.get_abi_sizeof(lltype)
             self.debuginfo.mark_variable(self.builder, aptr, name=name,
                                          lltype=lltype, size=sizeof,
-                                         line=self.loc.line)
+                                         line=loc.line)
         return aptr
 
     def incref(self, typ, val):
