@@ -791,6 +791,8 @@ def np_all(a):
 @overload(np.any)
 @overload_method(types.Array, "any")
 def np_any(a):
+    if not type_can_asarray(a):
+        raise errors.TypingError('The argument "a" must be array-like')
     def flat_any(a):
         a = np.asarray(a)
         for v in np.nditer(a):
