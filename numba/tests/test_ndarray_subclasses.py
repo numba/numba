@@ -181,9 +181,6 @@ def _ol_array_allocate(cls, allocsize, align):
 @intrinsic
 def allocator_MyArray(typingctx, allocsize, align):
     def impl(context, builder, sig, args):
-        # Implementation is just Numba's allocator at the moment for
-        # illustration.
-        # Haven't done the integration to test our real new allocator yet.
         context.nrt._require_nrt()
         size, align = args
 
