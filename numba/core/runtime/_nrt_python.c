@@ -372,7 +372,7 @@ NRT_adapt_ndarray_to_python_acqref(arystruct_t* arystruct, PyTypeObject *retty,
         NRT_Debug(nrt_debug_print("NRT_adapt_ndarray_to_python_acqref created MemInfo=%p\n", miobj));
         NRT_MemInfo_acquire(arystruct->meminfo);
         if (MemInfo_init(miobj, args, NULL)) {
-            NRT_Debug(nrt_debug_print("MemInfo_init returned 0.\n"));
+            NRT_Debug(nrt_debug_print("MemInfo_init failed.\n"));
             return NULL;
         }
         Py_DECREF(args);
