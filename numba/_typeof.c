@@ -999,17 +999,17 @@ typeof_typecode(PyObject *dispatcher, PyObject *val)
            a totally separate type, it will cease to function in Numba unless
            an implementation of that type is provided to Numba through the
            Numba type extension mechanisms (e.g., overload).  This would
-           typically start with defining a Numba type to corresponding to the
+           typically start with defining a Numba type corresponding to the
            ndarray subtype. This is the same concept as how Numba has a
            corollary of numpy.ndarray in its type system as types.Array.
            Next, one would typically defining boxing and unboxing routines
            and the associated memory model.  Then, overloads for NumPy
-           functions on that type would be created.  However, particularly
+           functions on that type would be created.  However,
            if the same default array memory model is used then there are tricks
            one can do to look at Numba's internal types.Array registries and
            to quickly apply those to the subtype as well.  In this manner,
            only those cases where the base ndarray and the ndarray subtype
-           behavior differs require new custom code for the subtype.  Third,
+           behavior differ would new custom functions need to be written for the subtype.  Finally,
            after adding support for the new type, you would have a separate
            ndarray subtype that could operate with other objects of the same
            subtype but would not support interoperation with regular NumPy

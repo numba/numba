@@ -464,10 +464,10 @@ void* NRT_Allocate(size_t size) {
 }
 
 void* NRT_Allocate_External(size_t size, NRT_ExternalAllocator *allocator) {
-    void *ptr;
+    void *ptr = NULL;
     if (allocator) {
         ptr = allocator->malloc(size, allocator->opaque_data);
-        NRT_Debug(nrt_debug_print("NRT_Allocate custom bytes=%zu ptr=%p\n", size, ptr));
+        NRT_Debug(nrt_debug_print("NRT_Allocate_External custom bytes=%zu ptr=%p\n", size, ptr));
     } else {
         ptr = TheMSys.allocator.malloc(size);
         NRT_Debug(nrt_debug_print("NRT_Allocate bytes=%zu ptr=%p\n", size, ptr));

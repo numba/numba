@@ -1193,7 +1193,7 @@ class PythonAPI(object):
         assert self.context.enable_nrt, "NRT required"
 
         intty = ir.IntType(32)
-        # Embed the Python type of the array (maybe subclass) in the LLVM.
+        # Embed the Python type of the array (maybe subclass) in the LLVM IR.
         serial_aryty_pytype = self.unserialize(self.serialize_object(aryty.box_type))
 
         fnty = Type.function(self.pyobj,

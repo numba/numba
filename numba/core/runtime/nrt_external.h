@@ -33,7 +33,7 @@ typedef struct {
     Returning a new reference.
     */
     NRT_MemInfo* (*allocate)(size_t nbytes);
-    /* Allocator memory using an external allocator but still using Numba's MemInfo.
+    /* Allocates memory using an external allocator but still using Numba's MemInfo.
 
     */
     NRT_MemInfo* (*allocate_external)(size_t nbytes, NRT_ExternalAllocator *allocator);

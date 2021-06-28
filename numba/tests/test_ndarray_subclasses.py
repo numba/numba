@@ -1,5 +1,5 @@
 """
-Test Numpy Subclassing features
+Test NumPy Subclassing features
 """
 
 import builtins
@@ -54,11 +54,10 @@ class myarray(np.ndarray):
 
     # __array__ is not needed given that this is a ndarray subclass
     #
-    # # Interoperate with Numpy outside of Numba.
     # def __array__(self, dtype=None):
     #     return self
 
-    # Interoperate with Numpy outside of Numba.
+    # Interoperate with NumPy outside of Numba.
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         if method == "__call__":
             N = None
@@ -66,8 +65,8 @@ class myarray(np.ndarray):
             for inp in inputs:
                 if isinstance(inp, Number):
                     scalars.append(inp)
-                elif isinstance(inp, (self.__class__, np.ndarray)):
-                    if isinstance(inp, self.__class__):
+                elif isinstance(inp, (type(self), np.ndarray)):
+                    if isinstance(inp, type(self)):
                         scalars.append(np.ndarray(inp.shape, inp.dtype, inp))
                     else:
                         scalars.append(inp)
@@ -87,7 +86,7 @@ class myarray(np.ndarray):
 class MyArrayType(types.Array):
     def __init__(self, dtype, ndim, layout, readonly=False, aligned=True):
         name = f"MyArray({ndim}, {dtype}, {layout})"
-        super().__init__(dtype, ndim, layout, readonly=False, aligned=aligned,
+        super().__init__(dtype, ndim, layout, readonly=readonly, aligned=aligned,
                          name=name)
 
     # Tell Numba typing how to combine MyArrayType with other ndarray types.
@@ -215,7 +214,7 @@ def allocator_MyArray(typingctx, allocsize, align):
 class TestNdarraySubclasses(MemoryLeakMixin, TestCase):
 
     def test_myarray_return(self):
-        """This test `types.Array.box_type`
+        """This tests the path to `MyArrayType.box_type`
         """
         @njit
         def foo(a):
@@ -256,8 +255,8 @@ class TestNdarraySubclasses(MemoryLeakMixin, TestCase):
 
     def test_myarray_asarray_non_jit(self):
         def foo(buf):
-            coverted = myarray(buf.shape, buf.dtype, buf)
-            return np.asarray(coverted) + buf
+            converted = myarray(buf.shape, buf.dtype, buf)
+            return np.asarray(converted) + buf
 
         buf = np.arange(4)
         got = foo(buf)
@@ -270,8 +269,8 @@ class TestNdarraySubclasses(MemoryLeakMixin, TestCase):
 
         @njit
         def foo(buf):
-            coverted = myarray(buf.shape, buf.dtype, buf)
-            return np.asarray(coverted)
+            converted = myarray(buf.shape, buf.dtype, buf)
+            return np.asarray(converted)
 
         buf = np.arange(4)
         got = foo(buf)
@@ -282,8 +281,8 @@ class TestNdarraySubclasses(MemoryLeakMixin, TestCase):
     def test_myarray_ufunc_unsupported(self):
         @njit
         def foo(buf):
-            coverted = myarray(buf.shape, buf.dtype, buf)
-            return coverted + coverted
+            converted = myarray(buf.shape, buf.dtype, buf)
+            return converted + converted
 
         buf = np.arange(4, dtype=np.float32)
         with self.assertRaises(TypingError) as raises:
