@@ -470,7 +470,7 @@ void* NRT_Allocate_External(size_t size, NRT_ExternalAllocator *allocator) {
         NRT_Debug(nrt_debug_print("NRT_Allocate_External custom bytes=%zu ptr=%p\n", size, ptr));
     } else {
         ptr = TheMSys.allocator.malloc(size);
-        NRT_Debug(nrt_debug_print("NRT_Allocate bytes=%zu ptr=%p\n", size, ptr));
+        NRT_Debug(nrt_debug_print("NRT_Allocate_External bytes=%zu ptr=%p\n", size, ptr));
     }
     TheMSys.atomic_inc(&TheMSys.stats_alloc);
     return ptr;

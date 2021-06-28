@@ -48,7 +48,7 @@ def use_logger(fn):
     return core
 
 
-class myarray(np.ndarray):
+class MyArray(np.ndarray):
     # Tell Numba to not seamlessly treat this type as a regular ndarray.
     __numba_array_subtype_dispatch__ = True
 
@@ -86,8 +86,8 @@ class myarray(np.ndarray):
 class MyArrayType(types.Array):
     def __init__(self, dtype, ndim, layout, readonly=False, aligned=True):
         name = f"MyArray({ndim}, {dtype}, {layout})"
-        super().__init__(dtype, ndim, layout, readonly=readonly, aligned=aligned,
-                         name=name)
+        super().__init__(dtype, ndim, layout, readonly=readonly,
+                         aligned=aligned, name=name)
 
     # Tell Numba typing how to combine MyArrayType with other ndarray types.
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
@@ -104,10 +104,10 @@ class MyArrayType(types.Array):
 
     @property
     def box_type(self):
-        return myarray
+        return MyArray
 
 
-@typeof_impl.register(myarray)
+@typeof_impl.register(MyArray)
 def typeof_ta_ndarray(val, c):
     try:
         dtype = numpy_support.from_dtype(val.dtype)
@@ -121,7 +121,7 @@ def typeof_ta_ndarray(val, c):
 register_model(MyArrayType)(numba.core.datamodel.models.ArrayModel)
 
 
-@type_callable(myarray)
+@type_callable(MyArray)
 def type_myarray(context):
     def typer(shape, dtype, buf):
         out = MyArrayType(
@@ -132,7 +132,7 @@ def type_myarray(context):
     return typer
 
 
-@lower_builtin(myarray, types.UniTuple, types.DType, types.Array)
+@lower_builtin(MyArray, types.UniTuple, types.DType, types.Array)
 def impl_myarray(context, builder, sig, args):
     from numba.np.arrayobj import make_array, populate_array
 
@@ -221,10 +221,10 @@ class TestNdarraySubclasses(MemoryLeakMixin, TestCase):
             return a + 1
 
         buf = np.arange(4)
-        a = myarray(buf.shape, buf.dtype, buf)
+        a = MyArray(buf.shape, buf.dtype, buf)
         expected = foo.py_func(a)
         got = foo(a)
-        self.assertIsInstance(got, myarray)
+        self.assertIsInstance(got, MyArray)
         self.assertIs(type(expected), type(got))
         self.assertPreciseEqual(expected, got)
 
@@ -234,28 +234,28 @@ class TestNdarraySubclasses(MemoryLeakMixin, TestCase):
             return a
 
         buf = np.arange(4)
-        a = myarray(buf.shape, buf.dtype, buf)
+        a = MyArray(buf.shape, buf.dtype, buf)
         expected = foo.py_func(a)
         got = foo(a)
-        self.assertIsInstance(got, myarray)
+        self.assertIsInstance(got, MyArray)
         self.assertIs(type(expected), type(got))
         self.assertPreciseEqual(expected, got)
 
     def test_myarray_convert(self):
         @njit
         def foo(buf):
-            return myarray(buf.shape, buf.dtype, buf)
+            return MyArray(buf.shape, buf.dtype, buf)
 
         buf = np.arange(4)
         expected = foo.py_func(buf)
         got = foo(buf)
-        self.assertIsInstance(got, myarray)
+        self.assertIsInstance(got, MyArray)
         self.assertIs(type(expected), type(got))
         self.assertPreciseEqual(expected, got)
 
     def test_myarray_asarray_non_jit(self):
         def foo(buf):
-            converted = myarray(buf.shape, buf.dtype, buf)
+            converted = MyArray(buf.shape, buf.dtype, buf)
             return np.asarray(converted) + buf
 
         buf = np.arange(4)
@@ -269,7 +269,7 @@ class TestNdarraySubclasses(MemoryLeakMixin, TestCase):
 
         @njit
         def foo(buf):
-            converted = myarray(buf.shape, buf.dtype, buf)
+            converted = MyArray(buf.shape, buf.dtype, buf)
             return np.asarray(converted)
 
         buf = np.arange(4)
@@ -281,7 +281,7 @@ class TestNdarraySubclasses(MemoryLeakMixin, TestCase):
     def test_myarray_ufunc_unsupported(self):
         @njit
         def foo(buf):
-            converted = myarray(buf.shape, buf.dtype, buf)
+            converted = MyArray(buf.shape, buf.dtype, buf)
             return converted + converted
 
         buf = np.arange(4, dtype=np.float32)
@@ -304,7 +304,7 @@ class TestNdarraySubclasses(MemoryLeakMixin, TestCase):
             return b, c
 
         buf = np.arange(4, dtype=np.float64)
-        a = myarray(buf.shape, buf.dtype, buf)
+        a = MyArray(buf.shape, buf.dtype, buf)
 
         expected = foo.py_func(a)
         got = foo(a)
