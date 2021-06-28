@@ -29,6 +29,7 @@ class BaseLower(object):
         self.call_conv = context.call_conv
         self.generator_info = func_ir.generator_info
         self.metadata = metadata
+        self.flags = utils.ConfigStack.top_or_none()
 
         # Initialize LLVM
         self.module = self.library.create_ir_module(self.fndesc.unique_name)
@@ -278,6 +279,14 @@ class Lower(BaseLower):
         super().init()
         # find all singly assigned variables
         self._find_singly_assigned_variable()
+
+    @property
+    def _disable_sroa_like_opt(self):
+        """Flags that the SROA like optimisation that Numba performs (which
+        prevent alloca and subsequent load/store for locals) should be disabled.
+        Currently, this is conditional solely on the presence of a request for
+        the emission of debug information."""
+        return False if self.flags is None else self.flags.debuginfo
 
     def _find_singly_assigned_variable(self):
         func_ir = self.func_ir
@@ -1285,8 +1294,8 @@ class Lower(BaseLower):
             return
 
         # If the name is used in multiple blocks or lowering with debuginfo...
-        flags = utils.ConfigStack.top_or_none()
-        if (name not in self._singly_assigned_vars) or flags.debuginfo:
+        if ((name not in self._singly_assigned_vars) or
+                self._disable_sroa_like_opt):
             # If not already defined, allocate it
             llty = self.context.get_value_type(fetype)
             ptr = self.alloca_lltype(name, llty)
@@ -1297,8 +1306,7 @@ class Lower(BaseLower):
         """
         Get a pointer to the given variable's slot.
         """
-        flags = utils.ConfigStack.top_or_none()
-        if not flags.debuginfo:
+        if not self._disable_sroa_like_opt:
             assert name not in self._blk_local_varmap
             assert name not in self._singly_assigned_vars
         return self.varmap[name]
@@ -1307,8 +1315,7 @@ class Lower(BaseLower):
         """
         Load the given variable's value.
         """
-        flags = utils.ConfigStack.top_or_none()
-        if name in self._blk_local_varmap and not flags.debuginfo:
+        if name in self._blk_local_varmap and not self._disable_sroa_like_opt:
             return self._blk_local_varmap[name]
         ptr = self.getvar(name)
         return self.builder.load(ptr)
@@ -1322,8 +1329,8 @@ class Lower(BaseLower):
         self._alloca_var(name, fetype)
 
         # Store variable
-        flags = utils.ConfigStack.top_or_none()
-        if name in self._singly_assigned_vars and not flags.debuginfo:
+        if (name in self._singly_assigned_vars and
+                not self._disable_sroa_like_opt):
             self._blk_local_varmap[name] = value
         else:
             # Clean up existing value stored in the variable
@@ -1347,10 +1354,10 @@ class Lower(BaseLower):
         Delete the given variable.
         """
         fetype = self.typeof(name)
-        flags = utils.ConfigStack.top_or_none()
 
         # Out-of-order
-        if name not in self._blk_local_varmap and not flags.debuginfo:
+        if (name not in self._blk_local_varmap and
+                not self._disable_sroa_like_opt):
             if name in self._singly_assigned_vars:
                 self._singly_assigned_vars.discard(name)
 
@@ -1358,7 +1365,7 @@ class Lower(BaseLower):
         # at the beginning of a loop, but only set later in the loop)
         self._alloca_var(name, fetype)
 
-        if name in self._blk_local_varmap and not flags.debuginfo:
+        if name in self._blk_local_varmap and not self._disable_sroa_like_opt:
             llval = self._blk_local_varmap[name]
             self.decref(fetype, llval)
         else:
