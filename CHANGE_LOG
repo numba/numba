@@ -1,22 +1,41 @@
 Version 0.54.0
---------------
+==============
 
-In development
+This release includes a significant number of new features, important
+refactoring, critical bug fixes and a number of dependency upgrades.
 
-NOTES:
+Features
+--------
 
-* Minimum python version raised to 3.7.
+* Better support for additional hardware targets
+* All NumPy functions can now be overloaded for different hardwar targets
+
+Deprecations
+-----------
+
+* Moved ROCm target to "unmaintained" status, and moved all functionaliy to a
+  seperate repo at: https://github.com/numba/numba-rocm
+* Multiple CUDA related deprecations
+
+Upgrades
+-------
+
+* LLVM 11 now supported on all platofrms via llvmlite.
+* Minimum Python version raised to 3.7.
 * NumPy version 1.20 supported.
-* Minimum supported NumPy version raised to 1.17.
-* Moved ROCm target to "unmaintained" status.
+* Minimum supported NumPy version raised to 1.17 for runtime.(Compilation
+  however remains compatible with NumPy 1.11)
+* Vendor `cloudpickle <https://github.com/cloudpipe/cloudpickle>`_ `v1.6.0` --
+  now used for all `pickle` operations.
 
-Pull-Requests:
+Pull-Requests
+-------------
 
 * PR `#4516 <https://github.com/numba/numba/pull/4516>`_: Make setitem accept 0d np-arrays (`Guilherme Leobas <https://github.com/guilhermeleobas>`_)
 * PR `#4610 <https://github.com/numba/numba/pull/4610>`_: Implement np.is* functions (`Guilherme Leobas <https://github.com/guilhermeleobas>`_)
 * PR `#5984 <https://github.com/numba/numba/pull/5984>`_: Handle idx and size unification in wrap_index manually. (`Todd A. Anderson <https://github.com/DrTodd13>`_)
-* PR `#6468 <https://github.com/numba/numba/pull/6468>`_: Access `replace_functions_map` via PreParforPass instance (`Reazul Hoque <https://github.com/reazulhoque>`_ `Sergey Pokhodenko <https://github.com/PokhodenkoSA>`_)
-* PR `#6469 <https://github.com/numba/numba/pull/6469>`_: Add address space in pointer type (`Reazul Hoque <https://github.com/reazulhoque>`_ `Sergey Pokhodenko <https://github.com/PokhodenkoSA>`_)
+* PR `#6468 <https://github.com/numba/numba/pull/6468>`_: Access `replace_functions_map` via PreParforPass instance (`Sergey Pokhodenko <https://github.com/PokhodenkoSA>`_ `Reazul Hoque <https://github.com/reazulhoque>`_)
+* PR `#6469 <https://github.com/numba/numba/pull/6469>`_: Add address space in pointer type (`Sergey Pokhodenko <https://github.com/PokhodenkoSA>`_ `Reazul Hoque <https://github.com/reazulhoque>`_)
 * PR `#6608 <https://github.com/numba/numba/pull/6608>`_: Support f-strings for common cases (`Ehsan Totoni <https://github.com/ehsantn>`_)
 * PR `#6619 <https://github.com/numba/numba/pull/6619>`_: Improved fastmath code generation for trig, log, and exp/pow. (`Graham Markall <https://github.com/gmarkall>`_ `Michael Collison <https://github.com/testhound>`_)
 * PR `#6680 <https://github.com/numba/numba/pull/6680>`_: Allow getattr to work in objmode output type spec (`Siu Kwan Lam <https://github.com/sklam>`_)
@@ -46,20 +65,20 @@ Pull-Requests:
 * PR `#6758 <https://github.com/numba/numba/pull/6758>`_: patch to compile _devicearray.cpp with c++11 (`esc <https://github.com/esc>`_)
 * PR `#6759 <https://github.com/numba/numba/pull/6759>`_: Update CHANGE_LOG for 0.53.0rc2 (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#6760 <https://github.com/numba/numba/pull/6760>`_: Fix scheduler bug where it rounds to 0 divisions for a chunk. (`Todd A. Anderson <https://github.com/DrTodd13>`_)
-* PR `#6762 <https://github.com/numba/numba/pull/6762>`_: Glue wrappers to create @overload from split typing and lowering. (`stuartarchibald <https://github.com/stuartarchibald>`_ `Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#6762 <https://github.com/numba/numba/pull/6762>`_: Glue wrappers to create @overload from split typing and lowering. (`Siu Kwan Lam <https://github.com/sklam>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#6766 <https://github.com/numba/numba/pull/6766>`_: Fix DeviceNDArray null shape issue (`Michael Collison <https://github.com/testhound>`_)
 * PR `#6769 <https://github.com/numba/numba/pull/6769>`_: CUDA: Replace `CachedPTX` and `CachedCUFunction` with `CUDACodeLibrary` functionality (`Graham Markall <https://github.com/gmarkall>`_)
 * PR `#6776 <https://github.com/numba/numba/pull/6776>`_: Fix issue with TBB interface causing warnings and parfors counting them (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#6779 <https://github.com/numba/numba/pull/6779>`_: Fix wrap_index type unification. (`Todd A. Anderson <https://github.com/DrTodd13>`_)
 * PR `#6786 <https://github.com/numba/numba/pull/6786>`_: Fix gufunc kwargs support (`Siu Kwan Lam <https://github.com/sklam>`_)
 * PR `#6788 <https://github.com/numba/numba/pull/6788>`_: Add support for fastmath 32-bit floating point divide (`Michael Collison <https://github.com/testhound>`_)
-* PR `#6789 <https://github.com/numba/numba/pull/6789>`_: Fix warnings struct ref typeguard (`stuartarchibald <https://github.com/stuartarchibald>`_ `Siu Kwan Lam <https://github.com/sklam>`_ `esc <https://github.com/esc>`_)
+* PR `#6789 <https://github.com/numba/numba/pull/6789>`_: Fix warnings struct ref typeguard (`esc <https://github.com/esc>`_ `Siu Kwan Lam <https://github.com/sklam>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#6792 <https://github.com/numba/numba/pull/6792>`_: Update changelog for 0.53.0rc3 (`Siu Kwan Lam <https://github.com/sklam>`_)
 * PR `#6794 <https://github.com/numba/numba/pull/6794>`_: refactor and move create_temp_module into numba.tests.support (`Alexander-Makaryev <https://github.com/Alexander-Makaryev>`_)
 * PR `#6795 <https://github.com/numba/numba/pull/6795>`_: CUDA: Lazily add libdevice to compilation units  (`Graham Markall <https://github.com/gmarkall>`_)
 * PR `#6798 <https://github.com/numba/numba/pull/6798>`_: CUDA: Add optional Driver API argument logging (`Graham Markall <https://github.com/gmarkall>`_)
 * PR `#6799 <https://github.com/numba/numba/pull/6799>`_: Print Numba and llvmlite versions in sysinfo (`Graham Markall <https://github.com/gmarkall>`_)
-* PR `#6800 <https://github.com/numba/numba/pull/6800>`_: Make a common standard API for querying ufunc impl (`Siu Kwan Lam <https://github.com/sklam>`_ `Sergey Pokhodenko <https://github.com/PokhodenkoSA>`_)
+* PR `#6800 <https://github.com/numba/numba/pull/6800>`_: Make a common standard API for querying ufunc impl (`Sergey Pokhodenko <https://github.com/PokhodenkoSA>`_ `Siu Kwan Lam <https://github.com/sklam>`_)
 * PR `#6801 <https://github.com/numba/numba/pull/6801>`_: ParallelAccelerator no long will convert StaticSetItem to SetItem because record arrays require StaticSetItems. (`Todd A. Anderson <https://github.com/DrTodd13>`_)
 * PR `#6802 <https://github.com/numba/numba/pull/6802>`_: Add lineinfo flag to PTX and SASS compilation (`Graham Markall <https://github.com/gmarkall>`_ `Max Katz <https://github.com/maxpkatz>`_)
 * PR `#6804 <https://github.com/numba/numba/pull/6804>`_: added runtime version to `numba -s` (`Kalyan <https://github.com/rawwar>`_)
@@ -68,10 +87,10 @@ Pull-Requests:
 * PR `#6810 <https://github.com/numba/numba/pull/6810>`_: Fix tiny formatting error in ROC kernel docs (`Felix Divo <https://github.com/felixdivo>`_)
 * PR `#6811 <https://github.com/numba/numba/pull/6811>`_: CUDA: Remove test of runtime being a supported version (`Graham Markall <https://github.com/gmarkall>`_)
 * PR `#6813 <https://github.com/numba/numba/pull/6813>`_: Mostly CUDA: Replace llvmpy API usage with llvmlite APIs (`Graham Markall <https://github.com/gmarkall>`_)
-* PR `#6814 <https://github.com/numba/numba/pull/6814>`_: Improving context stack (`stuartarchibald <https://github.com/stuartarchibald>`_ `Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#6814 <https://github.com/numba/numba/pull/6814>`_: Improving context stack (`Siu Kwan Lam <https://github.com/sklam>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#6817 <https://github.com/numba/numba/pull/6817>`_: Update changelog for 0.53.0 final release date (`Siu Kwan Lam <https://github.com/sklam>`_)
 * PR `#6818 <https://github.com/numba/numba/pull/6818>`_: CUDA: Support IPC on Windows (`Graham Markall <https://github.com/gmarkall>`_)
-* PR `#6822 <https://github.com/numba/numba/pull/6822>`_: Add support for np.rot90 (`stuartarchibald <https://github.com/stuartarchibald>`_ `Daniel Nagel <https://github.com/braniii>`_)
+* PR `#6822 <https://github.com/numba/numba/pull/6822>`_: Add support for np.rot90 (`Daniel Nagel <https://github.com/braniii>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#6826 <https://github.com/numba/numba/pull/6826>`_: Fix regression on gufunc serialization (`Siu Kwan Lam <https://github.com/sklam>`_)
 * PR `#6828 <https://github.com/numba/numba/pull/6828>`_: Fix regression in CUDA: Set stream in mapped and managed array device_setup (`Graham Markall <https://github.com/gmarkall>`_)
 * PR `#6829 <https://github.com/numba/numba/pull/6829>`_: Fix accuracy of np.arange and np.linspace (`stuartarchibald <https://github.com/stuartarchibald>`_)
@@ -88,10 +107,10 @@ Pull-Requests:
 * PR `#6849 <https://github.com/numba/numba/pull/6849>`_: Add __hash__ for IntEnum (`Hannes Pahl <https://github.com/HPLegion>`_)
 * PR `#6850 <https://github.com/numba/numba/pull/6850>`_: Fix up more internal warnings (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#6851 <https://github.com/numba/numba/pull/6851>`_: set non-reported llvm timing values to 0.0 (`Ben Greiner <https://github.com/bnavigator>`_)
-* PR `#6854 <https://github.com/numba/numba/pull/6854>`_: PR 6096 continued (`stuartarchibald <https://github.com/stuartarchibald>`_ `Ivan Butygin <https://github.com/Hardcode84>`_)
+* PR `#6854 <https://github.com/numba/numba/pull/6854>`_: PR 6096 continued (`Ivan Butygin <https://github.com/Hardcode84>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#6861 <https://github.com/numba/numba/pull/6861>`_: updated reference to hsa with roc (`Kalyan <https://github.com/rawwar>`_)
 * PR `#6867 <https://github.com/numba/numba/pull/6867>`_: Update changelog for 0.53.1 (`esc <https://github.com/esc>`_)
-* PR `#6870 <https://github.com/numba/numba/pull/6870>`_: Add support for dispatcher retargeting using with-context (`stuartarchibald <https://github.com/stuartarchibald>`_ `Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#6870 <https://github.com/numba/numba/pull/6870>`_: Add support for dispatcher retargeting using with-context (`Siu Kwan Lam <https://github.com/sklam>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#6871 <https://github.com/numba/numba/pull/6871>`_: Force text-align:left when using Annotate (`Guilherme Leobas <https://github.com/guilhermeleobas>`_)
 * PR `#6873 <https://github.com/numba/numba/pull/6873>`_: docs: Update reference to @jitclass location (`David Nadlinger <https://github.com/dnadlinger>`_)
 * PR `#6876 <https://github.com/numba/numba/pull/6876>`_: Add trailing slashes to dir paths in CODEOWNERS (`Graham Markall <https://github.com/gmarkall>`_)
@@ -112,7 +131,7 @@ Pull-Requests:
 * PR `#6915 <https://github.com/numba/numba/pull/6915>`_: Update _Intrinsic for sphinx to capture the inner docstring (`Guilherme Leobas <https://github.com/guilhermeleobas>`_)
 * PR `#6918 <https://github.com/numba/numba/pull/6918>`_: Start section on commonly encounted unsupported parfors code. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#6924 <https://github.com/numba/numba/pull/6924>`_: CUDA: Fix `ffs` (`Graham Markall <https://github.com/gmarkall>`_)
-* PR `#6928 <https://github.com/numba/numba/pull/6928>`_: Add support for axis keyword arg to numpy.argmax() (`Itamar Turner-Trauring <https://github.com/itamarst>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#6928 <https://github.com/numba/numba/pull/6928>`_: Add support for axis keyword arg to numpy.argmax() (`stuartarchibald <https://github.com/stuartarchibald>`_ `Itamar Turner-Trauring <https://github.com/itamarst>`_)
 * PR `#6929 <https://github.com/numba/numba/pull/6929>`_: Fix CI failure when gitpython is missing. (`Siu Kwan Lam <https://github.com/sklam>`_)
 * PR `#6935 <https://github.com/numba/numba/pull/6935>`_: fixes broken link in numba-runtime.rst (`Kalyan <https://github.com/rawwar>`_)
 * PR `#6936 <https://github.com/numba/numba/pull/6936>`_: CUDA: Implement support for PTDS globally (`Graham Markall <https://github.com/gmarkall>`_)
@@ -121,7 +140,7 @@ Pull-Requests:
 * PR `#6941 <https://github.com/numba/numba/pull/6941>`_: ABC the target descriptor and make consistent throughout. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#6944 <https://github.com/numba/numba/pull/6944>`_: CUDA: Support for `@overload` (`Graham Markall <https://github.com/gmarkall>`_)
 * PR `#6945 <https://github.com/numba/numba/pull/6945>`_: Fix issue with array analysis tests needing scipy. (`stuartarchibald <https://github.com/stuartarchibald>`_)
-* PR `#6948 <https://github.com/numba/numba/pull/6948>`_: Refactor registry init. (`Graham Markall <https://github.com/gmarkall>`_ `stuartarchibald <https://github.com/stuartarchibald>`_ `Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#6948 <https://github.com/numba/numba/pull/6948>`_: Refactor registry init. (`Graham Markall <https://github.com/gmarkall>`_ `Siu Kwan Lam <https://github.com/sklam>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#6953 <https://github.com/numba/numba/pull/6953>`_: CUDA: Fix and deprecate `inspect_ptx()`, fix NVVM option setup for device functions (`Graham Markall <https://github.com/gmarkall>`_)
 * PR `#6958 <https://github.com/numba/numba/pull/6958>`_: Inconsistent behavior of reshape between numpy and numba/cuda device array (`Lauren Arnett <https://github.com/laurenarnett>`_)
 * PR `#6961 <https://github.com/numba/numba/pull/6961>`_: Update overload glue to deal with typing_key (`stuartarchibald <https://github.com/stuartarchibald>`_)
@@ -130,7 +149,7 @@ Pull-Requests:
 * PR `#6971 <https://github.com/numba/numba/pull/6971>`_: Fix CUDA @``intrinsic`` use (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#6977 <https://github.com/numba/numba/pull/6977>`_: Vendor cloudpickle (`Siu Kwan Lam <https://github.com/sklam>`_)
 * PR `#6978 <https://github.com/numba/numba/pull/6978>`_: Implement operator.contains for empty Tuples (`Brandon T. Willard <https://github.com/brandonwillard>`_)
-* PR `#6981 <https://github.com/numba/numba/pull/6981>`_: Fix LLVM IR parsing error on use of `np.bool_` in globals (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#6981 <https://github.com/numba/numba/pull/6981>`_: Fix LLVM IR parsing error on use of np.bool_ in globals (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#6983 <https://github.com/numba/numba/pull/6983>`_: Support Optional types in ufuncs. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#6985 <https://github.com/numba/numba/pull/6985>`_: Implement static set/get items on records with integer index (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#6986 <https://github.com/numba/numba/pull/6986>`_: document release checklist (`esc <https://github.com/esc>`_)
@@ -141,7 +160,7 @@ Pull-Requests:
 * PR `#6996 <https://github.com/numba/numba/pull/6996>`_: Add constant lowering support for `SliceType`s (`Brandon T. Willard <https://github.com/brandonwillard>`_)
 * PR `#6997 <https://github.com/numba/numba/pull/6997>`_: CUDA: Remove catch of NotImplementedError in target.py (`Graham Markall <https://github.com/gmarkall>`_)
 * PR `#6999 <https://github.com/numba/numba/pull/6999>`_: Fix errors introduced by the cloudpickle patch (`Siu Kwan Lam <https://github.com/sklam>`_)
-* PR `#7003 <https://github.com/numba/numba/pull/7003>`_: More mainline fixes (`Graham Markall <https://github.com/gmarkall>`_ `stuartarchibald <https://github.com/stuartarchibald>`_ `Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#7003 <https://github.com/numba/numba/pull/7003>`_: More mainline fixes (`Graham Markall <https://github.com/gmarkall>`_ `Siu Kwan Lam <https://github.com/sklam>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#7004 <https://github.com/numba/numba/pull/7004>`_: Test extending the CUDA target (`Graham Markall <https://github.com/gmarkall>`_)
 * PR `#7007 <https://github.com/numba/numba/pull/7007>`_: Made stencil compilation not fail for arrays of conflicting types. (`MegaIng <https://github.com/MegaIng>`_)
 * PR `#7008 <https://github.com/numba/numba/pull/7008>`_: Added support for np.random.dirichlet with all size arguments (`Rishi Kulkarni <https://github.com/rishi-kulkarni>`_)
@@ -179,7 +198,8 @@ Pull-Requests:
 
 Total PRs: 164
 
-Authors:
+Authors
+-------
 
 * `Alexander-Makaryev <https://github.com/Alexander-Makaryev>`_
 * `Todd A. Anderson <https://github.com/DrTodd13>`_
