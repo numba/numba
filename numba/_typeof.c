@@ -938,7 +938,7 @@ int
 typeof_typecode(PyObject *dispatcher, PyObject *val)
 {
     PyTypeObject *tyobj = Py_TYPE(val);
-    int no_subtype_attr;
+    int subtype_attr;
     /* This needs to be kept in sync with Dispatcher.typeof_pyval(),
      * otherwise funny things may happen.
      */
@@ -1023,8 +1023,8 @@ typeof_typecode(PyObject *dispatcher, PyObject *val)
            ndarray subtypes.  The array type __array_ufunc__ returns the
            type of the output of the given ufunc.
          */
-        no_subtype_attr = PyObject_HasAttrString(val, "__numba_array_subtype_dispatch__");
-        if (!no_subtype_attr) {
+        subtype_attr = PyObject_HasAttrString(val, "__numba_array_subtype_dispatch__");
+        if (!subtype_attr) {
             return typecode_ndarray(dispatcher, (PyArrayObject*)val);
         }
     }
