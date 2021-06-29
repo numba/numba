@@ -141,7 +141,7 @@ def null_comparer(a, b):
 
 
 @needs_subprocess
-class TestParforsBase(MemoryLeakMixin, TestCase):
+class TestParforsBase(TestCase):
     """
     Base class for testing parfors.
     Provides functions for compilation and three way comparison between
@@ -1846,7 +1846,7 @@ class TestParfors(TestParforsBase):
 
 
 @skip_parfors_unsupported
-class TestParforsLeaks(TestParforsBase):
+class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
         cfunc, cpfunc = self.compile_all(pyfunc, *args)
         self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
