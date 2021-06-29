@@ -36,7 +36,20 @@ def mk_unique_var(prefix):
     return var
 
 
-_max_label = 0
+class _MaxLabel:
+    def __init__(self, value=0):
+        self._value = value
+
+    def next(self):
+        self._value += 1
+        return self._value
+
+    def update(self, newval):
+        self._value = max(newval, self._value)
+
+
+_the_max_label = _MaxLabel()
+del _MaxLabel
 
 
 def get_unused_var_name(prefix, var_table):
@@ -52,9 +65,7 @@ def get_unused_var_name(prefix, var_table):
 
 
 def next_label():
-    global _max_label
-    _max_label += 1
-    return _max_label
+    return _the_max_label.next()
 
 
 def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc, lhs_typ):
@@ -1662,10 +1673,9 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, targetctx=None,
     remove_dels(f_ir.blocks)
 
     # relabel by adding an offset
-    global _max_label
-    f_ir.blocks = add_offset_to_labels(f_ir.blocks, _max_label + 1)
+    f_ir.blocks = add_offset_to_labels(f_ir.blocks, _the_max_label.next())
     max_label = max(f_ir.blocks.keys())
-    _max_label = max_label
+    _the_max_label.update(max_label)
 
     # rename all variables to avoid conflict
     var_table = get_name_var_table(f_ir.blocks)

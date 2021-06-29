@@ -21,6 +21,7 @@ import operator
 from collections import defaultdict, namedtuple
 import copy
 from itertools import cycle, chain
+import subprocess as subp
 
 import numba.parfors.parfor
 from numba import njit, prange, set_num_threads, get_num_threads, typeof
@@ -3804,6 +3805,17 @@ class TestPrangeSpecific(TestPrangeBase):
         n = 128
         X = np.random.ranf(n)
         self.prange_tester(test_impl, X)
+
+    @skip_parfors_unsupported
+    def test_issue_due_to_max_label(self):
+        # Run the actual test in a new process since it can only reproduce in
+        # a fresh state.
+        out = subp.check_output(
+            [sys.executable, '-m', 'numba.tests.parfors_max_label_error'],
+            timeout=30,
+            stderr=subp.STDOUT, # redirect stderr to stdout
+        )
+        self.assertIn("TEST PASSED", out.decode())
 
 
 @skip_parfors_unsupported
