@@ -129,6 +129,52 @@ class TestCudaDebugInfo(CUDATestCase):
             if i < len(arr):
                 arr[i] = threadid()
 
+    def test_debug_function_chained_device_function(self):
+        # Calling a device function that calls another device function from a
+        # kernel with `debug=True` on the kernel only should succeed. See Issue
+        # #7159.
+
+        @cuda.jit(device=True)
+        def f2(x):
+            return x + 1
+
+        @cuda.jit(device=True)
+        def f1(x, y):
+            return x - f2(y)
+
+        @cuda.jit(debug=True)
+        def kernel(x, y):
+            f1(x, y)
+
+        kernel[1, 1](1, 2)
+
+    def test_debug_function_multiple_device_function_calls(self):
+        # Calling a device function that calls another device function from a
+        # kernel with `debug=True` on the kernel only should succeed, and the
+        # kernel may also call one of the device functions without resulting in
+        # multiple-defined symbols.
+        #
+        # In this example, f2 is lowered twice, once because of the call from
+        # f1 and once because of the call from kernel. These should be merged
+        # and not duplicated.
+        #
+        # See Issue # #7159.
+
+        @cuda.jit(device=True)
+        def f2(x):
+            return x + 1
+
+        @cuda.jit(device=True)
+        def f1(x, y):
+            return x - f2(y)
+
+        @cuda.jit(debug=True)
+        def kernel(x, y):
+            f1(x, y)
+            f2(x)
+
+        kernel[1, 1](1, 2)
+
 
 if __name__ == '__main__':
     unittest.main()
