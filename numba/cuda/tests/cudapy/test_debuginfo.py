@@ -4,6 +4,7 @@ from numba import cuda
 from numba.cuda.cudadrv.nvvm import NVVM
 from numba.core import types
 from numba.cuda.testing import CUDATestCase
+import itertools
 import re
 import unittest
 
@@ -129,51 +130,69 @@ class TestCudaDebugInfo(CUDATestCase):
             if i < len(arr):
                 arr[i] = threadid()
 
-    def test_debug_function_chained_device_function(self):
-        # Calling a device function that calls another device function from a
-        # kernel with `debug=True` on the kernel only should succeed. See Issue
-        # #7159.
-
-        @cuda.jit(device=True)
+    def _test_chained_device_function(self, kernel_debug, f1_debug, f2_debug):
+        @cuda.jit(device=True, debug=f2_debug)
         def f2(x):
             return x + 1
 
-        @cuda.jit(device=True)
+        @cuda.jit(device=True, debug=f1_debug)
         def f1(x, y):
             return x - f2(y)
 
-        @cuda.jit(debug=True)
+        @cuda.jit((types.int32, types.int32), debug=kernel_debug)
         def kernel(x, y):
             f1(x, y)
 
         kernel[1, 1](1, 2)
 
-    def test_debug_function_multiple_device_function_calls(self):
+    def test_chained_device_function(self):
         # Calling a device function that calls another device function from a
-        # kernel with `debug=True` on the kernel only should succeed, and the
-        # kernel may also call one of the device functions without resulting in
-        # multiple-defined symbols.
-        #
-        # In this example, f2 is lowered twice, once because of the call from
-        # f1 and once because of the call from kernel. These should be merged
-        # and not duplicated.
-        #
-        # See Issue # #7159.
+        # kernel with should succeed regardless of which jit decorators have
+        # debug=True. See Issue #7159.
 
-        @cuda.jit(device=True)
+        debug_opts = itertools.product(*[(True, False)] * 3)
+
+        for kernel_debug, f1_debug, f2_debug in debug_opts:
+            with self.subTest(kernel_debug=kernel_debug,
+                              f1_debug=f1_debug,
+                              f2_debug=f2_debug):
+                self._test_chained_device_function(kernel_debug,
+                                                   f1_debug,
+                                                   f2_debug)
+
+    def _test_chained_device_function_two_calls(self, kernel_debug, f1_debug,
+                                                f2_debug):
+
+        @cuda.jit(device=True, debug=f2_debug)
         def f2(x):
             return x + 1
 
-        @cuda.jit(device=True)
+        @cuda.jit(device=True, debug=f1_debug)
         def f1(x, y):
             return x - f2(y)
 
-        @cuda.jit(debug=True)
+        @cuda.jit(debug=kernel_debug)
         def kernel(x, y):
             f1(x, y)
             f2(x)
 
         kernel[1, 1](1, 2)
+
+    def test_chained_device_function_two_calls(self):
+        # Calling a device function that calls a leaf device function from a
+        # kernel, and calling the leaf device function from the kernel should
+        # succeed, regardless of which jit decorators have debug=True. See
+        # Issue #7159.
+
+        debug_opts = itertools.product(*[(True, False)] * 3)
+
+        for kernel_debug, f1_debug, f2_debug in debug_opts:
+            with self.subTest(kernel_debug=kernel_debug,
+                              f1_debug=f1_debug,
+                              f2_debug=f2_debug):
+                self._test_chained_device_function_two_calls(kernel_debug,
+                                                             f1_debug,
+                                                             f2_debug)
 
 
 if __name__ == '__main__':
