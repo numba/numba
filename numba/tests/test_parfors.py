@@ -79,7 +79,7 @@ class TestParforsRunner(TestCase):
         status = subprocess.run(cmd, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, timeout=self._TIMEOUT,
                                 env=env_copy, universal_newlines=True)
-        self.assertEqual(status.returncode, 0, msg=status.stderr))
+        self.assertEqual(status.returncode, 0, msg=status.stderr)
         self.assertIn('OK', status.stderr)
         self.assertTrue('FAIL' not in status.stderr)
         self.assertTrue('ERROR' not in status.stderr)
