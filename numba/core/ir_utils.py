@@ -114,7 +114,7 @@ def mk_alloc(typingctx, typemap, calltypes, lhs, size_var, dtype, scope, loc,
         cac = typemap[attr_var.name].get_call_type(
             typingctx, [size_typ, types.functions.NumberClass(dtype)], {})
         # By default, all calls to "empty" are typed as returning a standard
-        # Numpy ndarray.  If we are allocating a ndarray subclass here then
+        # NumPy ndarray.  If we are allocating a ndarray subclass here then
         # just change the return type to be that of the subclass.
         cac._return_type = (lhs_typ.copy(layout='C')
                             if lhs_typ.layout == 'F'
