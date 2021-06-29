@@ -111,9 +111,6 @@ class TestParforsRunner(TestCase):
     def test_TestParforsOptions(self):
         self.runner()
 
-    def test_TestParforsRunner(self):
-        self.runner()
-
     def test_TestParforsSlice(self):
         self.runner()
 
