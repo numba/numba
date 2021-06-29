@@ -5,11 +5,13 @@
 
 
 from math import sqrt
-import numbers
 import re
-import sys
 import dis
+import numbers
+import os
 import platform
+import sys
+import subprocess
 import types as pytypes
 import warnings
 from functools import reduce
@@ -44,6 +46,83 @@ from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
 import cmath
 import unittest
 
+# NOTE: Each parfors test class is run in separate subprocess, this to reduce
+# memory pressure in CI settings. The environment variable "SUBPROC_TEST" is
+# used to determine whether a test is skipped or not, such that if you want to
+# run any parfors test directly this environment variable can be set. The
+# subprocesses running the test classes set this environment variable as the new
+# process starts which enables the tests within the process.
+_exec_cond = os.environ.get('SUBPROC_TEST', None) == '1'
+needs_subprocess = unittest.skipUnless(_exec_cond, "needs subprocess harness")
+
+
+@skip_parfors_unsupported
+class TestParforsRunner(TestCase):
+
+    _numba_parallel_test_ = False
+
+    """This is the test runner for all the parfors tests, it runs them in
+    subprocesses as described above. The convention for the test method naming
+    is: `test_<TestClass>` where <TestClass> is the name of the test class in
+    this module.
+    """
+    def runner(self):
+        themod = self.__module__
+        test_clazz_name = self.id().split('.')[-1].split('_')[-1]
+        the_test = f'{themod}.{test_clazz_name}'
+        cmd = [sys.executable, '-m', 'numba.runtests', the_test]
+        env_copy = os.environ.copy()
+        env_copy['SUBPROC_TEST'] = '1'
+        status = subprocess.run(cmd, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, timeout=600,
+                                env=env_copy, universal_newlines=True)
+        self.assertEqual(status.returncode, 0)
+        self.assertIn('OK', status.stderr)
+        self.assertTrue('FAIL' not in status.stderr)
+        self.assertTrue('ERROR' not in status.stderr)
+
+    def test_TestParforBasic(self):
+        self.runner()
+
+    def test_TestParforNumericalMisc(self):
+        self.runner()
+
+    def test_TestParforNumPy(self):
+        self.runner()
+
+    def test_TestParfors(self):
+        self.runner()
+
+    def test_TestParforsBitMask(self):
+        self.runner()
+
+    def test_TestParforsDiagnostics(self):
+        self.runner()
+
+    def test_TestParforsLeaks(self):
+        self.runner()
+
+    def test_TestParforsMisc(self):
+        self.runner()
+
+    def test_TestParforsOptions(self):
+        self.runner()
+
+    def test_TestParforsRunner(self):
+        self.runner()
+
+    def test_TestParforsSlice(self):
+        self.runner()
+
+    def test_TestParforsVectorizer(self):
+        self.runner()
+
+    def test_TestPrangeBasic(self):
+        self.runner()
+
+    def test_TestPrangeSpecific(self):
+        self.runner()
+
 
 x86_only = unittest.skipIf(platform.machine() not in ('i386', 'x86_64'), 'x86 only test')
 
@@ -61,6 +140,7 @@ def null_comparer(a, b):
     pass
 
 
+@needs_subprocess
 class TestParforsBase(TestCase, MemoryLeakMixin):
     """
     Base class for testing parfors.
