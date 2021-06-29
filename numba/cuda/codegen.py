@@ -262,7 +262,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
                 for fn in mod.functions:
                     if not fn.is_declaration:
                         if self._nvvm_options.get('debug', False):
-                            fn.linkage = 'external'
+                            fn.linkage = 'weak_odr'
                         else:
                             fn.linkage = 'linkonce_odr'
 
