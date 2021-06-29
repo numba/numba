@@ -32,6 +32,7 @@ from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
 from numba.core.overload_glue import glue_lowering
+from numba.core.extending import overload_classmethod
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
@@ -3501,10 +3502,16 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
              " the maximum possible size.",)
         )
 
-    align = context.get_preferred_array_alignment(arrtype.dtype)
-    meminfo = context.nrt.meminfo_alloc_aligned(builder, size=allocsize,
-                                                align=align)
+    dtype = arrtype.dtype
+    align_val = context.get_preferred_array_alignment(dtype)
+    align = context.get_constant(types.uint32, align_val)
+    args = (context.get_dummy_value(), allocsize, align)
 
+    mip = types.MemInfoPointer(types.voidptr)
+    arytypeclass = types.TypeRef(type(arrtype))
+    argtypes = signature(mip, arytypeclass, types.intp, types.uint32)
+
+    meminfo = context.compile_internal(builder, _call_allocator, argtypes, args)
     data = context.nrt.meminfo_data(builder, meminfo)
 
     intp_t = context.get_value_type(types.intp)
@@ -3519,6 +3526,35 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
                    meminfo=meminfo)
 
     return ary
+
+
+@overload_classmethod(types.Array, "_allocate")
+def _ol_array_allocate(cls, allocsize, align):
+    """Implements a Numba-only default target (cpu) classmethod on the array type.
+    """
+    def impl(cls, allocsize, align):
+        return intrin_alloc(allocsize, align)
+    return impl
+
+
+def _call_allocator(arrtype, size, align):
+    """Trampoline to call the intrinsic used for allocation
+    """
+    return arrtype._allocate(size, align)
+
+
+@intrinsic
+def intrin_alloc(typingctx, allocsize, align):
+    """Intrinsic to call into the allocator for Array
+    """
+    def codegen(context, builder, signature, args):
+        [allocsize, align] = args
+        meminfo = context.nrt.meminfo_alloc_aligned(builder, allocsize, align)
+        return meminfo
+
+    mip = types.MemInfoPointer(types.voidptr)    # return untyped pointer
+    sig = signature(mip, allocsize, align)
+    return sig, codegen
 
 
 def _zero_fill_array(context, builder, ary):

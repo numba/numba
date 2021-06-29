@@ -391,7 +391,10 @@ class BoundFunction(Callable, Opaque):
 
     @property
     def key(self):
-        return self.typing_key, self.this
+        # FIXME: With target-overload, the MethodTemplate can change depending
+        #        on the target.
+        unique_impl = getattr(self.template, "_overload_func", None)
+        return self.typing_key, self.this, unique_impl
 
     def get_impl_key(self, sig):
         """

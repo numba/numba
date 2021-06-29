@@ -38,7 +38,10 @@ class RawPointer(Opaque):
 
 
 class StringLiteral(Literal, Dummy):
-    pass
+
+    def can_convert_to(self, typingctx, other):
+        if isinstance(other, UnicodeType):
+            return Conversion.safe
 
 
 Literal.ctor_map[str] = StringLiteral
