@@ -1813,7 +1813,7 @@ def np_clip(a, a_min, a_max, out=None):
     if not isinstance(a_max, (types.NoneType, types.Number)):
         raise errors.TypingError('The argument "a_max" must be a number')
 
-    if not isinstance(out, (types.NoneType, types.Array)):
+    if not (isinstance(out, types.Array) or is_nonelike(out)):
         msg = 'The argument "out" must be an array if it is provided'
         raise errors.TypingError(msg)
 
