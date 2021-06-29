@@ -46,7 +46,7 @@ from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
 import cmath
 import unittest
 
-# NOTE: Each parfors test class is run in separate subprocess, this to reduce
+# NOTE: Each parfors test class is run in separate subprocess, this is to reduce
 # memory pressure in CI settings. The environment variable "SUBPROC_TEST" is
 # used to determine whether a test is skipped or not, such that if you want to
 # run any parfors test directly this environment variable can be set. The
@@ -79,7 +79,7 @@ class TestParforsRunner(TestCase):
         status = subprocess.run(cmd, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, timeout=self._TIMEOUT,
                                 env=env_copy, universal_newlines=True)
-        self.assertEqual(status.returncode, 0)
+        self.assertEqual(status.returncode, 0, msg=status.stderr))
         self.assertIn('OK', status.stderr)
         self.assertTrue('FAIL' not in status.stderr)
         self.assertTrue('ERROR' not in status.stderr)
@@ -141,7 +141,7 @@ def null_comparer(a, b):
 
 
 @needs_subprocess
-class TestParforsBase(TestCase, MemoryLeakMixin):
+class TestParforsBase(MemoryLeakMixin, TestCase):
     """
     Base class for testing parfors.
     Provides functions for compilation and three way comparison between
