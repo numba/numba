@@ -12,6 +12,7 @@ from numba import jit, typeof, njit, typed
 from numba.core import errors, types, utils, config
 from numba.tests.support import TestCase, tag
 
+py38orlater = utils.PYVERSION >= (3, 8)
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -205,6 +206,18 @@ def pow_op_usecase(x, y):
 
 def pow_usecase(x, y):
     return pow(x, y)
+
+
+def sum_usecase(x):
+    return sum(x)
+
+
+def sum_kwarg_usecase(x, start=0):
+    ret = sum(x, start)
+    if py38orlater:
+        return sum(x, start=start), ret
+    else:
+        return ret
 
 
 class TestBuiltins(TestCase):
@@ -842,19 +855,8 @@ class TestBuiltins(TestCase):
 
     def test_sum(self):
         # In Python 3.8 "start" can be specified as a kwarg, so test that too
-        py38orlater = utils.PYVERSION >= (3, 8)
-
-        @njit
-        def sum_default(x):
-            return sum(x)
-
-        @njit
-        def sum_kwarg(x, start=0):
-            ret = sum(x, start)
-            if py38orlater:
-                return sum(x, start=start), ret
-            else:
-                return ret
+        sum_default = njit(sum_usecase)
+        sum_kwarg = njit(sum_kwarg_usecase)
 
         @njit
         def sum_range(sz, start=0):
@@ -864,7 +866,6 @@ class TestBuiltins(TestCase):
                 return sum(tmp, start=start), ret
             else:
                 return ret
-
 
         ntpl = namedtuple('ntpl', ['a', 'b'])
 
@@ -886,6 +887,12 @@ class TestBuiltins(TestCase):
 
         for x in args():
             self.assertPreciseEqual(sum_default(x), sum_default.py_func(x))
+
+        # Check the uint use case, as start is signed, NumPy will end up with
+        # a float result whereas Numba will end up with an int (see integer
+        # typing NBEP).
+        x = (np.uint64(32), np.uint32(2), np.uint8(3))
+        self.assertEqual(sum_default(x), sum_default.py_func(x))
 
         # check call with changing default kwarg, start
         def args_kws():
@@ -912,6 +919,10 @@ class TestBuiltins(TestCase):
             for sz in range(-3, 4):
                 self.assertPreciseEqual(sum_range(sz, start=start),
                                         sum_range.py_func(sz, start=start))
+
+    def test_sum_exceptions(self):
+        sum_default = njit(sum_usecase)
+        sum_kwarg = njit(sum_kwarg_usecase)
 
         # check start as string/bytes/bytearray is error
         msg = "sum() can't sum {}"
