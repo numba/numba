@@ -441,28 +441,13 @@ class NoPythonSupportedFeatureValidation(AnalysisPass):
     """NoPython Mode check: Validates the IR to ensure that features in use are
     in a form that is supported"""
 
-    _name = "no_python_supported_feature_validation"
+    _name = "nopython_supported_feature_validation"
 
     def __init__(self):
         AnalysisPass.__init__(self)
 
     def run_pass(self, state):
         raise_on_unsupported_feature(state.func_ir, state.typemap)
-        warn_deprecated(state.func_ir, state.typemap)
-        return False
-
-
-@register_pass(mutates_CFG=False, analysis_only=True)
-class ObjModeSupportedFeatureValidation(AnalysisPass):
-    """Object mode check: Validates the IR to ensure that features in use are
-    in a form that is supported"""
-
-    _name = "obj_mode_supported_feature_validation"
-
-    def __init__(self):
-        AnalysisPass.__init__(self)
-
-    def run_pass(self, state):
         warn_deprecated(state.func_ir, state.typemap)
         return False
 

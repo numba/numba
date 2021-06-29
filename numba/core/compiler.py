@@ -30,7 +30,7 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                      InlineOverloads, PreLowerStripPhis,
                                      NativeLowering,
                                      NoPythonSupportedFeatureValidation,
-                                     ObjModeSupportedFeatureValidation)
+                                     )
 
 from numba.core.object_mode_passes import (ObjectModeFrontEnd,
                                            ObjectModeBackEnd)
@@ -651,8 +651,6 @@ class DefaultPassBuilder(object):
         pm.add_pass(MakeFunctionToJitFunction,
                     "convert make_function into JIT functions")
         pm.add_pass(AnnotateTypes, "annotate types")
-        pm.add_pass(ObjModeSupportedFeatureValidation,
-                    "ensure features that are in use are in a valid form")
         pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
         pm.add_pass(ObjectModeBackEnd, "object mode backend")
         pm.finalize()
