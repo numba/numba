@@ -1993,9 +1993,11 @@ class ConvertNumpyPass:
 
         # generate init block and body
         init_block = ir.Block(scope, loc)
-        init_block.body = mk_alloc(pass_states.typemap, pass_states.calltypes, lhs,
-                                   tuple(size_vars), el_typ, scope, loc,
-                                   pass_states.typemap[lhs.name])
+        init_block.body = mk_alloc(
+            pass_states.typingctx,
+            pass_states.typemap, pass_states.calltypes, lhs,
+            tuple(size_vars), el_typ, scope, loc,
+            pass_states.typemap[lhs.name])
         body_label = next_label()
         body_block = ir.Block(scope, loc)
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
@@ -2077,9 +2079,11 @@ class ConvertNumpyPass:
 
         # generate init block and body
         init_block = ir.Block(scope, loc)
-        init_block.body = mk_alloc(pass_states.typemap, pass_states.calltypes, lhs,
-                                   tuple(size_vars), el_typ, scope, loc,
-                                   pass_states.typemap[lhs.name])
+        init_block.body = mk_alloc(
+            pass_states.typingctx,
+            pass_states.typemap, pass_states.calltypes, lhs,
+            tuple(size_vars), el_typ, scope, loc,
+            pass_states.typemap[lhs.name])
         body_label = next_label()
         body_block = ir.Block(scope, loc)
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)

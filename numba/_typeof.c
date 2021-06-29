@@ -938,6 +938,7 @@ int
 typeof_typecode(PyObject *dispatcher, PyObject *val)
 {
     PyTypeObject *tyobj = Py_TYPE(val);
+    int subtype_attr;
     /* This needs to be kept in sync with Dispatcher.typeof_pyval(),
      * otherwise funny things may happen.
      */
@@ -964,11 +965,69 @@ typeof_typecode(PyObject *dispatcher, PyObject *val)
         return typecode_arrayscalar(dispatcher, val);
     }
     /* Array handling */
-    else if (PyType_IsSubtype(tyobj, &PyArray_Type)) {
+    else if (tyobj == &PyArray_Type) {
         return typecode_ndarray(dispatcher, (PyArrayObject*)val);
     }
+    /* Subtype of CUDA device array */
     else if (PyType_IsSubtype(tyobj, &DeviceArrayType)) {
         return typecode_devicendarray(dispatcher, val);
+    }
+    /* Subtypes of Array handling */
+    else if (PyType_IsSubtype(tyobj, &PyArray_Type)) {
+        /* By default, Numba will treat all numpy.ndarray subtypes as if they
+           were the base numpy.ndarray type.  In this way, ndarray subtypes
+           can easily use all of the support that Numba has for ndarray
+           methods.
+           EXPERIMENTAL: There may be cases where a programmer would NOT want
+           ndarray subtypes to be treated exactly like the base numpy.ndarray.
+           For this purpose, a currently experimental feature allows a
+           programmer to add an attribute named
+           __numba_array_subtype_dispatch__ to their ndarray subtype.  This
+           attribute can have any value as Numba only checks for the presence
+           of the attribute and not its value.  When present, a ndarray subtype
+           will NOT be typed by Numba as a regular ndarray but this code will
+           fallthrough to the typecode_using_fingerprint call, which will
+           create a new unique Numba typecode for this ndarray subtype.  This
+           behavior has several significant effects.  First, since this
+           ndarray subtype will be treated as a different type by Numba,
+           the Numba dispatcher would then specialize on this type.  So, if
+           there was a function that had several parameters that were
+           expected to be either numpy.ndarray or a subtype of ndarray, then
+           Numba would compile a custom version of this function for each
+           combination of base and subtypes that were actually passed to the
+           function.  Second, because this subtype would now be treated as
+           a totally separate type, it will cease to function in Numba unless
+           an implementation of that type is provided to Numba through the
+           Numba type extension mechanisms (e.g., overload).  This would
+           typically start with defining a Numba type corresponding to the
+           ndarray subtype. This is the same concept as how Numba has a
+           corollary of numpy.ndarray in its type system as types.Array.
+           Next, one would typically defining boxing and unboxing routines
+           and the associated memory model.  Then, overloads for NumPy
+           functions on that type would be created.  However,
+           if the same default array memory model is used then there are tricks
+           one can do to look at Numba's internal types.Array registries and
+           to quickly apply those to the subtype as well.  In this manner,
+           only those cases where the base ndarray and the ndarray subtype
+           behavior differ would new custom functions need to be written for
+           the subtype. Finally,
+           after adding support for the new type, you would have a separate
+           ndarray subtype that could operate with other objects of the same
+           subtype but would not support interoperation with regular NumPy
+           ndarrays.  In standard Python, this interoperation is provided
+           through the __array_ufunc__ magic method in the ndarray subtype
+           class and in that case the function operates on ndarrays or their
+           subtypes.  This idea is extended into Numba such that
+           __array_ufunc__ can be present in a Numba array type object.
+           In this case, this function is consulted during Numba typing and
+           so the arguments to __array_ufunc__ are Numba types instead of
+           ndarray subtypes.  The array type __array_ufunc__ returns the
+           type of the output of the given ufunc.
+         */
+        subtype_attr = PyObject_HasAttrString(val, "__numba_array_subtype_dispatch__");
+        if (!subtype_attr) {
+            return typecode_ndarray(dispatcher, (PyArrayObject*)val);
+        }
     }
 
     return typecode_using_fingerprint(dispatcher, val);
