@@ -1009,7 +1009,8 @@ typeof_typecode(PyObject *dispatcher, PyObject *val)
            one can do to look at Numba's internal types.Array registries and
            to quickly apply those to the subtype as well.  In this manner,
            only those cases where the base ndarray and the ndarray subtype
-           behavior differ would new custom functions need to be written for the subtype.  Finally,
+           behavior differ would new custom functions need to be written for
+           the subtype. Finally,
            after adding support for the new type, you would have a separate
            ndarray subtype that could operate with other objects of the same
            subtype but would not support interoperation with regular NumPy
