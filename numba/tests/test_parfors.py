@@ -61,6 +61,9 @@ class TestParforsRunner(TestCase):
 
     _numba_parallel_test_ = False
 
+    # Each test class can run for 30 minutes before time out.
+    _TIMEOUT = 1800
+
     """This is the test runner for all the parfors tests, it runs them in
     subprocesses as described above. The convention for the test method naming
     is: `test_<TestClass>` where <TestClass> is the name of the test class in
@@ -74,7 +77,7 @@ class TestParforsRunner(TestCase):
         env_copy = os.environ.copy()
         env_copy['SUBPROC_TEST'] = '1'
         status = subprocess.run(cmd, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, timeout=600,
+                                stderr=subprocess.PIPE, timeout=self._TIMEOUT,
                                 env=env_copy, universal_newlines=True)
         self.assertEqual(status.returncode, 0)
         self.assertIn('OK', status.stderr)
