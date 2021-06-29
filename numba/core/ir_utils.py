@@ -49,6 +49,7 @@ class _MaxLabel:
 
 
 _the_max_label = _MaxLabel()
+del _MaxLabel
 
 
 def get_unused_var_name(prefix, var_table):
