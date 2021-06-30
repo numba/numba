@@ -191,7 +191,7 @@ Pull-Requests:
 * PR `#6971 <https://github.com/numba/numba/pull/6971>`_: Fix CUDA @``intrinsic`` use (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#6977 <https://github.com/numba/numba/pull/6977>`_: Vendor cloudpickle (`Siu Kwan Lam <https://github.com/sklam>`_)
 * PR `#6978 <https://github.com/numba/numba/pull/6978>`_: Implement operator.contains for empty Tuples (`Brandon T. Willard <https://github.com/brandonwillard>`_)
-* PR `#6981 <https://github.com/numba/numba/pull/6981>`_: Fix LLVM IR parsing error on use of np.bool_ in globals (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#6981 <https://github.com/numba/numba/pull/6981>`_: Fix LLVM IR parsing error on use of `np.bool_` in globals (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#6983 <https://github.com/numba/numba/pull/6983>`_: Support Optional types in ufuncs. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#6985 <https://github.com/numba/numba/pull/6985>`_: Implement static set/get items on records with integer index (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#6986 <https://github.com/numba/numba/pull/6986>`_: document release checklist (`esc <https://github.com/esc>`_)
