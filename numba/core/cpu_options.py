@@ -55,9 +55,10 @@ class ParallelOptions(object):
     Options for controlling auto parallelization.
     """
     __slots__ = ("enabled", "comprehension", "reduction", "inplace_binop",
-                 "setitem", "numpy", "stencil", "fusion", "prange")
+                 "setitem", "numpy", "stencil", "fusion", "prange", "recursive")
 
     def __init__(self, value):
+        self.recursive = False
         if isinstance(value, bool):
             self.enabled = value
             self.comprehension = value
