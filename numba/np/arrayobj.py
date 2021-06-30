@@ -16,7 +16,7 @@ import numpy as np
 from numba import pndindex, literal_unroll
 from numba.core import types, utils, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
-                                    is_fortran)
+                                    is_fortran, check_is_integer)
 from numba.np.numpy_support import type_can_asarray, is_nonelike
 from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_getattr_generic,
@@ -31,6 +31,7 @@ from numba.core.extending import (register_jitable, overload, overload_method,
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
+from numba.np.unsafe.ndarray import to_fixed_tuple
 from numba.core.overload_glue import glue_lowering
 
 
@@ -5377,3 +5378,47 @@ def numpy_swapaxes(arr, axis1, axis2):
         return np.transpose(arr, axes_tuple)
 
     return impl
+
+
+@register_jitable
+def _take_along_axis_impl(arr, indices, axis, ndim, Ni_length, Nk_length):
+    Ni = list(arr.shape)[:axis]
+    M = arr.shape[axis]
+    Nk = list(arr.shape)[axis+1:]
+    J = indices.shape[axis]  # Need not equal M
+    out = np.empty(to_fixed_tuple(np.array(Ni + [J] + Nk), ndim))
+
+    Ni = to_fixed_tuple(np.array(Ni), Ni_length)
+    Nk = to_fixed_tuple(np.array(Nk), Nk_length)
+
+    for ii in np.ndindex(Ni):
+        ii = list(ii)
+        for kk in np.ndindex(Nk):
+            kk = list(ii)
+            tuple_buffer = to_fixed_tuple(np.array(ii + [slice(None, None, None)] + kk), ndim)
+            a_1d = arr[tuple_buffer]
+            indices_1d = indices[tuple_buffer]
+            out_1d = out[tuple_buffer]
+            out_1d[:] = a_1d[indices_1d]
+    return out
+
+
+@overload(np.take_along_axis)
+def arr_take_along_axis(arr, indices, axis):
+    if is_nonelike(axis):
+        def take_along_axis_impl(arr, indices, axis):
+            return _take_along_axis_impl(arr.flat, indices, 0, 1, 0, 0)
+    else:
+        check_is_integer(axis, "axis")
+
+        def take_along_axis_impl(arr, indices, axis):
+            # TODO merge with axis normalization logic in argmax/argmin
+            if axis < 0:
+                axis = arr.ndim + axis
+
+            if axis < 0 or axis >= arr.ndim:
+                raise ValueError("axis is out of bounds")
+
+            return _take_along_axis_impl(arr, indices, axis, arr.ndim, axis, arr.ndim - axis - 1)
+
+    return take_along_axis_impl
