@@ -3,10 +3,12 @@ from numba.cuda.testing import skip_on_cudasim
 from numba import cuda
 from numba.cuda.cudadrv.nvvm import NVVM
 from numba.core import types
+from numba.core.errors import NumbaInvalidConfigWarning
 from numba.cuda.testing import CUDATestCase
 import itertools
 import re
 import unittest
+import warnings
 
 
 @skip_on_cudasim('Simulator does not produce debug dumps')
@@ -19,6 +21,9 @@ class TestCudaDebugInfo(CUDATestCase):
         return fn.inspect_asm(sig)
 
     def _check(self, fn, sig, expect):
+        if not NVVM().is_nvvm70:
+            self.skipTest("debuginfo not generated for NVVM 3.4")
+
         asm = self._getasm(fn, sig=sig)
         re_section_dbginfo = re.compile(r"\.section\s+\.debug_info\s+{")
         match = re_section_dbginfo.search(asm)
@@ -160,28 +165,6 @@ class TestCudaDebugInfo(CUDATestCase):
                                                    f1_debug,
                                                    f2_debug)
 
-    def test_chained_device_three_functions(self):
-        # Like test_chained_device_function, but with enough functions (three)
-        # to ensure that the recursion visits all the way down the call tree
-        # when fixing linkage of functions for debug.
-        @cuda.jit(device=True)
-        def f3(x):
-            return x * x
-
-        @cuda.jit(device=True)
-        def f2(x):
-            return f3(x) + 1
-
-        @cuda.jit(device=True)
-        def f1(x, y):
-            return x - f2(y)
-
-        @cuda.jit((types.int32, types.int32), debug=True)
-        def kernel(x, y):
-            f1(x, y)
-
-        kernel[1, 1](1, 2)
-
     def _test_chained_device_function_two_calls(self, kernel_debug, f1_debug,
                                                 f2_debug):
 
@@ -215,6 +198,73 @@ class TestCudaDebugInfo(CUDATestCase):
                 self._test_chained_device_function_two_calls(kernel_debug,
                                                              f1_debug,
                                                              f2_debug)
+
+    def check_warnings(self, warnings, any_debug):
+        if NVVM().is_nvvm70:
+            # We should not warn on NVVM 7.0.
+            self.assertEqual(len(warnings), 0)
+        else:
+            expected_warning_count = 1 if any_debug else 0
+            self.assertEqual(len(warnings), expected_warning_count)
+            # Each warning should warn about not generating debug info.
+            for warning in warnings:
+                self.assertIs(warning.category, NumbaInvalidConfigWarning)
+                self.assertIn('debuginfo is not generated',
+                              str(warning.message))
+
+    def test_debug_warning(self):
+        # We don't generate debug info for NVVM 3.4, and warn accordingly. Here
+        # we check that no warnings appear with NVVM 7.0, and that warnings
+        # appear as appropriate with NVVM 3.4
+        debug_opts = itertools.product(*[(True, False)] * 3)
+
+        for kernel_debug, f1_debug, f2_debug in debug_opts:
+            with self.subTest(kernel_debug=kernel_debug,
+                              f1_debug=f1_debug,
+                              f2_debug=f2_debug):
+                with warnings.catch_warnings(record=True) as w:
+                    self._test_chained_device_function_two_calls(kernel_debug,
+                                                                 f1_debug,
+                                                                 f2_debug)
+                any_debug = kernel_debug or f1_debug or f2_debug
+                self.check_warnings(w, any_debug)
+
+    def test_chained_device_three_functions(self):
+        # Like test_chained_device_function, but with enough functions (three)
+        # to ensure that the recursion visits all the way down the call tree
+        # when fixing linkage of functions for debug.
+        def three_device_fns(kernel_debug, leaf_debug):
+            @cuda.jit(device=True, debug=leaf_debug)
+            def f3(x):
+                return x * x
+
+            @cuda.jit(device=True)
+            def f2(x):
+                return f3(x) + 1
+
+            @cuda.jit(device=True)
+            def f1(x, y):
+                return x - f2(y)
+
+            @cuda.jit(debug=kernel_debug)
+            def kernel(x, y):
+                f1(x, y)
+
+            kernel[1, 1](1, 2)
+
+        # Check when debug on the kernel, on the leaf, and not on any function.
+
+        with warnings.catch_warnings(record=True) as w:
+            three_device_fns(kernel_debug=True, leaf_debug=False)
+        self.check_warnings(w, True)
+
+        with warnings.catch_warnings(record=True) as w:
+            three_device_fns(kernel_debug=False, leaf_debug=True)
+        self.check_warnings(w, True)
+
+        with warnings.catch_warnings(record=True) as w:
+            three_device_fns(kernel_debug=False, leaf_debug=False)
+        self.check_warnings(w, False)
 
 
 if __name__ == '__main__':
