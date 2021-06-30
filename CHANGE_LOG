@@ -1,35 +1,61 @@
 Version 0.54.0
-==============
+--------------
 
 This release includes a significant number of new features, important
 refactoring, critical bug fixes and a number of dependency upgrades.
 
-Features
---------
+Python language support enhancements:
 
-* Better support for additional hardware targets
-* All NumPy functions can now be overloaded for different hardwar targets
+* f-strings (basic support)
+* dict comprehension
+* ``sum`` builtin
+* NumPy features/enhancements
+  * np.clip
+  * np.rot90
+  * np.swapaxes
+  * np.argmax(axis)
+  * np.random.dirichlet
+  * np.iscomplexobj
+  * np.isreal
+  * np.isrealobj
+  * np.isscalar
+  * np.isneginf
+  * np.isposinf
+  * np.iscomplex
+  * setitem 0d arrays
 
-Deprecations
-------------
+Debug enhancements:
+
+* DWARF/gdb fixes
+* A lot of CUDA changes:
+  * TBC CC @gmarkall
+
+Experimental target extension work:
+
+* Context managed retargeting of dispatchers.
+* Custom NumPy array subclass support.
+* Target specific overload support/general mechanism to add new targets.
+* Per function compiler flags with inheritance behaviours.
+* overload_classmethod in the extension API.
+
+Deprecations:
 
 * Moved ROCm target to "unmaintained" status, and moved all functionaliy to a
   seperate repo at: https://github.com/numba/numba-rocm
 * Multiple CUDA related deprecations
 
-Upgrades
--------
+Version support changes:
 
 * LLVM 11 now supported on all platofrms via llvmlite.
 * Minimum Python version raised to 3.7.
 * NumPy version 1.20 supported.
 * Minimum supported NumPy version raised to 1.17 for runtime.(Compilation
-  however remains compatible with NumPy 1.11)
+  however remains compatible with NumPy 1.11).
 * Vendor `cloudpickle <https://github.com/cloudpipe/cloudpickle>`_ `v1.6.0` --
   now used for all `pickle` operations.
+* TBB >= 2021 supported and required to use TBB.
 
-Pull-Requests
--------------
+Pull-Requests:
 
 * PR `#4516 <https://github.com/numba/numba/pull/4516>`_: Make setitem accept 0d np-arrays (`Guilherme Leobas <https://github.com/guilhermeleobas>`_)
 * PR `#4610 <https://github.com/numba/numba/pull/4610>`_: Implement np.is* functions (`Guilherme Leobas <https://github.com/guilhermeleobas>`_)
