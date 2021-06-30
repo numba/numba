@@ -6,54 +6,68 @@ refactoring, critical bug fixes and a number of dependency upgrades.
 
 Python language support enhancements:
 
-* f-strings (basic support)
-* dict comprehension
-* ``sum`` builtin
-* NumPy features/enhancements
+* Basic support for ``f-strings``,
+* ``dict`` comprehensions are now supported.
+* The ``sum`` built-in function is implemented.
+
+NumPy features/enhancements:
+
+The following functions are now supported.
   * np.clip
-  * np.rot90
-  * np.swapaxes
-  * np.argmax(axis)
-  * np.random.dirichlet
+  * np.iscomplex
   * np.iscomplexobj
+  * np.isneginf
+  * np.isposinf
   * np.isreal
   * np.isrealobj
   * np.isscalar
-  * np.isneginf
-  * np.isposinf
-  * np.iscomplex
-  * setitem 0d arrays
+  * np.random.dirichlet
+  * np.rot90
+  * np.swapaxes
 
-Debug enhancements:
+Also ``np.argmax`` has gain support for the ``axis`` keyword argument and it's
+now possible to use ``0d`` NumPy arrays as scalars in ``__setitem__`` calls.
 
-* DWARF/gdb fixes
-* A lot of CUDA changes:
+Internal changes:
+
+* Debugging support through DWARF has been fixed and enhanced.
+* Numba now optimises the way in which locals are emitted to help reduce time
+  spend in LLVM's SROA passes.
+
+CUDA target changes:
   * TBC CC @gmarkall
 
-Experimental target extension work:
+Intel kindly sponsored research and development that lead to a number of new
+features and internal support changes:
 
-* Context managed retargeting of dispatchers.
-* Custom NumPy array subclass support.
-* Target specific overload support/general mechanism to add new targets.
+* Dispatchers can now be retargetted to a new target via a use defined context
+  manager.
+* Support for custom NumPy array subclasses has been added (including an
+  overloadable memory allocator).
+* An inheritance based model for targets that permits targets to share
+  ``@overload`` implementations.
 * Per function compiler flags with inheritance behaviours.
-* overload_classmethod in the extension API.
+* The extension API now has support for overloading class methods via the
+  ``@overload_classmethod`` decorator.
 
 Deprecations:
 
-* Moved ROCm target to "unmaintained" status, and moved all functionaliy to a
-  seperate repo at: https://github.com/numba/numba-rocm
-* Multiple CUDA related deprecations
+* The ``ROCm`` target (for AMD ROC GPUs) has been moved to an "unmaintained"
+  status and a seperate repository stub has been created for it at:
+  https://github.com/numba/numba-rocm
+* Multiple CUDA related deprecations TBC
 
-Version support changes:
+Version support/dependency changes:
 
-* LLVM 11 now supported on all platofrms via llvmlite.
-* Minimum Python version raised to 3.7.
+* LLVM 11 now supported on all platforms via llvmlite.
+* The minimum supported Python version is raised to 3.7.
 * NumPy version 1.20 supported.
-* Minimum supported NumPy version raised to 1.17 for runtime.(Compilation
+* The minimum supported NumPy version raised to 1.17 for runtime (compilation
   however remains compatible with NumPy 1.11).
 * Vendor `cloudpickle <https://github.com/cloudpipe/cloudpickle>`_ `v1.6.0` --
   now used for all `pickle` operations.
-* TBB >= 2021 supported and required to use TBB.
+* TBB >= 2021 is now supported and all prior versions are unsupported (not
+  easily possible to maintain the ABI breaking changes).
 
 Pull-Requests:
 
