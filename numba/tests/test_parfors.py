@@ -3414,6 +3414,7 @@ class TestPrangeBasic(TestPrangeBase):
 
     def test_prange_28(self):
         # issue7105: label conflict in nested parfor
+<<<<<<< HEAD
         def test_impl(TwoDPts, comboarr):
             comboout = np.zeros(len(comboarr))
             for cindx in range(len(comboarr)):
@@ -3451,35 +3452,6 @@ class TestPrangeBasic(TestPrangeBase):
                [4, 5]])
 
         self.prange_tester(test_impl, TwoDPts, comboarr, scheduler_type='unsigned',
-                           check_fastmath=True, check_fastmath_result=True)
-
-    def test_prange_29(self):
-        def test_impl(x, y):
-            out = np.zeros(len(y))
-            for idx in range(0, len(y)):
-                i0 = y[idx, 0]
-                i1 = y[idx, 1]
-                Pt1 = x[i0]
-                Pt2 = x[i1]
-                v = Pt1 - Pt2
-                vl2 = v[0] + v[1]
-                out[idx] = vl2
-            return out
-
-        X = np.array([[-1., -1.],
-                      [-1.,  1.],
-                      [ 0.,  0.],
-                      [ 1., -1.],
-                      [ 1.,  0.],
-                      [ 1.,  1.]])
-
-        Y = np.array([[0, 1],
-                      [1, 2],
-                      [2, 3],
-                      [3, 4],
-                      [4, 5]])
-
-        self.prange_tester(test_impl, X, Y, scheduler_type='unsigned',
                            check_fastmath=True, check_fastmath_result=True)
 
 
