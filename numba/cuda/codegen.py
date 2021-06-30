@@ -123,7 +123,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
             for lib in self.linking_libraries:
                 if lib._nvvm_options.get('debug'):
                     msg = ("debuginfo is not generated for CUDA versions "
-                           f"< 11.2 (debug=True on {lib.name})")
+                           f"< 11.2 (debug=True on function: {lib.name})")
                     warn(NumbaInvalidConfigWarning(msg))
             options['debug'] = False
 
