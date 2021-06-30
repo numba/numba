@@ -1793,11 +1793,15 @@ class TestParfors(TestParforsBase):
             for i in numba.prange(n):
                 dat.x[i] = -1
 
+        def comparer(a, b):
+            np.testing.assert_almost_equal(a.x, b.x)
+
+        x = TestNamedTuple3(y=np.zeros(10))
         x = np.ones(10)
         Data = namedtuple("Data", ["x"])
         dat = Data(x)
 
-        self.check(test_impl, dat)
+        self.check(test_impl, dat, check_arg_equality=[comparer])
 
     def test_inplace_binop(self):
         def test_impl(a, b):
