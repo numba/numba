@@ -1,8 +1,10 @@
 from llvmlite import binding as ll
 from llvmlite import ir
+from warnings import warn
 
 from numba.core import config, serialize
 from numba.core.codegen import Codegen, CodeLibrary
+from numba.core.errors import NumbaInvalidConfigWarning
 from .cudadrv import devices, driver, nvvm
 
 import ctypes
@@ -113,6 +115,17 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         arch = nvvm.get_arch_option(*cc)
         options = self._nvvm_options.copy()
         options['arch'] = arch
+        if not nvvm.NVVM().is_nvvm70:
+            # Avoid enabling debug for NVVM 3.4 as it has various issues. We
+            # need to warn the user that we're doing this if any of the
+            # functions that they're compiling have `debug=True` set, which we
+            # can determine by checking the NVVM options.
+            debug_callee = any(lib._nvvm_options.get('debug')
+                               for lib in self.linking_libraries)
+            if options.get('debug') or debug_callee:
+                msg = "debuginfo is not generated for CUDA versions < 11.2"
+                warn(NumbaInvalidConfigWarning(msg))
+            options['debug'] = False
 
         irs = [str(mod) for mod in self.modules]
 
@@ -234,6 +247,17 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
     def modules(self):
         return [self._module] + [mod for lib in self._linking_libraries
                                  for mod in lib.modules]
+
+    @property
+    def linking_libraries(self):
+        # Libraries we link to may link to other libraries, so we recursively
+        # traverse the linking libraries property to build up a list of all
+        # linked libraries.
+        libs = []
+        for lib in self._linking_libraries:
+            libs.extend(lib.linking_libraries)
+            libs.append(lib)
+        return libs
 
     def finalize(self):
         # Unlike the CPUCodeLibrary, we don't invoke the binding layer here -
