@@ -6,13 +6,14 @@ refactoring, critical bug fixes and a number of dependency upgrades.
 
 Python language support enhancements:
 
-* Basic support for ``f-strings``,
+* Basic support for ``f-strings``.
 * ``dict`` comprehensions are now supported.
 * The ``sum`` built-in function is implemented.
 
 NumPy features/enhancements:
 
-The following functions are now supported.
+The following functions are now supported:
+
   * ``np.clip``
   * ``np.iscomplex``
   * ``np.iscomplexobj``
