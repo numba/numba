@@ -37,6 +37,7 @@ from numba.core.ir_utils import (
     is_const_call,
     fixup_var_define_in_scope,
     transfer_scope,
+    find_max_label,
 )
 from numba.core.analysis import compute_use_defs, compute_live_map, compute_dead_maps, compute_cfg_from_blocks
 from numba.core.typing import signature
@@ -1258,13 +1259,13 @@ def _create_gufunc_for_parfor_body(
             "\n",
             gufunc_param_types)
 
-    gufunc_stub_last_label = max(gufunc_ir.blocks.keys()) + 1
+    gufunc_stub_last_label = find_max_label(gufunc_ir.blocks) + 1
 
     # Add gufunc stub last label to each parfor.loop_body label to prevent
     # label conflicts.
     loop_body = add_offset_to_labels(loop_body, gufunc_stub_last_label)
     # new label for splitting sentinel block
-    new_label = max(loop_body.keys()) + 1
+    new_label = find_max_label(loop_body) + 1
 
     # If enabled, add a print statement after every assignment.
     if config.DEBUG_ARRAY_OPT_RUNTIME:
@@ -1371,6 +1372,8 @@ def _create_gufunc_for_parfor_body(
         print("typemap", typemap)
 
     old_alias = flags.noalias
+    old_recursive = flags.auto_parallel.recursive
+    flags.auto_parallel.recursive = True
     if not has_aliases:
         if config.DEBUG_ARRAY_OPT:
             print("No aliases found so adding noalias flag.")
@@ -1387,6 +1390,7 @@ def _create_gufunc_for_parfor_body(
         locals)
 
     flags.noalias = old_alias
+    flags.auto_parallel.recursive = old_recursive
 
     kernel_sig = signature(types.none, *gufunc_param_types)
     if config.DEBUG_ARRAY_OPT:
