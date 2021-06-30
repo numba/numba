@@ -3407,6 +3407,46 @@ class TestPrangeBasic(TestPrangeBase):
                            scheduler_type='unsigned',
                            check_fastmath=True)
 
+    def test_prange_28(self):
+        # issue7105: label conflict in nested parfor
+        def test_impl(TwoDPts, comboarr):
+            comboout = np.zeros(len(comboarr))
+            for cindx in range(len(comboarr)):
+                i0 = comboarr[cindx, 0]
+                i1 = comboarr[cindx, 1]
+                Pt1 = TwoDPts[i0]
+                Pt2 = TwoDPts[i1]
+                v = Pt1 - Pt2
+                vl2 = v[0] + v[1]
+                comboout[cindx] = vl2
+            return comboout
+
+        TwoDPts = np.array([[-1., -1.],
+               [-1.,  1.],
+               [ 0.,  0.],
+               [ 1., -1.],
+               [ 1.,  0.],
+               [ 1.,  1.]])
+
+        comboarr = np.array([
+               [0, 1],
+               [0, 2],
+               [0, 3],
+               [0, 4],
+               [0, 5],
+               [1, 2],
+               [1, 3],
+               [1, 4],
+               [1, 5],
+               [2, 3],
+               [2, 4],
+               [2, 5],
+               [3, 4],
+               [3, 5],
+               [4, 5]])
+
+        self.prange_tester(test_impl, TwoDPts, comboarr, , scheduler_type='unsigned',
+                           check_fastmath=True, check_fastmath_result=True)
 
 @skip_parfors_unsupported
 class TestPrangeSpecific(TestPrangeBase):
