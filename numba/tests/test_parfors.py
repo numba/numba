@@ -1796,7 +1796,6 @@ class TestParfors(TestParforsBase):
         def comparer(a, b):
             np.testing.assert_almost_equal(a.x, b.x)
 
-        x = TestNamedTuple3(y=np.zeros(10))
         x = np.ones(10)
         Data = namedtuple("Data", ["x"])
         dat = Data(x)
