@@ -199,13 +199,12 @@ class TestCudaDebugInfo(CUDATestCase):
                                                              f1_debug,
                                                              f2_debug)
 
-    def check_warnings(self, warnings, any_debug):
+    def check_warnings(self, warnings, warn_count):
         if NVVM().is_nvvm70:
             # We should not warn on NVVM 7.0.
             self.assertEqual(len(warnings), 0)
         else:
-            expected_warning_count = 1 if any_debug else 0
-            self.assertEqual(len(warnings), expected_warning_count)
+            self.assertEqual(len(warnings), warn_count)
             # Each warning should warn about not generating debug info.
             for warning in warnings:
                 self.assertIs(warning.category, NumbaInvalidConfigWarning)
@@ -226,8 +225,8 @@ class TestCudaDebugInfo(CUDATestCase):
                     self._test_chained_device_function_two_calls(kernel_debug,
                                                                  f1_debug,
                                                                  f2_debug)
-                any_debug = kernel_debug or f1_debug or f2_debug
-                self.check_warnings(w, any_debug)
+                warn_count = kernel_debug + f1_debug + f2_debug
+                self.check_warnings(w, warn_count)
 
     def test_chained_device_three_functions(self):
         # Like test_chained_device_function, but with enough functions (three)
@@ -255,16 +254,20 @@ class TestCudaDebugInfo(CUDATestCase):
         # Check when debug on the kernel, on the leaf, and not on any function.
 
         with warnings.catch_warnings(record=True) as w:
+            three_device_fns(kernel_debug=True, leaf_debug=True)
+        self.check_warnings(w, 2)
+
+        with warnings.catch_warnings(record=True) as w:
             three_device_fns(kernel_debug=True, leaf_debug=False)
-        self.check_warnings(w, True)
+        self.check_warnings(w, 1)
 
         with warnings.catch_warnings(record=True) as w:
             three_device_fns(kernel_debug=False, leaf_debug=True)
-        self.check_warnings(w, True)
+        self.check_warnings(w, 1)
 
         with warnings.catch_warnings(record=True) as w:
             three_device_fns(kernel_debug=False, leaf_debug=False)
-        self.check_warnings(w, False)
+        self.check_warnings(w, 0)
 
 
 if __name__ == '__main__':

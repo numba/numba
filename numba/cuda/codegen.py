@@ -120,11 +120,11 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
             # need to warn the user that we're doing this if any of the
             # functions that they're compiling have `debug=True` set, which we
             # can determine by checking the NVVM options.
-            debug_callee = any(lib._nvvm_options.get('debug')
-                               for lib in self.linking_libraries)
-            if options.get('debug') or debug_callee:
-                msg = "debuginfo is not generated for CUDA versions < 11.2"
-                warn(NumbaInvalidConfigWarning(msg))
+            for lib in self.linking_libraries:
+                if lib._nvvm_options.get('debug'):
+                    msg = ("debuginfo is not generated for CUDA versions "
+                           f"< 11.2 (debug=True on {lib.name})")
+                    warn(NumbaInvalidConfigWarning(msg))
             options['debug'] = False
 
         irs = [str(mod) for mod in self.modules]
