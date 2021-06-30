@@ -816,9 +816,7 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
             if isinstance(instr, ir.Assign):
                 expr = instr.value
                 lhs = instr.target.name
-                lhstype = None
-                if lhs in typemap:
-                    lhstype = typemap[lhs]
+                lhstype = get_type_or_none(lhs, typemap)
 
                 # only mutable types can alias
                 if is_immutable_type(lhs, typemap):
@@ -898,6 +896,11 @@ def is_immutable_type(var, typemap):
         return True
     # conservatively, assume mutable
     return False
+
+def get_type_or_none(var, typemap):
+    if typemap is None or var not in typemap:
+        return None
+    return typemap[var]
 
 def copy_propagate(blocks, typemap):
     """compute copy propagation information for each block using fixed-point
