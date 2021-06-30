@@ -35,7 +35,25 @@ Internal changes:
   spend in LLVM's SROA passes.
 
 CUDA target changes:
-  * TBC CC @gmarkall
+
+* Support for emitting lineinfo to be consumed by profiling tools such as
+  Nsight Compute
+* Improved fastmath code generation for various trig, division, and other
+  functions
+* Faster compilation using lazy addition of libdevice to compiled units
+* Support for IPC on Windows
+* Support for passing tuples to CUDA ufuncs
+* Performance warnings:
+
+  * When making implicit copies by calling a kernel on arrays in host memory
+  * When occupancy is poor due to kernel or ufunc/gufunc configuration
+
+* Support for implementing warp-aggregated intrinsics:
+
+  * Using support for more CUDA functions: ``activemask()``, ``lanemask_lt()``
+  * The ``ffs()`` function now works correctly!
+
+* Support for @overload in the CUDA target
 
 Intel kindly sponsored research and development that lead to a number of new
 features and internal support changes:
@@ -56,6 +74,15 @@ Deprecations:
   status and a seperate repository stub has been created for it at:
   https://github.com/numba/numba-rocm
 * Multiple CUDA related deprecations TBC
+
+CUDA target deprecations and breaking changes:
+
+* Relaxed strides checking is now the default when computing contiguity of
+  device arrays.
+* The ``inspect_ptx()`` method is deprecated. For use cases that obtain PTX for
+  further compilation outside of Numba, use ``compile_ptx()`` instead.
+* Eager compilation of device functions (the case when ``device=True`` and a
+  signature is provided) is deprecated.
 
 Version support/dependency changes:
 
