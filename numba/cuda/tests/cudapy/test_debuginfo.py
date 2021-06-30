@@ -160,6 +160,28 @@ class TestCudaDebugInfo(CUDATestCase):
                                                    f1_debug,
                                                    f2_debug)
 
+    def test_chained_device_three_functions(self):
+        # Like test_chained_device_function, but with enough functions (three)
+        # to ensure that the recursion visits all the way down the call tree
+        # when fixing linkage of functions for debug.
+        @cuda.jit(device=True)
+        def f3(x):
+            return x * x
+
+        @cuda.jit(device=True)
+        def f2(x):
+            return f3(x) + 1
+
+        @cuda.jit(device=True)
+        def f1(x, y):
+            return x - f2(y)
+
+        @cuda.jit((types.int32, types.int32), debug=True)
+        def kernel(x, y):
+            f1(x, y)
+
+        kernel[1, 1](1, 2)
+
     def _test_chained_device_function_two_calls(self, kernel_debug, f1_debug,
                                                 f2_debug):
 
