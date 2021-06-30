@@ -3445,7 +3445,7 @@ class TestPrangeBasic(TestPrangeBase):
                [3, 5],
                [4, 5]])
 
-        self.prange_tester(test_impl, TwoDPts, comboarr, , scheduler_type='unsigned',
+        self.prange_tester(test_impl, TwoDPts, comboarr, scheduler_type='unsigned',
                            check_fastmath=True, check_fastmath_result=True)
 
 @skip_parfors_unsupported
