@@ -2793,95 +2793,71 @@ class ParforPass(ParforPassStates):
         """run parfor conversion pass: replace Numpy calls
         with Parfors when possible and optimize the IR."""
         self._pre_run()
-        # run stencil translation to parfor
-        if self.options.stencil:
-            stencil_pass = StencilPass(self.func_ir, self.typemap,
-                                       self.calltypes, self.array_analysis,
-                                       self.typingctx, self.targetctx,
-                                       self.flags)
-            stencil_pass.run()
-        if self.options.setitem:
-            ConvertSetItemPass(self).run(self.func_ir.blocks)
-        if self.options.numpy:
-            ConvertNumpyPass(self).run(self.func_ir.blocks)
-        if self.options.reduction:
-            ConvertReducePass(self).run(self.func_ir.blocks)
-        if self.options.prange:
-            ConvertLoopPass(self).run(self.func_ir.blocks)
-        if self.options.inplace_binop:
-            ConvertInplaceBinop(self).run(self.func_ir.blocks)
+        if not self.options.recursive:
+            # run stencil translation to parfor
+            if self.options.stencil:
+                stencil_pass = StencilPass(self.func_ir, self.typemap,
+                                           self.calltypes, self.array_analysis,
+                                           self.typingctx, self.targetctx,
+                                           self.flags)
+                stencil_pass.run()
+            if self.options.setitem:
+                ConvertSetItemPass(self).run(self.func_ir.blocks)
+            if self.options.numpy:
+                ConvertNumpyPass(self).run(self.func_ir.blocks)
+            if self.options.reduction:
+                ConvertReducePass(self).run(self.func_ir.blocks)
+            if self.options.prange:
+                ConvertLoopPass(self).run(self.func_ir.blocks)
+            if self.options.inplace_binop:
+                ConvertInplaceBinop(self).run(self.func_ir.blocks)
 
-        # setup diagnostics now parfors are found
-        self.diagnostics.setup(self.func_ir, self.options.fusion)
+            # setup diagnostics now parfors are found
+            self.diagnostics.setup(self.func_ir, self.options.fusion)
 
-        dprint_func_ir(self.func_ir, "after parfor pass")
+            dprint_func_ir(self.func_ir, "after parfor pass")
 
-        # simplify CFG of parfor body loops since nested parfors with extra
-        # jumps can be created with prange conversion
-        n_parfors = simplify_parfor_body_CFG(self.func_ir.blocks)
-        # simplify before fusion
-        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
-        # need two rounds of copy propagation to enable fusion of long sequences
-        # of parfors like test_fuse_argmin (some PYTHONHASHSEED values since
-        # apply_copies_parfor depends on set order for creating dummy assigns)
-        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
-
-        if self.options.fusion and n_parfors >= 2:
-            self.func_ir._definitions = build_definitions(self.func_ir.blocks)
-            self.array_analysis.equiv_sets = dict()
-            self.array_analysis.run(self.func_ir.blocks)
-            # reorder statements to maximize fusion
-            # push non-parfors down
-            maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap,
-                                                            up_direction=False)
-            dprint_func_ir(self.func_ir, "after maximize fusion down")
-            self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
-            dprint_func_ir(self.func_ir, "after first fuse")
-            # push non-parfors up
-            maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap)
-            dprint_func_ir(self.func_ir, "after maximize fusion up")
-            # try fuse again after maximize
-            self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
-            dprint_func_ir(self.func_ir, "after fusion")
-            # remove dead code after fusion to remove extra arrays and variables
+            # simplify CFG of parfor body loops since nested parfors with extra
+            # jumps can be created with prange conversion
+            n_parfors = simplify_parfor_body_CFG(self.func_ir.blocks)
+            # simplify before fusion
             simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
+            # need two rounds of copy propagation to enable fusion of long sequences
+            # of parfors like test_fuse_argmin (some PYTHONHASHSEED values since
+            # apply_copies_parfor depends on set order for creating dummy assigns)
+            simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
+            dprint_func_ir(self.func_ir, "after simplify")
 
-        # push function call variables inside parfors so gufunc function
-        # wouldn't need function variables as argument
-        push_call_vars(self.func_ir.blocks, {}, {}, self.typemap)
-        dprint_func_ir(self.func_ir, "after push call vars")
-        # simplify again
-        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
-        dprint_func_ir(self.func_ir, "after optimization")
-        if config.DEBUG_ARRAY_OPT >= 1:
-            print("variable types: ", sorted(self.typemap.items()))
-            print("call types: ", self.calltypes)
+            if self.options.fusion and n_parfors >= 2:
+                self.func_ir._definitions = build_definitions(self.func_ir.blocks)
+                self.array_analysis.equiv_sets = dict()
+                self.array_analysis.run(self.func_ir.blocks)
+                # reorder statements to maximize fusion
+                # push non-parfors down
+                maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap,
+                                                                up_direction=False)
+                dprint_func_ir(self.func_ir, "after maximize fusion down")
+                self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
+                dprint_func_ir(self.func_ir, "after first fuse")
+                # push non-parfors up
+                maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap)
+                dprint_func_ir(self.func_ir, "after maximize fusion up")
+                # try fuse again after maximize
+                self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
+                dprint_func_ir(self.func_ir, "after fusion")
+                # remove dead code after fusion to remove extra arrays and variables
+                simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
 
-        if config.DEBUG_ARRAY_OPT >= 3:
-            for(block_label, block) in self.func_ir.blocks.items():
-                new_block = []
-                scope = block.scope
-                for stmt in block.body:
-                    new_block.append(stmt)
-                    if isinstance(stmt, ir.Assign):
-                        loc = stmt.loc
-                        lhs = stmt.target
-                        rhs = stmt.value
-                        lhs_typ = self.typemap[lhs.name]
-                        print("Adding print for assignment to ", lhs.name, lhs_typ, type(lhs_typ))
-                        if lhs_typ in types.number_domain or isinstance(lhs_typ, types.Literal):
-                            str_var = ir.Var(scope, mk_unique_var("str_var"), loc)
-                            self.typemap[str_var.name] = types.StringLiteral(lhs.name)
-                            lhs_const = ir.Const(lhs.name, loc)
-                            str_assign = ir.Assign(lhs_const, str_var, loc)
-                            new_block.append(str_assign)
-                            str_print = ir.Print([str_var], None, loc)
-                            self.calltypes[str_print] = signature(types.none, self.typemap[str_var.name])
-                            new_block.append(str_print)
-                            ir_print = ir.Print([lhs], None, loc)
-                            self.calltypes[ir_print] = signature(types.none, lhs_typ)
-                            new_block.append(ir_print)
-                block.body = new_block
+            # push function call variables inside parfors so gufunc function
+            # wouldn't need function variables as argument
+            push_call_vars(self.func_ir.blocks, {}, {}, self.typemap)
+            dprint_func_ir(self.func_ir, "after push call vars")
+            # simplify again
+            simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
+            dprint_func_ir(self.func_ir, "after optimization")
+            if config.DEBUG_ARRAY_OPT >= 1:
+                print("variable types: ", sorted(self.typemap.items()))
+                print("call types: ", self.calltypes)
 
         if self.func_ir.is_generator:
             fix_generator_types(self.func_ir.generator_info, self.return_type,
@@ -2916,6 +2892,43 @@ class ParforPass(ParforPassStates):
                            after_fusion, name, n_parfors, parfor_ids))
                 else:
                     print('Function {} has no Parfor.'.format(name))
+
+        if config.DEBUG_ARRAY_OPT >= 3:
+            for(block_label, block) in self.func_ir.blocks.items():
+                new_block = []
+                scope = block.scope
+                for stmt in block.body:
+                    print("Considering:", stmt)
+                    new_block.append(stmt)
+                    if isinstance(stmt, ir.Assign):
+                        loc = stmt.loc
+                        lhs = stmt.target
+                        rhs = stmt.value
+                        lhs_typ = self.typemap[lhs.name]
+                        print("Adding print for assignment to ", lhs.name, lhs_typ, type(lhs_typ))
+                        if lhs_typ in types.number_domain or isinstance(lhs_typ, types.Literal):
+                            str_var = ir.Var(scope, mk_unique_var("str_var"), loc)
+                            self.typemap[str_var.name] = types.StringLiteral(lhs.name)
+                            lhs_const = ir.Const(lhs.name, loc)
+                            str_assign = ir.Assign(lhs_const, str_var, loc)
+                            new_block.append(str_assign)
+                            str_print = ir.Print([str_var], None, loc)
+                            self.calltypes[str_print] = signature(types.none, self.typemap[str_var.name])
+                            new_block.append(str_print)
+                            ir_print = ir.Print([lhs], None, loc)
+                            self.calltypes[ir_print] = signature(types.none, lhs_typ)
+                            new_block.append(ir_print)
+                        else:
+                            str_var = ir.Var(scope, mk_unique_var("str_var"), loc)
+                            self.typemap[str_var.name] = types.StringLiteral(str(stmt))
+                            lhs_const = ir.Const(str(stmt), loc)
+                            str_assign = ir.Assign(lhs_const, str_var, loc)
+                            new_block.append(str_assign)
+                            str_print = ir.Print([str_var], None, loc)
+                            self.calltypes[str_print] = signature(types.none, self.typemap[str_var.name])
+                            new_block.append(str_print)
+                block.body = new_block
+            dprint_func_ir(self.func_ir, "after prints added")
 
         return
 
