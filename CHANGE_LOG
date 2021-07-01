@@ -33,7 +33,7 @@ Internal changes:
 
 * Debugging support through DWARF has been fixed and enhanced.
 * Numba now optimises the way in which locals are emitted to help reduce time
-  spend in LLVM's SROA passes.
+  spent in LLVM's SROA passes.
 
 CUDA target changes:
 
