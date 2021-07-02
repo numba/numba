@@ -24,7 +24,8 @@ def suspend_emission(builder):
 
 class AbstractDIBuilder(metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def mark_variable(self, builder, allocavalue, name, lltype, size, line):
+    def mark_variable(self, builder, allocavalue, name, lltype, size, line,
+                      datamodel=None):
         """Emit debug info for the variable.
         """
         pass
@@ -59,7 +60,8 @@ class DummyDIBuilder(AbstractDIBuilder):
     def __init__(self, module, filepath):
         pass
 
-    def mark_variable(self, builder, allocavalue, name, lltype, size, line):
+    def mark_variable(self, builder, allocavalue, name, lltype, size, line,
+                      datamodel=None):
         pass
 
     def mark_location(self, builder, line):
@@ -92,7 +94,12 @@ class DIBuilder(AbstractDIBuilder):
         # constructing subprograms
         self.dicompileunit = self._di_compile_unit()
 
-    def _var_type(self, lltype, size):
+    def _var_type(self, lltype, size, datamodel=None):
+        # HACK STARTS, need cgctx for abi sizeof()
+        from numba.core.typing.context import Context as tyctx
+        from numba.core.registry import cpu
+        cgctx = cpu.CPUContext(tyctx())
+        # HACK ENDS
         m = self.module
         bitsize = size * 8
 
@@ -108,8 +115,55 @@ class DIBuilder(AbstractDIBuilder):
                              if isinstance(lltype, int_type)
                              else ir.DIToken('DW_ATE_float')),
             })
-        # For all other types, describe it as sequence of bytes
+        elif isinstance(lltype, ir.PointerType):
+            mdtype = m.add_debug_info('DIDerivedType', {
+                'tag': ir.DIToken('DW_TAG_pointer_type'),
+                'baseType': self._var_type(lltype.pointee, cgctx.get_abi_sizeof(lltype.pointee)),
+                'size': 64 # HACK
+            })
+        elif isinstance(lltype, ir.LiteralStructType):
+            # Struct type
+            meta = []
+            offset = 0
+            for element, field in zip(lltype.elements, datamodel._fields):
+                size = cgctx.get_abi_sizeof(element)
+                basetype = self._var_type(element, size)
+                derived_type = m.add_debug_info('DIDerivedType', {
+                    'tag': ir.DIToken('DW_TAG_member'),
+                    'name': field,
+                    'baseType': basetype,
+                    'size': 8 * size, # DW_TAG_member size is in bits
+                    'offset': offset,
+                })
+                meta.append(derived_type)
+                offset += (8 * size) # offset is in bits
+
+            mdtype = m.add_debug_info('DICompositeType', {
+                'tag': ir.DIToken('DW_TAG_structure_type'),
+                'name': f"{datamodel.fe_type} ({str(lltype)})",
+                'identifier': str(lltype),
+                'elements': m.add_metadata(meta),
+                'size': offset,
+            }, is_distinct=True)
+        elif isinstance(lltype, ir.ArrayType):
+            element = lltype.element
+            el_size = cgctx.get_abi_sizeof(element)
+            basetype = self._var_type(element, el_size)
+
+            count = size // el_size
+            mdrange = m.add_debug_info('DISubrange', {
+                'count': count,
+            })
+            mdtype = m.add_debug_info('DICompositeType', {
+                'tag': ir.DIToken('DW_TAG_array_type'),
+                'baseType': basetype,
+                'name': str(lltype),
+                'size': bitsize,
+                'identifier': str(lltype),
+                'elements': m.add_metadata([mdrange]),
+            })
         else:
+            # For all other types, describe it as sequence of bytes
             count = size
             mdrange = m.add_debug_info('DISubrange', {
                 'count': count,
@@ -127,14 +181,16 @@ class DIBuilder(AbstractDIBuilder):
                 'identifier': str(lltype),
                 'elements': m.add_metadata([mdrange]),
             })
+
         return mdtype
 
-    def mark_variable(self, builder, allocavalue, name, lltype, size, line):
+    def mark_variable(self, builder, allocavalue, name, lltype, size, line,
+                      datamodel=None):
         m = self.module
         fnty = ir.FunctionType(ir.VoidType(), [ir.MetaDataType()] * 3)
         decl = cgutils.get_or_insert_function(m, fnty, 'llvm.dbg.declare')
 
-        mdtype = self._var_type(lltype, size)
+        mdtype = self._var_type(lltype, size, datamodel=datamodel)
         name = name.replace('.', '$')    # for gdb to work correctly
         mdlocalvar = m.add_debug_info('DILocalVariable', {
             'name': name,
@@ -286,7 +342,8 @@ class NvvmDIBuilder(DIBuilder):
     # Used in mark_location to remember last lineno to avoid duplication
     _last_lineno = None
 
-    def mark_variable(self, builder, allocavalue, name, lltype, size, line):
+    def mark_variable(self, builder, allocavalue, name, lltype, size, line,
+                      datamodel=None):
         # unsupported
         pass
 

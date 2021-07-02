@@ -1306,8 +1306,7 @@ class Lower(BaseLower):
         if ((name not in self._singly_assigned_vars) or
                 self._disable_sroa_like_opt):
             # If not already defined, allocate it
-            llty = self.context.get_value_type(fetype)
-            ptr = self.alloca_lltype(name, llty)
+            ptr = self.alloca(name, fetype)
             # Remember the pointer
             self.varmap[name] = ptr
 
@@ -1385,9 +1384,10 @@ class Lower(BaseLower):
 
     def alloca(self, name, type):
         lltype = self.context.get_value_type(type)
-        return self.alloca_lltype(name, lltype)
+        datamodel = self.context.data_model_manager[type]
+        return self.alloca_lltype(name, lltype, datamodel=datamodel)
 
-    def alloca_lltype(self, name, lltype):
+    def alloca_lltype(self, name, lltype, datamodel=None):
         # Is user variable?
         is_uservar = not name.startswith('$')
         # Allocate space for variable
@@ -1403,7 +1403,7 @@ class Lower(BaseLower):
             sizeof = self.context.get_abi_sizeof(lltype)
             self.debuginfo.mark_variable(self.builder, aptr, name=name,
                                          lltype=lltype, size=sizeof,
-                                         line=loc.line)
+                                         line=loc.line, datamodel=datamodel)
         return aptr
 
     def incref(self, typ, val):
