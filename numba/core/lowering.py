@@ -1407,7 +1407,11 @@ class Lower(BaseLower):
         if not self.context.enable_nrt:
             return
 
-        self.context.nrt.decref(self.builder, typ, val)
+        # do not associate decref with "use", it creates "jumpy" line info as
+        # the decrefs are usually where the ir.Del nodes are, which is at the
+        # end of the block.
+        with debuginfo.suspend_emission(self.builder):
+            self.context.nrt.decref(self.builder, typ, val)
 
 
 def _lit_or_omitted(value):
