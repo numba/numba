@@ -5382,16 +5382,35 @@ def numpy_swapaxes(arr, axis1, axis2):
 
 @register_jitable
 def copy_to_tuple(listlike, tuple_buffer, offset=0):
+    if len(tuple_buffer) == 0:
+        return tuple_buffer
     for i in range(len(listlike)):
         tuple_buffer = tuple_setitem(tuple_buffer, i+offset, listlike[i+offset])
     return tuple_buffer
 
 
 @register_jitable
-def _take_along_axis_impl(arr, indices, axis, Ni, Nk, lookup):
+def _take_along_axis_impl_set_ni(arr, indices, axis, Ni, Nk, lookup):
     Ni = copy_to_tuple(list(arr.shape)[:axis], Ni)
-    M = arr.shape[axis]
+    return _take_along_axis_impl(arr, indices, axis, Ni, Ni, lookup)
+
+
+@register_jitable
+def _take_along_axis_impl_set_nk(arr, indices, axis, Ni, Nk, lookup):
     Nk = copy_to_tuple(list(arr.shape)[axis+1:], Nk)
+    return _take_along_axis_impl(arr, indices, axis, Ni, Ni, lookup)
+
+
+@register_jitable
+def _take_along_axis_impl_set_ni_nk(arr, indices, axis, Ni, Nk, lookup):
+    Ni = copy_to_tuple(list(arr.shape)[:axis], Ni)
+    Nk = copy_to_tuple(list(arr.shape)[axis+1:], Nk)
+    return _take_along_axis_impl(arr, indices, axis, Ni, Ni, lookup)
+
+
+@register_jitable
+def _take_along_axis_impl(arr, indices, axis, Ni, Nk, lookup):
+    M = arr.shape[axis]
     J = indices.shape[axis]  # Need not equal M
     out = np.empty(tuple_setitem(arr.shape, axis, J))
 
@@ -5416,19 +5435,31 @@ def arr_take_along_axis(arr, indices, axis):
                                          (), (), (slice(None, None, None),))
     else:
         check_is_integer(axis, "axis")
-        Ni = tuple(range(axis.literal_value))
-        Nk = tuple(range(axis.literal_value+1, arr.ndim))
+        axis = axis.literal_value
+        if axis < 0:
+            axis = arr.ndim + axis
+
+        if axis < 0 or axis >= arr.ndim:
+            raise ValueError("axis is out of bounds")
+
+        Ni = tuple(range(axis))
+        Nk = tuple(range(axis+1, arr.ndim))
         lookup = [0] * arr.ndim
-        lookup[axis.literal_value] = slice(None, None, None)
+        lookup[axis] = slice(None, None, None)
         lookup = tuple(lookup)
-        def take_along_axis_impl(arr, indices, axis):
-            # TODO merge with axis normalization logic in argmax/argmin
-            if axis < 0:
-                axis = arr.ndim + axis
 
-            if axis < 0 or axis >= arr.ndim:
-                raise ValueError("axis is out of bounds")
-
-            return _take_along_axis_impl(arr, indices, axis, Ni, Nk, lookup)
-
+        if Ni:
+            if Nk:
+                def take_along_axis_impl(arr, indices, axis):
+                    return _take_along_axis_impl_set_ni_ki(arr, indices, axis, Ni, Nk, lookup)
+            else:
+                def take_along_axis_impl(arr, indices, axis):
+                    return _take_along_axis_impl_set_ni(arr, indices, axis, Ni, Nk, lookup)
+        else:
+            if Nk:
+                def take_along_axis_impl(arr, indices, axis):
+                    return _take_along_axis_impl_set_ki(arr, indices, axis, Ni, Nk, lookup)
+            else:
+                def take_along_axis_impl(arr, indices, axis):
+                    return _take_along_axis_impl(arr, indices, axis, Ni, Nk, lookup)
     return take_along_axis_impl
