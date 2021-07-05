@@ -4,6 +4,10 @@
 # Required
 version: 2
 
+# Confiugre the correct image
+build:
+  image: latest
+
 # Build documentation in the docs/ directory with Sphinx
 sphinx:
   configuration: docs/source/conf.py
