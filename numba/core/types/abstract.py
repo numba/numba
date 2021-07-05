@@ -278,6 +278,12 @@ class Callable(Type):
         Returns a tuple of (list of signatures, parameterized)
         """
 
+    @abstractmethod
+    def get_impl_key(self, sig):
+        """
+        Returns the impl key for the given signature
+        """
+
 
 class DTypeSpec(Type):
     """
