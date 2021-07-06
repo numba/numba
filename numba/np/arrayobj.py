@@ -1563,6 +1563,19 @@ def array_T(context, builder, typ, value):
     return impl_ret_borrowed(context, builder, typ, res)
 
 
+@overload(np.logspace)
+def numpy_logspace(start, stop, num=50, endpoint=True,
+                   base=10.0, dtype=None, axis=0):
+
+    def impl(start, stop, num=50, endpoint=True, base=10.0, dtype=None, axis=0):
+        y = np.linspace(start, stop, num=num, endpoint=endpoint, axis=axis)
+        if dtype is None:
+            return np.power(base, y)
+        return np.power(base, y).astype(dtype, copy=False)
+
+    return impl
+
+
 @overload(np.rot90)
 def numpy_rot90(arr, k=1):
     # supporting axes argument it needs to be included in np.flip
