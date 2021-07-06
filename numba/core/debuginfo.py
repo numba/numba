@@ -8,7 +8,8 @@ import os.path
 from contextlib import contextmanager
 
 from llvmlite import ir
-from numba.core import cgutils
+from numba.core import cgutils, types
+from numba.core.datamodel.models import ComplexModel, UniTupleModel
 
 @contextmanager
 def suspend_emission(builder):
@@ -57,7 +58,7 @@ class AbstractDIBuilder(metaclass=abc.ABCMeta):
 
 class DummyDIBuilder(AbstractDIBuilder):
 
-    def __init__(self, module, filepath):
+    def __init__(self, module, filepath, cgctx):
         pass
 
     def mark_variable(self, builder, allocavalue, name, lltype, size, line,
@@ -77,16 +78,21 @@ class DummyDIBuilder(AbstractDIBuilder):
         pass
 
 
+_BYTE_SIZE = 8
+
+
 class DIBuilder(AbstractDIBuilder):
     DWARF_VERSION = 4
     DEBUG_INFO_VERSION = 3
     DBG_CU_NAME = 'llvm.dbg.cu'
+    _DEBUG = False
 
-    def __init__(self, module, filepath):
+    def __init__(self, module, filepath, cgctx):
         self.module = module
         self.filepath = os.path.abspath(filepath)
         self.difile = self._di_file()
         self.subprograms = []
+        self.cgctx = cgctx
         self.initialize()
 
     def initialize(self):
@@ -95,49 +101,72 @@ class DIBuilder(AbstractDIBuilder):
         self.dicompileunit = self._di_compile_unit()
 
     def _var_type(self, lltype, size, datamodel=None):
-        # HACK STARTS, need cgctx for abi sizeof()
-        from numba.core.typing.context import Context as tyctx
-        from numba.core.registry import cpu
-        cgctx = cpu.CPUContext(tyctx())
-        # HACK ENDS
+        if self._DEBUG:
+            print("-->", lltype, size, datamodel,
+                  getattr(datamodel, 'fe_type', 'NO FE TYPE'))
         m = self.module
-        bitsize = size * 8
+        bitsize = _BYTE_SIZE * size
 
         int_type = ir.IntType,
         real_type = ir.FloatType, ir.DoubleType
         # For simple numeric types, choose the closest encoding.
-        # We treat all integers as unsigned.
+        # We treat all integers as unsigned when there's no known datamodel.
         if isinstance(lltype, int_type + real_type):
+            if datamodel is None:
+                # This is probably something like an `i8*` member of a struct
+                name = str(lltype)
+                if isinstance(lltype, int_type):
+                    ditok = 'DW_ATE_unsigned'
+                else:
+                    ditok = 'DW_ATE_float'
+            else:
+                # This is probably a known int/float scalar type
+                name = str(datamodel.fe_type)
+                if isinstance(datamodel.fe_type, types.Integer):
+                    if datamodel.fe_type.signed:
+                        ditok = 'DW_ATE_signed'
+                    else:
+                        ditok = 'DW_ATE_unsigned'
+                else:
+                    ditok = 'DW_ATE_float'
             mdtype = m.add_debug_info('DIBasicType', {
-                'name': str(lltype),
+                'name': name,
                 'size': bitsize,
-                'encoding': (ir.DIToken('DW_ATE_unsigned')
-                             if isinstance(lltype, int_type)
-                             else ir.DIToken('DW_ATE_float')),
+                'encoding': ir.DIToken(ditok),
             })
-        elif isinstance(lltype, ir.PointerType):
-            mdtype = m.add_debug_info('DIDerivedType', {
-                'tag': ir.DIToken('DW_TAG_pointer_type'),
-                'baseType': self._var_type(lltype.pointee, cgctx.get_abi_sizeof(lltype.pointee)),
-                'size': 64 # HACK
-            })
-        elif isinstance(lltype, ir.LiteralStructType):
-            # Struct type
+        elif isinstance(datamodel, ComplexModel):
+            # TODO: Is there a better way of determining "this is a complex
+            # number"?
+            #
+            # NOTE: Commented below is the way to generate the metadata for a
+            # C99 complex type that's directly supported by DWARF. Numba however
+            # generates a struct with real/imag cf. CPython to give a more
+            # pythonic feel to inspection.
+            #
+            # mdtype = m.add_debug_info('DIBasicType', {
+            #  'name': f"{datamodel.fe_type} ({str(lltype)})",
+            #  'size': bitsize,
+            # 'encoding': ir.DIToken('DW_ATE_complex_float'),
+            #})
             meta = []
             offset = 0
-            for element, field in zip(lltype.elements, datamodel._fields):
-                size = cgctx.get_abi_sizeof(element)
-                basetype = self._var_type(element, size)
+            for ix, name in enumerate(('real', 'imag')):
+                component = lltype.elements[ix]
+                component_size = self.cgctx.get_abi_sizeof(component)
+                component_basetype = m.add_debug_info('DIBasicType', {
+                    'name': str(component),
+                    'size': _BYTE_SIZE * component_size, # bits
+                    'encoding': ir.DIToken('DW_ATE_float'),
+                })
                 derived_type = m.add_debug_info('DIDerivedType', {
                     'tag': ir.DIToken('DW_TAG_member'),
-                    'name': field,
-                    'baseType': basetype,
-                    'size': 8 * size, # DW_TAG_member size is in bits
+                    'name': name,
+                    'baseType': component_basetype,
+                    'size': _BYTE_SIZE * component_size, # DW_TAG_member size is in bits
                     'offset': offset,
                 })
                 meta.append(derived_type)
-                offset += (8 * size) # offset is in bits
-
+                offset += (_BYTE_SIZE * component_size) # offset is in bits
             mdtype = m.add_debug_info('DICompositeType', {
                 'tag': ir.DIToken('DW_TAG_structure_type'),
                 'name': f"{datamodel.fe_type} ({str(lltype)})",
@@ -145,11 +174,79 @@ class DIBuilder(AbstractDIBuilder):
                 'elements': m.add_metadata(meta),
                 'size': offset,
             }, is_distinct=True)
+        elif isinstance(datamodel, UniTupleModel):
+            element = lltype.element
+            el_size = self.cgctx.get_abi_sizeof(element)
+            basetype = self._var_type(element, el_size)
+            name = f"{datamodel.fe_type} ({str(lltype)})"
+            count = size // el_size
+            mdrange = m.add_debug_info('DISubrange', {
+                'count': count,
+            })
+            mdtype = m.add_debug_info('DICompositeType', {
+                'tag': ir.DIToken('DW_TAG_array_type'),
+                'baseType': basetype,
+                'name': name,
+                'size': bitsize,
+                'identifier': str(lltype),
+                'elements': m.add_metadata([mdrange]),
+            })
+        elif isinstance(lltype, ir.PointerType):
+            model = getattr(datamodel, '_pointee_model', None)
+            basetype = self._var_type(lltype.pointee,
+                                      self.cgctx.get_abi_sizeof(lltype.pointee),
+                                      model)
+            mdtype = m.add_debug_info('DIDerivedType', {
+                'tag': ir.DIToken('DW_TAG_pointer_type'),
+                'baseType': basetype,
+                'size': _BYTE_SIZE * self.cgctx.get_abi_sizeof(lltype)
+            })
+        elif isinstance(lltype, ir.LiteralStructType):
+            # Struct type
+            meta = []
+            offset = 0
+            if datamodel is None:
+                name = f"Anonymous struct ({str(lltype)})"
+                for field_id, element in enumerate(lltype.elements):
+                    size = self.cgctx.get_abi_sizeof(element)
+                    basetype = self._var_type(element, size)
+                    derived_type = m.add_debug_info('DIDerivedType', {
+                        'tag': ir.DIToken('DW_TAG_member'),
+                        'name': f'<field {field_id}>',
+                        'baseType': basetype,
+                        'size': _BYTE_SIZE * size, # DW_TAG_member size is in bits
+                        'offset': offset,
+                    })
+                    meta.append(derived_type)
+                    offset += (_BYTE_SIZE * size) # offset is in bits
+            else:
+                name = f"{datamodel.fe_type} ({str(lltype)})"
+                for element, field, model in zip(lltype.elements,
+                                                 datamodel._fields,
+                                                 datamodel.inner_models()):
+                    size = self.cgctx.get_abi_sizeof(element)
+                    basetype = self._var_type(element, size, datamodel=model)
+                    derived_type = m.add_debug_info('DIDerivedType', {
+                        'tag': ir.DIToken('DW_TAG_member'),
+                        'name': field,
+                        'baseType': basetype,
+                        'size': _BYTE_SIZE * size, # DW_TAG_member size is in bits
+                        'offset': offset,
+                    })
+                    meta.append(derived_type)
+                    offset += (_BYTE_SIZE * size) # offset is in bits
+
+            mdtype = m.add_debug_info('DICompositeType', {
+                'tag': ir.DIToken('DW_TAG_structure_type'),
+                'name': name,
+                'identifier': str(lltype),
+                'elements': m.add_metadata(meta),
+                'size': offset,
+            }, is_distinct=True)
         elif isinstance(lltype, ir.ArrayType):
             element = lltype.element
-            el_size = cgctx.get_abi_sizeof(element)
+            el_size = self.cgctx.get_abi_sizeof(element)
             basetype = self._var_type(element, el_size)
-
             count = size // el_size
             mdrange = m.add_debug_info('DISubrange', {
                 'count': count,
@@ -170,7 +267,7 @@ class DIBuilder(AbstractDIBuilder):
             })
             mdbase = m.add_debug_info('DIBasicType', {
                 'name': 'byte',
-                'size': 8,
+                'size': _BYTE_SIZE,
                 'encoding': ir.DIToken('DW_ATE_unsigned_char'),
             })
             mdtype = m.add_debug_info('DICompositeType', {

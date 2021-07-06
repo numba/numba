@@ -57,7 +57,8 @@ class BaseLower(object):
                         else debuginfo.DummyDIBuilder)
 
         self.debuginfo = dibuildercls(module=self.module,
-                                      filepath=func_ir.loc.filename)
+                                      filepath=func_ir.loc.filename,
+                                      cgctx=context)
 
         # Subclass initialization
         self.init()
