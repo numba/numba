@@ -5381,58 +5381,53 @@ def numpy_swapaxes(arr, axis1, axis2):
 
 
 @register_jitable
-def copy_to_tuple(listlike, tuple_buffer, offset=0):
-    if len(tuple_buffer) == 0:
-        return tuple_buffer
-    for i in range(len(listlike)):
-        tuple_buffer = tuple_setitem(tuple_buffer, i+offset, listlike[i+offset])
-    return tuple_buffer
+def _take_along_axis_impl_set_ni(arr, indices, axis, Ni, Nk):
+    for i in range(len(Ni)):
+        Ni = tuple_setitem(Ni, i, arr.shape[i])
+    return _take_along_axis_impl(arr, indices, axis, Ni, Nk)
 
 
 @register_jitable
-def _take_along_axis_impl_set_ni(arr, indices, axis, Ni, Nk, lookup):
-    Ni = copy_to_tuple(list(arr.shape)[:axis], Ni)
-    return _take_along_axis_impl(arr, indices, axis, Ni, Ni, lookup)
+def _take_along_axis_impl_set_nk(arr, indices, axis, Ni, Nk):
+    for i in range(len(Nk)):
+        Nk = tuple_setitem(Nk, i, arr.shape[axis + i])
+    return _take_along_axis_impl(arr, indices, axis, Ni, Nk)
 
 
 @register_jitable
-def _take_along_axis_impl_set_nk(arr, indices, axis, Ni, Nk, lookup):
-    Nk = copy_to_tuple(list(arr.shape)[axis+1:], Nk)
-    return _take_along_axis_impl(arr, indices, axis, Ni, Ni, lookup)
+def _take_along_axis_impl_set_ni_nk(arr, indices, axis, Ni, Nk):
+    for i in range(len(Ni)):
+        Ni = tuple_setitem(Ni, i, arr.shape[i])
+    for i in range(len(Nk)):
+        Nk = tuple_setitem(Nk, i, arr.shape[axis + i])
+    return _take_along_axis_impl(arr, indices, axis, Ni, Nk)
 
 
 @register_jitable
-def _take_along_axis_impl_set_ni_nk(arr, indices, axis, Ni, Nk, lookup):
-    Ni = copy_to_tuple(list(arr.shape)[:axis], Ni)
-    Nk = copy_to_tuple(list(arr.shape)[axis+1:], Nk)
-    return _take_along_axis_impl(arr, indices, axis, Ni, Ni, lookup)
-
-
-@register_jitable
-def _take_along_axis_impl(arr, indices, axis, Ni, Nk, lookup):
+def _take_along_axis_impl(arr, indices, axis, Ni, Nk):
     M = arr.shape[axis]
     J = indices.shape[axis]  # Need not equal M
-    out = np.empty(tuple_setitem(arr.shape, axis, J))
+    out = np.empty(Ni + (J,) + Nk, arr.dtype)
 
     for ii in np.ndindex(Ni):
-        lookup = copy_to_tuple(ii, lookup)
-        for kk in np.ndindex(Nk):
-            lookup = copy_to_tuple(kk, lookup, axis+1)
-            a_1d = arr[lookup]
-            indices_1d = indices[lookup]
-            out_1d = out[lookup]
-            out_1d[:] = a_1d[indices_1d]
+        for ii in np.ndindex(Ni):
+            for kk in np.ndindex(Nk):
+                np_s_ = (slice(None, None, None),)
+                a_1d       = arr    [ii + np_s_ + kk]
+                indices_1d = indices[ii + np_s_ + kk]
+                out_1d     = out    [ii + np_s_ + kk]
+                for j in range(J):
+                    out_1d[j] = a_1d[indices_1d[j]]
     return out
 
 
-@overload(np.take_along_axis)
+@overload(np.take_along_axis, jit_options={'boundscheck':True})
 def arr_take_along_axis(arr, indices, axis):
     if is_nonelike(axis):
         def take_along_axis_impl(arr, indices, axis):
             arr = arr.flat
             axis = 0
-            return _take_along_axis_impl(arr.flat, indices, 0,
-                                         (), (), (slice(None, None, None),))
+            return _take_along_axis_impl(arr.flat, indices, 0, (), ())
     else:
         check_is_integer(axis, "axis")
         axis = axis.literal_value
@@ -5442,24 +5437,22 @@ def arr_take_along_axis(arr, indices, axis):
         if axis < 0 or axis >= arr.ndim:
             raise ValueError("axis is out of bounds")
 
+        n = arr.ndim
         Ni = tuple(range(axis))
         Nk = tuple(range(axis+1, arr.ndim))
-        lookup = [0] * arr.ndim
-        lookup[axis] = slice(None, None, None)
-        lookup = tuple(lookup)
 
         if Ni:
             if Nk:
                 def take_along_axis_impl(arr, indices, axis):
-                    return _take_along_axis_impl_set_ni_ki(arr, indices, axis, Ni, Nk, lookup)
+                    return _take_along_axis_impl_set_ni_nk(arr, indices, axis, Ni, Nk)
             else:
                 def take_along_axis_impl(arr, indices, axis):
-                    return _take_along_axis_impl_set_ni(arr, indices, axis, Ni, Nk, lookup)
+                    return _take_along_axis_impl_set_ni(arr, indices, axis, Ni, Nk)
         else:
             if Nk:
                 def take_along_axis_impl(arr, indices, axis):
-                    return _take_along_axis_impl_set_ki(arr, indices, axis, Ni, Nk, lookup)
+                    return _take_along_axis_impl_set_nk(arr, indices, axis, Ni, Nk)
             else:
                 def take_along_axis_impl(arr, indices, axis):
-                    return _take_along_axis_impl(arr, indices, axis, Ni, Nk, lookup)
+                    return _take_along_axis_impl(arr, indices, axis, Ni, Nk)
     return take_along_axis_impl
