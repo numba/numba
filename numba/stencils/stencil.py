@@ -19,18 +19,25 @@ import numba
 import operator
 from numba.np import numpy_support
 
+
 class StencilFuncLowerer(object):
-    '''Callable class responsible for lowering calls to a specific StencilFunc.
-    '''
+    """
+    Callable class responsible for lowering calls to a specific StencilFunc.
+    """
     def __init__(self, sf):
         self.stencilFunc = sf
 
     def __call__(self, context, builder, sig, args):
-        cres = self.stencilFunc.compile_for_argtys(sig.args, {},
-                    sig.return_type, None)
+        cres = self.stencilFunc.compile_for_argtys(
+            sig.args,
+            {},
+            sig.return_type,
+            None,
+        )
         res = context.call_internal(builder, cres.fndesc, sig, args)
         context.add_linking_libs([cres.library])
         return res
+
 
 @register_jitable
 def raise_if_incompatible_array_sizes(a, *args):
@@ -46,20 +53,26 @@ def raise_if_incompatible_array_sizes(a, *args):
     # (float[:], float[:], bool[:]) (Just (float[:], bool[:]) wouldn't fail)
     for arg in literal_unroll(args):
         if a.ndim != arg.ndim:
-            raise ValueError("Secondary stencil array does not have same number "
-                             " of dimensions as the first stencil input.")
+            raise ValueError(
+                "Secondary stencil array does not have same number of "
+                "dimensions as the first stencil input."
+            )
         argshape = arg.shape
         for i in range(len(ashape)):
             if ashape[i] > argshape[i]:
-                raise ValueError("Secondary stencil array has some dimension "
-                                 "smaller the same dimension in the first "
-                                 "stencil input.")
+                raise ValueError(
+                    "Secondary stencil array has some dimension smaller the "
+                    "same dimension in the first stencil input."
+                )
+
 
 def slice_addition(the_slice, addend):
-    """ Called by stencil in Python mode to add the loop index to a
-        user-specified slice.
+    """
+    Called by stencil in Python mode to add the loop index to a user-specified
+    slice.
     """
     return slice(the_slice.start + addend, the_slice.stop + addend)
+
 
 class StencilFunc(object):
     """
@@ -115,11 +128,13 @@ class StencilFunc(object):
                             var_index_vars += [index_var]
 
                         s_index_name = ir_utils.mk_unique_var("stencil_index")
-                        s_index_var  = ir.Var(scope, s_index_name, loc)
+                        s_index_var = ir.Var(scope, s_index_name, loc)
+
                         # Build a tuple from the index ir.Var's.
                         tuple_call = ir.Expr.build_tuple(var_index_vars, loc)
                         new_body.append(ir.Assign(tuple_call, s_index_var, loc))
                         rvar = ir.Var(scope, out_name, loc)
+
                         # Write the return statements original value into
                         # the array using the tuple index.
                         si = ir.SetItem(rvar, s_index_var, stmt.value, loc)
@@ -129,8 +144,8 @@ class StencilFunc(object):
             block.body = new_body
         return ret_blocks
 
-    def add_indices_to_kernel(self, kernel, index_names, ndim,
-                              neighborhood, standard_indexed, typemap, calltypes):
+    def add_indices_to_kernel(self, kernel, index_names, ndim, neighborhood,
+                              standard_indexed, typemap, calltypes):
         """
         Transforms the stencil kernel as specified by the user into one
         that includes each dimension's index variable as part of the getitem
@@ -148,8 +163,10 @@ class StencilFunc(object):
         else:
             need_to_calc_kernel = False
             if len(neighborhood) != ndim:
-                raise ValueError("%d dimensional neighborhood specified for %d " \
-                    "dimensional input array" % (len(neighborhood), ndim))
+                raise ValueError(
+                    "%d dimensional neighborhood specified for %d dimensional "
+                    "input array" % (len(neighborhood), ndim)
+                )
 
         tuple_table = ir_utils.get_tuple_table(kernel.blocks)
 
@@ -160,33 +177,47 @@ class StencilFunc(object):
             loc = block.loc
             new_body = []
             for stmt in block.body:
-                if (isinstance(stmt, ir.Assign) and
-                    isinstance(stmt.value, ir.Const)):
+                if (
+                    isinstance(stmt, ir.Assign)
+                    and isinstance(stmt.value, ir.Const)
+                ):
                     if config.DEBUG_ARRAY_OPT >= 1:
                         print("remembering in const_dict", stmt.target.name,
                               stmt.value.value)
                     # Remember consts for use later.
                     const_dict[stmt.target.name] = stmt.value.value
-                if ((isinstance(stmt, ir.Assign)
+                if (
+                    (
+                        isinstance(stmt, ir.Assign)
                         and isinstance(stmt.value, ir.Expr)
                         and stmt.value.op in ['setitem', 'static_setitem']
-                        and stmt.value.value.name in kernel.arg_names) or
-                   (isinstance(stmt, ir.SetItem)
-                        and stmt.target.name in kernel.arg_names)):
-                    raise ValueError("Assignments to arrays passed to stencil " \
-                        "kernels is not allowed.")
-                if (isinstance(stmt, ir.Assign)
-                        and isinstance(stmt.value, ir.Expr)
-                        and stmt.value.op in ['getitem', 'static_getitem']
                         and stmt.value.value.name in kernel.arg_names
-                        and stmt.value.value.name not in standard_indexed):
+                    ) or (
+                        isinstance(stmt, ir.SetItem)
+                        and stmt.target.name in kernel.arg_names
+                    )
+                ):
+                    raise ValueError(
+                        "Assignments to arrays passed to stencil kernels is "
+                        "not allowed."
+                    )
+                if (
+                    isinstance(stmt, ir.Assign)
+                    and isinstance(stmt.value, ir.Expr)
+                    and stmt.value.op in ['getitem', 'static_getitem']
+                    and stmt.value.value.name in kernel.arg_names
+                    and stmt.value.value.name not in standard_indexed
+                ):
                     # We found a getitem from the input array.
                     if stmt.value.op == 'getitem':
                         stmt_index_var = stmt.value.index
                     else:
                         stmt_index_var = stmt.value.index_var
                         # allow static_getitem since rewrite passes are applied
-                        #raise ValueError("Unexpected static_getitem in add_indices_to_kernel.")
+                        # raise ValueError(
+                        #     "Unexpected static_getitem in "
+                        #     "add_indices_to_kernel."
+                        # )
 
                     relatively_indexed.add(stmt.value.value.name)
 
@@ -200,8 +231,10 @@ class StencilFunc(object):
                         elif stmt_index_var.name in const_dict:
                             kernel_consts += [const_dict[stmt_index_var.name]]
                         else:
-                            raise ValueError("stencil kernel index is not "
-                                "constant, 'neighborhood' option required")
+                            raise ValueError(
+                                "stencil kernel index is not constant, "
+                                "'neighborhood' option required"
+                            )
 
                     if ndim == 1:
                         # Single dimension always has index variable 'index0'.
@@ -210,36 +243,73 @@ class StencilFunc(object):
                         # the current absolute location in index0.
                         index_var = ir.Var(scope, index_names[0], loc)
                         tmpname = ir_utils.mk_unique_var("stencil_index")
-                        tmpvar  = ir.Var(scope, tmpname, loc)
+                        tmpvar = ir.Var(scope, tmpname, loc)
                         stmt_index_var_typ = typemap[stmt_index_var.name]
                         # If the array is indexed with a slice then we
                         # have to add the index value with a call to
                         # slice_addition.
                         if isinstance(stmt_index_var_typ, types.misc.SliceType):
-                            sa_var = ir.Var(scope, ir_utils.mk_unique_var("slice_addition"), loc)
+                            sa_var = ir.Var(
+                                scope,
+                                ir_utils.mk_unique_var("slice_addition"),
+                                loc,
+                            )
                             sa_func = numba.njit(slice_addition)
                             sa_func_typ = types.functions.Dispatcher(sa_func)
                             typemap[sa_var.name] = sa_func_typ
                             g_sa = ir.Global("slice_addition", sa_func, loc)
                             new_body.append(ir.Assign(g_sa, sa_var, loc))
-                            slice_addition_call = ir.Expr.call(sa_var, [stmt_index_var, index_var], (), loc)
-                            calltypes[slice_addition_call] = sa_func_typ.get_call_type(self._typingctx, [stmt_index_var_typ, types.intp], {})
-                            new_body.append(ir.Assign(slice_addition_call, tmpvar, loc))
-                            new_body.append(ir.Assign(
-                                           ir.Expr.getitem(stmt.value.value, tmpvar, loc),
-                                           stmt.target, loc))
+                            slice_addition_call = ir.Expr.call(
+                                sa_var,
+                                [stmt_index_var, index_var],
+                                (),
+                                loc,
+                            )
+                            calltypes[slice_addition_call] = (
+                                sa_func_typ.get_call_type(
+                                    self._typingctx,
+                                    [stmt_index_var_typ, types.intp],
+                                    {},
+                                )
+                            )
+                            new_body.append(
+                                ir.Assign(slice_addition_call, tmpvar, loc),
+                            )
+                            new_body.append(
+                                ir.Assign(
+                                    ir.Expr.getitem(
+                                        stmt.value.value,
+                                        tmpvar,
+                                        loc,
+                                    ),
+                                    stmt.target,
+                                    loc,
+                                ),
+                            )
                         else:
-                            acc_call = ir.Expr.binop(operator.add, stmt_index_var,
-                                                     index_var, loc)
+                            acc_call = ir.Expr.binop(
+                                operator.add,
+                                stmt_index_var,
+                                index_var,
+                                loc,
+                            )
                             new_body.append(ir.Assign(acc_call, tmpvar, loc))
-                            new_body.append(ir.Assign(
-                                           ir.Expr.getitem(stmt.value.value, tmpvar, loc),
-                                           stmt.target, loc))
+                            new_body.append(
+                                ir.Assign(
+                                    ir.Expr.getitem(
+                                        stmt.value.value,
+                                        tmpvar,
+                                        loc,
+                                    ),
+                                    stmt.target,
+                                    loc,
+                                ),
+                            )
                     else:
                         index_vars = []
                         sum_results = []
                         s_index_name = ir_utils.mk_unique_var("stencil_index")
-                        s_index_var  = ir.Var(scope, s_index_name, loc)
+                        s_index_var = ir.Var(scope, s_index_name, loc)
                         const_index_vars = []
                         ind_stencils = []
 
@@ -251,22 +321,31 @@ class StencilFunc(object):
                         # index the array.
                         for dim in range(ndim):
                             tmpname = ir_utils.mk_unique_var("const_index")
-                            tmpvar  = ir.Var(scope, tmpname, loc)
-                            new_body.append(ir.Assign(ir.Const(dim, loc),
-                                                      tmpvar, loc))
+                            tmpvar = ir.Var(scope, tmpname, loc)
+                            new_body.append(
+                                ir.Assign(ir.Const(dim, loc), tmpvar, loc)
+                            )
                             const_index_vars += [tmpvar]
                             index_var = ir.Var(scope, index_names[dim], loc)
                             index_vars += [index_var]
 
-                            tmpname = ir_utils.mk_unique_var("ind_stencil_index")
-                            tmpvar  = ir.Var(scope, tmpname, loc)
+                            tmpname = ir_utils.mk_unique_var(
+                                "ind_stencil_index",
+                            )
+                            tmpvar = ir.Var(scope, tmpname, loc)
                             ind_stencils += [tmpvar]
                             getitemname = ir_utils.mk_unique_var("getitem")
-                            getitemvar  = ir.Var(scope, getitemname, loc)
-                            getitemcall = ir.Expr.getitem(stmt_index_var,
-                                                       const_index_vars[dim], loc)
-                            new_body.append(ir.Assign(getitemcall, getitemvar, loc))
-                            # Get the type of this particular part of the index tuple.
+                            getitemvar = ir.Var(scope, getitemname, loc)
+                            getitemcall = ir.Expr.getitem(
+                                stmt_index_var,
+                                const_index_vars[dim],
+                                loc,
+                            )
+                            new_body.append(
+                                ir.Assign(getitemcall, getitemvar, loc)
+                            )
+                            # Get the type of this particular part of the index
+                            # tuple.
                             if isinstance(stmt_index_var_typ, types.ConstSized):
                                 one_index_typ = stmt_index_var_typ[dim]
                             else:
@@ -275,25 +354,58 @@ class StencilFunc(object):
                             # have to add the index value with a call to
                             # slice_addition.
                             if isinstance(one_index_typ, types.misc.SliceType):
-                                sa_var = ir.Var(scope, ir_utils.mk_unique_var("slice_addition"), loc)
+                                sa_var = ir.Var(
+                                    scope,
+                                    ir_utils.mk_unique_var("slice_addition"),
+                                    loc,
+                                )
                                 sa_func = numba.njit(slice_addition)
-                                sa_func_typ = types.functions.Dispatcher(sa_func)
+                                sa_func_typ = types.functions.Dispatcher(
+                                    sa_func,
+                                )
                                 typemap[sa_var.name] = sa_func_typ
                                 g_sa = ir.Global("slice_addition", sa_func, loc)
                                 new_body.append(ir.Assign(g_sa, sa_var, loc))
-                                slice_addition_call = ir.Expr.call(sa_var, [getitemvar, index_vars[dim]], (), loc)
-                                calltypes[slice_addition_call] = sa_func_typ.get_call_type(self._typingctx, [one_index_typ, types.intp], {})
-                                new_body.append(ir.Assign(slice_addition_call, tmpvar, loc))
+                                slice_addition_call = ir.Expr.call(
+                                    sa_var,
+                                    [getitemvar, index_vars[dim]],
+                                    (),
+                                    loc,
+                                )
+                                calltypes[slice_addition_call] = (
+                                    sa_func_typ.get_call_type(
+                                        self._typingctx,
+                                        [one_index_typ, types.intp],
+                                        {},
+                                    ),
+                                )
+                                new_body.append(
+                                    ir.Assign(slice_addition_call, tmpvar, loc),
+                                )
                             else:
-                                acc_call = ir.Expr.binop(operator.add, getitemvar,
-                                                         index_vars[dim], loc)
-                                new_body.append(ir.Assign(acc_call, tmpvar, loc))
+                                acc_call = ir.Expr.binop(
+                                    operator.add,
+                                    getitemvar,
+                                    index_vars[dim],
+                                    loc,
+                                )
+                                new_body.append(
+                                    ir.Assign(acc_call, tmpvar, loc),
+                                )
 
                         tuple_call = ir.Expr.build_tuple(ind_stencils, loc)
                         new_body.append(ir.Assign(tuple_call, s_index_var, loc))
-                        new_body.append(ir.Assign(
-                                  ir.Expr.getitem(stmt.value.value,s_index_var,loc),
-                                  stmt.target,loc))
+                        new_body.append(
+                            ir.Assign(
+                                ir.Expr.getitem(
+                                    stmt.value.value,
+                                    s_index_var,
+                                    loc,
+                                ),
+                                stmt.target,
+                                loc,
+                            ),
+                        )
                 else:
                     new_body.append(stmt)
             block.body = new_body
@@ -301,10 +413,12 @@ class StencilFunc(object):
         if need_to_calc_kernel:
             # Find the size of the kernel by finding the maximum absolute value
             # index used in the kernel specification.
-            neighborhood = [[0,0] for _ in range(ndim)]
+            neighborhood = [[0, 0] for _ in range(ndim)]
             if len(kernel_consts) == 0:
-                raise ValueError("Stencil kernel with no accesses to "
-                                 "relatively indexed arrays.")
+                raise ValueError(
+                    "Stencil kernel with no accesses to relatively indexed "
+                    "arrays."
+                )
 
             for index in kernel_consts:
                 if isinstance(index, tuple) or isinstance(index, list):
@@ -326,13 +440,14 @@ class StencilFunc(object):
                     index_len = 1
                 else:
                     raise ValueError(
-                        "Non-tuple or non-integer used as stencil index.")
+                        "Non-tuple or non-integer used as stencil index."
+                    )
                 if index_len != ndim:
                     raise ValueError(
-                        "Stencil index does not match array dimensionality.")
+                        "Stencil index does not match array dimensionality."
+                    )
 
-        return (neighborhood, relatively_indexed)
-
+        return neighborhood, relatively_indexed
 
     def get_return_type(self, argtys):
         if config.DEBUG_ARRAY_OPT >= 1:
@@ -340,24 +455,31 @@ class StencilFunc(object):
             ir_utils.dump_blocks(self.kernel_ir.blocks)
 
         if not isinstance(argtys[0], types.npytypes.Array):
-            raise ValueError("The first argument to a stencil kernel must "
-                             "be the primary input array.")
+            raise ValueError(
+                "The first argument to a stencil kernel must be the primary "
+                "input array."
+            )
 
         from numba.core import typed_passes
         typemap, return_type, calltypes, _ = typed_passes.type_inference_stage(
-                self._typingctx,
-                self._targetctx,
-                self.kernel_ir,
-                argtys,
-                None,
-                {})
+            self._typingctx,
+            self._targetctx,
+            self.kernel_ir,
+            argtys,
+            None,
+            {},
+        )
         if isinstance(return_type, types.npytypes.Array):
             raise ValueError(
-                "Stencil kernel must return a scalar and not a numpy array.")
+                "Stencil kernel must return a scalar and not a numpy array."
+            )
 
-        real_ret = types.npytypes.Array(return_type, argtys[0].ndim,
-                                                     argtys[0].layout)
-        return (real_ret, typemap, calltypes)
+        real_ret = types.npytypes.Array(
+            return_type,
+            argtys[0].ndim,
+            argtys[0].layout,
+        )
+        return real_ret, typemap, calltypes
 
     def _install_type(self, typingctx):
         """Constructs and installs a typing class for a StencilFunc object in
@@ -382,8 +504,10 @@ class StencilFunc(object):
         built by StencilFunc._install_type().
         Return the call-site signature.
         """
-        if (self.neighborhood is not None and
-            len(self.neighborhood) != argtys[0].ndim):
+        if (
+            self.neighborhood is not None
+            and len(self.neighborhood) != argtys[0].ndim
+        ):
             raise ValueError("%d dimensional neighborhood specified "
                              "for %d dimensional input array" %
                              (len(self.neighborhood), argtys[0].ndim))
@@ -407,8 +531,10 @@ class StencilFunc(object):
 
         (real_ret, typemap, calltypes) = self.get_return_type(argtys)
         sig = signature(real_ret, *argtys_extra)
-        dummy_text = ("def __numba_dummy_stencil({}{}):\n    pass\n".format(
-                        ",".join(self.kernel_ir.arg_names), sig_extra))
+        dummy_text = "def __numba_dummy_stencil({}{}):\n    pass\n".format(
+            ",".join(self.kernel_ir.arg_names),
+            sig_extra,
+        )
         exec(dummy_text) in globals(), locals()
         dummy_func = eval("__numba_dummy_stencil")
         sig = sig.replace(pysig=utils.pysignature(dummy_func))
@@ -441,30 +567,36 @@ class StencilFunc(object):
                 if stmt in calltypes:
                     copy_calltypes[scopy] = calltypes[stmt]
             kernel_copy.blocks[block_label] = new_block
-        return (kernel_copy, copy_calltypes)
+        return kernel_copy, copy_calltypes
 
-    def _stencil_wrapper(self, result, sigret, return_type, typemap, calltypes, *args):
+    def _stencil_wrapper(self, result, sigret, return_type, typemap, calltypes,
+                         *args):
         # Overall approach:
-        # 1) Construct a string containing a function definition for the stencil function
-        #    that will execute the stencil kernel.  This function definition includes a
-        #    unique stencil function name, the parameters to the stencil kernel, loop
-        #    nests across the dimensions of the input array.  Those loop nests use the
-        #    computed stencil kernel size so as not to try to compute elements where
-        #    elements outside the bounds of the input array would be needed.
+        # 1) Construct a string containing a function definition for the stencil
+        #    function that will execute the stencil kernel. This function
+        #    definition includes a unique stencil function name, the parameters
+        #    to the stencil kernel, loop nests across the dimensions of the
+        #    input array. Those loop nests use the computed stencil kernel size
+        #    so as not to try to compute elements where elements outside the
+        #    bounds of the input array would be needed.
         # 2) The but of the loop nest in this new function is a special sentinel
         #    assignment.
         # 3) Get the IR of this new function.
-        # 4) Split the block containing the sentinel assignment and remove the sentinel
-        #    assignment.  Insert the stencil kernel IR into the stencil function IR
-        #    after label and variable renaming of the stencil kernel IR to prevent
-        #    conflicts with the stencil function IR.
-        # 5) Compile the combined stencil function IR + stencil kernel IR into existence.
+        # 4) Split the block containing the sentinel assignment and remove the
+        #    sentinel assignment. Insert the stencil kernel IR into the stencil
+        #    function IR after label and variable renaming of the stencil kernel
+        #    IR to prevent conflicts with the stencil function IR.
+        # 5) Compile the combined stencil function IR + stencil kernel IR into
+        #    existence.
 
         # Copy the kernel so that our changes for this callsite
         # won't effect other callsites.
-        (kernel_copy, copy_calltypes) = self.copy_ir_with_calltypes(
-                                            self.kernel_ir, calltypes)
-        # The stencil kernel body becomes the body of a loop, for which args aren't needed.
+        kernel_copy, copy_calltypes = self.copy_ir_with_calltypes(
+            self.kernel_ir,
+            calltypes,
+        )
+        # The stencil kernel body becomes the body of a loop, for which args
+        # aren't needed.
         ir_utils.remove_args(kernel_copy.blocks)
         first_arg = kernel_copy.arg_names[0]
 
@@ -475,27 +607,39 @@ class StencilFunc(object):
             in_cps,
             name_var_table,
             typemap,
-            copy_calltypes)
+            copy_calltypes,
+        )
 
         if "out" in name_var_table:
-            raise ValueError("Cannot use the reserved word 'out' in stencil kernels.")
+            raise ValueError(
+                "Cannot use the reserved word 'out' in stencil kernels."
+            )
 
-        sentinel_name = ir_utils.get_unused_var_name("__sentinel__", name_var_table)
+        sentinel_name = ir_utils.get_unused_var_name(
+            "__sentinel__",
+            name_var_table,
+        )
         if config.DEBUG_ARRAY_OPT >= 1:
             print("name_var_table", name_var_table, sentinel_name)
 
         the_array = args[0]
 
         if config.DEBUG_ARRAY_OPT >= 1:
-            print("_stencil_wrapper", return_type, return_type.dtype,
-                                      type(return_type.dtype), args)
+            print(
+                "_stencil_wrapper",
+                return_type,
+                return_type.dtype,
+                type(return_type.dtype),
+                args,
+            )
             ir_utils.dump_blocks(kernel_copy.blocks)
 
         # We generate a Numba function to execute this stencil and here
         # create the unique name of this function.
         stencil_func_name = "__numba_stencil_%s_%s" % (
-                                        hex(id(the_array)).replace("-", "_"),
-                                        self.id)
+            hex(id(the_array)).replace("-", "_"),
+            self.id,
+        )
 
         # We will put a loop nest in the generated function for each
         # dimension in the input array.  Here we create the name for
@@ -529,11 +673,17 @@ class StencilFunc(object):
 
         # Add index variables to getitems in the IR to transition the accesses
         # in the kernel from relative to regular Python indexing.  Returns the
-        # computed size of the stencil kernel and a list of the relatively indexed
-        # arrays.
+        # computed size of the stencil kernel and a list of the relatively
+        # indexed arrays.
         kernel_size, relatively_indexed = self.add_indices_to_kernel(
-                kernel_copy, index_vars, the_array.ndim,
-                self.neighborhood, standard_indexed, typemap, copy_calltypes)
+            kernel_copy,
+            index_vars,
+            the_array.ndim,
+            self.neighborhood,
+            standard_indexed,
+            typemap,
+            copy_calltypes,
+        )
         if self.neighborhood is None:
             self.neighborhood = kernel_size
 
@@ -551,8 +701,11 @@ class StencilFunc(object):
             ir_utils.dump_blocks(kernel_copy.blocks)
 
         # Start to form the new function to execute the stencil kernel.
-        func_text = "def {}({}{}):\n".format(stencil_func_name,
-                        ",".join(kernel_copy.arg_names), sig_extra)
+        func_text = "def {}({}{}):\n".format(
+            stencil_func_name,
+            ",".join(kernel_copy.arg_names),
+            sig_extra,
+        )
 
         # Get loop ranges for each dimension, which could be either int
         # or variable. In the latter case we'll use the extra neighborhood
@@ -581,25 +734,32 @@ class StencilFunc(object):
         shape_name = ir_utils.get_unused_var_name("full_shape", name_var_table)
         func_text += "    {} = {}.shape\n".format(shape_name, first_arg)
 
-
-        # If we have to allocate the output array (the out argument was not used)
-        # then us numpy.full if the user specified a cval stencil decorator option
-        # or np.zeros if they didn't to allocate the array.
+        # If we have to allocate the output array (the out argument was not
+        # used) then us numpy.full if the user specified a cval stencil
+        # decorator option or np.zeros if they didn't to allocate the array.
         if result is None:
             return_type_name = numpy_support.as_dtype(
-                               return_type.dtype).type.__name__
+                return_type.dtype,
+            ).type.__name__
             if "cval" in self.options:
                 cval = self.options["cval"]
                 if return_type.dtype != typing.typeof.typeof(cval):
                     raise ValueError(
                         "cval type does not match stencil return type.")
-                out_init ="{} = np.full({}, {}, dtype=np.{})\n".format(
-                            out_name, shape_name, cval, return_type_name)
+                out_init = "{} = np.full({}, {}, dtype=np.{})\n".format(
+                    out_name,
+                    shape_name,
+                    cval,
+                    return_type_name,
+                )
             else:
-                out_init ="{} = np.zeros({}, dtype=np.{})\n".format(
-                            out_name, shape_name, return_type_name)
+                out_init = "{} = np.zeros({}, dtype=np.{})\n".format(
+                    out_name,
+                    shape_name,
+                    return_type_name,
+                )
             func_text += "    " + out_init
-        else: # result is present, if cval is set then use it
+        else:  # result is present, if cval is set then use it
             if "cval" in self.options:
                 cval = self.options["cval"]
                 cval_ty = typing.typeof.typeof(cval)
@@ -615,21 +775,23 @@ class StencilFunc(object):
             for j in range(offset):
                 func_text += "    "
             # ranges[i][0] is the minimum index used in the i'th dimension
-            # but minimum's greater than 0 don't preclude any entry in the array.
-            # So, take the minimum of 0 and the minimum index found in the kernel
-            # and this will be a negative number (potentially -0).  Then, we do
-            # unary - on that to get the positive offset in this dimension whose
-            # use is precluded.
+            # but minimum's greater than 0 don't preclude any entry in the
+            # array. So, take the minimum of 0 and the minimum index found in
+            # the kernel and this will be a negative number (potentially -0).
+            # Then, we do unary - on that to get the positive offset in this
+            # dimension whose use is precluded.
             # ranges[i][1] is the maximum of 0 and the observed maximum index
             # in this dimension because negative maximums would not cause us to
             # preclude any entry in the array from being used.
-            func_text += ("for {} in range(-min(0,{}),"
-                          "{}[{}]-max(0,{})):\n").format(
-                            index_vars[i],
-                            ranges[i][0],
-                            shape_name,
-                            i,
-                            ranges[i][1])
+            func_text += (
+                "for {} in range(-min(0,{}),{}[{}]-max(0,{})):\n".format(
+                    index_vars[i],
+                    ranges[i][0],
+                    shape_name,
+                    i,
+                    ranges[i][1],
+                )
+            )
             offset += 1
 
         for j in range(offset):
@@ -661,7 +823,7 @@ class StencilFunc(object):
         reserved_names = ([sentinel_name, out_name, neighborhood_name,
                            shape_name] + kernel_copy.arg_names + index_vars)
         for name, var in var_table.items():
-            if not name in reserved_names:
+            if name not in reserved_names:
                 new_var_dict[name] = ir_utils.mk_unique_var(name)
         ir_utils.replace_var_names(stencil_ir.blocks, new_var_dict)
 
@@ -670,7 +832,9 @@ class StencilFunc(object):
         # Shift labels in the kernel copy so they are guaranteed unique
         # and don't conflict with any labels in the stencil_ir.
         kernel_copy.blocks = ir_utils.add_offset_to_labels(
-                                kernel_copy.blocks, stencil_stub_last_label)
+            kernel_copy.blocks,
+            stencil_stub_last_label,
+        )
         new_label = max(kernel_copy.blocks.keys()) + 1
         # Adjust ret_blocks to account for addition of the offset.
         ret_blocks = [x + stencil_stub_last_label for x in ret_blocks]
@@ -685,8 +849,10 @@ class StencilFunc(object):
         # Search all the block in the stencil outline for the sentinel.
         for label, block in stencil_ir.blocks.items():
             for i, inst in enumerate(block.body):
-                if (isinstance( inst, ir.Assign) and
-                    inst.target.name == sentinel_name):
+                if (
+                    isinstance(inst, ir.Assign)
+                    and inst.target.name == sentinel_name
+                ):
                     # We found the sentinel assignment.
                     loc = inst.loc
                     scope = block.scope
@@ -748,11 +914,14 @@ class StencilFunc(object):
         return new_func
 
     def __call__(self, *args, **kwargs):
-        if (self.neighborhood is not None and
-            len(self.neighborhood) != args[0].ndim):
-            raise ValueError("{} dimensional neighborhood specified for {} "
-                             "dimensional input array".format(
-                                len(self.neighborhood), args[0].ndim))
+        if (
+            self.neighborhood is not None
+            and len(self.neighborhood) != args[0].ndim
+        ):
+            raise ValueError(
+                "{} dimensional neighborhood specified for {} dimensional input"
+                " array".format(len(self.neighborhood), args[0].ndim)
+            )
 
         if 'out' in kwargs:
             result = kwargs['out']
@@ -778,10 +947,11 @@ class StencilFunc(object):
         if result is None:
             return new_func.entry_point(*args)
         else:
-            return new_func.entry_point(*(args+(result,)))
+            return new_func.entry_point(*(args + (result,)))
+
 
 def stencil(func_or_mode='constant', **options):
-    # called on function without specifying mode style
+    """called on function without specifying mode style"""
     if not isinstance(func_or_mode, str):
         mode = 'constant'  # default style
         func = func_or_mode
@@ -798,6 +968,7 @@ def stencil(func_or_mode='constant', **options):
         return wrapper(func)
     return wrapper
 
+
 def _stencil(mode, options):
     if mode != 'constant':
         raise ValueError("Unsupported mode style " + mode)
@@ -809,7 +980,8 @@ def _stencil(mode, options):
 
     return decorated
 
+
 @lower_builtin(stencil)
 def stencil_dummy_lower(context, builder, sig, args):
-    "lowering for dummy stencil calls"
+    """lowering for dummy stencil calls"""
     return lir.Constant(lir.IntType(types.intp.bitwidth), 0)
