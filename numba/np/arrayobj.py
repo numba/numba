@@ -5390,7 +5390,7 @@ def _take_along_axis_impl_set_ni(arr, indices, axis, Ni, Nk):
 @register_jitable
 def _take_along_axis_impl_set_nk(arr, indices, axis, Ni, Nk):
     for i in range(len(Nk)):
-        Nk = tuple_setitem(Nk, i, arr.shape[axis + i])
+        Nk = tuple_setitem(Nk, i, arr.shape[axis + 1 + i])
     return _take_along_axis_impl(arr, indices, axis, Ni, Nk)
 
 
@@ -5440,7 +5440,6 @@ def arr_take_along_axis(arr, indices, axis):
         n = arr.ndim
         Ni = tuple(range(axis))
         Nk = tuple(range(axis+1, arr.ndim))
-
         if Ni:
             if Nk:
                 def take_along_axis_impl(arr, indices, axis):
