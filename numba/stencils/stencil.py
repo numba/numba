@@ -5,6 +5,7 @@
 
 import copy
 
+import numpy as np  # noqa: F401 Unused import but is needed.
 from llvmlite import ir as lir
 
 from numba.core import types, typing, utils, ir, config, ir_utils, registry
