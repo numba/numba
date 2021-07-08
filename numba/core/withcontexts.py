@@ -89,7 +89,7 @@ class _CallContextType(WithContext):
             callfrom=blk_start,
             returnto=blk_end,
             body_block_ids=set(body_blocks),
-            )
+        )
 
         lifted_blks = {k: blocks[k] for k in body_blocks}
         _mutate_with_block_callee(lifted_blks, blk_start, blk_end,
@@ -101,13 +101,13 @@ class _CallContextType(WithContext):
             arg_names=tuple(inputs),
             arg_count=len(inputs),
             force_non_generator=True,
-            )
+        )
 
         dispatcher = dispatcher_factory(lifted_ir)
 
         newblk = _mutate_with_block_caller(
             dispatcher, blocks, blk_start, blk_end, inputs, outputs,
-            )
+        )
 
         blocks[blk_start] = newblk
         _clear_blocks(blocks, body_blocks)
@@ -201,14 +201,14 @@ class _ObjModeContextType(WithContext):
         if args:
             raise errors.CompilerError(
                 "objectmode context doesn't take any positional arguments",
-                )
+            )
         typeanns = {}
 
         def report_error(varname, msg, loc):
             raise errors.CompilerError(
-                    f"Error handling objmode argument {varname!r}. {msg}",
-                    loc=loc,
-                )
+                f"Error handling objmode argument {varname!r}. {msg}",
+                loc=loc,
+            )
 
         for k, v in kwargs.items():
             if isinstance(v, ir.Const) and isinstance(v.value, str):
@@ -277,7 +277,7 @@ class _ObjModeContextType(WithContext):
                 "Objmode context failed.",
                 f"Argument {name!r} is declared as "
                 f"an unsupported type: {typ}.",
-                f"Reflected types are not supported.",
+                "Reflected types are not supported.",
             ]
             raise errors.CompilerError(" ".join(msgbuf), loc=loc)
 
@@ -319,7 +319,7 @@ class _ObjModeContextType(WithContext):
             callfrom=blk_start,
             returnto=blk_end,
             body_block_ids=set(body_blocks),
-            )
+        )
 
         # Determine types in the output tuple
         def strip_var_ver(x):
@@ -359,14 +359,14 @@ class _ObjModeContextType(WithContext):
             arg_names=tuple(inputs),
             arg_count=len(inputs),
             force_non_generator=True,
-            )
+        )
 
         dispatcher = dispatcher_factory(lifted_ir, objectmode=True,
                                         output_types=outtup)
 
         newblk = _mutate_with_block_caller(
             dispatcher, blocks, blk_start, blk_end, inputs, outputs,
-            )
+        )
 
         blocks[blk_start] = newblk
         _clear_blocks(blocks, body_blocks)
@@ -424,7 +424,7 @@ def _mutate_with_block_caller(dispatcher, blocks, blk_start, blk_end,
         label_next=blk_end,
         inputs=inputs,
         outputs=outputs,
-        )
+    )
     return newblock
 
 
@@ -450,7 +450,7 @@ def _mutate_with_block_callee(blocks, blk_start, blk_end, inputs, outputs):
         block=ir.Block(scope=scope, loc=loc),
         inputs=inputs,
         label_next=head_blk,
-        )
+    )
     blocks[blk_end] = ir_utils.fill_callee_epilogue(
         block=ir.Block(scope=scope, loc=loc),
         outputs=outputs,
