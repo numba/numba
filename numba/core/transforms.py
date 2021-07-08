@@ -61,8 +61,12 @@ def _extract_loop_lifting_candidates(cfg, blocks):
     candidates = []
     for loop in find_top_level_loops(cfg):
         _logger.debug("top-level loop: %s", loop)
-        if (same_exit_point(loop) and one_entry(loop) and cannot_yield(loop) and
-            cfg.entry_point() not in loop.entries):
+        if (
+            same_exit_point(loop)
+            and one_entry(loop)
+            and cannot_yield(loop)
+            and cfg.entry_point() not in loop.entries
+        ):
             candidates.append(loop)
             _logger.debug("add candidate: %s", loop)
     return candidates
@@ -112,7 +116,7 @@ def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
         an_exit = next(iter(loop.exits))  # anyone of the exit block
         if len(loop.exits) > 1:
             # Pre-Py3.8 may have multiple exits
-            [(returnto, _)] = cfg.successors(an_exit)  # requirement checked earlier
+            [(returnto, _)] = cfg.successors(an_exit)  # req checked earlier
         else:
             # Post-Py3.8 DO NOT have multiple exits
             returnto = an_exit
@@ -200,9 +204,13 @@ def _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
                             typingctx, targetctx, flags, locals)
 
     # modify for calling into liftedloop
-    callblock = _loop_lift_modify_call_block(liftedloop, blocks[loopinfo.callfrom],
-                                             loopinfo.inputs, loopinfo.outputs,
-                                             loopinfo.returnto)
+    callblock = _loop_lift_modify_call_block(
+        liftedloop,
+        blocks[loopinfo.callfrom],
+        loopinfo.inputs,
+        loopinfo.outputs,
+        loopinfo.returnto,
+    )
     # remove blocks
     for k in loopblockkeys:
         del blocks[k]
@@ -220,8 +228,11 @@ def loop_lifting(func_ir, typingctx, targetctx, flags, locals):
     """
     blocks = func_ir.blocks.copy()
     cfg = compute_cfg_from_blocks(blocks)
-    loopinfos = _loop_lift_get_candidate_infos(cfg, blocks,
-                                               func_ir.variable_lifetime.livemap)
+    loopinfos = _loop_lift_get_candidate_infos(
+        cfg,
+        blocks,
+        func_ir.variable_lifetime.livemap,
+    )
     loops = []
     if loopinfos:
         _logger.debug('loop lifting this IR with %d candidates:\n%s',
@@ -407,7 +418,7 @@ def _get_with_contextmanager(func_ir, blocks, blk_start):
             raise errors.CompilerError(
                 "Undefined variable used as context manager",
                 loc=blocks[blk_start].loc,
-                )
+            )
 
         if ctxobj is None:
             raise errors.CompilerError(_illegal_cm_msg, loc=dfn.loc)
@@ -423,13 +434,13 @@ def _get_with_contextmanager(func_ir, blocks, blk_start):
                 raise errors.CompilerError(
                     "Unsupported context manager in use",
                     loc=blocks[blk_start].loc,
-                    )
+                )
             return ctxobj, extra
     # No contextmanager found?
     raise errors.CompilerError(
         "malformed with-context usage",
         loc=blocks[blk_start].loc,
-        )
+    )
 
 
 def _legalize_with_head(blk):
@@ -444,12 +455,12 @@ def _legalize_with_head(blk):
         raise errors.CompilerError(
             "with's head-block must have exactly 1 ENTER_WITH",
             loc=blk.loc,
-            )
+        )
     if counters.pop(ir.Jump) != 1:
         raise errors.CompilerError(
             "with's head-block must have exactly 1 JUMP",
             loc=blk.loc,
-            )
+        )
     # Can have any number of del
     counters.pop(ir.Del, None)
     # There MUST NOT be any other statements
@@ -457,7 +468,7 @@ def _legalize_with_head(blk):
         raise errors.CompilerError(
             "illegal statements in with's head-block",
             loc=blk.loc,
-            )
+        )
 
 
 def _cfg_nodes_in_region(cfg, region_begin, region_end):
@@ -542,7 +553,7 @@ def find_setupwiths(blocks):
                 raise errors.CompilerError(
                     'unsupported controlflow due to return/raise '
                     'statements inside with block'
-                    )
+                )
             assert s in blocks, 'starting offset is not a label'
             known_ranges.append((s, e))
 

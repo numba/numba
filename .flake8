@@ -24,7 +24,7 @@ exclude =
     numba/cloudpickle/*
     # Grandfather in existing failing files.  This list should shrink over time
     # numba/stencils/stencil.py
-    numba/core/transforms.py
+    # numba/core/transforms.py
     numba/core/tracing.py
     numba/core/withcontexts.py
     numba/_version.py
