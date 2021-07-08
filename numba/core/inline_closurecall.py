@@ -1083,8 +1083,8 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
         # index_var = -1 # starting the index with -1 since it will incremented
         # in loop header
         m1 = ir.Const(value=-1, loc=loc)
-        new_defn = _new_definition(func_ir, index_var, m1)
-        stmts.append(new_defn, loc)
+        new_defn = _new_definition(func_ir, index_var, m1, loc)
+        stmts.append(new_defn)
 
     # Insert statement to get the size of the loop iterator
     size_var = ir.Var(scope, mk_unique_var("size"), loc)
