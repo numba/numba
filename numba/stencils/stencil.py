@@ -5,12 +5,10 @@
 
 import copy
 
-import numpy as np
 from llvmlite import ir as lir
 
 from numba.core import types, typing, utils, ir, config, ir_utils, registry
-from numba.core.typing.templates import (CallableTemplate, signature,
-                                         infer_global, AbstractTemplate)
+from numba.core.typing.templates import AbstractTemplate, signature
 from numba.core.imputils import lower_builtin
 from numba.core.extending import register_jitable
 from numba.misc.special import literal_unroll
@@ -307,7 +305,6 @@ class StencilFunc(object):
                             )
                     else:
                         index_vars = []
-                        sum_results = []
                         s_index_name = ir_utils.mk_unique_var("stencil_index")
                         s_index_var = ir.Var(scope, s_index_name, loc)
                         const_index_vars = []
