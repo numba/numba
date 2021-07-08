@@ -113,7 +113,7 @@ def git_versions_from_keywords(keywords, tag_prefix, verbose=False):
         # "stabilization", as well as "HEAD" and "master".
         tags = set([r for r in refs if re.search(r'\d', r)])
         if verbose:
-            print("discarding '%s', no digits" % ",".join(refs-tags))
+            print("discarding '%s', no digits" % ",".join(refs - tags))
     if verbose:
         print("likely tags: %s" % ",".join(sorted(tags)))
     for ref in sorted(tags):
@@ -143,13 +143,13 @@ def git_parse_vcs_describe(git_describe, tag_prefix, verbose=False):
     # now we have TAG-NUM-gHEX or HEX
 
     if "-" not in git_describe:  # just HEX
-        return "0+untagged.g"+git_describe+dirty_suffix, dirty
+        return "0+untagged.g" + git_describe + dirty_suffix, dirty
 
     # just TAG-NUM-gHEX
     mo = re.search(r'^(.+)-(\d+)-g([0-9a-f]+)$', git_describe)
     if not mo:
         # unparseable. Maybe git-describe is misbehaving?
-        return "0+unparseable"+dirty_suffix, dirty
+        return "0+unparseable" + dirty_suffix, dirty
 
     # tag
     full_tag = mo.group(1)
