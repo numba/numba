@@ -1,19 +1,23 @@
 import logging
 import sys
-import types
 import threading
 import inspect
 from functools import wraps
 from itertools import chain
 from numba.core import config
 
+
 class TLS(threading.local):
-    """Use a subclass to properly initialize the TLS variables in all threads."""
+    """
+    Use a subclass to properly initialize the TLS variables in all threads.
+    """
     def __init__(self):
         self.tracing = False
         self.indent = 0
 
+
 tls = TLS()
+
 
 def find_function_info(func, spec, args):
     """Return function meta-data in a tuple.
@@ -46,6 +50,7 @@ def find_function_info(func, spec, args):
         name = ''.join(qname)
     return name, None
 
+
 def chop(value):
     MAX_SIZE = 320
     s = repr(value)
@@ -54,16 +59,17 @@ def chop(value):
     else:
         return s
 
+
 def create_events(fname, spec, args, kwds):
 
     values = dict()
     if spec.defaults:
-        values = dict(zip(spec.args[-len(spec.defaults):],spec.defaults))
+        values = dict(zip(spec.args[-len(spec.defaults):], spec.defaults))
     values.update(kwds)
     values.update(list(zip(spec.args[:len(args)], args)))
-    positional = ['%s=%r'%(a, values.pop(a)) for a in spec.args]
+    positional = ['%s=%r' % (a, values.pop(a)) for a in spec.args]
     anonymous = [str(a) for a in args[len(positional):]]
-    keywords = ['%s=%r'%(k, values[k]) for k in sorted(values.keys())]
+    keywords = ['%s=%r' % (k, values[k]) for k in sorted(values.keys())]
     params = ', '.join([f for f in chain(positional, anonymous, keywords) if f])
 
     enter = ['>> ', tls.indent * ' ', fname, '(', params, ')']
@@ -86,10 +92,11 @@ def dotrace(*args, **kwds):
     """
 
     recursive = kwds.get('recursive', False)
-    def decorator(func):
 
+    def decorator(func):
         spec = None
         logger = logging.getLogger('trace')
+
         def wrapper(*args, **kwds):
             if not logger.isEnabledFor(logging.INFO) or tls.tracing:
                 return func(*args, **kwds)
@@ -109,7 +116,7 @@ def dotrace(*args, **kwds):
                             result = func(*args, **kwds)
                         finally:
                             tls.tracing = True
-                    except:
+                    except BaseException:
                         type, value, traceback = sys.exc_info()
                         leave.append(' => exception thrown\n\traise ')
                         mname = type.__module__
@@ -136,7 +143,6 @@ def dotrace(*args, **kwds):
             return result
         # wrapper end
 
-        result = None
         rewrap = lambda x: x
         # Unwrap already wrapped functions
         # (to be rewrapped again later)
@@ -164,10 +170,11 @@ def dotrace(*args, **kwds):
             for n, c in inspect.getmembers(arg0, inspect.isclass):
                 dotrace(c, *args, recursive=recursive)
         elif inspect.isclass(arg0):
-            for n, f in inspect.getmembers(arg0, lambda x: (inspect.isfunction(x) or
-                                                            inspect.ismethod(x))):
+            for n, f in inspect.getmembers(
+                arg0,
+                lambda x: (inspect.isfunction(x) or inspect.ismethod(x))
+            ):
                 setattr(arg0, n, decorator(f))
-
 
     if callable(arg0) or type(arg0) in (classmethod, staticmethod):
         return decorator(arg0)
@@ -186,6 +193,7 @@ def dotrace(*args, **kwds):
     else:
         return decorator
 
+
 def notrace(*args, **kwds):
     """Just a no-op in case tracing is disabled."""
     def decorator(func):
@@ -197,13 +205,16 @@ def notrace(*args, **kwds):
     else:
         return decorator
 
+
 def doevent(msg):
     msg = ['== ', tls.indent * ' ', msg]
     logger = logging.getLogger('trace')
     logger.info(''.join(msg))
 
+
 def noevent(msg):
     pass
+
 
 if config.TRACE:
     logger = logging.getLogger('trace')
