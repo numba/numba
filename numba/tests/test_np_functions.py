@@ -157,8 +157,8 @@ def flip(a):
     return np.flip(a)
 
 
-def logspace(start, stop, num=50, endpoint=True, base=10.0, dtype=None, axis=0):
-    return np.logspace(start, stop, num, endpoint, base, dtype, axis)
+def logspace(start, stop, num=50, base=10.0):
+    return np.logspace(start, stop, num=num, base=base)
 
 
 def rot90(a):
@@ -2455,34 +2455,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_logspace_basic(self):
         pyfunc = logspace
         cfunc = jit(nopython=True)(pyfunc)
+
         self.assertPreciseEqual(pyfunc(0, 6), cfunc(0, 6))
         self.assertPreciseEqual(pyfunc(0, 6, num=100), cfunc(0, 6, num=100))
-        self.assertPreciseEqual(pyfunc(0, 6, endpoint=False),
-                                cfunc(0, 6, endpoint=False))
-
-    def test_logspace_start_stop_array(self):
-        pyfunc = logspace
-        cfunc = jit(nopython=True)(pyfunc)
-
-        start = np.array([0., 1.])
-        stop = np.array([6., 7.])
-        self.assertPreciseEqual(pyfunc(start, stop, num=6),
-                                cfunc(start, stop, num=6))
-        self.assertPreciseEqual(pyfunc(start, stop[0], num=6),
-                                cfunc(start, stop[0], num=6))
-        self.assertPreciseEqual(pyfunc(start, stop, axis=-1),
-                                cfunc(start, stop, axis=-1))
-
-    def test_logspace_dtype(self):
-        pyfunc = logspace
-        cfunc = jit(nopython=True)(pyfunc)
-
-        self.assertPreciseEqual(pyfunc(0, 6, dtype="int32"),
-                                cfunc(0, 6, dtype="int32"))
-        self.assertPreciseEqual(pyfunc(0, 6, dtype="float32"),
-                                cfunc(0, 6, dtype="float32"))
-        self.assertPreciseEqual(pyfunc(0, 6, dtype="float64"),
-                                cfunc(0, 6, dtype="float64"))
+        self.assertPreciseEqual(pyfunc(0, 6, base=2), cfunc(0, 6, base=2))
+        self.assertPreciseEqual(pyfunc(0, 6, 100, 2), cfunc(0, 6, 100, 2))
 
     def test_rot90_basic(self):
         pyfunc = rot90

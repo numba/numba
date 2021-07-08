@@ -1564,14 +1564,11 @@ def array_T(context, builder, typ, value):
 
 
 @overload(np.logspace)
-def numpy_logspace(start, stop, num=50, endpoint=True,
-                   base=10.0, dtype=None, axis=0):
+def numpy_logspace(start, stop, num=50, base=10.0):
 
-    def impl(start, stop, num=50, endpoint=True, base=10.0, dtype=None, axis=0):
-        y = np.linspace(start, stop, num=num, endpoint=endpoint, axis=axis)
-        if dtype is None:
-            return np.power(base, y)
-        return np.power(base, y).astype(dtype, copy=False)
+    def impl(start, stop, num=50, base=10.0):
+        y = np.linspace(start, stop, num)
+        return np.power(base, y)
 
     return impl
 
