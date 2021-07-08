@@ -5,7 +5,7 @@
 
 import copy
 
-import numpy as np  # noqa: F401 Unused import but is needed.
+import numpy as np  # noqa: F401 Used only in dynamic code generation.
 from llvmlite import ir as lir
 
 from numba.core import types, typing, utils, ir, config, ir_utils, registry
