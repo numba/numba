@@ -4216,6 +4216,48 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn('The third argument "axis2" is out of bounds for array'
                       ' of given dimension', str(raises.exception))
 
+    def test_take_along_axis_exceptions(self):
+        arr2d = np.arange(8).reshape(2, 4)
+        indices = np.array([0, 1], dtype=np.uint64)
+
+        # For now axis must be literal, so we need to define a bunch of
+        # functions.
+        @njit
+        def bad_axis(a, i):
+            return np.take_along_axis(a, i, axis="a")
+
+        with self.assertRaises(TypingError) as raises:
+            bad_axis(arr2d, indices)
+
+        self.assertIn("axis must be an integer", str(raises.exception))
+
+        @njit
+        def too_small_axis(a, i):
+            return np.take_along_axis(a, i, -3)
+
+        with self.assertRaises(TypingError) as raises:
+            too_small_axis(arr2d, indices)
+
+        self.assertIn("axis is out of bounds", str(raises.exception))
+
+        @njit
+        def too_large_axis(a, i):
+            return np.take_along_axis(a, i, 2)
+
+        with self.assertRaises(TypingError) as raises:
+            too_large_axis(arr2d, indices)
+
+        self.assertIn("axis is out of bounds", str(raises.exception))
+
+        @njit
+        def not_literal_axis(a, i, axis):
+            return np.take_along_axis(a, i, axis)
+
+        with self.assertRaises(TypingError) as raises:
+            not_literal_axis(arr2d, indices, 0)
+
+        self.assertIn("axis must be a literal value", str(raises.exception))
+
 
 class TestNPMachineParameters(TestCase):
     # tests np.finfo, np.iinfo, np.MachAr

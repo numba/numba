@@ -5432,6 +5432,8 @@ def arr_take_along_axis(arr, indices, axis):
             return _take_along_axis_impl(arr.flat, indices, 0, (), ())
     else:
         check_is_integer(axis, "axis")
+        if not isinstance(axis, types.IntegerLiteral):
+            raise ValueError("axis must be a literal value (i.e. not an argument) for now")
         axis = axis.literal_value
         if axis < 0:
             axis = arr.ndim + axis
@@ -5441,7 +5443,7 @@ def arr_take_along_axis(arr, indices, axis):
 
         n = arr.ndim
         Ni = tuple(range(axis))
-        Nk = tuple(range(axis+1, arr.ndim))
+        Nk = tuple(range(axis + 1, arr.ndim))
         # We need to do this rather verbose approach because tuple_setitem on
         # an empty tuple will fail with a LoweringError. If the code were to
         # _run_, it would be fine, because tuple_setitem isn't actually ever
