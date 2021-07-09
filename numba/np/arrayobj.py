@@ -5405,6 +5405,8 @@ def _take_along_axis_impl_set_ni_nk(arr, indices, axis, Ni, Nk):
 
 @register_jitable
 def _take_along_axis_impl(arr, indices, axis, Ni, Nk):
+    # Based on example code in
+    # https://numpy.org/doc/stable/reference/generated/numpy.take_along_axis.html
     M = arr.shape[axis]
     J = indices.shape[axis]  # Need not equal M
     out = np.empty(Ni + (J,) + Nk, arr.dtype)
@@ -5440,6 +5442,10 @@ def arr_take_along_axis(arr, indices, axis):
         n = arr.ndim
         Ni = tuple(range(axis))
         Nk = tuple(range(axis+1, arr.ndim))
+        # We need to do this rather verbose approach because tuple_setitem on
+        # an empty tuple will fail with a LoweringError. If the code were to
+        # _run_, it would be fine, because tuple_setitem isn't actually ever
+        # called, but we never reach the point where the code can be run.
         if Ni:
             if Nk:
                 def take_along_axis_impl(arr, indices, axis):
