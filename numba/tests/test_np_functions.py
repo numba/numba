@@ -4216,6 +4216,53 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn('The third argument "axis2" is out of bounds for array'
                       ' of given dimension', str(raises.exception))
 
+    def test_take_along_axis(self):
+        a = np.arange(24).reshape((3, 1, 4, 2))
+
+        # For now axis must be literal, so we need to define a bunch of
+        # functions.
+        @njit
+        def axis_none(a, i):
+            return np.take_along_axis(a, i, axis=None)
+
+        indices = np.array([1, 2], dtype=np.uint64)
+        self.assertPreciseEqual(axis_none(a, indices), axis_none.py_func(a, indices))
+
+        ai0 = np.argsort(a, axis=0)
+        ai1 = np.argsort(a, axis=1)
+        ai2 = np.argsort(a, axis=2)
+        ai3 = np.argsort(a, axis=3)
+
+        @njit
+        def axis_zero(a, i):
+            return np.take_along_axis(a, i, axis=0)
+
+        self.assertPreciseEqual(axis_zero(a, ai0), axis_zero.py_func(a, ai0))
+
+        @njit
+        def axis_one(a, i):
+            return np.take_along_axis(a, i, axis=1)
+
+        self.assertPreciseEqual(axis_one(a, ai1), axis_one.py_func(a, ai1))
+
+        @njit
+        def axis_two(a, i):
+            return np.take_along_axis(a, i, axis=2)
+
+        self.assertPreciseEqual(axis_two(a, ai2), axis_two.py_func(a, ai2))
+
+        @njit
+        def axis_three(a, i):
+            return np.take_along_axis(a, i, axis=3)
+
+        self.assertPreciseEqual(axis_three(a, ai3), axis_three.py_func(a, ai3))
+
+        @njit
+        def axis_minus_one(a, i):
+            return np.take_along_axis(a, i, axis=-1)
+
+        self.assertPreciseEqual(axis_minus_one(a, ai2), axis_minus_one.py_func(a, ai2))
+
     def test_take_along_axis_exceptions(self):
         arr2d = np.arange(8).reshape(2, 4)
         indices = np.array([0, 1], dtype=np.uint64)
