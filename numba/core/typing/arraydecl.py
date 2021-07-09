@@ -445,9 +445,12 @@ class ArrayAttribute(AttributeTemplate):
 
     @bound_function("array.astype")
     def resolve_astype(self, ary, args, kws):
+        from numba.core.errors import RequireLiteralValue
         from .npydecl import parse_dtype
         assert not kws
         dtype, = args
+        if dtype == types.unicode_type:
+            raise RequireLiteralValue("array.astype if dtype is a string it must be constant")
         dtype = parse_dtype(dtype)
         if dtype is None:
             return
