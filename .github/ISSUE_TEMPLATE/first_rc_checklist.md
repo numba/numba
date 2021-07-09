@@ -27,7 +27,6 @@ labels: task
 * [ ] Review, merge and check execution of release notebook.
 * [ ] Send RC announcement email / post announcement to discourse group.
 * [ ] Post link to Twitter.
-* [ ] Post link to python-announce-list@python.org.
 
 ### Post Release:
 
