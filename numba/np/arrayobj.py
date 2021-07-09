@@ -5427,9 +5427,7 @@ def _take_along_axis_impl(arr, indices, axis, Ni, Nk):
 def arr_take_along_axis(arr, indices, axis):
     if is_nonelike(axis):
         def take_along_axis_impl(arr, indices, axis):
-            arr = arr.flat
-            axis = 0
-            return _take_along_axis_impl(arr.flat, indices, 0, (), ())
+            return _take_along_axis_impl(arr.flatten(), indices, 0, (), ())
     else:
         check_is_integer(axis, "axis")
         if not isinstance(axis, types.IntegerLiteral):
