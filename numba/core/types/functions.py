@@ -391,7 +391,10 @@ class BoundFunction(Callable, Opaque):
 
     @property
     def key(self):
-        return self.typing_key, self.this
+        # FIXME: With target-overload, the MethodTemplate can change depending
+        #        on the target.
+        unique_impl = getattr(self.template, "_overload_func", None)
+        return self.typing_key, self.this, unique_impl
 
     def get_impl_key(self, sig):
         """
@@ -405,6 +408,7 @@ class BoundFunction(Callable, Opaque):
         literal_e = None
         nonliteral_e = None
         out = None
+
         choice = [True, False] if template.prefer_literal else [False, True]
         for uselit in choice:
             if uselit:
@@ -441,10 +445,7 @@ class BoundFunction(Callable, Opaque):
                                 raise exc
                         nonliteral_e = exc
                     else:
-                        # If out returns None don't break as we may need to use
-                        # a literal.
-                        if out is not None:
-                            break
+                        break
 
         if out is None and (nonliteral_e is not None or literal_e is not None):
             header = "- Resolution failure for {} arguments:\n{}\n"
@@ -567,7 +568,12 @@ class Dispatcher(WeakType, Callable, Dummy):
         A strong reference to the underlying numba.dispatcher.Dispatcher
         instance.
         """
-        return self._get_object()
+        disp = self._get_object()
+        # TODO: improve interface to avoid the dynamic check here
+        if hasattr(disp, "_get_dispatcher_for_current_target"):
+            return disp._get_dispatcher_for_current_target()
+        else:
+            return disp
 
     def get_overload(self, sig):
         """
