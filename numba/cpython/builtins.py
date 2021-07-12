@@ -19,7 +19,6 @@ from numba.core.typeconv import Conversion
 from numba.core.errors import TypingError
 from numba.misc.special import literal_unroll
 
-
 @overload(operator.truth)
 def ol_truth(val):
     if isinstance(val, types.Boolean):
@@ -672,3 +671,22 @@ def ol_filter(func, iterable):
                 if func(x):
                     yield x
     return impl
+
+# ------------------------------------------------------------------------------
+
+@overload(isinstance)
+def ol_isinstance(var_type, type_type):
+    def return_true(var_type, type_type):
+        return True
+    def return_false(var_type, type_type):
+        return False
+
+    if not isinstance(type_type, types.containers.Tuple):
+        type_type = (type_type, )
+
+    for tt in type_type:
+        ant = typing.asnumbatype.as_numba_type.infer(tt.key[0])
+        if var_type == ant:
+            return return_true
+
+    return return_false
