@@ -5399,7 +5399,7 @@ def _take_along_axis_impl_set_ni_nk(arr, indices, axis, Ni, Nk):
     for i in range(len(Ni)):
         Ni = tuple_setitem(Ni, i, arr.shape[i])
     for i in range(len(Nk)):
-        Nk = tuple_setitem(Nk, i, arr.shape[axis + i])
+        Nk = tuple_setitem(Nk, i, arr.shape[axis + 1 + i])
     return _take_along_axis_impl(arr, indices, axis, Ni, Nk)
 
 
