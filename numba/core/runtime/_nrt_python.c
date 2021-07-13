@@ -314,6 +314,31 @@ RETURN_ARRAY_COPY:
     return NULL;
 }
 
+static
+void set_writeable_flag(PyArrayObject* array, int writeable)
+{
+    /* Set writable */
+#if NPY_API_VERSION >= 0x00000007
+    if (writeable)
+    {
+        PyArray_ENABLEFLAGS(array, NPY_ARRAY_WRITEABLE);
+    }
+    else
+    {
+        PyArray_CLEARFLAGS(array, NPY_ARRAY_WRITEABLE);
+    }
+#else
+    if (writeable)
+    {
+        array->flags |= NPY_WRITEABLE;
+    }
+    else
+    {
+        array->flags &= ~NPY_WRITEABLE;
+    }
+#endif
+}
+
 /**
  * This function is used during the boxing of ndarray type.
  * `arystruct` is a structure containing essential information from the
@@ -354,6 +379,7 @@ NRT_adapt_ndarray_to_python_acqref(arystruct_t* arystruct, PyTypeObject *retty,
     if (arystruct->parent) {
         PyObject *obj = try_to_return_parent(arystruct, ndim, descr);
         if (obj) {
+            set_writeable_flag((PyArrayObject*)obj, writeable);
             return obj;
         }
     }
@@ -387,22 +413,7 @@ NRT_adapt_ndarray_to_python_acqref(arystruct_t* arystruct, PyTypeObject *retty,
     if (array == NULL)
         return NULL;
 
-    /* Set writable */
-#if NPY_API_VERSION >= 0x00000007
-    if (writeable) {
-        PyArray_ENABLEFLAGS(array, NPY_ARRAY_WRITEABLE);
-    }
-    else {
-        PyArray_CLEARFLAGS(array, NPY_ARRAY_WRITEABLE);
-    }
-#else
-    if (writeable) {
-        array->flags |= NPY_WRITEABLE;
-    }
-    else {
-        array->flags &= ~NPY_WRITEABLE;
-    }
-#endif
+    set_writeable_flag(array, writeable);
 
     if (miobj) {
         /* Set the MemInfoObject as the base object */

@@ -787,7 +787,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         for input_array, shape in data:
             expected = pyfunc(input_array, shape)
             got = cfunc(input_array, shape)
-            got.flags.writeable = False
             self.assertPreciseEqual(got, expected)
 
     def test_broadcast_to_raises(self):
