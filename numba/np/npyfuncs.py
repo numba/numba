@@ -6,6 +6,7 @@ Python builtins
 
 
 import math
+import numpy as np
 
 from llvmlite.llvmpy import core as lc
 
@@ -508,7 +509,6 @@ def np_gcd_impl(context, builder, sig, args):
 # numpy lowest common multiple
 
 def np_lcm_impl(context, builder, sig, args):
-    import numpy as np
 
     xty, yty = sig.args
     assert xty == yty == sig.return_type
@@ -774,7 +774,6 @@ def np_complex_square_impl(context, builder, sig, args):
 
 def np_real_cbrt_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-    import numpy as np
 
     # We enable fastmath here to force np.power(x, 1/3) to generate a
     # call to libm cbrt function
