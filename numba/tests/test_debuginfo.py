@@ -1,10 +1,7 @@
 import inspect
-import os
 import re
-import subprocess
-import sys
 
-from numba.tests.support import TestCase, override_config
+from numba.tests.support import TestCase, override_config, needs_subprocess
 from numba import jit, njit
 from numba.core import types
 import unittest
@@ -55,14 +52,11 @@ class TestDebugInfo(TestCase):
             self._check(bar, sig=(types.int32,), expect=False)
 
 
-# some tests need clean environments to hide optimisation default states
-_exec_cond = os.environ.get('SUBPROC_TEST', None) == '1'
-needs_subprocess = unittest.skipUnless(_exec_cond, "needs subprocess harness")
-
-
 class TestDebugInfoEmission(TestCase):
     """ Tests that debug info is emitted correctly.
     """
+
+    _NUMBA_OPT_0_ENV = {'NUMBA_OPT': '0'}
 
     def _get_llvmir(self, fn, sig):
         with override_config('OPT', 0):
@@ -79,23 +73,12 @@ class TestDebugInfoEmission(TestCase):
         return metadata
 
     def _subprocess_test_runner(self, test_name):
-        # Runs a named unit test, test_name (str), from this class in a
-        # subprocess with `NUMBA_OPT` set to 0 so as to get the most unoptimized
-        # llvm IR available. It then checks the test executed without error.
         themod = self.__module__
         thecls = type(self).__name__
-        injected_method = f'{themod}.{thecls}.{test_name}'
-        cmd = [sys.executable, '-m', 'numba.runtests', injected_method]
-        env_copy = os.environ.copy()
-        env_copy['SUBPROC_TEST'] = '1'
-        env_copy['NUMBA_OPT'] = '0'
-        status = subprocess.run(cmd, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, timeout=60,
-                                env=env_copy, universal_newlines=True)
-        self.assertEqual(status.returncode, 0)
-        self.assertIn('OK', status.stderr)
-        self.assertTrue('FAIL' not in status.stderr)
-        self.assertTrue('ERROR' not in status.stderr)
+        self.subprocess_test_runner(test_module=themod,
+                                    test_class=thecls,
+                                    test_name=test_name,
+                                    envvars=self._NUMBA_OPT_0_ENV)
 
     def test_DW_LANG(self):
 
