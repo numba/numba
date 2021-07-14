@@ -78,6 +78,25 @@ class TestDebugInfoEmission(TestCase):
                 metadata.append(line)
         return metadata
 
+    def _subprocess_test_runner(self, test_name):
+        # Runs a named unit test, test_name (str), from this class in a
+        # subprocess with `NUMBA_OPT` set to 0 so as to get the most unoptimized
+        # llvm IR available. It then checks the test executed without error.
+        themod = self.__module__
+        thecls = type(self).__name__
+        injected_method = f'{themod}.{thecls}.{test_name}'
+        cmd = [sys.executable, '-m', 'numba.runtests', injected_method]
+        env_copy = os.environ.copy()
+        env_copy['SUBPROC_TEST'] = '1'
+        env_copy['NUMBA_OPT'] = '0'
+        status = subprocess.run(cmd, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, timeout=60,
+                                env=env_copy, universal_newlines=True)
+        self.assertEqual(status.returncode, 0)
+        self.assertIn('OK', status.stderr)
+        self.assertTrue('FAIL' not in status.stderr)
+        self.assertTrue('ERROR' not in status.stderr)
+
     def test_DW_LANG(self):
 
         @njit(debug=True)
@@ -263,24 +282,121 @@ class TestDebugInfoEmission(TestCase):
         # as jitting literally anything at any point in the lifetime of the
         # process ends up with a codegen at opt 3. This is not amenable to this
         # test!
-        themod = self.__module__
-        thecls = type(self).__name__
-        injected_method = f'{themod}.{thecls}.test_DILocation_entry_blk_impl'
-        cmd = [sys.executable, '-m', 'numba.runtests', injected_method]
-        env_copy = os.environ.copy()
-        env_copy['SUBPROC_TEST'] = '1'
         # This test relies on the CFG not being simplified as it checks the jump
         # from the entry block to the first basic block. Force OPT as 0, if set
         # via the env var the targetmachine and various pass managers all end up
         # at OPT 0 and the IR is minimally transformed prior to lowering to ELF.
-        env_copy['NUMBA_OPT'] = '0'
-        status = subprocess.run(cmd, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, timeout=60,
-                                env=env_copy, universal_newlines=True)
-        self.assertEqual(status.returncode, 0)
-        self.assertIn('OK', status.stderr)
-        self.assertTrue('FAIL' not in status.stderr)
-        self.assertTrue('ERROR' not in status.stderr)
+        self._subprocess_test_runner('test_DILocation_entry_blk_impl')
+
+    @needs_subprocess
+    def test_DILocation_decref_impl(self):
+        """ This tests that decref's generated from `ir.Del`s as variables go
+        out of scope do not have debuginfo associated with them (the location of
+        `ir.Del` is an implementation detail).
+        """
+
+        @njit(debug=True)
+        def sink(*x):
+            pass
+
+        # This function has many decrefs!
+        @njit(debug=True)
+        def foo(a):
+            x = (a, a)
+            if a[0] == 0:
+                sink(x)
+                return 12
+            z = x[0][0]
+            return z
+
+        sig = (types.float64[::1],)
+        full_ir = self._get_llvmir(foo, sig=sig)
+
+        # make sure decref lines end with `meminfo.<number>)`.
+        count = 0
+        for line in full_ir.splitlines():
+            line_stripped = line.strip()
+            if line_stripped.startswith('call void @NRT_decref'):
+                self.assertRegex(line, r'.*meminfo\.[0-9]+\)$')
+                count += 1
+        self.assertTrue(count > 0) # make sure there were some decrefs!
+
+    def test_DILocation_decref(self):
+        # Test runner for test_DILocation_decref_impl, needs a subprocess
+        # with opt=0 to preserve decrefs.
+        self._subprocess_test_runner('test_DILocation_decref_impl')
+
+    def test_DILocation_undefined(self):
+        """ Tests that DILocation information for undefined vars is associated
+        with the line of the function definition (so it ends up in the prologue)
+        """
+        @njit(debug=True)
+        def foo(n):
+            if n:
+                if n > 0:
+                    c = 0
+                return c
+            else:
+                # variable c is not defined in this branch
+                c += 1
+                return c
+
+        sig = (types.intp,)
+        metadata = self._get_metadata(foo, sig=sig)
+        pysrc, pysrc_line_start = inspect.getsourcelines(foo)
+        # Looks for versions of variable "c" and captures the line number
+        expr = r'.*!DILocalVariable\(name: "c\$?[0-9]?",.*line: ([0-9]+),.*'
+        matcher = re.compile(expr)
+        associated_lines = set()
+        for md in metadata:
+            match = matcher.match(md)
+            if match:
+                groups = match.groups()
+                self.assertEqual(len(groups), 1)
+                associated_lines.add(int(groups[0]))
+        self.assertEqual(len(associated_lines), 3) # 3 versions of 'c'
+        self.assertIn(pysrc_line_start, associated_lines)
+
+    def test_DILocation_versioned_variables(self):
+        """ Tests that DILocation information for versions of variables matches
+        up to their definition site."""
+        # Note: there's still something wrong in the DI/SSA naming, the ret c is
+        # associated with the logically first definition.
+
+        @njit(debug=True)
+        def foo(n):
+            if n:
+                c = 5
+            else:
+                c = 1
+            return c
+
+        sig = (types.intp,)
+        metadata = self._get_metadata(foo, sig=sig)
+        pysrc, pysrc_line_start = inspect.getsourcelines(foo)
+
+        # Looks for SSA versioned names i.e. <basename>$<version id> of the
+        # variable 'c' and captures the line
+        expr = r'.*!DILocalVariable\(name: "c\$[0-9]?",.*line: ([0-9]+),.*'
+        matcher = re.compile(expr)
+        associated_lines = set()
+        for md in metadata:
+            match = matcher.match(md)
+            if match:
+                groups = match.groups()
+                self.assertEqual(len(groups), 1)
+                associated_lines.add(int(groups[0]))
+        self.assertEqual(len(associated_lines), 2) # 2 SSA versioned names 'c'
+
+        # Now find the `c = ` lines in the python source
+        py_lines = set()
+        for ix, pyln in enumerate(pysrc):
+            if 'c = ' in pyln:
+                py_lines.add(ix + pysrc_line_start)
+        self.assertEqual(len(py_lines), 2) # 2 assignments to c
+
+        # check that the DILocation from the DI for `c` matches the python src
+        self.assertEqual(associated_lines, py_lines)
 
 
 if __name__ == '__main__':
