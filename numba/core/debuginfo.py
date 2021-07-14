@@ -10,6 +10,15 @@ from contextlib import contextmanager
 from llvmlite import ir
 from numba.core import cgutils
 
+
+
+def _escape_unicode(x):
+    """Escape unicode chars used in LLVM debug metadata.
+    """
+    # We will simply replace them with '?' for now.
+    return x.encode('ascii', 'replace').decode()
+
+
 @contextmanager
 def suspend_emission(builder):
     """Suspends the emission of debug_metadata for the duration of the context
@@ -137,7 +146,7 @@ class DIBuilder(AbstractDIBuilder):
         mdtype = self._var_type(lltype, size)
         name = name.replace('.', '$')    # for gdb to work correctly
         mdlocalvar = m.add_debug_info('DILocalVariable', {
-            'name': name,
+            'name': _escape_unicode(name),
             'arg': 0,
             'scope': self.subprograms[-1],
             'file': self.difile,
@@ -243,7 +252,7 @@ class DIBuilder(AbstractDIBuilder):
 
     def _di_subprogram(self, name, linkagename, line):
         return self.module.add_debug_info('DISubprogram', {
-            'name': name,
+            'name': _escape_unicode(name),
             'linkageName': linkagename,
             'scope': self.difile,
             'file': self.difile,
