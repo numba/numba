@@ -672,7 +672,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         if signature is not None:
             cres = self.overloads[signature]
             lib = cres.library
-            return lib.get_disasm_cfg()
+            return lib.get_disasm_cfg(cres.fndesc.mangled_name)
 
         return dict((sig, self.inspect_disasm_cfg(sig))
                     for sig in self.signatures)
