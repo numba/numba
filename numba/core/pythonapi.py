@@ -1203,7 +1203,6 @@ class PythonAPI(object):
 
         ndim = self.context.get_constant(types.int32, aryty.ndim)
         writable = self.context.get_constant(types.int32, int(aryty.mutable))
-        print(writable)
 
         aryptr = cgutils.alloca_once_value(self.builder, ary)
         return self.builder.call(fn, [self.builder.bitcast(aryptr,
