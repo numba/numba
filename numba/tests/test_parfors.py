@@ -73,17 +73,10 @@ class TestParforsRunner(TestCase):
     def runner(self):
         themod = self.__module__
         test_clazz_name = self.id().split('.')[-1].split('_')[-1]
-        the_test = f'{themod}.{test_clazz_name}'
-        cmd = [sys.executable, '-m', 'numba.runtests', the_test]
-        env_copy = os.environ.copy()
-        env_copy['SUBPROC_TEST'] = '1'
-        status = subprocess.run(cmd, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, timeout=self._TIMEOUT,
-                                env=env_copy, universal_newlines=True)
-        self.assertEqual(status.returncode, 0, msg=status.stderr)
-        self.assertIn('OK', status.stderr)
-        self.assertTrue('FAIL' not in status.stderr)
-        self.assertTrue('ERROR' not in status.stderr)
+        # don't specify a given test, it's an entire class that needs running
+        self.subprocess_test_runner(test_module=themod,
+                                    test_class=test_clazz_name,
+                                    timeout=self._TIMEOUT)
 
     def test_TestParforBasic(self):
         self.runner()
