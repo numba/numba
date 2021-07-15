@@ -1316,6 +1316,10 @@ def _numpy_broadcast_to(typingctx, array, shape):
         shape_ = cgutils.unpack_tuple(builder, shape_)
         _, dest = _broadcast_to_shape(context, builder, srcty, src, shape_,)
 
+        # Hack to get np.broadcast_to to return a read-only array
+        setattr(dest, 'parent', Constant.null(
+            context.get_value_type(dest._datamodel.get_type('parent'))))
+
         res = dest._getvalue()
         return impl_ret_borrowed(context, builder, sig.return_type, res)
     return sig, codegen
