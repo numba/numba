@@ -547,8 +547,8 @@ class TestCase(unittest.TestCase):
                    f'captured stderr: {status.stderr}')
         self.assertEqual(status.returncode, 0, streams)
         self.assertIn('OK', status.stderr)
-        self.assertTrue('FAIL' not in status.stderr)
-        self.assertTrue('ERROR' not in status.stderr)
+        self.assertNotIn('FAIL', status.stderr)
+        self.assertNotIn('ERROR', status.stderr)
 
 
 class SerialMixin(object):
