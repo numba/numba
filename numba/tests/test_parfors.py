@@ -43,7 +43,8 @@ from numba.core.typed_passes import IRLegalization
 from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       override_env_config, linux_only, tag,
                       skip_parfors_unsupported, _32bit, needs_blas,
-                      needs_lapack, disabled_test, skip_unless_scipy)
+                      needs_lapack, disabled_test, skip_unless_scipy,
+                      needs_subprocess)
 import cmath
 import unittest
 
@@ -52,9 +53,8 @@ import unittest
 # used to determine whether a test is skipped or not, such that if you want to
 # run any parfors test directly this environment variable can be set. The
 # subprocesses running the test classes set this environment variable as the new
-# process starts which enables the tests within the process.
-_exec_cond = os.environ.get('SUBPROC_TEST', None) == '1'
-needs_subprocess = unittest.skipUnless(_exec_cond, "needs subprocess harness")
+# process starts which enables the tests within the process. The decorator
+# @needs_subprocess is used to ensure the appropriate test skips are made.
 
 
 @skip_parfors_unsupported

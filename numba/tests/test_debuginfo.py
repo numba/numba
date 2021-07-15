@@ -7,6 +7,10 @@ from numba.core import types
 import unittest
 import llvmlite.binding as llvm
 
+#NOTE: These tests are potentially sensitive to changes in SSA or lowering
+# behaviour and may need updating should changes be made to the corresponding
+# algorithms.
+
 
 class TestDebugInfo(TestCase):
     """
@@ -295,14 +299,14 @@ class TestDebugInfoEmission(TestCase):
         sig = (types.float64[::1],)
         full_ir = self._get_llvmir(foo, sig=sig)
 
-        # make sure decref lines end with `meminfo.<number>)`.
+        # make sure decref lines end with `meminfo.<number>)` without !dbg info.
         count = 0
         for line in full_ir.splitlines():
             line_stripped = line.strip()
             if line_stripped.startswith('call void @NRT_decref'):
                 self.assertRegex(line, r'.*meminfo\.[0-9]+\)$')
                 count += 1
-        self.assertTrue(count > 0) # make sure there were some decrefs!
+        self.assertGreater(count, 0) # make sure there were some decrefs!
 
     def test_DILocation_decref(self):
         # Test runner for test_DILocation_decref_impl, needs a subprocess
