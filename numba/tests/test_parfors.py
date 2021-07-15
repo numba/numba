@@ -43,7 +43,8 @@ from numba.core.typed_passes import IRLegalization
 from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       override_env_config, linux_only, tag,
                       skip_parfors_unsupported, _32bit, needs_blas,
-                      needs_lapack, disabled_test, skip_unless_scipy)
+                      needs_lapack, disabled_test, skip_unless_scipy,
+                      needs_subprocess)
 import cmath
 import unittest
 
@@ -52,9 +53,8 @@ import unittest
 # used to determine whether a test is skipped or not, such that if you want to
 # run any parfors test directly this environment variable can be set. The
 # subprocesses running the test classes set this environment variable as the new
-# process starts which enables the tests within the process.
-_exec_cond = os.environ.get('SUBPROC_TEST', None) == '1'
-needs_subprocess = unittest.skipUnless(_exec_cond, "needs subprocess harness")
+# process starts which enables the tests within the process. The decorator
+# @needs_subprocess is used to ensure the appropriate test skips are made.
 
 
 @skip_parfors_unsupported
@@ -73,17 +73,10 @@ class TestParforsRunner(TestCase):
     def runner(self):
         themod = self.__module__
         test_clazz_name = self.id().split('.')[-1].split('_')[-1]
-        the_test = f'{themod}.{test_clazz_name}'
-        cmd = [sys.executable, '-m', 'numba.runtests', the_test]
-        env_copy = os.environ.copy()
-        env_copy['SUBPROC_TEST'] = '1'
-        status = subprocess.run(cmd, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, timeout=self._TIMEOUT,
-                                env=env_copy, universal_newlines=True)
-        self.assertEqual(status.returncode, 0, msg=status.stderr)
-        self.assertIn('OK', status.stderr)
-        self.assertTrue('FAIL' not in status.stderr)
-        self.assertTrue('ERROR' not in status.stderr)
+        # don't specify a given test, it's an entire class that needs running
+        self.subprocess_test_runner(test_module=themod,
+                                    test_class=test_clazz_name,
+                                    timeout=self._TIMEOUT)
 
     def test_TestParforBasic(self):
         self.runner()
