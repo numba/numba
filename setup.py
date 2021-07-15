@@ -23,6 +23,7 @@ min_python_version = "3.7"
 max_python_version = "3.10"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.17"
+max_numpy_run_version = "1.20"
 min_llvmlite_version = "0.37.0rc1"
 max_llvmlite_version = "0.38"
 
@@ -359,7 +360,7 @@ packages = find_packages(include=["numba", "numba.*"])
 build_requires = ['numpy >={}'.format(min_numpy_build_version)]
 install_requires = [
     'llvmlite >={},<{}'.format(min_llvmlite_version, max_llvmlite_version),
-    'numpy >={}'.format(min_numpy_run_version),
+    'numpy >={},<={}'.format(min_numpy_run_version, max_numpy_run_version),
     'setuptools',
 ]
 
