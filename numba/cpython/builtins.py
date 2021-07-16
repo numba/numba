@@ -672,3 +672,23 @@ def ol_filter(func, iterable):
                 if func(x):
                     yield x
     return impl
+
+
+@overload(isinstance)
+def ol_isinstance(var, typs):
+    def true_impl(var, typs):
+        return True
+    def false_impl(var, typs):
+        return False
+
+    if not isinstance(typs, types.containers.Tuple):
+        typs = (typs, )
+
+    var = typing.asnumbatype.as_numba_type(var)
+
+    for typ in typs:
+        numba_typ = typing.asnumbatype.as_numba_type(typ.key[0])
+        if var == numba_typ:
+            return true_impl
+
+    return false_impl

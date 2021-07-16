@@ -78,7 +78,7 @@ def type_inference_stage(typingctx, targetctx, interp, args, return_type,
         for k, v in locals.items():
             infer.seed_type(k, v)
 
-        infer.build_constraint()
+        infer.build_constraint(raise_errors=raise_errors)
         # return errors in case of partial typing
         errs = infer.propagate(raise_errors=raise_errors)
         typemap, restype, calltypes = infer.unify(raise_errors=raise_errors)

@@ -17,7 +17,7 @@ from numba.core.ir_utils import (guard, resolve_func_from_module, simplify_CFG,
                                  replace_var_names, get_name_var_table,
                                  compile_to_numba_ir, get_definition,
                                  find_max_label, rename_labels,
-                                 transfer_scope, fixup_var_define_in_scope,
+                                 transfer_scope, fixup_var_define_in_scope
                                  )
 from numba.core.ssa import reconstruct_ssa
 from numba.core import interpreter
@@ -1424,6 +1424,90 @@ class IterLoopCanonicalization(FunctionPass):
 
         func_ir.blocks = simplify_CFG(func_ir.blocks)
         return mutated
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class PropagateLiterals(FunctionPass):
+    """Implement literal propagation based on partial type inference"""
+    _name = "PropagateLiterals"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        # In some cases, state doesn't have _definitions
+        func_ir = state.func_ir
+        func_ir._reset_analysis_variables()
+
+        if not hasattr(func_ir, '_definitions'):
+            func_ir._definitions = build_definitions(state.func_ir.blocks)
+        typemap = state.typemap
+        changed = False
+
+        literal_types = (types.BooleanLiteral, types.IntegerLiteral,
+                         types.StringLiteral)
+
+        for block in func_ir.blocks.values():
+            for assign in block.find_insts(ir.Assign):
+                if isinstance(assign.value, (ir.Arg, ir.Const,
+                                             ir.FreeVar, ir.Global)):
+                    continue
+
+                # dont change return stmt in the form
+                # $return_xyz = cast(value=ABC)
+                if isinstance(assign.value, ir.Expr) and \
+                        assign.value.op == 'cast':
+                    continue
+
+                target = assign.target
+                if len(func_ir._definitions.get(target.name, ())) > 1:
+                    continue
+
+                lit = typemap.get(target.name, None)
+                if lit and isinstance(lit, literal_types):
+                    # replace assign instruction by ir.Const(lit) iff
+                    # lit is a literal value
+                    rhs = ir.Const(lit.literal_value, assign.loc)
+                    new_assign = ir.Assign(rhs, target, assign.loc)
+
+                    # replace instruction
+                    block.insert_after(new_assign, assign)
+                    block.remove(assign)
+
+                    changed = True
+
+        if changed:
+            # Rebuild definitions
+            func_ir._definitions = build_definitions(state.func_ir.blocks)
+
+        return changed
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class LiteralPropagation(FunctionPass):
+    """Implement literal propagation based on partial type inference"""
+    _name = "LiteralPropagation"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        # run as subpipeline
+        from numba.core.compiler_machinery import PassManager
+        from numba.core.typed_passes import PartialTypeInference
+        pm = PassManager("literal_propagation_subpipeline")
+
+        pm.add_pass(PartialTypeInference, "performs partial type inference")
+        pm.add_pass(PropagateLiterals, "performs literal propagation")
+
+        # rewrite consts / dead branch pruning / rewrites
+        pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
+        pm.add_pass(DeadBranchPrune, "dead branch pruning")
+        pm.add_pass(GenericRewrites, "nopython rewrites")
+
+        pm.finalize()
+        pm.run(state)
+        return True
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
