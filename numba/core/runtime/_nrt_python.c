@@ -389,21 +389,17 @@ NRT_adapt_ndarray_to_python_acqref(arystruct_t* arystruct, PyTypeObject *retty,
 
     /* Set writable */
 #if NPY_API_VERSION >= 0x00000007
-    if (writeable)
-    {
+    if (writeable) {
         PyArray_ENABLEFLAGS(array, NPY_ARRAY_WRITEABLE);
     }
-    else
-    {
+    else {
         PyArray_CLEARFLAGS(array, NPY_ARRAY_WRITEABLE);
     }
 #else
-    if (writeable)
-    {
+    if (writeable) {
         array->flags |= NPY_WRITEABLE;
     }
-    else
-    {
+    else {
         array->flags &= ~NPY_WRITEABLE;
     }
 #endif
