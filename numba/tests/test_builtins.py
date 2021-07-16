@@ -220,6 +220,17 @@ def sum_kwarg_usecase(x, start=0):
         return ret
 
 
+def isinstance_usecase(a):
+    if isinstance(a, (int, float)):
+        if isinstance(a, int):
+            return a + 1
+        if isinstance(a, float):
+            return a + 2.0
+    elif isinstance(a, str):
+        return a + ", world!"
+    return (1 + 2j)
+
+
 class TestBuiltins(TestCase):
 
     def run_nullary_func(self, pyfunc, flags):
@@ -947,6 +958,23 @@ class TestBuiltins(TestCase):
             sum_default('abcd')
 
         self.assertIn('No implementation', str(raises.exception))
+
+    def test_isinstance(self):
+        pyfunc = isinstance_usecase 
+        cfunc = jit(nopython=True)(pyfunc)
+
+        inputs = (
+            3,        # int
+            5.0,      # float
+            "Hello",  # string
+            1j,       # complex
+        )
+
+        for inpt in inputs:
+            expected = pyfunc(inpt)
+            got = cfunc(inpt)
+            self.assertEqual(expected, got)
+
 
     def test_truth(self):
         pyfunc = truth_usecase

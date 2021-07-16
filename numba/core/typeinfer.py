@@ -1021,10 +1021,14 @@ class TypeInferer(object):
         for var in self._get_return_vars():
             self.lock_type(var.name, typ, loc=None)
 
-    def build_constraint(self):
-        for blk in self.blocks.values():
-            for inst in blk.body:
-                self.constrain_statement(inst)
+    def build_constraint(self, raise_errors=True):
+        try:
+            for blk in self.blocks.values():
+                for inst in blk.body:
+                    self.constrain_statement(inst)
+        except TypingError as exc:
+            if raise_errors:
+                raise exc
 
     def return_types_from_partial(self):
         """

@@ -52,7 +52,7 @@ class TestCase(unittest.TestCase):
         number = int(last_line.split(' ')[0])
         # There may be some "skipped" messages at the beginning,
         # so do an approximate check.
-        self.assertIn(len(lines), range(number + 1, number + 10))
+        self.assertIn(len(lines), range(number + 1, number + 20))
         self.assertGreaterEqual(number, minsize)
         return lines
 
