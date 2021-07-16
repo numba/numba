@@ -273,6 +273,9 @@ Pull-Requests:
 * PR `#7162 <https://github.com/numba/numba/pull/7162>`_: CUDA: Fix linkage of device functions when compiling for debug (`Graham Markall <https://github.com/gmarkall>`_)
 * PR `#7163 <https://github.com/numba/numba/pull/7163>`_: Split legalization pass to consider IR and features separately. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#7165 <https://github.com/numba/numba/pull/7165>`_: Fix use of np.clip where out is not provided. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7196 <https://github.com/numba/numba/pull/7196>`_: Fixes for lineinfo emission. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7209 <https://github.com/numba/numba/pull/7209>`_: Clamp numpy (`esc <https://github.com/esc>`_)
+* PR `#7216 <https://github.com/numba/numba/pull/7216>`_: Update CHANGE_LOG for 0.54.0rc2. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 
 Authors:
 
