@@ -7,22 +7,16 @@ import numpy
 
 import types as pytypes
 import collections
-import operator
 import warnings
-
-from llvmlite import ir as lir
 
 import numba
 from numba.core.extending import _Intrinsic
-from numba.core import types, utils, typing, ir, analysis, postproc, rewrites, config, cgutils
-from numba.core.typing.templates import (signature, infer_global,
-                                         AbstractTemplate)
-from numba.core.imputils import impl_ret_untracked
+from numba.core import types, typing, ir, analysis, postproc, rewrites, config
+from numba.core.typing.templates import signature
 from numba.core.analysis import (compute_live_map, compute_use_defs,
                                  compute_cfg_from_blocks)
-from numba.core.errors import (TypingError, UnsupportedError, NumbaWarning,
-                               NumbaPendingDeprecationWarning, CompilerError,
-                               feedback_details)
+from numba.core.errors import (TypingError, UnsupportedError,
+                               NumbaPendingDeprecationWarning, CompilerError)
 
 import copy
 
@@ -484,7 +478,8 @@ def add_offset_to_labels(blocks, offset):
             for inst in b.body:
                 for T, f in add_offset_to_labels_extensions.items():
                     if isinstance(inst, T):
-                        f_max = f(inst, offset)
+                        # Although f_max is unused, this is required for parfor.
+                        f_max = f(inst, offset)  # noqa: F841
         if isinstance(term, ir.Jump):
             b.body[-1] = ir.Jump(term.target + offset, term.loc)
         if isinstance(term, ir.Branch):
