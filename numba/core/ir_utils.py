@@ -7,16 +7,22 @@ import numpy
 
 import types as pytypes
 import collections
+import operator
 import warnings
+
+from llvmlite import ir as lir
 
 import numba
 from numba.core.extending import _Intrinsic
-from numba.core import types, typing, ir, analysis, postproc, rewrites, config
-from numba.core.typing.templates import signature
+from numba.core import types, utils, typing, ir, analysis, postproc, rewrites, config, cgutils
+from numba.core.typing.templates import (signature, infer_global,
+                                         AbstractTemplate)
+from numba.core.imputils import impl_ret_untracked
 from numba.core.analysis import (compute_live_map, compute_use_defs,
                                  compute_cfg_from_blocks)
-from numba.core.errors import (TypingError, UnsupportedError,
-                               NumbaPendingDeprecationWarning, CompilerError)
+from numba.core.errors import (TypingError, UnsupportedError, NumbaWarning,
+                               NumbaPendingDeprecationWarning, CompilerError,
+                               feedback_details)
 
 import copy
 
