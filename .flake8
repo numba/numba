@@ -23,7 +23,6 @@ exclude =
     # Ignore vendored files
     numba/cloudpickle/*
     # Grandfather in existing failing files.  This list should shrink over time
-    numba/core/ir_utils.py
     numba/core/pylowering.py
     numba/python_utils.py
     numba/parfors/parfor.py
