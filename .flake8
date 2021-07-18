@@ -22,8 +22,7 @@ exclude =
     __init__.py
     # Ignore vendored files
     numba/cloudpickle/*
-    # Grandfather in existing failing files.  This list should shrink over time
-    numba/python_utils.py
+    # Grandfather in existing failing files. This list should shrink over time
     numba/parfors/parfor.py
     numba/misc/numba_entry.py
     numba/stencils/stencilparfor.py
