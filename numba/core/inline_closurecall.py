@@ -1174,9 +1174,20 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
             block_id = terminator.truebr
             blk = func_ir.blocks[block_id]
             loc = blk.loc
-            binop = ir.Expr.binop(fn=operator.sub, lhs=iter_first_var,
-                                  rhs=range_def[0], loc=loc),
-            blk.body.insert(0, _new_definition(func_ir, index_var, binop, loc))
+            blk.body.insert(
+                0,
+                _new_definition(
+                    func_ir,
+                    index_var,
+                    ir.Expr.binop(
+                        fn=operator.sub,
+                        lhs=iter_first_var,
+                        rhs=range_def[0],
+                        loc=loc,
+                    ),
+                    loc,
+                ),
+            )
     else:
         # Insert index_var increment to the end of loop header
         loc = loop_header.loc
