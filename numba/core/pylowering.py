@@ -7,7 +7,7 @@ import builtins
 import operator
 import inspect
 
-from llvmlite.llvmpy.core import Type, Constant
+from llvmlite.llvmpy.core import Type
 import llvmlite.llvmpy.core as lc
 
 from numba.core import types, utils, ir, generators, cgutils
@@ -62,6 +62,7 @@ PYTHON_COMPAREOPMAP = {
     operator.is_not: 'is not',
     operator.contains: 'in'
 }
+
 
 class PyLower(BaseLower):
 
@@ -208,7 +209,9 @@ class PyLower(BaseLower):
                 typobj = self.pyapi.get_type(obj)
                 is_omitted = self.builder.icmp_unsigned('==', typobj,
                                                         self._omitted_typobj)
-                with self.builder.if_else(is_omitted, likely=False) as (omitted, present):
+                with self.builder.if_else(
+                        is_omitted, likely=False
+                ) as (omitted, present):
                     with present:
                         self.incref(obj)
                         self.builder.store(obj, slot)
@@ -351,7 +354,11 @@ class PyLower(BaseLower):
                     # Make the tuple valid by inserting None as dummy
                     # iteration "result" (it will be ignored).
                     self.pyapi.tuple_setitem(pair, 0, self.pyapi.make_none())
-            self.pyapi.tuple_setitem(pair, 1, self.pyapi.bool_from_bool(is_valid))
+            self.pyapi.tuple_setitem(
+                pair,
+                1,
+                self.pyapi.bool_from_bool(is_valid),
+            )
             return pair
         elif expr.op == 'pair_first':
             pair = self.loadvar(expr.value.name)
@@ -451,8 +458,10 @@ class PyLower(BaseLower):
             bbelse = self.builder.basic_block
 
             with self.builder.if_then(obj_is_null):
-                mod = self.pyapi.dict_getitem(moddict,
-                                          self._freeze_string("__builtins__"))
+                mod = self.pyapi.dict_getitem(
+                    moddict,
+                    self._freeze_string("__builtins__"),
+                )
                 builtin = self.builtin_lookup(mod, name)
                 bbif = self.builder.basic_block
 
