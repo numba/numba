@@ -7,6 +7,7 @@ import sys
 from numba.tests.support import TestCase, override_config
 from numba import jit, njit
 from numba.core import types
+from numba.core.debuginfo import _escape_unicode
 import unittest
 import llvmlite.binding as llvm
 
@@ -281,6 +282,12 @@ class TestDebugInfoEmission(TestCase):
         self.assertIn('OK', status.stderr)
         self.assertTrue('FAIL' not in status.stderr)
         self.assertTrue('ERROR' not in status.stderr)
+
+
+class TestDebugInfoMisc(TestCase):
+    def test_escape_unicode(self):
+        self.assertEqual(_escape_unicode("apple"), "apple")
+        self.assertEqual(_escape_unicode("appl©"), r"appl\302\251")
 
 
 if __name__ == '__main__':
