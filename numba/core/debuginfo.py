@@ -15,8 +15,13 @@ from numba.core import cgutils
 def _escape_unicode(x):
     """Escape unicode chars used in LLVM debug metadata.
     """
-    # We will simply replace them with '?' for now.
-    return x.encode('ascii', 'replace').decode()
+    def repl(x):
+        # GDB uses \NNN where NNN is octal representation of the character.
+        s = chr(x)
+        return s if s.isascii() else r'\{:03o}'.format(x)
+    utf8chars = x.encode()
+    out = ''.join(map(repl, utf8chars))
+    return out
 
 
 @contextmanager
