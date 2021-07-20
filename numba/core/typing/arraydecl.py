@@ -421,7 +421,7 @@ class ArrayAttribute(AttributeTemplate):
         kwargs = dict(kws)
         kind = kwargs.pop('kind', types.StringLiteral('quicksort'))
         if not isinstance(kind, types.StringLiteral):
-            raise errors.TypingError('"kind" must be a string literal')
+            raise TypingError('"kind" must be a string literal')
         if kwargs:
             msg = "Unsupported keywords: {!r}"
             raise TypingError(msg.format([k for k in kwargs.keys()]))
