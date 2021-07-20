@@ -213,9 +213,9 @@ def argmax_parallel_impl(in_arr):
 def dotvv_parallel_impl(a, b):
     numba.parfors.parfor.init_prange()
     l = a.shape[0]
-    m = b.shape[0]
+    # m = b.shape[0]
     # TODO: investigate assert_equiv
-    #assert_equiv("sizes of l, m do not match", l, m)
+    # assert_equiv("sizes of l, m do not match", l, m)
     s = 0
     for i in numba.parfors.parfor.internal_prange(l):
         s += a[i] * b[i]
@@ -224,17 +224,17 @@ def dotvv_parallel_impl(a, b):
 
 def dotvm_parallel_impl(a, b):
     numba.parfors.parfor.init_prange()
-    l = a.shape
+    # l = a.shape
     m, n = b.shape
     # TODO: investigate assert_equiv
-    #assert_equiv("Sizes of l, m do not match", l, m)
+    # assert_equiv("Sizes of l, m do not match", l, m)
     c = np.zeros(n, a.dtype)
     # TODO: evaluate dotvm implementation options
-    #for i in prange(n):
-    #    s = 0
-    #    for j in range(m):
-    #        s += a[j] * b[j, i]
-    #    c[i] = s
+    # for i in prange(n):
+    #     s = 0
+    #     for j in range(m):
+    #         s += a[j] * b[j, i]
+    #     c[i] = s
     for i in numba.parfors.parfor.internal_prange(m):
         c += a[i] * b[i, :]
     return c
@@ -243,9 +243,9 @@ def dotvm_parallel_impl(a, b):
 def dotmv_parallel_impl(a, b):
     numba.parfors.parfor.init_prange()
     m, n = a.shape
-    l = b.shape
+    # l = b.shape
     # TODO: investigate assert_equiv
-    #assert_equiv("sizes of n, l do not match", n, l)
+    # assert_equiv("sizes of n, l do not match", n, l)
     c = np.empty(m, a.dtype)
     for i in numba.parfors.parfor.internal_prange(m):
         s = 0
@@ -404,7 +404,6 @@ def arange_parallel_impl(return_type, *args):
             nitems_r = math.ceil((stop - start) / step)
             nitems = int(max(nitems_r, 0))
             arr = np.empty(nitems, dtype)
-            val = start
             for i in numba.parfors.parfor.internal_prange(nitems):
                 arr[i] = start + i * step
             return arr
@@ -693,7 +692,6 @@ class Parfor(ir.Expr, ir.Stmt):
 def _analyze_parfor(parfor, equiv_set, typemap, array_analysis):
     """Recursive array analysis for parfor nodes.
     """
-    func_ir = array_analysis.func_ir
     parfor_blocks = wrap_parfor_blocks(parfor)
     # Since init_block get label 0 after wrap, we need to save
     # the equivset for the real block label 0.
@@ -967,7 +965,6 @@ class ParforDiagnostics(object):
             for r in _nroots:
                 if nadj[r] != []:
                     nroots.add(r)
-        all_roots = froots ^ nroots
 
         # This computes all the parfors at the top level that are either:
         # - roots of loop fusion
@@ -1354,17 +1351,6 @@ class ParforDiagnostics(object):
             print_wrapped('-' * _termwidth)
 
         # Augmented source section
-        filename = self.func_ir.loc.filename
-        try:
-            # Try to get a relative path
-            # ipython/jupyter input just returns as filename
-            path = os.path.relpath(filename)
-        except ValueError:
-            # Fallback to absolute path if error occurred in getting the
-            # relative path.
-            # This may happen on windows if the drive is different
-            path = os.path.abspath(filename)
-
         if print_source_listing:
             self.source_listing(parfors_simple, purpose_str)
 
@@ -1495,7 +1481,7 @@ class ParforDiagnostics(object):
 
         else:  # there are no parfors
             print_wrapped(
-                'Function %s, %s, has no parallel for-loops.'.format(
+                'Function {}, {}, has no parallel for-loops.'.format(
                     name,
                     line,
                 ),
@@ -2661,7 +2647,6 @@ class ConvertLoopPass:
         live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
         loops = cfg.loops()
         sized_loops = [(loops[k], len(loops[k].body)) for k in loops.keys()]
-        moved_blocks = []
 
         # We go over all loops, smaller loops first (inner first)
         for loop, s in sorted(sized_loops, key=lambda tup: tup[1]):
@@ -3408,7 +3393,6 @@ class ParforPass(ParforPassStates):
                     if isinstance(stmt, ir.Assign):
                         loc = stmt.loc
                         lhs = stmt.target
-                        rhs = stmt.value
                         lhs_typ = self.typemap[lhs.name]
                         print(
                             "Adding print for assignment to ",
@@ -3848,7 +3832,6 @@ def _gen_arrayexpr_getitem(
         out_ir.append(const_assign)
         index_vars = []
         for i in reversed(range(ndims)):
-            size_var = size_vars[i]
             size_const = size_consts[i]
             if size_const == 1:
                 index_vars.append(const_var)
@@ -3956,9 +3939,13 @@ def _lower_parfor_sequential_block(
                 inst.init_block.body.append(ir.Jump(range_label, loc))
                 header_block.body[-1].falsebr = block_label
             else:
-                new_blocks[prev_header_label].body[-1].truebr = range_label
-                header_block.body[-1].falsebr = prev_header_label
-            prev_header_label = header_label  # to set truebr next loop
+                # This case only runs for i >= 1, when prev_header_label is set.
+                # But flake8 doesn't understand this construct, so ignore.
+                new_blocks[prev_header_label].body[-1].truebr = range_label  # noqa: F821, E501
+                header_block.body[-1].falsebr = prev_header_label  # noqa: F821
+
+            # to set truebr next loop
+            prev_header_label = header_label  # noqa: F841
 
         # last body block jump to inner most header
         body_last_label = max(inst.loop_body.keys())
@@ -4055,7 +4042,7 @@ def get_parfor_params_inner(parfor, pre_defs, options_fusion, fusion_info):
         if config.DEBUG_ARRAY_OPT_STATS:
             after_fusion = ("After fusion" if options_fusion
                             else "With fusion disabled")
-            print('{}, parallel for-loop {} has nested Parfor(s) #{}.'.format(
+            print('{}, parallel for-loop {} has nested Parfor(s) #{}.'.format(  # noqa: F523, E501
                 after_fusion,
                 parfor.id,
                 n_parfors,
@@ -4085,7 +4072,6 @@ def get_parfor_outputs(parfor, parfor_params):
     """
     # FIXME: The following assumes the target of all SetItem are outputs,
     # which is wrong!
-    last_label = max(parfor.loop_body.keys())
     outputs = []
     for blk in parfor.loop_body.values():
         for stmt in blk.body:
