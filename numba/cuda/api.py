@@ -495,6 +495,7 @@ def detect():
         attrs += [('Compute Capability', '%d.%d' % cc)]
         attrs += [('PCI Device ID', dev.PCI_DEVICE_ID)]
         attrs += [('PCI Bus ID', dev.PCI_BUS_ID)]
+        attrs += [('UUID', dev.uuid)]
         attrs += [('Watchdog', 'Enabled' if kernel_timeout else 'Disabled')]
         if os.name == "nt":
             attrs += [('Compute Mode', 'TCC' if tcc else 'WDDM')]
