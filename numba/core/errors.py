@@ -82,6 +82,17 @@ class NumbaInvalidConfigWarning(NumbaWarning):
     Warning category for using an invalid configuration.
     """
 
+
+class NumbaPedanticWarning(NumbaWarning):
+    """
+    Warning category for reporting pedantic messages.
+    """
+
+class NumbaIRAssumptionWarning(NumbaPedanticWarning):
+    """
+    Warning category for reporting IR assumption violation.
+    """
+
 # These are needed in the color formatting of errors setup
 
 
