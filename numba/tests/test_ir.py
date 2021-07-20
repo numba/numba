@@ -7,20 +7,20 @@ from numba import objmode
 from numba.core import ir, compiler
 from numba.core import errors
 from numba.core.compiler import (
-    CompilerBase, 
+    CompilerBase,
     ReconstructSSA,
 )
 from numba.core.compiler_machinery import (
-    FunctionPass, 
+    FunctionPass,
     PassManager,
     register_pass,
 )
 from numba.core.untyped_passes import (
     TranslateByteCode,
     IRProcessing,
-    WithLifting,
 )
 from numba import njit
+
 
 class TestIR(unittest.TestCase):
 
@@ -515,7 +515,7 @@ class TestIRPedanticChecks(TestCase):
                 FunctionPass.__init__(self)
 
             def run_pass(self, state):
-                # This is unreachable. SSA pass should have raised before this 
+                # This is unreachable. SSA pass should have raised before this
                 # pass
                 raise AssertionError("unreachable")
 
@@ -553,7 +553,7 @@ class TestIRPedanticChecks(TestCase):
                 str(raises.exception),
                 r"variable name '[a-z]' not in scope",
             )
-        
+
 
 if __name__ == '__main__':
     unittest.main()
