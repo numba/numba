@@ -12,39 +12,42 @@ This is similar to ParallelAccelerator package in Julia:
 https://github.com/IntelLabs/ParallelAccelerator.jl
 'Parallelizing Julia with a Non-invasive DSL', T. Anderson et al., ECOOP'17.
 """
-import types as pytypes  # avoid confusion with numba.types
-import sys
-import math
-import os
-import textwrap
 import copy
 import inspect
 import linecache
-from functools import reduce
-from collections import defaultdict, OrderedDict, namedtuple
-from contextlib import contextmanager
+import math
 import operator
+import os
+import sys
+import textwrap
+from collections import defaultdict, namedtuple
+from contextlib import contextmanager
+from functools import reduce
 
+import numpy
+import numpy as np
+
+import numba.cpython.builtins
 import numba.core.ir
+from numba import prange, pndindex
 from numba.core import (
     types,
     typing,
-    utils,
     errors,
     ir,
     analysis,
     postproc,
-    rewrites,
     typeinfer,
     config,
     ir_utils,
 )
-from numba import prange, pndindex
-from numba.np.numpy_support import as_dtype
-from numba.core.typing.templates import infer_global, AbstractTemplate
-from numba.stencils.stencilparfor import StencilPass
-from numba.core.extending import register_jitable
-
+from numba.core.analysis import (
+    compute_use_defs,
+    compute_live_map,
+    compute_dead_maps,
+    compute_cfg_from_blocks,
+)
+from numba.core.extending import overload, register_jitable
 from numba.core.ir_utils import (
     mk_unique_var,
     next_label,
@@ -52,7 +55,6 @@ from numba.core.ir_utils import (
     get_np_ufunc_typ,
     mk_range_block,
     mk_loop_header,
-    get_name_var_table,
     replace_vars,
     replace_vars_inner,
     visit_vars,
@@ -81,8 +83,6 @@ from numba.core.ir_utils import (
     build_definitions,
     replace_arg_nodes,
     replace_returns,
-    is_getitem,
-    is_setitem,
     is_get_setitem,
     index_var_of_get_setitem,
     set_index_var_of_get_setitem,
@@ -90,33 +90,20 @@ from numba.core.ir_utils import (
     replace_var_names,
     transfer_scope,
 )
-
-from numba.core.analysis import (
-    compute_use_defs,
-    compute_live_map,
-    compute_dead_maps,
-    compute_cfg_from_blocks,
-)
-from numba.core.controlflow import CFGraph
-from numba.core.typing import npydecl, signature
 from numba.core.types.functions import Function
+from numba.core.typing import npydecl, signature
+from numba.core.typing.templates import infer_global, AbstractTemplate
+from numba.np.numpy_support import as_dtype
 from numba.parfors.array_analysis import (
     random_int_args,
     random_1arg_size,
     random_2arg_sizelast,
     random_3arg_sizelast,
     random_calls,
-    assert_equiv,
 )
-from numba.core.extending import overload
-import copy
-import numpy
-import numpy as np
 from numba.parfors import array_analysis
-import numba.cpython.builtins
-from numba.stencils import stencilparfor
+from numba.stencils.stencilparfor import StencilPass
 # circular dependency: import numba.npyufunc.dufunc.DUFunc
-
 
 # wrapped pretty print
 _termwidth = 80
