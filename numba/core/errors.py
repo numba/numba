@@ -88,6 +88,7 @@ class NumbaPedanticWarning(NumbaWarning):
     Warning category for reporting pedantic messages.
     """
 
+
 class NumbaIRAssumptionWarning(NumbaPedanticWarning):
     """
     Warning category for reporting IR assumption violation.
