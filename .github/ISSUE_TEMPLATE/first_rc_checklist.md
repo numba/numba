@@ -23,7 +23,6 @@ labels: task
 * [ ] Verify wheels for all platforms arrived on PyPi.
 * [ ] Initialize and verify ReadTheDocs build.
 * [ ] Clean up `ci_artifacts`.
-* [ ] Review, merge and check execution of release notebook.
 * [ ] Send RC announcement email / post announcement to discourse group.
 * [ ] Post link to Twitter.
 
