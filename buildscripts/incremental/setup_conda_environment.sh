@@ -100,5 +100,5 @@ if [ "$RUN_TYPEGUARD" == "yes" ]; then $CONDA_INSTALL conda-forge::typeguard; fi
 # environment dump for debug
 # echo "DEBUG ENV:"
 # echo "-------------------------------------------------------------------------"
-# conda env export
+_CONDA_PYTHON_SYSCONFIGDATA_NAME= conda env export
 # echo "-------------------------------------------------------------------------"
