@@ -1372,8 +1372,6 @@ def _create_gufunc_for_parfor_body(
         print("typemap", typemap)
 
     old_alias = flags.noalias
-    old_recursive = flags.auto_parallel.recursive
-    flags.auto_parallel.recursive = True
     if not has_aliases:
         if config.DEBUG_ARRAY_OPT:
             print("No aliases found so adding noalias flag.")
@@ -1390,7 +1388,6 @@ def _create_gufunc_for_parfor_body(
         locals)
 
     flags.noalias = old_alias
-    flags.auto_parallel.recursive = old_recursive
 
     kernel_sig = signature(types.none, *gufunc_param_types)
     if config.DEBUG_ARRAY_OPT:
