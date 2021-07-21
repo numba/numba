@@ -182,7 +182,10 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
             layout = 'A'
 
         dtype = numpy_support.from_dtype(self.dtype)
-        return types.Array(dtype, self.ndim, layout)
+        if isinstance(dtype, types.NestedArray):
+            return types.Array(dtype.dtype, len(dtype.shape), "C")
+        else:
+            return types.Array(dtype, self.ndim, layout)
 
     @property
     def device_ctypes_pointer(self):
@@ -425,13 +428,18 @@ class DeviceRecord(DeviceNDArrayBase):
                                    stream=stream)
             return hostary[0]
         else:
+            if typ.names is not None:
+                return DeviceRecord(dtype=typ, stream=stream,
+                                    gpu_data=newdata)
             # subarray case
-            shape, strides, dtype = prepare_shape_strides_dtype(typ.shape,
-                                                                None,
-                                                                typ, 'C')
-            return DeviceNDArray(shape=shape, strides=strides,
-                                 dtype=dtype, gpu_data=newdata,
-                                 stream=stream)
+            else:
+                shape, strides, dtype = \
+                    prepare_shape_strides_dtype(typ.shape,
+                                                None,
+                                                typ.subdtype[0], 'C')
+                return DeviceNDArray(shape=shape, strides=strides,
+                                     dtype=dtype, gpu_data=newdata,
+                                     stream=stream)
 
     @devices.require_context
     def __setitem__(self, key, value):
@@ -457,10 +465,9 @@ class DeviceRecord(DeviceNDArrayBase):
         # (1) prepare LHS
 
         typ, offset = self.dtype.fields[key]
+        newdata = self.gpu_data.view(offset)
 
         if typ.shape == ():
-            newdata = self.gpu_data.view(offset)
-
             lhs = type(self)(dtype=typ, stream=stream, gpu_data=newdata)
 
             # (2) prepare RHS
@@ -481,9 +488,10 @@ class DeviceRecord(DeviceNDArrayBase):
                 stream.synchronize()
         else:
             #subarray case
-            shape, strides, dtype = prepare_shape_strides_dtype(typ.shape,
-                                                                None,
-                                                                typ, 'C')
+            shape, strides, dtype = \
+                prepare_shape_strides_dtype(typ.shape,
+                                            None,
+                                            typ.subdtype[0], 'C')
             return DeviceNDArray(shape=shape, strides=strides,
                                  dtype=dtype, gpu_data=newdata,
                                  stream=stream)
@@ -630,16 +638,17 @@ class DeviceNDArray(DeviceNDArrayBase):
         if len(extents) == 1:
             newdata = self.gpu_data.view(*extents[0])
 
-            # Check for structured array type (record)
-            if self.dtype.names is not None:
-                return DeviceRecord(dtype=self.dtype, stream=stream,
-                                    gpu_data=newdata)
-            elif not arr.is_array:
-                # Element indexing
-                hostary = np.empty(1, dtype=self.dtype)
-                _driver.device_to_host(dst=hostary, src=newdata,
-                                       size=self._dummy.itemsize,
-                                       stream=stream)
+            if not arr.is_array:
+                # Check for structured array type (record)
+                if self.dtype.names is not None:
+                    return DeviceRecord(dtype=self.dtype, stream=stream,
+                                        gpu_data=newdata)
+                else:
+                    # Element indexing
+                    hostary = np.empty(1, dtype=self.dtype)
+                    _driver.device_to_host(dst=hostary, src=newdata,
+                                           size=self._dummy.itemsize,
+                                           stream=stream)
                 return hostary[0]
             else:
                 return cls(shape=arr.shape, strides=arr.strides,
@@ -693,6 +702,7 @@ class DeviceNDArray(DeviceNDArrayBase):
         # (2) prepare RHS
 
         rhs, _ = auto_device(value, stream=stream)
+
         if rhs.ndim > lhs.ndim:
             raise ValueError("Can't assign %s-D array to %s-D self" % (
                 rhs.ndim,

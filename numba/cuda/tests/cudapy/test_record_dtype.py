@@ -97,6 +97,9 @@ recordwitharray = np.dtype(
 recordwith2darray = np.dtype([('i', np.int32),
                               ('j', np.float32, (3, 2))])
 
+recwithmat = np.dtype([('i', np.int32),
+                       ('j', np.float32, (3, 3))])
+
 
 class TestRecordDtype(CUDATestCase):
 
@@ -277,6 +280,58 @@ class TestRecordDtypeWithStructArrays(TestRecordDtype):
         self.sample1d = np.zeros(3, dtype=recordtype)
         self.samplerec1darr = np.zeros(1, dtype=recordwitharray)[0]
         self.samplerec2darr = np.zeros(1, dtype=recordwith2darray)[0]
+
+
+@skip_on_cudasim('Structured array attr access not supported in simulator')
+class TestRecordDtypeWithStructArrays2(CUDATestCase):
+    '''
+    Same as TestRecordDtype, but using structured arrays instead of recarrays.
+    '''
+
+    def _createSampleArrays(self):
+        self.sample1d = cuda.device_array(3, dtype=recordtype)
+        self.samplerec1darr = cuda.device_array(1, dtype=recordwitharray)[0]
+        self.samplerec2darr = cuda.device_array(1, dtype=recordwith2darray)[0]
+        self.samplerecmat = cuda.device_array(1,dtype=recwithmat)[0]
+
+    def setUp(self):
+        super().setUp()
+        self._createSampleArrays()
+
+        ary = self.sample1d
+        for i in range(ary.size):
+            x = i + 1
+            ary[i]['a'] = x / 2
+            ary[i]['b'] = x
+            ary[i]['c'] = x * 1j
+            ary[i]['d'] = "%d" % x
+
+    def test_structured_array1(self):
+        ary = self.sample1d
+        for i in range(self.sample1d.size):
+            x = i + 1
+            self.assertEqual(ary[i]['a'], x / 2)
+            self.assertEqual(ary[i]['b'], x)
+            self.assertEqual(ary[i]['c'], x * 1j)
+            self.assertEqual(ary[i]['d'], "%d" % x)
+
+    def test_structured_array2(self):
+        ary = self.samplerec1darr
+        ary['g'] = 2
+        ary['h'][0] = 3.0
+        ary['h'][1] = 4.0
+        self.assertEqual(ary['g'], 2)
+        self.assertEqual(ary['h'][0], 3.0)
+        self.assertEqual(ary['h'][1], 4.0)
+
+    def test_structured_array3(self):
+        ary = self.samplerecmat
+        mat = np.array([[5.0, 10.0, 15.0],
+                       [20.0, 25.0, 30.0],
+                       [35.0, 40.0, 45.0]],
+                       dtype=np.float32).reshape(3,3)
+        ary['j'][:] = mat
+        np.testing.assert_equal(ary['j'], mat)
 
 
 if __name__ == '__main__':
