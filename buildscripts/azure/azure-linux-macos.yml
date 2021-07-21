@@ -35,7 +35,7 @@ jobs:
 
     - script: |
         export PATH=$HOME/miniconda3/bin:$PATH
-        conda install -y mypy
+        conda install -y mypy>=0.950
         mypy
       displayName: 'Mypy'
       condition: eq(variables['RUN_MYPY'], 'yes')
