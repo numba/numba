@@ -31,7 +31,7 @@ scheme for them to avoid leading digits.
 
 import re
 
-from numba.core import types, utils
+from numba.core import types
 
 
 # According the scheme, valid characters for mangled names are [a-zA-Z0-9_$].
@@ -243,5 +243,3 @@ def _split_mangled_ident(mangled):
     ctlen = len(str(ct))
     at = ctlen + ct
     return mangled[:at], mangled[at:]
-
-
