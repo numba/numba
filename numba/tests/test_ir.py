@@ -486,7 +486,7 @@ class TestIRCompounds(CheckEquality):
 
 class TestIRPedanticChecks(TestCase):
     def test_var_in_scope_assumption(self):
-        # Create a pass that clear ir.Scope in ir.Block
+        # Create a pass that clears ir.Scope in ir.Block
         @register_pass(mutates_CFG=False, analysis_only=False)
         class RemoveVarInScope(FunctionPass):
             _name = "_remove_var_in_scope"
@@ -501,12 +501,12 @@ class TestIRPedanticChecks(TestCase):
                 # walk the blocks
                 for blk in func_ir.blocks.values():
                     oldscope = blk.scope
-                    # put in a empty Scope
+                    # put in an empty Scope
                     blk.scope = ir.Scope(parent=oldscope.parent,
                                          loc=oldscope.loc)
                 return True
 
-        # Create a pass that always fail to stop the compiler
+        # Create a pass that always fails, to stop the compiler
         @register_pass(mutates_CFG=False, analysis_only=False)
         class FailPass(FunctionPass):
             _name = "_fail"
@@ -516,7 +516,8 @@ class TestIRPedanticChecks(TestCase):
 
             def run_pass(self, state):
                 # This is unreachable. SSA pass should have raised before this
-                # pass
+                # pass when run with `error.NumbaPedanicWarning`s raised as
+                # errors.
                 raise AssertionError("unreachable")
 
         class MyCompiler(CompilerBase):

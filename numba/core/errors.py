@@ -91,7 +91,7 @@ class NumbaPedanticWarning(NumbaWarning):
 
 class NumbaIRAssumptionWarning(NumbaPedanticWarning):
     """
-    Warning category for reporting IR assumption violation.
+    Warning category for reporting an IR assumption violation.
     """
 
 # These are needed in the color formatting of errors setup

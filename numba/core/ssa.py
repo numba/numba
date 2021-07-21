@@ -268,7 +268,7 @@ class _FreshVarHandler(_BaseHandler):
                 newtarget = assign.target
                 _logger.debug("first assign: %s", newtarget)
                 if newtarget.name not in scope.localvars:
-                    wmsg = f"variable name {newtarget.name!r} not in scope."
+                    wmsg = f"variable {newtarget.name!r} is not in scope."
                     warnings.warn(errors.NumbaIRAssumptionWarning(wmsg,
                                   loc=assign.loc))
             else:
