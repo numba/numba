@@ -1818,6 +1818,19 @@ class TestMore(TestCase):
 
         self.assertEqual(foo(), foo.py_func())
 
+    def test_unroller_with_scope_update(self):
+        # See issue #7217
+        @njit
+        def foo():
+            i = 0
+            for _ in literal_unroll((1, 2)):
+                for i in range(1):
+                    i += 1
+            return i
+
+        foo()
+        self.assertEqual(foo(), foo.py_func())
+
 
 def capture(real_pass):
     """ Returns a compiler pass that captures the mutation state reported

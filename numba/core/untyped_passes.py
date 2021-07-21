@@ -910,6 +910,17 @@ class MixedContainerUnroller(FunctionPass):
                 new_var_dict[name] = mk_unique_var(name)
             replace_var_names(loop_blocks, new_var_dict)
 
+            # Patch up the scope with the new variable names, this is horrible
+            new_var_table = get_name_var_table(loop_blocks)
+            for blk in loop_blocks.values():
+                scope = blk.scope
+                real_con = scope.localvars._con
+                for name, var in dict(scope.localvars._con).items():
+                    if name in new_var_dict:
+                        new_name = new_var_dict[name]
+                        del real_con[name]
+                        real_con[new_name] = new_var_table[new_name]
+
             # clobber the sentinel body and then stuff in the rest
             switch_ir.blocks[lbl] = deepcopy(loop_blocks[loop_start_lbl])
             remaining_keys = [y for y in loop_blocks.keys()]
