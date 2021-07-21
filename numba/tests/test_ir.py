@@ -531,8 +531,6 @@ class TestIRPedanticChecks(TestCase):
                 pm.finalize()
                 return [pm]
 
-        # import logging
-        # logging.basicConfig(level=logging.DEBUG)
         @njit(pipeline_class=MyCompiler)
         def dummy(x):
             a = 1
