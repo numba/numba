@@ -58,7 +58,8 @@ def main():
     os.environ['NUMBA_DUMP_ANNOTATION'] = str(int(args.annotate))
     if args.annotate_html is not None:
         try:
-            from jinja2 import Template
+            # jinja is used to generate the HTML, so check it is installed.
+            from jinja2 import Template  # noqa: F401
         except ImportError:
             raise ImportError("Please install the 'jinja2' package")
         os.environ['NUMBA_DUMP_HTML'] = str(args.annotate_html[0])

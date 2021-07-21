@@ -32,7 +32,6 @@ exclude =
     numba/core/ir_utils.py
     numba/core/pylowering.py
     numba/python_utils.py
-    numba/misc/numba_entry.py
     numba/stencils/stencilparfor.py
     numba/core/ir.py
     numba/core/itanium_mangler.py
