@@ -35,7 +35,8 @@ jobs:
 
     - script: |
         export PATH=$HOME/miniconda3/bin:$PATH
-        conda install -y mypy
+        # a temporarily fix to use conda-forge mypy build
+        conda install -y conda-forge::"mypy>=0.900"
         mypy
       displayName: 'Mypy'
       condition: eq(variables['RUN_MYPY'], 'yes')
