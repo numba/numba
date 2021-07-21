@@ -550,7 +550,7 @@ class TestIRPedanticChecks(TestCase):
             # Verify the error message
             self.assertRegex(
                 str(raises.exception),
-                r"variable name '[a-z]' not in scope",
+                r"variable '[a-z]' is not in scope",
             )
 
 
