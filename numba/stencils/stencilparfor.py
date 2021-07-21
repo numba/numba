@@ -5,7 +5,6 @@
 
 import numbers
 import copy
-import types as pytypes
 from operator import add
 import operator
 
@@ -13,9 +12,8 @@ import numpy as np
 
 import numba.parfors.parfor
 from numba.core import types, ir, rewrites, config, ir_utils
-from numba.core.typing.templates import infer_global, AbstractTemplate
 from numba.core.typing import signature
-from numba.core import utils, typing
+from numba.core import typing
 from numba.core.ir_utils import (
     get_call_table,
     mk_unique_var,
@@ -49,7 +47,8 @@ class StencilPass(object):
         self.flags = flags
 
     def run(self):
-        """ Finds all calls to StencilFuncs in the IR and converts them to parfor.
+        """ Finds all calls to StencilFuncs in the IR and converts them to
+        parfor.
         """
         from numba.stencils.stencil import StencilFunc
 
@@ -135,7 +134,6 @@ class StencilPass(object):
         Returns the block labels that contained return statements.
         """
         for label, block in blocks.items():
-            scope = block.scope
             loc = block.loc
             new_body = []
             for stmt in block.body:
@@ -834,8 +832,6 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
                    calltypes):
     """get typed IR from stencil bytecode
     """
-    from numba.core.cpu import CPUContext
-    from numba.core.registry import cpu_target
     from numba.core.annotations import type_annotations
     from numba.core.typed_passes import type_inference_stage
 
@@ -884,7 +880,6 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
         stencil_blocks,
         ir_utils.next_label(),
     )
-    min_label = min(stencil_blocks.keys())
     max_label = max(stencil_blocks.keys())
     ir_utils._the_max_label.update(max_label)
 
