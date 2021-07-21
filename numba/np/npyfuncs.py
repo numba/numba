@@ -6,11 +6,13 @@ Python builtins
 
 
 import math
+import numpy as np
 
 from llvmlite.llvmpy import core as lc
 
 from numba.core.imputils import impl_ret_untracked
 from numba.core import typing, types, errors, lowering, cgutils
+from numba.core.extending import register_jitable
 from numba.np import npdatetime
 from numba.cpython import cmathimpl, mathimpl, numbers
 
@@ -481,6 +483,21 @@ def np_complex_power_impl(context, builder, sig, args):
 
 
 ########################################################################
+# numpy float power funcs
+
+def real_float_power_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    return numbers.real_power_impl(context, builder, sig, args)
+
+
+def np_complex_float_power_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    return numbers.complex_power_impl(context, builder, sig, args)
+
+
+########################################################################
 # numpy greatest common denominator
 
 def np_gcd_impl(context, builder, sig, args):
@@ -492,7 +509,6 @@ def np_gcd_impl(context, builder, sig, args):
 # numpy lowest common multiple
 
 def np_lcm_impl(context, builder, sig, args):
-    import numpy as np
 
     xty, yty = sig.args
     assert xty == yty == sig.return_type
@@ -751,6 +767,29 @@ def np_complex_square_impl(context, builder, sig, args):
     binary_sig = typing.signature(*[sig.return_type]*3)
     return numbers.complex_mul_impl(context, builder, binary_sig,
                                      [args[0], args[0]])
+
+
+########################################################################
+# NumPy cbrt
+
+def np_real_cbrt_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1)
+
+    # We enable fastmath here to force np.power(x, 1/3) to generate a
+    # call to libm cbrt function
+    @register_jitable(fastmath=True)
+    def cbrt(x):
+        if x < 0:
+            return -np.power(-x, 1.0 / 3.0)
+        else:
+            return np.power(x, 1.0 / 3.0)
+
+    def _cbrt(x):
+        if np.isnan(x):
+            return np.nan
+        return cbrt(x)
+
+    return context.compile_internal(builder, _cbrt, sig, args)
 
 
 ########################################################################

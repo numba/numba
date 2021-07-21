@@ -651,6 +651,17 @@ class InternalError(NumbaError):
         self.old_exception = exception
 
 
+class InternalTargetMismatchError(InternalError):
+    """For signalling a target mismatch error occurred internally within the
+    compiler.
+    """
+    def __init__(self, kind, target_hw, hw_clazz):
+        msg = (f"{kind.title()} being resolved on a target from which it does "
+               f"not inherit. Local target is {target_hw}, declared "
+               f"target class is {hw_clazz}.")
+        super().__init__(msg)
+
+
 class RequireLiteralValue(TypingError):
     """
     For signalling that a function's typing requires a constant value for

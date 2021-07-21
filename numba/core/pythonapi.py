@@ -1193,8 +1193,11 @@ class PythonAPI(object):
         assert self.context.enable_nrt, "NRT required"
 
         intty = ir.IntType(32)
+        # Embed the Python type of the array (maybe subclass) in the LLVM IR.
+        serial_aryty_pytype = self.unserialize(self.serialize_object(aryty.box_type))
+
         fnty = Type.function(self.pyobj,
-                             [self.voidptr, intty, intty, self.pyobj])
+                             [self.voidptr, self.pyobj, intty, intty, self.pyobj])
         fn = self._get_function(fnty, name="NRT_adapt_ndarray_to_python_acqref")
         fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
 
@@ -1204,6 +1207,7 @@ class PythonAPI(object):
         aryptr = cgutils.alloca_once_value(self.builder, ary)
         return self.builder.call(fn, [self.builder.bitcast(aryptr,
                                                            self.voidptr),
+                                      serial_aryty_pytype,
                                       ndim, writable, dtypeptr])
 
     def nrt_meminfo_new_from_pyobject(self, data, pyobj):

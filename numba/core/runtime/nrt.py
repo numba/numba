@@ -29,7 +29,11 @@ class _Runtime(object):
 
         # Register globals into the system
         for py_name in _nrt.c_helpers:
-            c_name = "NRT_" + py_name
+            if py_name.startswith("_"):
+                # internal API
+                c_name = py_name
+            else:
+                c_name = "NRT_" + py_name
             c_address = _nrt.c_helpers[py_name]
             ll.add_symbol(c_name, c_address)
 

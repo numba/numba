@@ -9,6 +9,7 @@ from numba.core.typeconv import Conversion
 from numba.core import utils
 from .misc import UnicodeType
 from .containers import Bytes
+import numpy as np
 
 class CharSeq(Type):
     """
@@ -451,8 +452,9 @@ class Array(Buffer):
             layout = self.layout
         if readonly is None:
             readonly = not self.mutable
-        return Array(dtype=dtype, ndim=ndim, layout=layout, readonly=readonly,
-                     aligned=self.aligned)
+        cls = type(self)
+        return cls(dtype=dtype, ndim=ndim, layout=layout, readonly=readonly,
+                   aligned=self.aligned)
 
     @property
     def key(self):
@@ -488,6 +490,12 @@ class Array(Buffer):
 
     def is_precise(self):
         return self.dtype.is_precise()
+
+    @property
+    def box_type(self):
+        """Returns the Python type to box to.
+        """
+        return np.ndarray
 
 
 class ArrayCTypes(Type):
