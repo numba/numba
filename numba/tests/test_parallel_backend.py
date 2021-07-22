@@ -521,6 +521,48 @@ class TestThreadingLayerSelection(ThreadLayerTestHelper):
 TestThreadingLayerSelection.generate()
 
 
+class TestThreadingLayerPriority(ThreadLayerTestHelper):
+
+    def each_env_var(self, env_var: str):
+        """Test setting priority via env var NUMBA_THREADING_LAYER_PRIORITY."""
+        env = os.environ.copy()
+        env['NUMBA_THREADING_LAYER'] = 'default'
+        env['NUMBA_THREADING_LAYER_PRIORITY'] = env_var
+
+        code = """import numba
+
+# trigger threading layer decision
+# hence catching invalid THREADING_LAYER_PRIORITY
+@numba.jit('float64[::1](float64[::1], float64[::1])', nopython=True, parallel=True)
+def plus(x, y):
+    return x + y
+
+print(' '.join(numba.config.THREADING_LAYER_PRIORITY))
+"""
+        cmd = [
+            sys.executable,
+            '-c',
+            code,
+        ]
+        out, err = self.run_cmd(cmd, env=env)
+        self.assertEqual(out.strip(), env_var)
+
+    def test_valid_env_var(self):
+        import itertools
+
+        default = ['tbb', 'omp', 'workqueue']
+        for p in itertools.permutations(default):
+            env_var = ' '.join(p)
+            self.each_env_var(env_var)
+
+    def test_invalid_env_var(self):
+        env_var = 'tbb omp workqueue notvalidhere'
+        try:
+            self.each_env_var(env_var)
+        except AssertionError:
+            pass
+
+
 @skip_parfors_unsupported
 class TestMiscBackendIssues(ThreadLayerTestHelper):
     """
