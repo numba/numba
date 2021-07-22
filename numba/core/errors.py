@@ -330,8 +330,8 @@ else:
 
 
 pedantic_warning_info = """
-This error came from an internal pedantic check. Please report the error message
-and traceback, along with a minimal reproducer at:
+This warning came from an internal pedantic check. Please report the warning
+message and traceback, along with a minimal reproducer at:
 https://github.com/numba/numba/issues/new
 """
 
