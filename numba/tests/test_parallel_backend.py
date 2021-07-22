@@ -560,7 +560,8 @@ print(' '.join(numba.config.THREADING_LAYER_PRIORITY))
         try:
             self.each_env_var(env_var)
         except AssertionError:
-            pass
+            return
+        raise RuntimeError('Not catching invalid NUMBA_THREADING_LAYER_PRIORITY: %s' % env_var)
 
 
 @skip_parfors_unsupported
