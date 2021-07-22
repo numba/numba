@@ -195,6 +195,11 @@ class PostProcessor(object):
                 # used here but not afterwards
                 delete_pts.append((stmt, dead_set))
                 internal_dead_set -= dead_set
+                # Readd the variable to the dead set after any
+                # assignments in case a variable is assigned
+                # to multiple times
+                if isinstance(stmt, ir.Assign):
+                    internal_dead_set.add(stmt.target.name)
 
             # rewrite body and insert dels
             body = []
