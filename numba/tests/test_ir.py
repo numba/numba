@@ -516,7 +516,7 @@ class TestIRPedanticChecks(TestCase):
 
             def run_pass(self, state):
                 # This is unreachable. SSA pass should have raised before this
-                # pass when run with `error.NumbaPedanicWarning`s raised as
+                # pass when run with `error.NumbaPedanticWarning`s raised as
                 # errors.
                 raise AssertionError("unreachable")
 
