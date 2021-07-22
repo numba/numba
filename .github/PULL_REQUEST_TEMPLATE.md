@@ -18,8 +18,9 @@ Here's some guidelines to help the review process go smoothly.
    noted here: https://help.github.com/articles/closing-issues-using-keywords/
 
 3. If your pull request is not ready for review but you want to make use of the
-   continuous integration testing facilities please label it with `[WIP]` and
-   then remove the label when you'd like it to be reviewed.
+   continuous integration testing facilities please click the arrow besides
+   "Create Pull Request" and choose "Create Draft Pull Request". And
+   then change the status to "ready to review" when you'd like it to be reviewed.
 
 4. Once review has taken place please do not add features or make changes out of
    the scope of those requested by the reviewer (doing this just add delays as
