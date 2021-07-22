@@ -422,7 +422,14 @@ def _launch_threads():
                 return lib, backend
 
             t = str(config.THREADING_LAYER).lower()
-            namedbackends = ['tbb', 'omp', 'workqueue']
+            namedbackends = config.THREADING_LAYER_PRIORITY
+            if set(namedbackends) != {'tbb', 'omp', 'workqueue'}:
+                raise ValueError(
+                    "THREADING_LAYER_PRIORITY invalid: %s."
+                    "It must be a permutation of "
+                    "'tbb', 'omp', 'workqueue'"
+                    % namedbackends
+                )
 
             lib = None
             err_helpers = dict()
