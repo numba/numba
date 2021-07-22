@@ -533,7 +533,11 @@ class TestThreadingLayerPriority(ThreadLayerTestHelper):
 
 # trigger threading layer decision
 # hence catching invalid THREADING_LAYER_PRIORITY
-@numba.jit('float64[::1](float64[::1], float64[::1])', nopython=True, parallel=True)
+@numba.jit(
+    'float64[::1](float64[::1], float64[::1])',
+    nopython=True,
+    parallel=True,
+)
 def plus(x, y):
     return x + y
 
@@ -561,7 +565,9 @@ print(' '.join(numba.config.THREADING_LAYER_PRIORITY))
             self.each_env_var(env_var)
         except AssertionError:
             return
-        raise RuntimeError('Not catching invalid NUMBA_THREADING_LAYER_PRIORITY: %s' % env_var)
+        raise RuntimeError(
+            'Not catching invalid NUMBA_THREADING_LAYER_PRIORITY: %s' % env_var
+        )
 
 
 @skip_parfors_unsupported
