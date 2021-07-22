@@ -87,6 +87,8 @@ class NumbaPedanticWarning(NumbaWarning):
     """
     Warning category for reporting pedantic messages.
     """
+    def __init__(self, msg, **kwargs):
+        super().__init__(f"{msg}\n{pedantic_warning_info}")
 
 
 class NumbaIRAssumptionWarning(NumbaPedanticWarning):
@@ -325,6 +327,13 @@ else:
             scheme = themes[numba.core.config.COLOR_SCHEME]
             _termcolor_inst = HighlightColorScheme(scheme)
         return _termcolor_inst
+
+
+pedantic_warning_info = """
+This error came from an internal pedantic check. Please report the error message
+and traceback, along with a minimal reproducer at:
+https://github.com/numba/numba/issues/new
+"""
 
 feedback_details = """
 Please report the error message and traceback, along with a minimal reproducer
