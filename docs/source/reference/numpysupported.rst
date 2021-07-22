@@ -484,6 +484,7 @@ The following top-level functions are supported:
 * :func:`numpy.interp` (only the 3 first arguments)
 * :func:`numpy.intersect1d` (only first 2 arguments, ar1 and ar2)
 * :func:`numpy.linspace` (only the 3-argument form)
+* :func:`numpy.logspace` (only the 3 first arguments)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
 * :class:`numpy.nditer` (only the first argument)
@@ -498,7 +499,6 @@ The following top-level functions are supported:
   must be an integer)
 * :func:`numpy.roots`
 * :func:`numpy.rot90` (only the 2 first arguments)
-* :func:`numpy.logspace` (only the 4-argument form)
 * :func:`numpy.round_`
 * :func:`numpy.searchsorted` (only the 3 first arguments)
 * :func:`numpy.select` (only using homogeneous lists or tuples for the first

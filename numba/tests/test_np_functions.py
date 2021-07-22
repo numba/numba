@@ -157,8 +157,8 @@ def flip(a):
     return np.flip(a)
 
 
-def logspace(start, stop, num=50, base=10.0):
-    return np.logspace(start, stop, num=num, base=base)
+def logspace(start, stop, num=50):
+    return np.logspace(start, stop, num=num)
 
 
 def rot90(a):
@@ -2456,10 +2456,51 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         pyfunc = logspace
         cfunc = jit(nopython=True)(pyfunc)
 
-        self.assertPreciseEqual(pyfunc(0, 6), cfunc(0, 6))
-        self.assertPreciseEqual(pyfunc(0, 6, num=100), cfunc(0, 6, num=100))
-        self.assertPreciseEqual(pyfunc(0, 6, base=2), cfunc(0, 6, base=2))
-        self.assertPreciseEqual(pyfunc(0, 6, 100, 2), cfunc(0, 6, 100, 2))
+        self.assertPreciseEqual(pyfunc(5, 10), cfunc(5, 10))
+        self.assertPreciseEqual(pyfunc(-10, -5), cfunc(-10, -5))
+        self.assertPreciseEqual(pyfunc(-5, 10), cfunc(-5, 10))
+
+        self.assertPreciseEqual(pyfunc(1.0, 60.0), cfunc(1.0, 60.0))
+        self.assertPreciseEqual(pyfunc(-60.0, -1.0), cfunc(-60.0, -1.0))
+        self.assertPreciseEqual(pyfunc(-1.0, 60.0), cfunc(-1.0, 60.0))
+
+        self.assertPreciseEqual(pyfunc(0.0, np.e), cfunc(0.0, np.e))
+        self.assertPreciseEqual(pyfunc(0.0, np.pi), cfunc(0.0, np.pi))
+
+    def test_logspace_with_num_basic(self):
+        pyfunc = logspace
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self.assertPreciseEqual(pyfunc(5, 10, num=60), cfunc(5, 10, num=60))
+        self.assertPreciseEqual(pyfunc(0.0, 60.0, num=70),
+                                cfunc(0.0, 60.0, num=70))
+        self.assertPreciseEqual(pyfunc(-5.0, 60.0, num=70),
+                                cfunc(-5.0, 60.0, num=70))
+
+        self.assertPreciseEqual(pyfunc(0.0, np.e, num=80),
+                                cfunc(0.0, np.e, num=80))
+        self.assertPreciseEqual(pyfunc(0.0, np.pi, num=90),
+                                cfunc(0.0, np.pi, num=90))
+
+    def test_logspace_exception(self):
+        cfunc = jit(nopython=True)(logspace)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc", 5)
+        self.assertIn('The first argument "start" must be a number',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(5, "abc")
+        self.assertIn('The second argument "end" must be a number',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(0, 5, "abc")
+        self.assertIn('The third argument "num" must be an integer',
+                      str(raises.exception))
 
     def test_rot90_basic(self):
         pyfunc = rot90
