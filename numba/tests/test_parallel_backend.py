@@ -521,6 +521,7 @@ class TestThreadingLayerSelection(ThreadLayerTestHelper):
 TestThreadingLayerSelection.generate()
 
 
+@skip_parfors_unsupported
 class TestThreadingLayerPriority(ThreadLayerTestHelper):
 
     def each_env_var(self, env_var: str):
