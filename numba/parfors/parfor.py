@@ -4457,8 +4457,19 @@ def push_call_vars(blocks, saved_globals, saved_getattrs, typemap, nested=False)
                             block_defs.add(lhs.name)
 
             if not nested and isinstance(stmt, Parfor):
+                # Check all the vars used in the loop nests to see if they are globals
+                # that require being pushed into the gufunc before this parfor.
+                for pfln in stmt.loop_nests:
+                    for v in pfln.list_vars():
+                        new_body += _get_saved_call_nodes(v.name, saved_globals,
+                                                  saved_getattrs, block_defs, rename_dict)
                 for s in stmt.init_block.body:
                     process_assign(s)
+                    # Check all the vars used in the init block to see if they are globals
+                    # that require being pushed into the gufunc before this parfor.
+                    for v in stmt.list_vars():
+                        new_body += _get_saved_call_nodes(v.name, saved_globals,
+                                                  saved_getattrs, block_defs, rename_dict)
                 pblocks = stmt.loop_body.copy()
                 push_call_vars(pblocks, saved_globals, saved_getattrs, typemap, nested=True)
                 new_body.append(stmt)

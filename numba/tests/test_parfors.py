@@ -122,6 +122,8 @@ x86_only = unittest.skipIf(platform.machine() not in ('i386', 'x86_64'), 'x86 on
 
 _GLOBAL_INT_FOR_TESTING1 = 17
 _GLOBAL_INT_FOR_TESTING2 = 5
+_GLOBAL_ISSUE7213_ARR = np.ones((_GLOBAL_INT_FOR_TESTING2,
+                                 _GLOBAL_INT_FOR_TESTING2)).astype(np.complex128)
 
 TestNamedTuple = namedtuple('TestNamedTuple', ('part0', 'part1'))
 
@@ -1837,6 +1839,21 @@ class TestParfors(TestParforsBase):
             return x * 5.0
         x = np.ones((2, 2, 2, 2, 2, 15))
         self.check(test_impl, x)
+
+    def test_global_loop_nest_stop(self):
+        # issue7213
+        def test_impl():
+            a = np.empty((2,))
+            for k in prange(2):
+                b = np.arange(1)
+                c = np.zeros((_GLOBAL_INT_FOR_TESTING2,
+                              _GLOBAL_INT_FOR_TESTING2), dtype=np.complex128)
+                d = np.expand_dims(b, -1) * c
+                e = np.diag(_GLOBAL_ISSUE7213_ARR @ d)
+                a[k] = 1
+            return a
+
+        self.check(test_impl)
 
 
 @skip_parfors_unsupported
