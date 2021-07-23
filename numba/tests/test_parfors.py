@@ -1849,7 +1849,7 @@ class TestParfors(TestParforsBase):
                 c = np.zeros((_GLOBAL_INT_FOR_TESTING2,
                               _GLOBAL_INT_FOR_TESTING2), dtype=np.complex128)
                 d = np.expand_dims(b, -1) * c
-                e = np.diag(_GLOBAL_ISSUE7213_ARR @ d)
+                e = np.diag(_GLOBAL_ISSUE7213_ARR + d)
                 a[k] = 1
             return a
 
