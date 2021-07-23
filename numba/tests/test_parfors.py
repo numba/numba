@@ -805,6 +805,18 @@ class TestParforBasic(TestParforsBase):
 
         self.check(test_impl, *self.simple_args)
 
+    def test_inplace_alias(self):
+        # issue7201
+        def test_impl(a):
+            a += 1
+            a[:] = 3
+
+        def comparer(a, b):
+            np.testing.assert_equal(a, b)
+
+        x = np.ones(1)
+        self.check(test_impl, x, check_arg_equality=[comparer])
+
 
 @skip_parfors_unsupported
 class TestParforNumericalMisc(TestParforsBase):
