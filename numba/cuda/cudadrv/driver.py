@@ -88,7 +88,7 @@ class CudaAPIError(CudaDriverError):
         return "[%s] %s" % (self.code, self.msg)
 
 
-def find_driver():
+def locate_driver_and_loader():
 
     envpath = config.CUDA_DRIVER
 
@@ -128,6 +128,11 @@ def find_driver():
         candidates = dlnames + [os.path.join(x, y)
                                 for x, y in product(dldir, dlnames)]
 
+    return dlloader, candidates
+
+
+def load_driver(dlloader, candidates):
+
     # Load the driver; Collect driver error information
     path_not_exist = []
     driver_load_error = []
@@ -140,7 +145,7 @@ def find_driver():
             path_not_exist.append(not os.path.isfile(path))
             driver_load_error.append(e)
         else:
-            return dll
+            return dll, path
 
     # Problem loading driver
     if all(path_not_exist):
@@ -148,6 +153,12 @@ def find_driver():
     else:
         errmsg = '\n'.join(str(e) for e in driver_load_error)
         _raise_driver_error(errmsg)
+
+
+def find_driver():
+    dlloader, candidates = locate_driver_and_loader()
+    dll, path = load_driver(dlloader, candidates)
+    return dll
 
 
 DRIVER_NOT_FOUND_MSG = """

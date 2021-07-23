@@ -15,6 +15,9 @@ import ctypes
 
 from numba.misc.findlib import find_lib
 from numba.cuda.cuda_paths import get_cuda_paths
+from numba.cuda.cudadrv.driver import locate_driver_and_loader, load_driver
+from numba.cuda.cudadrv.error import CudaSupportError
+
 
 if sys.platform == 'win32':
     _dllnamepattern = '%s.dll'
@@ -79,6 +82,19 @@ def test(_platform=None, print_paths=True):
     """Test library lookup.  Path info is printed to stdout.
     """
     failed = False
+
+    # Check for the driver
+    try:
+        dlloader, candidates = locate_driver_and_loader()
+        locations = ", ".join(candidates)
+        print(f'Finding driver from candidates: {locations}...')
+        print(f'Using loader {dlloader}')
+        print('\ttrying to load driver', end='...')
+        dll, path = load_driver(dlloader, candidates)
+        print(f'\tok, loaded from {path}')
+    except CudaSupportError as e:
+        print(f'\tERROR: failed to open driver: {e}')
+        failed = True
 
     # Checks for dynamic libraries
     libs = 'nvvm cudart'.split()
