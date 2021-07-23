@@ -1845,10 +1845,11 @@ class TestParfors(TestParforsBase):
         def test_impl():
             a = np.empty((2,))
             for k in prange(2):
-                b = np.arange(1)
+                b = np.zeros((_GLOBAL_INT_FOR_TESTING2,
+                              _GLOBAL_INT_FOR_TESTING2))
                 c = np.zeros((_GLOBAL_INT_FOR_TESTING2,
                               _GLOBAL_INT_FOR_TESTING2), dtype=np.complex128)
-                d = np.expand_dims(b, -1) * c
+                d = b * c
                 e = np.diag(_GLOBAL_ISSUE7213_ARR + d)
                 a[k] = 1
             return a
