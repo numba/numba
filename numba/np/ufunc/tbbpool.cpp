@@ -81,9 +81,9 @@ get_thread_id(void)
 
 // watch the arena, if it decides to create more threads/add threads into the
 // arena then make sure they get the right thread count
-class fix_tls_observer: public tbb::task_scheduler_observer {
+class fix_tls_observer : public tbb::task_scheduler_observer {
     int mask_val;
-    void on_scheduler_entry( bool is_worker ) override;
+    void on_scheduler_entry(bool is_worker) override;
 public:
     fix_tls_observer(tbb::task_arena &arena, int mask) : tbb::task_scheduler_observer(arena), mask_val(mask)
     {
@@ -125,18 +125,18 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 
     if(_DEBUG && _TRACE_SPLIT)
     {
-        printf("inner_ndim: %lu\n",inner_ndim);
+        printf("inner_ndim: %lu\n", inner_ndim);
         printf("arg_len: %lu\n", arg_len);
         printf("total: %lu\n", dimensions[0]);
         printf("dimensions: ");
-        for(size_t j = 0; j < arg_len; j++)
-            printf("%lu, ", ((size_t *)dimensions)[j]);
+        for (size_t j = 0; j < arg_len; j++)
+            printf("%lu, ", ((size_t *) dimensions)[j]);
         printf("\nsteps: ");
-        for(size_t j = 0; j < array_count; j++)
+        for (size_t j = 0; j < array_count; j++)
             printf("%lu, ", steps[j]);
         printf("\n*args: ");
-        for(size_t j = 0; j < array_count; j++)
-            printf("%p, ", (void *)args[j]);
+        for (size_t j = 0; j < array_count; j++)
+            printf("%p, ", (void *) args[j]);
         printf("\n");
     }
 
@@ -154,12 +154,12 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     tbb::task_arena limited(num_threads);
     fix_tls_observer observer(limited, num_threads);
 
-    limited.execute([&]{
+    limited.execute([&] {
         using range_t = tbb::blocked_range<size_t>;
         tbb::parallel_for(range_t(0, dimensions[0]), [=](const range_t &range)
         {
-            size_t * count_space = (size_t *)alloca(sizeof(size_t) * arg_len);
-            char ** array_arg_space = (char**)alloca(sizeof(char*) * array_count);
+            size_t *count_space = (size_t *) alloca(sizeof(size_t) * arg_len);
+            char **array_arg_space = (char **) alloca(sizeof(char *) * array_count);
             memcpy(count_space, dimensions, arg_len * sizeof(size_t));
             count_space[0] = range.size();
 
@@ -167,13 +167,13 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
             {
                 printf("THREAD %p:", count_space);
                 printf("count_space: ");
-                for(size_t j = 0; j < arg_len; j++)
+                for (size_t j = 0; j < arg_len; j++)
                     printf("%lu, ", count_space[j]);
                 printf("\n");
             }
             for(size_t j = 0; j < array_count; j++)
             {
-                char * base = args[j];
+                char *base = args[j];
                 size_t step = steps[j];
                 ptrdiff_t offset = step * range.begin();
                 array_arg_space[j] = base + offset;
@@ -181,18 +181,18 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
                 if(_DEBUG && _TRACE_SPLIT > 2)
                 {
                     printf("Index %ld\n", j);
-                    printf("-->Got base %p\n", (void *)base);
+                    printf("-->Got base %p\n", (void *) base);
                     printf("-->Got step %lu\n", step);
                     printf("-->Got offset %ld\n", offset);
-                    printf("-->Got addr %p\n", (void *)array_arg_space[j]);
+                    printf("-->Got addr %p\n", (void *) array_arg_space[j]);
                 }
             }
 
             if(_DEBUG && _TRACE_SPLIT > 2)
             {
                 printf("array_arg_space: ");
-                for(size_t j = 0; j < array_count; j++)
-                    printf("%p, ", (void *)array_arg_space[j]);
+                for (size_t j = 0; j < array_count; j++)
+                    printf("%p, ", (void *) array_arg_space[j]);
                 printf("\n");
             }
             auto func = reinterpret_cast<void (*)(char **args, size_t *dims, size_t *steps, void *data)>(fn);
@@ -274,20 +274,20 @@ static void unload_tbb(void)
     if (tsh_was_initialized)
     {
         // blocking terminate is not strictly required here, ignore return value
-        (void)tbb::finalize(tsh, std::nothrow);
+        (void) tbb::finalize(tsh, std::nothrow);
         tsh_was_initialized = false;
     }
 }
 
 static void launch_threads(int count)
 {
-    if(tg)
+    if (tg)
         return;
 
-    if(_DEBUG)
+    if (_DEBUG)
         puts("Using TBB");
 
-    if(count < 1)
+    if (count < 1)
         count = tbb::task_arena::automatic;
 
     tsh = tbb::task_scheduler_handle::get();
@@ -323,28 +323,37 @@ MOD_INIT(tbbpool)
     PyModuleDef *md = PyModule_GetDef(m);
     if (md)
     {
-        md->m_free = (freefunc)unload_tbb;
+        md->m_free = (freefunc) unload_tbb;
     }
-    PyObject_SetAttrString(m, "launch_threads",
-                           PyLong_FromVoidPtr((void*)&launch_threads));
-    PyObject_SetAttrString(m, "synchronize",
-                           PyLong_FromVoidPtr((void*)&synchronize));
-    PyObject_SetAttrString(m, "ready",
-                           PyLong_FromVoidPtr((void*)&ready));
-    PyObject_SetAttrString(m, "add_task",
-                           PyLong_FromVoidPtr((void*)&add_task));
-    PyObject_SetAttrString(m, "parallel_for",
-                           PyLong_FromVoidPtr((void*)&parallel_for));
-    PyObject_SetAttrString(m, "do_scheduling_signed",
-                           PyLong_FromVoidPtr((void*)&do_scheduling_signed));
-    PyObject_SetAttrString(m, "do_scheduling_unsigned",
-                           PyLong_FromVoidPtr((void*)&do_scheduling_unsigned));
-    PyObject_SetAttrString(m, "set_num_threads",
-                           PyLong_FromVoidPtr((void*)&set_num_threads));
-    PyObject_SetAttrString(m, "get_num_threads",
-                           PyLong_FromVoidPtr((void*)&get_num_threads));
-    PyObject_SetAttrString(m, "get_thread_id",
-                           PyLong_FromVoidPtr((void*)&get_thread_id));
+    tmp = PyLong_FromVoidPtr((void *) &launch_threads)
+    PyObject_SetAttrString(m, "launch_threads", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &synchronize)
+    PyObject_SetAttrString(m, "synchronize", tmp);
+    tmp = PyLong_FromVoidPtr((void *) &ready)
+    PyObject_SetAttrString(m, "ready", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &add_task)
+    PyObject_SetAttrString(m, "add_task", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &parallel_for)
+    PyObject_SetAttrString(m, "parallel_for", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &do_scheduling_signed)
+    PyObject_SetAttrString(m, "do_scheduling_signed", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &do_scheduling_unsigned)
+    PyObject_SetAttrString(m, "do_scheduling_unsigned", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &set_num_threads)
+    PyObject_SetAttrString(m, "set_num_threads", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &get_num_threads)
+    PyObject_SetAttrString(m, "get_num_threads", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &get_thread_id)
+    PyObject_SetAttrString(m, "get_thread_id", tmp);
+    Py_DECREF(tmp);
 
     return MOD_SUCCESS_VAL(m);
 }

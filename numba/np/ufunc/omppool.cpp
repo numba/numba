@@ -129,7 +129,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 
     const size_t arg_len = (inner_ndim + 1);
     // index variable in OpenMP 'for' statement must have signed integral type for MSVC
-    const ptrdiff_t size = (ptrdiff_t)dimensions[0];
+    const ptrdiff_t size = (ptrdiff_t) dimensions[0];
 
     // holds the shared variable for `num_threads`, this is a bit superfluous
     // but present to force thinking about the scope of validity
@@ -137,33 +137,33 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 
     if(_DEBUG)
     {
-        printf("inner_ndim: %zu\n",inner_ndim);
+        printf("inner_ndim: %zu\n", inner_ndim);
         printf("arg_len: %zu\n", arg_len);
         printf("total: %td\n", size);
         printf("dimensions: ");
-        for(size_t j = 0; j < arg_len; j++)
-            printf("%zu, ", ((size_t *)dimensions)[j]);
+        for (size_t j = 0; j < arg_len; j++)
+            printf("%zu, ", ((size_t *) dimensions)[j]);
         printf("\nsteps: ");
-        for(size_t j = 0; j < array_count; j++)
+        for (size_t j = 0; j < array_count; j++)
             printf("%zu, ", steps[j]);
         printf("\n*args: ");
-        for(size_t j = 0; j < array_count; j++)
-            printf("%p, ", (void *)args[j]);
+        for (size_t j = 0; j < array_count; j++)
+            printf("%p, ", (void *) args[j]);
         printf("\n");
     }
 
     // Set the thread mask on the pragma such that the state is scope limited
     // and passed via a register on the OMP region call site, this limiting
     // global state and racing
-    #pragma omp parallel num_threads(num_threads), shared(agreed_nthreads)
+#pragma omp parallel num_threads(num_threads), shared(agreed_nthreads)
     {
-        size_t * count_space = (size_t *)alloca(sizeof(size_t) * arg_len);
-        char ** array_arg_space = (char**)alloca(sizeof(char*) * array_count);
+        size_t *count_space = (size_t *) alloca(sizeof(size_t) * arg_len);
+        char **array_arg_space = (char **) alloca(sizeof(char *) * array_count);
 
         // tell the active thread team about the number of threads
         set_num_threads(agreed_nthreads);
 
-        #pragma omp for
+#pragma omp for
         for(ptrdiff_t r = 0; r < size; r++)
         {
             memcpy(count_space, dimensions, arg_len * sizeof(size_t));
@@ -173,13 +173,13 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
             {
                 printf("THREAD %p:", count_space);
                 printf("count_space: ");
-                for(size_t j = 0; j < arg_len; j++)
+                for (size_t j = 0; j < arg_len; j++)
                     printf("%zd, ", count_space[j]);
                 printf("\n");
             }
             for(size_t j = 0; j < array_count; j++)
             {
-                char * base = args[j];
+                char *base = args[j];
                 size_t step = steps[j];
                 ptrdiff_t offset = step * r;
                 array_arg_space[j] = base + offset;
@@ -187,18 +187,18 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
                 if(0&&_DEBUG)
                 {
                     printf("Index %zu\n", j);
-                    printf("-->Got base %p\n", (void *)base);
+                    printf("-->Got base %p\n", (void *) base);
                     printf("-->Got step %zu\n", step);
                     printf("-->Got offset %td\n", offset);
-                    printf("-->Got addr %p\n", (void *)array_arg_space[j]);
+                    printf("-->Got addr %p\n", (void *) array_arg_space[j]);
                 }
             }
 
             if(_DEBUG)
             {
                 printf("array_arg_space: ");
-                for(size_t j = 0; j < array_count; j++)
-                    printf("%p, ", (void *)array_arg_space[j]);
+                for (size_t j = 0; j < array_count; j++)
+                    printf("%p, ", (void *) array_arg_space[j]);
                 printf("\n");
             }
             func(array_arg_space, count_space, steps, data);
@@ -217,11 +217,11 @@ static void launch_threads(int count)
         printf("Setting parent as %d\n", parent_pid);
     }
 #endif
-    if(initialized)
+    if (initialized)
         return;
-    if(_DEBUG)
+    if (_DEBUG)
         puts("Using OpenMP");
-    if(count < 1)
+    if (count < 1)
         return;
     omp_set_num_threads(count);
     omp_set_nested(0x1); // enable nesting, control depth with OMP env var
@@ -239,31 +239,44 @@ static void ready(void)
 MOD_INIT(omppool)
 {
     PyObject *m;
+    PyObject *tmp;
     MOD_DEF(m, "omppool", "No docs", NULL)
     if (m == NULL)
         return MOD_ERROR_VAL;
 
-    PyObject_SetAttrString(m, "launch_threads",
-                           PyLong_FromVoidPtr((void*)&launch_threads));
-    PyObject_SetAttrString(m, "synchronize",
-                           PyLong_FromVoidPtr((void*)&synchronize));
-    PyObject_SetAttrString(m, "ready",
-                           PyLong_FromVoidPtr((void*)&ready));
-    PyObject_SetAttrString(m, "add_task",
-                           PyLong_FromVoidPtr((void*)&add_task));
-    PyObject_SetAttrString(m, "parallel_for",
-                           PyLong_FromVoidPtr((void*)&parallel_for));
-    PyObject_SetAttrString(m, "do_scheduling_signed",
-                           PyLong_FromVoidPtr((void*)&do_scheduling_signed));
-    PyObject_SetAttrString(m, "do_scheduling_unsigned",
-                           PyLong_FromVoidPtr((void*)&do_scheduling_unsigned));
-    PyObject_SetAttrString(m, "openmp_vendor",
-                           PyString_FromString(_OMP_VENDOR));
-    PyObject_SetAttrString(m, "set_num_threads",
-                           PyLong_FromVoidPtr((void*)&set_num_threads));
-    PyObject_SetAttrString(m, "get_num_threads",
-                           PyLong_FromVoidPtr((void*)&get_num_threads));
-    PyObject_SetAttrString(m, "get_thread_id",
-                           PyLong_FromVoidPtr((void*)&get_thread_id));
+    tmp = PyLong_FromVoidPtr((void *) &launch_threads);
+    PyObject_SetAttrString(m, "launch_threads", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &synchronize);
+    PyObject_SetAttrString(m, "synchronize", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &ready);
+    PyObject_SetAttrString(m, "ready", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &add_task);
+    PyObject_SetAttrString(m, "add_task", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &parallel_for);
+    PyObject_SetAttrString(m, "parallel_for", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &do_scheduling_signed);
+    PyObject_SetAttrString(m, "do_scheduling_signed", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &do_scheduling_unsigned);
+    PyObject_SetAttrString(m, "do_scheduling_unsigned", tmp);
+    Py_DECREF(tmp);
+    tmp = PyString_FromString(_OMP_VENDOR);
+    PyObject_SetAttrString(m, "openmp_vendor", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &set_num_threads);
+    PyObject_SetAttrString(m, "set_num_threads", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &get_num_threads);
+    PyObject_SetAttrString(m, "get_num_threads", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &get_thread_id);
+    PyObject_SetAttrString(m, "get_thread_id", tmp);
+    Py_DECREF(tmp);
+
     return MOD_SUCCESS_VAL(m);
 }

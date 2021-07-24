@@ -567,29 +567,41 @@ static void reset_after_fork(void)
 MOD_INIT(workqueue)
 {
     PyObject *m;
+    PyObject *tmp;
     MOD_DEF(m, "workqueue", "No docs", NULL)
     if (m == NULL)
         return MOD_ERROR_VAL;
 
-    PyObject_SetAttrString(m, "launch_threads",
-                           PyLong_FromVoidPtr(&launch_threads));
-    PyObject_SetAttrString(m, "synchronize",
-                           PyLong_FromVoidPtr(&synchronize));
-    PyObject_SetAttrString(m, "ready",
-                           PyLong_FromVoidPtr(&ready));
-    PyObject_SetAttrString(m, "add_task",
-                           PyLong_FromVoidPtr(&add_task));
-    PyObject_SetAttrString(m, "parallel_for",
-                           PyLong_FromVoidPtr(&parallel_for));
-    PyObject_SetAttrString(m, "do_scheduling_signed",
-                           PyLong_FromVoidPtr(&do_scheduling_signed));
-    PyObject_SetAttrString(m, "do_scheduling_unsigned",
-                           PyLong_FromVoidPtr(&do_scheduling_unsigned));
-    PyObject_SetAttrString(m, "set_num_threads",
-                           PyLong_FromVoidPtr((void*)&set_num_threads));
-    PyObject_SetAttrString(m, "get_num_threads",
-                           PyLong_FromVoidPtr((void*)&get_num_threads));
-    PyObject_SetAttrString(m, "get_thread_id",
-                           PyLong_FromVoidPtr((void*)&get_thread_id));
+
+    tmp = PyLong_FromVoidPtr((void *) &launch_threads)
+    PyObject_SetAttrString(m, "launch_threads", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &synchronize)
+    PyObject_SetAttrString(m, "synchronize", tmp);
+    tmp = PyLong_FromVoidPtr((void *) &ready)
+    PyObject_SetAttrString(m, "ready", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &add_task)
+    PyObject_SetAttrString(m, "add_task", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &parallel_for)
+    PyObject_SetAttrString(m, "parallel_for", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &do_scheduling_signed)
+    PyObject_SetAttrString(m, "do_scheduling_signed", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &do_scheduling_unsigned)
+    PyObject_SetAttrString(m, "do_scheduling_unsigned", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &set_num_threads)
+    PyObject_SetAttrString(m, "set_num_threads", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &get_num_threads)
+    PyObject_SetAttrString(m, "get_num_threads", tmp);
+    Py_DECREF(tmp);
+    tmp = PyLong_FromVoidPtr((void *) &get_thread_id)
+    PyObject_SetAttrString(m, "get_thread_id", tmp);
+    Py_DECREF(tmp);
+
     return MOD_SUCCESS_VAL(m);
 }
