@@ -573,35 +573,16 @@ MOD_INIT(workqueue)
         return MOD_ERROR_VAL;
 
 
-    tmp = PyLong_FromVoidPtr((void *) &launch_threads)
-    PyObject_SetAttrString(m, "launch_threads", tmp);
-    Py_DECREF(tmp);
-    tmp = PyLong_FromVoidPtr((void *) &synchronize)
-    PyObject_SetAttrString(m, "synchronize", tmp);
-    tmp = PyLong_FromVoidPtr((void *) &ready)
-    PyObject_SetAttrString(m, "ready", tmp);
-    Py_DECREF(tmp);
-    tmp = PyLong_FromVoidPtr((void *) &add_task)
-    PyObject_SetAttrString(m, "add_task", tmp);
-    Py_DECREF(tmp);
-    tmp = PyLong_FromVoidPtr((void *) &parallel_for)
-    PyObject_SetAttrString(m, "parallel_for", tmp);
-    Py_DECREF(tmp);
-    tmp = PyLong_FromVoidPtr((void *) &do_scheduling_signed)
-    PyObject_SetAttrString(m, "do_scheduling_signed", tmp);
-    Py_DECREF(tmp);
-    tmp = PyLong_FromVoidPtr((void *) &do_scheduling_unsigned)
-    PyObject_SetAttrString(m, "do_scheduling_unsigned", tmp);
-    Py_DECREF(tmp);
-    tmp = PyLong_FromVoidPtr((void *) &set_num_threads)
-    PyObject_SetAttrString(m, "set_num_threads", tmp);
-    Py_DECREF(tmp);
-    tmp = PyLong_FromVoidPtr((void *) &get_num_threads)
-    PyObject_SetAttrString(m, "get_num_threads", tmp);
-    Py_DECREF(tmp);
-    tmp = PyLong_FromVoidPtr((void *) &get_thread_id)
-    PyObject_SetAttrString(m, "get_thread_id", tmp);
-    Py_DECREF(tmp);
+    SetAttrStringFromVoidPointer(m,launch_threads,tmp)
+    SetAttrStringFromVoidPointer(m,synchronize,tmp)
+    SetAttrStringFromVoidPointer(m,ready,tmp)
+    SetAttrStringFromVoidPointer(m,add_task,tmp)
+    SetAttrStringFromVoidPointer(m,parallel_for,tmp)
+    SetAttrStringFromVoidPointer(m,do_scheduling_signed,tmp)
+    SetAttrStringFromVoidPointer(m,do_scheduling_unsigned,tmp)
+    SetAttrStringFromVoidPointer(m,set_num_threads,tmp)
+    SetAttrStringFromVoidPointer(m,get_num_threads,tmp)
+    SetAttrStringFromVoidPointer(m,get_thread_id,tmp)
 
     return MOD_SUCCESS_VAL(m);
 }
