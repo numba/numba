@@ -49,6 +49,8 @@ static pid_t parent_pid = 0; // 0 is not set, users can't own this anyway
 #define THREAD_LOCAL(ty) __thread ty
 #endif
 
+#define AddStringAttrFromVoidPtr(m,name,tmp)
+
 // This is the number of threads that is default, it is set on initialisation of
 // the threading backend via the launch_threads() call
 static int _INIT_NUM_THREADS = -1;
@@ -244,38 +246,18 @@ MOD_INIT(omppool)
     if (m == NULL)
         return MOD_ERROR_VAL;
 
-    tmp = PyLong_FromVoidPtr((void *) &launch_threads);
-    PyObject_SetAttrString(m, "launch_threads", tmp);
-    Py_DECREF(tmp);
-    tmp = PyLong_FromVoidPtr((void *) &synchronize);
-    PyObject_SetAttrString(m, "synchronize", tmp);
-    Py_DECREF(tmp);
-    tmp = PyLong_FromVoidPtr((void *) &ready);
-    PyObject_SetAttrString(m, "ready", tmp);
-    Py_DECREF(tmp);
-    tmp = PyLong_FromVoidPtr((void *) &add_task);
-    PyObject_SetAttrString(m, "add_task", tmp);
-    Py_DECREF(tmp);
-    tmp = PyLong_FromVoidPtr((void *) &parallel_for);
-    PyObject_SetAttrString(m, "parallel_for", tmp);
-    Py_DECREF(tmp);
-    tmp = PyLong_FromVoidPtr((void *) &do_scheduling_signed);
-    PyObject_SetAttrString(m, "do_scheduling_signed", tmp);
-    Py_DECREF(tmp);
-    tmp = PyLong_FromVoidPtr((void *) &do_scheduling_unsigned);
-    PyObject_SetAttrString(m, "do_scheduling_unsigned", tmp);
-    Py_DECREF(tmp);
+    SetAttrStringFromVoidPointer(m,launch_threads,tmp)
+    SetAttrStringFromVoidPointer(m,synchronize,tmp)
+    SetAttrStringFromVoidPointer(m,ready,tmp)
+    SetAttrStringFromVoidPointer(m,add_task,tmp)
+    SetAttrStringFromVoidPointer(m,parallel_for,tmp)
+    SetAttrStringFromVoidPointer(m,do_scheduling_signed,tmp)
+    SetAttrStringFromVoidPointer(m,do_scheduling_unsigned,tmp)
+    SetAttrStringFromVoidPointer(m,set_num_threads,tmp)
+    SetAttrStringFromVoidPointer(m,get_num_threads,tmp)
+    SetAttrStringFromVoidPointer(m,get_thread_id,tmp)
     tmp = PyString_FromString(_OMP_VENDOR);
     PyObject_SetAttrString(m, "openmp_vendor", tmp);
-    Py_DECREF(tmp);
-    tmp = PyLong_FromVoidPtr((void *) &set_num_threads);
-    PyObject_SetAttrString(m, "set_num_threads", tmp);
-    Py_DECREF(tmp);
-    tmp = PyLong_FromVoidPtr((void *) &get_num_threads);
-    PyObject_SetAttrString(m, "get_num_threads", tmp);
-    Py_DECREF(tmp);
-    tmp = PyLong_FromVoidPtr((void *) &get_thread_id);
-    PyObject_SetAttrString(m, "get_thread_id", tmp);
     Py_DECREF(tmp);
 
     return MOD_SUCCESS_VAL(m);
