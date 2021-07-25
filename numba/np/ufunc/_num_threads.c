@@ -32,6 +32,5 @@ MOD_INIT(_num_threads)
     SetAttrStringFromVoidPointer(m,set_num_threads,tmp)
     SetAttrStringFromVoidPointer(m,get_num_threads,tmp)
 
-
     return MOD_SUCCESS_VAL(m);
 }
