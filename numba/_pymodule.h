@@ -27,7 +27,7 @@
 // Define object attribute using a temporary variable to avoid memory leak
 #define SetAttrStringFromVoidPointer(m, name, tmp) \
             tmp = PyLong_FromVoidPtr((void *) &name);\
-            PyObject_SetAttrString(m, "name", tmp);\
-            Py_DECREF(tmp);\
+            PyObject_SetAttrString(m, #name, tmp);\
+            Py_DECREF(tmp);
 
 #endif /* NUMBA_PY_MODULE_H_ */
