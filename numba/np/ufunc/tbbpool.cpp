@@ -317,6 +317,7 @@ static void ready(void)
 MOD_INIT(tbbpool)
 {
     PyObject *m;
+    PyObject *tmp;
     MOD_DEF(m, "tbbpool", "No docs", NULL)
     if (m == NULL)
         return MOD_ERROR_VAL;
