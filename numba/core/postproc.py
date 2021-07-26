@@ -197,9 +197,19 @@ class PostProcessor(object):
                 internal_dead_set -= dead_set
                 # Readd the variable to the dead set after any
                 # assignments in case a variable is assigned
-                # to multiple times
+                # to multiple times. This is not safe if the variable
+                # is also used on the RHS, which while uncommon, seems
+                # to be possible with objmode.
                 if isinstance(stmt, ir.Assign):
-                    internal_dead_set.add(stmt.target.name)
+                    # If the LHS name appears more than once, it must also be on
+                    # the RHS and therefore should not be added. We don't look
+                    # at list_vars for the value because it may not exist
+                    # (i.e. ir.Const).
+                    name_count = sum(
+                        [v.name == stmt.target.name for v in stmt.list_vars()]
+                    )
+                    if name_count == 1:
+                        internal_dead_set.add(stmt.target.name)
 
             # rewrite body and insert dels
             body = []
