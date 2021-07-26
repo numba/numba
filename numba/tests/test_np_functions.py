@@ -2456,9 +2456,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         pyfunc = logspace
         cfunc = jit(nopython=True)(pyfunc)
 
-        self.assertPreciseEqual(pyfunc(5, 10), cfunc(5, 10))
-        self.assertPreciseEqual(pyfunc(-10, -5), cfunc(-10, -5))
-        self.assertPreciseEqual(pyfunc(-5, 10), cfunc(-5, 10))
+        self.assertPreciseEqual(pyfunc(1, 60), cfunc(1, 60))
+        self.assertPreciseEqual(pyfunc(-60, 1), cfunc(-60, 1))
+        self.assertPreciseEqual(pyfunc(-1, -60), cfunc(-1, -60))
 
         self.assertPreciseEqual(pyfunc(1.0, 60.0), cfunc(1.0, 60.0))
         self.assertPreciseEqual(pyfunc(-60.0, -1.0), cfunc(-60.0, -1.0))
@@ -2471,11 +2471,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         pyfunc = logspace
         cfunc = jit(nopython=True)(pyfunc)
 
-        self.assertPreciseEqual(pyfunc(5, 10, num=60), cfunc(5, 10, num=60))
+        self.assertPreciseEqual(pyfunc(1, 50, num=20), cfunc(1, 50, num=20))
         self.assertPreciseEqual(pyfunc(0.0, 60.0, num=70),
                                 cfunc(0.0, 60.0, num=70))
-        self.assertPreciseEqual(pyfunc(-5.0, 60.0, num=70),
-                                cfunc(-5.0, 60.0, num=70))
+        self.assertPreciseEqual(pyfunc(-1.0, 70.0, num=70),
+                                cfunc(-1.0, 70.0, num=70))
 
         self.assertPreciseEqual(pyfunc(0.0, np.e, num=80),
                                 cfunc(0.0, np.e, num=80))
