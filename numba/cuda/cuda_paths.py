@@ -78,6 +78,12 @@ def _cudalib_path():
     else:
         return 'lib64'
 
+def _static_cudalib_path():
+    if IS_WIN32:
+        return ('lib', 'x64')
+    else:
+        return ('lib64',)
+
 
 def _get_cudalib_dir_path_decision():
     options = [
@@ -94,7 +100,7 @@ def _get_static_cudalib_dir_path_decision():
     options = [
         ('Conda environment', get_conda_ctk()),
         ('Conda environment (NVIDIA package)', get_nvidia_static_cudalib_ctk()),
-        ('CUDA_HOME', get_cuda_home(_cudalib_path())),
+        ('CUDA_HOME', get_cuda_home(*_static_cudalib_path())),
         ('System', get_system_ctk(_cudalib_path())),
     ]
     by, libdir = _find_valid_path(options)
