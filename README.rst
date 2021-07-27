@@ -81,7 +81,7 @@ Mailing Lists
 
 Numba has a discourse forum for discussions:
 
-* https://numba.discourse.groups
+* https://numba.discourse.group
 
 Some old mailing list archives are at:
 
