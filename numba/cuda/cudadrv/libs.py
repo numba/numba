@@ -120,7 +120,8 @@ def test(_platform=None, print_paths=True):
     # Check for cudadevrt (the only static library)
     lib = 'cudadevrt'
     path = get_cudalib(lib, _platform, static=True)
-    print('Finding {} from {}'.format(lib, _get_source_variable(lib, static=True)))
+    print('Finding {} from {}'.format(lib, _get_source_variable(lib,
+                                                                static=True)))
     if print_paths:
         print('\tlocated at', path)
     else:
