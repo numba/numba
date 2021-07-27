@@ -112,6 +112,24 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
         self.gpu_data = gpu_data
         self.stream = stream
 
+    @devices.require_context
+    def __getitem__(self, item):
+        return self._do_getitem(item)
+
+    def getitem(self, item, stream=0):
+        """Do `__getitem__(item)` with CUDA stream
+        """
+        return self._do_getitem(item, stream)
+
+    @devices.require_context
+    def __setitem__(self, key, value):
+        return self._do_setitem(key, value)
+
+    def setitem(self, key, value, stream=0):
+        """Do `__setitem__(key, value)` with CUDA stream
+        """
+        return self._do_setitem(key, value, stream=stream)
+
     @property
     def __cuda_array_interface__(self):
         if self.device_ctypes_pointer.value is not None:
@@ -414,9 +432,10 @@ class DeviceRecord(DeviceNDArrayBase):
         """
         return numpy_support.from_dtype(self.dtype)
 
-    @devices.require_context
-    def __getitem__(self, item):
-        return self._do_getitem(item)
+    def getitem(self, item, stream=0):
+        """Do `__getitem__(item)` with CUDA stream
+        """
+        return self._do_getitem(item, stream)
 
     def _do_getitem(self, item, stream=0):
         stream = self._default_stream(stream)
@@ -424,28 +443,23 @@ class DeviceRecord(DeviceNDArrayBase):
         newdata = self.gpu_data.view(offset)
 
         if typ.shape == ():
-            hostary = np.empty(1, dtype=typ)
-            _driver.device_to_host(dst=hostary, src=newdata,
-                                   size=typ.itemsize,
-                                   stream=stream)
-            return hostary[0]
-        else:
             if typ.names is not None:
                 return DeviceRecord(dtype=typ, stream=stream,
                                     gpu_data=newdata)
-            # subarray case
             else:
-                shape, strides, dtype = \
-                    prepare_shape_strides_dtype(typ.shape,
-                                                None,
-                                                typ.subdtype[0], 'C')
-                return DeviceNDArray(shape=shape, strides=strides,
-                                     dtype=dtype, gpu_data=newdata,
-                                     stream=stream)
-
-    @devices.require_context
-    def __setitem__(self, key, value):
-        return self._do_setitem(key, value)
+                hostary = np.empty(1, dtype=typ)
+                _driver.device_to_host(dst=hostary, src=newdata,
+                                       size=typ.itemsize,
+                                       stream=stream)
+            return hostary[0]
+        else:
+            shape, strides, dtype = \
+                prepare_shape_strides_dtype(typ.shape,
+                                            None,
+                                            typ.subdtype[0], 'C')
+            return DeviceNDArray(shape=shape, strides=strides,
+                                 dtype=dtype, gpu_data=newdata,
+                                 stream=stream)
 
     def setitem(self, key, value, stream=0):
         """Do `__setitem__(key, value)` with CUDA stream
@@ -622,15 +636,6 @@ class DeviceNDArray(DeviceNDArrayBase):
         else:
             raise NotImplementedError("operation requires copying")
 
-    @devices.require_context
-    def __getitem__(self, item):
-        return self._do_getitem(item)
-
-    def getitem(self, item, stream=0):
-        """Do `__getitem__(item)` with CUDA stream
-        """
-        return self._do_getitem(item, stream)
-
     def _do_getitem(self, item, stream=0):
         stream = self._default_stream(stream)
 
@@ -659,15 +664,6 @@ class DeviceNDArray(DeviceNDArrayBase):
             newdata = self.gpu_data.view(*arr.extent)
             return cls(shape=arr.shape, strides=arr.strides,
                        dtype=self.dtype, gpu_data=newdata, stream=stream)
-
-    @devices.require_context
-    def __setitem__(self, key, value):
-        return self._do_setitem(key, value)
-
-    def setitem(self, key, value, stream=0):
-        """Do `__setitem__(key, value)` with CUDA stream
-        """
-        return self._do_setitem(key, value, stream=stream)
 
     def _do_setitem(self, key, value, stream=0):
 
