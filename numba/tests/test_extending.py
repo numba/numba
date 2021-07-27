@@ -512,8 +512,6 @@ class CallableTypeRef(types.Callable):
 
     def get_call_type(self, context, args, kws):
 
-        # >>> self == callable_type_ref[<class '__main__.MyClass'>]
-        # type(self) == <class '__main__.CallableTypeRef'>
         res_sig = None
         for template in context._functions[type(self)]:
             try:
@@ -539,23 +537,18 @@ class CallableTypeRef(types.Callable):
 
 @register_model(CallableTypeRef)
 class CallableTypeModel(models.OpaqueModel):
+
     def __init__(self, dmm, fe_type):
 
         models.OpaqueModel.__init__(self, dmm, fe_type)
 
 
-@typeof_impl.register(CallableTypeRef)
-def typeof_callable_typeref(val, c):
-    return val
+infer_global(MyClass, CallableTypeRef(MyClass))
 
 
 @lower_constant(CallableTypeRef)
 def constant_callable_typeref(context, builder, ty, pyval):
     return context.get_dummy_value()
-
-
-def get_callable_typeref(instance_type):
-    return CallableTypeRef(instance_type)
 
 
 # -----------------------------------------------------------------------
@@ -1230,17 +1223,15 @@ class TestHighLevelExtending(TestCase):
 
         @overload(CallableTypeRef)
         def callable_type_call_ovld2(x):
-            if isinstance(x, (types.UnicodeType, types.StringLiteral)):
+            if isinstance(x, types.UnicodeType):
                 def impl(x):
                     return '42.5' + x
 
                 return impl
 
-        typeref_type = get_callable_typeref(MyClass)
-
         @njit
         def foo(a, b):
-            return typeref_type(a), typeref_type(b)
+            return MyClass(a), MyClass(b)
 
         args = (4, '4')
         expected = (42.5 + args[0], '42.5' + args[1])
