@@ -78,6 +78,7 @@ def _cudalib_path():
     else:
         return 'lib64'
 
+
 def _static_cudalib_path():
     if IS_WIN32:
         return ('lib', 'x64')
@@ -177,7 +178,8 @@ def get_nvidia_cudalib_ctk():
     if not nvvm_ctk:
         return
     env_dir = os.path.dirname(os.path.dirname(nvvm_ctk))
-    return os.path.join(env_dir, _cudalib_path())
+    subdir = 'bin' if IS_WIN32 else 'lib'
+    return os.path.join(env_dir, subdir)
 
 
 def get_nvidia_static_cudalib_ctk():
@@ -187,7 +189,8 @@ def get_nvidia_static_cudalib_ctk():
     if not nvvm_ctk:
         return
     env_dir = os.path.dirname(os.path.dirname(nvvm_ctk))
-    return os.path.join(env_dir, 'Lib', 'x64')
+    dirs = ('Lib', 'x64') if IS_WIN32 else ('lib',)
+    return os.path.join(env_dir, *dirs)
 
 
 def get_cuda_home(*subdirs):
