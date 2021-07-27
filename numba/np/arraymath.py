@@ -28,7 +28,7 @@ from numba.np.linalg import ensure_blas
 from numba.core.extending import intrinsic
 from numba.core.errors import RequireLiteralValue, TypingError
 from numba.core.overload_glue import glue_lowering
-from numba.cpython.unsafe.tuple import tuple_setitem
+from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
 
 
 def _check_blas():
@@ -3480,7 +3480,7 @@ np_delete_handler_isarray = register_jitable(lambda x : np.asarray(x))
 
 
 @overload(np.delete)
-def np_delete(arr, obj):
+def np_delete(arr, obj, axis=None):
     # Implementation based on numpy
     # https://github.com/numpy/numpy/blob/af66e487a57bfd4850f4306e3b85d1dac3c70412/numpy/lib/function_base.py#L4065-L4267    # noqa: E501
 
@@ -3488,41 +3488,78 @@ def np_delete(arr, obj):
         raise TypingError("arr must be either an Array or a Sequence")
 
     if isinstance(obj, (types.Array, types.Sequence, types.SliceType)):
-        if isinstance(obj, (types.SliceType)):
-            handler = np_delete_handler_isslice
+
+        if isinstance(axis, types.misc.NoneType):
+            if isinstance(obj, (types.SliceType)):
+                handler = np_delete_handler_isslice
+            else:
+                if not isinstance(obj.dtype, types.Integer):
+                    raise TypingError('obj should be of Integer dtype')
+                handler = np_delete_handler_isarray
+
+            def np_delete_impl(arr, obj, axis=None):
+                arr = np.ravel(np.asarray(arr))
+                N = arr.size
+
+                keep = np.ones(N, dtype=np.bool_)
+                obj = handler(obj)
+                keep[obj] = False
+                return arr[keep]
         else:
-            if not isinstance(obj.dtype, types.Integer):
-                raise TypingError('obj should be of Integer dtype')
-            handler = np_delete_handler_isarray
+            def np_delete_impl(arr,obj, axis=None):
+                if axis > arr.ndim - 1:
+                    raise ValueError("axis must less than ndim of arr")
 
-        def np_delete_impl(arr, obj):
-            arr = np.ravel(np.asarray(arr))
-            N = arr.size
+                c = 0
+                for i in obj:
+                    arr = np.delete(arr, i - c, axis)
+                    c += 1
 
-            keep = np.ones(N, dtype=np.bool_)
-            obj = handler(obj)
-            keep[obj] = False
-            return arr[keep]
+                return arr
+
         return np_delete_impl
 
     else: # scalar value
         if not isinstance(obj, types.Integer):
             raise TypingError('obj should be of Integer dtype')
 
-        def np_delete_scalar_impl(arr, obj):
-            arr = np.ravel(np.asarray(arr))
-            N = arr.size
-            pos = obj
+        if isinstance(axis, types.misc.NoneType):
 
-            if (pos < -N or pos >= N):
-                raise IndexError('obj must be less than the len(arr)')
-                # NumPy raises IndexError: index 'i' is out of
-                # bounds for axis 'x' with size 'n'
+            def np_delete_scalar_impl(arr, obj, axis=None):
+                arr = np.ravel(np.asarray(arr))
+                N = arr.size
+                pos = obj
 
-            if (pos < 0):
-                pos += N
+                if (pos < -N or pos >= N):
+                    raise IndexError('obj must be less than the len(arr)')
+                    # NumPy raises IndexError: index 'i' is out of
+                    # bounds for axis 'x' with size 'n'
 
-            return np.concatenate((arr[:pos], arr[pos + 1:]))
+                if (pos < 0):
+                    pos += N
+
+                return np.concatenate((arr[:pos], arr[pos + 1:]))
+
+        else:
+            def np_delete_scalar_impl(arr, obj, axis=None):
+
+                if axis > arr.ndim - 1:
+                    raise ValueError("axis must less than ndim of arr")
+
+                new_shape = tuple_setitem(arr.shape, axis,arr.shape[axis] - 1)
+                new = np.empty(new_shape, arr.dtype)
+
+                slobj = build_full_slice_tuple(arr.ndim)
+                slobj = tuple_setitem(slobj, axis, slice(None, obj))
+                new[slobj] = arr[slobj]
+
+                slobj = tuple_setitem(slobj, axis, slice(obj, None))
+                slobj2 = build_full_slice_tuple(arr.ndim)
+                slobj2 = tuple_setitem(slobj2, axis, slice(obj + 1, None))
+                new[slobj] = arr[slobj2]
+
+                return new
+
         return np_delete_scalar_impl
 
 
