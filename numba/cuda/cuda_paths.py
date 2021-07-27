@@ -128,7 +128,10 @@ def get_nvidia_nvvm_ctk():
     if not is_conda_env:
         return
     # Asssume the existence of NVVM to imply cudatoolkit installed
-    libdir = os.path.join(sys.prefix, 'nvvm', 'lib64')
+    if sys.platform.startswith('linux'):
+        libdir = os.path.join(sys.prefix, 'nvvm', 'lib64')
+    else:
+        libdir = os.path.join(sys.prefix, 'nvvm', 'bin')
     if not os.path.exists(libdir) or not os.path.isdir(libdir):
         return
     paths = find_lib('nvvm', libdir=libdir)
@@ -155,7 +158,11 @@ def get_nvidia_cudalib_ctk():
     if not nvvm_ctk:
         return
     env_dir = os.path.dirname(os.path.dirname(nvvm_ctk))
-    return os.path.join(env_dir, 'lib')
+    if sys.platform.startswith('linux'):
+        libdir = 'lib'
+    else:
+        libdir = 'bin'
+    return os.path.join(env_dir, libdir)
 
 
 def get_cuda_home(*subdirs):
