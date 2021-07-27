@@ -1305,7 +1305,8 @@ def _broadcast_to_shape(context, builder, arrtype, arr, target_shape):
 
 @intrinsic
 def _numpy_broadcast_to(typingctx, array, shape):
-    ret = types.Array(array.dtype, shape.count, array.layout, readonly=True)
+    layout = 'A'  # setting layout to 'A' for broadcast_to_shapes to use strides
+    ret = types.Array(array.dtype, shape.count, layout, readonly=True)
     sig = ret(array, shape)
 
     def codegen(context, builder, sig, args):

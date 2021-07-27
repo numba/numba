@@ -52,6 +52,10 @@ def numpy_broadcast_to(arr, shape):
     return np.broadcast_to(arr, shape)
 
 
+def numpy_broadcast_to_indexing(arr, shape, idx):
+    return np.broadcast_to(arr, shape)[idx]
+
+
 def flatten_array(a):
     return a.flatten()
 
@@ -816,6 +820,16 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                 cfunc(arr, target_shape)
             self.assertIn(msg, str(raises.exception))
 
+    def test_broadcast_to_indexing(self):
+        pyfunc = numpy_broadcast_to_indexing
+        cfunc = jit(nopython=True)(pyfunc)
+        data = [
+            [np.ones(2), (2, 2), (1,)],
+        ]
+        for input_array, shape, idx in data:
+            expected = pyfunc(input_array, shape, idx)
+            got = cfunc(input_array, shape, idx)
+            self.assertPreciseEqual(got, expected)
 
     def test_shape(self):
         pyfunc = numpy_shape
