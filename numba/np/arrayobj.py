@@ -31,7 +31,6 @@ from numba.core.extending import (register_jitable, overload, overload_method,
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
-from numba.np.unsafe.ndarray import to_fixed_tuple
 from numba.core.overload_glue import glue_lowering
 
 
@@ -5407,7 +5406,6 @@ def _take_along_axis_impl_set_ni_nk(arr, indices, axis, Ni, Nk):
 def _take_along_axis_impl(arr, indices, axis, Ni, Nk):
     # Based on example code in
     # https://numpy.org/doc/stable/reference/generated/numpy.take_along_axis.html
-    M = arr.shape[axis]
     J = indices.shape[axis]  # Need not equal M
     out = np.empty(Ni + (J,) + Nk, arr.dtype)
 
@@ -5415,9 +5413,9 @@ def _take_along_axis_impl(arr, indices, axis, Ni, Nk):
         for ii in np.ndindex(Ni):
             for kk in np.ndindex(Nk):
                 np_s_ = (slice(None, None, None),)
-                a_1d       = arr    [ii + np_s_ + kk]
+                a_1d = arr[ii + np_s_ + kk]
                 indices_1d = indices[ii + np_s_ + kk]
-                out_1d     = out    [ii + np_s_ + kk]
+                out_1d = out[ii + np_s_ + kk]
                 for j in range(J):
                     out_1d[j] = a_1d[indices_1d[j]]
     return out
@@ -5431,7 +5429,9 @@ def arr_take_along_axis(arr, indices, axis):
     else:
         check_is_integer(axis, "axis")
         if not isinstance(axis, types.IntegerLiteral):
-            raise ValueError("axis must be a literal value (i.e. not an argument) for now")
+            raise ValueError(
+                "axis must be a literal value (i.e. not an argument) for now"
+            )
         axis = axis.literal_value
         if axis < 0:
             axis = arr.ndim + axis
@@ -5439,7 +5439,6 @@ def arr_take_along_axis(arr, indices, axis):
         if axis < 0 or axis >= arr.ndim:
             raise ValueError("axis is out of bounds")
 
-        n = arr.ndim
         Ni = tuple(range(axis))
         Nk = tuple(range(axis + 1, arr.ndim))
         # We need to do this rather verbose approach because tuple_setitem on
@@ -5449,14 +5448,20 @@ def arr_take_along_axis(arr, indices, axis):
         if Ni:
             if Nk:
                 def take_along_axis_impl(arr, indices, axis):
-                    return _take_along_axis_impl_set_ni_nk(arr, indices, axis, Ni, Nk)
+                    return _take_along_axis_impl_set_ni_nk(
+                        arr, indices, axis, Ni, Nk
+                    )
             else:
                 def take_along_axis_impl(arr, indices, axis):
-                    return _take_along_axis_impl_set_ni(arr, indices, axis, Ni, Nk)
+                    return _take_along_axis_impl_set_ni(
+                        arr, indices, axis, Ni, Nk
+                    )
         else:
             if Nk:
                 def take_along_axis_impl(arr, indices, axis):
-                    return _take_along_axis_impl_set_nk(arr, indices, axis, Ni, Nk)
+                    return _take_along_axis_impl_set_nk(
+                        arr, indices, axis, Ni, Nk
+                    )
             else:
                 def take_along_axis_impl(arr, indices, axis):
                     return _take_along_axis_impl(arr, indices, axis, Ni, Nk)

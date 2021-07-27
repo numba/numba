@@ -4226,7 +4226,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             return np.take_along_axis(a, i, axis=None)
 
         indices = np.array([1, 2], dtype=np.uint64)
-        self.assertPreciseEqual(axis_none(a, indices), axis_none.py_func(a, indices))
+        self.assertPreciseEqual(axis_none(a, indices),
+                                axis_none.py_func(a, indices))
 
         ai0 = np.argsort(a, axis=0)
         ai1 = np.argsort(a, axis=1)
@@ -4261,7 +4262,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def axis_minus_one(a, i):
             return np.take_along_axis(a, i, axis=-1)
 
-        self.assertPreciseEqual(axis_minus_one(a, ai3), axis_minus_one.py_func(a, ai3))
+        self.assertPreciseEqual(axis_minus_one(a, ai3),
+                                axis_minus_one.py_func(a, ai3))
 
     def test_take_along_axis_exceptions(self):
         arr2d = np.arange(8).reshape(2, 4)
