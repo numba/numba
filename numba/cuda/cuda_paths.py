@@ -90,8 +90,24 @@ def _get_cudalib_dir_path_decision():
     return by, libdir
 
 
+def _get_static_cudalib_dir_path_decision():
+    options = [
+        ('Conda environment', get_conda_ctk()),
+        ('Conda environment (NVIDIA package)', get_nvidia_static_cudalib_ctk()),
+        ('CUDA_HOME', get_cuda_home(_cudalib_path())),
+        ('System', get_system_ctk(_cudalib_path())),
+    ]
+    by, libdir = _find_valid_path(options)
+    return by, libdir
+
+
 def _get_cudalib_dir():
     by, libdir = _get_cudalib_dir_path_decision()
+    return _env_path_tuple(by, libdir)
+
+
+def _get_static_cudalib_dir():
+    by, libdir = _get_static_cudalib_dir_path_decision()
     return _env_path_tuple(by, libdir)
 
 
@@ -158,6 +174,16 @@ def get_nvidia_cudalib_ctk():
     return os.path.join(env_dir, _cudalib_path())
 
 
+def get_nvidia_static_cudalib_ctk():
+    """Return path to directory containing the static libraries of cudatoolkit.
+    """
+    nvvm_ctk = get_nvidia_nvvm_ctk()
+    if not nvvm_ctk:
+        return
+    env_dir = os.path.dirname(os.path.dirname(nvvm_ctk))
+    return os.path.join(env_dir, 'Lib', 'x64')
+
+
 def get_cuda_home(*subdirs):
     """Get paths of CUDA_HOME.
     If *subdirs* are the subdirectory name to be appended in the resulting
@@ -198,6 +224,7 @@ def get_cuda_paths():
             'nvvm': _get_nvvm_path(),
             'libdevice': _get_libdevice_paths(),
             'cudalib_dir': _get_cudalib_dir(),
+            'static_cudalib_dir': _get_static_cudalib_dir(),
         }
         # Cache result
         get_cuda_paths._cached_result = d

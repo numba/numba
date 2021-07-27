@@ -51,7 +51,8 @@ def get_cudalib(lib, platform=None, static=False):
     if lib == 'nvvm':
         return get_cuda_paths()['nvvm'].info or _dllnamepattern % 'nvvm'
     else:
-        libdir = get_cuda_paths()['cudalib_dir'].info
+        dir_type = 'static_cudalib_dir' if static else 'cudalib_dir'
+        libdir = get_cuda_paths()[dir_type].info
 
     candidates = find_lib(lib, libdir, platform=platform, static=static)
     namepattern = _staticnamepattern if static else _dllnamepattern
@@ -69,13 +70,14 @@ def check_static_lib(lib):
         raise FileNotFoundError(f'{path} not found')
 
 
-def _get_source_variable(lib):
+def _get_source_variable(lib, static=False):
     if lib == 'nvvm':
         return get_cuda_paths()['nvvm'].by
     elif lib == 'libdevice':
         return get_cuda_paths()['libdevice'].by
     else:
-        return get_cuda_paths()['cudalib_dir'].by
+        dir_type = 'static_cudalib_dir' if static else 'cudalib_dir'
+        return get_cuda_paths()[dir_type].by
 
 
 def test(_platform=None, print_paths=True):
@@ -118,7 +120,7 @@ def test(_platform=None, print_paths=True):
     # Check for cudadevrt (the only static library)
     lib = 'cudadevrt'
     path = get_cudalib(lib, _platform, static=True)
-    print('Finding {} from {}'.format(lib, _get_source_variable(lib)))
+    print('Finding {} from {}'.format(lib, _get_source_variable(lib, static=True)))
     if print_paths:
         print('\tlocated at', path)
     else:
