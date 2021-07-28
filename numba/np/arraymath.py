@@ -3487,15 +3487,18 @@ def np_delete(arr, obj, axis=None):
     if not isinstance(arr, (types.Array, types.Sequence)):
         raise TypingError("arr must be either an Array or a Sequence")
 
-    if isinstance(obj, (types.Array, types.Sequence, types.SliceType)):
+    if not isinstance(axis, (types.NoneType, types.Integer)):
+        raise TypingError("axis must be either a NoneType or an Integer")
 
-        if isinstance(axis, types.misc.NoneType):
-            if isinstance(obj, (types.SliceType)):
-                handler = np_delete_handler_isslice
-            else:
-                if not isinstance(obj.dtype, types.Integer):
-                    raise TypingError('obj should be of Integer dtype')
-                handler = np_delete_handler_isarray
+    if isinstance(obj, (types.Array, types.Sequence, types.SliceType)):
+        if isinstance(obj, (types.SliceType)):
+            handler = np_delete_handler_isslice
+        else:
+            if not isinstance(obj.dtype, types.Integer):
+                raise TypingError('obj should be of Integer dtype')
+            handler = np_delete_handler_isarray
+
+        if isinstance(axis, types.NoneType):
 
             def np_delete_impl(arr, obj, axis=None):
                 arr = np.ravel(np.asarray(arr))

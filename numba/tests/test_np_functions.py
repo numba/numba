@@ -53,8 +53,8 @@ def count_nonzero(arr, axis):
     return np.count_nonzero(arr, axis=axis)
 
 
-def delete(arr, obj):
-    return np.delete(arr, obj)
+def delete(arr, obj, axis=None):
+    return np.delete(arr, obj, axis)
 
 
 def diff1(a):
