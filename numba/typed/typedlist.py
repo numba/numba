@@ -206,9 +206,7 @@ class List(MutableSequence, pt.Generic[T]):
                 allocated=DEFAULT_ALLOCATED,
                 **kwargs):
         if config.DISABLE_JIT:
-            pylist = list.__new__(list)
-            pylist.__init__(*args, **kwargs)
-            return pylist
+            return list(*args, **kwargs)
         else:
             return object.__new__(cls)
 
