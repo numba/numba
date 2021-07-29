@@ -332,7 +332,7 @@ else:
 pedantic_warning_info = """
 This warning came from an internal pedantic check. Please report the warning
 message and traceback, along with a minimal reproducer at:
-https://github.com/numba/numba/issues/new
+https://github.com/numba/numba/issues/new?template=bug_report.md
 """
 
 feedback_details = """
