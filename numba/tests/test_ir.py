@@ -533,6 +533,8 @@ class TestIRPedanticChecks(TestCase):
 
         @njit(pipeline_class=MyCompiler)
         def dummy(x):
+            # To trigger SSA and the pedantic check, this function must have
+            # multiple assignments to the same variable in different blocks.
             a = 1
             b = 2
             if a < b:
