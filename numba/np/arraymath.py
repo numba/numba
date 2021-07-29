@@ -3510,6 +3510,7 @@ def np_delete(arr, obj, axis=None):
                 return arr[keep]
         else:
             def np_delete_impl(arr,obj, axis=None):
+                # arr = np.asarray(arr)
                 if axis > arr.ndim - 1:
                     raise ValueError("axis must less than ndim of arr")
 
@@ -3546,6 +3547,7 @@ def np_delete(arr, obj, axis=None):
         else:
             def np_delete_scalar_impl(arr, obj, axis=None):
 
+                # arr = np.asarray(arr)
                 if axis > arr.ndim - 1:
                     raise ValueError("axis must less than ndim of arr")
 

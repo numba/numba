@@ -448,7 +448,7 @@ The following top-level functions are supported:
   * If ``shape[-1] == 2`` for both inputs, please replace your
     :func:`numpy.cross` call with :func:`numba.np.extensions.cross2d`.
 
-* :func:`numpy.delete` (only the 2 first arguments)
+* :func:`numpy.delete`
 * :func:`numpy.diag`
 * :func:`numpy.digitize`
 * :func:`numpy.dstack`

@@ -752,6 +752,36 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(arr, obj)
             self.assertPreciseEqual(expected, got)
 
+    def test_delete_with_axis(self):
+
+        def arrays():
+            # array, obj
+            #
+            # an array-like type
+            yield [1, 2, 3, 4, 5], 3, 0
+            # yield [1, 2, 3, 4, 5], [2, 3], 0
+            # 1d array, scalar
+            # yield np.arange(10), 3, 0
+            # yield np.arange(10), -3, 0 # Negative obj
+            # 1d array, list
+            # yield np.arange(10), [3, 5, 6], 0
+            # yield np.arange(10), [2, 3, 4, 5], 0
+            # 3d array, scalar
+            # yield np.arange(3 * 4 * 5).reshape(3, 4, 5), 2, 2
+            # 3d array, list
+            # yield np.arange(3 * 4 * 5).reshape(3, 4, 5), [2,4], 2
+            # slices
+            # yield [1, 2, 3, 4], slice(1, 3, 1), 0
+            # yield np.arange(10), slice(10), 0
+
+        pyfunc = delete
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr, obj, axis in arrays():
+            expected = pyfunc(arr, obj, axis)
+            got = cfunc(arr, obj, axis)
+            self.assertPreciseEqual(expected, got)
+
     def test_delete_exceptions(self):
         pyfunc = delete
         cfunc = jit(nopython=True)(pyfunc)
