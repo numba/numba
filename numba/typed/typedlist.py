@@ -200,12 +200,15 @@ class List(MutableSequence, pt.Generic[T]):
     _legal_kwargs = ["lsttype", "meminfo", "allocated"]
 
     def __new__(cls,
+                *args,
                 lsttype=None,
                 meminfo=None,
                 allocated=DEFAULT_ALLOCATED,
                 **kwargs):
         if config.DISABLE_JIT:
-            return list.__new__(list)
+            pylist = list.__new__(list)
+            pylist.__init__(*args, **kwargs)
+            return pylist
         else:
             return object.__new__(cls)
 
