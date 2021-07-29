@@ -12,7 +12,7 @@ recordtype = np.dtype(
         ('a', np.float64),
         ('b', np.int32),
         ('c', np.complex64),
-        ('d', (np.str_, 5))
+        ('d', np.int64)
     ],
     align=True
 )
@@ -135,7 +135,7 @@ class TestRecordDtypeWithStructArrays(CUDATestCase):
             ary[i]['a'] = x / 2
             ary[i]['b'] = x
             ary[i]['c'] = x * 1j
-            ary[i]['d'] = "%d" % x
+            ary[i]['d'] = x * x
 
     def test_structured_array1(self):
         ary = self.sample1d
@@ -144,7 +144,7 @@ class TestRecordDtypeWithStructArrays(CUDATestCase):
             self.assertEqual(ary[i]['a'], x / 2)
             self.assertEqual(ary[i]['b'], x)
             self.assertEqual(ary[i]['c'], x * 1j)
-            self.assertEqual(ary[i]['d'], "%d" % x)
+            self.assertEqual(ary[i]['d'], x * x)
 
     def test_structured_array2(self):
         ary = self.samplerec1darr

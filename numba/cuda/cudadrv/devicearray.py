@@ -112,24 +112,6 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
         self.gpu_data = gpu_data
         self.stream = stream
 
-    @devices.require_context
-    def __getitem__(self, item):
-        return self._do_getitem(item)
-
-    def getitem(self, item, stream=0):
-        """Do `__getitem__(item)` with CUDA stream
-        """
-        return self._do_getitem(item, stream)
-
-    @devices.require_context
-    def __setitem__(self, key, value):
-        return self._do_setitem(key, value)
-
-    def setitem(self, key, value, stream=0):
-        """Do `__setitem__(key, value)` with CUDA stream
-        """
-        return self._do_setitem(key, value, stream=stream)
-
     @property
     def __cuda_array_interface__(self):
         if self.device_ctypes_pointer.value is not None:
@@ -432,6 +414,11 @@ class DeviceRecord(DeviceNDArrayBase):
         """
         return numpy_support.from_dtype(self.dtype)
 
+    @devices.require_context
+    def __getitem__(self, item):
+        return self._do_getitem(item)
+
+    @devices.require_context
     def getitem(self, item, stream=0):
         """Do `__getitem__(item)` with CUDA stream
         """
@@ -461,6 +448,11 @@ class DeviceRecord(DeviceNDArrayBase):
                                  dtype=dtype, gpu_data=newdata,
                                  stream=stream)
 
+    @devices.require_context
+    def __setitem__(self, key, value):
+        return self._do_setitem(key, value)
+
+    @devices.require_context
     def setitem(self, key, value, stream=0):
         """Do `__setitem__(key, value)` with CUDA stream
         """
@@ -636,6 +628,16 @@ class DeviceNDArray(DeviceNDArrayBase):
         else:
             raise NotImplementedError("operation requires copying")
 
+    @devices.require_context
+    def __getitem__(self, item):
+        return self._do_getitem(item)
+
+    @devices.require_context
+    def getitem(self, item, stream=0):
+        """Do `__getitem__(item)` with CUDA stream
+        """
+        return self._do_getitem(item, stream)
+
     def _do_getitem(self, item, stream=0):
         stream = self._default_stream(stream)
 
@@ -664,6 +666,16 @@ class DeviceNDArray(DeviceNDArrayBase):
             newdata = self.gpu_data.view(*arr.extent)
             return cls(shape=arr.shape, strides=arr.strides,
                        dtype=self.dtype, gpu_data=newdata, stream=stream)
+
+    @devices.require_context
+    def __setitem__(self, key, value):
+        return self._do_setitem(key, value)
+
+    @devices.require_context
+    def setitem(self, key, value, stream=0):
+        """Do `__setitem__(key, value)` with CUDA stream
+        """
+        return self._do_setitem(key, value, stream=stream)
 
     def _do_setitem(self, key, value, stream=0):
 
