@@ -3487,7 +3487,7 @@ def np_delete(arr, obj, axis=None):
     if not isinstance(arr, (types.Array, types.Sequence)):
         raise TypingError("arr must be either an Array or a Sequence")
 
-    if not isinstance(axis, (types.NoneType, types.Integer)):
+    if not isinstance(axis, (type(None), types.NoneType, types.Integer)):
         raise TypingError("axis must be either a NoneType or an Integer")
 
     if isinstance(obj, (types.Array, types.Sequence, types.SliceType)):
@@ -3498,8 +3498,7 @@ def np_delete(arr, obj, axis=None):
                 raise TypingError('obj should be of Integer dtype')
             handler = np_delete_handler_isarray
 
-        if isinstance(axis, types.NoneType):
-
+        if axis in (None, types.none):
             def np_delete_impl(arr, obj, axis=None):
                 arr = np.ravel(np.asarray(arr))
                 N = arr.size
@@ -3510,9 +3509,16 @@ def np_delete(arr, obj, axis=None):
                 return arr[keep]
         else:
             def np_delete_impl(arr,obj, axis=None):
-                # arr = np.asarray(arr)
                 if axis > arr.ndim - 1:
-                    raise ValueError("axis must less than ndim of arr")
+                    raise IndexError("axis must less than ndim of arr")
+                pos = np.sort(np.asarray(obj))
+                N = arr.shape[axis]
+                for index, num in enumerate(pos):
+                    if (num < -N or num >= N):
+                        raise IndexError(
+                            'obj must be less than arr.shape[axis]')
+                    if num < 0:
+                        obj[index] = num + N
 
                 c = 0
                 for i in obj:
@@ -3527,8 +3533,7 @@ def np_delete(arr, obj, axis=None):
         if not isinstance(obj, types.Integer):
             raise TypingError('obj should be of Integer dtype')
 
-        if isinstance(axis, types.misc.NoneType):
-
+        if axis in (None, types.none):
             def np_delete_scalar_impl(arr, obj, axis=None):
                 arr = np.ravel(np.asarray(arr))
                 N = arr.size
@@ -3543,13 +3548,16 @@ def np_delete(arr, obj, axis=None):
                     pos += N
 
                 return np.concatenate((arr[:pos], arr[pos + 1:]))
-
         else:
             def np_delete_scalar_impl(arr, obj, axis=None):
-
-                # arr = np.asarray(arr)
                 if axis > arr.ndim - 1:
-                    raise ValueError("axis must less than ndim of arr")
+                    raise IndexError("axis must less than ndim of arr")
+
+                N = arr.shape[axis]
+                if (obj < -N or obj >= N):
+                    raise IndexError('obj must be less than arr.shape[axis]')
+                if (obj < 0):
+                    obj += N
 
                 new_shape = tuple_setitem(arr.shape, axis,arr.shape[axis] - 1)
                 new = np.empty(new_shape, arr.dtype)

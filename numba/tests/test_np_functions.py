@@ -54,7 +54,7 @@ def count_nonzero(arr, axis):
 
 
 def delete(arr, obj, axis=None):
-    return np.delete(arr, obj, axis)
+    return np.delete(arr, obj, axis=axis)
 
 
 def diff1(a):
@@ -755,24 +755,24 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_delete_with_axis(self):
 
         def arrays():
-            # array, obj
+            # array, obj, axis
             #
-            # an array-like type
-            yield [1, 2, 3, 4, 5], 3, 0
-            # yield [1, 2, 3, 4, 5], [2, 3], 0
             # 1d array, scalar
-            # yield np.arange(10), 3, 0
-            # yield np.arange(10), -3, 0 # Negative obj
+            yield np.arange(10), 3, 0
+            yield np.arange(10), -3, 0 # Negative obj
             # 1d array, list
-            # yield np.arange(10), [3, 5, 6], 0
-            # yield np.arange(10), [2, 3, 4, 5], 0
+            yield np.arange(10), [3, 5, 6], 0
+            yield np.arange(10), [6, 5, 3], 0
+            yield np.arange(10), [-2, -3, -4], 0
+            yield np.arange(10), [-4, -3, -2], 0
             # 3d array, scalar
-            # yield np.arange(3 * 4 * 5).reshape(3, 4, 5), 2, 2
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), 2, 2
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), -2, 2
             # 3d array, list
-            # yield np.arange(3 * 4 * 5).reshape(3, 4, 5), [2,4], 2
-            # slices
-            # yield [1, 2, 3, 4], slice(1, 3, 1), 0
-            # yield np.arange(10), slice(10), 0
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), [0, 2, 3], 1
+            yield np.arange(3 * 4 * 5).reshape(4, 3, 5), [0, 2, 1], 1
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), [-3, -2, -1], 2
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), [-2, -3, -1], 2
 
         pyfunc = delete
         cfunc = jit(nopython=True)(pyfunc)
@@ -780,7 +780,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for arr, obj, axis in arrays():
             expected = pyfunc(arr, obj, axis)
             got = cfunc(arr, obj, axis)
-            self.assertPreciseEqual(expected, got)
+            self.assertAlmostEqual(expected.all(), got.all())
 
     def test_delete_exceptions(self):
         pyfunc = delete
@@ -802,9 +802,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         )
 
         with self.assertRaises(TypingError) as raises:
-            cfunc(2, 3)
+            cfunc(np.arange(10), [3.5, 5.6, 6.2], 0)
         self.assertIn(
-            'arr must be either an Array or a Sequence',
+            'obj should be of Integer dtype',
             str(raises.exception)
         )
 
@@ -813,6 +813,48 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn(
             'obj must be less than the len(arr)',
             str(raises.exception),
+        )
+
+        with self.assertRaises(IndexError) as raises:
+            cfunc(np.arange(2 * 3 * 4).reshape(2, 3, 4), 3, 0)
+        self.assertIn(
+            'obj must be less than arr.shape[axis]',
+            str(raises.exception),
+        )
+
+        with self.assertRaises(IndexError) as raises:
+            cfunc(np.arange(2 * 3 * 4).reshape(2, 3, 4), -3, 0)
+        self.assertIn(
+            'obj must be less than arr.shape[axis]',
+            str(raises.exception),
+        )
+
+        with self.assertRaises(IndexError) as raises:
+            cfunc(np.arange(2 * 3 * 4).reshape(2, 3, 4), [3, 4], 0)
+        self.assertIn(
+            'obj must be less than arr.shape[axis]',
+            str(raises.exception),
+        )
+
+        with self.assertRaises(IndexError) as raises:
+            cfunc(np.arange(2 * 3 * 4).reshape(2, 3, 4), [-4, -3], 0)
+        self.assertIn(
+            'obj must be less than arr.shape[axis]',
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(2, 3)
+        self.assertIn(
+            'arr must be either an Array or a Sequence',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(2, 3, 0)
+        self.assertIn(
+            'arr must be either an Array or a Sequence',
+            str(raises.exception)
         )
 
     def diff_arrays(self):
