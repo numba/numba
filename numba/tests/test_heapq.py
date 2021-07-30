@@ -379,7 +379,8 @@ class _TestHeapq(MemoryLeakMixin):
         cfunc_heappop = jit(nopython=True)(heappop)
 
         for trial in range(100):
-            data = self.listimpl(self.rnd.choice(range(5), 10))
+            values = np.arange(5, dtype=np.int64)
+            data = self.listimpl(self.rnd.choice(values, 10))
             if trial & 1:
                 heap = data[:]
                 cfunc_heapify(heap)
@@ -422,7 +423,8 @@ class _TestHeapq(MemoryLeakMixin):
         pyfunc_heapify = heapify
         cfunc_heapify = jit(nopython=True)(pyfunc_heapify)
 
-        data = self.listimpl(self.rnd.choice(range(2000), 1000))
+        values = np.arange(2000, dtype=np.int64)
+        data = self.listimpl(self.rnd.choice(values, 1000))
         heap = data[:10]
         cfunc_heapify(heap)
 
