@@ -316,7 +316,7 @@ else:
 
 feedback_details = """
 Please report the error message and traceback, along with a minimal reproducer
-at: https://github.com/numba/numba/issues/new
+at: https://github.com/numba/numba/issues/new?template=bug_report.md
 
 If more help is needed please feel free to speak to the Numba core developers
 directly at: https://gitter.im/numba/numba
