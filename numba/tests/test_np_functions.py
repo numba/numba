@@ -773,6 +773,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.arange(3 * 4 * 5).reshape(4, 3, 5), [0, 2, 1], 1
             yield np.arange(3 * 4 * 5).reshape(3, 4, 5), [-3, -2, -1], 2
             yield np.arange(3 * 4 * 5).reshape(3, 4, 5), [-2, -3, -1], 2
+            # slices
+            yield np.arange(10), slice(1, 3, 1), 0
+            yield np.arange(10), slice(10), 0
 
         pyfunc = delete
         cfunc = jit(nopython=True)(pyfunc)
@@ -824,20 +827,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(IndexError) as raises:
             cfunc(np.arange(2 * 3 * 4).reshape(2, 3, 4), -3, 0)
-        self.assertIn(
-            'obj must be less than arr.shape[axis]',
-            str(raises.exception),
-        )
-
-        with self.assertRaises(IndexError) as raises:
-            cfunc(np.arange(2 * 3 * 4).reshape(2, 3, 4), [3, 4], 0)
-        self.assertIn(
-            'obj must be less than arr.shape[axis]',
-            str(raises.exception),
-        )
-
-        with self.assertRaises(IndexError) as raises:
-            cfunc(np.arange(2 * 3 * 4).reshape(2, 3, 4), [-4, -3], 0)
         self.assertIn(
             'obj must be less than arr.shape[axis]',
             str(raises.exception),

@@ -3493,10 +3493,12 @@ def np_delete(arr, obj, axis=None):
     if isinstance(obj, (types.Array, types.Sequence, types.SliceType)):
         if isinstance(obj, (types.SliceType)):
             handler = np_delete_handler_isslice
+            obj_is_slice = True
         else:
             if not isinstance(obj.dtype, types.Integer):
                 raise TypingError('obj should be of Integer dtype')
             handler = np_delete_handler_isarray
+            obj_is_slice = False
 
         if axis in (None, types.none):
             def np_delete_impl(arr, obj, axis=None):
@@ -3508,24 +3510,32 @@ def np_delete(arr, obj, axis=None):
                 keep[obj] = False
                 return arr[keep]
         else:
-            def np_delete_impl(arr,obj, axis=None):
+            ndim = arr.ndim
+
+            def np_delete_impl(arr, obj, axis=None):
                 if axis > arr.ndim - 1:
                     raise IndexError("axis must less than ndim of arr")
-                pos = np.sort(np.asarray(obj))
-                N = arr.shape[axis]
-                for index, num in enumerate(pos):
-                    if (num < -N or num >= N):
-                        raise IndexError(
-                            'obj must be less than arr.shape[axis]')
-                    if num < 0:
-                        obj[index] = num + N
 
-                c = 0
-                for i in obj:
-                    arr = np.delete(arr, i - c, axis)
-                    c += 1
+                shape = arr.shape
+                keep = np.ones(shape, dtype=np.bool_)
+                slobj = build_full_slice_tuple(ndim)
+                if obj_is_slice:
+                    slobj = tuple_setitem(slobj, axis, obj)
+                    keep[slobj] = False
+                    obj_length = (obj.stop - obj.start) / obj.step
+                else:
+                    for pos in obj:
+                        if (pos < 0):
+                            pos += shape[axis]
+                        slobj = tuple_setitem(slobj, axis, slice(pos, pos + 1))
+                        keep[slobj] = False
+                    obj_length = len(obj)
 
-                return arr
+                new_shape = tuple_setitem(shape, axis, shape[axis] - obj_length)
+                arr = np.ravel(arr)
+                keep = np.ravel(keep)
+                res = arr[keep].reshape(new_shape)
+                return res
 
         return np_delete_impl
 
