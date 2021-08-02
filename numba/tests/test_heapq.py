@@ -5,6 +5,7 @@ import numpy as np
 
 from numba import jit, typed
 from numba.core.compiler import Flags
+from numba.core.config import IS_WIN32
 from numba.tests.support import TestCase, CompilationCache, MemoryLeakMixin
 
 no_pyobj_flags = Flags()
@@ -378,8 +379,14 @@ class _TestHeapq(MemoryLeakMixin):
         cfunc_heappush = jit(nopython=True)(heappush)
         cfunc_heappop = jit(nopython=True)(heappop)
 
+        arange_kwargs = {}
+        if IS_WIN32:
+            # Ensure consistency of typing on Windows, where the default dtype
+            # of arange is int32 (vs. int64 on other 64-bit platforms)
+            arange_kwargs['dtype'] = np.int64
+
         for trial in range(100):
-            values = np.arange(5, dtype=np.int64)
+            values = np.arange(5, **arange_kwargs)
             data = self.listimpl(self.rnd.choice(values, 10))
             if trial & 1:
                 heap = data[:]
@@ -423,7 +430,13 @@ class _TestHeapq(MemoryLeakMixin):
         pyfunc_heapify = heapify
         cfunc_heapify = jit(nopython=True)(pyfunc_heapify)
 
-        values = np.arange(2000, dtype=np.int64)
+        arange_kwargs = {}
+        if IS_WIN32:
+            # Ensure consistency of typing on Windows, where the default dtype
+            # of arange is int32 (vs. int64 on other 64-bit platforms)
+            arange_kwargs['dtype'] = np.int64
+
+        values = np.arange(2000, **arange_kwargs)
         data = self.listimpl(self.rnd.choice(values, 1000))
         heap = data[:10]
         cfunc_heapify(heap)
