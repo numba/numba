@@ -4659,3 +4659,87 @@ def cross2d(a, b):
         return _cross2d_operation(a_, b_)
 
     return impl
+
+
+@register_jitable
+def multiply_reduce(a):
+    result = 1
+    for i in range(len(a)):
+        result *= a[i]
+    return result
+
+
+@register_jitable
+def copy_to_tuple(from_list, to_tuple):
+    for i in range(len(to_tuple)):
+        tuple_setitem(to_tuple, i, from_list[i])
+
+
+@overload(np.tensordot)
+def np_tensordot(a, b, axes):
+    #if not type_can_asarray(a) or not type_can_asarray(b):
+    #    raise TypingError("Inputs must be array-like.")
+    # try:
+    #     iter(axes)
+    # except Exception:
+    #     axes_a = list(range(-axes, 0))
+    #     axes_b = list(range(0, axes))
+    # else:
+    #     axes_a, axes_b = axes
+    newaxes_a = (0,) * a.ndim
+    newaxes_b = (0,) * b.ndim
+
+    def tensordot_impl(a, b, axes):
+        axes_a, axes_b = axes
+
+        na = len(axes_a)
+        axes_a = list(axes_a)
+
+        nb = len(axes_b)
+        axes_b = list(axes_b)
+
+        a, b = np.asarray(a), np.asarray(b)
+        as_ = a.shape
+        nda = a.ndim
+        bs = b.shape
+        ndb = b.ndim
+        equal = True
+        if na != nb:
+            equal = False
+        else:
+            for k in range(na):
+                if as_[axes_a[k]] != bs[axes_b[k]]:
+                    equal = False
+                    break
+                if axes_a[k] < 0:
+                    axes_a[k] += nda
+                if axes_b[k] < 0:
+                    axes_b[k] += ndb
+        if not equal:
+            raise ValueError("shape-mismatch for sum")
+
+        # Move the axes to sum over to the end of "a"
+        # and to the front of "b"
+        notin = [k for k in range(nda) if k not in axes_a]
+        copy_to_tuple(notin + axes_a, newaxes_a)
+
+        N2 = 1
+        for axis in axes_a:
+            N2 *= as_[axis]
+        newshape_a = (int(multiply_reduce([as_[ax] for ax in notin])), N2)
+        olda = [as_[axis] for axis in notin]
+
+        notin = [k for k in range(ndb) if k not in axes_b]
+        copy_to_tuple(axes_b + notin, newaxes_b)
+        N2 = 1
+        for axis in axes_b:
+            N2 *= bs[axis]
+        newshape_b = (N2, int(multiply_reduce([bs[ax] for ax in notin])))
+        oldb = [bs[axis] for axis in notin]
+
+        at = a.transpose(newaxes_a).reshape(newshape_a)
+        bt = b.transpose(newaxes_b).reshape(newshape_b)
+        res = np.dot(at, bt)
+        return res.reshape(olda + oldb)
+
+    return tensordot_impl
