@@ -799,10 +799,6 @@ for fName in ["var", "std"]:
     install_array_method(fName, generic_hetero_always_real)
 
 
-# Functions that return an index (intp)
-install_array_method("argmin", generic_index)
-
-
 @infer_global(operator.eq)
 class CmpOpEqArray(AbstractTemplate):
     #key = operator.eq
