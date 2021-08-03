@@ -314,7 +314,14 @@ class Lower(BaseLower):
                 if len(var_assign_map[var]) == 1:
                     # Usemap does not keep locally defined variables.
                     if len(var_use_map[var]) == 0:
-                        sav.add(var)
+                        # Ensure that the variable is not defined multiple times
+                        # the the block
+                        [defblk] = var_assign_map[var]
+                        assigns = [stmt for stmt in self.blocks[defblk].body
+                                   if isinstance(stmt, ir.Assign)
+                                   and stmt.target.name == var]
+                        if len(assigns) == 1:
+                            sav.add(var)
 
         self._singly_assigned_vars = sav
         self._blk_local_varmap = {}
