@@ -1,6 +1,7 @@
 from math import sqrt
 from numba import cuda, float32, uint32, void
 from numba.cuda import compile_ptx, compile_ptx_for_current_device
+from numba.cuda.cudadrv.nvvm import NVVM
 
 from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 
@@ -64,6 +65,9 @@ class TestCompileToPTX(unittest.TestCase):
         self.assertIn('sqrt.approx.ftz.f32', ptx)
 
     def check_debug_info(self, ptx):
+        if not NVVM().is_nvvm70:
+            self.skipTest('debuginfo not generated for NVVM 3.4')
+
         # A debug_info section should exist in the PTX. Whitespace varies
         # between CUDA toolkit versions.
         self.assertRegex(ptx, '\\.section\\s+\\.debug_info')
@@ -73,7 +77,12 @@ class TestCompileToPTX(unittest.TestCase):
         self.assertRegex(ptx, '\\.file.*test_compiler.py"')
 
     def test_device_function_with_debug(self):
-        # See Issue #6719
+        # See Issue #6719 - this ensures that compilation with debug succeeds
+        # with CUDA 11.2 / NVVM 7.0 onwards. Previously it failed because NVVM
+        # IR version metadata was not added when compiling device functions,
+        # and NVVM assumed DBG version 1.0 if not specified, which is
+        # incompatible with the 3.0 IR we use. This was specified only for
+        # kernels.
         def f():
             pass
 

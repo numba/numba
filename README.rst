@@ -49,7 +49,7 @@ Dependencies
 ============
 
 * Python versions: 3.7-3.9
-* llvmlite 0.37.*
+* llvmlite 0.38.*
 * NumPy >=1.17 (can build with 1.11 for ABI compatibility).
 
 Optionally:
@@ -81,7 +81,7 @@ Mailing Lists
 
 Numba has a discourse forum for discussions:
 
-* https://numba.discourse.groups
+* https://numba.discourse.group
 
 Some old mailing list archives are at:
 

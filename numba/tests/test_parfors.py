@@ -43,7 +43,8 @@ from numba.core.typed_passes import IRLegalization
 from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       override_env_config, linux_only, tag,
                       skip_parfors_unsupported, _32bit, needs_blas,
-                      needs_lapack, disabled_test, skip_unless_scipy)
+                      needs_lapack, disabled_test, skip_unless_scipy,
+                      needs_subprocess)
 import cmath
 import unittest
 
@@ -52,9 +53,8 @@ import unittest
 # used to determine whether a test is skipped or not, such that if you want to
 # run any parfors test directly this environment variable can be set. The
 # subprocesses running the test classes set this environment variable as the new
-# process starts which enables the tests within the process.
-_exec_cond = os.environ.get('SUBPROC_TEST', None) == '1'
-needs_subprocess = unittest.skipUnless(_exec_cond, "needs subprocess harness")
+# process starts which enables the tests within the process. The decorator
+# @needs_subprocess is used to ensure the appropriate test skips are made.
 
 
 @skip_parfors_unsupported
@@ -73,17 +73,10 @@ class TestParforsRunner(TestCase):
     def runner(self):
         themod = self.__module__
         test_clazz_name = self.id().split('.')[-1].split('_')[-1]
-        the_test = f'{themod}.{test_clazz_name}'
-        cmd = [sys.executable, '-m', 'numba.runtests', the_test]
-        env_copy = os.environ.copy()
-        env_copy['SUBPROC_TEST'] = '1'
-        status = subprocess.run(cmd, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, timeout=self._TIMEOUT,
-                                env=env_copy, universal_newlines=True)
-        self.assertEqual(status.returncode, 0, msg=status.stderr)
-        self.assertIn('OK', status.stderr)
-        self.assertTrue('FAIL' not in status.stderr)
-        self.assertTrue('ERROR' not in status.stderr)
+        # don't specify a given test, it's an entire class that needs running
+        self.subprocess_test_runner(test_module=themod,
+                                    test_class=test_clazz_name,
+                                    timeout=self._TIMEOUT)
 
     def test_TestParforBasic(self):
         self.runner()
@@ -811,6 +804,18 @@ class TestParforBasic(TestParforsBase):
             return operator.add(m2, v1)
 
         self.check(test_impl, *self.simple_args)
+
+    def test_inplace_alias(self):
+        # issue7201
+        def test_impl(a):
+            a += 1
+            a[:] = 3
+
+        def comparer(a, b):
+            np.testing.assert_equal(a, b)
+
+        x = np.ones(1)
+        self.check(test_impl, x, check_arg_equality=[comparer])
 
 
 @skip_parfors_unsupported
@@ -3447,6 +3452,36 @@ class TestPrangeBasic(TestPrangeBase):
 
         self.prange_tester(test_impl, TwoDPts, comboarr, scheduler_type='unsigned',
                            check_fastmath=True, check_fastmath_result=True)
+
+    def test_prange_29(self):
+        def test_impl(x, y):
+            out = np.zeros(len(y))
+            for idx in range(0, len(y)):
+                i0 = y[idx, 0]
+                i1 = y[idx, 1]
+                Pt1 = x[i0]
+                Pt2 = x[i1]
+                v = Pt1 - Pt2
+                vl2 = v[0] + v[1]
+                out[idx] = vl2
+            return out
+
+        X = np.array([[-1., -1.],
+                      [-1.,  1.],
+                      [ 0.,  0.],
+                      [ 1., -1.],
+                      [ 1.,  0.],
+                      [ 1.,  1.]])
+
+        Y = np.array([[0, 1],
+                      [1, 2],
+                      [2, 3],
+                      [3, 4],
+                      [4, 5]])
+
+        self.prange_tester(test_impl, X, Y, scheduler_type='unsigned',
+                           check_fastmath=True, check_fastmath_result=True)
+
 
 @skip_parfors_unsupported
 class TestPrangeSpecific(TestPrangeBase):

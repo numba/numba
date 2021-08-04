@@ -1,5 +1,6 @@
 import contextlib
 import os
+import platform
 import shutil
 import sys
 
@@ -97,6 +98,12 @@ def skip_without_nvdisasm(reason):
 def skip_with_nvdisasm(reason):
     nvdisasm_path = shutil.which('nvdisasm')
     return unittest.skipIf(nvdisasm_path is not None, reason)
+
+
+def skip_on_arm(reason):
+    cpu = platform.processor()
+    is_arm = cpu.startswith('arm') or cpu.startswith('aarch')
+    return unittest.skipIf(is_arm, reason)
 
 
 def cc_X_or_above(major, minor):

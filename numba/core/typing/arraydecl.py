@@ -421,7 +421,7 @@ class ArrayAttribute(AttributeTemplate):
         kwargs = dict(kws)
         kind = kwargs.pop('kind', types.StringLiteral('quicksort'))
         if not isinstance(kind, types.StringLiteral):
-            raise errors.TypingError('"kind" must be a string literal')
+            raise TypingError('"kind" must be a string literal')
         if kwargs:
             msg = "Unsupported keywords: {!r}"
             raise TypingError(msg.format([k for k in kwargs.keys()]))
@@ -797,10 +797,6 @@ for fName in ["mean"]:
 # get promoted to float64 return
 for fName in ["var", "std"]:
     install_array_method(fName, generic_hetero_always_real)
-
-
-# Functions that return an index (intp)
-install_array_method("argmin", generic_index)
 
 
 @infer_global(operator.eq)
