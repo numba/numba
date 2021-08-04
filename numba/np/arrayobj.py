@@ -4157,8 +4157,8 @@ def np_normalize_axis_index(axis, ndim, msg_prefix=None):
     if not isinstance(ndim, types.Integer):
         raise TypeError("ndim must be an integer")
 
-    if not isinstance(msg_prefix, (type(None),
-                      types.NoneType, types.StringLiteral)):
+    if not isinstance(msg_prefix, (type(None), types.NoneType,
+                      types.StringLiteral, types.misc.UnicodeType)):
         raise TypeError("msg_prefix must be a literal string")
 
     def normalize_axis_index_impl(axis, ndim, msg_prefix=None):
@@ -4188,7 +4188,9 @@ def normalize_axis_list(axis, ndim, argname=None, allow_duplicate=False):
 
 @overload(normalize_axis_list)
 def _normalize_axis_list(axis, ndim, argname=None, allow_duplicate=False):
-    if not isinstance(axis, (types.Sequence, types.List)):
+    if not isinstance(axis, types.Sequence):
+        raise TypeError("axis must be a sequence of integers")
+    elif not isinstance(axis.dtype, types.Integer):
         raise TypeError("axis must be a sequence of integers")
 
     if not isinstance(ndim, types.Integer):

@@ -19,6 +19,7 @@ from numba.np.extensions import cross2d
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
                                  needs_blas)
 import unittest
+from numba.np.arrayobj import normalize_axis_list
 
 
 no_pyobj_flags = Flags()
@@ -55,6 +56,10 @@ def count_nonzero(arr, axis):
 
 def delete(arr, obj):
     return np.delete(arr, obj)
+
+
+def np_normalize_axis_list(axis, ndim, argname=None, allow_duplicate=False):
+    return normalize_axis_list(axis, ndim, argname, allow_duplicate)
 
 
 def moveaxis(a, source, destination):
@@ -798,6 +803,85 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc([1, 2], 3)
         self.assertIn(
             'obj must be less than the len(arr)',
+            str(raises.exception),
+        )
+
+    def test_normalize_axis_list(self):
+
+        pyfunc = np_normalize_axis_list
+        cfunc = jit(nopython=True)(pyfunc)
+        self.disable_leak_check()
+
+        self.assertPreciseEqual(
+            cfunc([-3, -2, -1], 3), [0, 1, 2])
+
+        self.assertPreciseEqual(
+            cfunc([-3, -2, -1], 3, None, False), [0, 1, 2])
+
+        self.assertPreciseEqual(
+            cfunc([0, -1, 1], 3, None, False), [0, 2, 1])
+
+        self.assertPreciseEqual(
+            cfunc([0, -1, 1], 3, "source", False), [0, 2, 1])
+
+        self.assertPreciseEqual(
+            cfunc([0, 1, 1], 3, "source", True), [0, 1, 1])
+
+        self.assertPreciseEqual(
+            cfunc([0, -2, 1], 3, "source", True), [0, 1, 1])
+
+    def test_normalize_axis_list_exceptions(self):
+        pyfunc = np_normalize_axis_list
+        cfunc = jit(nopython=True)(pyfunc)
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(1, 2)
+        self.assertIn(
+            "axis must be a sequence of integers",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc([1.0], 2)
+        self.assertIn(
+            "axis must be a sequence of integers",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc([0, 1], 2.0)
+        self.assertIn(
+            "ndim must be an integer",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc([0, 1], 2, argname=3)
+        self.assertIn(
+            "argname must be a literal string or None",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc([0, 1], 2, allow_duplicate="")
+        self.assertIn(
+            "allow_duplicate must be True/False",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc([0, 1, 1], 2, allow_duplicate=False)
+        self.assertIn(
+            "repeated axis",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(NotImplementedError) as raises:
+            pyfunc([0, 1], 2)
+        self.assertIn(
+            "normalize_axis_list: "
+            "this function can only be used in nopython mode",
             str(raises.exception),
         )
 
