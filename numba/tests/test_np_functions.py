@@ -20,6 +20,7 @@ from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
                                  needs_blas)
 import unittest
 from numba.np.arrayobj import normalize_axis_list
+from numpy.core.multiarray import normalize_axis_index
 
 
 no_pyobj_flags = Flags()
@@ -56,6 +57,10 @@ def count_nonzero(arr, axis):
 
 def delete(arr, obj):
     return np.delete(arr, obj)
+
+
+def np_normalize_axis_index(axis, ndim, msg_prefix=None):
+    return normalize_axis_index(axis, ndim, msg_prefix)
 
 
 def np_normalize_axis_list(axis, ndim, argname=None, allow_duplicate=False):
@@ -803,6 +808,65 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc([1, 2], 3)
         self.assertIn(
             'obj must be less than the len(arr)',
+            str(raises.exception),
+        )
+
+    def test_normalize_axis_index(self):
+
+        pyfunc = np_normalize_axis_index
+        cfunc = jit(nopython=True)(pyfunc)
+        self.disable_leak_check()
+
+        self.assertPreciseEqual(pyfunc(1, 2), cfunc(1, 2))
+        self.assertPreciseEqual(pyfunc(-1, 2), cfunc(-1, 2))
+        self.assertPreciseEqual(pyfunc(-1, 2, "source"), cfunc(-1, 2, "source"))
+        self.assertPreciseEqual(pyfunc(-2, 2, "source"), cfunc(-2, 2, "source"))
+
+    def test_normalize_axis_index_exceptions(self):
+
+        pyfunc = np_normalize_axis_index
+        cfunc = jit(nopython=True)(pyfunc)
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(1.0, 3)
+        self.assertIn(
+            'axis must be an integer',
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc([1, 2], 3)
+        self.assertIn(
+            'axis must be an integer',
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(1, 3.0)
+        self.assertIn(
+            'ndim must be an integer',
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(1, 3, 3)
+        self.assertIn(
+            'msg_prefix must be a literal string',
+            str(raises.exception),
+        )
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(4, 3)
+        self.assertIn(
+            'axis is out of bounds for array',
+            str(raises.exception),
+        )
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(-4, 3)
+        self.assertIn(
+            'axis is out of bounds for array',
             str(raises.exception),
         )
 
