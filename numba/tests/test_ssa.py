@@ -509,6 +509,7 @@ class TestSROAIssues(MemoryLeakMixin, TestCase):
         # variables named "foobar".
         # In reported issue, the bug will cause a memory leak.
         cloned = []
+
         @register_pass(analysis_only=False, mutates_CFG=True)
         class CloneFoobarAssignments(FunctionPass):
             # A pass that clone variable assignments into "foobar"
