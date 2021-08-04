@@ -4,13 +4,17 @@ Tests for SSA reconstruction
 import sys
 import copy
 import logging
+import io
 
 import numpy as np
 
 from numba import njit, jit, types
-from numba.core import errors
+from numba.core import errors, ir
+from numba.core.compiler_machinery import FunctionPass, register_pass
+from numba.core.compiler import DefaultPassBuilder, CompilerBase
+from numba.core.untyped_passes import ReconstructSSA
 from numba.extending import overload
-from numba.tests.support import TestCase, override_config
+from numba.tests.support import MemoryLeakMixin, TestCase, override_config
 
 
 _DEBUG = False
@@ -493,3 +497,77 @@ class TestReportedSSAIssues(SSABaseTest):
         self.assertPreciseEqual(while_for(10), while_for.py_func(10))
         # One phi?
         self.assertEqual(phi_counter, [1])
+
+
+class TestSROAIssues(MemoryLeakMixin, TestCase):
+    # This tests issues related to the SROA optimization done in lowering to
+    # reduce time spent in LLVM SROA pass. The optimization is related to SSA
+    # and tries to reduce the number of alloca statements for variables with
+    # only a single assignemnt.
+    def test_issue7258_multiple_assignment_post_SSA(self):
+        # This test adds a pass that will duplicate assignment statements to
+        # variables named "foobar".
+        # In reported issue, the bug will cause a memory leak.
+        cloned = []
+        @register_pass(analysis_only=False, mutates_CFG=True)
+        class CloneFoobarAssignments(FunctionPass):
+            # A pass that clone variable assignments into "foobar"
+            _name = "clone_foobar_assignments_pass"
+
+            def __init__(self):
+                FunctionPass.__init__(self)
+
+            def run_pass(self, state):
+                mutated = False
+                for blk in state.func_ir.blocks.values():
+                    to_clone = []
+                    # find assignments to "foobar"
+                    for assign in blk.find_insts(ir.Assign):
+                        if assign.target.name == "foobar":
+                            to_clone.append(assign)
+                    # clone
+                    for assign in to_clone:
+                        clone = copy.deepcopy(assign)
+                        blk.insert_after(clone, assign)
+                        mutated = True
+                        # keep track of cloned statements
+                        cloned.append(clone)
+                return mutated
+
+        class CustomCompiler(CompilerBase):
+            def define_pipelines(self):
+                pm = DefaultPassBuilder.define_nopython_pipeline(
+                    self.state, "custom_pipeline",
+                )
+                pm._finalized = False
+                # Insert the cloning pass after SSA
+                pm.add_pass_after(CloneFoobarAssignments, ReconstructSSA)
+                pm.finalize()
+                return [pm]
+
+        @njit(pipeline_class=CustomCompiler)
+        def udt(arr):
+            foobar = arr + 1  # this assigment will be cloned
+            return foobar
+
+        arr = np.arange(10)
+        # Verify that the function works as expected
+        self.assertPreciseEqual(udt(arr), arr + 1)
+        # Verify that the expected statement is cloned
+        self.assertEqual(len(cloned), 1)
+        self.assertEqual(cloned[0].target.name, "foobar")
+        # Verify the Numba IR that the expected statement is cloned
+        with io.StringIO() as buf:
+            udt.inspect_types(file=buf, signature=udt.signatures[0])
+            nir = buf.getvalue()
+        lines = nir.splitlines()
+        matched_lines = [ln for ln in lines
+                         if "foobar =" in ln and ln.lstrip().startswith('#')]
+        self.assertEqual(
+            len(matched_lines), 2,
+            "expected two assignment statements into 'foobar'",
+        )
+        self.assertEqual(
+            matched_lines[0], matched_lines[1],
+            "expected the two assignment statements to be the same",
+        )
