@@ -57,6 +57,10 @@ def delete(arr, obj):
     return np.delete(arr, obj)
 
 
+def moveaxis(a, source, destination):
+    return np.moveaxis(a, source, destination)
+
+
 def diff1(a):
     return np.diff(a)
 
@@ -794,6 +798,117 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc([1, 2], 3)
         self.assertIn(
             'obj must be less than the len(arr)',
+            str(raises.exception),
+        )
+
+    def test_moveaxis_basic(self):
+
+        def arrays():
+            # a, source, destination
+            # 2d array
+            yield np.arange(10).reshape(2, 5), 0, 1
+            yield np.arange(10).reshape(2, 5), [0], [1]
+            yield np.arange(10).reshape(2, 5), [0, 1], [1, 0]
+            yield np.arange(10).reshape(5, 2), [1, 0], [0, 1]
+            # 3d array
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), 0, 1
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), [0], [1]
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), [1], [2]
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), [0, 1], [1, 2]
+            yield np.arange(3 * 4 * 5).reshape(5, 4, 3), [0, 1, 2], [2, 1, 0]
+            # 4d array
+            yield np.arange(2 * 3 * 4 * 5).reshape(2, 3, 4, 5), 1, 2
+            yield np.arange(2 * 3 * 4 * 5).reshape(2, 3, 4, 5), [1], [2]
+            yield np.arange(2 * 3 * 4 * 5).reshape(2, 3, 4, 5), [3], [0]
+            yield np.arange(2 * 3 * 4 * 5).reshape(2, 3, 4, 5),\
+                [0, 1, 3], [1, 2, 0]
+            yield np.arange(2 * 3 * 4 * 5).reshape(5, 4, 3, 2),\
+                [3, 1, 2], [2, 1, 3]
+
+        pyfunc = moveaxis
+        cfunc = jit(nopython=True)(pyfunc)
+        self.disable_leak_check()
+
+        for a, source, destination in arrays():
+            self.assertPreciseEqual(pyfunc(a, source, destination),
+                                    cfunc(a, source, destination))
+
+    def test_moveaxis_exceptions(self):
+        pyfunc = moveaxis
+        cfunc = jit(nopython=True)(pyfunc)
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(1, 0, 0)
+        self.assertIn(
+            "a must be an array",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc([0, 1], 0, 0)
+        self.assertIn(
+            "a must be an array",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(2 * 3).reshape(2, 3), 0.0, 1)
+        self.assertIn(
+            "source must be an integer or sequence of integers",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(2 * 3).reshape(2, 3), [0.0], [1])
+        self.assertIn(
+            "source must be an integer or sequence of integers",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(2 * 3).reshape(2, 3), 0, 1.0)
+        self.assertIn(
+            "destination must be an integer or sequence of integers",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(2 * 3).reshape(2, 3), [0], [1.0])
+        self.assertIn(
+            "destination must be an integer or sequence of integers",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.arange(2 * 3).reshape(2, 3), [0], [1, 0])
+        self.assertIn(
+            "source and destination arguments "
+            "must have the same number of elements",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.arange(2 * 3).reshape(2, 3), [0, 1], [1])
+        self.assertIn(
+            "source and destination arguments "
+            "must have the same number of elements",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypeError) as raises:
+            cfunc(np.arange(2 * 3).reshape(2, 3), 0, [1])
+        self.assertIn(
+            "source and destination must be either "
+            "integer or sequence of integers at same time",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypeError) as raises:
+            cfunc(np.arange(2 * 3).reshape(2, 3), [0], 1)
+        self.assertIn(
+            "source and destination must be either "
+            "integer or sequence of integers at same time",
             str(raises.exception),
         )
 

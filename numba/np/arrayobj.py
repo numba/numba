@@ -4218,35 +4218,56 @@ def _normalize_axis_list(axis, ndim, argname=None, allow_duplicate=False):
 @overload(np.moveaxis)
 def numpy_moveaxis(a, source, destination):
     if not isinstance(a, types.Array):
-        raise TypeError("moveaxis: 'a' must be an array")
+        raise TypeError("a must be an array")
 
     for arg, arg_name in [(source, 'source'), (destination, 'destination')]:
         if isinstance(arg, types.Sequence):
             if not isinstance(arg.dtype, types.Integer):
                 raise TypeError(
-                    "moveaxis: '%s' must be an integer or sequence of integers"
+                    "%s must be an integer or sequence of integers"
                     % arg_name)
         else:
             if not isinstance(arg, (types.Integer, types.IntegerLiteral)):
                 raise TypeError(
-                    "moveaxis: '%s' must be an integer or sequence of integers"
+                    "%s must be an integer or sequence of integers"
                     % arg_name)
 
-    def numpy_moveaxis_impl(a, source, destination):
-        source = normalize_axis_list(source, a.ndim, 'source')
-        destination = normalize_axis_list(destination, a.ndim, 'destination')
-        if len(source) != len(destination):
-            raise ValueError('`source` and `destination` arguments must have '
-                             'the same number of elements')
+    if isinstance(source, types.Sequence) and isinstance(destination,
+                                                         types.Sequence):
+        def numpy_moveaxis_impl(a, source, destination):
+            source = normalize_axis_list(source, a.ndim, 'source')
+            destination = normalize_axis_list(destination, a.ndim,
+                                              'destination')
+            if len(source) != len(destination):
+                raise ValueError('source and destination arguments must have '
+                                 'the same number of elements')
 
-        order = sorted(set(range(a.ndim)) - set(source))
-        for dest, src in sorted(zip(destination, source)):
-            order.insert(dest, src)
+            order = sorted(set(range(a.ndim)) - set(source))
+            for dest, src in sorted(zip(destination, source)):
+                order.insert(dest, src)
 
-        order_tuple = to_fixed_tuple(np.asarray(order), a.ndim)
-        result = a.transpose(order_tuple)
+            order_tuple = to_fixed_tuple(np.asarray(order), a.ndim)
+            result = a.transpose(order_tuple)
 
-        return result
+            return result
+
+    elif isinstance(source, types.Integer) and isinstance(destination,
+                                                          types.Integer):
+        def numpy_moveaxis_impl(a, source, destination):
+            source = normalize_axis_index(source, a.ndim)
+            destination = normalize_axis_index(destination, a.ndim)
+            order = sorted(set(range(a.ndim)) - set([source]))
+            order.insert(destination, source)
+
+            order_tuple = to_fixed_tuple(np.asarray(order), a.ndim)
+            result = a.transpose(order_tuple)
+
+            return result
+
+    else:
+        def numpy_moveaxis_impl(a, source, destination):
+            raise TypeError("source and destination must be either "
+                            "integer or sequence of integers at same time")
 
     return numpy_moveaxis_impl
 
