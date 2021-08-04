@@ -34,6 +34,7 @@ from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
 from numba.core.overload_glue import glue_lowering
 from numba.core.extending import overload_classmethod
 from numba.np.unsafe.ndarray import to_fixed_tuple
+from numpy.core.multiarray import normalize_axis_index
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
@@ -4148,12 +4149,8 @@ def np_arange(start, stop=None, step=None, dtype=None):
     return impl
 
 
-def normalize_axis_index(axis, ndim, msg_prefix=None):
-    pass
-
-
-@overload(normalize_axis_index)
-def _normalize_axis_index(axis, ndim, msg_prefix=None):
+@overload(np.core.multiarray.normalize_axis_index)
+def np_normalize_axis_index(axis, ndim, msg_prefix=None):
     if not isinstance(axis, types.Integer):
         raise TypeError("axis must be an integer")
 
@@ -4185,7 +4182,8 @@ def np_normalize_axis_tuple(axis, ndim, argname=None, allow_duplicate=False):
 
 
 def normalize_axis_list(axis, ndim, argname=None, allow_duplicate=False):
-    pass
+    raise NotImplementedError(
+        'normalize_axis_list: this function can only be used in nopython mode')
 
 
 @overload(normalize_axis_list)
