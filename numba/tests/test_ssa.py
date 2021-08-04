@@ -500,19 +500,19 @@ class TestReportedSSAIssues(SSABaseTest):
 
 
 class TestSROAIssues(MemoryLeakMixin, TestCase):
-    # This tests issues related to the SROA optimization done in lowering to
-    # reduce time spent in LLVM SROA pass. The optimization is related to SSA
+    # This tests issues related to the SROA optimization done in lowering, which
+    # reduces time spent in the LLVM SROA pass. The optimization is related to SSA
     # and tries to reduce the number of alloca statements for variables with
     # only a single assignemnt.
     def test_issue7258_multiple_assignment_post_SSA(self):
         # This test adds a pass that will duplicate assignment statements to
         # variables named "foobar".
-        # In reported issue, the bug will cause a memory leak.
+        # In the reported issue, the bug will cause a memory leak.
         cloned = []
 
         @register_pass(analysis_only=False, mutates_CFG=True)
         class CloneFoobarAssignments(FunctionPass):
-            # A pass that clone variable assignments into "foobar"
+            # A pass that clones variable assignments into "foobar"
             _name = "clone_foobar_assignments_pass"
 
             def __init__(self):
@@ -548,7 +548,7 @@ class TestSROAIssues(MemoryLeakMixin, TestCase):
 
         @njit(pipeline_class=CustomCompiler)
         def udt(arr):
-            foobar = arr + 1  # this assigment will be cloned
+            foobar = arr + 1  # this assignment will be cloned
             return foobar
 
         arr = np.arange(10)
@@ -557,7 +557,7 @@ class TestSROAIssues(MemoryLeakMixin, TestCase):
         # Verify that the expected statement is cloned
         self.assertEqual(len(cloned), 1)
         self.assertEqual(cloned[0].target.name, "foobar")
-        # Verify the Numba IR that the expected statement is cloned
+        # Verify in the Numba IR that the expected statement is cloned
         with io.StringIO() as buf:
             udt.inspect_types(file=buf, signature=udt.signatures[0])
             nir = buf.getvalue()
