@@ -317,9 +317,9 @@ class Lower(BaseLower):
                         # Ensure that the variable is not defined multiple times
                         # the the block
                         [defblk] = var_assign_map[var]
-                        assigns = [stmt for stmt in self.blocks[defblk].body
-                                   if isinstance(stmt, ir.Assign)
-                                   and stmt.target.name == var]
+                        assign_stmts = self.blocks[defblk].find_insts(ir.Assign)
+                        assigns = [stmt for stmt in assign_stmts
+                                   if stmt.target.name == var]
                         if len(assigns) == 1:
                             sav.add(var)
 

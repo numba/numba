@@ -4,7 +4,6 @@ Tests for SSA reconstruction
 import sys
 import copy
 import logging
-import io
 
 import numpy as np
 
@@ -12,7 +11,8 @@ from numba import njit, jit, types
 from numba.core import errors, ir
 from numba.core.compiler_machinery import FunctionPass, register_pass
 from numba.core.compiler import DefaultPassBuilder, CompilerBase
-from numba.core.untyped_passes import ReconstructSSA
+from numba.core.untyped_passes import ReconstructSSA, PreserveIR
+from numba.core.typed_passes import NativeLowering
 from numba.extending import overload
 from numba.tests.support import MemoryLeakMixin, TestCase, override_config
 
@@ -501,8 +501,8 @@ class TestReportedSSAIssues(SSABaseTest):
 
 class TestSROAIssues(MemoryLeakMixin, TestCase):
     # This tests issues related to the SROA optimization done in lowering, which
-    # reduces time spent in the LLVM SROA pass. The optimization is related to SSA
-    # and tries to reduce the number of alloca statements for variables with
+    # reduces time spent in the LLVM SROA pass. The optimization is related to
+    # SSA and tries to reduce the number of alloca statements for variables with
     # only a single assignemnt.
     def test_issue7258_multiple_assignment_post_SSA(self):
         # This test adds a pass that will duplicate assignment statements to
@@ -543,6 +543,8 @@ class TestSROAIssues(MemoryLeakMixin, TestCase):
                 pm._finalized = False
                 # Insert the cloning pass after SSA
                 pm.add_pass_after(CloneFoobarAssignments, ReconstructSSA)
+                # Capture IR post lowering
+                pm.add_pass_after(PreserveIR, NativeLowering)
                 pm.finalize()
                 return [pm]
 
@@ -558,17 +560,18 @@ class TestSROAIssues(MemoryLeakMixin, TestCase):
         self.assertEqual(len(cloned), 1)
         self.assertEqual(cloned[0].target.name, "foobar")
         # Verify in the Numba IR that the expected statement is cloned
-        with io.StringIO() as buf:
-            udt.inspect_types(file=buf, signature=udt.signatures[0])
-            nir = buf.getvalue()
-        lines = nir.splitlines()
-        matched_lines = [ln for ln in lines
-                         if "foobar =" in ln and ln.lstrip().startswith('#')]
+        nir = udt.overloads[udt.signatures[0]].metadata['preserved_ir']
+        self.assertEqual(len(nir.blocks), 1,
+                         "only one block")
+        [blk] = nir.blocks.values()
+        assigns = blk.find_insts(ir.Assign)
+        foobar_assigns = [stmt for stmt in assigns
+                          if stmt.target.name == "foobar"]
         self.assertEqual(
-            len(matched_lines), 2,
+            len(foobar_assigns), 2,
             "expected two assignment statements into 'foobar'",
         )
         self.assertEqual(
-            matched_lines[0], matched_lines[1],
+            foobar_assigns[0], foobar_assigns[1],
             "expected the two assignment statements to be the same",
         )
