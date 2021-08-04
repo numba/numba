@@ -3414,7 +3414,6 @@ class TestPrangeBasic(TestPrangeBase):
 
     def test_prange_28(self):
         # issue7105: label conflict in nested parfor
-<<<<<<< HEAD
         def test_impl(TwoDPts, comboarr):
             comboout = np.zeros(len(comboarr))
             for cindx in range(len(comboarr)):
