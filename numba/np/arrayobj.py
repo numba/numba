@@ -4161,7 +4161,7 @@ def _normalize_axis_index(axis, ndim, msg_prefix=None):
         raise TypeError("ndim must be an integer")
 
     if not isinstance(msg_prefix, (type(None),
-                    types.NoneType, types.StringLiteral)):
+                      types.NoneType, types.StringLiteral)):
         raise TypeError("msg_prefix must be a literal string")
 
     def normalize_axis_index_impl(axis, ndim, msg_prefix=None):
@@ -4196,14 +4196,15 @@ def _normalize_axis_list(axis, ndim, argname=None, allow_duplicate=False):
     if not isinstance(ndim, types.Integer):
         raise TypeError("ndim must be an integer")
 
-    if not isinstance(argname, (type(None), types.NoneType, 
-                    types.StringLiteral, types.misc.UnicodeType)):
+    if not isinstance(argname, (type(None), types.NoneType,
+                      types.StringLiteral, types.misc.UnicodeType)):
         raise TypeError("argname must be a literal string or None")
 
     if not isinstance(allow_duplicate, (bool, types.Boolean)):
         raise TypeError("allow_duplicate must be True/False")
 
-    def normalize_axis_list_impl(axis, ndim, argname=None, allow_duplicate=False):
+    def normalize_axis_list_impl(axis, ndim, argname=None,
+                                 allow_duplicate=False):
         res = []
         for ax in axis:
             res.append(normalize_axis_index(ax, ndim, argname))
@@ -4215,6 +4216,7 @@ def _normalize_axis_list(axis, ndim, argname=None, allow_duplicate=False):
 
     return normalize_axis_list_impl
 
+
 @overload(np.moveaxis)
 def numpy_moveaxis(a, source, destination):
     if not isinstance(a, types.Array):
@@ -4224,8 +4226,8 @@ def numpy_moveaxis(a, source, destination):
         if isinstance(arg, types.Sequence):
             if not isinstance(arg.dtype, types.Integer):
                 raise TypeError(
-                "moveaxis: '%s' must be an integer or sequence of integers"
-                % arg_name)
+                    "moveaxis: '%s' must be an integer or sequence of integers"
+                    % arg_name)
         else:
             if not isinstance(arg, (types.Integer, types.IntegerLiteral)):
                 raise TypeError(
