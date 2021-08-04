@@ -33,6 +33,7 @@ from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
 from numba.core.overload_glue import glue_lowering
 from numba.core.extending import overload_classmethod
+from numba.np.unsafe.ndarray import to_fixed_tuple
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
@@ -4145,6 +4146,109 @@ def np_arange(start, stop=None, step=None, dtype=None):
         return arr
 
     return impl
+
+
+def normalize_axis_index(axis, ndim, msg_prefix=None):
+    pass
+
+
+@overload(normalize_axis_index)
+def _normalize_axis_index(axis, ndim, msg_prefix=None):
+    if not isinstance(axis, types.Integer):
+        raise TypeError("axis must be an integer")
+
+    if not isinstance(ndim, types.Integer):
+        raise TypeError("ndim must be an integer")
+
+    if not isinstance(msg_prefix, (type(None),
+                    types.NoneType, types.StringLiteral)):
+        raise TypeError("msg_prefix must be a literal string")
+
+    def normalize_axis_index_impl(axis, ndim, msg_prefix=None):
+        if axis < 0:
+            axis += ndim
+        if axis < 0 or axis > ndim - 1:
+            raise ValueError("axis is out of bounds for array")
+
+        return axis
+
+    return normalize_axis_index_impl
+
+
+@overload(np.core.numeric.normalize_axis_tuple)
+def np_normalize_axis_tuple(axis, ndim, argname=None, allow_duplicate=False):
+    raise NotImplementedError(
+        "'numpy.core.numeric.normalize_axis_tuple()' is not implemented in "
+        "numba. Please use 'numba.targets.arrayobj.normalize_axis_list()' "
+        "instead."
+    )
+
+
+def normalize_axis_list(axis, ndim, argname=None, allow_duplicate=False):
+    pass
+
+
+@overload(normalize_axis_list)
+def _normalize_axis_list(axis, ndim, argname=None, allow_duplicate=False):
+    if not isinstance(axis, (types.Sequence, types.List)):
+        raise TypeError("axis must be a sequence of integers")
+
+    if not isinstance(ndim, types.Integer):
+        raise TypeError("ndim must be an integer")
+
+    if not isinstance(argname, (type(None), types.NoneType, 
+                    types.StringLiteral, types.misc.UnicodeType)):
+        raise TypeError("argname must be a literal string or None")
+
+    if not isinstance(allow_duplicate, (bool, types.Boolean)):
+        raise TypeError("allow_duplicate must be True/False")
+
+    def normalize_axis_list_impl(axis, ndim, argname=None, allow_duplicate=False):
+        res = []
+        for ax in axis:
+            res.append(normalize_axis_index(ax, ndim, argname))
+
+        if not allow_duplicate and len(set(axis)) != len(axis):
+            raise ValueError("repeated axis")
+
+        return res
+
+    return normalize_axis_list_impl
+
+@overload(np.moveaxis)
+def numpy_moveaxis(a, source, destination):
+    if not isinstance(a, types.Array):
+        raise TypeError("moveaxis: 'a' must be an array")
+
+    for arg, arg_name in [(source, 'source'), (destination, 'destination')]:
+        if isinstance(arg, types.Sequence):
+            if not isinstance(arg.dtype, types.Integer):
+                raise TypeError(
+                "moveaxis: '%s' must be an integer or sequence of integers"
+                % arg_name)
+        else:
+            if not isinstance(arg, (types.Integer, types.IntegerLiteral)):
+                raise TypeError(
+                    "moveaxis: '%s' must be an integer or sequence of integers"
+                    % arg_name)
+
+    def numpy_moveaxis_impl(a, source, destination):
+        source = normalize_axis_list(source, a.ndim, 'source')
+        destination = normalize_axis_list(destination, a.ndim, 'destination')
+        if len(source) != len(destination):
+            raise ValueError('`source` and `destination` arguments must have '
+                             'the same number of elements')
+
+        order = sorted(set(range(a.ndim)) - set(source))
+        for dest, src in sorted(zip(destination, source)):
+            order.insert(dest, src)
+
+        order_tuple = to_fixed_tuple(np.asarray(order), a.ndim)
+        result = a.transpose(order_tuple)
+
+        return result
+
+    return numpy_moveaxis_impl
 
 
 @glue_lowering(np.linspace, types.Number, types.Number)
