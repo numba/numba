@@ -4678,20 +4678,28 @@ def copy_to_tuple(from_list, to_tuple):
 
 @overload(np.tensordot)
 def np_tensordot(a, b, axes):
+    """
+    Implementation of np.tensordot().
+
+    If multiple axes are given, requires the two array-likes to be tuples,
+    unlike more lenient NumPy.  Based on
+    https://github.com/numpy/numpy/blob/v1.21.0/numpy/core/numeric.py#L943-L1133
+    """
     #if not type_can_asarray(a) or not type_can_asarray(b):
     #    raise TypingError("Inputs must be array-like.")
     # try:
     #     iter(axes)
     # except Exception:
-    #     axes_a = list(range(-axes, 0))
-    #     axes_b = list(range(0, axes))
+    #     axes_a = tuple(range(-axes, 0))
+    #     axes_b = tuple(range(0, axes))
     # else:
     #     axes_a, axes_b = axes
     newaxes_a_tuple = (0,) * a.ndim
     newaxes_b_tuple = (0,) * b.ndim
     # We don't know the size of the final reshape, and reshape wants a tuple,
     # so just prepare all possible tuples.
-    final_shape_tuples = [(0,) * i for i in range(1, a.ndim + b.ndim)]
+    olda_tuple = (0,) * (a.ndim - len(axes[0]))
+    oldb_tuple = (0,) * (b.ndim - len(axes[1]))
 
     def tensordot_impl(a, b, axes):
         axes_a, axes_b = axes
@@ -4731,7 +4739,7 @@ def np_tensordot(a, b, axes):
         for axis in axes_a:
             N2 *= as_[axis]
         newshape_a = (int(multiply_reduce([as_[ax] for ax in notin])), N2)
-        olda = [as_[axis] for axis in notin]
+        olda = copy_to_tuple([as_[axis] for axis in notin], olda_tuple)
 
         notin = [k for k in range(ndb) if k not in axes_b]
         newaxes_b = copy_to_tuple(axes_b + notin, newaxes_b_tuple)
@@ -4739,19 +4747,13 @@ def np_tensordot(a, b, axes):
         for axis in axes_b:
             N2 *= bs[axis]
         newshape_b = (N2, int(multiply_reduce([bs[ax] for ax in notin])))
-        oldb = [bs[axis] for axis in notin]
+        oldb = copy_to_tuple([bs[axis] for axis in notin], oldb_tuple)
 
         # TODO: figure out way to do reshape on original transpose, without
         # ascontiguousarray().
         at = np.ascontiguousarray(a.transpose(newaxes_a)).reshape(newshape_a)
         bt = np.ascontiguousarray(b.transpose(newaxes_b)).reshape(newshape_b)
         res = np.dot(at, bt)
-
-        # Convert list to tuple, the hard way:
-        final_shape_list = olda + oldb
-        #final_shape = final_shape_tuples[len(final_shape_list)]
-        #final_shape = copy_to_tuple(final_shape_list, final_shape)
-
-        return res.reshape(np.asarray(final_shape_list))
+        return res.reshape(olda + oldb)
 
     return tensordot_impl
