@@ -264,9 +264,20 @@ Pull-Requests:
 * PR `#7162 <https://github.com/numba/numba/pull/7162>`_: CUDA: Fix linkage of device functions when compiling for debug (`Graham Markall <https://github.com/gmarkall>`_)
 * PR `#7163 <https://github.com/numba/numba/pull/7163>`_: Split legalization pass to consider IR and features separately. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#7165 <https://github.com/numba/numba/pull/7165>`_: Fix use of np.clip where out is not provided. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7189 <https://github.com/numba/numba/pull/7189>`_: CUDA: Skip IPC tests on ARM (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7190 <https://github.com/numba/numba/pull/7190>`_: CUDA: Fix test_pinned on Jetson (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7192 <https://github.com/numba/numba/pull/7192>`_: Fix missing import in array.argsort impl and add more tests. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#7196 <https://github.com/numba/numba/pull/7196>`_: Fixes for lineinfo emission. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7203 <https://github.com/numba/numba/pull/7203>`_: remove duplicate changelog entries (`esc <https://github.com/esc>`_)
 * PR `#7209 <https://github.com/numba/numba/pull/7209>`_: Clamp numpy (`esc <https://github.com/esc>`_)
 * PR `#7216 <https://github.com/numba/numba/pull/7216>`_: Update CHANGE_LOG for 0.54.0rc2. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7223 <https://github.com/numba/numba/pull/7223>`_: Replace assertion errors on IR assumption violation (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#7230 <https://github.com/numba/numba/pull/7230>`_: PR #7171 bugfix only (`Todd A. Anderson <https://github.com/DrTodd13>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7236 <https://github.com/numba/numba/pull/7236>`_: CUDA: Skip managed alloc tests on ARM (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7267 <https://github.com/numba/numba/pull/7267>`_: Fix #7258. Bug in SROA optimization (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#7271 <https://github.com/numba/numba/pull/7271>`_: Update 3rd party license text. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7272 <https://github.com/numba/numba/pull/7272>`_: Allow annotations in njit-ed functions (`LunarLanding <https://github.com/LunarLanding>`_)
+* PR `#7273 <https://github.com/numba/numba/pull/7273>`_: Update CHANGE_LOG for 0.54.0rc3. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 
 Authors:
 
@@ -292,6 +303,7 @@ Authors:
 * `Jérome Eertmans <https://github.com/jeertmans>`_
 * `Alexey Kozlov <https://github.com/kozlov-alexey>`_
 * `Lauren Arnett <https://github.com/laurenarnett>`_
+* `LunarLanding <https://github.com/LunarLanding>`_
 * `Max Katz <https://github.com/maxpkatz>`_
 * `Kalyan <https://github.com/rawwar>`_
 * `Reazul Hoque <https://github.com/reazulhoque>`_
