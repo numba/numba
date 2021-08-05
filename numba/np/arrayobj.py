@@ -1568,7 +1568,7 @@ def numpy_logspace(start, stop, num=50):
     if not isinstance(start, types.Number):
         raise errors.TypingError('The first argument "start" must be a number')
     if not isinstance(stop, types.Number):
-        raise errors.TypingError('The second argument "end" must be a number')
+        raise errors.TypingError('The second argument "stop" must be a number')
     if not isinstance(num, (int, types.Integer)):
         raise errors.TypingError('The third argument "num" must be an integer')
 

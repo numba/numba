@@ -157,7 +157,11 @@ def flip(a):
     return np.flip(a)
 
 
-def logspace(start, stop, num=50):
+def logspace2(start, stop):
+    return np.logspace(start, stop)
+
+
+def logspace3(start, stop, num=50):
     return np.logspace(start, stop, num=num)
 
 
@@ -2452,38 +2456,36 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         self.assertIn("Cannot np.flip on UniTuple", str(raises.exception))
 
-    def test_logspace_basic(self):
-        pyfunc = logspace
+    def test_logspace2_basic(self):
+
+        def Inputs():
+            #start, stop
+            yield 1, 60
+            yield -1, 60
+            yield -60, -1
+            yield -1, -60
+            yield 60, -1
+            yield 1.0, 60.0
+            yield -60.0, -1.0
+            yield -1.0, 60.0
+            yield 0.0, np.e
+            yield 0.0, np.pi
+            yield np.complex64(1), np.complex64(2)
+            yield np.complex64(2j), np.complex64(4j)
+            yield np.complex64(2), np.complex64(4j)
+            yield np.complex64(1 + 2j), np.complex64(3 + 4j)
+            yield np.complex64(1 - 2j), np.complex64(3 - 4j)
+            yield np.complex64(-1 + 2j), np.complex64(3 + 4j)
+
+        pyfunc = logspace2
         cfunc = jit(nopython=True)(pyfunc)
 
-        self.assertPreciseEqual(pyfunc(1, 60), cfunc(1, 60))
-        self.assertPreciseEqual(pyfunc(-60, 1), cfunc(-60, 1))
-        self.assertPreciseEqual(pyfunc(-1, -60), cfunc(-1, -60))
+        for start, stop in Inputs():
+            self.assertAlmostEqual(pyfunc(start, stop).all(),
+                                   cfunc(start, stop).all())
 
-        self.assertPreciseEqual(pyfunc(1.0, 60.0), cfunc(1.0, 60.0))
-        self.assertPreciseEqual(pyfunc(-60.0, -1.0), cfunc(-60.0, -1.0))
-        self.assertPreciseEqual(pyfunc(-1.0, 60.0), cfunc(-1.0, 60.0))
-
-        self.assertPreciseEqual(pyfunc(0.0, np.e), cfunc(0.0, np.e))
-        self.assertPreciseEqual(pyfunc(0.0, np.pi), cfunc(0.0, np.pi))
-
-    def test_logspace_with_num_basic(self):
-        pyfunc = logspace
-        cfunc = jit(nopython=True)(pyfunc)
-
-        self.assertPreciseEqual(pyfunc(1, 50, num=20), cfunc(1, 50, num=20))
-        self.assertPreciseEqual(pyfunc(0.0, 60.0, num=70),
-                                cfunc(0.0, 60.0, num=70))
-        self.assertPreciseEqual(pyfunc(-1.0, 70.0, num=70),
-                                cfunc(-1.0, 70.0, num=70))
-
-        self.assertPreciseEqual(pyfunc(0.0, np.e, num=80),
-                                cfunc(0.0, np.e, num=80))
-        self.assertPreciseEqual(pyfunc(0.0, np.pi, num=90),
-                                cfunc(0.0, np.pi, num=90))
-
-    def test_logspace_exception(self):
-        cfunc = jit(nopython=True)(logspace)
+    def test_logspace2_exception(self):
+        cfunc = jit(nopython=True)(logspace2)
 
         self.disable_leak_check()
 
@@ -2494,7 +2496,80 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             cfunc(5, "abc")
-        self.assertIn('The second argument "end" must be a number',
+        self.assertIn('The second argument "stop" must be a number',
+                      str(raises.exception))
+
+    def test_logspace3_basic(self):
+
+        def Inputs():
+            #start, stop
+            yield 1, 60
+            yield -1, 60
+            yield -60, -1
+            yield -1, -60
+            yield 60, -1
+            yield 1.0, 60.0
+            yield -60.0, -1.0
+            yield -1.0, 60.0
+            yield 0.0, np.e
+            yield 0.0, np.pi
+            yield np.complex64(1), np.complex64(2)
+            yield np.complex64(2j), np.complex64(4j)
+            yield np.complex64(2), np.complex64(4j)
+            yield np.complex64(1 + 2j), np.complex64(3 + 4j)
+            yield np.complex64(1 - 2j), np.complex64(3 - 4j)
+            yield np.complex64(-1 + 2j), np.complex64(3 + 4j)
+
+        pyfunc = logspace3
+        cfunc = jit(nopython=True)(pyfunc)
+        self.disable_leak_check()
+
+        for start, stop in Inputs():
+            self.assertAlmostEqual(pyfunc(start, stop).all(),
+                                   cfunc(start, stop).all())
+
+    def test_logspace3_with_num_basic(self):
+
+        def Inputs():
+            #start, stop, num
+            yield 1, 60, 20
+            yield -1, 60, 30
+            yield -60, -1, 40
+            yield -1, -60, 50
+            yield 60, -1, 60
+            yield 1.0, 60.0, 70
+            yield -60.0, -1.0, 80
+            yield -1.0, 60.0, 90
+            yield 0.0, np.e, 20
+            yield 0.0, np.pi, 30
+            yield np.complex64(1), np.complex64(2), 40
+            yield np.complex64(2j), np.complex64(4j), 50
+            yield np.complex64(2), np.complex64(4j), 60
+            yield np.complex64(1 + 2j), np.complex64(3 + 4j), 70
+            yield np.complex64(1 - 2j), np.complex64(3 - 4j), 80
+            yield np.complex64(-1 + 2j), np.complex64(3 + 4j), 90
+
+        pyfunc = logspace3
+        cfunc = jit(nopython=True)(pyfunc)
+        self.disable_leak_check()
+
+        for start, stop, num in Inputs():
+            self.assertAlmostEqual(pyfunc(start, stop, num).all(),
+                                   cfunc(start, stop, num).all())
+
+    def test_logspace3_exception(self):
+        cfunc = jit(nopython=True)(logspace3)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc", 5)
+        self.assertIn('The first argument "start" must be a number',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(5, "abc")
+        self.assertIn('The second argument "stop" must be a number',
                       str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
