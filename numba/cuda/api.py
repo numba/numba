@@ -146,8 +146,8 @@ def managed_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
     Allocate a np.ndarray with a buffer that is managed.
     Similar to np.empty().
 
-    Managed memory is supported on Linux, and is considered experimental on
-    Windows.
+    Managed memory is supported on Linux / x86 and PowerPC, and is considered
+    experimental on Windows and Linux / AArch64.
 
     :param attach_global: A flag indicating whether to attach globally. Global
                           attachment implies that the memory is accessible from

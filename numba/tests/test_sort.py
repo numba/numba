@@ -1069,6 +1069,33 @@ class TestSortSlashSortedWithKey(MemoryLeakMixin, TestCase):
             self.assertIn(expect, str(raises.exception))
 
 
+class TestArrayArgsort(MemoryLeakMixin, TestCase):
+    """Tests specific to array.argsort"""
+
+    def test_exceptions(self):
+
+        @njit
+        def nonliteral_kind(kind):
+            np.arange(5).argsort(kind=kind)
+
+        # check non-literal kind
+        with self.assertRaises(errors.TypingError) as raises:
+            # valid spelling but not literal
+            nonliteral_kind('quicksort')
+
+        expect = '"kind" must be a string literal'
+        self.assertIn(expect, str(raises.exception))
+
+        @njit
+        def unsupported_kwarg():
+            np.arange(5).argsort(foo='')
+
+        with self.assertRaises(errors.TypingError) as raises:
+            unsupported_kwarg()
+
+        expect = "Unsupported keywords: ['foo']"
+        self.assertIn(expect, str(raises.exception))
+
 
 if __name__ == '__main__':
     unittest.main()
