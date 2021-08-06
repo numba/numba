@@ -4716,7 +4716,7 @@ def np_tensordot(a, b, axes):
     Implementation of np.tensordot().
 
     For now axes does not yet support integers, and it's limited to a tuple of
-    two tuples, unlike more lenient NumPy.  Based on
+    two tuples, unlike more lenient NumPy.  Original code is
     https://github.com/numpy/numpy/blob/v1.21.0/numpy/core/numeric.py#L943-L1133
     """
     if not type_can_asarray(a) or not type_can_asarray(b):
@@ -4724,10 +4724,9 @@ def np_tensordot(a, b, axes):
     if isinstance(axes, (int, types.Integer)):
         raise ValueError("integer axes are not yet supported")
 
+    # Prepare starting tuples we will later use to construct new tuples from.
     newaxes_a_tuple = (0,) * a.ndim
     newaxes_b_tuple = (0,) * b.ndim
-    # We don't know the size of the final reshape, and reshape wants a tuple,
-    # so just prepare all possible tuples.
     olda_tuple = (0,) * (a.ndim - len(axes[0]))
     oldb_tuple = (0,) * (b.ndim - len(axes[1]))
 
@@ -4783,7 +4782,8 @@ def np_tensordot(a, b, axes):
         for axis in axes_a:
             N2 *= as_[axis]
         newshape_a = (int(_multiply_reduce([as_[ax] for ax in notin])), N2)
-        olda = copy_to_tuple_maybe_empty_a([as_[axis] for axis in notin], olda_tuple)
+        olda = copy_to_tuple_maybe_empty_a([as_[axis] for axis in notin],
+                                           olda_tuple)
 
         notin = [k for k in range(ndb) if k not in axes_b]
         newaxes_b = _copy_to_tuple(axes_b + notin, newaxes_b_tuple)
@@ -4791,10 +4791,11 @@ def np_tensordot(a, b, axes):
         for axis in axes_b:
             N2 *= bs[axis]
         newshape_b = (N2, int(_multiply_reduce([bs[ax] for ax in notin])))
-        oldb = copy_to_tuple_maybe_empty_b([bs[axis] for axis in notin], oldb_tuple)
+        oldb = copy_to_tuple_maybe_empty_b([bs[axis] for axis in notin],
+                                           oldb_tuple)
 
-        # TODO: figure out way to do reshape on original transpose, without
-        # ascontiguousarray().
+        # It would be nice to figure out way to do reshape on the original
+        # transpose, without ascontiguousarray().
         at = np.ascontiguousarray(a.transpose(newaxes_a)).reshape(newshape_a)
         bt = np.ascontiguousarray(b.transpose(newaxes_b)).reshape(newshape_b)
         res = np.dot(at, bt)
