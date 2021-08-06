@@ -581,15 +581,23 @@ class StencilFunc(object):
         shape_name = ir_utils.get_unused_var_name("full_shape", name_var_table)
         func_text += "    {} = {}.shape\n".format(shape_name, first_arg)
 
+        # Converts cval to a string constant
+        def cval_as_str(cval):
+            if not np.isfinite(cval):
+                # See if this is a string-repr numerical const, issue #7286
+                if np.isnan(cval):
+                    return "np.nan"
+                elif np.isinf(cval):
+                    if cval < 0:
+                        return "-np.inf"
+                    else:
+                        return "np.inf"
+            else:
+                return str(cval)
 
         # If we have to allocate the output array (the out argument was not used)
         # then us numpy.full if the user specified a cval stencil decorator option
         # or np.zeros if they didn't to allocate the array.
-        def cval_as_str(cval):
-            if getattr(np, str(cval), False) is cval:
-                return f"np.{cval}"
-            else:
-                return str(cval)
         if result is None:
             return_type_name = numpy_support.as_dtype(
                                return_type.dtype).type.__name__

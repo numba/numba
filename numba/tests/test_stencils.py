@@ -613,31 +613,33 @@ class TestStencil(TestStencilBase):
 
     @skip_unsupported
     def test_out_kwarg_w_cval_np_attr(self):
-        """ Tests issue #7286 where cval is an attr on the np module"""
-        def kernel(a):
-            return (a[0, 0] - a[1, 0])
+        """ Test issue #7286 where the cval is a np attr/string-based numerical
+        constant"""
+        for cval in (np.nan, np.inf, -np.inf, float('inf'), -float('inf')):
+            def kernel(a):
+                return (a[0, 0] - a[1, 0])
 
-        stencil_fn = numba.stencil(kernel, cval=np.inf)
+            stencil_fn = numba.stencil(kernel, cval=cval)
 
-        def wrapped():
+            def wrapped():
+                A = np.arange(12.).reshape((3, 4))
+                ret = np.ones_like(A)
+                stencil_fn(A, out=ret)
+                return ret
+
+            # stencil function case
             A = np.arange(12.).reshape((3, 4))
+            expected = np.full_like(A, -4)
+            expected[-1, :] = cval
             ret = np.ones_like(A)
             stencil_fn(A, out=ret)
-            return ret
+            np.testing.assert_almost_equal(ret, expected)
 
-        # stencil function case
-        A = np.arange(12.).reshape((3, 4))
-        expected = np.full_like(A, -4)
-        expected[-1, :] = np.inf
-        ret = np.ones_like(A)
-        stencil_fn(A, out=ret)
-        np.testing.assert_almost_equal(ret, expected)
-
-        # wrapped function case, check njit, then njit(parallel=True)
-        impls = self.compile_all(wrapped,)
-        for impl in impls:
-            got = impl.entry_point()
-            np.testing.assert_almost_equal(got, expected)
+            # wrapped function case, check njit, then njit(parallel=True)
+            impls = self.compile_all(wrapped,)
+            for impl in impls:
+                got = impl.entry_point()
+                np.testing.assert_almost_equal(got, expected)
 
 
 class pyStencilGenerator:
@@ -2824,12 +2826,14 @@ class TestManyStencils(TestStencilBase):
         self.check(kernel, a)
 
     def test_basic98(self):
-        """ Test issue #7286 where the cval is a np attr"""
-        def kernel(a):
-            return a[0, 0]
-        a = np.arange(6.).reshape((2, 3))
-        self.check(kernel, a, options={'neighborhood': ((-1, 1), (-1, 1),),
-                   'cval':np.nan})
+        """ Test issue #7286 where the cval is a np attr/string-based numerical
+        constant"""
+        for cval in (np.nan, np.inf, -np.inf, float('inf'), -float('inf')):
+            def kernel(a):
+                return a[0, 0]
+            a = np.arange(6.).reshape((2, 3))
+            self.check(kernel, a, options={'neighborhood': ((-1, 1), (-1, 1),),
+                       'cval':cval})
 
 
 if __name__ == "__main__":
