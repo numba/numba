@@ -75,7 +75,7 @@ class FakeCUDAKernel(object):
         self.dynshared_size = 0
 
     def __call__(self, *args):
-        if self._device:
+        if self._device or _kernel_context:
             with swapped_cuda_module(self.fn, _get_kernel_context()):
                 return self.fn(*args)
 
