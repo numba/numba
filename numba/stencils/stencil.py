@@ -585,6 +585,11 @@ class StencilFunc(object):
         # If we have to allocate the output array (the out argument was not used)
         # then us numpy.full if the user specified a cval stencil decorator option
         # or np.zeros if they didn't to allocate the array.
+        def cval_as_str(cval):
+            if getattr(np, str(cval), False) is cval:
+                return f"np.{cval}"
+            else:
+                return str(cval)
         if result is None:
             return_type_name = numpy_support.as_dtype(
                                return_type.dtype).type.__name__
@@ -594,7 +599,8 @@ class StencilFunc(object):
                     raise ValueError(
                         "cval type does not match stencil return type.")
                 out_init ="{} = np.full({}, {}, dtype=np.{})\n".format(
-                            out_name, shape_name, cval, return_type_name)
+                            out_name, shape_name, cval_as_str(cval),
+                            return_type_name)
             else:
                 out_init ="{} = np.zeros({}, dtype=np.{})\n".format(
                             out_name, shape_name, return_type_name)
@@ -606,7 +612,7 @@ class StencilFunc(object):
                 if not self._typingctx.can_convert(cval_ty, return_type.dtype):
                     msg = "cval type does not match stencil return type."
                     raise ValueError(msg)
-                out_init = "{}[:] = {}\n".format(out_name, cval)
+                out_init = "{}[:] = {}\n".format(out_name, cval_as_str(cval))
                 func_text += "    " + out_init
 
         offset = 1

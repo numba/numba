@@ -611,6 +611,34 @@ class TestStencil(TestStencilBase):
             else:
                 raise AssertionError("Expected error was not raised")
 
+    @skip_unsupported
+    def test_out_kwarg_w_cval_np_attr(self):
+        """ Tests issue #7286 where cval is an attr on the np module"""
+        def kernel(a):
+            return (a[0, 0] - a[1, 0])
+
+        stencil_fn = numba.stencil(kernel, cval=np.inf)
+
+        def wrapped():
+            A = np.arange(12.).reshape((3, 4))
+            ret = np.ones_like(A)
+            stencil_fn(A, out=ret)
+            return ret
+
+        # stencil function case
+        A = np.arange(12.).reshape((3, 4))
+        expected = np.full_like(A, -4)
+        expected[-1, :] = np.inf
+        ret = np.ones_like(A)
+        stencil_fn(A, out=ret)
+        np.testing.assert_almost_equal(ret, expected)
+
+        # wrapped function case, check njit, then njit(parallel=True)
+        impls = self.compile_all(wrapped,)
+        for impl in impls:
+            got = impl.entry_point()
+            np.testing.assert_almost_equal(got, expected)
+
 
 class pyStencilGenerator:
     """
@@ -2794,6 +2822,15 @@ class TestManyStencils(TestStencilBase):
             return np.median(a[-1:2, 3])
         a = np.arange(20, dtype=np.uint32).reshape(4, 5)
         self.check(kernel, a)
+
+    def test_basic98(self):
+        """ Test issue #7286 where the cval is a np attr"""
+        def kernel(a):
+            return a[0, 0]
+        a = np.arange(6.).reshape((2, 3))
+        self.check(kernel, a, options={'neighborhood': ((-1, 1), (-1, 1),),
+                   'cval':np.nan})
+
 
 if __name__ == "__main__":
     unittest.main()
