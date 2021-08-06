@@ -185,4 +185,4 @@ Numba compiled code, including use within the Python interpreter and without
 the Python interpreter.  To make that work, we will be doing some refactoring:
 
 * numba :term:`NPM` code references statically compiled code in "helperlib.c".
-Those functions should be moved to NRT.
+  Those functions should be moved to NRT.
