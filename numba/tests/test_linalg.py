@@ -28,6 +28,10 @@ def vdot(a, b):
     return np.vdot(a, b)
 
 
+def tensordot(a, b, axes):
+    return np.tensordot(a, b, axes)
+
+
 class TestProduct(TestCase):
     """
     Tests for dot products.
@@ -326,6 +330,23 @@ class TestProduct(TestCase):
         cfunc = jit(nopython=True)(vdot)
         with self.check_contiguity_warning(cfunc.py_func):
             cfunc(a, b)
+
+    @needs_blas
+    def test_tensordot_errors(self):
+        cfunc = jit(nopython=True)(tensordot)
+        a = self.sample_matrix(2, 2, np.float64)
+
+        with self.assertTypingError() as e:
+            cfunc(a, None, ((0, 1), (0, 1)))
+        self.assertIn("Inputs must be array-like.", str(e.exception))
+
+        with self.assertTypingError() as e:
+            cfunc(None, a, ((0, 1), (0, 1)))
+        self.assertIn("Inputs must be array-like.", str(e.exception))
+
+        with self.assertTypingError() as e:
+            cfunc(a, a, 1)
+        self.assertIn("integer axes are not yet supported", str(e.exception))
 
 
 # Implementation definitions for the purpose of jitting.

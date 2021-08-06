@@ -4707,19 +4707,15 @@ def np_tensordot(a, b, axes):
     """
     Implementation of np.tensordot().
 
-    If multiple axes are given, requires the two array-likes to be tuples,
-    unlike more lenient NumPy.  Based on
+    For now axes does not yet support integers, and it's limited to a tuple of
+    two tuples, unlike more lenient NumPy.  Based on
     https://github.com/numpy/numpy/blob/v1.21.0/numpy/core/numeric.py#L943-L1133
     """
-    #if not type_can_asarray(a) or not type_can_asarray(b):
-    #    raise TypingError("Inputs must be array-like.")
-    # try:
-    #     iter(axes)
-    # except Exception:
-    #     axes_a = tuple(range(-axes, 0))
-    #     axes_b = tuple(range(0, axes))
-    # else:
-    #     axes_a, axes_b = axes
+    if not type_can_asarray(a) or not type_can_asarray(b):
+        raise TypingError("Inputs must be array-like.")
+    if isinstance(axes, (int, types.Integer)):
+        raise ValueError("integer axes are not yet supported")
+
     newaxes_a_tuple = (0,) * a.ndim
     newaxes_b_tuple = (0,) * b.ndim
     # We don't know the size of the final reshape, and reshape wants a tuple,
