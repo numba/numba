@@ -4702,6 +4702,14 @@ def _copy_to_tuple(from_list, to_tuple):
     return to_tuple
 
 
+@register_jitable
+def _copy_to_tuple_noop(from_list, to_tuple):
+    """Use this when to_tuple is empty."""
+    if len(from_list) != 0:
+        raise ValueError("This should never happen")
+    return to_tuple
+
+
 @overload(np.tensordot)
 def np_tensordot(a, b, axes):
     """
@@ -4723,14 +4731,28 @@ def np_tensordot(a, b, axes):
     olda_tuple = (0,) * (a.ndim - len(axes[0]))
     oldb_tuple = (0,) * (b.ndim - len(axes[1]))
 
+    # tuple_setitem blows up compilation on 0-length tuples *even if it's not
+    # called*, so avoid it when necessary.
+    if len(olda_tuple) > 0:
+        copy_to_tuple_maybe_empty_a = _copy_to_tuple
+    else:
+        copy_to_tuple_maybe_empty_a = _copy_to_tuple_noop
+
+    if len(oldb_tuple) > 0:
+        copy_to_tuple_maybe_empty_b = _copy_to_tuple
+    else:
+        copy_to_tuple_maybe_empty_b = _copy_to_tuple_noop
+
     def tensordot_impl(a, b, axes):
         axes_a, axes_b = axes
 
         na = len(axes_a)
-        axes_a = list(axes_a)
+        # The assarray() is necessary so that if axes_a is empty, the resulting
+        # list knows it is a list of uint64.
+        axes_a = list(np.asarray(axes_a, dtype=np.uint64))
 
         nb = len(axes_b)
-        axes_b = list(axes_b)
+        axes_b = list(np.asarray(axes_b, dtype=np.uint64))
 
         a, b = np.asarray(a), np.asarray(b)
         as_ = a.shape
@@ -4761,7 +4783,7 @@ def np_tensordot(a, b, axes):
         for axis in axes_a:
             N2 *= as_[axis]
         newshape_a = (int(_multiply_reduce([as_[ax] for ax in notin])), N2)
-        olda = _copy_to_tuple([as_[axis] for axis in notin], olda_tuple)
+        olda = copy_to_tuple_maybe_empty_a([as_[axis] for axis in notin], olda_tuple)
 
         notin = [k for k in range(ndb) if k not in axes_b]
         newaxes_b = _copy_to_tuple(axes_b + notin, newaxes_b_tuple)
@@ -4769,7 +4791,7 @@ def np_tensordot(a, b, axes):
         for axis in axes_b:
             N2 *= bs[axis]
         newshape_b = (N2, int(_multiply_reduce([bs[ax] for ax in notin])))
-        oldb = _copy_to_tuple([bs[axis] for axis in notin], oldb_tuple)
+        oldb = copy_to_tuple_maybe_empty_b([bs[axis] for axis in notin], oldb_tuple)
 
         # TODO: figure out way to do reshape on original transpose, without
         # ascontiguousarray().

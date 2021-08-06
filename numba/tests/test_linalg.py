@@ -348,6 +348,32 @@ class TestProduct(TestCase):
             cfunc(a, a, 1)
         self.assertIn("integer axes are not yet supported", str(e.exception))
 
+    @needs_blas
+    def test_tensordot(self):
+        cfunc = jit(nopython=True)(tensordot)
+
+        def assert_same_as_py(arr1, arr2, axes):
+            expected = cfunc.py_func(arr1, arr2, axes)
+            result = cfunc(arr1, arr2, axes)
+            np.testing.assert_allclose(expected, result)
+
+        # 2-D squares:
+        a = self.sample_matrix(3, 3, np.float64)
+        b = self.sample_matrix(3, 3, np.float64)
+        assert_same_as_py(a, b, ((1, 0), (0, 1)))
+        assert_same_as_py(a, b, ((0, 1), (0, 1)))
+        assert_same_as_py(a, b, ((0, 1), (1, 0)))
+        assert_same_as_py(a, b, ((1, 0), (1, 0)))
+        assert_same_as_py(a, b, ((1,), (1,)))
+        assert_same_as_py(a, b, ((0,), (0,)))
+        assert_same_as_py(a, b, ((), ()))
+
+        # 2-D rectangle:
+        # TODO
+
+        # 3-D:
+        # TODO
+
 
 # Implementation definitions for the purpose of jitting.
 
