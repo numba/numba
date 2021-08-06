@@ -348,6 +348,17 @@ class TestProduct(TestCase):
             cfunc(a, a, 1)
         self.assertIn("integer axes are not yet supported", str(e.exception))
 
+        # Length of tuples doesn't match:
+        with self.assertRaises(ValueError) as e:
+            cfunc(a, a, ((), (1,)))
+        self.assertIn("shape-mismatch for sum", str(e.exception))
+
+        # Length matches, but array dimensions don't.
+        b = self.sample_matrix(2, 3, np.float64)
+        with self.assertRaises(ValueError) as e:
+            cfunc(a, b, ((0, 1), (0, 1)))
+        self.assertIn("shape-mismatch for sum", str(e.exception))
+
     @needs_blas
     def test_tensordot(self):
         cfunc = jit(nopython=True)(tensordot)
@@ -356,6 +367,12 @@ class TestProduct(TestCase):
             expected = cfunc.py_func(arr1, arr2, axes)
             result = cfunc(arr1, arr2, axes)
             np.testing.assert_allclose(expected, result)
+
+        # 1-D:
+        a = self.sample_vector(6, np.float64)
+        b = self.sample_vector(6, np.float64)
+        assert_same_as_py(a, b, ((0,), (0,)))
+        assert_same_as_py(a, b, ((), ()))
 
         # 2-D squares:
         a = self.sample_matrix(3, 3, np.float64)
@@ -369,10 +386,16 @@ class TestProduct(TestCase):
         assert_same_as_py(a, b, ((), ()))
 
         # 2-D rectangle:
-        # TODO
+        a = self.sample_matrix(3, 6, np.float64)
+        b = self.sample_matrix(6, 3, np.float64)
+        assert_same_as_py(a, b, ((1, 0), (0, 1)))
+        assert_same_as_py(a, b.transpose(1, 0), ((0, 1), (0, 1)))
+        assert_same_as_py(a, b, ((1,), (0,)))
 
         # 3-D:
-        # TODO
+        a = np.arange(60.).reshape(3,4,5)
+        b = np.arange(24.).reshape(4,3,2)
+        assert_same_as_py(a, b, ((1, 0), (0, 1)))
 
 
 # Implementation definitions for the purpose of jitting.
