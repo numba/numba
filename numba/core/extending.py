@@ -203,10 +203,12 @@ def _overload_method_common(typ, attr, **kwargs):
     from numba.core.typing.templates import make_overload_method_template
 
     def decorate(overload_func):
+        copied_kwargs = kwargs.copy() # avoid mutating parent dict
         template = make_overload_method_template(
             typ, attr, overload_func,
-            inline=kwargs.get('inline', 'never'),
-            prefer_literal=kwargs.get('prefer_literal', False)
+            inline=copied_kwargs.pop('inline', 'never'),
+            prefer_literal=copied_kwargs.pop('prefer_literal', False),
+            **copied_kwargs,
         )
         infer_getattr(template)
         overload(overload_func, **kwargs)(overload_func)

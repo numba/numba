@@ -452,11 +452,20 @@ GPU support
    indicating that verbose messaging is enabled. This should not need to be
    modified under normal circumstances.
 
+.. envvar:: NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM
+
+   When set to 1, the default stream is the per-thread default stream. When set
+   to 0, the default stream is the legacy default stream. This defaults to 0,
+   for the legacy default stream. It may default to 1 in a future release of
+   Numba. See `Stream Synchronization Behavior
+   <https://docs.nvidia.com/cuda/cuda-runtime-api/stream-sync-behavior.html>`_
+   for an explanation of the legacy and per-thread default streams.
+
 .. envvar:: NUMBA_NPY_RELAXED_STRIDES_CHECKING
 
    By default arrays that inherit from ``numba.misc.dummyarray.Array`` (e.g.
-   CUDA and ROCm device arrays) compute their contiguity using relaxed strides
-   checking, which is the default mechanism used by NumPy since version 1.12
+   CUDA device arrays) compute their contiguity using relaxed strides checking,
+   which is the default mechanism used by NumPy since version 1.12
    (see `NPY_RELAXED_STRIDES_CHECKING
    <https://numpy.org/doc/stable/release/1.8.0-notes.html#npy-relaxed-strides-checking>`_).
    Setting ``NUMBA_NPY_RELAXED_STRIDES_CHECKING=0`` reverts back to strict
@@ -477,6 +486,11 @@ GPU support
    this warning will reduce the number of CUDA API calls (during JIT compilation), as the
    heuristic needs to check the number of SMs available on the device in the
    current context.
+
+.. envvar:: CUDA_WARN_ON_IMPLICIT_COPY
+
+   Enable warnings if a kernel is launched with host memory which forces a copy to and
+   from the device. This option is on by default (default value is 1).
 
 
 Threading Control

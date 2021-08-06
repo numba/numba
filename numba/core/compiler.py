@@ -28,7 +28,9 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                      ParforPass, DumpParforDiagnostics,
                                      IRLegalization, NoPythonBackend,
                                      InlineOverloads, PreLowerStripPhis,
-                                     NativeLowering)
+                                     NativeLowering,
+                                     NoPythonSupportedFeatureValidation,
+                                     )
 
 from numba.core.object_mode_passes import (ObjectModeFrontEnd,
                                            ObjectModeBackEnd)
@@ -132,6 +134,13 @@ detail""",
         type=cpu.InlineOptions,
         default=cpu.InlineOptions("never"),
         doc="TODO",
+    )
+    # Defines a new target option for tracking the "target backend".
+    # This will be the XYZ in @jit(_target=XYZ).
+    target_backend = Option(
+        type=str,
+        default="cpu", # if not set, default to CPU
+        doc="backend"
     )
 
 
@@ -540,6 +549,8 @@ class DefaultPassBuilder(object):
     def define_nopython_lowering_pipeline(state, name='nopython_lowering'):
         pm = PassManager(name)
         # legalise
+        pm.add_pass(NoPythonSupportedFeatureValidation,
+                    "ensure features that are in use are in a valid form")
         pm.add_pass(IRLegalization,
                     "ensure IR is legal prior to lowering")
 

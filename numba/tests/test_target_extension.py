@@ -12,7 +12,7 @@ import ctypes
 import operator
 import numpy as np
 from numba import njit, types
-from numba.extending import overload, intrinsic
+from numba.extending import overload, intrinsic, overload_classmethod
 from numba.core.target_extension import (
     JitDecorator,
     target_registry,
@@ -426,28 +426,18 @@ class TestTargetHierarchySelection(TestCase):
     that appropriate functions are selected based on what's available and that
     the DPU target is distinctly different to the CPU"""
 
-    def test_generic(self):
-        def my_func(x):
-            pass
+    def test_0_dpu_registry(self):
+        """Checks that the DPU registry only contains the things added
 
-        # Can be used by both CPU and DPU
-        @overload(my_func, target="generic")
-        def ol_my_func1(x):
-            def impl(x):
-                return 1 + x
-
-            return impl
-
-        @djit()
-        def dpu_foo():
-            return my_func(7)
-
-        @njit()
-        def cpu_foo():
-            return my_func(7)
-
-        self.assertPreciseEqual(dpu_foo(), -6)  # DPU subtracts
-        self.assertPreciseEqual(cpu_foo(), 8)  # CPU adds
+        This test must be first to execute among all tests in this file to
+        ensure the no lazily loaded entries are added yet.
+        """
+        self.assertFalse(dpu_function_registry.functions)
+        self.assertFalse(dpu_function_registry.getattrs)
+        # int literal -> int cast is registered
+        self.assertEqual(len(dpu_function_registry.casts), 1)
+        # int, float and dummy constants are registered
+        self.assertEqual(len(dpu_function_registry.constants), 3)
 
     def test_specialise_gpu(self):
         def my_func(x):
@@ -549,15 +539,6 @@ class TestTargetHierarchySelection(TestCase):
 
         for msg in msgs:
             self.assertIn(msg, str(raises.exception))
-
-    def test_dpu_registry(self):
-        """Checks that the DPU registry only contains the things added"""
-        self.assertFalse(dpu_function_registry.functions)
-        self.assertFalse(dpu_function_registry.getattrs)
-        # int literal -> int cast is registered
-        self.assertEqual(len(dpu_function_registry.casts), 1)
-        # int, float and dummy constants are registered
-        self.assertEqual(len(dpu_function_registry.constants), 3)
 
     def test_invalid_target_jit(self):
 
@@ -681,6 +662,75 @@ class TestTargetHierarchySelection(TestCase):
                 "for the current target",]
         for msg in msgs:
             self.assertIn(msg, str(raises.exception))
+
+    def test_overload_allocation(self):
+        def cast_integer(context, builder, val, fromty, toty):
+            # XXX Shouldn't require this.
+            if toty.bitwidth == fromty.bitwidth:
+                # Just a change of signedness
+                return val
+            elif toty.bitwidth < fromty.bitwidth:
+                # Downcast
+                return builder.trunc(val, context.get_value_type(toty))
+            elif fromty.signed:
+                # Signed upcast
+                return builder.sext(val, context.get_value_type(toty))
+            else:
+                # Unsigned upcast
+                return builder.zext(val, context.get_value_type(toty))
+
+        @intrinsic(target='dpu')
+        def intrin_alloc(typingctx, allocsize, align):
+            """Intrinsic to call into the allocator for Array
+            """
+            def codegen(context, builder, signature, args):
+                [allocsize, align] = args
+
+                # XXX: error are being eaten.
+                #      example: replace the next line with `align_u32 = align`
+                align_u32 = cast_integer(context, builder, align,
+                                         signature.args[1], types.uint32)
+                meminfo = context.nrt.meminfo_alloc_aligned(builder, allocsize,
+                                                            align_u32)
+                return meminfo
+
+            from numba.core.typing import signature
+            mip = types.MemInfoPointer(types.voidptr)  # return untyped pointer
+            sig = signature(mip, allocsize, align)
+            return sig, codegen
+
+        @overload_classmethod(types.Array, '_allocate', target='dpu',
+                              jit_options={'nopython':True})
+        def _ol_arr_allocate_dpu(cls, allocsize, align):
+            def impl(cls, allocsize, align):
+                return intrin_alloc(allocsize, align)
+            return impl
+
+        @overload(np.empty, target='dpu', jit_options={'nopython':True})
+        def ol_empty_impl(n):
+            def impl(n):
+                return types.Array._allocate(n, 7)
+            return impl
+
+        def buffer_func():
+            pass
+
+        @overload(buffer_func, target='dpu', jit_options={'nopython':True})
+        def ol_buffer_func_impl():
+            def impl():
+                return np.empty(10)
+            return impl
+
+        from numba.core.target_extension import target_override
+
+        # XXX: this should probably go inside the dispatcher
+        with target_override('dpu'):
+            @djit(nopython=True)
+            def foo():
+                return buffer_func()
+            r = foo()
+        from numba.core.runtime import nrt
+        self.assertIsInstance(r, nrt.MemInfo)
 
 
 class TestTargetOffload(TestCase):

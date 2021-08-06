@@ -1,5 +1,6 @@
+from warnings import warn
 from numba.core import config, sigutils
-from numba.core.errors import DeprecationError
+from numba.core.errors import DeprecationError, NumbaDeprecationWarning
 from .compiler import compile_device, declare_device_function, Dispatcher
 from .simulator.kernel import FakeCUDAKernel
 
@@ -88,6 +89,9 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                                   debug=debug)
 
         if device:
+            msg = ("Eager compilation of device functions is deprecated "
+                   "(this occurs when a signature is provided)")
+            warn(NumbaDeprecationWarning(msg))
             return device_jit
         else:
             return kernel_jit

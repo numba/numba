@@ -1571,7 +1571,7 @@ class ParforPassStates:
             self.typingctx, self.func_ir, self.typemap, self.calltypes,
         )
 
-        ir_utils._max_label = max(func_ir.blocks.keys())
+        ir_utils._the_max_label.update(max(func_ir.blocks.keys()))
         self.flags = flags
         self.metadata = metadata
         if "parfors" not in metadata:
@@ -1993,9 +1993,11 @@ class ConvertNumpyPass:
 
         # generate init block and body
         init_block = ir.Block(scope, loc)
-        init_block.body = mk_alloc(pass_states.typemap, pass_states.calltypes, lhs,
-                                   tuple(size_vars), el_typ, scope, loc,
-                                   pass_states.typemap[lhs.name])
+        init_block.body = mk_alloc(
+            pass_states.typingctx,
+            pass_states.typemap, pass_states.calltypes, lhs,
+            tuple(size_vars), el_typ, scope, loc,
+            pass_states.typemap[lhs.name])
         body_label = next_label()
         body_block = ir.Block(scope, loc)
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
@@ -2077,9 +2079,11 @@ class ConvertNumpyPass:
 
         # generate init block and body
         init_block = ir.Block(scope, loc)
-        init_block.body = mk_alloc(pass_states.typemap, pass_states.calltypes, lhs,
-                                   tuple(size_vars), el_typ, scope, loc,
-                                   pass_states.typemap[lhs.name])
+        init_block.body = mk_alloc(
+            pass_states.typingctx,
+            pass_states.typemap, pass_states.calltypes, lhs,
+            tuple(size_vars), el_typ, scope, loc,
+            pass_states.typemap[lhs.name])
         body_label = next_label()
         body_block = ir.Block(scope, loc)
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
@@ -2302,6 +2306,11 @@ class ConvertLoopPass:
                         and isinstance(inst.value, ir.Expr)
                         and inst.value.op == 'call'
                         and self._is_parallel_loop(inst.value.func.name, call_table)):
+                    # Here we've found a parallel loop, either prange or pndindex.
+                    # We create a parfor from this loop and then overwrite the contents
+                    # of the original loop header block to contain this parfor and then
+                    # a jump to the original loop exit block.  Other blocks in the
+                    # original loop are discarded.
                     body_labels = [ l for l in loop.body if
                                     l in blocks and l != loop.header ]
                     args = inst.value.args
@@ -2540,19 +2549,17 @@ class ConvertLoopPass:
                                     equiv_set,
                                     ("prange", loop_kind, loop_replacing),
                                     pass_states.flags, races=races)
-                    # add parfor to entry block's jump target
-                    jump = blocks[entry].body[-1]
-                    jump.target = list(loop.exits)[0]
-                    blocks[jump.target].body.insert(0, parfor)
+
+                    blocks[loop.header].body = [parfor, ir.Jump(list(loop.exits)[0], loc)]
                     self.rewritten.append(dict(
                         old_loop=loop,
                         new=parfor,
                         reason='loop',
                     ))
                     # remove loop blocks from top level dict
-                    blocks.pop(loop.header)
                     for l in body_labels:
-                        blocks.pop(l)
+                        if l != loop.header:
+                            blocks.pop(l)
                     if config.DEBUG_ARRAY_OPT >= 1:
                         print("parfor from loop")
                         parfor.dump()
@@ -2778,9 +2785,9 @@ class ParforPass(ParforPassStates):
     def _pre_run(self):
         # run array analysis, a pre-requisite for parfor translation
         self.array_analysis.run(self.func_ir.blocks)
-        # NOTE: Prepare _max_label. See #6102
-        ir_utils._max_label = max(ir_utils._max_label,
-                                  ir_utils.find_max_label(self.func_ir.blocks))
+        # NOTE: Prepare _the_max_label. See #6102
+        ir_utils._the_max_label.update(
+            ir_utils.find_max_label(self.func_ir.blocks))
 
     def run(self):
         """run parfor conversion pass: replace Numpy calls
@@ -3252,8 +3259,7 @@ def _find_func_var(typemap, func, avail_vars, loc):
 
 
 def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes, metadata):
-    ir_utils._max_label = max(ir_utils._max_label,
-                              ir_utils.find_max_label(func_ir.blocks))
+    ir_utils._the_max_label.update(ir_utils.find_max_label(func_ir.blocks))
     parfor_found = False
     new_blocks = {}
     scope = next(iter(func_ir.blocks.values())).scope

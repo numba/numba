@@ -233,6 +233,9 @@ def array_real(a):
 def array_imag(a):
     return np.imag(a)
 
+def np_clip_no_out(a, a_min, a_max):
+    return np.clip(a, a_min, a_max)
+
 def np_clip(a, a_min, a_max, out=None):
     return np.clip(a, a_min, a_max, out)
 
@@ -245,6 +248,8 @@ def array_clip(a, a_min=None, a_max=None, out=None):
 def array_clip_kwargs(a, a_min=None, a_max=None, out=None):
     return a.clip(a_min, a_max, out=out)
 
+def array_clip_no_out(a, a_min, a_max):
+    return a.clip(a_min, a_max)
 
 def array_conj(a):
     return a.conj()
@@ -1358,11 +1363,12 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(pyfunc(z), cfunc(z))
 
     def test_clip(self):
+        has_out = (np_clip, np_clip_kwargs, array_clip, array_clip_kwargs)
+        has_no_out = (np_clip_no_out, array_clip_no_out)
         # TODO: scalars are not tested (issue #3469)
         for a in (np.linspace(-10, 10, 101),
                   np.linspace(-10, 10, 40).reshape(5, 2, 4)):
-            for pyfunc in [np_clip, np_clip_kwargs, array_clip,
-                           array_clip_kwargs]:
+            for pyfunc in has_out + has_no_out:
                 cfunc = jit(nopython=True)(pyfunc)
 
                 msg = "array_clip: must set either max or min"
@@ -1374,11 +1380,12 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
                 np.testing.assert_equal(pyfunc(a, -5, 5), cfunc(a, -5, 5))
 
-                pyout = np.empty_like(a)
-                cout = np.empty_like(a)
-                np.testing.assert_equal(pyfunc(a, -5, 5, pyout),
-                                        cfunc(a, -5, 5, cout))
-                np.testing.assert_equal(pyout, cout)
+                if pyfunc in has_out:
+                    pyout = np.empty_like(a)
+                    cout = np.empty_like(a)
+                    np.testing.assert_equal(pyfunc(a, -5, 5, pyout),
+                                            cfunc(a, -5, 5, cout))
+                    np.testing.assert_equal(pyout, cout)
 
                 # verifies that type-inference is working on the return value
                 # this used to trigger issue #3489

@@ -7,6 +7,7 @@ from numba import njit, vectorize
 from numba import typeof
 from numba.core import utils, types, typing, ir, compiler, cpu, cgutils
 from numba.core.compiler import Compiler, Flags
+from numba.core.registry import cpu_target
 from numba.tests.support import (MemoryLeakMixin, TestCase, temp_directory,
                                  create_temp_module)
 from numba.extending import (
@@ -95,9 +96,9 @@ class RewritesTester(Compiler):
             flags = Flags()
         flags.nrt = True
         if typing_context is None:
-            typing_context = typing.Context()
+            typing_context = cpu_target.typing_context
         if target_context is None:
-            target_context = cpu.CPUContext(typing_context)
+            target_context = cpu_target.target_context
         return cls(typing_context, target_context, library, args, return_type,
                    flags, locals)
 

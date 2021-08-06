@@ -227,9 +227,11 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
     else:
         fname = cres.fndesc.llvm_func_name
         tgt = cres.target_context
+        filename = cres.type_annotation.filename
+        linenum = int(cres.type_annotation.linenum)
         lib, kernel = tgt.prepare_cuda_kernel(cres.library, fname,
                                               cres.signature.args, debug,
-                                              nvvm_options)
+                                              nvvm_options, filename, linenum)
 
     cc = cc or config.CUDA_DEFAULT_PTX_CC
     ptx = lib.get_asm_str(cc=cc)
@@ -379,14 +381,6 @@ class _Kernel(serialize.ReduceMixin):
         self.lineinfo = lineinfo
         self.extensions = extensions or []
 
-        cres = compile_cuda(self.py_func, types.void, self.argtypes,
-                            debug=self.debug,
-                            lineinfo=self.lineinfo,
-                            inline=inline,
-                            fastmath=fastmath)
-        fname = cres.fndesc.llvm_func_name
-        args = cres.signature.args
-
         nvvm_options = {
             'debug': self.debug,
             'lineinfo': self.lineinfo,
@@ -394,9 +388,22 @@ class _Kernel(serialize.ReduceMixin):
             'opt': 3 if opt else 0
         }
 
+        cres = compile_cuda(self.py_func, types.void, self.argtypes,
+                            debug=self.debug,
+                            lineinfo=self.lineinfo,
+                            inline=inline,
+                            fastmath=fastmath,
+                            nvvm_options=nvvm_options)
+        fname = cres.fndesc.llvm_func_name
+        args = cres.signature.args
+
         tgt_ctx = cres.target_context
+        code = self.py_func.__code__
+        filename = code.co_filename
+        linenum = code.co_firstlineno
         lib, kernel = tgt_ctx.prepare_cuda_kernel(cres.library, fname, args,
                                                   debug, nvvm_options,
+                                                  filename, linenum,
                                                   max_registers)
 
         if not link:

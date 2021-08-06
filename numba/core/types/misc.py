@@ -38,7 +38,10 @@ class RawPointer(Opaque):
 
 
 class StringLiteral(Literal, Dummy):
-    pass
+
+    def can_convert_to(self, typingctx, other):
+        if isinstance(other, UnicodeType):
+            return Conversion.safe
 
 
 Literal.ctor_map[str] = StringLiteral
@@ -333,6 +336,11 @@ class SliceLiteral(Literal, SliceType):
         name = 'Literal[slice]({})'.format(value)
         members = 2 if value.step is None else 3
         SliceType.__init__(self, name=name, members=members)
+
+    @property
+    def key(self):
+        sl = self.literal_value
+        return sl.start, sl.stop, sl.step
 
 
 Literal.ctor_map[slice] = SliceLiteral
