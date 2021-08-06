@@ -4702,31 +4702,6 @@ def _copy_to_tuple(from_list, to_tuple):
     return to_tuple
 
 
-@register_jitable
-def _nm_dot(a, b):
-    """
-    This is an implementation of np.dot for the N-D/M-D case where M>=2.
-
-    Ideally this should eventually be:
-
-    1. Exposed as part of normal np.dot() API.
-    2. Implemented in a more efficient way (BLAS?).
-    """
-    result_shape = a.shape[:-1] + b.shape[:-2] + (b.shape[-1],)
-    adim = len(a.shape)
-    bdim = len(b.shape)
-    result = np.zeros(result_shape, dtype=a.dtype)
-    # TODO can't slice tuple
-    for a_key in np.ndindex(np.empty(result_shape[:adim - 1])):
-        for b_key_part_1 in np.ndindex(np.empty(result_shape[adim -1:adim -1 + bdim -2])):
-            for b_key_part_2 in range(result_shape[-1]):
-                result[a_key + b_key_part_1 + (b_key_part_2,)] = np.sum(
-                    a[a_key + (slice(None, None),)] *
-                    b[b_key_part_1 + (slice(None, None), b_key_part_2)]
-                )
-    return result
-
-
 @overload(np.tensordot)
 def np_tensordot(a, b, axes):
     """
@@ -4789,8 +4764,7 @@ def np_tensordot(a, b, axes):
         N2 = 1
         for axis in axes_a:
             N2 *= as_[axis]
-        # TODO not hardocding results in segfault
-        newshape_a = (2, 1, 0)#(int(_multiply_reduce([as_[ax] for ax in notin])), N2)
+        newshape_a = (int(_multiply_reduce([as_[ax] for ax in notin])), N2)
         olda = _copy_to_tuple([as_[axis] for axis in notin], olda_tuple)
 
         notin = [k for k in range(ndb) if k not in axes_b]
@@ -4798,14 +4772,14 @@ def np_tensordot(a, b, axes):
         N2 = 1
         for axis in axes_b:
             N2 *= bs[axis]
-        newshape_b = (0, 1, 2)#(N2, int(_multiply_reduce([bs[ax] for ax in notin])))
+        newshape_b = (N2, int(_multiply_reduce([bs[ax] for ax in notin])))
         oldb = _copy_to_tuple([bs[axis] for axis in notin], oldb_tuple)
 
         # TODO: figure out way to do reshape on original transpose, without
         # ascontiguousarray().
         at = np.ascontiguousarray(a.transpose(newaxes_a)).reshape(newshape_a)
         bt = np.ascontiguousarray(b.transpose(newaxes_b)).reshape(newshape_b)
-        res = _nm_dot(at, bt)
+        res = np.dot(at, bt)
         return res.reshape(olda + oldb)
 
     return tensordot_impl
