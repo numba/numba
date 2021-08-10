@@ -437,6 +437,22 @@ class NativeLowering(LoweringPass):
 
 
 @register_pass(mutates_CFG=False, analysis_only=True)
+class NoPythonSupportedFeatureValidation(AnalysisPass):
+    """NoPython Mode check: Validates the IR to ensure that features in use are
+    in a form that is supported"""
+
+    _name = "nopython_supported_feature_validation"
+
+    def __init__(self):
+        AnalysisPass.__init__(self)
+
+    def run_pass(self, state):
+        raise_on_unsupported_feature(state.func_ir, state.typemap)
+        warn_deprecated(state.func_ir, state.typemap)
+        return False
+
+
+@register_pass(mutates_CFG=False, analysis_only=True)
 class IRLegalization(AnalysisPass):
 
     _name = "ir_legalization"
@@ -445,8 +461,6 @@ class IRLegalization(AnalysisPass):
         AnalysisPass.__init__(self)
 
     def run_pass(self, state):
-        raise_on_unsupported_feature(state.func_ir, state.typemap)
-        warn_deprecated(state.func_ir, state.typemap)
         # NOTE: this function call must go last, it checks and fixes invalid IR!
         check_and_legalize_ir(state.func_ir)
         return True
@@ -829,13 +843,14 @@ class PreLowerStripPhis(FunctionPass):
             for target, rhs in exporters[label]:
                 # If RHS is undefined
                 if rhs is ir.UNDEFINED:
-                    # Put in a NULL initializer
-                    rhs = ir.Expr.null(loc=target.loc)
+                    # Put in a NULL initializer, set the location to be in what
+                    # will eventually materialize as the prologue.
+                    rhs = ir.Expr.null(loc=func_ir.loc)
 
                 assign = ir.Assign(
                     target=target,
                     value=rhs,
-                    loc=target.loc
+                    loc=rhs.loc
                 )
                 # Insert at the earliest possible location; i.e. after the
                 # last assignment to rhs

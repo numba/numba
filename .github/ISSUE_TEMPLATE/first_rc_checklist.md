@@ -19,15 +19,12 @@ labels: task
 * [ ] Build and upload conda packages on buildfarm (check "upload").
 * [ ] Build wheels (`$PYTHON_VERSIONS`) on the buildfarm.
 * [ ] Upload wheels and sdist to PyPI (upload from `ci_artifacts`).
-* [ ] Verify packages uploaded to Anaconda Cloud and move to
-  `numba/label/main`.
+* [ ] Verify packages uploaded to Anaconda Cloud and move to `numba/label/main`.
 * [ ] Verify wheels for all platforms arrived on PyPi.
-* [ ] Verify ReadTheDocs build.
+* [ ] Initialize and verify ReadTheDocs build.
 * [ ] Clean up `ci_artifacts`.
-* [ ] Review, merge and check execution of release notebook.
 * [ ] Send RC announcement email / post announcement to discourse group.
 * [ ] Post link to Twitter.
-* [ ] Post link to python-announce-list@python.org.
 
 ### Post Release:
 

@@ -632,77 +632,92 @@ def array_max(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@lower_builtin(np.argmin, types.Array)
-@lower_builtin("array.argmin", types.Array)
-def array_argmin(context, builder, sig, args):
-    ty = sig.args[0].dtype
+@register_jitable
+def array_argmin_impl_datetime(arry):
+    if arry.size == 0:
+        raise ValueError("attempt to get argmin of an empty sequence")
+    it = np.nditer(arry)
+    min_value = next(it).take(0)
+    min_idx = 0
+    if _is_nat(min_value):
+        return min_idx
 
-    if (isinstance(ty, (types.NPDatetime, types.NPTimedelta))):
-        def array_argmin_impl(arry):
-            if arry.size == 0:
-                raise ValueError("attempt to get argmin of an empty sequence")
-            it = np.nditer(arry)
-            min_value = next(it).take(0)
-            min_idx = 0
-            if _is_nat(min_value):
-                return min_idx
-
-            idx = 1
-            for view in it:
-                v = view.item()
-                if _is_nat(v):
-                    if numpy_version >= (1, 18):
-                        return idx
-                    else:
-                        idx += 1
-                        continue
-                if v < min_value:
-                    min_value = v
-                    min_idx = idx
-                idx += 1
-            return min_idx
-
-    elif isinstance(ty, types.Float):
-        def array_argmin_impl(arry):
-            if arry.size == 0:
-                raise ValueError("attempt to get argmin of an empty sequence")
-            for v in arry.flat:
-                min_value = v
-                min_idx = 0
-                break
-            if np.isnan(min_value):
-                return min_idx
-
-            idx = 0
-            for v in arry.flat:
-                if np.isnan(v):
-                    return idx
-                if v < min_value:
-                    min_value = v
-                    min_idx = idx
-                idx += 1
-            return min_idx
-
-    else:
-        def array_argmin_impl(arry):
-            if arry.size == 0:
-                raise ValueError("attempt to get argmin of an empty sequence")
-            for v in arry.flat:
-                min_value = v
-                min_idx = 0
-                break
+    idx = 1
+    for view in it:
+        v = view.item()
+        if _is_nat(v):
+            if numpy_version >= (1, 18):
+                return idx
             else:
-                raise RuntimeError('unreachable')
-
-            idx = 0
-            for v in arry.flat:
-                if v < min_value:
-                    min_value = v
-                    min_idx = idx
                 idx += 1
-            return min_idx
-    res = context.compile_internal(builder, array_argmin_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+                continue
+        if v < min_value:
+            min_value = v
+            min_idx = idx
+        idx += 1
+    return min_idx
+
+
+@register_jitable
+def array_argmin_impl_float(arry):
+    if arry.size == 0:
+        raise ValueError("attempt to get argmin of an empty sequence")
+    for v in arry.flat:
+        min_value = v
+        min_idx = 0
+        break
+    if np.isnan(min_value):
+        return min_idx
+
+    idx = 0
+    for v in arry.flat:
+        if np.isnan(v):
+            return idx
+        if v < min_value:
+            min_value = v
+            min_idx = idx
+        idx += 1
+    return min_idx
+
+
+@register_jitable
+def array_argmin_impl_generic(arry):
+    if arry.size == 0:
+        raise ValueError("attempt to get argmin of an empty sequence")
+    for v in arry.flat:
+        min_value = v
+        min_idx = 0
+        break
+    else:
+        raise RuntimeError('unreachable')
+
+    idx = 0
+    for v in arry.flat:
+        if v < min_value:
+            min_value = v
+            min_idx = idx
+        idx += 1
+    return min_idx
+
+
+@overload(np.argmin)
+@overload_method(types.Array, "argmin")
+def array_argmin(arr, axis=None):
+    if isinstance(arr.dtype, (types.NPDatetime, types.NPTimedelta)):
+        flatten_impl = array_argmin_impl_datetime
+    elif isinstance(arr.dtype, types.Float):
+        flatten_impl = array_argmin_impl_float
+    else:
+        flatten_impl = array_argmin_impl_generic
+
+    if is_nonelike(axis):
+        def array_argmin_impl(arr, axis=None):
+            return flatten_impl(arr)
+    else:
+        array_argmin_impl = build_argmax_or_argmin_with_axis_impl(
+            arr, axis, flatten_impl
+        )
+    return array_argmin_impl
 
 
 @register_jitable
@@ -771,6 +786,50 @@ def array_argmax_impl_generic(arry):
     return max_idx
 
 
+def build_argmax_or_argmin_with_axis_impl(arr, axis, flatten_impl):
+    """
+    Given a function that implements the logic for handling a flattened
+    array, return the implementation function.
+    """
+    _check_is_integer(axis, "axis")
+    retty = arr.dtype
+
+    tuple_buffer = tuple(range(arr.ndim))
+
+    def impl(arr, axis=None):
+        if axis < 0:
+            axis = arr.ndim + axis
+
+        if axis < 0 or axis >= arr.ndim:
+            raise ValueError("axis is out of bounds")
+
+        # Short circuit 1-dimensional arrays:
+        if arr.ndim == 1:
+            return flatten_impl(arr)
+
+        # Make chosen axis the last axis:
+        tmp = tuple_buffer
+        for i in range(axis, arr.ndim - 1):
+            tmp = tuple_setitem(tmp, i, i + 1)
+        transpose_index = tuple_setitem(tmp, arr.ndim - 1, axis)
+        transposed_arr = arr.transpose(transpose_index)
+
+        # Flatten along that axis; since we've transposed, we can just get
+        # batches off the overall flattened array.
+        m = transposed_arr.shape[-1]
+        raveled = transposed_arr.ravel()
+        assert raveled.size == arr.size
+        assert transposed_arr.size % m == 0
+        out = np.empty(transposed_arr.size // m, retty)
+        for i in range(out.size):
+            out[i] = flatten_impl(raveled[i * m:(i + 1) * m])
+
+        # Reshape based on axis we didn't flatten over:
+        return out.reshape(transposed_arr.shape[:-1])
+
+    return impl
+
+
 @overload(np.argmax)
 @overload_method(types.Array, "argmax")
 def array_argmax(arr, axis=None):
@@ -785,42 +844,9 @@ def array_argmax(arr, axis=None):
         def array_argmax_impl(arr, axis=None):
             return flatten_impl(arr)
     else:
-        check_is_integer(axis, "axis")
-        retty = arr.dtype
-
-        tuple_buffer = tuple(range(arr.ndim))
-
-        def array_argmax_impl(arr, axis=None):
-            if axis < 0:
-                axis = arr.ndim + axis
-
-            if axis < 0 or axis >= arr.ndim:
-                raise ValueError("axis is out of bounds")
-
-            # Short circuit 1-dimensional arrays:
-            if arr.ndim == 1:
-                return flatten_impl(arr)
-
-            # Make chosen axis the last axis:
-            tmp = tuple_buffer
-            for i in range(axis, arr.ndim - 1):
-                tmp = tuple_setitem(tmp, i, i + 1)
-            transpose_index = tuple_setitem(tmp, arr.ndim - 1, axis)
-            transposed_arr = arr.transpose(transpose_index)
-
-            # Flatten along that axis; since we've transposed, we can just get
-            # batches off the overall flattened array.
-            m = transposed_arr.shape[-1]
-            raveled = transposed_arr.ravel()
-            assert raveled.size == arr.size
-            assert transposed_arr.size % m == 0
-            out = np.empty(transposed_arr.size // m, retty)
-            for i in range(out.size):
-                out[i] = flatten_impl(raveled[i * m:(i + 1) * m])
-
-            # Reshape based on axis we didn't flatten over:
-            return out.reshape(transposed_arr.shape[:-1])
-
+        array_argmax_impl = build_argmax_or_argmin_with_axis_impl(
+            arr, axis, flatten_impl
+        )
     return array_argmax_impl
 
 

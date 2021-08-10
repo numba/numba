@@ -421,7 +421,7 @@ class ArrayAttribute(AttributeTemplate):
         kwargs = dict(kws)
         kind = kwargs.pop('kind', types.StringLiteral('quicksort'))
         if not isinstance(kind, types.StringLiteral):
-            raise errors.TypingError('"kind" must be a string literal')
+            raise TypingError('"kind" must be a string literal')
         if kwargs:
             msg = "Unsupported keywords: {!r}"
             raise TypingError(msg.format([k for k in kwargs.keys()]))
@@ -559,13 +559,22 @@ class StaticGetItemLiteralRecord(AbstractTemplate):
     def generic(self, args, kws):
         # Resolution of members for records
         record, idx = args
-        if isinstance(record, types.Record) and isinstance(idx, types.StringLiteral):
-            if idx.literal_value not in record.fields:
-                raise KeyError(f"Field '{idx.literal_value}' was not found in record with "
-                               f"fields {tuple(record.fields.keys())}")
-            ret = record.typeof(idx.literal_value)
-            assert ret
-            return signature(ret, *args)
+        if isinstance(record, types.Record):
+            if isinstance(idx, types.StringLiteral):
+                if idx.literal_value not in record.fields:
+                    raise KeyError(f"Field '{idx.literal_value}' was not found in record with "
+                                   f"fields {tuple(record.fields.keys())}")
+                ret = record.typeof(idx.literal_value)
+                assert ret
+                return signature(ret, *args)
+            elif isinstance(idx, types.IntegerLiteral):
+                if idx.literal_value >= len(record.fields):
+                    msg = f"Requested index {idx.literal_value} is out of range"
+                    raise IndexError(msg)
+                field_names = list(record.fields)
+                ret = record.typeof(field_names[idx.literal_value])
+                assert ret
+                return signature(ret, *args)
 
 
 @infer
@@ -575,10 +584,21 @@ class StaticSetItemRecord(AbstractTemplate):
     def generic(self, args, kws):
         # Resolution of members for record and structured arrays
         record, idx, value = args
-        if isinstance(record, types.Record) and isinstance(idx, str):
-            expectedty = record.typeof(idx)
-            if self.context.can_convert(value, expectedty) is not None:
-                return signature(types.void, record, types.literal(idx), value)
+        if isinstance(record, types.Record):
+            if isinstance(idx, str):
+                expectedty = record.typeof(idx)
+                if self.context.can_convert(value, expectedty) is not None:
+                    return signature(types.void, record, types.literal(idx),
+                                     value)
+            elif isinstance(idx, int):
+                if idx >= len(record.fields):
+                    msg = f"Requested index {idx} is out of range"
+                    raise IndexError(msg)
+                str_field = list(record.fields)[idx]
+                expectedty = record.typeof(str_field)
+                if self.context.can_convert(value, expectedty) is not None:
+                    return signature(types.void, record, types.literal(idx),
+                                     value)
 
 
 @infer_global(operator.setitem)
@@ -777,10 +797,6 @@ for fName in ["mean"]:
 # get promoted to float64 return
 for fName in ["var", "std"]:
     install_array_method(fName, generic_hetero_always_real)
-
-
-# Functions that return an index (intp)
-install_array_method("argmin", generic_index)
 
 
 @infer_global(operator.eq)

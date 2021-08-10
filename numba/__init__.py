@@ -85,8 +85,8 @@ __all__ = """
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 33, 0)
-_min_llvm_version = (9, 0, 0)
+_min_llvmlite_version = (0, 38, 0)
+_min_llvm_version = (11, 0, 0)
 
 def _ensure_llvm():
     """
@@ -132,8 +132,8 @@ def _ensure_critical_deps():
     if PYVERSION < (3, 7):
         raise ImportError("Numba needs Python 3.7 or greater")
 
-    if numpy_version < (1, 15):
-        raise ImportError("Numba needs NumPy 1.15 or greater")
+    if numpy_version < (1, 17):
+        raise ImportError("Numba needs NumPy 1.17 or greater")
 
     try:
         import scipy

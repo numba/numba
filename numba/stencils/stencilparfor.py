@@ -692,7 +692,7 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
                                                         ir_utils.next_label())
     min_label = min(stencil_blocks.keys())
     max_label = max(stencil_blocks.keys())
-    ir_utils._max_label = max_label
+    ir_utils._the_max_label.update(max_label)
 
     if config.DEBUG_ARRAY_OPT >= 1:
         print("Initial stencil_blocks")

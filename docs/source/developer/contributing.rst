@@ -292,14 +292,14 @@ Platform support
 ''''''''''''''''
 
 Every commit to the master branch is automatically tested on all of the
-platforms Numba supports. This includes ARMv7, ARMv8, POWER8, as well as both
-AMD and NVIDIA GPUs.  The build system however is internal to Anaconda, so we
-also use `Azure <https://dev.azure.com/numba/numba/_build>`_ to provide public
-continuous integration information for as many combinations as can be supported
-by the service.  Azure CI automatically tests all pull requests on Windows, OS X
-and Linux, as well as a sampling of different Python and NumPy versions. If you
-see problems on platforms you are unfamiliar with, feel free to ask for help in
-your pull request. The Numba core developers can help diagnose cross-platform
+platforms Numba supports. This includes ARMv8, POWER8, and NVIDIA GPUs.
+The build system however is internal to Anaconda, so we also use
+`Azure <https://dev.azure.com/numba/numba/_build>`_ to provide public continuous
+integration information for as many combinations as can be supported by the
+service.  Azure CI automatically tests all pull requests on Windows, OS X and
+Linux, as well as a sampling of different Python and NumPy versions. If you see
+problems on platforms you are unfamiliar with, feel free to ask for help in your
+pull request. The Numba core developers can help diagnose cross-platform
 compatibility issues. Also see the :ref:`continuous integration
 <continuous_integration_testing>` section on how public CI is implemented.
 
@@ -319,7 +319,7 @@ The Numba test suite causes CI systems a lot of grief:
 #. The combination of things that Numba has to test well exceeds the capacity of
    any public CI system, (Python versions x NumPy versions x Operating systems
    x Architectures x feature libraries (e.g. SVML) x threading backends
-   (e.g. OpenMP, TBB)) and then there's CUDA and ROCm too and all their version
+   (e.g. OpenMP, TBB)) and then there's CUDA too and all its version
    variants.
 
 As a result of the above, public CI is implemented as follows:
@@ -336,10 +336,10 @@ As a result of the above, public CI is implemented as follows:
       matrix and each combination runs one chunk. This is done for speed,
       because public CI cannot cope with the load else.
 
-If a pull request is changing CUDA or ROCm code (which cannot be tested on
-Public CI as there's no hardware) or it is making changes to something that the
-core developers consider risky, then it will also be run on the Numba farm just
-to make sure. The Numba project's private build and test farm will actually
+If a pull request is changing CUDA code (which cannot be tested on Public CI as
+there's no hardware) or it is making changes to something that the core
+developers consider risky, then it will also be run on the Numba farm just to
+make sure. The Numba project's private build and test farm will actually
 exercise all the applicable tests on all the combinations noted above on real
 hardware!
 

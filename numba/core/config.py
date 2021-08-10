@@ -310,6 +310,12 @@ class _EnvReloader(object):
 
         # CUDA Configs
 
+        # Whether to warn about kernel launches where a host array
+        # is used as a parameter, forcing a copy to and from the device.
+        # On by default.
+        CUDA_WARN_ON_IMPLICIT_COPY = _readenv(
+            "NUMBA_CUDA_WARN_ON_IMPLICIT_COPY", int, 1)
+
         # Force CUDA compute capability to a specific version
         FORCE_CUDA_CC = _readenv("NUMBA_FORCE_CUDA_CC", _parse_cc, None)
 
@@ -354,6 +360,10 @@ class _EnvReloader(object):
 
         # Whether to generate verbose log messages when JIT linking
         CUDA_VERBOSE_JIT_LOG = _readenv("NUMBA_CUDA_VERBOSE_JIT_LOG", int, 1)
+
+        # Whether the default stream is the per-thread default stream
+        CUDA_PER_THREAD_DEFAULT_STREAM = _readenv(
+            "NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM", int, 0)
 
         # Compute contiguity of device arrays using the relaxed strides
         # checking algorithm.

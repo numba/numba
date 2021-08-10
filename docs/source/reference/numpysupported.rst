@@ -274,7 +274,6 @@ The following methods of Numpy arrays are supported in their basic form
 
 * :meth:`~numpy.ndarray.all`
 * :meth:`~numpy.ndarray.any`
-* :meth:`~numpy.ndarray.argmin`
 * :meth:`~numpy.ndarray.clip`
 * :meth:`~numpy.ndarray.conj`
 * :meth:`~numpy.ndarray.conjugate`
@@ -298,6 +297,7 @@ Other methods
 The following methods of Numpy arrays are supported:
 
 * :meth:`~numpy.ndarray.argmax` (``axis`` keyword argument supported).
+* :meth:`~numpy.ndarray.argmin` (``axis`` keyword argument supported).
 * :meth:`~numpy.ndarray.argsort` (``kind`` key word argument supported for
   values ``'quicksort'`` and ``'mergesort'``)
 * :meth:`~numpy.ndarray.astype` (only the 1-argument form)
@@ -743,6 +743,7 @@ Math operations
  floor_divide        Yes          Yes
  negative            Yes          Yes
  power               Yes          Yes
+ float_power         Yes          Yes
  remainder           Yes          Yes
  mod                 Yes          Yes
  fmod                Yes          Yes
@@ -762,6 +763,7 @@ Math operations
  log1p               Yes          Yes
  sqrt                Yes          Yes
  square              Yes          Yes
+ cbrt                Yes          Yes
  reciprocal          Yes          Yes
  conjugate           Yes          Yes
  gcd                 Yes          Yes

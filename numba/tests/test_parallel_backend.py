@@ -262,7 +262,7 @@ class TestParallelBackendBase(TestCase):
         'concurrent_jit': [
             jit_runner(nopython=True, parallel=(not _parfors_unsupported)),
         ],
-        'concurrect_vectorize': [
+        'concurrent_vectorize': [
             vectorize_runner(nopython=True, target='parallel'),
         ],
         'concurrent_guvectorize': [
