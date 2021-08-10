@@ -791,7 +791,7 @@ def build_argmax_or_argmin_with_axis_impl(arr, axis, flatten_impl):
     Given a function that implements the logic for handling a flattened
     array, return the implementation function.
     """
-    _check_is_integer(axis, "axis")
+    check_is_integer(axis, "axis")
     retty = arr.dtype
 
     tuple_buffer = tuple(range(arr.ndim))
