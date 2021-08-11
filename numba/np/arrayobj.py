@@ -1563,6 +1563,22 @@ def array_T(context, builder, typ, value):
     return impl_ret_borrowed(context, builder, typ, res)
 
 
+@overload(np.logspace)
+def numpy_logspace(start, stop, num=50):
+    if not isinstance(start, types.Number):
+        raise errors.TypingError('The first argument "start" must be a number')
+    if not isinstance(stop, types.Number):
+        raise errors.TypingError('The second argument "stop" must be a number')
+    if not isinstance(num, (int, types.Integer)):
+        raise errors.TypingError('The third argument "num" must be an integer')
+
+    def impl(start, stop, num=50):
+        y = np.linspace(start, stop, num)
+        return np.power(10.0, y)
+
+    return impl
+
+
 @overload(np.rot90)
 def numpy_rot90(arr, k=1):
     # supporting axes argument it needs to be included in np.flip
