@@ -729,23 +729,31 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_delete2_basic(self):
 
         def arrays():
+
+            def make_list(values):
+                a = List()
+                for i in values:
+                    a.append(i)
+                return a
+
             # array, obj
             #
             # an array-like type
-            yield [1, 2, 3, 4, 5], 3
-            yield [1, 2, 3, 4, 5], [2, 3]
+            yield make_list([1, 2, 3, 4, 5]), 3
+            yield make_list([1, 2, 3, 4, 5]), make_list([2, 3])
             # 1d array, scalar
             yield np.arange(10), 3
             yield np.arange(10), -3 # Negative obj
             # 1d array, list
-            yield np.arange(10), [3, 5, 6]
-            yield np.arange(10), [2, 3, 4, 5]
+            yield np.arange(10), make_list([3, 5, 6])
+            yield np.arange(10), make_list([2, 3, 4, 5])
             # 3d array, scalar
             yield np.arange(3 * 4 * 5).reshape(3, 4, 5), 2
             # 3d array, list
-            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), [5, 30, 27, 8]
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5),\
+                make_list([5, 30, 27, 8])
             # slices
-            yield [1, 2, 3, 4], slice(1, 3, 1)
+            yield make_list([1, 2, 3, 4]), slice(1, 3, 1)
             yield np.arange(10), slice(10)
 
         pyfunc = delete2
@@ -757,26 +765,33 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(expected, got)
 
     def test_delete2_exceptions(self):
+
+        def make_list(values):
+            a = List()
+            for i in values:
+                a.append(i)
+            return a
+
         pyfunc = delete2
         cfunc = jit(nopython=True)(pyfunc)
         self.disable_leak_check()
 
         with self.assertRaises(TypingError) as raises:
-            cfunc([1, 2], 3.14)
+            cfunc(make_list([1, 2]), 3.14)
         self.assertIn(
             'obj should be of Integer dtype',
             str(raises.exception)
         )
 
         with self.assertRaises(TypingError) as raises:
-            cfunc(np.arange(10), [3.5, 5.6, 6.2])
+            cfunc(np.arange(10), make_list([3.5, 5.6, 6.2]))
         self.assertIn(
             'obj should be of Integer dtype',
             str(raises.exception)
         )
 
         with self.assertRaises(IndexError) as raises:
-            cfunc([1, 2], 3)
+            cfunc(make_list([1, 2]), 3)
         self.assertIn(
             'obj must be less than the len(arr)',
             str(raises.exception),
@@ -792,23 +807,31 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_delete3_basic(self):
 
         def arrays():
+
+            def make_list(values):
+                a = List()
+                for i in values:
+                    a.append(i)
+                return a
+
             # array, obj
             #
             # an array-like type
-            yield [1, 2, 3, 4, 5], 3
-            yield [1, 2, 3, 4, 5], [2, 3]
+            yield make_list([1, 2, 3, 4, 5]), 3
+            yield make_list([1, 2, 3, 4, 5]), make_list([2, 3])
             # 1d array, scalar
             yield np.arange(10), 3
             yield np.arange(10), -3 # Negative obj
             # 1d array, list
-            yield np.arange(10), [3, 5, 6]
-            yield np.arange(10), [2, 3, 4, 5]
+            yield np.arange(10), make_list([3, 5, 6])
+            yield np.arange(10), make_list([2, 3, 4, 5])
             # 3d array, scalar
             yield np.arange(3 * 4 * 5).reshape(3, 4, 5), 2
             # 3d array, list
-            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), [5, 30, 27, 8]
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5),\
+                make_list([5, 30, 27, 8])
             # slices
-            yield [1, 2, 3, 4], slice(1, 3, 1)
+            yield make_list([1, 2, 3, 4]), slice(1, 3, 1)
             yield np.arange(10), slice(10)
 
         pyfunc = delete3
@@ -822,24 +845,33 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_delete3_with_axis_basic(self):
 
         def arrays():
+
+            def make_list(values):
+                a = List()
+                for i in values:
+                    a.append(i)
+                return a
+
             # array, obj, axis
             #
             # 1d array, scalar
             yield np.arange(10), 3, 0
             yield np.arange(10), -3, 0 # Negative obj
             # 1d array, list
-            yield np.arange(10), [3, 5, 6], 0
-            yield np.arange(10), [6, 5, 3], 0
-            yield np.arange(10), [-2, -3, -4], 0
-            yield np.arange(10), [-4, -3, -2], 0
+            yield np.arange(10), make_list([3, 5, 6]), 0
+            yield np.arange(10), make_list([6, 5, 3]), 0
+            yield np.arange(10), make_list([-2, -3, -4]), 0
+            yield np.arange(10), make_list([-4, -3, -2]), 0
             # 3d array, scalar
             yield np.arange(3 * 4 * 5).reshape(3, 4, 5), 2, 2
             yield np.arange(3 * 4 * 5).reshape(3, 4, 5), -2, 2
             # 3d array, list
-            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), [0, 2, 3], 1
-            yield np.arange(3 * 4 * 5).reshape(4, 3, 5), [0, 2, 1], 1
-            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), [-3, -2, -1], 2
-            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), [-2, -3, -1], 2
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), make_list([0, 2, 3]), 1
+            yield np.arange(3 * 4 * 5).reshape(4, 3, 5), make_list([0, 2, 1]), 1
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5),\
+                make_list([-3, -2, -1]), 2
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5),\
+                make_list([-2, -3, -1]), 2
             # slices
             yield np.arange(10), slice(1, 3, 1), 0
             yield np.arange(10), slice(10), 0
@@ -853,33 +885,40 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             np.testing.assert_allclose(expected, got)
 
     def test_delete3_exceptions(self):
+
+        def make_list(values):
+            a = List()
+            for i in values:
+                a.append(i)
+            return a
+
         pyfunc = delete3
         cfunc = jit(nopython=True)(pyfunc)
         self.disable_leak_check()
 
         with self.assertRaises(TypingError) as raises:
-            cfunc([1, 2], 3.14)
+            cfunc(make_list([1, 2]), 3.14)
         self.assertIn(
             'obj should be of Integer dtype',
             str(raises.exception)
         )
 
         with self.assertRaises(TypingError) as raises:
-            cfunc(np.arange(10), [3.5, 5.6, 6.2])
+            cfunc(np.arange(10), make_list([3.5, 5.6, 6.2]))
         self.assertIn(
             'obj should be of Integer dtype',
             str(raises.exception)
         )
 
         with self.assertRaises(TypingError) as raises:
-            cfunc(np.arange(10), [3.5, 5.6, 6.2], 0)
+            cfunc(np.arange(10), make_list([3.5, 5.6, 6.2]), 0)
         self.assertIn(
             'obj should be of Integer dtype',
             str(raises.exception)
         )
 
         with self.assertRaises(IndexError) as raises:
-            cfunc([1, 2], 3)
+            cfunc(make_list([1, 2]), 3)
         self.assertIn(
             'obj must be less than the len(arr)',
             str(raises.exception),
