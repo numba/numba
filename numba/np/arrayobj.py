@@ -32,6 +32,7 @@ from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
 from numba.core.overload_glue import glue_lowering
+from numba.core.extending import overload_classmethod
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
@@ -1812,7 +1813,7 @@ def np_clip(a, a_min, a_max, out=None):
     if not isinstance(a_max, (types.NoneType, types.Number)):
         raise errors.TypingError('The argument "a_max" must be a number')
 
-    if not isinstance(out, (types.NoneType, types.Array)):
+    if not (isinstance(out, types.Array) or is_nonelike(out)):
         msg = 'The argument "out" must be an array if it is provided'
         raise errors.TypingError(msg)
 
@@ -2494,7 +2495,7 @@ def record_setattr(context, builder, sig, args, attr):
 
 
 @lower_builtin('static_getitem', types.Record, types.StringLiteral)
-def record_getitem(context, builder, sig, args):
+def record_static_getitem_str(context, builder, sig, args):
     """
     Record.__getitem__ redirects to getattr()
     """
@@ -2502,8 +2503,20 @@ def record_getitem(context, builder, sig, args):
     return impl(context, builder, sig.args[0], args[0], args[1])
 
 
+@lower_builtin('static_getitem', types.Record, types.IntegerLiteral)
+def record_static_getitem_int(context, builder, sig, args):
+    """
+    Record.__getitem__ redirects to getattr()
+    """
+    idx = sig.args[1].literal_value
+    fields = list(sig.args[0].fields)
+    ll_field = context.insert_const_string(builder.module, fields[idx])
+    impl = context.get_getattr(sig.args[0], ll_field)
+    return impl(context, builder, sig.args[0], args[0], fields[idx])
+
+
 @lower_builtin('static_setitem', types.Record, types.StringLiteral, types.Any)
-def record_setitem(context, builder, sig, args):
+def record_static_setitem_str(context, builder, sig, args):
     """
     Record.__setitem__ redirects to setattr()
     """
@@ -2511,6 +2524,20 @@ def record_setitem(context, builder, sig, args):
     rec, idx, val = args
     getattr_sig = signature(sig.return_type, recty, valty)
     impl = context.get_setattr(idx, getattr_sig)
+    assert impl is not None
+    return impl(builder, (rec, val))
+
+
+@lower_builtin('static_setitem', types.Record, types.IntegerLiteral, types.Any)
+def record_static_setitem_int(context, builder, sig, args):
+    """
+    Record.__setitem__ redirects to setattr()
+    """
+    recty, _, valty = sig.args
+    rec, idx, val = args
+    getattr_sig = signature(sig.return_type, recty, valty)
+    fields = list(sig.args[0].fields)
+    impl = context.get_setattr(fields[idx], getattr_sig)
     assert impl is not None
     return impl(builder, (rec, val))
 
@@ -3475,10 +3502,16 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
              " the maximum possible size.",)
         )
 
-    align = context.get_preferred_array_alignment(arrtype.dtype)
-    meminfo = context.nrt.meminfo_alloc_aligned(builder, size=allocsize,
-                                                align=align)
+    dtype = arrtype.dtype
+    align_val = context.get_preferred_array_alignment(dtype)
+    align = context.get_constant(types.uint32, align_val)
+    args = (context.get_dummy_value(), allocsize, align)
 
+    mip = types.MemInfoPointer(types.voidptr)
+    arytypeclass = types.TypeRef(type(arrtype))
+    argtypes = signature(mip, arytypeclass, types.intp, types.uint32)
+
+    meminfo = context.compile_internal(builder, _call_allocator, argtypes, args)
     data = context.nrt.meminfo_data(builder, meminfo)
 
     intp_t = context.get_value_type(types.intp)
@@ -3493,6 +3526,35 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
                    meminfo=meminfo)
 
     return ary
+
+
+@overload_classmethod(types.Array, "_allocate")
+def _ol_array_allocate(cls, allocsize, align):
+    """Implements a Numba-only default target (cpu) classmethod on the array type.
+    """
+    def impl(cls, allocsize, align):
+        return intrin_alloc(allocsize, align)
+    return impl
+
+
+def _call_allocator(arrtype, size, align):
+    """Trampoline to call the intrinsic used for allocation
+    """
+    return arrtype._allocate(size, align)
+
+
+@intrinsic
+def intrin_alloc(typingctx, allocsize, align):
+    """Intrinsic to call into the allocator for Array
+    """
+    def codegen(context, builder, signature, args):
+        [allocsize, align] = args
+        meminfo = context.nrt.meminfo_alloc_aligned(builder, allocsize, align)
+        return meminfo
+
+    mip = types.MemInfoPointer(types.voidptr)    # return untyped pointer
+    sig = signature(mip, allocsize, align)
+    return sig, codegen
 
 
 def _zero_fill_array(context, builder, ary):
@@ -5220,6 +5282,33 @@ def array_to_array(context, builder, fromty, toty, val):
     # Type inference should have prevented illegal array casting.
     assert fromty.mutable != toty.mutable or toty.layout == 'A'
     return val
+
+
+@lower_cast(types.Array, types.UnicodeCharSeq)
+@lower_cast(types.Array, types.Float)
+@lower_cast(types.Array, types.Integer)
+@lower_cast(types.Array, types.Complex)
+@lower_cast(types.Array, types.Boolean)
+@lower_cast(types.Array, types.NPTimedelta)
+@lower_cast(types.Array, types.NPDatetime)
+def array0d_to_scalar(context, builder, fromty, toty, val):
+    def impl(a):
+        # a is an array(T, 0d, O), T is type, O is order
+        return a.take(0)
+
+    sig = signature(toty, fromty)
+    res = context.compile_internal(builder, impl, sig, [val])
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+@lower_cast(types.Array, types.UnicodeCharSeq)
+def array_to_unichrseq(context, builder, fromty, toty, val):
+    def impl(a):
+        return str(a[()])
+
+    sig = signature(toty, fromty)
+    res = context.compile_internal(builder, impl, sig, [val])
+    return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
 # ------------------------------------------------------------------------------

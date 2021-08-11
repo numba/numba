@@ -10,18 +10,18 @@ it should really quack like the CPython `list`.
 """
 from collections.abc import MutableSequence
 
-from numba.core.types import ListType, TypeRef
+from numba.core.types import ListType
 from numba.core.imputils import numba_typeref_ctor
 from numba.core.dispatcher import Dispatcher
 from numba.core import types, config, cgutils
 from numba import njit, typeof
 from numba.core.extending import (
-    overload_method,
     overload,
     box,
     unbox,
     NativeValue,
     type_callable,
+    overload_classmethod,
 )
 from numba.typed import listobject
 from numba.core.errors import TypingError, LoweringError
@@ -200,12 +200,13 @@ class List(MutableSequence, pt.Generic[T]):
     _legal_kwargs = ["lsttype", "meminfo", "allocated"]
 
     def __new__(cls,
+                *args,
                 lsttype=None,
                 meminfo=None,
                 allocated=DEFAULT_ALLOCATED,
                 **kwargs):
         if config.DISABLE_JIT:
-            return list.__new__(list)
+            return list(*args, **kwargs)
         else:
             return object.__new__(cls)
 
@@ -443,8 +444,7 @@ class List(MutableSequence, pt.Generic[T]):
         return "{prefix}({body})".format(prefix=prefix, body=body)
 
 
-# XXX: should we have a better way to classmethod
-@overload_method(TypeRef, 'empty_list')
+@overload_classmethod(ListType, 'empty_list')
 def typedlist_empty(cls, item_type, allocated=DEFAULT_ALLOCATED):
     if cls.instance_type is not ListType:
         return

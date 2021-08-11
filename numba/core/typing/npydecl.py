@@ -95,6 +95,9 @@ class Numpy_rules_ufunc(AbstractTemplate):
         return self.key
 
     def generic(self, args, kws):
+        # First, strip optional types, ufunc loops are typed on concrete types
+        args = [x.type if isinstance(x, types.Optional) else x for x in args]
+
         ufunc = self.ufunc
         base_types, explicit_outputs, ndims, layout = self._handle_inputs(
             ufunc, args, kws)
@@ -127,7 +130,33 @@ class Numpy_rules_ufunc(AbstractTemplate):
             ret_tys = ufunc_loop.outputs[-implicit_output_count:]
             if ndims > 0:
                 assert layout is not None
-                ret_tys = [types.Array(dtype=ret_ty, ndim=ndims, layout=layout)
+                # If either of the types involved in the ufunc operation have a
+                # __array_ufunc__ method then invoke the first such one to
+                # determine the output type of the ufunc.
+                array_ufunc_type = None
+                for a in args:
+                    if hasattr(a, "__array_ufunc__"):
+                        array_ufunc_type = a
+                        break
+                output_type = types.Array
+                if array_ufunc_type is not None:
+                    output_type = array_ufunc_type.__array_ufunc__(ufunc, "__call__", *args, **kws)
+                    if output_type is NotImplemented:
+                        msg = (f"unsupported use of ufunc {ufunc} on "
+                               f"{array_ufunc_type}")
+                        # raise TypeError here because
+                        # NumpyRulesArrayOperator.generic is capturing
+                        # TypingError
+                        raise TypeError(msg)
+                    elif not issubclass(output_type, types.Array):
+                        msg = (f"ufunc {ufunc} on {array_ufunc_type}"
+                               f"cannot return non-array {output_type}")
+                        # raise TypeError here because
+                        # NumpyRulesArrayOperator.generic is capturing
+                        # TypingError
+                        raise TypeError(msg)
+
+                ret_tys = [output_type(dtype=ret_ty, ndim=ndims, layout=layout)
                            for ret_ty in ret_tys]
                 ret_tys = [resolve_output_type(self.context, args, ret_ty)
                            for ret_ty in ret_tys]
@@ -245,10 +274,10 @@ class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
 _math_operations = [ "add", "subtract", "multiply",
                      "logaddexp", "logaddexp2", "true_divide",
                      "floor_divide", "negative", "positive", "power",
-                     "remainder", "fmod", "absolute",
+                     "float_power", "remainder", "fmod", "absolute",
                      "rint", "sign", "conjugate", "exp", "exp2",
                      "log", "log2", "log10", "expm1", "log1p",
-                     "sqrt", "square", "reciprocal",
+                     "sqrt", "square", "cbrt", "reciprocal",
                      "divide", "mod", "divmod", "abs", "fabs" , "gcd", "lcm"]
 
 _trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
@@ -387,8 +416,7 @@ def _numpy_redirect(fname):
     infer_global(numpy_function, types.Function(cls))
 
 for func in ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
-             'cumsum', 'cumprod', 'argmin', 'argmax', 'argsort',
-             'nonzero', 'ravel']:
+             'cumsum', 'cumprod', 'argsort', 'nonzero', 'ravel']:
     _numpy_redirect(func)
 
 

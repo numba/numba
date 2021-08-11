@@ -232,6 +232,10 @@ def _build_array(context, builder, array_ty, input_types, inputs):
     given the target context, builder, output array type, and a list of
     _ArrayHelper instances.
     """
+    # First, strip optional types, ufunc loops are typed on concrete types
+    input_types = [x.type if isinstance(x, types.Optional) else x
+                   for x in input_types]
+
     intp_ty = context.get_value_type(types.intp)
     def make_intp_const(val):
         return context.get_constant(types.intp, val)

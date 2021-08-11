@@ -337,6 +337,11 @@ class SliceLiteral(Literal, SliceType):
         members = 2 if value.step is None else 3
         SliceType.__init__(self, name=name, members=members)
 
+    @property
+    def key(self):
+        sl = self.literal_value
+        return sl.start, sl.stop, sl.step
+
 
 Literal.ctor_map[slice] = SliceLiteral
 

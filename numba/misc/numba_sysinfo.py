@@ -13,8 +13,6 @@ from subprocess import check_output, PIPE, CalledProcessError
 import llvmlite.binding as llvmbind
 from llvmlite import __version__ as llvmlite_version
 from numba import cuda as cu, __version__ as version_number
-from numba import roc
-from numba.roc.hlc import hlc, libhlc
 from numba.cuda import cudadrv
 from numba.cuda.cudadrv.driver import driver as cudriver
 from numba.cuda.cudadrv.runtime import runtime as curuntime
@@ -61,10 +59,6 @@ _cu_dev_init = 'CUDA Device Init'
 _cu_drv_ver = 'CUDA Driver Version'
 _cu_rt_ver = 'CUDA Runtime Version'
 _cu_detect_out, _cu_lib_test = 'CUDA Detect Output', 'CUDA Lib Test'
-# ROC information
-_roc_available, _roc_toolchains = 'ROC Available', 'ROC Toolchains'
-_hsa_agents_count, _hsa_agents = 'HSA Agents Count', 'HSA Agents'
-_hsa_gpus_count, _hsa_gpus = 'HSA Discrete GPUs Count', 'HSA Discrete GPUs'
 # SVML info
 _svml_state, _svml_loaded = 'SVML State', 'SVML Lib Loaded'
 _llvm_svml_patched = 'LLVM SVML Patched'
@@ -304,7 +298,6 @@ def get_sysinfo():
         _numba_version: version_number,
         _llvm_version: '.'.join(str(i) for i in llvmbind.llvm_version_info),
         _llvmlite_version: llvmlite_version,
-        _roc_available: roc.is_available(),
         _psutil: _psutil_import,
     }
 
@@ -377,61 +370,6 @@ def get_sysinfo():
                 "Warning (cuda): Probing CUDA failed "
                 "(device and driver present, runtime problem?)\n"
                 f"(cuda) {type(e)}: {e}")
-
-    # ROC information
-    # If no ROC try and report why
-    if not sys_info[_roc_available]:
-        from numba.roc.hsadrv.driver import hsa
-        try:
-            hsa.is_available
-        except Exception as e:
-            msg = str(e)
-        else:
-            msg = 'No ROC toolchains found.'
-        _warning_log.append(f"Warning (roc): Error initialising ROC: {msg}")
-
-    toolchains = []
-    try:
-        libhlc.HLC()
-        toolchains.append('librocmlite library')
-    except Exception:
-        pass
-    try:
-        cmd = hlc.CmdLine().check_tooling()
-        toolchains.append('ROC command line tools')
-    except Exception:
-        pass
-    sys_info[_roc_toolchains] = toolchains
-
-    try:
-        # ROC might not be available due to lack of tool chain, but HSA
-        # agents may be listed
-        from numba.roc.hsadrv.driver import hsa, dgpu_count
-
-        def decode(x):
-            return x.decode('utf-8') if isinstance(x, bytes) else x
-
-        sys_info[_hsa_agents_count] = len(hsa.agents)
-        agents = []
-        for i, agent in enumerate(hsa.agents):
-            agents.append({
-                'Agent id': i,
-                'Vendor': decode(agent.vendor_name),
-                'Name': decode(agent.name),
-                'Type': agent.device,
-            })
-        sys_info[_hsa_agents] = agents
-
-        _dgpus = []
-        for a in hsa.agents:
-            if a.is_component and a.device == 'GPU':
-                _dgpus.append(decode(a.name))
-        sys_info[_hsa_gpus_count] = dgpu_count()
-        sys_info[_hsa_gpus] = ', '.join(_dgpus)
-    except Exception as e:
-        _warning_log.append(
-            "Warning (roc): No HSA Agents found, "
-            f"encountered exception when searching: {e}")
 
     # SVML information
     # Replicate some SVML detection logic from numba.__init__ here.
@@ -611,15 +549,6 @@ def display_sysinfo(info=None, sep_pos=45):
         (info.get(_cu_detect_out, "None"),),
         ("CUDA Libraries Test Output:",),
         (info.get(_cu_lib_test, "None"),),
-        ("",),
-        ("__ROC information__",),
-        ("ROC Available", info.get(_roc_available, '?')),
-        ("ROC Toolchains", info.get(_roc_toolchains, []) or 'None'),
-        ("HSA Agents Count", info.get(_hsa_agents_count, 0)),
-        ("HSA Agents:",),
-        (DisplaySeqMaps(info.get(_hsa_agents, {})) or ('None',)),
-        ('HSA Discrete GPUs Count', info.get(_hsa_gpus_count, 0)),
-        ('HSA Discrete GPUs', info.get(_hsa_gpus, 'None')),
         ("",),
         ("__SVML Information__",),
         ("SVML State, config.USING_SVML", info.get(_svml_state, '?')),

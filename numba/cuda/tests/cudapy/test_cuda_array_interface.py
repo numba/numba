@@ -59,7 +59,10 @@ class TestCudaArrayInterface(ContextResettingTestCase):
 
         @cuda.jit
         def mutate(arr, val):
-            arr[cuda.grid(1)] += val
+            i = cuda.grid(1)
+            if i >= len(arr):
+                return
+            arr[i] += val
 
         val = 7
         mutate.forall(wrapped.size)(wrapped, val)

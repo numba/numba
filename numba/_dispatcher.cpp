@@ -601,6 +601,35 @@ find_named_args(Dispatcher *self, PyObject **pargs, PyObject **pkws)
     return 0;
 }
 
+
+/*
+ * Management of thread-local
+ */
+
+#ifdef _MSC_VER
+#define THREAD_LOCAL(ty) __declspec(thread) ty
+#else
+/* Non-standard C99 extension that's understood by gcc and clang */
+#define THREAD_LOCAL(ty) __thread ty
+#endif
+
+static THREAD_LOCAL(bool) use_tls_target_stack;
+
+
+struct raii_use_tls_target_stack {
+    bool old_setting;
+
+    raii_use_tls_target_stack(bool new_setting)
+        : old_setting(use_tls_target_stack)
+    {
+        use_tls_target_stack = new_setting;
+    }
+
+    ~raii_use_tls_target_stack() {
+        use_tls_target_stack = old_setting;
+    }
+};
+
 static PyObject*
 Dispatcher_call(Dispatcher *self, PyObject *args, PyObject *kws)
 {
@@ -613,6 +642,19 @@ Dispatcher_call(Dispatcher *self, PyObject *args, PyObject *kws)
     PyObject *cfunc;
     PyThreadState *ts = PyThreadState_Get();
     PyObject *locals = NULL;
+
+    // Check TLS target stack
+    if (use_tls_target_stack) {
+        raii_use_tls_target_stack turn_off(false);
+        PyObject * meth_call_tls_target;
+        meth_call_tls_target = PyObject_GetAttrString((PyObject*)self,
+                                                      "_call_tls_target");
+        if (!meth_call_tls_target) return NULL;
+        // Transfer control to self._call_tls_target
+        retval = PyObject_Call(meth_call_tls_target, args, kws);
+        Py_DECREF(meth_call_tls_target);
+        return retval;
+    }
 
     /* If compilation is enabled, ensure that an exact match is found and if
      * not compile one */
@@ -923,10 +965,26 @@ static PyObject *compute_fingerprint(PyObject *self, PyObject *args)
     return typeof_compute_fingerprint(val);
 }
 
+static PyObject *set_use_tls_target_stack(PyObject *self, PyObject *args)
+{
+    int val;
+    if (!PyArg_ParseTuple(args, "p", &val))
+        return NULL;
+    bool old = use_tls_target_stack;
+    use_tls_target_stack = val;
+    // return the old value
+    if (old) {
+        Py_RETURN_TRUE;
+    } else {
+        Py_RETURN_FALSE;
+    }
+}
+
 static PyMethodDef ext_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
     declmethod(typeof_init),
     declmethod(compute_fingerprint),
+    declmethod(set_use_tls_target_stack),
     { NULL },
 #undef declmethod
 };

@@ -126,7 +126,7 @@ Extending the lowering layer
 """"""""""""""""""""""""""""
 
 We have finished teaching Numba about our type inference additions.
-We must now teach Numba how to actually generated code and data for
+We must now teach Numba how to actually generate code and data for
 the new operations.
 
 

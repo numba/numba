@@ -666,7 +666,8 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
         raise ValueError("Cannot use the reserved word 'out' in stencil kernels.")
 
     # get typed IR with a dummy pipeline (similar to test_parfors.py)
-    targetctx = CPUContext(typingctx)
+    from numba.core.registry import cpu_target
+    targetctx = cpu_target.target_context
     with cpu_target.nested_context(typingctx, targetctx):
         tp = DummyPipeline(typingctx, targetctx, args, stencil_func_ir)
 
@@ -691,7 +692,7 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
                                                         ir_utils.next_label())
     min_label = min(stencil_blocks.keys())
     max_label = max(stencil_blocks.keys())
-    ir_utils._max_label = max_label
+    ir_utils._the_max_label.update(max_label)
 
     if config.DEBUG_ARRAY_OPT >= 1:
         print("Initial stencil_blocks")

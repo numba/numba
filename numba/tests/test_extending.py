@@ -21,6 +21,7 @@ from numba.tests.support import (
     temp_directory,
     override_config,
     run_in_new_process_in_cache_dir,
+    skip_if_typeguard,
 )
 from numba.core.errors import LoweringError
 import unittest
@@ -43,6 +44,7 @@ from numba.extending import (
     register_jitable,
     get_cython_function_address,
     is_jitted,
+    overload_classmethod,
 )
 from numba.core.typing.templates import (
     ConcreteTemplate,
@@ -1119,6 +1121,38 @@ class TestHighLevelExtending(TestCase):
             foo(obj, 1, 2, (3, (4, 5))), (1, 2, ((3, (4, 5)),)),
         )
 
+    def test_overload_classmethod(self):
+        # Add classmethod to a subclass of Array
+        class MyArray(types.Array):
+            pass
+
+        @overload_classmethod(MyArray, "array_alloc")
+        def ol_array_alloc(cls, nitems):
+            def impl(cls, nitems):
+                arr = np.arange(nitems)
+                return arr
+            return impl
+
+        @njit
+        def foo(nitems):
+            return MyArray.array_alloc(nitems)
+
+        nitems = 13
+        self.assertPreciseEqual(foo(nitems), np.arange(nitems))
+
+        # Check that the base type doesn't get the classmethod
+
+        @njit
+        def no_classmethod_in_base(nitems):
+            return types.Array.array_alloc(nitems)
+
+        with self.assertRaises(errors.TypingError) as raises:
+            no_classmethod_in_base(nitems)
+        self.assertIn(
+            "Unknown attribute 'array_alloc' of",
+            str(raises.exception),
+        )
+
 
 def _assert_cache_stats(cfunc, expect_hit, expect_misses):
     hit = cfunc._cache_hits[cfunc.signatures[0]]
@@ -1129,6 +1163,7 @@ def _assert_cache_stats(cfunc, expect_hit, expect_misses):
         raise AssertionError("cache not used")
 
 
+@skip_if_typeguard
 class TestOverloadMethodCaching(TestCase):
     # Nested multiprocessing.Pool raises AssertionError:
     # "daemonic processes are not allowed to have children"
@@ -1726,6 +1761,7 @@ def with_objmode_cache_ov_example(x):
     pass
 
 
+@skip_if_typeguard
 class TestCachingOverloadObjmode(TestCase):
     """Test caching of the use of overload implementations that use
     `with objmode`

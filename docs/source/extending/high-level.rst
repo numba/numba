@@ -44,19 +44,18 @@ Implementing methods
 --------------------
 
 The ``@overload_method`` decorator similarly allows implementing a
-method on a type well-known to Numba. The following example implements
-the :meth:`~numpy.ndarray.take()` method on Numpy arrays::
+method on a type well-known to Numba.
 
-   @overload_method(types.Array, 'take')
-   def array_take(arr, indices):
-      if isinstance(indices, types.Array):
-          def take_impl(arr, indices):
-              n = indices.shape[0]
-              res = np.empty(n, arr.dtype)
-              for i in range(n):
-                  res[i] = arr[indices[i]]
-              return res
-          return take_impl
+.. autofunction:: numba.core.extending.overload_method
+
+Implementing classmethods
+-------------------------
+
+The ``@overload_classmethod`` decorator similarly allows implementing a
+classmethod on a type well-known to Numba.
+
+.. autofunction:: numba.core.extending.overload_classmethod
+
 
 Implementing attributes
 -----------------------

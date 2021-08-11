@@ -82,6 +82,20 @@ class NumbaInvalidConfigWarning(NumbaWarning):
     Warning category for using an invalid configuration.
     """
 
+
+class NumbaPedanticWarning(NumbaWarning):
+    """
+    Warning category for reporting pedantic messages.
+    """
+    def __init__(self, msg, **kwargs):
+        super().__init__(f"{msg}\n{pedantic_warning_info}")
+
+
+class NumbaIRAssumptionWarning(NumbaPedanticWarning):
+    """
+    Warning category for reporting an IR assumption violation.
+    """
+
 # These are needed in the color formatting of errors setup
 
 
@@ -314,9 +328,16 @@ else:
             _termcolor_inst = HighlightColorScheme(scheme)
         return _termcolor_inst
 
+
+pedantic_warning_info = """
+This warning came from an internal pedantic check. Please report the warning
+message and traceback, along with a minimal reproducer at:
+https://github.com/numba/numba/issues/new?template=bug_report.md
+"""
+
 feedback_details = """
 Please report the error message and traceback, along with a minimal reproducer
-at: https://github.com/numba/numba/issues/new
+at: https://github.com/numba/numba/issues/new?template=bug_report.md
 
 If more help is needed please feel free to speak to the Numba core developers
 directly at: https://gitter.im/numba/numba
@@ -649,6 +670,17 @@ class InternalError(NumbaError):
     def __init__(self, exception):
         super(InternalError, self).__init__(str(exception))
         self.old_exception = exception
+
+
+class InternalTargetMismatchError(InternalError):
+    """For signalling a target mismatch error occurred internally within the
+    compiler.
+    """
+    def __init__(self, kind, target_hw, hw_clazz):
+        msg = (f"{kind.title()} being resolved on a target from which it does "
+               f"not inherit. Local target is {target_hw}, declared "
+               f"target class is {hw_clazz}.")
+        super().__init__(msg)
 
 
 class RequireLiteralValue(TypingError):

@@ -804,13 +804,27 @@ class NumberClassAttribute(AttributeTemplate):
             elif isinstance(val, (types.Number, types.Boolean)):
                  # Scalar constructor, e.g. np.int32(42)
                  return ty
+            elif isinstance(val, (types.NPDatetime, types.NPTimedelta)):
+                # Constructor cast from datetime-like, e.g.
+                # > np.int64(np.datetime64("2000-01-01"))
+                if ty.bitwidth == 64:
+                    return ty
+                else:
+                    msg = (f"Cannot cast {val} to {ty} as {ty} is not 64 bits "
+                           "wide.")
+                    raise errors.TypingError(msg)
             else:
-                # unsupported
-                msg = f"Casting {val} to {ty} directly is unsupported."
-                if isinstance(val, types.Array):
-                    # array casts are supported a different way.
-                    msg += f" Try doing '<array>.astype(np.{ty})' instead"
-                raise errors.TypingError(msg)
+                if (isinstance(val, types.Array) and val.ndim == 0 and
+                    val.dtype == ty):
+                    # This is 0d array -> scalar degrading
+                    return ty
+                else:
+                    # unsupported
+                    msg = f"Casting {val} to {ty} directly is unsupported."
+                    if isinstance(val, types.Array):
+                        # array casts are supported a different way.
+                        msg += f" Try doing '<array>.astype(np.{ty})' instead"
+                    raise errors.TypingError(msg)
 
         return types.Function(make_callable_template(key=ty, typer=typer))
 

@@ -272,6 +272,8 @@ _options_mixin = include_default_options(
     "fastmath",
     "error_model",
     "inline",
+    # Add "target_backend" as a accepted option for the CPU in @jit(...)
+    "target_backend",
 )
 
 class CPUTargetOptions(_options_mixin, TargetOptions):
@@ -293,6 +295,11 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
         flags.enable_pyobject_looplift = True
 
         flags.inherit_if_not_set("fastmath")
+
+        flags.inherit_if_not_set("error_model", default="python")
+
+        # Add "target_backend" as a option that inherits from the caller
+        flags.inherit_if_not_set("target_backend")
 
 # ----------------------------------------------------------------------------
 # Internal

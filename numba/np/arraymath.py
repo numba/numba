@@ -28,6 +28,7 @@ from numba.np.linalg import ensure_blas
 from numba.core.extending import intrinsic
 from numba.core.errors import RequireLiteralValue, TypingError
 from numba.core.overload_glue import glue_lowering
+from numba.cpython.unsafe.tuple import tuple_setitem
 
 
 def _check_blas():
@@ -631,148 +632,222 @@ def array_max(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@lower_builtin(np.argmin, types.Array)
-@lower_builtin("array.argmin", types.Array)
-def array_argmin(context, builder, sig, args):
-    ty = sig.args[0].dtype
+@register_jitable
+def array_argmin_impl_datetime(arry):
+    if arry.size == 0:
+        raise ValueError("attempt to get argmin of an empty sequence")
+    it = np.nditer(arry)
+    min_value = next(it).take(0)
+    min_idx = 0
+    if _is_nat(min_value):
+        return min_idx
 
-    if (isinstance(ty, (types.NPDatetime, types.NPTimedelta))):
-        def array_argmin_impl(arry):
-            if arry.size == 0:
-                raise ValueError("attempt to get argmin of an empty sequence")
-            it = np.nditer(arry)
-            min_value = next(it).take(0)
-            min_idx = 0
-            if _is_nat(min_value):
-                return min_idx
-
-            idx = 1
-            for view in it:
-                v = view.item()
-                if _is_nat(v):
-                    if numpy_version >= (1, 18):
-                        return idx
-                    else:
-                        idx += 1
-                        continue
-                if v < min_value:
-                    min_value = v
-                    min_idx = idx
-                idx += 1
-            return min_idx
-
-    elif isinstance(ty, types.Float):
-        def array_argmin_impl(arry):
-            if arry.size == 0:
-                raise ValueError("attempt to get argmin of an empty sequence")
-            for v in arry.flat:
-                min_value = v
-                min_idx = 0
-                break
-            if np.isnan(min_value):
-                return min_idx
-
-            idx = 0
-            for v in arry.flat:
-                if np.isnan(v):
-                    return idx
-                if v < min_value:
-                    min_value = v
-                    min_idx = idx
-                idx += 1
-            return min_idx
-
-    else:
-        def array_argmin_impl(arry):
-            if arry.size == 0:
-                raise ValueError("attempt to get argmin of an empty sequence")
-            for v in arry.flat:
-                min_value = v
-                min_idx = 0
-                break
+    idx = 1
+    for view in it:
+        v = view.item()
+        if _is_nat(v):
+            if numpy_version >= (1, 18):
+                return idx
             else:
-                raise RuntimeError('unreachable')
-
-            idx = 0
-            for v in arry.flat:
-                if v < min_value:
-                    min_value = v
-                    min_idx = idx
                 idx += 1
-            return min_idx
-    res = context.compile_internal(builder, array_argmin_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+                continue
+        if v < min_value:
+            min_value = v
+            min_idx = idx
+        idx += 1
+    return min_idx
 
 
-@lower_builtin(np.argmax, types.Array)
-@lower_builtin("array.argmax", types.Array)
-def array_argmax(context, builder, sig, args):
-    ty = sig.args[0].dtype
+@register_jitable
+def array_argmin_impl_float(arry):
+    if arry.size == 0:
+        raise ValueError("attempt to get argmin of an empty sequence")
+    for v in arry.flat:
+        min_value = v
+        min_idx = 0
+        break
+    if np.isnan(min_value):
+        return min_idx
 
-    if (isinstance(ty, (types.NPDatetime, types.NPTimedelta))):
-        def array_argmax_impl(arry):
-            if arry.size == 0:
-                raise ValueError("attempt to get argmax of an empty sequence")
-            it = np.nditer(arry)
-            max_value = next(it).take(0)
-            max_idx = 0
-            if _is_nat(max_value):
-                return max_idx
+    idx = 0
+    for v in arry.flat:
+        if np.isnan(v):
+            return idx
+        if v < min_value:
+            min_value = v
+            min_idx = idx
+        idx += 1
+    return min_idx
 
-            idx = 1
-            for view in it:
-                v = view.item()
-                if _is_nat(v):
-                    if numpy_version >= (1, 18):
-                        return idx
-                    else:
-                        idx += 1
-                        continue
-                if v > max_value:
-                    max_value = v
-                    max_idx = idx
-                idx += 1
-            return max_idx
 
-    elif isinstance(ty, types.Float):
-        def array_argmax_impl(arry):
-            if arry.size == 0:
-                raise ValueError("attempt to get argmax of an empty sequence")
-            for v in arry.flat:
-                max_value = v
-                max_idx = 0
-                break
-            if np.isnan(max_value):
-                return max_idx
-
-            idx = 0
-            for v in arry.flat:
-                if np.isnan(v):
-                    return idx
-                if v > max_value:
-                    max_value = v
-                    max_idx = idx
-                idx += 1
-            return max_idx
-
+@register_jitable
+def array_argmin_impl_generic(arry):
+    if arry.size == 0:
+        raise ValueError("attempt to get argmin of an empty sequence")
+    for v in arry.flat:
+        min_value = v
+        min_idx = 0
+        break
     else:
-        def array_argmax_impl(arry):
-            if arry.size == 0:
-                raise ValueError("attempt to get argmax of an empty sequence")
-            for v in arry.flat:
-                max_value = v
-                max_idx = 0
-                break
+        raise RuntimeError('unreachable')
 
-            idx = 0
-            for v in arry.flat:
-                if v > max_value:
-                    max_value = v
-                    max_idx = idx
+    idx = 0
+    for v in arry.flat:
+        if v < min_value:
+            min_value = v
+            min_idx = idx
+        idx += 1
+    return min_idx
+
+
+@overload(np.argmin)
+@overload_method(types.Array, "argmin")
+def array_argmin(arr, axis=None):
+    if isinstance(arr.dtype, (types.NPDatetime, types.NPTimedelta)):
+        flatten_impl = array_argmin_impl_datetime
+    elif isinstance(arr.dtype, types.Float):
+        flatten_impl = array_argmin_impl_float
+    else:
+        flatten_impl = array_argmin_impl_generic
+
+    if is_nonelike(axis):
+        def array_argmin_impl(arr, axis=None):
+            return flatten_impl(arr)
+    else:
+        array_argmin_impl = build_argmax_or_argmin_with_axis_impl(
+            arr, axis, flatten_impl
+        )
+    return array_argmin_impl
+
+
+@register_jitable
+def array_argmax_impl_datetime(arry):
+    if arry.size == 0:
+        raise ValueError("attempt to get argmax of an empty sequence")
+    it = np.nditer(arry)
+    max_value = next(it).take(0)
+    max_idx = 0
+    if _is_nat(max_value):
+        return max_idx
+
+    idx = 1
+    for view in it:
+        v = view.item()
+        if _is_nat(v):
+            if numpy_version >= (1, 18):
+                return idx
+            else:
                 idx += 1
-            return max_idx
-    res = context.compile_internal(builder, array_argmax_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+                continue
+        if v > max_value:
+            max_value = v
+            max_idx = idx
+        idx += 1
+    return max_idx
+
+
+@register_jitable
+def array_argmax_impl_float(arry):
+    if arry.size == 0:
+        raise ValueError("attempt to get argmax of an empty sequence")
+    for v in arry.flat:
+        max_value = v
+        max_idx = 0
+        break
+    if np.isnan(max_value):
+        return max_idx
+
+    idx = 0
+    for v in arry.flat:
+        if np.isnan(v):
+            return idx
+        if v > max_value:
+            max_value = v
+            max_idx = idx
+        idx += 1
+    return max_idx
+
+
+@register_jitable
+def array_argmax_impl_generic(arry):
+    if arry.size == 0:
+        raise ValueError("attempt to get argmax of an empty sequence")
+    for v in arry.flat:
+        max_value = v
+        max_idx = 0
+        break
+
+    idx = 0
+    for v in arry.flat:
+        if v > max_value:
+            max_value = v
+            max_idx = idx
+        idx += 1
+    return max_idx
+
+
+def build_argmax_or_argmin_with_axis_impl(arr, axis, flatten_impl):
+    """
+    Given a function that implements the logic for handling a flattened
+    array, return the implementation function.
+    """
+    _check_is_integer(axis, "axis")
+    retty = arr.dtype
+
+    tuple_buffer = tuple(range(arr.ndim))
+
+    def impl(arr, axis=None):
+        if axis < 0:
+            axis = arr.ndim + axis
+
+        if axis < 0 or axis >= arr.ndim:
+            raise ValueError("axis is out of bounds")
+
+        # Short circuit 1-dimensional arrays:
+        if arr.ndim == 1:
+            return flatten_impl(arr)
+
+        # Make chosen axis the last axis:
+        tmp = tuple_buffer
+        for i in range(axis, arr.ndim - 1):
+            tmp = tuple_setitem(tmp, i, i + 1)
+        transpose_index = tuple_setitem(tmp, arr.ndim - 1, axis)
+        transposed_arr = arr.transpose(transpose_index)
+
+        # Flatten along that axis; since we've transposed, we can just get
+        # batches off the overall flattened array.
+        m = transposed_arr.shape[-1]
+        raveled = transposed_arr.ravel()
+        assert raveled.size == arr.size
+        assert transposed_arr.size % m == 0
+        out = np.empty(transposed_arr.size // m, retty)
+        for i in range(out.size):
+            out[i] = flatten_impl(raveled[i * m:(i + 1) * m])
+
+        # Reshape based on axis we didn't flatten over:
+        return out.reshape(transposed_arr.shape[:-1])
+
+    return impl
+
+
+@overload(np.argmax)
+@overload_method(types.Array, "argmax")
+def array_argmax(arr, axis=None):
+    if isinstance(arr.dtype, (types.NPDatetime, types.NPTimedelta)):
+        flatten_impl = array_argmax_impl_datetime
+    elif isinstance(arr.dtype, types.Float):
+        flatten_impl = array_argmax_impl_float
+    else:
+        flatten_impl = array_argmax_impl_generic
+
+    if is_nonelike(axis):
+        def array_argmax_impl(arr, axis=None):
+            return flatten_impl(arr)
+    else:
+        array_argmax_impl = build_argmax_or_argmin_with_axis_impl(
+            arr, axis, flatten_impl
+        )
+    return array_argmax_impl
 
 
 @overload(np.all)
@@ -810,6 +885,86 @@ def get_isnan(dtype):
         def _trivial_isnan(x):
             return False
         return _trivial_isnan
+
+
+@overload(np.iscomplex)
+def np_iscomplex(x):
+    if type_can_asarray(x):
+        # NumPy uses asanyarray here!
+        return lambda x: np.asarray(x).imag != 0
+    return None
+
+
+@overload(np.isreal)
+def np_isreal(x):
+    if type_can_asarray(x):
+        # NumPy uses asanyarray here!
+        return lambda x: np.asarray(x).imag == 0
+    return None
+
+
+@overload(np.iscomplexobj)
+def iscomplexobj(x):
+    # Implementation based on NumPy
+    # https://github.com/numpy/numpy/blob/d9b1e32cb8ef90d6b4a47853241db2a28146a57d/numpy/lib/type_check.py#L282-L320
+    dt = determine_dtype(x)
+    if isinstance(x, types.Optional):
+        dt = determine_dtype(x.type)
+    iscmplx = np.issubdtype(dt, np.complexfloating)
+
+    if isinstance(x, types.Optional):
+        def impl(x):
+            if x is None:
+                return False
+            return iscmplx
+    else:
+        def impl(x):
+            return iscmplx
+    return impl
+
+
+@overload(np.isrealobj)
+def isrealobj(x):
+    # Return True if x is not a complex type.
+    # Implementation based on NumPy
+    # https://github.com/numpy/numpy/blob/ccfbcc1cd9a4035a467f2e982a565ab27de25b6b/numpy/lib/type_check.py#L290-L322
+    def impl(x):
+        return not np.iscomplexobj(x)
+    return impl
+
+
+@overload(np.isscalar)
+def np_isscalar(num):
+    res = isinstance(num, (types.Number, types.UnicodeType, types.Boolean))
+
+    def impl(num):
+        return res
+    return impl
+
+
+def is_np_inf_impl(x, out, fn):
+
+    # if/else branch should be unified after PR #5606 is merged
+    if is_nonelike(out):
+        def impl(x, out=None):
+            return np.logical_and(np.isinf(x), fn(np.signbit(x)))
+    else:
+        def impl(x, out=None):
+            return np.logical_and(np.isinf(x), fn(np.signbit(x)), out)
+
+    return impl
+
+
+@overload(np.isneginf)
+def isneginf(x, out=None):
+    fn = register_jitable(lambda x: x)
+    return is_np_inf_impl(x, out, fn)
+
+
+@overload(np.isposinf)
+def isposinf(x, out=None):
+    fn = register_jitable(lambda x: ~x)
+    return is_np_inf_impl(x, out, fn)
 
 
 @register_jitable
@@ -1271,6 +1426,8 @@ def np_median(a):
 
 @register_jitable
 def _collect_percentiles_inner(a, q):
+    #TODO: This needs rewriting to be closer to NumPy, particularly the nan/inf
+    # handling which is generally subject to algorithmic changes.
     n = len(a)
 
     if n == 1:
@@ -4238,32 +4395,51 @@ def np_asarray_chkfinite(a, dtype=None):
 #   - translated from the numpy implementations found in:
 #   https://github.com/numpy/numpy/blob/v1.16.1/numpy/lib/function_base.py#L2543-L3233    # noqa: E501
 #   at commit: f1c4c758e1c24881560dd8ab1e64ae750
+#   - and also, for NumPy >= 1.20, translated from implementations in
+#   https://github.com/numpy/numpy/blob/156cd054e007b05d4ac4829e10a369d19dd2b0b1/numpy/lib/function_base.py#L2655-L3065  # noqa: E501
 
 
 @register_jitable
 def np_bartlett_impl(M):
-    n = np.arange(M)
-    return np.where(np.less_equal(n, (M - 1) / 2.0), 2.0 * n / (M - 1),
-                    2.0 - 2.0 * n / (M - 1))
+    if numpy_version >= (1, 20):
+        n = np.arange(1. - M, M, 2)
+        return np.where(np.less_equal(n, 0), 1 + n / (M - 1), 1 - n / (M - 1))
+    else:
+        n = np.arange(M)
+        return np.where(np.less_equal(n, (M - 1) / 2.0), 2.0 * n / (M - 1),
+                        2.0 - 2.0 * n / (M - 1))
 
 
 @register_jitable
 def np_blackman_impl(M):
-    n = np.arange(M)
-    return (0.42 - 0.5 * np.cos(2.0 * np.pi * n / (M - 1)) +
-            0.08 * np.cos(4.0 * np.pi * n / (M - 1)))
+    if numpy_version >= (1, 20):
+        n = np.arange(1. - M, M, 2)
+        return (0.42 + 0.5 * np.cos(np.pi * n / (M - 1)) +
+                0.08 * np.cos(2.0 * np.pi * n / (M - 1)))
+    else:
+        n = np.arange(M)
+        return (0.42 - 0.5 * np.cos(2.0 * np.pi * n / (M - 1)) +
+                0.08 * np.cos(4.0 * np.pi * n / (M - 1)))
 
 
 @register_jitable
 def np_hamming_impl(M):
-    n = np.arange(M)
-    return 0.54 - 0.46 * np.cos(2.0 * np.pi * n / (M - 1))
+    if numpy_version >= (1, 20):
+        n = np.arange(1 - M, M, 2)
+        return 0.54 + 0.46 * np.cos(np.pi * n / (M - 1))
+    else:
+        n = np.arange(M)
+        return 0.54 - 0.46 * np.cos(2.0 * np.pi * n / (M - 1))
 
 
 @register_jitable
 def np_hanning_impl(M):
-    n = np.arange(M)
-    return 0.5 - 0.5 * np.cos(2.0 * np.pi * n / (M - 1))
+    if numpy_version >= (1, 20):
+        n = np.arange(1 - M, M, 2)
+        return 0.5 + 0.5 * np.cos(np.pi * n / (M - 1))
+    else:
+        n = np.arange(M)
+        return 0.5 - 0.5 * np.cos(2.0 * np.pi * n / (M - 1))
 
 
 def window_generator(func):

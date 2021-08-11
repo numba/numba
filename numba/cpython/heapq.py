@@ -104,7 +104,7 @@ def _heapreplace_max(heap, item):
 
 
 def assert_heap_type(heap):
-    if not isinstance(heap, types.List):
+    if not isinstance(heap, (types.List, types.ListType)):
         raise TypingError('heap argument must be a list')
 
     dt = heap.dtype
@@ -194,7 +194,7 @@ def check_input_types(n, iterable):
         # heapq also accepts 1.0 (but not 0.0, 2.0, 3.0...) but
         # this isn't replicated
 
-    if not isinstance(iterable, (types.Sequence, types.Array)):
+    if not isinstance(iterable, (types.Sequence, types.Array, types.ListType)):
         raise TypingError("Second argument 'iterable' must be iterable")
 
 
