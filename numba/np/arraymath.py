@@ -3484,14 +3484,13 @@ def np_delete(arr, obj, axis=None):
     # Implementation based on numpy
     # https://github.com/numpy/numpy/blob/af66e487a57bfd4850f4306e3b85d1dac3c70412/numpy/lib/function_base.py#L4065-L4267    # noqa: E501
 
-    if not isinstance(arr, (types.Array, types.Sequence, types.ListType)):
+    if not isinstance(arr, (types.Array, types.Sequence)):
         raise TypingError("arr must be either an Array or a Sequence")
 
     if not isinstance(axis, (type(None), types.NoneType, types.Integer)):
         raise TypingError("axis must be either a NoneType or an Integer")
 
-    if isinstance(obj, (types.Array, types.Sequence,
-                        types.SliceType, types.ListType)):
+    if isinstance(obj, (types.Array, types.Sequence, types.SliceType)):
         if isinstance(obj, (types.SliceType)):
             handler = np_delete_handler_isslice
             obj_is_slice = True
