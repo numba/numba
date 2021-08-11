@@ -850,7 +850,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for arr, obj, axis in arrays():
             expected = pyfunc(arr, obj, axis)
             got = cfunc(arr, obj, axis)
-            self.assertAlmostEqual(expected.all(), got.all())
+            np.testing.assert_allclose(expected, got)
 
     def test_delete3_exceptions(self):
         pyfunc = delete3
