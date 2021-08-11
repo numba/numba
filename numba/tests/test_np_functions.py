@@ -2458,7 +2458,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_logspace2_basic(self):
 
-        def Inputs():
+        def inputs():
             #start, stop
             yield 1, 60
             yield -1, 60
@@ -2480,9 +2480,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         pyfunc = logspace2
         cfunc = jit(nopython=True)(pyfunc)
 
-        for start, stop in Inputs():
-            self.assertAlmostEqual(pyfunc(start, stop).all(),
-                                   cfunc(start, stop).all())
+        for start, stop in inputs():
+            np.testing.assert_allclose(pyfunc(start, stop), cfunc(start, stop))
 
     def test_logspace2_exception(self):
         cfunc = jit(nopython=True)(logspace2)
@@ -2501,7 +2500,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_logspace3_basic(self):
 
-        def Inputs():
+        def inputs():
             #start, stop
             yield 1, 60
             yield -1, 60
@@ -2522,15 +2521,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         pyfunc = logspace3
         cfunc = jit(nopython=True)(pyfunc)
-        self.disable_leak_check()
 
-        for start, stop in Inputs():
-            self.assertAlmostEqual(pyfunc(start, stop).all(),
-                                   cfunc(start, stop).all())
+        for start, stop in inputs():
+            np.testing.assert_allclose(pyfunc(start, stop), cfunc(start, stop))
 
     def test_logspace3_with_num_basic(self):
 
-        def Inputs():
+        def inputs():
             #start, stop, num
             yield 1, 60, 20
             yield -1, 60, 30
@@ -2551,11 +2548,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         pyfunc = logspace3
         cfunc = jit(nopython=True)(pyfunc)
-        self.disable_leak_check()
 
-        for start, stop, num in Inputs():
-            self.assertAlmostEqual(pyfunc(start, stop, num).all(),
-                                   cfunc(start, stop, num).all())
+        for start, stop, num in inputs():
+            np.testing.assert_allclose(pyfunc(start, stop, num),
+                                       cfunc(start, stop, num))
 
     def test_logspace3_exception(self):
         cfunc = jit(nopython=True)(logspace3)
