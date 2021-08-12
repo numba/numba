@@ -138,7 +138,7 @@ def pthread_compile_args():
     # https://github.com/numba/numba/issues/7302
     # https://github.com/scipy/scipy/issues/11323#issuecomment-571664588
     if platform.machine() in {"ppc64le"}:
-        return {"libraries", ["pthread"]}
+        return {"libraries": ["pthread"]}
     else:
         return {}
 
