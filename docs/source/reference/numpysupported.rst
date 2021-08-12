@@ -274,7 +274,6 @@ The following methods of Numpy arrays are supported in their basic form
 
 * :meth:`~numpy.ndarray.all`
 * :meth:`~numpy.ndarray.any`
-* :meth:`~numpy.ndarray.argmin`
 * :meth:`~numpy.ndarray.clip`
 * :meth:`~numpy.ndarray.conj`
 * :meth:`~numpy.ndarray.conjugate`
@@ -298,6 +297,7 @@ Other methods
 The following methods of Numpy arrays are supported:
 
 * :meth:`~numpy.ndarray.argmax` (``axis`` keyword argument supported).
+* :meth:`~numpy.ndarray.argmin` (``axis`` keyword argument supported).
 * :meth:`~numpy.ndarray.argsort` (``kind`` key word argument supported for
   values ``'quicksort'`` and ``'mergesort'``)
 * :meth:`~numpy.ndarray.astype` (only the 1-argument form)
@@ -484,6 +484,7 @@ The following top-level functions are supported:
 * :func:`numpy.interp` (only the 3 first arguments)
 * :func:`numpy.intersect1d` (only first 2 arguments, ar1 and ar2)
 * :func:`numpy.linspace` (only the 3-argument form)
+* :func:`numpy.logspace` (only the 3 first arguments)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
 * :class:`numpy.nditer` (only the first argument)

@@ -8,9 +8,13 @@ import logging
 import numpy as np
 
 from numba import njit, jit, types
-from numba.core import errors
+from numba.core import errors, ir
+from numba.core.compiler_machinery import FunctionPass, register_pass
+from numba.core.compiler import DefaultPassBuilder, CompilerBase
+from numba.core.untyped_passes import ReconstructSSA, PreserveIR
+from numba.core.typed_passes import NativeLowering
 from numba.extending import overload
-from numba.tests.support import TestCase, override_config
+from numba.tests.support import MemoryLeakMixin, TestCase, override_config
 
 
 _DEBUG = False
@@ -493,3 +497,81 @@ class TestReportedSSAIssues(SSABaseTest):
         self.assertPreciseEqual(while_for(10), while_for.py_func(10))
         # One phi?
         self.assertEqual(phi_counter, [1])
+
+
+class TestSROAIssues(MemoryLeakMixin, TestCase):
+    # This tests issues related to the SROA optimization done in lowering, which
+    # reduces time spent in the LLVM SROA pass. The optimization is related to
+    # SSA and tries to reduce the number of alloca statements for variables with
+    # only a single assignemnt.
+    def test_issue7258_multiple_assignment_post_SSA(self):
+        # This test adds a pass that will duplicate assignment statements to
+        # variables named "foobar".
+        # In the reported issue, the bug will cause a memory leak.
+        cloned = []
+
+        @register_pass(analysis_only=False, mutates_CFG=True)
+        class CloneFoobarAssignments(FunctionPass):
+            # A pass that clones variable assignments into "foobar"
+            _name = "clone_foobar_assignments_pass"
+
+            def __init__(self):
+                FunctionPass.__init__(self)
+
+            def run_pass(self, state):
+                mutated = False
+                for blk in state.func_ir.blocks.values():
+                    to_clone = []
+                    # find assignments to "foobar"
+                    for assign in blk.find_insts(ir.Assign):
+                        if assign.target.name == "foobar":
+                            to_clone.append(assign)
+                    # clone
+                    for assign in to_clone:
+                        clone = copy.deepcopy(assign)
+                        blk.insert_after(clone, assign)
+                        mutated = True
+                        # keep track of cloned statements
+                        cloned.append(clone)
+                return mutated
+
+        class CustomCompiler(CompilerBase):
+            def define_pipelines(self):
+                pm = DefaultPassBuilder.define_nopython_pipeline(
+                    self.state, "custom_pipeline",
+                )
+                pm._finalized = False
+                # Insert the cloning pass after SSA
+                pm.add_pass_after(CloneFoobarAssignments, ReconstructSSA)
+                # Capture IR post lowering
+                pm.add_pass_after(PreserveIR, NativeLowering)
+                pm.finalize()
+                return [pm]
+
+        @njit(pipeline_class=CustomCompiler)
+        def udt(arr):
+            foobar = arr + 1  # this assignment will be cloned
+            return foobar
+
+        arr = np.arange(10)
+        # Verify that the function works as expected
+        self.assertPreciseEqual(udt(arr), arr + 1)
+        # Verify that the expected statement is cloned
+        self.assertEqual(len(cloned), 1)
+        self.assertEqual(cloned[0].target.name, "foobar")
+        # Verify in the Numba IR that the expected statement is cloned
+        nir = udt.overloads[udt.signatures[0]].metadata['preserved_ir']
+        self.assertEqual(len(nir.blocks), 1,
+                         "only one block")
+        [blk] = nir.blocks.values()
+        assigns = blk.find_insts(ir.Assign)
+        foobar_assigns = [stmt for stmt in assigns
+                          if stmt.target.name == "foobar"]
+        self.assertEqual(
+            len(foobar_assigns), 2,
+            "expected two assignment statements into 'foobar'",
+        )
+        self.assertEqual(
+            foobar_assigns[0], foobar_assigns[1],
+            "expected the two assignment statements to be the same",
+        )
