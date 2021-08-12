@@ -327,6 +327,9 @@ def np_trapz_dx(y, dx):
 
 def np_trapz_x_dx(y, x, dx):
     return np.trapz(y, x, dx)
+  
+def array_average(a, axis=None, weights=None):
+    return np.average(a, axis=axis, weights=weights)
 
 
 def interp(x, xp, fp):
@@ -3082,6 +3085,81 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 cfunc(y, None, 1.0)
 
             self.assertIn('y cannot be a scalar', str(e.exception))
+
+    def test_average(self):
+
+        #array of random numbers
+        N = 100
+        a = np.random.ranf(N)*100
+        w = np.random.ranf(N)*100
+        w0 = np.zeros(N)
+
+        #boolean array and weights
+        a_bool = np.random.ranf(N) > 0.5
+        w_bool = np.random.ranf(N) > 0.5
+
+        #array of random ints
+        a_int = np.random.randint(101, size=N)
+        w_int = np.random.randint(101, size=N)
+
+        #3D array of random numbers
+        d0 = 100
+        d1 = 50
+        d2 = 25
+        a_3d = np.random.rand(d0,d1,d2)*100
+        w_3d = np.random.rand(d0,d1,d2)*100
+
+        pyfunc = array_average
+        cfunc = jit(nopython=True)(pyfunc)
+
+        #test case for average with weights (number of elements in array and weight array are equal)
+        self.assertAlmostEqual(pyfunc(a,weights=w), cfunc(a,weights=w), places=10)
+        self.assertAlmostEqual(pyfunc(a_3d,weights=w_3d), cfunc(a_3d,weights=w_3d), places=10)
+
+        #test case for average with array and weights with
+        #int datatype (number of elements in array and weight array are equal)
+        self.assertAlmostEqual(pyfunc(a_int,weights=w_int), cfunc(a_int,weights=w_int), places=10)
+
+        #test case for average with boolean weights
+        self.assertAlmostEqual(pyfunc(a,weights=w_bool), cfunc(a,weights=w_bool), places=10)
+        self.assertAlmostEqual(pyfunc(a_bool,weights=w), cfunc(a_bool,weights=w), places=10)
+        self.assertAlmostEqual(pyfunc(a_bool, weights=w_bool), cfunc(a_bool, weights=w_bool), places=10)
+
+        #test case for average without weights
+        self.assertAlmostEqual(pyfunc(a), cfunc(a), places=10)
+        self.assertAlmostEqual(pyfunc(a_3d), cfunc(a_3d), places=10)
+
+        def test_weights_zero_sum(data, weights):
+            with self.assertRaises(ZeroDivisionError) as e:
+                test = cfunc(data, weights=weights)
+            err = e.exception
+            self.assertEqual(str(err), "Weights sum to zero, can't be normalized.")
+
+	#test case when sum of weights is zero
+        test_weights_zero_sum(a, weights=w0)
+
+        def test_1D_weights(data, weights):
+            with self.assertRaises(TypeError) as e:
+                test = cfunc(data, weights=weights)
+            err = e.exception
+            self.assertEqual(str(err), "Numba does not support average when shapes of a and weights "
+                                       "differ.")
+
+        def test_1D_weights_axis(data, axis, weights):
+            with self.assertRaises(TypeError) as e:
+                test = cfunc(data,axis=axis, weights=weights)
+            err = e.exception
+            self.assertEqual(str(err), 'Numba does not support average with axis.')
+
+        #small case to test exceptions for 2D array and 1D weights
+        data = np.arange(6).reshape((3,2,1))
+        w=np.asarray([1./4, 3./4])
+
+        #test without axis argument
+        test_1D_weights(data, weights=w)
+
+        #test with axis argument
+        test_1D_weights_axis(data, axis=1, weights=w)
 
     def test_interp_basic(self):
         pyfunc = interp
