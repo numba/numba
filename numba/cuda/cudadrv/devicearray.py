@@ -184,9 +184,6 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
             layout = 'A'
 
         dtype = numpy_support.from_dtype(self.dtype)
-        #if isinstance(dtype, types.NestedArray):
-        #    return types.Array(dtype.dtype, len(dtype.shape), "C")
-        #else:
         return types.Array(dtype, self.ndim, layout)
 
     @property
@@ -464,7 +461,7 @@ class DeviceRecord(DeviceNDArrayBase):
 
         # If the record didn't have a default stream, and the user didn't
         # provide a stream, then we will use the default stream for the
-        # assignment # kernel and synchronize on it.
+        # assignment kernel and synchronize on it.
         synchronous = not stream
         if synchronous:
             ctx = devices.get_context()
