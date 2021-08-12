@@ -184,10 +184,10 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
             layout = 'A'
 
         dtype = numpy_support.from_dtype(self.dtype)
-        if isinstance(dtype, types.NestedArray):
-            return types.Array(dtype.dtype, len(dtype.shape), "C")
-        else:
-            return types.Array(dtype, self.ndim, layout)
+        #if isinstance(dtype, types.NestedArray):
+        #    return types.Array(dtype.dtype, len(dtype.shape), "C")
+        #else:
+        return types.Array(dtype, self.ndim, layout)
 
     @property
     def device_ctypes_pointer(self):
@@ -463,7 +463,7 @@ class DeviceRecord(DeviceNDArrayBase):
         stream = self._default_stream(stream)
 
         # If the record didn't have a default stream, and the user didn't
-        # provide# a stream, then we will use the default stream for the
+        # provide a stream, then we will use the default stream for the
         # assignment # kernel and synchronize on it.
         synchronous = not stream
         if synchronous:
@@ -475,34 +475,25 @@ class DeviceRecord(DeviceNDArrayBase):
         typ, offset = self.dtype.fields[key]
         newdata = self.gpu_data.view(offset)
 
-        if typ.shape == ():
-            lhs = type(self)(dtype=typ, stream=stream, gpu_data=newdata)
+        lhs = type(self)(dtype=typ, stream=stream, gpu_data=newdata)
 
-            # (2) prepare RHS
+        # (2) prepare RHS
 
-            rhs, _ = auto_device(lhs.dtype.type(value), stream=stream)
+        rhs, _ = auto_device(lhs.dtype.type(value), stream=stream)
 
-            if rhs.dtype.itemsize > lhs.dtype.itemsize:
-                err_str = """Can't assign record of size %s
-                             to self record of size %s"""
-                raise ValueError(err_str % (rhs.dtype.itemsize,
-                                            lhs.dtype.itemsize))
+        if rhs.dtype.itemsize > lhs.dtype.itemsize:
+            err_str = """Can't assign record of size %s
+                            to self record of size %s"""
+            raise ValueError(err_str % (rhs.dtype.itemsize,
+                                        lhs.dtype.itemsize))
 
-            # (3) do the copy
+        # (3) do the copy
 
-            _driver.device_to_device(lhs, rhs, rhs.dtype.itemsize, stream)
+        _driver.device_to_device(lhs, rhs, rhs.dtype.itemsize, stream)
 
-            if synchronous:
-                stream.synchronize()
-        else:
-            #subarray case
-            shape, strides, dtype = \
-                prepare_shape_strides_dtype(typ.shape,
-                                            None,
-                                            typ.subdtype[0], 'C')
-            return DeviceNDArray(shape=shape, strides=strides,
-                                 dtype=dtype, gpu_data=newdata,
-                                 stream=stream)
+        if synchronous:
+            stream.synchronize()
+
 
 
 @lru_cache

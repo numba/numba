@@ -7,12 +7,14 @@ from numba.cuda.testing import skip_on_cudasim
 from numba.np import numpy_support
 from numba import cuda
 
+N_CHARS = 5
+
 recordtype = np.dtype(
     [
         ('a', np.float64),
         ('b', np.int32),
         ('c', np.complex64),
-        ('d', np.int64)
+        ('d', (np.str_, N_CHARS))
     ],
     align=True
 )
@@ -135,7 +137,7 @@ class TestRecordDtypeWithStructArrays(CUDATestCase):
             ary[i]['a'] = x / 2
             ary[i]['b'] = x
             ary[i]['c'] = x * 1j
-            ary[i]['d'] = x * x
+            ary[i]['d'] = str(x) * N_CHARS
 
     def test_structured_array1(self):
         ary = self.sample1d
@@ -144,7 +146,7 @@ class TestRecordDtypeWithStructArrays(CUDATestCase):
             self.assertEqual(ary[i]['a'], x / 2)
             self.assertEqual(ary[i]['b'], x)
             self.assertEqual(ary[i]['c'], x * 1j)
-            self.assertEqual(ary[i]['d'], x * x)
+            self.assertEqual(ary[i]['d'], str(x) * N_CHARS)
 
     def test_structured_array2(self):
         ary = self.samplerec1darr
