@@ -5,6 +5,7 @@ from distutils import sysconfig
 from distutils.command import build
 from distutils.command.build_ext import build_ext
 from distutils.spawn import spawn
+from collections import defaultdict
 
 from setuptools import Extension, find_packages, setup
 import versioneer
@@ -130,6 +131,27 @@ def is_building():
     return any(bc in sys.argv[1:] for bc in build_commands)
 
 
+def pthread_compile_args():
+    # Add -lpthread on platform that needs it.
+    #
+    # References:
+    # https://github.com/numba/numba/issues/7302
+    # https://github.com/scipy/scipy/issues/11323#issuecomment-571664588
+    if platform.machine() in {"ppc64le"}:
+        return {"libraries", ["pthread"]}
+    else:
+        return {}
+
+
+def combine_compile_args(*args):
+    # Combine compile_args dictionaries
+    out = defaultdict(list)
+    for dct in args:
+        for k, vl in dct.items():
+            out[k].extend(vl)
+    return out
+
+
 def get_ext_modules():
     """
     Return a list of Extension instances for the setup() call.
@@ -180,7 +202,8 @@ def get_ext_modules():
                                        "numba/_random.c",
                                        "numba/mathnames.inc",
                                        ],
-                              **np_compile_args)
+                              **combine_compile_args(np_compile_args,
+                                                     pthread_compile_args()))
 
     ext_typeconv = Extension(name="numba.core.typeconv._typeconv",
                              sources=["numba/core/typeconv/typeconv.cpp",
