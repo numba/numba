@@ -495,7 +495,6 @@ class DeviceRecord(DeviceNDArrayBase):
             stream.synchronize()
 
 
-
 @lru_cache
 def _assign_kernel(ndim):
     """
