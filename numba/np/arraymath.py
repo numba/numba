@@ -873,6 +873,7 @@ def np_any(a):
 
     return flat_any
 
+
 @overload(np.average)
 def np_average(arr, axis=None, weights=None):
 
@@ -889,24 +890,26 @@ def np_average(arr, axis=None, weights=None):
                 if arr.shape != weights.shape:
                     if axis is None:
                         raise TypeError(
-                            "Numba does not support average when shapes of a and weights "
-                            "differ.")
+                            "Numba does not support average when shapes of "
+                            "a and weights differ.")
                     if weights.ndim != 1:
                         raise TypeError(
-                            "1D weights expected when shapes of a and weights differ.")
+                            "1D weights expected when shapes of "
+                            "a and weights differ.")
 
                 scl = np.sum(weights)
                 if scl == 0.0:
                     raise ZeroDivisionError(
                         "Weights sum to zero, can't be normalized.")
 
-                avg = np.sum(np.multiply(arr, weights))/scl
+                avg = np.sum(np.multiply(arr, weights)) / scl
                 return avg
         else:
             def np_average_impl(arr, axis=None, weights=None):
                 raise TypeError("Numba does not support average with axis.")
 
     return np_average_impl
+
 
 def get_isnan(dtype):
     """
