@@ -783,7 +783,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             [np.ones(1), 1],
             [np.ones(1), 2],
             # these cases with size 0 are strange, but they reproduce the behavior
-            # of broadcasting with ufuncs (see test_same_as_ufunc above)
+            # of broadcasting with ufuncs
             [np.ones(1), (0,)],
             [np.ones((1, 2)), (0, 2)],
             [np.ones((2, 1)), (2, 0)],
@@ -800,25 +800,79 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         # Tests taken from
         # https://github.com/numpy/numpy/blob/75f852edf94a7293e7982ad516bee314d7187c2d/numpy/lib/tests/test_stride_tricks.py#L260-L276  # noqa: E501
         data = [
-            [(0,), (), TypingError, 'The argument "shape" must be a tuple or an integer.'],
-            [(1,), (), TypingError, 'The argument "shape" must be a tuple or an integer.'],
-            [(3,), (), TypingError, 'The argument "shape" must be a tuple or an integer.'],
-            [(3,), (1,), ValueError, 'operands could not be broadcast together with remapped shapes'],
-            [(3,), (2,), ValueError, 'operands could not be broadcast together with remapped shapes'],
-            [(3,), (4,), ValueError, 'operands could not be broadcast together with remapped shapes'],
-            [(1, 2), (2, 1), ValueError, 'operands could not be broadcast together with remapped shapes'],
-            [(1, 1), (1,), ValueError, 'input operand has more dimensions than allowed by the axis remapping'],
-            [(2, 2), (3,), ValueError, 'input operand has more dimensions than allowed by the axis remapping'],
-            [(1,), -1, ValueError, 'all elements of broadcast shape must be non-negative'],
-            [(1,), (-1,), ValueError, 'all elements of broadcast shape must be non-negative'],
-            [(1, 2), (-1, 2), ValueError, 'all elements of broadcast shape must be non-negative'],
+            [
+                np.zeros((0,)), (), TypingError,
+                'The argument "shape" must be a tuple or an integer.'
+            ],
+            [
+                np.zeros((1,)), (), TypingError,
+                'The argument "shape" must be a tuple or an integer.'
+            ],
+            [
+                np.zeros((3,)), (), TypingError,
+                'The argument "shape" must be a tuple or an integer.'
+            ],
+            [
+                np.zeros((3,)), (1,), ValueError,
+                'operands could not be broadcast together with remapped shapes'
+            ],
+            [
+                np.zeros((3,)), (2,), ValueError,
+                'operands could not be broadcast together with remapped shapes'
+            ],
+            [
+                np.zeros((3,)), (4,), ValueError,
+                'operands could not be broadcast together with remapped shapes'
+            ],
+            [
+                np.zeros((1, 2)), (2, 1), ValueError,
+                'operands could not be broadcast together with remapped shapes'
+            ],
+            [
+                np.zeros((1, 1)), (1,), ValueError,
+                'input operand has more dimensions than allowed by the axis remapping'
+            ],
+            [
+                np.zeros((2, 2)), (3,), ValueError,
+                'input operand has more dimensions than allowed by the axis remapping'
+            ],
+            [
+                np.zeros((1,)), -1, ValueError,
+                'all elements of broadcast shape must be non-negative'
+            ],
+            [
+                np.zeros((1,)), (-1,), ValueError,
+                'all elements of broadcast shape must be non-negative'
+            ],
+            [
+                np.zeros((1, 2)), (-1, 2), ValueError,
+                'all elements of broadcast shape must be non-negative'
+            ],
+            [
+                np.zeros((1, 2)), (1.1, 2.2), TypingError,
+                'The second argument "shape" must be a Tuple[int]'
+            ],
+            [
+                'hello', (3,), TypingError,
+                'The first argument "array" must be array-like'
+            ],
         ]
-        for orig_shape, target_shape, err, msg in data:
-            self.disable_leak_check()
-            arr = np.zeros(orig_shape)
+        self.disable_leak_check()
+        for arr, target_shape, err, msg in data:
             with self.assertRaises(err) as raises:
                 cfunc(arr, target_shape)
             self.assertIn(msg, str(raises.exception))
+
+    def test_broadcast_to_change_view(self):
+        pyfunc = numpy_broadcast_to
+        cfunc = jit(nopython=True)(pyfunc)
+        input_array = np.zeros(2, dtype=np.int32)
+        shape = (2, 2)
+        view = cfunc(input_array, shape)
+        input_array[0] = 10
+
+        self.assertEqual(input_array.sum(), 10)
+        self.assertEqual(view.sum(), 20)
 
     def test_broadcast_to_indexing(self):
         pyfunc = numpy_broadcast_to_indexing

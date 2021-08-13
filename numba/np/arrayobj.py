@@ -1305,8 +1305,7 @@ def _broadcast_to_shape(context, builder, arrtype, arr, target_shape):
 
 @intrinsic
 def _numpy_broadcast_to(typingctx, array, shape):
-    layout = 'A'  # setting layout to 'A' for broadcast_to_shapes to use strides
-    ret = types.Array(array.dtype, shape.count, layout, readonly=True)
+    ret = array.copy(ndim=shape.count, layout='A', readonly=True)
     sig = ret(array, shape)
 
     def codegen(context, builder, sig, args):
@@ -1319,7 +1318,7 @@ def _numpy_broadcast_to(typingctx, array, shape):
 
         # Hack to get np.broadcast_to to return a read-only array
         setattr(dest, 'parent', Constant.null(
-            context.get_value_type(dest._datamodel.get_type('parent'))))
+                context.get_value_type(dest._datamodel.get_type('parent'))))
 
         res = dest._getvalue()
         return impl_ret_borrowed(context, builder, sig.return_type, res)
@@ -1339,7 +1338,7 @@ def _can_broadcast(array, dest_shape):
             raise ValueError('all elements of broadcast shape must be '
                              'non-negative')
 
-    # based on _broadcast_onto function on numba/np/npyimpl.py
+    # based on _broadcast_onto function in numba/np/npyimpl.py
     src_index = 0
     dest_index = dest_ndim - src_ndim
     while src_index < src_ndim:
@@ -1360,6 +1359,15 @@ def _can_broadcast(array, dest_shape):
 
 @overload(np.broadcast_to)
 def numpy_broadcast_to(array, shape):
+    if not type_can_asarray(array):
+        raise errors.TypingError('The first argument "array" must '
+                                 'be array-like')
+
+    if isinstance(shape, types.UniTuple) and not \
+            isinstance(shape.dtype, types.Integer):
+        raise errors.TypingError('The second argument "shape" must '
+                                 'be a Tuple[int]')
+
     if isinstance(shape, types.UniTuple):
         def impl(array, shape):
             _can_broadcast(array, shape)
