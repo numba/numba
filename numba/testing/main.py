@@ -13,7 +13,7 @@ import warnings
 
 from functools import lru_cache
 from io import StringIO
-from unittest import result, runner, signals, suite, loader, case
+from unittest import result, runner, signals, suite, loader, case, TestCase
 
 from .loader import TestLoader
 from numba.core import config
@@ -328,9 +328,10 @@ class NumbaTestProgram(unittest.main):
                 msg = ("Value specified for the number of processes to use in "
                     "running the suite must be > 0")
                 raise ValueError(msg)
-            self.testRunner = ParallelTestRunner(runner.TextTestRunner,
-                                                 self.multiprocess,
-                                                 self.useslice,
+            self.testRunner = ParallelXMLTestRunner(
+                                                 nprocs=self.multiprocess,
+                                                 useslice=self.useslice,
+                                                 output="junit_reports",
                                                  verbosity=self.verbosity,
                                                  failfast=self.failfast,
                                                  buffer=self.buffer)
@@ -807,3 +808,62 @@ class ParallelTestRunner(runner.TextTestRunner):
         # This will call self._run_inner() on the created result object,
         # and print out the detailed test results at the end.
         return super(ParallelTestRunner, self).run(self._run_inner)
+
+
+
+
+import xmlrunner
+class ParallelXMLTestRunner:
+    """
+    A test runner which delegates the actual running to a pool of child
+    processes.
+    """
+    timeout = _TIMEOUT
+
+    def __init__(self, *, nprocs, useslice, **kwargs):
+        self.nprocs = nprocs
+        self.useslice = parse_slice(useslice)
+        self._kwargs = kwargs.copy()
+
+    def run(self, test):
+        self._ptests, self._stests = _split_nonparallel_tests(test,
+                                                              sliced=self.useslice)
+        print("Parallel: %s. Serial: %s" % (len(self._ptests),
+                                            len(self._stests)))
+        runner = xmlrunner.XMLTestRunner(**self._kwargs)
+        return runner.run(self._run_inner)
+
+    def _run_inner(self, result):
+        pool = multiprocessing.get_context("spawn").Pool(self.nprocs)
+
+        ptests = self._ptests
+        if ptests:
+            chunk_size = (len(ptests) + self.nprocs - 1) // self.nprocs
+            splitted_tests = [ptests[i:i + chunk_size]
+                            for i in range(0, len(self._ptests), chunk_size)]
+            assert sum(map(len, splitted_tests)) == len(ptests)
+
+            for idx, status in pool.imap_unordered(xml_child_runner, enumerate(splitted_tests)):
+                if not status:
+                    case = type(f"ParallelTest{idx}", (_FailedTest,), {})
+                    ss = loader.defaultTestLoader.loadTestsFromTestCase(case)
+                    ss.run(result)
+
+        stests = SerialSuite(self._stests)
+        stests.run(result)
+        return result
+
+
+class _FailedTest(TestCase):
+    def test_parallel_failed(self):
+        self.fail("parallel test failed")
+
+
+def xml_child_runner(args):
+    idx, tests = args
+    runner = xmlrunner.XMLTestRunner(output="junit_reports", verbosity=0, buffer=1)
+    def xml_inner_runner(result):
+        SerialSuite(tests).run(result)
+    result = runner.run(xml_inner_runner)
+    return idx, result.wasSuccessful()
+
