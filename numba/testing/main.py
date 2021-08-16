@@ -314,9 +314,10 @@ class NumbaTestProgram(unittest.main):
                 msg = ("Value specified for the number of processes to use in "
                     "running the suite must be > 0")
                 raise ValueError(msg)
-            self.testRunner = ParallelTestRunner(runner.TextTestRunner,
-                                                 self.multiprocess,
-                                                 self.useslice,
+            self.testRunner = ParallelXMLTestRunner(
+                                                 nprocs=self.multiprocess,
+                                                 useslice=self.useslice,
+                                                 output="junits_reports",
                                                  verbosity=self.verbosity,
                                                  failfast=self.failfast,
                                                  buffer=self.buffer)
@@ -793,3 +794,53 @@ class ParallelTestRunner(runner.TextTestRunner):
         # This will call self._run_inner() on the created result object,
         # and print out the detailed test results at the end.
         return super(ParallelTestRunner, self).run(self._run_inner)
+
+
+
+
+import xmlrunner
+class ParallelXMLTestRunner:
+    """
+    A test runner which delegates the actual running to a pool of child
+    processes.
+    """
+    timeout = _TIMEOUT
+
+    def __init__(self, *, nprocs, useslice, **kwargs):
+        self.nprocs = nprocs
+        self.useslice = parse_slice(useslice)
+        self._kwargs = kwargs.copy()
+
+    def run(self, test):
+        self._ptests, self._stests = _split_nonparallel_tests(test,
+                                                              sliced=self.useslice)
+        print("Parallel: %s. Serial: %s" % (len(self._ptests),
+                                            len(self._stests)))
+        runner = xmlrunner.XMLTestRunner(**self._kwargs)
+        return runner.run(self._run_inner)
+
+    def _run_inner(self, result):
+        pool = multiprocessing.Pool(self.nprocs)
+
+        ptests = self._ptests
+        chunk_size = len(ptests) // self.nprocs
+        splitted_tests = [ptests[i:i + chunk_size]
+                          for i in range(0, len(self._ptests), chunk_size)]
+        assert sum(map(len, splitted_tests)) == len(ptests)
+
+        for a in pool.imap_unordered(xml_child_runner, splitted_tests):
+            print(a)
+
+
+        stests = SerialSuite(self._stests)
+        stests.run(result)
+        return result
+
+
+def xml_child_runner(tests):
+    runner = xmlrunner.XMLTestRunner(output="junit_reports", verbosity=0, buffer=1)
+    def xml_inner_runner(result):
+        SerialSuite(tests).run(result)
+    result = runner.run(xml_inner_runner)
+    return result.wasSuccessful()
+
