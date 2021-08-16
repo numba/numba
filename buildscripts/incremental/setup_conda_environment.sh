@@ -96,6 +96,8 @@ if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL -c numba tbb=2021 tbb-dev
 if [ "$TEST_PICKLE5" == "yes" ]; then $PIP_INSTALL pickle5; fi
 # Install typeguard
 if [ "$RUN_TYPEGUARD" == "yes" ]; then $CONDA_INSTALL conda-forge::typeguard; fi
+# Install unittest-xml-reporting
+$CONDA_INSTALL conda-forge::unittest-xml-reporting
 
 # environment dump for debug
 # echo "DEBUG ENV:"
