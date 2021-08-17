@@ -823,16 +823,14 @@ class ParallelXMLTestRunner:
         pool = multiprocessing.Pool(self.nprocs)
 
         ptests = self._ptests
-        chunk_size = (len(ptests) + self.nprocs - 1) // self.nprocs
-        if chunk_size == 0:
-            chunk_size = len(ptests)
-        splitted_tests = [ptests[i:i + chunk_size]
-                          for i in range(0, len(self._ptests), chunk_size)]
-        assert sum(map(len, splitted_tests)) == len(ptests)
+        if ptests:
+            chunk_size = (len(ptests) + self.nprocs - 1) // self.nprocs
+            splitted_tests = [ptests[i:i + chunk_size]
+                            for i in range(0, len(self._ptests), chunk_size)]
+            assert sum(map(len, splitted_tests)) == len(ptests)
 
-        for a in pool.imap_unordered(xml_child_runner, splitted_tests):
-            print(a)
-
+            for a in pool.imap_unordered(xml_child_runner, splitted_tests):
+                print(a)
 
         stests = SerialSuite(self._stests)
         stests.run(result)
