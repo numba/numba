@@ -1,6 +1,7 @@
 import re
 import numpy as np
 from numba import cuda
+from numba.cuda.cudadrv.nvvm import NVVM
 from numba.cuda.testing import unittest, skip_on_cudasim, CUDATestCase
 from llvmlite import ir
 
@@ -56,6 +57,9 @@ class TestConstStringCodegen(unittest.TestCase):
 
 class TestConstString(CUDATestCase):
     def test_assign_const_string(self):
+        if not NVVM().is_nvvm70:
+            self.skipTest('Character sequences unsupported on NVVM 3.4')
+
         # Inspired by the reproducer from Issue #7041.
 
         @cuda.jit
