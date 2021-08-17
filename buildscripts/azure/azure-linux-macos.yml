@@ -46,6 +46,7 @@ jobs:
       displayName: 'Test'
 
     - task: PublishTestResults@2
+      condition: succeededOrFailed()
       displayName: Publish Test Results
       inputs:
         testResultsFiles: 'junit_reports/TEST-*.xml'
