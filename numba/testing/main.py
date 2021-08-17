@@ -317,7 +317,7 @@ class NumbaTestProgram(unittest.main):
             self.testRunner = ParallelXMLTestRunner(
                                                  nprocs=self.multiprocess,
                                                  useslice=self.useslice,
-                                                 output="junits_reports",
+                                                 output="junit_reports",
                                                  verbosity=self.verbosity,
                                                  failfast=self.failfast,
                                                  buffer=self.buffer)
@@ -823,7 +823,7 @@ class ParallelXMLTestRunner:
         pool = multiprocessing.Pool(self.nprocs)
 
         ptests = self._ptests
-        chunk_size = len(ptests) // self.nprocs
+        chunk_size = (len(ptests) + self.nprocs - 1) // self.nprocs
         splitted_tests = [ptests[i:i + chunk_size]
                           for i in range(0, len(self._ptests), chunk_size)]
         assert sum(map(len, splitted_tests)) == len(ptests)
