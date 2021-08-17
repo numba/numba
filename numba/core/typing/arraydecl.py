@@ -174,7 +174,8 @@ class SetItemBuffer(AbstractTemplate):
         if not isinstance(ary, types.Buffer):
             return
         if not ary.mutable:
-            raise TypeError("Cannot modify value of type %s" %(ary,))
+            msg = f"Cannot modify readonly array of type: {ary}"
+            raise TypeError(msg)
         out = get_array_index_type(ary, idx)
         if out is None:
             return
