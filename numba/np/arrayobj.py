@@ -1363,13 +1363,13 @@ def numpy_broadcast_to(array, shape):
         raise errors.TypingError('The first argument "array" must '
                                  'be array-like')
 
-    if isinstance(shape, types.UniTuple) and not \
-            isinstance(shape.dtype, types.Integer):
-        raise errors.TypingError('The second argument "shape" must '
-                                 'be a Tuple[int]')
-
     if isinstance(shape, types.UniTuple):
+        if not isinstance(shape.dtype, types.Integer):
+            raise errors.TypingError('The second argument "shape" must '
+                                     'be a tuple of integers')
+
         def impl(array, shape):
+            array = np.asarray(array)
             _can_broadcast(array, shape)
             return _numpy_broadcast_to(array, shape)
     elif isinstance(shape, types.Integer):
