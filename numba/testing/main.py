@@ -824,6 +824,8 @@ class ParallelXMLTestRunner:
 
         ptests = self._ptests
         chunk_size = (len(ptests) + self.nprocs - 1) // self.nprocs
+        if chunk_size == 0:
+            chunk_size = len(ptests)
         splitted_tests = [ptests[i:i + chunk_size]
                           for i in range(0, len(self._ptests), chunk_size)]
         assert sum(map(len, splitted_tests)) == len(ptests)
