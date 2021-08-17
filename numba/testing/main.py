@@ -12,7 +12,7 @@ import unittest
 import warnings
 
 from io import StringIO
-from unittest import result, runner, signals, suite, loader, case
+from unittest import result, runner, signals, suite, loader, case, TestCase
 
 from .loader import TestLoader
 from numba.core import config
@@ -829,18 +829,27 @@ class ParallelXMLTestRunner:
                             for i in range(0, len(self._ptests), chunk_size)]
             assert sum(map(len, splitted_tests)) == len(ptests)
 
-            for a in pool.imap_unordered(xml_child_runner, splitted_tests):
-                print(a)
+            for idx, status in pool.imap_unordered(xml_child_runner, enumerate(splitted_tests)):
+                if not status:
+                    case = type(f"ParallelTest{idx}", (_FailedTest,), {})
+                    ss = loader.defaultTestLoader.loadTestsFromTestCase(case)
+                    ss.run(result)
 
         stests = SerialSuite(self._stests)
         stests.run(result)
         return result
 
 
-def xml_child_runner(tests):
+class _FailedTest(TestCase):
+    def test_parallel_failed(self):
+        self.fail("parallel test failed")
+
+
+def xml_child_runner(args):
+    idx, tests = args
     runner = xmlrunner.XMLTestRunner(output="junit_reports", verbosity=0, buffer=1)
     def xml_inner_runner(result):
         SerialSuite(tests).run(result)
     result = runner.run(xml_inner_runner)
-    return result.wasSuccessful()
+    return idx, result.wasSuccessful()
 
