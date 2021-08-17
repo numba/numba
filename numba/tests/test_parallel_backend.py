@@ -16,7 +16,8 @@ import numpy as np
 
 from numba import jit, vectorize, guvectorize, set_num_threads
 from numba.tests.support import (temp_directory, override_config, TestCase, tag,
-                                 skip_parfors_unsupported, linux_only)
+                                 skip_parfors_unsupported, linux_only,
+                                 needs_external_compilers)
 
 import queue as t_queue
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
@@ -949,6 +950,91 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
         # assert error message printed on stderr
         msg_head = "Attempted to fork from a non-main thread, the TBB library"
         self.assertIn(msg_head, err)
+
+        if self._DEBUG:
+            print("OUT:", out)
+            print("ERR:", err)
+
+    @needs_external_compilers
+    @linux_only # os.fork required.
+    def test_lifetime_of_task_scheduler_handle(self):
+        # See PR #7280 for context.
+        BROKEN_COMPILERS = 'SKIP: COMPILATION FAILED'
+        runme = """if 1:
+            import ctypes
+            import os
+            import sys
+            from tempfile import TemporaryDirectory, NamedTemporaryFile
+            from numba.pycc.platform import Toolchain, _external_compiler_ok
+            from numba import njit, prange, threading_layer
+
+            if not _external_compiler_ok:
+                raise AssertionError('External compilers are not found.')
+
+            try:
+                with TemporaryDirectory() as tmpdir:
+                    with NamedTemporaryFile(dir=tmpdir) as tmpfile:
+                        src = \"\"\"
+                        #define TBB_PREVIEW_WAITING_FOR_WORKERS 1
+                        #include <tbb/tbb.h>
+                        static tbb::task_scheduler_handle tsh;
+                        extern "C"
+                        {
+                        void launch(void)
+                        {
+                            tsh = tbb::task_scheduler_handle::get();
+                        }
+                        }
+                        \"\"\"
+                        cxxfile = f"{tmpfile.name}.cxx"
+                        with open(cxxfile, 'wt') as f:
+                            f.write(src)
+                        tc = Toolchain()
+                        object_files = tc.compile_objects([cxxfile,],
+                                                           output_dir=tmpdir)
+                        dso_name = f"{tmpfile.name}.so"
+                        tc.link_shared(dso_name, object_files,
+                                       libraries=['tbb',],
+                                       export_symbols=['launch'])
+                        # Load into the process, it doesn't matter whether the
+                        # DSO exists on disk once it's loaded in.
+                        DLL = ctypes.CDLL(dso_name)
+            except Exception as e:
+                # Something is broken in compilation, could be one of many
+                # things including, but not limited to: missing tbb headers,
+                # incorrect permissions, compilers that don't work for the above
+                print(e)
+                print('BROKEN_COMPILERS')
+                sys.exit(0)
+
+            # Do the test
+            DLL.launch()
+
+            @njit(parallel=True)
+            def foo(n):
+                acc = 0
+                for i in prange(n):
+                    acc += i
+                return acc
+
+            foo(1)
+            assert threading_layer() == 'tbb'
+            pid = os.fork()
+            if pid != 0:
+                # parent prints success
+                print("SUCCESS")
+            sys.exit(0)
+            """.replace('BROKEN_COMPILERS', BROKEN_COMPILERS)
+
+        cmdline = [sys.executable, '-c', runme]
+        env = os.environ.copy()
+        env['NUMBA_THREADING_LAYER'] = 'tbb'
+        out, err = self.run_cmd(cmdline, env=env)
+
+        if BROKEN_COMPILERS in out:
+            self.skipTest("Compilation of DSO failed. Check output for details")
+        else:
+            self.assertIn("SUCCESS", out)
 
         if self._DEBUG:
             print("OUT:", out)
