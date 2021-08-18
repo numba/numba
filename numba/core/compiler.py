@@ -721,7 +721,9 @@ def compile_ir(typingctx, targetctx, func_ir, args, return_type, flags,
                                        lifted_from=lifted_from)
 
         # compile with rewrites off, IR shouldn't be mutated irreparably
-        norw_cres = compile_local(func_ir.copy(), norw_flags)
+        # deepcopy to create defense against mutation
+        norw_ir_copy = copy.deepcopy(func_ir)
+        norw_cres = compile_local(norw_ir_copy, norw_flags)
 
         # try and compile with rewrites on if no_rewrites was not set in the
         # original flags, IR might get broken but we've got a CompileResult
@@ -732,7 +734,7 @@ def compile_ir(typingctx, targetctx, func_ir, args, return_type, flags,
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", errors.NumbaWarning)
                 try:
-                    rw_cres = compile_local(func_ir.copy(), flags)
+                    rw_cres = compile_local(copy.deepcopy(func_ir), flags)
                 except Exception:
                     pass
         # if the rewrite variant of compilation worked, use it, else use

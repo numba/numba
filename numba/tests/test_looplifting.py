@@ -599,6 +599,22 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         [lifted] = foo.overloads[foo.signatures[0]].lifted
         self.assertEqual(len(lifted.nopython_signatures), 1)
 
+    def test_lift_forceobj_issue_7215(self):
+        from numba import jit
+
+        @jit(forceobj=True)
+        def foo(d):
+            res = {}
+            for k, v in d.items():
+                res[k] = v
+                if v:
+                    pass
+            return res
+
+        x = {1: 1, 2: 2}
+        got = foo(x)
+        self.assertEqual(x, got)
+
 
 if __name__ == '__main__':
     unittest.main()
