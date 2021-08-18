@@ -13,7 +13,7 @@ from llvmlite.llvmpy.core import Constant
 
 import numpy as np
 
-from numba import pndindex, literal_unroll
+from numba import pndindex, literal_unroll, njit
 from numba.core import types, utils, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                     is_fortran, check_is_integer)
@@ -5441,21 +5441,21 @@ def numpy_swapaxes(arr, axis1, axis2):
     return impl
 
 
-@register_jitable
+@njit
 def _take_along_axis_impl_set_ni(arr, indices, axis, Ni, Nk):
     for i in range(len(Ni)):
         Ni = tuple_setitem(Ni, i, arr.shape[i])
     return _take_along_axis_impl(arr, indices, axis, Ni, Nk)
 
 
-@register_jitable
+@njit
 def _take_along_axis_impl_set_nk(arr, indices, axis, Ni, Nk):
     for i in range(len(Nk)):
         Nk = tuple_setitem(Nk, i, arr.shape[axis + 1 + i])
     return _take_along_axis_impl(arr, indices, axis, Ni, Nk)
 
 
-@register_jitable
+@njit
 def _take_along_axis_impl_set_ni_nk(arr, indices, axis, Ni, Nk):
     for i in range(len(Ni)):
         Ni = tuple_setitem(Ni, i, arr.shape[i])
@@ -5464,7 +5464,7 @@ def _take_along_axis_impl_set_ni_nk(arr, indices, axis, Ni, Nk):
     return _take_along_axis_impl(arr, indices, axis, Ni, Nk)
 
 
-@register_jitable
+@njit
 def _take_along_axis_impl(arr, indices, axis, Ni, Nk):
     # Based on example code in
     # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/shape_base.py#L90
