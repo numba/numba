@@ -5471,9 +5471,10 @@ def _take_along_axis_impl(arr, indices, axis, Ni, Nk):
     J = indices.shape[axis]  # Need not equal M
     out = np.empty(Ni + (J,) + Nk, arr.dtype)
 
+    np_s_ = (slice(None, None, None),)
+    
     for ii in np.ndindex(Ni):
         for kk in np.ndindex(Nk):
-            np_s_ = (slice(None, None, None),)
             a_1d = arr[ii + np_s_ + kk]
             indices_1d = indices[ii + np_s_ + kk]
             out_1d = out[ii + np_s_ + kk]
