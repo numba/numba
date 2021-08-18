@@ -956,24 +956,24 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
             print("ERR:", err)
 
     @needs_external_compilers
-    @linux_only # os.fork required.
+    @linux_only # fork required.
     def test_lifetime_of_task_scheduler_handle(self):
         # See PR #7280 for context.
         BROKEN_COMPILERS = 'SKIP: COMPILATION FAILED'
         runme = """if 1:
             import ctypes
-            import os
             import sys
+            import multiprocessing as mp
             from tempfile import TemporaryDirectory, NamedTemporaryFile
             from numba.pycc.platform import Toolchain, _external_compiler_ok
             from numba import njit, prange, threading_layer
-
+            import faulthandler
+            faulthandler.enable()
             if not _external_compiler_ok:
                 raise AssertionError('External compilers are not found.')
-
-            try:
-                with TemporaryDirectory() as tmpdir:
-                    with NamedTemporaryFile(dir=tmpdir) as tmpfile:
+            with TemporaryDirectory() as tmpdir:
+                with NamedTemporaryFile(dir=tmpdir) as tmpfile:
+                    try:
                         src = \"\"\"
                         #define TBB_PREVIEW_WAITING_FOR_WORKERS 1
                         #include <tbb/tbb.h>
@@ -999,31 +999,42 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
                         # Load into the process, it doesn't matter whether the
                         # DSO exists on disk once it's loaded in.
                         DLL = ctypes.CDLL(dso_name)
-            except Exception as e:
-                # Something is broken in compilation, could be one of many
-                # things including, but not limited to: missing tbb headers,
-                # incorrect permissions, compilers that don't work for the above
-                print(e)
-                print('BROKEN_COMPILERS')
-                sys.exit(0)
+                    except Exception as e:
+                        # Something is broken in compilation, could be one of
+                        # many things including, but not limited to: missing tbb
+                        # headers, incorrect permissions, compilers that don't
+                        # work for the above
+                        print(e)
+                        print('BROKEN_COMPILERS')
+                        sys.exit(0)
 
-            # Do the test
-            DLL.launch()
+                    # Do the test, launch this library and also execute a
+                    # function with the TBB threading layer.
 
-            @njit(parallel=True)
-            def foo(n):
-                acc = 0
-                for i in prange(n):
-                    acc += i
-                return acc
+                    DLL.launch()
 
-            foo(1)
+                    @njit(parallel=True)
+                    def foo(n):
+                        acc = 0
+                        for i in prange(n):
+                            acc += i
+                        return acc
+
+                    foo(1)
+
+            # Check the threading layer used was TBB
             assert threading_layer() == 'tbb'
-            pid = os.fork()
-            if pid != 0:
-                # parent prints success
-                print("SUCCESS")
-            sys.exit(0)
+
+            # Use mp context for a controlled version of fork, this triggers the
+            # reported bug.
+
+            ctx = mp.get_context('fork')
+            def nowork():
+                pass
+            p = ctx.Process(target=nowork)
+            p.start()
+            p.join(10)
+            print("SUCCESS")
             """.replace('BROKEN_COMPILERS', BROKEN_COMPILERS)
 
         cmdline = [sys.executable, '-c', runme]
