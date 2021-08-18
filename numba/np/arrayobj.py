@@ -5467,7 +5467,7 @@ def _take_along_axis_impl_set_ni_nk(arr, indices, axis, Ni, Nk):
 @register_jitable
 def _take_along_axis_impl(arr, indices, axis, Ni, Nk):
     # Based on example code in
-    # https://numpy.org/doc/stable/reference/generated/numpy.take_along_axis.html
+    # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/shape_base.py#L90
     J = indices.shape[axis]  # Need not equal M
     out = np.empty(Ni + (J,) + Nk, arr.dtype)
 

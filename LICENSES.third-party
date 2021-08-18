@@ -456,7 +456,6 @@ NumPy (https://github.com/numpy/numpy)
 Numba source code that references URLs starting with:
 
 https://github.com/numpy/numpy
-https://numpy.org/doc/
 
 relates to use of/inclusion of/derivate work based on NumPy source code which
 has the following license:
