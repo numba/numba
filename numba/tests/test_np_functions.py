@@ -4229,41 +4229,16 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(axis_none(a, indices),
                                 axis_none.py_func(a, indices))
 
-        ai0 = np.argsort(a, axis=0)
-        ai1 = np.argsort(a, axis=1)
-        ai2 = np.argsort(a, axis=2)
-        ai3 = np.argsort(a, axis=3)
+        def gen(axis):
+            @njit
+            def impl(a, i):
+                return np.take_along_axis(a, i, axis)
+            return impl
 
-        @njit
-        def axis_zero(a, i):
-            return np.take_along_axis(a, i, axis=0)
-
-        self.assertPreciseEqual(axis_zero(a, ai0), axis_zero.py_func(a, ai0))
-
-        @njit
-        def axis_one(a, i):
-            return np.take_along_axis(a, i, axis=1)
-
-        self.assertPreciseEqual(axis_one(a, ai1), axis_one.py_func(a, ai1))
-
-        @njit
-        def axis_two(a, i):
-            return np.take_along_axis(a, i, axis=2)
-
-        self.assertPreciseEqual(axis_two(a, ai2), axis_two.py_func(a, ai2))
-
-        @njit
-        def axis_three(a, i):
-            return np.take_along_axis(a, i, axis=3)
-
-        self.assertPreciseEqual(axis_three(a, ai3), axis_three.py_func(a, ai3))
-
-        @njit
-        def axis_minus_one(a, i):
-            return np.take_along_axis(a, i, axis=-1)
-
-        self.assertPreciseEqual(axis_minus_one(a, ai3),
-                                axis_minus_one.py_func(a, ai3))
+        for i in range(-1, a.ndim):
+            jfunc = gen(i)
+            ai = np.argsort(a, axis=i)
+            self.assertPreciseEqual(jfunc(a, ai), jfunc.py_func(a, ai))
 
     def test_take_along_axis_exceptions(self):
         arr2d = np.arange(8).reshape(2, 4)
