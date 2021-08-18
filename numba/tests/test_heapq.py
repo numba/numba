@@ -5,7 +5,6 @@ import numpy as np
 
 from numba import jit, typed
 from numba.core.compiler import Flags
-from numba.core.config import IS_WIN32
 from numba.tests.support import TestCase, CompilationCache, MemoryLeakMixin
 
 no_pyobj_flags = Flags()
