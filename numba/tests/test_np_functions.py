@@ -4241,35 +4241,27 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_take_along_axis_exceptions(self):
         arr2d = np.arange(8).reshape(2, 4)
+        # Valid indices when axis=None is passed to take_along_axis:
         indices = np.array([0, 1], dtype=np.uint64)
 
-        # For now axis must be literal, so we need to define a bunch of
-        # functions.
-        @njit
-        def bad_axis(a, i):
-            return np.take_along_axis(a, i, axis="a")
+        # For now axis must be literal, so we need to construct functions with
+        # explicit axis:
+        def gen(axis):
+            @njit
+            def impl(a, i):
+                return np.take_along_axis(a, i, axis)
+            return impl
 
         with self.assertRaises(TypingError) as raises:
-            bad_axis(arr2d, indices)
-
+            gen("a")(arr2d, indices)
         self.assertIn("axis must be an integer", str(raises.exception))
 
-        @njit
-        def too_small_axis(a, i):
-            return np.take_along_axis(a, i, -3)
-
         with self.assertRaises(TypingError) as raises:
-            too_small_axis(arr2d, indices)
-
+            gen(-3)(arr2d, indices)
         self.assertIn("axis is out of bounds", str(raises.exception))
 
-        @njit
-        def too_large_axis(a, i):
-            return np.take_along_axis(a, i, 2)
-
         with self.assertRaises(TypingError) as raises:
-            too_large_axis(arr2d, indices)
-
+            gen(2)(arr2d, indices)
         self.assertIn("axis is out of bounds", str(raises.exception))
 
         @njit
@@ -4278,7 +4270,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             not_literal_axis(arr2d, indices, 0)
-
         self.assertIn("axis must be a literal value", str(raises.exception))
 
 
