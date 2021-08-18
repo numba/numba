@@ -4219,8 +4219,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_take_along_axis(self):
         a = np.arange(24).reshape((3, 1, 4, 2))
 
-        # For now axis must be literal, so we need to define a bunch of
-        # functions.
+        # For now axis must be literal, test explicitly defined implementations
         @njit
         def axis_none(a, i):
             return np.take_along_axis(a, i, axis=None)
