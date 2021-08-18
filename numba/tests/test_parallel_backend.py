@@ -152,7 +152,7 @@ class guvectorize_runner(runnable):
 def chooser(fnlist, **kwargs):
     q = kwargs.get('queue')
     try:
-        faulthandler.enable()
+        faulthandler.enable(file=sys.__stderr__)
         for _ in range(int(len(fnlist) * 1.5)):
             fn = random.choice(fnlist)
             fn()

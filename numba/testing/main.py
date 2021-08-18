@@ -820,7 +820,7 @@ class ParallelXMLTestRunner:
         return runner.run(self._run_inner)
 
     def _run_inner(self, result):
-        pool = multiprocessing.Pool(self.nprocs)
+        pool = multiprocessing.get_context("spawn").Pool(self.nprocs)
 
         ptests = self._ptests
         if ptests:
