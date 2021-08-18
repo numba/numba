@@ -4264,6 +4264,18 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             gen(2)(arr2d, indices)
         self.assertIn("axis is out of bounds", str(raises.exception))
 
+        with self.assertRaises(TypingError) as raises:
+            gen(None)(12, indices)
+        self.assertIn('"arr" must be an array', str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            gen(None)(arr2d, 5)
+        self.assertIn('"indices" must be an array', str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            gen(None)(arr2d, np.array([0.0, 1.0]))
+        self.assertIn('indices array must contain integers', str(raises.exception))
+
         @njit
         def not_literal_axis(a, i, axis):
             return np.take_along_axis(a, i, axis)

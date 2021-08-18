@@ -5472,7 +5472,7 @@ def _take_along_axis_impl(arr, indices, axis, Ni, Nk):
     out = np.empty(Ni + (J,) + Nk, arr.dtype)
 
     np_s_ = (slice(None, None, None),)
-    
+
     for ii in np.ndindex(Ni):
         for kk in np.ndindex(Nk):
             a_1d = arr[ii + np_s_ + kk]
@@ -5485,6 +5485,13 @@ def _take_along_axis_impl(arr, indices, axis, Ni, Nk):
 
 @overload(np.take_along_axis)
 def arr_take_along_axis(arr, indices, axis):
+    if not isinstance(arr, types.Array):
+        raise errors.TypingError('The first argument "arr" must be an array')
+    if not isinstance(indices, types.Array):
+        raise errors.TypingError('The second argument "indices" must be an array')
+    if not isinstance(indices.dtype, types.Integer):
+        raise errors.TypingError('The indices array must contain integers')
+
     if is_nonelike(axis):
         def take_along_axis_impl(arr, indices, axis):
             return _take_along_axis_impl(arr.flatten(), indices, 0, (), ())
