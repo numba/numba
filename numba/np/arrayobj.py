@@ -5488,7 +5488,8 @@ def arr_take_along_axis(arr, indices, axis):
     if not isinstance(arr, types.Array):
         raise errors.TypingError('The first argument "arr" must be an array')
     if not isinstance(indices, types.Array):
-        raise errors.TypingError('The second argument "indices" must be an array')
+        raise errors.TypingError(
+            'The second argument "indices" must be an array')
     if not isinstance(indices.dtype, types.Integer):
         raise errors.TypingError('The indices array must contain integers')
 

@@ -4274,7 +4274,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             gen(None)(arr2d, np.array([0.0, 1.0]))
-        self.assertIn('indices array must contain integers', str(raises.exception))
+        self.assertIn(
+            'indices array must contain integers',
+            str(raises.exception)
+        )
 
         @njit
         def not_literal_axis(a, i, axis):
