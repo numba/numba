@@ -4239,6 +4239,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             ai = np.argsort(a, axis=i)
             self.assertPreciseEqual(jfunc(a, ai), jfunc.py_func(a, ai))
 
+    def test_take_along_axis_2(self):
+        # Based on
+        # https://github.com/numpy/numpy/blob/v1.21.0/numpy/lib/tests/test_shape_base.py#L74-L79
+        # This caught a segfault-causing bug in the initial implementation.
+        arr = np.ones((3, 4, 1))
+        ai = np.ones((1, 2, 5), dtype=np.intp)
+
+        @njit
+        def check(a, i):
+            return np.take_along_axis(a, i, axis=1)
+
+        expected = check.py_func(arr, ai)
+        actual = check(arr, ai)
+        self.assertPreciseEqual(expected, actual)
+        self.assertEqual(actual.shape, (3, 2, 5))
+
     def test_take_along_axis_exceptions(self):
         arr2d = np.arange(8).reshape(2, 4)
         # Valid indices when axis=None is passed to take_along_axis:
