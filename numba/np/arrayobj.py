@@ -5482,7 +5482,7 @@ def _take_along_axis_impl(arr, indices, axis, Ni, Nk):
     return out
 
 
-@overload(np.take_along_axis, jit_options={'boundscheck':True})
+@overload(np.take_along_axis)
 def arr_take_along_axis(arr, indices, axis):
     if is_nonelike(axis):
         def take_along_axis_impl(arr, indices, axis):
