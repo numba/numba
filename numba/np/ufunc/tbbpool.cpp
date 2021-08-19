@@ -224,16 +224,14 @@ static void prepare_fork(void)
     {
         if(is_main_thread())
         {
-            if (tbb::finalize(tsh, std::nothrow))
+            if (!tbb::finalize(tsh, std::nothrow))
             {
-                tsh_was_initialized = false;
-                need_reinit_after_fork = true;
-            }
-            else
-            {
+                tbb::task_scheduler_handle::release(tsh);
                 puts("Unable to join threads to shut down before fork(). "
                      "This can break multithreading in child processes.\n");
             }
+            tsh_was_initialized = false;
+            need_reinit_after_fork = true;
         }
         else
         {
@@ -255,6 +253,7 @@ static void reset_after_fork(void)
     {
         tsh = tbb::task_scheduler_handle::get();
         set_main_thread();
+        tsh_was_initialized = true;
         need_reinit_after_fork = false;
     }
 }
