@@ -3,7 +3,6 @@ import sys
 import os
 import re
 import warnings
-import multiprocessing
 
 # YAML needed to use file based Numba config
 try:
@@ -377,16 +376,23 @@ class _EnvReloader(object):
         DISABLE_HSA = _readenv("NUMBA_DISABLE_HSA", int, 0)
 
         # The default number of threads to use.
-        NUMBA_DEFAULT_NUM_THREADS = max(
-            1,
-            len(os.sched_getaffinity(0))
-            if hasattr(os, "sched_getaffinity")
-            else multiprocessing.cpu_count(),
-        )
+        def num_threads_default():
+            try:
+                sched_getaffinity = os.sched_getaffinity
+            except AttributeError:
+                pass
+            else:
+                return max(1, len(sched_getaffinity(0)))
+
+            cpu_count = os.cpu_count()
+            if cpu_count is not None:
+                return max(1, cpu_count)
+
+            return 1
 
         # Numba thread pool size (defaults to number of CPUs on the system).
         _NUMBA_NUM_THREADS = _readenv("NUMBA_NUM_THREADS", int,
-                                      NUMBA_DEFAULT_NUM_THREADS)
+                                      num_threads_default)
         if ('NUMBA_NUM_THREADS' in globals()
                 and globals()['NUMBA_NUM_THREADS'] != _NUMBA_NUM_THREADS):
 
