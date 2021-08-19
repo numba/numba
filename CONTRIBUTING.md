@@ -4,12 +4,45 @@ Even simple documentation improvements are encouraged.
 
 # Asking questions
 
-The development mailing-list is at [Google Groups](
-https://groups.google.com/a/continuum.io/forum/#!forum/numba-users).
-If you prefer, there is a bidirectional [Gmane mirror](
-http://news.gmane.org/gmane.comp.python.numba.user/) allowing NNTP access.
+Numba has a [discourse forum](https://numba.discourse.group/) for longer/more
+involved questions and an IRC channel on
+[gitter.im](https://gitter.im/numba/numba) for quick questions and interactive
+help.
 
-# Contributing patches
+# Ways to help:
+
+There's lots of ways to help improve Numba, some of these require creating code
+changes, see **contributing patches** below.
+
+## Quick things:
+
+* Answer a question asked on [discourse](https://numba.discourse.group/) or
+  [gitter.im](https://gitter.im/numba/numba).
+* Review a page of documentation, check it makes sense, that it's clear and
+  still relevant, that the examples are present, good and working. Fix anything
+  that needs updating in a pull request.
+* Make a file that is not `flake8` compliant meet the standard, a list of all
+  failing files is in the `exclude` section of the [`.flake8` config](https://github.com/numba/numba/blob/master/.flake8),
+  then create a pull request with the change.
+
+## More involved things:
+
+* Review a pull request, you don't need to be a compiler engineer to do an
+  initial review of a pull request. It's incredibly helpful to have pull
+  requests go through a review to just make sure the code change is well formed,
+  documented, efficient and clear. Further, if the code is fixing a bug, making
+  sure that tests are present demonstrating it is fixed! Look out for PRs with
+  the [`needs initial review`](https://github.com/numba/numba/labels/needs%20initial%20review)
+  label.
+* Work on fixing or implementing something in the code base, there are a lot of
+  [`good first issue's`](https://github.com/numba/numba/labels/good%20first%20issue)
+  and [`good second issue's`](https://github.com/numba/numba/labels/good%20first%20issue).
+  For implementing new features/functionality, the extension API is the best
+  thing to use and a guide to using `@overload` in particular is
+  [here](https://numba.pydata.org/numba-doc/dev/extending/overloading-guide.html)
+  and the API documentation is [here](https://numba.pydata.org/numba-doc/latest/extending/high-level.html#implementing-functions).
+
+## Contributing patches
 
 Please fork the Numba repository on Github, and create a new branch
 containing your work.  When you are done, open a pull request.
@@ -17,4 +50,4 @@ containing your work.  When you are done, open a pull request.
 # Further reading
 
 Please read the [contributing guide](
-http://numba.pydata.org/numba-doc/dev/developer/contributing.html).
+https://numba.pydata.org/numba-doc/dev/developer/contributing.html).

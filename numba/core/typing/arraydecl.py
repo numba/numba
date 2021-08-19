@@ -180,7 +180,7 @@ class SetItemBuffer(AbstractTemplate):
             return
 
         idx = out.index
-        res = out.result
+        res = out.result # res is the result type of the access ary[idx]
         if isinstance(res, types.Array):
             # Indexing produces an array
             if isinstance(val, types.Array):
@@ -192,7 +192,7 @@ class SetItemBuffer(AbstractTemplate):
             elif isinstance(val, types.Sequence):
                 if (res.ndim == 1 and
                     self.context.can_convert(val.dtype, res.dtype)):
-                    # Allow assignement of sequence to 1d array
+                    # Allow assignment of sequence to 1d array
                     res = val
                 else:
                     # NOTE: sequence-to-array broadcasting is unsupported
@@ -214,6 +214,10 @@ class SetItemBuffer(AbstractTemplate):
                     return signature(types.none, newary, idx, res)
                 else:
                     return
+            res = val
+        elif isinstance(val, types.Array) and val.ndim == 0 \
+            and self.context.can_convert(val.dtype, res):
+            # val is an array(T, 0d, O), where T is the type of res, O is order
             res = val
         else:
             return
@@ -416,6 +420,8 @@ class ArrayAttribute(AttributeTemplate):
         assert not args
         kwargs = dict(kws)
         kind = kwargs.pop('kind', types.StringLiteral('quicksort'))
+        if not isinstance(kind, types.StringLiteral):
+            raise TypingError('"kind" must be a string literal')
         if kwargs:
             msg = "Unsupported keywords: {!r}"
             raise TypingError(msg.format([k for k in kwargs.keys()]))
@@ -428,10 +434,10 @@ class ArrayAttribute(AttributeTemplate):
 
     @bound_function("array.view")
     def resolve_view(self, ary, args, kws):
-        from .npydecl import _parse_dtype
+        from .npydecl import parse_dtype
         assert not kws
         dtype, = args
-        dtype = _parse_dtype(dtype)
+        dtype = parse_dtype(dtype)
         if dtype is None:
             return
         retty = ary.copy(dtype=dtype)
@@ -439,10 +445,10 @@ class ArrayAttribute(AttributeTemplate):
 
     @bound_function("array.astype")
     def resolve_astype(self, ary, args, kws):
-        from .npydecl import _parse_dtype
+        from .npydecl import parse_dtype
         assert not kws
         dtype, = args
-        dtype = _parse_dtype(dtype)
+        dtype = parse_dtype(dtype)
         if dtype is None:
             return
         if not self.context.can_convert(ary.dtype, dtype):
@@ -553,13 +559,23 @@ class StaticGetItemLiteralRecord(AbstractTemplate):
     def generic(self, args, kws):
         # Resolution of members for records
         record, idx = args
-        if isinstance(record, types.Record) and isinstance(idx, types.StringLiteral):
-            if idx.literal_value not in record.fields:
-                raise KeyError(f"Field '{idx.literal_value}' was not found in record with "
-                               f"fields {tuple(record.fields.keys())}")
-            ret = record.typeof(idx.literal_value)
-            assert ret
-            return signature(ret, *args)
+        if isinstance(record, types.Record):
+            if isinstance(idx, types.StringLiteral):
+                if idx.literal_value not in record.fields:
+                    raise KeyError(f"Field '{idx.literal_value}' was not found in record with "
+                                   f"fields {tuple(record.fields.keys())}")
+                ret = record.typeof(idx.literal_value)
+                assert ret
+                return signature(ret, *args)
+            elif isinstance(idx, types.IntegerLiteral):
+                if idx.literal_value >= len(record.fields):
+                    msg = f"Requested index {idx.literal_value} is out of range"
+                    raise IndexError(msg)
+                field_names = list(record.fields)
+                ret = record.typeof(field_names[idx.literal_value])
+                assert ret
+                return signature(ret, *args)
+
 
 @infer
 class StaticSetItemRecord(AbstractTemplate):
@@ -568,10 +584,35 @@ class StaticSetItemRecord(AbstractTemplate):
     def generic(self, args, kws):
         # Resolution of members for record and structured arrays
         record, idx, value = args
-        if isinstance(record, types.Record) and isinstance(idx, str):
-            expectedty = record.typeof(idx)
+        if isinstance(record, types.Record):
+            if isinstance(idx, str):
+                expectedty = record.typeof(idx)
+                if self.context.can_convert(value, expectedty) is not None:
+                    return signature(types.void, record, types.literal(idx),
+                                     value)
+            elif isinstance(idx, int):
+                if idx >= len(record.fields):
+                    msg = f"Requested index {idx} is out of range"
+                    raise IndexError(msg)
+                str_field = list(record.fields)[idx]
+                expectedty = record.typeof(str_field)
+                if self.context.can_convert(value, expectedty) is not None:
+                    return signature(types.void, record, types.literal(idx),
+                                     value)
+
+
+@infer_global(operator.setitem)
+class StaticSetItemLiteralRecord(AbstractTemplate):
+    def generic(self, args, kws):
+        # Resolution of members for records
+        target, idx, value = args
+        if isinstance(target, types.Record) and isinstance(idx, types.StringLiteral):
+            if idx.literal_value not in target.fields:
+                raise KeyError(f"Field '{idx.literal_value}' was not found in record with "
+                               f"fields {tuple(target.fields.keys())}")
+            expectedty = target.typeof(idx.literal_value)
             if self.context.can_convert(value, expectedty) is not None:
-                return signature(types.void, record, types.literal(idx), value)
+                return signature(types.void, target, idx, value)
 
 
 @infer_getattr
@@ -675,15 +716,15 @@ def sum_expand(self, args, kws):
     elif args_len == 1 and 'dtype' in kws:
         # No axis parameter so the return type of the summation is a scalar
         # of the dtype parameter.
-        from .npydecl import _parse_dtype
+        from .npydecl import parse_dtype
         dtype, = args
-        dtype = _parse_dtype(dtype)
+        dtype = parse_dtype(dtype)
         out = signature(dtype, *args, recvr=self.this)
 
     elif args_len == 2:
         # There is an axis and dtype parameter, either arg or kwarg
-        from .npydecl import _parse_dtype
-        dtype = _parse_dtype(args[1])
+        from .npydecl import parse_dtype
+        dtype = parse_dtype(args[1])
         return_type = dtype
         if self.this.ndim != 1:
             # 1d reduces to a scalar, 2d and above reduce dim by 1
@@ -727,8 +768,9 @@ def generic_index(self, args, kws):
     assert not kws
     return signature(types.intp, recvr=self.this)
 
-def install_array_method(name, generic):
-    my_attr = {"key": "array." + name, "generic": generic}
+def install_array_method(name, generic, prefer_literal=True):
+    my_attr = {"key": "array." + name, "generic": generic,
+               "prefer_literal": prefer_literal}
     temp_class = type("Array_" + name, (AbstractTemplate,), my_attr)
     def array_attribute_attachment(self, ary):
         return types.BoundFunction(temp_class, ary)
@@ -741,7 +783,7 @@ for fname in ["min", "max"]:
 
 # Functions that return a machine-width type, to avoid overflows
 install_array_method("prod", generic_expand)
-install_array_method("sum", sum_expand)
+install_array_method("sum", sum_expand, prefer_literal=True)
 
 # Functions that return a machine-width type, to avoid overflows
 for fname in ["cumsum", "cumprod"]:
@@ -755,11 +797,6 @@ for fName in ["mean"]:
 # get promoted to float64 return
 for fName in ["var", "std"]:
     install_array_method(fName, generic_hetero_always_real)
-
-
-# Functions that return an index (intp)
-install_array_method("argmin", generic_index)
-install_array_method("argmax", generic_index)
 
 
 @infer_global(operator.eq)

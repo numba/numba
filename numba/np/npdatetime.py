@@ -10,8 +10,10 @@ import llvmlite.llvmpy.core as lc
 
 from numba.core import types, cgutils
 from numba.core.imputils import (lower_builtin, lower_constant,
-                                    impl_ret_untracked)
-from numba.np import npdatetime_helpers, numpy_support
+                                 impl_ret_untracked, lower_cast)
+from numba.np import npdatetime_helpers, numpy_support, npyfuncs
+from numba.extending import overload_method
+from numba.core.config import IS_32BITS
 
 # datetime64 and timedelta64 use the same internal representation
 DATETIME64 = TIMEDELTA64 = Type.int(64)
@@ -710,65 +712,89 @@ for op, func in [(operator.eq, datetime_eq_datetime_impl),
 ########################################################################
 # datetime/timedelta fmax/fmin maximum/minimum support
 
-def datetime_max_impl(context, builder, sig, args):
-    # just a regular int64 max avoiding nats.
-    # note this could be optimizing relying on the actual value of NAT
-    # but as NumPy doesn't rely on this, this seems more resilient
-    in1, in2 = args
-    in1_not_nat = is_not_nat(builder, in1)
-    in2_not_nat = is_not_nat(builder, in2)
-    in1_ge_in2 = builder.icmp(lc.ICMP_SGE, in1, in2)
-    res = builder.select(in1_ge_in2, in1, in2)
-    res = builder.select(in1_not_nat, res, in2)
-    res = builder.select(in2_not_nat, res, in1)
+def _gen_datetime_max_impl(NAT_DOMINATES):
+    def datetime_max_impl(context, builder, sig, args):
+        # note this could be optimizing relying on the actual value of NAT
+        # but as NumPy doesn't rely on this, this seems more resilient
+        in1, in2 = args
+        in1_not_nat = is_not_nat(builder, in1)
+        in2_not_nat = is_not_nat(builder, in2)
+        in1_ge_in2 = builder.icmp(lc.ICMP_SGE, in1, in2)
+        res = builder.select(in1_ge_in2, in1, in2)
+        if NAT_DOMINATES and numpy_support.numpy_version >= (1, 18):
+            # NaT now dominates, like NaN
+            in1, in2 = in2, in1
+        res = builder.select(in1_not_nat, res, in2)
+        res = builder.select(in2_not_nat, res, in1)
 
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
+    return datetime_max_impl
 
+datetime_maximum_impl = _gen_datetime_max_impl(True)
+datetime_fmax_impl = _gen_datetime_max_impl(False)
 
-def datetime_min_impl(context, builder, sig, args):
-    # just a regular int64 min avoiding nats.
-    # note this could be optimizing relying on the actual value of NAT
-    # but as NumPy doesn't rely on this, this seems more resilient
-    in1, in2 = args
-    in1_not_nat = is_not_nat(builder, in1)
-    in2_not_nat = is_not_nat(builder, in2)
-    in1_le_in2 = builder.icmp(lc.ICMP_SLE, in1, in2)
-    res = builder.select(in1_le_in2, in1, in2)
-    res = builder.select(in1_not_nat, res, in2)
-    res = builder.select(in2_not_nat, res, in1)
+def _gen_datetime_min_impl(NAT_DOMINATES):
+    def datetime_min_impl(context, builder, sig, args):
+        # note this could be optimizing relying on the actual value of NAT
+        # but as NumPy doesn't rely on this, this seems more resilient
+        in1, in2 = args
+        in1_not_nat = is_not_nat(builder, in1)
+        in2_not_nat = is_not_nat(builder, in2)
+        in1_le_in2 = builder.icmp(lc.ICMP_SLE, in1, in2)
+        res = builder.select(in1_le_in2, in1, in2)
+        if NAT_DOMINATES and numpy_support.numpy_version >= (1, 18):
+            # NaT now dominates, like NaN
+            in1, in2 = in2, in1
+        res = builder.select(in1_not_nat, res, in2)
+        res = builder.select(in2_not_nat, res, in1)
 
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
+    return datetime_min_impl
 
+datetime_minimum_impl = _gen_datetime_min_impl(True)
+datetime_fmin_impl = _gen_datetime_min_impl(False)
 
-def timedelta_max_impl(context, builder, sig, args):
-    # just a regular int64 max avoiding nats.
-    # note this could be optimizing relying on the actual value of NAT
-    # but as NumPy doesn't rely on this, this seems more resilient
-    in1, in2 = args
-    in1_not_nat = is_not_nat(builder, in1)
-    in2_not_nat = is_not_nat(builder, in2)
-    in1_ge_in2 = builder.icmp(lc.ICMP_SGE, in1, in2)
-    res = builder.select(in1_ge_in2, in1, in2)
-    res = builder.select(in1_not_nat, res, in2)
-    res = builder.select(in2_not_nat, res, in1)
+def _gen_timedelta_max_impl(NAT_DOMINATES):
+    def timedelta_max_impl(context, builder, sig, args):
+        # note this could be optimizing relying on the actual value of NAT
+        # but as NumPy doesn't rely on this, this seems more resilient
+        in1, in2 = args
+        in1_not_nat = is_not_nat(builder, in1)
+        in2_not_nat = is_not_nat(builder, in2)
+        in1_ge_in2 = builder.icmp(lc.ICMP_SGE, in1, in2)
+        res = builder.select(in1_ge_in2, in1, in2)
+        if NAT_DOMINATES and numpy_support.numpy_version >= (1, 18):
+            # NaT now dominates, like NaN
+            in1, in2 = in2, in1
+        res = builder.select(in1_not_nat, res, in2)
+        res = builder.select(in2_not_nat, res, in1)
 
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
+    return timedelta_max_impl
 
+timedelta_maximum_impl = _gen_timedelta_max_impl(True)
+timedelta_fmax_impl = _gen_timedelta_max_impl(False)
 
-def timedelta_min_impl(context, builder, sig, args):
-    # just a regular int64 min avoiding nats.
-    # note this could be optimizing relying on the actual value of NAT
-    # but as NumPy doesn't rely on this, this seems more resilient
-    in1, in2 = args
-    in1_not_nat = is_not_nat(builder, in1)
-    in2_not_nat = is_not_nat(builder, in2)
-    in1_le_in2 = builder.icmp(lc.ICMP_SLE, in1, in2)
-    res = builder.select(in1_le_in2, in1, in2)
-    res = builder.select(in1_not_nat, res, in2)
-    res = builder.select(in2_not_nat, res, in1)
+def _gen_timedelta_min_impl(NAT_DOMINATES):
+    def timedelta_min_impl(context, builder, sig, args):
+        # note this could be optimizing relying on the actual value of NAT
+        # but as NumPy doesn't rely on this, this seems more resilient
+        in1, in2 = args
+        in1_not_nat = is_not_nat(builder, in1)
+        in2_not_nat = is_not_nat(builder, in2)
+        in1_le_in2 = builder.icmp(lc.ICMP_SLE, in1, in2)
+        res = builder.select(in1_le_in2, in1, in2)
+        if NAT_DOMINATES and numpy_support.numpy_version >= (1, 18):
+            # NaT now dominates, like NaN
+            in1, in2 = in2, in1
+        res = builder.select(in1_not_nat, res, in2)
+        res = builder.select(in2_not_nat, res, in1)
 
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
+    return timedelta_min_impl
 
+timedelta_minimum_impl = _gen_timedelta_min_impl(True)
+timedelta_fmin_impl = _gen_timedelta_min_impl(False)
 
 def _cast_to_timedelta(context, builder, val):
     temp = builder.alloca(TIMEDELTA64)
@@ -782,3 +808,41 @@ def _cast_to_timedelta(context, builder, val):
         with els:
             builder.store(builder.fptosi(val, TIMEDELTA64), temp)
     return builder.load(temp)
+
+
+@lower_builtin(np.isnat, types.NPDatetime)
+@lower_builtin(np.isnat, types.NPTimedelta)
+def _np_isnat_impl(context, builder, sig, args):
+    return npyfuncs.np_datetime_isnat_impl(context, builder, sig, args)
+
+
+@lower_cast(types.NPDatetime, types.Integer)
+@lower_cast(types.NPTimedelta, types.Integer)
+def _cast_npdatetime_int64(context, builder, fromty, toty, val):
+    if toty.bitwidth != 64: # all date time types are 64 bit
+        msg = f"Cannot cast {fromty} to {toty} as {toty} is not 64 bits wide."
+        raise ValueError(msg)
+    return val
+
+
+@overload_method(types.NPTimedelta, '__hash__')
+@overload_method(types.NPDatetime, '__hash__')
+def ol_hash_npdatetime(x):
+    if IS_32BITS:
+        def impl(x):
+            x = np.int64(x)
+            if x < 2**31 - 1:  # x < LONG_MAX
+                y = np.int32(x)
+            else:
+                hi = (np.int64(x) & 0xffffffff00000000) >> 32
+                lo = (np.int64(x) & 0x00000000ffffffff)
+                y = np.int32(lo + (1000003) * hi)
+            if y == -1:
+                y = np.int32(-2)
+            return y
+    else:
+        def impl(x):
+            if np.int64(x) == -1:
+                return np.int64(-2)
+            return np.int64(x)
+    return impl

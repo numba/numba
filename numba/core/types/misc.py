@@ -1,9 +1,8 @@
-from numba.core.types.abstract import Callable, Literal, Type
+from numba.core.types.abstract import Callable, Literal, Type, Hashable
 from numba.core.types.common import (Dummy, IterableType, Opaque,
                                      SimpleIteratorType)
 from numba.core.typeconv import Conversion
 from numba.core.errors import TypingError, LiteralTypingError
-
 
 
 class PyObject(Dummy):
@@ -39,7 +38,10 @@ class RawPointer(Opaque):
 
 
 class StringLiteral(Literal, Dummy):
-    pass
+
+    def can_convert_to(self, typingctx, other):
+        if isinstance(other, UnicodeType):
+            return Conversion.safe
 
 
 Literal.ctor_map[str] = StringLiteral
@@ -84,12 +86,16 @@ class Omitted(Opaque):
     """
 
     def __init__(self, value):
-        self.value = value
+        self._value = value
         super(Omitted, self).__init__("omitted(default=%r)" % (value,))
 
     @property
     def key(self):
-        return type(self.value), id(self.value)
+        return type(self._value), id(self._value)
+
+    @property
+    def value(self):
+        return self._value
 
 
 class VarArg(Type):
@@ -118,17 +124,6 @@ class Module(Dummy):
         return self.pymod
 
 
-class Macro(Type):
-    def __init__(self, template):
-        self.template = template
-        cls = type(self)
-        super(Macro, self).__init__("%s(%s)" % (cls.__name__, template))
-
-    @property
-    def key(self):
-        return self.template
-
-
 class MemInfoPointer(Type):
     """
     Pointer to a Numba "meminfo" (i.e. the information for a managed
@@ -149,17 +144,27 @@ class MemInfoPointer(Type):
 class CPointer(Type):
     """
     Type class for pointers to other types.
+
+    Attributes
+    ----------
+        dtype : The pointee type
+        addrspace : int
+            The address space pointee belongs to.
     """
     mutable = True
 
-    def __init__(self, dtype):
+    def __init__(self, dtype, addrspace=None):
         self.dtype = dtype
-        name = "%s*" % dtype
+        self.addrspace = addrspace
+        if addrspace is not None:
+            name = "%s_%s*" % (dtype, addrspace)
+        else:
+            name = "%s*" % dtype
         super(CPointer, self).__init__(name)
 
     @property
     def key(self):
-        return self.dtype
+        return self.dtype, self.addrspace
 
 
 class EphemeralPointer(CPointer):
@@ -332,6 +337,11 @@ class SliceLiteral(Literal, SliceType):
         members = 2 if value.step is None else 3
         SliceType.__init__(self, name=name, members=members)
 
+    @property
+    def key(self):
+        sl = self.literal_value
+        return sl.start, sl.stop, sl.step
+
 
 Literal.ctor_map[slice] = SliceLiteral
 
@@ -364,12 +374,16 @@ class ClassInstanceType(Type):
         return self.class_type.class_name
 
     @property
-    def jitprops(self):
-        return self.class_type.jitprops
+    def jit_props(self):
+        return self.class_type.jit_props
 
     @property
-    def jitmethods(self):
-        return self.class_type.jitmethods
+    def jit_static_methods(self):
+        return self.class_type.jit_static_methods
+
+    @property
+    def jit_methods(self):
+        return self.class_type.jit_methods
 
     @property
     def struct(self):
@@ -378,6 +392,10 @@ class ClassInstanceType(Type):
     @property
     def methods(self):
         return self.class_type.methods
+
+    @property
+    def static_methods(self):
+        return self.class_type.static_methods
 
 
 class ClassType(Callable, Opaque):
@@ -389,13 +407,14 @@ class ClassType(Callable, Opaque):
     name_prefix = "jitclass"
     instance_type_class = ClassInstanceType
 
-    def __init__(self, class_def, ctor_template_cls, struct, jitmethods,
-                 jitprops):
+    def __init__(self, class_def, ctor_template_cls, struct, jit_methods,
+                 jit_props, jit_static_methods):
         self.class_name = class_def.__name__
         self.class_doc = class_def.__doc__
         self._ctor_template_class = ctor_template_cls
-        self.jitmethods = jitmethods
-        self.jitprops = jitprops
+        self.jit_methods = jit_methods
+        self.jit_props = jit_props
+        self.jit_static_methods = jit_static_methods
         self.struct = struct
         fielddesc = ','.join("{0}:{1}".format(k, v) for k, v in struct.items())
         name = "{0}.{1}#{2:x}<{3}>".format(self.name_prefix, self.class_name,
@@ -410,8 +429,11 @@ class ClassType(Callable, Opaque):
 
     @property
     def methods(self):
-        methods = dict((k, v.py_func) for k, v in self.jitmethods.items())
-        return methods
+        return {k: v.py_func for k, v in self.jit_methods.items()}
+
+    @property
+    def static_methods(self):
+        return {k: v.py_func for k, v in self.jit_static_methods.items()}
 
     @property
     def instance_type(self):
@@ -431,6 +453,7 @@ class DeferredType(Type):
     before it is materialized (used in the compiler).  Once defined, it
     behaves exactly as the type it is defining.
     """
+
     def __init__(self):
         self._define = None
         name = "{0}#{1}".format(type(self).__name__, id(self))
@@ -459,6 +482,7 @@ class ClassDataType(Type):
     ClassInstanceType contains a pointer to a ClassDataType which represents
     a C structure that contains all the data fields of the class instance.
     """
+
     def __init__(self, classtyp):
         self.class_type = classtyp
         name = "data.{0}".format(self.class_type.name)
@@ -469,6 +493,7 @@ class ContextManager(Callable, Phantom):
     """
     An overly-simple ContextManager type that cannot be materialized.
     """
+
     def __init__(self, cm):
         self.cm = cm
         super(ContextManager, self).__init__("ContextManager({})".format(cm))
@@ -491,7 +516,7 @@ class ContextManager(Callable, Phantom):
         return typing.signature(self, *posargs)
 
 
-class UnicodeType(IterableType):
+class UnicodeType(IterableType, Hashable):
 
     def __init__(self, name):
         super(UnicodeType, self).__init__(name)

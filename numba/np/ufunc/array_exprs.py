@@ -2,6 +2,7 @@ import ast
 from collections import defaultdict, OrderedDict
 import contextlib
 import sys
+from types import SimpleNamespace
 
 import numpy as np
 import operator
@@ -76,7 +77,10 @@ class RewriteArrayExprs(rewrites.Rewrite):
         if ((expr_op in ('unary', 'binop')) and (
                 expr.fn in npydecl.supported_array_operators)):
             # It is an array operator that maps to a ufunc.
-            array_assigns[target_name] = instr
+            # check that all args have internal types
+            if all(self.typemap[var.name].is_internal
+                   for var in expr.list_vars()):
+                array_assigns[target_name] = instr
 
         elif ((expr_op == 'call') and (expr.func.name in self.typemap)):
             # It could be a match for a known ufunc call.
@@ -157,7 +161,7 @@ class RewriteArrayExprs(rewrites.Rewrite):
             self.array_assigns[instr.target.name] = new_instr
             for operand in self._get_operands(expr):
                 operand_name = operand.name
-                if operand_name in self.array_assigns:
+                if operand.is_temp and operand_name in self.array_assigns:
                     child_assign = self.array_assigns[operand_name]
                     child_expr = child_assign.value
                     child_operands = child_expr.list_vars()
@@ -308,9 +312,11 @@ def _legalize_parameter_names(var_list):
     var_map = OrderedDict()
     for var in var_list:
         old_name = var.name
-        new_name = old_name.replace("$", "_").replace(".", "_")
+        new_name = var.scope.redefine(old_name, loc=var.loc).name
+        new_name = new_name.replace("$", "_").replace(".", "_")
         # Caller should ensure the names are unique
-        assert new_name not in var_map
+        if new_name in var_map:
+            raise AssertionError(f"{new_name!r} not unique")
         var_map[new_name] = var, old_name
         var.name = new_name
     param_names = list(var_map)
@@ -337,17 +343,9 @@ def _lower_array_expr(lowerer, expr):
     expr_args = [var.name for var in expr_var_unique]
 
     # 1. Create an AST tree from the array expression.
-
     with _legalize_parameter_names(expr_var_unique) as expr_params:
-
-        if hasattr(ast, "arg"):
-            # Should be Python 3.x
-            ast_args = [ast.arg(param_name, None)
-                        for param_name in expr_params]
-        else:
-            # Should be Python 2.x
-            ast_args = [ast.Name(param_name, ast.Param())
-                        for param_name in expr_params]
+        ast_args = [ast.arg(param_name, None)
+                    for param_name in expr_params]
         # Parse a stub function to ensure the AST is populated with
         # reasonable defaults for the Python version.
         ast_module = ast.parse('def {0}(): return'.format(expr_name),
@@ -378,10 +376,11 @@ def _lower_array_expr(lowerer, expr):
             inner_sig_args.append(argty)
     inner_sig = outer_sig.return_type.dtype(*inner_sig_args)
 
+    flags = utils.ConfigStack().top_or_none()
+    flags = compiler.Flags() if flags is None else flags.copy() # make sure it's a clone or a fresh instance
     # Follow the Numpy error model.  Note this also allows e.g. vectorizing
     # division (issue #1223).
-    flags = compiler.Flags()
-    flags.set('error_model', 'numpy')
+    flags.error_model = 'numpy'
     cres = context.compile_subroutine(builder, impl, inner_sig, flags=flags,
                                       caching=False)
 
@@ -398,6 +397,10 @@ def _lower_array_expr(lowerer, expr):
             return self.cast(result, inner_sig.return_type,
                              self.outer_sig.return_type)
 
+    # create a fake ufunc object which is enough to trick numpy_ufunc_kernel
+    ufunc = SimpleNamespace(nin=len(expr_args), nout=1, __name__=expr_name)
+    ufunc.nargs = ufunc.nin + ufunc.nout
+
     args = [lowerer.loadvar(name) for name in expr_args]
     return npyimpl.numpy_ufunc_kernel(
-        context, builder, outer_sig, args, ExprKernel, explicit_output=False)
+        context, builder, outer_sig, args, ufunc, ExprKernel)

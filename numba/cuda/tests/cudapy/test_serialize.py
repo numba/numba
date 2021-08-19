@@ -2,13 +2,13 @@ import pickle
 import numpy as np
 from numba import cuda, vectorize
 from numba.core import types
-from numba.cuda.testing import skip_on_cudasim, SerialMixin
+from numba.cuda.testing import skip_on_cudasim, CUDATestCase
 import unittest
 from numba.np import numpy_support
 
 
 @skip_on_cudasim('pickling not supported in CUDASIM')
-class TestPickle(SerialMixin, unittest.TestCase):
+class TestPickle(CUDATestCase):
 
     def check_call(self, callee):
         arr = np.array([100])
@@ -36,7 +36,7 @@ class TestPickle(SerialMixin, unittest.TestCase):
         self.assertEqual(foo3.griddim, (5, 1, 1))
         self.assertEqual(foo3.blockdim, (8, 1, 1))
 
-    def test_pickling_jit(self):
+    def test_pickling_jit_typing(self):
         @cuda.jit(device=True)
         def inner(a):
             return a + 1
@@ -47,7 +47,7 @@ class TestPickle(SerialMixin, unittest.TestCase):
 
         self.check_call(foo)
 
-    def test_pickling_autojit(self):
+    def test_pickling_jit(self):
 
         @cuda.jit(device=True)
         def inner(a):

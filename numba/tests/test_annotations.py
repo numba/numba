@@ -60,8 +60,8 @@ class TestAnnotation(unittest.TestCase):
 
         # compile into an isolated context
         flags = Flags()
-        flags.set('enable_pyobject')
-        flags.set('enable_looplift')
+        flags.enable_pyobject = True
+        flags.enable_looplift = True
         cres = compile_isolated(foo, [types.intp], flags=flags)
 
         ta = cres.type_annotation

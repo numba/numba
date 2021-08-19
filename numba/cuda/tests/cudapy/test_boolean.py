@@ -1,5 +1,5 @@
 import numpy as np
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 from numba import cuda
 
 
@@ -10,7 +10,7 @@ def boolean_func(A, vertial):
         A[0] = 321
 
 
-class TestCudaBoolean(SerialMixin, unittest.TestCase):
+class TestCudaBoolean(CUDATestCase):
     def test_boolean(self):
         func = cuda.jit('void(float64[:], bool_)')(boolean_func)
         A = np.array([0], dtype='float64')

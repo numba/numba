@@ -2,12 +2,14 @@ import os
 import uuid
 import weakref
 import collections
+import functools
 
 import numba
 from numba.core import types, errors, utils, config
 
 # Exported symbols
 from numba.core.typing.typeof import typeof_impl  # noqa: F401
+from numba.core.typing.asnumbatype import as_numba_type  # noqa: F401
 from numba.core.typing.templates import infer, infer_getattr  # noqa: F401
 from numba.core.imputils import (  # noqa: F401
     lower_builtin, lower_getattr, lower_getattr_generic,  # noqa: F401
@@ -16,6 +18,7 @@ from numba.core.datamodel import models   # noqa: F401
 from numba.core.datamodel import register_default as register_model  # noqa: F401, E501
 from numba.core.pythonapi import box, unbox, reflect, NativeValue  # noqa: F401
 from numba._helperlib import _import_cython_function  # noqa: F401
+from numba.core.serialize import ReduceMixin
 
 
 def type_callable(func):
@@ -54,7 +57,8 @@ def type_callable(func):
 _overload_default_jit_options = {'no_cpython_wrapper': True}
 
 
-def overload(func, jit_options={}, strict=True, inline='never'):
+def overload(func, jit_options={}, strict=True, inline='never',
+             prefer_literal=False, **kwargs):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode.
@@ -100,6 +104,16 @@ def overload(func, jit_options={}, strict=True, inline='never'):
       holds the information from the callee. The function should return Truthy
       to determine whether to inline, this essentially permitting custom
       inlining rules (typical use might be cost models).
+
+    The *prefer_literal* option allows users to control if literal types should
+    be tried first or last. The default (`False`) is to use non-literal types.
+    Implementations that can specialize based on literal values should set the
+    option to `True`. Note, this option maybe expanded in the near future to
+    allow for more control (e.g. disabling non-literal types).
+
+    **kwargs prescribes additional arguments passed through to the overload
+    template. The only accepted key at present is 'target' which is a string
+    corresponding to the target that this overload should be bound against.
     """
     from numba.core.typing.templates import make_overload_template, infer_global
 
@@ -107,9 +121,12 @@ def overload(func, jit_options={}, strict=True, inline='never'):
     opts = _overload_default_jit_options.copy()
     opts.update(jit_options)  # let user options override
 
+    # TODO: abort now if the kwarg 'target' relates to an unregistered target,
+    # this requires sorting out the circular imports first.
+
     def decorate(overload_func):
         template = make_overload_template(func, overload_func, opts, strict,
-                                          inline)
+                                          inline, prefer_literal, **kwargs)
         infer(template)
         if callable(func):
             infer_global(func, types.Function(template))
@@ -138,6 +155,7 @@ def register_jitable(*args, **kwargs):
     def wrap(fn):
         # It is just a wrapper for @overload
         inline = kwargs.pop('inline', 'never')
+
         @overload(fn, jit_options=kwargs, inline=inline, strict=False)
         def ov_wrap(*args, **kwargs):
             return fn
@@ -179,10 +197,30 @@ def overload_attribute(typ, attr, **kwargs):
     return decorate
 
 
+def _overload_method_common(typ, attr, **kwargs):
+    """Common code for overload_method and overload_classmethod
+    """
+    from numba.core.typing.templates import make_overload_method_template
+
+    def decorate(overload_func):
+        copied_kwargs = kwargs.copy() # avoid mutating parent dict
+        template = make_overload_method_template(
+            typ, attr, overload_func,
+            inline=copied_kwargs.pop('inline', 'never'),
+            prefer_literal=copied_kwargs.pop('prefer_literal', False),
+            **copied_kwargs,
+        )
+        infer_getattr(template)
+        overload(overload_func, **kwargs)(overload_func)
+        return overload_func
+
+    return decorate
+
+
 def overload_method(typ, attr, **kwargs):
     """
     A decorator marking the decorated function as typing and implementing
-    attribute *attr* for the given Numba type in nopython mode.
+    method *attr* for the given Numba type in nopython mode.
 
     *kwargs* are passed to the underlying `@overload` call.
 
@@ -199,18 +237,34 @@ def overload_method(typ, attr, **kwargs):
                     return res
                 return take_impl
     """
-    from numba.core.typing.templates import make_overload_method_template
+    return _overload_method_common(typ, attr, **kwargs)
 
-    def decorate(overload_func):
-        template = make_overload_method_template(
-            typ, attr, overload_func,
-            inline=kwargs.get('inline', 'never'),
-        )
-        infer_getattr(template)
-        overload(overload_func, **kwargs)(overload_func)
-        return overload_func
 
-    return decorate
+def overload_classmethod(typ, attr, **kwargs):
+    """
+    A decorator marking the decorated function as typing and implementing
+    classmethod *attr* for the given Numba type in nopython mode.
+
+
+    Similar to ``overload_method``.
+
+
+    Here is an example implementing a classmethod on the Array type to call
+    ``np.arange()``::
+
+        @overload_classmethod(types.Array, "make")
+        def ov_make(cls, nitems):
+            def impl(cls, nitems):
+                return np.arange(nitems)
+            return impl
+
+    The above code will allow the following to work in jit-compiled code::
+
+        @njit
+        def foo(n):
+            return types.Array.make(n)
+    """
+    return _overload_method_common(types.TypeRef(typ), attr, **kwargs)
 
 
 def make_attribute_wrapper(typeclass, struct_attr, python_attr):
@@ -255,7 +309,7 @@ def make_attribute_wrapper(typeclass, struct_attr, python_attr):
         return impl_ret_borrowed(context, builder, attrty, attrval)
 
 
-class _Intrinsic(object):
+class _Intrinsic(ReduceMixin):
     """
     Dummy callable for intrinsic
     """
@@ -266,9 +320,11 @@ class _Intrinsic(object):
 
     __uuid = None
 
-    def __init__(self, name, defn):
+    def __init__(self, name, defn, **kwargs):
+        self._ctor_kwargs = kwargs
         self._name = name
         self._defn = defn
+        functools.update_wrapper(self, defn)
 
     @property
     def _uuid(self):
@@ -291,10 +347,12 @@ class _Intrinsic(object):
         self._recent.append(self)
 
     def _register(self):
+        # _ctor_kwargs
         from numba.core.typing.templates import (make_intrinsic_template,
                                                  infer_global)
 
-        template = make_intrinsic_template(self, self._defn, self._name)
+        template = make_intrinsic_template(self, self._defn, self._name,
+                                           self._ctor_kwargs)
         infer(template)
         infer_global(self, types.Function(template))
 
@@ -308,26 +366,25 @@ class _Intrinsic(object):
     def __repr__(self):
         return "<intrinsic {0}>".format(self._name)
 
-    def __reduce__(self):
-        from numba.core import serialize
+    def __deepcopy__(self, memo):
+        # NOTE: Intrinsic are immutable and we don't need to copy.
+        #       This is triggered from deepcopy of statements.
+        return self
 
-        def reduce_func(fn):
-            gs = serialize._get_function_globals_for_reduction(fn)
-            return serialize._reduce_function(fn, gs)
-
-        return (serialize._rebuild_reduction,
-                (self.__class__, str(self._uuid), self._name,
-                 reduce_func(self._defn)))
+    def _reduce_states(self):
+        """
+        NOTE: part of ReduceMixin protocol
+        """
+        return dict(uuid=self._uuid, name=self._name, defn=self._defn)
 
     @classmethod
-    def _rebuild(cls, uuid, name, defn_reduced):
-        from numba.core import serialize
-
+    def _rebuild(cls, uuid, name, defn):
+        """
+        NOTE: part of ReduceMixin protocol
+        """
         try:
             return cls._memo[uuid]
         except KeyError:
-            defn = serialize._rebuild_function(*defn_reduced)
-
             llc = cls(name=name, defn=defn)
             llc._register()
             llc._set_uuid(uuid)

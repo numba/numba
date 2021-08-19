@@ -1,58 +1,16 @@
-import weakref
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 import operator
 from functools import partial
 
 from llvmlite.llvmpy.core import Constant, Type, Builder
 
-from numba import _dynfunc
 from numba.core import (typing, utils, types, ir, debuginfo, funcdesc,
                         generators, config, ir_utils, cgutils, removerefctpass)
 from numba.core.errors import (LoweringError, new_error_context, TypingError,
-                               LiteralTypingError)
+                               LiteralTypingError, UnsupportedError)
 from numba.core.funcdesc import default_mangler
-
-
-class Environment(_dynfunc.Environment):
-    """Stores globals and constant pyobjects for runtime.
-
-    It is often needed to convert b/w nopython objects and pyobjects.
-    """
-    __slots__ = ('env_name', '__weakref__')
-    # A weak-value dictionary to store live environment with env_name as the
-    # key.
-    _memo = weakref.WeakValueDictionary()
-
-    @classmethod
-    def from_fndesc(cls, fndesc):
-        try:
-            # Avoid creating new Env
-            return cls._memo[fndesc.env_name]
-        except KeyError:
-            inst = cls(fndesc.lookup_globals())
-            inst.env_name = fndesc.env_name
-            cls._memo[fndesc.env_name] = inst
-            return inst
-
-    def __reduce__(self):
-        return _rebuild_env, (
-            self.globals['__name__'],
-            self.consts,
-            self.env_name,
-        )
-
-    def __del__(self):
-        return
-
-
-def _rebuild_env(modname, consts, env_name):
-    if env_name in Environment._memo:
-        return Environment._memo[env_name]
-    from numba.core import serialize
-    mod = serialize._rebuild_module(modname)
-    env = Environment(mod.__dict__)
-    env.consts[:] = consts
-    return env
+from numba.core.environment import Environment
+from numba.core.analysis import compute_use_defs
 
 
 _VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
@@ -66,11 +24,12 @@ class BaseLower(object):
     def __init__(self, context, library, fndesc, func_ir, metadata=None):
         self.library = library
         self.fndesc = fndesc
-        self.blocks = utils.SortedMap(utils.iteritems(func_ir.blocks))
+        self.blocks = utils.SortedMap(func_ir.blocks.items())
         self.func_ir = func_ir
         self.call_conv = context.call_conv
         self.generator_info = func_ir.generator_info
         self.metadata = metadata
+        self.flags = utils.ConfigStack.top_or_none()
 
         # Initialize LLVM
         self.module = self.library.create_ir_module(self.fndesc.unique_name)
@@ -81,6 +40,7 @@ class BaseLower(object):
 
         # Internal states
         self.blkmap = {}
+        self.pending_phis = {}
         self.varmap = {}
         self.firstblk = min(self.blocks.keys())
         self.loc = -1
@@ -129,7 +89,7 @@ class BaseLower(object):
         self.pyapi = None
         self.debuginfo.mark_subprogram(function=self.builder.function,
                                        name=self.fndesc.qualname,
-                                       loc=self.func_ir.loc)
+                                       line=self.func_ir.loc.line)
 
     def post_lower(self):
         """
@@ -192,9 +152,10 @@ class BaseLower(object):
                     from pygments import highlight
                     from pygments.lexers import LlvmLexer as lexer
                     from pygments.formatters import Terminal256Formatter
+                    from numba.misc.dump_style import by_colorscheme
                     print(highlight(self.module.__repr__(), lexer(),
                                     Terminal256Formatter(
-                                        style='solarized-light')))
+                                        style=by_colorscheme())))
                 except ImportError:
                     msg = "Please install pygments to see highlighted dumps"
                     raise ValueError(msg)
@@ -230,9 +191,12 @@ class BaseLower(object):
         self.extract_function_arguments()
         entry_block_tail = self.lower_function_body()
 
-        # Close tail of entry block
-        self.builder.position_at_end(entry_block_tail)
-        self.builder.branch(self.blkmap[self.firstblk])
+        # Close tail of entry block, do not emit debug metadata else the
+        # unconditional jump gets associated with the metadata from the function
+        # body end.
+        with debuginfo.suspend_emission(self.builder):
+            self.builder.position_at_end(entry_block_tail)
+            self.builder.branch(self.blkmap[self.firstblk])
 
     def lower_function_body(self):
         """
@@ -249,12 +213,12 @@ class BaseLower(object):
 
         self.debug_print("# function begin: {0}".format(
             self.fndesc.unique_name))
+
         # Lower all blocks
         for offset, block in sorted(self.blocks.items()):
             bb = self.blkmap[offset]
             self.builder.position_at_end(bb)
             self.lower_block(block)
-
         self.post_lower()
         return entry_block_tail
 
@@ -284,6 +248,15 @@ class BaseLower(object):
                                             self.env, self.call_helper,
                                             release_gil=release_gil)
 
+    def create_cfunc_wrapper(self):
+        """
+        Create C wrapper around this function.
+        """
+        if self.genlower:
+            raise UnsupportedError('generator as a first-class function type')
+        self.context.create_cfunc_wrapper(self.library, self.fndesc,
+                                          self.env, self.call_helper)
+
     def setup_function(self, fndesc):
         # Setup function
         self.function = self.context.declare_function(self.module, fndesc)
@@ -299,17 +272,81 @@ class BaseLower(object):
             self.context.debug_print(self.builder, "DEBUGJIT: {0}".format(msg))
 
 
-# Dictionary mapping instruction class to its lowering function.
-lower_extensions = {}
-
-
 class Lower(BaseLower):
     GeneratorLower = generators.GeneratorLower
+
+    def init(self):
+        super().init()
+        # find all singly assigned variables
+        self._find_singly_assigned_variable()
+
+    @property
+    def _disable_sroa_like_opt(self):
+        """Flags that the SROA like optimisation that Numba performs (which
+        prevent alloca and subsequent load/store for locals) should be disabled.
+        Currently, this is conditional solely on the presence of a request for
+        the emission of debug information."""
+        return False if self.flags is None else self.flags.debuginfo
+
+    def _find_singly_assigned_variable(self):
+        func_ir = self.func_ir
+        blocks = func_ir.blocks
+
+        sav = set()
+
+        if not self.func_ir.func_id.is_generator:
+            use_defs = compute_use_defs(blocks)
+
+            # Compute where variables are defined
+            var_assign_map = defaultdict(set)
+            for blk, vl in use_defs.defmap.items():
+                for var in vl:
+                    var_assign_map[var].add(blk)
+
+            # Compute where variables are used
+            var_use_map = defaultdict(set)
+            for blk, vl in use_defs.usemap.items():
+                for var in vl:
+                    var_use_map[var].add(blk)
+
+            # Keep only variables that are defined locally and used locally
+            for var in var_assign_map:
+                if len(var_assign_map[var]) == 1:
+                    # Usemap does not keep locally defined variables.
+                    if len(var_use_map[var]) == 0:
+                        # Ensure that the variable is not defined multiple times
+                        # the the block
+                        [defblk] = var_assign_map[var]
+                        assign_stmts = self.blocks[defblk].find_insts(ir.Assign)
+                        assigns = [stmt for stmt in assign_stmts
+                                   if stmt.target.name == var]
+                        if len(assigns) == 1:
+                            sav.add(var)
+
+        self._singly_assigned_vars = sav
+        self._blk_local_varmap = {}
 
     def pre_block(self, block):
         from numba.core.unsafe import eh
 
         super(Lower, self).pre_block(block)
+        self._cur_ir_block = block
+
+        if block == self.firstblk:
+            # create slots for all the vars, irrespective of whether they are
+            # initialized, SSA will pick this up and warn users about using
+            # uninitialized variables. Slots are added as alloca in the first
+            # block
+            bb = self.blkmap[self.firstblk]
+            self.builder.position_at_end(bb)
+            all_names = set()
+            for block in self.blocks.values():
+                for x in block.find_insts(ir.Del):
+                    if x.value not in all_names:
+                        all_names.add(x.value)
+            for name in all_names:
+                fetype = self.typeof(name)
+                self._alloca_var(name, fetype)
 
         # Detect if we are in a TRY block by looking for a call to
         # `eh.exception_check`.
@@ -336,7 +373,7 @@ class Lower(BaseLower):
 
     def lower_inst(self, inst):
         # Set debug location for all subsequent LL instructions
-        self.debuginfo.mark_location(self.builder, self.loc)
+        self.debuginfo.mark_location(self.builder, self.loc.line)
         self.debug_print(str(inst))
         if isinstance(inst, ir.Assign):
             ty = self.typeof(inst.target.name)
@@ -369,8 +406,8 @@ class Lower(BaseLower):
                 # If returning an optional type
                 self.call_conv.return_optional_value(self.builder, ty, oty, val)
                 return
-            if ty != oty:
-                val = self.context.cast(self.builder, val, oty, ty)
+            assert ty == oty, (
+                "type '{}' does not match return type '{}'".format(oty, ty))
             retval = self.context.get_return_value(self.builder, ty, val)
             self.call_conv.return_value(self.builder, retval)
 
@@ -454,10 +491,11 @@ class Lower(BaseLower):
             self.lower_static_try_raise(inst)
 
         else:
-            for _class, func in lower_extensions.items():
-                if isinstance(inst, _class):
-                    func(self, inst)
-                    return
+            if hasattr(self.context, "lower_extensions"):
+                for _class, func in self.context.lower_extensions.items():
+                    if isinstance(inst, _class):
+                        func(self, inst)
+                        return
             raise NotImplementedError(type(inst))
 
     def lower_setitem(self, target_var, index_var, value_var, signature):
@@ -481,7 +519,8 @@ class Lower(BaseLower):
             target = self.context.cast(self.builder, target, targetty,
                                        targetty.type)
         else:
-            assert targetty == signature.args[0]
+            ul = types.unliteral
+            assert ul(targetty) == ul(signature.args[0])
 
         index = self.context.cast(self.builder, index, indexty,
                                   signature.args[1])
@@ -529,10 +568,12 @@ class Lower(BaseLower):
             argty = self.typeof("arg." + value.name)
             if isinstance(argty, types.Omitted):
                 pyval = argty.value
+                tyctx = self.context.typing_context
+                valty = tyctx.resolve_value_type_prefer_literal(pyval)
                 # use the type of the constant value
-                valty = self.context.typing_context.resolve_value_type(pyval)
-                const = self.context.get_constant_generic(self.builder, valty,
-                                                          pyval)
+                const = self.context.get_constant_generic(
+                    self.builder, valty, pyval,
+                )
                 # cast it to the variable type
                 res = self.context.cast(self.builder, const, valty, ty)
             else:
@@ -740,7 +781,7 @@ class Lower(BaseLower):
                     pos_tys[i] = types.literal(pyval)
 
         fixed_sig = typing.signature(sig.return_type, *pos_tys)
-        fixed_sig.pysig = sig.pysig
+        fixed_sig = fixed_sig.replace(pysig=sig.pysig)
 
         argvals = self.fold_call_args(fnty, sig, pos_args, inst.vararg, {})
         impl = self.context.get_function(print, fixed_sig)
@@ -752,10 +793,7 @@ class Lower(BaseLower):
         if isinstance(signature.return_type, types.Phantom):
             return self.context.get_dummy_value()
 
-        if isinstance(expr.func, ir.Intrinsic):
-            fnty = expr.func.name
-        else:
-            fnty = self.typeof(expr.func.name)
+        fnty = self.typeof(expr.func.name)
 
         if isinstance(fnty, types.ObjModeDispatcher):
             res = self._lower_call_ObjModeDispatcher(fnty, expr, signature)
@@ -769,6 +807,9 @@ class Lower(BaseLower):
 
         elif isinstance(fnty, types.RecursiveCall):
             res = self._lower_call_RecursiveCall(fnty, expr, signature)
+
+        elif isinstance(fnty, types.FunctionType):
+            res = self._lower_call_FunctionType(fnty, expr, signature)
 
         else:
             res = self._lower_call_normal(fnty, expr, signature)
@@ -789,6 +830,8 @@ class Lower(BaseLower):
                                  resty)
 
     def _lower_call_ObjModeDispatcher(self, fnty, expr, signature):
+        from numba.core.pythonapi import ObjModeUtils
+
         self.init_pyapi()
         # Acquire the GIL
         gil_state = self.pyapi.gil_ensure()
@@ -803,13 +846,10 @@ class Lower(BaseLower):
         argobjs = [self.pyapi.from_native_value(atyp, aval,
                                                 self.env_manager)
                    for atyp, aval in zip(argtypes, argvalues)]
+
+        # Load objmode dispatcher
+        callee = ObjModeUtils(self.pyapi).load_dispatcher(fnty, argtypes)
         # Make Call
-        entry_pt = fnty.dispatcher.compile(tuple(argtypes))
-        callee = self.context.add_dynamic_addr(
-            self.builder,
-            id(entry_pt),
-            info="with_objectmode",
-        )
         ret_obj = self.pyapi.call_function_objargs(callee, argobjs)
         has_exception = cgutils.is_null(self.builder, ret_obj)
         with self. builder.if_else(has_exception) as (then, orelse):
@@ -931,18 +971,80 @@ class Lower(BaseLower):
             )
         return res
 
+    def _lower_call_FunctionType(self, fnty, expr, signature):
+        self.debug_print("# calling first-class function type")
+        sig = types.unliteral(signature)
+        if not fnty.check_signature(signature):
+            # value dependent polymorphism?
+            raise UnsupportedError(
+                f'mismatch of function types:'
+                f' expected {fnty} but got {types.FunctionType(sig)}')
+        ftype = fnty.ftype
+        argvals = self.fold_call_args(
+            fnty, sig, expr.args, expr.vararg, expr.kws,
+        )
+        func_ptr = self.__get_function_pointer(ftype, expr.func.name, sig=sig)
+        res = self.builder.call(func_ptr, argvals, cconv=fnty.cconv)
+        return res
+
+    def __get_function_pointer(self, ftype, fname, sig=None):
+        from numba.experimental.function_type import lower_get_wrapper_address
+
+        llty = self.context.get_value_type(ftype)
+        fstruct = self.loadvar(fname)
+        addr = self.builder.extract_value(fstruct, 0,
+                                          name='addr_of_%s' % (fname))
+
+        fptr = cgutils.alloca_once(self.builder, llty,
+                                   name="fptr_of_%s" % (fname))
+        with self.builder.if_else(
+                cgutils.is_null(self.builder, addr),
+                likely=False) as (then, orelse):
+            with then:
+                self.init_pyapi()
+                # Acquire the GIL
+                gil_state = self.pyapi.gil_ensure()
+                pyaddr = self.builder.extract_value(
+                    fstruct, 1,
+                    name='pyaddr_of_%s' % (fname))
+                # try to recover the function address, see
+                # test_zero_address BadToGood example in
+                # test_function_type.py
+                addr1 = lower_get_wrapper_address(
+                    self.context, self.builder, pyaddr, sig,
+                    failure_mode='ignore')
+                with self.builder.if_then(
+                        cgutils.is_null(self.builder, addr1), likely=False):
+                    self.return_exception(
+                        RuntimeError,
+                        exc_args=(f"{ftype} function address is null",),
+                        loc=self.loc)
+                addr2 = self.pyapi.long_as_voidptr(addr1)
+                self.builder.store(self.builder.bitcast(addr2, llty), fptr)
+                self.pyapi.decref(addr1)
+                self.pyapi.gil_release(gil_state)
+            with orelse:
+                self.builder.store(self.builder.bitcast(addr, llty), fptr)
+        return self.builder.load(fptr)
+
     def _lower_call_normal(self, fnty, expr, signature):
         # Normal function resolution
         self.debug_print("# calling normal function: {0}".format(fnty))
         self.debug_print("# signature: {0}".format(signature))
-        if (isinstance(expr.func, ir.Intrinsic) or
-                isinstance(fnty, types.ObjModeDispatcher)):
+        if isinstance(fnty, types.ObjModeDispatcher):
             argvals = expr.func.args
         else:
             argvals = self.fold_call_args(
                 fnty, signature, expr.args, expr.vararg, expr.kws,
             )
-        impl = self.context.get_function(fnty, signature)
+        tname = expr.target
+        if tname is not None:
+            from numba.core.target_extension import resolve_dispatcher_from_str
+            disp = resolve_dispatcher_from_str(tname)
+            hw_ctx = disp.targetdescr.target_context
+            impl = hw_ctx.get_function(fnty, signature)
+        else:
+            impl = self.context.get_function(fnty, signature)
         if signature.recvr:
             # The "self" object is passed as the function object
             # for bounded function
@@ -1129,10 +1231,20 @@ class Lower(BaseLower):
         elif expr.op == "build_list":
             itemvals = [self.loadvar(i.name) for i in expr.items]
             itemtys = [self.typeof(i.name) for i in expr.items]
-            castvals = [self.context.cast(self.builder, val, fromty,
-                                          resty.dtype)
-                        for val, fromty in zip(itemvals, itemtys)]
-            return self.context.build_list(self.builder, resty, castvals)
+            if isinstance(resty, types.LiteralList):
+                castvals = [self.context.cast(self.builder, val, fromty, toty)
+                            for val, toty, fromty in zip(itemvals, resty.types,
+                                                         itemtys)]
+                tup = self.context.make_tuple(self.builder,
+                                              types.Tuple(resty.types),
+                                              castvals)
+                self.incref(resty, tup)
+                return tup
+            else:
+                castvals = [self.context.cast(self.builder, val, fromty,
+                                              resty.dtype)
+                            for val, fromty in zip(itemvals, itemtys)]
+                return self.context.build_list(self.builder, resty, castvals)
 
         elif expr.op == "build_set":
             # Insert in reverse order, as Python does
@@ -1168,6 +1280,12 @@ class Lower(BaseLower):
             self.incref(resty, castval)
             return castval
 
+        elif expr.op == "phi":
+            raise LoweringError("PHI not stripped")
+
+        elif expr.op == 'null':
+            return self.context.get_constant_null(resty)
+
         elif expr.op in self.context.special_ops:
             res = self.context.special_ops[expr.op](self, expr)
             return res
@@ -1176,9 +1294,15 @@ class Lower(BaseLower):
 
     def _alloca_var(self, name, fetype):
         """
-        Ensure the given variable has an allocated stack slot.
+        Ensure the given variable has an allocated stack slot (if needed).
         """
-        if name not in self.varmap:
+        if name in self.varmap:
+            # quit early
+            return
+
+        # If the name is used in multiple blocks or lowering with debuginfo...
+        if ((name not in self._singly_assigned_vars) or
+                self._disable_sroa_like_opt):
             # If not already defined, allocate it
             llty = self.context.get_value_type(fetype)
             ptr = self.alloca_lltype(name, llty)
@@ -1189,12 +1313,17 @@ class Lower(BaseLower):
         """
         Get a pointer to the given variable's slot.
         """
+        if not self._disable_sroa_like_opt:
+            assert name not in self._blk_local_varmap
+            assert name not in self._singly_assigned_vars
         return self.varmap[name]
 
     def loadvar(self, name):
         """
         Load the given variable's value.
         """
+        if name in self._blk_local_varmap and not self._disable_sroa_like_opt:
+            return self._blk_local_varmap[name]
         ptr = self.getvar(name)
         return self.builder.load(ptr)
 
@@ -1203,25 +1332,29 @@ class Lower(BaseLower):
         Store the value into the given variable.
         """
         fetype = self.typeof(name)
-
         # Define if not already
         self._alloca_var(name, fetype)
 
-        # Clean up existing value stored in the variable
-        old = self.loadvar(name)
-        self.decref(fetype, old)
-
         # Store variable
-        ptr = self.getvar(name)
-        if value.type != ptr.type.pointee:
-            msg = ("Storing {value.type} to ptr of {ptr.type.pointee} "
-                   "('{name}'). FE type {fetype}").format(value=value,
-                                                          ptr=ptr,
-                                                          fetype=fetype,
-                                                          name=name)
-            raise AssertionError(msg)
+        if (name in self._singly_assigned_vars and
+                not self._disable_sroa_like_opt):
+            self._blk_local_varmap[name] = value
+        else:
+            # Clean up existing value stored in the variable
+            old = self.loadvar(name)
+            self.decref(fetype, old)
 
-        self.builder.store(value, ptr)
+            # stack stored variable
+            ptr = self.getvar(name)
+            if value.type != ptr.type.pointee:
+                msg = ("Storing {value.type} to ptr of {ptr.type.pointee} "
+                       "('{name}'). FE type {fetype}").format(value=value,
+                                                              ptr=ptr,
+                                                              fetype=fetype,
+                                                              name=name)
+                raise AssertionError(msg)
+
+            self.builder.store(value, ptr)
 
     def delvar(self, name):
         """
@@ -1229,14 +1362,24 @@ class Lower(BaseLower):
         """
         fetype = self.typeof(name)
 
+        # Out-of-order
+        if (name not in self._blk_local_varmap and
+                not self._disable_sroa_like_opt):
+            if name in self._singly_assigned_vars:
+                self._singly_assigned_vars.discard(name)
+
         # Define if not already (may happen if the variable is deleted
         # at the beginning of a loop, but only set later in the loop)
         self._alloca_var(name, fetype)
 
-        ptr = self.getvar(name)
-        self.decref(fetype, self.builder.load(ptr))
-        # Zero-fill variable to avoid double frees on subsequent dels
-        self.builder.store(Constant.null(ptr.type.pointee), ptr)
+        if name in self._blk_local_varmap and not self._disable_sroa_like_opt:
+            llval = self._blk_local_varmap[name]
+            self.decref(fetype, llval)
+        else:
+            ptr = self.getvar(name)
+            self.decref(fetype, self.builder.load(ptr))
+            # Zero-fill variable to avoid double frees on subsequent dels
+            self.builder.store(Constant.null(ptr.type.pointee), ptr)
 
     def alloca(self, name, type):
         lltype = self.context.get_value_type(type)
@@ -1249,11 +1392,16 @@ class Lower(BaseLower):
         aptr = cgutils.alloca_once(self.builder, lltype,
                                    name=name, zfill=False)
         if is_uservar:
+            # If it's an arg set the location as the function definition line
+            if name in self.func_ir.arg_names:
+                loc = self.loc.with_lineno(self.func_ir.loc.line)
+            else:
+                loc = self.loc
             # Emit debug info for user variable
             sizeof = self.context.get_abi_sizeof(lltype)
             self.debuginfo.mark_variable(self.builder, aptr, name=name,
                                          lltype=lltype, size=sizeof,
-                                         loc=self.loc)
+                                         line=loc.line)
         return aptr
 
     def incref(self, typ, val):
@@ -1266,7 +1414,11 @@ class Lower(BaseLower):
         if not self.context.enable_nrt:
             return
 
-        self.context.nrt.decref(self.builder, typ, val)
+        # do not associate decref with "use", it creates "jumpy" line info as
+        # the decrefs are usually where the ir.Del nodes are, which is at the
+        # end of the block.
+        with debuginfo.suspend_emission(self.builder):
+            self.context.nrt.decref(self.builder, typ, val)
 
 
 def _lit_or_omitted(value):

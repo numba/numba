@@ -3,11 +3,12 @@ This tests the inline kwarg to @jit and @overload etc, it has nothing to do with
 LLVM or low level inlining.
 """
 
-
+import operator
+from itertools import product
 import numpy as np
 
-from numba import njit, typeof
-from numba.core import types, ir, ir_utils
+from numba import njit, typeof, literally
+from numba.core import types, ir, ir_utils, cgutils
 from numba.core.extending import (
     overload,
     overload_method,
@@ -16,15 +17,19 @@ from numba.core.extending import (
     typeof_impl,
     unbox,
     NativeValue,
+    models,
+    make_attribute_wrapper,
+    intrinsic,
     register_jitable,
 )
 from numba.core.datamodel.models import OpaqueModel
 from numba.core.cpu import InlineOptions
 from numba.core.compiler import DefaultPassBuilder, CompilerBase
-from numba.core.typed_passes import DeadCodeElimination, IRLegalization
+from numba.core.typed_passes import IRLegalization, InlineOverloads
 from numba.core.untyped_passes import PreserveIR
-from itertools import product
-from numba.tests.support import TestCase, unittest, skip_py38_or_later
+from numba.core.typing import signature
+from numba.tests.support import (TestCase, unittest, skip_py38_or_later,
+                                 MemoryLeakMixin)
 
 
 class InlineTestPipeline(CompilerBase):
@@ -39,8 +44,8 @@ class InlineTestPipeline(CompilerBase):
 
         # TODO: add a way to not do this! un-finalizing is not a good idea
         pipeline._finalized = False
-        pipeline.add_pass_after(DeadCodeElimination, IRLegalization)
-        pipeline.add_pass_after(PreserveIR, DeadCodeElimination)
+        pipeline.add_pass_after(PreserveIR, IRLegalization)
+
         pipeline.finalize()
         return [pipeline]
 
@@ -121,9 +126,34 @@ class InliningBase(TestCase):
                 if getattr(expr, 'op', False) == 'call':
                     func_defn = fir.get_definition(expr.func)
                     found |= func_defn.name == k
+                elif ir_utils.is_operator_or_getitem(expr):
+                    found |= expr.fn.__name__ == k
             self.assertFalse(found == v)
 
         return fir  # for use in further analysis
+
+    def make_dummy_type(self):
+        """ Use to generate a dummy type """
+
+        # Use test_id to make sure no collision is possible.
+        test_id = self.id()
+        DummyType = type('DummyTypeFor{}'.format(test_id), (types.Opaque,), {})
+
+        dummy_type = DummyType("my_dummy")
+        register_model(DummyType)(OpaqueModel)
+
+        class Dummy(object):
+            pass
+
+        @typeof_impl.register(Dummy)
+        def typeof_dummy(val, c):
+            return dummy_type
+
+        @unbox(DummyType)
+        def unbox_dummy(typ, obj, c):
+            return NativeValue(c.context.get_dummy_value())
+
+        return Dummy, DummyType
 
 
 # used in _gen_involved
@@ -139,12 +169,14 @@ def _gen_involved():
         g = np.zeros(c, dtype=np.complex64)
         h = f + g
         i = 1j / d
+        # For SSA, zero init, n and t
+        n = 0
+        t = 0
         if np.abs(i) > 0:
             k = h / i
             l = np.arange(1, c + 1)
             m = np.sqrt(l - g) + e * k
             if np.abs(m[0]) < 1:
-                n = 0
                 for o in range(a):
                     n += 0
                     if np.abs(n) < 3:
@@ -166,7 +198,7 @@ def _gen_involved():
     return foo
 
 
-class TestFunctionInlining(InliningBase):
+class TestFunctionInlining(MemoryLeakMixin, InliningBase):
 
     def test_basic_inline_never(self):
         @njit(inline='never')
@@ -241,6 +273,7 @@ class TestFunctionInlining(InliningBase):
 
         def factory(inline, x, y):
             z = x + 12
+
             @njit(inline=inline)
             def func():
                 return (x, y + 3, z)
@@ -308,6 +341,7 @@ class TestFunctionInlining(InliningBase):
 
         def factory():
             from .inlining_usecases import bar
+
             @njit(inline='always')
             def tmp():
                 return bar()
@@ -457,7 +491,7 @@ class TestFunctionInlining(InliningBase):
                                         'fortran': True}, block_count=37)
 
 
-class TestRegisterJitableInlining(InliningBase):
+class TestRegisterJitableInlining(MemoryLeakMixin, InliningBase):
 
     def test_register_jitable_inlines(self):
 
@@ -471,7 +505,7 @@ class TestRegisterJitableInlining(InliningBase):
         self.check(impl, inline_expect={'foo': True})
 
 
-class TestOverloadInlining(InliningBase):
+class TestOverloadInlining(MemoryLeakMixin, InliningBase):
 
     def test_basic_inline_never(self):
         def foo():
@@ -517,6 +551,146 @@ class TestOverloadInlining(InliningBase):
             return foo(3, b=4)
 
         self.check(impl, inline_expect={'foo': True})
+
+    def test_inline_operators_unary(self):
+
+        def impl_inline(x):
+            return -x
+
+        def impl_noinline(x):
+            return +x
+
+        dummy_unary_impl = lambda x: True
+        Dummy, DummyType = self.make_dummy_type()
+        setattr(Dummy, '__neg__', dummy_unary_impl)
+        setattr(Dummy, '__pos__', dummy_unary_impl)
+
+        @overload(operator.neg, inline='always')
+        def overload_dummy_neg(x):
+            if isinstance(x, DummyType):
+                return dummy_unary_impl
+
+        @overload(operator.pos, inline='never')
+        def overload_dummy_pos(x):
+            if isinstance(x, DummyType):
+                return dummy_unary_impl
+
+        self.check(impl_inline, Dummy(), inline_expect={'neg': True})
+        self.check(impl_noinline, Dummy(), inline_expect={'pos': False})
+
+    def test_inline_operators_binop(self):
+
+        def impl_inline(x):
+            return x == 1
+
+        def impl_noinline(x):
+            return x != 1
+
+        Dummy, DummyType = self.make_dummy_type()
+
+        dummy_binop_impl = lambda a, b: True
+        setattr(Dummy, '__eq__', dummy_binop_impl)
+        setattr(Dummy, '__ne__', dummy_binop_impl)
+
+        @overload(operator.eq, inline='always')
+        def overload_dummy_eq(a, b):
+            if isinstance(a, DummyType):
+                return dummy_binop_impl
+
+        @overload(operator.ne, inline='never')
+        def overload_dummy_ne(a, b):
+            if isinstance(a, DummyType):
+                return dummy_binop_impl
+
+        self.check(impl_inline, Dummy(), inline_expect={'eq': True})
+        self.check(impl_noinline, Dummy(), inline_expect={'ne': False})
+
+    def test_inline_operators_inplace_binop(self):
+
+        def impl_inline(x):
+            x += 1
+
+        def impl_noinline(x):
+            x -= 1
+
+        Dummy, DummyType = self.make_dummy_type()
+
+        dummy_inplace_binop_impl = lambda a, b: True
+        setattr(Dummy, '__iadd__', dummy_inplace_binop_impl)
+        setattr(Dummy, '__isub__', dummy_inplace_binop_impl)
+
+        @overload(operator.iadd, inline='always')
+        def overload_dummy_iadd(a, b):
+            if isinstance(a, DummyType):
+                return dummy_inplace_binop_impl
+
+        @overload(operator.isub, inline='never')
+        def overload_dummy_isub(a, b):
+            if isinstance(a, DummyType):
+                return dummy_inplace_binop_impl
+
+        # DummyType is not mutable, so lowering 'inplace_binop' Expr
+        # re-uses (requires) copying function definition
+        @overload(operator.add, inline='always')
+        def overload_dummy_add(a, b):
+            if isinstance(a, DummyType):
+                return dummy_inplace_binop_impl
+
+        @overload(operator.sub, inline='never')
+        def overload_dummy_sub(a, b):
+            if isinstance(a, DummyType):
+                return dummy_inplace_binop_impl
+
+        self.check(impl_inline, Dummy(), inline_expect={'iadd': True})
+        self.check(impl_noinline, Dummy(), inline_expect={'isub': False})
+
+    def test_inline_always_operators_getitem(self):
+
+        def impl(x, idx):
+            return x[idx]
+
+        def impl_static_getitem(x):
+            return x[1]
+
+        Dummy, DummyType = self.make_dummy_type()
+
+        dummy_getitem_impl = lambda obj, idx: None
+        setattr(Dummy, '__getitem__', dummy_getitem_impl)
+
+        @overload(operator.getitem, inline='always')
+        def overload_dummy_getitem(obj, idx):
+            if isinstance(obj, DummyType):
+                return dummy_getitem_impl
+
+        # note getitem and static_getitem Exprs refer to operator.getitem
+        # hence they are checked using the same expected key
+        self.check(impl, Dummy(), 1, inline_expect={'getitem': True})
+        self.check(impl_static_getitem, Dummy(),
+                   inline_expect={'getitem': True})
+
+    def test_inline_never_operators_getitem(self):
+
+        def impl(x, idx):
+            return x[idx]
+
+        def impl_static_getitem(x):
+            return x[1]
+
+        Dummy, DummyType = self.make_dummy_type()
+
+        dummy_getitem_impl = lambda obj, idx: None
+        setattr(Dummy, '__getitem__', dummy_getitem_impl)
+
+        @overload(operator.getitem, inline='never')
+        def overload_dummy_getitem(obj, idx):
+            if isinstance(obj, DummyType):
+                return dummy_getitem_impl
+
+        # noth getitem and static_getitem Exprs refer to opertor.getitem
+        # hence they are checked using the same expect key
+        self.check(impl, Dummy(), 1, inline_expect={'getitem': False})
+        self.check(impl_static_getitem, Dummy(),
+                   inline_expect={'getitem': False})
 
     def test_inline_stararg_error(self):
         def foo(a, *b):
@@ -613,6 +787,7 @@ class TestOverloadInlining(InliningBase):
 
             def factory(target, x, y, inline=None):
                 z = x + 12
+
                 @overload(target, inline=inline)
                 def func():
                     def impl():
@@ -672,6 +847,7 @@ class TestOverloadInlining(InliningBase):
 
         def factory():
             from .inlining_usecases import baz
+
             @njit(inline='always')
             def tmp():
                 return baz()
@@ -806,29 +982,80 @@ class TestOverloadInlining(InliningBase):
         for val in consts:
             self.assertNotEqual(val.value, 1234)
 
+    def test_overload_inline_always_with_literally_in_inlinee(self):
+        # See issue #5887
+
+        def foo_ovld(dtype):
+
+            if not isinstance(dtype, types.StringLiteral):
+                def foo_noop(dtype):
+                    return literally(dtype)
+                return foo_noop
+
+            if dtype.literal_value == 'str':
+                def foo_as_str_impl(dtype):
+                    return 10
+                return foo_as_str_impl
+
+            if dtype.literal_value in ('int64', 'float64'):
+                def foo_as_num_impl(dtype):
+                    return 20
+                return foo_as_num_impl
+
+        # define foo for literal str 'str'
+        def foo(dtype):
+            return 10
+
+        overload(foo, inline='always')(foo_ovld)
+
+        def test_impl(dtype):
+            return foo(dtype)
+
+        # check literal dispatch on 'str'
+        dtype = 'str'
+        self.check(test_impl, dtype, inline_expect={'foo': True})
+
+        # redefine foo to be correct for literal str 'int64'
+        def foo(dtype):
+            return 20
+        overload(foo, inline='always')(foo_ovld)
+
+        # check literal dispatch on 'int64'
+        dtype = 'int64'
+        self.check(test_impl, dtype, inline_expect={'foo': True})
+
+    def test_inline_always_ssa(self):
+        """make sure IR inlining uses SSA properly. Test for #6721.
+        """
+
+        dummy_true = True
+
+        def foo(A):
+            return True
+
+        @overload(foo, inline="always")
+        def foo_overload(A):
+
+            def impl(A):
+                s = dummy_true
+                for i in range(len(A)):
+                    dummy = dummy_true
+                    if A[i]:
+                        dummy = A[i]
+                    s *= dummy
+                return s
+            return impl
+
+        def impl():
+            return foo(np.array([True, False, True]))
+
+        self.check(impl, block_count='SKIP', inline_expect={'foo': True})
+
 
 class TestOverloadMethsAttrsInlining(InliningBase):
     def setUp(self):
-        # Use test_id to makesure no collision is possible.
-        test_id = self.id()
-        DummyType = type('DummyTypeFor{}'.format(test_id), (types.Opaque,), {})
-
-        dummy_type = DummyType("my_dummy")
-        register_model(DummyType)(OpaqueModel)
-
-        class Dummy(object):
-            pass
-
-        @typeof_impl.register(Dummy)
-        def typeof_Dummy(val, c):
-            return dummy_type
-
-        @unbox(DummyType)
-        def unbox_index(typ, obj, c):
-            return NativeValue(c.context.get_dummy_value())
-
-        self.Dummy = Dummy
-        self.DummyType = DummyType
+        self.make_dummy_type()
+        super(TestOverloadMethsAttrsInlining, self).setUp()
 
     def check_method(self, test_impl, args, expected, block_count,
                      expects_inlined=True):
@@ -875,7 +1102,9 @@ class TestOverloadMethsAttrsInlining(InliningBase):
             self.assertTrue(allgetattrs)
 
     def test_overload_method_default_args_always(self):
-        @overload_method(self.DummyType, "inline_method", inline='always')
+        Dummy, DummyType = self.make_dummy_type()
+
+        @overload_method(DummyType, "inline_method", inline='always')
         def _get_inlined_method(obj, val=None, val2=None):
             def get(obj, val=None, val2=None):
                 return ("THIS IS INLINED", val, val2)
@@ -886,7 +1115,7 @@ class TestOverloadMethsAttrsInlining(InliningBase):
 
         self.check_method(
             test_impl=foo,
-            args=[self.Dummy()],
+            args=[Dummy()],
             expected=(("THIS IS INLINED", 123, None),
                       ("THIS IS INLINED", None, 321)),
             block_count=1,
@@ -896,7 +1125,9 @@ class TestOverloadMethsAttrsInlining(InliningBase):
         def costmodel(*args):
             return should_inline
 
-        @overload_method(self.DummyType, "inline_method", inline=costmodel)
+        Dummy, DummyType = self.make_dummy_type()
+
+        @overload_method(DummyType, "inline_method", inline=costmodel)
         def _get_inlined_method(obj, val):
             def get(obj, val):
                 return ("THIS IS INLINED!!!", val)
@@ -907,7 +1138,7 @@ class TestOverloadMethsAttrsInlining(InliningBase):
 
         self.check_method(
             test_impl=foo,
-            args=[self.Dummy()],
+            args=[Dummy()],
             expected=("THIS IS INLINED!!!", 123),
             block_count=1,
             expects_inlined=should_inline,
@@ -938,7 +1169,9 @@ class TestOverloadMethsAttrsInlining(InliningBase):
         )
 
     def make_overload_attribute_test(self, costmodel, should_inline):
-        @overload_attribute(self.DummyType, "inlineme", inline=costmodel)
+        Dummy, DummyType = self.make_dummy_type()
+
+        @overload_attribute(DummyType, "inlineme", inline=costmodel)
         def _get_inlineme(obj):
             def get(obj):
                 return "MY INLINED ATTRS"
@@ -949,7 +1182,7 @@ class TestOverloadMethsAttrsInlining(InliningBase):
 
         self.check_getattr(
             test_impl=foo,
-            args=[self.Dummy()],
+            args=[Dummy()],
             expected="MY INLINED ATTRS",
             block_count=1,
             expects_inlined=should_inline,
@@ -980,7 +1213,7 @@ class TestOverloadMethsAttrsInlining(InliningBase):
         )
 
 
-class TestGeneralInlining(InliningBase):
+class TestGeneralInlining(MemoryLeakMixin, InliningBase):
 
     def test_with_inlined_and_noninlined_variants(self):
         # This test is contrived and was to demonstrate fixing a bug in the
@@ -1062,6 +1295,165 @@ class TestInlineOptions(TestCase):
         self.assertFalse(model.is_never_inline)
         self.assertTrue(model.has_cost_model)
         self.assertIs(model.value, cost_model)
+
+
+class TestInlineMiscIssues(TestCase):
+
+    def test_issue4691(self):
+        def output_factory(array, dtype):
+            pass
+
+        @overload(output_factory, inline='always')
+        def ol_output_factory(array, dtype):
+            if isinstance(array, types.npytypes.Array):
+                def impl(array, dtype):
+                    shape = array.shape[3:]
+                    return np.zeros(shape, dtype=dtype)
+
+                return impl
+
+        @njit(nogil=True)
+        def fn(array):
+            out = output_factory(array, array.dtype)
+            return out
+
+        @njit(nogil=True)
+        def fn2(array):
+            return np.zeros(array.shape[3:], dtype=array.dtype)
+
+        fn(np.ones((10, 20, 30, 40, 50)))
+        fn2(np.ones((10, 20, 30, 40, 50)))
+
+    def test_issue4693(self):
+
+        @njit(inline='always')
+        def inlining(array):
+            if array.ndim != 1:
+                raise ValueError("Invalid number of dimensions")
+
+            return array
+
+        @njit
+        def fn(array):
+            return inlining(array)
+
+        fn(np.zeros(10))
+
+    def test_issue5476(self):
+        # Actual issue has the ValueError passed as an arg to `inlining` so is
+        # a constant inference error
+        @njit(inline='always')
+        def inlining():
+            msg = 'Something happened'
+            raise ValueError(msg)
+
+        @njit
+        def fn():
+            return inlining()
+
+        with self.assertRaises(ValueError) as raises:
+            fn()
+
+        self.assertIn("Something happened", str(raises.exception))
+
+    def test_issue5792(self):
+        # Issue is that overloads cache their IR and closure inliner was
+        # manipulating the cached IR in a way that broke repeated inlines.
+
+        class Dummy:
+            def __init__(self, data):
+                self.data = data
+
+            def div(self, other):
+                return data / other.data
+
+        class DummyType(types.Type):
+            def __init__(self, data):
+                self.data = data
+                super().__init__(name=f'Dummy({self.data})')
+
+        @register_model(DummyType)
+        class DummyTypeModel(models.StructModel):
+            def __init__(self, dmm, fe_type):
+                members = [
+                    ('data', fe_type.data),
+                ]
+                super().__init__(dmm, fe_type, members)
+
+        make_attribute_wrapper(DummyType, 'data', '_data')
+
+        @intrinsic
+        def init_dummy(typingctx, data):
+            def codegen(context, builder, sig, args):
+                typ = sig.return_type
+                data, = args
+                dummy = cgutils.create_struct_proxy(typ)(context, builder)
+                dummy.data = data
+
+                if context.enable_nrt:
+                    context.nrt.incref(builder, sig.args[0], data)
+
+                return dummy._getvalue()
+
+            ret_typ = DummyType(data)
+            sig = signature(ret_typ, data)
+
+            return sig, codegen
+
+        @overload(Dummy, inline='always')
+        def dummy_overload(data):
+            def ctor(data):
+                return init_dummy(data)
+
+            return ctor
+
+        @overload_method(DummyType, 'div', inline='always')
+        def div_overload(self, other):
+            def impl(self, other):
+                return self._data / other._data
+
+            return impl
+
+        @njit
+        def test_impl(data, other_data):
+            dummy = Dummy(data) # ctor inlined once
+            other = Dummy(other_data)  # ctor inlined again
+
+            return dummy.div(other)
+
+        data = 1.
+        other_data = 2.
+        res = test_impl(data, other_data)
+        self.assertEqual(res, data / other_data)
+
+    def test_issue5824(self):
+        """ Similar to the above test_issue5792, checks mutation of the inlinee
+        IR is local only"""
+
+        class CustomCompiler(CompilerBase):
+
+            def define_pipelines(self):
+                pm = DefaultPassBuilder.define_nopython_pipeline(self.state)
+                # Run the inliner twice!
+                pm.add_pass_after(InlineOverloads, InlineOverloads)
+                pm.finalize()
+                return [pm]
+
+        def bar(x):
+            ...
+
+        @overload(bar, inline='always')
+        def ol_bar(x):
+            if isinstance(x, types.Integer):
+                def impl(x):
+                    return x + 1.3
+                return impl
+
+        @njit(pipeline_class=CustomCompiler)
+        def foo(z):
+            return bar(z), bar(z)
+
+        self.assertEqual(foo(10), (11.3, 11.3))
 
 
 if __name__ == '__main__':

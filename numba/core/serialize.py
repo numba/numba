@@ -1,15 +1,14 @@
 """
 Serialization support for compiled functions.
 """
-
-
-from importlib.util import MAGIC_NUMBER as bc_magic
-
-import marshal
 import sys
-from types import FunctionType, ModuleType
+import abc
+import io
+import copyreg
 
-from numba.core import bytecode, compiler
+
+import pickle
+from numba import cloudpickle
 
 
 #
@@ -23,90 +22,227 @@ def _rebuild_reduction(cls, *args):
     return cls._rebuild(*args)
 
 
-class _ModuleRef(object):
+# Keep unpickled object via `numba_unpickle` alive.
+_unpickled_memo = {}
 
-    def __init__(self, name):
-        self.name = name
+
+def _numba_unpickle(address, bytedata, hashed):
+    """Used by `numba_unpickle` from _helperlib.c
+
+    Parameters
+    ----------
+    address : int
+    bytedata : bytes
+    hashed : bytes
+
+    Returns
+    -------
+    obj : object
+        unpickled object
+    """
+    key = (address, hashed)
+    try:
+        obj = _unpickled_memo[key]
+    except KeyError:
+        _unpickled_memo[key] = obj = cloudpickle.loads(bytedata)
+    return obj
+
+
+def dumps(obj):
+    """Similar to `pickle.dumps()`. Returns the serialized object in bytes.
+    """
+    pickler = NumbaPickler
+    with io.BytesIO() as buf:
+        p = pickler(buf, protocol=4)
+        p.dump(obj)
+        pickled = buf.getvalue()
+
+    return pickled
+
+
+# Alias to pickle.loads to allow `serialize.loads()`
+loads = cloudpickle.loads
+
+
+class _CustomPickled:
+    """A wrapper for objects that must be pickled with `NumbaPickler`.
+
+    Standard `pickle` will pick up the implementation registered via `copyreg`.
+    This will spawn a `NumbaPickler` instance to serialize the data.
+
+    `NumbaPickler` overrides the handling of this type so as not to spawn a
+    new pickler for the object when it is already being pickled by a
+    `NumbaPickler`.
+    """
+
+    __slots__ = 'ctor', 'states'
+
+    def __init__(self, ctor, states):
+        self.ctor = ctor
+        self.states = states
+
+    def _reduce(self):
+        return _CustomPickled._rebuild, (self.ctor, self.states)
+
+    @classmethod
+    def _rebuild(cls, ctor, states):
+        return cls(ctor, states)
+
+
+def _unpickle__CustomPickled(serialized):
+    """standard unpickling for `_CustomPickled`.
+
+    Uses `NumbaPickler` to load.
+    """
+    ctor, states = loads(serialized)
+    return _CustomPickled(ctor, states)
+
+
+def _pickle__CustomPickled(cp):
+    """standard pickling for `_CustomPickled`.
+
+    Uses `NumbaPickler` to dump.
+    """
+    serialized = dumps((cp.ctor, cp.states))
+    return _unpickle__CustomPickled, (serialized,)
+
+
+# Register custom pickling for the standard pickler.
+copyreg.pickle(_CustomPickled, _pickle__CustomPickled)
+
+
+def custom_reduce(cls, states):
+    """For customizing object serialization in `__reduce__`.
+
+    Object states provided here are used as keyword arguments to the
+    `._rebuild()` class method.
+
+    Parameters
+    ----------
+    states : dict
+        Dictionary of object states to be serialized.
+
+    Returns
+    -------
+    result : tuple
+        This tuple conforms to the return type requirement for `__reduce__`.
+    """
+    return custom_rebuild, (_CustomPickled(cls, states),)
+
+
+def custom_rebuild(custom_pickled):
+    """Customized object deserialization.
+
+    This function is referenced internally by `custom_reduce()`.
+    """
+    cls, states = custom_pickled.ctor, custom_pickled.states
+    return cls._rebuild(**states)
+
+
+def is_serialiable(obj):
+    """Check if *obj* can be serialized.
+
+    Parameters
+    ----------
+    obj : object
+
+    Returns
+    --------
+    can_serialize : bool
+    """
+    with io.BytesIO() as fout:
+        pickler = NumbaPickler(fout)
+        try:
+            pickler.dump(obj)
+        except pickle.PicklingError:
+            return False
+        else:
+            return True
+
+
+def _no_pickle(obj):
+    raise pickle.PicklingError(f"Pickling of {type(obj)} is unsupported")
+
+
+def disable_pickling(typ):
+    """This is called on a type to disable pickling
+    """
+    NumbaPickler.disabled_types.add(typ)
+    # The following is needed for Py3.7
+    NumbaPickler.dispatch_table[typ] = _no_pickle
+    # Return `typ` to allow use as a decorator
+    return typ
+
+
+class NumbaPickler(cloudpickle.CloudPickler):
+    disabled_types = set()
+    """A set of types that pickling cannot is disabled.
+    """
+
+    def reducer_override(self, obj):
+        # Overridden to disable pickling of certain types
+        if type(obj) in self.disabled_types:
+            _no_pickle(obj)  # noreturn
+        return super().reducer_override(obj)
+
+
+def _custom_reduce__custompickled(cp):
+    return cp._reduce()
+
+
+NumbaPickler.dispatch_table[_CustomPickled] = _custom_reduce__custompickled
+
+
+class ReduceMixin(abc.ABC):
+    """A mixin class for objects that should be reduced by the NumbaPickler instead
+    of the standard pickler.
+    """
+    # Subclass MUST override the below methods
+
+    @abc.abstractmethod
+    def _reduce_states(self):
+        raise NotImplementedError
+
+    @abc.abstractclassmethod
+    def _rebuild(cls, **kwargs):
+        raise NotImplementedError
+
+    # Subclass can override the below methods
+
+    def _reduce_class(self):
+        return self.__class__
+
+    # Private methods
 
     def __reduce__(self):
-        return _rebuild_module, (self.name,)
+        return custom_reduce(self._reduce_class(), self._reduce_states())
 
 
-def _rebuild_module(name):
-    if name is None:
-        raise ImportError("cannot import None")
-    __import__(name)
-    return sys.modules[name]
+class PickleCallableByPath:
+    """Wrap a callable object to be pickled by path to workaround limitation
+    in pickling due to non-pickleable objects in function non-locals.
 
+    Note:
+    - Do not use this as a decorator.
+    - Wrapped object must be a global that exist in its parent module and it
+      can be imported by `from the_module import the_object`.
 
-def _get_function_globals_for_reduction(func):
-    """
-    Analyse *func* and return a dictionary of global values suitable for
-    reduction.
-    """
-    func_id = bytecode.FunctionIdentity.from_function(func)
-    bc = bytecode.ByteCode(func_id)
-    globs = bc.get_used_globals()
-    for k, v in globs.items():
-        # Make modules picklable by name
-        if isinstance(v, ModuleType):
-            globs[k] = _ModuleRef(v.__name__)
-    # Remember the module name so that the function gets a proper __module__
-    # when rebuilding.  This is used to recreate the environment.
-    globs['__name__'] = func.__module__
-    return globs
+    Usage:
 
-def _reduce_function(func, globs):
+    >>> def my_fn(x):
+    >>>     ...
+    >>> wrapped_fn = PickleCallableByPath(my_fn)
+    >>> # refer to `wrapped_fn` instead of `my_fn`
     """
-    Reduce a Python function and its globals to picklable components.
-    If there are cell variables (i.e. references to a closure), their
-    values will be frozen.
-    """
-    if func.__closure__:
-        cells = [cell.cell_contents for cell in func.__closure__]
-    else:
-        cells = None
-    return _reduce_code(func.__code__), globs, func.__name__, cells
+    def __init__(self, fn):
+        self._fn = fn
 
-def _reduce_code(code):
-    """
-    Reduce a code object to picklable components.
-    """
-    return marshal.version, bc_magic, marshal.dumps(code)
+    def __call__(self, *args, **kwargs):
+        return self._fn(*args, **kwargs)
 
-def _dummy_closure(x):
-    """
-    A dummy function allowing us to build cell objects.
-    """
-    return lambda: x
+    def __reduce__(self):
+        return type(self)._rebuild, (self._fn.__module__, self._fn.__name__,)
 
-def _rebuild_function(code_reduced, globals, name, cell_values):
-    """
-    Rebuild a function from its _reduce_function() results.
-    """
-    if cell_values:
-        cells = tuple(_dummy_closure(v).__closure__[0] for v in cell_values)
-    else:
-        cells = ()
-    code = _rebuild_code(*code_reduced)
-    modname = globals['__name__']
-    try:
-        _rebuild_module(modname)
-    except ImportError:
-        # If the module can't be found, avoid passing it (it would produce
-        # errors when lowering).
-        del globals['__name__']
-    return FunctionType(code, globals, name, (), cells)
-
-def _rebuild_code(marshal_version, bytecode_magic, marshalled):
-    """
-    Rebuild a code object from its _reduce_code() results.
-    """
-    if marshal.version != marshal_version:
-        raise RuntimeError("incompatible marshal version: "
-                           "interpreter has %r, marshalled code has %r"
-                           % (marshal.version, marshal_version))
-    if bc_magic != bytecode_magic:
-        raise RuntimeError("incompatible bytecode version")
-    return marshal.loads(marshalled)
-
+    @classmethod
+    def _rebuild(cls, modname, fn_path):
+        return cls(getattr(sys.modules[modname], fn_path))

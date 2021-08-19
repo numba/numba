@@ -2,7 +2,7 @@ import numpy as np
 from numba import cuda
 from numba.cuda.kernels.transpose import transpose
 from numba.cuda.testing import unittest
-from numba.cuda.testing import skip_on_cudasim, SerialMixin
+from numba.cuda.testing import skip_on_cudasim, CUDATestCase
 
 
 recordwith2darray = np.dtype([('i', np.int32),
@@ -10,7 +10,7 @@ recordwith2darray = np.dtype([('i', np.int32),
 
 
 @skip_on_cudasim('Device Array API unsupported in the simulator')
-class Test(SerialMixin, unittest.TestCase):
+class Test(CUDATestCase):
 
     def test_transpose(self):
         variants = ((5, 6, np.float64),

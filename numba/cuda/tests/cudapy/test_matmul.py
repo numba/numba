@@ -1,7 +1,7 @@
 import numpy as np
 
-from numba import cuda, float32
-from numba.cuda.testing import unittest, SerialMixin
+from numba import cuda, float32, void
+from numba.cuda.testing import unittest, CUDATestCase
 from numba.core import config
 
 # Ensure the test takes a reasonable amount of time in the simulator
@@ -14,11 +14,11 @@ n = bpg * tpb
 SM_SIZE = (tpb, tpb)
 
 
-class TestCudaMatMul(SerialMixin, unittest.TestCase):
+class TestCudaMatMul(CUDATestCase):
 
     def test_func(self):
 
-        @cuda.jit(argtypes=[float32[:, ::1], float32[:, ::1], float32[:, ::1]])
+        @cuda.jit(void(float32[:, ::1], float32[:, ::1], float32[:, ::1]))
         def cu_square_matrix_mul(A, B, C):
             sA = cuda.shared.array(shape=SM_SIZE, dtype=float32)
             sB = cuda.shared.array(shape=(tpb, tpb), dtype=float32)

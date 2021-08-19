@@ -28,7 +28,7 @@ class CPUTarget(TargetDescriptor):
     @utils.cached_property
     def _toplevel_target_context(self):
         # Lazily-initialized top-level target context, for all threads
-        return cpu.CPUContext(self.typing_context)
+        return cpu.CPUContext(self.typing_context, self._target_name)
 
     @utils.cached_property
     def _toplevel_typing_context(self):
@@ -66,35 +66,47 @@ class CPUTarget(TargetDescriptor):
 
 
 # The global CPU target
-cpu_target = CPUTarget()
+cpu_target = CPUTarget('cpu')
 
 
 class CPUDispatcher(dispatcher.Dispatcher):
     targetdescr = cpu_target
 
 
-class TargetRegistry(utils.UniqueDict):
+class DelayedRegistry(utils.UniqueDict):
     """
-    A registry of API implementations for various backends.
+    A unique dictionary but with deferred initialisation of the values.
 
     Attributes
     ----------
     ondemand:
 
-        A dictionary of target-name -> function, where function is executed
-        the first time a target is used.  It is used for deferred
-        initialization for some targets (e.g. gpu).
+        A dictionary of key -> value, where value is executed
+        the first time it is is used.  It is used for part of a deferred
+        initialization strategy.
     """
     def __init__(self, *args, **kws):
-        super(TargetRegistry, self).__init__(*args, **kws)
         self.ondemand = utils.UniqueDict()
+        self.key_type = kws.pop('key_type', None)
+        self.value_type = kws.pop('value_type', None)
+        self._type_check = self.key_type or self.value_type
+        super(DelayedRegistry, self).__init__(*args, **kws)
 
     def __getitem__(self, item):
         if item in self.ondemand:
             self[item] = self.ondemand[item]()
             del self.ondemand[item]
-        return super(TargetRegistry, self).__getitem__(item)
+        return super(DelayedRegistry, self).__getitem__(item)
 
-
-dispatcher_registry = TargetRegistry()
-dispatcher_registry['cpu'] = CPUDispatcher
+    def __setitem__(self, key, value):
+        if self._type_check:
+            def check(x, ty_x):
+                if isinstance(ty_x, type):
+                    assert ty_x in x.__mro__, (x, ty_x)
+                else:
+                    assert isinstance(x, ty_x), (x, ty_x)
+            if self.key_type is not None:
+                check(key, self.key_type)
+            if self.value_type is not None:
+                check(value, self.value_type)
+        return super(DelayedRegistry, self).__setitem__(key, value)

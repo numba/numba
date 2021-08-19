@@ -1,6 +1,6 @@
 import numpy as np
-from numba import cuda, float32
-from numba.cuda.testing import unittest, SerialMixin
+from numba import cuda, float32, void
+from numba.cuda.testing import unittest, CUDATestCase
 
 
 def generate_input(n):
@@ -9,13 +9,13 @@ def generate_input(n):
     return A, B
 
 
-class TestCudaNonDet(SerialMixin, unittest.TestCase):
+class TestCudaNonDet(CUDATestCase):
     def test_for_pre(self):
         """Test issue with loop not running due to bad sign-extension at the for loop
         precondition.
         """
 
-        @cuda.jit(argtypes=[float32[:, :], float32[:, :], float32[:]])
+        @cuda.jit(void(float32[:, :], float32[:, :], float32[:]))
         def diagproduct(c, a, b):
             startX, startY = cuda.grid(2)
             gridX = cuda.gridDim.x * cuda.blockDim.x
@@ -47,4 +47,3 @@ class TestCudaNonDet(SerialMixin, unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-

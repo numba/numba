@@ -42,7 +42,7 @@ class SetAttribute(AttributeTemplate):
         unified = self.context.unify_pairs(set.dtype, item)
         if unified is not None:
             sig = signature(types.none, unified)
-            sig.recvr = set.copy(dtype=unified)
+            sig = sig.replace(recvr=set.copy(dtype=unified))
             return sig
 
     @bound_function("set.clear")
@@ -86,7 +86,7 @@ class SetAttribute(AttributeTemplate):
         unified = self.context.unify_pairs(set.dtype, dtype)
         if unified is not None:
             sig = signature(types.none, iterable)
-            sig.recvr = set.copy(dtype=unified)
+            sig = sig.replace(recvr=set.copy(dtype=unified))
             return sig
 
     def _resolve_xxx_update(self, set, args, kws):

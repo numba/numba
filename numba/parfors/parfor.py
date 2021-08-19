@@ -32,7 +32,6 @@ from numba.core.typing.templates import infer_global, AbstractTemplate
 from numba.stencils.stencilparfor import StencilPass
 from numba.core.extending import register_jitable
 
-
 from numba.core.ir_utils import (
     mk_unique_var,
     next_label,
@@ -75,7 +74,9 @@ from numba.core.ir_utils import (
     index_var_of_get_setitem,
     set_index_var_of_get_setitem,
     find_potential_aliases,
-    replace_var_names)
+    replace_var_names,
+    transfer_scope,
+)
 
 from numba.core.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
@@ -411,7 +412,7 @@ def linspace_parallel_impl(return_type, *args):
     else:
         raise ValueError("parallel linspace with types {}".format(args))
 
-replace_functions_map = {
+swap_functions_map = {
     ('argmin', 'numpy'): lambda r,a: argmin_parallel_impl,
     ('argmax', 'numpy'): lambda r,a: argmax_parallel_impl,
     ('min', 'numpy'): min_parallel_impl,
@@ -614,6 +615,35 @@ class Parfor(ir.Expr, ir.Stmt):
             block.dump(file)
         print(("end parfor {}".format(self.id)).center(20, '-'), file=file)
 
+    def validate_params(self, typemap):
+        """
+        Check that Parfors params are of valid types.
+        """
+        if self.params is None:
+            msg = ("Cannot run parameter validation on a Parfor with params "
+                   "not set")
+            raise ValueError(msg)
+        for p in self.params:
+            ty = typemap.get(p)
+            if ty is None:
+                msg = ("Cannot validate parameter %s, there is no type "
+                       "information available")
+                raise ValueError(msg)
+            if isinstance(ty, types.BaseTuple):
+                if ty.count > config.PARFOR_MAX_TUPLE_SIZE:
+                    msg = ("Use of a tuple (%s) of length %d in a parallel region "
+                           "exceeds the maximum supported tuple size.  Since "
+                           "Generalized Universal Functions back parallel regions "
+                           "and those do not support tuples, tuples passed to "
+                           "parallel regions are unpacked if their size is below "
+                           "a certain threshold, currently configured to be %d. "
+                           "This threshold can be modified using the Numba "
+                           "environment variable NUMBA_PARFOR_MAX_TUPLE_SIZE.")
+                    raise errors.UnsupportedParforsError(msg %
+                              (p, ty.count, config.PARFOR_MAX_TUPLE_SIZE),
+                              self.loc)
+
+
 def _analyze_parfor(parfor, equiv_set, typemap, array_analysis):
     """Recursive array analysis for parfor nodes.
     """
@@ -671,7 +701,6 @@ class ParforDiagnostics(object):
     @has_setup.setter
     def has_setup(self, state):
         self._has_setup = state
-
 
     def count_parfors(self, blocks=None):
         return len(self.get_parfors())
@@ -834,6 +863,340 @@ class ParforDiagnostics(object):
                             pass
         return line
 
+    def get_parfors_simple(self, print_loop_search):
+        parfors_simple = dict()
+
+        # print in line order, parfors loop id is based on discovery order
+        for pf in sorted(self.initial_parfors, key=lambda x: x.loc.line):
+            # use 0 here, the parfors are mutated by the time this routine
+            # is called, however, fusion appends the patterns so we can just
+            # pull in the first as a "before fusion" emulation
+            r_pattern = pf.patterns[0]
+            pattern = pf.patterns[0]
+            loc = pf.loc
+            if isinstance(pattern, tuple):
+                if pattern[0] == 'prange':
+                    if pattern[1] == 'internal':
+                        replfn = '.'.join(reversed(list(pattern[2][0])))
+                        loc = pattern[2][1]
+                        r_pattern = '%s %s' % (replfn, '(internal parallel version)')
+                    elif pattern[1] == 'user':
+                        r_pattern = "user defined prange"
+                    elif pattern[1] == 'pndindex':
+                        r_pattern = "internal pndindex" #FIXME: trace this!
+                    else:
+                        assert 0
+            fmt = 'Parallel for-loop #%s: is produced from %s:\n    %s\n \n'
+            if print_loop_search:
+                print_wrapped(fmt % (pf.id, loc, r_pattern))
+            parfors_simple[pf.id] = (pf, loc, r_pattern)
+        return parfors_simple
+
+    def get_all_lines(self, parfors_simple):
+        # ensure adjacency lists are the same size for both sets of info
+        # (nests and fusion may not traverse the same space, for
+        # convenience [] is used as a condition to halt recursion)
+        fadj, froots = self.compute_graph_info(self.fusion_info)
+        nadj, _nroots = self.compute_graph_info(self.nested_fusion_info)
+
+        if len(fadj) > len(nadj):
+            lim = len(fadj)
+            tmp = nadj
+        else:
+            lim = len(nadj)
+            tmp = fadj
+        for x in range(len(tmp), lim):
+            tmp.append([])
+
+        # This computes the roots of true loop nests (i.e. loops containing
+        # loops opposed to just a loop that's a root).
+        nroots = set()
+        if _nroots:
+            for r in _nroots:
+                if nadj[r] != []:
+                    nroots.add(r)
+        all_roots = froots ^ nroots
+
+        # This computes all the parfors at the top level that are either:
+        # - roots of loop fusion
+        # - roots of true loop nests
+        # it then combines these based on source line number for ease of
+        # producing output ordered in a manner similar to the code structure
+        froots_lines = {}
+        for x in froots:
+            line = self.sort_pf_by_line(x, parfors_simple)
+            froots_lines[line] = 'fuse', x, fadj
+
+        nroots_lines = {}
+        for x in nroots:
+            line = self.sort_pf_by_line(x, parfors_simple)
+            nroots_lines[line] = 'nest', x, nadj
+
+        all_lines = froots_lines.copy()
+        all_lines.update(nroots_lines)
+        return all_lines
+
+    def source_listing(self, parfors_simple, purpose_str):
+        filename = self.func_ir.loc.filename
+        count = self.count_parfors()
+        func_name = self.func_ir.func_id.func
+        try:
+            lines = inspect.getsource(func_name).splitlines()
+        except OSError: # generated function
+            lines = None
+        if lines and parfors_simple:
+            src_width = max([len(x) for x in lines])
+            map_line_to_pf = defaultdict(list) # parfors can alias lines
+            for k, v in parfors_simple.items():
+                # TODO: do a better job of tracking parfors that are not in
+                # this file but are referred to, e.g. np.arange()
+                if parfors_simple[k][1].filename == filename:
+                    match_line = self.sort_pf_by_line(k, parfors_simple)
+                    map_line_to_pf[match_line].append(str(k))
+
+            max_pf_per_line = max([1] + [len(x) for x in map_line_to_pf.values()])
+            width = src_width + (1 + max_pf_per_line * (len(str(count)) + 2))
+            newlines = []
+            newlines.append('\n')
+            newlines.append('Parallel loop listing for %s' % purpose_str)
+            newlines.append(width * '-' + '|loop #ID')
+            fmt = '{0:{1}}| {2}'
+            # why are these off by 1?
+            lstart = max(0, self.func_ir.loc.line - 1)
+            for no, line in enumerate(lines, lstart):
+                pf_ids = map_line_to_pf.get(no, None)
+                if pf_ids is not None:
+                    pfstr = '#' + ', '.join(pf_ids)
+                else:
+                    pfstr = ''
+                stripped = line.strip('\n')
+                srclen = len(stripped)
+                if pf_ids:
+                    l = fmt.format(width * '-', width, pfstr)
+                else:
+                    l = fmt.format(width * ' ', width, pfstr)
+                newlines.append(stripped + l[srclen:])
+            print('\n'.join(newlines))
+        else:
+            print("No source available")
+
+    def print_unoptimised(self, lines):
+        # This prints the unoptimised parfors state
+        sword = '+--'
+        fac = len(sword)
+        fadj, froots = self.compute_graph_info(self.fusion_info)
+        nadj, _nroots = self.compute_graph_info(self.nested_fusion_info)
+
+        if len(fadj) > len(nadj):
+            lim = len(fadj)
+            tmp = nadj
+        else:
+            lim = len(nadj)
+            tmp = fadj
+        for x in range(len(tmp), lim):
+            tmp.append([])
+
+        def print_nest(fadj_, nadj_, theroot, reported, region_id):
+            def print_g(fadj_, nadj_, nroot, depth):
+                print_wrapped(fac * depth * ' ' + '%s%s %s' % (sword, nroot, '(parallel)'))
+                for k in nadj_[nroot]:
+                    if nadj_[k] == []:
+                        msg = []
+                        msg.append(fac * (depth + 1) * ' ' + '%s%s %s' % (sword, k, '(parallel)'))
+                        if fadj_[k] != [] and k not in reported:
+                            fused = self.reachable_nodes(fadj_, k)
+                            for i in fused:
+                                msg.append(fac * (depth + 1) * ' ' + '%s%s %s' % (sword, i, '(parallel)'))
+                        reported.append(k)
+                        print_wrapped('\n'.join(msg))
+                    else:
+                        print_g(fadj_, nadj_, k, depth + 1)
+
+            if nadj_[theroot] != []:
+                print_wrapped("Parallel region %s:" % region_id)
+                print_g(fadj_, nadj_, theroot, 0)
+                print("\n")
+                region_id = region_id + 1
+            return region_id
+
+        def print_fuse(ty, pf_id, adj, depth, region_id):
+            msg = []
+            print_wrapped("Parallel region %s:" % region_id)
+            msg.append(fac * depth * ' ' + '%s%s %s' % (sword, pf_id, '(parallel)'))
+            if adj[pf_id] != []:
+                fused = sorted(self.reachable_nodes(adj, pf_id))
+                for k in fused:
+                    msg.append(fac * depth * ' ' + '%s%s %s' % (sword, k, '(parallel)'))
+            region_id = region_id + 1
+            print_wrapped('\n'.join(msg))
+            print("\n")
+            return region_id
+
+        # Walk the parfors by src line and print optimised structure
+        region_id = 0
+        reported = []
+        for line, info in sorted(lines.items()):
+            opt_ty, pf_id, adj = info
+            if opt_ty == 'fuse':
+                if pf_id not in reported:
+                    region_id = print_fuse('f', pf_id, adj, 0, region_id)
+            elif opt_ty == 'nest':
+                region_id = print_nest(fadj, nadj, pf_id, reported, region_id)
+            else:
+                assert 0
+
+    def print_optimised(self, lines):
+        # This prints the optimised output based on the transforms that
+        # occurred during loop fusion and rewriting of loop nests
+        sword = '+--'
+        fac = len(sword)
+        fadj, froots = self.compute_graph_info(self.fusion_info)
+        nadj, _nroots = self.compute_graph_info(self.nested_fusion_info)
+
+        if len(fadj) > len(nadj):
+            lim = len(fadj)
+            tmp = nadj
+        else:
+            lim = len(nadj)
+            tmp = fadj
+        for x in range(len(tmp), lim):
+            tmp.append([])
+
+        summary = dict()
+        # region : {fused, serialized}
+
+        def print_nest(fadj_, nadj_, theroot, reported, region_id):
+            def print_g(fadj_, nadj_, nroot, depth):
+                for k in nadj_[nroot]:
+                    msg = fac * depth * ' ' + '%s%s %s' % (sword, k, '(serial')
+                    if nadj_[k] == []:
+                        fused = []
+                        if fadj_[k] != [] and k not in reported:
+                            fused = sorted(self.reachable_nodes(fadj_, k))
+                            msg += ", fused with loop(s): "
+                            msg += ', '.join([str(x) for x in fused])
+                        msg += ')'
+                        reported.append(k)
+                        print_wrapped(msg)
+                        summary[region_id]['fused'] += len(fused)
+                    else:
+                        print_wrapped(msg + ')')
+                        print_g(fadj_, nadj_, k, depth + 1)
+                    summary[region_id]['serialized'] += 1
+
+            if nadj_[theroot] != []:
+                print_wrapped("Parallel region %s:" % region_id)
+                print_wrapped('%s%s %s' % (sword, theroot, '(parallel)'))
+                summary[region_id] = {'root': theroot, 'fused': 0, 'serialized': 0}
+                print_g(fadj_, nadj_, theroot, 1)
+                print("\n")
+                region_id = region_id + 1
+            return region_id
+
+        def print_fuse(ty, pf_id, adj, depth, region_id):
+            print_wrapped("Parallel region %s:" % region_id)
+            msg = fac * depth * ' ' + '%s%s %s' % (sword, pf_id, '(parallel')
+            fused = []
+            if adj[pf_id] != []:
+                fused = sorted(self.reachable_nodes(adj, pf_id))
+                msg += ", fused with loop(s): "
+                msg += ', '.join([str(x) for x in fused])
+
+            summary[region_id] = {'root': pf_id, 'fused': len(fused), 'serialized': 0}
+            msg += ')'
+            print_wrapped(msg)
+            print("\n")
+            region_id = region_id + 1
+            return region_id
+
+        # Walk the parfors by src line and print optimised structure
+        region_id = 0
+        reported = []
+        for line, info in sorted(lines.items()):
+            opt_ty, pf_id, adj = info
+            if opt_ty == 'fuse':
+                if pf_id not in reported:
+                    region_id = print_fuse('f', pf_id, adj, 0, region_id)
+            elif opt_ty == 'nest':
+                region_id = print_nest(fadj, nadj, pf_id, reported, region_id)
+            else:
+                assert 0
+
+        # print the summary of the fuse/serialize rewrite
+        if summary:
+            for k, v in sorted(summary.items()):
+                msg = ('\n \nParallel region %s (loop #%s) had %s '
+                    'loop(s) fused')
+                root = v['root']
+                fused = v['fused']
+                serialized = v['serialized']
+                if serialized != 0:
+                    msg += (' and %s loop(s) '
+                    'serialized as part of the larger '
+                    'parallel loop (#%s).')
+                    print_wrapped(msg % (k, root, fused, serialized, root))
+                else:
+                    msg += '.'
+                    print_wrapped(msg % (k, root, fused))
+        else:
+            print_wrapped("Parallel structure is already optimal.")
+
+    def allocation_hoist(self):
+        found = False
+        print('Allocation hoisting:')
+        for pf_id, data in self.hoist_info.items():
+            stmt = data.get('hoisted', [])
+            for inst in stmt:
+                if isinstance(inst.value, ir.Expr):
+                    try:
+                        attr = inst.value.attr
+                        if attr == 'empty':
+                            msg = ("The memory allocation derived from the "
+                                "instruction at %s is hoisted out of the "
+                                "parallel loop labelled #%s (it will be "
+                                "performed before the loop is executed and "
+                                "reused inside the loop):")
+                            loc = inst.loc
+                            print_wrapped(msg % (loc, pf_id))
+                            try:
+                                path = os.path.relpath(loc.filename)
+                            except ValueError:
+                                path = os.path.abspath(loc.filename)
+                            lines = linecache.getlines(path)
+                            if lines and loc.line:
+                                print_wrapped("   Allocation:: " + lines[0 if loc.line < 2 else loc.line - 1].strip())
+                            print_wrapped("    - numpy.empty() is used for the allocation.\n")
+                            found = True
+                    except (KeyError, AttributeError):
+                        pass
+        if not found:
+            print_wrapped('No allocation hoisting found')
+
+    def instruction_hoist(self):
+        print("")
+        print('Instruction hoisting:')
+        hoist_info_printed = False
+        if self.hoist_info:
+            for pf_id, data in self.hoist_info.items():
+                hoisted = data.get('hoisted', None)
+                not_hoisted = data.get('not_hoisted', None)
+                if not hoisted and not not_hoisted:
+                    print("loop #%s has nothing to hoist." % pf_id)
+                    continue
+
+                print("loop #%s:" % pf_id)
+                if hoisted:
+                    print("  Has the following hoisted:")
+                    [print("    %s" % y) for y in hoisted]
+                    hoist_info_printed = True
+                if not_hoisted:
+                    print("  Failed to hoist the following:")
+                    [print("    %s: %s" % (y, x)) for x, y in not_hoisted]
+                    hoist_info_printed = True
+        if not hoist_info_printed:
+            print_wrapped('No instruction hoisting found')
+        print_wrapped(80 * '-')
+
     def dump(self, level=1):
         if not self.has_setup:
             raise RuntimeError("self.setup has not been called")
@@ -891,33 +1254,7 @@ class ParforDiagnostics(object):
 #----------- search section
         if print_loop_search:
             print_wrapped('Looking for parallel loops'.center(_termwidth, '-'))
-
-        parfors_simple = dict()
-
-        # print in line order, parfors loop id is based on discovery order
-        for pf in sorted(self.initial_parfors, key=lambda x: x.loc.line):
-            # use 0 here, the parfors are mutated by the time this routine
-            # is called, however, fusion appends the patterns so we can just
-            # pull in the first as a "before fusion" emulation
-            r_pattern = pf.patterns[0]
-            pattern = pf.patterns[0]
-            loc = pf.loc
-            if isinstance(pattern, tuple):
-                if pattern[0] == 'prange':
-                    if pattern[1] == 'internal':
-                        replfn = '.'.join(reversed(list(pattern[2][0])))
-                        loc = pattern[2][1]
-                        r_pattern = '%s %s' % (replfn, '(internal parallel version)')
-                    elif pattern[1] == 'user':
-                        r_pattern = "user defined prange"
-                    elif pattern[1] == 'pndindex':
-                        r_pattern = "internal pndindex" #FIXME: trace this!
-                    else:
-                        assert 0
-            fmt = 'Parallel for-loop #%s: is produced from %s:\n    %s\n \n'
-            if print_loop_search:
-                print_wrapped(fmt % (pf.id, loc, r_pattern))
-            parfors_simple[pf.id] = (pf, loc, r_pattern)
+        parfors_simple = self.get_parfors_simple(print_loop_search)
 
         count = self.count_parfors()
         if print_loop_search:
@@ -937,46 +1274,7 @@ class ParforDiagnostics(object):
             path = os.path.abspath(filename)
 
         if print_source_listing:
-            func_name = self.func_ir.func_id.func
-            try:
-                lines = inspect.getsource(func_name).splitlines()
-            except OSError: # generated function
-                lines = None
-            if lines:
-                src_width = max([len(x) for x in lines])
-                map_line_to_pf = defaultdict(list) # parfors can alias lines
-                for k, v in parfors_simple.items():
-                    # TODO: do a better job of tracking parfors that are not in
-                    # this file but are referred to, e.g. np.arange()
-                    if parfors_simple[k][1].filename == filename:
-                        match_line = self.sort_pf_by_line(k, parfors_simple)
-                        map_line_to_pf[match_line].append(str(k))
-
-                max_pf_per_line = max([1] + [len(x) for x in map_line_to_pf.values()])
-                width = src_width + (1 + max_pf_per_line * (len(str(count)) + 2))
-                newlines = []
-                newlines.append('\n')
-                newlines.append('Parallel loop listing for %s' % purpose_str)
-                newlines.append(width * '-' + '|loop #ID')
-                fmt = '{0:{1}}| {2}'
-                # why are these off by 1?
-                lstart = max(0, self.func_ir.loc.line - 1)
-                for no, line in enumerate(lines, lstart):
-                    pf_ids = map_line_to_pf.get(no, None)
-                    if pf_ids is not None:
-                        pfstr = '#' + ', '.join(pf_ids)
-                    else:
-                        pfstr = ''
-                    stripped = line.strip('\n')
-                    srclen = len(stripped)
-                    if pf_ids:
-                        l = fmt.format(width * '-', width, pfstr)
-                    else:
-                        l = fmt.format(width * ' ', width, pfstr)
-                    newlines.append(stripped + l[srclen:])
-                print('\n'.join(newlines))
-            else:
-                print("No source available")
+            self.source_listing(parfors_simple, purpose_str)
 
 #---------- these are used a lot here on in
         sword = '+--'
@@ -1047,198 +1345,16 @@ class ParforDiagnostics(object):
                     print_wrapped("")
 
 #---------- compute various properties and orderings in the data for subsequent use
-
-            # ensure adjacency lists are the same size for both sets of info
-            # (nests and fusion may not traverse the same space, for
-            # convenience [] is used as a condition to halt recursion)
-            fadj, froots = self.compute_graph_info(self.fusion_info)
-            nadj, _nroots = self.compute_graph_info(self.nested_fusion_info)
-
-            if len(fadj) > len(nadj):
-                lim = len(fadj)
-                tmp = nadj
-            else:
-                lim = len(nadj)
-                tmp = fadj
-            for x in range(len(tmp), lim):
-                tmp.append([])
-
-            # This computes the roots of true loop nests (i.e. loops containing
-            # loops opposed to just a loop that's a root).
-            nroots = set()
-            if _nroots:
-                for r in _nroots:
-                    if nadj[r] != []:
-                        nroots.add(r)
-            all_roots = froots ^ nroots
-
-            # This computes all the parfors at the top level that are either:
-            # - roots of loop fusion
-            # - roots of true loop nests
-            # it then combines these based on source line number for ease of
-            # producing output ordered in a manner similar to the code structure
-            froots_lines = {}
-            for x in froots:
-                line = self.sort_pf_by_line(x, parfors_simple)
-                froots_lines[line] = 'fuse', x, fadj
-
-            nroots_lines = {}
-            for x in nroots:
-                line = self.sort_pf_by_line(x, parfors_simple)
-                nroots_lines[line] = 'nest', x, nadj
-
-            all_lines = froots_lines.copy()
-            all_lines.update(nroots_lines)
-
-            # nroots, froots, nadj and fadj are all set up correctly
-            # define some print functions
-
-            def print_unoptimised(lines):
-                # This prints the unoptimised parfors state
-
-                fac = len(sword)
-
-                def print_nest(fadj_, nadj_, theroot, reported, region_id):
-                    def print_g(fadj_, nadj_, nroot, depth):
-                        print_wrapped(fac * depth * ' ' + '%s%s %s' % (sword, nroot, '(parallel)'))
-                        for k in nadj_[nroot]:
-                            if nadj_[k] == []:
-                                msg = []
-                                msg.append(fac * (depth + 1) * ' ' + '%s%s %s' % (sword, k, '(parallel)'))
-                                if fadj_[k] != [] and k not in reported:
-                                    fused = self.reachable_nodes(fadj_, k)
-                                    for i in fused:
-                                        msg.append(fac * (depth + 1) * ' ' + '%s%s %s' % (sword, i, '(parallel)'))
-                                reported.append(k)
-                                print_wrapped('\n'.join(msg))
-                            else:
-                                print_g(fadj_, nadj_, k, depth + 1)
-
-                    if nadj_[theroot] != []:
-                        print_wrapped("Parallel region %s:" % region_id)
-                        print_g(fadj_, nadj_, theroot, 0)
-                        print("\n")
-                        region_id = region_id + 1
-                    return region_id
-
-                def print_fuse(ty, pf_id, adj, depth, region_id):
-                    msg = []
-                    print_wrapped("Parallel region %s:" % region_id)
-                    msg.append(fac * depth * ' ' + '%s%s %s' % (sword, pf_id, '(parallel)'))
-                    if adj[pf_id] != []:
-                        fused = sorted(self.reachable_nodes(adj, pf_id))
-                        for k in fused:
-                            msg.append(fac * depth * ' ' + '%s%s %s' % (sword, k, '(parallel)'))
-                    region_id = region_id + 1
-                    print_wrapped('\n'.join(msg))
-                    print("\n")
-                    return region_id
-
-                # Walk the parfors by src line and print optimised structure
-                region_id = 0
-                reported = []
-                for line, info in sorted(lines.items()):
-                    opt_ty, pf_id, adj = info
-                    if opt_ty == 'fuse':
-                        if pf_id not in reported:
-                            region_id = print_fuse('f', pf_id, adj, 0, region_id)
-                    elif opt_ty == 'nest':
-                        region_id = print_nest(fadj, nadj, pf_id, reported, region_id)
-                    else:
-                        assert 0
-
-            def print_optimised(lines):
-                # This prints the optimised output based on the transforms that
-                # occurred during loop fusion and rewriting of loop nests
-                fac = len(sword)
-
-                summary = dict()
-                # region : {fused, serialized}
-
-                def print_nest(fadj_, nadj_, theroot, reported, region_id):
-                    def print_g(fadj_, nadj_, nroot, depth):
-                        for k in nadj_[nroot]:
-                            msg = fac * depth * ' ' + '%s%s %s' % (sword, k, '(serial')
-                            if nadj_[k] == []:
-                                fused = []
-                                if fadj_[k] != [] and k not in reported:
-                                    fused = sorted(self.reachable_nodes(fadj_, k))
-                                    msg += ", fused with loop(s): "
-                                    msg += ', '.join([str(x) for x in fused])
-                                msg += ')'
-                                reported.append(k)
-                                print_wrapped(msg)
-                                summary[region_id]['fused'] += len(fused)
-                            else:
-                                print_wrapped(msg + ')')
-                                print_g(fadj_, nadj_, k, depth + 1)
-                            summary[region_id]['serialized'] += 1
-
-                    if nadj_[theroot] != []:
-                        print_wrapped("Parallel region %s:" % region_id)
-                        print_wrapped('%s%s %s' % (sword, theroot, '(parallel)'))
-                        summary[region_id] = {'root': theroot, 'fused': 0, 'serialized': 0}
-                        print_g(fadj_, nadj_, theroot, 1)
-                        print("\n")
-                        region_id = region_id + 1
-                    return region_id
-
-                def print_fuse(ty, pf_id, adj, depth, region_id):
-                    print_wrapped("Parallel region %s:" % region_id)
-                    msg = fac * depth * ' ' + '%s%s %s' % (sword, pf_id, '(parallel')
-                    fused = []
-                    if adj[pf_id] != []:
-                        fused = sorted(self.reachable_nodes(adj, pf_id))
-                        msg += ", fused with loop(s): "
-                        msg += ', '.join([str(x) for x in fused])
-
-                    summary[region_id] = {'root': pf_id, 'fused': len(fused), 'serialized': 0}
-                    msg += ')'
-                    print_wrapped(msg)
-                    print("\n")
-                    region_id = region_id + 1
-                    return region_id
-
-                # Walk the parfors by src line and print optimised structure
-                region_id = 0
-                reported = []
-                for line, info in sorted(lines.items()):
-                    opt_ty, pf_id, adj = info
-                    if opt_ty == 'fuse':
-                        if pf_id not in reported:
-                            region_id = print_fuse('f', pf_id, adj, 0, region_id)
-                    elif opt_ty == 'nest':
-                        region_id = print_nest(fadj, nadj, pf_id, reported, region_id)
-                    else:
-                        assert 0
-
-                # print the summary of the fuse/serialize rewrite
-                if summary:
-                    for k, v in sorted(summary.items()):
-                        msg = ('\n \nParallel region %s (loop #%s) had %s '
-                            'loop(s) fused')
-                        root = v['root']
-                        fused = v['fused']
-                        serialized = v['serialized']
-                        if serialized != 0:
-                            msg += (' and %s loop(s) '
-                            'serialized as part of the larger '
-                            'parallel loop (#%s).')
-                            print_wrapped(msg % (k, root, fused, serialized, root))
-                        else:
-                            msg += '.'
-                            print_wrapped(msg % (k, root, fused))
-                else:
-                    print_wrapped("Parallel structure is already optimal.")
+            all_lines = self.get_all_lines(parfors_simple)
 
             if print_pre_optimised:
                 print(' Before Optimisation '.center(_termwidth,'-'))
-                print_unoptimised(all_lines)
+                self.print_unoptimised(all_lines)
                 print(_termwidth * '-')
 
             if print_post_optimised:
                 print(' After Optimisation '.center(_termwidth,'-'))
-                print_optimised(all_lines)
+                self.print_optimised(all_lines)
                 print(_termwidth * '-')
             print_wrapped("")
             print_wrapped(_termwidth * '-')
@@ -1249,60 +1365,10 @@ class ParforDiagnostics(object):
                 print_wrapped('Loop invariant code motion'.center(80, '-'))
 
             if print_allocation_hoist:
-                found = False
-                print('Allocation hoisting:')
-                for pf_id, data in self.hoist_info.items():
-                    stmt = data.get('hoisted', [])
-                    for inst in stmt:
-                        if isinstance(inst.value, ir.Expr):
-                            try:
-                                attr = inst.value.attr
-                                if attr == 'empty':
-                                    msg = ("The memory allocation derived from the "
-                                        "instruction at %s is hoisted out of the "
-                                        "parallel loop labelled #%s (it will be "
-                                        "performed before the loop is executed and "
-                                        "reused inside the loop):")
-                                    loc = inst.loc
-                                    print_wrapped(msg % (loc, pf_id))
-                                    try:
-                                        path = os.path.relpath(loc.filename)
-                                    except ValueError:
-                                        path = os.path.abspath(loc.filename)
-                                    lines = linecache.getlines(path)
-                                    if lines and loc.line:
-                                        print_wrapped("   Allocation:: " + lines[0 if loc.line < 2 else loc.line - 1].strip())
-                                    print_wrapped("    - numpy.empty() is used for the allocation.\n")
-                                    found = True
-                            except (KeyError, AttributeError):
-                                pass
-                if not found:
-                    print_wrapped('No allocation hoisting found')
+                self.allocation_hoist()
+
             if print_instruction_hoist:
-                print("")
-                print('Instruction hoisting:')
-                hoist_info_printed = False
-                if self.hoist_info:
-                    for pf_id, data in self.hoist_info.items():
-                        hoisted = data.get('hoisted', None)
-                        not_hoisted = data.get('not_hoisted', None)
-                        if not hoisted and not not_hoisted:
-                            print("loop #%s has nothing to hoist." % pf_id)
-                            continue
-
-                        print("loop #%s:" % pf_id)
-                        if hoisted:
-                            print("  Has the following hoisted:")
-                            [print("    %s" % y) for y in hoisted]
-                            hoist_info_printed = True
-                        if not_hoisted:
-                            print("  Failed to hoist the following:")
-                            [print("    %s: %s" % (y, x)) for x, y in not_hoisted]
-                            hoist_info_printed = True
-                if not hoist_info_printed:
-                    print_wrapped('No instruction hoisting found')
-                print_wrapped(80 * '-')
-
+                self.instruction_hoist()
 
         else: # there are no parfors
             print_wrapped('Function %s, %s, has no parallel for-loops.'.format(name, line))
@@ -1321,15 +1387,19 @@ class PreParforPass(object):
     """Preprocessing for the Parfor pass. It mostly inlines parallel
     implementations of numpy functions if available.
     """
-    def __init__(self, func_ir, typemap, calltypes, typingctx, options,
-                 swapped={}):
+    def __init__(self, func_ir, typemap, calltypes, typingctx, targetctx,
+                 options, swapped={}, replace_functions_map=None):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
         self.typingctx = typingctx
+        self.targetctx = targetctx
         self.options = options
         # diagnostics
         self.swapped = swapped
+        if replace_functions_map is None:
+            replace_functions_map = swap_functions_map
+        self.replace_functions_map = replace_functions_map
         self.stats = {
             'replaced_func': 0,
             'replaced_dtype': 0,
@@ -1366,7 +1436,7 @@ class PreParforPass(object):
                         def replace_func():
                             func_def = get_definition(self.func_ir, expr.func)
                             callname = find_callname(self.func_ir, expr)
-                            repl_func = replace_functions_map.get(callname, None)
+                            repl_func = self.replace_functions_map.get(callname, None)
                             # Handle method on array type
                             if (repl_func is None and
                                 len(callname) == 2 and
@@ -1378,13 +1448,13 @@ class PreParforPass(object):
                                     # Add the array that the method is on to the arg list.
                                     expr.args.insert(0, callname[1])
 
-                            require(repl_func != None)
+                            require(repl_func is not None)
                             typs = tuple(self.typemap[x.name] for x in expr.args)
                             try:
                                 new_func =  repl_func(lhs_typ, *typs)
                             except:
                                 new_func = None
-                            require(new_func != None)
+                            require(new_func is not None)
                             g = copy.copy(self.func_ir.func_id.func.__globals__)
                             g['numba'] = numba
                             g['np'] = numpy
@@ -1397,8 +1467,8 @@ class PreParforPass(object):
                                 g[check.name] = check.func
                             # inline the parallel implementation
                             new_blocks, _ = inline_closure_call(self.func_ir, g,
-                                            block, i, new_func, self.typingctx, typs,
-                                            self.typemap, self.calltypes, work_list)
+                                            block, i, new_func, self.typingctx, self.targetctx,
+                                            typs, self.typemap, self.calltypes, work_list)
                             call_table = get_call_table(new_blocks, topological_ordering=False)
 
                             # find the prange in the new blocks and record it for use in diagnostics
@@ -1483,11 +1553,13 @@ class ParforPassStates:
     """
 
     def __init__(self, func_ir, typemap, calltypes, return_type, typingctx,
-                 options, flags, diagnostics=ParforDiagnostics()):
+                 targetctx,  options, flags, metadata,
+                 diagnostics=ParforDiagnostics()):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
         self.typingctx = typingctx
+        self.targetctx = targetctx
         self.return_type = return_type
         self.options = options
         self.diagnostics = diagnostics
@@ -1496,11 +1568,136 @@ class ParforPassStates:
         self.nested_fusion_info = diagnostics.nested_fusion_info
 
         self.array_analysis = array_analysis.ArrayAnalysis(
-            typingctx, func_ir, typemap, calltypes,
+            self.typingctx, self.func_ir, self.typemap, self.calltypes,
         )
 
-        ir_utils._max_label = max(func_ir.blocks.keys())
+        ir_utils._the_max_label.update(max(func_ir.blocks.keys()))
         self.flags = flags
+        self.metadata = metadata
+        if "parfors" not in metadata:
+            metadata["parfors"] = {}
+
+
+class ConvertInplaceBinop:
+    """Parfor subpass to convert setitem on Arrays
+    """
+    def __init__(self, pass_states):
+        """
+        Parameters
+        ----------
+        pass_states : ParforPassStates
+        """
+        self.pass_states = pass_states
+        self.rewritten = []
+
+    def run(self, blocks):
+        pass_states = self.pass_states
+        # convert expressions like A += ... where A is an array.
+        topo_order = find_topo_order(blocks)
+        # variables available in the program so far (used for finding map
+        # functions in array_expr lowering)
+        for label in topo_order:
+            block = blocks[label]
+            new_body = []
+            equiv_set = pass_states.array_analysis.get_equiv_set(label)
+            for instr in block.body:
+                if isinstance(instr, ir.Assign):
+                    lhs = instr.target
+                    expr = instr.value
+                    if isinstance(expr, ir.Expr) and expr.op == 'inplace_binop':
+                        loc = expr.loc
+                        target = expr.lhs
+                        value = expr.rhs
+                        target_typ = pass_states.typemap[target.name]
+                        value_typ = pass_states.typemap[value.name]
+                        # Handle A op= ...
+                        if isinstance(target_typ, types.npytypes.Array):
+                            # RHS is an array
+                            if isinstance(value_typ, types.npytypes.Array):
+                                new_instr = self._inplace_binop_to_parfor(equiv_set,
+                                        loc, expr.immutable_fn, target, value)
+                                self.rewritten.append(
+                                    dict(old=instr, new=new_instr,
+                                         reason='inplace_binop'),
+                                )
+                                instr = [new_instr, ir.Assign(target, lhs, loc)]
+                if isinstance(instr, list):
+                    new_body.extend(instr)
+                else:
+                    new_body.append(instr)
+            block.body = new_body
+
+    def _inplace_binop_to_parfor(self, equiv_set, loc, op, target, value):
+        """generate parfor from setitem node with a boolean or slice array indices.
+        The value can be either a scalar or an array variable, and if a boolean index
+        is used for the latter case, the same index must be used for the value too.
+        """
+        pass_states = self.pass_states
+        scope = target.scope
+        arr_typ = pass_states.typemap[target.name]
+        el_typ = arr_typ.dtype
+        init_block = ir.Block(scope, loc)
+        value_typ = pass_states.typemap[value.name]
+
+        size_vars = equiv_set.get_shape(target)
+
+        # generate loopnests and size variables from target correlations
+        index_vars, loopnests = _mk_parfor_loops(pass_states.typemap, size_vars, scope, loc)
+
+        # generate body
+        body_label = next_label()
+        body_block = ir.Block(scope, loc)
+        index_var, index_var_typ = _make_index_var(
+                pass_states.typemap, scope, index_vars, body_block)
+
+        # Read value.
+        value_var = ir.Var(scope, mk_unique_var("$value_var"), loc)
+        pass_states.typemap[value_var.name] = value_typ.dtype
+        getitem_call = ir.Expr.getitem(value, index_var, loc)
+        pass_states.calltypes[getitem_call] = signature(
+            value_typ.dtype, value_typ, index_var_typ)
+        body_block.body.append(ir.Assign(getitem_call, value_var, loc))
+
+        # Read target
+        target_var = ir.Var(scope, mk_unique_var("$target_var"), loc)
+        pass_states.typemap[target_var.name] = el_typ
+        getitem_call = ir.Expr.getitem(target, index_var, loc)
+        pass_states.calltypes[getitem_call] = signature(
+            el_typ, arr_typ, index_var_typ)
+        body_block.body.append(ir.Assign(getitem_call, target_var, loc))
+
+        # Create temp to hold result.
+        expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
+        pass_states.typemap[expr_out_var.name] = el_typ
+
+        # Create binop and assign result to temporary.
+        binop_expr = ir.Expr.binop(op, target_var, value_var, loc)
+        body_block.body.append(ir.Assign(binop_expr, expr_out_var, loc))
+        unified_type = self.pass_states.typingctx.unify_pairs(el_typ, value_typ.dtype)
+        pass_states.calltypes[binop_expr] = signature(
+            unified_type, unified_type, unified_type)
+
+        # Write to target
+        setitem_node = ir.SetItem(target, index_var, expr_out_var, loc)
+        pass_states.calltypes[setitem_node] = signature(
+            types.none, arr_typ, index_var_typ, el_typ)
+        body_block.body.append(setitem_node)
+
+        parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
+                        ('inplace_binop', ''), pass_states.flags)
+        parfor.loop_body = {body_label: body_block}
+        if config.DEBUG_ARRAY_OPT >= 1:
+            print("parfor from inplace_binop")
+            parfor.dump()
+        return parfor
+
+    def _type_getitem(self, args):
+        fnty = operator.getitem
+        return self.pass_states.typingctx.resolve_function_type(fnty, tuple(args), {})
+
+
+def get_index_var(x):
+    return x.index if isinstance(x, ir.SetItem) else x.index_var
 
 
 class ConvertSetItemPass:
@@ -1522,17 +1719,15 @@ class ConvertSetItemPass:
         topo_order = find_topo_order(blocks)
         # variables available in the program so far (used for finding map
         # functions in array_expr lowering)
-        avail_vars = []
         for label in topo_order:
             block = blocks[label]
             new_body = []
             equiv_set = pass_states.array_analysis.get_equiv_set(label)
             for instr in block.body:
-                if isinstance(instr, ir.StaticSetItem) or isinstance(instr, ir.SetItem):
+                if isinstance(instr, (ir.StaticSetItem, ir.SetItem)):
                     loc = instr.loc
                     target = instr.target
-                    index = (instr.index if isinstance(instr, ir.SetItem)
-                             else instr.index_var)
+                    index = get_index_var(instr)
                     value = instr.value
                     target_typ = pass_states.typemap[target.name]
                     index_typ = pass_states.typemap[index.name]
@@ -1735,16 +1930,17 @@ class ConvertNumpyPass:
                 if isinstance(instr, ir.Assign):
                     expr = instr.value
                     lhs = instr.target
-                    if self._is_C_order(lhs.name):
-                        # only translate C order since we can't allocate F
+                    lhs_typ = self.pass_states.typemap[lhs.name]
+                    if self._is_C_or_F_order(lhs_typ):
                         if guard(self._is_supported_npycall, expr):
                             new_instr = self._numpy_to_parfor(equiv_set, lhs, expr)
-                            self.rewritten.append(dict(
-                                old=instr,
-                                new=new_instr,
-                                reason='numpy_allocator',
-                            ))
-                            instr = new_instr
+                            if new_instr is not None:
+                                self.rewritten.append(dict(
+                                    old=instr,
+                                    new=new_instr,
+                                    reason='numpy_allocator',
+                                ))
+                                instr = new_instr
                         elif isinstance(expr, ir.Expr) and expr.op == 'arrayexpr':
                             new_instr = self._arrayexpr_to_parfor(
                                 equiv_set, lhs, expr, avail_vars)
@@ -1759,8 +1955,26 @@ class ConvertNumpyPass:
             block.body = new_body
 
     def _is_C_order(self, arr_name):
-        typ = self.pass_states.typemap[arr_name]
-        return isinstance(typ, types.npytypes.Array) and typ.layout == 'C' and typ.ndim > 0
+        if isinstance(arr_name, types.npytypes.Array):
+            return arr_name.layout == 'C' and arr_name.ndim > 0
+        elif arr_name is str:
+            typ = self.pass_states.typemap[arr_name]
+            return (isinstance(typ, types.npytypes.Array) and
+                    typ.layout == 'C' and
+                    typ.ndim > 0)
+        else:
+            return False
+
+    def _is_C_or_F_order(self, arr_name):
+        if isinstance(arr_name, types.npytypes.Array):
+            return (arr_name.layout == 'C' or arr_name.layout == 'F') and arr_name.ndim > 0
+        elif arr_name is str:
+            typ = self.pass_states.typemap[arr_name]
+            return (isinstance(typ, types.npytypes.Array) and
+                    (typ.layout == 'C' or typ.layout == 'F') and
+                    typ.ndim > 0)
+        else:
+            return False
 
     def _arrayexpr_to_parfor(self, equiv_set, lhs, arrayexpr, avail_vars):
         """generate parfor from arrayexpr node, which is essentially a
@@ -1779,8 +1993,11 @@ class ConvertNumpyPass:
 
         # generate init block and body
         init_block = ir.Block(scope, loc)
-        init_block.body = mk_alloc(pass_states.typemap, pass_states.calltypes, lhs,
-                                   tuple(size_vars), el_typ, scope, loc)
+        init_block.body = mk_alloc(
+            pass_states.typingctx,
+            pass_states.typemap, pass_states.calltypes, lhs,
+            tuple(size_vars), el_typ, scope, loc,
+            pass_states.typemap[lhs.name])
         body_label = next_label()
         body_block = ir.Block(scope, loc)
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
@@ -1853,12 +2070,20 @@ class ConvertNumpyPass:
 
         # generate loopnests and size variables from lhs correlations
         size_vars = equiv_set.get_shape(lhs)
+        if size_vars is None:
+            if config.DEBUG_ARRAY_OPT >= 1:
+                print("Could not convert numpy map to parfor, unknown size")
+            return None
+
         index_vars, loopnests = _mk_parfor_loops(pass_states.typemap, size_vars, scope, loc)
 
         # generate init block and body
         init_block = ir.Block(scope, loc)
-        init_block.body = mk_alloc(pass_states.typemap, pass_states.calltypes, lhs,
-                                   tuple(size_vars), el_typ, scope, loc)
+        init_block.body = mk_alloc(
+            pass_states.typingctx,
+            pass_states.typemap, pass_states.calltypes, lhs,
+            tuple(size_vars), el_typ, scope, loc,
+            pass_states.typemap[lhs.name])
         body_label = next_label()
         body_block = ir.Block(scope, loc)
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
@@ -1882,20 +2107,20 @@ class ConvertNumpyPass:
                 typing.Context(), new_arg_typs, new_kw_types)
             value = expr
         else:
-            NotImplementedError(
+            raise NotImplementedError(
                 "Map of numpy.{} to parfor is not implemented".format(call_name))
 
         value_assign = ir.Assign(value, expr_out_var, loc)
         body_block.body.append(value_assign)
 
-        parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
-                        ('{} function'.format(call_name,), 'NumPy mapping'),
-                        pass_states.flags)
-
         setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
         pass_states.calltypes[setitem_node] = signature(
             types.none, pass_states.typemap[lhs.name], index_var_typ, el_typ)
         body_block.body.append(setitem_node)
+
+        parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
+                        ('{} function'.format(call_name,), 'NumPy mapping'),
+                        pass_states.flags)
         parfor.loop_body = {body_label: body_block}
         if config.DEBUG_ARRAY_OPT >= 1:
             print("generated parfor for numpy map:")
@@ -1963,7 +2188,10 @@ class ConvertReducePass:
             in_arr, mask_var, mask_typ, mask_indices = mask_query_result
 
         init_val = args[2]
-        size_vars = equiv_set.get_shape(in_arr if mask_indices == None else mask_var)
+        size_vars = equiv_set.get_shape(in_arr if mask_indices is None else mask_var)
+        if size_vars is None:
+            return None
+
         index_vars, loopnests = _mk_parfor_loops(pass_states.typemap, size_vars, scope, loc)
         mask_index = index_vars
         if mask_indices:
@@ -1985,7 +2213,7 @@ class ConvertReducePass:
             raise AssertionError("unreachable")
             index_var = mask_index[0]
 
-        if mask_var != None:
+        if mask_var is not None:
             true_label = min(loop_body.keys())
             false_label = max(loop_body.keys())
             body_block = ir.Block(scope, loc)
@@ -2033,6 +2261,7 @@ class ConvertReducePass:
         reduce_f_ir = compile_to_numba_ir(fcode,
                                         pass_states.func_ir.func_id.func.__globals__,
                                         pass_states.typingctx,
+                                        pass_states.targetctx,
                                         (in_typ, in_typ),
                                         pass_states.typemap,
                                         pass_states.calltypes)
@@ -2077,6 +2306,11 @@ class ConvertLoopPass:
                         and isinstance(inst.value, ir.Expr)
                         and inst.value.op == 'call'
                         and self._is_parallel_loop(inst.value.func.name, call_table)):
+                    # Here we've found a parallel loop, either prange or pndindex.
+                    # We create a parfor from this loop and then overwrite the contents
+                    # of the original loop header block to contain this parfor and then
+                    # a jump to the original loop exit block.  Other blocks in the
+                    # original loop are discarded.
                     body_labels = [ l for l in loop.body if
                                     l in blocks and l != loop.header ]
                     args = inst.value.args
@@ -2213,7 +2447,7 @@ class ConvertLoopPass:
                         else:
                             in_arr = args[0]
                         size_vars = equiv_set.get_shape(in_arr
-                                        if mask_indices == None else mask_var)
+                                        if mask_indices is None else mask_var)
                         index_vars, loops = _mk_parfor_loops(
                             pass_states.typemap, size_vars, scope, loc,
                         )
@@ -2238,7 +2472,7 @@ class ConvertLoopPass:
 
                         # if masked array optimization is being applied, create
                         # the branch for array selection
-                        if mask_var != None:
+                        if mask_var is not None:
                             # The following code are not tested
                             raise AssertionError("unreachable")
                             body_label = next_label()
@@ -2315,19 +2549,17 @@ class ConvertLoopPass:
                                     equiv_set,
                                     ("prange", loop_kind, loop_replacing),
                                     pass_states.flags, races=races)
-                    # add parfor to entry block's jump target
-                    jump = blocks[entry].body[-1]
-                    jump.target = list(loop.exits)[0]
-                    blocks[jump.target].body.insert(0, parfor)
+
+                    blocks[loop.header].body = [parfor, ir.Jump(list(loop.exits)[0], loc)]
                     self.rewritten.append(dict(
                         old_loop=loop,
                         new=parfor,
                         reason='loop',
                     ))
                     # remove loop blocks from top level dict
-                    blocks.pop(loop.header)
                     for l in body_labels:
-                        blocks.pop(l)
+                        if l != loop.header:
+                            blocks.pop(l)
                     if config.DEBUG_ARRAY_OPT >= 1:
                         print("parfor from loop")
                         parfor.dump()
@@ -2435,11 +2667,23 @@ class ConvertLoopPass:
                         index_set.add(stmt.target.name)
                         added_indices.add(stmt.target.name)
                     # make sure parallel index is not overwritten
-                    elif stmt.target.name in index_set and stmt.target.name != stmt.value.name:
-                        raise errors.UnsupportedRewriteError(
-                            "Overwrite of parallel loop index",
-                            loc=stmt.target.loc,
-                        )
+                    else:
+                        scope = block.scope
+
+                        def unver(name):
+                            from numba.core import errors
+                            try:
+                                return scope.get_exact(name).unversioned_name
+                            except errors.NotDefinedError:
+                                return name
+
+                        if unver(stmt.target.name) in map(unver, index_set) and unver(stmt.target.name) != unver(stmt.value.name):
+                            raise errors.UnsupportedRewriteError(
+                                "Overwrite of parallel loop index",
+                                loc=stmt.target.loc,
+                            )
+
+
 
                 if is_get_setitem(stmt):
                     index = index_var_of_get_setitem(stmt)
@@ -2522,8 +2766,6 @@ def _find_mask(typemap, func_ir, arr_def):
                 mask_indices.append(None)
             # Handle integer index
             elif isinstance(index_typ, types.Integer):
-                # The follow is never tested
-                raise AssertionError('unreachable')
                 count_consts += 1
                 mask_indices.append(ind)
 
@@ -2543,6 +2785,9 @@ class ParforPass(ParforPassStates):
     def _pre_run(self):
         # run array analysis, a pre-requisite for parfor translation
         self.array_analysis.run(self.func_ir.blocks)
+        # NOTE: Prepare _the_max_label. See #6102
+        ir_utils._the_max_label.update(
+            ir_utils.find_max_label(self.func_ir.blocks))
 
     def run(self):
         """run parfor conversion pass: replace Numpy calls
@@ -2550,8 +2795,10 @@ class ParforPass(ParforPassStates):
         self._pre_run()
         # run stencil translation to parfor
         if self.options.stencil:
-            stencil_pass = StencilPass(self.func_ir, self.typemap, self.calltypes,
-                                            self.array_analysis, self.typingctx, self.flags)
+            stencil_pass = StencilPass(self.func_ir, self.typemap,
+                                       self.calltypes, self.array_analysis,
+                                       self.typingctx, self.targetctx,
+                                       self.flags)
             stencil_pass.run()
         if self.options.setitem:
             ConvertSetItemPass(self).run(self.func_ir.blocks)
@@ -2561,6 +2808,8 @@ class ParforPass(ParforPassStates):
             ConvertReducePass(self).run(self.func_ir.blocks)
         if self.options.prange:
             ConvertLoopPass(self).run(self.func_ir.blocks)
+        if self.options.inplace_binop:
+            ConvertInplaceBinop(self).run(self.func_ir.blocks)
 
         # setup diagnostics now parfors are found
         self.diagnostics.setup(self.func_ir, self.options.fusion)
@@ -2569,15 +2818,15 @@ class ParforPass(ParforPassStates):
 
         # simplify CFG of parfor body loops since nested parfors with extra
         # jumps can be created with prange conversion
-        simplify_parfor_body_CFG(self.func_ir.blocks)
+        n_parfors = simplify_parfor_body_CFG(self.func_ir.blocks)
         # simplify before fusion
-        simplify(self.func_ir, self.typemap, self.calltypes)
+        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
         # need two rounds of copy propagation to enable fusion of long sequences
         # of parfors like test_fuse_argmin (some PYTHONHASHSEED values since
         # apply_copies_parfor depends on set order for creating dummy assigns)
-        simplify(self.func_ir, self.typemap, self.calltypes)
+        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
 
-        if self.options.fusion:
+        if self.options.fusion and n_parfors >= 2:
             self.func_ir._definitions = build_definitions(self.func_ir.blocks)
             self.array_analysis.equiv_sets = dict()
             self.array_analysis.run(self.func_ir.blocks)
@@ -2587,20 +2836,22 @@ class ParforPass(ParforPassStates):
                                                             up_direction=False)
             dprint_func_ir(self.func_ir, "after maximize fusion down")
             self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
+            dprint_func_ir(self.func_ir, "after first fuse")
             # push non-parfors up
             maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap)
             dprint_func_ir(self.func_ir, "after maximize fusion up")
             # try fuse again after maximize
             self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
             dprint_func_ir(self.func_ir, "after fusion")
-        # simplify again
-        simplify(self.func_ir, self.typemap, self.calltypes)
+            # remove dead code after fusion to remove extra arrays and variables
+            simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
+
         # push function call variables inside parfors so gufunc function
         # wouldn't need function variables as argument
         push_call_vars(self.func_ir.blocks, {}, {}, self.typemap)
         dprint_func_ir(self.func_ir, "after push call vars")
         # simplify again
-        simplify(self.func_ir, self.typemap, self.calltypes)
+        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
         dprint_func_ir(self.func_ir, "after optimization")
         if config.DEBUG_ARRAY_OPT >= 1:
             print("variable types: ", sorted(self.typemap.items()))
@@ -2632,15 +2883,12 @@ class ParforPass(ParforPassStates):
                             new_block.append(ir_print)
                 block.body = new_block
 
-        # run post processor again to generate Del nodes
-        post_proc = postproc.PostProcessor(self.func_ir)
-        post_proc.run(True)
         if self.func_ir.is_generator:
             fix_generator_types(self.func_ir.generator_info, self.return_type,
                                 self.typemap)
         if sequential_parfor_lowering:
             lower_parfor_sequential(
-                self.typingctx, self.func_ir, self.typemap, self.calltypes)
+                self.typingctx, self.func_ir, self.typemap, self.calltypes, self.metadata)
         else:
             # prepare for parallel lowering
             # add parfor params to parfors here since lowering is destructive
@@ -2648,8 +2896,15 @@ class ParforPass(ParforPassStates):
             parfor_ids, parfors = get_parfor_params(self.func_ir.blocks,
                                                     self.options.fusion,
                                                     self.nested_fusion_info)
+
+            # Validate reduction in parfors.
             for p in parfors:
                 get_parfor_reductions(self.func_ir, p, p.params, self.calltypes)
+
+            # Validate parameters:
+            for p in parfors:
+                p.validate_params(self.typemap)
+
             if config.DEBUG_ARRAY_OPT_STATS:
                 name = self.func_ir.func_id.func_qualname
                 n_parfors = len(parfor_ids)
@@ -2695,7 +2950,8 @@ class ParforPass(ParforPassStates):
                         equiv_set = array_analysis.get_equiv_set(label)
                         stmt.equiv_set = equiv_set
                         next_stmt.equiv_set = equiv_set
-                        fused_node, fuse_report = try_fuse(equiv_set, stmt, next_stmt)
+                        fused_node, fuse_report = try_fuse(equiv_set, stmt, next_stmt,
+                            self.metadata["parfors"])
                         # accumulate fusion reports
                         self.diagnostics.fusion_reports.append(fuse_report)
                         if fused_node is not None:
@@ -2716,6 +2972,7 @@ class ParforPass(ParforPassStates):
     def fuse_recursive_parfor(self, parfor, equiv_set):
         blocks = wrap_parfor_blocks(parfor)
         maximize_fusion(self.func_ir, blocks, self.typemap)
+        dprint_func_ir(self.func_ir, "after recursive maximize fusion down", blocks)
         arr_analysis = array_analysis.ArrayAnalysis(self.typingctx, self.func_ir,
                                                 self.typemap, self.calltypes)
         arr_analysis.run(blocks, equiv_set)
@@ -2817,7 +3074,8 @@ def _arrayexpr_tree_to_ir(
             el_typ1 = typemap[arg_vars[0].name]
             if len(arg_vars) == 2:
                 el_typ2 = typemap[arg_vars[1].name]
-                func_typ = typingctx.resolve_function_type(op, (el_typ1, el_typ), {})
+                func_typ = typingctx.resolve_function_type(op, (el_typ1,
+                                                                el_typ2), {})
                 ir_expr = ir.Expr.binop(op, arg_vars[0], arg_vars[1], loc)
                 if op == operator.truediv:
                     func_typ, ir_expr = _gen_np_divide(
@@ -2956,7 +3214,7 @@ def _gen_arrayexpr_getitem(
         # Use last index for 1D arrays
         index_var = all_parfor_indices[-1]
     # Handle known constant size
-    elif any([x != None for x in size_consts]):
+    elif any([x is not None for x in size_consts]):
         # Need a tuple as index
         ind_offset = num_indices - ndims
         tuple_var = ir.Var(var.scope, mk_unique_var(
@@ -3000,14 +3258,15 @@ def _find_func_var(typemap, func, avail_vars, loc):
     raise errors.UnsupportedRewriteError("ufunc call variable not found", loc=loc)
 
 
-def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes):
-    ir_utils._max_label = max(ir_utils._max_label,
-                              ir_utils.find_max_label(func_ir.blocks))
+def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes, metadata):
+    ir_utils._the_max_label.update(ir_utils.find_max_label(func_ir.blocks))
     parfor_found = False
     new_blocks = {}
+    scope = next(iter(func_ir.blocks.values())).scope
     for (block_label, block) in func_ir.blocks.items():
         block_label, parfor_found = _lower_parfor_sequential_block(
-            block_label, block, new_blocks, typemap, calltypes, parfor_found)
+            block_label, block, new_blocks, typemap, calltypes, parfor_found,
+            scope=scope)
         # old block stays either way
         new_blocks[block_label] = block
     func_ir.blocks = new_blocks
@@ -3015,12 +3274,8 @@ def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes):
     if parfor_found:
         func_ir.blocks = rename_labels(func_ir.blocks)
     dprint_func_ir(func_ir, "after parfor sequential lowering")
-    simplify(func_ir, typemap, calltypes)
+    simplify(func_ir, typemap, calltypes, metadata["parfors"])
     dprint_func_ir(func_ir, "after parfor sequential simplify")
-    # add dels since simplify removes dels
-    post_proc = postproc.PostProcessor(func_ir)
-    post_proc.run(True)
-    return
 
 
 def _lower_parfor_sequential_block(
@@ -3029,8 +3284,8 @@ def _lower_parfor_sequential_block(
         new_blocks,
         typemap,
         calltypes,
-        parfor_found):
-    scope = block.scope
+        parfor_found,
+        scope):
     i = _find_first_parfor(block.body)
     while i != -1:
         parfor_found = True
@@ -3043,7 +3298,7 @@ def _lower_parfor_sequential_block(
         # previous block jump to parfor init block
         init_label = next_label()
         prev_block.body.append(ir.Jump(init_label, loc))
-        new_blocks[init_label] = inst.init_block
+        new_blocks[init_label] = transfer_scope(inst.init_block, scope)
         new_blocks[block_label] = prev_block
         block_label = next_label()
 
@@ -3087,8 +3342,9 @@ def _lower_parfor_sequential_block(
         # add parfor body to blocks
         for (l, b) in inst.loop_body.items():
             l, parfor_found = _lower_parfor_sequential_block(
-                l, b, new_blocks, typemap, calltypes, parfor_found)
-            new_blocks[l] = b
+                l, b, new_blocks, typemap, calltypes, parfor_found,
+                scope=scope)
+            new_blocks[l] = transfer_scope(b, scope)
         i = _find_first_parfor(block.body)
     return block_label, parfor_found
 
@@ -3122,12 +3378,41 @@ def get_parfor_params(blocks, options_fusion, fusion_info):
             dummy_block.body = block.body[:i]
             before_defs = compute_use_defs({0: dummy_block}).defmap[0]
             pre_defs |= before_defs
-            parfor.params = get_parfor_params_inner(parfor, pre_defs, options_fusion, fusion_info) | parfor.races
+            params = get_parfor_params_inner(
+                parfor, pre_defs, options_fusion, fusion_info,
+            )
+            parfor.params, parfor.races = _combine_params_races_for_ssa_names(
+                block.scope, params, parfor.races,
+            )
             parfor_ids.add(parfor.id)
             parfors.append(parfor)
 
         pre_defs |= all_defs[label]
     return parfor_ids, parfors
+
+
+def _combine_params_races_for_ssa_names(scope, params, races):
+    """Returns `(params|races1, races1)`, where `races1` contains all variables
+    in `races` are NOT referring to the same unversioned (SSA) variables in
+    `params`.
+    """
+    def unversion(k):
+        try:
+            return scope.get_exact(k).unversioned_name
+        except ir.NotDefinedError:
+            # XXX: it's a bug that something references an undefined name
+            return k
+
+    races1 = set(races)
+    unver_params = list(map(unversion, params))
+
+    for rv in races:
+        if any(unversion(rv) == pv for pv in unver_params):
+            races1.discard(rv)
+        else:
+            break
+
+    return params | races1, races1
 
 
 def get_parfor_params_inner(parfor, pre_defs, options_fusion, fusion_info):
@@ -3172,9 +3457,9 @@ def get_parfor_outputs(parfor, parfor_params):
     outputs = []
     for blk in parfor.loop_body.values():
         for stmt in blk.body:
-            if isinstance(stmt, ir.SetItem):
-                if stmt.index.name == parfor.index_var.name:
-                    outputs.append(stmt.target.name)
+            if (isinstance(stmt, (ir.StaticSetItem, ir.SetItem)) and
+                get_index_var(stmt).name == parfor.index_var.name):
+                outputs.append(stmt.target.name)
     # make sure these written arrays are in parfor parameters (live coming in)
     outputs = list(set(outputs) & set(parfor_params))
     return sorted(outputs)
@@ -3209,9 +3494,9 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
             if (isinstance(stmt, ir.Assign)
                     and (stmt.target.name in parfor_params
                       or stmt.target.name in var_to_param)):
-                lhs = stmt.target.name
+                lhs = stmt.target
                 rhs = stmt.value
-                cur_param = lhs if lhs in parfor_params else var_to_param[lhs]
+                cur_param = lhs if lhs.name in parfor_params else var_to_param[lhs.name]
                 used_vars = []
                 if isinstance(rhs, ir.Var):
                     used_vars = [rhs.name]
@@ -3228,24 +3513,32 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
             if isinstance(stmt, Parfor):
                 # recursive parfors can have reductions like test_prange8
                 get_parfor_reductions(func_ir, stmt, parfor_params, calltypes,
-                    reductions, reduce_varnames, param_uses, param_nodes, var_to_param)
+                    reductions, reduce_varnames, None, param_nodes, var_to_param)
 
     for param, used_vars in param_uses.items():
         # a parameter is a reduction variable if its value is used to update it
         # check reduce_varnames since recursive parfors might have processed
         # param already
-        if param in used_vars and param not in reduce_varnames:
-            reduce_varnames.append(param)
+        param_name = param.name
+        if param_name in used_vars and param_name not in reduce_varnames:
             param_nodes[param].reverse()
             reduce_nodes = get_reduce_nodes(param, param_nodes[param], func_ir)
-            check_conflicting_reduction_operators(param, reduce_nodes)
-            gri_out = guard(get_reduction_init, reduce_nodes)
-            if gri_out is not None:
-                init_val, redop = gri_out
-            else:
-                init_val = None
-                redop = None
-            reductions[param] = (init_val, reduce_nodes, redop)
+            # Certain kinds of ill-formed Python (like potentially undefined
+            # variables) in combination with SSA can make things look like
+            # reductions except that they don't have reduction operators.
+            # If we get to this point but don't find a reduction operator
+            # then assume it is this situation and just don't treat this
+            # variable as a reduction.
+            if reduce_nodes is not None:
+                reduce_varnames.append(param_name)
+                check_conflicting_reduction_operators(param, reduce_nodes)
+                gri_out = guard(get_reduction_init, reduce_nodes)
+                if gri_out is not None:
+                    init_val, redop = gri_out
+                else:
+                    init_val = None
+                    redop = None
+                reductions[param_name] = (init_val, reduce_nodes, redop)
 
     return reduce_varnames, reductions
 
@@ -3265,19 +3558,23 @@ def check_conflicting_reduction_operators(param, nodes):
             else:
                 if first_red_func != node.value.fn:
                     msg = ("Reduction variable %s has multiple conflicting "
-                           "reduction operators." % param)
+                           "reduction operators." % param.unversioned_name)
                     raise errors.UnsupportedRewriteError(msg, node.loc)
 
 def get_reduction_init(nodes):
     """
     Get initial value for known reductions.
-    Currently, only += and *= are supported. We assume the inplace_binop node
-    is followed by an assignment.
+    Currently, only += and *= are supported.
     """
-    require(len(nodes) >=2)
-    require(isinstance(nodes[-1].value, ir.Var))
-    require(nodes[-2].target.name == nodes[-1].value.name)
-    acc_expr = nodes[-2].value
+    require(len(nodes) >=1)
+    # there could be an extra assignment after the reduce node
+    # See: test_reduction_var_reuse
+    if isinstance(nodes[-1].value, ir.Var):
+        require(len(nodes) >=2)
+        require(nodes[-2].target.name == nodes[-1].value.name)
+        acc_expr = nodes[-2].value
+    else:
+        acc_expr = nodes[-1].value
     require(isinstance(acc_expr, ir.Expr) and acc_expr.op=='inplace_binop')
     if acc_expr.fn == operator.iadd or acc_expr.fn == operator.isub:
         return 0, acc_expr.fn
@@ -3296,7 +3593,7 @@ def supported_reduction(x, func_ir):
             return True
     return False
 
-def get_reduce_nodes(name, nodes, func_ir):
+def get_reduce_nodes(reduction_node, nodes, func_ir):
     """
     Get nodes that combine the reduction variable with a sentinel variable.
     Recognizes the first node that combines the reduction variable with another
@@ -3310,8 +3607,9 @@ def get_reduce_nodes(name, nodes, func_ir):
         if isinstance(val, ir.Var):
             return lookup(val)
         else:
-            return var if (varonly or val == None) else val
-
+            return var if (varonly or val is None) else val
+    name = reduction_node.name
+    unversioned_name = reduction_node.unversioned_name
     for i, stmt in enumerate(nodes):
         lhs = stmt.target
         rhs = stmt.value
@@ -3321,14 +3619,21 @@ def get_reduce_nodes(name, nodes, func_ir):
         if isinstance(rhs, ir.Expr):
             in_vars = set(lookup(v, True).name for v in rhs.list_vars())
             if name in in_vars:
-                next_node = nodes[i+1]
-                if not (isinstance(next_node, ir.Assign) and next_node.target.name == name):
-                    raise ValueError(("Use of reduction variable " + name +
-                                      " other than in a supported reduction"
-                                      " function is not permitted."))
+                # reductions like sum have an assignment afterwards
+                # e.g. $2 = a + $1; a = $2
+                # reductions that are functions calls like max() don't have an
+                # extra assignment afterwards
+                if (not (i+1 < len(nodes) and isinstance(nodes[i+1], ir.Assign)
+                        and nodes[i+1].target.unversioned_name == unversioned_name)
+                        and lhs.unversioned_name != unversioned_name):
+                    raise ValueError(
+                        f"Use of reduction variable {unversioned_name!r} other "
+                        "than in a supported reduction function is not "
+                        "permitted."
+                    )
 
                 if not supported_reduction(rhs, func_ir):
-                    raise ValueError(("Use of reduction variable " + name +
+                    raise ValueError(("Use of reduction variable " + unversioned_name +
                                       " in an unsupported reduction function."))
                 args = [ (x.name, lookup(x, True)) for x in get_expr_args(rhs) ]
                 non_red_args = [ x for (x, y) in args if y.name != name ]
@@ -3338,8 +3643,7 @@ def get_reduce_nodes(name, nodes, func_ir):
                 replace_dict[non_red_args[0]] = ir.Var(lhs.scope, name+"#init", lhs.loc)
                 replace_vars_inner(rhs, replace_dict)
                 reduce_nodes = nodes[i:]
-                break;
-    assert reduce_nodes, "Invalid reduction format"
+                break
     return reduce_nodes
 
 def get_expr_args(expr):
@@ -3435,7 +3739,7 @@ def parfor_defs(parfor, use_set=None, def_set=None):
     loop_vars |= {
         l.step.name for l in parfor.loop_nests if isinstance(
             l.step, ir.Var)}
-    use_set.update(loop_vars)
+    use_set.update(loop_vars - def_set)
     use_set |= get_parfor_pattern_vars(parfor)
 
     return analysis._use_defs_result(usemap=use_set, defmap=def_set)
@@ -3499,14 +3803,26 @@ def maximize_fusion(func_ir, blocks, typemap, up_direction=True):
     so they are adjacent.
     """
     call_table, _ = get_call_table(blocks)
-    alias_map, arg_aliases = find_potential_aliases(blocks, func_ir.arg_names, typemap, func_ir)
+    alias_map, arg_aliases = find_potential_aliases(
+                                 blocks,
+                                 func_ir.arg_names,
+                                 typemap,
+                                 func_ir
+                             )
     for block in blocks.values():
         order_changed = True
         while order_changed:
-            order_changed = maximize_fusion_inner(func_ir, block, call_table,
-                                                  alias_map, up_direction)
+            order_changed = maximize_fusion_inner(
+                                func_ir,
+                                block,
+                                call_table,
+                                alias_map,
+                                arg_aliases,
+                                up_direction
+                            )
 
-def maximize_fusion_inner(func_ir, block, call_table, alias_map, up_direction=True):
+def maximize_fusion_inner(func_ir, block, call_table, alias_map,
+                          arg_aliases, up_direction=True):
     order_changed = False
     i = 0
     # i goes to body[-3] (i+1 to body[-2]) since body[-1] is terminator and
@@ -3514,9 +3830,10 @@ def maximize_fusion_inner(func_ir, block, call_table, alias_map, up_direction=Tr
     while i < len(block.body) - 2:
         stmt = block.body[i]
         next_stmt = block.body[i+1]
-        can_reorder = (_can_reorder_stmts(stmt, next_stmt, func_ir, call_table, alias_map)
+        can_reorder = (_can_reorder_stmts(stmt, next_stmt, func_ir,
+                                          call_table, alias_map, arg_aliases)
                         if up_direction else _can_reorder_stmts(next_stmt, stmt,
-                        func_ir, call_table, alias_map))
+                        func_ir, call_table, alias_map, arg_aliases))
         if can_reorder:
             block.body[i] = next_stmt
             block.body[i+1] = stmt
@@ -3524,16 +3841,18 @@ def maximize_fusion_inner(func_ir, block, call_table, alias_map, up_direction=Tr
         i += 1
     return order_changed
 
-def expand_aliases(the_set, alias_map):
+def expand_aliases(the_set, alias_map, arg_aliases):
     ret = set()
     for i in the_set:
         if i in alias_map:
             ret = ret.union(alias_map[i])
-        else:
-            ret.add(i)
+        if i in arg_aliases:
+            ret = ret.union(arg_aliases)
+        ret.add(i)
     return ret
 
-def _can_reorder_stmts(stmt, next_stmt, func_ir, call_table, alias_map):
+def _can_reorder_stmts(stmt, next_stmt, func_ir, call_table,
+                       alias_map, arg_aliases):
     """
     Check dependencies to determine if a parfor can be reordered in the IR block
     with a non-parfor statement.
@@ -3542,18 +3861,20 @@ def _can_reorder_stmts(stmt, next_stmt, func_ir, call_table, alias_map):
     # don't reorder calls with side effects (e.g. file close)
     # only read-read dependencies are OK
     # make sure there is no write-write, write-read dependencies
-    if (isinstance(
-            stmt, Parfor) and not isinstance(
-            next_stmt, Parfor) and not isinstance(
-            next_stmt, ir.Print)
-            and (not isinstance(next_stmt, ir.Assign)
-                 or has_no_side_effect(
-                next_stmt.value, set(), call_table)
+    if (isinstance(stmt, Parfor)
+        and not isinstance(next_stmt, Parfor)
+        and not isinstance(next_stmt, ir.Print)
+        and (not isinstance(next_stmt, ir.Assign)
+            or has_no_side_effect(next_stmt.value, set(), call_table)
             or guard(is_assert_equiv, func_ir, next_stmt.value))):
-        stmt_accesses = expand_aliases({v.name for v in stmt.list_vars()}, alias_map)
-        stmt_writes = expand_aliases(get_parfor_writes(stmt), alias_map)
-        next_accesses = expand_aliases({v.name for v in next_stmt.list_vars()}, alias_map)
-        next_writes = expand_aliases(get_stmt_writes(next_stmt), alias_map)
+        stmt_accesses = expand_aliases({v.name for v in stmt.list_vars()},
+                                       alias_map, arg_aliases)
+        stmt_writes = expand_aliases(get_parfor_writes(stmt),
+                                     alias_map, arg_aliases)
+        next_accesses = expand_aliases({v.name for v in next_stmt.list_vars()},
+                                       alias_map, arg_aliases)
+        next_writes = expand_aliases(get_stmt_writes(next_stmt),
+                                     alias_map, arg_aliases)
         if len((stmt_writes & next_accesses)
                 | (next_writes & stmt_accesses)) == 0:
             return True
@@ -3578,7 +3899,7 @@ def get_parfor_writes(parfor):
 
 FusionReport = namedtuple('FusionReport', ['first', 'second', 'message'])
 
-def try_fuse(equiv_set, parfor1, parfor2):
+def try_fuse(equiv_set, parfor1, parfor2, metadata):
     """try to fuse parfors and return a fused parfor, otherwise return None
     """
     dprint("try_fuse: trying to fuse \n", parfor1, "\n", parfor2)
@@ -3602,6 +3923,16 @@ def try_fuse(equiv_set, parfor1, parfor2):
     def is_equiv(x, y):
         return x == y or equiv_set.is_equiv(x, y)
 
+    def get_user_varname(v):
+        """get original variable name by user if possible"""
+        if not isinstance(v, ir.Var):
+            return v
+        v = v.name
+        if "var_rename_map" in metadata and v in metadata["var_rename_map"]:
+            user_varname = metadata["var_rename_map"][v]
+            return user_varname
+        return v
+
     for i in range(ndims):
         nest1 = parfor1.loop_nests[i]
         nest2 = parfor2.loop_nests[i]
@@ -3610,8 +3941,10 @@ def try_fuse(equiv_set, parfor1, parfor2):
                 is_equiv(nest1.step, nest2.step)):
             dprint("try_fuse: parfor dimension correlation mismatch", i)
             msg = "- fusion failed: loop dimension mismatched in axis %s. "
-            msg += "slice(%s, %s, %s) != " % (nest1.start, nest1.stop, nest1.step)
-            msg += "slice(%s, %s, %s)" % (nest2.start, nest2.stop, nest2.step)
+            msg += "slice(%s, %s, %s) != " % (get_user_varname(nest1.start),
+                get_user_varname(nest1.stop), get_user_varname(nest1.step))
+            msg += "slice(%s, %s, %s)" % (get_user_varname(nest2.start),
+                get_user_varname(nest2.stop), get_user_varname(nest2.step))
             report = FusionReport(parfor1.id, parfor2.id, msg % i)
             return None, report
 
@@ -3713,7 +4046,7 @@ def remove_duplicate_definitions(blocks, nameset):
 
 
 def has_cross_iter_dep(parfor):
-    # we consevatively assume there is cross iteration dependency when
+    # we conservatively assume there is cross iteration dependency when
     # the parfor index is used in any expression since the expression could
     # be used for indexing arrays
     # TODO: make it more accurate using ud-chains
@@ -3824,8 +4157,8 @@ def remove_dead_parfor(parfor, lives, lives_n_aliases, arg_aliases, alias_map, f
             alias_lives = in_lives & alias_set
             for v in alias_lives:
                 in_lives |= alias_map[v]
-            if (isinstance(stmt, ir.SetItem) and
-                stmt.index.name == parfor.index_var.name and
+            if (isinstance(stmt, (ir.StaticSetItem, ir.SetItem)) and
+                get_index_var(stmt).name == parfor.index_var.name and
                 stmt.target.name not in in_lives and
                 stmt.target.name not in arg_aliases):
                 continue
@@ -3862,8 +4195,9 @@ def _update_parfor_get_setitems(block_body, index_var, alias_map,
     replace getitems of a previously set array in a block of parfor loop body
     """
     for stmt in block_body:
-        if (isinstance(stmt, ir.SetItem) and stmt.index.name ==
-                index_var.name and stmt.target.name not in lives):
+        if (isinstance(stmt, (ir.StaticSetItem, ir.SetItem)) and
+            get_index_var(stmt).name == index_var.name and
+            stmt.target.name not in lives):
             # saved values of aliases of SetItem target array are invalid
             for w in alias_map.get(stmt.target.name, []):
                 saved_values.pop(w, None)
@@ -3964,9 +4298,11 @@ ir_utils.alias_analysis_extensions[Parfor] = find_potential_aliases_parfor
 
 def simplify_parfor_body_CFG(blocks):
     """simplify CFG of body loops in parfors"""
+    n_parfors = 0
     for block in blocks.values():
         for stmt in block.body:
             if isinstance(stmt, Parfor):
+                n_parfors += 1
                 parfor = stmt
                 # add dummy return to enable CFG creation
                 # can't use dummy_return_in_loop_body since body changes
@@ -3981,12 +4317,13 @@ def simplify_parfor_body_CFG(blocks):
                 last_block.body.pop()
                 # call on body recursively
                 simplify_parfor_body_CFG(parfor.loop_body)
+    return n_parfors
 
 
 def wrap_parfor_blocks(parfor, entry_label = None):
     """wrap parfor blocks for analysis/optimization like CFG"""
     blocks = parfor.loop_body.copy()  # shallow copy is enough
-    if entry_label == None:
+    if entry_label is None:
         entry_label = min(blocks.keys())
     assert entry_label > 0  # we are using 0 for init block here
 

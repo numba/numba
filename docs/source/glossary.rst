@@ -46,6 +46,7 @@ Glossary
       "lowering" stems from the fact that LLVM IR is low-level and
       machine-specific while Numba IR is high-level and abstract.
 
+   NPM
    nopython mode
       A Numba compilation mode that generates code that does not access the
       Python C API.  This compilation mode produces the highest performance

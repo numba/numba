@@ -65,14 +65,21 @@ python -m numba.tests.test_runtests
 # Now run tests based on the changes identified via git
 NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPROCS -- numba.tests
 
+# List the tests found
+echo "INFO: All discovered tests:"
+python -m numba.runtests -l
 
 # Now run the Numba test suite with slicing
 # Note that coverage is run from the checkout dir to match the "source"
 # directive in .coveragerc
+echo "INFO: Running slice of discovered tests: ($TEST_START_INDEX,None,$TEST_COUNT)"
 if [ "$RUN_COVERAGE" == "yes" ]; then
     export PYTHONPATH=.
     coverage erase
     $SEGVCATCH coverage run runtests.py -b -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
+elif [ "$RUN_TYPEGUARD" == "yes" ]; then
+    echo "INFO: Running with typeguard"
+    NUMBA_USE_TYPEGUARD=1 NUMBA_ENABLE_CUDASIM=1 PYTHONWARNINGS="ignore:::typeguard" $SEGVCATCH python runtests.py -b -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
 else
     NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
 fi

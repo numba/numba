@@ -14,7 +14,7 @@ from numba.core import types, cgutils
 from numba.core.typing import signature
 from numba.cpython import builtins, mathimpl
 
-registry = Registry()
+registry = Registry('cmathimpl')
 lower = registry.lower
 
 
@@ -151,6 +151,7 @@ def exp_impl(x, y, x_is_finite, y_is_finite):
             s = math.sin(y)
             return complex(r * c, r * s)
         else:
+            r = 0
             return complex(r, r)
 
 @lower(cmath.log, types.Complex)

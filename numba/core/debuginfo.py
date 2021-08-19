@@ -5,31 +5,47 @@ Implements helpers to build LLVM debuginfo.
 
 import abc
 import os.path
+from contextlib import contextmanager
 
 from llvmlite import ir
+from numba.core import cgutils
 
-from numba.core.utils import add_metaclass
+@contextmanager
+def suspend_emission(builder):
+    """Suspends the emission of debug_metadata for the duration of the context
+    managed block."""
+    ref = builder.debug_metadata
+    builder.debug_metadata = None
+    try:
+        yield
+    finally:
+        builder.debug_metadata = ref
 
 
-@add_metaclass(abc.ABCMeta)
-class AbstractDIBuilder(object):
+class AbstractDIBuilder(metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def mark_variable(self, builder, allocavalue, name, lltype, size, loc):
+    def mark_variable(self, builder, allocavalue, name, lltype, size, line):
         """Emit debug info for the variable.
         """
         pass
 
     @abc.abstractmethod
-    def mark_location(self, builder, loc):
+    def mark_location(self, builder, line):
         """Emit source location information to the given IRBuilder.
         """
         pass
 
     @abc.abstractmethod
-    def mark_subprogram(self, function, name, loc):
+    def mark_subprogram(self, function, name, line):
         """Emit source location information for the given function.
         """
         pass
+
+    @abc.abstractmethod
+    def initialize(self):
+        """Initialize the debug info. An opportunity for the debuginfo to
+        prepare any necessary data structures.
+        """
 
     @abc.abstractmethod
     def finalize(self):
@@ -43,13 +59,16 @@ class DummyDIBuilder(AbstractDIBuilder):
     def __init__(self, module, filepath):
         pass
 
-    def mark_variable(self, builder, allocavalue, name, lltype, size, loc):
+    def mark_variable(self, builder, allocavalue, name, lltype, size, line):
         pass
 
-    def mark_location(self, builder, loc):
+    def mark_location(self, builder, line):
         pass
 
-    def mark_subprogram(self, function, name, loc):
+    def mark_subprogram(self, function, name, line):
+        pass
+
+    def initialize(self):
         pass
 
     def finalize(self):
@@ -66,6 +85,11 @@ class DIBuilder(AbstractDIBuilder):
         self.filepath = os.path.abspath(filepath)
         self.difile = self._di_file()
         self.subprograms = []
+        self.initialize()
+
+    def initialize(self):
+        # Create the compile unit now because it is referenced when
+        # constructing subprograms
         self.dicompileunit = self._di_compile_unit()
 
     def _var_type(self, lltype, size):
@@ -105,10 +129,10 @@ class DIBuilder(AbstractDIBuilder):
             })
         return mdtype
 
-    def mark_variable(self, builder, allocavalue, name, lltype, size, loc):
+    def mark_variable(self, builder, allocavalue, name, lltype, size, line):
         m = self.module
         fnty = ir.FunctionType(ir.VoidType(), [ir.MetaDataType()] * 3)
-        decl = m.get_or_insert_function(fnty, name='llvm.dbg.declare')
+        decl = cgutils.get_or_insert_function(m, fnty, 'llvm.dbg.declare')
 
         mdtype = self._var_type(lltype, size)
         name = name.replace('.', '$')    # for gdb to work correctly
@@ -117,25 +141,25 @@ class DIBuilder(AbstractDIBuilder):
             'arg': 0,
             'scope': self.subprograms[-1],
             'file': self.difile,
-            'line': loc.line,
+            'line': line,
             'type': mdtype,
         })
         mdexpr = m.add_debug_info('DIExpression', {})
 
         return builder.call(decl, [allocavalue, mdlocalvar, mdexpr])
 
-    def mark_location(self, builder, loc):
-        builder.debug_metadata = self._add_location(loc.line)
+    def mark_location(self, builder, line):
+        builder.debug_metadata = self._add_location(line)
 
-    def mark_subprogram(self, function, name, loc):
+    def mark_subprogram(self, function, name, line):
         di_subp = self._add_subprogram(name=name, linkagename=function.name,
-                                       line=loc.line)
+                                       line=line)
         function.set_metadata("dbg", di_subp)
         # disable inlining for this function for easier debugging
         function.attributes.add('noinline')
 
     def finalize(self):
-        dbgcu = self.module.get_or_insert_named_metadata(self.DBG_CU_NAME)
+        dbgcu = cgutils.get_or_insert_named_metadata(self.module, self.DBG_CU_NAME)
         dbgcu.add(self.dicompileunit)
         self._set_module_flags()
 
@@ -147,7 +171,7 @@ class DIBuilder(AbstractDIBuilder):
         """Set the module flags metadata
         """
         module = self.module
-        mflags = module.get_or_insert_named_metadata('llvm.module.flags')
+        mflags = cgutils.get_or_insert_named_metadata(module, 'llvm.module.flags')
         # Set *require* behavior to warning
         # See http://llvm.org/docs/LangRef.html#module-flags-metadata
         require_warning_behavior = self._const_int(2)
@@ -204,7 +228,7 @@ class DIBuilder(AbstractDIBuilder):
 
     def _di_compile_unit(self):
         return self.module.add_debug_info('DICompileUnit', {
-            'language': ir.DIToken('DW_LANG_Python'),
+            'language': ir.DIToken('DW_LANG_C_plus_plus'),
             'file': self.difile,
             'producer': 'Numba',
             'runtimeVersion': 0,
@@ -262,26 +286,26 @@ class NvvmDIBuilder(DIBuilder):
     # Used in mark_location to remember last lineno to avoid duplication
     _last_lineno = None
 
-    def mark_variable(self, builder, allocavalue, name, lltype, size, loc):
+    def mark_variable(self, builder, allocavalue, name, lltype, size, line):
         # unsupported
         pass
 
-    def mark_location(self, builder, loc):
+    def mark_location(self, builder, line):
         # Avoid duplication
-        if self._last_lineno == loc.line:
+        if self._last_lineno == line:
             return
-        self._last_lineno = loc.line
+        self._last_lineno = line
         # Add call to an inline asm to mark line location
         asmty = ir.FunctionType(ir.VoidType(), [])
-        asm = ir.InlineAsm(asmty, "// dbg {}".format(loc.line), "",
+        asm = ir.InlineAsm(asmty, "// dbg {}".format(line), "",
                            side_effect=True)
         call = builder.call(asm, [])
-        md = self._di_location(loc.line)
+        md = self._di_location(line)
         call.set_metadata('numba.dbg', md)
 
-    def mark_subprogram(self, function, name, loc):
+    def mark_subprogram(self, function, name, line):
         self._add_subprogram(name=name, linkagename=function.name,
-                             line=loc.line)
+                             line=line)
 
     #
     # Helper methods to create the metadata nodes.
@@ -302,6 +326,7 @@ class NvvmDIBuilder(DIBuilder):
     def _di_compile_unit(self):
         filepair = self._filepair()
         empty = self.module.add_metadata([self._const_int(0)])
+        sp_metadata = self.module.add_metadata(self.subprograms)
         return self.module.add_metadata([
             self._const_int(self.DI_Compile_unit),         # tag
             filepair,                   # source directory and file pair
@@ -374,3 +399,11 @@ class NvvmDIBuilder(DIBuilder):
             None,                    # original scope
         ])
 
+    def initialize(self):
+        pass
+
+    def finalize(self):
+        # We create the compile unit at this point because subprograms is
+        # populated and can be referred to by the compile unit.
+        self.dicompileunit = self._di_compile_unit()
+        super().finalize()

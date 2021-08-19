@@ -44,19 +44,18 @@ Implementing methods
 --------------------
 
 The ``@overload_method`` decorator similarly allows implementing a
-method on a type well-known to Numba. The following example implements
-the :meth:`~numpy.ndarray.take()` method on Numpy arrays::
+method on a type well-known to Numba.
 
-   @overload_method(types.Array, 'take')
-   def array_take(arr, indices):
-      if isinstance(indices, types.Array):
-          def take_impl(arr, indices):
-              n = indices.shape[0]
-              res = np.empty(n, arr.dtype)
-              for i in range(n):
-                  res[i] = arr[indices[i]]
-              return res
-          return take_impl
+.. autofunction:: numba.core.extending.overload_method
+
+Implementing classmethods
+-------------------------
+
+The ``@overload_classmethod`` decorator similarly allows implementing a
+classmethod on a type well-known to Numba.
+
+.. autofunction:: numba.core.extending.overload_classmethod
+
 
 Implementing attributes
 -----------------------
@@ -182,3 +181,66 @@ and the output of ``.inspect_types()`` demonstrates the cast (note the
         #   return $0.5
 
         y = cast_int_to_byte_ptr(x)
+
+
+Implementing mutable structures
+-------------------------------
+
+.. warning:: This is an experimental feature, the API may change without warning.
+
+The ``numba.experimental.structref`` module provides utilities for defining
+mutable pass-by-reference structures, a ``StructRef``. The following example
+demonstrates how to define a basic mutable structure:
+
+Defining a StructRef
+''''''''''''''''''''
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_structref_usage.py
+   :language: python
+   :caption: from ``numba/tests/doc_examples/test_structref_usage.py``
+   :start-after: magictoken.ex_structref_type_definition.begin
+   :end-before: magictoken.ex_structref_type_definition.end
+   :dedent: 0
+   :linenos:
+
+The following demonstrates using the above mutable struct definition:
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_structref_usage.py
+   :language: python
+   :caption: from ``test_type_definition`` of ``numba/tests/doc_examples/test_structref_usage.py``
+   :start-after: magictoken.ex_structref_type_definition_test.begin
+   :end-before: magictoken.ex_structref_type_definition_test.end
+   :dedent: 8
+   :linenos:
+
+
+Defining a method on StructRef
+''''''''''''''''''''''''''''''
+
+Methods and attributes can be attached using ``@overload_*`` as shown in the
+previous sections.
+
+The following demonstrates the use of ``@overload_method`` to insert a
+method for instances of ``MyStructType``:
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_structref_usage.py
+   :language: python
+   :caption: from ``test_overload_method`` of ``numba/tests/doc_examples/test_structref_usage.py``
+   :start-after: magictoken.ex_structref_method.begin
+   :end-before: magictoken.ex_structref_method.end
+   :dedent: 8
+   :linenos:
+
+
+``numba.experimental.structref`` API Reference
+''''''''''''''''''''''''''''''''''''''''''''''
+
+.. automodule:: numba.experimental.structref
+    :members:
+
+Determining if a function is already wrapped by a ``jit`` family decorator
+--------------------------------------------------------------------------
+
+The following function is provided for this purpose.
+
+.. automethod:: numba.extending.is_jitted

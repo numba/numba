@@ -402,14 +402,8 @@ debug info is available:
 
 Known issues:
 
-* Stepping depends heavily on optimization level.
-
-  * At full optimization (equivalent to O3), most of the variables are
-    optimized out.
-  * With no optimization (e.g. ``NUMBA_OPT=0``), source location jumps around
-    when stepping through the code.
-  * At O1 optimization (e.g. ``NUMBA_OPT=1``), stepping is stable but some
-    variables are optimized out.
+* Stepping depends heavily on optimization level. At full optimization
+  (equivalent to O3), most of the variables are optimized out.
 
 * Memory consumption increases significantly with debug info enabled.
   The compiler emits extra information (`DWARF <http://www.dwarfstd.org/>`_)
@@ -649,7 +643,10 @@ by example, debugging a 'segfault' (memory access violation signalling
     from numba import njit, gdb_init
     import numpy as np
 
-    @njit(debug=True)
+    # NOTE debug=True switches bounds-checking on, but for the purposes of this
+    # example it is explicitly turned off so that the out of bounds index is
+    # not caught!
+    @njit(debug=True, boundscheck=False)
     def foo(a, index):
         gdb_init() # instruct Numba to attach gdb at this location, but not to pause execution
         b = a + 1

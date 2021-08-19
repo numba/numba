@@ -5,7 +5,7 @@ try:
 except ImportError as e:
     from numba.core.errors import feedback_details as reportme
     import sys
-    url = "http://numba.pydata.org/numba-doc/latest/developer/contributing.html"
+    url = "https://numba.pydata.org/numba-doc/latest/developer/contributing.html"
     dashes = '-' * 80
     msg = ("Numba could not be imported.\nIf you are seeing this message and "
            "are undertaking Numba development work, you may need to re-run:\n\n"

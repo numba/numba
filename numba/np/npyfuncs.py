@@ -6,11 +6,13 @@ Python builtins
 
 
 import math
+import numpy as np
 
 from llvmlite.llvmpy import core as lc
 
 from numba.core.imputils import impl_ret_untracked
 from numba.core import typing, types, errors, lowering, cgutils
+from numba.core.extending import register_jitable
 from numba.np import npdatetime
 from numba.cpython import cmathimpl, mathimpl, numbers
 
@@ -95,7 +97,7 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
                         for ty in call_argtys]
         fnty = lc.Type.function(lc.Type.void(), call_argltys)
         # Note: the function isn't pure here (it writes to its pointer args)
-        fn = mod.get_or_insert_function(fnty, name=func_name)
+        fn = cgutils.get_or_insert_function(mod, fnty, func_name)
         builder.call(fn, call_args)
         retval = builder.load(call_args[0])
     else:
@@ -122,13 +124,14 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
 
 def np_int_sdiv_impl(context, builder, sig, args):
     # based on the actual code in NumPy loops.c.src for signed integer types
-    num, den = args
-    lltype = num.type
-    assert all(i.type==lltype for i in args), "must have homogeneous types"
+    _check_arity_and_homogeneity(sig, args, 2)
 
-    ZERO = lc.Constant.int(lltype, 0)
-    MINUS_ONE = lc.Constant.int(lltype, -1)
-    MIN_INT = lc.Constant.int(lltype, 1 << (den.type.width-1))
+    num, den = args
+    ty = sig.args[0]  # any arg type will do, homogeneous
+
+    ZERO = context.get_constant(ty, 0)
+    MINUS_ONE = context.get_constant(ty, -1)
+    MIN_INT = context.get_constant(ty, 1 << (den.type.width-1))
     den_is_zero = builder.icmp(lc.ICMP_EQ, ZERO, den)
     den_is_minus_one = builder.icmp(lc.ICMP_EQ, MINUS_ONE, den)
     num_is_min_int = builder.icmp(lc.ICMP_EQ, MIN_INT, num)
@@ -149,7 +152,7 @@ def np_int_sdiv_impl(context, builder, sig, args):
             fix_value = builder.select(needs_fixing, MINUS_ONE, ZERO)
             result_otherwise = builder.add(div, fix_value)
 
-    result = builder.phi(lltype)
+    result = builder.phi(ZERO.type)
     result.add_incoming(ZERO, bb_then)
     result.add_incoming(result_otherwise, bb_otherwise)
 
@@ -161,8 +164,7 @@ def np_int_srem_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
     num, den = args
-    ty = sig.args[0] # any arg type will do, homogeneous
-    lty = num.type
+    ty = sig.args[0]  # any arg type will do, homogeneous
 
     ZERO = context.get_constant(ty, 0)
     den_not_zero = builder.icmp(lc.ICMP_NE, ZERO, den)
@@ -178,19 +180,26 @@ def np_int_srem_impl(context, builder, sig, args):
         fix_value = builder.select(needs_fixing, den, ZERO)
         final_mod = builder.add(fix_value, mod)
 
-    result = builder.phi(lty)
+    result = builder.phi(ZERO.type)
     result.add_incoming(ZERO, bb_no_if)
     result.add_incoming(final_mod, bb_if)
 
     return result
 
 
-def np_int_udiv_impl(context, builder, sig, args):
-    num, den = args
-    lltype = num.type
-    assert all(i.type==lltype for i in args), "must have homogeneous types"
+def np_int_sdivrem_impl(context, builder, sig, args):
+    div = np_int_sdiv_impl(context, builder, sig.return_type[0](*sig.args), args)
+    rem = np_int_srem_impl(context, builder, sig.return_type[1](*sig.args), args)
+    return context.make_tuple(builder, sig.return_type, [div, rem])
 
-    ZERO = lc.Constant.int(lltype, 0)
+
+def np_int_udiv_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    num, den = args
+    ty = sig.args[0]  # any arg type will do, homogeneous
+
+    ZERO = context.get_constant(ty, 0)
     div_by_zero = builder.icmp(lc.ICMP_EQ, ZERO, den)
     with builder.if_else(div_by_zero, likely=False) as (then, otherwise):
         with then:
@@ -201,7 +210,7 @@ def np_int_udiv_impl(context, builder, sig, args):
             div = builder.udiv(num, den)
             bb_otherwise = builder.basic_block
 
-    result = builder.phi(lltype)
+    result = builder.phi(ZERO.type)
     result.add_incoming(ZERO, bb_then)
     result.add_incoming(div, bb_otherwise)
     return result
@@ -212,8 +221,7 @@ def np_int_urem_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
     num, den = args
-    ty = sig.args[0] # any arg type will do, homogeneous
-    lty = num.type
+    ty = sig.args[0]  # any arg type will do, homogeneous
 
     ZERO = context.get_constant(ty, 0)
     den_not_zero = builder.icmp(lc.ICMP_NE, ZERO, den)
@@ -222,11 +230,17 @@ def np_int_urem_impl(context, builder, sig, args):
         bb_if = builder.basic_block
         mod = builder.urem(num,den)
 
-    result = builder.phi(lty)
+    result = builder.phi(ZERO.type)
     result.add_incoming(ZERO, bb_no_if)
     result.add_incoming(mod, bb_if)
 
     return result
+
+
+def np_int_udivrem_impl(context, builder, sig, args):
+    div = np_int_udiv_impl(context, builder, sig.return_type[0](*sig.args), args)
+    rem = np_int_urem_impl(context, builder, sig.return_type[1](*sig.args), args)
+    return context.make_tuple(builder, sig.return_type, [div, rem])
 
 
 # implementation of int_fmod is in fact the same as the unsigned remainder,
@@ -402,6 +416,12 @@ def np_real_floor_div_impl(context, builder, sig, args):
     return np_real_floor_impl(context, builder, s, (res,))
 
 
+def np_real_divmod_impl(context, builder, sig, args):
+    div = np_real_floor_div_impl(context, builder, sig.return_type[0](*sig.args), args)
+    rem = np_real_mod_impl(context, builder, sig.return_type[1](*sig.args), args)
+    return context.make_tuple(builder, sig.return_type, [div, rem])
+
+
 def np_complex_floor_div_impl(context, builder, sig, args):
     # this is based on the complex floor divide in Numpy's loops.c.src
     # This is basically a full complex division with a complex floor
@@ -463,6 +483,21 @@ def np_complex_power_impl(context, builder, sig, args):
 
 
 ########################################################################
+# numpy float power funcs
+
+def real_float_power_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    return numbers.real_power_impl(context, builder, sig, args)
+
+
+def np_complex_float_power_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    return numbers.complex_power_impl(context, builder, sig, args)
+
+
+########################################################################
 # numpy greatest common denominator
 
 def np_gcd_impl(context, builder, sig, args):
@@ -474,7 +509,6 @@ def np_gcd_impl(context, builder, sig, args):
 # numpy lowest common multiple
 
 def np_lcm_impl(context, builder, sig, args):
-    import numpy as np
 
     xty, yty = sig.args
     assert xty == yty == sig.return_type
@@ -733,6 +767,29 @@ def np_complex_square_impl(context, builder, sig, args):
     binary_sig = typing.signature(*[sig.return_type]*3)
     return numbers.complex_mul_impl(context, builder, binary_sig,
                                      [args[0], args[0]])
+
+
+########################################################################
+# NumPy cbrt
+
+def np_real_cbrt_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1)
+
+    # We enable fastmath here to force np.power(x, 1/3) to generate a
+    # call to libm cbrt function
+    @register_jitable(fastmath=True)
+    def cbrt(x):
+        if x < 0:
+            return -np.power(-x, 1.0 / 3.0)
+        else:
+            return np.power(x, 1.0 / 3.0)
+
+    def _cbrt(x):
+        if np.isnan(x):
+            return np.nan
+        return cbrt(x)
+
+    return context.compile_internal(builder, _cbrt, sig, args)
 
 
 ########################################################################
@@ -1471,6 +1528,11 @@ def np_int_isfinite_impl(context, builder, sig, args):
 def np_datetime_isfinite_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
     return builder.icmp_unsigned('!=', args[0], npdatetime.NAT)
+
+
+def np_datetime_isnat_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    return builder.icmp_signed('==', args[0], npdatetime.NAT)
 
 
 def np_real_isfinite_impl(context, builder, sig, args):

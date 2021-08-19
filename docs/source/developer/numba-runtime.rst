@@ -7,29 +7,29 @@ Notes on Numba Runtime
 
 The *Numba Runtime (NRT)* provides the language runtime to the *nopython mode*
 Python subset.  NRT is a standalone C library with a Python binding.  This
-allows NPM runtime feature to be used without the GIL.  Currently, the only
-language feature implemented in NRT is memory management.
+allows :term:`NPM` runtime feature to be used without the GIL.  Currently, the 
+only language feature implemented in NRT is memory management.
 
 
 Memory Management
 =================
 
-NRT implements memory management for NPM code.  It uses *atomic reference count*
-for threadsafe, deterministic memory management.  NRT maintains a separate
-``MemInfo`` structure for storing information about each allocation.
+NRT implements memory management for :term:`NPM` code.  It uses *atomic 
+reference count* for threadsafe, deterministic memory management.  NRT maintains 
+a separate ``MemInfo`` structure for storing information about each allocation.
 
 Cooperating with CPython
 ------------------------
 
 For NRT to cooperate with CPython, the NRT python binding provides adaptors for
 converting python objects that export a memory region.  When such an
-object is used as an argument to a NPM function, a new ``MemInfo`` is created
-and it acquires a reference to the Python object.  When a NPM value is returned
-to the Python interpreter, the associated ``MemInfo`` (if any) is checked.  If
-the ``MemInfo`` references a Python object, the underlying Python object is
-released and returned instead.  Otherwise, the ``MemInfo`` is wrapped in a
-Python object and returned.  Additional process maybe required depending on
-the type.
+object is used as an argument to a :term:`NPM` function, a new ``MemInfo`` is 
+created and it acquires a reference to the Python object.  When a :term:`NPM` 
+value is returned to the Python interpreter, the associated ``MemInfo`` 
+(if any) is checked.  If the ``MemInfo`` references a Python object, the 
+underlying Python object is released and returned instead.  Otherwise, the 
+``MemInfo`` is wrapped in a Python object and returned. Additional process 
+maybe required depending on the type.
 
 The current implementation supports Numpy array and any buffer-exporting types.
 
@@ -48,21 +48,39 @@ Optimizations
 -------------
 
 The compiler is allowed to emit incref/decref operations naively.  It relies
-on an optimization pass that to remove the redundant reference count
-operations.
+on an optimization pass to remove redundant reference count operations.
 
-The optimization pass runs on block level to avoid control flow analysis.
+A new optimization pass is implemented in version 0.52.0 to remove reference
+count operations that fall into the following four categories of control-flow
+structure---per basic-block, diamond, fanout, fanout+raise. See the documentation
+for :envvar:`NUMBA_LLVM_REFPRUNE_FLAGS` for their descriptions.
+
+The old optimization pass runs at block level to avoid control flow analysis.
 It depends on LLVM function optimization pass to simplify the control flow,
 stack-to-register, and simplify instructions.  It works by matching and
-removing incref and decref pairs within each block.
+removing incref and decref pairs within each block.  The old pass can be
+enabled by setting :envvar:`NUMBA_LLVM_REFPRUNE_PASS` to `0`.
+
+Important assumptions
+---------------------
+
+Both the old (pre-0.52.0) and the new (post-0.52.0) optimization passes assume
+that the only function that can consume a reference is ``NRT_decref``.
+It is important that there are no other functions that will consume references.
+Since the passes operate on LLVM IR, the "functions" here are referring to any
+callee in a LLVM call instruction.
+
+To summarize, all functions exposed to the refcount optimization pass
+**must not** consume counted references unless done so via ``NRT_decref``.
 
 
-Quirks
-------
+Quirks of the old optimization pass
+-----------------------------------
 
-Since the `refcount optimization pass <nrt-refct-opt-pass_>`_ requires LLVM
-function optimization pass, the pass works on the LLVM IR as text.  The
-optimized IR is then materialized again as a new LLVM in-memory bitcode object.
+Since the pre-0.52.0 `refcount optimization pass <nrt-refct-opt-pass_>`_
+requires the LLVM function optimization pass, the pass works on the LLVM IR as
+text. The optimized IR is then materialized again as a new LLVM in-memory
+bitcode object.
 
 
 Debugging Leaks
@@ -72,7 +90,7 @@ To debug reference leaks in NRT MemInfo, each MemInfo python object has a
 ``.refcount`` attribute for inspection.  To get the MemInfo from a ndarray
 allocated by NRT, use the ``.base`` attribute.
 
-To debug memory leaks in NRT, the ``numba.runtime.rtsys`` defines
+To debug memory leaks in NRT, the ``numba.core.runtime.rtsys`` defines
 ``.get_allocation_stats()``.  It returns a namedtuple containing the
 number of allocation and deallocation since the start of the program.
 Checking that the allocation and deallocation counters are matching is the
@@ -82,7 +100,8 @@ simplest way to know if the NRT is leaking.
 Debugging Leaks in C
 --------------------
 
-The start of `numba/runtime/nrt.h <https://github.com/numba/numba/blob/master/numba/runtime/nrt.h>`_
+The start of `numba/core/runtime/nrt.h
+<https://github.com/numba/numba/blob/master/numba/core/runtime/nrt.h>`_
 has these lines:
 
 .. code-block:: C
@@ -165,5 +184,5 @@ The plan for NRT is to make a standalone shared library that can be linked to
 Numba compiled code, including use within the Python interpreter and without
 the Python interpreter.  To make that work, we will be doing some refactoring:
 
-* numba NPM code references statically compiled code in "helperlib.c".  Those
-  functions should be moved to NRT.
+* numba :term:`NPM` code references statically compiled code in "helperlib.c".
+  Those functions should be moved to NRT.

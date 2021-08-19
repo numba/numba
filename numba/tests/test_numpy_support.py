@@ -41,6 +41,8 @@ class TestFromDtype(TestCase):
         check('D', types.complex128)
         check('c16', types.complex128)
 
+        check('O', types.pyobject)
+
         check('b', types.int8)
         check('i1', types.int8)
         check('B', types.uint8)
@@ -142,7 +144,7 @@ class TestFromDtype(TestCase):
             recovered = numpy_support.as_dtype(inst)
             self.assertEqual(np_dt, recovered)
 
-        dts = [np.float64, np.int32, np.complex128, np.bool]
+        dts = [np.float64, np.int32, np.complex128, np.bool_]
         enums = [Shake, RequestError]
 
         for dt, enum in product(dts, enums):

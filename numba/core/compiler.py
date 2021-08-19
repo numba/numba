@@ -6,8 +6,8 @@ from numba.core.tracing import event
 from numba.core import (utils, errors, typing, interpreter, bytecode, postproc,
                         config, callconv, cpu)
 from numba.parfors.parfor import ParforDiagnostics
-from numba.core.inline_closurecall import InlineClosureCallPass
 from numba.core.errors import CompilerError
+from numba.core.environment import lookup_environment
 
 from numba.core.compiler_machinery import PassManager
 
@@ -19,53 +19,133 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
                                        FindLiterallyCalls,
                                        MakeFunctionToJitFunction,
                                        CanonicalizeLoopExit,
-                                       CanonicalizeLoopEntry, LiteralUnroll,)
+                                       CanonicalizeLoopEntry, LiteralUnroll,
+                                       ReconstructSSA,
+                                       )
 
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                      NopythonRewrites, PreParforPass,
                                      ParforPass, DumpParforDiagnostics,
                                      IRLegalization, NoPythonBackend,
-                                     InlineOverloads)
+                                     InlineOverloads, PreLowerStripPhis,
+                                     NativeLowering,
+                                     NoPythonSupportedFeatureValidation,
+                                     )
 
 from numba.core.object_mode_passes import (ObjectModeFrontEnd,
-                                           ObjectModeBackEnd, CompileInterpMode)
+                                           ObjectModeBackEnd)
+from numba.core.targetconfig import TargetConfig, Option
 
 
-class Flags(utils.ConfigOptions):
-    # These options are all false by default, but the defaults are
-    # different with the @jit decorator (see targets.options.TargetOptions).
-
-    OPTIONS = {
-        # Enable loop-lifting
-        'enable_looplift': False,
-        # Enable pyobject mode (in general)
-        'enable_pyobject': False,
-        # Enable pyobject mode inside lifted loops
-        'enable_pyobject_looplift': False,
-        # Force pyobject mode inside the whole function
-        'force_pyobject': False,
-        # Release GIL inside the native function
-        'release_gil': False,
-        'no_compile': False,
-        'debuginfo': False,
-        'boundscheck': False,
-        'forceinline': False,
-        'no_cpython_wrapper': False,
-        # Enable automatic parallel optimization, can be fine-tuned by taking
-        # a dictionary of sub-options instead of a boolean, see parfor.py for
-        # detail.
-        'auto_parallel': cpu.ParallelOptions(False),
-        'nrt': False,
-        'no_rewrites': False,
-        'error_model': 'python',
-        'fastmath': cpu.FastMathOptions(False),
-        'noalias': False,
-        'inline': cpu.InlineOptions('never'),
-    }
+class Flags(TargetConfig):
+    enable_looplift = Option(
+        type=bool,
+        default=False,
+        doc="Enable loop-lifting",
+    )
+    enable_pyobject = Option(
+        type=bool,
+        default=False,
+        doc="Enable pyobject mode (in general)",
+    )
+    enable_pyobject_looplift = Option(
+        type=bool,
+        default=False,
+        doc="Enable pyobject mode inside lifted loops",
+    )
+    enable_ssa = Option(
+        type=bool,
+        default=True,
+        doc="Enable SSA",
+    )
+    force_pyobject = Option(
+        type=bool,
+        default=False,
+        doc="Force pyobject mode inside the whole function",
+    )
+    release_gil = Option(
+        type=bool,
+        default=False,
+        doc="Release GIL inside the native function",
+    )
+    no_compile = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    debuginfo = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    boundscheck = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    forceinline = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    no_cpython_wrapper = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    no_cfunc_wrapper = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    auto_parallel = Option(
+        type=cpu.ParallelOptions,
+        default=cpu.ParallelOptions(False),
+        doc="""Enable automatic parallel optimization, can be fine-tuned by
+taking a dictionary of sub-options instead of a boolean, see parfor.py for
+detail""",
+    )
+    nrt = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    no_rewrites = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    error_model = Option(
+        type=str,
+        default="python",
+        doc="TODO",
+    )
+    fastmath = Option(
+        type=cpu.FastMathOptions,
+        default=cpu.FastMathOptions(False),
+        doc="TODO",
+    )
+    noalias = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    inline = Option(
+        type=cpu.InlineOptions,
+        default=cpu.InlineOptions("never"),
+        doc="TODO",
+    )
+    # Defines a new target option for tracking the "target backend".
+    # This will be the XYZ in @jit(_target=XYZ).
+    target_backend = Option(
+        type=str,
+        default="cpu", # if not set, default to CPU
+        doc="backend"
+    )
 
 
 DEFAULT_FLAGS = Flags()
-DEFAULT_FLAGS.set('nrt')
+DEFAULT_FLAGS.nrt = True
 
 
 CR_FIELDS = ["typing_context",
@@ -77,7 +157,6 @@ CR_FIELDS = ["typing_context",
              "objectmode",
              "lifted",
              "fndesc",
-             "interpmode",
              "library",
              "call_helper",
              "environment",
@@ -85,6 +164,7 @@ CR_FIELDS = ["typing_context",
              # List of functions to call to initialize on unserialization
              # (i.e cache load).
              "reload_init",
+             "referenced_envs",
              ]
 
 
@@ -105,15 +185,31 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
         fndesc = self.fndesc
         # Those don't need to be pickled and may fail
         fndesc.typemap = fndesc.calltypes = None
-
+        # Include all referenced environments
+        referenced_envs = self._find_referenced_environments()
         return (libdata, self.fndesc, self.environment, self.signature,
-                self.objectmode, self.interpmode, self.lifted, typeann,
-                self.reload_init)
+                self.objectmode, self.lifted, typeann, self.reload_init,
+                tuple(referenced_envs))
+
+    def _find_referenced_environments(self):
+        """Returns a list of referenced environments
+        """
+        mod = self.library._final_module
+        # Find environments
+        referenced_envs = []
+        for gv in mod.global_variables:
+            gvn = gv.name
+            if gvn.startswith("_ZN08NumbaEnv"):
+                env = lookup_environment(gvn)
+                if env is not None:
+                    if env.can_cache():
+                        referenced_envs.append(env)
+        return referenced_envs
 
     @classmethod
     def _rebuild(cls, target_context, libdata, fndesc, env,
-                 signature, objectmode, interpmode, lifted, typeann,
-                 reload_init):
+                 signature, objectmode, lifted, typeann,
+                 reload_init, referenced_envs):
         if reload_init:
             # Re-run all
             for fn in reload_init:
@@ -130,14 +226,24 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
                  type_annotation=typeann,
                  signature=signature,
                  objectmode=objectmode,
-                 interpmode=interpmode,
                  lifted=lifted,
                  typing_error=None,
                  call_helper=None,
                  metadata=None,  # Do not store, arbitrary & potentially large!
                  reload_init=reload_init,
+                 referenced_envs=referenced_envs,
                  )
+
+        # Load Environments
+        for env in referenced_envs:
+            library.codegen.set_env(env.env_name, env)
+
         return cr
+
+    def dump(self, tab=''):
+        print(f'{tab}DUMP {type(self).__name__} {self.entry_point}')
+        self.signature.dump(tab=tab + '  ')
+        print(f'{tab}END DUMP')
 
 
 _LowerResult = namedtuple("_LowerResult", [
@@ -173,7 +279,7 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
     """
     from numba.core.registry import cpu_target
     typingctx = typing.Context()
-    targetctx = cpu.CPUContext(typingctx)
+    targetctx = cpu.CPUContext(typingctx, target='cpu')
     # Register the contexts in case for nested @jit or @overload calls
     with cpu_target.nested_context(typingctx, targetctx):
         return compile_extra(typingctx, targetctx, func, args, return_type,
@@ -194,6 +300,7 @@ def run_frontend(func, inline_closures=False, emit_dels=False):
     bc = bytecode.ByteCode(func_id=func_id)
     func_ir = interp.interpret(bc)
     if inline_closures:
+        from numba.core.inline_closurecall import InlineClosureCallPass
         inline_pass = InlineClosureCallPass(func_ir, cpu.ParallelOptions(False),
                                             {}, False)
         inline_pass.run()
@@ -206,12 +313,11 @@ class _CompileStatus(object):
     """
     Describes the state of compilation. Used like a C record.
     """
-    __slots__ = ['fail_reason', 'can_fallback', 'can_giveup']
+    __slots__ = ['fail_reason', 'can_fallback']
 
-    def __init__(self, can_fallback, can_giveup):
+    def __init__(self, can_fallback):
         self.fail_reason = None
         self.can_fallback = can_fallback
-        self.can_giveup = can_giveup
 
     def __repr__(self):
         vals = []
@@ -307,22 +413,15 @@ class CompilerBase(object):
         self.state.parfor_diagnostics = ParforDiagnostics()
         self.state.metadata['parfor_diagnostics'] = \
             self.state.parfor_diagnostics
+        self.state.metadata['parfors'] = {}
 
         self.state.status = _CompileStatus(
-            can_fallback=self.state.flags.enable_pyobject,
-            can_giveup=config.COMPATIBILITY_MODE
+            can_fallback=self.state.flags.enable_pyobject
         )
 
     def compile_extra(self, func):
         self.state.func_id = bytecode.FunctionIdentity.from_function(func)
-        try:
-            ExtractByteCode().run_pass(self.state)
-        except Exception as e:
-            if self.state.status.can_giveup:
-                CompileInterpMode().run_pass(self.state)
-                return self.state.cr
-            else:
-                raise e
+        ExtractByteCode().run_pass(self.state)
 
         self.state.lifted = ()
         self.state.lifted_from = None
@@ -347,41 +446,43 @@ class CompilerBase(object):
         """
         Populate and run compiler pipeline
         """
-        pms = self.define_pipelines()
-        for pm in pms:
-            pipeline_name = pm.pipeline_name
-            func_name = "%s.%s" % (self.state.func_id.modname,
-                                   self.state.func_id.func_qualname)
+        with utils.ConfigStack().enter(self.state.flags.copy()):
+            pms = self.define_pipelines()
+            for pm in pms:
+                pipeline_name = pm.pipeline_name
+                func_name = "%s.%s" % (self.state.func_id.modname,
+                                       self.state.func_id.func_qualname)
 
-            event("Pipeline: %s for %s" % (pipeline_name, func_name))
-            self.state.metadata['pipeline_times'] = {pipeline_name:
-                                                     pm.exec_times}
-            is_final_pipeline = pm == pms[-1]
-            res = None
-            try:
-                pm.run(self.state)
-                if self.state.cr is not None:
+                event("Pipeline: %s for %s" % (pipeline_name, func_name))
+                self.state.metadata['pipeline_times'] = {pipeline_name:
+                                                         pm.exec_times}
+                is_final_pipeline = pm == pms[-1]
+                res = None
+                try:
+                    pm.run(self.state)
+                    if self.state.cr is not None:
+                        break
+                except _EarlyPipelineCompletion as e:
+                    res = e.result
                     break
-            except _EarlyPipelineCompletion as e:
-                res = e.result
-                break
-            except Exception as e:
-                self.state.status.fail_reason = e
-                if is_final_pipeline:
-                    raise e
-        else:
-            raise CompilerError("All available pipelines exhausted")
+                except Exception as e:
+                    self.state.status.fail_reason = e
+                    if is_final_pipeline:
+                        raise e
+            else:
+                raise CompilerError("All available pipelines exhausted")
 
-        # Pipeline is done, remove self reference to release refs to user code
-        self.state.pipeline = None
+            # Pipeline is done, remove self reference to release refs to user
+            # code
+            self.state.pipeline = None
 
-        # organise a return
-        if res is not None:
-            # Early pipeline completion
-            return res
-        else:
-            assert self.state.cr is not None
-            return self.state.cr
+            # organise a return
+            if res is not None:
+                # Early pipeline completion
+                return res
+            else:
+                assert self.state.cr is not None
+                return self.state.cr
 
     def _compile_bytecode(self):
         """
@@ -411,10 +512,6 @@ class Compiler(CompilerBase):
             pms.append(
                 DefaultPassBuilder.define_objectmode_pipeline(self.state)
             )
-        if self.state.status.can_giveup:
-            pms.append(
-                DefaultPassBuilder.define_interpreted_pipeline(self.state)
-            )
         return pms
 
 
@@ -425,11 +522,71 @@ class DefaultPassBuilder(object):
       - nopython
       - objectmode
       - interpreted
+      - typed
+      - untyped
+      - nopython lowering
     """
     @staticmethod
     def define_nopython_pipeline(state, name='nopython'):
         """Returns an nopython mode pipeline based PassManager
         """
+        # compose pipeline from untyped, typed and lowering parts
+        dpb = DefaultPassBuilder
+        pm = PassManager(name)
+        untyped_passes = dpb.define_untyped_pipeline(state)
+        pm.passes.extend(untyped_passes.passes)
+
+        typed_passes = dpb.define_typed_pipeline(state)
+        pm.passes.extend(typed_passes.passes)
+
+        lowering_passes = dpb.define_nopython_lowering_pipeline(state)
+        pm.passes.extend(lowering_passes.passes)
+
+        pm.finalize()
+        return pm
+
+    @staticmethod
+    def define_nopython_lowering_pipeline(state, name='nopython_lowering'):
+        pm = PassManager(name)
+        # legalise
+        pm.add_pass(NoPythonSupportedFeatureValidation,
+                    "ensure features that are in use are in a valid form")
+        pm.add_pass(IRLegalization,
+                    "ensure IR is legal prior to lowering")
+
+        # lower
+        pm.add_pass(NativeLowering, "native lowering")
+        pm.add_pass(NoPythonBackend, "nopython mode backend")
+        pm.add_pass(DumpParforDiagnostics, "dump parfor diagnostics")
+        pm.finalize()
+        return pm
+
+    @staticmethod
+    def define_typed_pipeline(state, name="typed"):
+        """Returns the typed part of the nopython pipeline"""
+        pm = PassManager(name)
+        # typing
+        pm.add_pass(NopythonTypeInference, "nopython frontend")
+        pm.add_pass(AnnotateTypes, "annotate types")
+
+        # strip phis
+        pm.add_pass(PreLowerStripPhis, "remove phis nodes")
+
+        # optimisation
+        pm.add_pass(InlineOverloads, "inline overloaded functions")
+        if state.flags.auto_parallel.enabled:
+            pm.add_pass(PreParforPass, "Preprocessing for parfors")
+        if not state.flags.no_rewrites:
+            pm.add_pass(NopythonRewrites, "nopython rewrites")
+        if state.flags.auto_parallel.enabled:
+            pm.add_pass(ParforPass, "convert to parfors")
+
+        pm.finalize()
+        return pm
+
+    @staticmethod
+    def define_untyped_pipeline(state, name='untyped'):
+        """Returns an untyped part of the nopython pipeline"""
         pm = PassManager(name)
         if state.func_ir is None:
             pm.add_pass(TranslateByteCode, "analyzing bytecode")
@@ -437,14 +594,17 @@ class DefaultPassBuilder(object):
         pm.add_pass(IRProcessing, "processing IR")
         pm.add_pass(WithLifting, "Handle with contexts")
 
+        # inline closures early in case they are using nonlocal's
+        # see issue #6585.
+        pm.add_pass(InlineClosureLikes,
+                    "inline calls to locally defined closures")
+
         # pre typing
         if not state.flags.no_rewrites:
             pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
             pm.add_pass(DeadBranchPrune, "dead branch pruning")
             pm.add_pass(GenericRewrites, "nopython rewrites")
 
-        pm.add_pass(InlineClosureLikes,
-                    "inline calls to locally defined closures")
         # convert any remaining closures into functions
         pm.add_pass(MakeFunctionToJitFunction,
                     "convert make_function into JIT functions")
@@ -459,26 +619,9 @@ class DefaultPassBuilder(object):
         pm.add_pass(FindLiterallyCalls, "find literally calls")
         pm.add_pass(LiteralUnroll, "handles literal_unroll")
 
-        # typing
-        pm.add_pass(NopythonTypeInference, "nopython frontend")
-        pm.add_pass(AnnotateTypes, "annotate types")
+        if state.flags.enable_ssa:
+            pm.add_pass(ReconstructSSA, "ssa")
 
-        # optimisation
-        pm.add_pass(InlineOverloads, "inline overloaded functions")
-        if state.flags.auto_parallel.enabled:
-            pm.add_pass(PreParforPass, "Preprocessing for parfors")
-        if not state.flags.no_rewrites:
-            pm.add_pass(NopythonRewrites, "nopython rewrites")
-        if state.flags.auto_parallel.enabled:
-            pm.add_pass(ParforPass, "convert to parfors")
-
-        # legalise
-        pm.add_pass(IRLegalization,
-                    "ensure IR is legal prior to lowering")
-
-        # lower
-        pm.add_pass(NoPythonBackend, "nopython mode backend")
-        pm.add_pass(DumpParforDiagnostics, "dump parfor diagnostics")
         pm.finalize()
         return pm
 
@@ -490,6 +633,10 @@ class DefaultPassBuilder(object):
         if state.func_ir is None:
             pm.add_pass(TranslateByteCode, "analyzing bytecode")
             pm.add_pass(FixupArgs, "fix up args")
+        else:
+            # Reaches here if it's a fallback from nopython mode.
+            # Strip the phi nodes.
+            pm.add_pass(PreLowerStripPhis, "remove phis nodes")
         pm.add_pass(IRProcessing, "processing IR")
 
         if utils.PYVERSION >= (3, 7):
@@ -506,16 +653,6 @@ class DefaultPassBuilder(object):
         pm.add_pass(AnnotateTypes, "annotate types")
         pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
         pm.add_pass(ObjectModeBackEnd, "object mode backend")
-        pm.finalize()
-        return pm
-
-    @staticmethod
-    def define_interpreted_pipeline(state, name="interpreted"):
-        """Returns an interpreted mode pipeline based PassManager
-        """
-        pm = PassManager(name)
-        pm.add_pass(CompileInterpMode,
-                    "compiling with interpreter mode")
         pm.finalize()
         return pm
 

@@ -8,6 +8,7 @@ import unittest
 from numba import jit
 from numba.core.errors import NumbaWarning, deprecated, NumbaDeprecationWarning
 from numba.core import errors
+from numba.tests.support import ignore_internal_warnings
 
 
 class TestBuiltins(unittest.TestCase):
@@ -26,6 +27,7 @@ class TestBuiltins(unittest.TestCase):
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always', NumbaWarning)
+            ignore_internal_warnings()
 
             cfunc = jit(add)
             cfunc(1, 2)
@@ -50,6 +52,7 @@ class TestBuiltins(unittest.TestCase):
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always', NumbaWarning)
+            ignore_internal_warnings()
 
             cfunc = jit(_nrt=False)(return_external_array)
             cfunc()
@@ -79,6 +82,7 @@ class TestBuiltins(unittest.TestCase):
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always', NumbaWarning)
+            ignore_internal_warnings()
 
             cfunc = jit(return_external_array)
             cfunc()
@@ -92,6 +96,7 @@ class TestBuiltins(unittest.TestCase):
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always', NumbaWarning)
+            ignore_internal_warnings()
 
             cfunc = jit(add, forceobj=True)
             cfunc(1, 2)
@@ -106,12 +111,15 @@ class TestBuiltins(unittest.TestCase):
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always', NumbaWarning)
+            ignore_internal_warnings()
 
             x = np.ones(4, dtype=np.float32)
             cfunc = jit(do_loop)
             cfunc(x)
 
-            self.assertEqual(len(w), 4)
+            msg = '\n'.join(f"----------\n{x.message}" for x in w)
+
+            self.assertEqual(len(w), 4, msg=msg)
 
             # Type inference failure (1st pass, in npm, fall-back to objmode
             # with looplift)
@@ -141,6 +149,7 @@ class TestBuiltins(unittest.TestCase):
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always')
+            ignore_internal_warnings()
             bar()
 
             self.assertEqual(len(w), 1)
@@ -155,9 +164,11 @@ class TestBuiltins(unittest.TestCase):
         with wfix.catch_warnings('foo', 10):
             warnings.warn(errors.NumbaWarning('same'))
             warnings.warn(errors.NumbaDeprecationWarning('same'))
+            ignore_internal_warnings()
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always')
+            ignore_internal_warnings()
             wfix.flush()
 
             self.assertEqual(len(w), 2)
@@ -182,8 +193,10 @@ class TestBuiltins(unittest.TestCase):
             import warnings
             from numba.tests.error_usecases import foo
             import numba
+            from numba.tests.support import ignore_internal_warnings
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter('always')
+                ignore_internal_warnings()
                 foo()
             for x in w:
                 if x.category == numba.errors.NumbaPerformanceWarning:

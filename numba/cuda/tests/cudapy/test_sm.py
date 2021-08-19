@@ -1,6 +1,6 @@
 from numba import cuda, int32, float64
 
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 
 import numpy as np
 from numba.np import numpy_support as nps
@@ -10,15 +10,15 @@ recordwith2darray = np.dtype([('i', np.int32),
                               ('j', np.float32, (3, 2))])
 
 
-class TestSharedMemoryIssue(SerialMixin, unittest.TestCase):
+class TestSharedMemoryIssue(CUDATestCase):
     def test_issue_953_sm_linkage_conflict(self):
         @cuda.jit(device=True)
         def inner():
-            inner_arr = cuda.shared.array(1, dtype=int32)
+            inner_arr = cuda.shared.array(1, dtype=int32)  # noqa: F841
 
         @cuda.jit
         def outer():
-            outer_arr = cuda.shared.array(1, dtype=int32)
+            outer_arr = cuda.shared.array(1, dtype=int32)  # noqa: F841
             inner()
 
         outer[1, 1]()
@@ -74,7 +74,7 @@ class TestSharedMemoryIssue(SerialMixin, unittest.TestCase):
         cuda.synchronize()
 
 
-class TestSharedMemory(SerialMixin, unittest.TestCase):
+class TestSharedMemory(CUDATestCase):
     def _test_shared(self, arr):
         # Use a kernel that copies via shared memory to check loading and
         # storing different dtypes with shared memory. All threads in a block
@@ -347,7 +347,7 @@ class TestSharedMemory(SerialMixin, unittest.TestCase):
         def sm_slice_copy(x, y, chunksize):
             dynsmem = cuda.shared.array(0, dtype=dt)
             sm1 = dynsmem[0:chunksize]
-            sm2 = dynsmem[chunksize:chunksize*2]
+            sm2 = dynsmem[chunksize:chunksize * 2]
 
             tx = cuda.threadIdx.x
             bx = cuda.blockIdx.x
@@ -368,7 +368,6 @@ class TestSharedMemory(SerialMixin, unittest.TestCase):
                 for j in range(chunksize):
                     y[bd * bx + j] = sm1[j]
                     y[bd * bx + j + chunksize] = sm2[j]
-
 
         d_result = cuda.device_array_like(arr)
         sm_slice_copy[nblocks, nthreads, 0, nshared](arr, d_result, chunksize)

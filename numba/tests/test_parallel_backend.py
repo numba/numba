@@ -16,7 +16,8 @@ import numpy as np
 
 from numba import jit, vectorize, guvectorize, set_num_threads
 from numba.tests.support import (temp_directory, override_config, TestCase, tag,
-                                 skip_parfors_unsupported, linux_only)
+                                 skip_parfors_unsupported, linux_only,
+                                 needs_external_compilers)
 
 import queue as t_queue
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
@@ -262,7 +263,7 @@ class TestParallelBackendBase(TestCase):
         'concurrent_jit': [
             jit_runner(nopython=True, parallel=(not _parfors_unsupported)),
         ],
-        'concurrect_vectorize': [
+        'concurrent_vectorize': [
             vectorize_runner(nopython=True, target='parallel'),
         ],
         'concurrent_guvectorize': [
@@ -858,37 +859,230 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
 
 
 @skip_parfors_unsupported
+@skip_no_tbb
+class TestTBBSpecificIssues(ThreadLayerTestHelper):
+
+    _DEBUG = False
+
+    @linux_only # os.fork required.
+    def test_fork_from_non_main_thread(self):
+        # See issue #5973 and PR #6208 for original context.
+        # See issue #6963 for context on the following comments:
+        #
+        # Important things to note:
+        # 1. Compilation of code containing an objmode block will result in the
+        #    use of and `ObjModeLiftedWith` as the dispatcher. This inherits
+        #    from `LiftedCode` which handles the serialization. In that
+        #    serialization is a call to uuid.uuid1() which causes a fork_exec in
+        #    CPython internals.
+        # 2. The selected parallel backend thread pool is started during the
+        #    compilation of a function that has `parallel=True`.
+        # 3. The TBB backend can handle forks from the main thread, it will
+        #    safely reinitialise after so doing. If a fork occurs from a
+        #    non-main thread it will warn and the state is invalid in the child
+        #    process.
+        #
+        # Due to 1. and 2. the `obj_mode_func` function separated out and is
+        # `njit` decorated. This means during type inference of `work` it will
+        # trigger a standard compilation of the function and the thread pools
+        # won't have started yet as the parallelisation compiler passes for
+        # `work` won't yet have run. This mitigates the fork() call from 1.
+        # occuring after 2. The result of this is that 3. can be tested using
+        # the threading etc herein with the state being known as the above
+        # described, i.e. the TBB threading layer has not experienced a fork().
+
+        runme = """if 1:
+            import threading
+            import numba
+            numba.config.THREADING_LAYER='tbb'
+            from numba import njit, prange, objmode
+            from numba.core.serialize import PickleCallableByPath
+            import os
+
+            e_running = threading.Event()
+            e_proceed = threading.Event()
+
+            def indirect_core():
+                e_running.set()
+                # wait for forker() to have forked
+                while not e_proceed.isSet():
+                    pass
+
+            indirect = PickleCallableByPath(indirect_core)
+
+            @njit
+            def obj_mode_func():
+                with objmode():
+                    indirect()
+
+            @njit(parallel=True, nogil=True)
+            def work():
+                acc = 0
+                for x in prange(10):
+                    acc += x
+                obj_mode_func()
+                return acc
+
+            def runner():
+                work()
+
+            def forker():
+                # wait for the jit function to say it's running
+                while not e_running.isSet():
+                    pass
+                # then fork
+                os.fork()
+                # now fork is done signal the runner to proceed to exit
+                e_proceed.set()
+
+            numba_runner = threading.Thread(target=runner,)
+            fork_runner =  threading.Thread(target=forker,)
+
+            threads = (numba_runner, fork_runner)
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+        """
+
+        cmdline = [sys.executable, '-c', runme]
+        out, err = self.run_cmd(cmdline)
+        # assert error message printed on stderr
+        msg_head = "Attempted to fork from a non-main thread, the TBB library"
+        self.assertIn(msg_head, err)
+
+        if self._DEBUG:
+            print("OUT:", out)
+            print("ERR:", err)
+
+    @needs_external_compilers
+    @linux_only # fork required.
+    def test_lifetime_of_task_scheduler_handle(self):
+        # See PR #7280 for context.
+        BROKEN_COMPILERS = 'SKIP: COMPILATION FAILED'
+        runme = """if 1:
+            import ctypes
+            import sys
+            import multiprocessing as mp
+            from tempfile import TemporaryDirectory, NamedTemporaryFile
+            from numba.pycc.platform import Toolchain, _external_compiler_ok
+            from numba import njit, prange, threading_layer
+            import faulthandler
+            faulthandler.enable()
+            if not _external_compiler_ok:
+                raise AssertionError('External compilers are not found.')
+            with TemporaryDirectory() as tmpdir:
+                with NamedTemporaryFile(dir=tmpdir) as tmpfile:
+                    try:
+                        src = \"\"\"
+                        #define TBB_PREVIEW_WAITING_FOR_WORKERS 1
+                        #include <tbb/tbb.h>
+                        static tbb::task_scheduler_handle tsh;
+                        extern "C"
+                        {
+                        void launch(void)
+                        {
+                            tsh = tbb::task_scheduler_handle::get();
+                        }
+                        }
+                        \"\"\"
+                        cxxfile = f"{tmpfile.name}.cxx"
+                        with open(cxxfile, 'wt') as f:
+                            f.write(src)
+                        tc = Toolchain()
+                        object_files = tc.compile_objects([cxxfile,],
+                                                           output_dir=tmpdir)
+                        dso_name = f"{tmpfile.name}.so"
+                        tc.link_shared(dso_name, object_files,
+                                       libraries=['tbb',],
+                                       export_symbols=['launch'])
+                        # Load into the process, it doesn't matter whether the
+                        # DSO exists on disk once it's loaded in.
+                        DLL = ctypes.CDLL(dso_name)
+                    except Exception as e:
+                        # Something is broken in compilation, could be one of
+                        # many things including, but not limited to: missing tbb
+                        # headers, incorrect permissions, compilers that don't
+                        # work for the above
+                        print(e)
+                        print('BROKEN_COMPILERS')
+                        sys.exit(0)
+
+                    # Do the test, launch this library and also execute a
+                    # function with the TBB threading layer.
+
+                    DLL.launch()
+
+                    @njit(parallel=True)
+                    def foo(n):
+                        acc = 0
+                        for i in prange(n):
+                            acc += i
+                        return acc
+
+                    foo(1)
+
+            # Check the threading layer used was TBB
+            assert threading_layer() == 'tbb'
+
+            # Use mp context for a controlled version of fork, this triggers the
+            # reported bug.
+
+            ctx = mp.get_context('fork')
+            def nowork():
+                pass
+            p = ctx.Process(target=nowork)
+            p.start()
+            p.join(10)
+            print("SUCCESS")
+            """.replace('BROKEN_COMPILERS', BROKEN_COMPILERS)
+
+        cmdline = [sys.executable, '-c', runme]
+        env = os.environ.copy()
+        env['NUMBA_THREADING_LAYER'] = 'tbb'
+        out, err = self.run_cmd(cmdline, env=env)
+
+        if BROKEN_COMPILERS in out:
+            self.skipTest("Compilation of DSO failed. Check output for details")
+        else:
+            self.assertIn("SUCCESS", out)
+
+        if self._DEBUG:
+            print("OUT:", out)
+            print("ERR:", err)
+
+
+@skip_parfors_unsupported
 class TestInitSafetyIssues(TestCase):
 
     _DEBUG = False
+
+    def run_cmd(self, cmdline):
+        popen = subprocess.Popen(cmdline,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE,)
+        # finish in _TEST_TIMEOUT seconds or kill it
+        timeout = threading.Timer(_TEST_TIMEOUT, popen.kill)
+        try:
+            timeout.start()
+            out, err = popen.communicate()
+            if popen.returncode != 0:
+                raise AssertionError(
+                    "process failed with code %s: stderr follows\n%s\n" %
+                    (popen.returncode, err.decode()))
+        finally:
+            timeout.cancel()
+        return out.decode(), err.decode()
 
     @linux_only # only linux can leak semaphores
     def test_orphaned_semaphore(self):
         # sys path injection and separate usecase module to make sure everything
         # is importable by children of multiprocessing
 
-        def run_cmd(cmdline):
-            popen = subprocess.Popen(cmdline,
-                                     stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE,)
-            # finish in _TEST_TIMEOUT seconds or kill it
-            timeout = threading.Timer(_TEST_TIMEOUT, popen.kill)
-            try:
-                timeout.start()
-                out, err = popen.communicate()
-                if popen.returncode != 0:
-                    raise AssertionError(
-                        "process failed with code %s: stderr follows\n%s\n" %
-                        (popen.returncode, err.decode()))
-            finally:
-                timeout.cancel()
-            return out.decode(), err.decode()
-
         test_file = os.path.join(os.path.dirname(__file__),
                                  "orphaned_semaphore_usecase.py")
-
         cmdline = [sys.executable, test_file]
-        out, err = run_cmd(cmdline)
+        out, err = self.run_cmd(cmdline)
 
         # assert no semaphore leaks reported on stderr
         self.assertNotIn("leaked semaphore", err)
@@ -896,6 +1090,27 @@ class TestInitSafetyIssues(TestCase):
         if self._DEBUG:
             print("OUT:", out)
             print("ERR:", err)
+
+    def test_lazy_lock_init(self):
+        # checks based on https://github.com/numba/numba/pull/5724
+        # looking for "lazy" process lock initialisation so as to avoid setting
+        # a multiprocessing context as part of import.
+        for meth in ('fork', 'spawn', 'forkserver'):
+            # if a context is available on the host check it can be set as the
+            # start method in a separate process
+            try:
+                multiprocessing.get_context(meth)
+            except ValueError:
+                continue
+            cmd = ("import numba; import multiprocessing;"
+                   "multiprocessing.set_start_method('{}');"
+                   "print(multiprocessing.get_context().get_start_method())")
+            cmdline = [sys.executable, "-c", cmd.format(meth)]
+            out, err = self.run_cmd(cmdline)
+            if self._DEBUG:
+                print("OUT:", out)
+                print("ERR:", err)
+            self.assertIn(meth, out)
 
 
 @skip_parfors_unsupported

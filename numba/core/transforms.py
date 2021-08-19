@@ -9,6 +9,7 @@ import logging
 from numba.core.analysis import compute_cfg_from_blocks, find_top_level_loops
 from numba.core import errors, ir, ir_utils
 from numba.core.analysis import compute_use_defs
+from numba.core.utils import PYVERSION
 
 
 _logger = logging.getLogger(__name__)
@@ -339,12 +340,15 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
             cls = LiftedWith
         return cls(func_ir, typingctx, targetctx, myflags, locals, **kwargs)
 
+    # find where with-contexts regions are
+    withs = find_setupwiths(func_ir.blocks)
+    if not withs:
+        return func_ir, []
+
     postproc.PostProcessor(func_ir).run()  # ensure we have variable lifetime
     assert func_ir.variable_lifetime
     vlt = func_ir.variable_lifetime
     blocks = func_ir.blocks.copy()
-    # find where with-contexts regions are
-    withs = find_setupwiths(blocks)
     cfg = vlt.cfg
     _legalize_withs_cfg(withs, cfg, blocks)
     # For each with-regions, mutate them according to
@@ -503,7 +507,26 @@ def find_setupwiths(blocks):
     def find_ranges(blocks):
         for blk in blocks.values():
             for ew in blk.find_insts(ir.EnterWith):
-                yield ew.begin, ew.end
+                if PYVERSION < (3, 9):
+                    end = ew.end
+                    for offset in blocks:
+                        if ew.end <= offset:
+                            end = offset
+                            break
+                else:
+                    # Since py3.9, the `with finally` handling is injected into
+                    # caller function. However, the numba byteflow doesn't
+                    # account for that block, which is where `ew.end` is
+                    # pointing to. We need to point to the block before
+                    # `ew.end`.
+                    end = ew.end
+                    last_offset = None
+                    for offset in blocks:
+                        if ew.end < offset:
+                            end = last_offset
+                            break
+                        last_offset = offset
+                yield ew.begin, end
 
     def previously_occurred(start, known_ranges):
         for a, b in known_ranges:

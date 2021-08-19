@@ -18,7 +18,7 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, Fixup
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                            NopythonRewrites, PreParforPass, ParforPass,
                            DumpParforDiagnostics, NativeLowering,
-                           IRLegalization, NoPythonBackend)
+                           IRLegalization, NoPythonBackend, NativeLowering)
 
 from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
 import unittest
@@ -55,8 +55,9 @@ class InlineTestPass(FunctionPass):
         for i, stmt in enumerate(block.body):
             if guard(find_callname,state.func_ir, stmt.value) is not None:
                 inline_closure_call(state.func_ir, {}, block, i, lambda: None,
-                    state.typingctx, (), state.type_annotation.typemap,
-                    state.type_annotation.calltypes)
+                                    state.typingctx, state.targetctx, (),
+                                    state.type_annotation.typemap,
+                                    state.type_annotation.calltypes)
                 break
         # also fix up the IR
         post_proc = postproc.PostProcessor(state.func_ir)
@@ -98,6 +99,7 @@ def gen_pipeline(state, test_pass):
         pm.add_pass(PreserveIR, "preserve IR")
 
         # lower
+        pm.add_pass(NativeLowering, "native lowering")
         pm.add_pass(NoPythonBackend, "nopython mode backend")
         pm.add_pass(DumpParforDiagnostics, "dump parfor diagnostics")
         return pm
@@ -258,7 +260,7 @@ class TestInlining(TestCase):
                     if (guard(find_callname, state.func_ir, stmt.value)
                             is not None):
                         inline_closure_call(state.func_ir, {}, block, i,
-                            foo.py_func, state.typingctx,
+                            foo.py_func, state.typingctx, state.targetctx,
                             (state.type_annotation.typemap[stmt.value.args[0].name],),
                             state.type_annotation.typemap, state.calltypes)
                         break

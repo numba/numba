@@ -1,7 +1,7 @@
 import numpy as np
 
-from numba import cuda
-from numba.cuda.testing import unittest, SerialMixin
+from numba import cuda, complex64, int32, float64
+from numba.cuda.testing import unittest, CUDATestCase
 from numba.core.config import ENABLE_CUDASIM
 
 CONST_EMPTY = np.array([])
@@ -89,9 +89,10 @@ def cuconstAlign(z):
     z[i] = a[i] + b[i]
 
 
-class TestCudaConstantMemory(SerialMixin, unittest.TestCase):
+class TestCudaConstantMemory(CUDATestCase):
     def test_const_array(self):
-        jcuconst = cuda.jit('void(float64[:])')(cuconst)
+        sig = (float64[:],)
+        jcuconst = cuda.jit(sig)(cuconst)
         A = np.zeros_like(CONST1D)
         jcuconst[2, 5](A)
         self.assertTrue(np.all(A == CONST1D + 1))
@@ -99,12 +100,12 @@ class TestCudaConstantMemory(SerialMixin, unittest.TestCase):
         if not ENABLE_CUDASIM:
             self.assertIn(
                 'ld.const.f64',
-                jcuconst.ptx,
+                jcuconst.ptx[sig],
                 "as we're adding to it, load as a double")
 
     def test_const_empty(self):
-        jcuconstEmpty = cuda.jit('void(float64[:])')(cuconstEmpty)
-        A = np.full(1, fill_value=-1, dtype=int)
+        jcuconstEmpty = cuda.jit('void(int64[:])')(cuconstEmpty)
+        A = np.full(1, fill_value=-1, dtype=np.int64)
         jcuconstEmpty[1, 1](A)
         self.assertTrue(np.all(A == 0))
 
@@ -115,7 +116,8 @@ class TestCudaConstantMemory(SerialMixin, unittest.TestCase):
         self.assertTrue(np.all(A == (CONST3BYTES + CONST1D[:3])))
 
     def test_const_array_2d(self):
-        jcuconst2d = cuda.jit('void(int32[:,:])')(cuconst2d)
+        sig = (int32[:,:],)
+        jcuconst2d = cuda.jit(sig)(cuconst2d)
         A = np.zeros_like(CONST2D, order='C')
         jcuconst2d[(2, 2), (5, 5)](A)
         self.assertTrue(np.all(A == CONST2D))
@@ -123,24 +125,32 @@ class TestCudaConstantMemory(SerialMixin, unittest.TestCase):
         if not ENABLE_CUDASIM:
             self.assertIn(
                 'ld.const.u32',
-                jcuconst2d.ptx,
+                jcuconst2d.ptx[sig],
                 "load the ints as ints")
 
     def test_const_array_3d(self):
-        jcuconst3d = cuda.jit('void(complex64[:,:,:])')(cuconst3d)
+        sig = (complex64[:,:,:],)
+        jcuconst3d = cuda.jit(sig)(cuconst3d)
         A = np.zeros_like(CONST3D, order='F')
         jcuconst3d[1, (5, 5, 5)](A)
         self.assertTrue(np.all(A == CONST3D))
 
         if not ENABLE_CUDASIM:
-            self.assertIn(
-                'ld.const.v2.u32',
-                jcuconst3d.ptx,
-                "load the two halves of the complex as u32s")
+            # CUDA <= 11.1 uses two f32 loads to load the complex. CUDA >= 11.2
+            # uses a vector of 2x f32. The root cause of these codegen
+            # differences is not known, but must be accounted for in this test.
+            if cuda.runtime.get_version() > (11, 1):
+                complex_load = 'ld.const.v2.f32'
+                description = 'Load the complex as a vector of 2x f32'
+            else:
+                complex_load = 'ld.const.f32'
+                description = 'load each half of the complex as f32'
+
+            self.assertIn(complex_load, jcuconst3d.ptx[sig], description)
 
     def test_const_record_empty(self):
-        jcuconstRecEmpty = cuda.jit('void(float64[:])')(cuconstRecEmpty)
-        A = np.full(1, fill_value=-1, dtype=int)
+        jcuconstRecEmpty = cuda.jit('void(int64[:])')(cuconstRecEmpty)
+        A = np.full(1, fill_value=-1, dtype=np.int64)
         jcuconstRecEmpty[1, 1](A)
         self.assertTrue(np.all(A == 0))
 
@@ -148,23 +158,6 @@ class TestCudaConstantMemory(SerialMixin, unittest.TestCase):
         A = np.zeros(2, dtype=float)
         B = np.zeros(2, dtype=int)
         jcuconst = cuda.jit(cuconstRec).specialize(A, B)
-
-        if not ENABLE_CUDASIM:
-            if not any(c in jcuconst.ptx for c in [
-                # a vector load: the compiler fuses the load
-                # of the x and y fields into a single instruction!
-                'ld.const.v2.u64',
-
-                # for some reason Win64 / Py3 / CUDA 9.1 decides
-                # to do two u32 loads, and shifts and ors the
-                # values to get the float `x` field, then uses
-                # another ld.const.u32 to load the int `y` as
-                # a 32-bit value!
-                'ld.const.u32',
-            ]):
-                raise AssertionError(
-                    "the compiler should realise it doesn't " \
-                    "need to interpret the bytes as float!")
 
         jcuconst[2, 1](A, B)
         np.testing.assert_allclose(A, CONST_RECORD['x'])
@@ -177,22 +170,6 @@ class TestCudaConstantMemory(SerialMixin, unittest.TestCase):
         D = np.zeros(2, dtype=np.float64)
         E = np.zeros(2, dtype=np.float64)
         jcuconst = cuda.jit(cuconstRecAlign).specialize(A, B, C, D, E)
-
-        if not ENABLE_CUDASIM:
-            self.assertIn(
-                'ld.const.v4.u8',
-                jcuconst.ptx,
-                'load the first three bytes as a vector')
-
-            self.assertIn(
-                'ld.const.u32',
-                jcuconst.ptx,
-                'load the uint32 natively')
-
-            self.assertIn(
-                'ld.const.u8',
-                jcuconst.ptx,
-                'load the last byte by itself')
 
         jcuconst[2, 1](A, B, C, D, E)
         np.testing.assert_allclose(A, CONST_RECORD_ALIGN['a'])

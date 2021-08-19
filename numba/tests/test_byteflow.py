@@ -1,6 +1,8 @@
 """
 Test byteflow.py specific issues
 """
+import unittest
+
 from numba.tests.support import TestCase
 from numba.core.compiler import run_frontend
 
@@ -65,3 +67,28 @@ class TestByteFlowIssues(TestCase):
                         print
 
         run_frontend(udt)
+
+    def test_issue_5097(self):
+        # Inspired by https://github.com/numba/numba/issues/5097
+        def udt():
+            for i in range(0):
+                if i > 0:
+                    pass
+                a = None # noqa: F841
+
+        run_frontend(udt)
+
+    def test_issue_5680(self):
+        # From https://github.com/numba/numba/issues/5680#issuecomment-625351336
+        def udt():
+            for k in range(0):
+                if 1 == 1:
+                    ...
+                if 'a' == 'a':
+                    ...
+
+        run_frontend(udt)
+
+
+if __name__ == '__main__':
+    unittest.main()

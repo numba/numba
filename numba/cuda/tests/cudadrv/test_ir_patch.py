@@ -6,9 +6,9 @@ from numba.cuda.testing import skip_on_cudasim
 class TestIRPatch(unittest.TestCase):
     def patch(self, ir):
         # Import here to avoid error in CUDASIM
-        from numba.cuda.cudadrv.nvvm import llvm39_to_34_ir
+        from numba.cuda.cudadrv.nvvm import llvm100_to_34_ir
 
-        return llvm39_to_34_ir(ir)
+        return llvm100_to_34_ir(ir)
 
     def test_load_rewrite(self):
         text = "%myload = not really"

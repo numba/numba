@@ -2,13 +2,14 @@ import re
 import types
 
 import numpy as np
+import warnings
 
-from numba.cuda.testing import unittest, skip_on_cudasim, SerialMixin
+from numba.cuda.testing import unittest, skip_on_cudasim, CUDATestCase
 from numba import cuda, jit, int32
 from numba.core.errors import TypingError
 
 
-class TestDeviceFunc(SerialMixin, unittest.TestCase):
+class TestDeviceFunc(CUDATestCase):
 
     def test_use_add2f(self):
 
@@ -139,6 +140,15 @@ class TestDeviceFunc(SerialMixin, unittest.TestCase):
         llvm = foo.inspect_llvm(args)
         # Check that the compiled function name is in the LLVM.
         self.assertIn(fname, llvm)
+
+    @skip_on_cudasim('not supported in cudasim')
+    def test_deprecated_eager_device(self):
+        with warnings.catch_warnings(record=True) as w:
+            cuda.jit('int32(int32)', device=True)
+
+        self.assertEqual(len(w), 1)
+        self.assertIn('Eager compilation of device functions is deprecated',
+                      str(w[0].message))
 
 
 if __name__ == '__main__':

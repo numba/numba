@@ -8,7 +8,7 @@ from numba.core.errors import TypingError
 from numba.tests.support import TestCase, tag
 from .serialize_usecases import *
 import unittest
-from numba.core import registry
+from numba.core.target_extension import resolve_dispatcher_from_str
 
 
 class TestDispatcherPickling(TestCase):
@@ -19,10 +19,11 @@ class TestDispatcherPickling(TestCase):
 
     @contextlib.contextmanager
     def simulate_fresh_target(self):
-        dispatcher_cls = registry.dispatcher_registry['cpu']
+        hwstr = 'cpu'
+        dispatcher_cls = resolve_dispatcher_from_str(hwstr)
         old_descr = dispatcher_cls.targetdescr
         # Simulate fresh targetdescr
-        dispatcher_cls.targetdescr = type(dispatcher_cls.targetdescr)()
+        dispatcher_cls.targetdescr = type(dispatcher_cls.targetdescr)(hwstr)
         try:
             yield
         finally:
@@ -185,6 +186,24 @@ class TestDispatcherPickling(TestCase):
                     assert "the imp module is deprecated" not in x.msg
         """
         subprocess.check_call([sys.executable, "-c", code])
+
+
+class TestSerializationMisc(TestCase):
+    def test_numba_unpickle(self):
+        # Test that _numba_unpickle is memorizing its output
+        from numba.core.serialize import _numba_unpickle
+
+        random_obj = object()
+        bytebuf = pickle.dumps(random_obj)
+        hashed = hash(random_obj)
+
+        got1 = _numba_unpickle(id(random_obj), bytebuf, hashed)
+        # not the original object
+        self.assertIsNot(got1, random_obj)
+        got2 = _numba_unpickle(id(random_obj), bytebuf, hashed)
+        # unpickled results are the same objects
+        self.assertIs(got1, got2)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -5,7 +5,7 @@ parameters:
 
 jobs:
 - job: ${{ parameters.name }}
-  pool: 
+  pool:
     vmImage: ${{ parameters.vmImage }}
   strategy:
     matrix:
@@ -32,6 +32,13 @@ jobs:
         flake8 numba
       displayName: 'Flake8'
       condition: eq(variables['RUN_FLAKE8'], 'yes')
+
+    - script: |
+        export PATH=$HOME/miniconda3/bin:$PATH
+        conda install -y mypy
+        mypy
+      displayName: 'Mypy'
+      condition: eq(variables['RUN_MYPY'], 'yes')
 
     - script: |
         export PATH=$HOME/miniconda3/bin:$PATH

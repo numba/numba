@@ -35,7 +35,7 @@ def _parse_cc(text):
     else:
         m = re.match(r'(\d+)\.(\d+)', text)
         if not m:
-            raise ValueError("NUMBA_FORCE_CUDA_CC must be specified as a "
+            raise ValueError("Compute capability must be specified as a "
                              "string of \"major.minor\" where major "
                              "and minor are decimals")
         grp = m.groups()
@@ -147,6 +147,18 @@ class _EnvReloader(object):
         # globally.
         BOUNDSCHECK = _readenv("NUMBA_BOUNDSCHECK", int, None)
 
+        # Whether to always warn about potential uninitialized variables
+        # because static controlflow analysis cannot find a definition
+        # in one or more of the incoming paths.
+        ALWAYS_WARN_UNINIT_VAR = _readenv(
+            "NUMBA_ALWAYS_WARN_UNINIT_VAR", int, 0,
+        )
+
+        # Whether to warn about kernel launches where the grid size will
+        # under utilize the GPU due to low occupancy. On by default.
+        CUDA_LOW_OCCUPANCY_WARNINGS = _readenv(
+            "NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS", int, 1)
+
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)
 
@@ -169,9 +181,17 @@ class _EnvReloader(object):
         # (up to and including IR generation)
         DEBUG_FRONTEND = _readenv("NUMBA_DEBUG_FRONTEND", int, 0)
 
+        # Enable debug prints in nrtdynmod
+        DEBUG_NRT = _readenv("NUMBA_DEBUG_NRT", int, 0)
+
         # How many recently deserialized functions to retain regardless
         # of external references
         FUNCTION_CACHE_SIZE = _readenv("NUMBA_FUNCTION_CACHE_SIZE", int, 128)
+
+        # Maximum tuple size that parfors will unpack and pass to
+        # internal gufunc.
+        PARFOR_MAX_TUPLE_SIZE = _readenv("NUMBA_PARFOR_MAX_TUPLE_SIZE",
+                                         int, 100)
 
         # Enable logging of cache operation
         DEBUG_CACHE = _readenv("NUMBA_DEBUG_CACHE", int, DEBUG)
@@ -204,7 +224,11 @@ class _EnvReloader(object):
 
         # Force dump of Numba IR
         DUMP_IR = _readenv("NUMBA_DUMP_IR", int,
-                           DEBUG_FRONTEND or DEBUG_TYPEINFER)
+                           DEBUG_FRONTEND)
+
+        # Force dump of Numba IR in SSA form
+        DUMP_SSA = _readenv("NUMBA_DUMP_SSA", int,
+                            DEBUG_FRONTEND or DEBUG_TYPEINFER)
 
         # print debug info of analysis and optimization on array operations
         DEBUG_ARRAY_OPT = _readenv("NUMBA_DEBUG_ARRAY_OPT", int, 0)
@@ -236,6 +260,9 @@ class _EnvReloader(object):
         LOOP_VECTORIZE = _readenv("NUMBA_LOOP_VECTORIZE", int,
                                   not (IS_WIN32 and IS_32BITS))
 
+        # Switch on  superword-level parallelism vectorization, default is on.
+        SLP_VECTORIZE = _readenv("NUMBA_SLP_VECTORIZE", int, 1)
+
         # Force dump of generated assembly
         DUMP_ASSEMBLY = _readenv("NUMBA_DUMP_ASSEMBLY", int, DEBUG)
 
@@ -253,11 +280,6 @@ class _EnvReloader(object):
                 return os.path.abspath(path)
 
         HTML = _readenv("NUMBA_DUMP_HTML", fmt_html_path, None)
-
-        # Allow interpreter fallback so that Numba @jit decorator will never
-        # fail. Use for migrating from old numba (<0.12) which supported
-        # closure, and other yet-to-be-supported features.
-        COMPATIBILITY_MODE = _readenv("NUMBA_COMPATIBILITY_MODE", int, 0)
 
         # x86-64 specific
         # Enable AVX on supported platforms where it won't degrade performance.
@@ -288,8 +310,18 @@ class _EnvReloader(object):
 
         # CUDA Configs
 
+        # Whether to warn about kernel launches where a host array
+        # is used as a parameter, forcing a copy to and from the device.
+        # On by default.
+        CUDA_WARN_ON_IMPLICIT_COPY = _readenv(
+            "NUMBA_CUDA_WARN_ON_IMPLICIT_COPY", int, 1)
+
         # Force CUDA compute capability to a specific version
         FORCE_CUDA_CC = _readenv("NUMBA_FORCE_CUDA_CC", _parse_cc, None)
+
+        # The default compute capability to target when compiling to PTX.
+        CUDA_DEFAULT_PTX_CC = _readenv("NUMBA_CUDA_DEFAULT_PTX_CC", _parse_cc,
+                                       (5, 2))
 
         # Disable CUDA support
         DISABLE_CUDA = _readenv("NUMBA_DISABLE_CUDA",
@@ -305,6 +337,9 @@ class _EnvReloader(object):
         #       Any existing logging configuration is preserved.
         CUDA_LOG_LEVEL = _readenv("NUMBA_CUDA_LOG_LEVEL", str, '')
 
+        # Include argument values in the CUDA Driver API logs
+        CUDA_LOG_API_ARGS = _readenv("NUMBA_CUDA_LOG_API_ARGS", int, 0)
+
         # Maximum number of pending CUDA deallocations (default: 10)
         CUDA_DEALLOCS_COUNT = _readenv("NUMBA_CUDA_MAX_PENDING_DEALLOCS_COUNT",
                                        int, 10)
@@ -313,13 +348,41 @@ class _EnvReloader(object):
         CUDA_DEALLOCS_RATIO = _readenv("NUMBA_CUDA_MAX_PENDING_DEALLOCS_RATIO",
                                        float, 0.2)
 
+        CUDA_ARRAY_INTERFACE_SYNC = _readenv("NUMBA_CUDA_ARRAY_INTERFACE_SYNC",
+                                             int, 1)
+
+        # Path of the directory that the CUDA driver libraries are located
+        CUDA_DRIVER = _readenv("NUMBA_CUDA_DRIVER", str, '')
+
+        # Buffer size for logs produced by CUDA driver operations (e.g.
+        # linking)
+        CUDA_LOG_SIZE = _readenv("NUMBA_CUDA_LOG_SIZE", int, 1024)
+
+        # Whether to generate verbose log messages when JIT linking
+        CUDA_VERBOSE_JIT_LOG = _readenv("NUMBA_CUDA_VERBOSE_JIT_LOG", int, 1)
+
+        # Whether the default stream is the per-thread default stream
+        CUDA_PER_THREAD_DEFAULT_STREAM = _readenv(
+            "NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM", int, 0)
+
+        # Compute contiguity of device arrays using the relaxed strides
+        # checking algorithm.
+        NPY_RELAXED_STRIDES_CHECKING = _readenv(
+            "NUMBA_NPY_RELAXED_STRIDES_CHECKING",
+            int, 1)
+
         # HSA Configs
 
         # Disable HSA support
         DISABLE_HSA = _readenv("NUMBA_DISABLE_HSA", int, 0)
 
         # The default number of threads to use.
-        NUMBA_DEFAULT_NUM_THREADS = max(1, multiprocessing.cpu_count())
+        NUMBA_DEFAULT_NUM_THREADS = max(
+            1,
+            len(os.sched_getaffinity(0))
+            if hasattr(os, "sched_getaffinity")
+            else multiprocessing.cpu_count(),
+        )
 
         # Numba thread pool size (defaults to number of CPUs on the system).
         _NUMBA_NUM_THREADS = _readenv("NUMBA_NUM_THREADS", int,
@@ -356,6 +419,26 @@ class _EnvReloader(object):
 
         # gdb binary location
         GDB_BINARY = _readenv("NUMBA_GDB_BINARY", str, '/usr/bin/gdb')
+
+        # CUDA Memory management
+        CUDA_MEMORY_MANAGER = _readenv("NUMBA_CUDA_MEMORY_MANAGER", str,
+                                       'default')
+
+        # Experimental refprune pass
+        LLVM_REFPRUNE_PASS = _readenv(
+            "NUMBA_LLVM_REFPRUNE_PASS", int, 1,
+        )
+        LLVM_REFPRUNE_FLAGS = _readenv(
+            "NUMBA_LLVM_REFPRUNE_FLAGS", str,
+            "all" if LLVM_REFPRUNE_PASS else "",
+        )
+
+        # Timing support.
+
+        # LLVM_PASS_TIMINGS enables LLVM recording of pass timings.
+        LLVM_PASS_TIMINGS = _readenv(
+            "NUMBA_LLVM_PASS_TIMINGS", int, 0,
+        )
 
         # Inject the configuration values into the module globals
         for name, value in locals().copy().items():

@@ -1,16 +1,21 @@
 import atexit
 import builtins
 import functools
+import inspect
 import os
 import operator
-import threading
 import timeit
 import math
 import sys
 import traceback
 import weakref
+import warnings
+import threading
+import contextlib
+
 from types import ModuleType
-from collections.abc import Mapping
+from importlib import import_module
+from collections.abc import Mapping, Sequence
 import numpy as np
 
 from inspect import signature as pysignature # noqa: F401
@@ -19,77 +24,7 @@ from inspect import Parameter as pyParameter # noqa: F401
 
 from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
                                DEVELOPER_MODE) # noqa: F401
-
-
-INT_TYPES = (int,)
-longint = int
-get_ident = threading.get_ident
-intern = sys.intern
-file_replace = os.replace
-asbyteint = int
-
-# ------------------------------------------------------------------------------
-# Start: Originally from `numba.six` under the following license
-
-"""Utilities for writing code that runs on Python 2 and 3"""
-
-# Copyright (c) 2010-2015 Benjamin Peterson
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
-
-def add_metaclass(metaclass):
-    """Class decorator for creating a class with a metaclass."""
-    def wrapper(cls):
-        orig_vars = cls.__dict__.copy()
-        slots = orig_vars.get('__slots__')
-        if slots is not None:
-            if isinstance(slots, str):
-                slots = [slots]
-            for slots_var in slots:
-                orig_vars.pop(slots_var)
-        orig_vars.pop('__dict__', None)
-        orig_vars.pop('__weakref__', None)
-        return metaclass(cls.__name__, cls.__bases__, orig_vars)
-    return wrapper
-
-
-def reraise(tp, value, tb=None):
-    if value is None:
-        value = tp()
-    if value.__traceback__ is not tb:
-        raise value.with_traceback(tb)
-    raise value
-
-
-def iteritems(d, **kw):
-    return iter(d.items(**kw))
-
-
-def itervalues(d, **kw):
-    return iter(d.values(**kw))
-
-
-get_function_globals = operator.attrgetter("__globals__")
-
-# End: Originally from `numba.six` under the following license
-# ------------------------------------------------------------------------------
+from numba.core import types
 
 
 def erase_traceback(exc_value):
@@ -99,6 +34,23 @@ def erase_traceback(exc_value):
     if exc_value.__traceback__ is not None:
         traceback.clear_frames(exc_value.__traceback__)
     return exc_value.with_traceback(None)
+
+
+def safe_relpath(path, start=os.curdir):
+    """
+    Produces a "safe" relative path, on windows relpath doesn't work across
+    drives as technically they don't share the same root.
+    See: https://bugs.python.org/issue7195 for details.
+    """
+    # find the drive letters for path and start and if they are not the same
+    # then don't use relpath!
+    drive_letter = lambda x: os.path.splitdrive(os.path.abspath(x))[0]
+    drive_path = drive_letter(path)
+    drive_start = drive_letter(start)
+    if drive_path != drive_start:
+        return os.path.abspath(path)
+    else:
+        return os.path.relpath(path, start=start)
 
 
 # Mapping between operator module functions and the corresponding built-in
@@ -126,7 +78,8 @@ BINOPS_TO_OPERATORS = {
     'is': operator.is_,
     'is not': operator.is_not,
     # This one has its args reversed!
-    'in': operator.contains
+    'in': operator.contains,
+    '@': operator.matmul,
 }
 
 INPLACE_BINOPS_TO_OPERATORS = {
@@ -142,6 +95,7 @@ INPLACE_BINOPS_TO_OPERATORS = {
     '^=': operator.ixor,
     '<<=': operator.ilshift,
     '>>=': operator.irshift,
+    '@=': operator.imatmul,
 }
 
 UNARY_BUITINS_TO_OPERATORS = {
@@ -195,9 +149,6 @@ OPERATORS_TO_BUILTINS = {
     operator.truth: 'is_true',
 }
 
-BINOPS_TO_OPERATORS['@'] = operator.matmul
-INPLACE_BINOPS_TO_OPERATORS['@='] = operator.imatmul
-
 
 _shutting_down = False
 
@@ -227,6 +178,55 @@ def shutting_down(globals=globals):
 # finalizer then register atexit to ensure this ordering.
 weakref.finalize(lambda: None, lambda: None)
 atexit.register(_at_shutdown)
+
+
+class ConfigStack:
+    """A stack for tracking target configurations in the compiler.
+
+    It stores the stack in a thread-local class attribute. All instances in the
+    same thread will see the same stack.
+    """
+    tls = threading.local()
+
+    @classmethod
+    def top_or_none(cls):
+        """Get the TOS or return None if no config is set.
+        """
+        self = cls()
+        if self:
+            flags = self.top()
+        else:
+            # Note: should this be the default flag for the target instead?
+            flags = None
+        return flags
+
+    def __init__(self):
+        tls = self.tls
+        try:
+            stk = tls.stack
+        except AttributeError:
+            tls.stack = stk = []
+        self._stk = stk
+
+    def push(self, data):
+        self._stk.append(data)
+
+    def pop(self):
+        return self._stk.pop()
+
+    def top(self):
+        return self._stk[-1]
+
+    def __len__(self):
+        return len(self._stk)
+
+    @contextlib.contextmanager
+    def enter(self, flags):
+        self.push(flags)
+        try:
+            yield
+        finally:
+            self.pop()
 
 
 class ConfigOptions(object):
@@ -308,26 +308,67 @@ class UniqueDict(dict):
         super(UniqueDict, self).__setitem__(key, value)
 
 
-# Django's cached_property
-# see https://docs.djangoproject.com/en/dev/ref/utils/#django.utils.functional.cached_property    # noqa: E501
+if PYVERSION > (3, 7):
+    from functools import cached_property
+else:
+    from threading import RLock
 
-class cached_property(object):
-    """
-    Decorator that converts a method with a single self argument into a
-    property cached on the instance.
+    # The following cached_property() implementation is adapted from CPython:
+    # https://github.com/python/cpython/blob/3.8/Lib/functools.py#L924-L976
+    # commit SHA: 12b714391e485d0150b343b114999bae4a0d34dd
 
-    Optional ``name`` argument allows you to make cached properties of other
-    methods. (e.g.  url = cached_property(get_absolute_url, name='url') )
-    """
-    def __init__(self, func, name=None):
-        self.func = func
-        self.name = name or func.__name__
+    ###########################################################################
+    ### cached_property() - computed once per instance, cached as attribute
+    ###########################################################################
 
-    def __get__(self, instance, type=None):
-        if instance is None:
-            return self
-        res = instance.__dict__[self.name] = self.func(instance)
-        return res
+    _NOT_FOUND = object()
+
+    class cached_property:
+        def __init__(self, func):
+            self.func = func
+            self.attrname = None
+            self.__doc__ = func.__doc__
+            self.lock = RLock()
+
+        def __set_name__(self, owner, name):
+            if self.attrname is None:
+                self.attrname = name
+            elif name != self.attrname:
+                raise TypeError(
+                    "Cannot assign the same cached_property to two different names " # noqa: E501
+                    f"({self.attrname!r} and {name!r})."
+                )
+
+        def __get__(self, instance, owner=None):
+            if instance is None:
+                return self
+            if self.attrname is None:
+                raise TypeError(
+                    "Cannot use cached_property instance without calling __set_name__ on it.") # noqa: E501
+            try:
+                cache = instance.__dict__
+            except AttributeError:  # not all objects have __dict__ (e.g. class defines slots) # noqa: E501
+                msg = (
+                    f"No '__dict__' attribute on {type(instance).__name__!r} "
+                    f"instance to cache {self.attrname!r} property."
+                )
+                raise TypeError(msg) from None
+            val = cache.get(self.attrname, _NOT_FOUND)
+            if val is _NOT_FOUND:
+                with self.lock:
+                    # check if another thread filled cache while we awaited lock
+                    val = cache.get(self.attrname, _NOT_FOUND)
+                    if val is _NOT_FOUND:
+                        val = self.func(instance)
+                        try:
+                            cache[self.attrname] = val
+                        except TypeError:
+                            msg = (
+                                f"The '__dict__' attribute on {type(instance).__name__!r} instance "    # noqa: E501
+                                f"does not support item assignment for caching {self.attrname!r} property." # noqa: E501
+                            )
+                            raise TypeError(msg) from None
+            return val
 
 
 def runonce(fn):
@@ -347,7 +388,7 @@ def bit_length(intval):
     """
     Return the number of bits necessary to represent integer `intval`.
     """
-    assert isinstance(intval, INT_TYPES)
+    assert isinstance(intval, int)
     if intval >= 0:
         return len(bin(intval)) - 2
     else:
@@ -418,24 +459,6 @@ def benchmark(func, maxsec=1):
     return BenchmarkResult(func, records, number)
 
 
-RANGE_ITER_OBJECTS = (builtins.range,)
-
-
-def logger_hasHandlers(logger):
-    # Backport from python3.5 logging implementation of `.hasHandlers()`
-    c = logger
-    rv = False
-    while c:
-        if c.handlers:
-            rv = True
-            break
-        if not c.propagate:
-            break
-        else:
-            c = c.parent
-    return rv
-
-
 # A dummy module for dynamically-generated functions
 _dynamic_modname = '<dynamic>'
 _dynamic_module = ModuleType(_dynamic_modname)
@@ -449,3 +472,167 @@ def chain_exception(new_exc, old_exc):
     if DEVELOPER_MODE:
         new_exc.__cause__ = old_exc
     return new_exc
+
+
+def get_nargs_range(pyfunc):
+    """Return the minimal and maximal number of Python function
+    positional arguments.
+    """
+    sig = pysignature(pyfunc)
+    min_nargs = 0
+    max_nargs = 0
+    for p in sig.parameters.values():
+        max_nargs += 1
+        if p.default == inspect._empty:
+            min_nargs += 1
+    return min_nargs, max_nargs
+
+
+def unify_function_types(numba_types):
+    """Return a normalized tuple of Numba function types so that
+
+        Tuple(numba_types)
+
+    becomes
+
+        UniTuple(dtype=<unified function type>, count=len(numba_types))
+
+    If the above transformation would be incorrect, return the
+    original input as given. For instance, if the input tuple contains
+    types that are not function or dispatcher type, the transformation
+    is considered incorrect.
+    """
+    dtype = unified_function_type(numba_types)
+    if dtype is None:
+        return numba_types
+    return (dtype,) * len(numba_types)
+
+
+def unified_function_type(numba_types, require_precise=True):
+    """Returns a unified Numba function type if possible.
+
+    Parameters
+    ----------
+    numba_types : Sequence of numba Type instances.
+    require_precise : bool
+      If True, the returned Numba function type must be precise.
+
+    Returns
+    -------
+    typ : {numba.core.types.Type, None}
+      A unified Numba function type. Or ``None`` when the Numba types
+      cannot be unified, e.g. when the ``numba_types`` contains at
+      least two different Numba function type instances.
+
+    If ``numba_types`` contains a Numba dispatcher type, the unified
+    Numba function type will be an imprecise ``UndefinedFunctionType``
+    instance, or None when ``require_precise=True`` is specified.
+
+    Specifying ``require_precise=False`` enables unifying imprecise
+    Numba dispatcher instances when used in tuples or if-then branches
+    when the precise Numba function cannot be determined on the first
+    occurrence that is not a call expression.
+    """
+    from numba.core.errors import NumbaExperimentalFeatureWarning
+
+    if not (isinstance(numba_types, Sequence) and
+            len(numba_types) > 0 and
+            isinstance(numba_types[0],
+                       (types.Dispatcher, types.FunctionType))):
+        return
+
+    warnings.warn("First-class function type feature is experimental",
+                  category=NumbaExperimentalFeatureWarning)
+
+    mnargs, mxargs = None, None
+    dispatchers = set()
+    function = None
+    undefined_function = None
+
+    for t in numba_types:
+        if isinstance(t, types.Dispatcher):
+            mnargs1, mxargs1 = get_nargs_range(t.dispatcher.py_func)
+            if mnargs is None:
+                mnargs, mxargs = mnargs1, mxargs1
+            elif not (mnargs, mxargs) == (mnargs1, mxargs1):
+                return
+            dispatchers.add(t.dispatcher)
+            t = t.dispatcher.get_function_type()
+            if t is None:
+                continue
+        if isinstance(t, types.FunctionType):
+            if mnargs is None:
+                mnargs = mxargs = t.nargs
+            elif not (mnargs == mxargs == t.nargs):
+                return
+            if isinstance(t, types.UndefinedFunctionType):
+                if undefined_function is None:
+                    undefined_function = t
+                else:
+                    # Refuse to unify using function type
+                    return
+                dispatchers.update(t.dispatchers)
+            else:
+                if function is None:
+                    function = t
+                else:
+                    assert function == t
+        else:
+            return
+    if require_precise and (function is None or undefined_function is not None):
+        return
+    if function is not None:
+        if undefined_function is not None:
+            assert function.nargs == undefined_function.nargs
+            function = undefined_function
+    elif undefined_function is not None:
+        undefined_function.dispatchers.update(dispatchers)
+        function = undefined_function
+    else:
+        function = types.UndefinedFunctionType(mnargs, dispatchers)
+
+    return function
+
+
+class _RedirectSubpackage(ModuleType):
+    """Redirect a subpackage to a subpackage.
+
+    This allows all references like:
+
+    >>> from numba.old_subpackage import module
+    >>> module.item
+
+    >>> import numba.old_subpackage.module
+    >>> numba.old_subpackage.module.item
+
+    >>> from numba.old_subpackage.module import item
+    """
+    def __init__(self, old_module_locals, new_module):
+        old_module = old_module_locals['__name__']
+        super().__init__(old_module)
+
+        self.__old_module_states = {}
+        self.__new_module = new_module
+
+        new_mod_obj = import_module(new_module)
+
+        # Map all sub-modules over
+        for k, v in new_mod_obj.__dict__.items():
+            # Get attributes so that `subpackage.xyz` and
+            # `from subpackage import xyz` work
+            setattr(self, k, v)
+            if isinstance(v, ModuleType):
+                # Map modules into the interpreter so that
+                # `import subpackage.xyz` works
+                sys.modules[f"{old_module}.{k}"] = sys.modules[v.__name__]
+
+        # copy across dunders so that package imports work too
+        for attr, value in old_module_locals.items():
+            if attr.startswith('__') and attr.endswith('__'):
+                if attr != "__builtins__":
+                    setattr(self, attr, value)
+                    self.__old_module_states[attr] = value
+
+    def __reduce__(self):
+        args = (self.__old_module_states, self.__new_module)
+        return _RedirectSubpackage, args

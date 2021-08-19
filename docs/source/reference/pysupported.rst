@@ -36,7 +36,7 @@ Below is a quick reference for the support level of Python constructs.
 
 **Partially supported** constructs:
 
-- exceptions: ``try .. except``, ``raise``
+- exceptions: ``try .. except``, ``raise``, ``else`` and ``finally``
   (See details in this :ref:`section <pysupported-exception-handling>`)
 
 - context manager:
@@ -190,11 +190,32 @@ use-case would look like:
      handle_error_case()
      return error_code
 
-The ``finally`` block and the ``else`` block of a ``try .. except`` are
-supported.
+``try .. except .. else .. finally``
+''''''''''''''''''''''''''''''''''''
 
-The ``try .. finally`` construct without the ``except`` is currently
-**unsupported**.
+The ``else`` block and the ``finally`` block of a ``try .. except`` are
+supported:
+
+  .. code-block:: python
+
+    >>> @jit(nopython=True)
+    ... def foo():
+    ...     try:
+    ...         print('main block')
+    ...     except Exception:
+    ...         print('handler block')
+    ...     else:
+    ...         print('else block')
+    ...     finally:
+    ...         print('final block')
+    ...
+    >>> foo()
+    main block
+    else block
+    final block
+
+The ``try .. finally`` construct without the ``except`` clause is also
+supported.
 
 .. _pysupported-builtin-types:
 
@@ -241,8 +262,10 @@ same character width as the original string, even if the slice could be
 represented with a narrower character width.  (These details are invisible to
 the user, of course.)
 
-The following functions, attributes and methods are currently supported:
+The following constructors, functions, attributes and methods are currently
+supported:
 
+* ``str(int)``
 * ``len()``
 * ``+`` (concatenation of strings)
 * ``*`` (repetition of strings)
@@ -288,6 +311,11 @@ The following functions, attributes and methods are currently supported:
 * ``.title()``
 * ``.upper()``
 * ``.zfill()``
+
+Regular string literals (e.g. ``"ABC"``) as well as f-strings without format specs
+(e.g. ``"ABC_{a+1}"``)
+that only use string and integer variables (types with ``str()`` overload)
+are supported in :term:`nopython mode`.
 
 Additional operations as well as support for Python 2 strings / Python 3 bytes
 will be added in a future version of Numba.  Python 2 Unicode objects will
@@ -372,7 +400,6 @@ than to act as a token to permit the use of this feature. Example use:
 .. warning::
     The following restrictions apply to the use of :func:`literal_unroll`:
 
-    * This feature is only available for Python versions >= 3.6.
     * :func:`literal_unroll` can only be used on tuples and constant lists of
       compile time constants, e.g. ``[1, 2j, 3, "a"]`` and the list not being
       mutated.
@@ -488,6 +515,32 @@ of this limitation.
    List sorting currently uses a quicksort algorithm, which has different
    performance characterics than the algorithm used by Python.
 
+.. _feature-list-initial-value:
+
+Initial Values
+''''''''''''''
+.. warning::
+  This is an experimental feature!
+
+Lists that:
+
+* Are constructed using the square braces syntax
+* Have values of a literal type
+
+will have their initial value stored in the ``.initial_value`` property on the
+type so as to permit inspection of these values at compile time. If required,
+to force value based dispatch the :ref:`literally <developer-literally>`
+function will accept such a list.
+
+Example:
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_literal_container_usage.py
+   :language: python
+   :caption: from ``test_ex_initial_value_list_compile_time_consts`` of ``numba/tests/doc_examples/test_literal_container_usage.py``
+   :start-after: magictoken.test_ex_initial_value_list_compile_time_consts.begin
+   :end-before: magictoken.test_ex_initial_value_list_compile_time_consts.end
+   :dedent: 12
+   :linenos:
 
 .. _feature-typed-list:
 
@@ -533,35 +586,72 @@ explicitly from the `numba.typed` module::
 Here's an example using ``List()`` to create ``numba.typed.List`` inside a
 jit-compiled function and letting the compiler infer the item type:
 
-.. literalinclude:: ../../../examples/typed_list_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_list_usage.py
    :language: python
-   :caption: from ``ex_inferred_list_jit`` of ``examples/typed_list_usage.py``
+   :caption: from ``ex_inferred_list_jit`` of ``numba/tests/doc_examples/test_typed_list_usage.py``
    :start-after: magictoken.ex_inferred_list_jit.begin
    :end-before: magictoken.ex_inferred_list_jit.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 Here's an example of using ``List()`` to create a ``numba.typed.List`` outside of
 a jit-compiled function and then using it as an argument to a jit-compiled
 function:
 
-.. literalinclude:: ../../../examples/typed_list_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_list_usage.py
    :language: python
-   :caption: from ``ex_inferred_list`` of ``examples/typed_list_usage.py``
+   :caption: from ``ex_inferred_list`` of ``numba/tests/doc_examples/test_typed_list_usage.py``
    :start-after: magictoken.ex_inferred_list.begin
    :end-before: magictoken.ex_inferred_list.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 Finally, here's an example of using a nested `List()`:
 
-.. literalinclude:: ../../../examples/typed_list_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_list_usage.py
    :language: python
-   :caption: from ``ex_nested_list`` of ``examples/typed_list_usage.py``
+   :caption: from ``ex_nested_list`` of ``numba/tests/doc_examples/test_typed_list_usage.py``
    :start-after: magictoken.ex_nested_list.begin
    :end-before: magictoken.ex_nested_list.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
+
+.. _feature-literal-list:
+
+Literal List
+''''''''''''
+
+.. warning::
+  This is an experimental feature!
+
+Numba supports the use of literal lists containing any values, for example::
+
+  l = ['a', 1, 2j, np.zeros(5,)]
+
+the predominant use of these lists is for use as a configuration object.
+The lists appear as a ``LiteralList`` type which inherits from ``Literal``, as a
+result the literal values of the list items are available at compile time.
+For example:
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_literal_container_usage.py
+   :language: python
+   :caption: from ``test_ex_literal_list`` of ``numba/tests/doc_examples/test_literal_container_usage.py``
+   :start-after: magictoken.test_ex_literal_list.begin
+   :end-before: magictoken.test_ex_literal_list.end
+   :dedent: 12
+   :linenos:
+
+Important things to note about these kinds of lists:
+
+#. They are immutable, use of mutating methods e.g. ``.pop()`` will result in
+   compilation failure. Read-only static access and read only methods are
+   supported e.g. ``len()``.
+#. Dynamic access of items is not possible, e.g. ``some_list[x]``, for a
+   value ``x`` which is not a compile time constant. This is because it's
+   impossible to statically determine the type of the item being accessed.
+#. Inside the compiler, these lists are actually just tuples with some extra
+   things added to make them look like they are lists.
+#. They cannot be returned to the interpreter from a compiled function.
 
 .. _pysupported-comprehension:
 
@@ -614,6 +704,7 @@ All methods and operations on sets are supported in JIT-compiled functions.
 Sets must be strictly homogeneous: Numba will reject any set containing
 objects of different types, even if the types are compatible (for example,
 ``{1, 2.5}`` is rejected as it contains a :class:`int` and a :class:`float`).
+The use of reference counted types, e.g. strings, in sets is unsupported.
 
 .. note::
    When passing a set into a JIT-compiled function, any modifications
@@ -623,7 +714,7 @@ objects of different types, even if the types are compatible (for example,
 .. _feature-typed-dict:
 
 Typed Dict
-''''''''''
+----------
 
 .. warning::
   ``numba.typed.Dict`` is an experimental feature.  The API may change
@@ -672,34 +763,34 @@ limitations will be relaxed as Numba continues to improve.
 Here's an example of using ``dict()`` and ``{}`` to create ``numba.typed.Dict``
 instances and letting the compiler infer the key-value types:
 
-.. literalinclude:: ../../../examples/dict_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_dict_usage.py
    :language: python
-   :caption: from ``ex_inferred_dict_njit`` of ``examples/dict_usage.py``
+   :caption: from ``test_ex_inferred_dict_njit`` of ``numba/tests/doc_examples/test_typed_dict_usage.py``
    :start-after: magictoken.ex_inferred_dict_njit.begin
    :end-before: magictoken.ex_inferred_dict_njit.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 Here's an example of creating a ``numba.typed.Dict`` instance from interpreted
 code and using the dictionary in jit code:
 
-.. literalinclude:: ../../../examples/dict_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_dict_usage.py
    :language: python
-   :caption: from ``ex_typed_dict_from_cpython`` of ``examples/dict_usage.py``
+   :caption: from ``test_ex_typed_dict_from_cpython`` of ``numba/tests/doc_examples/test_typed_dict_usage.py``
    :start-after: magictoken.ex_typed_dict_from_cpython.begin
    :end-before: magictoken.ex_typed_dict_from_cpython.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 Here's an example of creating a ``numba.typed.Dict`` instance from jit code and
 using the dictionary in interpreted code:
 
-.. literalinclude:: ../../../examples/dict_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_dict_usage.py
    :language: python
-   :caption: from ``ex_typed_dict_njit`` of ``examples/dict_usage.py``
+   :caption: from ``test_ex_typed_dict_njit`` of ``numba/tests/doc_examples/test_typed_dict_usage.py``
    :start-after: magictoken.ex_typed_dict_njit.begin
    :end-before: magictoken.ex_typed_dict_njit.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 It should be noted that ``numba.typed.Dict`` is not thread-safe.
@@ -708,6 +799,92 @@ threads will potentially corrupt memory, causing a
 range of possible failures. However, the dictionary can be safely read from
 multiple threads as long as the contents of the dictionary do not
 change during the parallel access.
+
+Dictionary comprehension
+''''''''''''''''''''''''
+
+Numba supports dictionary comprehension under the assumption that a
+``numba.typed.Dict`` instance can be created from the comprehension.  For
+example::
+
+  In [1]: from numba import njit
+
+  In [2]: @njit
+     ...: def foo(n):
+     ...:     return {i: i**2 for i in range(n)}
+     ...:
+
+  In [3]: foo(3)
+  Out[3]: DictType[int64,int64]<iv=None>({0: 0, 1: 1, 2: 4})
+
+.. _feature-dict-initial-value:
+
+Initial Values
+''''''''''''''
+.. warning::
+  This is an experimental feature!
+
+Typed dictionaries that:
+
+* Are constructed using the curly braces syntax
+* Have literal string keys
+* Have values of a literal type
+
+will have their initial value stored in the ``.initial_value`` property on the
+type so as to permit inspection of these values at compile time. If required,
+to force value based dispatch the :ref:`literally <developer-literally>`
+function will accept a typed dictionary.
+
+Example:
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_literal_container_usage.py
+   :language: python
+   :caption: from ``test_ex_initial_value_dict_compile_time_consts`` of ``numba/tests/doc_examples/test_literal_container_usage.py``
+   :start-after: magictoken.test_ex_initial_value_dict_compile_time_consts.begin
+   :end-before: magictoken.test_ex_initial_value_dict_compile_time_consts.end
+   :dedent: 12
+   :linenos:
+
+.. _feature-literal-str-key-dict:
+
+Heterogeneous Literal String Key Dictionary
+-------------------------------------------
+
+.. warning::
+  This is an experimental feature!
+
+Numba supports the use of statically declared string key to any value
+dictionaries, for example::
+
+  d = {'a': 1, 'b': 'data', 'c': 2j}
+
+the predominant use of these dictionaries is to orchestrate advanced compilation
+dispatch or as a container for use as a configuration object. The dictionaries
+appear as a ``LiteralStrKeyDict`` type which inherits from ``Literal``, as a
+result the literal values of the keys and the types of the items are available
+at compile time. For example:
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_literal_container_usage.py
+   :language: python
+   :caption: from ``test_ex_literal_dict_compile_time_consts`` of ``numba/tests/doc_examples/test_literal_container_usage.py``
+   :start-after: magictoken.test_ex_literal_dict_compile_time_consts.begin
+   :end-before: magictoken.test_ex_literal_dict_compile_time_consts.end
+   :dedent: 12
+   :linenos:
+
+Important things to note about these kinds of dictionaries:
+
+#. They are immutable, use of mutating methods e.g. ``.pop()`` will result in
+   compilation failure. Read-only static access and read only methods are
+   supported e.g. ``len()``.
+#. Dynamic access of items is not possible, e.g. ``some_dictionary[x]``, for a
+   value ``x`` which is not a compile time constant. This is because it's
+   impossible statically determine the type of the item being accessed.
+#. Inside the compiler, these dictionaries are actually just named tuples with
+   some extra things added to make them look like they are dictionaries.
+#. They cannot be returned to the interpreter from a compiled function.
+#. The ``.keys()``, ``.values()`` and ``.items()`` methods all functionally
+   operate but return tuples opposed to iterables.
 
 None
 ----
@@ -764,6 +941,7 @@ The following built-in functions are supported:
   a jitted function).
 * :func:`round`
 * :func:`sorted`: the ``key`` argument is not supported
+* :func:`sum`
 * :func:`type`: only the one-argument form, and only on some types
   (e.g. numbers and named tuples)
 * :func:`zip`
@@ -979,9 +1157,39 @@ startup with entropy drawn from the operating system.
 * :func:`random.vonmisesvariate`
 * :func:`random.weibullvariate`
 
-.. note::
+.. warning::
    Calling :func:`random.seed` from non-Numba code (or from :term:`object mode`
    code) will seed the Python random generator, not the Numba random generator.
+   To seed the Numba random generator, see the example below.
+
+.. code-block:: python
+
+  from numba import njit
+  import random
+
+  @njit
+  def seed(a):
+      random.seed(a)
+
+  @njit
+  def rand():
+      return random.random()
+
+
+  # Incorrect seeding
+  random.seed(1234)
+  print(rand())
+
+  random.seed(1234)
+  print(rand())
+
+  # Correct seeding
+  seed(1234)
+  print(rand())
+
+  seed(1234)
+  print(rand())
+
 
 .. note::
    Since version 0.28.0, the generator is thread-safe and fork-safe.  Each
@@ -1057,12 +1265,12 @@ type may be registered with Numba. This may include struct types, though it is
 only permitted to call functions that accept pointers to structs - passing a
 struct by value is unsupported. For registering a mapping, use:
 
-.. function:: numba.cffi_support.register_type(cffi_type, numba_type)
+.. function:: numba.core.typing.cffi_utils.register_type(cffi_type, numba_type)
 
 Out-of-line cffi modules must be registered with Numba prior to the use of any
 of their functions from within Numba-compiled functions:
 
-.. function:: numba.cffi_support.register_module(mod)
+.. function:: numba.core.typing.cffi_utils.register_module(mod)
 
    Register the cffi out-of-line module ``mod`` with Numba.
 
