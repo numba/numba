@@ -1303,6 +1303,85 @@ def _broadcast_to_shape(context, builder, arrtype, arr, target_shape):
     return new_arrtype, new_arr
 
 
+@intrinsic
+def _numpy_broadcast_to(typingctx, array, shape):
+    ret = array.copy(ndim=shape.count, layout='A', readonly=True)
+    sig = ret(array, shape)
+
+    def codegen(context, builder, sig, args):
+        src, shape_ = args
+        srcty = sig.args[0]
+
+        src = make_array(srcty)(context, builder, src)
+        shape_ = cgutils.unpack_tuple(builder, shape_)
+        _, dest = _broadcast_to_shape(context, builder, srcty, src, shape_,)
+
+        # Hack to get np.broadcast_to to return a read-only array
+        setattr(dest, 'parent', Constant.null(
+                context.get_value_type(dest._datamodel.get_type('parent'))))
+
+        res = dest._getvalue()
+        return impl_ret_borrowed(context, builder, sig.return_type, res)
+    return sig, codegen
+
+
+@register_jitable
+def _can_broadcast(array, dest_shape):
+    src_shape = array.shape
+    src_ndim = len(src_shape)
+    dest_ndim = len(dest_shape)
+    if src_ndim > dest_ndim:
+        raise ValueError('input operand has more dimensions than allowed '
+                         'by the axis remapping')
+    for size in dest_shape:
+        if size < 0:
+            raise ValueError('all elements of broadcast shape must be '
+                             'non-negative')
+
+    # based on _broadcast_onto function in numba/np/npyimpl.py
+    src_index = 0
+    dest_index = dest_ndim - src_ndim
+    while src_index < src_ndim:
+        src_dim = src_shape[src_index]
+        dest_dim = dest_shape[dest_index]
+        # possible cases for (src_dim, dest_dim):
+        #  * (1, 1)   -> Ok
+        #  * (>1, 1)  -> Error!
+        #  * (>1, >1) -> src_dim == dest_dim else error!
+        #  * (1, >1)  -> Ok
+        if src_dim == dest_dim or src_dim == 1:
+            src_index += 1
+            dest_index += 1
+        else:
+            raise ValueError('operands could not be broadcast together '
+                             'with remapped shapes')
+
+
+@overload(np.broadcast_to)
+def numpy_broadcast_to(array, shape):
+    if not type_can_asarray(array):
+        raise errors.TypingError('The first argument "array" must '
+                                 'be array-like')
+
+    if isinstance(shape, types.UniTuple):
+        if not isinstance(shape.dtype, types.Integer):
+            raise errors.TypingError('The second argument "shape" must '
+                                     'be a tuple of integers')
+
+        def impl(array, shape):
+            array = np.asarray(array)
+            _can_broadcast(array, shape)
+            return _numpy_broadcast_to(array, shape)
+    elif isinstance(shape, types.Integer):
+        def impl(array, shape):
+            return np.broadcast_to(array, (shape,))
+    else:
+        msg = ('The argument "shape" must be a tuple or an integer. '
+               'Got %s' % shape)
+        raise errors.TypingError(msg)
+    return impl
+
+
 def fancy_setslice(context, builder, sig, args, index_types, indices):
     """
     Implement slice assignment for arrays.  This implementation works for

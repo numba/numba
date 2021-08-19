@@ -426,7 +426,7 @@ The following top-level functions are supported:
 * :func:`numpy.array_split`
 * :func:`numpy.asarray` (only the 2 first arguments)
 * :func:`numpy.asarray_chkfinite` (only the 2 first arguments)
-* :func:`numpy.asfarray` 
+* :func:`numpy.asfarray`
 * :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.atleast_1d`
 * :func:`numpy.atleast_2d`
@@ -434,6 +434,7 @@ The following top-level functions are supported:
 * :func:`numpy.bartlett`
 * :func:`numpy.bincount`
 * :func:`numpy.blackman`
+* :func:`numpy.broadcast_to` (only the 2 first arguments)
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate`
 * :func:`numpy.convolve` (only the 2 first arguments)
