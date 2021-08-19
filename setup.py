@@ -307,9 +307,8 @@ install_requires = [
     f'llvmlite >={min_llvmlite_version},<{max_llvmlite_version}',
     f'numpy >={min_numpy_run_version}',
     'setuptools',
+    'importlib_metadata; python_version < "3.8"',
 ]
-if sys.version_info < (3, 8):
-    install_requires.append('importlib_metadata')
 
 metadata = dict(
     name='numba',
