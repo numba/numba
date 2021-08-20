@@ -41,7 +41,7 @@ def init_all():
                 func = entry_point.load()
                 func()
             except Exception as e:
-                msg = (f"Numba extension module '{entry_point.module_name}' "
+                msg = (f"Numba extension module '{entry_point.module}' "
                        f"failed to load due to '{type(e).__name__}({str(e)})'.")
                 warnings.warn(msg, stacklevel=2)
                 logger.debug('Extension loading failed for: %s', entry_point)
