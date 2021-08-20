@@ -1,4 +1,5 @@
 import logging
+import re
 import warnings
 
 from numba.core.config import PYVERSION
@@ -41,7 +42,21 @@ def init_all():
                 func = entry_point.load()
                 func()
             except Exception as e:
-                msg = (f"Numba extension module '{entry_point.module}' "
+                # entry_point.module was only added in Python 3.9. The
+                # backported importlib_metadata (used on Python 3.7) also adds
+                # it. So, on Python 3.8 we need to duplicate the logic used to
+                # extract the module name.
+                if PYVERSION == (3, 8):
+                    pattern = re.compile(
+                        r'(?P<module>[\w.]+)\s*'
+                        r'(:\s*(?P<attr>[\w.]+))?\s*'
+                        r'(?P<extras>\[.*\])?\s*$'
+                    )
+                    match = pattern.match(entry_point.value)
+                    module = match.group('module')
+                else:
+                    module = entry_point.module
+                msg = (f"Numba extension module '{module}' "
                        f"failed to load due to '{type(e).__name__}({str(e)})'.")
                 warnings.warn(msg, stacklevel=2)
                 logger.debug('Extension loading failed for: %s', entry_point)
