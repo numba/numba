@@ -11,7 +11,6 @@ import unittest
 import os
 import subprocess
 import threading
-import pkg_resources
 
 from numba import njit
 from numba.tests.support import TestCase
@@ -95,33 +94,34 @@ class TestEntrypoints(TestCase):
             # We are registering an entry point using the "numba" package
             # ("distribution" in pkg_resources-speak) itself, though these are
             # normally registered by other packages.
-            dist = "numba"
-            entrypoints = pkg_resources.get_entry_map(dist)
-            my_entrypoint = pkg_resources.EntryPoint(
-                "init",  # name of entry point
-                mod.__name__,  # module with entry point object
-                attrs=['init_func'],  # name of entry point object
-                dist=pkg_resources.get_distribution(dist)
+            my_entrypoint = importlib_metadata.EntryPoint(
+                'init',
+                '_test_numba_bad_extension:init_func',
+                'numba_extensions',
             )
-            entrypoints.setdefault('numba_extensions',
-                                   {})['init'] = my_entrypoint
 
-            from numba.core import entrypoints
-            # Allow reinitialization
-            entrypoints._already_initialized = False
+            with mock.patch.object(
+                importlib_metadata,
+                'entry_points',
+                return_value={'numba_extensions': (my_entrypoint,)},
+            ):
 
-            with warnings.catch_warnings(record=True) as w:
-                entrypoints.init_all()
+                from numba.core import entrypoints
+                # Allow reinitialization
+                entrypoints._already_initialized = False
 
-            bad_str = "Numba extension module '_test_numba_bad_extension'"
-            for x in w:
-                if bad_str in str(x):
-                    break
-            else:
-                raise ValueError("Expected warning message not found")
+                with warnings.catch_warnings(record=True) as w:
+                    entrypoints.init_all()
 
-            # was our init function called?
-            self.assertEqual(counters['init'], 1)
+                bad_str = "Numba extension module '_test_numba_bad_extension'"
+                for x in w:
+                    if bad_str in str(x):
+                        break
+                else:
+                    raise ValueError("Expected warning message not found")
+
+                # was our init function called?
+                self.assertEqual(counters['init'], 1)
 
         finally:
             # remove fake module
@@ -190,23 +190,23 @@ class TestEntrypoints(TestCase):
             # We are registering an entry point using the "numba" package
             # ("distribution" in pkg_resources-speak) itself, though these are
             # normally registered by other packages.
-            dist = "numba"
-            entrypoints = pkg_resources.get_entry_map(dist)
-            my_entrypoint = pkg_resources.EntryPoint(
-                "init",  # name of entry point
-                mod.__name__,  # module with entry point object
-                attrs=['init_func'],  # name of entry point object
-                dist=pkg_resources.get_distribution(dist)
+            my_entrypoint = importlib_metadata.EntryPoint(
+                'init',
+                '_test_numba_init_sequence:init_func',
+                'numba_extensions',
             )
-            entrypoints.setdefault('numba_extensions',
-                                   {})['init'] = my_entrypoint
 
-            @njit
-            def foo(x):
-                return x
+            with mock.patch.object(
+                importlib_metadata,
+                'entry_points',
+                return_value={'numba_extensions': (my_entrypoint,)},
+            ):
+                @njit
+                def foo(x):
+                    return x
 
-            ival = _DummyClass(10)
-            foo(ival)
+                ival = _DummyClass(10)
+                foo(ival)
         finally:
             # remove fake module
             if mod.__name__ in sys.modules:
