@@ -152,21 +152,23 @@ traditional dynamic memory management.
 Local memory
 ============
 
-Local memory is an area of memory private to each thread.  Using local
-memory helps allocate some scratchpad area when scalar local variables
-are not enough.  The memory is allocated once for the duration of the kernel,
-unlike traditional dynamic memory management.
+Local memory is an area of memory private to each thread.  Using local memory
+helps reserve some scratchpad area to variables when scalar local variables are
+not enough.  The memory is allocated once for the duration of the kernel, unlike
+traditional dynamic memory management.
 
 .. function:: numba.cuda.local.array(shape, type)
    :noindex:
 
-   Allocate a local array of the given *shape* and *type* on the device.
+   Create a variable representing a local array of the given *shape* and *type*
+   on the device that corresponds to a chunk of statically defined memory.
    *shape* is either an integer or a tuple of integers representing the array's
-   dimensions and must be a simple constant expression. *type* is a
-   :ref:`Numba type <numba-types>` of the elements needing to be stored in the
-   array. The array is private to the current thread. An array-like object is
-   returned which can be read and written to like any standard array
-   (e.g. through indexing).
+   dimensions and must be a simple constant expression. *type* is a :ref:`Numba
+   type <numba-types>` of the elements needing to be stored in the array. The
+   array is private to the current thread. An array-like object is returned
+   which can be read and written to like any standard array (e.g. through
+   indexing). See also the Local Memory section of `Device Memory Accesses
+   <https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#device-memory-accesses>`_
 
 Constant memory
 ===============
