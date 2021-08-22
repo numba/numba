@@ -43,14 +43,12 @@ implements a faster version of the square matrix multiplication using shared mem
     # Controls threads per block and shared memory usage.
     # The computation will be done on blocks of TPBxTPB elements.
     # TBP should not be larger than 32 in this example
-    TPB = 16
-
-    from numba import cuda, float32
+    TBP = 16
 
     @cuda.jit
     def fast_matmul(A, B, C):
-        """Based on corrected version by @RobertCrovella from https://stackoverflow.com/a/64198479/13697228
-        """
+    """Based on corrected version by @RobertCrovella from https://stackoverflow.com/a/64198479/13697228
+    """
         # Define an array in the shared memory
         # The size and type of the arrays must be known at compile time
         sA = cuda.shared.array(shape=(TPB, TPB), dtype=float32)
@@ -67,24 +65,24 @@ implements a faster version of the square matrix multiplication using shared mem
         tmp = float32(0.)
         for i in range(bpg):
             # Preload data into shared memory
-            sA[tx, ty] = 0
-            sB[tx, ty] = 0
-            if x < A.shape[0] and (ty+i*TPB) < A.shape[1]:
-              sA[tx, ty] = A[x, ty + i * TPB]
-            if y < B.shape[1] and (tx+i*TPB) < B.shape[0]:
-              sB[tx, ty] = B[tx + i * TPB, y]
+            sA[ty, tx] = 0
+            sB[ty, tx] = 0
+            if y < A.shape[0] and (tx+i*TPB) < A.shape[1]:
+              sA[ty, tx] = A[y, tx + i * TPB]
+            if x < B.shape[1] and (ty+i*TPB) < B.shape[0]:
+              sB[ty, tx] = B[ty + i * TPB, x]
 
             # Wait until all threads finish preloading
             cuda.syncthreads()
 
             # Computes partial product on the shared memory
             for j in range(TPB):
-                tmp += sA[tx, j] * sB[j, ty]
+                tmp += sA[ty, j] * sB[j, tx]
 
             # Wait until all threads finish computing
             cuda.syncthreads()
-        if x < C.shape[0] and y < C.shape[1]:
-            C[x, y] = tmp
+        if y < C.shape[0] and x < C.shape[1]:
+            C[y, x] = tmp
 
 Because the shared memory is a limited resource, the code preloads small
 block at a time from the input arrays.  Then, it calls
@@ -134,96 +132,51 @@ This passes a :ref:`CUDA memory check test <debugging-cuda-python-code>`:
     [54. 54. 54. 54.]]
     ========= ERROR SUMMARY: 0 errors
 
-    This generalizes to non-square matrix multiplication as follows:
+Note: For high performance matrix multiplication operations in CUDA, see the `cuBLAS API from pyculib <http://pyculib.readthedocs.io/en/latest/cublas.html#pyculib.blas.Blas.gemm>`_ or the `CuPy implementation <https://docs.cupy.dev/en/stable/reference/generated/cupy.matmul.html>`_.
 
-    .. code-block:: python
-      :linenos:
+The approach outlined here generalizes to non-square matrix multiplication as follows by adjusting the blockspergrid variable:
 
-        from numba import cuda, float32
+Again, here is an example usage:
 
-        # TBP should not be larger than 32 in this example
-        TBP = 16
+.. code-block:: python
+  :linenos:
 
-        @cuda.jit
-        def fast_nonsq_matmul(A, B, C):
-        """Modified version of generalized version by @RobertCrovella from https://stackoverflow.com/a/64198479/13697228
-        """
-            # Define an array in the shared memory
-            # The size and type of the arrays must be known at compile time
-            sA = cuda.shared.array(shape=(TPB, TPB), dtype=float32)
-            sB = cuda.shared.array(shape=(TPB, TPB), dtype=float32)
+  x_h = np.arange(115).reshape([5,23])
+  y_h = np.ones([23,7])
+  z_h = np.zeros([5,7])
 
-            x, y = cuda.grid(2)
+  x_d = cuda.to_device(x_h)
+  y_d = cuda.to_device(y_h)
+  z_d = cuda.to_device(z_h)
 
-            tx = cuda.threadIdx.x
-            ty = cuda.threadIdx.y
-            bpg = cuda.gridDim.x    # blocks per grid
+  #TPB must be an integer between 1 and 32
+  TPB = 32
+  threadsperblock = (TPB, TPB)
+  grid_y_max = max(x_h.shape[0],y_h.shape[0])
+  grid_x_max = max(x_h.shape[1],y_h.shape[1])
+  blockspergrid_x = math.ceil(grid_x_max / threadsperblock[0])
+  blockspergrid_y = math.ceil(grid_y_max / threadsperblock[1])
+  blockspergrid = (blockspergrid_x, blockspergrid_y)
 
-            # Each thread computes one element in the result matrix.
-            # The dot product is chunked into dot products of TPB-long vectors.
-            tmp = float32(0.)
-            for i in range(bpg):
-                # Preload data into shared memory
-                sA[ty, tx] = 0
-                sB[ty, tx] = 0
-                if y < A.shape[0] and (tx+i*TPB) < A.shape[1]:
-                  sA[ty, tx] = A[y, tx + i * TPB]
-                if x < B.shape[1] and (ty+i*TPB) < B.shape[0]:
-                  sB[ty, tx] = B[ty + i * TPB, x]
+  fast_matmul[blockspergrid, threadsperblock](x_d, y_d, z_d)
+  z_h = z_d.copy_to_host()
+  print(z_h)
+  print(x_h@y_h)
 
-                # Wait until all threads finish preloading
-                cuda.syncthreads()
+and a corresponding memory check:
 
-                # Computes partial product on the shared memory
-                for j in range(TPB):
-                    tmp += sA[ty, j] * sB[j, tx]
+.. code-block:: none
 
-                # Wait until all threads finish computing
-                cuda.syncthreads()
-            if y < C.shape[0] and x < C.shape[1]:
-                C[y, x] = tmp
-
-    Again, here is an example usage:
-
-    .. code-block:: python
-      :linenos:
-
-      x_h = np.arange(115).reshape([5,23])
-      y_h = np.ones([23,7])
-      z_h = np.zeros([5,7])
-
-      x_d = cuda.to_device(x_h)
-      y_d = cuda.to_device(y_h)
-      z_d = cuda.to_device(z_h)
-
-      #TPB must be an integer between 1 and 32
-      TPB = 32
-      threadsperblock = (TPB, TPB)
-      grid_y_max = max(x_h.shape[0],y_h.shape[0])
-      grid_x_max = max(x_h.shape[1],y_h.shape[1])
-      blockspergrid_x = math.ceil(grid_x_max / threadsperblock[0])
-      blockspergrid_y = math.ceil(grid_y_max / threadsperblock[1])
-      blockspergrid = (blockspergrid_x, blockspergrid_y)
-
-      fast_matmul[blockspergrid, threadsperblock](x_d, y_d, z_d)
-      z_h = z_d.copy_to_host()
-      print(z_h)
-      print(x_h@y_h)
-
-    and a corresponding memory check:
-
-    .. code-block:: none
-
-      $ cuda-memcheck python t49.py
-      ========= CUDA-MEMCHECK
-      [[ 253.  253.  253.  253.  253.  253.  253.]
-      [ 782.  782.  782.  782.  782.  782.  782.]
-      [1311. 1311. 1311. 1311. 1311. 1311. 1311.]
-      [1840. 1840. 1840. 1840. 1840. 1840. 1840.]
-      [2369. 2369. 2369. 2369. 2369. 2369. 2369.]]
-      [[ 253.  253.  253.  253.  253.  253.  253.]
-      [ 782.  782.  782.  782.  782.  782.  782.]
-      [1311. 1311. 1311. 1311. 1311. 1311. 1311.]
-      [1840. 1840. 1840. 1840. 1840. 1840. 1840.]
-      [2369. 2369. 2369. 2369. 2369. 2369. 2369.]]
-      ========= ERROR SUMMARY: 0 errors
+  $ cuda-memcheck python t49.py
+  ========= CUDA-MEMCHECK
+  [[ 253.  253.  253.  253.  253.  253.  253.]
+  [ 782.  782.  782.  782.  782.  782.  782.]
+  [1311. 1311. 1311. 1311. 1311. 1311. 1311.]
+  [1840. 1840. 1840. 1840. 1840. 1840. 1840.]
+  [2369. 2369. 2369. 2369. 2369. 2369. 2369.]]
+  [[ 253.  253.  253.  253.  253.  253.  253.]
+  [ 782.  782.  782.  782.  782.  782.  782.]
+  [1311. 1311. 1311. 1311. 1311. 1311. 1311.]
+  [1840. 1840. 1840. 1840. 1840. 1840. 1840.]
+  [2369. 2369. 2369. 2369. 2369. 2369. 2369.]]
+  ========= ERROR SUMMARY: 0 errors
