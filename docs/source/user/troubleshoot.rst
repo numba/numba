@@ -39,7 +39,7 @@ all the variables in use, this is so it can generate a type specific
 implementation of your code that can be compiled down to machine code. A common
 reason for Numba failing to compile (especially in :term:`nopython mode`) is a
 type inference failure, essentially Numba cannot work out what the type of all
-the variables in your code should be. 
+the variables in your code should be.
 
 For example, let's consider this trivial function::
 
@@ -135,22 +135,22 @@ is determined at runtime based on the value of `x`::
     ...:         return (1,)
     ...:     else:
     ...:         return 1
-    ...:     
+    ...:
 
     In [3]: f(10)
 
-Trying to execute this function, errors out as follows:: 
+Trying to execute this function, errors out as follows::
 
     TypingError: Failed at nopython (nopython frontend)
     Can't unify return type from the following types: tuple(int64 x 1), int64
-    Return of: IR name '$8.2', type '(int64 x 1)', location: 
+    Return of: IR name '$8.2', type '(int64 x 1)', location:
     File "<ipython-input-2-51ef1cc64bea>", line 4:
     def f(x):
         <source elided>
         if x > 10:
             return (1,)
             ^
-    Return of: IR name '$12.2', type 'int64', location: 
+    Return of: IR name '$12.2', type 'int64', location:
     File "<ipython-input-2-51ef1cc64bea>", line 6:
     def f(x):
         <source elided>
@@ -1061,6 +1061,7 @@ on which the child will break. Additional :func:`numba.gdb_breakpoint` calls
 create calls to the registered breakpoint hence the program will also break at
 these locations.
 
+.. debugging-cuda-python-code:
 
 Debugging CUDA Python code
 ==========================
