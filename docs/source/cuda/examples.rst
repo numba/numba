@@ -115,7 +115,7 @@ An example usage of this function is as follows:
     z_h = z_d.copy_to_host()
     print(z_h)
     print(x_h@y_h)
-:ref:`the CUDA Simulator documentation <simulator>`
+
 This passes a :ref:`CUDA memory check test <debugging-cuda-python-code>`:
 
 .. code-block:: none
