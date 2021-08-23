@@ -3,12 +3,12 @@ import warnings
 
 from numba.core.config import PYVERSION
 
-if PYVERSION < (3, 8):
+if PYVERSION < (3, 9):
     try:
         import importlib_metadata
     except ImportError as ex:
         raise ImportError(
-            "importlib_metadata backport is required for Python version < 3.8, "
+            "importlib_metadata backport is required for Python version < 3.9, "
             "try:\n"
             "$ conda/pip install importlib_metadata"
         ) from ex
