@@ -1,10 +1,6 @@
 import sys
 from unittest import mock
 
-try:
-    from importlib import metadata as importlib_metadata
-except ImportError:
-    import importlib_metadata
 import types
 import warnings
 import unittest
@@ -12,9 +8,14 @@ import os
 import subprocess
 import threading
 
-from numba import njit
+from numba import config, njit
 from numba.tests.support import TestCase
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
+
+if config.PYVERSION < (3, 9):
+    import importlib_metadata
+else:
+    from importlib import metadata as importlib_metadata
 
 _TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
 
