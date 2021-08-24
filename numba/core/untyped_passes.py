@@ -1426,7 +1426,7 @@ class IterLoopCanonicalization(FunctionPass):
         return mutated
 
 
-@register_pass(mutates_CFG=True, analysis_only=False)
+@register_pass(mutates_CFG=False, analysis_only=False)
 class PropagateLiterals(FunctionPass):
     """Implement literal propagation based on partial type inference"""
     _name = "PropagateLiterals"
@@ -1435,19 +1435,14 @@ class PropagateLiterals(FunctionPass):
         FunctionPass.__init__(self)
 
     def run_pass(self, state):
-        # In some cases, state doesn't have _definitions
-        func_ir = state.func_ir
-        func_ir._reset_analysis_variables()
-
-        if not hasattr(func_ir, '_definitions'):
-            func_ir._definitions = build_definitions(state.func_ir.blocks)
-        typemap = state.typemap
+        if not hasattr(state.func_ir, '_definitions'):
+            state.func_ir._definitions = build_definitions(state.func_ir.blocks)
         changed = False
 
         literal_types = (types.BooleanLiteral, types.IntegerLiteral,
                          types.StringLiteral)
 
-        for block in func_ir.blocks.values():
+        for block in state.func_ir.blocks.values():
             for assign in block.find_insts(ir.Assign):
                 if isinstance(assign.value, (ir.Arg, ir.Const,
                                              ir.FreeVar, ir.Global)):
@@ -1460,10 +1455,10 @@ class PropagateLiterals(FunctionPass):
                     continue
 
                 target = assign.target
-                if len(func_ir._definitions.get(target.name, ())) > 1:
+                if len(state.func_ir._definitions.get(target.name, ())) > 1:
                     continue
 
-                lit = typemap.get(target.name, None)
+                lit = state.typemap.get(target.name, None)
                 if lit and isinstance(lit, literal_types):
                     # replace assign instruction by ir.Const(lit) iff
                     # lit is a literal value
@@ -1476,9 +1471,13 @@ class PropagateLiterals(FunctionPass):
 
                     changed = True
 
+        # reset type inference now we are done with the partial results
+        state.typemap = None
+        state.calltypes = None
+
         if changed:
             # Rebuild definitions
-            func_ir._definitions = build_definitions(state.func_ir.blocks)
+            state.func_ir._definitions = build_definitions(state.func_ir.blocks)
 
         return changed
 
@@ -1503,7 +1502,7 @@ class LiteralPropagation(FunctionPass):
         # rewrite consts / dead branch pruning / rewrites
         pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
         pm.add_pass(DeadBranchPrune, "dead branch pruning")
-        pm.add_pass(GenericRewrites, "nopython rewrites")
+        # pm.add_pass(GenericRewrites, "nopython rewrites")
 
         pm.finalize()
         pm.run(state)
