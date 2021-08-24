@@ -1015,7 +1015,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for a, b, kwargs in values():
             expected = pyfunc(a, b, **kwargs)
             got = cfunc(a, b, **kwargs)
-            print(a, b)
             if isinstance(expected, np.bool_):
                 self.assertEqual(expected, got)
             else:
