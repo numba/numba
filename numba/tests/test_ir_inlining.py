@@ -907,55 +907,55 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
         impl = gen(10, 20)
         self.check(impl, inline_expect={'bar': True})
 
-    # def test_inlining_models(self):
+    def test_inlining_models(self):
 
-    #     def s17_caller_model(expr, caller_info, callee_info):
-    #         self.assertIsInstance(expr, ir.Expr)
-    #         self.assertEqual(expr.op, "call")
-    #         return self.sentinel_17_cost_model(caller_info.func_ir)
+        def s17_caller_model(expr, caller_info, callee_info):
+            self.assertIsInstance(expr, ir.Expr)
+            self.assertEqual(expr.op, "call")
+            return self.sentinel_17_cost_model(caller_info.func_ir)
 
-    #     def s17_callee_model(expr, caller_info, callee_info):
-    #         self.assertIsInstance(expr, ir.Expr)
-    #         self.assertEqual(expr.op, "call")
-    #         return self.sentinel_17_cost_model(callee_info.func_ir)
+        def s17_callee_model(expr, caller_info, callee_info):
+            self.assertIsInstance(expr, ir.Expr)
+            self.assertEqual(expr.op, "call")
+            return self.sentinel_17_cost_model(callee_info.func_ir)
 
-    #     # caller has sentinel
-    #     for caller, callee in ((10, 11), (17, 11)):
+        # caller has sentinel
+        for caller, callee in ((10, 11), (17, 11)):
 
-    #         def foo():
-    #             return callee
+            def foo():
+                return callee
 
-    #         @overload(foo, inline=s17_caller_model)
-    #         def foo_ol():
-    #             def impl():
-    #                 return callee
-    #             return impl
+            @overload(foo, inline=s17_caller_model)
+            def foo_ol():
+                def impl():
+                    return callee
+                return impl
 
-    #         def impl(z):
-    #             x = z + caller
-    #             y = foo()
-    #             return y + 3, x
+            def impl(z):
+                x = z + caller
+                y = foo()
+                return y + 3, x
 
-    #         self.check(impl, 10, inline_expect={'foo': caller == 17})
+            self.check(impl, 10, inline_expect={'foo': caller == 17})
 
-    #     # callee has sentinel
-    #     for caller, callee in ((11, 17), (11, 10)):
+        # callee has sentinel
+        for caller, callee in ((11, 17), (11, 10)):
 
-    #         def bar():
-    #             return callee
+            def bar():
+                return callee
 
-    #         @overload(bar, inline=s17_callee_model)
-    #         def bar_ol():
-    #             def impl():
-    #                 return callee
-    #             return impl
+            @overload(bar, inline=s17_callee_model)
+            def bar_ol():
+                def impl():
+                    return callee
+                return impl
 
-    #         def impl(z):
-    #             x = z + caller
-    #             y = bar()
-    #             return y + 3, x
+            def impl(z):
+                x = z + caller
+                y = bar()
+                return y + 3, x
 
-    #         self.check(impl, 10, inline_expect={'bar': callee == 17})
+            self.check(impl, 10, inline_expect={'bar': callee == 17})
 
     def test_multiple_overloads_with_different_inline_characteristics(self):
         # check that having different inlining options for different overloads
