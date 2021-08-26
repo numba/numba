@@ -430,7 +430,7 @@ def _launch_threads():
                 raise ValueError(
                     "THREADING_LAYER_PRIORITY invalid: %s."
                     "It must be a permutation of "
-                    "'tbb', 'omp', 'workqueue'"
+                    "{'tbb', 'omp', 'workqueue'}"
                     % namedbackends
                 )
 
