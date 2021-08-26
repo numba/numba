@@ -537,4 +537,4 @@ Threading Control
    string and by default is ``tbb omp workqueue``, with the priority taken based
    on position from the left of the string, left most being the highest. Valid
    values are any permutation of the three choices (for more information about
-   these see :ref:`the threading layer documentation <numba-threading-layer>.`)
+   these see :ref:`the threading layer documentation <numba-threading-layer>`.)
