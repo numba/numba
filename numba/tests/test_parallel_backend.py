@@ -525,12 +525,16 @@ TestThreadingLayerSelection.generate()
 class TestThreadingLayerPriority(ThreadLayerTestHelper):
 
     def each_env_var(self, env_var: str):
-        """Test setting priority via env var NUMBA_THREADING_LAYER_PRIORITY."""
+        """Test setting priority via env var NUMBA_THREADING_LAYER_PRIORITY.
+        
+        :return: threading_layer_priority, threading_layer
+        """
         env = os.environ.copy()
         env['NUMBA_THREADING_LAYER'] = 'default'
         env['NUMBA_THREADING_LAYER_PRIORITY'] = env_var
 
-        code = """import numba
+        code = """import sys
+import numba
 
 # trigger threading layer decision
 # hence catching invalid THREADING_LAYER_PRIORITY
@@ -543,14 +547,14 @@ def plus(x, y):
     return x + y
 
 print(' '.join(numba.config.THREADING_LAYER_PRIORITY))
+print(numba.threading_layer(), file=sys.stderr)
 """
         cmd = [
             sys.executable,
             '-c',
             code,
         ]
-        out, err = self.run_cmd(cmd, env=env)
-        self.assertEqual(out.strip(), env_var)
+        return self.run_cmd(cmd, env=env)
 
     def test_valid_env_var(self):
         import itertools
@@ -558,7 +562,8 @@ print(' '.join(numba.config.THREADING_LAYER_PRIORITY))
         default = ['tbb', 'omp', 'workqueue']
         for p in itertools.permutations(default):
             env_var = ' '.join(p)
-            self.each_env_var(env_var)
+            threading_layer_priority, _ = self.each_env_var(env_var)
+            self.assertEqual(threading_layer_priority.strip(), env_var)
 
     def test_invalid_env_var(self):
         env_var = 'tbb omp workqueue notvalidhere'
@@ -569,6 +574,26 @@ print(' '.join(numba.config.THREADING_LAYER_PRIORITY))
         raise RuntimeError(
             'Not catching invalid NUMBA_THREADING_LAYER_PRIORITY: %s' % env_var
         )
+
+    @skip_no_omp
+    def test_omp(self):
+        for env_var in ("omp tbb workqueue", "omp workqueue tbb"):
+            threading_layer_priority, threading_layer = self.each_env_var(env_var)
+            self.assertEqual(threading_layer_priority.strip(), env_var)
+            self.assertEqual(threading_layer.strip(), "omp")
+
+    @skip_no_tbb
+    def test_tbb(self):
+        for env_var in ("tbb omp workqueue", "tbb workqueue omp"):
+            threading_layer_priority, threading_layer = self.each_env_var(env_var)
+            self.assertEqual(threading_layer_priority.strip(), env_var)
+            self.assertEqual(threading_layer.strip(), "tbb")
+
+    def test_workqueue(self):
+        for env_var in ("workqueue tbb omp", "workqueue omp tbb"):
+            threading_layer_priority, threading_layer = self.each_env_var(env_var)
+            self.assertEqual(threading_layer_priority.strip(), env_var)
+            self.assertEqual(threading_layer.strip(), "workqueue")
 
 
 @skip_parfors_unsupported
