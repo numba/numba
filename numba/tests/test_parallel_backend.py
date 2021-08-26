@@ -566,13 +566,11 @@ print(numba.threading_layer(), file=sys.stderr)
 
     def test_invalid_env_var(self):
         env_var = 'tbb omp workqueue notvalidhere'
-        try:
+        with self.assertRaises(AssertionError) as raises:
             self.each_env_var(env_var)
-        except AssertionError:
-            return
-        raise RuntimeError(
-            'Not catching invalid NUMBA_THREADING_LAYER_PRIORITY: %s' % env_var
-        )
+        msgs = ("THREADING_LAYER_PRIORITY invalid:", "It must be a permutation of")
+        for msg in msgs:
+            self.assertIn(f"{msg}", str(raises.exception))
 
     @skip_no_omp
     def test_omp(self):
