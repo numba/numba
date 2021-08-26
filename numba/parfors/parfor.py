@@ -3570,7 +3570,7 @@ def get_reduction_init(nodes):
     # there could be multiple extra assignments after the reduce node
     # See: test_reduction_var_reuse
     cur_index = 1
-    acc_expr = nodes[cur_index].value
+    acc_expr = nodes[-cur_index].value
     while isinstance(acc_expr, ir.Var):
         require(len(nodes) >= cur_index + 1)
         require(nodes[-(cur_index + 1)].target.name == nodes[-cur_index].value.name)
