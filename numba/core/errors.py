@@ -349,7 +349,7 @@ unsupported_error_info = """
 Unsupported functionality was found in the code Numba was trying to compile.
 
 If this functionality is important to you please file a feature request at:
-https://github.com/numba/numba/issues/new?template=bug_report.md
+https://github.com/numba/numba/issues/new?template=feature_request.md
 """
 
 interpreter_error_info = """
@@ -359,7 +359,8 @@ without Numba? (To temporarily disable Numba JIT, set the `NUMBA_DISABLE_JIT`
 environment variable to non-zero, and then rerun the code).
 
 If the code is valid and the unsupported functionality is important to you
-please file a feature request at: https://github.com/numba/numba/issues/new?template=bug_report.md
+please file a feature request at: 
+https://github.com/numba/numba/issues/new?template=feature_request.md
 
 To see Python/NumPy features supported by the latest release of Numba visit:
 https://numba.pydata.org/numba-doc/latest/reference/pysupported.html
@@ -376,7 +377,8 @@ the requirement of compile time constants as arguments to exceptions:
 https://numba.pydata.org/numba-doc/latest/reference/pysupported.html?highlight=exceptions#constructs
 
 If the code is valid and the unsupported functionality is important to you
-please file a feature request at: https://github.com/numba/numba/issues/new?template=bug_report.md
+please file a feature request at:
+https://github.com/numba/numba/issues/new?template=feature_request.md
 
 If you think your code should work with Numba. %s
 """ % feedback_details
