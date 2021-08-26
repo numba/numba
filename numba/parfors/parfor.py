@@ -3566,15 +3566,17 @@ def get_reduction_init(nodes):
     Get initial value for known reductions.
     Currently, only += and *= are supported.
     """
-    require(len(nodes) >=1)
-    # there could be an extra assignment after the reduce node
+    require(len(nodes) >= 1)
+    # there could be multiple extra assignments after the reduce node
     # See: test_reduction_var_reuse
-    if isinstance(nodes[-1].value, ir.Var):
-        require(len(nodes) >=2)
-        require(nodes[-2].target.name == nodes[-1].value.name)
-        acc_expr = nodes[-2].value
-    else:
-        acc_expr = nodes[-1].value
+    cur_index = 1
+    acc_expr = nodes[cur_index].value
+    while isinstance(acc_expr, ir.Var):
+        require(len(nodes) >= cur_index + 1)
+        require(nodes[-(cur_index + 1)].target.name == nodes[-cur_index].value.name)
+        cur_index += 1
+        acc_expr = nodes[-cur_index].value
+
     require(isinstance(acc_expr, ir.Expr) and acc_expr.op=='inplace_binop')
     if acc_expr.fn == operator.iadd or acc_expr.fn == operator.isub:
         return 0, acc_expr.fn
