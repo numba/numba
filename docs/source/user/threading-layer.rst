@@ -62,18 +62,14 @@ selection via the threading layer name (e.g. ``tbb``).
 Setting the threading layer selection priority
 ----------------------------------------------
 
-By default, The threading layers are searched in the order of
-'tbb', 'omp', and 'workqueue'.
-If you want to let Numba choice the threading layer
-based on availability automatically but with a different priority,
-it can be changed via the environment variable
-``NUMBA_THREADING_LAYER_PRIORITY`` or through assignment to
-``numba.config.THREADING_LAYER_PRIORITY``.
+By default the threading layers are searched in the order of ``'tbb'``,
+``'omp'``, then ``'workqueue'``. To change this search order whilst
+maintaining the selection of a threading layer based on availability, the
+environment variable :envvar:`NUMBA_THREADING_LAYER_PRIORITY` can be used.
 
-For example, if you want Numba to choose ``omp`` first if available,
-then ``tbb`` and so on, you can set either
-``NUMBA_THREADING_LAYER_PRIORITY="omp tbb workqueue"`` or
-``numba.config.THREADING_LAYER_PRIORITY = ["omp", "tbb", "workqueue"]``.
+For example, to instruct Numba to choose ``omp`` first if available,
+then ``tbb`` and so on, set the environment variable as
+``NUMBA_THREADING_LAYER_PRIORITY="omp tbb workqueue"``.
 
 Selecting a threading layer for safe parallel execution
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
