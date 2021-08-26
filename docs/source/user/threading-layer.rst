@@ -59,8 +59,8 @@ choosing a threading layer, the first is by selecting a threading layer that is
 safe under various forms of parallel execution, the second is through explicit
 selection via the threading layer name (e.g. ``tbb``).
 
-Setting the threading layer priority
-------------------------------------
+Setting the threading layer selection priority
+----------------------------------------------
 
 By default, The threading layers are searched in the order of
 'tbb', 'omp', and 'workqueue'.
