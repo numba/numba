@@ -358,7 +358,7 @@ compile. This error could be due to invalid code, does the code work
 without Numba? (To temporarily disable Numba JIT, set the `NUMBA_DISABLE_JIT`
 environment variable to non-zero, and then rerun the code).
 
-If the code is valid and the unsupported functionality is important to you 
+If the code is valid and the unsupported functionality is important to you
 please file a feature request at:
 https://github.com/numba/numba/issues/new?template=feature_request.md
 
