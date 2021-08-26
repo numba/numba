@@ -4,6 +4,7 @@
 Tests the parallel backend
 """
 import faulthandler
+import itertools
 import multiprocessing
 import os
 import random
@@ -557,8 +558,6 @@ print(numba.threading_layer(), file=sys.stderr)
         return self.run_cmd(cmd, env=env)
 
     def test_valid_env_var(self):
-        import itertools
-
         default = ['tbb', 'omp', 'workqueue']
         for p in itertools.permutations(default):
             env_var = ' '.join(p)
