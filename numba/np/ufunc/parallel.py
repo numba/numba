@@ -423,7 +423,7 @@ def _launch_threads():
 
             t = str(config.THREADING_LAYER).lower()
             namedbackends = config.THREADING_LAYER_PRIORITY
-            if set(namedbackends) != {'tbb', 'omp', 'workqueue'}:
+            if not (len(namedbackends) == 3 and set(namedbackends) == {'tbb', 'omp', 'workqueue'}):
                 raise ValueError(
                     "THREADING_LAYER_PRIORITY invalid: %s."
                     "It must be a permutation of "
