@@ -528,7 +528,7 @@ class TestThreadingLayerPriority(ThreadLayerTestHelper):
     def each_env_var(self, env_var: str):
         """Test setting priority via env var NUMBA_THREADING_LAYER_PRIORITY.
         
-        :return: threading_layer_priority, threading_layer
+        :return: threading_layer_priority, stderr (containing ``@threading_layer@``)
         """
         env = os.environ.copy()
         env['NUMBA_THREADING_LAYER'] = 'default'
@@ -548,7 +548,7 @@ def plus(x, y):
     return x + y
 
 print(' '.join(numba.config.THREADING_LAYER_PRIORITY))
-print(numba.threading_layer(), file=sys.stderr)
+print("@%s@" % numba.threading_layer(), file=sys.stderr)
 """
         cmd = [
             sys.executable,
@@ -575,22 +575,22 @@ print(numba.threading_layer(), file=sys.stderr)
     @skip_no_omp
     def test_omp(self):
         for env_var in ("omp tbb workqueue", "omp workqueue tbb"):
-            threading_layer_priority, threading_layer = self.each_env_var(env_var)
+            threading_layer_priority, out = self.each_env_var(env_var)
             self.assertEqual(threading_layer_priority.strip(), env_var)
-            self.assertEqual(threading_layer.strip(), "omp")
+            self.assertIn("@omp@", out)
 
     @skip_no_tbb
     def test_tbb(self):
         for env_var in ("tbb omp workqueue", "tbb workqueue omp"):
-            threading_layer_priority, threading_layer = self.each_env_var(env_var)
+            threading_layer_priority, out = self.each_env_var(env_var)
             self.assertEqual(threading_layer_priority.strip(), env_var)
-            self.assertEqual(threading_layer.strip(), "tbb")
+            self.assertIn("@tbb@", out)
 
     def test_workqueue(self):
         for env_var in ("workqueue tbb omp", "workqueue omp tbb"):
-            threading_layer_priority, threading_layer = self.each_env_var(env_var)
+            threading_layer_priority, out = self.each_env_var(env_var)
             self.assertEqual(threading_layer_priority.strip(), env_var)
-            self.assertEqual(threading_layer.strip(), "workqueue")
+            self.assertIn("@workqueue@", out)
 
 
 @skip_parfors_unsupported
