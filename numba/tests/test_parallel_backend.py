@@ -527,8 +527,9 @@ class TestThreadingLayerPriority(ThreadLayerTestHelper):
 
     def each_env_var(self, env_var: str):
         """Test setting priority via env var NUMBA_THREADING_LAYER_PRIORITY.
-        
-        :return: threading_layer_priority, stderr (containing ``@threading_layer@``)
+
+        :return: threading_layer_priority, stderr
+            (containing ``@threading_layer@``)
         """
         env = os.environ.copy()
         env['NUMBA_THREADING_LAYER'] = 'default'
@@ -568,8 +569,10 @@ print("@%s@" % numba.threading_layer(), file=sys.stderr)
         env_var = 'tbb omp workqueue notvalidhere'
         with self.assertRaises(AssertionError) as raises:
             self.each_env_var(env_var)
-        msgs = ("THREADING_LAYER_PRIORITY invalid:", "It must be a permutation of")
-        for msg in msgs:
+        for msg in (
+            "THREADING_LAYER_PRIORITY invalid:",
+            "It must be a permutation of"
+        ):
             self.assertIn(f"{msg}", str(raises.exception))
 
     @skip_no_omp
