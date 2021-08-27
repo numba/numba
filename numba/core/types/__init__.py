@@ -47,9 +47,9 @@ int64 = Integer('int64')
 intp = int32 if utils.MACHINE_BITS == 32 else int64
 uintp = uint32 if utils.MACHINE_BITS == 32 else uint64
 intc = int32 if struct.calcsize('i') == 4 else int64
-uintc = uint32 if struct.calcsize('i') == 4 else uint64
+uintc = uint32 if struct.calcsize('I') == 4 else uint64
 ssize_t = int32 if struct.calcsize('n') == 4 else int64
-size_t = uint32 if struct.calcsize('n') == 4 else uint64
+size_t = uint32 if struct.calcsize('N') == 4 else uint64
 
 float32 = Float('float32')
 float64 = Float('float64')
