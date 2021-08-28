@@ -116,7 +116,7 @@ An example usage of this function is as follows:
     fast_matmul[blockspergrid, threadsperblock](x_d, y_d, z_d)
     z_h = z_d.copy_to_host()
     print(z_h)
-    print(x_h@y_h)
+    print(x_h @ y_h)
 
 This passes a :ref:`CUDA memory check test <debugging-cuda-python-code>`:
 
