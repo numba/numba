@@ -167,7 +167,7 @@ and a corresponding memory check:
 
 .. code-block:: none
 
-  $ cuda-memcheck python t49.py
+  $ python nonsquare_matmul.py
   ========= CUDA-MEMCHECK
   [[ 253.  253.  253.  253.  253.  253.  253.]
   [ 782.  782.  782.  782.  782.  782.  782.]
