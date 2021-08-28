@@ -166,7 +166,7 @@ Again, here is an example usage:
   print(z_h)
   print(x_h @ y_h)
 
-and a corresponding memory check:
+and a corresponding output:
 
 .. code-block:: none
 
