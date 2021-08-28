@@ -136,7 +136,8 @@ This passes a :ref:`CUDA memory check test <debugging-cuda-python-code>`:
 
 .. note:: For high performance matrix multiplication in CUDA, see also the `CuPy implementation <https://docs.cupy.dev/en/stable/reference/generated/cupy.  matmul.html>`_.
 
-The approach outlined here generalizes to non-square matrix multiplication as follows by adjusting the blockspergrid variable:
+The approach outlined here generalizes to non-square matrix multiplication as
+follows by adjusting the ``blockspergrid`` variable:
 
 Again, here is an example usage:
 
