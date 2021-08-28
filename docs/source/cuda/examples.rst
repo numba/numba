@@ -48,7 +48,8 @@ memory:
 
     @cuda.jit
     def fast_matmul(A, B, C):
-    """Based on corrected version by @RobertCrovella from https://stackoverflow.com/a/64198479/13697228
+    """Reference: https://stackoverflow.com/a/64198479/13697228
+    by @RobertCrovella
     """
         # Define an array in the shared memory
         # The size and type of the arrays must be known at compile time
