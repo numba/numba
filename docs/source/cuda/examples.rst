@@ -42,8 +42,8 @@ implements a faster version of the square matrix multiplication using shared mem
 
     # Controls threads per block and shared memory usage.
     # The computation will be done on blocks of TPBxTPB elements.
-    # TBP should not be larger than 32 in this example
-    TBP = 16
+    # TPB should not be larger than 32 in this example
+    TPB = 16
 
     @cuda.jit
     def fast_matmul(A, B, C):
