@@ -132,7 +132,7 @@ This passes a :ref:`CUDA memory check test <debugging-cuda-python-code>`:
     [54. 54. 54. 54.]]
     ========= ERROR SUMMARY: 0 errors
 
-Note: For high performance matrix multiplication operations in CUDA, see the `cuBLAS API from pyculib <http://pyculib.readthedocs.io/en/latest/cublas.html#pyculib.blas.Blas.gemm>`_ or the `CuPy implementation <https://docs.cupy.dev/en/stable/reference/generated/cupy.matmul.html>`_.
+.. note:: For high performance matrix multiplication in CUDA, see also the `CuPy implementation <https://docs.cupy.dev/en/stable/reference/generated/cupy.  matmul.html>`_.
 
 The approach outlined here generalizes to non-square matrix multiplication as follows by adjusting the blockspergrid variable:
 
