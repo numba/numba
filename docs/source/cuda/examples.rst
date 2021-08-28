@@ -33,7 +33,8 @@ they may not be large enough to hold the entire inputs at once).
 It will be faster if we use a blocked algorithm to reduce accesses to the
 device memory.  CUDA provides a fast :ref:`shared memory <cuda-shared-memory>`
 for threads in a block to cooperatively compute on a task.  The following
-implements a faster version of the square matrix multiplication using shared memory:
+implements a faster version of the square matrix multiplication using shared
+memory:
 
 .. code-block:: python
   :linenos:
