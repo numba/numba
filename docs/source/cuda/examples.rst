@@ -70,7 +70,7 @@ memory:
             sA[ty, tx] = 0
             sB[ty, tx] = 0
             if y < A.shape[0] and (tx+i*TPB) < A.shape[1]:
-              sA[ty, tx] = A[y, tx + i * TPB]
+                sA[ty, tx] = A[y, tx + i * TPB]
             if x < B.shape[1] and (ty+i*TPB) < B.shape[0]:
                 sB[ty, tx] = B[ty + i * TPB, x]
 
