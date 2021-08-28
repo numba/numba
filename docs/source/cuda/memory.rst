@@ -167,8 +167,11 @@ traditional dynamic memory management.
    type <numba-types>` of the elements needing to be stored in the array. The
    array is private to the current thread. An array-like object is returned
    which can be read and written to like any standard array (e.g. through
-   indexing). See also the Local Memory section of `Device Memory Accesses
-   <https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#device-memory-accesses>`_
+   indexing).
+
+   .. seealso:: The Local Memory section of `Device Memory Accesses
+      <https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#device-memory-accesses>`_
+      in the CUDA programming guide.
 
 Constant memory
 ===============
