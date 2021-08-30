@@ -308,6 +308,9 @@ class _EnvReloader(object):
         # choose parallel backend to use
         THREADING_LAYER = _readenv("NUMBA_THREADING_LAYER", str, 'default')
 
+        # Choose how to handle captured errors
+        CAPTURED_ERRORS =  _readenv("NUMBA_CAPTURED_ERRORS", str, 'old_style')
+
         # CUDA Configs
 
         # Whether to warn about kernel launches where a host array
