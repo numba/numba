@@ -5631,6 +5631,7 @@ def arr_take_along_axis(arr, indices, axis):
 
         Ni = tuple(range(axis))
         Nk = tuple(range(axis + 1, arr.ndim))
+
         def take_along_axis_impl(arr, indices, axis):
             return _take_along_axis_impl(arr, indices, axis, Ni, Nk,
                                          indices_broadcast_shape)

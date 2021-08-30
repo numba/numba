@@ -4456,7 +4456,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_take_along_axis_broadcasting(self):
         # Based on
         # https://github.com/numpy/numpy/blob/v1.21.0/numpy/lib/tests/test_shape_base.py#L74-L79
-        # This demonstrates that arrays are broadcast before the algorithm is applied.
+        # This demonstrates that arrays are broadcast before the algorithm is
+        # applied.
         arr = np.ones((3, 4, 1))
         ai = np.ones((1, 2, 5), dtype=np.intp)
 
@@ -4520,12 +4521,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             gen(0)(arr2d, np.array([0, 1], dtype=np.uint64))
-        self.assertIn("must have the same number of dimensions", str(raises.exception))
+        self.assertIn("must have the same number of dimensions",
+                      str(raises.exception))
 
         # With axis None, array's ndim is implicitly 1.
         with self.assertRaises(TypingError) as raises:
             gen(None)(arr2d, arr2d)
-        self.assertIn("must have the same number of dimensions", str(raises.exception))
+        self.assertIn("must have the same number of dimensions",
+                      str(raises.exception))
 
         with self.assertRaises(ValueError) as raises:
             gen(0)(arr2d, np.ones((2, 3), dtype=np.uint64))
