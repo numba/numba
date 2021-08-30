@@ -222,13 +222,26 @@ def record_write_2d_array(ary):
     ary.j[2, 0] = 9.0
     ary.j[2, 1] = 10.0
 
+def recarray_getitem_return(ary):
+    return ary[0]
+
+def recarray_getitem_field_return(ary):
+    return ary['h']
+
+def recarray_getitem_field_return2(ary):
+    return ary.h
 
 def record_read_array0(ary):
     return ary.h[0]
 
+def record_read_array0_alt(ary):
+    return ary[0].h
 
 def record_read_array1(ary):
     return ary.h[1]
+
+def record_read_whole_array(ary):
+    return ary.h
 
 
 def record_read_2d_array00(ary):
@@ -731,72 +744,6 @@ class TestRecordDtype(unittest.TestCase):
 
         got = cfunc(nbval1, nbval2)
         self.assertEqual(expected, got)
-
-    def test_record_write_array(self):
-        '''
-        Testing writing to a 1D array within a structured type
-        '''
-        nbval = np.recarray(1, dtype=recordwitharray)
-        nbrecord = numpy_support.from_dtype(recordwitharray)
-        cfunc = self.get_cfunc(record_write_array, (nbrecord,))
-        cfunc(nbval[0])
-
-        expected = np.recarray(1, dtype=recordwitharray)
-        expected[0].g = 2
-        expected[0].h[0] = 3.0
-        expected[0].h[1] = 4.0
-        np.testing.assert_equal(expected, nbval)
-
-    def test_record_write_2d_array(self):
-        '''
-        Test writing to a 2D array within a structured type
-        '''
-        nbval = np.recarray(1, dtype=recordwith2darray)
-        nbrecord = numpy_support.from_dtype(recordwith2darray)
-        cfunc = self.get_cfunc(record_write_2d_array, (nbrecord,))
-        cfunc(nbval[0])
-
-        expected = np.recarray(1, dtype=recordwith2darray)
-        expected[0].i = 3
-        expected[0].j[:] = np.asarray([5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
-                                      np.float32).reshape(3, 2)
-        np.testing.assert_equal(expected, nbval)
-
-    def test_record_read_array(self):
-        '''
-        Test reading from a 1D array within a structured type
-        '''
-        nbval = np.recarray(1, dtype=recordwitharray)
-        nbval[0].h[0] = 15.0
-        nbval[0].h[1] = 25.0
-        nbrecord = numpy_support.from_dtype(recordwitharray)
-        cfunc = self.get_cfunc(record_read_array0, (nbrecord,))
-        res = cfunc(nbval[0])
-        np.testing.assert_equal(res, nbval[0].h[0])
-
-        cfunc = self.get_cfunc(record_read_array1, (nbrecord,))
-        res = cfunc(nbval[0])
-        np.testing.assert_equal(res, nbval[0].h[1])
-
-    def test_record_read_2d_array(self):
-        '''
-        Test reading from a 2D array within a structured type
-        '''
-        nbval = np.recarray(1, dtype=recordwith2darray)
-        nbval[0].j = np.asarray([1.5, 2.5, 3.5, 4.5, 5.5, 6.5],
-                                np.float32).reshape(3, 2)
-        nbrecord = numpy_support.from_dtype(recordwith2darray)
-        cfunc = self.get_cfunc(record_read_2d_array00, (nbrecord,))
-        res = cfunc(nbval[0])
-        np.testing.assert_equal(res, nbval[0].j[0, 0])
-
-        cfunc = self.get_cfunc(record_read_2d_array01, (nbrecord,))
-        res = cfunc(nbval[0])
-        np.testing.assert_equal(res, nbval[0].j[0, 1])
-
-        cfunc = self.get_cfunc(record_read_2d_array10, (nbrecord,))
-        res = cfunc(nbval[0])
-        np.testing.assert_equal(res, nbval[0].j[1, 0])
 
     def test_record_return(self):
         """
@@ -1360,6 +1307,152 @@ class TestSubtyping(TestCase):
         self.assertEqual(len(foo.nopython_signatures), 2)
         self.assertEqual(foo(self.a_rec1) + 1, foo(self.ab_rec1))
         self.assertEqual(foo(self.ab_rec1, flag=1), self.ab_rec1[0] + k + 20)
+
+
+class TestNestedArrays(TestCase):
+
+    def get_cfunc(self, pyfunc, argspec):
+        cres = compile_isolated(pyfunc, argspec)
+        return cres.entry_point
+
+    def test_record_write_array(self):
+        '''
+        Testing writing to a 1D array within a structured type
+        '''
+        nbval = np.recarray(1, dtype=recordwitharray)
+        nbrecord = numpy_support.from_dtype(recordwitharray)
+        cfunc = self.get_cfunc(record_write_array, (nbrecord,))
+        cfunc(nbval[0])
+
+        expected = np.recarray(1, dtype=recordwitharray)
+        expected[0].g = 2
+        expected[0].h[0] = 3.0
+        expected[0].h[1] = 4.0
+        np.testing.assert_equal(expected, nbval)
+
+    def test_record_write_2d_array(self):
+        '''
+        Test writing to a 2D array within a structured type
+        '''
+        nbval = np.recarray(1, dtype=recordwith2darray)
+        nbrecord = numpy_support.from_dtype(recordwith2darray)
+        cfunc = self.get_cfunc(record_write_2d_array, (nbrecord,))
+        cfunc(nbval[0])
+
+        expected = np.recarray(1, dtype=recordwith2darray)
+        expected[0].i = 3
+        expected[0].j[:] = np.asarray([5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
+                                      np.float32).reshape(3, 2)
+        np.testing.assert_equal(expected, nbval)
+
+    def test_record_read_array(self):
+        '''
+        Test reading from a 1D array within a structured type
+        '''
+        nbval = np.recarray(1, dtype=recordwitharray)
+        nbval[0].h[0] = 15.0
+        nbval[0].h[1] = 25.0
+        nbrecord = numpy_support.from_dtype(recordwitharray)
+        cfunc = self.get_cfunc(record_read_array0, (nbrecord,))
+        res = cfunc(nbval[0])
+        np.testing.assert_equal(res, nbval[0].h[0])
+
+        cfunc = self.get_cfunc(record_read_array1, (nbrecord,))
+        res = cfunc(nbval[0])
+        np.testing.assert_equal(res, nbval[0].h[1])
+
+    def test_record_read_2d_array(self):
+        '''
+        Test reading from a 2D array within a structured type
+        '''
+        nbval = np.recarray(1, dtype=recordwith2darray)
+        nbval[0].j = np.asarray([1.5, 2.5, 3.5, 4.5, 5.5, 6.5],
+                                np.float32).reshape(3, 2)
+        nbrecord = numpy_support.from_dtype(recordwith2darray)
+        cfunc = self.get_cfunc(record_read_2d_array00, (nbrecord,))
+        res = cfunc(nbval[0])
+        np.testing.assert_equal(res, nbval[0].j[0, 0])
+
+        cfunc = self.get_cfunc(record_read_2d_array01, (nbrecord,))
+        res = cfunc(nbval[0])
+        np.testing.assert_equal(res, nbval[0].j[0, 1])
+
+        cfunc = self.get_cfunc(record_read_2d_array10, (nbrecord,))
+        res = cfunc(nbval[0])
+        np.testing.assert_equal(res, nbval[0].j[1, 0])
+
+    def test_record_return(self):
+        """
+        Testing scalar record value as return value.
+        We can only return a copy of the record.
+        """
+
+    def test_record_args(self):
+        """
+        Testing scalar record value as argument
+        """
+
+    def test_set_record(self):
+        """
+        Test setting an entire record
+        """
+
+    def test_set_array(self):
+        """
+        Test setting an entire array within one record
+        """
+
+    def test_set_arrays(self):
+        """
+        Test setting an entire array of arrays (multiple records)
+        """
+
+    def test_getitem_idx(self):
+        """
+        Test __getitem__ with numerical index
+
+        This test returning a record when passing an array and
+        return the first item when passing a record
+        """
+        nbarr = np.recarray(2, dtype=recordwitharray)
+        nbarr[0] = np.array([(1, (2,3))], dtype=recordwitharray)[0]
+        for arg in [nbarr, nbarr[0]]:
+            ty = typeof(arg)
+            pyfunc = recarray_getitem_return
+            arr_expected = pyfunc(arg)
+            cfunc = self.get_cfunc(pyfunc, (ty,))
+            arr_res = cfunc(arg)
+            np.testing.assert_equal(arr_res, arr_expected)
+
+    def test_return_getattr_getitem_fieldname(self):
+        """
+        Test __getitem__ with field name and getattr .field_name
+
+        This tests returning a array of nestedarrays when passing an array and
+        returning a nestedarray when passing a record
+        """
+        nbarr = np.recarray(2, dtype=recordwitharray)
+        nbarr[0] = np.array([(1, (2,3))], dtype=recordwitharray)[0]
+        for arg in [nbarr, nbarr[0]]:
+            for pyfunc in [recarray_getitem_field_return, recarray_getitem_field_return2]:
+                ty = typeof(arg)
+                arr_expected = pyfunc(arg)
+                cfunc = self.get_cfunc(pyfunc, (ty,))
+                arr_res = cfunc(arg)
+                np.testing.assert_equal(arr_res, arr_expected)
+
+    def test_return_array(self):
+        """
+        Test getitem record AND array within record and returning it
+        """
+        nbval = np.recarray(2, dtype=recordwitharray)
+        nbval[0] = np.array([(1, (2,3))], dtype=recordwitharray)[0]
+        for pyfunc in [record_read_array0]:
+            arr_expected = pyfunc(nbval)
+            cfunc = self.get_cfunc(pyfunc, (typeof(nbval),))
+            arr_res = cfunc(nbval)
+            print(arr_res)
+            np.testing.assert_equal(arr_expected, arr_res)
 
 
 class TestRecordArrayExceptions(TestCase):
