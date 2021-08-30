@@ -4239,10 +4239,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             ai = np.argsort(a, axis=i)
             self.assertPreciseEqual(jfunc(a, ai), jfunc.py_func(a, ai))
 
-    def test_take_along_axis_2(self):
+    def test_take_along_axis_broadcasting(self):
         # Based on
         # https://github.com/numpy/numpy/blob/v1.21.0/numpy/lib/tests/test_shape_base.py#L74-L79
-        # This caught a segfault-causing bug in the initial implementation.
+        # This demonstrates that arrays are broadcast before the algorithm is applied.
         arr = np.ones((3, 4, 1))
         ai = np.ones((1, 2, 5), dtype=np.intp)
 
