@@ -772,7 +772,13 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         jitter = self._get_jit_decorator()
 
         # Get the overload implementation for the given types
-        ovf_result = self._overload_func(*args, **kws)
+        try:
+            ovf_result = self._overload_func(*args, **kws)
+        except TypeError:
+            # This is a raw Python TypeError from doing something like calling
+            # the overload with the wrong number of args.
+            ovf_result = None
+
         if ovf_result is None:
             # No implementation => fail typing
             self._impl_cache[cache_key] = None, None

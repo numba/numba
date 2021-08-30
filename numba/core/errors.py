@@ -747,6 +747,28 @@ class LiteralTypingError(TypingError):
     pass
 
 
+# These Exception classes are just Numba copies of their Python equivalents for
+# use internally in cases where we want e.g. type inference to keep on trying.
+# Exceptions extending from NumbaError are considered "special" by Numba's
+# internals and are treated differently to standard Python exceptions which are
+# permitted to just propagate up the stack.
+
+class NumbaValueError(TypingError):
+    pass
+
+
+class NumbaTypeError(TypingError):
+    pass
+
+
+class NumbaAttributeError(TypingError):
+    pass
+
+
+class NumbaAssertionError(TypingError):
+    pass
+
+
 def _format_msg(fmt, args, kwargs):
     return fmt.format(*args, **kwargs)
 
