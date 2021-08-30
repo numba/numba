@@ -5442,32 +5442,18 @@ def numpy_swapaxes(arr, axis1, axis2):
 
 
 @njit
-def _take_along_axis_impl_set_ni(arr, indices, axis, Ni, Nk):
-    for i in range(len(Ni)):
-        Ni = tuple_setitem(Ni, i, arr.shape[i])
-    return _take_along_axis_impl(arr, indices, axis, Ni, Nk)
-
-
-@njit
-def _take_along_axis_impl_set_nk(arr, indices, axis, Ni, Nk):
-    for i in range(len(Nk)):
-        Nk = tuple_setitem(Nk, i, arr.shape[axis + 1 + i])
-    return _take_along_axis_impl(arr, indices, axis, Ni, Nk)
-
-
-@njit
-def _take_along_axis_impl_set_ni_nk(arr, indices, axis, Ni, Nk):
-    for i in range(len(Ni)):
-        Ni = tuple_setitem(Ni, i, arr.shape[i])
-    for i in range(len(Nk)):
-        Nk = tuple_setitem(Nk, i, arr.shape[axis + 1 + i])
-    return _take_along_axis_impl(arr, indices, axis, Ni, Nk)
-
-
-@njit
-def _take_along_axis_impl(arr, indices, axis, Ni, Nk):
+def _take_along_axis_impl(arr, indices, axis, Ni_orig, Nk_orig):
     # Based on example code in
     # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/shape_base.py#L90
+    Ni = Ni_orig
+    if len(Ni_orig) > 0:
+        for i in range(len(Ni)):
+            Ni = tuple_setitem(Ni, i, arr.shape[i])
+    Nk = Nk_orig
+    if len(Nk_orig) > 0:
+        for i in range(len(Nk)):
+            Nk = tuple_setitem(Nk, i, arr.shape[axis + 1 + i])
+
     J = indices.shape[axis]  # Need not equal M
     out = np.empty(Ni + (J,) + Nk, arr.dtype)
 
@@ -5511,28 +5497,6 @@ def arr_take_along_axis(arr, indices, axis):
 
         Ni = tuple(range(axis))
         Nk = tuple(range(axis + 1, arr.ndim))
-        # We need to do this rather verbose approach because tuple_setitem on
-        # an empty tuple will fail with a LoweringError. If the code were to
-        # _run_, it would be fine, because tuple_setitem isn't actually ever
-        # called, but we never reach the point where the code can be run.
-        if Ni:
-            if Nk:
-                def take_along_axis_impl(arr, indices, axis):
-                    return _take_along_axis_impl_set_ni_nk(
-                        arr, indices, axis, Ni, Nk
-                    )
-            else:
-                def take_along_axis_impl(arr, indices, axis):
-                    return _take_along_axis_impl_set_ni(
-                        arr, indices, axis, Ni, Nk
-                    )
-        else:
-            if Nk:
-                def take_along_axis_impl(arr, indices, axis):
-                    return _take_along_axis_impl_set_nk(
-                        arr, indices, axis, Ni, Nk
-                    )
-            else:
-                def take_along_axis_impl(arr, indices, axis):
-                    return _take_along_axis_impl(arr, indices, axis, Ni, Nk)
+        def take_along_axis_impl(arr, indices, axis):
+            return _take_along_axis_impl(arr, indices, axis, Ni, Nk)
     return take_along_axis_impl
