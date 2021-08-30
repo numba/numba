@@ -110,7 +110,7 @@ def from_dtype(dtype):
             subtype = from_dtype(dtype.subdtype[0])
             return types.NestedArray(subtype, dtype.shape)
 
-    raise NotImplementedError(dtype)
+    raise errors.NumbaNotImplementedError(dtype)
 
 
 _as_dtype_letters = {

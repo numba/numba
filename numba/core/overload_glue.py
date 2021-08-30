@@ -136,7 +136,11 @@ class _OverloadWrapper(object):
                 if self._TYPER is None:
                     raise errors.InternalError(msg)
                 typing = self._TYPER(tyctx)
-                sig = typing.apply(ol_args, ol_kwargs)
+                try:
+                    sig = typing.apply(ol_args, ol_kwargs)
+                except TypeError:
+                    # Probably arg count doesn't match template
+                    sig = None
                 if sig is None:
                     # this follows convention of something not typeable
                     # returning None

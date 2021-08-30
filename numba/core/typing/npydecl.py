@@ -11,7 +11,8 @@ from numba.np.numpy_support import (ufunc_find_matching_loop,
                              supported_ufunc_loop, as_dtype,
                              from_dtype, as_dtype, resolve_output_type,
                              carray, farray, _ufunc_loop_sig)
-from numba.core.errors import TypingError, NumbaPerformanceWarning
+from numba.core.errors import (TypingError, NumbaPerformanceWarning,
+                               NumbaTypeError)
 from numba import pndindex
 from numba.core.overload_glue import glue_typing
 
@@ -1256,27 +1257,27 @@ class NumbaCArray(CallableTemplate):
             elif isinstance(ptr, types.CPointer):
                 ptr_dtype = ptr.dtype
             else:
-                raise TypeError("%s(): pointer argument expected, got '%s'"
-                                % (func_name, ptr))
+                raise NumbaTypeError("%s(): pointer argument expected, got '%s'"
+                                     % (func_name, ptr))
 
             if dtype is types.none:
                 if ptr_dtype is None:
-                    raise TypeError("%s(): explicit dtype required for void* argument"
-                                    % (func_name,))
+                    raise NumbaTypeError("%s(): explicit dtype required for void* argument"
+                                         % (func_name,))
                 dtype = ptr_dtype
             elif isinstance(dtype, types.DTypeSpec):
                 dtype = dtype.dtype
                 if ptr_dtype is not None and dtype != ptr_dtype:
-                    raise TypeError("%s(): mismatching dtype '%s' for pointer type '%s'"
-                                    % (func_name, dtype, ptr))
+                    raise NumbaTypeError("%s(): mismatching dtype '%s' for pointer type '%s'"
+                                         % (func_name, dtype, ptr))
             else:
-                raise TypeError("%s(): invalid dtype spec '%s'"
-                                % (func_name, dtype))
+                raise NumbaTypeError("%s(): invalid dtype spec '%s'"
+                                     % (func_name, dtype))
 
             ndim = parse_shape(shape)
             if ndim is None:
-                raise TypeError("%s(): invalid shape '%s'"
-                                % (func_name, shape))
+                raise NumbaTypeError("%s(): invalid shape '%s'"
+                                     % (func_name, shape))
 
             return types.Array(dtype, ndim, self.layout)
 

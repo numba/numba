@@ -9,7 +9,8 @@ from numba.core.typing.templates import (AttributeTemplate, AbstractTemplate,
 # import time side effect: array operations requires typing support of sequence
 # defined in collections: e.g. array.shape[i]
 from numba.core.typing import collections
-from numba.core.errors import TypingError
+from numba.core.errors import (TypingError, NumbaTypeError,
+                               NumbaNotImplementedError)
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
 
@@ -39,8 +40,8 @@ def get_array_index_type(ary, idx):
     for ty in idx:
         if ty is types.ellipsis:
             if ellipsis_met:
-                raise TypeError("only one ellipsis allowed in array index "
-                                "(got %s)" % (idx,))
+                raise NumbaTypeError("only one ellipsis allowed in array index "
+                                     "(got %s)" % (idx,))
             ellipsis_met = True
         elif isinstance(ty, types.SliceType):
             pass
@@ -62,11 +63,12 @@ def get_array_index_type(ary, idx):
                 # We don't support the complicated combination of
                 # advanced indices (and integers are considered part
                 # of them by Numpy).
-                raise NotImplementedError("only one advanced index supported")
+                msg = "only one advanced index supported"
+                raise NumbaNotImplementedError(msg)
             advanced = True
         else:
-            raise TypeError("unsupported array index type %s in %s"
-                            % (ty, idx))
+            raise NumbaTypeError("unsupported array index type %s in %s"
+                                 % (ty, idx))
         (right_indices if ellipsis_met else left_indices).append(ty)
 
     # Only Numpy arrays support advanced indexing
@@ -81,8 +83,8 @@ def get_array_index_type(ary, idx):
 
     n_indices = len(all_indices) - ellipsis_met
     if n_indices > ary.ndim:
-        raise TypeError("cannot index %s with %d indices: %s"
-                        % (ary, n_indices, idx))
+        raise NumbaTypeError("cannot index %s with %d indices: %s"
+                             % (ary, n_indices, idx))
     if n_indices == ary.ndim and ndim == 0 and not ellipsis_met:
         # Full integer indexing => scalar result
         # (note if ellipsis is present, a 0-d view is returned instead)
