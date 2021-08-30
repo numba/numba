@@ -495,7 +495,11 @@ class ArrayAttribute(AttributeTemplate):
         # Resolution of other attributes, for record arrays
         if isinstance(ary.dtype, types.Record):
             if attr in ary.dtype.fields:
-                return ary.copy(dtype=ary.dtype.typeof(attr), layout='A')
+                attr_dtype = ary.dtype.typeof(attr)
+                if isinstance(attr_dtype, types.NestedArray):
+                    return ary.copy(dtype=attr_dtype.dtype, ndim=ary.ndim + attr_dtype.ndim, layout='A')
+                else:
+                    return ary.copy(dtype=attr_dtype, layout='A')
 
 
 @infer_getattr
@@ -525,8 +529,16 @@ class StaticGetItemArray(AbstractTemplate):
         if (isinstance(ary, types.Array) and isinstance(idx, str) and
             isinstance(ary.dtype, types.Record)):
             if idx in ary.dtype.fields:
-                ret = ary.copy(dtype=ary.dtype.typeof(idx), layout='A')
-                return signature(ret, *args)
+                attr_dtype = ary.dtype.typeof(idx)
+                if isinstance(attr_dtype, types.NestedArray):
+                    ret = ary.copy(dtype=attr_dtype.dtype, ndim=ary.ndim + attr_dtype.ndim, layout='A')
+                    return signature(ret, *args)
+                else:
+                    ret = ary.copy(dtype=attr_dtype, layout='A')
+                    return signature(ret, *args)
+
+
+
 
 
 @infer_getattr
