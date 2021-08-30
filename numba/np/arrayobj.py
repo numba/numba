@@ -5537,9 +5537,36 @@ def numpy_swapaxes(arr, axis1, axis2):
 
 
 @njit
-def _take_along_axis_impl(arr, indices, axis, Ni_orig, Nk_orig):
+def _take_along_axis_impl(
+        arr, indices, axis, Ni_orig, Nk_orig, indices_broadcast_shape
+):
     # Based on example code in
     # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/shape_base.py#L90
+    # With addition of pre-broadcasting:
+    # https://github.com/numpy/numpy/issues/19704
+
+    # Broadcast the two arrays to matching shapes:
+    arr_shape = list(arr.shape)
+    arr_shape[axis] = 1
+    for i, (d1, d2) in enumerate(zip(arr_shape, indices.shape)):
+        if d1 == 1:
+            new_val = d2
+        elif d2 == 1:
+            new_val = d1
+        else:
+            if d1 != d2:
+                # TODO test
+                raise ValueError("Dimensions don't match")
+            new_val = d1
+        indices_broadcast_shape = tuple_setitem(
+            indices_broadcast_shape, i, new_val
+        )
+    arr_broadcast_shape = tuple_setitem(
+        indices_broadcast_shape, axis, arr.shape[axis]
+    )
+    arr = np.broadcast_to(arr, arr_broadcast_shape)
+    indices = np.broadcast_to(indices, indices_broadcast_shape)
+
     Ni = Ni_orig
     if len(Ni_orig) > 0:
         for i in range(len(Ni)):
@@ -5573,10 +5600,14 @@ def arr_take_along_axis(arr, indices, axis):
             'The second argument "indices" must be an array')
     if not isinstance(indices.dtype, types.Integer):
         raise errors.TypingError('The indices array must contain integers')
+    # TODO check both arrays have same size
+    # ValueError: `indices` and `arr` must have the same number of dimensions
 
+    indices_broadcast_shape = tuple(range(indices.ndim))
     if is_nonelike(axis):
         def take_along_axis_impl(arr, indices, axis):
-            return _take_along_axis_impl(arr.flatten(), indices, 0, (), ())
+            return _take_along_axis_impl(arr.flatten(), indices, 0, (), (),
+                                         indices_broadcast_shape)
     else:
         check_is_integer(axis, "axis")
         if not isinstance(axis, types.IntegerLiteral):
@@ -5593,5 +5624,6 @@ def arr_take_along_axis(arr, indices, axis):
         Ni = tuple(range(axis))
         Nk = tuple(range(axis + 1, arr.ndim))
         def take_along_axis_impl(arr, indices, axis):
-            return _take_along_axis_impl(arr, indices, axis, Ni, Nk)
+            return _take_along_axis_impl(arr, indices, axis, Ni, Nk,
+                                         indices_broadcast_shape)
     return take_along_axis_impl
