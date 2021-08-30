@@ -5555,8 +5555,9 @@ def _take_along_axis_impl(
             new_val = d1
         else:
             if d1 != d2:
-                # TODO test
-                raise ValueError("Dimensions don't match")
+                raise ValueError(
+                    "`arr` and `indices` dimensions don't match"
+                )
             new_val = d1
         indices_broadcast_shape = tuple_setitem(
             indices_broadcast_shape, i, new_val
@@ -5600,8 +5601,15 @@ def arr_take_along_axis(arr, indices, axis):
             'The second argument "indices" must be an array')
     if not isinstance(indices.dtype, types.Integer):
         raise errors.TypingError('The indices array must contain integers')
-    # TODO check both arrays have same size
-    # ValueError: `indices` and `arr` must have the same number of dimensions
+    if is_nonelike(axis):
+        arr_ndim = 1
+    else:
+        arr_ndim = arr.ndim
+    if arr_ndim != indices.ndim:
+        # Matches NumPy error:
+        raise errors.TypingError(
+            "`indices` and `arr` must have the same number of dimensions"
+        )
 
     indices_broadcast_shape = tuple(range(indices.ndim))
     if is_nonelike(axis):

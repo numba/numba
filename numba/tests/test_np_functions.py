@@ -4472,7 +4472,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_take_along_axis_exceptions(self):
         arr2d = np.arange(8).reshape(2, 4)
         # Valid indices when axis=None is passed to take_along_axis:
-        indices = np.array([0, 1], dtype=np.uint64)
+        indices_none = np.array([0, 1], dtype=np.uint64)
+        indices = np.ones((2, 4), dtype=np.uint64)
 
         # For now axis must be literal, so we need to construct functions with
         # explicit axis:
@@ -4495,7 +4496,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn("axis is out of bounds", str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
-            gen(None)(12, indices)
+            gen(None)(12, indices_none)
         self.assertIn('"arr" must be an array', str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
@@ -4516,6 +4517,19 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             not_literal_axis(arr2d, indices, 0)
         self.assertIn("axis must be a literal value", str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            gen(0)(arr2d, np.array([0, 1], dtype=np.uint64))
+        self.assertIn("must have the same number of dimensions", str(raises.exception))
+
+        # With axis None, array's ndim is implicitly 1.
+        with self.assertRaises(TypingError) as raises:
+            gen(None)(arr2d, arr2d)
+        self.assertIn("must have the same number of dimensions", str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            gen(0)(arr2d, np.ones((2, 3), dtype=np.uint64))
+        self.assertIn("dimensions don't match", str(raises.exception))
 
 
 class TestNPMachineParameters(TestCase):
