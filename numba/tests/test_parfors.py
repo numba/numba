@@ -1574,6 +1574,20 @@ class TestParfors(TestParforsBase):
             return s
         self.check(test_impl, np.ones(10), np.ones(10).astype('bool'))
 
+    def test_if_not_else_reduction(self):
+        # issue #7344
+        def test_impl(A, cond):
+            s = 1
+            t = 10
+            for i in prange(A.shape[0]):
+                if cond[i]:
+                    s += 1
+                    t += 1
+                else:
+                    s += 2
+            return s + t
+        self.check(test_impl, np.ones(10), np.ones(10).astype('bool'))
+
     def test_two_d_array_reduction_reuse(self):
         def test_impl(n):
             shp = (13, 17)
