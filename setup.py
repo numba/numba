@@ -361,7 +361,7 @@ install_requires = [
     'llvmlite >={},<{}'.format(min_llvmlite_version, max_llvmlite_version),
     'numpy >={}'.format(min_numpy_run_version),
     'setuptools',
-    'importlib_metadata; python_version < "3.8"',
+    'importlib_metadata; python_version < "3.9"',
 ]
 
 metadata = dict(
