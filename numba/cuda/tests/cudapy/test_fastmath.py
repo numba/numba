@@ -140,14 +140,14 @@ class TestFastMathOption(CUDATestCase):
         # Device functions inherit the fastmath flag from the calling kernel -
         # the presence or absence of fastmath flag on the called function is
         # ignored.
-        @cuda.jit("float32(float32, float32)", device=True)
+        @cuda.jit(device=True)
         def foo(a, b):
             return a / b
 
         def bar(arr, val):
             i = cuda.grid(1)
             if i < arr.size:
-                arr[i] = foo(i, val)
+                arr[i] = foo(float32(i), val)
 
         sig = (float32[::1], float32)
         fastver = cuda.jit(sig, fastmath=True)(bar)

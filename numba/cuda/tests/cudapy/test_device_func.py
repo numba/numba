@@ -2,7 +2,6 @@ import re
 import types
 
 import numpy as np
-import warnings
 
 from numba.cuda.testing import unittest, skip_on_cudasim, CUDATestCase
 from numba import cuda, jit, int32
@@ -142,13 +141,12 @@ class TestDeviceFunc(CUDATestCase):
         self.assertIn(fname, llvm)
 
     @skip_on_cudasim('not supported in cudasim')
-    def test_deprecated_eager_device(self):
-        with warnings.catch_warnings(record=True) as w:
+    def test_unsupported_eager_device(self):
+        with self.assertRaises(NotImplementedError) as e:
             cuda.jit('int32(int32)', device=True)
 
-        self.assertEqual(len(w), 1)
-        self.assertIn('Eager compilation of device functions is deprecated',
-                      str(w[0].message))
+        self.assertIn('Eager compilation of device functions is unsupported',
+                      str(e.exception))
 
 
 if __name__ == '__main__':
