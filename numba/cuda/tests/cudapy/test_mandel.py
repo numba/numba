@@ -1,14 +1,11 @@
-from numba import cuda
-from numba.cuda.testing import unittest
+from numba import cuda, float64, uint32, uint64
+from numba.cuda.testing import unittest, CUDATestCase
 
 
-class TestCudaMandel(unittest.TestCase):
+class TestCudaMandel(CUDATestCase):
     def test_mandel(self):
         """Just make sure we can compile this
         """
-
-        @cuda.jit('(uint32, float64, float64, float64, '
-                  'float64, uint32, uint32, uint32)', device=True)
         def mandel(tid, min_x, max_x, min_y, max_y, width, height, iters):
             pixel_size_x = (max_x - min_x) / width
             pixel_size_y = (max_y - min_y) / height
@@ -27,6 +24,16 @@ class TestCudaMandel(unittest.TestCase):
                 if (z.real * z.real + z.imag * z.imag) >= 4:
                     return i
             return iters
+
+        args = (uint32, float64, float64, float64, float64, uint32, uint32,
+                uint32)
+
+        ptx, resty = cuda.compile_ptx_for_current_device(mandel, args,
+                                                         device=True)
+        # Check return type
+        self.assertEqual(resty, uint64)
+        # Check a device function was emitted
+        self.assertIn('.visible .func', ptx)
 
 
 if __name__ == '__main__':
