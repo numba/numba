@@ -43,9 +43,6 @@ class TestEntrypoints(TestCase):
             # will remove this module at the end of the test
             sys.modules[mod.__name__] = mod
 
-            # We are registering an entry point using the "numba" package
-            # ("distribution" in importlib-speak) itself, though these are
-            # normally registered by other packages.
             my_entrypoint = importlib_metadata.EntryPoint(
                 'init', '_test_numba_extension:init_func', 'numba_extensions',
             )
@@ -92,9 +89,6 @@ class TestEntrypoints(TestCase):
             # will remove this module at the end of the test
             sys.modules[mod.__name__] = mod
 
-            # We are registering an entry point using the "numba" package
-            # ("distribution" in pkg_resources-speak) itself, though these are
-            # normally registered by other packages.
             my_entrypoint = importlib_metadata.EntryPoint(
                 'init',
                 '_test_numba_bad_extension:init_func',
@@ -188,9 +182,6 @@ class TestEntrypoints(TestCase):
             # will remove this module at the end of the test
             sys.modules[mod.__name__] = mod
 
-            # We are registering an entry point using the "numba" package
-            # ("distribution" in pkg_resources-speak) itself, though these are
-            # normally registered by other packages.
             my_entrypoint = importlib_metadata.EntryPoint(
                 'init',
                 '_test_numba_init_sequence:init_func',
