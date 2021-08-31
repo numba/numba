@@ -15,7 +15,7 @@ from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
 from numba.core.typing import signature
 from numba.core.extending import overload, register_jitable
 from numba.core import types, cgutils
-from numba.core.errors import TypingError
+from numba.core.errors import TypingError, NumbaTypeError
 from .arrayobj import make_array, _empty_nd_impl, array_copy
 from numba.np import numpy_support as np_support
 from numba.core.overload_glue import glue_lowering
@@ -2493,7 +2493,7 @@ def matrix_power_impl(a, n):
 
     nt = getattr(n, 'dtype', n)
     if not isinstance(nt, types.Integer):
-        raise TypeError("Exponent must be an integer.")
+        raise NumbaTypeError("Exponent must be an integer.")
 
     def matrix_power_impl(a, n):
 

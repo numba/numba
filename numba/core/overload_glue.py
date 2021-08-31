@@ -2,13 +2,14 @@
 Provides wrapper functions for "glueing" together Numba implementations that are
 written in the "old" style of a separate typing and lowering implementation.
 """
+import inspect
 import types as pytypes
 import textwrap
 from threading import RLock
 from collections import defaultdict
 
 from numba.core import errors
-
+from numba.core.typing.templates import CallableTemplate
 
 class _OverloadWrapper(object):
     """This class does all the work of assembling and registering wrapped split
@@ -136,11 +137,22 @@ class _OverloadWrapper(object):
                 if self._TYPER is None:
                     raise errors.InternalError(msg)
                 typing = self._TYPER(tyctx)
-                try:
-                    sig = typing.apply(ol_args, ol_kwargs)
-                except TypeError:
-                    # Probably arg count doesn't match template
-                    sig = None
+                # Try and bind the args to the typer sig, if this fails it's
+                # probably because the arg count doesn't match template sig.
+                generic = getattr(typing, 'generic', None)
+                if generic is not None:
+                    if isinstance(typing, CallableTemplate):
+                        generic_inst = generic()
+                        try:
+                            match_sig = inspect.signature(generic_inst)
+                            match_sig.bind(*ol_args, **ol_kwargs)
+                        except TypeError:
+                            return None
+                else:
+                    # It's probably an abstract template or a concrete template,
+                    # can't do much with it?
+                    pass
+                sig = typing.apply(ol_args, ol_kwargs)
                 if sig is None:
                     # this follows convention of something not typeable
                     # returning None
