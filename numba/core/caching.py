@@ -307,7 +307,7 @@ class _IPythonCacheLocator(_CacheLocator):
 
     @classmethod
     def from_function(cls, py_func, py_file):
-        if not py_file.startswith("<ipython-"):
+        if not py_file.startswith("<ipython-") and "ipykernel" not in py_file:
             return
         self = cls(py_func, py_file)
         try:
