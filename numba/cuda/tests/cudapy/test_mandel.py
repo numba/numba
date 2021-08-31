@@ -1,7 +1,8 @@
 from numba import cuda, float64, uint32, uint64
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 
 
+@skip_on_cudasim('Compilation to PTX unsupported in the simulator')
 class TestCudaMandel(CUDATestCase):
     def test_mandel(self):
         """Just make sure we can compile this
