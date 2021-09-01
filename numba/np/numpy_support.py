@@ -370,11 +370,11 @@ def ufunc_find_matching_loop(ufunc, arg_types):
 
     try:
         np_input_types = [as_dtype(x) for x in input_types]
-    except NotImplementedError:
+    except errors.NumbaNotImplementedError:
         return None
     try:
         np_output_types = [as_dtype(x) for x in output_types]
-    except NotImplementedError:
+    except errors.NumbaNotImplementedError:
         return None
 
     # Whether the inputs are mixed integer / floating-point
@@ -492,7 +492,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                 if ufunc_inputs[0] == 'm':
                     outputs = set_output_dt_units(inputs, outputs, ufunc_inputs)
 
-            except NotImplementedError:
+            except errors.NumbaNotImplementedError:
                 # One of the selected dtypes isn't supported by Numba
                 # (e.g. float16), try other candidates
                 continue
