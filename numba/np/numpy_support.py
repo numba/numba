@@ -153,8 +153,9 @@ def as_dtype(nbtype):
         return np.dtype(spec)
     if isinstance(nbtype, types.PyObject):
         return np.dtype(object)
-    raise NotImplementedError("%r cannot be represented as a Numpy dtype"
-                              % (nbtype,))
+
+    msg = f"{nbtype} cannot be represented as a NumPy dtype"
+    raise errors.NumbaNotImplementedError(msg)
 
 
 def as_struct_dtype(rec):

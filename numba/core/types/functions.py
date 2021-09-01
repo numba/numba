@@ -420,6 +420,9 @@ class BoundFunction(Callable, Opaque):
                 try:
                     out = template.apply(args, kws)
                 except Exception as exc:
+                    if (config.CAPTURED_ERRORS == 'new_style' and not
+                        isinstance(exc, errors.NumbaError)):
+                            raise exc
                     if isinstance(exc, errors.ForceLiteralArg):
                         raise exc
                     literal_e = exc
