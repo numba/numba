@@ -444,7 +444,7 @@ class TestErrorMessages(unittest.TestCase):
             Particle(pos=1, mass=2)
 
         excstr = str(raises.exception)
-        self.assertIn("required positional argument: 'mass'", excstr)
+        self.assertIn("missing a required argument: 'mass'", excstr)
 
 
 class TestDeveloperSpecificErrorMessages(SerialMixin, unittest.TestCase):

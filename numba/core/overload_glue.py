@@ -146,8 +146,11 @@ class _OverloadWrapper(object):
                         try:
                             match_sig = inspect.signature(generic_inst)
                             match_sig.bind(*ol_args, **ol_kwargs)
-                        except TypeError:
-                            return None
+                        except TypeError as e:
+                            # ctor or bind failed, raise, if there's a
+                            # ValueError then there's likely unrecoverable
+                            # problems
+                            raise errors.TypingError(str(e)) from e
                 else:
                     # It's probably an abstract template or a concrete template,
                     # can't do much with it?
