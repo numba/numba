@@ -1448,8 +1448,8 @@ class TestNestedArrays(TestCase):
         """
         Test setting an entire array of arrays (multiple records)
         """
-        arr = np.recarray(2, dtype=recordwith2darray)
-        nbarr = np.recarray(2, dtype=recordwith2darray)
+        arr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
+        nbarr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
         ty = typeof(nbarr)
         for pyfunc in (
                 recarray_write_array_of_nestedarray_broadcast,
