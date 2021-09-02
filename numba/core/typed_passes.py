@@ -147,13 +147,13 @@ class BaseTypeInference(FunctionPass):
                         if self._raise_errors:
                             msg = ("Only accept returning of array passed into "
                                    "the function as argument")
-                            raise errors.TypingError(msg)
+                            raise errors.NumbaTypeError(msg)
 
             elif (isinstance(return_type, types.Function) or
                     isinstance(return_type, types.Phantom)):
                 if self._raise_errors:
                     msg = "Can't return function object ({}) in nopython mode"
-                    raise errors.TypingError(msg.format(return_type))
+                    raise errors.NumbaTypeError(msg.format(return_type))
 
         with fallback_context(state, 'Function "%s" has invalid return type'
                               % (state.func_id.func_name,)):
