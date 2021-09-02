@@ -3,7 +3,7 @@ import multiprocessing as mp
 from numba import cuda
 from numba.cuda.cudadrv.driver import CudaAPIError, driver
 from numba.cuda.cudadrv.error import CudaSupportError
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 
 
 # A mock of cuInit that always raises a CudaAPIError
@@ -50,6 +50,7 @@ def initialization_error_test(result_queue):
     result_queue.put((success, msg))
 
 
+@skip_on_cudasim('CUDA Simulator does not initialize driver')
 class TestInit(CUDATestCase):
     def _test_init_failure(self, target, expected):
         # Run the initialization failure test in a separate subprocess
