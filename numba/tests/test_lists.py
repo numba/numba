@@ -1811,12 +1811,12 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
 
         foo()
 
-    def test_return_mixed_list(self):
+    def test_return_mixed_literal_value(self):
         @njit
         def foo():
             return ['a', 1]
 
-        foo()
+        self.assertEqual(foo(), foo.py_func())
 
 
 if __name__ == '__main__':
