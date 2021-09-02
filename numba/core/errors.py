@@ -772,6 +772,7 @@ class NumbaAssertionError(TypingError):
 class NumbaNotImplementedError(TypingError):
     pass
 
+
 def _format_msg(fmt, args, kwargs):
     return fmt.format(*args, **kwargs)
 

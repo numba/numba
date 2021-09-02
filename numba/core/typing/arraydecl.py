@@ -10,7 +10,7 @@ from numba.core.typing.templates import (AttributeTemplate, AbstractTemplate,
 # defined in collections: e.g. array.shape[i]
 from numba.core.typing import collections
 from numba.core.errors import (TypingError, NumbaTypeError,
-                               NumbaNotImplementedError)
+                               NumbaNotImplementedError, NumbaAssertionError)
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
 
@@ -741,8 +741,10 @@ def sum_expand(self, args, kws):
 
 
 def generic_expand_cumulative(self, args, kws):
-    assert not args
-    assert not kws
+    if args:
+        raise NumbaAssertionError("args unsupported")
+    if kws:
+        raise NumbaAssertionError("kwargs unsupported")
     assert isinstance(self.this, types.Array)
     return_type = types.Array(dtype=_expand_integer(self.this.dtype),
                               ndim=1, layout='C')
