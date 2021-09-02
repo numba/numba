@@ -4662,7 +4662,8 @@ def dummy_return_in_loop_body(loop_body):
 class ReduceInfer(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
-        assert len(args) == 3
+        if len(args) != 3:
+            raise errors.NumbaAssertionError("len(args) != 3")
         assert isinstance(args[1], types.Array)
         return signature(args[1].dtype, *args)
 

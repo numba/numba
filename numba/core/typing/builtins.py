@@ -945,7 +945,8 @@ class Bool(AbstractTemplate):
 class Int(AbstractTemplate):
 
     def generic(self, args, kws):
-        assert not kws
+        if kws:
+            raise errors.NumbaAssertionError('kws not supported')
 
         [arg] = args
 
