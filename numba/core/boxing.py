@@ -561,6 +561,20 @@ def unbox_tuple(typ, obj, c):
                        is_error=c.builder.load(is_error_ptr))
 
 
+@box(types.LiteralList)
+def box_literallist(typ, val, c):
+    """
+    Convert native literal list *val* to a list object.
+    """
+    count = c.context.get_constant(types.int64, typ.count)
+    list_val = c.pyapi.list_new(count)
+    for i, dtype in enumerate(typ):
+        item = c.builder.extract_value(val, i)
+        obj = c.box(dtype, item)
+        idx = c.context.get_constant(types.int64, i)
+        c.pyapi.list_setitem(list_val, idx, obj)
+    return list_val
+
 @box(types.List)
 def box_list(typ, val, c):
     """
