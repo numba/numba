@@ -479,7 +479,8 @@ class ArrayAttribute(AttributeTemplate):
 
     @bound_function("array.take")
     def resolve_take(self, ary, args, kws):
-        assert not kws
+        if kws:
+            raise NumbaAssertionError("kws not supported")
         argty, = args
         if isinstance(argty, types.Integer):
             sig = signature(ary.dtype, *args)
