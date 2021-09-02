@@ -964,10 +964,10 @@ class Float(AbstractTemplate):
         [arg] = args
 
         if arg not in types.number_domain:
-            raise TypeError("float() only support for numbers")
+            raise errors.NumbaTypeError("float() only support for numbers")
 
         if arg in types.complex_domain:
-            raise TypeError("float() does not support complex")
+            raise errors.NumbaTypeError("float() does not support complex")
 
         if arg in types.integer_domain:
             return signature(types.float64, arg)
