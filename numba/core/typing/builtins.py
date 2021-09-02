@@ -1011,8 +1011,8 @@ class Enumerate(AbstractTemplate):
         assert not kws
         it = args[0]
         if len(args) > 1 and not isinstance(args[1], types.Integer):
-            raise TypeError("Only integers supported as start value in "
-                            "enumerate")
+            raise errors.NumbaTypeError("Only integers supported as start "
+                                        "value in enumerate")
         elif len(args) > 2:
             #let python raise its own error
             enumerate(*args)
