@@ -2513,10 +2513,12 @@ def array_record_getattr(context, builder, typ, value, attr):
     )
     if isinstance(dtype, types.NestedArray):
         datasize = context.get_abi_sizeof(context.get_data_type(dtype.dtype))
-        # strides = [context.get_constant(types.intp, s) for s in (typ.dtype.size, datasize)]
-        strides = cgutils.unpack_tuple(builder, array.strides, typ.ndim) + [context.get_constant(types.intp, datasize)]
+        # new strides is recarray strides with the strides of the inner nestedarray
+        strides = cgutils.unpack_tuple(builder, array.strides, typ.ndim)
+        strides += [context.get_constant(types.intp, i) for i in dtype.strides]
         # new shape is recarray shape with additional inner dimension from nestedarray
-        shape = cgutils.unpack_tuple(builder, array.shape, typ.ndim) + [context.get_constant(types.intp, dtype.nitems)]
+        shape = cgutils.unpack_tuple(builder, array.shape, typ.ndim)
+        shape += [context.get_constant(types.intp, i) for i in dtype.shape]
         populate_array(rary,
                        data=newdataptr,
                        shape=cgutils.pack_array(builder, shape),
