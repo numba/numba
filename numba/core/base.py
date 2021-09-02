@@ -13,7 +13,7 @@ from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
 from numba.core import types, utils, typing, datamodel, debuginfo, funcdesc, config, cgutils, imputils
-from numba.core import event
+from numba.core import event, errors
 from numba import _dynfunc, _helperlib
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.pythonapi import PythonAPI
@@ -54,7 +54,7 @@ class OverloadSelector(object):
         if candidates:
             return candidates[self._best_signature(candidates)]
         else:
-            raise NotImplementedError(self, sig)
+            raise errors.NumbaNotImplementedError(f'{self}, {sig}')
 
     def _select_compatible(self, sig):
         """
