@@ -566,12 +566,12 @@ def box_literallist(typ, val, c):
     """
     Convert native literal list *val* to a list object.
     """
-    count = c.context.get_constant(types.int64, typ.count)
+    count = c.context.get_constant(types.intp, typ.count)
     list_val = c.pyapi.list_new(count)
     for i, dtype in enumerate(typ):
         item = c.builder.extract_value(val, i)
         obj = c.box(dtype, item)
-        idx = c.context.get_constant(types.int64, i)
+        idx = c.context.get_constant(types.intp, i)
         c.pyapi.list_setitem(list_val, idx, obj)
     return list_val
 
