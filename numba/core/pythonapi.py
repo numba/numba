@@ -1,4 +1,10 @@
-from collections import namedtuple, Hashable
+from collections import namedtuple
+try:
+    # Python 3
+    from collections.abc import Hashable
+except ImportError:
+    # Python 2.7
+    from collections import Hashable
 import contextlib
 import pickle
 import hashlib
