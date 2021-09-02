@@ -1367,7 +1367,7 @@ class PythonAPI(object):
         return struct
 
     def _serialize_get_gv(self, obj):
-        """ Create serializable global variable """
+        """ Serialize and create global variable """
         struct = self.serialize_uncached(obj)
         name = ".const.picklebuf.%s" % (id(obj) if config.DIFF_IR == 0 else "DIFF_IR")
         gv = self.context.insert_unique_const(self.module, name, struct)
