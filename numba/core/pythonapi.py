@@ -1371,7 +1371,6 @@ class PythonAPI(object):
         as a pointer to a {i8* data, i32 length}, structure constant
         (suitable for passing to unserialize()).
         """
-        if hashable
         try:
             gv = self.module.__serialized[obj]
         except KeyError:
@@ -1380,10 +1379,6 @@ class PythonAPI(object):
             gv = self.context.insert_unique_const(self.module, name, struct)
             # Make the id() (and hence the name) unique while populating the module.
             self.module.__serialized[obj] = gv
-        else
-            struct = self.serialize_uncached(obj)
-            name = ".const.picklebuf.%s" % (id(obj) if config.DIFF_IR == 0 else "DIFF_IR")
-            gv = self.context.insert_unique_const(self.module, name, struct)
         return gv
 
     def c_api_error(self):

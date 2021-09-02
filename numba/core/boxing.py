@@ -594,38 +594,6 @@ def box_list(typ, val, c):
     c.context.nrt.decref(c.builder, typ, val)
     return c.builder.load(res)
 
-#@box(types.LiteralList)
-#def box_literal_list(typ, val, c):
-#    nitems = typ.count
-#    list_val = c.pyapi.list_new(nitems)
-
-    #for i, dtype in enumerate(typ):
-    #    item = c.builder.extract_value(val, i)
-    #    obj = c.box(dtype, item)
-    #    c.pyapi.list_setitem(list_val, i, obj)
-
-#    return list_val
-# def box_list(typ, val, c):
-#     """
-#     Convert native list *val* to a list object.
-#     """
-#     import pdb; pdb.set_trace()
-#     # Build a new Python list
-#     nitems = typ.size
-#     obj = c.pyapi.list_new(nitems)
-#     with c.builder.if_then(cgutils.is_not_null(c.builder, obj),
-#         likely=True):
-#             with cgutils.for_range(c.builder, nitems) as loop:
-#                 item = list.getitem(loop.index)
-#                 list.incref_value(item)
-#                 itemobj = c.box(typ.literal_value, item)
-#                 c.pyapi.list_setitem(obj, loop.index, itemobj)
-
-#             c.builder.store(obj, res)
-
-#     # Steal NRT ref
-#     c.context.nrt.decref(c.builder, typ, val)
-#     return c.builder.load(res)
 
 class _NumbaTypeHelper(object):
     """A helper for acquiring `numba.typeof` for type checking.
@@ -1111,7 +1079,6 @@ def box_unsupported(typ, val, c):
 def box_literal(typ, val, c):
     # Const type contains the python object of the constant value,
     # which we can directly return.
-    import pdb; pdb.set_trace()
     retval = typ.literal_value
     # Serialize the value into the IR
     return c.pyapi.unserialize(c.pyapi.serialize_object(retval))
