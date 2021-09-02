@@ -222,23 +222,56 @@ def record_write_2d_array(ary):
     ary.j[2, 0] = 9.0
     ary.j[2, 1] = 10.0
 
+
+def record_write_full_array(rec):
+    rec.j[:, :] = np.ones((3, 2))
+
+
+def record_write_full_array_alt(rec):
+    rec['j'][:, :] = np.ones((3, 2))
+
+
+def recarray_set_record(ary, rec):
+    ary[0] = rec
+
+
+def recarray_write_array_of_nestedarray_broadcast(ary):
+    ary.j[:, :, :] = 1
+    return ary
+
+
+def recarray_write_array_of_nestedarray(ary):
+    ary.j[:, :, :] = np.ones((2, 3, 2), dtype=np.float64)
+    return ary
+
+
 def recarray_getitem_return(ary):
     return ary[0]
+
 
 def recarray_getitem_field_return(ary):
     return ary['h']
 
+
 def recarray_getitem_field_return2(ary):
     return ary.h
+
+
+def recarray_getitem_field_return2_2d(ary):
+    return ary.j
+
 
 def record_read_array0(ary):
     return ary.h[0]
 
+
 def record_read_array0_alt(ary):
     return ary[0].h
 
+
 def record_read_array1(ary):
     return ary.h[1]
+
 
 def record_read_whole_array(ary):
     return ary.h
@@ -1381,31 +1414,51 @@ class TestNestedArrays(TestCase):
         res = cfunc(nbval[0])
         np.testing.assert_equal(res, nbval[0].j[1, 0])
 
-    def test_record_return(self):
-        """
-        Testing scalar record value as return value.
-        We can only return a copy of the record.
-        """
-
-    def test_record_args(self):
-        """
-        Testing scalar record value as argument
-        """
-
     def test_set_record(self):
         """
         Test setting an entire record
         """
+        rec = np.ones(2, dtype=recordwith2darray).view(np.recarray)[0]
+        nbarr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
+        arr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
+        ty_arr = typeof(nbarr)
+        ty_rec = typeof(rec)
+        pyfunc = recarray_set_record
+        pyfunc(arr, rec)
+        cfunc = self.get_cfunc(pyfunc, (ty_arr, ty_rec))
+        cfunc(nbarr, rec)
+        np.testing.assert_equal(nbarr, arr)
 
     def test_set_array(self):
         """
         Test setting an entire array within one record
         """
+        arr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
+        rec = arr[0]
+        nbarr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
+        nbrec = nbarr[0]
+        ty = typeof(nbrec)
+        for pyfunc in (record_write_full_array, record_write_full_array_alt):
+            pyfunc(rec)
+            cfunc = self.get_cfunc(pyfunc, (ty,))
+            cfunc(nbrec)
+            np.testing.assert_equal(nbarr, arr)
 
     def test_set_arrays(self):
         """
         Test setting an entire array of arrays (multiple records)
         """
+        arr = np.recarray(2, dtype=recordwith2darray)
+        nbarr = np.recarray(2, dtype=recordwith2darray)
+        ty = typeof(nbarr)
+        for pyfunc in (
+                recarray_write_array_of_nestedarray_broadcast,
+                recarray_write_array_of_nestedarray,
+                       ):
+            arr_expected = pyfunc(arr)
+            cfunc = self.get_cfunc(pyfunc, (ty,))
+            arr_res = cfunc(nbarr)
+            np.testing.assert_equal(arr_res, arr_expected)
 
     def test_getitem_idx(self):
         """
@@ -1419,6 +1472,23 @@ class TestNestedArrays(TestCase):
         for arg in [nbarr, nbarr[0]]:
             ty = typeof(arg)
             pyfunc = recarray_getitem_return
+            arr_expected = pyfunc(arg)
+            cfunc = self.get_cfunc(pyfunc, (ty,))
+            arr_res = cfunc(arg)
+            np.testing.assert_equal(arr_res, arr_expected)
+
+    def test_getitem_idx_2darray(self):
+        """
+        Test __getitem__ with numerical index
+
+        This test returning a record when passing an array and
+        return the first item when passing a record
+        """
+        nbarr = np.recarray(2, dtype=recordwith2darray)
+        nbarr[0] = np.array([(1, ((1,2),(4,5),(2,3)))], dtype=recordwith2darray)[0]
+        for arg in [nbarr, nbarr[0]]:
+            ty = typeof(arg)
+            pyfunc = recarray_getitem_field_return2_2d
             arr_expected = pyfunc(arg)
             cfunc = self.get_cfunc(pyfunc, (ty,))
             arr_res = cfunc(arg)
@@ -1451,7 +1521,6 @@ class TestNestedArrays(TestCase):
             arr_expected = pyfunc(nbval)
             cfunc = self.get_cfunc(pyfunc, (typeof(nbval),))
             arr_res = cfunc(nbval)
-            print(arr_res)
             np.testing.assert_equal(arr_expected, arr_res)
 
 
