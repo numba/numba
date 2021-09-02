@@ -26,7 +26,7 @@ from numba.np.arrayobj import make_array, load_item, store_item, _empty_nd_impl
 from numba.np.linalg import ensure_blas
 
 from numba.core.extending import intrinsic
-from numba.core.errors import RequireLiteralValue, TypingError
+from numba.core.errors import RequireLiteralValue, TypingError, NumbaValueError
 from numba.core.overload_glue import glue_lowering
 from numba.cpython.unsafe.tuple import tuple_setitem
 
@@ -328,7 +328,8 @@ def array_sum_axis(context, builder, sig, args):
         if const_axis_val < 0:
             const_axis_val = ty_array.ndim + const_axis_val
         if const_axis_val < 0 or const_axis_val > ty_array.ndim:
-            raise ValueError("'axis' entry is out of bounds")
+            msg = f"'axis' entry ({const_axis_val}) is out of bounds"
+            raise NumbaValueError(msg)
 
         ty_axis = context.typing_context.resolve_value_type(const_axis_val)
         axis_val = context.get_constant(ty_axis, const_axis_val)
