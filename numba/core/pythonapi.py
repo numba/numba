@@ -1,10 +1,5 @@
 from collections import namedtuple
-try:
-    # Python 3
-    from collections.abc import Hashable
-except ImportError:
-    # Python 2.7
-    from collections import Hashable
+from collections.abc import Hashable
 import contextlib
 import pickle
 import hashlib
@@ -1371,15 +1366,14 @@ class PythonAPI(object):
             ])
         return struct
 
-    def get_gv(self, obj):
-        """
-
-        """
+    def _serialize_get_gv(self, obj):
+        """ Create serializable global variable """
         struct = self.serialize_uncached(obj)
         name = ".const.picklebuf.%s" % (id(obj) if config.DIFF_IR == 0 else "DIFF_IR")
         gv = self.context.insert_unique_const(self.module, name, struct)
         # Make the id() (and hence the name) unique while populating the module.
         return gv
+
     def serialize_object(self, obj):
         """
         Serialize the given object in the bitcode, and return it
@@ -1390,9 +1384,9 @@ class PythonAPI(object):
             if isinstance(obj, Hashable):
                 gv = self.module.__serialized[obj]
             else:
-                gv = self.get_gv(obj)
+                gv = self._serialize_get_gv(obj)
         except KeyError:
-            gv = self.get_gv(obj)
+            gv = self._serialize_get_gv(obj)
             self.module.__serialized[obj] = gv
         return gv
 
