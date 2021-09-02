@@ -1811,6 +1811,13 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
 
         foo()
 
+    def test_return_mixed_list(self):
+        @njit
+        def foo():
+            return ['a', 1]
+
+        foo()
+
 
 if __name__ == '__main__':
     unittest.main()
