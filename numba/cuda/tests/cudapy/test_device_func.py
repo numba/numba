@@ -148,6 +148,26 @@ class TestDeviceFunc(CUDATestCase):
         self.assertIn('Eager compilation of device functions is unsupported',
                       str(e.exception))
 
+    def test_device_casting(self):
+        @cuda.jit('int32(int32, int32, int32, int32)', device=True)
+        def rgba(r, g, b, a):
+            return (((r & 0xFF) << 16) |
+                    ((g & 0xFF) << 8) |
+                    ((b & 0xFF) << 0) |
+                    ((a & 0xFF) << 24))
+
+        @cuda.jit
+        def rgba_caller(x, channels):
+            x[0] = rgba(channels[0], channels[1], channels[2], channels[3])
+
+        x = cuda.device_array(1, dtype=np.int32)
+        channels = cuda.to_device(np.asarray([1.0, 2.0, 3.0, 4.0],
+                                             dtype=np.float32))
+
+        rgba_caller[1, 1](x, channels)
+
+        self.assertEqual(0x04010203, x[0])
+
 
 if __name__ == '__main__':
     unittest.main()
