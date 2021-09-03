@@ -11,7 +11,7 @@ First, import the modules needed for this example:
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_matmul.py
    :language: python
-   :caption: from ``test_ex_matmul of ``numba/cuda/tests/doc_example/test_matmul.py``
+   :caption: from ``test_ex_matmul`` in ``numba/cuda/tests/doc_example/test_matmul.py``
    :start-after: magictoken.ex_import.begin
    :end-before: magictoken.ex_import.end
    :dedent: 8
@@ -21,7 +21,7 @@ Here is a naive implementation of matrix multiplication using a CUDA kernel:
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_matmul.py
    :language: python
-   :caption: from ``test_ex_matmul of ``numba/cuda/tests/doc_example/test_matmul.py``
+   :caption: from ``test_ex_matmul`` in ``numba/cuda/tests/doc_example/test_matmul.py``
    :start-after: magictoken.ex_matmul.begin
    :end-before: magictoken.ex_matmul.end
    :dedent: 8
@@ -41,7 +41,7 @@ memory:
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_matmul.py
    :language: python
-   :caption: from ``test_ex_matmul of ``numba/cuda/tests/doc_example/test_matmul.py``
+   :caption: from ``test_ex_matmul`` in ``numba/cuda/tests/doc_example/test_matmul.py``
    :start-after: magictoken.ex_fast_matmul.begin
    :end-before: magictoken.ex_fast_matmul.end
    :dedent: 8
@@ -60,15 +60,15 @@ An example usage of this function is as follows:
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_matmul.py
    :language: python
-   :caption: from ``test_ex_matmul of ``numba/cuda/tests/doc_example/test_matmul.py``
+   :caption: from ``test_ex_matmul`` in ``numba/cuda/tests/doc_example/test_matmul.py``
    :start-after: magictoken.ex_run_fast_matmul.begin
    :end-before: magictoken.ex_run_fast_matmul.end
    :dedent: 8
    :linenos:
 
 
-This passes a :ref:`CUDA memory check test <debugging-cuda-python-code>`, which
-can help with troubleshooting. Running the script produces the following output:
+This passes a :ref:`CUDA memory check test <developer-debugging>`, which
+can help with debugging. Running the script produces the following output:
 
 .. code-block:: none
 
@@ -82,8 +82,7 @@ can help with troubleshooting. Running the script produces the following output:
     [38. 38. 38. 38.]
     [54. 54. 54. 54.]]
 
-.. note:: For high performance matrix multiplication in CUDA, see also the
-`CuPy implementation <https://docs.cupy.dev/en/stable/reference/generated/cupy.matmul.html>`_.
+.. note:: For high performance matrix multiplication in CUDA, see also the `CuPy implementation <https://docs.cupy.dev/en/stable/reference/generated/cupy.matmul.html>`_.
 
 The approach outlined here generalizes to non-square matrix multiplication as
 follows by adjusting the ``blockspergrid`` variable:
@@ -92,7 +91,7 @@ Again, here is an example usage:
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_matmul.py
    :language: python
-   :caption: from ``test_ex_matmul of ``numba/cuda/tests/doc_example/test_matmul.py``
+   :caption: from ``test_ex_matmul`` in ``numba/cuda/tests/doc_example/test_matmul.py``
    :start-after: magictoken.ex_run_nonsquare.begin
    :end-before: magictoken.ex_run_nonsquare.end
    :dedent: 8
