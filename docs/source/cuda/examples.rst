@@ -21,7 +21,7 @@ Here is a naive implementation of matrix multiplication using a CUDA kernel:
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_matmul.py
    :language: python
-   :caption: from ``test_ex_matmul`` in ``numba/cuda/tests/doc_example/test_matmul.py``
+   :caption: from ``test_ex_matmul`` in ``numba/cuda/tests/doc_examples/test_matmul.py``
    :start-after: magictoken.ex_matmul.begin
    :end-before: magictoken.ex_matmul.end
    :dedent: 8
@@ -41,14 +41,14 @@ memory:
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_matmul.py
    :language: python
-   :caption: from ``test_ex_matmul`` in ``numba/cuda/tests/doc_example/test_matmul.py``
+   :caption: from ``test_ex_matmul`` in ``numba/cuda/tests/doc_examples/test_matmul.py``
    :start-after: magictoken.ex_fast_matmul.begin
    :end-before: magictoken.ex_fast_matmul.end
    :dedent: 8
    :linenos:
 
 
-Because the shared memory is a limited resource, the code preloads small
+Because the shared memory is a limited resource, the code preloads a small
 block at a time from the input arrays.  Then, it calls
 :func:`~numba.cuda.syncthreads` to wait until all threads have finished
 preloading and before doing the computation on the shared memory.
@@ -60,7 +60,7 @@ An example usage of this function is as follows:
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_matmul.py
    :language: python
-   :caption: from ``test_ex_matmul`` in ``numba/cuda/tests/doc_example/test_matmul.py``
+   :caption: from ``test_ex_matmul`` in ``numba/cuda/tests/doc_examples/test_matmul.py``
    :start-after: magictoken.ex_run_fast_matmul.begin
    :end-before: magictoken.ex_run_fast_matmul.end
    :dedent: 8
