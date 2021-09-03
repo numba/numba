@@ -11,7 +11,7 @@ First, import the modules needed for this example:
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_matmul.py
    :language: python
-   :caption: from ``test_ex_matmul`` in ``numba/cuda/tests/doc_example/test_matmul.py``
+   :caption: from ``test_ex_matmul`` in ``numba/cuda/tests/doc_examples/test_matmul.py``
    :start-after: magictoken.ex_import.begin
    :end-before: magictoken.ex_import.end
    :dedent: 8
