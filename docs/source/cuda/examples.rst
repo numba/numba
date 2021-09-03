@@ -7,6 +7,15 @@ Examples
 
 Matrix multiplication
 =====================
+First, import the modules needed for this example:
+
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_matmul.py
+   :language: python
+   :caption: from ``test_ex_matmul of ``numba/cuda/tests/doc_example/test_matmul.py``
+   :start-after: magictoken.ex_import.begin
+   :end-before: magictoken.ex_import.end
+   :dedent: 8
+   :linenos:
 
 Here is a naive implementation of matrix multiplication using a CUDA kernel:
 
