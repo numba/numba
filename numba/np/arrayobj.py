@@ -2497,10 +2497,10 @@ def array_record_getattr(context, builder, typ, value, attr):
     offset = rectype.offset(attr)
 
     if isinstance(dtype, types.NestedArray):
-        resty = typ.copy(dtype=dtype.dtype, ndim=typ.ndim + dtype.ndim, layout='A')
+        resty = typ.copy(
+            dtype=dtype.dtype, ndim=typ.ndim + dtype.ndim, layout='A')
     else:
         resty = typ.copy(dtype=dtype, layout='A')
-
 
     raryty = make_array(resty)
 
@@ -2513,10 +2513,10 @@ def array_record_getattr(context, builder, typ, value, attr):
     )
     if isinstance(dtype, types.NestedArray):
         datasize = context.get_abi_sizeof(context.get_data_type(dtype.dtype))
-        # new strides is recarray strides with the strides of the inner nestedarray
+        # new strides = recarray strides + strides of the inner nestedarray
         strides = cgutils.unpack_tuple(builder, array.strides, typ.ndim)
         strides += [context.get_constant(types.intp, i) for i in dtype.strides]
-        # new shape is recarray shape with additional inner dimension from nestedarray
+        # new shape = recarray shape + inner dimension from nestedarray
         shape = cgutils.unpack_tuple(builder, array.shape, typ.ndim)
         shape += [context.get_constant(types.intp, i) for i in dtype.shape]
         populate_array(rary,

@@ -1454,7 +1454,7 @@ class TestNestedArrays(TestCase):
         for pyfunc in (
                 recarray_write_array_of_nestedarray_broadcast,
                 recarray_write_array_of_nestedarray,
-                       ):
+        ):
             arr_expected = pyfunc(arr)
             cfunc = self.get_cfunc(pyfunc, (ty,))
             arr_res = cfunc(nbarr)
@@ -1485,7 +1485,8 @@ class TestNestedArrays(TestCase):
         return the first item when passing a record
         """
         nbarr = np.recarray(2, dtype=recordwith2darray)
-        nbarr[0] = np.array([(1, ((1,2),(4,5),(2,3)))], dtype=recordwith2darray)[0]
+        nbarr[0] = np.array([(1, ((1,2),(4,5),(2,3)))],
+                            dtype=recordwith2darray)[0]
         for arg in [nbarr, nbarr[0]]:
             ty = typeof(arg)
             pyfunc = recarray_getitem_field_return2_2d
@@ -1504,7 +1505,8 @@ class TestNestedArrays(TestCase):
         nbarr = np.recarray(2, dtype=recordwitharray)
         nbarr[0] = np.array([(1, (2,3))], dtype=recordwitharray)[0]
         for arg in [nbarr, nbarr[0]]:
-            for pyfunc in [recarray_getitem_field_return, recarray_getitem_field_return2]:
+            for pyfunc in [recarray_getitem_field_return,
+                           recarray_getitem_field_return2]:
                 ty = typeof(arg)
                 arr_expected = pyfunc(arg)
                 cfunc = self.get_cfunc(pyfunc, (ty,))
