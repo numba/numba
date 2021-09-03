@@ -17,7 +17,7 @@ First, import the modules needed for this example:
    :dedent: 8
    :linenos:
 
-Here is a naive implementation of matrix multiplication using a CUDA kernel:
+Here is a naïve implementation of matrix multiplication using a CUDA kernel:
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_matmul.py
    :language: python
@@ -67,8 +67,8 @@ An example usage of this function is as follows:
    :linenos:
 
 
-This passes a :ref:`CUDA memory check test <developer-debugging>`, which
-can help with debugging. Running the script produces the following output:
+This passes a :ref:`CUDA memory check test <debugging-cuda-python-code>`, which
+can help with debugging. Running the code above produces the following output:
 
 .. code-block:: none
 
