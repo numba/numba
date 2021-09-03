@@ -12,6 +12,8 @@ Here is a naive implementation of matrix multiplication using a CUDA kernel:
 
 .. code-block:: python
   :linenos:
+    from numba import cuda
+
 
     @cuda.jit
     def matmul(A, B, C):
@@ -39,18 +41,22 @@ memory:
 .. code-block:: python
   :linenos:
 
+    import math
+    import numpy as np
     from numba import cuda, float32
+
 
     # Controls threads per block and shared memory usage.
     # The computation will be done on blocks of TPBxTPB elements.
     # TPB should not be larger than 32 in this example
     TPB = 16
 
+
     @cuda.jit
     def fast_matmul(A, B, C):
-    """Reference: https://stackoverflow.com/a/64198479/13697228
-    by @RobertCrovella
-    """
+        """Reference: https://stackoverflow.com/a/64198479/13697228
+        by @RobertCrovella
+        """
         # Define an array in the shared memory
         # The size and type of the arrays must be known at compile time
         sA = cuda.shared.array(shape=(TPB, TPB), dtype=float32)
@@ -98,16 +104,14 @@ An example usage of this function is as follows:
 
 .. code-block:: python
   :linenos:
-
-    x_h = np.arange(16).reshape([4,4])
-    y_h = np.ones([4,4])
-    z_h = np.zeros([4,4])
+    x_h = np.arange(16).reshape([4, 4])
+    y_h = np.ones([4, 4])
+    z_h = np.zeros([4, 4])
 
     x_d = cuda.to_device(x_h)
     y_d = cuda.to_device(y_h)
     z_d = cuda.to_device(z_h)
 
-    TPB = 3
     threadsperblock = (TPB, TPB)
     blockspergrid_x = math.ceil(z_h.shape[0] / threadsperblock[0])
     blockspergrid_y = math.ceil(z_h.shape[1] / threadsperblock[1])
@@ -118,12 +122,12 @@ An example usage of this function is as follows:
     print(z_h)
     print(x_h @ y_h)
 
-This passes a :ref:`CUDA memory check test <debugging-cuda-python-code>`:
+This passes a :ref:`CUDA memory check test <debugging-cuda-python-code>`, which
+can help with troubleshooting. Running the script produces the following output:
 
 .. code-block:: none
 
-    $ cuda-memcheck python t49.py
-    ========= CUDA-MEMCHECK
+    $ python fast_matmul.py
     [[ 6.  6.  6.  6.]
     [22. 22. 22. 22.]
     [38. 38. 38. 38.]
@@ -132,9 +136,9 @@ This passes a :ref:`CUDA memory check test <debugging-cuda-python-code>`:
     [22. 22. 22. 22.]
     [38. 38. 38. 38.]
     [54. 54. 54. 54.]]
-    ========= ERROR SUMMARY: 0 errors
 
-.. note:: For high performance matrix multiplication in CUDA, see also the `CuPy implementation <https://docs.cupy.dev/en/stable/reference/generated/cupy.  matmul.html>`_.
+.. note:: For high performance matrix multiplication in CUDA, see also the
+`CuPy implementation <https://docs.cupy.dev/en/stable/reference/generated/cupy.matmul.html>`_.
 
 The approach outlined here generalizes to non-square matrix multiplication as
 follows by adjusting the ``blockspergrid`` variable:
@@ -143,7 +147,6 @@ Again, here is an example usage:
 
 .. code-block:: python
   :linenos:
-
   x_h = np.arange(115).reshape([5,23])
   y_h = np.ones([23,7])
   z_h = np.zeros([5,7])
@@ -152,8 +155,6 @@ Again, here is an example usage:
   y_d = cuda.to_device(y_h)
   z_d = cuda.to_device(z_h)
 
-  #TPB must be an integer between 1 and 32
-  TPB = 32
   threadsperblock = (TPB, TPB)
   grid_y_max = max(x_h.shape[0],y_h.shape[0])
   grid_x_max = max(x_h.shape[1],y_h.shape[1])
@@ -166,12 +167,11 @@ Again, here is an example usage:
   print(z_h)
   print(x_h @ y_h)
 
-and a corresponding output:
+and the corresponding output:
 
 .. code-block:: none
 
   $ python nonsquare_matmul.py
-  ========= CUDA-MEMCHECK
   [[ 253.  253.  253.  253.  253.  253.  253.]
   [ 782.  782.  782.  782.  782.  782.  782.]
   [1311. 1311. 1311. 1311. 1311. 1311. 1311.]
@@ -182,4 +182,3 @@ and a corresponding output:
   [1311. 1311. 1311. 1311. 1311. 1311. 1311.]
   [1840. 1840. 1840. 1840. 1840. 1840. 1840.]
   [2369. 2369. 2369. 2369. 2369. 2369. 2369.]]
-  ========= ERROR SUMMARY: 0 errors
