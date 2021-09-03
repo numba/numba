@@ -23,7 +23,7 @@ class TestMatMul(CUDATestCase):
         from numba import cuda, float32
         import numpy as np
         import math
-        # magictoken.ex_import.begin
+        # magictoken.ex_import.end
 
         # magictoken.ex_matmul.begin
         @cuda.jit
