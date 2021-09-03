@@ -84,6 +84,7 @@ class TestMatMul(CUDATestCase):
                 cuda.syncthreads()
             if y < C.shape[0] and x < C.shape[1]:
                 C[y, x] = tmp
+        # magictoken.ex_fast_matmul.end
 
         # magictoken.ex_run_fast_matmul.begin
         x_h = np.arange(16).reshape([4, 4])
