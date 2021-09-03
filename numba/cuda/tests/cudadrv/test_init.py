@@ -1,4 +1,5 @@
 import multiprocessing as mp
+import os
 
 from numba import cuda
 from numba.cuda.cudadrv.driver import CudaAPIError, driver
@@ -45,8 +46,39 @@ def initialization_error_test(result_queue):
         cuda.device_array(1)
     except CudaSupportError:
         success = True
-        msg = cuda.cuda_error()
 
+    msg = cuda.cuda_error()
+    result_queue.put((success, msg))
+
+
+# For testing the path where Driver.__init__() catches a CudaSupportError
+def cuda_disabled_test(result_queue):
+    success = False
+    msg = None
+
+    try:
+        # A CUDA operation that forces initialization of the device
+        cuda.device_array(1)
+    except CudaSupportError as e:
+        success = True
+        msg = e.msg
+
+    result_queue.put((success, msg))
+
+
+# Similar to cuda_disabled_test, but checks cuda.cuda_error() instead of the
+# exception raised on initialization
+def cuda_disabled_error_test(result_queue):
+    success = False
+    msg = None
+
+    try:
+        # A CUDA operation that forces initialization of the device
+        cuda.device_array(1)
+    except CudaSupportError:
+        success = True
+
+    msg = cuda.cuda_error()
     result_queue.put((success, msg))
 
 
@@ -66,7 +98,7 @@ class TestInit(CUDATestCase):
         if not success:
             self.fail('CudaSupportError not raised')
 
-        self.assertEqual(msg, expected)
+        self.assertIn(expected, msg)
 
     def test_init_failure_raising(self):
         expected = 'Error at driver init: CUDA_ERROR_UNKNOWN (999)'
@@ -75,6 +107,26 @@ class TestInit(CUDATestCase):
     def test_init_failure_error(self):
         expected = 'CUDA_ERROR_UNKNOWN (999)'
         self._test_init_failure(initialization_error_test, expected)
+
+    def _test_cuda_disabled(self, target):
+        # Uses _test_init_failure to launch the test in a separate subprocess
+        # with CUDA disabled.
+        cuda_disabled = os.environ.get('NUMBA_DISABLE_CUDA')
+        os.environ['NUMBA_DISABLE_CUDA'] = "1"
+        try:
+            expected = 'CUDA is disabled due to setting NUMBA_DISABLE_CUDA=1'
+            self._test_init_failure(cuda_disabled_test, expected)
+        finally:
+            if cuda_disabled is not None:
+                os.environ['NUMBA_DISABLE_CUDA'] = cuda_disabled
+            else:
+                os.environ.pop('NUMBA_DISABLE_CUDA')
+
+    def test_cuda_disabled_raising(self):
+        self._test_cuda_disabled(cuda_disabled_test)
+
+    def test_cuda_disabled_error(self):
+        self._test_cuda_disabled(cuda_disabled_error_test)
 
     def test_init_success(self):
         # Here we assume that initialization is successful (because many bad

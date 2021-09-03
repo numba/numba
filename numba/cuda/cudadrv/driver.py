@@ -221,7 +221,7 @@ class Driver(object):
             self.lib = find_driver()
         except CudaSupportError as e:
             self.is_initialized = True
-            self.initialization_error = e
+            self.initialization_error = e.msg
 
     def ensure_initialized(self):
         if self.is_initialized:
