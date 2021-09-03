@@ -91,7 +91,7 @@ Again, here is an example usage:
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_matmul.py
    :language: python
-   :caption: from ``test_ex_matmul`` in ``numba/cuda/tests/doc_example/test_matmul.py``
+   :caption: from ``test_ex_matmul`` in ``numba/cuda/tests/doc_examples/test_matmul.py``
    :start-after: magictoken.ex_run_nonsquare.begin
    :end-before: magictoken.ex_run_nonsquare.end
    :dedent: 8
