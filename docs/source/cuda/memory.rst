@@ -162,7 +162,10 @@ unlike traditional dynamic memory management.
 
    Allocate a local array of the given *shape* and *type* on the device.
    *shape* is either an integer or a tuple of integers representing the array's
-   dimensions and must be a simple constant expression. *type* is a :ref:`Numba
+   dimensions and must be a simple constant expression which can be defined by
+   typing literal numeric characters within the function call (e.g. ``10``) or
+   by defining a global variable near the top of the script (e.g.
+   ``shape=10``). *shape* cannot be a NumPy integer. *type* is a :ref:`Numba
    type <numba-types>` of the elements needing to be stored in the array. The
    array is private to the current thread. An array-like object is returned
    which can be read and written to like any standard array (e.g. through
