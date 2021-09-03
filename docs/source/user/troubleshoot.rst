@@ -1061,7 +1061,7 @@ on which the child will break. Additional :func:`numba.gdb_breakpoint` calls
 create calls to the registered breakpoint hence the program will also break at
 these locations.
 
-.. debugging-cuda-python-code:
+.. _debugging-cuda-python-code:
 
 Debugging CUDA Python code
 ==========================
