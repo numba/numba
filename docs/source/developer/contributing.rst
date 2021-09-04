@@ -91,10 +91,11 @@ recommend you use `conda <http://conda.pydata.org/miniconda.html>`_ to
 create a dedicated development environment and install precompiled versions
 of those dependencies there.
 
-First add the Anaconda Cloud ``numba`` channel so as to get development builds
-of the llvmlite library::
+First add the Anaconda Cloud ``numba`` and ``numba/label/ci_llvmlite_0.38``
+channels so as to get development builds of the llvmlite library::
 
    $ conda config --add channels numba
+   $ conda config --add channels numba/label/ci_llvmlite_0.38
 
 Then create an environment with the right dependencies::
 
@@ -118,7 +119,7 @@ Once the environment is activated, you have a dedicated Python with the
 required dependencies::
 
     $ python
-    Python 3.8.5 (default, Sep  4 2020, 07:30:14) 
+    Python 3.8.5 (default, Sep  4 2020, 07:30:14)
     [GCC 7.3.0] :: Anaconda, Inc. on linux
     Type "help", "copyright", "credits" or "license" for more information.
 
@@ -259,6 +260,11 @@ and then running::
 
 from the root of the Numba repository. Now ``flake8`` will be run each time
 you commit changes. You can skip this check with ``git commit --no-verify``.
+
+.. note::
+  To use these pre-commit hooks on Windows, it may be necessary to copy
+``sqlite3.dll`` from ``C:\Users\<USER>\anaconda3\Library\bin`` to
+``C:\Users\<USER>\anaconda3\DLLs`` or modify your PATH. (`source <https://stackoverflow.com/a/55642416/13697228>`_).
 
 Numba has started the process of using `type hints <https://www.python.org/dev/peps/pep-0484/>`_ in its code base. This
 will be a gradual process of extending the number of files that use type hints, as well as going from voluntary to
