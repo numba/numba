@@ -262,9 +262,9 @@ from the root of the Numba repository. Now ``flake8`` will be run each time
 you commit changes. You can skip this check with ``git commit --no-verify``.
 
 .. note::
-  To use these pre-commit hooks on Windows, it may be necessary to copy
-``sqlite3.dll`` from ``C:\Users\<USER>\anaconda3\Library\bin`` to
-``C:\Users\<USER>\anaconda3\DLLs`` or modify your PATH. (`source <https://stackoverflow.com/a/55642416/13697228>`_).
+   To use these pre-commit hooks on Windows, it may be necessary to copy
+   ``sqlite3.dll`` from ``C:\Users\<USER>\anaconda3\Library\bin`` to
+   ``C:\Users\<USER>\anaconda3\DLLs`` or modify your PATH (`source <https:// stackoverflow.com/a/55642416/13697228>`_).
 
 Numba has started the process of using `type hints <https://www.python.org/dev/peps/pep-0484/>`_ in its code base. This
 will be a gradual process of extending the number of files that use type hints, as well as going from voluntary to
