@@ -91,11 +91,11 @@ recommend you use `conda <http://conda.pydata.org/miniconda.html>`_ to
 create a dedicated development environment and install precompiled versions
 of those dependencies there.
 
-First add the Anaconda Cloud ``numba`` and ``numba/label/ci_llvmlite_0.38``
+First add the Anaconda Cloud ``numba`` and ``numba/label/dev``
 channels so as to get development builds of the llvmlite library::
 
    $ conda config --add channels numba
-   $ conda config --add channels numba/label/ci_llvmlite_0.38
+   $ conda config --add channels numba/label/dev
 
 Then create an environment with the right dependencies::
 
