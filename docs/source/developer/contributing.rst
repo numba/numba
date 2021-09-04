@@ -421,12 +421,12 @@ It is built with `Sphinx <http://sphinx-doc.org/>`_ and
 `numpydoc <https://numpydoc.readthedocs.io/>`_, which are available using
 conda or pip; i.e. ``conda install sphinx numpydoc``.
 
-To build the documentation, you need the bootstrap theme::
+To build the documentation, you need the bootstrap and rtd themes::
 
-   $ pip install sphinx_bootstrap_theme
+   $ pip install sphinx_bootstrap_theme sphinx-rtd-theme
 
 You can edit the source files under ``docs/source/``, after which you can
-build and check the documentation::
+build and check the documentation under ``docs/``::
 
    $ make html
    $ open _build/html/index.html
