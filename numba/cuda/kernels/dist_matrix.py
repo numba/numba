@@ -21,7 +21,7 @@ from math import sqrt, ceil
 from numba import cuda, jit, prange  # noqa
 from numba.cuda.testing import unittest, CUDATestCase  # noqa
 from numba.types import int32, float32, int64, float64  # noqa
-from numba.cuda.kernels.device.myjit import get_myjit  # noqa
+# HACK from numba.cuda.kernels.device.myjit import get_myjit
 # from numba.cuda.cudadrv.driver import driver
 # TPB = driver.get_device().MAX_THREADS_PER_BLOCK # max TPB causes crash..
 
@@ -63,6 +63,7 @@ if target == "cpu":
     nb_float = np_float
     nb_int = np_int
 
+# HACK
 # a "hacky" way to get compatibility between @njit and @cuda.jit
 # myjit = get_myjit(target=target, inline=inline)
 # mycudajit = get_myjit(device=False, target=target, inline=inline)
@@ -492,11 +493,11 @@ def two_set_distance_matrix(U, V, U_weights, V_weights, out, metric_num):
 
 
 def dist_matrix(U,
-            V=None,
-            U_weights=None,
-            V_weights=None,
-            pairs=None,
-            metric="euclidean"):  # noqa
+                V=None,
+                U_weights=None,
+                V_weights=None,
+                pairs=None,
+                metric="euclidean"):  # noqa
     """
     Compute distance matrices using Numba/CUDA.
 
