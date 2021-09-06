@@ -148,6 +148,7 @@ class TestDeviceFunc(CUDATestCase):
         self.assertIn('Eager compilation of device functions is unsupported',
                       str(e.exception))
 
+    @skip_on_cudasim('cudasim ignores casting by jit decorator signature')
     def test_device_casting(self):
         @cuda.jit('int32(int32, int32, int32, int32)', device=True)
         def rgba(r, g, b, a):
