@@ -150,7 +150,7 @@ class TestDeviceFunc(CUDATestCase):
 
     @skip_on_cudasim('cudasim ignores casting by jit decorator signature')
     def test_device_casting(self):
-        @cuda.jit('int32(int32, int32, int32, int32)', device=True)
+        @cuda.jit('int32(int32, int32, int32, int32)')
         def rgba(r, g, b, a):
             return (((r & 0xFF) << 16) |
                     ((g & 0xFF) << 8) |
@@ -168,6 +168,30 @@ class TestDeviceFunc(CUDATestCase):
         rgba_caller[1, 1](x, channels)
 
         self.assertEqual(0x04010203, x[0])
+
+    def test_kernel_then_device(self):
+        # Presently fails because the overload of f that is a kernel gets used
+        # as the overload for a device function when compiling f_caller
+        @cuda.jit
+        def f(x, y):
+            x[0] = y[0]
+
+        @cuda.jit
+        def f_caller(x, y):
+            f(x, y)
+
+        one = np.ones(1)
+        zero = np.zeros_like(one)
+        y1 = cuda.to_device(one)
+        y2 = cuda.to_device(one)
+        x1 = cuda.to_device(zero)
+        x2 = cuda.to_device(zero)
+
+        f[1, 1](x1, y1)
+        f_caller[1, 1](x2, y2)
+
+        self.assertEqual(x1[0], y1[0])
+        self.assertEqual(x2[0], y2[0])
 
 
 if __name__ == '__main__':
