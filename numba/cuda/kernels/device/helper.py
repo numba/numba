@@ -1,13 +1,10 @@
-"""
-Helper functions for distance matrix computations.
-"""
-
+"""Helper functions for distance matrix computations."""
 import os
 from math import sqrt
 from numba import jit
 from time import time
 
-inline = os.environ["INLINE"]
+inline = os.environ.get("INLINE", "never")
 
 
 class Timer(object):
@@ -25,9 +22,11 @@ class Timer(object):
         self.name = name
 
     def __enter__(self):
+        """Enter the timer."""
         self.tstart = time()
 
     def __exit__(self, type, value, traceback):
+        """Exit the timer."""
         if self.name:
             print("[%s]" % self.name,)
         print(("Elapsed: {}\n").format(round((time() - self.tstart), 5)))
@@ -72,7 +71,6 @@ def insertionSort(arr):
     None.
 
     """
-
     for i in range(1, len(arr)):
         key = arr[i]
 
@@ -105,7 +103,6 @@ def insertionArgSort(arr, ids):
     None.
 
     """
-
     # fill ids
     for i in range(len(arr)):
         ids[i] = i
@@ -347,3 +344,12 @@ def integrate(u_cdf, v_cdf, deltas, p):
             out += (u_cdf[i] - v_cdf[i]) ** p * deltas[i]
             out = out ** (1 / p)
     return out
+
+
+# %% CODE GRAVEYARD
+# from numba.core import config
+# config_keys = dir(config)
+# if "INLINE" in config_keys:
+#     inline = config.INLINE
+# else:
+#     inline = "never"
