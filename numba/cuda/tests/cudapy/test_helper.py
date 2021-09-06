@@ -7,7 +7,7 @@ from numba.cuda.testing import unittest, CUDATestCase
 import numba.cuda.kernels.device.helper as hp
 from numpy.testing import assert_allclose, assert_equal
 
-bits = int(os.environ["MACHINE_BITS"])
+bits = int(os.environ.get("MACHINE_BITS", "32"))
 
 if bits == 32:
     np_float = np.float32
