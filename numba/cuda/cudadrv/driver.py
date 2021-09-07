@@ -809,14 +809,19 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
         is retried.  If it fails in the second attempt, the error is reraised.
         """
         try:
-            allocator()
+            return allocator()
         except CudaAPIError as e:
             # is out-of-memory?
-            if e.code == enums.CUDA_ERROR_OUT_OF_MEMORY:
+            if config.CUDA_USE_CUDA_PYTHON:
+                oom_code = cuda_driver.CUresult.CUDA_ERROR_OUT_OF_MEMORY
+            else:
+                oom_code = enums.CUDA_ERROR_OUT_OF_MEMORY
+
+            if e.code == oom_code:
                 # clear pending deallocations
                 self.deallocations.clear()
                 # try again
-                allocator()
+                return allocator()
             else:
                 raise
 
@@ -1755,13 +1760,13 @@ class MemoryPointer(object):
             size = stop - start
 
         # Handle NULL/empty memory buffer
-        if self.device_pointer.value is None:
+        if not self.device_pointer_value:
             if size != 0:
                 raise RuntimeError("non-empty slice into empty slice")
             view = self      # new view is just a reference to self
         # Handle normal case
         else:
-            base = self.device_pointer.value + start
+            base = self.device_pointer_value + start
             if size < 0:
                 raise RuntimeError('size cannot be negative')
             pointer = drvapi.cu_device_ptr(base)
@@ -1777,6 +1782,13 @@ class MemoryPointer(object):
     @property
     def device_ctypes_pointer(self):
         return self.device_pointer
+
+    @property
+    def device_pointer_value(self):
+        if config.CUDA_USE_CUDA_PYTHON:
+            return int(self.device_pointer) or None
+        else:
+            return self.device_pointer.value
 
 
 class AutoFreePointer(MemoryPointer):
