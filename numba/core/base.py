@@ -551,13 +551,13 @@ class BaseContext(object):
 
         try:
             return _wrap_impl(overloads.find(sig.args), self, sig)
-        except NotImplementedError:
+        except errors.NumbaNotImplementedError:
             pass
         if isinstance(fn, types.Type):
             # It's a type instance => try to find a definition for the type class
             try:
                 return self.get_function(type(fn), sig)
-            except NotImplementedError:
+            except errors.NumbaNotImplementedError:
                 # Raise exception for the type instance, for a better error message
                 pass
 
@@ -613,13 +613,13 @@ class BaseContext(object):
         overloads = self._getattrs[attr]
         try:
             return overloads.find((typ,))
-        except NotImplementedError:
+        except errors.NumbaNotImplementedError:
             pass
         # Lookup generic getattr implementation for this type
         overloads = self._getattrs[None]
         try:
             return overloads.find((typ,))
-        except NotImplementedError:
+        except errors.NumbaNotImplementedError:
             pass
 
         raise NotImplementedError("No definition for lowering %s.%s" % (typ, attr))
