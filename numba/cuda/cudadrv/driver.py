@@ -450,16 +450,24 @@ class _ActiveContext(object):
             hctx, devnum = self._tls_cache.ctx_devnum
         # Not cached. Query the driver API.
         else:
-            hctx = drvapi.cu_context(0)
-            driver.cuCtxGetCurrent(byref(hctx))
-            hctx = hctx if hctx.value else None
+            if config.CUDA_USE_CUDA_PYTHON:
+                hctx = driver.cuCtxGetCurrent()
+                if int(hctx) == 0:
+                    hctx = None
+            else:
+                hctx = drvapi.cu_context(0)
+                driver.cuCtxGetCurrent(byref(hctx))
+                hctx = hctx if hctx.value else None
 
             if hctx is None:
                 devnum = None
             else:
-                hdevice = drvapi.cu_device()
-                driver.cuCtxGetDevice(byref(hdevice))
-                devnum = hdevice.value
+                if config.CUDA_USE_CUDA_PYTHON:
+                    devnum = int(driver.cuCtxGetDevice())
+                else:
+                    hdevice = drvapi.cu_device()
+                    driver.cuCtxGetDevice(byref(hdevice))
+                    devnum = hdevice.value
 
                 self._tls_cache.ctx_devnum = (hctx, devnum)
                 is_top = True
@@ -621,8 +629,11 @@ class Device(object):
         met_requirement_for_device(self)
 
         # create primary context
-        hctx = drvapi.cu_context()
-        driver.cuDevicePrimaryCtxRetain(byref(hctx), self.id)
+        if config.CUDA_USE_CUDA_PYTHON:
+            hctx = driver.cuDevicePrimaryCtxRetain(self.id)
+        else:
+            hctx = drvapi.cu_context()
+            driver.cuDevicePrimaryCtxRetain(byref(hctx), self.id)
 
         ctx = Context(weakref.proxy(self), hctx)
         self.primary_context = ctx
@@ -967,10 +978,16 @@ class NumbaCUDAMemoryManager(GetIpcHandleMixin, HostOnlyCUDAMemoryManager):
         return mem.own()
 
     def get_memory_info(self):
-        free = c_size_t()
-        total = c_size_t()
-        driver.cuMemGetInfo(byref(free), byref(total))
-        return MemoryInfo(free=free.value, total=total.value)
+        if config.CUDA_USE_CUDA_PYTHON:
+            free, total = driver.cuMemGetInfo()
+        else:
+            free = c_size_t()
+            total = c_size_t()
+            driver.cuMemGetInfo(byref(free), byref(total))
+            free = free.value
+            total = total.value
+
+        return MemoryInfo(free=free, total=total)
 
     @property
     def interface_version(self):

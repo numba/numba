@@ -15,6 +15,7 @@ import threading
 from contextlib import contextmanager
 
 from .driver import driver
+from numba.core import config
 
 
 class _DeviceList(object):
@@ -155,10 +156,16 @@ class _Runtime(object):
                     # Get primary context for the active device
                     ctx = self.gpus[ac.devnum].get_primary_context()
                     # Is active context the primary context?
-                    if ctx.handle.value != ac.context_handle.value:
+                    if config.CUDA_USE_CUDA_PYTHON:
+                        ctx_handle = int(ctx.handle)
+                        ac_ctx_handle = int(ac.context_handle)
+                    else:
+                        ctx_handle = ctx.handle.value
+                        ac_ctx_handle = ac.context_handle.value
+                    if ctx_handle != ac_ctx_handle:
                         msg = ('Numba cannot operate on non-primary'
                                ' CUDA context {:x}')
-                        raise RuntimeError(msg.format(ac.context_handle.value))
+                        raise RuntimeError(msg.format(ac_ctx_handle))
                     # Ensure the context is ready
                     ctx.prepare_for_use()
                 return ctx
