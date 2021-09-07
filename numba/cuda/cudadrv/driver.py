@@ -2245,7 +2245,49 @@ FILE_EXTENSION_MAP = {
 }
 
 
-class Linker(object):
+class Linker(metaclass=ABCMeta):
+    """Abstract base class for linkers"""
+
+    @classmethod
+    def new(self, max_registers=0, lineinfo=False, cc=None):
+        if config.CUDA_USE_CUDA_PYTHON:
+            return CudaPythonLinker(max_registers, lineinfo, cc)
+        else:
+            return CtypesLinker(max_registers, lineinfo, cc)
+
+    @abstractmethod
+    def __init__(self, max_registers, lineinfo, cc):
+        pass
+
+    @property
+    @abstractmethod
+    def info_log(self):
+        """Return the info log from the linker invocation"""
+
+    @property
+    @abstractmethod
+    def error_log(self):
+        """Return the error log from the linker invocation"""
+
+    @abstractmethod
+    def add_ptx(self, ptx, name):
+        """Add PTX source in a string to the link"""
+
+    @abstractmethod
+    def add_file(self, path, kind):
+        """Add code from a file to the link"""
+
+    def add_file_guess_ext(self, path):
+        ext = path.rsplit('.', 1)[1]
+        kind = FILE_EXTENSION_MAP[ext]
+        self.add_file(path, kind)
+
+    @abstractmethod
+    def complete(self):
+        """Complete the link"""
+
+
+class CtypesLinker(Linker):
     """
     Links for current device if no CC given
     """
@@ -2322,10 +2364,103 @@ class Linker(object):
                 msg = "%s\n%s" % (e, self.error_log)
             raise LinkerError(msg)
 
-    def add_file_guess_ext(self, path):
-        ext = path.rsplit('.', 1)[1]
-        kind = FILE_EXTENSION_MAP[ext]
-        self.add_file(path, kind)
+    def complete(self):
+        '''
+        Returns (cubin, size)
+            cubin is a pointer to a internal buffer of cubin owned
+            by the linker; thus, it should be loaded before the linker
+            is destroyed.
+        '''
+        cubin = c_void_p(0)
+        size = c_size_t(0)
+
+        try:
+            driver.cuLinkComplete(self.handle, byref(cubin), byref(size))
+        except CudaAPIError as e:
+            raise LinkerError("%s\n%s" % (e, self.error_log))
+
+        size = size.value
+        assert size > 0, 'linker returned a zero sized cubin'
+        del self._keep_alive[:]
+        return cubin, size
+
+
+class CudaPythonLinker(Linker):
+    """
+    Links for current device if no CC given
+    """
+    def __init__(self, max_registers=0, lineinfo=False, cc=None):
+        logsz = config.CUDA_LOG_SIZE
+        linkerinfo = (c_char * logsz)()
+        linkererrors = (c_char * logsz)()
+
+        options = {
+            enums.CU_JIT_INFO_LOG_BUFFER: addressof(linkerinfo),
+            enums.CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES: c_void_p(logsz),
+            enums.CU_JIT_ERROR_LOG_BUFFER: addressof(linkererrors),
+            enums.CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES: c_void_p(logsz),
+            enums.CU_JIT_LOG_VERBOSE: c_void_p(1),
+        }
+        if max_registers:
+            options[enums.CU_JIT_MAX_REGISTERS] = c_void_p(max_registers)
+        if lineinfo:
+            options[enums.CU_JIT_GENERATE_LINE_INFO] = c_void_p(1)
+
+        if cc is None:
+            # No option value is needed, but we need something as a placeholder
+            options[enums.CU_JIT_TARGET_FROM_CUCONTEXT] = 1
+        else:
+            cc_val = cc[0] * 10 + cc[1]
+            options[enums.CU_JIT_TARGET] = c_void_p(cc_val)
+
+        raw_keys = list(options.keys())
+        raw_values = list(options.values())
+        del options
+
+        option_keys = (drvapi.cu_jit_option * len(raw_keys))(*raw_keys)
+        option_vals = (c_void_p * len(raw_values))(*raw_values)
+
+        self.handle = handle = drvapi.cu_link_state()
+        driver.cuLinkCreate(len(raw_keys), option_keys, option_vals,
+                            byref(self.handle))
+
+        weakref.finalize(self, driver.cuLinkDestroy, handle)
+
+        self.linker_info_buf = linkerinfo
+        self.linker_errors_buf = linkererrors
+
+        self._keep_alive = [linkerinfo, linkererrors, option_keys, option_vals]
+
+    @property
+    def info_log(self):
+        return self.linker_info_buf.value.decode('utf8')
+
+    @property
+    def error_log(self):
+        return self.linker_errors_buf.value.decode('utf8')
+
+    def add_ptx(self, ptx, name='<cudapy-ptx>'):
+        ptxbuf = c_char_p(ptx)
+        namebuf = c_char_p(name.encode('utf8'))
+        self._keep_alive += [ptxbuf, namebuf]
+        try:
+            driver.cuLinkAddData(self.handle, enums.CU_JIT_INPUT_PTX,
+                                 ptxbuf, len(ptx), namebuf, 0, None, None)
+        except CudaAPIError as e:
+            raise LinkerError("%s\n%s" % (e, self.error_log))
+
+    def add_file(self, path, kind):
+        pathbuf = c_char_p(path.encode("utf8"))
+        self._keep_alive.append(pathbuf)
+
+        try:
+            driver.cuLinkAddFile(self.handle, kind, pathbuf, 0, None, None)
+        except CudaAPIError as e:
+            if e.code == enums.CUDA_ERROR_FILE_NOT_FOUND:
+                msg = f'{path} not found'
+            else:
+                msg = "%s\n%s" % (e, self.error_log)
+            raise LinkerError(msg)
 
     def complete(self):
         '''
