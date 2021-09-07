@@ -905,7 +905,7 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
 
         self._attempt_allocation(allocator)
 
-        finalizer = _alloc_finalizer(self, ptr, size)
+        finalizer = _alloc_finalizer(self, ptr, ptr.value, size)
         ctx = weakref.proxy(self.context)
         mem = ManagedMemory(ctx, ptr, size, finalizer=finalizer)
         self.allocations[ptr.value] = mem
@@ -964,17 +964,25 @@ class NumbaCUDAMemoryManager(GetIpcHandleMixin, HostOnlyCUDAMemoryManager):
             self.deallocations.memory_capacity = self.get_memory_info().total
 
     def memalloc(self, size):
-        ptr = drvapi.cu_device_ptr()
+        if config.CUDA_USE_CUDA_PYTHON:
+            def allocator():
+                return driver.cuMemAlloc(size)
 
-        def allocator():
-            driver.cuMemAlloc(byref(ptr), size)
+            ptr = self._attempt_allocation(allocator)
+            alloc_key = ptr
+        else:
+            ptr = drvapi.cu_device_ptr()
 
-        self._attempt_allocation(allocator)
+            def allocator():
+                driver.cuMemAlloc(byref(ptr), size)
 
-        finalizer = _alloc_finalizer(self, ptr, size)
+            self._attempt_allocation(allocator)
+            alloc_key = ptr.value
+
+        finalizer = _alloc_finalizer(self, ptr, alloc_key, size)
         ctx = weakref.proxy(self.context)
         mem = AutoFreePointer(ctx, ptr, size, finalizer=finalizer)
-        self.allocations[ptr.value] = mem
+        self.allocations[alloc_key] = mem
         return mem.own()
 
     def get_memory_info(self):
@@ -1390,14 +1398,14 @@ def load_module_image(context, image):
                   _module_finalizer(context, handle))
 
 
-def _alloc_finalizer(memory_manager, handle, size):
+def _alloc_finalizer(memory_manager, ptr, alloc_key, size):
     allocations = memory_manager.allocations
     deallocations = memory_manager.deallocations
 
     def core():
         if allocations:
-            del allocations[handle.value]
-        deallocations.add_item(driver.cuMemFree, handle, size)
+            del allocations[alloc_key]
+        deallocations.add_item(driver.cuMemFree, ptr, size)
 
     return core
 
