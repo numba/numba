@@ -1373,6 +1373,13 @@ def load_module_image(context, image):
     """
     image must be a pointer
     """
+    if config.CUDA_USE_CUDA_PYTHON:
+        return load_module_image_cuda_python(context, image)
+    else:
+        return load_module_image_ctypes(context, image)
+
+
+def load_module_image_ctypes(context, image):
     logsz = config.CUDA_LOG_SIZE
 
     jitinfo = (c_char * logsz)()
@@ -1398,6 +1405,40 @@ def load_module_image(context, image):
         raise CudaAPIError(e.code, msg)
 
     info_log = jitinfo.value
+
+    return Module(weakref.proxy(context), handle, info_log,
+                  _module_finalizer(context, handle))
+
+
+def load_module_image_cuda_python(context, image):
+    """
+    image must be a pointer
+    """
+    logsz = config.CUDA_LOG_SIZE
+
+    jitinfo = bytearray(logsz)
+    jiterrors = bytearray(logsz)
+
+    jit_option = cuda_driver.CUjit_option
+    options = {
+        jit_option.CU_JIT_INFO_LOG_BUFFER: jitinfo,
+        jit_option.CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES: logsz,
+        jit_option.CU_JIT_ERROR_LOG_BUFFER: jiterrors,
+        jit_option.CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES: logsz,
+        jit_option.CU_JIT_LOG_VERBOSE: config.CUDA_VERBOSE_JIT_LOG,
+    }
+
+    option_keys = [k for k in options.keys()]
+    option_vals = [v for v in options.values()]
+
+    try:
+        handle = driver.cuModuleLoadDataEx(image, len(options), option_keys,
+                                           option_vals)
+    except CudaAPIError as e:
+        msg = "cuModuleLoadDataEx error:\n%s" % jiterrors.value.decode("utf8")
+        raise CudaAPIError(e.code, msg)
+
+    info_log = jitinfo.decode('utf-8')
 
     return Module(weakref.proxy(context), handle, info_log,
                   _module_finalizer(context, handle))
@@ -2284,7 +2325,11 @@ class Linker(metaclass=ABCMeta):
 
     @abstractmethod
     def complete(self):
-        """Complete the link"""
+        """Complete the link. Returns (cubin, size)
+
+        cubin is a pointer to a internal buffer of cubin owned by the linker;
+        thus, it should be loaded before the linker is destroyed.
+        """
 
 
 class CtypesLinker(Linker):
@@ -2365,12 +2410,6 @@ class CtypesLinker(Linker):
             raise LinkerError(msg)
 
     def complete(self):
-        '''
-        Returns (cubin, size)
-            cubin is a pointer to a internal buffer of cubin owned
-            by the linker; thus, it should be loaded before the linker
-            is destroyed.
-        '''
         cubin = c_void_p(0)
         size = c_size_t(0)
 
@@ -2391,93 +2430,81 @@ class CudaPythonLinker(Linker):
     """
     def __init__(self, max_registers=0, lineinfo=False, cc=None):
         logsz = config.CUDA_LOG_SIZE
-        linkerinfo = (c_char * logsz)()
-        linkererrors = (c_char * logsz)()
+        linkerinfo = bytearray(logsz)
+        linkererrors = bytearray(logsz)
+
+        jit_option = cuda_driver.CUjit_option
 
         options = {
-            enums.CU_JIT_INFO_LOG_BUFFER: addressof(linkerinfo),
-            enums.CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES: c_void_p(logsz),
-            enums.CU_JIT_ERROR_LOG_BUFFER: addressof(linkererrors),
-            enums.CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES: c_void_p(logsz),
-            enums.CU_JIT_LOG_VERBOSE: c_void_p(1),
+            jit_option.CU_JIT_INFO_LOG_BUFFER: linkerinfo,
+            jit_option.CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES: logsz,
+            jit_option.CU_JIT_ERROR_LOG_BUFFER: linkererrors,
+            jit_option.CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES: logsz,
+            jit_option.CU_JIT_LOG_VERBOSE: 1,
         }
         if max_registers:
-            options[enums.CU_JIT_MAX_REGISTERS] = c_void_p(max_registers)
+            options[jit_option.CU_JIT_MAX_REGISTERS] = max_registers
         if lineinfo:
-            options[enums.CU_JIT_GENERATE_LINE_INFO] = c_void_p(1)
+            options[jit_option.CU_JIT_GENERATE_LINE_INFO] = 1
 
         if cc is None:
             # No option value is needed, but we need something as a placeholder
-            options[enums.CU_JIT_TARGET_FROM_CUCONTEXT] = 1
+            options[jit_option.CU_JIT_TARGET_FROM_CUCONTEXT] = 1
         else:
             cc_val = cc[0] * 10 + cc[1]
-            options[enums.CU_JIT_TARGET] = c_void_p(cc_val)
+            cc_enum = getattr(cuda_driver.CUjit_target,
+                              f'CU_TARGET_COMPUTE_{cc_val}')
+            options[jit_option.CU_JIT_TARGET] = cc_enum
 
         raw_keys = list(options.keys())
         raw_values = list(options.values())
-        del options
 
-        option_keys = (drvapi.cu_jit_option * len(raw_keys))(*raw_keys)
-        option_vals = (c_void_p * len(raw_values))(*raw_values)
+        self.handle = driver.cuLinkCreate(len(raw_keys), raw_keys, raw_values)
 
-        self.handle = handle = drvapi.cu_link_state()
-        driver.cuLinkCreate(len(raw_keys), option_keys, option_vals,
-                            byref(self.handle))
-
-        weakref.finalize(self, driver.cuLinkDestroy, handle)
+        weakref.finalize(self, driver.cuLinkDestroy, self.handle)
 
         self.linker_info_buf = linkerinfo
         self.linker_errors_buf = linkererrors
 
-        self._keep_alive = [linkerinfo, linkererrors, option_keys, option_vals]
+        self._keep_alive = [linkerinfo, linkererrors, raw_keys, raw_values]
 
     @property
     def info_log(self):
-        return self.linker_info_buf.value.decode('utf8')
+        return self.linker_info_buf.decode('utf8')
 
     @property
     def error_log(self):
-        return self.linker_errors_buf.value.decode('utf8')
+        return self.linker_errors_buf.decode('utf8')
 
     def add_ptx(self, ptx, name='<cudapy-ptx>'):
-        ptxbuf = c_char_p(ptx)
-        namebuf = c_char_p(name.encode('utf8'))
-        self._keep_alive += [ptxbuf, namebuf]
+        namebuf = name.encode('utf8')
+        self._keep_alive += [ptx, namebuf]
         try:
-            driver.cuLinkAddData(self.handle, enums.CU_JIT_INPUT_PTX,
-                                 ptxbuf, len(ptx), namebuf, 0, None, None)
+            input_ptx = cuda_driver.CUjitInputType.CU_JIT_INPUT_PTX
+            driver.cuLinkAddData(self.handle, input_ptx, ptx, len(ptx),
+                                 namebuf, 0, [], [])
         except CudaAPIError as e:
             raise LinkerError("%s\n%s" % (e, self.error_log))
 
     def add_file(self, path, kind):
-        pathbuf = c_char_p(path.encode("utf8"))
+        pathbuf = path.encode("utf8")
         self._keep_alive.append(pathbuf)
 
         try:
-            driver.cuLinkAddFile(self.handle, kind, pathbuf, 0, None, None)
+            driver.cuLinkAddFile(self.handle, kind, pathbuf, 0, [], [])
         except CudaAPIError as e:
-            if e.code == enums.CUDA_ERROR_FILE_NOT_FOUND:
+            if e.code == cuda_driver.CUresult.CUDA_ERROR_FILE_NOT_FOUND:
                 msg = f'{path} not found'
             else:
                 msg = "%s\n%s" % (e, self.error_log)
             raise LinkerError(msg)
 
     def complete(self):
-        '''
-        Returns (cubin, size)
-            cubin is a pointer to a internal buffer of cubin owned
-            by the linker; thus, it should be loaded before the linker
-            is destroyed.
-        '''
-        cubin = c_void_p(0)
-        size = c_size_t(0)
-
         try:
-            driver.cuLinkComplete(self.handle, byref(cubin), byref(size))
+            cubin, size = driver.cuLinkComplete(self.handle)
         except CudaAPIError as e:
             raise LinkerError("%s\n%s" % (e, self.error_log))
 
-        size = size.value
         assert size > 0, 'linker returned a zero sized cubin'
         del self._keep_alive[:]
         return cubin, size
