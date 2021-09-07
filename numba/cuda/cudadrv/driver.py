@@ -36,6 +36,8 @@ from .drvapi import API_PROTOTYPES
 from .drvapi import cu_occupancy_b2d_size, cu_stream_callback_pyobj, cu_uuid
 from numba.cuda.cudadrv import enums, drvapi, _extras
 
+if config.CUDA_USE_CUDA_PYTHON:
+    from cuda import cuda as cuda_driver
 
 MIN_REQUIRED_CC = (3, 0)
 
@@ -241,6 +243,9 @@ class Driver(object):
         self._initialize_extras()
 
     def _initialize_extras(self):
+        if config.CUDA_USE_CUDA_PYTHON:
+            return
+
         # set pointer to original cuIpcOpenMemHandle
         set_proto = ctypes.CFUNCTYPE(None, c_void_p)
         set_cuIpcOpenMemHandle = set_proto(_extras.set_cuIpcOpenMemHandle)
@@ -252,8 +257,8 @@ class Driver(object):
                                       ctypes.c_uint)
         call_cuIpcOpenMemHandle = call_proto(_extras.call_cuIpcOpenMemHandle)
         call_cuIpcOpenMemHandle.__name__ = 'call_cuIpcOpenMemHandle'
-        safe_call = self._wrap_api_call('call_cuIpcOpenMemHandle',
-                                        call_cuIpcOpenMemHandle)
+        safe_call = self._ctypes_wrap_fn('call_cuIpcOpenMemHandle',
+                                         call_cuIpcOpenMemHandle)
         # override cuIpcOpenMemHandle
         self.cuIpcOpenMemHandle = safe_call
 
@@ -265,14 +270,8 @@ class Driver(object):
 
     def __getattr__(self, fname):
         # First request of a driver API function
-        try:
-            proto = API_PROTOTYPES[fname]
-        except KeyError:
-            raise AttributeError(fname)
-        restype = proto[0]
-        argtypes = proto[1:]
 
-        # Initialize driver
+        # Ensure driver is initialized
         if not self.is_initialized:
             self.initialize()
 
@@ -280,33 +279,66 @@ class Driver(object):
             raise CudaSupportError("Error at driver init: \n%s:" %
                                    self.initialization_error)
 
-        # Find function in driver library
-        libfn = self._find_api(fname)
-        libfn.restype = restype
-        libfn.argtypes = argtypes
+        if config.CUDA_USE_CUDA_PYTHON:
+            return self._cuda_python_wrap_fn(fname)
+        else:
+            return self._ctypes_wrap_fn(fname)
 
-        safe_call = self._wrap_api_call(fname, libfn)
-        setattr(self, fname, safe_call)
-        return safe_call
+    def _ctypes_wrap_fn(self, fname, libfn=None):
+        # Wrap a CUDA driver function by default
+        if libfn is None:
+            try:
+                proto = API_PROTOTYPES[fname]
+            except KeyError:
+                raise AttributeError(fname)
+            restype = proto[0]
+            argtypes = proto[1:]
 
-    def _wrap_api_call(self, fname, libfn):
+            # Find function in driver library
+            libfn = self._find_api(fname)
+            libfn.restype = restype
+            libfn.argtypes = argtypes
+
         def verbose_cuda_api_call(*args):
             argstr = ", ".join([str(arg) for arg in args])
             _logger.debug('call driver api: %s(%s)', libfn.__name__, argstr)
             retcode = libfn(*args)
-            self._check_error(fname, retcode)
+            self._check_ctypes_error(fname, retcode)
 
         def safe_cuda_api_call(*args):
             _logger.debug('call driver api: %s', libfn.__name__)
             retcode = libfn(*args)
-            self._check_error(fname, retcode)
+            self._check_ctypes_error(fname, retcode)
 
         if config.CUDA_LOG_API_ARGS:
             wrapper = verbose_cuda_api_call
         else:
             wrapper = safe_cuda_api_call
 
-        return functools.wraps(libfn)(wrapper)
+        safe_call = functools.wraps(libfn)(wrapper)
+        setattr(self, fname, safe_call)
+        return safe_call
+
+    def _cuda_python_wrap_fn(self, fname):
+        libfn = getattr(cuda_driver, fname)
+
+        def verbose_cuda_api_call(*args):
+            argstr = ", ".join([str(arg) for arg in args])
+            _logger.debug('call driver api: %s(%s)', libfn.__name__, argstr)
+            return self._check_cuda_python_error(fname, libfn(*args))
+
+        def safe_cuda_api_call(*args):
+            _logger.debug('call driver api: %s', libfn.__name__)
+            return self._check_cuda_python_error(fname, libfn(*args))
+
+        if config.CUDA_LOG_API_ARGS:
+            wrapper = verbose_cuda_api_call
+        else:
+            wrapper = safe_cuda_api_call
+
+        safe_call = functools.wraps(libfn)(wrapper)
+        setattr(self, fname, safe_call)
+        return safe_call
 
     def _find_api(self, fname):
         if config.CUDA_PER_THREAD_DEFAULT_STREAM:
@@ -328,7 +360,7 @@ class Driver(object):
         setattr(self, fname, absent_function)
         return absent_function
 
-    def _check_error(self, fname, retcode):
+    def _check_ctypes_error(self, fname, retcode):
         if retcode != enums.CUDA_SUCCESS:
             errname = ERROR_MAP.get(retcode, "UNKNOWN_CUDA_ERROR")
             msg = "Call to %s results in %s" % (fname, errname)
@@ -341,6 +373,25 @@ class Driver(object):
                     raise CudaDriverError("CUDA initialized before forking")
             raise CudaAPIError(retcode, msg)
 
+    def _check_cuda_python_error(self, fname, returned):
+        retcode = returned[0]
+        retval = returned[1:]
+        if len(retval) == 1:
+            retval = retval[0]
+
+        if retcode != cuda_driver.CUresult.CUDA_SUCCESS:
+            msg = "Call to %s results in %s" % (fname, retcode.name)
+            _logger.error(msg)
+            if retcode == cuda_driver.CUresult.CUDA_ERROR_NOT_INITIALIZED:
+                # Detect forking
+                if self.pid is not None and _getpid() != self.pid:
+                    msg = 'pid %s forked from pid %s after CUDA driver init'
+                    _logger.critical(msg, _getpid(), self.pid)
+                    raise CudaDriverError("CUDA initialized before forking")
+            raise CudaAPIError(retcode, msg)
+
+        return retval
+
     def get_device(self, devnum=0):
         dev = self.devices.get(devnum)
         if dev is None:
@@ -349,6 +400,9 @@ class Driver(object):
         return weakref.proxy(dev)
 
     def get_device_count(self):
+        if config.CUDA_USE_CUDA_PYTHON:
+            return self.cuDeviceGetCount()
+
         count = c_int()
         self.cuDeviceGetCount(byref(count))
         return count.value
@@ -464,10 +518,20 @@ class Device(object):
             raise RuntimeError(errmsg)
 
     def __init__(self, devnum):
-        got_devnum = c_int()
-        driver.cuDeviceGet(byref(got_devnum), devnum)
-        assert devnum == got_devnum.value, "Driver returned another device"
-        self.id = got_devnum.value
+        if config.CUDA_USE_CUDA_PYTHON:
+            result = driver.cuDeviceGet(devnum)
+            self.id = result
+            got_devnum = int(result)
+        else:
+            result = c_int()
+            driver.cuDeviceGet(byref(result), devnum)
+            got_devnum = result.value
+            self.id = got_devnum
+
+        msg = f"Driver returned device {got_devnum} instead of {devnum}"
+        if devnum != got_devnum:
+            raise RuntimeError(msg)
+
         self.attributes = {}
 
         # Read compute capability
@@ -476,19 +540,32 @@ class Device(object):
 
         # Read name
         bufsz = 128
-        buf = (c_char * bufsz)()
-        driver.cuDeviceGetName(buf, bufsz, self.id)
-        self.name = buf.value
+
+        if config.CUDA_USE_CUDA_PYTHON:
+            buf = driver.cuDeviceGetName(bufsz, self.id)
+            name = buf.decode('utf-8').rstrip('\0')
+        else:
+            buf = (c_char * bufsz)()
+            driver.cuDeviceGetName(buf, bufsz, self.id)
+            name = buf.value
+
+        self.name = name
 
         # Read UUID
-        uuid = cu_uuid()
-        driver.cuDeviceGetUuid(byref(uuid), self.id)
+        if config.CUDA_USE_CUDA_PYTHON:
+            uuid = driver.cuDeviceGetUuid(self.id)
+            uuid_vals = tuple(uuid.bytes)
+        else:
+            uuid = cu_uuid()
+            driver.cuDeviceGetUuid(byref(uuid), self.id)
+            uuid_vals = tuple(bytes(uuid))
+
         b = '%02x'
         b2 = b * 2
         b4 = b * 4
         b6 = b * 6
         fmt = f'GPU-{b4}-{b2}-{b2}-{b2}-{b6}'
-        self.uuid = fmt % tuple(bytes(uuid))
+        self.uuid = fmt % uuid_vals
 
         self.primary_context = None
 
@@ -505,16 +582,22 @@ class Device(object):
     def __getattr__(self, attr):
         """Read attributes lazily
         """
-        try:
-            code = DEVICE_ATTRIBUTES[attr]
-        except KeyError:
-            raise AttributeError(attr)
+        if config.CUDA_USE_CUDA_PYTHON:
+            code = getattr(cuda_driver.CUdevice_attribute,
+                           f'CU_DEVICE_ATTRIBUTE_{attr}')
+            value = driver.cuDeviceGetAttribute(code, self.id)
+        else:
+            try:
+                code = DEVICE_ATTRIBUTES[attr]
+            except KeyError:
+                raise AttributeError(attr)
 
-        value = c_int()
-        driver.cuDeviceGetAttribute(byref(value), code, self.id)
-        setattr(self, attr, value.value)
+            result = c_int()
+            driver.cuDeviceGetAttribute(byref(result), code, self.id)
+            value = result.value
 
-        return value.value
+        setattr(self, attr, value)
+        return value
 
     def __hash__(self):
         return hash(self.id)

@@ -159,6 +159,10 @@ class _EnvReloader(object):
         CUDA_LOW_OCCUPANCY_WARNINGS = _readenv(
             "NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS", int, 1)
 
+        # Whether to use the official CUDA Python API
+        CUDA_USE_CUDA_PYTHON = _readenv(
+            "NUMBA_CUDA_USE_CUDA_PYTHON", int, 1)
+
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)
 
