@@ -1307,11 +1307,19 @@ class Context(object):
 
     def create_module_image(self, image):
         module = load_module_image(self, image)
-        self.modules[module.handle.value] = module
+        if config.CUDA_USE_CUDA_PYTHON:
+            key = module.handle
+        else:
+            key = module.handle.value
+        self.modules[key] = module
         return weakref.proxy(module)
 
     def unload_module(self, module):
-        del self.modules[module.handle.value]
+        if config.CUDA_USE_CUDA_PYTHON:
+            key = module.handle
+        else:
+            key = module.handle.value
+        del self.modules[key]
 
     def get_default_stream(self):
         handle = drvapi.cu_stream(drvapi.CU_STREAM_DEFAULT)
@@ -1406,8 +1414,8 @@ def load_module_image_ctypes(context, image):
 
     info_log = jitinfo.value
 
-    return Module(weakref.proxy(context), handle, info_log,
-                  _module_finalizer(context, handle))
+    return CtypesModule(weakref.proxy(context), handle, info_log,
+                        _module_finalizer(context, handle))
 
 
 def load_module_image_cuda_python(context, image):
@@ -1440,8 +1448,8 @@ def load_module_image_cuda_python(context, image):
 
     info_log = jitinfo.decode('utf-8')
 
-    return Module(weakref.proxy(context), handle, info_log,
-                  _module_finalizer(context, handle))
+    return CudaPythonModule(weakref.proxy(context), handle, info_log,
+                            _module_finalizer(context, handle))
 
 
 def _alloc_finalizer(memory_manager, ptr, alloc_key, size):
@@ -1520,6 +1528,11 @@ def _module_finalizer(context, handle):
     dealloc = context.deallocations
     modules = context.modules
 
+    if config.CUDA_USE_CUDA_PYTHON:
+        key = handle
+    else:
+        key = handle.value
+
     def core():
         shutting_down = utils.shutting_down  # early bind
 
@@ -1527,7 +1540,7 @@ def _module_finalizer(context, handle):
             # If we are not shutting down, we must be called due to
             # Context.reset() of Context.unload_module().  Both must have
             # cleared the module reference from the context.
-            assert shutting_down() or handle.value not in modules
+            assert shutting_down() or key not in modules
             driver.cuModuleUnload(handle)
 
         dealloc.add_item(module_unload, handle)
@@ -2162,7 +2175,9 @@ def event_elapsed_time(evtstart, evtend):
     return msec.value
 
 
-class Module(object):
+class Module(metaclass=ABCMeta):
+    """Abstract base class for modules"""
+
     def __init__(self, context, handle, info_log, finalizer=None):
         self.context = context
         self.handle = handle
@@ -2171,13 +2186,25 @@ class Module(object):
             self._finalizer = weakref.finalize(self, finalizer)
 
     def unload(self):
+        """Unload this module from the context"""
         self.context.unload_module(self)
+
+    @abstractmethod
+    def get_function(self, name):
+        """Returns a Function object encapsulating the named function"""
+
+    @abstractmethod
+    def get_global_symbol(self, name):
+        """Return a MemoryPointer referring to the named symbol"""
+
+
+class CtypesModule(Module):
 
     def get_function(self, name):
         handle = drvapi.cu_function()
         driver.cuModuleGetFunction(byref(handle), self.handle,
                                    name.encode('utf8'))
-        return Function(weakref.proxy(self), handle, name)
+        return CtypesFunction(weakref.proxy(self), handle, name)
 
     def get_global_symbol(self, name):
         ptr = drvapi.cu_device_ptr()
@@ -2187,11 +2214,22 @@ class Module(object):
         return MemoryPointer(self.context, ptr, size), size.value
 
 
+class CudaPythonModule(Module):
+
+    def get_function(self, name):
+        handle = driver.cuModuleGetFunction(self.handle, name.encode('utf8'))
+        return CudaPythonFunction(weakref.proxy(self), handle, name)
+
+    def get_global_symbol(self, name):
+        ptr, size = driver.cuModuleGetGlobal(self.handle, name.encode('utf8'))
+        return MemoryPointer(self.context, ptr, size), size
+
+
 FuncAttr = namedtuple("FuncAttr", ["regs", "shared", "local", "const",
                                    "maxthreads"])
 
 
-class Function(object):
+class Function(metaclass=ABCMeta):
     griddim = 1, 1, 1
     blockdim = 1, 1, 1
     stream = 0
@@ -2201,10 +2239,31 @@ class Function(object):
         self.module = module
         self.handle = handle
         self.name = name
-        self.attrs = self._read_func_attr_all()
+        self.attrs = self.read_func_attr_all()
 
     def __repr__(self):
         return "<CUDA function %s>" % self.name
+
+    @property
+    def device(self):
+        return self.module.context.device
+
+    @abstractmethod
+    def cache_config(self, prefer_equal=False, prefer_cache=False,
+                     prefer_shared=False):
+        """Set the cache configuration for this function."""
+
+    @abstractmethod
+    def read_func_attr(self, attrid):
+        """Return the value of the attribute with given ID."""
+
+    @abstractmethod
+    def read_func_attr_all(self):
+        """Return a FuncAttr object with the values of various function
+        attributes."""
+
+
+class CtypesFunction(Function):
 
     def cache_config(self, prefer_equal=False, prefer_cache=False,
                      prefer_shared=False):
@@ -2219,25 +2278,49 @@ class Function(object):
             flag = enums.CU_FUNC_CACHE_PREFER_NONE
         driver.cuFuncSetCacheConfig(self.handle, flag)
 
-    @property
-    def device(self):
-        return self.module.context.device
-
-    def _read_func_attr(self, attrid):
-        """
-        Read CUfunction attributes
-        """
+    def read_func_attr(self, attrid):
         retval = c_int()
         driver.cuFuncGetAttribute(byref(retval), attrid, self.handle)
         return retval.value
 
-    def _read_func_attr_all(self):
-        nregs = self._read_func_attr(enums.CU_FUNC_ATTRIBUTE_NUM_REGS)
-        cmem = self._read_func_attr(enums.CU_FUNC_ATTRIBUTE_CONST_SIZE_BYTES)
-        lmem = self._read_func_attr(enums.CU_FUNC_ATTRIBUTE_LOCAL_SIZE_BYTES)
-        smem = self._read_func_attr(enums.CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES)
-        maxtpb = self._read_func_attr(
+    def read_func_attr_all(self):
+        nregs = self.read_func_attr(enums.CU_FUNC_ATTRIBUTE_NUM_REGS)
+        cmem = self.read_func_attr(enums.CU_FUNC_ATTRIBUTE_CONST_SIZE_BYTES)
+        lmem = self.read_func_attr(enums.CU_FUNC_ATTRIBUTE_LOCAL_SIZE_BYTES)
+        smem = self.read_func_attr(enums.CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES)
+        maxtpb = self.read_func_attr(
             enums.CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK)
+        return FuncAttr(regs=nregs, const=cmem, local=lmem, shared=smem,
+                        maxthreads=maxtpb)
+
+
+class CudaPythonFunction(Function):
+
+    def cache_config(self, prefer_equal=False, prefer_cache=False,
+                     prefer_shared=False):
+        prefer_equal = prefer_equal or (prefer_cache and prefer_shared)
+        attr = cuda_driver.CUfunction_attribute
+        if prefer_equal:
+            flag = attr.CU_FUNC_CACHE_PREFER_EQUAL
+        elif prefer_cache:
+            flag = attr.CU_FUNC_CACHE_PREFER_L1
+        elif prefer_shared:
+            flag = attr.CU_FUNC_CACHE_PREFER_SHARED
+        else:
+            flag = attr.CU_FUNC_CACHE_PREFER_NONE
+        driver.cuFuncSetCacheConfig(self.handle, flag)
+
+    def read_func_attr(self, attrid):
+        return driver.cuFuncGetAttribute(attrid, self.handle)
+
+    def read_func_attr_all(self):
+        attr = cuda_driver.CUfunction_attribute
+        nregs = self.read_func_attr(attr.CU_FUNC_ATTRIBUTE_NUM_REGS)
+        cmem = self.read_func_attr(attr.CU_FUNC_ATTRIBUTE_CONST_SIZE_BYTES)
+        lmem = self.read_func_attr(attr.CU_FUNC_ATTRIBUTE_LOCAL_SIZE_BYTES)
+        smem = self.read_func_attr(attr.CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES)
+        maxtpb = self.read_func_attr(
+            attr.CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK)
         return FuncAttr(regs=nregs, const=cmem, local=lmem, shared=smem,
                         maxthreads=maxtpb)
 
@@ -2290,7 +2373,7 @@ class Linker(metaclass=ABCMeta):
     """Abstract base class for linkers"""
 
     @classmethod
-    def new(self, max_registers=0, lineinfo=False, cc=None):
+    def new(cls, max_registers=0, lineinfo=False, cc=None):
         if config.CUDA_USE_CUDA_PYTHON:
             return CudaPythonLinker(max_registers, lineinfo, cc)
         else:
