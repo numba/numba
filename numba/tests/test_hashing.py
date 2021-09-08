@@ -116,9 +116,14 @@ class BaseTest(TestCase):
                 yield a + a.mean()
 
         # Infs, nans, zeros, magic -1
-        a = typ([0.0, 0.5, -0.0, -1.0, float('inf'), -float('inf'),
-                 float('nan')])
-        yield a
+        a = [0.0, 0.5, -0.0, -1.0, float('inf'), -float('inf'),]
+
+        # Python 3.10 has a hash for nan based on the pointer to the PyObject
+        # containing the nan, skip this input and use explicit test instead.
+        if utils.PYVERSION < (3, 10):
+            a.append(float('nan'))
+
+        yield typ(a)
 
     def complex_samples(self, typ, float_ty):
         for real in self.float_samples(float_ty):
