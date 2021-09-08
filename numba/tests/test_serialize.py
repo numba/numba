@@ -5,6 +5,7 @@ import runpy
 import subprocess
 import sys
 import unittest
+from multiprocessing import get_context
 
 from numba.core.errors import TypingError
 from numba.tests.support import TestCase
@@ -234,10 +235,23 @@ class TestCloudPickleIssues(TestCase):
     @unittest.skipIf(__name__ == "__main__",
                      "Test cannot run as when module is __main__")
     def test_main_class_reset_on_unpickle(self):
-        from multiprocessing import get_context
-
         mp = get_context('spawn')
         proc = mp.Process(target=check_main_class_reset_on_unpickle)
+        proc.start()
+        proc.join(timeout=10)
+        self.assertEqual(proc.exitcode, 0)
+
+    def test_dynamic_class_reset_on_unpickle_new_proc(self):
+        # a dynamic class
+        class Klass:
+            classvar = None
+
+        # serialize Klass in this process
+        saved = dumps(Klass)
+
+        # Check the reset problem in a new process
+        mp = get_context('spawn')
+        proc = mp.Process(target=check_unpickle_dyn_class_new_proc, args=(saved,))
         proc.start()
         proc.join(timeout=10)
         self.assertEqual(proc.exitcode, 0)
@@ -252,21 +266,37 @@ def check_main_class_reset_on_unpickle():
     # Get the Klass and check it is from __main__
     Klass = glbs['Klass']
     assert Klass.__module__ == "__main__"
+    assert Klass.classvar != 100
+    saved = dumps(Klass)
+    # mutate
+    Klass.classvar = 100
+    # check
+    _check_dyn_class(Klass, saved)
 
-    def mutator():
-        Klass.classvar = 100
 
+def check_unpickle_dyn_class_new_proc(saved):
+    Klass = loads(saved)
+    assert Klass.classvar != 100
+    # mutate
+    Klass.classvar = 100
+    # check
+    _check_dyn_class(Klass, saved)
+
+
+def _check_dyn_class(Klass, saved):
     def check():
         if Klass.classvar != 100:
             raise AssertionError("Check failed. Klass reset.")
 
-    saved = dumps(Klass)
-    mutator()
     check()
-    loads(saved)
+    loaded = loads(saved)
+    if loaded is not Klass:
+        raise AssertionError("Expected reuse")
     # Without the patch, each `loads(saved)` will reset `Klass.classvar`
     check()
-    loads(saved)
+    loaded = loads(saved)
+    if loaded is not Klass:
+        raise AssertionError("Expected reuse")
     check()
 
 
