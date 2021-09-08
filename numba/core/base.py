@@ -643,13 +643,13 @@ class BaseContext(object):
         overloads = self._setattrs[attr]
         try:
             return wrap_setattr(overloads.find((typ, valty)))
-        except NotImplementedError:
+        except errors.NumbaNotImplementedError:
             pass
         # Lookup generic setattr implementation for this type
         overloads = self._setattrs[None]
         try:
             return wrap_setattr(overloads.find((typ, valty)))
-        except NotImplementedError:
+        except errors.NumbaNotImplementedError:
             pass
 
         raise NotImplementedError("No definition for lowering %s.%s = %s"
