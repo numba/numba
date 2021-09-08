@@ -212,6 +212,8 @@ class TestSerializationMisc(TestCase):
 class TestCloudPickleIssues(TestCase):
     """This testcase includes all issues specific to cloudpickle implementation.
     """
+    _numba_parallel_test_ = False
+
     def test_dynamic_class_reset_on_unpickle(self):
         # a dynamic class
         class Klass:
