@@ -661,8 +661,11 @@ def _expand_integer(ty):
 
 
 def generic_homog(self, args, kws):
-    assert not args
-    assert not kws
+    if args:
+        raise NumbaAssertionError("args not supported")
+    if kws:
+        raise NumbaAssertionError("kws not supported")
+
     return signature(self.this.dtype, recvr=self.this)
 
 

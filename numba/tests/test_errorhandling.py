@@ -214,7 +214,7 @@ class TestErrorMessages(unittest.TestCase):
 
         @overload(foo)
         def ol_foo():
-            raise ValueError(given_reason)
+            raise errors.NumbaValueError(given_reason)
 
         @njit
         def call_foo():
@@ -459,9 +459,7 @@ class TestDeveloperSpecificErrorMessages(SerialMixin, unittest.TestCase):
                 njit("void(int64[:,:])")(foo)
 
         excstr = str(raises.exception)
-        self.assertIn("AssertionError()", excstr)
-        self.assertIn("BoundFunction(array.max for array(int64, 2d, A))",
-                      excstr)
+        self.assertIn("args not supported", excstr)
 
 
 if __name__ == '__main__':
