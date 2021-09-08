@@ -709,8 +709,8 @@ class BaseContext(object):
         try:
             impl = self._casts.find((fromty, toty))
             return impl(self, builder, fromty, toty, val)
-        except NotImplementedError:
-            raise NotImplementedError(
+        except errors.NumbaNotImplementedError:
+            raise errors.NumbaNotImplementedError(
                 "Cannot cast %s to %s: %s" % (fromty, toty, val))
 
     def generic_compare(self, builder, key, argtypes, args):
