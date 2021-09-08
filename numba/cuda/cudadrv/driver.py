@@ -1213,23 +1213,38 @@ class Context(object):
         :param blocksizelimit: maximum block size the kernel is designed to
                                handle
         """
+        args = (func, b2d_func, memsize, blocksizelimit, flags)
+        if config.CUDA_USE_CUDA_PYTHON:
+            return self._cuda_python_max_potential_block_size(*args)
+        else:
+            return self._ctypes_max_potential_block_size(*args)
 
+    def _ctypes_max_potential_block_size(self, func, b2d_func, memsize,
+                                         blocksizelimit, flags):
         gridsize = c_int()
         blocksize = c_int()
         b2d_cb = cu_occupancy_b2d_size(b2d_func)
+        args = [byref(gridsize), byref(blocksize), func.handle, b2d_cb,
+                memsize, blocksizelimit]
+
         if not flags:
-            driver.cuOccupancyMaxPotentialBlockSize(byref(gridsize),
-                                                    byref(blocksize),
-                                                    func.handle, b2d_cb,
-                                                    memsize, blocksizelimit)
+            driver.cuOccupancyMaxPotentialBlockSize(*args)
         else:
-            driver.cuOccupancyMaxPotentialBlockSizeWithFlags(byref(gridsize),
-                                                             byref(blocksize),
-                                                             func.handle,
-                                                             b2d_cb, memsize,
-                                                             blocksizelimit,
-                                                             flags)
+            args.append(flags)
+            driver.cuOccupancyMaxPotentialBlockSizeWithFlags(*args)
+
         return (gridsize.value, blocksize.value)
+
+    def _cuda_python_max_potential_block_size(self, func, b2d_func, memsize,
+                                              blocksizelimit, flags):
+        b2d_cb = cuda_driver.CUoccupancyB2DSize(b2d_func)
+        args = [func.handle, b2d_cb, memsize, blocksizelimit]
+
+        if not flags:
+            return driver.cuOccupancyMaxPotentialBlockSize(*args)
+        else:
+            args.append(flags)
+            return driver.cuOccupancyMaxPotentialBlockSizeWithFlags(*args)
 
     def prepare_for_use(self):
         """Initialize the context for use.
@@ -2344,7 +2359,11 @@ def launch_kernel(cufunc_handle,
     params = (c_void_p * len(param_vals))(*param_vals)
 
     if config.CUDA_USE_CUDA_PYTHON:
-        params = addressof(params)
+        params_for_launch = addressof(params)
+        extra = 0
+    else:
+        params_for_launch = params
+        extra = None
 
     if cooperative:
         driver.cuLaunchCooperativeKernel(cufunc_handle,
@@ -2352,18 +2371,14 @@ def launch_kernel(cufunc_handle,
                                          bx, by, bz,
                                          sharedmem,
                                          hstream,
-                                         params)
+                                         params_for_launch)
     else:
-        if config.CUDA_USE_CUDA_PYTHON:
-            extra = 0
-        else:
-            extra = None
         driver.cuLaunchKernel(cufunc_handle,
                               gx, gy, gz,
                               bx, by, bz,
                               sharedmem,
                               hstream,
-                              params,
+                              params_for_launch,
                               extra)
 
 

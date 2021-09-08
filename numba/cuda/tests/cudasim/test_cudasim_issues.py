@@ -3,11 +3,13 @@ import threading
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import CUDATestCase, skip_unless_cudasim
+from numba.cuda.testing import (CUDATestCase, skip_unless_cudasim,
+                                skip_with_cuda_python)
 import numba.cuda.simulator as simulator
 import unittest
 
 
+@skip_with_cuda_python('Segfaults with CUDA Python')
 class TestCudaSimIssues(CUDATestCase):
     def test_record_access(self):
         backyard_type = [('statue', np.float64),
