@@ -12,7 +12,7 @@ from numba.np.numpy_support import (ufunc_find_matching_loop,
                              from_dtype, as_dtype, resolve_output_type,
                              carray, farray, _ufunc_loop_sig)
 from numba.core.errors import (TypingError, NumbaPerformanceWarning,
-                               NumbaTypeError)
+                               NumbaTypeError, NumbaAssertionError)
 from numba import pndindex
 from numba.core.overload_glue import glue_typing
 
@@ -1225,8 +1225,10 @@ class DiagCtor(CallableTemplate):
 class Take(AbstractTemplate):
 
     def generic(self, args, kws):
-        assert not kws
-        assert len(args) == 2
+        if kws:
+            raise NumbaAssertionError("kws not supported")
+        if len(args) != 2:
+            raise NumbaAssertionError("two arguments are required")
         arr, ind = args
         if isinstance(ind, types.Number):
             retty = arr.dtype
