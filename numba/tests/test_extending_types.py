@@ -5,7 +5,7 @@ import operator
 
 from numba import njit, literally
 from numba.core import types, cgutils
-from numba.core.errors import TypingError
+from numba.core.errors import TypingError, NumbaTypeError
 from numba.core.extending import lower_builtin
 from numba.core.extending import models, register_model
 from numba.core.extending import make_attribute_wrapper
@@ -69,7 +69,7 @@ class TestExtTypDummy(unittest.TestCase):
                     return float(x.value)
                 return codegen
             else:
-                raise TypeError('cannot type float({})'.format(x))
+                raise NumbaTypeError('cannot type float({})'.format(x))
 
     def test_overload_float(self):
         self._add_float_overload()
@@ -91,9 +91,9 @@ class TestExtTypDummy(unittest.TestCase):
         with self.assertRaises(TypingError) as raises:
             foo(1j)
 
-        self.assertIn("TypeError: float() does not support complex",
+        self.assertIn("float() does not support complex",
                       str(raises.exception))
-        self.assertIn("TypeError: cannot type float(complex128)",
+        self.assertIn("cannot type float(complex128)",
                       str(raises.exception))
 
     def test_unboxing(self):
