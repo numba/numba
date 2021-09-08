@@ -342,7 +342,7 @@ class TestErrorMessages(unittest.TestCase):
                 raise errors.RequireLiteralValue(given_reason1)
 
             if arr.ndim != 1:
-                raise ValueError(given_reason2)
+                raise errors.NumbaValueError(given_reason2)
 
             sig = types.intp(x, arr)
 
