@@ -4074,7 +4074,10 @@ def _arange_dtype(*args):
         # were wrapped in NumPy int*() calls it's not possible to detect the
         # difference between `np.arange(10)` and `np.arange(np.int64(10)`.
         NPY_TY = getattr(types, "int%s" % (8 * np.dtype(int).itemsize))
-        dtype = max(bounds + [NPY_TY,])
+
+        # unliteral these types such that `max` works.
+        unliteral_bounds = [types.unliteral(x) for x in bounds]
+        dtype = max(unliteral_bounds + [NPY_TY,])
 
     return dtype
 
