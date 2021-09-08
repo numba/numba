@@ -1,14 +1,16 @@
 import contextlib
 import gc
 import pickle
+import runpy
 import subprocess
 import sys
+import unittest
 
 from numba.core.errors import TypingError
-from numba.tests.support import TestCase, tag
-from .serialize_usecases import *
-import unittest
+from numba.tests.support import TestCase
 from numba.core.target_extension import resolve_dispatcher_from_str
+from numba.cloudpickle import dumps, loads
+from .serialize_usecases import *
 
 
 class TestDispatcherPickling(TestCase):
@@ -210,8 +212,6 @@ class TestCloudPickleIssues(TestCase):
     """This testcase includes all issues specific to cloudpickle implementation.
     """
     def test_dynamic_class_reset_on_unpickle(self):
-        from numba.cloudpickle import dumps, loads
-
         # a dynamic class
         class Klass:
             classvar = None
@@ -226,10 +226,48 @@ class TestCloudPickleIssues(TestCase):
         mutator()
         check()
         loads(saved)
+        # Without the patch, each `loads(saved)` will reset `Klass.classvar`
         check()
         loads(saved)
         check()
 
+    @unittest.skipIf(__name__ == "__main__",
+                     "Test cannot run as when module is __main__")
+    def test_main_class_reset_on_unpickle(self):
+        from multiprocessing import get_context
+
+        mp = get_context('spawn')
+        proc = mp.Process(target=check_main_class_reset_on_unpickle)
+        proc.start()
+        proc.join(timeout=10)
+        self.assertEqual(proc.exitcode, 0)
+
+
+def check_main_class_reset_on_unpickle():
+    # Load module and get its global dictionary
+    glbs = runpy.run_module(
+        "numba.tests.cloudpickle_main_class",
+        run_name="__main__",
+    )
+    # Get the Klass and check it is from __main__
+    Klass = glbs['Klass']
+    assert Klass.__module__ == "__main__"
+
+    def mutator():
+        Klass.classvar = 100
+
+    def check():
+        if Klass.classvar != 100:
+            raise AssertionError("Check failed. Klass reset.")
+
+    saved = dumps(Klass)
+    mutator()
+    check()
+    loads(saved)
+    # Without the patch, each `loads(saved)` will reset `Klass.classvar`
+    check()
+    loads(saved)
+    check()
 
 
 if __name__ == '__main__':
