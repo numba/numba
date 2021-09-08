@@ -2336,11 +2336,15 @@ def launch_kernel(cufunc_handle,
     param_vals = []
     for arg in args:
         if is_device_memory(arg):
-            param_vals.append(addressof(device_ctypes_pointer(arg)))
+            getaddr = int if config.CUDA_USE_CUDA_PYTHON else addressof
+            param_vals.append(getaddr(device_ctypes_pointer(arg)))
         else:
             param_vals.append(addressof(arg))
 
     params = (c_void_p * len(param_vals))(*param_vals)
+
+    if config.CUDA_USE_CUDA_PYTHON:
+        params = addressof(params)
 
     if cooperative:
         driver.cuLaunchCooperativeKernel(cufunc_handle,
@@ -2350,15 +2354,20 @@ def launch_kernel(cufunc_handle,
                                          hstream,
                                          params)
     else:
+        if config.CUDA_USE_CUDA_PYTHON:
+            extra = 0
+        else:
+            extra = None
         driver.cuLaunchKernel(cufunc_handle,
                               gx, gy, gz,
                               bx, by, bz,
                               sharedmem,
                               hstream,
                               params,
-                              None)
+                              extra)
 
 
+# XXX: Need a CUDA Python version of this
 FILE_EXTENSION_MAP = {
     'o': enums.CU_JIT_INPUT_OBJECT,
     'ptx': enums.CU_JIT_INPUT_PTX,

@@ -33,6 +33,8 @@ from .args import wrap_arg
 from numba.core.errors import NumbaPerformanceWarning
 from .descriptor import cuda_target
 
+from cuda import cuda as cuda_driver
+
 
 def _nvvm_options_type(x):
     if x is None:
@@ -730,7 +732,12 @@ class _Kernel(serialize.ReduceMixin):
         for t, v in zip(self.argument_types, args):
             self._prepare_args(t, v, stream, retr, kernelargs)
 
-        stream_handle = stream and stream.handle or None
+        if config.CUDA_USE_CUDA_PYTHON:
+            zero_stream = cuda_driver.CUstream(0)
+        else:
+            zero_stream = None
+
+        stream_handle = stream and stream.handle or zero_stream
 
         # Invoke kernel
         driver.launch_kernel(cufunc.handle,
