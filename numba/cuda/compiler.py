@@ -801,7 +801,14 @@ class _Kernel(serialize.ReduceMixin):
             parent = ctypes.c_void_p(0)
             nitems = c_intp(devary.size)
             itemsize = c_intp(devary.dtype.itemsize)
-            data = ctypes.c_void_p(driver.device_pointer(devary))
+
+            ptr = driver.device_pointer(devary)
+
+            if config.CUDA_USE_CUDA_PYTHON:
+                ptr = int(ptr)
+
+            data = ctypes.c_void_p(ptr)
+
             kernelargs.append(meminfo)
             kernelargs.append(parent)
             kernelargs.append(nitems)

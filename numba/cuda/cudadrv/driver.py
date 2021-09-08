@@ -2720,6 +2720,9 @@ def host_memory_size(obj):
 
 def device_pointer(obj):
     "Get the device pointer as an integer"
+    if config.CUDA_USE_CUDA_PYTHON:
+        return obj.device_ctypes_pointer
+
     return device_ctypes_pointer(obj).value
 
 
