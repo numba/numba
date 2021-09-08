@@ -937,6 +937,8 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
                                         defargs, can_fallback, has_stararg,
                                         exact_match_required)
 
+        functools.update_wrapper(self, py_func)
+
         if sigs:
             if len(sigs) > 1:
                 raise TypeError("Only one signature supported at present")
