@@ -554,6 +554,10 @@ br i1 %.294, label %B42, label %B160
 class TestNrtExternalCFFI(MemoryLeakMixin, TestCase):
     """Testing the use of externally compiled C code that use NRT
     """
+    def setUp(self):
+        # initialize the NRT (in case the tests are run in isolation)
+        super(TestNrtExternalCFFI, self).setUp()
+        cpu.CPUContext(typing.Context())
 
     def compile_cffi_module(self, name, source, cdef):
         from cffi import FFI

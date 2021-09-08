@@ -176,6 +176,19 @@ Here is an example that uses the ``nrt_external.h``:
       return mi;
   }
 
+It is important to ensure that the NRT is initialized prior to making calls to
+it, calling ``numba.core.runtime.nrt.rtsys.initialize(context)`` from Python
+will have the desired effect. Similarly the code snippet:
+
+.. code-block:: Python
+
+  from numba.core import typing, cpu
+  typingctx = typing.Context()
+  cpu.CPUContext(typingctx, 'cpu')
+
+will achieve the same specifically for Numba's CPU target (the default). Failure
+to initialize the NRT will result in access violations as function pointers for
+various internal atomic operations will be missing in the ``NRT_MemSys`` struct.
 
 Future Plan
 ===========
