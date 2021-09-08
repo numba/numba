@@ -205,5 +205,32 @@ class TestSerializationMisc(TestCase):
         self.assertIs(got1, got2)
 
 
+
+class TestCloudPickleIssues(TestCase):
+    """This testcase includes all issues specific to cloudpickle implementation.
+    """
+    def test_dynamic_class_reset_on_unpickle(self):
+        from numba.cloudpickle import dumps, loads
+
+        # a dynamic class
+        class Klass:
+            classvar = None
+
+        def mutator():
+            Klass.classvar = 100
+
+        def check():
+            self.assertEqual(Klass.classvar, 100)
+
+        saved = dumps(Klass)
+        mutator()
+        check()
+        loads(saved)
+        check()
+        loads(saved)
+        check()
+
+
+
 if __name__ == '__main__':
     unittest.main()
