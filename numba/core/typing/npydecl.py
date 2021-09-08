@@ -787,9 +787,9 @@ def _homogeneous_dims(context, func_name, arrays):
     ndim = arrays[0].ndim
     for a in arrays:
         if a.ndim != ndim:
-            raise TypeError("%s(): all the input arrays "
-                            "must have same number of dimensions"
-                            % func_name)
+            msg = (f"{func_name}(): all the input arrays must have same number "
+                   "of dimensions")
+            raise NumbaTypeError(msg)
     return ndim
 
 def _sequence_of_arrays(context, func_name, arrays,
