@@ -2,9 +2,12 @@ import ctypes
 
 import numpy as np
 
+from numba import config
 from numba.cuda.cudadrv import driver, drvapi, devices
 from numba.cuda.testing import unittest, ContextResettingTestCase
 from numba.cuda.testing import skip_on_cudasim
+
+from cuda import cuda as cuda_driver
 
 
 @skip_on_cudasim('CUDA Memory API unsupported in the simulator')
@@ -20,8 +23,12 @@ class TestCudaMemory(ContextResettingTestCase):
     def _template(self, obj):
         self.assertTrue(driver.is_device_memory(obj))
         driver.require_device_memory(obj)
+        if config.CUDA_USE_CUDA_PYTHON:
+            expected_class = cuda_driver.CUdeviceptr
+        else:
+            expected_class = drvapi.cu_device_ptr
         self.assertTrue(isinstance(obj.device_ctypes_pointer,
-                                   drvapi.cu_device_ptr))
+                                   expected_class))
 
     def test_device_memory(self):
         devmem = self.context.memalloc(1024)
@@ -48,23 +55,43 @@ class TestCudaMemory(ContextResettingTestCase):
 
     def test_derived_pointer(self):
         # Use MemoryPointer.view to create derived pointer
-        def check(m, offset):
-            # create view
-            v1 = m.view(offset)
-            self.assertEqual(v1.owner.handle.value, m.handle.value)
-            self.assertEqual(m.refct, 2)
-            self.assertEqual(v1.handle.value - offset, v1.owner.handle.value)
-            # create a view
-            v2 = v1.view(offset)
-            self.assertEqual(v2.owner.handle.value, m.handle.value)
-            self.assertEqual(v2.owner.handle.value, m.handle.value)
-            self.assertEqual(v2.handle.value - offset * 2,
-                             v2.owner.handle.value)
-            self.assertEqual(m.refct, 3)
-            del v2
-            self.assertEqual(m.refct, 2)
-            del v1
-            self.assertEqual(m.refct, 1)
+        if config.CUDA_USE_CUDA_PYTHON:
+            def check(m, offset):
+                # create view
+                v1 = m.view(offset)
+                self.assertEqual(int(v1.owner.handle), int(m.handle))
+                self.assertEqual(m.refct, 2)
+                self.assertEqual(int(v1.handle) - offset, int(v1.owner.handle))
+                # create a view
+                v2 = v1.view(offset)
+                self.assertEqual(int(v2.owner.handle), int(m.handle))
+                self.assertEqual(int(v2.owner.handle), int(m.handle))
+                self.assertEqual(int(v2.handle) - offset * 2,
+                                 int(v2.owner.handle))
+                self.assertEqual(m.refct, 3)
+                del v2
+                self.assertEqual(m.refct, 2)
+                del v1
+                self.assertEqual(m.refct, 1)
+        else:
+            def check(m, offset):
+                # create view
+                v1 = m.view(offset)
+                self.assertEqual(v1.owner.handle.value, m.handle.value)
+                self.assertEqual(m.refct, 2)
+                self.assertEqual(v1.handle.value - offset,
+                                 v1.owner.handle.value)
+                # create a view
+                v2 = v1.view(offset)
+                self.assertEqual(v2.owner.handle.value, m.handle.value)
+                self.assertEqual(v2.owner.handle.value, m.handle.value)
+                self.assertEqual(v2.handle.value - offset * 2,
+                                 v2.owner.handle.value)
+                self.assertEqual(m.refct, 3)
+                del v2
+                self.assertEqual(m.refct, 2)
+                del v1
+                self.assertEqual(m.refct, 1)
 
         m = self.context.memalloc(1024)
         check(m=m, offset=0)
