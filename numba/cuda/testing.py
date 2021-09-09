@@ -66,11 +66,6 @@ def ensure_supported_ccs_initialized():
         nvvm.get_supported_ccs()
 
 
-def skip_with_cuda_python(reason):
-    """Skip this test if running with the CUDA Python bindings"""
-    return unittest.skipIf(config.CUDA_USE_CUDA_PYTHON, reason)
-
-
 def skip_on_cudasim(reason):
     """Skip this test if running on the CUDA simulator"""
     return unittest.skipIf(config.ENABLE_CUDASIM, reason)
