@@ -1337,36 +1337,54 @@ class Context(object):
         del self.modules[key]
 
     def get_default_stream(self):
-        handle = drvapi.cu_stream(drvapi.CU_STREAM_DEFAULT)
+        if config.CUDA_USE_CUDA_PYTHON:
+            handle = cuda_driver.CUstream(0)
+        else:
+            handle = drvapi.cu_stream(drvapi.CU_STREAM_DEFAULT)
         return Stream(weakref.proxy(self), handle, None)
 
     def get_legacy_default_stream(self):
-        handle = drvapi.cu_stream(drvapi.CU_STREAM_LEGACY)
+        if config.CUDA_USE_CUDA_PYTHON:
+            handle = cuda_driver.CUstream(1)
+        else:
+            handle = drvapi.cu_stream(drvapi.CU_STREAM_LEGACY)
         return Stream(weakref.proxy(self), handle, None)
 
     def get_per_thread_default_stream(self):
-        handle = drvapi.cu_stream(drvapi.CU_STREAM_PER_THREAD)
+        if config.CUDA_USE_CUDA_PYTHON:
+            handle = cuda_driver.CUstream(2)
+        else:
+            handle = drvapi.cu_stream(drvapi.CU_STREAM_PER_THREAD)
         return Stream(weakref.proxy(self), handle, None)
 
     def create_stream(self):
-        handle = drvapi.cu_stream()
-        driver.cuStreamCreate(byref(handle), 0)
+        if config.CUDA_USE_CUDA_PYTHON:
+            handle = driver.cuStreamCreate(0)
+        else:
+            handle = drvapi.cu_stream()
+            driver.cuStreamCreate(byref(handle), 0)
         return Stream(weakref.proxy(self), handle,
                       _stream_finalizer(self.deallocations, handle))
 
     def create_external_stream(self, ptr):
         if not isinstance(ptr, int):
             raise TypeError("ptr for external stream must be an int")
-        handle = drvapi.cu_stream(ptr)
+        if config.CUDA_USE_CUDA_PYTHON:
+            handle = cuda_driver.CUstream(ptr)
+        else:
+            handle = drvapi.cu_stream(ptr)
         return Stream(weakref.proxy(self), handle, None,
                       external=True)
 
     def create_event(self, timing=True):
-        handle = drvapi.cu_event()
         flags = 0
         if not timing:
             flags |= enums.CU_EVENT_DISABLE_TIMING
-        driver.cuEventCreate(byref(handle), flags)
+        if config.CUDA_USE_CUDA_PYTHON:
+            handle = driver.cuEventCreate(flags)
+        else:
+            handle = drvapi.cu_event()
+            driver.cuEventCreate(byref(handle), flags)
         return Event(weakref.proxy(self), handle,
                      finalizer=_event_finalizer(self.deallocations, handle))
 
