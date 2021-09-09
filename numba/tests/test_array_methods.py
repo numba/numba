@@ -465,6 +465,25 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             got = run(arr, dtype)
             self.assertPreciseEqual(got, expected)
 
+        def run_dtype_arg(arr, dtype):
+            """
+            Equivalent to run but dtype is passed as
+            an arg instead of as a lowered constant.
+            This is used to check LiteralValue requirements.
+            """
+            pyfunc = lambda arr, dtype: arr.astype(dtype)
+            cres = self.ccache.compile(pyfunc, (typeof(arr), typeof(dtype)))
+            return cres.entry_point(arr, dtype)
+        def check_dtype_arg(arr, dtype):
+            """
+            Equivalent to check but dtype is passed as
+            an arg instead of as a lowered constant.
+            This is used to check LiteralValue requirements.
+            """
+            expected = arr.astype(dtype).copy(order='A')
+            got = run_dtype_arg(arr, dtype)
+            self.assertPreciseEqual(got, expected)
+
         # C-contiguous
         arr = np.arange(24, dtype=np.int8)
         check(arr, np.dtype('int16'))
@@ -491,6 +510,12 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         with self.assertTypingError() as raises:
             check(arr, dt)
         self.assertIn('cannot convert from int32 to Record',
+                      str(raises.exception))
+        # Non-Literal String
+        unicode_val = "float32"
+        with self.assertTypingError() as raises:
+            check_dtype_arg(arr, unicode_val)
+        self.assertIn('array.astype if dtype is a string it must be constant',
                       str(raises.exception))
 
     def check_np_frombuffer(self, pyfunc):
