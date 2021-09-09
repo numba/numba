@@ -83,6 +83,7 @@ class TestCudaDriver(CUDATestCase):
         array = (c_int * 100)()
 
         memory = self.context.memalloc(sizeof(array))
+        ptr = memory.device_ctypes_pointer
 
         host_to_device(memory, array, sizeof(array))
 
@@ -91,7 +92,7 @@ class TestCudaDriver(CUDATestCase):
                       100, 1, 1,        # bx, by, bz
                       0,                # dynamic shared mem
                       0,                # stream
-                      [memory])         # arguments
+                      [ptr])            # arguments
 
         device_to_host(array, memory, sizeof(array))
         for i, v in enumerate(array):
@@ -109,6 +110,7 @@ class TestCudaDriver(CUDATestCase):
 
         with stream.auto_synchronize():
             memory = self.context.memalloc(sizeof(array))
+            ptr = memory.device_ctypes_pointer
             host_to_device(memory, array, sizeof(array), stream=stream)
 
             launch_kernel(function.handle,  # Kernel
@@ -116,7 +118,7 @@ class TestCudaDriver(CUDATestCase):
                           100, 1, 1,        # bx, by, bz
                           0,                # dynamic shared mem
                           stream.handle,    # stream
-                          [memory])         # arguments
+                          [ptr])            # arguments
 
         device_to_host(array, memory, sizeof(array), stream=stream)
 

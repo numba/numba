@@ -2348,15 +2348,8 @@ def launch_kernel(cufunc_handle,
                   args,
                   cooperative=False):
 
-    param_vals = []
-    for arg in args:
-        if is_device_memory(arg):
-            getaddr = int if config.CUDA_USE_CUDA_PYTHON else addressof
-            param_vals.append(getaddr(device_ctypes_pointer(arg)))
-        else:
-            param_vals.append(addressof(arg))
-
-    params = (c_void_p * len(param_vals))(*param_vals)
+    param_ptrs = [addressof(arg) for arg in args]
+    params = (c_void_p * len(param_ptrs))(*param_ptrs)
 
     if config.CUDA_USE_CUDA_PYTHON:
         params_for_launch = addressof(params)

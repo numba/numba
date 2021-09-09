@@ -855,7 +855,7 @@ class _Kernel(serialize.ReduceMixin):
 
         elif isinstance(ty, types.Record):
             devrec = wrap_arg(val).to_device(retr, stream)
-            kernelargs.append(devrec)
+            kernelargs.append(devrec.device_ctypes_pointer)
 
         elif isinstance(ty, types.BaseTuple):
             assert len(ty) == len(val)
