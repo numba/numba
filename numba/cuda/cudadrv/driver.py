@@ -835,7 +835,6 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
         It is recommended that this method is not overridden by EMM Plugin
         implementations - instead, use the :class:`BaseCUDAMemoryManager`.
         """
-        pointer = c_void_p()
         flags = 0
         if mapped:
             flags |= enums.CU_MEMHOSTALLOC_DEVICEMAP
@@ -844,20 +843,39 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
         if wc:
             flags |= enums.CU_MEMHOSTALLOC_WRITECOMBINED
 
-        def allocator():
-            driver.cuMemHostAlloc(byref(pointer), size, flags)
+        if config.CUDA_USE_CUDA_PYTHON:
+            def allocator():
+                return driver.cudaMemHostAlloc(size, flags)
 
-        if mapped:
-            self._attempt_allocation(allocator)
+            if mapped:
+                pointer = self._attempt_allocation(allocator)
+            else:
+                pointer = allocator()
+
+            alloc_key = pointer
         else:
-            allocator()
+            pointer = c_void_p()
 
-        finalizer = _hostalloc_finalizer(self, pointer, size, mapped)
+            def allocator():
+                driver.cuMemHostAlloc(byref(pointer), size, flags)
+
+            if mapped:
+                self._attempt_allocation(allocator)
+            else:
+                allocator()
+
+            alloc_key = pointer.value
+
+        finalizer = _hostalloc_finalizer(self, pointer, alloc_key, size, mapped)
         ctx = weakref.proxy(self.context)
 
         if mapped:
             mem = MappedMemory(ctx, pointer, size, finalizer=finalizer)
-            self.allocations[mem.handle.value] = mem
+            if config.CUDA_USE_CUDA_PYTHON:
+                key = mem.handle
+            else:
+                key = mem.handle.value
+            self.allocations[key] = mem
             return mem.own()
         else:
             return PinnedMemory(ctx, pointer, size, finalizer=finalizer)
@@ -1272,7 +1290,10 @@ class Context(object):
         must be at the top of the context stack, otherwise an error will occur.
         """
         popped = driver.pop_active_context()
-        assert popped.value == self.handle.value
+        if config.CUDA_USE_CUDA_PYTHON:
+            assert int(popped) == int(self.handle)
+        else:
+            assert popped.value == self.handle.value
 
     def memalloc(self, bytesize):
         return self.memory_manager.memalloc(bytesize)
@@ -1508,7 +1529,7 @@ def _alloc_finalizer(memory_manager, ptr, alloc_key, size):
     return core
 
 
-def _hostalloc_finalizer(memory_manager, handle, size, mapped):
+def _hostalloc_finalizer(memory_manager, ptr, alloc_key, size, mapped):
     """
     Finalize page-locked host memory allocated by `context.memhostalloc`.
 
@@ -1525,8 +1546,8 @@ def _hostalloc_finalizer(memory_manager, handle, size, mapped):
 
     def core():
         if mapped and allocations:
-            del allocations[handle.value]
-        deallocations.add_item(driver.cuMemFreeHost, handle, size)
+            del allocations[alloc_key]
+        deallocations.add_item(driver.cuMemFreeHost, ptr, size)
 
     return core
 
