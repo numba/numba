@@ -949,10 +949,14 @@ class GetIpcHandleMixin:
         populated with the underlying ``ipc_mem_handle``.
         """
         base, end = device_extents(memory)
-        ipchandle = drvapi.cu_ipc_mem_handle()
-        driver.cuIpcGetMemHandle(byref(ipchandle), base)
+        if config.CUDA_USE_CUDA_PYTHON:
+            ipchandle = driver.cuIpcGetMemHandle(base)
+            offset = int(memory.handle) - int(base)
+        else:
+            ipchandle = drvapi.cu_ipc_mem_handle()
+            driver.cuIpcGetMemHandle(byref(ipchandle), base)
+            offset = memory.handle.value - base
         source_info = self.context.device.get_device_identity()
-        offset = memory.handle.value - base
 
         return IpcHandle(memory, ipchandle, memory.size, source_info,
                          offset=offset)
@@ -1632,10 +1636,14 @@ class _StagedIpcImpl(object):
         from numba import cuda
 
         srcdev = Device.from_identity(self.source_info)
+        if config.CUDA_USE_CUDA_PYTHON:
+            srcdev_id = int(srcdev.id)
+        else:
+            srcdev_id = srcdev.id
 
         impl = _CudaIpcImpl(parent=self.parent)
         # Open context on the source device.
-        with cuda.gpus[srcdev.id]:
+        with cuda.gpus[srcdev_id]:
             source_ptr = impl.open(cuda.devices.get_context())
 
         # Allocate GPU buffer.
@@ -1645,7 +1653,7 @@ class _StagedIpcImpl(object):
         device_to_device(newmem, source_ptr, self.size)
 
         # Cleanup source context
-        with cuda.gpus[srcdev.id]:
+        with cuda.gpus[srcdev_id]:
             impl.close()
 
         return newmem
@@ -1752,7 +1760,10 @@ class IpcHandle(object):
 
     def __reduce__(self):
         # Preprocess the IPC handle, which is defined as a byte array.
-        preprocessed_handle = tuple(self.handle)
+        if config.CUDA_USE_CUDA_PYTHON:
+            preprocessed_handle = self.handle.reserved
+        else:
+            preprocessed_handle = tuple(self.handle)
         args = (
             self.__class__,
             preprocessed_handle,
@@ -1764,7 +1775,11 @@ class IpcHandle(object):
 
     @classmethod
     def _rebuild(cls, handle_ary, size, source_info, offset):
-        handle = drvapi.cu_ipc_mem_handle(*handle_ary)
+        if config.CUDA_USE_CUDA_PYTHON:
+            handle = cuda_driver.CUipcMemHandle()
+            handle.reserved = handle_ary
+        else:
+            handle = drvapi.cu_ipc_mem_handle(*handle_ary)
         return cls(base=None, handle=handle, size=size,
                    source_info=source_info, offset=offset)
 
@@ -2054,17 +2069,25 @@ class Stream(object):
             weakref.finalize(self, finalizer)
 
     def __int__(self):
-        # The default stream's handle.value is 0, which gives `None`
-        return self.handle.value or drvapi.CU_STREAM_DEFAULT
+        if config.CUDA_USE_CUDA_PYTHON:
+            return self.handle.getPtr() or 0
+        else:
+            # The default stream's handle.value is 0, which gives `None`
+            return self.handle.value or drvapi.CU_STREAM_DEFAULT
 
     def __repr__(self):
         default_streams = {
+            # XXX: Need definitions from elsewhere
             drvapi.CU_STREAM_DEFAULT: "<Default CUDA stream on %s>",
             drvapi.CU_STREAM_LEGACY: "<Legacy default CUDA stream on %s>",
             drvapi.CU_STREAM_PER_THREAD:
                 "<Per-thread default CUDA stream on %s>",
         }
-        ptr = self.handle.value or drvapi.CU_STREAM_DEFAULT
+        if config.CUDA_USE_CUDA_PYTHON:
+            ptr = self.handle or cuda_driver.CUstream(0)
+        else:
+            ptr = self.handle.value or drvapi.CU_STREAM_DEFAULT
+
         if ptr in default_streams:
             return default_streams[ptr] % self.context
         elif self.external:
@@ -2658,11 +2681,22 @@ def get_devptr_for_active_ctx(ptr):
     """Query the device pointer usable in the current context from an arbitrary
     pointer.
     """
-    devptr = drvapi.cu_device_ptr()
     if ptr != 0:
-        attr = enums.CU_POINTER_ATTRIBUTE_DEVICE_POINTER
-        driver.cuPointerGetAttribute(byref(devptr), attr, ptr)
-    return devptr
+        if config.CUDA_USE_CUDA_PYTHON:
+            ptr_attrs = cuda_driver.CUpointer_attribute
+            attr = ptr_attrs.CU_POINTER_ATTRIBUTE_DEVICE_POINTER
+            ptrobj = cuda_driver.CUdeviceptr(ptr)
+            return driver.cuPointerGetAttribute(attr, ptrobj)
+        else:
+            devptr = drvapi.cu_device_ptr()
+            attr = enums.CU_POINTER_ATTRIBUTE_DEVICE_POINTER
+            driver.cuPointerGetAttribute(byref(devptr), attr, ptr)
+            return devptr
+    else:
+        if config.CUDA_USE_CUDA_PYTHON:
+            return cuda_driver.CUdeviceptr()
+        else:
+            return drvapi.cu_device_ptr()
 
 
 def device_extents(devmem):
@@ -2675,9 +2709,13 @@ def device_extents(devmem):
     s = drvapi.cu_device_ptr()
     n = c_size_t()
     devptr = device_ctypes_pointer(devmem)
-    driver.cuMemGetAddressRange(byref(s), byref(n), devptr)
-    s, n = s.value, n.value
-    return s, s + n
+    if config.CUDA_USE_CUDA_PYTHON:
+        s, n = driver.cuMemGetAddressRange(devptr)
+        return s, cuda_driver.CUdeviceptr(int(s) + n)
+    else:
+        driver.cuMemGetAddressRange(byref(s), byref(n), devptr)
+        s, n = s.value, n.value
+        return s, s + n
 
 
 def device_memory_size(devmem):

@@ -113,10 +113,16 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
 
     @property
     def __cuda_array_interface__(self):
-        if self.device_ctypes_pointer.value is not None:
-            ptr = self.device_ctypes_pointer.value
+        if config.CUDA_USE_CUDA_PYTHON:
+            if self.device_ctypes_pointer is not None:
+                ptr = int(self.device_ctypes_pointer)
+            else:
+                ptr = 0
         else:
-            ptr = 0
+            if self.device_ctypes_pointer.value is not None:
+                ptr = self.device_ctypes_pointer.value
+            else:
+                ptr = 0
 
         return {
             'shape': tuple(self.shape),
