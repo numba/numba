@@ -1917,7 +1917,12 @@ class MemoryPointer(object):
             base = self.device_pointer_value + start
             if size < 0:
                 raise RuntimeError('size cannot be negative')
-            pointer = drvapi.cu_device_ptr(base)
+            if config.CUDA_USE_CUDA_PYTHON:
+                pointer = cuda_driver.CUdeviceptr()
+                ctypes_ptr = drvapi.cu_device_ptr.from_address(pointer.getPtr())
+                ctypes_ptr.value = base
+            else:
+                pointer = drvapi.cu_device_ptr(base)
             view = MemoryPointer(self.context, pointer, size, owner=self.owner)
 
         if isinstance(self.owner, (MemoryPointer, OwnedPointer)):
