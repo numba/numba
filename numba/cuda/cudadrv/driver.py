@@ -923,9 +923,9 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
                 ma_flags = cuda_driver.CUmemAttach_flags
 
                 if attach_global:
-                    flags = ma_flags.CU_MEM_ATTACH_GLOBAL
+                    flags = ma_flags.CU_MEM_ATTACH_GLOBAL.value
                 else:
-                    flags = ma_flags.CU_MEM_ATTACH_HOST
+                    flags = ma_flags.CU_MEM_ATTACH_HOST.value
 
                 return driver.cuMemAllocManaged(size, flags)
 
@@ -2070,7 +2070,10 @@ class ManagedMemory(AutoFreePointer):
 
         # For buffer interface
         self._buflen_ = self.size
-        self._bufptr_ = self.device_pointer.value
+        if config.CUDA_USE_CUDA_PYTHON:
+            self._bufptr_ = self.device_pointer
+        else:
+            self._bufptr_ = self.device_pointer.value
 
     def own(self):
         return ManagedOwnedPointer(weakref.proxy(self))
