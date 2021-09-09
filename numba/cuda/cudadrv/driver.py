@@ -630,7 +630,6 @@ class Device(object):
             return self.primary_context
 
         met_requirement_for_device(self)
-
         # create primary context
         if config.CUDA_USE_CUDA_PYTHON:
             hctx = driver.cuDevicePrimaryCtxRetain(self.id)
@@ -845,7 +844,7 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
 
         if config.CUDA_USE_CUDA_PYTHON:
             def allocator():
-                return driver.cudaMemHostAlloc(size, flags)
+                return driver.cuMemHostAlloc(size, flags)
 
             if mapped:
                 pointer = self._attempt_allocation(allocator)
@@ -871,6 +870,7 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
 
         if mapped:
             mem = MappedMemory(ctx, pointer, size, finalizer=finalizer)
+            # XXX: Could we just reuse alloc_key from before?
             if config.CUDA_USE_CUDA_PYTHON:
                 key = mem.handle
             else:
@@ -918,23 +918,41 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
                                 finalizer=finalizer)
 
     def memallocmanaged(self, size, attach_global):
-        ptr = drvapi.cu_device_ptr()
+        if config.CUDA_USE_CUDA_PYTHON:
+            def allocator():
+                ma_flags = cuda_driver.CUmemAttach_flags
 
-        def allocator():
-            flags = c_uint()
-            if attach_global:
-                flags = enums.CU_MEM_ATTACH_GLOBAL
-            else:
-                flags = enums.CU_MEM_ATTACH_HOST
+                if attach_global:
+                    flags = ma_flags.CU_MEM_ATTACH_GLOBAL
+                else:
+                    flags = ma_flags.CU_MEM_ATTACH_HOST
 
-            driver.cuMemAllocManaged(byref(ptr), size, flags)
+                return driver.cuMemAllocManaged(size, flags)
 
-        self._attempt_allocation(allocator)
+            ptr = self._attempt_allocation(allocator)
 
-        finalizer = _alloc_finalizer(self, ptr, ptr.value, size)
+            alloc_key = ptr
+
+        else:
+            ptr = drvapi.cu_device_ptr()
+
+            def allocator():
+                flags = c_uint()
+                if attach_global:
+                    flags = enums.CU_MEM_ATTACH_GLOBAL
+                else:
+                    flags = enums.CU_MEM_ATTACH_HOST
+
+                driver.cuMemAllocManaged(byref(ptr), size, flags)
+
+            self._attempt_allocation(allocator)
+
+            alloc_key = ptr.value
+
+        finalizer = _alloc_finalizer(self, ptr, alloc_key, size)
         ctx = weakref.proxy(self.context)
         mem = ManagedMemory(ctx, ptr, size, finalizer=finalizer)
-        self.allocations[ptr.value] = mem
+        self.allocations[alloc_key] = mem
         return mem.own()
 
     def reset(self):
@@ -1961,8 +1979,15 @@ class MappedMemory(AutoFreePointer):
     def __init__(self, context, pointer, size, owner=None, finalizer=None):
         self.owned = owner
         self.host_pointer = pointer
-        devptr = drvapi.cu_device_ptr()
-        driver.cuMemHostGetDevicePointer(byref(devptr), pointer, 0)
+
+        if config.CUDA_USE_CUDA_PYTHON:
+            devptr = driver.cuMemHostGetDevicePointer(pointer, 0)
+            self._bufptr_ = self.host_pointer
+        else:
+            devptr = drvapi.cu_device_ptr()
+            driver.cuMemHostGetDevicePointer(byref(devptr), pointer, 0)
+            self._bufptr_ = self.host_pointer.value
+
         self.device_pointer = devptr
         super(MappedMemory, self).__init__(context, devptr, size,
                                            finalizer=finalizer)
@@ -1970,7 +1995,6 @@ class MappedMemory(AutoFreePointer):
 
         # For buffer interface
         self._buflen_ = self.size
-        self._bufptr_ = self.host_pointer.value
 
     def own(self):
         return MappedOwnedPointer(weakref.proxy(self))
@@ -2005,7 +2029,10 @@ class PinnedMemory(mviewbuf.MemAlloc):
 
         # For buffer interface
         self._buflen_ = self.size
-        self._bufptr_ = self.host_pointer.value
+        if config.CUDA_USE_CUDA_PYTHON:
+            self._bufptr_ = self.host_pointer
+        else:
+            self._bufptr_ = self.host_pointer.value
 
         if finalizer is not None:
             weakref.finalize(self, finalizer)
