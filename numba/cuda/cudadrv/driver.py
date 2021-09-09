@@ -1356,12 +1356,14 @@ class Context(object):
         """Returns a bool indicating whether the peer access between the
         current and peer device is possible.
         """
-        can_access_peer = c_int()
-        driver.cuDeviceCanAccessPeer(
-            byref(can_access_peer),
-            self.device.id,
-            peer_device,
-        )
+        if config.CUDA_USE_CUDA_PYTHON:
+            can_access_peer = driver.cuDeviceCanAccessPeer(self.device.id,
+                                                           peer_device)
+        else:
+            can_access_peer = c_int()
+            driver.cuDeviceCanAccessPeer(byref(can_access_peer),
+                                         self.device.id, peer_device,)
+
         return bool(can_access_peer)
 
     def create_module_ptx(self, ptx):
