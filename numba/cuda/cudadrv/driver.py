@@ -424,9 +424,12 @@ class Driver(object):
         """
         with self.get_active_context() as ac:
             if ac.devnum is not None:
-                popped = drvapi.cu_context()
-                driver.cuCtxPopCurrent(byref(popped))
-                return popped
+                if config.CUDA_USE_CUDA_PYTHON:
+                    return driver.cuCtxPopCurrent()
+                else:
+                    popped = drvapi.cu_context()
+                    driver.cuCtxPopCurrent(byref(popped))
+                    return popped
 
     def get_active_context(self):
         """Returns an instance of ``_ActiveContext``.
@@ -1293,9 +1296,13 @@ class Context(object):
 
     def open_ipc_handle(self, handle, size):
         # open the IPC handle to get the device pointer
-        dptr = drvapi.cu_device_ptr()
         flags = 1  # CU_IPC_MEM_LAZY_ENABLE_PEER_ACCESS
-        driver.cuIpcOpenMemHandle(byref(dptr), handle, flags)
+        if config.CUDA_USE_CUDA_PYTHON:
+            dptr = driver.cuIpcOpenMemHandle(handle, flags)
+        else:
+            dptr = drvapi.cu_device_ptr()
+            driver.cuIpcOpenMemHandle(byref(dptr), handle, flags)
+
         # wrap it
         return MemoryPointer(context=weakref.proxy(self), pointer=dptr,
                              size=size)

@@ -140,6 +140,8 @@ class _Runtime(object):
             else:
                 return attached_ctx
         else:
+            if config.CUDA_USE_CUDA_PYTHON:
+                devnum = int(devnum)
             return self._activate_context_for(devnum)
 
     def _get_or_create_context_uncached(self, devnum):
