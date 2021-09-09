@@ -1,8 +1,7 @@
 import numpy as np
 from numba import cuda
 from numba.core import types
-from numba.cuda.testing import (skip_on_cudasim, skip_with_cuda_python,
-                                CUDATestCase)
+from numba.cuda.testing import skip_on_cudasim, CUDATestCase
 import unittest
 from numba.np import numpy_support
 
@@ -99,7 +98,6 @@ recordwith2darray = np.dtype([('i', np.int32),
                               ('j', np.float32, (3, 2))])
 
 
-@skip_with_cuda_python('Segfaults with CUDA Python bindings')
 class TestRecordDtype(CUDATestCase):
 
     def _createSampleArrays(self):

@@ -855,7 +855,10 @@ class _Kernel(serialize.ReduceMixin):
 
         elif isinstance(ty, types.Record):
             devrec = wrap_arg(val).to_device(retr, stream)
-            kernelargs.append(devrec.device_ctypes_pointer)
+            ptr = devrec.device_ctypes_pointer
+            if config.CUDA_USE_CUDA_PYTHON:
+                ptr = ctypes.c_void_p(int(ptr))
+            kernelargs.append(ptr)
 
         elif isinstance(ty, types.BaseTuple):
             assert len(ty) == len(val)
