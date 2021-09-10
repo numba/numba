@@ -1,7 +1,7 @@
 import numpy as np
 
 from numba import vectorize, guvectorize
-from numba import cuda
+from numba import config, cuda
 from numba.cuda.testing import unittest, ContextResettingTestCase, ForeignArray
 from numba.cuda.testing import skip_on_cudasim, skip_if_external_memmgr
 from numba.tests.support import linux_only, override_config
@@ -10,6 +10,11 @@ from unittest.mock import call, patch
 
 @skip_on_cudasim('CUDA Array Interface is not supported in the simulator')
 class TestCudaArrayInterface(ContextResettingTestCase):
+    def assertPointersEqual(self, a, b):
+        if config.CUDA_USE_CUDA_PYTHON:
+            self.assertEqual(int(a.device_ctypes_pointer),
+                             int(b.device_ctypes_pointer))
+
     def test_as_cuda_array(self):
         h_arr = np.arange(10)
         self.assertFalse(cuda.is_cuda_array(h_arr))
@@ -23,8 +28,7 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         np.testing.assert_array_equal(wrapped.copy_to_host(), h_arr)
         np.testing.assert_array_equal(d_arr.copy_to_host(), h_arr)
         # d_arr and wrapped must be the same buffer
-        self.assertEqual(wrapped.device_ctypes_pointer.value,
-                         d_arr.device_ctypes_pointer.value)
+        self.assertPointersEqual(wrapped, d_arr)
 
     @skip_if_external_memmgr('Ownership not relevant with external memmgr')
     def test_ownership(self):
@@ -103,8 +107,7 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         out = ForeignArray(cuda.device_array(h_arr.shape))
         returned = vadd(h_arr, val, out=out)
         np.testing.assert_array_equal(returned.copy_to_host(), h_arr + val)
-        self.assertEqual(returned.device_ctypes_pointer.value,
-                         out._arr.device_ctypes_pointer.value)
+        self.assertPointersEqual(returned, out._arr)
 
     def test_array_views(self):
         """Views created via array interface support:
