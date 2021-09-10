@@ -7,7 +7,7 @@ import re
 import numpy as np
 
 from numba import njit
-from numba.core import typing, types
+from numba.core import types
 from numba.core.compiler import compile_isolated, Flags
 from numba.core.runtime import (
     rtsys,
