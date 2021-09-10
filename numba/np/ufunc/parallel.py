@@ -426,7 +426,7 @@ def _launch_threads():
             if not (len(namedbackends) == 3 and
                     set(namedbackends) == {'tbb', 'omp', 'workqueue'}):
                 raise ValueError(
-                    "THREADING_LAYER_PRIORITY invalid: %s."
+                    "THREADING_LAYER_PRIORITY invalid: %s. "
                     "It must be a permutation of "
                     "{'tbb', 'omp', 'workqueue'}"
                     % namedbackends
