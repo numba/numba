@@ -528,7 +528,7 @@ Threading Control
    * ``omp`` - A threading layer backed by OpenMP.
    * ``workqueue`` - A simple built-in work-sharing task scheduler.
 
-   .. envvar:: NUMBA_THREADING_LAYER_PRIORITY
+.. envvar:: NUMBA_THREADING_LAYER_PRIORITY
 
    This environment variable controls the order in which the libraries used for
    concurrent execution, for the CPU parallel targets
