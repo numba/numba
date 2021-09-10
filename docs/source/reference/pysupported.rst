@@ -925,9 +925,9 @@ The following built-in functions are supported:
 * :func:`divmod`
 * :func:`enumerate`
 * :func:`filter`
-* :class:`float`
+* :class:`float`: only for numeric type conversions (Integer, Real)
 * :func:`hash` (see :ref:`pysupported-hashing` below)
-* :class:`int`: only the one-argument form
+* :class:`int`: only the one-argument form, and only for numeric type conversions (Integer, Float and Boolean)
 * :func:`iter`: only the one-argument form
 * :func:`len`
 * :func:`min`

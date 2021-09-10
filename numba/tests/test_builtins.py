@@ -96,8 +96,11 @@ def hex_usecase(x):
 def str_usecase(x):
     return str(x)
 
-def int_usecase(x, base):
+def int_usecase_with_base(x, base):
     return int(x, base=base)
+
+def int_usecase(x):
+    return int(x)
 
 def iter_next_usecase(x):
     it = iter(x)
@@ -562,8 +565,50 @@ class TestBuiltins(TestCase):
                 if typ.signed:
                     self.assertPreciseEqual(cfunc(typ(-v)), pyfunc(typ(-v)))
 
-    def test_int(self, flags=enable_pyobj_flags):
+    def test_int_from_int(self, flags=enable_pyobj_flags):
         pyfunc = int_usecase
+
+        for int_type in types.integer_domain:
+            cr = compile_isolated(pyfunc, (int_type,), flags=flags)
+            cfunc = cr.entry_point
+
+            x_operands = [0, 1, 10]
+            for x in x_operands:
+                self.assertPreciseEqual(cfunc(x), pyfunc(x))
+
+    def test_int_from_float(self, flags=enable_pyobj_flags):
+        pyfunc = int_usecase
+
+        for int_type in types.real_domain:
+            cr = compile_isolated(pyfunc, (int_type,), flags=flags)
+            cfunc = cr.entry_point
+
+            x_operands = [0.2, 1.5, 10.9]
+            for x in x_operands:
+                self.assertPreciseEqual(cfunc(x), pyfunc(x))
+
+    def test_int_from_bool(self, flags=enable_pyobj_flags):
+        pyfunc = int_usecase
+
+        cr = compile_isolated(pyfunc, (types.boolean,), flags=flags)
+        cfunc = cr.entry_point
+
+        x_operands = [True, False]
+        for x in x_operands:
+            self.assertPreciseEqual(cfunc(x), pyfunc(x))
+
+    def test_int_from_str(self, flags=enable_pyobj_flags):
+        pyfunc = int_usecase
+
+        cr = compile_isolated(pyfunc, (types.string,), flags=flags)
+        cfunc = cr.entry_point
+
+        x_operands = ['-1', '0', '1', '10']
+        for x in x_operands:
+            self.assertPreciseEqual(cfunc(x), pyfunc(x))
+
+    def test_int_from_str_with_base(self, flags=enable_pyobj_flags):
+        pyfunc = int_usecase_with_base
 
         cr = compile_isolated(pyfunc, (types.string, types.int32), flags=flags)
         cfunc = cr.entry_point
@@ -575,7 +620,16 @@ class TestBuiltins(TestCase):
 
     def test_int_npm(self):
         with self.assertTypingError():
-            self.test_int(flags=no_pyobj_flags)
+            self.test_int_from_str_with_base(flags=no_pyobj_flags)
+
+        with self.assertTypingError():
+            self.test_int_from_str(flags=no_pyobj_flags)
+
+        self.test_int_from_int(flags=no_pyobj_flags)
+
+        self.test_int_from_float(flags=no_pyobj_flags)
+
+        self.test_int_from_bool(flags=no_pyobj_flags)
 
     def test_iter_next(self, flags=enable_pyobj_flags):
         pyfunc = iter_next_usecase
