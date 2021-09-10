@@ -7,7 +7,7 @@ import numpy as np
 import numpy
 
 from numba.core.compiler import compile_isolated
-from numba import jit
+from numba import jit, typed
 from numba.core import types, utils
 from numba.core.errors import TypingError, LoweringError
 from numba.core.types.functions import _header_lead
@@ -407,6 +407,10 @@ class TestArrayComprehension(unittest.TestCase):
         self.check(array_comp, l)
         # with array iterator
         self.check(array_comp, np.array(l))
+        # with tuple iterator (issue #7394)
+        self.check(array_comp, tuple(l))
+        # with typed.List iterator (issue #6550)
+        self.check(array_comp, typed.List(l))
 
     def test_array_comp_with_dtype(self):
         def array_comp(n):
