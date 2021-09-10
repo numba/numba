@@ -4,6 +4,7 @@ import itertools
 import math
 import platform
 from functools import partial
+from itertools import product
 
 import numpy as np
 
@@ -383,6 +384,10 @@ def flip_lr(a):
 
 def flip_ud(a):
     return np.flipud(a)
+
+
+def tile(a, reps):
+    return np.tile(a, reps)
 
 
 def np_asarray_chkfinite(a, dtype=None):
@@ -4307,6 +4312,70 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             'Inputs must be array-like.',
             str(raises.exception)
         )
+
+    def test_tile(self):
+        def tiles():
+            yield 2
+            yield 3.0
+            yield True
+            yield np.array([])
+            yield np.array([1, 2])
+            # yield np.array([[1, 7], [3, 8]], dtype=float) - not supported yet
+
+        def shapes():
+            yield 10
+            yield 0
+            yield (6,)
+            yield (3, 3)
+            yield (2, 1, 4)
+
+        pyfunc = tile
+        cfunc = njit(pyfunc)
+        for a, reps in product(tiles(), shapes()):
+            expected = pyfunc(a, reps)
+            got = cfunc(a, reps)
+            self.assertPreciseEqual(expected, got)
+
+    def test_tile_exceptions(self):
+        pyfunc = tile
+        cfunc = njit(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        # First argument must be array-like
+        with self.assertRaises(TypingError) as raises:
+            cfunc(None, (2, 1))
+        self.assertIn(
+            'First argument must be array-like',
+            str(raises.exception)
+        )
+
+        # Second argument must be an integer or integer sequence
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.ones(1), 1.0)
+        self.assertIn(
+            "Second argument must be an integer "
+            "or an array/sequence of integers",
+            str(raises.exception))
+
+        # Second argument must be 1-dimensional
+        with self.assertRaises(TypingError) as raises:
+            cfunc(5, np.array([[1], [2]]))
+        self.assertIn(
+            'Second argument must be 1-dimensional',
+            str(raises.exception)
+        )
+
+        # Negative dimensions are not allowed, test both implementations
+        with self.assertRaises(ValueError) as raises:
+            cfunc([0, 0], (2, -1))
+        self.assertIn("tile(): negative dimensions are not allowed",
+                      str(raises.exception))
+        with self.assertRaises(ValueError) as raises:
+            cfunc([0, 0], -5)
+        self.assertIn("tile(): negative dimensions are not allowed",
+                      str(raises.exception))
 
     def test_asarray_chkfinite(self):
         pyfunc = np_asarray_chkfinite

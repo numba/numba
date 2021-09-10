@@ -2166,6 +2166,53 @@ def array_repeat(a, repeats):
     return array_repeat_impl
 
 
+@overload(np.tile)
+def np_tile(a, reps):
+    def np_tile_integer_impl(a, reps):
+        if reps < 0:
+            raise ValueError("tile(): negative dimensions are not allowed")
+        arr = np.asarray(a)
+        sz = arr.size
+        out = np.empty(reps * sz, dtype=arr.dtype)
+        arr_flat = arr.flatten()
+        for i in range(reps):
+            start = i * sz
+            end = start + sz
+            out[start:end] = arr_flat
+        return out
+
+    def np_tile_impl(a, reps):
+        for r in reps:
+            if r < 0:
+                raise ValueError("tile(): negative dimensions are not allowed")
+
+        arr = np.asarray(a)
+        sz = arr.size
+        # assumes arr is 1-dimensional
+        out_shape = reps[:-1] + (reps[-1] * sz,)
+        num_copies = np.prod(np.array(reps))
+        out = np.empty(shape=num_copies * sz, dtype=arr.dtype)
+        arr_flat = arr.flatten()
+        for i in range(num_copies):
+            start = i * sz
+            end = start + sz
+            out[start:end] = arr_flat
+        return np.reshape(out, out_shape)
+
+    # Type checks
+    if not type_can_asarray(a):
+        raise errors.TypingError("First argument must be array-like")
+    if isinstance(reps, types.Integer):
+        return np_tile_integer_impl
+    elif isinstance(reps, (types.Tuple, types.Array, types.Sequence)):
+        if isinstance(reps, types.Array) and reps.ndim != 1:
+            raise errors.TypingError("Second argument must be 1-dimensional")
+        if isinstance(reps.dtype, types.Integer):
+            return np_tile_impl
+    raise errors.TypingError("Second argument must be an integer "
+                             "or an array/sequence of integers")
+
+
 @lower_builtin('array.view', types.Array, types.DTypeSpec)
 def array_view(context, builder, sig, args):
     aryty = sig.args[0]

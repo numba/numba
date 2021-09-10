@@ -512,6 +512,7 @@ The following top-level functions are supported:
 * :func:`numpy.stack`
 * :func:`numpy.swapaxes`
 * :func:`numpy.take` (only the 2 first arguments)
+* :func:`numpy.tile` (first argument must be a 1-D array or scalar)
 * :func:`numpy.transpose`
 * :func:`numpy.trapz` (only the 3 first arguments)
 * :func:`numpy.tri` (only the 3 first arguments; third argument ``k`` must be an integer)

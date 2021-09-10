@@ -1906,7 +1906,7 @@ def np_triu_indices_from(arr, k=0):
     return np_triu_indices_from_impl
 
 
-def _prepare_array(arr):
+def _prepare_array(arr) -> np.ndarray:
     pass
 
 
