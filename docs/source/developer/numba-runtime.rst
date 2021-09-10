@@ -182,9 +182,8 @@ will have the desired effect. Similarly the code snippet:
 
 .. code-block:: Python
 
-  from numba.core import typing, cpu
-  typingctx = typing.Context()
-  cpu.CPUContext(typingctx, 'cpu')
+  from numba.core.registry import cpu_target # Get the CPU target singleton
+  cpu_target.target_context # Access the target_context property to initialize
 
 will achieve the same specifically for Numba's CPU target (the default). Failure
 to initialize the NRT will result in access violations as function pointers for
