@@ -1232,16 +1232,32 @@ class Context(object):
         :param blocksize: block size the kernel is intended to be launched with
         :param memsize: per-block dynamic shared memory usage intended, in bytes
         """
-
-        retval = c_int()
-        if not flags:
-            driver.cuOccupancyMaxActiveBlocksPerMultiprocessor(byref(retval),
-                                                               func.handle,
-                                                               blocksize,
-                                                               memsize)
+        args = (func, blocksize, memsize, flags)
+        if config.CUDA_USE_CUDA_PYTHON:
+            return self._cuda_python_active_blocks_per_multiprocessor(*args)
         else:
-            driver.cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
-                byref(retval), func.handle, blocksize, memsize, flags)
+            return self._ctypes_active_blocks_per_multiprocessor(*args)
+
+    def _cuda_python_active_blocks_per_multiprocessor(self, func, blocksize,
+                                                      memsize, flags):
+        ps = [func.handle, blocksize, memsize]
+
+        if not flags:
+            return driver.cuOccupancyMaxActiveBlocksPerMultiprocessor(*ps)
+
+        ps.append(flags)
+        return driver.cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(*ps)
+
+    def _ctypes_active_blocks_per_multiprocessor(self, func, blocksize,
+                                                 memsize, flags):
+        retval = c_int()
+        args = (byref(retval), func.handle, blocksize, memsize)
+
+        if not flags:
+            driver.cuOccupancyMaxActiveBlocksPerMultiprocessor(*args)
+        else:
+            driver.cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(*args)
+
         return retval.value
 
     def get_max_potential_block_size(self, func, b2d_func, memsize,
@@ -1280,8 +1296,12 @@ class Context(object):
 
     def _cuda_python_max_potential_block_size(self, func, b2d_func, memsize,
                                               blocksizelimit, flags):
-        b2d_cb = cuda_driver.CUoccupancyB2DSize(b2d_func)
-        args = [func.handle, b2d_cb, memsize, blocksizelimit]
+        # XXX: This is rather horrible
+        b2d_cb = cu_occupancy_b2d_size(b2d_func)
+        ptr = ctypes.cast(addressof(b2d_cb), ctypes.POINTER(ctypes.c_ulonglong))
+        deref = ptr.contents.value
+        driver_b2d_cb = cuda_driver.CUoccupancyB2DSize(deref)
+        args = [func.handle, driver_b2d_cb, memsize, blocksizelimit]
 
         if not flags:
             return driver.cuOccupancyMaxPotentialBlockSize(*args)
@@ -1369,7 +1389,10 @@ class Context(object):
     def create_module_ptx(self, ptx):
         if isinstance(ptx, str):
             ptx = ptx.encode('utf8')
-        image = c_char_p(ptx)
+        if config.CUDA_USE_CUDA_PYTHON:
+            image = ptx
+        else:
+            image = c_char_p(ptx)
         return self.create_module_image(image)
 
     def create_module_image(self, image):
@@ -1528,7 +1551,11 @@ def load_module_image_cuda_python(context, image):
         handle = driver.cuModuleLoadDataEx(image, len(options), option_keys,
                                            option_vals)
     except CudaAPIError as e:
-        msg = "cuModuleLoadDataEx error:\n%s" % jiterrors.value.decode("utf8")
+        if config.CUDA_USE_CUDA_PYTHON:
+            err_string = jiterrors.decode('utf-8')
+        else:
+            err_string = jiterrors.value.decode('utf-8')
+        msg = "cuModuleLoadDataEx error:\n%s" % err_string
         raise CudaAPIError(e.code, msg)
 
     info_log = jitinfo.decode('utf-8')
@@ -2135,22 +2162,28 @@ class Stream(object):
 
     def __int__(self):
         if config.CUDA_USE_CUDA_PYTHON:
-            return self.handle.getPtr() or 0
+            return int(self.handle)
         else:
             # The default stream's handle.value is 0, which gives `None`
             return self.handle.value or drvapi.CU_STREAM_DEFAULT
 
     def __repr__(self):
-        default_streams = {
-            # XXX: Need definitions from elsewhere
-            drvapi.CU_STREAM_DEFAULT: "<Default CUDA stream on %s>",
-            drvapi.CU_STREAM_LEGACY: "<Legacy default CUDA stream on %s>",
-            drvapi.CU_STREAM_PER_THREAD:
-                "<Per-thread default CUDA stream on %s>",
-        }
         if config.CUDA_USE_CUDA_PYTHON:
-            ptr = self.handle or cuda_driver.CUstream(0)
+            default_streams = {
+                0: "<Default CUDA stream on %s>",
+                cuda_driver.CU_STREAM_LEGACY:
+                    "<Legacy default CUDA stream on %s>",
+                cuda_driver.CU_STREAM_PER_THREAD:
+                    "<Per-thread default CUDA stream on %s>",
+            }
+            ptr = int(self.handle) or 0
         else:
+            default_streams = {
+                drvapi.CU_STREAM_DEFAULT: "<Default CUDA stream on %s>",
+                drvapi.CU_STREAM_LEGACY: "<Legacy default CUDA stream on %s>",
+                drvapi.CU_STREAM_PER_THREAD:
+                    "<Per-thread default CUDA stream on %s>",
+            }
             ptr = self.handle.value or drvapi.CU_STREAM_DEFAULT
 
         if ptr in default_streams:

@@ -1,9 +1,13 @@
-from ctypes import byref, c_int, sizeof
+from ctypes import byref, c_int, c_void_p, sizeof
+
+from numba import config
 from numba.cuda.cudadrv.driver import (host_to_device, device_to_host, driver,
                                        launch_kernel)
 from numba.cuda.cudadrv import devices, drvapi
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import skip_on_cudasim
+
+from cuda import cuda as cuda_driver
 
 
 ptx1 = '''
@@ -83,15 +87,20 @@ class TestCudaDriver(CUDATestCase):
         array = (c_int * 100)()
 
         memory = self.context.memalloc(sizeof(array))
-        ptr = memory.device_ctypes_pointer
-
         host_to_device(memory, array, sizeof(array))
+
+        ptr = memory.device_ctypes_pointer
+        stream = 0
+
+        if config.CUDA_USE_CUDA_PYTHON:
+            ptr = c_void_p(int(ptr))
+            stream = cuda_driver.CUstream(stream)
 
         launch_kernel(function.handle,  # Kernel
                       1,   1, 1,        # gx, gy, gz
                       100, 1, 1,        # bx, by, bz
                       0,                # dynamic shared mem
-                      0,                # stream
+                      stream,           # stream
                       [ptr])            # arguments
 
         device_to_host(array, memory, sizeof(array))
@@ -110,8 +119,11 @@ class TestCudaDriver(CUDATestCase):
 
         with stream.auto_synchronize():
             memory = self.context.memalloc(sizeof(array))
-            ptr = memory.device_ctypes_pointer
             host_to_device(memory, array, sizeof(array), stream=stream)
+
+            ptr = memory.device_ctypes_pointer
+            if config.CUDA_USE_CUDA_PYTHON:
+                ptr = c_void_p(int(ptr))
 
             launch_kernel(function.handle,  # Kernel
                           1,   1, 1,        # gx, gy, gz
@@ -166,9 +178,13 @@ class TestCudaDriver(CUDATestCase):
         # Test properties of a stream created from an external stream object.
         # We use the driver API directly to create a stream, to emulate an
         # external library creating a stream
-        handle = drvapi.cu_stream()
-        driver.cuStreamCreate(byref(handle), 0)
-        ptr = handle.value
+        if config.CUDA_USE_CUDA_PYTHON:
+            handle = driver.cuStreamCreate(0)
+            ptr = int(handle)
+        else:
+            handle = drvapi.cu_stream()
+            driver.cuStreamCreate(byref(handle), 0)
+            ptr = handle.value
         s = self.context.create_external_stream(ptr)
 
         self.assertIn("External CUDA stream", repr(s))
