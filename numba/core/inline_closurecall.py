@@ -1071,9 +1071,9 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
     debug_print("removed variables: ", removed)
 
     # Define an index_var to index the array.
-    # If the range happens to be single step ranges like range(n), or range(m,
-    # n), then the index_var correlates to iterator index; otherwise we'll have
-    # to define a new counter.
+    # If the range happens to be single step ranges like range(n), or 
+    # range(m, n), then the index_var correlates to iterator index; otherwise
+    # we'll have to define a new counter.
     range_def = guard(_find_iter_range, func_ir, iter_var, swapped)
     index_var = ir.Var(scope, mk_unique_var("index"), loc)
     if range_def and range_def[0] == 0:
