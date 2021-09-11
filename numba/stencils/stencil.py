@@ -469,7 +469,7 @@ class StencilFunc(object):
         )
         if isinstance(return_type, types.npytypes.Array):
             raise ValueError(
-                "Stencil kernel must return a scalar and not a numpy array."
+                "Stencil kernel must return a scalar and not a NumPy array."
             )
 
         real_ret = types.npytypes.Array(
