@@ -2124,8 +2124,8 @@ def raise_on_unsupported_feature(func_ir, typemap):
                 "Tuple '{}' length must be smaller than 1000.\nLarge tuples "
                 "lead to the generation of a prohibitively large LLVM IR which "
                 "causes excessive memory pressure and large compile times.\nAs "
-                "an alternative, the use of a 'list' is recommended in place of"
-                " a 'tuple' as lists do not suffer from this problem.".format(
+                "an alternative, the use of a 'list' is recommended in place "
+                "of a 'tuple' as lists do not suffer from this problem.".format(
                     arg_name,
                 )
             )
