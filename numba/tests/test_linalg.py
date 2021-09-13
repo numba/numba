@@ -397,6 +397,40 @@ class TestProduct(TestCase):
         b = np.arange(24.).reshape(4,3,2)
         assert_same_as_py(a, b, ((1, 0), (0, 1)))
 
+    def test_tensordot_numpy(self):
+        """
+        Tests based on the NumPy tensordot tests:
+
+        https://github.com/numpy/numpy/blob/5350aa0972a394afcda4ad6ecaca7690cbe5f702/numpy/core/tests/test_numeric.py#L3511-L3519
+        https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/core/tests/test_einsum.py#L421-L439
+        """
+        cfunc = jit(nopython=True)(tensordot)
+
+        a = np.ndarray((3,0))
+        b = np.ndarray((0,4))
+        td = np.tensordot(a, b, (1, 0))
+        self.assertTrue(np.array_equal(td, np.dot(a, b)))
+
+        a = np.arange(60, dtype=np.float64).reshape(3, 4, 5)
+        b = np.arange(24, dtype=np.float64).reshape(4, 3, 2)
+        self.assertTrue(
+            np.array_equal(np.einsum("ijk, jil -> kl", a, b),
+                           cfunc(a, b, axes=((1, 0), (0, 1)))))
+        self.assertTrue(
+            np.array_equal(
+                np.einsum(a, [0, 1, 2], b, [1, 0, 3], [2, 3]),
+                cfunc(a, b, axes=((1, 0), (0, 1)))))
+
+        c = np.arange(10, dtype=np.float64).reshape(5, 2)
+        np.einsum("ijk,jil->kl", a, b, out=c, dtype=np.float64)
+        self.assertTrue(np.array_equal(
+            c, cfunc(a, b, axes=((1, 0), (0, 1)))))
+        c[...] = 0
+        np.einsum(a, [0, 1, 2], b, [1, 0, 3], [2, 3], out=c,
+                  dtype=np.float64)
+        self.assertTrue(
+            np.array_equal(c, cfunc(a, b, axes=((1, 0), (0, 1)))))
+
 
 # Implementation definitions for the purpose of jitting.
 
