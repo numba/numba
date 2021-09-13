@@ -23,6 +23,9 @@ export NUMBA_DEVELOPER_MODE=1
 # enable the fault handler
 export PYTHONFAULTHANDLER=1
 
+# HACK: REMOVE THIS... enable new style error handling
+export NUMBA_CAPTURED_ERRORS="new_style"
+
 # deal with threading layers
 if [ -z ${TEST_THREADING+x} ]; then
     echo "INFO: Threading layer not explicitly set."
