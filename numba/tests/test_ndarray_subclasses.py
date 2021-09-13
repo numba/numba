@@ -287,10 +287,11 @@ class TestNdarraySubclasses(MemoryLeakMixin, TestCase):
         buf = np.arange(4, dtype=np.float32)
         with self.assertRaises(TypingError) as raises:
             foo(buf)
-        self.assertIn(
-            "unsupported use of ufunc <ufunc 'add'> on MyArray(1, float32, C)",
-            str(raises.exception),
-        )
+
+        msg = ("No implementation of function",
+               "add(MyArray(1, float32, C), MyArray(1, float32, C))")
+        for m in msg:
+            self.assertIn(m, str(raises.exception))
 
     @use_logger
     def test_myarray_allocator_override(self):

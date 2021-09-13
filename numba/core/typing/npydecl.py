@@ -148,7 +148,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
                         # raise TypeError here because
                         # NumpyRulesArrayOperator.generic is capturing
                         # TypingError
-                        raise TypeError(msg)
+                        raise NumbaTypeError(msg)
                     elif not issubclass(output_type, types.Array):
                         msg = (f"ufunc {ufunc} on {array_ufunc_type}"
                                f"cannot return non-array {output_type}")
