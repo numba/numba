@@ -2572,7 +2572,7 @@ def matrix_trace_impl(a, offset=0):
     _check_linalg_matrix(a, "trace", la_prefix=False)
 
     if not isinstance(offset, (int, types.Integer)):
-        raise TypeError("integer argument expected, got %s" % offset)
+        raise NumbaTypeError("integer argument expected, got %s" % offset)
 
     def matrix_trace_impl(a, offset=0):
         rows, cols = a.shape
