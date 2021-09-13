@@ -681,8 +681,15 @@ def ol_isinstance(var, typs):
     def false_impl(var, typs):
         return False
 
+    if isinstance(typs, types.UniTuple):
+        # corner case - all types in isinstance are the same
+        typs = (typs.key[0])
+
     if not isinstance(typs, types.containers.Tuple):
         typs = (typs, )
+
+    if not all([isinstance(typ, types.Function) for typ in typs]):
+        raise TypingError('arg 2 must be a type or tuple of types')
 
     var = typing.asnumbatype.as_numba_type(var)
 
