@@ -26,7 +26,8 @@ from numba.np.arrayobj import make_array, load_item, store_item, _empty_nd_impl
 from numba.np.linalg import ensure_blas
 
 from numba.core.extending import intrinsic
-from numba.core.errors import RequireLiteralValue, TypingError, NumbaValueError
+from numba.core.errors import (RequireLiteralValue, TypingError,
+                               NumbaValueError, NumbaNotImplementedError)
 from numba.core.overload_glue import glue_lowering
 from numba.cpython.unsafe.tuple import tuple_setitem
 
@@ -4416,7 +4417,7 @@ def np_asarray_chkfinite(a, dtype=None):
     else:
         try:
             dt = as_dtype(dtype)
-        except NotImplementedError:
+        except NumbaNotImplementedError:
             raise TypingError('dtype must be a valid Numpy dtype')
 
     def impl(a, dtype=None):
