@@ -5536,12 +5536,12 @@ def numpy_swapaxes(arr, axis1, axis2):
     return impl
 
 
-@njit
+@register_jitable
 def _take_along_axis_impl(
         arr, indices, axis, Ni_orig, Nk_orig, indices_broadcast_shape
 ):
     # Based on example code in
-    # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/shape_base.py#L90
+    # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/shape_base.py#L90-L103
     # With addition of pre-broadcasting:
     # https://github.com/numpy/numpy/issues/19704
 

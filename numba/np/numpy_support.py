@@ -676,6 +676,6 @@ def type_can_asarray(arr):
 
 
 def check_is_integer(v, name):
-    """Raise TypeError if the value is not an integer."""
+    """Raises TypingError if the value is not an integer."""
     if not isinstance(v, (int, types.Integer)):
         raise TypingError('{} must be an integer'.format(name))
