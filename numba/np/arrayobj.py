@@ -13,7 +13,7 @@ from llvmlite.llvmpy.core import Constant
 
 import numpy as np
 
-from numba import pndindex, literal_unroll, njit
+from numba import pndindex, literal_unroll
 from numba.core import types, utils, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                     is_fortran, check_is_integer)
