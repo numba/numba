@@ -1758,6 +1758,21 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
         for x in (-100, 100):
             self.assertEqual(foo.py_func(x), foo(x))
 
+    def test_not_unify(self):
+
+        @njit
+        def foo(x):
+            if x + 1 > 3:
+                l = ['a', 1, 2j]
+            else:
+                l = ['b', 2]
+            return l[0]
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo(100)
+        expect = "Cannot unify LiteralList"
+        self.assertIn(expect, str(raises.exception))
+
     def test_index(self):
         @njit
         def foo():

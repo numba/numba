@@ -222,13 +222,20 @@ def sum_kwarg_usecase(x, start=0):
 
 def isinstance_usecase(a):
     if isinstance(a, (int, float)):
-        if isinstance(a, int):
+        if isinstance(a, (int, int)):
             return a + 1
         if isinstance(a, float):
             return a + 2.0
     elif isinstance(a, str):
         return a + ", world!"
     return (1 + 2j)
+
+
+def invalid_isinstance_usecase(x):
+    if isinstance(x, ('foo',)):
+        return 'true branch'
+    else:
+        return 'false branch'
 
 
 class TestBuiltins(TestCase):
@@ -960,7 +967,7 @@ class TestBuiltins(TestCase):
         self.assertIn('No implementation', str(raises.exception))
 
     def test_isinstance(self):
-        pyfunc = isinstance_usecase 
+        pyfunc = isinstance_usecase
         cfunc = jit(nopython=True)(pyfunc)
 
         inputs = (
@@ -975,6 +982,13 @@ class TestBuiltins(TestCase):
             got = cfunc(inpt)
             self.assertEqual(expected, got)
 
+    def test_isinstance_exceptions(self):
+        fn = njit(invalid_isinstance_usecase)
+
+        with self.assertRaises(errors.TypingError) as raises:
+            fn(100)
+
+        self.assertIn('arg 2 must be a type or tuple of types', str(raises.exception))
 
     def test_truth(self):
         pyfunc = truth_usecase

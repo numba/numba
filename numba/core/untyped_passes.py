@@ -1449,9 +1449,9 @@ class PropagateLiterals(FunctionPass):
                     continue
 
                 # dont change return stmt in the form
-                # $return_xyz = cast(value=ABC)
+                # $return_xyz = cast(value=ABC) or static_getitem
                 if isinstance(assign.value, ir.Expr) and \
-                        assign.value.op == 'cast':
+                        assign.value.op in ('cast', 'static_getitem'):
                     continue
 
                 target = assign.target
