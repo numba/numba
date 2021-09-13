@@ -65,6 +65,8 @@ intc                    --               C int-sized integer
 uintc                   --               C int-sized unsigned integer
 intp                    --               pointer-sized integer
 uintp                   --               pointer-sized unsigned integer
+ssize_t                 --               C ssize_t
+size_t                  --               C size_t
 
 float32                 f4               single-precision floating-point number
 float64, double         f8               double-precision floating-point number
