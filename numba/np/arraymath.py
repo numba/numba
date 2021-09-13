@@ -27,7 +27,8 @@ from numba.np.linalg import ensure_blas
 
 from numba.core.extending import intrinsic
 from numba.core.errors import (RequireLiteralValue, TypingError,
-                               NumbaValueError, NumbaNotImplementedError)
+                               NumbaValueError, NumbaNotImplementedError,
+                               NumbaTypeError)
 from numba.core.overload_glue import glue_lowering
 from numba.cpython.unsafe.tuple import tuple_setitem
 
@@ -4060,7 +4061,12 @@ def generate_xinfo(np_func, container, attr):
     @overload(np_func)
     def xinfo_impl(arg):
         nbty = getattr(arg, 'dtype', arg)
-        f = np_func(as_dtype(nbty))
+        np_dtype = as_dtype(nbty)
+        try:
+            f = np_func(np_dtype)
+        except ValueError: # This exception instance comes from NumPy
+            # The np function might not support the dtype
+            return None
         data = tuple([getattr(f, x) for x in attr])
 
         def impl(arg):
@@ -4371,36 +4377,36 @@ def np_select(condlist, choicelist, default=0):
 
     # first we check the types of the input parameters
     if not isinstance(condlist, (types.List, types.UniTuple)):
-        raise TypeError('condlist must be a List or a Tuple')
+        raise NumbaTypeError('condlist must be a List or a Tuple')
     if not isinstance(choicelist, (types.List, types.UniTuple)):
-        raise TypeError('choicelist must be a List or a Tuple')
+        raise NumbaTypeError('choicelist must be a List or a Tuple')
     if not isinstance(default, (int, types.Number, types.Boolean)):
-        raise TypeError('default must be a scalar (number or boolean)')
+        raise NumbaTypeError('default must be a scalar (number or boolean)')
     # the types of the parameters have been checked, now we test the types
     # of the content of the parameters
     # implementation note: if in the future numba's np.where accepts tuples
     # as elements of condlist, then the check below should be extended to
     # accept tuples
     if not isinstance(condlist[0], types.Array):
-        raise TypeError('items of condlist must be arrays')
+        raise NumbaTypeError('items of condlist must be arrays')
     if not isinstance(choicelist[0], types.Array):
-        raise TypeError('items of choicelist must be arrays')
+        raise NumbaTypeError('items of choicelist must be arrays')
     # the types of the parameters and their contents have been checked,
     # now we test the dtypes of the content of parameters
     if isinstance(condlist[0], types.Array):
         if not isinstance(condlist[0].dtype, types.Boolean):
-            raise TypeError('condlist arrays must contain booleans')
+            raise NumbaTypeError('condlist arrays must contain booleans')
     if isinstance(condlist[0], types.UniTuple):
         if not (isinstance(condlist[0], types.UniTuple)
                 and isinstance(condlist[0][0], types.Boolean)):
-            raise TypeError('condlist tuples must only contain booleans')
+            raise NumbaTypeError('condlist tuples must only contain booleans')
     # the input types are correct, now we perform checks on the dimensions
     if (isinstance(condlist[0], types.Array) and
             condlist[0].ndim != choicelist[0].ndim):
-        raise TypeError('condlist and choicelist elements must have the '
-                        'same number of dimensions')
+        raise NumbaTypeError('condlist and choicelist elements must have the '
+                             'same number of dimensions')
     if isinstance(condlist[0], types.Array) and condlist[0].ndim < 1:
-        raise TypeError('condlist arrays must be of at least dimension 1')
+        raise NumbaTypeError('condlist arrays must be of at least dimension 1')
 
     return np_select_arr_impl
 
