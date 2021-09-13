@@ -451,7 +451,7 @@ def _assign_kernel(ndim):
             idx[1, i] = (location % lhs.shape[i]) * (rhs.shape[i] > 1)
             location //= lhs.shape[i]
 
-        lhs[make_tuple(ndim, idx[0])] = rhs[make_tuple(ndim, idx[1])]
+        lhs[to_fixed_tuple(idx[0], ndim)] = rhs[to_fixed_tuple(idx[1], ndim)]
     return kernel
 
 

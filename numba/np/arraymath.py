@@ -13,7 +13,6 @@ import numpy as np
 
 import llvmlite.llvmpy.core as lc
 
-<<<<<<< HEAD:numba/np/arraymath.py
 from numba import generated_jit
 from numba.core import types, cgutils
 from numba.core.extending import overload, overload_method, register_jitable
@@ -25,19 +24,6 @@ from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
 from numba.core.typing import signature
 from numba.np.arrayobj import make_array, load_item, store_item, _empty_nd_impl
 from numba.np.linalg import ensure_blas
-=======
-from numba import types, cgutils, generated_jit
-from numba.extending import overload, overload_method, register_jitable
-from numba.numpy_support import as_dtype, type_can_asarray
-from numba.numpy_support import numpy_version
-from numba.numpy_support import is_nonelike
-from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
-                                    impl_ret_new_ref, impl_ret_untracked)
-from numba.targets.tupleobj import make_tuple
-from numba.typing import signature
-from .arrayobj import make_array, load_item, store_item, _empty_nd_impl
-from .linalg import ensure_blas
->>>>>>> 4b2be7389 (squashed dependencies (PR #5169 and #5173)):numba/targets/arraymath.py
 
 from numba.core.extending import intrinsic
 from numba.core.errors import RequireLiteralValue, TypingError
@@ -55,6 +41,47 @@ def _check_blas():
 
 
 _HAVE_BLAS = _check_blas()
+
+
+@intrinsic
+def _create_tuple_result_shape(tyctx, shape_list, shape_tuple):
+    """
+    This routine converts shape list where the axis dimension has already
+    been popped to a tuple for indexing of the same size.  The original shape
+    tuple is also required because it contains a length field at compile time
+    whereas the shape list does not.
+    """
+
+    # The new tuple's size is one less than the original tuple since axis
+    # dimension removed.
+    nd = len(shape_tuple) - 1
+    # The return type of this intrinsic is an int tuple of length nd.
+    tupty = types.UniTuple(types.intp, nd)
+    # The function signature for this intrinsic.
+    function_sig = tupty(shape_list, shape_tuple)
+
+    def codegen(cgctx, builder, signature, args):
+        lltupty = cgctx.get_value_type(tupty)
+        # Create an empty int tuple.
+        tup = cgutils.get_null_value(lltupty)
+
+        # Get the shape list from the args and we don't need shape tuple.
+        [in_shape, _] = args
+
+        def array_indexer(a, i):
+            return a[i]
+
+        # loop to fill the tuple
+        for i in range(nd):
+            dataidx = cgctx.get_constant(types.intp, i)
+            # compile and call array_indexer
+            data = cgctx.compile_internal(builder, array_indexer,
+                                          types.intp(shape_list, types.intp),
+                                          [in_shape, dataidx])
+            tup = builder.insert_value(tup, data, i)
+        return tup
+
+    return function_sig, codegen
 
 
 @intrinsic
@@ -154,9 +181,7 @@ def _array_sum_axis_nop(arr, v):
     return arr
 
 
-def gen_sum_axis_impl(arr, is_axis_const, const_axis_val, op, zero):
-    result_ndim = arr.ndim - 1
-
+def gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero):
     def inner(arr, axis):
         """
         function that performs sums over one specific axis
@@ -190,7 +215,7 @@ def gen_sum_axis_impl(arr, is_axis_const, const_axis_val, op, zero):
         # Remove the axis dimension from the list of dimensional lengths.
         ashape.pop(axis)
         # Convert this shape list back to a tuple using above intrinsic.
-        ashape_without_axis = make_tuple(result_ndim, ashape)
+        ashape_without_axis = _create_tuple_result_shape(ashape, arr.shape)
         # Tuple needed here to create output array with correct size.
         result = np.full(ashape_without_axis, zero, type(zero))
 
@@ -254,8 +279,7 @@ def array_sum_axis_dtype(context, builder, sig, args):
         sig = sig.replace(args=[ty_array, ty_axis, ty_dtype])
         is_axis_const = True
 
-    gen_impl = gen_sum_axis_impl(
-        ty_array, is_axis_const, const_axis_val, op, zero)
+    gen_impl = gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero)
     compiled = register_jitable(gen_impl)
 
     def array_sum_impl_axis(arr, axis, dtype):
@@ -314,8 +338,7 @@ def array_sum_axis(context, builder, sig, args):
         sig = sig.replace(args=[ty_array, ty_axis])
         is_axis_const = True
 
-    gen_impl = gen_sum_axis_impl(
-        ty_array, is_axis_const, const_axis_val, op, zero)
+    gen_impl = gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero)
     compiled = register_jitable(gen_impl)
 
     def array_sum_impl_axis(arr, axis):

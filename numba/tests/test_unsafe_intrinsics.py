@@ -61,7 +61,6 @@ class TestNdarrayIntrinsic(TestCase):
     """Tests for numba.unsafe.ndarray
     """
     def test_to_fixed_tuple(self):
-        # QUESTION: OK to delete? Moved to tests.test_tuples.TestIntrinsics.
         const = 3
 
         @njit
