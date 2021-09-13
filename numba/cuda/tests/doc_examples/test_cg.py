@@ -2,9 +2,12 @@
 # "magictoken" is used for markers as beginning and ending of example text.
 
 import unittest
-from numba.cuda.testing import CUDATestCase, skip_on_cudasim
+from numba.cuda.testing import (CUDATestCase, skip_on_cudasim,
+                                skip_if_cudadevrt_missing, skip_unless_cc_60)
 
 
+@skip_if_cudadevrt_missing
+@skip_unless_cc_60
 @skip_on_cudasim("cudasim doesn't support cuda import at non-top-level")
 class TestCooperativeGroups(CUDATestCase):
     def test_ex_grid_sync(self):
