@@ -90,10 +90,10 @@ class TestInit(CUDATestCase):
         result_queue = ctx.Queue()
         proc = ctx.Process(target=target, args=(result_queue,))
         proc.start()
-        proc.join()
+        proc.join(30) # should complete within 30s
         success, msg = result_queue.get()
 
-        # Ensure the child process raised an except during initialization
+        # Ensure the child process raised an exception during initialization
         # before checking the message
         if not success:
             self.fail('CudaSupportError not raised')
