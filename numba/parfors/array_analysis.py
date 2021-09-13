@@ -1325,6 +1325,12 @@ class ArrayAnalysis(object):
                     shape = gvalue
                 elif isinstance(gvalue, int):
                     shape = (gvalue,)
+            elif isinstance(inst.value, ir.Arg):
+                if (
+                    isinstance(typ, types.containers.UniTuple)
+                    and isinstance(typ.dtype, types.Integer)
+                ):
+                    shape = inst.value
 
             if isinstance(shape, ir.Const):
                 if isinstance(shape.value, tuple):
@@ -3128,9 +3134,14 @@ class ArrayAnalysis(object):
         # attr call: A_sh_attr = getattr(A, shape)
         if isinstance(shape, ir.Var):
             shape = equiv_set.get_shape(shape)
+
         # already a tuple variable that contains size
         if isinstance(shape, ir.Var):
             attr_var = shape
+            shape_attr_call = None
+            shape = None
+        elif isinstance(shape, ir.Arg):
+            attr_var = var
             shape_attr_call = None
             shape = None
         else:

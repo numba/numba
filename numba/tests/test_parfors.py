@@ -1850,6 +1850,13 @@ class TestParfors(TestParforsBase):
         x = np.ones((2, 2, 2, 2, 2, 15))
         self.check(test_impl, x)
 
+    def test_tuple_arg(self):
+        def test_impl(x, sz):
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10,10)
+        self.check(test_impl, np.empty(sz), sz)
 
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
