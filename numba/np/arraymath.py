@@ -3781,7 +3781,7 @@ def searchsorted(a, v, side='left'):
     elif side_val == 'right':
         loop_impl = _searchsorted_right
     else:
-        raise ValueError("Invalid value given for 'side': %s" % side_val)
+        raise NumbaValueError(f"Invalid value given for 'side': {side_val}")
 
     if isinstance(v, types.Array):
         # N-d array and output
