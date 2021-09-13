@@ -478,12 +478,6 @@ class DeviceRecord(DeviceNDArrayBase):
 
         rhs, _ = auto_device(lhs.dtype.type(value), stream=stream)
 
-        if rhs.dtype.itemsize > lhs.dtype.itemsize:
-            err_str = """Can't assign record of size %s
-                            to self record of size %s"""
-            raise ValueError(err_str % (rhs.dtype.itemsize,
-                                        lhs.dtype.itemsize))
-
         # (3) do the copy
 
         _driver.device_to_device(lhs, rhs, rhs.dtype.itemsize, stream)
