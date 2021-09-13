@@ -1667,7 +1667,7 @@ def numpy_rot90(arr, k=1):
         raise errors.TypingError('The first argument "arr" must be an array')
 
     if arr.ndim < 2:
-        raise ValueError('Input must be >= 2-d.')
+        raise errors.NumbaValueError('Input must be >= 2-d.')
 
     def impl(arr, k=1):
         k = k % 4
@@ -5173,6 +5173,8 @@ def np_flip_ud(a):
 def _build_flip_slice_tuple(tyctx, sz):
     """ Creates a tuple of slices for np.flip indexing like
     `(slice(None, None, -1),) * sz` """
+    if not isinstance(sz, types.IntegerLiteral):
+        raise errors.RequireLiteralValue(sz)
     size = int(sz.literal_value)
     tuple_type = types.UniTuple(dtype=types.slice3_type, count=size)
     sig = tuple_type(sz)
