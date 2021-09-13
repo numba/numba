@@ -815,7 +815,10 @@ def new_error_context(fmt_, *args, **kwargs):
     except Exception as e:
         if numba.core.config.CAPTURED_ERRORS == 'old_style':
             newerr = errcls(e).add_context(_format_msg(fmt_, args, kwargs))
-            tb = sys.exc_info()[2] if numba.core.config.FULL_TRACEBACKS else None
+            if numba.core.config.FULL_TRACEBACKS:
+                tb = sys.exc_info()[2]
+            else:
+                tb = None
             raise newerr.with_traceback(tb)
         elif numba.core.config.CAPTURED_ERRORS == 'new_style':
             raise e

@@ -467,7 +467,7 @@ class CompilerBase(object):
                     break
                 except Exception as e:
                     if (config.CAPTURED_ERRORS == 'new_style' and not
-                        isinstance(e, errors.NumbaError)):
+                            isinstance(e, errors.NumbaError)):
                         raise e
 
                     self.state.status.fail_reason = e

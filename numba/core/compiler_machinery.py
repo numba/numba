@@ -338,7 +338,7 @@ class PassManager(object):
                 raise e
             except Exception as e:
                 if (config.CAPTURED_ERRORS == 'new_style' and not
-                    isinstance(e, errors.NumbaError)):
+                        isinstance(e, errors.NumbaError)):
                     raise e
                 msg = "Failed in %s mode pipeline (step: %s)" % \
                     (self.pipeline_name, pass_desc)

@@ -11,6 +11,7 @@ from collections import defaultdict
 from numba.core import errors
 from numba.core.typing.templates import CallableTemplate
 
+
 class _OverloadWrapper(object):
     """This class does all the work of assembling and registering wrapped split
     implementations.

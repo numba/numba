@@ -309,7 +309,7 @@ class _EnvReloader(object):
         THREADING_LAYER = _readenv("NUMBA_THREADING_LAYER", str, 'default')
 
         # Choose how to handle captured errors
-        CAPTURED_ERRORS =  _readenv("NUMBA_CAPTURED_ERRORS", str, 'old_style')
+        CAPTURED_ERRORS = _readenv("NUMBA_CAPTURED_ERRORS", str, 'old_style')
 
         # CUDA Configs
 

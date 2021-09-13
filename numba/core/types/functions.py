@@ -329,7 +329,7 @@ class BaseFunction(Callable):
                         sig = temp.apply(nolitargs, nolitkws)
                 except Exception as e:
                     if (config.CAPTURED_ERRORS == 'new_style' and
-                        not isinstance(e, errors.NumbaError)):
+                            not isinstance(e, errors.NumbaError)):
                         raise e
                     else:
                         sig = None
@@ -421,8 +421,8 @@ class BoundFunction(Callable, Opaque):
                     out = template.apply(args, kws)
                 except Exception as exc:
                     if (config.CAPTURED_ERRORS == 'new_style' and not
-                        isinstance(exc, errors.NumbaError)):
-                            raise exc
+                            isinstance(exc, errors.NumbaError)):
+                        raise exc
                     if isinstance(exc, errors.ForceLiteralArg):
                         raise exc
                     literal_e = exc
