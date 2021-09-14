@@ -20,7 +20,7 @@ from numba.core.compiler_machinery import PassManager
 from numba.core.types.functions import _err_reasons as error_reasons
 
 from numba.tests.support import (skip_parfors_unsupported, override_config,
-                                 SerialMixin)
+                                 SerialMixin, skip_unless_scipy)
 import unittest
 
 # used in TestMiscErrorHandling::test_handling_of_write_to_*_global
@@ -246,6 +246,7 @@ class TestErrorMessages(unittest.TestCase):
         excstr = str(raises.exception)
         self.assertIn("No match", excstr)
 
+    @skip_unless_scipy
     def test_error_function_source_is_correct(self):
         """ Checks that the reported source location for an overload is the
         overload implementation source, not the actual function source from the
