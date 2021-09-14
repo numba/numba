@@ -164,8 +164,8 @@ class ConstraintNetwork(object):
                 except Exception as e:
                     if config.CAPTURED_ERRORS == 'old_style':
                         _logger.debug("captured error", exc_info=e)
-                        msg = ("Internal error at {con}.\n"
-                            "{err}\nEnable logging at debug level for details.")
+                        msg = ("Internal error at {con}.\n{err}\n"
+                               "Enable logging at debug level for details.")
                         new_exc = TypingError(
                             msg.format(con=constraint, err=str(e)),
                             loc=constraint.loc,
