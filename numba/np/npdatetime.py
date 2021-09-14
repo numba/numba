@@ -576,8 +576,8 @@ def convert_datetime_for_arith(builder, dt_val, src_unit, dest_unit):
     dt_factor = npdatetime_helpers.get_timedelta_conversion_factor(dt_unit, dest_unit)
     if dt_factor is None:
         # This can happen when using explicit output in a ufunc.
-        raise NotImplementedError("cannot convert datetime64 from %r to %r"
-                                  % (src_unit, dest_unit))
+        raise LoweringError("cannot convert datetime64 from %r to %r"
+                                       % (src_unit, dest_unit))
     return scale_by_constant(builder, dt_val, dt_factor)
 
 
