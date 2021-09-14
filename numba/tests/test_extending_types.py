@@ -15,6 +15,7 @@ from numba.core.extending import typeof_impl
 
 import unittest
 
+
 def gen_mock_float():
     # Stub to overload, pretending to be `float`. The real `float` function is
     # not used as multiple registrations can collide.
