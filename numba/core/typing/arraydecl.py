@@ -566,8 +566,9 @@ class StaticGetItemLiteralRecord(AbstractTemplate):
         if isinstance(record, types.Record):
             if isinstance(idx, types.StringLiteral):
                 if idx.literal_value not in record.fields:
-                    raise KeyError(f"Field '{idx.literal_value}' was not found in record with "
-                                   f"fields {tuple(record.fields.keys())}")
+                    msg = (f"Field '{idx.literal_value}' was not found in "
+                           f"record with fields {tuple(record.fields.keys())}")
+                    raise NumbaKeyError(msg)
                 ret = record.typeof(idx.literal_value)
                 assert ret
                 return signature(ret, *args)
