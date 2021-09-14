@@ -1943,7 +1943,7 @@ def np_ediff1d(ary, to_end=None, to_begin=None):
 
     if isinstance(ary, types.Array):
         if isinstance(ary.dtype, types.Boolean):
-            raise TypeError("Boolean dtype is unsupported (as per NumPy)")
+            raise NumbaTypeError("Boolean dtype is unsupported (as per NumPy)")
             # Numpy tries to do this: return ary[1:] - ary[:-1] which
             # results in a TypeError exception being raised
 
@@ -1960,11 +1960,11 @@ def np_ediff1d(ary, to_end=None, to_begin=None):
 
         if to_begin_dt is not None and not np.can_cast(to_begin_dt, ary_dt):
             msg = "dtype of to_begin must be compatible with input ary"
-            raise TypeError(msg)
+            raise NumbaTypeError(msg)
 
         if to_end_dt is not None and not np.can_cast(to_end_dt, ary_dt):
             msg = "dtype of to_end must be compatible with input ary"
-            raise TypeError(msg)
+            raise NumbaTypeError(msg)
 
     def np_ediff1d_impl(ary, to_end=None, to_begin=None):
         # transform each input into an equivalent 1d array
