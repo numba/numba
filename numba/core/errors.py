@@ -773,6 +773,14 @@ class NumbaNotImplementedError(TypingError):
     pass
 
 
+class NumbaKeyError(TypingError):
+    pass
+
+
+class NumbaIndexError(TypingError):
+    pass
+
+
 class NumbaRuntimeError(NumbaError):
     pass
 

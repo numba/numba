@@ -10,7 +10,8 @@ from numba.core.typing.templates import (AttributeTemplate, AbstractTemplate,
 # defined in collections: e.g. array.shape[i]
 from numba.core.typing import collections
 from numba.core.errors import (TypingError, NumbaTypeError,
-                               NumbaNotImplementedError, NumbaAssertionError)
+                               NumbaNotImplementedError, NumbaAssertionError,
+                               NumbaKeyError, NumbaIndexError)
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
 
@@ -573,7 +574,7 @@ class StaticGetItemLiteralRecord(AbstractTemplate):
             elif isinstance(idx, types.IntegerLiteral):
                 if idx.literal_value >= len(record.fields):
                     msg = f"Requested index {idx.literal_value} is out of range"
-                    raise IndexError(msg)
+                    raise NumbaIndexError(msg)
                 field_names = list(record.fields)
                 ret = record.typeof(field_names[idx.literal_value])
                 assert ret
@@ -611,8 +612,9 @@ class StaticSetItemLiteralRecord(AbstractTemplate):
         target, idx, value = args
         if isinstance(target, types.Record) and isinstance(idx, types.StringLiteral):
             if idx.literal_value not in target.fields:
-                raise KeyError(f"Field '{idx.literal_value}' was not found in record with "
-                               f"fields {tuple(target.fields.keys())}")
+                msg = (f"Field '{idx.literal_value}' was not found in record "
+                       f"with fields {tuple(target.fields.keys())}")
+                raise NumbaKeyError(msg)
             expectedty = target.typeof(idx.literal_value)
             if self.context.can_convert(value, expectedty) is not None:
                 return signature(types.void, target, idx, value)
