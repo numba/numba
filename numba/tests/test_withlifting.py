@@ -257,7 +257,8 @@ class TestLiftCall(BaseTestWithLifting):
         self.check_same_semantic(liftcall3)
 
     def test_liftcall4(self):
-        with self.assertRaises(errors.TypingError) as raises:
+        accept = (errors.TypingError, errors.NumbaRuntimeError)
+        with self.assertRaises(accept) as raises:
             njit(liftcall4)()
         # Known error.  We only support one context manager per function
         # for body that are lifted.
