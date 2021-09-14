@@ -80,7 +80,7 @@ class OverloadSelector(object):
                 msg = ["{n} ambiguous signatures".format(n=len(same))]
                 for sig in same:
                     msg += ["{0} => {1}".format(sig, candidates[sig])]
-                raise TypeError('\n'.join(msg))
+                raise errors.NumbaTypeError('\n'.join(msg))
         return ordered[0]
 
     def _sort_signatures(self, candidates):
