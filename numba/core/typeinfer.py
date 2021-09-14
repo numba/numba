@@ -25,7 +25,7 @@ from numba.core import types, utils, typing, ir, config
 from numba.core.typing.templates import Signature
 from numba.core.errors import (TypingError, UntypedAttributeError,
                                new_error_context, termcolor, UnsupportedError,
-                               ForceLiteralArg, CompilerError)
+                               ForceLiteralArg, CompilerError, NumbaValueError)
 from numba.core.funcdesc import qualifying_prefix
 
 _logger = logging.getLogger(__name__)
@@ -394,10 +394,9 @@ class ExhaustIterConstraint(object):
                         typeinfer.add_type(self.target, tp, loc=self.loc)
                         break
                     else:
-                        raise ValueError("wrong tuple length for %r: "
-                                         "expected %d, got %d"
-                                         % (self.iterator.name, self.count,
-                                            len(tp)))
+                        msg = (f"wrong tuple length for {self.iterator.name}: ",
+                               f"expected {self.count}, got {len(tp)}")
+                        raise NumbaValueError(msg)
                 elif isinstance(tp, types.IterableType):
                     tup = types.UniTuple(dtype=tp.iterator_type.yield_type,
                                          count=self.count)
