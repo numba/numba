@@ -608,7 +608,10 @@ class StaticGetItemTuple(AbstractTemplate):
         if not isinstance(tup, types.BaseTuple):
             return
         if isinstance(idx, int):
-            ret = tup.types[idx]
+            try:
+                ret = tup.types[idx]
+            except IndexError:
+                raise errors.NumbaIndexError("tuple index out of range")
         elif isinstance(idx, slice):
             ret = types.BaseTuple.from_types(tup.types[idx])
         if ret is not None:
