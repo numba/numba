@@ -86,7 +86,7 @@ class ByteCodeInst(object):
             return self.next + self.arg * 2
         else:
             assert self.opcode in JABS_OPS
-            return self.arg * 2 + 2
+            return self.arg * 2 - 2
 
     def __repr__(self):
         return '%s(arg=%s, lineno=%d)' % (self.opname, self.arg, self.lineno)
