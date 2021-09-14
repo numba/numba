@@ -531,9 +531,9 @@ class TestTargetHierarchySelection(TestCase):
 
         # new style errors raise UnsupportedError, old style ends up as
         # TypingError
-        with self.assertRaises((errors.UnsupportedError, errors.TypingError))\
-            as raises:
-                dpu_foo()
+        accept = (errors.UnsupportedError, errors.TypingError)
+        with self.assertRaises(accept) as raises:
+            dpu_foo()
 
         msgs = ["Function resolution cannot find any matches for function",
                 "test_no_specialisation_found.<locals>.my_func",
@@ -629,9 +629,9 @@ class TestTargetHierarchySelection(TestCase):
         def cpu_foo_dpu():
             return intrin_math_dpu(3, 4)
 
-        with self.assertRaises((errors.TypingError, errors.UnsupportedError))\
-            as raises:
-                cpu_foo_dpu()
+        accept = (errors.UnsupportedError, errors.TypingError)
+        with self.assertRaises(accept) as raises:
+            cpu_foo_dpu()
 
         msgs = ["Function resolution cannot find any matches for function",
                 "intrinsic intrin_math_dpu",
@@ -658,9 +658,9 @@ class TestTargetHierarchySelection(TestCase):
         def dpu_foo_cpu():
             return intrin_math_cpu(3, 4)
 
-        with self.assertRaises((errors.TypingError, errors.UnsupportedError))\
-            as raises:
-                dpu_foo_cpu()
+        accept = (errors.UnsupportedError, errors.TypingError)
+        with self.assertRaises(accept) as raises:
+            dpu_foo_cpu()
 
         msgs = ["Function resolution cannot find any matches for function",
                 "intrinsic intrin_math_cpu",
