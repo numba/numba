@@ -181,7 +181,7 @@ def range_to_range(context, builder, fromty, toty, val):
     return cgutils.make_anonymous_struct(builder, items)
 
 @intrinsic
-def comprehension_iter_len(typingctx, val):
+def length_of_iterator(typingctx, val):
     """
     An implementation of len(iter) for internal use.
     Primary use is for array comprehensions (see inline_closurecall).
