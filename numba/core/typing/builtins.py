@@ -770,12 +770,12 @@ class SliceAttribute(AttributeTemplate):
     def resolve_indices(self, ty, args, kws):
         assert not kws
         if len(args) != 1:
-            raise TypeError(
+            raise errors.NumbaTypeError(
                 "indices() takes exactly one argument (%d given)" % len(args)
             )
         typ, = args
         if not isinstance(typ, types.Integer):
-            raise TypeError(
+            raise errors.NumbaTypeError(
                 "'%s' object cannot be interpreted as an integer" % typ
             )
         return signature(types.UniTuple(types.intp, 3), types.intp)
