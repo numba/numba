@@ -521,7 +521,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         # Check that an error occurred in with-lifting in objmode
         pat = ("During: resolving callee type: "
                "type\(ObjModeLiftedWith\(<.*>\)\)")
-        self.assertRegexpMatches(str(raises.exception), pat)
+        self.assertRegex(str(raises.exception), pat)
 
     def test_case07_mystery_key_error(self):
         # this raises a key error
