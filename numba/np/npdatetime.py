@@ -14,6 +14,7 @@ from numba.core.imputils import (lower_builtin, lower_constant,
 from numba.np import npdatetime_helpers, numpy_support, npyfuncs
 from numba.extending import overload_method
 from numba.core.config import IS_32BITS
+from numba.core.errors import LoweringError
 
 # datetime64 and timedelta64 use the same internal representation
 DATETIME64 = TIMEDELTA64 = Type.int(64)
@@ -52,8 +53,8 @@ def scale_timedelta(context, builder, val, srcty, destty):
         srcty.unit, destty.unit)
     if factor is None:
         # This can happen when using explicit output in a ufunc.
-        raise NotImplementedError("cannot convert timedelta64 from %r to %r"
-                                  % (srcty.unit, destty.unit))
+        msg = f"cannot convert timedelta64 from {srcty.unit} to {destty.unit}"
+        raise LoweringError(msg)
     return scale_by_constant(builder, val, factor)
 
 
