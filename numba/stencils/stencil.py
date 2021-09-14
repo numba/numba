@@ -201,7 +201,7 @@ class StencilFunc(object):
                         elif stmt_index_var.name in const_dict:
                             kernel_consts += [const_dict[stmt_index_var.name]]
                         else:
-                            raise ValueError("stencil kernel index is not "
+                            raise NumbaValueError("stencil kernel index is not "
                                 "constant, 'neighborhood' option required")
 
                     if ndim == 1:

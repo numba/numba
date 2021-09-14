@@ -509,14 +509,14 @@ class TestStencil(TestStencilBase):
         np.testing.assert_almost_equal(parfor_output4, expected, decimal=3)
 
         # check error in regular Python path
-        with self.assertRaises(ValueError) as e:
+        with self.assertRaises(NumbaValueError) as e:
             test_impl4(4)
 
         self.assertIn("stencil kernel index is not constant, "
                       "'neighborhood' option required", str(e.exception))
         # check error in njit path
         # TODO: ValueError should be thrown instead of LoweringError
-        with self.assertRaises(LoweringError) as e:
+        with self.assertRaises((LoweringError, NumbaValueError)) as e:
             njit(test_impl4)(4)
 
         self.assertIn("stencil kernel index is not constant, "
@@ -598,7 +598,7 @@ class TestStencil(TestStencilBase):
 
         A = np.arange(12).reshape((3, 4))
         ret = np.ones_like(A)
-        with self.assertRaises(ValueError) as e:
+        with self.assertRaises(NumbaValueError) as e:
             stencil_fn(A, out=ret)
         msg = "cval type does not match stencil return type."
         self.assertIn(msg, str(e.exception))
@@ -606,7 +606,7 @@ class TestStencil(TestStencilBase):
         for compiler in [self.compile_njit, self.compile_parallel]:
             try:
                 compiler(wrapped,())
-            except(ValueError, LoweringError) as e:
+            except(NumbaValueError, LoweringError) as e:
                 self.assertIn(msg, str(e))
             else:
                 raise AssertionError("Expected error was not raised")
