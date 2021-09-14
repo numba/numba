@@ -597,7 +597,7 @@ class StaticSetItemRecord(AbstractTemplate):
             elif isinstance(idx, int):
                 if idx >= len(record.fields):
                     msg = f"Requested index {idx} is out of range"
-                    raise IndexError(msg)
+                    raise NumbaIndexError(msg)
                 str_field = list(record.fields)[idx]
                 expectedty = record.typeof(str_field)
                 if self.context.can_convert(value, expectedty) is not None:
