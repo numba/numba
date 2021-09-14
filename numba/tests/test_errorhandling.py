@@ -463,5 +463,34 @@ class TestDeveloperSpecificErrorMessages(SerialMixin, unittest.TestCase):
         self.assertIn("args not supported", excstr)
 
 
+class TestCapturedErrorHandling(SerialMixin, unittest.TestCase):
+    """Checks that the way errors are captured changes depending on the env
+    var "NUMBA_CAPTURED_ERRORS".
+    """
+
+    def test_error_in_overload(self):
+
+        def bar(x):
+            pass
+
+        @overload(bar)
+        def ol_bar(x):
+            x.some_invalid_attr # doesn't exist!
+
+            def impl(x):
+                pass
+            return impl
+
+        for style, err_class in (('new_style', AttributeError),
+                                 ('old_style', errors.TypingError)):
+            with override_config('CAPTURED_ERRORS', style):
+                with self.assertRaises(err_class) as raises:
+                    @njit('void(int64)')
+                    def foo(x):
+                        bar(x)
+                expected = "object has no attribute 'some_invalid_attr'"
+                self.assertIn(expected, str(raises.exception))
+
+
 if __name__ == '__main__':
     unittest.main()
