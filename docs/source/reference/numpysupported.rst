@@ -498,6 +498,8 @@ The following top-level functions are supported:
 * :func:`numpy.reshape` (no order argument; 'C' order only)
 * :func:`numpy.roll` (only the 2 first arguments; second argument ``shift``
   must be an integer)
+* :func:`numpy.moveaxis` (if the ``source`` is an integer then
+  ``destination``, too, must be an integer and vice versa.)
 * :func:`numpy.roots`
 * :func:`numpy.rot90` (only the 2 first arguments)
 * :func:`numpy.round_`
