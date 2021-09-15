@@ -101,6 +101,10 @@ class GUFunc(serialize.ReduceMixin):
     @property
     def identity(self):
         return self.ufunc.identity
+    
+    @property
+    def signature(self):
+        return self.ufunc.signature
 
     def _get_ewise_dtypes(self, args):
         argtys = map(lambda x: typeof(x), args)
