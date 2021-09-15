@@ -7,7 +7,6 @@ import math
 from collections import namedtuple
 from enum import IntEnum
 from functools import partial
-from numba.core.sigutils import is_signature
 import operator
 
 import numpy as np
@@ -2163,7 +2162,8 @@ def moveaxis(a, source, destination) -> np.ndarray:
     source : int or sequence of int
         Original positions of the axes to move. These must be unique.
     dest : int or sequence of int
-        Destination positions for each of the original axes. These must also be unique.
+        Destination positions for each of the original axes. These must also be
+        unique.
 
     Returns
     -------
@@ -2172,11 +2172,13 @@ def moveaxis(a, source, destination) -> np.ndarray:
 
     Notes
     -----
-    If one of (source, destination) is an integer, then the other must be an integer, too.
+    If one of (source, destination) is an integer, then the other must be an
+    integer, too.
 
     See Also
     --------
-    `np.moveaxis <https://numpy.org/doc/stable/reference/generated/numpy.moveaxis.html>`_
+    `np.moveaxis
+    <https://numpy.org/doc/stable/reference/generated/numpy.moveaxis.html>`_
     """
 
     @register_jitable
@@ -2191,10 +2193,14 @@ def moveaxis(a, source, destination) -> np.ndarray:
             )
 
         if np.any(np.abs(source_work) >= a.ndim):
-            raise np.AxisError("source: an axis is out of bounds for the input array.")
-        
+            raise np.AxisError(
+                "source: an axis is out of bounds for the input array."
+            )
+
         if np.any(np.abs(destination_work) >= a.ndim):
-            raise np.AxisError("destination: an axis is out of bounds for the input array.")
+            raise np.AxisError(
+                "destination: an axis is out of bounds for the input array."
+            )
 
         if source_work.size != np.unique(source_work).size:
             raise ValueError("repeated axis in `source` argument.")
@@ -2215,9 +2221,13 @@ def moveaxis(a, source, destination) -> np.ndarray:
     @register_jitable
     def impl_int(a, source, destination):
         if abs(source) >= a.ndim:
-            raise np.AxisError("source: an axis is out of bounds for the input array.")
+            raise np.AxisError(
+                "source: an axis is out of bounds for the input array."
+            )
         if abs(destination) >= a.ndim:
-            raise np.AxisError("destination: an axis is out of bounds for the input array.")
+            raise np.AxisError(
+                "destination: an axis is out of bounds for the input array."
+            )
 
         source = source % a.ndim
         destination = destination % a.ndim
@@ -2232,10 +2242,14 @@ def moveaxis(a, source, destination) -> np.ndarray:
     def to_array(a):
         return np.asarray(a)
 
-    if isinstance(source, types.Integer) and isinstance(destination, types.Integer):
-        return lambda a, source, destination: impl_int(to_array(a), source, destination)
+    if (isinstance(source, types.Integer)
+            and isinstance(destination, types.Integer)):
+        return lambda a, source, destination: impl_int(
+            to_array(a), source, destination)
     else:
-        return lambda a, source, destination: impl_array(to_array(a), source, destination)
+        return lambda a, source, destination: impl_array(
+            to_array(a), source, destination)
+
 
 #----------------------------------------------------------------------------
 # Mathematical functions

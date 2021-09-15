@@ -292,6 +292,7 @@ def ediff1d(ary, to_end=None, to_begin=None):
 def roll(a, shift):
     return np.roll(a, shift)
 
+
 def moveaxis(a, source, destination):
     return np.moveaxis(a, source, destination)
 
@@ -2779,8 +2780,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for source, destination, expected in [
                 (0, 1, (2, 1, 3, 4)),
                 (1, 2, (1, 3, 2, 4)),
-                (1, -1, (1, 3, 4, 2)),
-                ]:
+                (1, -1, (1, 3, 4, 2))]:
             actual = cfunc(x, source, destination).shape
             np.testing.assert_(actual, expected)
 
@@ -2794,9 +2794,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 (3, -1),
                 (-1, 3),
                 ([0, -1], [0, -1]),
-                ([2, 0], [2, 0]),
-                # (range(4), range(4)),  # passing range is unspported in numba
-                ]:
+                ([2, 0], [2, 0])]:
             actual = cfunc(x, source, destination).shape
             np.testing.assert_(actual, (1, 2, 3, 4))
 
@@ -2810,8 +2808,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 ([2, 3], [0, 1], (2, 3, 0, 1)),
                 ([0, 1, 2], [2, 3, 0], (2, 3, 0, 1)),
                 ([3, 0], [1, 0], (0, 3, 1, 2)),
-                ([0, 3], [0, 1], (0, 3, 1, 2)),
-                ]:
+                ([0, 3], [0, 1], (0, 3, 1, 2))]:
             actual = cfunc(x, source, destination).shape
             np.testing.assert_(actual, expected)
 
@@ -2820,20 +2817,26 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         x = np.random.randn(1, 2, 3)
-        np.testing.assert_raises_regex(np.AxisError, 'source.*out of bounds',
-                            cfunc, x, 3, 0)
-        np.testing.assert_raises_regex(np.AxisError, 'source.*out of bounds',
-                            cfunc, x, -4, 0)
-        np.testing.assert_raises_regex(np.AxisError, 'destination.*out of bounds',
-                            cfunc, x, 0, 5)
-        np.testing.assert_raises_regex(ValueError, 'repeated axis in `source`',
-                            cfunc, x, [0, 0], [0, 1])
-        np.testing.assert_raises_regex(ValueError, 'repeated axis in `destination`',
-                            cfunc, x, [0, 1], [1, 1])
-        np.testing.assert_raises_regex(ValueError, 'must have the same number',
-                            cfunc, x, 0, [0, 1])
-        np.testing.assert_raises_regex(ValueError, 'must have the same number',
-                            cfunc, x, [0, 1], [0])
+        np.testing.assert_raises_regex(
+            np.AxisError, 'source.*out of bounds', cfunc, x, 3, 0)
+        np.testing.assert_raises_regex(
+            np.AxisError, 'source.*out of bounds', cfunc, x, -4, 0)
+        np.testing.assert_raises_regex(
+            np.AxisError, 'destination.*out of bounds', cfunc, x, 0, 5)
+        np.testing.assert_raises_regex(
+            ValueError, 'repeated axis in `source`', cfunc, x, [0, 0], [0, 1])
+        np.testing.assert_raises_regex(
+            ValueError,
+            'repeated axis in `destination`',
+            cfunc,
+            x,
+            [0, 1],
+            [1, 1]
+        )
+        np.testing.assert_raises_regex(
+            ValueError, 'must have the same number', cfunc, x, 0, [0, 1])
+        np.testing.assert_raises_regex(
+            ValueError, 'must have the same number', cfunc, x, [0, 1], [0])
 
     def test_moveaxis_array_likes(self):
         pyfunc = moveaxis
