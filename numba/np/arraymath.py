@@ -7,6 +7,7 @@ import math
 from collections import namedtuple
 from enum import IntEnum
 from functools import partial
+from numba.core.sigutils import is_signature
 import operator
 
 import numpy as np
@@ -19,6 +20,7 @@ from numba.core.extending import overload, overload_method, register_jitable
 from numba.np.numpy_support import as_dtype, type_can_asarray
 from numba.np.numpy_support import numpy_version
 from numba.np.numpy_support import is_nonelike
+from numba.np.unsafe.ndarray import to_fixed_tuple
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                  impl_ret_new_ref, impl_ret_untracked)
 from numba.core.typing import signature
@@ -2147,6 +2149,93 @@ def np_roll(a, shift):
     else:
         return np_roll_impl
 
+
+@overload(np.moveaxis)
+def moveaxis(a, source, destination) -> np.ndarray:
+    """Move axes of an array to new positions.
+
+    Other axes remain in their original order.
+
+    Parameters
+    ----------
+    a : np.ndarray
+        The array whose axes should be reordered.
+    source : int or sequence of int
+        Original positions of the axes to move. These must be unique.
+    dest : int or sequence of int
+        Destination positions for each of the original axes. These must also be unique.
+
+    Returns
+    -------
+    result : np.ndarray
+        Array with moved axes. This array is a view of the input array.
+
+    Notes
+    -----
+    If one of (source, destination) is an integer, then the other must be an integer, too.
+
+    See Also
+    --------
+    `np.moveaxis <https://numpy.org/doc/stable/reference/generated/numpy.moveaxis.html>`_
+    """
+
+    @register_jitable
+    def impl_array(a, source, destination):
+        source_work = np.atleast_1d(np.asarray(source))
+        destination_work = np.atleast_1d(np.asarray(destination))
+
+        if source_work.size != destination_work.size:
+            raise ValueError(
+                "`source` and `destination` arguments must have "
+                "the same number of elements"
+            )
+
+        if np.any(np.abs(source_work) >= a.ndim):
+            raise np.AxisError("source: an axis is out of bounds for the input array.")
+        
+        if np.any(np.abs(destination_work) >= a.ndim):
+            raise np.AxisError("destination: an axis is out of bounds for the input array.")
+
+        if source_work.size != np.unique(source_work).size:
+            raise ValueError("repeated axis in `source` argument.")
+
+        if destination_work.size != np.unique(destination_work).size:
+            raise ValueError("repeated axis in `destination` argument.")
+
+        source_work = [x % a.ndim for x in source_work]
+        destination_work = [x % a.ndim for x in destination_work]
+
+        order = [n for n in range(a.ndim) if n not in source_work]
+        for dest, src in sorted(zip(destination_work, source_work)):
+            order.insert(dest, src)
+
+        oder_tuple = to_fixed_tuple(np.array(order), a.ndim)
+        return np.transpose(a, oder_tuple)
+
+    @register_jitable
+    def impl_int(a, source, destination):
+        if abs(source) >= a.ndim:
+            raise np.AxisError("source: an axis is out of bounds for the input array.")
+        if abs(destination) >= a.ndim:
+            raise np.AxisError("destination: an axis is out of bounds for the input array.")
+
+        source = source % a.ndim
+        destination = destination % a.ndim
+
+        order = [n for n in range(a.ndim) if n != source]
+        order.insert(destination, source)
+
+        oder_tuple = to_fixed_tuple(np.array(order), a.ndim)
+        return np.transpose(a, oder_tuple)
+
+    @register_jitable
+    def to_array(a):
+        return np.asarray(a)
+
+    if isinstance(source, types.Integer) and isinstance(destination, types.Integer):
+        return lambda a, source, destination: impl_int(to_array(a), source, destination)
+    else:
+        return lambda a, source, destination: impl_array(to_array(a), source, destination)
 
 #----------------------------------------------------------------------------
 # Mathematical functions

@@ -292,6 +292,9 @@ def ediff1d(ary, to_end=None, to_begin=None):
 def roll(a, shift):
     return np.roll(a, shift)
 
+def moveaxis(a, source, destination):
+    return np.moveaxis(a, source, destination)
+
 
 def asarray(a):
     return np.asarray(a)
@@ -2755,6 +2758,96 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
             msg = "shift must be an integer"
             assert msg in str(e.exception)
+
+    def test_moveaxis_move_to_end(self):
+        pyfunc = moveaxis
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.random.randn(5, 6, 7)
+        for source, expected in [(0, (6, 7, 5)),
+                                 (1, (5, 7, 6)),
+                                 (2, (5, 6, 7)),
+                                 (-1, (5, 6, 7))]:
+            actual = cfunc(x, source, -1).shape
+            np.testing.assert_(actual, expected)
+
+    def test_moveaxis_move_new_position(self):
+        pyfunc = moveaxis
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.random.randn(1, 2, 3, 4)
+        for source, destination, expected in [
+                (0, 1, (2, 1, 3, 4)),
+                (1, 2, (1, 3, 2, 4)),
+                (1, -1, (1, 3, 4, 2)),
+                ]:
+            actual = cfunc(x, source, destination).shape
+            np.testing.assert_(actual, expected)
+
+    def test_moveaxis_preserve_order(self):
+        pyfunc = moveaxis
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.zeros((1, 2, 3, 4))
+        for source, destination in [
+                (0, 0),
+                (3, -1),
+                (-1, 3),
+                ([0, -1], [0, -1]),
+                ([2, 0], [2, 0]),
+                # (range(4), range(4)),  # passing range is unspported in numba
+                ]:
+            actual = cfunc(x, source, destination).shape
+            np.testing.assert_(actual, (1, 2, 3, 4))
+
+    def test_moveaxis_move_multiples(self):
+        pyfunc = moveaxis
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.zeros((0, 1, 2, 3))
+        for source, destination, expected in [
+                ([0, 1], [2, 3], (2, 3, 0, 1)),
+                ([2, 3], [0, 1], (2, 3, 0, 1)),
+                ([0, 1, 2], [2, 3, 0], (2, 3, 0, 1)),
+                ([3, 0], [1, 0], (0, 3, 1, 2)),
+                ([0, 3], [0, 1], (0, 3, 1, 2)),
+                ]:
+            actual = cfunc(x, source, destination).shape
+            np.testing.assert_(actual, expected)
+
+    def test_moveaxis_errors(self):
+        pyfunc = moveaxis
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.random.randn(1, 2, 3)
+        np.testing.assert_raises_regex(np.AxisError, 'source.*out of bounds',
+                            cfunc, x, 3, 0)
+        np.testing.assert_raises_regex(np.AxisError, 'source.*out of bounds',
+                            cfunc, x, -4, 0)
+        np.testing.assert_raises_regex(np.AxisError, 'destination.*out of bounds',
+                            cfunc, x, 0, 5)
+        np.testing.assert_raises_regex(ValueError, 'repeated axis in `source`',
+                            cfunc, x, [0, 0], [0, 1])
+        np.testing.assert_raises_regex(ValueError, 'repeated axis in `destination`',
+                            cfunc, x, [0, 1], [1, 1])
+        np.testing.assert_raises_regex(ValueError, 'must have the same number',
+                            cfunc, x, 0, [0, 1])
+        np.testing.assert_raises_regex(ValueError, 'must have the same number',
+                            cfunc, x, [0, 1], [0])
+
+    def test_moveaxis_array_likes(self):
+        pyfunc = moveaxis
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.ma.zeros((1, 2, 3))
+        result = cfunc(x, 0, 0)
+        np.testing.assert_(x.shape, result.shape)
+        np.testing.assert_(isinstance(result, np.ma.MaskedArray))
+
+        x = [1, 2, 3]
+        result = cfunc(x, 0, 0)
+        np.testing.assert_(x, list(result))
+        np.testing.assert_(isinstance(result, np.ndarray))
 
     def test_extract_basic(self):
         pyfunc = extract
