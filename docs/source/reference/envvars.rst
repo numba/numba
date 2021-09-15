@@ -91,7 +91,7 @@ These variables influence what is printed out during compilation of
       ``LoweringError``.
     - ``"new_style"`` this will treat any exception that does not inherit from
       ``numba.core.errors.NumbaError`` **and** is raised during compilation as a
-      "hard error", i.e. the exception will propagate and compilation will halt
+      "hard error", i.e. the exception will propagate and compilation will halt.
       The purpose of this new style is to differentiate between intentionally
       raised exceptions and those which occur due to mistakes. For example, if
       an ``AttributeError`` occurs in the typing of an ``@overload`` function,
