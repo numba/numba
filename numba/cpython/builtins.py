@@ -18,6 +18,7 @@ from numba.core.extending import overload, intrinsic
 from numba.core.typeconv import Conversion
 from numba.core.errors import TypingError
 from numba.misc.special import literal_unroll
+from numba.core.typing.asnumbatype import as_numba_type
 
 
 @overload(operator.truth)
@@ -681,6 +682,12 @@ def ol_isinstance(var, typs):
     def false_impl(var, typs):
         return False
 
+    # register container types (List, Dict, ...) with types.Any as base type
+    as_numba_type.register(tuple, types.Tuple((types.Any,)))
+    as_numba_type.register(list, types.List(types.Any))
+    # dict doesn't work as input to an njit function
+    # as_numba_type.register(dict, types.DictType(types.Any, types.Any))
+
     if isinstance(typs, types.UniTuple):
         # corner case - all types in isinstance are the same
         typs = (typs.key[0])
@@ -697,5 +704,12 @@ def ol_isinstance(var, typs):
         numba_typ = typing.asnumbatype.as_numba_type(typ.key[0])
         if var == numba_typ:
             return true_impl
+        elif isinstance(numba_typ, types.Container) and \
+                numba_typ.key[0] == types.Any:
+            # check if container is the same
+            if isinstance(var, numba_typ.__class__) or \
+                (isinstance(var, types.BaseTuple) and \
+                    isinstance(numba_typ, types.BaseTuple)):
+                return true_impl
 
     return false_impl

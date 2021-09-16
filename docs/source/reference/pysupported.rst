@@ -929,6 +929,7 @@ The following built-in functions are supported:
 * :func:`hash` (see :ref:`pysupported-hashing` below)
 * :class:`int`: only the one-argument form
 * :func:`iter`: only the one-argument form
+* :func:`isinstance`
 * :func:`len`
 * :func:`min`
 * :func:`map`

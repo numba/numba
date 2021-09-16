@@ -228,7 +228,14 @@ def isinstance_usecase(a):
             return a + 2.0
     elif isinstance(a, str):
         return a + ", world!"
-    return (1 + 2j)
+    elif isinstance(a, complex):
+        return (1 + 2j)
+    elif isinstance(a, (tuple, list)):
+        if isinstance(a, tuple):
+            return 'tuple'
+        else:
+            return 'list'
+    return 'no match'
 
 
 def invalid_isinstance_usecase(x):
@@ -971,10 +978,14 @@ class TestBuiltins(TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         inputs = (
-            3,        # int
-            5.0,      # float
-            "Hello",  # string
-            1j,       # complex
+            3,              # int
+            5.0,            # float
+            "Hello",        # string
+            1j,             # complex
+            [1, 2, 3],      # list
+            (1, 2),         # UniTuple
+            (1, 'nba', 2),  # Heterogeneous Tuple
+            # {'hello': 2},   # dict - doesn't work as input
         )
 
         for inpt in inputs:
