@@ -6,7 +6,7 @@ import numpy as np
 
 from numba.core import errors, types
 from numba.core.typing.templates import signature
-
+from numba.core.errors import TypingError
 
 # re-export
 from numba.core.cgutils import is_nonelike   # noqa: F401
@@ -673,3 +673,9 @@ def type_can_asarray(arr):
           types.Number, types.Boolean, types.containers.ListType)
 
     return isinstance(arr, ok)
+
+
+def check_is_integer(v, name):
+    """Raises TypingError if the value is not an integer."""
+    if not isinstance(v, (int, types.Integer)):
+        raise TypingError('{} must be an integer'.format(name))
