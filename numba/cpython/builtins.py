@@ -695,14 +695,20 @@ def ol_isinstance(var, typs):
     if not isinstance(typs, types.containers.Tuple):
         typs = (typs, )
 
-    if not all([isinstance(typ, types.Function) for typ in typs]):
+    if not all([isinstance(typ, (types.Function, types.ClassType)) for typ in typs]):
         raise TypingError('arg 2 must be a type or tuple of types')
 
     var = typing.asnumbatype.as_numba_type(var)
 
     for typ in typs:
-        numba_typ = typing.asnumbatype.as_numba_type(typ.key[0])
+        key = typ if isinstance(typ, types.ClassType) else typ.key[0]
+        numba_typ = typing.asnumbatype.as_numba_type(key)
+
         if var == numba_typ:
+            return true_impl
+        elif isinstance(numba_typ, types.ClassType) and \
+                isinstance(var, types.ClassInstanceType) and \
+                var.key == numba_typ.instance_type.key:
             return true_impl
         elif isinstance(numba_typ, types.Container) and \
                 numba_typ.key[0] == types.Any:

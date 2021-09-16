@@ -222,19 +222,19 @@ def sum_kwarg_usecase(x, start=0):
 
 def isinstance_usecase(a):
     if isinstance(a, (int, float)):
-        if isinstance(a, (int, int)):
-            return a + 1
+        if isinstance(a, int):
+            return a + 1, 'int'
         if isinstance(a, float):
-            return a + 2.0
+            return a + 2.0, 'float'
     elif isinstance(a, str):
-        return a + ", world!"
+        return a + ", world!", 'str'
     elif isinstance(a, complex):
-        return (1 + 2j)
+        return a.imag, 'complex'
     elif isinstance(a, (tuple, list)):
         if isinstance(a, tuple):
             return 'tuple'
         else:
-            return 'list'
+            return a.reverse(), 'list'
     return 'no match'
 
 
@@ -983,7 +983,7 @@ class TestBuiltins(TestCase):
             "Hello",        # string
             1j,             # complex
             [1, 2, 3],      # list
-            (1, 2),         # UniTuple
+            (1, 3, 3, 3),   # UniTuple
             (1, 'nba', 2),  # Heterogeneous Tuple
             # {'hello': 2},   # dict - doesn't work as input
         )
