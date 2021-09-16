@@ -108,6 +108,12 @@ class _EnvReloader(object):
             # Store a copy
             self.old_environ = dict(new_environ)
 
+        self.validate()
+
+    def validate(self):
+        if CUDA_USE_CUDA_PYTHON and CUDA_PER_THREAD_DEFAULT_STREAM: # noqa: F821
+            warnings.warn("PTDS is not supported with CUDA Python")
+
     def process_environ(self, environ):
         def _readenv(name, ctor, default):
             value = environ.get(name)

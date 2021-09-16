@@ -126,6 +126,13 @@ def skip_unless_cc_60(fn):
     return unittest.skipUnless(cc_X_or_above(6, 0), "requires cc >= 6.0")(fn)
 
 
+def xfail_with_cuda_python(fn):
+    if config.CUDA_USE_CUDA_PYTHON:
+        return unittest.expectedFailure(fn)
+    else:
+        return fn
+
+
 def cudadevrt_missing():
     if config.ENABLE_CUDASIM:
         return False
