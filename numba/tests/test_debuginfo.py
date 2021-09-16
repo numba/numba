@@ -1,5 +1,7 @@
+from collections import namedtuple
 import inspect
 import re
+import numpy as np
 
 from numba.tests.support import TestCase, override_config, needs_subprocess
 from numba import jit, njit
@@ -384,6 +386,67 @@ class TestDebugInfoEmission(TestCase):
 
         # check that the DILocation from the DI for `c` matches the python src
         self.assertEqual(associated_lines, py_lines)
+
+    def test_numeric_scalars(self):
+        """ Tests that dwarf info is correctly emitted for numeric scalars."""
+
+        DI = namedtuple('DI', 'name bits encoding')
+
+        type_infos = {np.float32: DI("float32", 32, "DW_ATE_float"),
+                      np.float64: DI("float64", 64, "DW_ATE_float"),
+                      np.int8: DI("int8", 8, "DW_ATE_signed"),
+                      np.int16: DI("int16", 16, "DW_ATE_signed"),
+                      np.int32: DI("int32", 32, "DW_ATE_signed"),
+                      np.int64: DI("int64", 64, "DW_ATE_signed"),
+                      np.uint8: DI("uint8", 8, "DW_ATE_unsigned"),
+                      np.uint16: DI("uint16", 16, "DW_ATE_unsigned"),
+                      np.uint32: DI("uint32", 32, "DW_ATE_unsigned"),
+                      np.uint64: DI("uint64", 64, "DW_ATE_unsigned"),
+                      np.complex64: DI("complex64", 64,
+                                       "DW_TAG_structure_type"),
+                      np.complex128: DI("complex128", 128,
+                                        "DW_TAG_structure_type"),}
+
+        for ty, dwarf_info in type_infos.items():
+
+            @njit(debug=True)
+            def foo():
+                a = ty(10)
+                return a
+
+            metadata = self._get_metadata(foo, sig=())
+            metadata_definition_map = dict()
+            meta_definition_split = re.compile(r'(![0-9]+) = (.*)')
+            for line in metadata:
+                matched = meta_definition_split.match(line)
+                if matched:
+                    dbg_val, info = matched.groups()
+                    metadata_definition_map[dbg_val] = info
+
+            for k, v in metadata_definition_map.items():
+                if 'DILocalVariable(name: "a"' in v:
+                    lvar = metadata_definition_map[k]
+                    break
+            else:
+                assert 0, "missing DILocalVariable 'a'"
+
+            type_marker = re.match('.*type: (![0-9]+).*', lvar).groups()[0]
+            type_decl = metadata_definition_map[type_marker]
+
+            if 'DW_ATE' in dwarf_info.encoding:
+                expected = (f'!DIBasicType(name: "{dwarf_info.name}", '
+                            f'size: {dwarf_info.bits}, '
+                            f'encoding: {dwarf_info.encoding})')
+                self.assertEqual(type_decl, expected)
+            else: # numerical complex type
+                # Don't match the whole string, just the known parts
+                raw_flt = 'float' if dwarf_info.bits == 64 else 'double'
+                expected = (f'distinct !DICompositeType('
+                            f'tag: {dwarf_info.encoding}, '
+                            f'name: "{dwarf_info.name} '
+                            f'({{{raw_flt}, {raw_flt}}})", '
+                            f'size: {dwarf_info.bits}')
+                self.assertIn(expected, type_decl)
 
 
 if __name__ == '__main__':
