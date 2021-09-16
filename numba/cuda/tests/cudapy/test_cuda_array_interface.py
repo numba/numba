@@ -30,6 +30,12 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         # d_arr and wrapped must be the same buffer
         self.assertPointersEqual(wrapped, d_arr)
 
+    def get_stream_value(self, stream):
+        if config.CUDA_USE_CUDA_PYTHON:
+            return int(stream.handle)
+        else:
+            return stream.handle.value
+
     @skip_if_external_memmgr('Ownership not relevant with external memmgr')
     def test_ownership(self):
         # Get the deallocation queue
@@ -279,19 +285,22 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         s = cuda.stream()
         c_arr = cuda.device_array(10, stream=s)
         cai_stream = c_arr.__cuda_array_interface__['stream']
-        self.assertEqual(s.handle.value, cai_stream)
+        stream_value = self.get_stream_value(s)
+        self.assertEqual(stream_value, cai_stream)
 
         s = cuda.stream()
         mapped_arr = cuda.mapped_array(10, stream=s)
         cai_stream = mapped_arr.__cuda_array_interface__['stream']
-        self.assertEqual(s.handle.value, cai_stream)
+        stream_value = self.get_stream_value(s)
+        self.assertEqual(stream_value, cai_stream)
 
     @linux_only
     def test_produce_managed_stream(self):
         s = cuda.stream()
         managed_arr = cuda.managed_array(10, stream=s)
         cai_stream = managed_arr.__cuda_array_interface__['stream']
-        self.assertEqual(s.handle.value, cai_stream)
+        stream_value = self.get_stream_value(s)
+        self.assertEqual(stream_value, cai_stream)
 
     def test_consume_no_stream(self):
         # Create a foreign array with no stream
@@ -309,7 +318,9 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         # Ensure that an imported array has the stream as its default stream
         c_arr = cuda.as_cuda_array(f_arr)
         self.assertTrue(c_arr.stream.external)
-        self.assertEqual(c_arr.stream.handle.value, s.handle.value)
+        stream_value = self.get_stream_value(s)
+        imported_stream_value = self.get_stream_value(c_arr.stream)
+        self.assertEqual(stream_value, imported_stream_value)
 
     def test_consume_no_sync(self):
         # Create a foreign array with no stream

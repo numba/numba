@@ -23,6 +23,9 @@ from numba.np import numpy_support
 from numba.core.errors import NumbaPerformanceWarning
 from warnings import warn
 
+from cuda import cuda as cuda_driver
+
+
 try:
     lru_cache = getattr(functools, 'lru_cache')(None)
 except AttributeError:
@@ -104,8 +107,12 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
                 self.alloc_size = _driver.device_memory_size(gpu_data)
         else:
             # Make NULL pointer for empty allocation
+            if config.CUDA_USE_CUDA_PYTHON:
+                null = cuda_driver.CUdeviceptr(0)
+            else:
+                null = c_void_p(0)
             gpu_data = _driver.MemoryPointer(context=devices.get_context(),
-                                             pointer=c_void_p(0), size=0)
+                                             pointer=null, size=0)
             self.alloc_size = 0
 
         self.gpu_data = gpu_data
@@ -196,7 +203,10 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
         """Returns the ctypes pointer to the GPU data buffer
         """
         if self.gpu_data is None:
-            return c_void_p(0)
+            if config.CUDA_USE_CUDA_PYTHON:
+                return cuda_driver.CUdeviceptr(0)
+            else:
+                return c_void_p(0)
         else:
             return self.gpu_data.device_ctypes_pointer
 
