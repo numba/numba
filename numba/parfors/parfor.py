@@ -1873,10 +1873,10 @@ class ConvertSetItemPass:
         return self.pass_states.typingctx.resolve_function_type(fnty, tuple(args), {})
 
 
-def _make_index_var(typemap, scope, index_vars, body_block):
+def _make_index_var(typemap, scope, index_vars, body_block, force_tuple=False):
     ndims = len(index_vars)
     loc = body_block.loc
-    if ndims > 1:
+    if ndims > 1 or force_tuple:
         tuple_var = ir.Var(scope, mk_unique_var(
             "$parfor_index_tuple_var"), loc)
         typemap[tuple_var.name] = types.containers.UniTuple(
@@ -2462,6 +2462,7 @@ class ConvertLoopPass:
                         body_block = ir.Block(scope, loc)
                         index_var, index_var_typ = _make_index_var(
                             pass_states.typemap, scope, index_vars, body_block,
+                            force_tuple=True
                         )
                         body = body_block.body + first_body_block.body
                         first_body_block.body = body
