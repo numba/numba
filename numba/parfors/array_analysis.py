@@ -1333,7 +1333,10 @@ class ArrayAnalysis(object):
                     shape = inst.value
                 elif (
                     isinstance(typ, types.containers.Tuple)
-                    and all([isinstance(x, (types.Integer, types.IntegerLiteral)) for x in typ.types])
+                    and all([isinstance(x,
+                            (types.Integer, types.IntegerLiteral))
+                        for x in typ.types]
+                    )
                 ):
                     shape = inst.value
 
@@ -1392,10 +1395,13 @@ class ArrayAnalysis(object):
                     )
             elif (
                 isinstance(typ, types.containers.Tuple)
-                and all([isinstance(x, (types.Integer, types.IntegerLiteral)) for x in typ.types])
+                and all([isinstance(x,
+                        (types.Integer, types.IntegerLiteral))
+                    for x in typ.types]
+                )
             ):
                 shape = self._gen_shape_call(
-                        equiv_set, lhs, len(typ), shape, post
+                    equiv_set, lhs, len(typ), shape, post
                 )
 
             """ See the comment on the define() function.
