@@ -24,7 +24,7 @@ from itertools import cycle, chain
 import subprocess as subp
 
 import numba.parfors.parfor
-from numba import njit, prange, set_num_threads, get_num_threads, typeof
+from numba import njit, prange, set_num_threads, get_num_threads, typeof, literally
 from numba.core import (types, utils, typing, errors, ir, rewrites,
                         typed_passes, inline_closurecall, config, compiler, cpu)
 from numba.extending import (overload_method, register_model,
@@ -1856,6 +1856,14 @@ class TestParfors(TestParforsBase):
                 x[i] = 1
             return x
         sz = (10,10)
+        self.check(test_impl, np.empty(sz), sz)
+
+    def test_tuple_arg_literal(self):
+        def test_impl(x, sz):
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10,numba.literally(10))
         self.check(test_impl, np.empty(sz), sz)
 
 @skip_parfors_unsupported
