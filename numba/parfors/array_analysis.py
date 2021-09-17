@@ -1331,6 +1331,11 @@ class ArrayAnalysis(object):
                     and isinstance(typ.dtype, types.Integer)
                 ):
                     shape = inst.value
+                elif (
+                    isinstance(typ, types.containers.Tuple)
+                    and all([isinstance(x, (types.IntegerLiteral)) for x in typ.types])
+                ):
+                    shape = inst.value
 
             if isinstance(shape, ir.Const):
                 if isinstance(shape.value, tuple):
@@ -1385,6 +1390,13 @@ class ArrayAnalysis(object):
                     shape = self._gen_shape_call(
                         equiv_set, lhs, len(typ), shape, post
                     )
+            elif (
+                isinstance(typ, types.containers.Tuple)
+                and all([isinstance(x, (types.IntegerLiteral)) for x in typ.types])
+            ):
+                shape = self._gen_shape_call(
+                        equiv_set, lhs, len(typ), shape, post
+                )
 
             """ See the comment on the define() function.
 
