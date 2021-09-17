@@ -1866,6 +1866,22 @@ class TestParfors(TestParforsBase):
         sz = (10,numba.literally(10))
         self.check(test_impl, np.empty(sz), sz)
 
+    def test_tuple_arg_1d(self):
+        def test_impl(x, sz):
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10,)
+        self.check(test_impl, np.empty(sz), sz)
+
+    def test_tuple_arg_1d_literal(self):
+        def test_impl(x, sz):
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (numba.literally(10),)
+        self.check(test_impl, np.empty(sz), sz)
+
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
