@@ -210,7 +210,7 @@ class TestSerializationMisc(TestCase):
 
 
 class TestCloudPickleIssues(TestCase):
-    """This testcase includes all issues specific to cloudpickle implementation.
+    """This test case includes issues specific to the cloudpickle implementation.
     """
     _numba_parallel_test_ = False
 
