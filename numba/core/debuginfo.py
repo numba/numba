@@ -26,7 +26,7 @@ def suspend_emission(builder):
 class AbstractDIBuilder(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def mark_variable(self, builder, allocavalue, name, lltype, size, line,
-                      datamodel=None):
+                      datamodel=None, argidx=None):
         """Emit debug info for the variable.
         """
         pass
@@ -38,7 +38,7 @@ class AbstractDIBuilder(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def mark_subprogram(self, function, name, line):
+    def mark_subprogram(self, function, fndesc, line):
         """Emit source location information for the given function.
         """
         pass
@@ -62,13 +62,13 @@ class DummyDIBuilder(AbstractDIBuilder):
         pass
 
     def mark_variable(self, builder, allocavalue, name, lltype, size, line,
-                      datamodel=None):
+                      datamodel=None, argidx=None):
         pass
 
     def mark_location(self, builder, line):
         pass
 
-    def mark_subprogram(self, function, name, line):
+    def mark_subprogram(self, function, fndesc, line):
         pass
 
     def initialize(self):
@@ -282,7 +282,9 @@ class DIBuilder(AbstractDIBuilder):
         return mdtype
 
     def mark_variable(self, builder, allocavalue, name, lltype, size, line,
-                      datamodel=None):
+                      datamodel=None, argidx=None):
+
+        arg_index = 0 if argidx is None else argidx
         m = self.module
         fnty = ir.FunctionType(ir.VoidType(), [ir.MetaDataType()] * 3)
         decl = cgutils.get_or_insert_function(m, fnty, 'llvm.dbg.declare')
@@ -291,7 +293,7 @@ class DIBuilder(AbstractDIBuilder):
         name = name.replace('.', '$')    # for gdb to work correctly
         mdlocalvar = m.add_debug_info('DILocalVariable', {
             'name': name,
-            'arg': 0,
+            'arg': arg_index,
             'scope': self.subprograms[-1],
             'file': self.difile,
             'line': line,
@@ -304,9 +306,12 @@ class DIBuilder(AbstractDIBuilder):
     def mark_location(self, builder, line):
         builder.debug_metadata = self._add_location(line)
 
-    def mark_subprogram(self, function, name, line):
+    def mark_subprogram(self, function, fndesc, line):
+        name = fndesc.qualname
+        argmap = {argname: fndesc.typemap[argname] for argname in fndesc.args}
         di_subp = self._add_subprogram(name=name, linkagename=function.name,
-                                       line=line)
+                                       line=line, function=function,
+                                       argmap=argmap)
         function.set_metadata("dbg", di_subp)
         # disable inlining for this function for easier debugging
         function.attributes.add('noinline')
@@ -344,10 +349,10 @@ class DIBuilder(AbstractDIBuilder):
         if debuginfo_version not in mflags.operands:
             mflags.add(debuginfo_version)
 
-    def _add_subprogram(self, name, linkagename, line):
+    def _add_subprogram(self, name, linkagename, line, function, argmap):
         """Emit subprogram metadata
         """
-        subp = self._di_subprogram(name, linkagename, line)
+        subp = self._di_subprogram(name, linkagename, line, function, argmap)
         self.subprograms.append(subp)
         return subp
 
@@ -389,19 +394,39 @@ class DIBuilder(AbstractDIBuilder):
             'emissionKind': 1,  # 0-NoDebug, 1-FullDebug
         }, is_distinct=True)
 
-    def _di_subroutine_type(self):
+    def _di_subroutine_type(self, line, function, argmap):
+        # The function call conv needs encoding.
+        llfunc = function
+        md = []
+
+        for idx, llarg in enumerate(llfunc.args):
+            if not llarg.name.startswith('arg.'):
+                name = llarg.name.replace('.', '$')    # for gdb to work correctly
+                lltype = llarg.type
+                size = self.cgctx.get_abi_sizeof(lltype)
+                mdtype = self._var_type(lltype, size, datamodel=None)
+                md.append(mdtype)
+
+        for idx, (name, nbtype) in enumerate(argmap.items()):
+            name = name.replace('.', '$')    # for gdb to work correctly
+            datamodel = self.cgctx.data_model_manager[nbtype]
+            lltype = self.cgctx.get_value_type(nbtype)
+            size = self.cgctx.get_abi_sizeof(lltype)
+            mdtype = self._var_type(lltype, size, datamodel=datamodel)
+            md.append(mdtype)
+
         return self.module.add_debug_info('DISubroutineType', {
-            'types': self.module.add_metadata([]),
+            'types': self.module.add_metadata(md),
         })
 
-    def _di_subprogram(self, name, linkagename, line):
+    def _di_subprogram(self, name, linkagename, line, function, argmap):
         return self.module.add_debug_info('DISubprogram', {
             'name': name,
             'linkageName': linkagename,
             'scope': self.difile,
             'file': self.difile,
             'line': line,
-            'type': self._di_subroutine_type(),
+            'type': self._di_subroutine_type(line, function, argmap),
             'isLocal': False,
             'isDefinition': True,
             'scopeLine': line,
@@ -440,7 +465,7 @@ class NvvmDIBuilder(DIBuilder):
     _last_lineno = None
 
     def mark_variable(self, builder, allocavalue, name, lltype, size, line,
-                      datamodel=None):
+                      datamodel=None, argidx=None):
         # unsupported
         pass
 
@@ -457,8 +482,8 @@ class NvvmDIBuilder(DIBuilder):
         md = self._di_location(line)
         call.set_metadata('numba.dbg', md)
 
-    def mark_subprogram(self, function, name, line):
-        self._add_subprogram(name=name, linkagename=function.name,
+    def mark_subprogram(self, function, fndesc, line):
+        self._add_subprogram(name=fndesc.name, linkagename=function.name,
                              line=line)
 
     #
