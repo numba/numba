@@ -22,6 +22,8 @@ export NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING=1
 export NUMBA_DEVELOPER_MODE=1
 # enable the fault handler
 export PYTHONFAULTHANDLER=1
+# TODO: REMOVE THIS
+export NUMBA_EXTEND_VARIABLE_LIFETIMES=1
 
 # deal with threading layers
 if [ -z ${TEST_THREADING+x} ]; then
