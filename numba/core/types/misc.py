@@ -91,11 +91,11 @@ class Omitted(Opaque):
         # Because id(value) may not match when loading from disk,
         # just return the value if we can hash it.
         # See discussion in gh #6957
-        self._value_key = (
-            value
-            if not isinstance(value, UndefinedType) and hasattr(value, "__hash__") and value.__hash__ is not None
-            else id(value)
-        )
+        try:
+            hash(value)
+            self._value_key = value
+        except Exception:
+            self._value_key = id(value)
         super(Omitted, self).__init__("omitted(default=%r)" % (value,))
 
     @property
