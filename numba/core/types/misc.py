@@ -3,6 +3,7 @@ from numba.core.types.common import (Dummy, IterableType, Opaque,
                                      SimpleIteratorType)
 from numba.core.typeconv import Conversion
 from numba.core.errors import TypingError, LiteralTypingError
+from numba.core.ir import UndefinedType
 
 
 class PyObject(Dummy):
@@ -92,7 +93,7 @@ class Omitted(Opaque):
         # See discussion in gh #6957
         self._value_key = (
             value
-            if hasattr(value, "__hash__") and value.__hash__ is not None
+            if not isinstance(value, UndefinedType) and hasattr(value, "__hash__") and value.__hash__ is not None
             else id(value)
         )
         super(Omitted, self).__init__("omitted(default=%r)" % (value,))
