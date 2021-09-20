@@ -87,11 +87,19 @@ class Omitted(Opaque):
 
     def __init__(self, value):
         self._value = value
+        # Because id(value) may not match when loading from disk,
+        # just return the value if we can hash it.
+        # See discussion in gh #6957
+        self._value_key = (
+            value
+            if hasattr(value, "__hash__") and value.__hash__ is not None
+            else id(value)
+        )
         super(Omitted, self).__init__("omitted(default=%r)" % (value,))
 
     @property
     def key(self):
-        return type(self._value), id(self._value)
+        return type(self._value), self._value_key
 
     @property
     def value(self):
