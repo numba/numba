@@ -417,6 +417,9 @@ class _EnvReloader(object):
         DEBUGINFO_DEFAULT = _readenv("NUMBA_DEBUGINFO", int, ENABLE_PROFILING)
         CUDA_DEBUGINFO_DEFAULT = _readenv("NUMBA_CUDA_DEBUGINFO", int, 0)
 
+        EXTEND_VARIABLE_LIFETIMES = _readenv("NUMBA_EXTEND_VARIABLE_LIFETIMES",
+                                             int, 0)
+
         # gdb binary location
         GDB_BINARY = _readenv("NUMBA_GDB_BINARY", str, '/usr/bin/gdb')
 
