@@ -7,6 +7,7 @@ import sys
 import unittest
 from multiprocessing import get_context
 
+import numba
 from numba.core.errors import TypingError
 from numba.tests.support import TestCase
 from numba.core.target_extension import resolve_dispatcher_from_str
@@ -257,6 +258,24 @@ class TestCloudPickleIssues(TestCase):
         proc.start()
         proc.join(timeout=10)
         self.assertEqual(proc.exitcode, 0)
+
+    def test_dynamic_class_issue_7356(self):
+        cfunc = numba.njit(issue_7356)
+        self.assertEqual(cfunc(), (100, 100))
+
+
+class DynClass(object):
+    # For testing issue #7356
+    a = None
+
+
+def issue_7356():
+    with numba.objmode(before="intp"):
+        DynClass.a = 100
+        before = DynClass.a
+    with numba.objmode(after="intp"):
+        after = DynClass.a
+    return before, after
 
 
 def check_main_class_reset_on_unpickle():
