@@ -360,6 +360,8 @@ class FloatModel(PrimitiveModel):
     def __init__(self, dmm, fe_type):
         if fe_type == types.float32:
             be_type = ir.FloatType()
+        elif fe_type == types.float16:
+            be_type = ir.HalfType()
         elif fe_type == types.float64:
             be_type = ir.DoubleType()
         else:

@@ -251,6 +251,8 @@ class DivMod(ConcreteTemplate):
 @infer_global(operator.pow)
 class BinOpPower(ConcreteTemplate):
     cases = list(integer_binop_cases)
+    cases += [signature(types.float16, types.float16, op)
+              for op in (types.int32, types.int64, types.uint64)]
     # Ensure that float32 ** int doesn't go through DP computations
     cases += [signature(types.float32, types.float32, op)
               for op in (types.int32, types.int64, types.uint64)]
@@ -265,6 +267,8 @@ class BinOpPower(ConcreteTemplate):
 @infer_global(operator.ipow)
 class BinOpPower(ConcreteTemplate):
     cases = list(integer_binop_cases)
+    cases += [signature(types.float16, types.float16, op)
+              for op in (types.int32, types.int64, types.uint64)]
     # Ensure that float32 ** int doesn't go through DP computations
     cases += [signature(types.float32, types.float32, op)
               for op in (types.int32, types.int64, types.uint64)]
@@ -919,6 +923,7 @@ class Round(ConcreteTemplate):
     cases = [
         signature(types.intp, types.float32),
         signature(types.int64, types.float64),
+        signature(types.float16, types.float16, types.intp),
         signature(types.float32, types.float32, types.intp),
         signature(types.float64, types.float64, types.intp),
     ]

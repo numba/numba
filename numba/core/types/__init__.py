@@ -51,6 +51,7 @@ uintc = uint32 if struct.calcsize('i') == 4 else uint64
 
 float32 = Float('float32')
 float64 = Float('float64')
+float16 = Float('float16')
 
 complex64 = Complex('complex64', float32)
 complex128 = Complex('complex128', float64)
