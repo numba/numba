@@ -16,7 +16,7 @@ import numpy as np
 from numba import pndindex, literal_unroll
 from numba.core import types, utils, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
-                                    is_fortran)
+                                    is_fortran, check_is_integer)
 from numba.np.numpy_support import type_can_asarray, is_nonelike
 from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_getattr_generic,
@@ -1301,6 +1301,85 @@ def _broadcast_to_shape(context, builder, arrtype, arr, target_shape):
                 strides=cgutils.pack_array(builder, strides))
     cgutils.copy_struct(new_arr, arr, repl)
     return new_arrtype, new_arr
+
+
+@intrinsic
+def _numpy_broadcast_to(typingctx, array, shape):
+    ret = array.copy(ndim=shape.count, layout='A', readonly=True)
+    sig = ret(array, shape)
+
+    def codegen(context, builder, sig, args):
+        src, shape_ = args
+        srcty = sig.args[0]
+
+        src = make_array(srcty)(context, builder, src)
+        shape_ = cgutils.unpack_tuple(builder, shape_)
+        _, dest = _broadcast_to_shape(context, builder, srcty, src, shape_,)
+
+        # Hack to get np.broadcast_to to return a read-only array
+        setattr(dest, 'parent', Constant.null(
+                context.get_value_type(dest._datamodel.get_type('parent'))))
+
+        res = dest._getvalue()
+        return impl_ret_borrowed(context, builder, sig.return_type, res)
+    return sig, codegen
+
+
+@register_jitable
+def _can_broadcast(array, dest_shape):
+    src_shape = array.shape
+    src_ndim = len(src_shape)
+    dest_ndim = len(dest_shape)
+    if src_ndim > dest_ndim:
+        raise ValueError('input operand has more dimensions than allowed '
+                         'by the axis remapping')
+    for size in dest_shape:
+        if size < 0:
+            raise ValueError('all elements of broadcast shape must be '
+                             'non-negative')
+
+    # based on _broadcast_onto function in numba/np/npyimpl.py
+    src_index = 0
+    dest_index = dest_ndim - src_ndim
+    while src_index < src_ndim:
+        src_dim = src_shape[src_index]
+        dest_dim = dest_shape[dest_index]
+        # possible cases for (src_dim, dest_dim):
+        #  * (1, 1)   -> Ok
+        #  * (>1, 1)  -> Error!
+        #  * (>1, >1) -> src_dim == dest_dim else error!
+        #  * (1, >1)  -> Ok
+        if src_dim == dest_dim or src_dim == 1:
+            src_index += 1
+            dest_index += 1
+        else:
+            raise ValueError('operands could not be broadcast together '
+                             'with remapped shapes')
+
+
+@overload(np.broadcast_to)
+def numpy_broadcast_to(array, shape):
+    if not type_can_asarray(array):
+        raise errors.TypingError('The first argument "array" must '
+                                 'be array-like')
+
+    if isinstance(shape, types.UniTuple):
+        if not isinstance(shape.dtype, types.Integer):
+            raise errors.TypingError('The second argument "shape" must '
+                                     'be a tuple of integers')
+
+        def impl(array, shape):
+            array = np.asarray(array)
+            _can_broadcast(array, shape)
+            return _numpy_broadcast_to(array, shape)
+    elif isinstance(shape, types.Integer):
+        def impl(array, shape):
+            return np.broadcast_to(array, (shape,))
+    else:
+        msg = ('The argument "shape" must be a tuple or an integer. '
+               'Got %s' % shape)
+        raise errors.TypingError(msg)
+    return impl
 
 
 def fancy_setslice(context, builder, sig, args, index_types, indices):
@@ -5455,3 +5534,105 @@ def numpy_swapaxes(arr, axis1, axis2):
         return np.transpose(arr, axes_tuple)
 
     return impl
+
+
+@register_jitable
+def _take_along_axis_impl(
+        arr, indices, axis, Ni_orig, Nk_orig, indices_broadcast_shape
+):
+    # Based on example code in
+    # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/shape_base.py#L90-L103
+    # With addition of pre-broadcasting:
+    # https://github.com/numpy/numpy/issues/19704
+
+    # Broadcast the two arrays to matching shapes:
+    arr_shape = list(arr.shape)
+    arr_shape[axis] = 1
+    for i, (d1, d2) in enumerate(zip(arr_shape, indices.shape)):
+        if d1 == 1:
+            new_val = d2
+        elif d2 == 1:
+            new_val = d1
+        else:
+            if d1 != d2:
+                raise ValueError(
+                    "`arr` and `indices` dimensions don't match"
+                )
+            new_val = d1
+        indices_broadcast_shape = tuple_setitem(
+            indices_broadcast_shape, i, new_val
+        )
+    arr_broadcast_shape = tuple_setitem(
+        indices_broadcast_shape, axis, arr.shape[axis]
+    )
+    arr = np.broadcast_to(arr, arr_broadcast_shape)
+    indices = np.broadcast_to(indices, indices_broadcast_shape)
+
+    Ni = Ni_orig
+    if len(Ni_orig) > 0:
+        for i in range(len(Ni)):
+            Ni = tuple_setitem(Ni, i, arr.shape[i])
+    Nk = Nk_orig
+    if len(Nk_orig) > 0:
+        for i in range(len(Nk)):
+            Nk = tuple_setitem(Nk, i, arr.shape[axis + 1 + i])
+
+    J = indices.shape[axis]  # Need not equal M
+    out = np.empty(Ni + (J,) + Nk, arr.dtype)
+
+    np_s_ = (slice(None, None, None),)
+
+    for ii in np.ndindex(Ni):
+        for kk in np.ndindex(Nk):
+            a_1d = arr[ii + np_s_ + kk]
+            indices_1d = indices[ii + np_s_ + kk]
+            out_1d = out[ii + np_s_ + kk]
+            for j in range(J):
+                out_1d[j] = a_1d[indices_1d[j]]
+    return out
+
+
+@overload(np.take_along_axis)
+def arr_take_along_axis(arr, indices, axis):
+    if not isinstance(arr, types.Array):
+        raise errors.TypingError('The first argument "arr" must be an array')
+    if not isinstance(indices, types.Array):
+        raise errors.TypingError(
+            'The second argument "indices" must be an array')
+    if not isinstance(indices.dtype, types.Integer):
+        raise errors.TypingError('The indices array must contain integers')
+    if is_nonelike(axis):
+        arr_ndim = 1
+    else:
+        arr_ndim = arr.ndim
+    if arr_ndim != indices.ndim:
+        # Matches NumPy error:
+        raise errors.TypingError(
+            "`indices` and `arr` must have the same number of dimensions"
+        )
+
+    indices_broadcast_shape = tuple(range(indices.ndim))
+    if is_nonelike(axis):
+        def take_along_axis_impl(arr, indices, axis):
+            return _take_along_axis_impl(arr.flatten(), indices, 0, (), (),
+                                         indices_broadcast_shape)
+    else:
+        check_is_integer(axis, "axis")
+        if not isinstance(axis, types.IntegerLiteral):
+            raise ValueError(
+                "axis must be a literal value (i.e. not an argument) for now"
+            )
+        axis = axis.literal_value
+        if axis < 0:
+            axis = arr.ndim + axis
+
+        if axis < 0 or axis >= arr.ndim:
+            raise ValueError("axis is out of bounds")
+
+        Ni = tuple(range(axis))
+        Nk = tuple(range(axis + 1, arr.ndim))
+
+        def take_along_axis_impl(arr, indices, axis):
+            return _take_along_axis_impl(arr, indices, axis, Ni, Nk,
+                                         indices_broadcast_shape)
+    return take_along_axis_impl

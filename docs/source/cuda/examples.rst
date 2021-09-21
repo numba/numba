@@ -7,19 +7,25 @@ Examples
 
 Matrix multiplication
 =====================
+First, import the modules needed for this example:
 
-Here is a naive implementation of matrix multiplication using a CUDA kernel::
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_matmul.py
+   :language: python
+   :caption: from ``test_ex_matmul`` in ``numba/cuda/tests/doc_examples/test_matmul.py``
+   :start-after: magictoken.ex_import.begin
+   :end-before: magictoken.ex_import.end
+   :dedent: 8
+   :linenos:
 
-    @cuda.jit
-    def matmul(A, B, C):
-        """Perform square matrix multiplication of C = A * B
-        """
-        i, j = cuda.grid(2)
-        if i < C.shape[0] and j < C.shape[1]:
-            tmp = 0.
-            for k in range(A.shape[1]):
-                tmp += A[i, k] * B[k, j]
-            C[i, j] = tmp
+Here is a naïve implementation of matrix multiplication using a CUDA kernel:
+
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_matmul.py
+   :language: python
+   :caption: from ``test_ex_matmul`` in ``numba/cuda/tests/doc_examples/test_matmul.py``
+   :start-after: magictoken.ex_matmul.begin
+   :end-before: magictoken.ex_matmul.end
+   :dedent: 8
+   :linenos:
 
 
 This implementation is straightforward and intuitive but performs poorly,
@@ -29,54 +35,20 @@ they may not be large enough to hold the entire inputs at once).
 
 It will be faster if we use a blocked algorithm to reduce accesses to the
 device memory.  CUDA provides a fast :ref:`shared memory <cuda-shared-memory>`
-for threads in a block to cooperately compute on a task.  The following
+for threads in a block to cooperatively compute on a task.  The following
 implements a faster version of the square matrix multiplication using shared
-memory::
+memory:
 
-    from numba import cuda, float32
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_matmul.py
+   :language: python
+   :caption: from ``test_ex_matmul`` in ``numba/cuda/tests/doc_examples/test_matmul.py``
+   :start-after: magictoken.ex_fast_matmul.begin
+   :end-before: magictoken.ex_fast_matmul.end
+   :dedent: 8
+   :linenos:
 
-    # Controls threads per block and shared memory usage.
-    # The computation will be done on blocks of TPBxTPB elements.
-    TPB = 16
 
-    @cuda.jit
-    def fast_matmul(A, B, C):
-        # Define an array in the shared memory
-        # The size and type of the arrays must be known at compile time
-        sA = cuda.shared.array(shape=(TPB, TPB), dtype=float32)
-        sB = cuda.shared.array(shape=(TPB, TPB), dtype=float32)
-
-        x, y = cuda.grid(2)
-
-        tx = cuda.threadIdx.x
-        ty = cuda.threadIdx.y
-        bpg = cuda.gridDim.x    # blocks per grid
-
-        if x >= C.shape[0] or y >= C.shape[1]:
-            # Quit if (x, y) is outside of valid C boundary
-            return
-
-        # Each thread computes one element in the result matrix.
-        # The dot product is chunked into dot products of TPB-long vectors.
-        tmp = 0.
-        for i in range(bpg):
-            # Preload data into shared memory
-            sA[tx, ty] = A[x, ty + i * TPB]
-            sB[tx, ty] = B[tx + i * TPB, y]
-
-            # Wait until all threads finish preloading
-            cuda.syncthreads()
-
-            # Computes partial product on the shared memory
-            for j in range(TPB):
-                tmp += sA[tx, j] * sB[j, ty]
-
-            # Wait until all threads finish computing
-            cuda.syncthreads()
-
-        C[x, y] = tmp
-
-Because the shared memory is a limited resources, the code preloads small
+Because the shared memory is a limited resource, the code preloads a small
 block at a time from the input arrays.  Then, it calls
 :func:`~numba.cuda.syncthreads` to wait until all threads have finished
 preloading and before doing the computation on the shared memory.
@@ -84,3 +56,59 @@ It synchronizes again after the computation to ensure all threads
 have finished with the data in shared memory before overwriting it
 in the next loop iteration.
 
+An example usage of this function is as follows:
+
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_matmul.py
+   :language: python
+   :caption: from ``test_ex_matmul`` in ``numba/cuda/tests/doc_examples/test_matmul.py``
+   :start-after: magictoken.ex_run_fast_matmul.begin
+   :end-before: magictoken.ex_run_fast_matmul.end
+   :dedent: 8
+   :linenos:
+
+
+This passes a :ref:`CUDA memory check test <debugging-cuda-python-code>`, which
+can help with debugging. Running the code above produces the following output:
+
+.. code-block:: none
+
+    $ python fast_matmul.py
+    [[ 6.  6.  6.  6.]
+    [22. 22. 22. 22.]
+    [38. 38. 38. 38.]
+    [54. 54. 54. 54.]]
+    [[ 6.  6.  6.  6.]
+    [22. 22. 22. 22.]
+    [38. 38. 38. 38.]
+    [54. 54. 54. 54.]]
+
+.. note:: For high performance matrix multiplication in CUDA, see also the `CuPy implementation <https://docs.cupy.dev/en/stable/reference/generated/cupy.matmul.html>`_.
+
+The approach outlined here generalizes to non-square matrix multiplication as
+follows by adjusting the ``blockspergrid`` variable:
+
+Again, here is an example usage:
+
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_matmul.py
+   :language: python
+   :caption: from ``test_ex_matmul`` in ``numba/cuda/tests/doc_examples/test_matmul.py``
+   :start-after: magictoken.ex_run_nonsquare.begin
+   :end-before: magictoken.ex_run_nonsquare.end
+   :dedent: 8
+   :linenos:
+
+and the corresponding output:
+
+.. code-block:: none
+
+  $ python nonsquare_matmul.py
+  [[ 253.  253.  253.  253.  253.  253.  253.]
+  [ 782.  782.  782.  782.  782.  782.  782.]
+  [1311. 1311. 1311. 1311. 1311. 1311. 1311.]
+  [1840. 1840. 1840. 1840. 1840. 1840. 1840.]
+  [2369. 2369. 2369. 2369. 2369. 2369. 2369.]]
+  [[ 253.  253.  253.  253.  253.  253.  253.]
+  [ 782.  782.  782.  782.  782.  782.  782.]
+  [1311. 1311. 1311. 1311. 1311. 1311. 1311.]
+  [1840. 1840. 1840. 1840. 1840. 1840. 1840.]
+  [2369. 2369. 2369. 2369. 2369. 2369. 2369.]]
