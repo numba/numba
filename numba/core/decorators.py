@@ -7,6 +7,7 @@ import sys
 import warnings
 import inspect
 import logging
+import typing
 
 from numba.core.errors import DeprecationError, NumbaDeprecationWarning
 from numba.stencils.stencil import stencil
@@ -23,8 +24,13 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "positional argument.")
 
 
+JittedFuncType = typing.TypeVar("JittedFuncType",
+                                bound=typing.Callable[..., typing.Any])
+
+
 def jit(signature_or_function=None, locals={}, cache=False,
-        pipeline_class=None, boundscheck=None, **options):
+        pipeline_class=None, boundscheck=None, **options
+    ) -> typing.Callable[[JittedFuncType], JittedFuncType]:
     """
     This decorator is used to compile a Python function into native code.
 
@@ -188,12 +194,14 @@ def jit(signature_or_function=None, locals={}, cache=False,
         return wrapper
 
 
-def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
+def _jit(
+         sigs, locals, target, cache, targetoptions, **dispatcher_args
+    ) -> typing.Callable[[JittedFuncType], JittedFuncType]:
 
     from numba.core.target_extension import resolve_dispatcher_from_str
     dispatcher = resolve_dispatcher_from_str(target)
 
-    def wrapper(func):
+    def wrapper(func: JittedFuncType) -> JittedFuncType:
         if extending.is_jitted(func):
             raise TypeError(
                 "A jit decorator was called on an already jitted function "
