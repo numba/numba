@@ -1449,9 +1449,9 @@ class PropagateLiterals(FunctionPass):
                     continue
 
                 # dont change return stmt in the form
-                # $return_xyz = cast(value=ABC) or static_getitem
+                # $return_xyz = cast(value=ABC)
                 if isinstance(assign.value, ir.Expr) and \
-                        assign.value.op in ('cast', 'static_getitem'):
+                        assign.value.op in ('cast'):
                     continue
 
                 target = assign.target
@@ -1483,7 +1483,7 @@ class PropagateLiterals(FunctionPass):
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
-class LiteralPropagation(FunctionPass):
+class LiteralPropagationSubPipelinePass(FunctionPass):
     """Implement literal propagation based on partial type inference"""
     _name = "LiteralPropagation"
 
@@ -1499,13 +1499,16 @@ class LiteralPropagation(FunctionPass):
         pm.add_pass(PartialTypeInference, "performs partial type inference")
         pm.add_pass(PropagateLiterals, "performs literal propagation")
 
-        # rewrite consts / dead branch pruning / rewrites
+        # rewrite consts / dead branch pruning
         pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
         pm.add_pass(DeadBranchPrune, "dead branch pruning")
 
         pm.finalize()
         pm.run(state)
         return True
+
+    def get_analysis_usage(self, AU):
+        AU.add_required(ReconstructSSA)
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
