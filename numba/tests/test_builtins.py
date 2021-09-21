@@ -238,6 +238,21 @@ def isinstance_usecase(a):
     return 'no match'
 
 
+def isinstance_usecase2(a):
+    if isinstance(a, (types.int32, types.int64)):
+        if isinstance(a, types.int32):
+            return 'int32'
+        else:
+            return 'int64'
+    elif isinstance(a, (types.float32, types.float64)):
+        if isinstance(a, types.float32):
+            return 'float32'
+        elif isinstance(a, types.float64):
+            return 'float64'
+    else:
+        return 'no match'
+
+
 def invalid_isinstance_usecase(x):
     if isinstance(x, ('foo',)):
         return 'true branch'
@@ -993,13 +1008,29 @@ class TestBuiltins(TestCase):
             got = cfunc(inpt)
             self.assertEqual(expected, got)
 
+    def test_isinstance2(self):
+        pyfunc = isinstance_usecase2
+        cfunc = jit(nopython=True)(pyfunc)
+
+        inputs = (
+            (types.int32(1), 'int32'),
+            (types.int64(2), 'int64'),
+            (types.float32(3.0), 'float32'),
+            (types.float64(4.0), 'float64'),
+            (types.complex64(5j), 'no match'),
+        )
+
+        for inpt, expected in inputs:
+            got = cfunc(inpt)
+            self.assertEqual(expected, got)
+
     def test_isinstance_exceptions(self):
         fn = njit(invalid_isinstance_usecase)
 
         with self.assertRaises(errors.TypingError) as raises:
             fn(100)
 
-        self.assertIn('arg 2 must be a type or tuple of types', str(raises.exception))
+        self.assertIn('Cannot infer numba type of python type', str(raises.exception))
 
     def test_truth(self):
         pyfunc = truth_usecase
