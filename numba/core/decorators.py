@@ -24,8 +24,8 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "positional argument.")
 
 
-def jit(signature_or_function=None, locals={}, cache=False, pipeline_class=None,
-        boundscheck=None, **options):
+def jit(signature_or_function=None, locals={}, cache=False,
+        pipeline_class=None, boundscheck=None, **options):
     """
     This decorator is used to compile a Python function into native code.
 
