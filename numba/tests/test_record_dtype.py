@@ -315,6 +315,10 @@ def set_field4(rec):
     return rec
 
 
+def set_field_slice(arr):
+    arr['k'][:] = 0.0
+
+
 recordtype = np.dtype([('a', np.float64),
                        ('b', np.int16),
                        ('c', np.complex64),
@@ -862,6 +866,10 @@ class TestRecordDtype(unittest.TestCase):
         self.assertEqual(cfunc(rec), pyfunc(rec))
 
         pyfunc = record_read_second_arr
+        cfunc = self.get_cfunc(pyfunc, (nbrecord,))
+        self.assertEqual(cfunc(rec), pyfunc(rec))
+
+        pyfunc = set_field_slice
         cfunc = self.get_cfunc(pyfunc, (nbrecord,))
         self.assertEqual(cfunc(rec), pyfunc(rec))
 
