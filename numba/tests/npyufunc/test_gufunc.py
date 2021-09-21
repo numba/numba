@@ -83,14 +83,14 @@ class TestGUFunc(TestCase):
         out_kw = np.zeros_like(y)
         my_cumsum(x, out=out_kw, axis=0)
         np.testing.assert_equal(out_kw, expected)
-    
+
     def test_docstring(self):
         @guvectorize([(int64[:], int64, int64[:])], '(n),()->(n)')
         def gufunc(x, y, res):
             "docstring for gufunc"
             for i in range(x.shape[0]):
                 res[i] = x[i] + y
-        
+
         self.assertEqual("numba.tests.npyufunc.test_gufunc", gufunc.__module__)
         self.assertEqual("gufunc", gufunc.__name__)
         self.assertEqual("TestGUFunc.test_docstring.<locals>.gufunc", gufunc.__qualname__)
@@ -197,6 +197,21 @@ class TestDynamicGUFunc(TestCase):
         out_kw = np.zeros_like(y)
         my_cumsum(x, out=out_kw, axis=0)
         np.testing.assert_equal(out_kw, expected)
+
+    def test_attrs(self):
+        @guvectorize("(n)->(n)")
+        def gufunc(x, res):
+            acc = 0
+            for i in range(x.shape[0]):
+                acc += x[i]
+                res[i] = acc
+
+        attrs = ['signature', 'accumulate', 'at', 'outer', 'reduce', 'reduceat']
+        for attr in attrs:
+            # ensure gufunc exports the propertie above
+            contains = hasattr(gufunc, attr)
+            self.assertTrue(contains, 'dynamic gufunc not exporting "%s"' % (attr,))
+
 
 class TestGUVectorizeScalar(TestCase):
     """
