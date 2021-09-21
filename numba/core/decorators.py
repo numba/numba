@@ -24,13 +24,8 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "positional argument.")
 
 
-JittedFuncType = typing.TypeVar("JittedFuncType",
-                                bound=typing.Callable[..., typing.Any])
-
-
-def jit(signature_or_function=None, locals={}, cache=False,
-        pipeline_class=None, boundscheck=None, **options
-    ) -> typing.Callable[[JittedFuncType], JittedFuncType]:
+def jit(signature_or_function=None, locals={}, cache=False, pipeline_class=None,
+        boundscheck=None, **options):
     """
     This decorator is used to compile a Python function into native code.
 
@@ -194,14 +189,12 @@ def jit(signature_or_function=None, locals={}, cache=False,
         return wrapper
 
 
-def _jit(
-         sigs, locals, target, cache, targetoptions, **dispatcher_args
-    ) -> typing.Callable[[JittedFuncType], JittedFuncType]:
+def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
 
     from numba.core.target_extension import resolve_dispatcher_from_str
     dispatcher = resolve_dispatcher_from_str(target)
 
-    def wrapper(func: JittedFuncType) -> JittedFuncType:
+    def wrapper(func):
         if extending.is_jitted(func):
             raise TypeError(
                 "A jit decorator was called on an already jitted function "
@@ -322,3 +315,20 @@ def jit_module(**kwargs):
             _logger.debug("Auto decorating function {} from module {} with jit "
                           "and options: {}".format(obj, module.__name__, kwargs))
             module.__dict__[name] = jit(obj, **kwargs)
+
+
+if typing.TYPE_CHECKING:
+    JittedFuncType = typing.TypeVar("JittedFuncType",
+                                    bound=typing.Callable[..., typing.Any])
+    
+    original_jit = jit
+    original_njit = njit
+
+    def jit(signature_or_function=None, locals={}, cache=False,
+        pipeline_class=None, boundscheck=None, **options
+    ) -> typing.Callable[[JittedFuncType], JittedFuncType]:
+        return original_jit(signature_or_function, locals, cache,
+                            pipeline_class, boundscheck, **options)
+    
+    def njit(*args, **kws) -> typing.Callable[[JittedFuncType], JittedFuncType]:
+        return original_njit(*args, **kws)
