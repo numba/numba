@@ -317,6 +317,7 @@ def set_field4(rec):
 
 def set_field_slice(arr):
     arr['k'][:] = 0.0
+    return arr
 
 
 recordtype = np.dtype([('a', np.float64),
@@ -871,7 +872,7 @@ class TestRecordDtype(unittest.TestCase):
 
         pyfunc = set_field_slice
         cfunc = self.get_cfunc(pyfunc, (nbrecord,))
-        self.assertEqual(cfunc(rec), pyfunc(rec))
+        np.testing.assert_array_equal(cfunc(rec), pyfunc(rec))
 
     def test_structure_dtype_with_titles(self):
         # the following is the definition of int4 vector type from pyopencl
