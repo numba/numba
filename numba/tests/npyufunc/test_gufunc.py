@@ -198,7 +198,7 @@ class TestDynamicGUFunc(TestCase):
         my_cumsum(x, out=out_kw, axis=0)
         np.testing.assert_equal(out_kw, expected)
 
-    def test_attrs(self):
+    def test_gufunc_attributes(self):
         @guvectorize("(n)->(n)")
         def gufunc(x, res):
             acc = 0
@@ -206,11 +206,13 @@ class TestDynamicGUFunc(TestCase):
                 acc += x[i]
                 res[i] = acc
 
+        # ensure gufunc exports attributes
         attrs = ['signature', 'accumulate', 'at', 'outer', 'reduce', 'reduceat']
         for attr in attrs:
-            # ensure gufunc exports the propertie above
             contains = hasattr(gufunc, attr)
             self.assertTrue(contains, 'dynamic gufunc not exporting "%s"' % (attr,))
+
+        self.assertEqual(gufunc.signature, "(n)->(n)")
 
 
 class TestGUVectorizeScalar(TestCase):
