@@ -1,6 +1,7 @@
 from collections import namedtuple, defaultdict
 import ast
 import inspect
+import textwrap
 import operator
 import warnings
 from functools import partial
@@ -76,7 +77,9 @@ class BaseLower(object):
                 # Parse the source and find the line with `def <func>` in it, it
                 # is assumed that if the compilation has made it this far that
                 # the source is at least legal and has valid syntax.
-                source_str = ''.join(raw_source_str)
+
+                # join the source as a block and dedent it
+                source_str = textwrap.dedent(''.join(raw_source_str))
                 src_ast = ast.parse(source_str)
                 # pull the definition out of the AST, only if it seems valid
                 # i.e. one thing in the body
