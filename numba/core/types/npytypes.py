@@ -452,9 +452,8 @@ class Array(Buffer):
             layout = self.layout
         if readonly is None:
             readonly = not self.mutable
-        cls = type(self)
-        return cls(dtype=dtype, ndim=ndim, layout=layout, readonly=readonly,
-                   aligned=self.aligned)
+        return Array(dtype=dtype, ndim=ndim, layout=layout, readonly=readonly,
+                     aligned=self.aligned)
 
     @property
     def key(self):
