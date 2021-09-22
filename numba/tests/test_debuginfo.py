@@ -5,7 +5,7 @@ import numpy as np
 
 from numba.tests.support import TestCase, override_config, needs_subprocess
 from numba import jit, njit
-from numba.core import types
+from numba.core import types, utils
 import unittest
 import llvmlite.binding as llvm
 
@@ -212,8 +212,10 @@ class TestDebugInfoEmission(TestCase):
                 groups = matched.groups()
                 self.assertEqual(len(groups), 1)
                 dbg_line = int(groups[0])
-                # +1 for the decorator, DWARF refers to the "def" line
-                self.assertEqual(dbg_line, pysrc_line_start + 1)
+                # +1 for the decorator on Python 3.8+, `inspect` changed, also
+                # recall that Numba's DWARF refers to the "def" line
+                defline = pysrc_line_start + (utils.PYVERSION >= (3, 8))
+                self.assertEqual(dbg_line, defline)
                 break
         else:
             self.fail('Assertion on DILocalVariable not made')
