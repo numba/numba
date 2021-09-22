@@ -212,7 +212,8 @@ class TestDebugInfoEmission(TestCase):
                 groups = matched.groups()
                 self.assertEqual(len(groups), 1)
                 dbg_line = int(groups[0])
-                self.assertEqual(dbg_line, pysrc_line_start)
+                # +1 for the decorator, DWARF refers to the "def" line
+                self.assertEqual(dbg_line, pysrc_line_start + 1)
                 break
         else:
             self.fail('Assertion on DILocalVariable not made')
