@@ -1403,7 +1403,6 @@ class Lower(BaseLower):
                                                               name=name)
                 raise AssertionError(msg)
 
-
             # If this store is associated with an argument to the function (i.e.
             # store following reassemble from CC splatting structs as many args
             # to the function) then mark this variable as such.
@@ -1413,9 +1412,9 @@ class Lower(BaseLower):
                 sizeof = self.context.get_abi_sizeof(lltype)
                 datamodel = self.context.data_model_manager[fetype]
                 self.debuginfo.mark_variable(self.builder, ptr, name=name,
-                                            lltype=lltype, size=sizeof,
-                                            line=loc.line, datamodel=datamodel,
-                                            argidx=argidx)
+                                             lltype=lltype, size=sizeof,
+                                             line=loc.line, datamodel=datamodel,
+                                             argidx=argidx)
             self.builder.store(value, ptr)
 
     def delvar(self, name):
@@ -1463,9 +1462,9 @@ class Lower(BaseLower):
             if name not in self.func_ir.arg_names:
                 sizeof = self.context.get_abi_sizeof(lltype)
                 self.debuginfo.mark_variable(self.builder, aptr, name=name,
-                                            lltype=lltype, size=sizeof,
-                                            line=self.loc.line,
-                                            datamodel=datamodel,)
+                                             lltype=lltype, size=sizeof,
+                                             line=self.loc.line,
+                                             datamodel=datamodel,)
         return aptr
 
     def incref(self, typ, val):
