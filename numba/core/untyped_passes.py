@@ -946,9 +946,50 @@ class MixedContainerUnroller(FunctionPass):
         """
         elif_tplt = "\n\telif PLACEHOLDER_INDEX in (%s,):\n\t\tSENTINEL = None"
 
+        # Note regarding the insertion of the garbage/defeat variables below:
+        # These values have been designed and inserted to defeat a specific
+        # beahviour of the cpython optimizer. The optimization was introduced
+        # in Python 3.10.
+
+        # The URL for the BPO is:
+        # https://bugs.python.org/issue44626
+        # The code for the optimization can be found at:
+        # https://github.com/python/cpython/blob/d41abe8/Python/compile.c#L7533-L7557
+
+        # Essentially the CPython optimizer will inline the exit block under
+        # certain circumstances and thus replace the jump with a return if the
+        # exit block is small enough.  This is an issue for unroller, as it
+        # looks for a jump, not a return, when it inserts the generated switch
+        # table.
+
+        # Part of the condition for this optimization to be applied is that the
+        # exit block not exceed a certain (4 at the time of writing) number of
+        # bytecode instructions. We defeat the optimizer by inserting a
+        # sufficient number of instructions so that the exit block is big
+        # enough. We don't care about this garbage, because the generated exit
+        # block is discarded anyway when we smash the switch table into the
+        # original function and so all the inserted garbage is dropped again.
+
+        # The final lines of the stacktrace w/o this will look like:
+        #
+        #  File "/numba/numba/core/untyped_passes.py", line 830, \
+        #       in inject_loop_body
+        #   sentinel_exits.add(blk.body[-1].target)
+        # AttributeError: Failed in nopython mode pipeline \
+        #       (step: handles literal_unroll)
+        # Failed in literal_unroll_subpipeline mode pipeline \
+        #       (step: performs mixed container unroll)
+        # 'Return' object has no attribute 'target'
+        #
+        # Which indicates that a Return has been found instead of a Jump
+
         b = ('def foo():\n\tif PLACEHOLDER_INDEX in (%s,):\n\t\t'
              'SENTINEL = None\n%s\n\telse:\n\t\t'
-             'raise RuntimeError("Unreachable")')
+             'raise RuntimeError("Unreachable")\n\t'
+             'temp_defeat_garbage = None\n\t'     # defeat optimizer
+             'obvious_defeat_pattern = None\n\t'  # defeat optimizer
+             'return None\n\t'                    # defeat optimizer
+             )
         keys = [k for k in data.keys()]
 
         elifs = []
