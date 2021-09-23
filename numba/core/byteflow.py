@@ -1021,6 +1021,17 @@ class TraceRunner(object):
         state.fork(pc=end, npop=2)
         state.fork(pc=inst.next)
 
+    def op_GEN_START(self, state, inst):
+        """Pops TOS. If TOS was not None, raises an exception. The kind
+        operand corresponds to the type of generator or coroutine and
+        determines the error message. The legal kinds are 0 for generator,
+        1 for coroutine, and 2 for async generator.
+
+        New in version 3.10.
+        """
+        # no-op in Numba
+        pass
+
     def _unaryop(self, state, inst):
         val = state.pop()
         res = state.make_temp()
