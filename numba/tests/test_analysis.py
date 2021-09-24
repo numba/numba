@@ -11,6 +11,7 @@ from numba.core.inline_closurecall import InlineClosureCallPass
 from numba.tests.support import TestCase, MemoryLeakMixin, SerialMixin
 
 from numba.core.analysis import dead_branch_prune, rewrite_semantic_constants
+from numba.core.untyped_passes import ReconstructSSA
 
 _GLOBAL = 123
 
@@ -24,7 +25,8 @@ def compile_to_ir(func):
     state.func_ir = func_ir
     state.typemap = None
     state.calltypes = None
-
+    # Transform to SSA
+    ReconstructSSA().run_pass(state)
     # call this to get print etc rewrites
     rewrites.rewrite_registry.apply('before-inference', state)
     return func_ir
@@ -169,15 +171,14 @@ class TestBranchPrune(TestBranchPruneBase, SerialMixin):
         self.assert_prune(impl, (types.NoneType('none'),), [True], None)
         self.assert_prune(impl, (types.IntegerLiteral(10),), [None], 10)
 
-        # TODO: cannot handle this without const prop
-        # def impl(x):
-        #     z = None
-        #     y = z
-        #     if x == y:
-        #         print("x is 10")
+        def impl(x):
+            z = None
+            y = z
+            if x == y:
+                return 100
 
-        # self.assert_prune(impl, (types.NoneType('none'),), [None], None)
-        # self.assert_prune(impl, (types.IntegerLiteral(10),), [None], 10)
+        self.assert_prune(impl, (types.NoneType('none'),), [False], None)
+        self.assert_prune(impl, (types.IntegerLiteral(10),), [True], 10)
 
     def test_single_if_else(self):
 
@@ -509,21 +510,21 @@ class TestBranchPrune(TestBranchPruneBase, SerialMixin):
         # break
 
         def impl(array, x, a=None):
-            b = 0
+            b = 2
             if x < 4:
                 b = 12
-            if a is None:
-                a = 0
+            if a is None: # known true
+                a = 7 # live
             else:
-                b = 12
-            if a < 0:
+                b = 15 # dead
+            if a < 0: # valid as a result of the redefinition of 'a'
                 return 10
             return 30 + b + a
 
         self.assert_prune(impl,
                           (types.Array(types.float64, 2, 'C'),
                            types.float64, types.NoneType('none'),),
-                          [None, None, None],
+                          [None, False, None],
                           np.zeros((2, 3)), 1., None)
 
     def test_redefinition_analysis_different_block_can_exec(self):

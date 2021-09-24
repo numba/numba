@@ -4,7 +4,7 @@ from copy import deepcopy, copy
 import warnings
 
 from numba.core.compiler_machinery import (FunctionPass, AnalysisPass,
-                                           register_pass)
+                                           SSACompliantMixin, register_pass)
 from numba.core import (errors, types, ir, bytecode, postproc, rewrites, config,
                         transforms)
 from numba.misc.special import literal_unroll
@@ -153,7 +153,7 @@ class RewriteSemanticConstants(FunctionPass):
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
-class DeadBranchPrune(FunctionPass):
+class DeadBranchPrune(FunctionPass, SSACompliantMixin):
     _name = "dead_branch_prune"
 
     def __init__(self):

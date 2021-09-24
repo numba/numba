@@ -103,6 +103,13 @@ class CompilerPass(metaclass=ABCMeta):
         return self._analysis[pass_name]
 
 
+class SSACompliantMixin(object):
+    """ Mixin to indicate a pass is SSA form compliant. Nothing is asserted
+    about this condition at present.
+    """
+    pass
+
+
 class FunctionPass(CompilerPass):
     """ Base class for function passes
     """
