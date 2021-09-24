@@ -1818,6 +1818,8 @@ class Interpreter(object):
                 else:
                     ok = False
                     break
+        if ok and build_empty_list is None:
+            raise errors.UnsupportedError("SPECIALSTRING")
         if ok:
             stmts = self.current_block.body
             build_tuple_asgn = self.current_block.body[-1]
