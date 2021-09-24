@@ -700,8 +700,11 @@ def ol_isinstance(var, typs):
     for typ in typs:
         if isinstance(typ, types.Function):
             key = typ.key[0]  # functions like int(..), float(..), str(..)
+        elif isinstance(typ, types.ClassType):
+            key = typ
         else:
             key = typ.key
+
         numba_typ = typing.asnumbatype.as_numba_type(key)
 
         if var == numba_typ:
