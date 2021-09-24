@@ -43,7 +43,7 @@ class BaseLower(object):
         self.pending_phis = {}
         self.varmap = {}
         self.firstblk = min(self.blocks.keys())
-        self.loc = -1
+        self.loc = ir.unknown_loc
 
         # Specializes the target context as seen inside the Lowerer
         # This adds:
@@ -325,7 +325,7 @@ class Lower(BaseLower):
         super(Lower, self).pre_block(block)
         self._cur_ir_block = block
 
-        if block == self.firstblk:
+        if block == self.func_ir.blocks[self.firstblk]:
             # create slots for all the vars, irrespective of whether they are
             # initialized, SSA will pick this up and warn users about using
             # uninitialized variables. Slots are added as alloca in the first
