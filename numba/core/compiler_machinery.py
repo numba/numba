@@ -366,7 +366,7 @@ class PassManager(object):
 
         def resolve_requires(key, rmap):
             def walk(lkey, rmap):
-                dep_set = set(rmap[lkey])
+                dep_set = rmap[lkey] if lkey in rmap else set()
                 if dep_set:
                     for x in dep_set:
                         dep_set |= (walk(x, rmap))
