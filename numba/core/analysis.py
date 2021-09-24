@@ -402,7 +402,7 @@ def dead_branch_prune(func_ir, called_args):
         print("before".center(80, '-'))
         print(func_ir.dump())
 
-    orig_cfg = compute_cfg_from_blocks(func_ir.blocks)
+    # orig_cfg = compute_cfg_from_blocks(func_ir.blocks)
     phi2lbl = dict()
     phi2asgn = dict()
     for lbl, blk in func_ir.blocks.items():
@@ -550,6 +550,7 @@ def dead_branch_prune(func_ir, called_args):
                 # with that.
                 ic = new_incoming[0]
                 order = []
+
                 def walk(label):
                     order.append(label)
                     pred = [x for x in new_cfg.predecessors(label)]
@@ -581,7 +582,8 @@ def dead_branch_prune(func_ir, called_args):
                 # incoming and remove dead
                 ic_val_tmp = []
                 ic_blk_tmp = []
-                for ic_val, ic_blk in zip(phi.incoming_values, phi.incoming_blocks):
+                for ic_val, ic_blk in zip(phi.incoming_values,
+                                          phi.incoming_blocks):
                     if ic_blk in dead_blocks:
                         continue
                     else:
