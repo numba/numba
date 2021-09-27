@@ -1382,6 +1382,44 @@ def numpy_broadcast_to(array, shape):
     return impl
 
 
+@register_jitable
+def broadcast_shape(r, k, tmp):
+    if tmp == 1:
+        return
+    if r[k] == 1:
+        r[k] = tmp
+    elif r[k] != tmp:
+        raise ValueError("shape mismatch: objects"
+                         " cannot be broadcast"
+                         " to a single shape")
+
+
+@overload(np.broadcast_shapes)
+def numpy_broadcast_shapes(*args):
+    # Based on https://github.com/numpy/numpy/blob/f702b26fff3271ba6a6ba29a021fc19051d1f007/numpy/core/src/multiarray/iterators.c#L1129-L1212  # noqa
+    def impl(*args):
+        # discover the number of dimensions
+        m = 0
+        for arg in literal_unroll(args):
+            if isinstance(arg, int):
+                m = max(m, 1)
+            else:
+                m = max(m, len(arg))
+
+        # propagate args
+        r = [1] * m
+        for arg in literal_unroll(args):
+            if isinstance(arg, int):
+                broadcast_shape(r, m - 1, arg)
+            else:
+                for i in range(len(arg)):
+                    tmp = arg[i]
+                    k = m - len(arg) + i
+                    broadcast_shape(r, k, tmp)
+        return r
+    return impl
+
+
 def fancy_setslice(context, builder, sig, args, index_types, indices):
     """
     Implement slice assignment for arrays.  This implementation works for

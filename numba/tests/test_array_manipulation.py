@@ -52,6 +52,10 @@ def numpy_broadcast_to(arr, shape):
     return np.broadcast_to(arr, shape)
 
 
+def numpy_broadcast_shapes(*args):
+    return np.broadcast_shapes(*args)
+
+
 def numpy_broadcast_to_indexing(arr, shape, idx):
     return np.broadcast_to(arr, shape)[idx]
 
@@ -860,6 +864,46 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             expected = pyfunc(input_array, shape, idx)
             got = cfunc(input_array, shape, idx)
             self.assertPreciseEqual(got, expected)
+
+    def test_broadcast_shapes(self):
+        pyfunc = numpy_broadcast_shapes
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Tests taken from
+        # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/tests/test_stride_tricks.py#L296-L334
+        data = [
+            # tests with empty tuples don't work at the moment
+            # [[], ()],
+            # [[()], ()],
+            [[(7,)], (7,)],
+            [[(1, 2), (2,)], (1, 2)],
+            [[(1, 1)], (1, 1)],
+            [[(1, 1), (3, 4)], (3, 4)],
+            [[(6, 7), (5, 6, 1), (7,), (5, 1, 7)], (5, 6, 7)],
+            [[(5, 6, 1)], (5, 6, 1)],
+            [[(1, 3), (3, 1)], (3, 3)],
+            [[(1, 0), (0, 0)], (0, 0)],
+            [[(0, 1), (0, 0)], (0, 0)],
+            [[(1, 0), (0, 1)], (0, 0)],
+            [[(1, 1), (0, 0)], (0, 0)],
+            [[(1, 1), (1, 0)], (1, 0)],
+            [[(1, 1), (0, 1)], (0, 1)],
+            # [[(), (0,)], (0,)],
+            [[(0,), (0, 0)], (0, 0)],
+            [[(0,), (0, 1)], (0, 0)],
+            [[(1,), (0, 0)], (0, 0)],
+            # [[(), (0, 0)], (0, 0)],
+            [[(1, 1), (0,)], (1, 0)],
+            [[(1,), (0, 1)], (0, 1)],
+            [[(1,), (1, 0)], (1, 0)],
+            # [[(), (1, 0)], (1, 0)],
+            # [[(), (0, 1)], (0, 1)],
+            [[(1,), (3,)], (3,)],
+            [[2, (3, 2)], (3, 2)],
+        ]
+        for input_shape, target_shape in data:
+            got = cfunc(*input_shape)
+            self.assertPreciseEqual(got, target_shape)
 
     def test_shape(self):
         pyfunc = numpy_shape
