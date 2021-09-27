@@ -2468,16 +2468,16 @@ class TestParforsMisc(TestParforsBase):
     def test_oversized_tuple_as_arg_to_kernel(self):
 
         @njit(parallel=True)
-        def oversize_tuple():
+        def oversize_tuple(idx):
             big_tup = (1,2,3,4)
             z = 0
             for x in prange(10):
-                z += big_tup[0]
+                z += big_tup[idx]
             return z
 
         with override_env_config('NUMBA_PARFOR_MAX_TUPLE_SIZE', '3'):
             with self.assertRaises(errors.UnsupportedParforsError) as raises:
-                oversize_tuple()
+                oversize_tuple(0)
 
         errstr = str(raises.exception)
         self.assertIn("Use of a tuple", errstr)
