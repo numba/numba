@@ -6,6 +6,7 @@ import numpy as np
 from numba.tests.support import TestCase, override_config, needs_subprocess
 from numba import jit, njit
 from numba.core import types, utils
+from numba.core.datamodel import default_manager
 import unittest
 import llvmlite.binding as llvm
 
@@ -450,6 +451,89 @@ class TestDebugInfoEmission(TestCase):
                             f'({{{raw_flt}, {raw_flt}}})", '
                             f'size: {dwarf_info.bits}')
                 self.assertIn(expected, type_decl)
+
+    def test_arrays(self):
+        #for ty, dwarf_info in type_infos.items():
+
+        ty = np.float64
+
+        @njit(debug=True)
+        def foo():
+            a = np.ones((2, 3), dtype=ty)
+            return a
+
+        metadata = self._get_metadata(foo, sig=())
+        metadata_definition_map = dict()
+        meta_definition_split = re.compile(r'(![0-9]+) = (.*)')
+        for line in metadata:
+            matched = meta_definition_split.match(line)
+            if matched:
+                dbg_val, info = matched.groups()
+                metadata_definition_map[dbg_val] = info
+
+        for k, v in metadata_definition_map.items():
+            if 'DILocalVariable(name: "a"' in v:
+                lvar = metadata_definition_map[k]
+                break
+        else:
+            assert 0, "missing DILocalVariable 'a'"
+
+        type_marker = re.match('.*type: (![0-9]+).*', lvar).groups()[0]
+        type_decl = metadata_definition_map[type_marker]
+
+        # check type
+        assert "!DICompositeType(tag: DW_TAG_structure_type" in type_decl
+        # check name encoding
+        assert f'name: "{str(types.float64[:, ::1])}' in type_decl
+
+        # pop out the "elements" of the composite type
+        match_elements = re.compile(r'.*elements: (![0-9]+),.*')
+        elem_matches = match_elements.match(type_decl).groups()
+        assert len(elem_matches) == 1
+        elem_match = elem_matches[0]
+        # The match should be something like, it's the elements from an array
+        # data model.
+        # !{!35, !36, !37, !39, !40, !43, !45}'
+        struct_markers = metadata_definition_map[elem_match]
+        struct_pattern = '!{' + '(![0-9]+), ' * 6 + '(![0-9]+)}'
+        match_struct = re.compile(struct_pattern)
+        struct_member_matches = match_struct.match(struct_markers).groups()
+        assert struct_member_matches
+        data_model = default_manager.lookup(types.float64[:, ::1])
+        assert len(struct_member_matches) == len(data_model._fields)
+
+        ptr_size = types.intp.bitwidth
+        ptr_re = (r'!DIDerivedType\(tag: DW_TAG_pointer_type, '
+                  rf'baseType: ![0-9]+, size: {ptr_size}\)')
+        int_re = (rf'!DIBasicType\(name: "int{ptr_size}", size: {ptr_size}, '
+                  r'encoding: DW_ATE_signed\)')
+        utuple_re = (r'!DICompositeType\(tag: DW_TAG_array_type, '
+                     rf'name: "UniTuple\(int{ptr_size} x 2\) '
+                     rf'\(\[2 x i{ptr_size}\]\)", baseType: ![0-9]+, '
+                     rf'size: {2 * ptr_size}, elements: ![0-9]+, '
+                     rf'identifier: "\[2 x i{ptr_size}\]"\)')
+        expected = {'meminfo': ptr_re,
+                    'parent': ptr_re,
+                    'nitems': int_re,
+                    'itemsize': int_re,
+                    'data': ptr_re,
+                    'shape': utuple_re,
+                    'strides': utuple_re}
+
+        # look for `baseType: <>` for the type
+        base_type_pattern = r'!DIDerivedType\(.*, baseType: (![0-9]+),.*'
+        base_type_matcher = re.compile(base_type_pattern)
+
+        for ix, field in enumerate(data_model._fields):
+            derived_type = metadata_definition_map[struct_member_matches[ix]]
+            assert "DIDerivedType" in derived_type
+            assert f'name: "{field}"' in derived_type
+            base_type_match = base_type_matcher.match(derived_type)
+            base_type_matches = base_type_match.groups()
+            assert len(base_type_matches) == 1
+            base_type_marker = base_type_matches[0]
+            data_type = metadata_definition_map[base_type_marker]
+            assert re.match(expected[field], data_type)
 
 
 if __name__ == '__main__':
