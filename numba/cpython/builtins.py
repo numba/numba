@@ -695,7 +695,7 @@ def ol_isinstance(var, typs):
     if not isinstance(typs, types.containers.Tuple):
         typs = (typs, )
 
-    var = typing.asnumbatype.as_numba_type(var)
+    var = as_numba_type(var)
 
     for typ in typs:
         if isinstance(typ, types.Function):
@@ -705,7 +705,7 @@ def ol_isinstance(var, typs):
         else:
             key = typ.key
 
-        numba_typ = typing.asnumbatype.as_numba_type(key)
+        numba_typ = as_numba_type(key)
 
         if var == numba_typ:
             return true_impl
