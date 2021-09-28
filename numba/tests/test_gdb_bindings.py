@@ -11,10 +11,10 @@ from itertools import permutations
 from numba import njit, gdb, gdb_init, gdb_breakpoint, prange
 from numba.core import errors
 from numba import jit
-from numba.misc.gdb_hook import _confirm_gdb
 
 from numba.tests.support import (TestCase, captured_stdout, tag,
                                  skip_parfors_unsupported)
+from numba.tests.gdb_support import needs_gdb
 import unittest
 
 
@@ -34,15 +34,6 @@ not_arm = unittest.skipIf(_is_arm, "testing disabled on ARM")
 _gdb_cond = os.environ.get('GDB_TEST', None) == '1'
 needs_gdb_harness = unittest.skipUnless(_gdb_cond, "needs gdb harness")
 
-# check if gdb is present and working
-try:
-    _confirm_gdb()
-    _HAVE_GDB = True
-except Exception:
-    _HAVE_GDB = False
-
-_msg = "functioning gdb with correct ptrace permissions is required"
-needs_gdb = unittest.skipUnless(_HAVE_GDB, _msg)
 long_running = tag('long_running')
 
 _dbg_njit = njit(debug=True)
