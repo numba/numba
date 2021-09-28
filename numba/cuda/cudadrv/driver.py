@@ -2309,7 +2309,10 @@ class Event(object):
         queued in the stream at the time of the call to ``record()`` has been
         completed.
         """
-        hstream = stream.handle if stream else 0
+        if config.CUDA_USE_CUDA_PYTHON:
+            hstream = stream.handle if stream else cuda_driver.CUstream(0)
+        else:
+            hstream = stream.handle if stream else 0
         driver.cuEventRecord(self.handle, hstream)
 
     def synchronize(self):
@@ -2322,7 +2325,10 @@ class Event(object):
         """
         All future works submitted to stream will wait util the event completes.
         """
-        hstream = stream.handle if stream else 0
+        if config.CUDA_USE_CUDA_PYTHON:
+            hstream = stream.handle if stream else cuda_driver.CUstream(0)
+        else:
+            hstream = stream.handle if stream else 0
         flags = 0
         driver.cuStreamWaitEvent(hstream, self.handle, flags)
 
@@ -2334,9 +2340,12 @@ def event_elapsed_time(evtstart, evtend):
     '''
     Compute the elapsed time between two events in milliseconds.
     '''
-    msec = c_float()
-    driver.cuEventElapsedTime(byref(msec), evtstart.handle, evtend.handle)
-    return msec.value
+    if config.CUDA_USE_CUDA_PYTHON:
+        return driver.cuEventElapsedTime(evtstart.handle, evtend.handle)
+    else:
+        msec = c_float()
+        driver.cuEventElapsedTime(byref(msec), evtstart.handle, evtend.handle)
+        return msec.value
 
 
 class Module(metaclass=ABCMeta):
