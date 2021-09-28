@@ -2853,7 +2853,10 @@ def device_memory_size(devmem):
     sz = getattr(devmem, '_cuda_memsize_', None)
     if sz is None:
         s, e = device_extents(devmem)
-        sz = e - s
+        if config.CUDA_USE_CUDA_PYTHON:
+            sz = int(e) - int(s)
+        else:
+            sz = e - s
         devmem._cuda_memsize_ = sz
     assert sz >= 0, "{} length array".format(sz)
     return sz
