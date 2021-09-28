@@ -217,7 +217,7 @@ class TestDynamicGUFunc(TestCase):
         gufunc(a, res)  # trigger compilation
         self.assertPreciseEqual(res, np.array([1, 3, 6, 10]))
 
-        # other attributes are not callable from a gufunc with signaturek
+        # other attributes are not callable from a gufunc with signature
         # see: https://github.com/numba/numba/issues/2794
         # note: this is a limitation in NumPy source code!
         self.assertEqual(gufunc.signature, "(n)->(n)")
@@ -246,7 +246,6 @@ class TestDynamicGUFunc(TestCase):
         # add signature "(),() -> ()" is evaluated to None
         self.assertIsNone(add.signature)
 
-        # test other attributes using "add" gufunc
         a = np.array([1, 2, 3, 4])
         b = np.array([4, 3, 2, 1])
         res = np.array([0, 0, 0, 0])
