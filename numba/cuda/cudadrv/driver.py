@@ -2231,7 +2231,17 @@ class Stream(object):
         """
         data = (self, callback, arg)
         _py_incref(data)
-        driver.cuStreamAddCallback(self.handle, self._stream_callback, data, 0)
+        if config.CUDA_USE_CUDA_PYTHON:
+            # XXX: This is rather horrible
+            ptr = ctypes.cast(addressof(self._stream_callback),
+                              ctypes.POINTER(ctypes.c_ulonglong))
+            deref = ptr.contents.value
+            stream_callback = cuda_driver.CUstreamCallback(deref)
+            # XXX: This is even more horrible!
+            data = id(data)
+        else:
+            stream_callback = self._stream_callback
+        driver.cuStreamAddCallback(self.handle, stream_callback, data, 0)
 
     @staticmethod
     @cu_stream_callback_pyobj
