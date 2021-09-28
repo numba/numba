@@ -1377,6 +1377,7 @@ class Context(object):
         current and peer device is possible.
         """
         if config.CUDA_USE_CUDA_PYTHON:
+            peer_device = cuda_driver.CUdevice(peer_device)
             can_access_peer = driver.cuDeviceCanAccessPeer(self.device.id,
                                                            peer_device)
         else:
