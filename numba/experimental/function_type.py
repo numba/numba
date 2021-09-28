@@ -61,12 +61,6 @@ class FunctionModel(models.StructModel):
         super(FunctionModel, self).__init__(dmm, fe_type, members)
 
 
-@lower_constant(types.Dispatcher)
-def lower_constant_dispatcher(context, builder, typ, pyval):
-    return context.add_dynamic_addr(builder, id(pyval),
-                                    info=type(pyval).__name__)
-
-
 @lower_constant(FunctionType)
 def lower_constant_function_type(context, builder, typ, pyval):
     typ = typ.get_precise()
