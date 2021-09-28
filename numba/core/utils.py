@@ -23,7 +23,7 @@ from inspect import Signature as pySignature # noqa: F401
 from inspect import Parameter as pyParameter # noqa: F401
 
 from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
-                               DEVELOPER_MODE) # noqa: F401
+                               DEVELOPER_MODE, CAPTURED_ERRORS) # noqa: F401
 from numba.core import types
 
 
@@ -178,6 +178,11 @@ def shutting_down(globals=globals):
 # finalizer then register atexit to ensure this ordering.
 weakref.finalize(lambda: None, lambda: None)
 atexit.register(_at_shutdown)
+
+
+def use_new_style_errors():
+    """Returns True if new style errors are to be used, false otherwise"""
+    return CAPTURED_ERRORS == 'new_style'
 
 
 class ConfigStack:
