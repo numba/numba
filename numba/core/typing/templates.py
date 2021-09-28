@@ -402,6 +402,15 @@ class CallableTemplate(FunctionTemplate):
     def apply(self, args, kws):
         generic = getattr(self, "generic")
         typer = generic()
+        try:
+            match_sig = inspect.signature(typer)
+            match_sig.bind(*args, **kws)
+        except TypeError as e:
+            # ctor or bind failed, raise, if there's a
+            # ValueError then there's likely unrecoverable
+            # problems
+            raise TypingError(str(e)) from e
+
         sig = typer(*args, **kws)
 
         # Unpack optional type if no matching signature
