@@ -199,11 +199,7 @@ class TargetConfig(metaclass=_MetaTargetConfig):
         In contrast to ``__repr__``, only options that are explicitly set will
         be shown.
         """
-        args = []
-        for k in self.options:
-            msg = f"{k}={getattr(self, k)}"
-            if self.is_set(k):
-                args.append(msg)
+        args = [f"{k}={v}" for k, v in self._summary_args()]
         clsname = self.__class__.__name__
         return f"{clsname}({', '.join(args)})"
 
@@ -211,3 +207,21 @@ class TargetConfig(metaclass=_MetaTargetConfig):
         if name not in self.options:
             msg = f"{name!r} is not a valid option for {type(self)}"
             raise ValueError(msg)
+
+    def _summary_args(self):
+        args = []
+        for k in self.options:
+            if self.is_set(k):
+                v = (k, getattr(self, k))
+                args.append(v)
+        return args
+
+    def get_mangle_string(self):
+        def convert(v):
+            if isinstance(v, bool):
+                return "T" if v else "F"
+            else:
+                return repr(v)
+
+        items = [f"{k}={convert(v)}" for k, v in sorted(self._summary_args())]
+        return ''.join(items)

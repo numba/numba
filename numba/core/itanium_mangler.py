@@ -122,7 +122,7 @@ def _len_encoded(string):
     return '%u%s' % (len(string), string)
 
 
-def mangle_identifier(ident, template_params=''):
+def mangle_identifier(ident, template_params='', *, abi_tags=()):
     """
     Mangle the identifier with optional template parameters.
 
@@ -130,11 +130,14 @@ def mangle_identifier(ident, template_params=''):
 
     This treats '.' as '::' in C++.
     """
+    assert isinstance(abi_tags, (tuple, list))
     parts = [_len_encoded(_escape_string(x)) for x in ident.split('.')]
+    enc_abi_tags = ["B" + _len_encoded(_escape_string(x)) for x in abi_tags]
+    extras = template_params + ''.join(enc_abi_tags)
     if len(parts) > 1:
-        return 'N%s%sE' % (''.join(parts), template_params)
+        return 'N%s%sE' % (''.join(parts), extras)
     else:
-        return '%s%s' % (parts[0], template_params)
+        return '%s%s' % (parts[0], extras)
 
 
 def mangle_type_c(typ):
@@ -209,11 +212,11 @@ def mangle_c(ident, argtys):
     return PREFIX + mangle_identifier(ident) + mangle_args_c(argtys)
 
 
-def mangle(ident, argtys):
+def mangle(ident, argtys, abi_tags):
     """
     Mangle identifier with Numba type objects and arbitrary values.
     """
-    return PREFIX + mangle_identifier(ident) + mangle_args(argtys)
+    return PREFIX + mangle_identifier(ident, abi_tags=abi_tags) + mangle_args(argtys)
 
 
 def prepend_namespace(mangled, ns):
