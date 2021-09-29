@@ -223,9 +223,12 @@ class Driver(object):
             self.lib = find_driver()
         except CudaSupportError as e:
             self.is_initialized = True
-            self.initialization_error = e
+            self.initialization_error = e.msg
 
-    def initialize(self):
+    def ensure_initialized(self):
+        if self.is_initialized:
+            return
+
         # lazily initialize logger
         global _logger
         _logger = make_logger()
@@ -235,8 +238,9 @@ class Driver(object):
             _logger.info('init')
             self.cuInit(0)
         except CudaAPIError as e:
-            self.initialization_error = e
-            raise CudaSupportError("Error at driver init: \n%s:" % e)
+            description = f"{e.msg} ({e.code})"
+            self.initialization_error = description
+            raise CudaSupportError(f"Error at driver init: {description}")
         else:
             self.pid = _getpid()
 
@@ -264,16 +268,12 @@ class Driver(object):
 
     @property
     def is_available(self):
-        if not self.is_initialized:
-            self.initialize()
+        self.ensure_initialized()
         return self.initialization_error is None
 
     def __getattr__(self, fname):
         # First request of a driver API function
-
-        # Ensure driver is initialized
-        if not self.is_initialized:
-            self.initialize()
+        self.ensure_initialized()
 
         if self.initialization_error is not None:
             raise CudaSupportError("Error at driver init: \n%s:" %

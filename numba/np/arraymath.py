@@ -18,7 +18,7 @@ from numba.core import types, cgutils
 from numba.core.extending import overload, overload_method, register_jitable
 from numba.np.numpy_support import as_dtype, type_can_asarray
 from numba.np.numpy_support import numpy_version
-from numba.np.numpy_support import is_nonelike
+from numba.np.numpy_support import is_nonelike, check_is_integer
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                  impl_ret_new_ref, impl_ret_untracked)
 from numba.core.typing import signature
@@ -791,7 +791,7 @@ def build_argmax_or_argmin_with_axis_impl(arr, axis, flatten_impl):
     Given a function that implements the logic for handling a flattened
     array, return the implementation function.
     """
-    _check_is_integer(axis, "axis")
+    check_is_integer(axis, "axis")
     retty = arr.dtype
 
     tuple_buffer = tuple(range(arr.ndim))
@@ -1018,11 +1018,6 @@ def greater_than(a, b):
 def check_array(a):
     if a.size == 0:
         raise ValueError('zero-size array to reduction operation not possible')
-
-
-def _check_is_integer(v, name):
-    if not isinstance(v, (int, types.Integer)):
-        raise TypingError('{} must be an integer'.format(name))
 
 
 def nan_min_max_factory(comparison_op, is_complex_dtype):
@@ -1758,7 +1753,7 @@ def _tri_impl(N, M, k):
 def np_tri(N, M=None, k=0):
 
     # we require k to be integer, unlike numpy
-    _check_is_integer(k, 'k')
+    check_is_integer(k, 'k')
 
     def tri_impl(N, M=None, k=0):
         if M is None:
@@ -1795,7 +1790,7 @@ def np_tril_impl_2d(m, k=0):
 def my_tril(m, k=0):
 
     # we require k to be integer, unlike numpy
-    _check_is_integer(k, 'k')
+    check_is_integer(k, 'k')
 
     def np_tril_impl_1d(m, k=0):
         m_2d = _make_square(m)
@@ -1822,10 +1817,10 @@ def my_tril(m, k=0):
 def np_tril_indices(n, k=0, m=None):
 
     # we require integer arguments, unlike numpy
-    _check_is_integer(n, 'n')
-    _check_is_integer(k, 'k')
+    check_is_integer(n, 'n')
+    check_is_integer(k, 'k')
     if not is_nonelike(m):
-        _check_is_integer(m, 'm')
+        check_is_integer(m, 'm')
 
     def np_tril_indices_impl(n, k=0, m=None):
         return np.nonzero(np.tri(n, m, k=k))
@@ -1836,7 +1831,7 @@ def np_tril_indices(n, k=0, m=None):
 def np_tril_indices_from(arr, k=0):
 
     # we require k to be integer, unlike numpy
-    _check_is_integer(k, 'k')
+    check_is_integer(k, 'k')
 
     if arr.ndim != 2:
         raise TypingError("input array must be 2-d")
@@ -1855,7 +1850,7 @@ def np_triu_impl_2d(m, k=0):
 @overload(np.triu)
 def my_triu(m, k=0):
     # we require k to be integer, unlike numpy
-    _check_is_integer(k, 'k')
+    check_is_integer(k, 'k')
 
     def np_triu_impl_1d(m, k=0):
         m_2d = _make_square(m)
@@ -1882,10 +1877,10 @@ def my_triu(m, k=0):
 def np_triu_indices(n, k=0, m=None):
 
     # we require integer arguments, unlike numpy
-    _check_is_integer(n, 'n')
-    _check_is_integer(k, 'k')
+    check_is_integer(n, 'n')
+    check_is_integer(k, 'k')
     if not is_nonelike(m):
-        _check_is_integer(m, 'm')
+        check_is_integer(m, 'm')
 
     def np_triu_indices_impl(n, k=0, m=None):
         return np.nonzero(1 - np.tri(n, m, k=k - 1))
@@ -1896,7 +1891,7 @@ def np_triu_indices(n, k=0, m=None):
 def np_triu_indices_from(arr, k=0):
 
     # we require k to be integer, unlike numpy
-    _check_is_integer(k, 'k')
+    check_is_integer(k, 'k')
 
     if arr.ndim != 2:
         raise TypingError("input array must be 2-d")
@@ -3690,7 +3685,7 @@ def np_bincount(a, weights=None, minlength=0):
     if not isinstance(a.dtype, types.Integer):
         return
 
-    _check_is_integer(minlength, 'minlength')
+    check_is_integer(minlength, 'minlength')
 
     if weights not in (None, types.none):
         validate_1d_array_like("bincount", weights)
