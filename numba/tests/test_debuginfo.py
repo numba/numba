@@ -453,13 +453,10 @@ class TestDebugInfoEmission(TestCase):
                 self.assertIn(expected, type_decl)
 
     def test_arrays(self):
-        #for ty, dwarf_info in type_infos.items():
-
-        ty = np.float64
 
         @njit(debug=True)
         def foo():
-            a = np.ones((2, 3), dtype=ty)
+            a = np.ones((2, 3), dtype=np.float64)
             return a
 
         metadata = self._get_metadata(foo, sig=())
@@ -482,14 +479,14 @@ class TestDebugInfoEmission(TestCase):
         type_decl = metadata_definition_map[type_marker]
 
         # check type
-        assert "!DICompositeType(tag: DW_TAG_structure_type" in type_decl
+        self.assertIn("!DICompositeType(tag: DW_TAG_structure_type", type_decl)
         # check name encoding
-        assert f'name: "{str(types.float64[:, ::1])}' in type_decl
+        self.assertIn(f'name: "{str(types.float64[:, ::1])}', type_decl)
 
         # pop out the "elements" of the composite type
         match_elements = re.compile(r'.*elements: (![0-9]+),.*')
         elem_matches = match_elements.match(type_decl).groups()
-        assert len(elem_matches) == 1
+        self.assertEqual(len(elem_matches), 1)
         elem_match = elem_matches[0]
         # The match should be something like, it's the elements from an array
         # data model.
@@ -498,9 +495,9 @@ class TestDebugInfoEmission(TestCase):
         struct_pattern = '!{' + '(![0-9]+), ' * 6 + '(![0-9]+)}'
         match_struct = re.compile(struct_pattern)
         struct_member_matches = match_struct.match(struct_markers).groups()
-        assert struct_member_matches
+        self.assertIsNotNone(struct_member_matches is not None)
         data_model = default_manager.lookup(types.float64[:, ::1])
-        assert len(struct_member_matches) == len(data_model._fields)
+        self.assertEqual(len(struct_member_matches), len(data_model._fields))
 
         ptr_size = types.intp.bitwidth
         ptr_re = (r'!DIDerivedType\(tag: DW_TAG_pointer_type, '
@@ -526,14 +523,14 @@ class TestDebugInfoEmission(TestCase):
 
         for ix, field in enumerate(data_model._fields):
             derived_type = metadata_definition_map[struct_member_matches[ix]]
-            assert "DIDerivedType" in derived_type
-            assert f'name: "{field}"' in derived_type
+            self.assertIn("DIDerivedType", derived_type)
+            self.assertIn(f'name: "{field}"', derived_type)
             base_type_match = base_type_matcher.match(derived_type)
             base_type_matches = base_type_match.groups()
-            assert len(base_type_matches) == 1
+            self.assertEqual(len(base_type_matches), 1)
             base_type_marker = base_type_matches[0]
             data_type = metadata_definition_map[base_type_marker]
-            assert re.match(expected[field], data_type)
+            self.assertRegex(data_type, expected[field])
 
 
 if __name__ == '__main__':
