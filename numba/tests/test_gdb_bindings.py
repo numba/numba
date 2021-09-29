@@ -192,10 +192,11 @@ class TestGdbBinding(TestCase):
 
         def test_template(self):
             o, e = self.run_test_in_separate_process(injected_method)
-            self.assertIn('GNU gdb', o)
-            self.assertIn('OK', e)
-            self.assertTrue('FAIL' not in e)
-            self.assertTrue('ERROR' not in e)
+            dbgmsg = f'\nSTDOUT={o}\nSTDERR={e}\n'
+            self.assertIn('GNU gdb', o, msg=dbgmsg)
+            self.assertIn('OK', e, msg=dbgmsg)
+            self.assertTrue('FAIL' not in e, msg=dbgmsg)
+            self.assertTrue('ERROR' not in e, msg=dbgmsg)
         if 'quick' in name:
             setattr(cls, methname, test_template)
         else:
