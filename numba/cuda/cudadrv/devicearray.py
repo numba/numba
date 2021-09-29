@@ -23,8 +23,6 @@ from numba.np import numpy_support
 from numba.core.errors import NumbaPerformanceWarning
 from warnings import warn
 
-from cuda import cuda as cuda_driver
-
 
 try:
     lru_cache = getattr(functools, 'lru_cache')(None)
@@ -108,7 +106,7 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
         else:
             # Make NULL pointer for empty allocation
             if config.CUDA_USE_CUDA_PYTHON:
-                null = cuda_driver.CUdeviceptr(0)
+                null = _driver.cuda_driver.CUdeviceptr(0)
             else:
                 null = c_void_p(0)
             gpu_data = _driver.MemoryPointer(context=devices.get_context(),
@@ -204,7 +202,7 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
         """
         if self.gpu_data is None:
             if config.CUDA_USE_CUDA_PYTHON:
-                return cuda_driver.CUdeviceptr(0)
+                return _driver.cuda_driver.CUdeviceptr(0)
             else:
                 return c_void_p(0)
         else:

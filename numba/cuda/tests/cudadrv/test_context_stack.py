@@ -6,8 +6,6 @@ from numba import config, cuda
 from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 from numba.cuda.cudadrv import driver
 
-from cuda import cuda as cuda_driver
-
 
 class TestContextStack(CUDATestCase):
     def setUp(self):
@@ -84,7 +82,7 @@ class Test3rdPartyContext(CUDATestCase):
         # Emulate primary context creation by 3rd party
         the_driver = driver.driver
         if config.CUDA_USE_CUDA_PYTHON:
-            dev = cuda_driver.CUdevice(0)
+            dev = driver.cuda_driver.CUdevice(0)
             hctx = the_driver.cuDevicePrimaryCtxRetain(dev)
         else:
             dev = 0
@@ -111,7 +109,7 @@ class Test3rdPartyContext(CUDATestCase):
         the_driver = driver.driver
         if config.CUDA_USE_CUDA_PYTHON:
             flags = 0
-            dev = cuda_driver.CUdevice(0)
+            dev = driver.cuda_driver.CUdevice(0)
             hctx = the_driver.cuCtxCreate(flags, dev)
         else:
             hctx = driver.drvapi.cu_context()

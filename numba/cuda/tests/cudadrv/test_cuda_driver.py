@@ -3,11 +3,9 @@ from ctypes import byref, c_int, c_void_p, sizeof
 from numba import config
 from numba.cuda.cudadrv.driver import (host_to_device, device_to_host, driver,
                                        launch_kernel)
-from numba.cuda.cudadrv import devices, drvapi
+from numba.cuda.cudadrv import devices, drvapi, driver as _driver
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import skip_on_cudasim
-
-from cuda import cuda as cuda_driver
 
 
 ptx1 = '''
@@ -94,7 +92,7 @@ class TestCudaDriver(CUDATestCase):
 
         if config.CUDA_USE_CUDA_PYTHON:
             ptr = c_void_p(int(ptr))
-            stream = cuda_driver.CUstream(stream)
+            stream = _driver.cuda_driver.CUstream(stream)
 
         launch_kernel(function.handle,  # Kernel
                       1,   1, 1,        # gx, gy, gz

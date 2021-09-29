@@ -111,8 +111,16 @@ class _EnvReloader(object):
         self.validate()
 
     def validate(self):
-        if CUDA_USE_CUDA_PYTHON and CUDA_PER_THREAD_DEFAULT_STREAM: # noqa: F821
-            warnings.warn("PTDS is not supported with CUDA Python")
+        if CUDA_USE_CUDA_PYTHON:  # noqa: F821
+            try:
+                import cuda  # noqa: F401
+            except ImportError as ie:
+                msg = ("CUDA Python bindings requested, "
+                       "but they are not importable")
+                raise RuntimeError(msg) from ie
+
+            if CUDA_PER_THREAD_DEFAULT_STREAM:  # noqa: F821
+                warnings.warn("PTDS is not supported with CUDA Python")
 
     def process_environ(self, environ):
         def _readenv(name, ctor, default):
@@ -166,8 +174,14 @@ class _EnvReloader(object):
             "NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS", int, 1)
 
         # Whether to use the official CUDA Python API
+        try:
+            import cuda  # noqa: F401
+            use_cuda_python_default = 1
+        except ImportError:
+            use_cuda_python_default = 0
+
         CUDA_USE_CUDA_PYTHON = _readenv(
-            "NUMBA_CUDA_USE_CUDA_PYTHON", int, 1)
+            "NUMBA_CUDA_USE_CUDA_PYTHON", int, use_cuda_python_default)
 
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)

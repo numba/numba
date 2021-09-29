@@ -7,8 +7,6 @@ from numba.cuda.cudadrv import driver, drvapi, devices
 from numba.cuda.testing import unittest, ContextResettingTestCase
 from numba.cuda.testing import skip_on_cudasim
 
-from cuda import cuda as cuda_driver
-
 
 @skip_on_cudasim('CUDA Memory API unsupported in the simulator')
 class TestCudaMemory(ContextResettingTestCase):
@@ -24,7 +22,7 @@ class TestCudaMemory(ContextResettingTestCase):
         self.assertTrue(driver.is_device_memory(obj))
         driver.require_device_memory(obj)
         if config.CUDA_USE_CUDA_PYTHON:
-            expected_class = cuda_driver.CUdeviceptr
+            expected_class = driver.cuda_driver.CUdeviceptr
         else:
             expected_class = drvapi.cu_device_ptr
         self.assertTrue(isinstance(obj.device_ctypes_pointer,
