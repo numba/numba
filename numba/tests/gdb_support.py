@@ -8,7 +8,7 @@ from numba.misc.gdb_hook import _confirm_gdb
 
 # check if gdb is present and working
 try:
-    _confirm_gdb()
+    _confirm_gdb(need_ptrace_attach=False) # The driver launches as `gdb EXE`.
     _HAVE_GDB = True
 except Exception:
     _HAVE_GDB = False

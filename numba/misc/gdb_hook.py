@@ -15,7 +15,14 @@ _unix_like = (_platform.startswith('linux') or
               ('bsd' in _platform))
 
 
-def _confirm_gdb():
+def _confirm_gdb(need_ptrace_attach=True):
+    """
+    Set need_ptrace_attach to True/False to indicate whether the ptrace attach
+    permission is needed for this gdb use case. Mode 0 (classic) or 1
+    (restricted ptrace) is required if need_ptrace_attach is True. See:
+    https://www.kernel.org/doc/Documentation/admin-guide/LSM/Yama.rst
+    for details on the modes.
+    """
     if not _unix_like:
         raise RuntimeError('gdb support is only available on unix-like systems')
     gdbloc = config.GDB_BINARY
@@ -34,7 +41,7 @@ def _confirm_gdb():
     if has_ptrace_scope:
         with open(ptrace_scope_file, 'rt') as f:
             value = f.readline().strip()
-        if value != "0":
+        if need_ptrace_attach and value not in ("0", "1"):
             msg = ("gdb can launch but cannot attach to the executing program"
                    " because ptrace permissions have been restricted at the "
                    "system level by the Linux security module 'Yama'.\n\n"
