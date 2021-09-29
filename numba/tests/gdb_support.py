@@ -32,7 +32,7 @@ class GdbMIDriver(object):
     Driver class for the GDB machine interface:
     https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI.html
     """
-    def __init__(self, file_name, debug=False, timeout=5):
+    def __init__(self, file_name, debug=False, timeout=10):
         if not _HAVE_PEXPECT:
             msg = ("This driver requires the pexpect module. This can be "
                    "obtained via:\n\n$ conda install pexpect")
