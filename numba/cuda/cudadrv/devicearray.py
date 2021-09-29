@@ -24,7 +24,6 @@ from numba.cuda.api_util import prepare_shape_strides_dtype
 from numba.core.errors import NumbaPerformanceWarning
 from warnings import warn
 
-
 try:
     lru_cache = getattr(functools, 'lru_cache')(None)
 except AttributeError:

@@ -248,6 +248,7 @@ class Driver(object):
 
     def _initialize_extras(self):
         if config.CUDA_USE_CUDA_PYTHON:
+            # The extras are only needed when using Numba's ctypes bindings
             return
 
         # set pointer to original cuIpcOpenMemHandle
