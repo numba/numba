@@ -25,7 +25,7 @@ from numba.core.retarget import BaseRetarget
 import numba.core.event as ev
 
 
-class TargetConfig:
+class TargetConfigurationStack:
     """The target configuration stack.
 
     Uses the BORG pattern and stores states in threadlocal storage.
@@ -1067,17 +1067,18 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         """Returns a dispatcher for the retarget request.
         """
         # Check TLS target configuration
-        tc = TargetConfig()
+        tc = TargetConfigurationStack()
         retarget = tc.get()
         retarget.check_compatible(self)
         disp = retarget.retarget(self)
         return disp
 
     def _get_dispatcher_for_current_target(self):
-        """Returns a dispatcher for the current target registered in `TargetConfig`.
-        `self` is returned if no target is specified.
+        """Returns a dispatcher for the current target registered in
+        `TargetConfigurationStack`. `self` is returned if no target is
+        specified.
         """
-        tc = TargetConfig()
+        tc = TargetConfigurationStack()
         if tc:
             return self._get_retarget_dispatcher()
         else:
