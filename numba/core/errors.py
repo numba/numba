@@ -11,7 +11,8 @@ import warnings
 import numba.core.config
 import numpy as np
 from collections import defaultdict
-from numba.core.utils import chain_exception
+from numba.core.utils import (chain_exception, use_old_style_errors,
+                              use_new_style_errors)
 from functools import wraps
 from abc import abstractmethod
 
@@ -821,14 +822,14 @@ def new_error_context(fmt_, *args, **kwargs):
         # Let assertion error pass through for shorter traceback in debugging
         raise
     except Exception as e:
-        if numba.core.config.CAPTURED_ERRORS == 'old_style':
+        if use_old_style_errors():
             newerr = errcls(e).add_context(_format_msg(fmt_, args, kwargs))
             if numba.core.config.FULL_TRACEBACKS:
                 tb = sys.exc_info()[2]
             else:
                 tb = None
             raise newerr.with_traceback(tb)
-        elif numba.core.config.CAPTURED_ERRORS == 'new_style':
+        elif use_new_style_errors():
             raise e
         else:
             assert 0

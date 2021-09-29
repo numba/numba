@@ -188,6 +188,13 @@ def use_new_style_errors():
     return config.CAPTURED_ERRORS == 'new_style'
 
 
+def use_old_style_errors():
+    """Returns True if old style errors are to be used, false otherwise"""
+    # This uses `config` so as to make sure it gets the current value from the
+    # module as e.g. some tests mutate the config with `override_config`.
+    return config.CAPTURED_ERRORS == 'old_style'
+
+
 class ConfigStack:
     """A stack for tracking target configurations in the compiler.
 

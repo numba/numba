@@ -162,7 +162,7 @@ class ConstraintNetwork(object):
                     )
                     errors.append(utils.chain_exception(new_exc, e))
                 except Exception as e:
-                    if config.CAPTURED_ERRORS == 'old_style':
+                    if utils.use_old_style_errors():
                         _logger.debug("captured error", exc_info=e)
                         msg = ("Internal error at {con}.\n{err}\n"
                                "Enable logging at debug level for details.")
@@ -172,7 +172,7 @@ class ConstraintNetwork(object):
                             highlighting=False,
                         )
                         errors.append(utils.chain_exception(new_exc, e))
-                    elif config.CAPTURED_ERRORS == 'new_style':
+                    elif utils.use_new_style_errors():
                         raise e
                     else:
                         assert 0
