@@ -2247,6 +2247,26 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
 
         foo()
 
+    def test_uncommon_identifiers(self):
+        # Tests uncommon identifiers like numerical values and operators in
+        # the key fields. See #6518 and #7416.
+
+        # Numerical values in keys
+        @njit
+        def foo():
+            d = {'0': np.ones(5), '1': 4}
+            return len(d)
+
+        self.assertPreciseEqual(foo(), foo.py_func())
+
+        # operators in keys
+        @njit
+        def bar():
+            d = {'+': np.ones(5), 'x--': 4}
+            return len(d)
+
+        self.assertPreciseEqual(bar(), bar.py_func())
+
 
 if __name__ == '__main__':
     unittest.main()

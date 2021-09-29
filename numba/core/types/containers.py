@@ -1,4 +1,3 @@
-from collections import namedtuple
 from collections.abc import Iterable
 from types import MappingProxyType
 
@@ -766,13 +765,22 @@ class LiteralStrKeyDict(Literal, ConstSized, Hashable):
     namedtuple with dict semantics).
     """
 
+    class FakeNamedTuple(object):
+        # This is namedtuple-like and is a workaround for #6518 and #7416.
+        # This has the couple of namedtuple properties that are used by Numba's
+        # internals but avoids use of an actual namedtuple as it cannot have
+        # numeric field names, i.e. `namedtuple('foo', '0 1')` is invalid.
+        def __init__(self, name, keys):
+            self.__name__ = name
+            self._fields = tuple(keys)
+
     mutable = False
 
     def __init__(self, literal_value, value_index=None):
         self._literal_init(literal_value)
         self.value_index = value_index
         strkeys = [x.literal_value for x in literal_value.keys()]
-        self.tuple_ty = namedtuple("_ntclazz", " ".join(strkeys))
+        self.tuple_ty = self.FakeNamedTuple("_ntclazz", strkeys)
         tys = [x for x in literal_value.values()]
         self.types = tuple(tys)
         self.count = len(self.types)
