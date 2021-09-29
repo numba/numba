@@ -60,9 +60,9 @@ class GdbMIDriver(object):
     def _captured_expect(self, expect):
         try:
             self._captured.expect(expect, timeout=self._timeout)
-        except pexpect.exceptions.TIMEOUT:
+        except pexpect.exceptions.TIMEOUT as e:
             msg = f"Expected value did not arrive: {expect}."
-            raise ValueError(msg)
+            raise ValueError(msg) from e
 
     def assert_output(self, expected):
         """Asserts that the current output string contains the expected."""
