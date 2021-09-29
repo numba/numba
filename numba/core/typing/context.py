@@ -10,6 +10,7 @@ import numba
 from numba.core import types, errors
 from numba.core.typeconv import Conversion, rules
 from numba.core.typing import templates
+from numba.core.utils import order_by_target_specificity
 from .typeof import typeof, Purpose
 
 from numba.core import utils
@@ -284,31 +285,11 @@ class BaseContext(object):
                 return attrty
 
     def find_matching_getattr_template(self, typ, attr):
-        from numba.core.target_extension import (target_registry,
-                                                 get_local_target)
 
         templates = list(self._get_attribute_templates(typ))
 
-        # get the current target target
-        target_hw = get_local_target(self)
-
-        # fish out templates that are specific to the target if a target is
-        # specified
-        DEFAULT_TARGET = 'generic'
-        usable = []
-        for ix, temp_cls in enumerate(templates):
-            md = getattr(temp_cls, "metadata", {})
-            hw = md.get('target', DEFAULT_TARGET)
-            if hw is not None:
-                hw_clazz = target_registry[hw]
-                if target_hw.inherits_from(hw_clazz):
-                    usable.append((temp_cls, hw_clazz, ix))
-
-        # sort templates based on target specificity
-        def key(x):
-            return target_hw.__mro__.index(x[1])
-
-        order = [x[0] for x in sorted(usable, key=key)]
+        # get the order in which to try templates
+        order = order_by_target_specificity(self, templates, fnkey=attr)
 
         for template in order:
             return_type = template.resolve(typ, attr)

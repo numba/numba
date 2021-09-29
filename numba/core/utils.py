@@ -279,6 +279,47 @@ class ConfigOptions(object):
         return hash(tuple(sorted(self._values.items())))
 
 
+def order_by_target_specificity(context, templates, fnkey=''):
+    """This orders the given templates from most to least specific against the
+    current "target". "fnkey" is an indicative typing key for use in the
+    exception message in the case that there's no usable templates for the
+    current "target".
+    """
+    # No templates... return early!
+    if templates == []:
+        return []
+
+    from numba.core.target_extension import target_registry, get_local_target
+    # get the current target
+    target_hw = get_local_target(context)
+
+    # fish out templates that are specific to the target if a target is
+    # specified
+    DEFAULT_TARGET = 'generic'
+    usable = []
+    for ix, temp_cls in enumerate(templates):
+        # ? Need to do something about this next line
+        md = getattr(temp_cls, "metadata", {})
+        hw = md.get('target', DEFAULT_TARGET)
+        if hw is not None:
+            hw_clazz = target_registry[hw]
+            if target_hw.inherits_from(hw_clazz):
+                usable.append((temp_cls, hw_clazz, ix))
+
+    # sort templates based on target specificity
+    def key(x):
+        return target_hw.__mro__.index(x[1])
+    order = [x[0] for x in sorted(usable, key=key)]
+
+    if not order:
+        msg = (f"Function resolution cannot find any matches for function "
+               f"'{fnkey}' for the current target: '{target_hw}'.")
+        from numba.core.errors import UnsupportedError
+        raise UnsupportedError(msg)
+
+    return order
+
+
 class SortedMap(Mapping):
     """Immutable
     """
