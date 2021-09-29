@@ -5624,15 +5624,13 @@ def arr_take_along_axis(arr, indices, axis):
     else:
         check_is_integer(axis, "axis")
         if not isinstance(axis, types.IntegerLiteral):
-            raise ValueError(
-                "axis must be a literal value (i.e. not an argument) for now"
-            )
+            raise errors.NumbaValueError("axis must be a literal value")
         axis = axis.literal_value
         if axis < 0:
             axis = arr.ndim + axis
 
         if axis < 0 or axis >= arr.ndim:
-            raise ValueError("axis is out of bounds")
+            raise errors.NumbaValueError("axis is out of bounds")
 
         Ni = tuple(range(axis))
         Nk = tuple(range(axis + 1, arr.ndim))
