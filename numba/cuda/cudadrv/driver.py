@@ -886,8 +886,13 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
         It is recommended that this method is not overridden by EMM Plugin
         implementations - instead, use the :class:`BaseCUDAMemoryManager`.
         """
-        if isinstance(pointer, int):
+        if isinstance(pointer, int) and not config.CUDA_USE_CUDA_PYTHON:
             pointer = c_void_p(pointer)
+
+        if config.CUDA_USE_CUDA_PYTHON:
+            alloc_key = pointer
+        else:
+            alloc_key = pointer.value
 
         # possible flags are "portable" (between context)
         # and "device-map" (map host memory to device thus no need
@@ -905,13 +910,13 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
         else:
             allocator()
 
-        finalizer = _pin_finalizer(self, pointer, mapped)
+        finalizer = _pin_finalizer(self, pointer, alloc_key, mapped)
         ctx = weakref.proxy(self.context)
 
         if mapped:
             mem = MappedMemory(ctx, pointer, size, owner=owner,
                                finalizer=finalizer)
-            self.allocations[mem.handle.value] = mem
+            self.allocations[alloc_key] = mem
             return mem.own()
         else:
             return PinnedMemory(ctx, pointer, size, owner=owner,
@@ -1600,7 +1605,7 @@ def _hostalloc_finalizer(memory_manager, ptr, alloc_key, size, mapped):
     return core
 
 
-def _pin_finalizer(memory_manager, handle, mapped):
+def _pin_finalizer(memory_manager, ptr, alloc_key, mapped):
     """
     Finalize temporary page-locking of host memory by `context.mempin`.
 
@@ -1617,8 +1622,8 @@ def _pin_finalizer(memory_manager, handle, mapped):
 
     def core():
         if mapped and allocations:
-            del allocations[handle.value]
-        driver.cuMemHostUnregister(handle)
+            del allocations[alloc_key]
+        driver.cuMemHostUnregister(ptr)
 
     return core
 
