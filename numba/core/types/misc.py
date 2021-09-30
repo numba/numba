@@ -4,6 +4,7 @@ from numba.core.types.common import (Dummy, IterableType, Opaque,
 from numba.core.typeconv import Conversion
 from numba.core.errors import TypingError, LiteralTypingError
 from numba.core.ir import UndefinedType
+from numba.core.utils import get_hashable_key
 
 
 class PyObject(Dummy):
@@ -88,14 +89,9 @@ class Omitted(Opaque):
 
     def __init__(self, value):
         self._value = value
-        # Because id(value) may not match when loading from disk,
-        # just return the value if we can hash it.
-        # See discussion in gh #6957
-        try:
-            hash(value)
-            self._value_key = value
-        except Exception:
-            self._value_key = id(value)
+        # Use helper function to support both hashable and non-hashable
+        # values. See discussion in gh #6957.
+        self._value_key = get_hashable_key(value)
         super(Omitted, self).__init__("omitted(default=%r)" % (value,))
 
     @property
