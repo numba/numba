@@ -395,7 +395,7 @@ metadata = dict(
         "numba.typed": ["py.typed"],
     },
     scripts=["numba/pycc/pycc", "bin/numba"],
-    url="https://numba.pydata.org/",
+    url="https://numba.pydata.org",
     packages=packages,
     setup_requires=build_requires,
     install_requires=install_requires,
