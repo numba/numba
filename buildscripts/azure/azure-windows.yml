@@ -12,12 +12,12 @@ jobs:
         PYTHON: '3.9'
         NUMPY: '1.20'
         CONDA_ENV: 'testenv'
-        TEST_START_INDEX: 17
+        TEST_START_INDEX: 20
       py37_np117:
         PYTHON: '3.7'
         NUMPY: '1.17'
         CONDA_ENV: 'testenv'
-        TEST_START_INDEX: 18
+        TEST_START_INDEX: 21
 
   steps:
     - task: CondaEnvironment@1
