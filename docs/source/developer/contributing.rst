@@ -35,13 +35,6 @@ Numba uses Discourse as a forum for longer running threads such as design
 discussions and roadmap planning. There are various categories available and it
 can be reached at: `numba.discourse.group <https://numba.discourse.group/>`_.
 
-Mailing-list
-''''''''''''
-
-We have a public mailing-list that you can e-mail at numba-users@anaconda.com.
-You can subscribe and read the archives on
-`Google Groups <https://groups.google.com/a/continuum.io/forum/#!forum/numba-users>`_.
-
 Weekly Meetings
 '''''''''''''''
 
