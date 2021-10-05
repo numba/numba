@@ -1874,6 +1874,14 @@ class ConvertSetItemPass:
 
 
 def _make_index_var(typemap, scope, index_vars, body_block, force_tuple=False):
+    """ When generating a SetItem call to an array in a parfor, the general
+    strategy is to generate a tuple if the array is more than 1 dimension.
+    If it is 1 dimensional then you can use a simple variable.  This routine
+    is also used when converting pndindex to parfor but pndindex requires a
+    tuple even if the iteration space is 1 dimensional.  The pndindex use of
+    this function will use force_tuple to make the output index a tuple even
+    if it is one dimensional.
+    """
     ndims = len(index_vars)
     loc = body_block.loc
     if ndims > 1 or force_tuple:
