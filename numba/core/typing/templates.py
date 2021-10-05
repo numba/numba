@@ -406,7 +406,7 @@ class CallableTemplate(FunctionTemplate):
         try:
             match_sig.bind(*args, **kws)
         except TypeError as e:
-            # ctor or bind failed, raise, if there's a
+            # bind failed, raise, if there's a
             # ValueError then there's likely unrecoverable
             # problems
             raise TypingError(str(e)) from e
@@ -781,11 +781,11 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         jitter = self._get_jit_decorator()
 
         # Get the overload implementation for the given types
+        ov_sig = inspect.signature(self._overload_func)
         try:
-            ov_sig = inspect.signature(self._overload_func)
             ov_sig.bind(*args, **kws)
         except TypeError as e:
-            # ctor or bind failed, raise, if there's a
+            # bind failed, raise, if there's a
             # ValueError then there's likely unrecoverable
             # problems
             raise TypingError(str(e)) from e
