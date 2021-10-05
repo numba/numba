@@ -48,13 +48,13 @@ class TestItaniumManager(unittest.TestCase):
         self.assertEqual(expect, got)
 
     def test_function(self):
-        got = itanium_mangler.mangle("what", [int32, float32])
+        got = itanium_mangler.mangle("what", [int32, float32], abi_tags=())
         expect = "_Z4whatif"
         self.assertEqual(expect, got)
 
-        got = itanium_mangler.mangle("a_little_brown_fox", [uint64,
-                                                            uint32,
-                                                            float64])
+        got = itanium_mangler.mangle("a_little_brown_fox",
+                                     [uint64, uint32, float64],
+                                     abi_tags=())
         expect = "_Z18a_little_brown_foxyjd"
         self.assertEqual(expect, got)
 
