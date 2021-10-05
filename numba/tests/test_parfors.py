@@ -1891,11 +1891,11 @@ class TestParfors(TestParforsBase):
                 x[i] = 1
             return x
 
-        def test_driver(impl_arg):
-            sz = (10, numba.literally(5))
+        def test_driver(impl_arg, first):
+            sz = (first, 5)
             return impl_arg(np.empty(sz), sz)
 
-        self.check(test_driver, test_impl)
+        self.check(test_driver, test_impl, 10)
 
     def test_tuple_arg_1d(self):
         def test_impl(x, sz):
@@ -1913,7 +1913,7 @@ class TestParfors(TestParforsBase):
             return x
 
         def test_driver(impl_arg):
-            sz = (numba.literally(10),)
+            sz = (10,)
             return impl_arg(np.empty(sz), sz)
 
         self.check(test_driver, test_impl)
