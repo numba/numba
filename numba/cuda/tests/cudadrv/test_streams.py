@@ -66,7 +66,7 @@ class TestCudaStream(CUDATestCase):
 
     @with_asyncio_loop
     async def test_multiple_async_done_multiple_streams(self):
-        streams = [ cuda.stream() for _ in range(4)]
+        streams = [cuda.stream() for _ in range(4)]
         done_aws = [stream.async_done() for stream in streams]
         done = await asyncio.gather(*done_aws)
 
