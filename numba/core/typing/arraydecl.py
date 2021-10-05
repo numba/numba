@@ -449,8 +449,8 @@ class ArrayAttribute(AttributeTemplate):
         assert not kws
         dtype, = args
         if isinstance(dtype, types.UnicodeType):
-            raise RequireLiteralValue("array.astype if dtype is a string \
-                 it must be constant")
+            raise RequireLiteralValue(("array.astype if dtype is a string it "
+                                       "must be constant"))
         dtype = parse_dtype(dtype)
         if dtype is None:
             return
