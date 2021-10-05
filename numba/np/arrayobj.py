@@ -5550,6 +5550,11 @@ def _take_along_axis_impl(
     # With addition of pre-broadcasting:
     # https://github.com/numpy/numpy/issues/19704
 
+    # Wrap axis, it's used in tuple_setitem so must be (axis >= 0) to ensure
+    # the GEP is in bounds.
+    if axis < 0:
+        axis = arr.ndim + axis
+
     # Broadcast the two arrays to matching shapes:
     arr_shape = list(arr.shape)
     arr_shape[axis] = 1
