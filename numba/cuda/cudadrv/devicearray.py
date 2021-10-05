@@ -20,6 +20,7 @@ from numba.core import types, config
 from numba.np.unsafe.ndarray import to_fixed_tuple
 from numba.misc import dummyarray
 from numba.np import numpy_support
+from numba.cuda.api_util import prepare_shape_strides_dtype
 from numba.core.errors import NumbaPerformanceWarning
 from warnings import warn
 
@@ -410,6 +411,80 @@ class DeviceRecord(DeviceNDArrayBase):
         """
         return numpy_support.from_dtype(self.dtype)
 
+    @devices.require_context
+    def __getitem__(self, item):
+        return self._do_getitem(item)
+
+    @devices.require_context
+    def getitem(self, item, stream=0):
+        """Do `__getitem__(item)` with CUDA stream
+        """
+        return self._do_getitem(item, stream)
+
+    def _do_getitem(self, item, stream=0):
+        stream = self._default_stream(stream)
+        typ, offset = self.dtype.fields[item]
+        newdata = self.gpu_data.view(offset)
+
+        if typ.shape == ():
+            if typ.names is not None:
+                return DeviceRecord(dtype=typ, stream=stream,
+                                    gpu_data=newdata)
+            else:
+                hostary = np.empty(1, dtype=typ)
+                _driver.device_to_host(dst=hostary, src=newdata,
+                                       size=typ.itemsize,
+                                       stream=stream)
+            return hostary[0]
+        else:
+            shape, strides, dtype = \
+                prepare_shape_strides_dtype(typ.shape,
+                                            None,
+                                            typ.subdtype[0], 'C')
+            return DeviceNDArray(shape=shape, strides=strides,
+                                 dtype=dtype, gpu_data=newdata,
+                                 stream=stream)
+
+    @devices.require_context
+    def __setitem__(self, key, value):
+        return self._do_setitem(key, value)
+
+    @devices.require_context
+    def setitem(self, key, value, stream=0):
+        """Do `__setitem__(key, value)` with CUDA stream
+        """
+        return self._do_setitem(key, value, stream=stream)
+
+    def _do_setitem(self, key, value, stream=0):
+
+        stream = self._default_stream(stream)
+
+        # If the record didn't have a default stream, and the user didn't
+        # provide a stream, then we will use the default stream for the
+        # assignment kernel and synchronize on it.
+        synchronous = not stream
+        if synchronous:
+            ctx = devices.get_context()
+            stream = ctx.get_default_stream()
+
+        # (1) prepare LHS
+
+        typ, offset = self.dtype.fields[key]
+        newdata = self.gpu_data.view(offset)
+
+        lhs = type(self)(dtype=typ, stream=stream, gpu_data=newdata)
+
+        # (2) prepare RHS
+
+        rhs, _ = auto_device(lhs.dtype.type(value), stream=stream)
+
+        # (3) do the copy
+
+        _driver.device_to_device(lhs, rhs, rhs.dtype.itemsize, stream)
+
+        if synchronous:
+            stream.synchronize()
+
 
 @lru_cache
 def _assign_kernel(ndim):
@@ -538,6 +613,7 @@ class DeviceNDArray(DeviceNDArrayBase):
     def __getitem__(self, item):
         return self._do_getitem(item)
 
+    @devices.require_context
     def getitem(self, item, stream=0):
         """Do `__getitem__(item)` with CUDA stream
         """
@@ -553,11 +629,16 @@ class DeviceNDArray(DeviceNDArrayBase):
             newdata = self.gpu_data.view(*extents[0])
 
             if not arr.is_array:
-                # Element indexing
-                hostary = np.empty(1, dtype=self.dtype)
-                _driver.device_to_host(dst=hostary, src=newdata,
-                                       size=self._dummy.itemsize,
-                                       stream=stream)
+                # Check for structured array type (record)
+                if self.dtype.names is not None:
+                    return DeviceRecord(dtype=self.dtype, stream=stream,
+                                        gpu_data=newdata)
+                else:
+                    # Element indexing
+                    hostary = np.empty(1, dtype=self.dtype)
+                    _driver.device_to_host(dst=hostary, src=newdata,
+                                           size=self._dummy.itemsize,
+                                           stream=stream)
                 return hostary[0]
             else:
                 return cls(shape=arr.shape, strides=arr.strides,
@@ -571,6 +652,7 @@ class DeviceNDArray(DeviceNDArrayBase):
     def __setitem__(self, key, value):
         return self._do_setitem(key, value)
 
+    @devices.require_context
     def setitem(self, key, value, stream=0):
         """Do `__setitem__(key, value)` with CUDA stream
         """

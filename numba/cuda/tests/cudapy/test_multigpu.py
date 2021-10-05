@@ -107,10 +107,33 @@ class TestMultiGPUContext(CUDATestCase):
         with cuda.gpus[1]:
             np.testing.assert_equal(arr2.copy_to_host(), (hostarr + 2))
 
+    @unittest.skipIf(len(cuda.gpus) < 2, "need more than 1 gpus")
+    def test_with_context_peer_copy(self):
+        # Peer access is not always possible - for example, with one GPU in TCC
+        # mode and one in WDDM - if that is the case, this test would fail so
+        # we need to skip it.
         with cuda.gpus[0]:
-            # Transfer from GPU1 to GPU0
-            arr1.copy_to_device(arr2)
-            np.testing.assert_equal(arr1.copy_to_host(), (hostarr + 2))
+            ctx = cuda.current_context()
+            if not ctx.can_access_peer(1):
+                self.skipTest('Peer access between GPUs disabled')
+
+        # 1. Create a range in an array
+        hostarr = np.arange(10, dtype=np.float32)
+
+        # 2. Copy range array from host -> GPU 0
+        with cuda.gpus[0]:
+            arr1 = cuda.to_device(hostarr)
+
+        # 3. Initialize a zero-filled array on GPU 1
+        with cuda.gpus[1]:
+            arr2 = cuda.to_device(np.zeros_like(hostarr))
+
+        with cuda.gpus[0]:
+            # 4. Copy range from GPU 0 -> GPU 1
+            arr2.copy_to_device(arr1)
+
+            # 5. Copy range from GPU 1 -> host and check contents
+            np.testing.assert_equal(arr2.copy_to_host(), hostarr)
 
 
 if __name__ == '__main__':

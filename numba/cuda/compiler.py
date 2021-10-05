@@ -18,7 +18,8 @@ from numba.core.compiler_lock import global_compiler_lock
 from numba.core.compiler_machinery import (LoweringPass, PassManager,
                                            register_pass)
 from numba.core.dispatcher import OmittedArg
-from numba.core.errors import NumbaDeprecationWarning
+from numba.core.errors import (NumbaDeprecationWarning,
+                               NumbaInvalidConfigWarning)
 from numba.core.typed_passes import IRLegalization, NativeLowering
 from numba.core.typing.typeof import Purpose, typeof
 from warnings import warn
@@ -212,6 +213,12 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
     :return: (ptx, resty): The PTX code and inferred return type
     :rtype: tuple
     """
+    if debug and opt:
+        msg = ("debug=True with opt=True (the default) "
+               "is not supported by CUDA. This may result in a crash"
+               " - set debug=False or opt=False.")
+        warn(NumbaInvalidConfigWarning(msg))
+
     nvvm_options = {
         'debug': debug,
         'lineinfo': lineinfo,

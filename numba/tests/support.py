@@ -32,6 +32,7 @@ from numba.core.compiler import compile_extra, compile_isolated, Flags, DEFAULT_
 import unittest
 from numba.core.runtime import rtsys
 from numba.np import numpy_support
+from numba.pycc.platform import _external_compiler_ok
 
 
 try:
@@ -120,6 +121,12 @@ needs_blas = unittest.skipUnless(has_blas, "BLAS needs SciPy 1.0+")
 # with this environment variable set.
 _exec_cond = os.environ.get('SUBPROC_TEST', None) == '1'
 needs_subprocess = unittest.skipUnless(_exec_cond, "needs subprocess harness")
+
+
+# decorate for test needs external compilers
+needs_external_compilers = unittest.skipIf(not _external_compiler_ok,
+                                           ('Compatible external compilers are '
+                                            'missing'))
 
 
 def ignore_internal_warnings():

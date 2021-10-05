@@ -270,7 +270,6 @@ def array_dot_chain(a, b):
 def array_ctor(n, dtype):
     return np.ones(n, dtype=dtype)
 
-
 class TestArrayMethods(MemoryLeakMixin, TestCase):
     """
     Test various array methods and array-related functions.
@@ -1471,7 +1470,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         np.testing.assert_array_equal(pyfunc(*args), cfunc(*args))
         args = n, np.dtype('f4')
         np.testing.assert_array_equal(pyfunc(*args), cfunc(*args))
-
 
 class TestArrayComparisons(TestCase):
 
