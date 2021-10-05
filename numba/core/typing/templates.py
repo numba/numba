@@ -882,22 +882,17 @@ def make_overload_template(func, overload_func, jit_options, strict,
     return type(base)(name, (base,), dct)
 
 
-class _IntrinsicTemplate(AbstractTemplate):
-    """
-    A base class of templates for intrinsic definition
-    """
+class _TemplateTargetHelperMixin(object):
+    """Mixin for helper methods that assist with target/registry resolution"""
 
-    def generic(self, args, kws):
-        """
-        Type the intrinsic by the arguments.
+    def _get_target_registry(self):
+        """Returns the registry for the current target
         """
         from numba.core.target_extension import (_get_local_target_checked,
                                                  dispatcher_registry)
-        from numba.core.imputils import builtin_registry
-
-        cache_key = self.context, args, tuple(kws.items())
         hwstr = self.metadata.get('target', 'generic')
-        target_hw = _get_local_target_checked(self.context, hwstr, "intrinsic")
+        target_hw = _get_local_target_checked(self.context, hwstr, "attribute")
+        # Get resgistry for the current hardware
         disp = dispatcher_registry[target_hw]
         tgtctx = disp.targetdescr.target_context
         # This is all workarounds...
@@ -929,7 +924,20 @@ class _IntrinsicTemplate(AbstractTemplate):
             # Pick a registry in which to install intrinsics
             registries = iter(tgtctx._registries)
             reg = next(registries)
-        lower_builtin = reg.lower
+        return reg
+
+
+class _IntrinsicTemplate(AbstractTemplate, _TemplateTargetHelperMixin):
+    """
+    A base class of templates for intrinsic definition
+    """
+
+    def generic(self, args, kws):
+        """
+        Type the intrinsic by the arguments.
+        """
+        lower_builtin = self._get_target_registry().lower
+        cache_key = self.context, args, tuple(kws.items())
         try:
             return self._impl_cache[cache_key]
         except KeyError:
@@ -1007,7 +1015,7 @@ class AttributeTemplate(object):
     generic_resolve = NotImplemented
 
 
-class _OverloadAttributeTemplate(AttributeTemplate):
+class _OverloadAttributeTemplate(AttributeTemplate, _TemplateTargetHelperMixin):
     """
     A base class of templates for @overload_attribute functions.
     """
@@ -1017,25 +1025,6 @@ class _OverloadAttributeTemplate(AttributeTemplate):
         super(_OverloadAttributeTemplate, self).__init__(context)
         self.context = context
         self._init_once()
-
-    def _get_target_registry(self):
-        """Returns the registry for the current target
-        """
-        from numba.core.target_extension import (_get_local_target_checked,
-                                                 dispatcher_registry)
-        hwstr = self.metadata.get('target', 'generic')
-        target_hw = _get_local_target_checked(self.context, hwstr, "attribute")
-        # Get resgistry for the current hardware
-        disp = dispatcher_registry[target_hw]
-        tgtctx = disp.targetdescr.target_context
-        tgtctx.refresh()
-        if builtin_registry in tgtctx._registries:
-            reg = builtin_registry
-        else:
-            # Pick a registry in which to install intrinsics
-            registries = iter(tgtctx._registries)
-            reg = next(registries)
-        return reg
 
     def _init_once(self):
         cls = type(self)
