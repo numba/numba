@@ -4,6 +4,7 @@
 Tests the parallel backend
 """
 import faulthandler
+import itertools
 import multiprocessing
 import os
 import random
@@ -520,6 +521,80 @@ class TestThreadingLayerSelection(ThreadLayerTestHelper):
 
 
 TestThreadingLayerSelection.generate()
+
+
+@skip_parfors_unsupported
+class TestThreadingLayerPriority(ThreadLayerTestHelper):
+
+    def each_env_var(self, env_var: str):
+        """Test setting priority via env var NUMBA_THREADING_LAYER_PRIORITY.
+
+        :return: threading_layer_priority, stderr
+            (containing ``@threading_layer@``)
+        """
+        env = os.environ.copy()
+        env['NUMBA_THREADING_LAYER'] = 'default'
+        env['NUMBA_THREADING_LAYER_PRIORITY'] = env_var
+
+        code = """import sys
+import numba
+
+# trigger threading layer decision
+# hence catching invalid THREADING_LAYER_PRIORITY
+@numba.jit(
+    'float64[::1](float64[::1], float64[::1])',
+    nopython=True,
+    parallel=True,
+)
+def plus(x, y):
+    return x + y
+
+print(' '.join(numba.config.THREADING_LAYER_PRIORITY))
+print("@%s@" % numba.threading_layer(), file=sys.stderr)
+"""
+        cmd = [
+            sys.executable,
+            '-c',
+            code,
+        ]
+        return self.run_cmd(cmd, env=env)
+
+    def test_valid_env_var(self):
+        default = ['tbb', 'omp', 'workqueue']
+        for p in itertools.permutations(default):
+            env_var = ' '.join(p)
+            threading_layer_priority, _ = self.each_env_var(env_var)
+            self.assertEqual(threading_layer_priority.strip(), env_var)
+
+    def test_invalid_env_var(self):
+        env_var = 'tbb omp workqueue notvalidhere'
+        with self.assertRaises(AssertionError) as raises:
+            self.each_env_var(env_var)
+        for msg in (
+            "THREADING_LAYER_PRIORITY invalid:",
+            "It must be a permutation of"
+        ):
+            self.assertIn(f"{msg}", str(raises.exception))
+
+    @skip_no_omp
+    def test_omp(self):
+        for env_var in ("omp tbb workqueue", "omp workqueue tbb"):
+            threading_layer_priority, out = self.each_env_var(env_var)
+            self.assertEqual(threading_layer_priority.strip(), env_var)
+            self.assertIn("@omp@", out)
+
+    @skip_no_tbb
+    def test_tbb(self):
+        for env_var in ("tbb omp workqueue", "tbb workqueue omp"):
+            threading_layer_priority, out = self.each_env_var(env_var)
+            self.assertEqual(threading_layer_priority.strip(), env_var)
+            self.assertIn("@tbb@", out)
+
+    def test_workqueue(self):
+        for env_var in ("workqueue tbb omp", "workqueue omp tbb"):
+            threading_layer_priority, out = self.each_env_var(env_var)
+            self.assertEqual(threading_layer_priority.strip(), env_var)
+            self.assertIn("@workqueue@", out)
 
 
 @skip_parfors_unsupported
