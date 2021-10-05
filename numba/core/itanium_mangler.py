@@ -130,7 +130,7 @@ def mangle_identifier(ident, template_params='', *, abi_tags=()):
 
     This treats '.' as '::' in C++.
     """
-    assert isinstance(abi_tags, (tuple, list))
+    assert isinstance(abi_tags, (tuple, list)), abi_tags
     parts = [_len_encoded(_escape_string(x)) for x in ident.split('.')]
     enc_abi_tags = ["B" + _len_encoded(_escape_string(x)) for x in abi_tags]
     extras = template_params + ''.join(enc_abi_tags)

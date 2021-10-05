@@ -211,9 +211,12 @@ class TargetConfig(metaclass=_MetaTargetConfig):
     def _summary_args(self):
         args = []
         for k in self.options:
+            opt = self.options[k]
             if self.is_set(k):
-                v = (k, getattr(self, k))
-                args.append(v)
+                flagval = getattr(self, k)
+                if opt.default != flagval:
+                    v = (k, flagval)
+                    args.append(v)
         return args
 
     def get_mangle_string(self):

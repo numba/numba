@@ -2,6 +2,7 @@
 Function descriptors.
 """
 
+import inspect
 from collections import defaultdict
 import importlib
 
@@ -10,6 +11,7 @@ from numba.core.utils import _dynamic_modname, _dynamic_module
 
 
 def default_mangler(name, argtypes, abi_tags):
+    assert isinstance(abi_tags, (tuple, list))
     return itanium_mangler.mangle(name, argtypes, abi_tags)
 
 
@@ -19,6 +21,16 @@ def qualifying_prefix(modname, qualname):
     """
     # XXX choose a different convention for object mode
     return '{}.{}'.format(modname, qualname) if modname else qualname
+
+
+def _adapt_mangler(mangler):
+    def wrap(name, argtypes, abi_tags):
+        return mangler(name, argtypes)
+    sig = inspect.signature(mangler)
+    if 'abi_tags' in sig.parameters:
+        return mangler
+    else:
+        return wrap
 
 
 class FunctionDescriptor(object):
@@ -38,7 +50,7 @@ class FunctionDescriptor(object):
     def __init__(self, native, modname, qualname, unique_name, doc,
                  typemap, restype, calltypes, args, kws, mangler=None,
                  argtypes=None, inline=False, noalias=False, env_name=None,
-                 global_dict=None, abi_tags=None):
+                 global_dict=None, abi_tags=()):
         self.native = native
         self.modname = modname
         self.global_dict = global_dict
@@ -60,7 +72,9 @@ class FunctionDescriptor(object):
             # Get argument types from the type inference result
             # (note the "arg.FOO" convention as used in typeinfer
             self.argtypes = tuple(self.typemap['arg.' + a] for a in args)
-        mangler = default_mangler if mangler is None else mangler
+        mangler = _adapt_mangler(
+            default_mangler if mangler is None else mangler,
+        )
         # The mangled name *must* be unique, else the wrong function can
         # be chosen at link time.
         qualprefix = qualifying_prefix(self.modname, self.unique_name)
