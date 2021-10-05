@@ -397,6 +397,7 @@ class TestProduct(TestCase):
         b = np.arange(24.).reshape(4,3,2)
         assert_same_as_py(a, b, ((1, 0), (0, 1)))
 
+    @needs_blas
     def test_tensordot_numpy(self):
         """
         Tests based on the NumPy tensordot tests:
