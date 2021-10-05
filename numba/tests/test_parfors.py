@@ -1855,16 +1855,39 @@ class TestParfors(TestParforsBase):
             for i in numba.pndindex(sz):
                 x[i] = 1
             return x
-        sz = (10,10)
+        sz = (10, 5)
         self.check(test_impl, np.empty(sz), sz)
 
+    def test_tuple_for_pndindex(self):
+        def test_impl(x):
+            sz = (10, 5)
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10, 5)
+        self.check(test_impl, np.empty(sz))
+
+    def test_tuple_for_pndindex_with_literally(self):
+        def test_impl(x):
+            sz = (10, numba.literally(5))
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10,5)
+        self.check(test_impl, np.empty(sz))
+
     def test_tuple_arg_literal(self):
+        @njit(parallel=True)
         def test_impl(x, sz):
             for i in numba.pndindex(sz):
                 x[i] = 1
             return x
-        sz = (10,numba.literally(10))
-        self.check(test_impl, np.empty(sz), sz)
+
+        def test_driver():
+            sz = (10, numba.literally(5))
+            return test_impl(np.empty(sz), sz)
+
+        self.check(test_driver)
 
     def test_tuple_arg_1d(self):
         def test_impl(x, sz):
@@ -1875,12 +1898,17 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, np.empty(sz), sz)
 
     def test_tuple_arg_1d_literal(self):
+        @njit(parallel=True)
         def test_impl(x, sz):
             for i in numba.pndindex(sz):
                 x[i] = 1
             return x
-        sz = (numba.literally(10),)
-        self.check(test_impl, np.empty(sz), sz)
+
+        def test_driver():
+            sz = (numba.literally(10),)
+            return test_impl(np.empty(sz), sz)
+
+        self.check(test_driver, np.empty(sz), sz)
 
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
