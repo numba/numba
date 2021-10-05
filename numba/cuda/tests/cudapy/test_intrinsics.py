@@ -67,6 +67,54 @@ def simple_fma(ary, a, b, c):
     ary[0] = cuda.fma(a, b, c)
 
 
+def simple_hadd(ary, a, b):
+    ary[0] = cuda.fp16.hadd(a[0], b[0])
+
+
+def simple_hadd_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hadd(a, b)
+
+
+def simple_hfma(ary, a, b, c):
+    ary[0] = cuda.fp16.hfma(a[0], b[0], c[0])
+
+
+def simple_hfma_scalar(ary, a, b, c):
+    ary[0] = cuda.fp16.hfma(a, b, c)
+
+
+def simple_hsub(ary, a, b):
+    ary[0] = cuda.fp16.hsub(a[0], b[0])
+
+
+def simple_hsub_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hsub(a, b)
+
+
+def simple_hmul(ary, a, b):
+    ary[0] = cuda.fp16.hmul(a[0], b[0])
+
+
+def simple_hmul_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hmul(a, b)
+
+
+def simple_hneg(ary, a):
+    ary[0] = cuda.fp16.hneg(a[0])
+
+
+def simple_hneg_scalar(ary, a):
+    ary[0] = cuda.fp16.hneg(a)
+
+
+def simple_habs(ary, a):
+    ary[0] = cuda.fp16.habs(a[0])
+
+
+def simple_habs_scalar(ary, a):
+    ary[0] = cuda.fp16.habs(a)
+
+
 def simple_cbrt(ary, a):
     ary[0] = cuda.cbrt(a)
 
@@ -291,6 +339,106 @@ class TestCudaIntrinsic(CUDATestCase):
         ary = np.zeros(1, dtype=np.float64)
         compiled[1, 1](ary, 2., 3., 4.)
         np.testing.assert_allclose(ary[0], 2 * 3 + 4)
+
+    def test_hadd(self):
+        compiled = cuda.jit("void(f2[:], f2[:], f2[:])")(simple_hadd)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.array([3.], dtype=np.float16)
+        arg2 = np.array([4.], dtype=np.float16)
+        compiled[1, 1](ary, arg1, arg2)
+        np.testing.assert_allclose(ary[0], arg1 + arg2)
+
+    def test_hadd_scalar(self):
+        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hadd_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(3.1415926)
+        arg2 = np.float16(3.)
+        compiled[1, 1](ary, arg1, arg2)
+        ref = arg1 + arg2
+        np.testing.assert_allclose(ary[0], ref)
+
+    def test_hfma(self):
+        compiled = cuda.jit("void(f2[:], f2[:], f2[:], f2[:])")(simple_hfma)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.array([2.], dtype=np.float16)
+        arg2 = np.array([3.], dtype=np.float16)
+        arg3 = np.array([4.], dtype=np.float16)
+        compiled[1, 1](ary, arg1, arg2, arg3)
+        np.testing.assert_allclose(ary[0], arg1 * arg2 + arg3)
+
+    def test_hfma_scalar(self):
+        compiled = cuda.jit("void(f2[:], f2, f2, f2)")(simple_hfma_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(2.)
+        arg2 = np.float16(3.)
+        arg3 = np.float16(4.)
+        compiled[1, 1](ary, arg1, arg2, arg3)
+        ref = arg1 * arg2 + arg3
+        np.testing.assert_allclose(ary[0], ref)
+
+    def test_hsub(self):
+        compiled = cuda.jit("void(f2[:], f2[:], f2[:])")(simple_hsub)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.array([3.], dtype=np.float16)
+        arg2 = np.array([4.], dtype=np.float16)
+        compiled[1, 1](ary, arg1, arg2)
+        np.testing.assert_allclose(ary[0], arg1 - arg2)
+
+    def test_hsub_scalar(self):
+        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hsub_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(3.1415926)
+        arg2 = np.float16(1.57)
+        compiled[1, 1](ary, arg1, arg2)
+        ref = arg1 - arg2
+        np.testing.assert_allclose(ary[0], ref)
+
+    def test_hmul(self):
+        compiled = cuda.jit("void(f2[:], f2[:], f2[:])")(simple_hmul)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.array([3.], dtype=np.float16)
+        arg2 = np.array([4.], dtype=np.float16)
+        compiled[1, 1](ary, arg1, arg2)
+        np.testing.assert_allclose(ary[0], arg1 * arg2)
+
+    def test_hmul_scalar(self):
+        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hmul_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(3.1415926)
+        arg2 = np.float16(1.57)
+        compiled[1, 1](ary, arg1, arg2)
+        ref = arg1 * arg2
+        np.testing.assert_allclose(ary[0], ref)
+
+    def test_hneg(self):
+        compiled = cuda.jit("void(f2[:], f2[:])")(simple_hneg)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.array([3.], dtype=np.float16)
+        compiled[1, 1](ary, arg1)
+        np.testing.assert_allclose(ary[0], -arg1)
+
+    def test_hneg_scalar(self):
+        compiled = cuda.jit("void(f2[:], f2)")(simple_hneg_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(3.1415926)
+        compiled[1, 1](ary, arg1)
+        ref = -arg1
+        np.testing.assert_allclose(ary[0], ref)
+
+    def test_habs(self):
+        compiled = cuda.jit("void(f2[:], f2[:])")(simple_habs)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.array([-3.], dtype=np.float16)
+        compiled[1, 1](ary, arg1)
+        np.testing.assert_allclose(ary[0], abs(arg1))
+
+    def test_habs_scalar(self):
+        compiled = cuda.jit("void(f2[:], f2)")(simple_habs_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(-3.1415926)
+        compiled[1, 1](ary, arg1)
+        ref = abs(arg1)
+        np.testing.assert_allclose(ary[0], ref)
 
     def test_cbrt_f32(self):
         compiled = cuda.jit("void(float32[:], float32)")(simple_cbrt)

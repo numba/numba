@@ -304,6 +304,24 @@ class FakeCUDAModule(object):
     def fma(self, a, b, c):
         return a * b + c
 
+    def hadd(self, a, b):
+        return a + b
+
+    def hsub(self, a, b):
+        return a + b
+
+    def hmul(self, a, b):
+        return a + b
+
+    def hfma(self, a, b, c):
+        return a * b + c
+
+    def hneg(self, a):
+        return -a
+
+    def habs(self, a):
+        return abs(a)
+
     def cbrt(self, a):
         return a ** (1 / 3)
 

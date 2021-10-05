@@ -6,7 +6,6 @@ import os
 import sys
 
 import numpy as np
-
 from numba import _dispatcher
 from numba.core.typing.templates import AbstractTemplate, ConcreteTemplate
 from numba.core import (types, typing, utils, funcdesc, serialize, config,
@@ -814,6 +813,10 @@ class _Kernel(serialize.ReduceMixin):
 
         elif isinstance(ty, types.Integer):
             cval = getattr(ctypes, "c_%s" % ty)(val)
+            kernelargs.append(cval)
+
+        elif ty == types.float16:
+            cval = ctypes.c_uint16(np.float16(val).view(np.uint16))
             kernelargs.append(cval)
 
         elif ty == types.float64:

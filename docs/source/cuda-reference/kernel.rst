@@ -463,6 +463,51 @@ precision parts of the CUDA Toolkit documentation.
    ``cbrt`` and ``cbrtf`` in the C api. Supports float32, and float64 arguments
    only.
 
+16-bit Floating Point Intrinsics
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. function:: numba.cuda.fp16.hfma (a, b, c)
+
+   Perform the fused multiply-add operation ``(a * b) + c`` on 16-bit
+   floating point arguments in round to nearest mode. Maps to the ``fma.rn.f16``
+   PTX instruction.
+
+   Returns the fp16 result of the fused multiply-add.
+
+.. function:: numba.cuda.fp16.hadd (a, b)
+
+   Perform the add operation ``a + b`` on 16-bit floating point arguments in
+   round to nearest mode. Maps to the ``add.f16`` PTX instruction.
+
+   Returns the 16-bit floating point result of the addition.
+
+.. function:: numba.cuda.fp16.hsub (a, b)
+
+   Perform the subtract operation ``a - b`` on 16-bit floating point arguments in
+   round to nearest mode. Maps to the ``sub.f16`` PTX instruction.
+
+   Returns the 16-bit floating point result of the subtraction.
+
+.. function:: numba.cuda.fp16.hmul (a, b)
+
+   Perform the multiply operation ``a * b`` on 16-bit floating point arguments in
+   round to nearest mode. Maps to the ``mul.f16`` PTX instruction.
+
+   Returns the 16-bit floating point result of the multiplication.
+
+.. function:: numba.cuda.fp16.hneg (a)
+
+   Perform the negation operation ``-a`` on 1the 6-bit floating point argument.
+   Maps to the ``neg.f16`` PTX instruction.
+
+   Returns the 16-bit floating point result of the negation.
+
+.. function:: numba.cuda.fp16.habs (a)
+
+   Perform the absolute value operation ``|a|`` on 1the 6-bit floating point argument.
+   Maps to the ``abs.f16`` PTX instruction.
+
+   Returns the 16-bit floating point result of the absolute value operation.
 
 Control Flow Instructions
 ~~~~~~~~~~~~~~~~~~~~~~~~~

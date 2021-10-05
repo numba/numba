@@ -87,6 +87,7 @@ u2 = uint16
 u4 = uint32
 u8 = uint64
 
+f2 = float16
 f4 = float32
 f8 = float64
 
