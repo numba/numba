@@ -1891,11 +1891,11 @@ class TestParfors(TestParforsBase):
                 x[i] = 1
             return x
 
-        def test_driver():
+        def test_driver(impl_arg):
             sz = (10, numba.literally(5))
-            return test_impl(np.empty(sz), sz)
+            return impl_arg(np.empty(sz), sz)
 
-        self.check(test_driver)
+        self.check(test_driver, test_impl)
 
     def test_tuple_arg_1d(self):
         def test_impl(x, sz):
@@ -1912,11 +1912,11 @@ class TestParfors(TestParforsBase):
                 x[i] = 1
             return x
 
-        def test_driver():
+        def test_driver(impl_arg):
             sz = (numba.literally(10),)
-            return test_impl(np.empty(sz), sz)
+            return impl_arg(np.empty(sz), sz)
 
-        self.check(test_driver)
+        self.check(test_driver, test_impl)
 
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
