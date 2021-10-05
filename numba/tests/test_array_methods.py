@@ -496,9 +496,9 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         unicode_val = "float32"
         with self.assertTypingError() as raises:
             @jit(nopython=True)
-+            def foo(dtype):
-+                np.array([1]).astype(dtype)
-+            foo(unicode_val)
+            def foo(dtype):
+                np.array([1]).astype(dtype)
+            foo(unicode_val)
         self.assertIn('array.astype if dtype is a string it must be constant',
                       str(raises.exception))
 
