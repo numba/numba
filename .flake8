@@ -112,7 +112,6 @@ exclude =
     numba/tests/test_func_lifetime.py
     numba/tests/test_typeinfer.py
     numba/tests/test_return_values.py
-    numba/tests/test_mangling.py
     numba/tests/test_npdatetime.py
     numba/tests/test_fancy_indexing.py
     numba/tests/support.py
@@ -198,7 +197,6 @@ exclude =
     numba/tests/test_cgutils.py
     numba/tests/test_complex.py
     numba/tests/test_hashing.py
-    numba/tests/test_itanium_mangler.py
     numba/tests/test_sys_stdin_assignment.py
     numba/tests/test_ufuncs.py
     numba/tests/pdlike_usecase.py
