@@ -4303,6 +4303,7 @@ def array_ascontiguousarray(context, builder, sig, args):
 
 
 @lower_builtin("array.astype", types.Array, types.DTypeSpec)
+@lower_builtin("array.astype", types.Array, types.StringLiteral)
 def array_astype(context, builder, sig, args):
     arytype = sig.args[0]
     ary = make_array(arytype)(context, builder, value=args[0])
