@@ -1297,11 +1297,9 @@ class Context(object):
 
     def _cuda_python_max_potential_block_size(self, func, b2d_func, memsize,
                                               blocksizelimit, flags):
-        # XXX: This is rather horrible
-        b2d_cb = cu_occupancy_b2d_size(b2d_func)
-        ptr = ctypes.cast(addressof(b2d_cb), ctypes.POINTER(ctypes.c_ulonglong))
-        deref = ptr.contents.value
-        driver_b2d_cb = cuda_driver.CUoccupancyB2DSize(deref)
+        b2d_cb = ctypes.CFUNCTYPE(c_size_t, c_int)(b2d_func)
+        ptr = int.from_bytes(b2d_cb, byteorder='little')
+        driver_b2d_cb = cuda_driver.CUoccupancyB2DSize(ptr)
         args = [func.handle, driver_b2d_cb, memsize, blocksizelimit]
 
         if not flags:
@@ -2234,12 +2232,9 @@ class Stream(object):
         data = (self, callback, arg)
         _py_incref(data)
         if config.CUDA_USE_CUDA_PYTHON:
-            # XXX: This is rather horrible
-            ptr = ctypes.cast(addressof(self._stream_callback),
-                              ctypes.POINTER(ctypes.c_ulonglong))
-            deref = ptr.contents.value
-            stream_callback = cuda_driver.CUstreamCallback(deref)
-            # XXX: This is even more horrible!
+            ptr = int.from_bytes(self._stream_callback, byteorder='little')
+            stream_callback = cuda_driver.CUstreamCallback(ptr)
+            # The callback needs to receive a pointer to the data PyObject
             data = id(data)
         else:
             stream_callback = self._stream_callback
