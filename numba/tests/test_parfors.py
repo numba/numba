@@ -1925,6 +1925,13 @@ class TestParfors(TestParforsBase):
         sz = (10,)
         self.check(test_impl, np.zeros(sz))
 
+    def test_int_arg_pndindex(self):
+        def test_impl(x, sz):
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        self.check(test_impl, np.zeros((10, 10)), 3)
+
 
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
