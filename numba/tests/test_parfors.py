@@ -1874,6 +1874,88 @@ class TestParfors(TestParforsBase):
         x = np.ones((2, 2, 2, 2, 2, 15))
         self.check(test_impl, x)
 
+    def test_tuple_arg(self):
+        def test_impl(x, sz):
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10, 5)
+        self.check(test_impl, np.empty(sz), sz)
+
+    def test_tuple_arg_not_whole_array(self):
+        def test_impl(x, sz):
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10, 5)
+        self.check(test_impl, np.zeros(sz), (10, 3))
+
+    def test_tuple_for_pndindex(self):
+        def test_impl(x):
+            sz = (10, 5)
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10, 5)
+        self.check(test_impl, np.zeros(sz))
+
+    def test_tuple_arg_literal(self):
+        def test_impl(x, first):
+            sz = (first, 5)
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10, 5)
+        self.check(test_impl, np.zeros(sz), 10)
+
+    def test_tuple_of_literal_nonliteral(self):
+        # This test has to be done manually as the self.check uses
+        # compile_isolated and one function cannot "see" the other
+
+        def test_impl(x, sz):
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+
+        def call(x, fn):
+            return fn(x, (10, 3)) # Only want to iterate to the 3rd
+
+        get_input = lambda: np.zeros((10, 10))
+        expected = call(get_input(), test_impl)
+
+        def check(dec):
+            f1 = dec(test_impl)
+            f2 = njit(call) # no parallel semantics in the caller
+            got = f2(get_input(), f1)
+            self.assertPreciseEqual(expected, got)
+
+        for d in (njit, njit(parallel=True)):
+            check(d)
+
+    def test_tuple_arg_1d(self):
+        def test_impl(x, sz):
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10,)
+        self.check(test_impl, np.zeros(sz), sz)
+
+    def test_tuple_arg_1d_literal(self):
+        def test_impl(x):
+            sz = (10,)
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10,)
+        self.check(test_impl, np.zeros(sz))
+
+    def test_int_arg_pndindex(self):
+        def test_impl(x, sz):
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        self.check(test_impl, np.zeros((10, 10)), 3)
+
 
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
