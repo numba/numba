@@ -464,7 +464,7 @@ precision parts of the CUDA Toolkit documentation.
    only.
 
 16-bit Floating Point Intrinsics
-~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. function:: numba.cuda.fp16.hfma (a, b, c)
 
