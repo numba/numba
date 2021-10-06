@@ -607,7 +607,7 @@ def real_divmod(context, builder, x, y):
     floatty = x.type
 
     module = builder.module
-    fname = context.mangler(".numba.python.rem", [x.type], abi_tags=())
+    fname = context.mangler(".numba.python.rem", [x.type])
     fnty = Type.function(floatty, (floatty, floatty, Type.pointer(floatty)))
     fn = cgutils.get_or_insert_function(module, fnty, fname)
 

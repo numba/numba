@@ -31,7 +31,7 @@ scheme for them to avoid leading digits.
 
 import re
 
-from numba.core import types, utils
+from numba.core import types
 
 
 # According the scheme, valid characters for mangled names are [a-zA-Z0-9_$].
@@ -124,13 +124,12 @@ def _len_encoded(string):
 
 def mangle_identifier(ident, template_params='', *, abi_tags=()):
     """
-    Mangle the identifier with optional template parameters.
+    Mangle the identifier with optional template parameters and abi_tags.
 
     Note:
 
     This treats '.' as '::' in C++.
     """
-    assert isinstance(abi_tags, (tuple, list)), abi_tags
     parts = [_len_encoded(_escape_string(x)) for x in ident.split('.')]
     enc_abi_tags = ["B" + _len_encoded(_escape_string(x)) for x in abi_tags]
     extras = template_params + ''.join(enc_abi_tags)
@@ -212,11 +211,13 @@ def mangle_c(ident, argtys):
     return PREFIX + mangle_identifier(ident) + mangle_args_c(argtys)
 
 
-def mangle(ident, argtys, abi_tags):
+def mangle(ident, argtys, *, abi_tags=()):
     """
-    Mangle identifier with Numba type objects and arbitrary values.
+    Mangle identifier with Numba type objects and abi-tags.
     """
-    return PREFIX + mangle_identifier(ident, abi_tags=abi_tags) + mangle_args(argtys)
+    return ''.join([PREFIX,
+                    mangle_identifier(ident, abi_tags=abi_tags),
+                    mangle_args(argtys)])
 
 
 def prepend_namespace(mangled, ns):
@@ -246,5 +247,3 @@ def _split_mangled_ident(mangled):
     ctlen = len(str(ct))
     at = ctlen + ct
     return mangled[:at], mangled[at:]
-
-

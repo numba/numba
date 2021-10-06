@@ -12,19 +12,19 @@ class TestMangling(TestCase):
     def test_one_args(self):
         fname = 'foo'
         argtypes = types.int32,
-        name = default_mangler(fname, argtypes, abi_tags=())
+        name = default_mangler(fname, argtypes)
         self.assertEqual(name, '_Z3fooi')
 
     def test_two_args(self):
         fname = 'foo'
         argtypes = types.int32, types.float32
-        name = default_mangler(fname, argtypes, abi_tags=())
+        name = default_mangler(fname, argtypes)
         self.assertEqual(name, '_Z3fooif')
 
     def test_unicode_fname(self):
         fname = u'foಠ'
         argtypes = types.int32, types.float32
-        name = default_mangler(fname, argtypes, abi_tags=())
+        name = default_mangler(fname, argtypes)
         self.assertIsInstance(name, str)
         # manually encode it
         unichar = fname[2]

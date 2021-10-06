@@ -2,7 +2,6 @@
 Function descriptors.
 """
 
-import inspect
 from collections import defaultdict
 import importlib
 
@@ -10,9 +9,8 @@ from numba.core import types, itanium_mangler
 from numba.core.utils import _dynamic_modname, _dynamic_module
 
 
-def default_mangler(name, argtypes, abi_tags):
-    assert isinstance(abi_tags, (tuple, list))
-    return itanium_mangler.mangle(name, argtypes, abi_tags)
+def default_mangler(name, argtypes, *, abi_tags=()):
+    return itanium_mangler.mangle(name, argtypes, abi_tags=abi_tags)
 
 
 def qualifying_prefix(modname, qualname):
@@ -21,16 +19,6 @@ def qualifying_prefix(modname, qualname):
     """
     # XXX choose a different convention for object mode
     return '{}.{}'.format(modname, qualname) if modname else qualname
-
-
-def _adapt_mangler(mangler):
-    def wrap(name, argtypes, abi_tags):
-        return mangler(name, argtypes)
-    sig = inspect.signature(mangler)
-    if 'abi_tags' in sig.parameters:
-        return mangler
-    else:
-        return wrap
 
 
 class FunctionDescriptor(object):
@@ -72,9 +60,7 @@ class FunctionDescriptor(object):
             # Get argument types from the type inference result
             # (note the "arg.FOO" convention as used in typeinfer
             self.argtypes = tuple(self.typemap['arg.' + a] for a in args)
-        mangler = _adapt_mangler(
-            default_mangler if mangler is None else mangler,
-        )
+        mangler = default_mangler if mangler is None else mangler
         # The mangled name *must* be unique, else the wrong function can
         # be chosen at link time.
         qualprefix = qualifying_prefix(self.modname, self.unique_name)
@@ -237,4 +223,5 @@ class ExternalFunctionDescriptor(FunctionDescriptor):
               ).__init__(native=True, modname=None, qualname=name,
                          unique_name=name, doc='', typemap=None,
                          restype=restype, calltypes=None, args=args,
-                         kws=None, mangler=lambda a, x: a, argtypes=argtypes)
+                         kws=None,
+                         mangler=lambda a, x, abi_tags: a, argtypes=argtypes)
