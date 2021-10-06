@@ -1,6 +1,5 @@
 import math
 import numbers
-from sys import abiflags
 
 import numpy as np
 import operator
