@@ -1551,10 +1551,7 @@ def load_module_image_cuda_python(context, image):
         handle = driver.cuModuleLoadDataEx(image, len(options), option_keys,
                                            option_vals)
     except CudaAPIError as e:
-        if config.CUDA_USE_CUDA_PYTHON:
-            err_string = jiterrors.decode('utf-8')
-        else:
-            err_string = jiterrors.value.decode('utf-8')
+        err_string = jiterrors.decode('utf-8')
         msg = "cuModuleLoadDataEx error:\n%s" % err_string
         raise CudaAPIError(e.code, msg)
 
@@ -2776,29 +2773,6 @@ class CudaPythonLinker(Linker):
 
 
 # -----------------------------------------------------------------------------
-
-
-def _device_pointer_attr(devmem, attr, odata):
-    """Query attribute on the device pointer
-    """
-    error = driver.cuPointerGetAttribute(byref(odata), attr,
-                                         device_ctypes_pointer(devmem))
-    driver.check_error(error, "Failed to query pointer attribute")
-
-
-def device_pointer_type(devmem):
-    """Query the device pointer type: host, device, array, unified?
-    """
-    ptrtype = c_int(0)
-    _device_pointer_attr(devmem, enums.CU_POINTER_ATTRIBUTE_MEMORY_TYPE,
-                         ptrtype)
-    map = {
-        enums.CU_MEMORYTYPE_HOST: 'host',
-        enums.CU_MEMORYTYPE_DEVICE: 'device',
-        enums.CU_MEMORYTYPE_ARRAY: 'array',
-        enums.CU_MEMORYTYPE_UNIFIED: 'unified',
-    }
-    return map[ptrtype.value]
 
 
 def get_devptr_for_active_ctx(ptr):
