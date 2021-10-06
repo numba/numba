@@ -530,7 +530,7 @@ def find_setupwiths(blocks):
 
     def previously_occurred(start, known_ranges):
         for a, b in known_ranges:
-            if s >= a and s < b:
+            if start >= a and start < b:
                 return True
         return False
 

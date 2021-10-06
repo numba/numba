@@ -4461,14 +4461,19 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         arr = np.ones((3, 4, 1))
         ai = np.ones((1, 2, 5), dtype=np.intp)
 
-        @njit
-        def check(a, i):
-            return np.take_along_axis(a, i, axis=1)
+        def gen(axis):
+            @njit
+            def impl(a, i):
+                return np.take_along_axis(a, i, axis)
+            return impl
 
-        expected = check.py_func(arr, ai)
-        actual = check(arr, ai)
-        self.assertPreciseEqual(expected, actual)
-        self.assertEqual(actual.shape, (3, 2, 5))
+        # Check same axis but expressed as positive/negative value
+        for i in (1, -2):
+            check = gen(i)
+            expected = check.py_func(arr, ai)
+            actual = check(arr, ai)
+            self.assertPreciseEqual(expected, actual)
+            self.assertEqual(actual.shape, (3, 2, 5))
 
     def test_take_along_axis_exceptions(self):
         arr2d = np.arange(8).reshape(2, 4)
