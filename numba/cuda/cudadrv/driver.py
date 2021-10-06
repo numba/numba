@@ -871,12 +871,7 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
 
         if mapped:
             mem = MappedMemory(ctx, pointer, size, finalizer=finalizer)
-            # XXX: Could we just reuse alloc_key from before?
-            if config.CUDA_USE_CUDA_PYTHON:
-                key = mem.handle
-            else:
-                key = mem.handle.value
-            self.allocations[key] = mem
+            self.allocations[alloc_key] = mem
             return mem.own()
         else:
             return PinnedMemory(ctx, pointer, size, finalizer=finalizer)
