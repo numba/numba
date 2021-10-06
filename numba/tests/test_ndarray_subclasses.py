@@ -89,6 +89,11 @@ class MyArrayType(types.Array):
         super().__init__(dtype, ndim, layout, readonly=readonly,
                          aligned=aligned, name=name)
 
+    def copy(self, *args, **kwargs):
+        # This is here to future-proof.
+        # The test here never uses this.
+        raise NotImplementedError
+
     # Tell Numba typing how to combine MyArrayType with other ndarray types.
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         if method == "__call__":
