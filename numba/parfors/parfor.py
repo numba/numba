@@ -2454,11 +2454,20 @@ class ConvertLoopPass:
                             in_arr, mask_var, mask_typ, mask_indices = result
                         else:
                             in_arr = args[0]
-                        size_vars = equiv_set.get_shape(in_arr
-                                        if mask_indices is None else mask_var)
-                        index_vars, loops = _mk_parfor_loops(
-                            pass_states.typemap, size_vars, scope, loc,
-                        )
+                        assert(isinstance(in_arr, ir.Var))
+                        in_arr_typ = pass_states.typemap[in_arr.name]
+                        if isinstance(in_arr_typ, types.Integer):
+                            index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
+                            pass_states.typemap[index_var.name] = types.uintp
+                            loops = [LoopNest(index_var, 0, in_arr, 1)]
+                            index_vars = [index_var]
+                        else:
+                            size_vars = equiv_set.get_shape(in_arr
+                                          if mask_indices is None else mask_var)
+                            index_vars, loops = _mk_parfor_loops(
+                                pass_states.typemap, size_vars, scope, loc,
+                            )
+                        assert(len(loops) > 0)
                         orig_index = index_vars
                         if mask_indices:
                             # replace mask indices if required;
