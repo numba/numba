@@ -24,7 +24,7 @@ from itertools import cycle, chain
 import subprocess as subp
 
 import numba.parfors.parfor
-from numba import njit, prange, set_num_threads, get_num_threads, typeof, literally
+from numba import njit, prange, set_num_threads, get_num_threads, typeof
 from numba.core import (types, utils, typing, errors, ir, rewrites,
                         typed_passes, inline_closurecall, config, compiler, cpu)
 from numba.extending import (overload_method, register_model,
@@ -1883,6 +1883,30 @@ class TestParfors(TestParforsBase):
             return x
         sz = (10, 5)
         self.check(test_impl, np.zeros(sz), 10)
+
+    def test_tuple_of_literal_nonliteral(self):
+        # This test has to be done manually as the self.check uses
+        # compile_isolated and one function cannot "see" the other
+
+        def test_impl(x, sz):
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+
+        def call(x, fn):
+            return fn(x, (10, 3)) # Only want to iterate to the 3rd
+
+        get_input = lambda: np.zeros((10, 10))
+        expected = call(get_input(), test_impl)
+
+        def check(dec):
+            f1 = dec(test_impl)
+            f2 = njit(call) # no parallel semantics in the caller
+            got = f2(get_input(), f1)
+            self.assertPreciseEqual(expected, got)
+
+        for d in (njit, njit(parallel=True)):
+            check(d)
 
     def test_tuple_arg_1d(self):
         def test_impl(x, sz):
