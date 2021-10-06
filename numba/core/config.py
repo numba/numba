@@ -174,14 +174,8 @@ class _EnvReloader(object):
             "NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS", int, 1)
 
         # Whether to use the official CUDA Python API
-        try:
-            import cuda  # noqa: F401
-            use_cuda_python_default = 1
-        except ImportError:
-            use_cuda_python_default = 0
-
         CUDA_USE_CUDA_PYTHON = _readenv(
-            "NUMBA_CUDA_USE_CUDA_PYTHON", int, use_cuda_python_default)
+            "NUMBA_CUDA_USE_CUDA_PYTHON", int, 0)
 
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)
