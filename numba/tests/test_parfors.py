@@ -1864,7 +1864,7 @@ class TestParfors(TestParforsBase):
                 x[i] = 1
             return x
         sz = (10, 5)
-        self.check(test_impl, np.empty(sz), (10,3))
+        self.check(test_impl, np.zeros(sz), (10, 3))
 
     def test_tuple_for_pndindex(self):
         def test_impl(x):
@@ -1873,29 +1873,16 @@ class TestParfors(TestParforsBase):
                 x[i] = 1
             return x
         sz = (10, 5)
-        self.check(test_impl, np.empty(sz))
-
-    def test_tuple_for_pndindex_with_literally(self):
-        def test_impl(x):
-            sz = (10, numba.literally(5))
-            for i in numba.pndindex(sz):
-                x[i] = 1
-            return x
-        sz = (10,5)
-        self.check(test_impl, np.empty(sz))
+        self.check(test_impl, np.zeros(sz))
 
     def test_tuple_arg_literal(self):
-        @njit(parallel=True)
-        def test_impl(x, sz):
+        def test_impl(x, first):
+            sz = (first, 5)
             for i in numba.pndindex(sz):
                 x[i] = 1
             return x
-
-        def test_driver(impl_arg, first):
-            sz = (first, 5)
-            return impl_arg(np.empty(sz), sz)
-
-        self.check(test_driver, test_impl, 10)
+        sz = (10, 5)
+        self.check(test_impl, np.zeros(sz), 10)
 
     def test_tuple_arg_1d(self):
         def test_impl(x, sz):
@@ -1903,20 +1890,17 @@ class TestParfors(TestParforsBase):
                 x[i] = 1
             return x
         sz = (10,)
-        self.check(test_impl, np.empty(sz), sz)
+        self.check(test_impl, np.zeros(sz), sz)
 
     def test_tuple_arg_1d_literal(self):
-        @njit(parallel=True)
-        def test_impl(x, sz):
+        def test_impl(x):
+            sz = (10,)
             for i in numba.pndindex(sz):
                 x[i] = 1
             return x
+        sz = (10,)
+        self.check(test_impl, np.zeros(sz))
 
-        def test_driver(impl_arg):
-            sz = (10,)
-            return impl_arg(np.empty(sz), sz)
-
-        self.check(test_driver, test_impl)
 
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
