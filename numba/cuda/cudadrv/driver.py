@@ -221,9 +221,12 @@ class Driver(object):
             self.lib = find_driver()
         except CudaSupportError as e:
             self.is_initialized = True
-            self.initialization_error = e
+            self.initialization_error = e.msg
 
-    def initialize(self):
+    def ensure_initialized(self):
+        if self.is_initialized:
+            return
+
         # lazily initialize logger
         global _logger
         _logger = make_logger()
@@ -233,8 +236,9 @@ class Driver(object):
             _logger.info('init')
             self.cuInit(0)
         except CudaAPIError as e:
-            self.initialization_error = e
-            raise CudaSupportError("Error at driver init: \n%s:" % e)
+            description = f"{e.msg} ({e.code})"
+            self.initialization_error = description
+            raise CudaSupportError(f"Error at driver init: {description}")
         else:
             self.pid = _getpid()
 
@@ -259,8 +263,7 @@ class Driver(object):
 
     @property
     def is_available(self):
-        if not self.is_initialized:
-            self.initialize()
+        self.ensure_initialized()
         return self.initialization_error is None
 
     def __getattr__(self, fname):
@@ -272,9 +275,7 @@ class Driver(object):
         restype = proto[0]
         argtypes = proto[1:]
 
-        # Initialize driver
-        if not self.is_initialized:
-            self.initialize()
+        self.ensure_initialized()
 
         if self.initialization_error is not None:
             raise CudaSupportError("Error at driver init: \n%s:" %
@@ -1919,7 +1920,7 @@ class Stream(object):
     def async_done(self) -> asyncio.futures.Future:
         """
         Return an awaitable that resolves once all preceding stream operations
-        are complete.
+        are complete. The result of the awaitable is the current stream.
         """
         loop = asyncio.get_running_loop() if utils.PYVERSION >= (3, 7) \
             else asyncio.get_event_loop()
@@ -1929,7 +1930,7 @@ class Stream(object):
             if future.done():
                 return
             elif status == 0:
-                future.set_result(None)
+                future.set_result(self)
             else:
                 future.set_exception(Exception(f"Stream error {status}"))
 
