@@ -394,7 +394,7 @@ class TestCudaIntrinsic(CUDATestCase):
         np.testing.assert_allclose(ary[0], ref)
 
     def test_hmul(self):
-        compiled = cuda.jit("void(f2[:], f2[:], f2[:])")(simple_hmul)
+        compiled = cuda.jit()(simple_hmul)
         ary = np.zeros(1, dtype=np.float16)
         arg1 = np.array([3.], dtype=np.float16)
         arg2 = np.array([4.], dtype=np.float16)
@@ -426,7 +426,7 @@ class TestCudaIntrinsic(CUDATestCase):
         np.testing.assert_allclose(ary[0], ref)
 
     def test_habs(self):
-        compiled = cuda.jit("void(f2[:], f2[:])")(simple_habs)
+        compiled = cuda.jit()(simple_habs)
         ary = np.zeros(1, dtype=np.float16)
         arg1 = np.array([-3.], dtype=np.float16)
         compiled[1, 1](ary, arg1)

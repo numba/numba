@@ -29,7 +29,7 @@ FROM_DTYPE = {
 
     np.dtype('float32'): types.float32,
     np.dtype('float64'): types.float64,
-
+    np.dtype('float16'): types.float16,
     np.dtype('complex64'): types.complex64,
     np.dtype('complex128'): types.complex128,
 
