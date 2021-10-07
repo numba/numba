@@ -38,7 +38,7 @@ class TestCudaDebugInfo(CUDATestCase):
         self._check(foo, sig=(types.int32[:],), expect=False)
 
     def test_debuginfo_in_asm(self):
-        @cuda.jit(debug=True)
+        @cuda.jit(debug=True, opt=False)
         def foo(x):
             x[0] = 1
 
@@ -47,7 +47,7 @@ class TestCudaDebugInfo(CUDATestCase):
     def test_environment_override(self):
         with override_config('CUDA_DEBUGINFO_DEFAULT', 1):
             # Using default value
-            @cuda.jit
+            @cuda.jit(opt=False)
             def foo(x):
                 x[0] = 1
 
@@ -116,7 +116,7 @@ class TestCudaDebugInfo(CUDATestCase):
         # This is condensed from this reproducer in Issue 5311:
         # https://github.com/numba/numba/issues/5311#issuecomment-674206587
 
-        @cuda.jit((types.int32[:], types.int32[:]), debug=True)
+        @cuda.jit((types.int32[:], types.int32[:]), debug=True, opt=False)
         def f(inp, outp):
             outp[0] = 1 if inp[0] in (2, 3) else 3
 
@@ -136,15 +136,15 @@ class TestCudaDebugInfo(CUDATestCase):
                 arr[i] = threadid()
 
     def _test_chained_device_function(self, kernel_debug, f1_debug, f2_debug):
-        @cuda.jit(device=True, debug=f2_debug)
+        @cuda.jit(device=True, debug=f2_debug, opt=False)
         def f2(x):
             return x + 1
 
-        @cuda.jit(device=True, debug=f1_debug)
+        @cuda.jit(device=True, debug=f1_debug, opt=False)
         def f1(x, y):
             return x - f2(y)
 
-        @cuda.jit((types.int32, types.int32), debug=kernel_debug)
+        @cuda.jit((types.int32, types.int32), debug=kernel_debug, opt=False)
         def kernel(x, y):
             f1(x, y)
 
@@ -168,15 +168,15 @@ class TestCudaDebugInfo(CUDATestCase):
     def _test_chained_device_function_two_calls(self, kernel_debug, f1_debug,
                                                 f2_debug):
 
-        @cuda.jit(device=True, debug=f2_debug)
+        @cuda.jit(device=True, debug=f2_debug, opt=False)
         def f2(x):
             return x + 1
 
-        @cuda.jit(device=True, debug=f1_debug)
+        @cuda.jit(device=True, debug=f1_debug, opt=False)
         def f1(x, y):
             return x - f2(y)
 
-        @cuda.jit(debug=kernel_debug)
+        @cuda.jit(debug=kernel_debug, opt=False)
         def kernel(x, y):
             f1(x, y)
             f2(x)
@@ -233,7 +233,7 @@ class TestCudaDebugInfo(CUDATestCase):
         # to ensure that the recursion visits all the way down the call tree
         # when fixing linkage of functions for debug.
         def three_device_fns(kernel_debug, leaf_debug):
-            @cuda.jit(device=True, debug=leaf_debug)
+            @cuda.jit(device=True, debug=leaf_debug, opt=False)
             def f3(x):
                 return x * x
 
@@ -245,7 +245,7 @@ class TestCudaDebugInfo(CUDATestCase):
             def f1(x, y):
                 return x - f2(y)
 
-            @cuda.jit(debug=kernel_debug)
+            @cuda.jit(debug=kernel_debug, opt=False)
             def kernel(x, y):
                 f1(x, y)
 

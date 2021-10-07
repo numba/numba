@@ -1,7 +1,25 @@
 import unittest
-from numba import objmode
+from unittest.case import TestCase
+import warnings
 import numpy as np
+
+from numba import objmode
 from numba.core import ir, compiler
+from numba.core import errors
+from numba.core.compiler import (
+    CompilerBase,
+    ReconstructSSA,
+)
+from numba.core.compiler_machinery import (
+    FunctionPass,
+    PassManager,
+    register_pass,
+)
+from numba.core.untyped_passes import (
+    TranslateByteCode,
+    IRProcessing,
+)
+from numba import njit
 
 
 class TestIR(unittest.TestCase):
@@ -464,6 +482,78 @@ class TestIRCompounds(CheckEquality):
         tmp = foo_ir.diff_str(baz_ir)
         self.assertIn("Other block contains more statements", tmp)
         check_diffstr(tmp, ["c + b", "b + c"])
+
+
+class TestIRPedanticChecks(TestCase):
+    def test_var_in_scope_assumption(self):
+        # Create a pass that clears ir.Scope in ir.Block
+        @register_pass(mutates_CFG=False, analysis_only=False)
+        class RemoveVarInScope(FunctionPass):
+            _name = "_remove_var_in_scope"
+
+            def __init__(self):
+                FunctionPass.__init__(self)
+
+            # implement method to do the work, "state" is the internal compiler
+            # state from the CompilerBase instance.
+            def run_pass(self, state):
+                func_ir = state.func_ir
+                # walk the blocks
+                for blk in func_ir.blocks.values():
+                    oldscope = blk.scope
+                    # put in an empty Scope
+                    blk.scope = ir.Scope(parent=oldscope.parent,
+                                         loc=oldscope.loc)
+                return True
+
+        # Create a pass that always fails, to stop the compiler
+        @register_pass(mutates_CFG=False, analysis_only=False)
+        class FailPass(FunctionPass):
+            _name = "_fail"
+
+            def __init__(self, *args, **kwargs):
+                FunctionPass.__init__(self)
+
+            def run_pass(self, state):
+                # This is unreachable. SSA pass should have raised before this
+                # pass when run with `error.NumbaPedanticWarning`s raised as
+                # errors.
+                raise AssertionError("unreachable")
+
+        class MyCompiler(CompilerBase):
+            def define_pipelines(self):
+                pm = PassManager("testing pm")
+                pm.add_pass(TranslateByteCode, "analyzing bytecode")
+                pm.add_pass(IRProcessing, "processing IR")
+                pm.add_pass(RemoveVarInScope, "_remove_var_in_scope")
+                pm.add_pass(ReconstructSSA, "ssa")
+                pm.add_pass(FailPass, "_fail")
+                pm.finalize()
+                return [pm]
+
+        @njit(pipeline_class=MyCompiler)
+        def dummy(x):
+            # To trigger SSA and the pedantic check, this function must have
+            # multiple assignments to the same variable in different blocks.
+            a = 1
+            b = 2
+            if a < b:
+                a = 2
+            else:
+                b = 3
+            return a, b
+
+        with warnings.catch_warnings():
+            # Make NumbaPedanticWarning an error
+            warnings.simplefilter("error", errors.NumbaPedanticWarning)
+            # Catch NumbaIRAssumptionWarning
+            with self.assertRaises(errors.NumbaIRAssumptionWarning) as raises:
+                dummy(1)
+            # Verify the error message
+            self.assertRegex(
+                str(raises.exception),
+                r"variable '[a-z]' is not in scope",
+            )
 
 
 if __name__ == '__main__':

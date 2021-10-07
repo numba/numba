@@ -9,7 +9,7 @@ from numba.core.typing.templates import (AttributeTemplate, AbstractTemplate,
 # import time side effect: array operations requires typing support of sequence
 # defined in collections: e.g. array.shape[i]
 from numba.core.typing import collections
-from numba.core.errors import TypingError
+from numba.core.errors import RequireLiteralValue, TypingError
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
 
@@ -421,7 +421,7 @@ class ArrayAttribute(AttributeTemplate):
         kwargs = dict(kws)
         kind = kwargs.pop('kind', types.StringLiteral('quicksort'))
         if not isinstance(kind, types.StringLiteral):
-            raise errors.TypingError('"kind" must be a string literal')
+            raise TypingError('"kind" must be a string literal')
         if kwargs:
             msg = "Unsupported keywords: {!r}"
             raise TypingError(msg.format([k for k in kwargs.keys()]))
@@ -448,6 +448,9 @@ class ArrayAttribute(AttributeTemplate):
         from .npydecl import parse_dtype
         assert not kws
         dtype, = args
+        if isinstance(dtype, types.UnicodeType):
+            raise RequireLiteralValue(("array.astype if dtype is a string it "
+                                       "must be constant"))
         dtype = parse_dtype(dtype)
         if dtype is None:
             return
@@ -797,10 +800,6 @@ for fName in ["mean"]:
 # get promoted to float64 return
 for fName in ["var", "std"]:
     install_array_method(fName, generic_hetero_always_real)
-
-
-# Functions that return an index (intp)
-install_array_method("argmin", generic_index)
 
 
 @infer_global(operator.eq)

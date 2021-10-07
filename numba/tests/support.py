@@ -22,6 +22,7 @@ import traceback
 from contextlib import contextmanager
 import uuid
 import importlib
+import types as pytypes
 
 import numpy as np
 
@@ -31,6 +32,7 @@ from numba.core.compiler import compile_extra, compile_isolated, Flags, DEFAULT_
 import unittest
 from numba.core.runtime import rtsys
 from numba.np import numpy_support
+from numba.pycc.platform import _external_compiler_ok
 
 
 try:
@@ -112,6 +114,19 @@ except ImportError:
     has_blas = False
 
 needs_blas = unittest.skipUnless(has_blas, "BLAS needs SciPy 1.0+")
+
+# Decorate a test with @needs_subprocess to ensure it doesn't run unless the
+# `SUBPROC_TEST` environment variable is set. Use this in conjunction with:
+# TestCase::subprocess_test_runner which will execute a given test in subprocess
+# with this environment variable set.
+_exec_cond = os.environ.get('SUBPROC_TEST', None) == '1'
+needs_subprocess = unittest.skipUnless(_exec_cond, "needs subprocess harness")
+
+
+# decorate for test needs external compilers
+needs_external_compilers = unittest.skipIf(not _external_compiler_ok,
+                                           ('Compatible external compilers are '
+                                            'missing'))
 
 
 def ignore_internal_warnings():
@@ -501,6 +516,46 @@ class TestCase(unittest.TestCase):
         got = cfunc()
         self.assertPreciseEqual(got, expected)
         return got, expected
+
+    def subprocess_test_runner(self, test_module, test_class=None,
+                               test_name=None, envvars=None, timeout=60):
+        """
+        Runs named unit test(s) as specified in the arguments as:
+        test_module.test_class.test_name. test_module must always be supplied
+        and if no further refinement is made with test_class and test_name then
+        all tests in the module will be run. The tests will be run in a
+        subprocess with environment variables specified in `envvars`.
+        If given, envvars must be a map of form:
+            environment variable name (str) -> value (str)
+        It is most convenient to use this method in conjunction with
+        @needs_subprocess as the decorator will cause the decorated test to be
+        skipped unless the `SUBPROC_TEST` environment variable is set
+        (this special environment variable is set by this method such that the
+        specified test(s) will not be skipped in the subprocess).
+
+
+        Following execution in the subprocess this method will check the test(s)
+        executed without error. The timeout kwarg can be used to allow more time
+        for longer running tests, it defaults to 60 seconds.
+        """
+        themod = self.__module__
+        thecls = type(self).__name__
+        parts = (test_module, test_class, test_name)
+        fully_qualified_test = '.'.join(x for x in parts if x is not None)
+        cmd = [sys.executable, '-m', 'numba.runtests', fully_qualified_test]
+        env_copy = os.environ.copy()
+        env_copy['SUBPROC_TEST'] = '1'
+        envvars = pytypes.MappingProxyType({} if envvars is None else envvars)
+        env_copy.update(envvars)
+        status = subprocess.run(cmd, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, timeout=timeout,
+                                env=env_copy, universal_newlines=True)
+        streams = (f'\ncaptured stdout: {status.stdout}\n'
+                   f'captured stderr: {status.stderr}')
+        self.assertEqual(status.returncode, 0, streams)
+        self.assertIn('OK', status.stderr)
+        self.assertNotIn('FAIL', status.stderr)
+        self.assertNotIn('ERROR', status.stderr)
 
 
 class SerialMixin(object):

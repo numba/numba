@@ -314,7 +314,14 @@ class Lower(BaseLower):
                 if len(var_assign_map[var]) == 1:
                     # Usemap does not keep locally defined variables.
                     if len(var_use_map[var]) == 0:
-                        sav.add(var)
+                        # Ensure that the variable is not defined multiple times
+                        # the the block
+                        [defblk] = var_assign_map[var]
+                        assign_stmts = self.blocks[defblk].find_insts(ir.Assign)
+                        assigns = [stmt for stmt in assign_stmts
+                                   if stmt.target.name == var]
+                        if len(assigns) == 1:
+                            sav.add(var)
 
         self._singly_assigned_vars = sav
         self._blk_local_varmap = {}
@@ -590,13 +597,15 @@ class Lower(BaseLower):
         # Yield to caller
         val = self.loadvar(inst.value.name)
         typ = self.typeof(inst.value.name)
+        actual_rettyp = self.gentype.yield_type
 
         # cast the local val to the type yielded
-        yret = self.context.cast(self.builder, val, typ,
-                                 self.gentype.yield_type)
+        yret = self.context.cast(self.builder, val, typ, actual_rettyp)
 
         # get the return repr of yielded value
-        retval = self.context.get_return_value(self.builder, typ, yret)
+        retval = self.context.get_return_value(
+            self.builder, actual_rettyp, yret,
+        )
 
         # return
         self.call_conv.return_value(self.builder, retval)
@@ -1407,7 +1416,11 @@ class Lower(BaseLower):
         if not self.context.enable_nrt:
             return
 
-        self.context.nrt.decref(self.builder, typ, val)
+        # do not associate decref with "use", it creates "jumpy" line info as
+        # the decrefs are usually where the ir.Del nodes are, which is at the
+        # end of the block.
+        with debuginfo.suspend_emission(self.builder):
+            self.context.nrt.decref(self.builder, typ, val)
 
 
 def _lit_or_omitted(value):

@@ -12,6 +12,7 @@ labels: task
 * [ ] Cherry-pick items from the X.Y.Z milestone into a PR.
 * [ ] Merge change log modifications and cherry-picks to X.Y release branch.
   * [ ] https://github.com/numba/numba/pull/XXXX
+* [ ] Review, merge and check execution of release notebook. (FINAL ONLY)
 * [ ] Annotated tag X.Y.Z on release branch (no `v` prefix).
 * [ ] Build and upload conda packages on buildfarm (check "upload").
 * [ ] Build wheels (`$PYTHON_VERSIONS`) on the buildfarm.
@@ -27,7 +28,7 @@ labels: task
 
 ### Post release
 
-* [ ] Cherry-pick change-log modifications to main branch (`master`) via PR.
 * [ ] Update release checklist template.
 * [ ] Ping Anaconda Distro team to trigger a build for `defaults` (FINAL ONLY).
+* [ ] Create a release on Github at https://github.com/numba/numba/releases (FINAL ONLY).
 * [ ] Close milestone (and then close this release issue).

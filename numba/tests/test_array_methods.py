@@ -270,7 +270,6 @@ def array_dot_chain(a, b):
 def array_ctor(n, dtype):
     return np.ones(n, dtype=dtype)
 
-
 class TestArrayMethods(MemoryLeakMixin, TestCase):
     """
     Test various array methods and array-related functions.
@@ -476,6 +475,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check(arr, np.int32)
         check(arr, np.float32)
         check(arr, np.complex128)
+        check(arr, "float32")
 
         # F-contiguous
         arr = np.arange(24, dtype=np.int8).reshape((3, 8)).T
@@ -495,6 +495,15 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         with self.assertTypingError() as raises:
             check(arr, dt)
         self.assertIn('cannot convert from int32 to Record',
+                      str(raises.exception))
+        # Check non-Literal string raises
+        unicode_val = "float32"
+        with self.assertTypingError() as raises:
+            @jit(nopython=True)
+            def foo(dtype):
+                np.array([1]).astype(dtype)
+            foo(unicode_val)
+        self.assertIn('array.astype if dtype is a string it must be constant',
                       str(raises.exception))
 
     def check_np_frombuffer(self, pyfunc):
@@ -1471,7 +1480,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         np.testing.assert_array_equal(pyfunc(*args), cfunc(*args))
         args = n, np.dtype('f4')
         np.testing.assert_array_equal(pyfunc(*args), cfunc(*args))
-
 
 class TestArrayComparisons(TestCase):
 

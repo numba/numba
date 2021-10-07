@@ -843,13 +843,14 @@ class PreLowerStripPhis(FunctionPass):
             for target, rhs in exporters[label]:
                 # If RHS is undefined
                 if rhs is ir.UNDEFINED:
-                    # Put in a NULL initializer
-                    rhs = ir.Expr.null(loc=target.loc)
+                    # Put in a NULL initializer, set the location to be in what
+                    # will eventually materialize as the prologue.
+                    rhs = ir.Expr.null(loc=func_ir.loc)
 
                 assign = ir.Assign(
                     target=target,
                     value=rhs,
-                    loc=target.loc
+                    loc=rhs.loc
                 )
                 # Insert at the earliest possible location; i.e. after the
                 # last assignment to rhs

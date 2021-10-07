@@ -266,3 +266,4 @@ per-file-ignores =
     # the test code is already indented by 8 spaces)
     numba/cuda/tests/doc_examples/test_random.py:E501
     numba/cuda/tests/doc_examples/test_cg.py:E501
+    numba/cuda/tests/doc_examples/test_matmul.py:E501

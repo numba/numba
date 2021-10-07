@@ -825,6 +825,8 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                 if (isinstance(expr, ir.Expr) and (expr.op == 'cast' or
                     expr.op in ['getitem', 'static_getitem'])):
                     _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
+                if isinstance(expr, ir.Expr) and expr.op == 'inplace_binop':
+                    _add_alias(lhs, expr.lhs.name, alias_map, arg_aliases)
                 # array attributes like A.T
                 if (isinstance(expr, ir.Expr) and expr.op == 'getattr'
                         and expr.attr in ['T', 'ctypes', 'flat']):

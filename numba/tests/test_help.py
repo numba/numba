@@ -89,4 +89,4 @@ class TestInspector(TestCase):
         with self.assertRaises(subprocess.CalledProcessError) as raises:
             subprocess.check_output(cmds, stderr=subprocess.STDOUT)
         self.assertIn("\'foo\' is not supported",
-                      raises.exception.stdout.decode('ascii'))
+                      raises.exception.stdout.decode())
