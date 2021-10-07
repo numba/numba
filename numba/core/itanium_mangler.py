@@ -122,6 +122,10 @@ def _len_encoded(string):
     return '%u%s' % (len(string), string)
 
 
+def mangle_abi_tag(abi_tag: str) -> str:
+    return "B" + _len_encoded(_escape_string(abi_tag))
+
+
 def mangle_identifier(ident, template_params='', *, abi_tags=()):
     """
     Mangle the identifier with optional template parameters and abi_tags.
@@ -131,7 +135,7 @@ def mangle_identifier(ident, template_params='', *, abi_tags=()):
     This treats '.' as '::' in C++.
     """
     parts = [_len_encoded(_escape_string(x)) for x in ident.split('.')]
-    enc_abi_tags = ["B" + _len_encoded(_escape_string(x)) for x in abi_tags]
+    enc_abi_tags = list(map(mangle_abi_tag, abi_tags))
     extras = template_params + ''.join(enc_abi_tags)
     if len(parts) > 1:
         return 'N%s%sE' % (''.join(parts), extras)
