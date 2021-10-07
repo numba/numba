@@ -84,7 +84,7 @@ fi
 $CONDA_INSTALL -c numba/label/dev llvmlite
 
 # Install latest ipykernel for testing
-$CONDA_INSTALL ipykernel
+$CONDA_INSTALL ipykernel ipython_genutils
 
 # Install dependencies for building the documentation
 if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx=2.4.4 sphinx_rtd_theme pygments numpydoc; fi
