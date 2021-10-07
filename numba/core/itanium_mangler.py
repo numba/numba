@@ -34,9 +34,9 @@ import re
 from numba.core import types
 
 
-# According the scheme, valid characters for mangled names are [a-zA-Z0-9_$].
-# We borrow the '$' as the escape character to encode invalid char into
-# '$xx' where 'xx' is the hex codepoint.
+# According the scheme, valid characters for mangled names are [a-zA-Z0-9_].
+# We borrow the '_' as the escape character to encode invalid char into
+# '_xx' where 'xx' is the hex codepoint.
 _re_invalid_char = re.compile(r'[^a-z0-9_]', re.I)
 
 PREFIX = "_Z"
@@ -93,8 +93,9 @@ def _escape_string(text):
     Multibyte characters are encoded into utf8 and converted into the above
     hex format.
     """
+
     def repl(m):
-        return ''.join(('$%02x' % ch)
+        return ''.join(('_%02x' % ch)
                        for ch in m.group(0).encode('utf8'))
     ret = re.sub(_re_invalid_char, repl, text)
     # Return str if we got a unicode (for py2)

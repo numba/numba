@@ -28,7 +28,7 @@ class TestMangling(TestCase):
         self.assertIsInstance(name, str)
         # manually encode it
         unichar = fname[2]
-        enc = ''.join('${:02x}'.format(c)
+        enc = ''.join('_{:02x}'.format(c)
                       for c in unichar.encode('utf8'))
         text = 'fo' + enc
         expect = '_Z{}{}if'.format(len(text), text)
