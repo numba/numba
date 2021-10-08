@@ -9,9 +9,10 @@ from numba.core.typing.templates import (AttributeTemplate, AbstractTemplate,
 # import time side effect: array operations requires typing support of sequence
 # defined in collections: e.g. array.shape[i]
 from numba.core.typing import collections
-from numba.core.errors import (TypingError, NumbaTypeError,
+from numba.core.errors import (TypingError, RequireLiteralValue, NumbaTypeError,
                                NumbaNotImplementedError, NumbaAssertionError,
                                NumbaKeyError, NumbaIndexError)
+
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
 
@@ -451,6 +452,9 @@ class ArrayAttribute(AttributeTemplate):
         from .npydecl import parse_dtype
         assert not kws
         dtype, = args
+        if isinstance(dtype, types.UnicodeType):
+            raise RequireLiteralValue(("array.astype if dtype is a string it "
+                                       "must be constant"))
         dtype = parse_dtype(dtype)
         if dtype is None:
             return
