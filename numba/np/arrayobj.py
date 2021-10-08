@@ -4341,6 +4341,7 @@ def array_ascontiguousarray(context, builder, sig, args):
 
 
 @lower_builtin("array.astype", types.Array, types.DTypeSpec)
+@lower_builtin("array.astype", types.Array, types.StringLiteral)
 def array_astype(context, builder, sig, args):
     arytype = sig.args[0]
     ary = make_array(arytype)(context, builder, value=args[0])
@@ -5583,6 +5584,11 @@ def _take_along_axis_impl(
     # With addition of pre-broadcasting:
     # https://github.com/numpy/numpy/issues/19704
 
+    # Wrap axis, it's used in tuple_setitem so must be (axis >= 0) to ensure
+    # the GEP is in bounds.
+    if axis < 0:
+        axis = arr.ndim + axis
+
     # Broadcast the two arrays to matching shapes:
     arr_shape = list(arr.shape)
     arr_shape[axis] = 1
@@ -5658,7 +5664,7 @@ def arr_take_along_axis(arr, indices, axis):
         check_is_integer(axis, "axis")
         if not isinstance(axis, types.IntegerLiteral):
             raise ValueError(
-                "axis must be a literal value (i.e. not an argument) for now"
+                "axis must be a literal value (i.e. not an argument)"
             )
         axis = axis.literal_value
         if axis < 0:

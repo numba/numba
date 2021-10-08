@@ -527,3 +527,14 @@ Threading Control
    * ``tbb`` - A threading layer backed by Intel TBB.
    * ``omp`` - A threading layer backed by OpenMP.
    * ``workqueue`` - A simple built-in work-sharing task scheduler.
+
+.. envvar:: NUMBA_THREADING_LAYER_PRIORITY
+
+   This environment variable controls the order in which the libraries used for
+   concurrent execution, for the CPU parallel targets
+   (``@vectorize(target='parallel')``, ``@guvectorize(target='parallel')``
+   and ``@njit(parallel=True)``), are prioritized for use. The variable type is
+   string and by default is ``tbb omp workqueue``, with the priority taken based
+   on position from the left of the string, left most being the highest. Valid
+   values are any permutation of the three choices (for more information about
+   these see :ref:`the threading layer documentation <numba-threading-layer>`.)
