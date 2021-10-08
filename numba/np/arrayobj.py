@@ -17,7 +17,7 @@ from numba import pndindex, literal_unroll
 from numba.core import types, utils, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                     is_fortran, check_is_integer)
-from numba.np.numpy_support import type_can_asarray, is_nonelike
+from numba.np.numpy_support import type_can_asarray, is_nonelike, numpy_version
 from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_getattr_generic,
                                  lower_setattr_generic,
@@ -1382,57 +1382,55 @@ def numpy_broadcast_to(array, shape):
     return impl
 
 
-@register_jitable
-def broadcast_shape(r, k, tmp):
-    if tmp == 1:
-        return
-    if r[k] == 1:
-        r[k] = tmp
-    elif r[k] != tmp:
-        raise ValueError("shape mismatch: objects"
-                         " cannot be broadcast"
-                         " to a single shape")
+if numpy_version >= (1, 20):
+    @register_jitable
+    def broadcast_shape(r, k, tmp):
+        if tmp == 1:
+            return
+        if r[k] == 1:
+            r[k] = tmp
+        elif r[k] != tmp:
+            raise ValueError("shape mismatch: objects"
+                             " cannot be broadcast"
+                             " to a single shape")
 
+    def __broadcast_shape_inner(arg):
+        pass
 
-def __broadcast_shape_inner(arg):
-    pass
+    @overload(__broadcast_shape_inner)
+    def __broadcast_shape_inner_ol(r, m, arg):
+        if isinstance(arg, types.Tuple):
+            def impl(r, m, arg):
+                pass
+        else:
+            def impl(r, m, arg):
+                for i in range(len(arg)):
+                    tmp = arg[i]
+                    k = m - len(arg) + i
+                    broadcast_shape(r, k, tmp)
+        return impl
 
+    @overload(np.broadcast_shapes)
+    def numpy_broadcast_shapes(*args):
+        # Based on https://github.com/numpy/numpy/blob/f702b26fff3271ba6a6ba29a021fc19051d1f007/numpy/core/src/multiarray/iterators.c#L1129-L1212  # noqa
+        def impl(*args):
+            # discover the number of dimensions
+            m = 0
+            for arg in literal_unroll(args):
+                if isinstance(arg, int):
+                    m = max(m, 1)
+                else:
+                    m = max(m, len(arg))
 
-@overload(__broadcast_shape_inner)
-def __broadcast_shape_inner_ol(r, m, arg):
-    if isinstance(arg, types.Tuple):
-        def impl(r, m, arg):
-            pass
-    else:
-        def impl(r, m, arg):
-            for i in range(len(arg)):
-                tmp = arg[i]
-                k = m - len(arg) + i
-                broadcast_shape(r, k, tmp)
-    return impl
-
-
-@overload(np.broadcast_shapes)
-def numpy_broadcast_shapes(*args):
-    # Based on https://github.com/numpy/numpy/blob/f702b26fff3271ba6a6ba29a021fc19051d1f007/numpy/core/src/multiarray/iterators.c#L1129-L1212  # noqa
-    def impl(*args):
-        # discover the number of dimensions
-        m = 0
-        for arg in literal_unroll(args):
-            if isinstance(arg, int):
-                m = max(m, 1)
-            else:
-                m = max(m, len(arg))
-
-        # propagate args
-        r = [1] * m
-        for arg in literal_unroll(args):
-            if isinstance(arg, int):
-                broadcast_shape(r, m - 1, arg)
-            else:
-                __broadcast_shape_inner(r, m, arg)
-        return r
-    return impl
+            # propagate args
+            r = [1] * m
+            for arg in literal_unroll(args):
+                if isinstance(arg, int):
+                    broadcast_shape(r, m - 1, arg)
+                else:
+                    __broadcast_shape_inner(r, m, arg)
+            return r
+        return impl
 
 
 def fancy_setslice(context, builder, sig, args, index_types, indices):
