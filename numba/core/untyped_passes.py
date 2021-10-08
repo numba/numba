@@ -11,7 +11,7 @@ from numba.misc.special import literal_unroll
 from numba.core.analysis import (dead_branch_prune, rewrite_semantic_constants,
                                  find_literally_calls, compute_cfg_from_blocks,
                                  compute_use_defs)
-from numba.core.ir_utils import (guard, resolve_func_from_module, simplify_CFG,
+from numba.core.ir_utils import (guard, replace_vars, resolve_func_from_module, simplify_CFG,
                                  GuardException, convert_code_obj_to_function,
                                  mk_unique_var, build_definitions,
                                  replace_var_names, get_name_var_table,
@@ -1489,6 +1489,57 @@ class SimplifyCFG(FunctionPass):
         new_blks = simplify_CFG(blks)
         state.func_ir.blocks = new_blks
         mutated = blks != new_blks
+        return mutated
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class ConstantPropagation(FunctionPass):
+    _name = "constant_propagation"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        mutated = False
+
+        while True:
+            replace_vars_dict = dict()
+            var_block_map = dict()
+
+            for block_idx, block in state.func_ir.blocks.items():
+                for assign in block.find_insts(ir.Assign):
+                    if isinstance(assign.value, ir.Var):
+                        # lhs = rhs
+                        replace_vars_dict[assign.target.name] = assign.value
+                        var_block_map[assign] = block_idx
+
+            if len(var_block_map) == 0:
+                break
+
+            for stmt, block_idx in var_block_map.items():
+                mutated = True
+                if config.DEBUG:
+                    print('removing %s from block %s' % (stmt, block_idx))
+                state.func_ir.blocks[block_idx].remove(stmt)
+            replace_vars(state.func_ir.blocks, replace_vars_dict)
+
+        return mutated
+
+    def get_analysis_usage(self, AU):
+        AU.add_required(ReconstructSSA)
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class DeadLoopElimination(FunctionPass):
+    _name = "dead_loop_elimination"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        mutated = False
+        cfg = compute_cfg_from_blocks(state.func_ir.blocks)
+        print(cfg.loops())
         return mutated
 
 
