@@ -872,38 +872,61 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         # Tests taken from
         # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/tests/test_stride_tricks.py#L296-L334
         data = [
-            # tests with empty tuples don't work at the moment
             # [[], ()],
-            # [[()], ()],
-            [[(7,)], (7,)],
-            [[(1, 2), (2,)], (1, 2)],
-            [[(1, 1)], (1, 1)],
-            [[(1, 1), (3, 4)], (3, 4)],
-            [[(6, 7), (5, 6, 1), (7,), (5, 1, 7)], (5, 6, 7)],
-            [[(5, 6, 1)], (5, 6, 1)],
-            [[(1, 3), (3, 1)], (3, 3)],
-            [[(1, 0), (0, 0)], (0, 0)],
-            [[(0, 1), (0, 0)], (0, 0)],
-            [[(1, 0), (0, 1)], (0, 0)],
-            [[(1, 1), (0, 0)], (0, 0)],
-            [[(1, 1), (1, 0)], (1, 0)],
-            [[(1, 1), (0, 1)], (0, 1)],
-            # [[(), (0,)], (0,)],
-            [[(0,), (0, 0)], (0, 0)],
-            [[(0,), (0, 1)], (0, 0)],
-            [[(1,), (0, 0)], (0, 0)],
-            # [[(), (0, 0)], (0, 0)],
-            [[(1, 1), (0,)], (1, 0)],
-            [[(1,), (0, 1)], (0, 1)],
-            [[(1,), (1, 0)], (1, 0)],
-            # [[(), (1, 0)], (1, 0)],
-            # [[(), (0, 1)], (0, 1)],
-            [[(1,), (3,)], (3,)],
-            [[2, (3, 2)], (3, 2)],
+            [()],
+            [(7,)],
+            [(1, 2),],
+            [(1, 1)],
+            [(1, 1), (3, 4)],
+            [(6, 7), (5, 6, 1), (7,), (5, 1, 7)],
+            [(5, 6, 1)],
+            [(1, 3), (3, 1)],
+            [(1, 0), (0, 0)],
+            [(0, 1), (0, 0)],
+            [(1, 0), (0, 1)],
+            [(1, 1), (0, 0)],
+            [(1, 1), (1, 0)],
+            [(1, 1), (0, 1)],
+            [(), (0,)],
+            [(0,), (0, 0)],
+            [(0,), (0, 1)],
+            [(1,), (0, 0)],
+            [(), (0, 0)],
+            [(1, 1), (0,)],
+            [(1,), (0, 1)],
+            [(1,), (1, 0)],
+            [(), (1, 0)],
+            [(), (0, 1)],
+            [(1,), (3,)],
+            [2, (3, 2)],
         ]
-        for input_shape, target_shape in data:
+        for input_shape in data:
+            expected = pyfunc(*input_shape)
             got = cfunc(*input_shape)
-            self.assertPreciseEqual(got, target_shape)
+            self.assertPreciseEqual(expected, got)
+
+    def test_broadcast_shapes_raises(self):
+        pyfunc = numpy_broadcast_shapes
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self.disable_leak_check()
+
+        # Tests taken from
+        # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/tests/test_stride_tricks.py#L337-L351
+        data = [
+            [(3,), (4,)],
+            [(2, 3), (2,)],
+            [(3,), (3,), (4,)],
+            [(1, 3, 4), (2, 3, 3)],
+            [(1, 2), (3,1), (3,2), (10, 5)],
+            [2, (2, 3)],
+        ]
+        for input_shape in data:
+            with self.assertRaises(ValueError) as raises:
+                cfunc(*input_shape)
+
+            self.assertIn("shape mismatch: objects cannot be broadcast to a single shape",
+                          str(raises.exception))
 
     def test_shape(self):
         pyfunc = numpy_shape

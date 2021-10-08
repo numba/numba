@@ -1394,6 +1394,24 @@ def broadcast_shape(r, k, tmp):
                          " to a single shape")
 
 
+def __broadcast_shape_inner(arg):
+    pass
+
+
+@overload(__broadcast_shape_inner)
+def __broadcast_shape_inner_ol(r, m, arg):
+    if isinstance(arg, types.Tuple):
+        def impl(r, m, arg):
+            pass
+    else:
+        def impl(r, m, arg):
+            for i in range(len(arg)):
+                tmp = arg[i]
+                k = m - len(arg) + i
+                broadcast_shape(r, k, tmp)
+    return impl
+
+
 @overload(np.broadcast_shapes)
 def numpy_broadcast_shapes(*args):
     # Based on https://github.com/numpy/numpy/blob/f702b26fff3271ba6a6ba29a021fc19051d1f007/numpy/core/src/multiarray/iterators.c#L1129-L1212  # noqa
@@ -1412,10 +1430,7 @@ def numpy_broadcast_shapes(*args):
             if isinstance(arg, int):
                 broadcast_shape(r, m - 1, arg)
             else:
-                for i in range(len(arg)):
-                    tmp = arg[i]
-                    k = m - len(arg) + i
-                    broadcast_shape(r, k, tmp)
+                __broadcast_shape_inner(r, m, arg)
         return r
     return impl
 
