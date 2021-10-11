@@ -1523,6 +1523,10 @@ class ConstantPropagation(FunctionPass):
                 state.func_ir.blocks[block_idx].remove(stmt)
             replace_vars(state.func_ir.blocks, replace_vars_dict)
 
+        if mutated:
+            post_proc = postproc.PostProcessor(state.func_ir)
+            post_proc.run(emit_dels=False)
+
         return mutated
 
     def get_analysis_usage(self, AU):
