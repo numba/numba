@@ -1510,8 +1510,13 @@ class ConstantPropagation(FunctionPass):
                 for assign in block.find_insts(ir.Assign):
                     if isinstance(assign.value, ir.Var):
                         # lhs = rhs
-                        replace_vars_dict[assign.target.name] = assign.value
-                        var_block_map[assign] = block_idx
+                        rhs = state.func_ir.get_definition(assign.value)
+                        if isinstance(rhs, ir.Const):
+                            # rhs = ir.Const(...)
+                            # given the IR is in SSA format, one can safely
+                            # replace all uses of 'lhs' by 'rhs'.
+                            replace_vars_dict[assign.target.name] = assign.value
+                            var_block_map[assign] = block_idx
 
             if len(var_block_map) == 0:
                 break
@@ -1542,6 +1547,7 @@ class DeadLoopElimination(FunctionPass):
 
     def run_pass(self, state):
         mutated = False
+        state.func_ir.dump()
         cfg = compute_cfg_from_blocks(state.func_ir.blocks)
         print(cfg.loops())
         return mutated
