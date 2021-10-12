@@ -6,6 +6,7 @@ import os
 import sys
 
 import numpy as np
+
 from numba import _dispatcher
 from numba.core.typing.templates import AbstractTemplate, ConcreteTemplate
 from numba.core import (types, typing, utils, funcdesc, serialize, config,

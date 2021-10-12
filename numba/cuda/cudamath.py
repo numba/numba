@@ -40,7 +40,6 @@ class Math_unary(ConcreteTemplate):
     cases = [
         signature(types.float64, types.int64),
         signature(types.float64, types.uint64),
-        signature(types.float16, types.float16),
         signature(types.float32, types.float32),
         signature(types.float64, types.float64),
     ]
@@ -52,7 +51,6 @@ class Math_atan2(ConcreteTemplate):
     cases = [
         signature(types.float64, types.int64, types.int64),
         signature(types.float64, types.uint64, types.uint64),
-        signature(types.float16, types.float16, types.float16),
         signature(types.float32, types.float32, types.float32),
         signature(types.float64, types.float64, types.float64),
     ]
@@ -64,7 +62,6 @@ class Math_hypot(ConcreteTemplate):
     cases = [
         signature(types.float64, types.int64, types.int64),
         signature(types.float64, types.uint64, types.uint64),
-        signature(types.float16, types.float16, types.float16),
         signature(types.float32, types.float32, types.float32),
         signature(types.float64, types.float64, types.float64),
     ]
@@ -74,7 +71,6 @@ class Math_hypot(ConcreteTemplate):
 @infer_global(math.fmod)
 class Math_binary(ConcreteTemplate):
     cases = [
-        signature(types.float16, types.float16, types.float16),
         signature(types.float32, types.float32, types.float32),
         signature(types.float64, types.float64, types.float64),
     ]
@@ -84,7 +80,6 @@ if utils.PYVERSION >= (3, 7):
     @infer_global(math.remainder)
     class Math_remainder(ConcreteTemplate):
         cases = [
-            signature(types.float16, types.float16, types.float16),
             signature(types.float32, types.float32, types.float32),
             signature(types.float64, types.float64, types.float64),
         ]
@@ -93,10 +88,8 @@ if utils.PYVERSION >= (3, 7):
 @infer_global(math.pow)
 class Math_pow(ConcreteTemplate):
     cases = [
-        signature(types.float16, types.float16, types.float16),
         signature(types.float32, types.float32, types.float32),
         signature(types.float64, types.float64, types.float64),
-        signature(types.float16, types.float16, types.int32),
         signature(types.float32, types.float32, types.int32),
         signature(types.float64, types.float64, types.int32),
     ]
@@ -105,7 +98,6 @@ class Math_pow(ConcreteTemplate):
 @infer_global(math.frexp)
 class Math_frexp(ConcreteTemplate):
     cases = [
-        signature(types.Tuple([types.float16, types.int32]), types.float16),
         signature(types.Tuple([types.float32, types.int32]), types.float32),
         signature(types.Tuple([types.float64, types.int32]), types.float64),
     ]
@@ -114,7 +106,6 @@ class Math_frexp(ConcreteTemplate):
 @infer_global(math.ldexp)
 class Math_ldexp(ConcreteTemplate):
     cases = [
-        signature(types.float16, types.float16, types.float16),
         signature(types.float32, types.float32, types.int32),
         signature(types.float64, types.float64, types.int32),
     ]
@@ -127,7 +118,6 @@ class Math_isnan(ConcreteTemplate):
     cases = [
         signature(types.boolean, types.int64),
         signature(types.boolean, types.uint64),
-        signature(types.boolean, types.float16),
         signature(types.boolean, types.float32),
         signature(types.boolean, types.float64),
     ]
@@ -137,6 +127,5 @@ class Math_isnan(ConcreteTemplate):
 class Math_modf(ConcreteTemplate):
     cases = [
         signature(types.UniTuple(types.float64, 2), types.float64),
-        signature(types.UniTuple(types.float32, 2), types.float32),
-        signature(types.UniTuple(types.float16, 2), types.float16)
+        signature(types.UniTuple(types.float32, 2), types.float32)
     ]
