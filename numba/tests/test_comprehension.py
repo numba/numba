@@ -370,6 +370,16 @@ class TestArrayComprehension(unittest.TestCase):
         self.assertIn(_header_lead, str(raises.exception))
         self.assertIn('array(undefined,', str(raises.exception))
 
+    def test_comp_unsupported_iter(self):
+        def comp_unsupported_iter():
+            val = zip([1, 2, 3], [4, 5, 6])
+            return np.array([a for a, b in val])
+        with self.assertRaises(TypingError) as raises:
+            self.check(comp_unsupported_iter)
+        self.assertIn(_header_lead, str(raises.exception))
+        self.assertIn('Unsupported iterator found in array comprehension',
+                      str(raises.exception))
+
     def test_no_array_comp(self):
         def no_array_comp1(n):
             l = [1,2,3,4]
