@@ -497,9 +497,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                 # (e.g. float16), try other candidates
                 continue
             else:
-                loopspec = UFuncLoopSpec(inputs, outputs, candidate)
-                if supported_ufunc_loop(ufunc, loopspec):
-                    return loopspec
+                return UFuncLoopSpec(inputs, outputs, candidate)
 
     return None
 
