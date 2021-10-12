@@ -683,42 +683,62 @@ def ol_isinstance(var, typs):
         return False
 
     # register container types (List, Dict, ...) with types.Any as base type
-    as_numba_type.register(tuple, types.Tuple((types.Any,)))
-    as_numba_type.register(list, types.List(types.Any))
-    # dict doesn't work as input to an njit function
-    # as_numba_type.register(dict, types.DictType(types.Any, types.Any))
+    as_numba_type.register(tuple, types.Tuple((types.undefined,)))
+    as_numba_type.register(list, types.List(types.undefined))
+    # set requires the type to be hashable
+    as_numba_type.register(set, types.Set(types.undefined))
+    as_numba_type.register(types.ListType, types.ListType(types.undefined))
 
-    if isinstance(typs, types.UniTuple):
+    t_typs = typs
+
+    if isinstance(t_typs, types.UniTuple):
         # corner case - all types in isinstance are the same
-        typs = (typs.key[0])
+        t_typs = (t_typs.key[0])
 
-    if not isinstance(typs, types.containers.Tuple):
-        typs = (typs, )
+    if not isinstance(t_typs, types.containers.Tuple):
+        t_typs = (t_typs, )
 
-    var = as_numba_type(var)
+    var_ty = as_numba_type(var)
 
-    for typ in typs:
+    for typ in t_typs:
         if isinstance(typ, types.Function):
             key = typ.key[0]  # functions like int(..), float(..), str(..)
         elif isinstance(typ, types.ClassType):
-            key = typ
+            key = typ  # jitclasses
         else:
             key = typ.key
 
+        # corner cases for bytes, range, ...
+        # avoid registering those types on `as_numba_type`
+        types_not_registered = {
+            bytes: types.Bytes,
+            range: types.RangeType,
+        }
+        if key in types_not_registered:
+            if (key == bytes and isinstance(var_ty, types.Bytes)) or \
+                (key == range and isinstance(var_ty, types.RangeType)):
+                return true_impl
+            continue
+
         numba_typ = as_numba_type(key)
 
-        if var == numba_typ:
+        if var_ty == numba_typ:
             return true_impl
+        elif isinstance(typ, types.TypeRef):
+            # Case for TypeRef (i.e. isinstance(var, typed.List))
+            # i.e. var_ty == ListType[int64] (instance)
+            #         typ == types.ListType  (class)
+            return true_impl if type(var_ty) is key else false_impl
         elif isinstance(numba_typ, types.ClassType) and \
-                isinstance(var, types.ClassInstanceType) and \
-                var.key == numba_typ.instance_type.key:
+                isinstance(var_ty, types.ClassInstanceType) and \
+                var_ty.key == numba_typ.instance_type.key:
             # check for jitclasses
             return true_impl
         elif isinstance(numba_typ, types.Container) and \
-                numba_typ.key[0] == types.Any:
-            # check for containers (list, tuple, dict, ...)
-            if isinstance(var, numba_typ.__class__) or \
-                (isinstance(var, types.BaseTuple) and \
+                numba_typ.key[0] == types.undefined:
+            # check for containers (list, tuple, set, dict, ...)
+            if isinstance(var_ty, numba_typ.__class__) or \
+                (isinstance(var_ty, types.BaseTuple) and \
                     isinstance(numba_typ, types.BaseTuple)):
                 return true_impl
 

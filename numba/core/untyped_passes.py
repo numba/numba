@@ -1444,9 +1444,6 @@ class PropagateLiterals(FunctionPass):
 
         changed = False
 
-        literal_types = (types.BooleanLiteral, types.IntegerLiteral,
-                         types.StringLiteral)
-
         for block in state.func_ir.blocks.values():
             for assign in block.find_insts(ir.Assign):
                 if isinstance(assign.value, (ir.Arg, ir.Const,
@@ -1461,11 +1458,11 @@ class PropagateLiterals(FunctionPass):
 
                 target = assign.target
                 if not state.flags.enable_ssa:
-                    if len(state.func_ir._definitions.get(target.name, ())) > 1:
+                    if guard(get_definition, state.func_ir, target.name) is None:  # noqa: E501
                         continue
 
                 lit = state.typemap.get(target.name, None)
-                if lit and isinstance(lit, literal_types):
+                if lit and isinstance(lit, types.Literal):
                     # replace assign instruction by ir.Const(lit) iff
                     # lit is a literal value
                     rhs = ir.Const(lit.literal_value, assign.loc)
@@ -1503,7 +1500,7 @@ class LiteralPropagationSubPipelinePass(FunctionPass):
         pm = PassManager("literal_propagation_subpipeline")
 
         pm.add_pass(PartialTypeInference, "performs partial type inference")
-        pm.add_pass(PropagateLiterals, "performs literal propagation")
+        pm.add_pass(PropagateLiterals, "performs propagation of literal values")
 
         # rewrite consts / dead branch pruning
         pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
