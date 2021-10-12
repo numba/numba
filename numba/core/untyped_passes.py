@@ -153,7 +153,7 @@ class RewriteSemanticConstants(FunctionPass):
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
-class DeadBranchPrune(FunctionPass, SSACompliantMixin):
+class DeadBranchPrune(SSACompliantMixin, FunctionPass):
     _name = "dead_branch_prune"
 
     def __init__(self):
@@ -1434,9 +1434,10 @@ class PropagateLiterals(FunctionPass):
     def __init__(self):
         FunctionPass.__init__(self)
 
+    def get_analysis_usage(self, AU):
+        AU.add_required(ReconstructSSA)
+
     def run_pass(self, state):
-        if not hasattr(state.func_ir, '_definitions'):
-            state.func_ir._definitions = build_definitions(state.func_ir.blocks)
         changed = False
 
         literal_types = (types.BooleanLiteral, types.IntegerLiteral,
@@ -1455,8 +1456,6 @@ class PropagateLiterals(FunctionPass):
                     continue
 
                 target = assign.target
-                if len(state.func_ir._definitions.get(target.name, ())) > 1:
-                    continue
 
                 lit = state.typemap.get(target.name, None)
                 if lit and isinstance(lit, literal_types):
