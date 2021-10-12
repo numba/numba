@@ -11,7 +11,8 @@ from numba.misc.special import literal_unroll
 from numba.core.analysis import (dead_branch_prune, rewrite_semantic_constants,
                                  find_literally_calls, compute_cfg_from_blocks,
                                  compute_use_defs)
-from numba.core.ir_utils import (guard, resolve_func_from_module, simplify_CFG,
+from numba.core.ir_utils import (dead_code_elimination, guard,
+                                 resolve_func_from_module, simplify_CFG,
                                  GuardException, convert_code_obj_to_function,
                                  mk_unique_var, build_definitions,
                                  replace_var_names, get_name_var_table,
@@ -1678,6 +1679,91 @@ class SimplifyCFG(FunctionPass):
         state.func_ir.blocks = new_blks
         mutated = blks != new_blks
         return mutated
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class DeadLoopElimination(FunctionPass):
+    _name = "dead_loop_elimination"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+        self.dead_vars = []
+
+    def is_arg_constsized(self, state, arg):
+        # True if len(type(arg)) == 0
+        t = state.typemap.get(arg.name)
+        return isinstance(t, types.ConstSized) and len(t) == 0
+
+    def match_iter(self, state, getiter):
+        # call_fn  := Var(...)
+        # call_ret := call_expr(func=call_fn, args=[...])
+        #        _ := getiter(value=call_ret)
+        func_ir = state.func_ir
+        call_expr = get_definition(func_ir, getiter.value)
+        if not (isinstance(call_expr, ir.Expr) and call_expr.op == 'call'):
+            return False
+        call_fn = get_definition(func_ir, call_expr.func)
+
+        if call_fn.value not in (iter, zip):
+            return False
+
+        for arg in call_expr.args:
+            # only one arg?
+            if self.is_arg_constsized(state, arg):
+                self.dead_vars.append(func_ir.get_assignee(call_expr))
+                return True
+        return False
+
+    def find_dead_loops(self, state):
+        dead_loops = list()
+        cfg = compute_cfg_from_blocks(state.func_ir.blocks)
+        for loop in cfg.loops().values():
+            header = state.func_ir.blocks[loop.header]
+            for expr in header.find_exprs('iternext'):
+                defn = state.func_ir.get_definition(expr.value.name)
+                if isinstance(defn, ir.Expr) and defn.op == 'getiter':
+                    # defn := getiter(value=Var)
+                    if self.is_arg_constsized(state, defn.value) or \
+                       self.match_iter(state, defn):
+                        dead_loops.append(loop)
+        return dead_loops
+
+    def remove_dead_loops(self, state, dead_loops):
+        for loop in dead_loops:
+            header = state.func_ir.blocks[loop.header]
+            term = header.terminator
+            header.insert_before_terminator(ir.Jump(term.falsebr, term.loc))
+            header.remove(term)
+        dead_branch_prune(state.func_ir, state.args)
+
+        for var in self.dead_vars:
+            if var is None:
+                continue
+            for block in state.func_ir.blocks.values():
+                assign = block.find_variable_assignment(var.name)
+                if assign:
+                    block.remove(assign)
+
+    def run_pass(self, state):
+        # run as subpipeline
+        from numba.core.compiler_machinery import PassManager
+        from numba.core.typed_passes import PartialTypeInference
+        pm = PassManager("dead_loop_elimination_subpipeline")
+        pm.add_pass(GenericRewrites, "Generic Rewrites")
+        pm.add_pass(RewriteSemanticConstants, "Semantic const")
+        pm.add_pass(DeadBranchPrune, "Dead branch prune")
+        pm.add_pass(PartialTypeInference, "performs partial type inference")
+        pm.finalize()
+        pm.run(state)
+
+        dead_loops = self.find_dead_loops(state)
+        if dead_loops:
+            self.remove_dead_loops(state, dead_loops)
+            state.func_ir.blocks = simplify_CFG(state.func_ir.blocks)
+            dead_code_elimination(state.func_ir)
+            return True
+
+        return False
 
 
 @register_pass(mutates_CFG=False, analysis_only=False)

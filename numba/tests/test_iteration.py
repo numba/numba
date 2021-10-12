@@ -250,5 +250,84 @@ class TestIterationRefct(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(sequence), foo.py_func(sequence))
 
 
+class TestEmptyContainers(TestCase):
+    def testcase(self):
+        @njit
+        def empty_things():
+            for c in ():
+                if c:
+                    break
+                else:
+                    pass
+            for d in []:
+                if d:
+                    break
+                else:
+                    pass
+            for e in (((),)[-1]):
+                if e:
+                    break
+                else:
+                    pass
+
+        empty_things()
+
+    def test_simple_empty_list(self):
+        @njit
+        def func():
+            s = 0
+            for x in []:
+                s += x
+            return s
+
+        self.assertPreciseEqual(func(), func.py_func())
+
+    def test_simple_empty_tuple(self):
+        @njit
+        def func():
+            s = 0
+            for x in ():
+                s += x
+            return s
+
+        self.assertPreciseEqual(func(), func.py_func())
+
+    def test_iter(self):
+        from numba import literal_unroll
+
+        @njit
+        def func(containers):
+            s = -1
+            for container in literal_unroll(containers):
+                for x in iter(container):
+                    s += x
+            return s
+
+        inps = [
+            ((),),
+            ((), ()),
+            ((), (), ()),
+            ((), (0,), ()),
+        ]
+        for inp in inps:
+            self.assertPreciseEqual(func(inp), func.py_func(inp))
+
+    def test_zip(self):
+        @njit
+        def func(ca, cb):
+            s = -1
+            for x, y in zip(ca, cb):
+                s += x + y
+            return s
+
+        inps = [
+            ((), ()),
+            ((), (0, 2, 3)),
+            ((0, 2, 3), ()),
+        ]
+        for ca, cb in inps:
+            self.assertPreciseEqual(func(ca, cb), func.py_func(ca, cb))
+
+
 if __name__ == '__main__':
     unittest.main()
