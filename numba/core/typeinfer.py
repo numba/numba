@@ -175,7 +175,10 @@ class ConstraintNetwork(object):
                     elif utils.use_new_style_errors():
                         raise e
                     else:
-                        assert 0
+                        msg = ("Unknown CAPTURED_ERRORS style: "
+                               f"'{config.CAPTURED_ERRORS}'.")
+                        assert 0, msg
+
         return errors
 
 

@@ -832,7 +832,9 @@ def new_error_context(fmt_, *args, **kwargs):
         elif use_new_style_errors():
             raise e
         else:
-            assert 0
+            msg = ("Unknown CAPTURED_ERRORS style: "
+                   f"'{numba.core.config.CAPTURED_ERRORS}'.")
+            assert 0, msg
 
 
 __all__ += [name for (name, value) in globals().items()
