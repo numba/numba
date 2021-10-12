@@ -1438,6 +1438,10 @@ class PropagateLiterals(FunctionPass):
         AU.add_required(ReconstructSSA)
 
     def run_pass(self, state):
+        if not hasattr(state.func_ir, '_definitions') \
+                and not state.flags.enable_ssa:
+            state.func_ir._definitions = build_definitions(state.func_ir.blocks)
+
         changed = False
 
         literal_types = (types.BooleanLiteral, types.IntegerLiteral,
@@ -1456,6 +1460,9 @@ class PropagateLiterals(FunctionPass):
                     continue
 
                 target = assign.target
+                if not state.flags.enable_ssa:
+                    if len(state.func_ir._definitions.get(target.name, ())) > 1:
+                        continue
 
                 lit = state.typemap.get(target.name, None)
                 if lit and isinstance(lit, literal_types):
