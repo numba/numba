@@ -455,6 +455,10 @@ def ufunc_find_matching_loop(ufunc, arg_types):
     for candidate in ufunc.types:
         ufunc_inputs = candidate[:ufunc.nin]
         ufunc_outputs = candidate[-ufunc.nout:] if ufunc.nout else []
+
+        if 'e' in ufunc_inputs:
+            # Skip float16 arrays since we don't have implementation for them
+            continue
         if 'O' in ufunc_inputs:
             # Skip object arrays
             continue
@@ -497,9 +501,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                 # (e.g. float16), try other candidates
                 continue
             else:
-                loopspec = UFuncLoopSpec(inputs, outputs, candidate)
-                if supported_ufunc_loop(ufunc, loopspec):
-                    return loopspec
+                return UFuncLoopSpec(inputs, outputs, candidate)
 
     return None
 
