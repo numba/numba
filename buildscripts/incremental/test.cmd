@@ -14,7 +14,7 @@ set NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING=1
 set NUMBA_DEVELOPER_MODE=1
 @rem enable the faulthandler
 set PYTHONFAULTHANDLER=1
-@rem HACK: REMOVE THIS... enable new style error handling
+@rem enable new style error handling
 set NUMBA_CAPTURED_ERRORS="new_style"
 
 @rem First check that the test discovery works
