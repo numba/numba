@@ -75,7 +75,7 @@ class TestPrint(CUDATestCase):
         # Tests that we emit the format string and warn when there are more
         # than 32 arguments, in common with CUDA C/C++ printf - this is due to
         # a limitation in CUDA vprintf, see:
-        #    https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#limitations
+        # https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#limitations
 
         cufunc = cuda.jit(print_too_many)
         r = np.arange(33)
@@ -88,8 +88,6 @@ class TestPrint(CUDATestCase):
         self.assertIn(expected_fmt_string, stdout.getvalue())
 
         # Check for the expected warning about formatting more than 32 items
-        found = False
-
         for warning in w:
             warnobj = warning.message
             if isinstance(warnobj, NumbaWarning):
@@ -97,9 +95,8 @@ class TestPrint(CUDATestCase):
                             'The raw format string will be emitted by the '
                             'kernel instead.')
                 if warnobj.msg == expected:
-                    found = True
-
-        if not found:
+                    break
+        else:
             self.fail('Expected a warning for printing more than 32 items')
 
 
