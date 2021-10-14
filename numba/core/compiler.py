@@ -466,6 +466,10 @@ class CompilerBase(object):
                     res = e.result
                     break
                 except Exception as e:
+                    if (utils.use_new_style_errors() and not
+                            isinstance(e, errors.NumbaError)):
+                        raise e
+
                     self.state.status.fail_reason = e
                     if is_final_pipeline:
                         raise e

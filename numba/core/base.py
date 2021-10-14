@@ -13,7 +13,7 @@ from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
 from numba.core import types, utils, typing, datamodel, debuginfo, funcdesc, config, cgutils, imputils
-from numba.core import event
+from numba.core import event, errors
 from numba import _dynfunc, _helperlib
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.pythonapi import PythonAPI
@@ -54,7 +54,7 @@ class OverloadSelector(object):
         if candidates:
             return candidates[self._best_signature(candidates)]
         else:
-            raise NotImplementedError(self, sig)
+            raise errors.NumbaNotImplementedError(f'{self}, {sig}')
 
     def _select_compatible(self, sig):
         """
@@ -80,7 +80,7 @@ class OverloadSelector(object):
                 msg = ["{n} ambiguous signatures".format(n=len(same))]
                 for sig in same:
                     msg += ["{0} => {1}".format(sig, candidates[sig])]
-                raise TypeError('\n'.join(msg))
+                raise errors.NumbaTypeError('\n'.join(msg))
         return ordered[0]
 
     def _sort_signatures(self, candidates):
@@ -551,13 +551,13 @@ class BaseContext(object):
 
         try:
             return _wrap_impl(overloads.find(sig.args), self, sig)
-        except NotImplementedError:
+        except errors.NumbaNotImplementedError:
             pass
         if isinstance(fn, types.Type):
             # It's a type instance => try to find a definition for the type class
             try:
                 return self.get_function(type(fn), sig)
-            except NotImplementedError:
+            except errors.NumbaNotImplementedError:
                 # Raise exception for the type instance, for a better error message
                 pass
 
@@ -613,13 +613,13 @@ class BaseContext(object):
         overloads = self._getattrs[attr]
         try:
             return overloads.find((typ,))
-        except NotImplementedError:
+        except errors.NumbaNotImplementedError:
             pass
         # Lookup generic getattr implementation for this type
         overloads = self._getattrs[None]
         try:
             return overloads.find((typ,))
-        except NotImplementedError:
+        except errors.NumbaNotImplementedError:
             pass
 
         raise NotImplementedError("No definition for lowering %s.%s" % (typ, attr))
@@ -643,13 +643,13 @@ class BaseContext(object):
         overloads = self._setattrs[attr]
         try:
             return wrap_setattr(overloads.find((typ, valty)))
-        except NotImplementedError:
+        except errors.NumbaNotImplementedError:
             pass
         # Lookup generic setattr implementation for this type
         overloads = self._setattrs[None]
         try:
             return wrap_setattr(overloads.find((typ, valty)))
-        except NotImplementedError:
+        except errors.NumbaNotImplementedError:
             pass
 
         raise NotImplementedError("No definition for lowering %s.%s = %s"
@@ -709,8 +709,8 @@ class BaseContext(object):
         try:
             impl = self._casts.find((fromty, toty))
             return impl(self, builder, fromty, toty, val)
-        except NotImplementedError:
-            raise NotImplementedError(
+        except errors.NumbaNotImplementedError:
+            raise errors.NumbaNotImplementedError(
                 "Cannot cast %s to %s: %s" % (fromty, toty, val))
 
     def generic_compare(self, builder, key, argtypes, args):

@@ -68,6 +68,17 @@ def _os_supports_avx():
             return False
 
 
+# Choose how to handle captured errors
+def _validate_captured_errors_style(style_str):
+    rendered_style = str(style_str)
+    if rendered_style not in ('new_style', 'old_style'):
+        msg = ("Invalid style in NUMBA_CAPTURED_ERRORS: "
+               f"{rendered_style}")
+        raise ValueError(msg)
+    else:
+        return rendered_style
+
+
 class _EnvReloader(object):
 
     def __init__(self):
@@ -312,6 +323,10 @@ class _EnvReloader(object):
             ['tbb', 'omp', 'workqueue'],
         )
         THREADING_LAYER = _readenv("NUMBA_THREADING_LAYER", str, 'default')
+
+        CAPTURED_ERRORS = _readenv("NUMBA_CAPTURED_ERRORS",
+                                   _validate_captured_errors_style,
+                                   'old_style')
 
         # CUDA Configs
 
