@@ -50,7 +50,7 @@ Dependencies
 
 * Python versions: 3.7-3.9
 * llvmlite 0.38.*
-* NumPy >=1.17 (can build with 1.11 for ABI compatibility).
+* NumPy >=1.18 (can build with 1.11 for ABI compatibility).
 
 Optionally:
 
