@@ -17,7 +17,7 @@ from numba.core.compiler import (CompilerBase, DefaultPassBuilder,
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.compiler_machinery import (LoweringPass, PassManager,
                                            register_pass)
-from numba.core.dispatcher import OmittedArg
+from numba.core.dispatcher import CompilingCounter, OmittedArg
 from numba.core.errors import (NumbaDeprecationWarning,
                                NumbaInvalidConfigWarning)
 from numba.core.typed_passes import IRLegalization, NativeLowering
@@ -32,6 +32,7 @@ from .api import get_current_device
 from .args import wrap_arg
 from numba.core.errors import NumbaPerformanceWarning
 from .descriptor import cuda_target
+from . import types as cuda_types
 
 
 def _nvvm_options_type(x):
@@ -264,11 +265,24 @@ class DeviceDispatcher(serialize.ReduceMixin):
         self.inline = inline
         self.opt = opt
         self.overloads = {}
+        self._type = self._numba_type_
         name = getattr(pyfunc, '__name__', 'unknown')
         self.__name__ = f"{name} <CUDA device function>".format(name)
+        self._compiling_counter = CompilingCounter()
 
     def _reduce_states(self):
         return dict(py_func=self.py_func, debug=self.debug, inline=self.inline)
+
+    @property
+    def _numba_type_(self):
+        return cuda_types.CUDADispatcher(self)
+
+    @property
+    def is_compiling(self):
+        """
+        Whether a specialization is currently being compiled.
+        """
+        return self._compiling_counter
 
     @classmethod
     def _rebuild(cls, py_func, debug, inline):
@@ -282,20 +296,21 @@ class DeviceDispatcher(serialize.ReduceMixin):
 
         A (template, pysig, args, kws) tuple is returned.
         """
-        # Ensure an overload is available
-        self.compile(tuple(args))
+        with self._compiling_counter:
+            # Ensure an overload is available
+            self.compile(tuple(args))
 
-        # Create function type for typing
-        func_name = self.py_func.__name__
-        name = "CallTemplate({0})".format(func_name)
+            # Create function type for typing
+            func_name = self.py_func.__name__
+            name = "CallTemplate({0})".format(func_name)
 
-        # The `key` isn't really used except for diagnosis here,
-        # so avoid keeping a reference to `cfunc`.
-        call_template = typing.make_concrete_template(
-            name, key=func_name, signatures=self.nopython_signatures)
-        pysig = utils.pysignature(self.py_func)
+            # The `key` isn't really used except for diagnosis here,
+            # so avoid keeping a reference to `cfunc`.
+            call_template = typing.make_concrete_template(
+                name, key=func_name, signatures=self.nopython_signatures)
+            pysig = utils.pysignature(self.py_func)
 
-        return call_template, pysig, args, kws
+            return call_template, pysig, args, kws
 
     @property
     def nopython_signatures(self):
@@ -304,11 +319,12 @@ class DeviceDispatcher(serialize.ReduceMixin):
         return [info.signature for info in self.overloads.values()]
 
     def get_overload(self, sig):
-        # NOTE: This dispatcher seems to be used as the key for the dict of
-        # implementations elsewhere in Numba, so we return this dispatcher
-        # instead of a compiled entry point as in
-        # _DispatcherBase.get_overload().
-        return self
+        # We give the id of the overload (a CompileResult) because this is used
+        # as a key into a dict of overloads, and this is the only small and
+        # unique property of a CompileResult on CUDA (c.f. the CPU target,
+        # which uses its entry_point, which is a pointer value).
+        args, return_type = sigutils.normalize_signature(sig)
+        return id(self.overloads[args])
 
     def compile(self, args):
         """Compile the function for the given argument types.
@@ -326,17 +342,12 @@ class DeviceDispatcher(serialize.ReduceMixin):
 
             cres = compile_cuda(self.py_func, None, args, debug=self.debug,
                                 inline=self.inline, nvvm_options=nvvm_options)
-            first_definition = not self.overloads
             self.overloads[args] = cres
-            libs = [cres.library]
 
-            if first_definition:
-                # First definition
-                cres.target_context.insert_user_function(self, cres.fndesc,
-                                                         libs)
-            else:
-                cres.target_context.add_user_function(self, cres.fndesc, libs)
-
+            # The inserted function uses the id of the CompileResult as a key,
+            # consistent with get_overload() above.
+            cres.target_context.insert_user_function(id(cres), cres.fndesc,
+                                                     [cres.library])
         else:
             cres = self.overloads[args]
 
@@ -451,15 +462,57 @@ class DeviceFunction(serialize.ReduceMixin):
                             debug=self.debug, inline=self.inline,
                             lineinfo=self.lineinfo)
         self.cres = cres
+        self._type = self._numba_type_
 
         class device_function_template(ConcreteTemplate):
             key = self
             cases = [cres.signature]
 
-        cres.typing_context.insert_user_function(
-            self, device_function_template)
-        cres.target_context.insert_user_function(self, cres.fndesc,
+        cres.typing_context.insert_user_function(self,
+                                                 device_function_template)
+
+        cres.target_context.insert_user_function(id(cres), cres.fndesc,
                                                  [cres.library])
+
+    @property
+    def _numba_type_(self):
+        return cuda_types.CUDADispatcher(self)
+
+    @property
+    def is_compiling(self):
+        """
+        Whether a specialization is currently being compiled.
+        """
+        # A DeviceFunction is eagerly compiled, so it's never compiling.
+        return False
+
+    @property
+    def nopython_signatures(self):
+        # A DeviceFunction is eagerly compiled for a single signature, so we
+        # can just return it wrapped in a list.
+        return [self.cres.signature]
+
+    def get_call_template(self, args, kws):
+        # Copied and simplified from _DispatcherBase.get_call_template.
+        """
+        Get a typing.ConcreteTemplate for this DeviceFunction and the given
+        *args* and *kws* types.  This allows to resolve the return type.
+
+        A (template, pysig, args, kws) tuple is returned.
+        """
+        # Create function type for typing
+        func_name = self.py_func.__name__
+        name = "CallTemplate({0})".format(func_name)
+
+        call_template = typing.make_concrete_template(
+            name, key=func_name, signatures=self.nopython_signatures)
+        pysig = utils.pysignature(self.py_func)
+
+        return call_template, pysig, args, kws
+
+    def get_overload(self, sig):
+        # We have a single overload, so just return its id.
+        return id(self.cres)
 
     def _reduce_states(self):
         return dict(py_func=self.py_func, return_type=self.return_type,
