@@ -332,7 +332,7 @@ init_ufunc_dispatch(int *numpy_uses_fastcall)
         if (result < 0) break;
 
         /* Check whether NumPy uses fastcall (ufunc.at never uses it) */
-        if (!strncmp(crnt_name, "at", 3)) {
+        if (strncmp(crnt_name, "at", 3) != 0) {
             if (*numpy_uses_fastcall == -1) {
                 *numpy_uses_fastcall = crnt->ml_flags & METH_FASTCALL;
             }
