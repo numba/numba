@@ -440,12 +440,6 @@ def compile_device_dispatcher(pyfunc, sig=None, debug=False, inline=False,
     return dispatcher
 
 
-def compile_device(pyfunc, return_type, args, inline=True, debug=False,
-                   lineinfo=False):
-    return DeviceFunction(pyfunc, return_type, args, inline=True, debug=False,
-                          lineinfo=False)
-
-
 def declare_device_function(name, restype, argtypes):
     from .descriptor import cuda_target
     typingctx = cuda_target.typing_context
@@ -462,85 +456,6 @@ def declare_device_function(name, restype, argtypes):
     typingctx.insert_user_function(extfn, device_function_template)
     targetctx.insert_user_function(extfn, fndesc)
     return extfn
-
-
-class DeviceFunction(serialize.ReduceMixin):
-
-    def __init__(self, pyfunc, return_type, args, inline, debug, lineinfo):
-        self.py_func = pyfunc
-        self.return_type = return_type
-        self.args = args
-        self.inline = True
-        self.debug = False
-        self.lineinfo = False
-        cres = compile_cuda(self.py_func, self.return_type, self.args,
-                            debug=self.debug, inline=self.inline,
-                            lineinfo=self.lineinfo)
-        self.cres = cres
-        self._type = self._numba_type_
-
-        class device_function_template(ConcreteTemplate):
-            key = self
-            cases = [cres.signature]
-
-        cres.typing_context.insert_user_function(self,
-                                                 device_function_template)
-
-        cres.target_context.insert_user_function(id(cres), cres.fndesc,
-                                                 [cres.library])
-
-    @property
-    def _numba_type_(self):
-        return cuda_types.CUDADispatcher(self)
-
-    @property
-    def is_compiling(self):
-        """
-        Whether a specialization is currently being compiled.
-        """
-        # A DeviceFunction is eagerly compiled, so it's never compiling.
-        return False
-
-    @property
-    def nopython_signatures(self):
-        # A DeviceFunction is eagerly compiled for a single signature, so we
-        # can just return it wrapped in a list.
-        return [self.cres.signature]
-
-    def get_call_template(self, args, kws):
-        # Copied and simplified from _DispatcherBase.get_call_template.
-        """
-        Get a typing.ConcreteTemplate for this DeviceFunction and the given
-        *args* and *kws* types.  This allows to resolve the return type.
-
-        A (template, pysig, args, kws) tuple is returned.
-        """
-        # Create function type for typing
-        func_name = self.py_func.__name__
-        name = "CallTemplate({0})".format(func_name)
-
-        call_template = typing.make_concrete_template(
-            name, key=func_name, signatures=self.nopython_signatures)
-        pysig = utils.pysignature(self.py_func)
-
-        return call_template, pysig, args, kws
-
-    def get_overload(self, sig):
-        # We have a single overload, so just return its id.
-        return id(self.cres)
-
-    def _reduce_states(self):
-        return dict(py_func=self.py_func, return_type=self.return_type,
-                    args=self.args, inline=self.inline, debug=self.debug,
-                    lineinfo=self.lineinfo)
-
-    @classmethod
-    def _rebuild(cls, py_func, return_type, args, inline, debug, lineinfo):
-        return cls(py_func, return_type, args, inline, debug, lineinfo)
-
-    def __repr__(self):
-        fmt = "<DeviceFunction py_func={0} signature={1}>"
-        return fmt.format(self.py_func, self.cres.signature)
 
 
 class ExternFunction(object):
