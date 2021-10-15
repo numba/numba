@@ -885,8 +885,16 @@ def make_overload_template(func, overload_func, jit_options, strict,
 class _TemplateTargetHelperMixin(object):
     """Mixin for helper methods that assist with target/registry resolution"""
 
-    def _get_target_registry(self):
-        """Returns the registry for the current target
+    def _get_target_registry(self, reason):
+        """Returns the registry for the current target.
+
+        Parameters
+        ----------
+        reason: str
+            Reason for the resolution. Expects a noun.
+        Returns
+        -------
+        reg : a registry suitable for the current target.
         """
         from numba.core.target_extension import (_get_local_target_checked,
                                                  dispatcher_registry)
@@ -927,7 +935,7 @@ class _TemplateTargetHelperMixin(object):
         return reg
 
 
-class _IntrinsicTemplate(AbstractTemplate, _TemplateTargetHelperMixin):
+class _IntrinsicTemplate(_TemplateTargetHelperMixin, AbstractTemplate):
     """
     A base class of templates for intrinsic definition
     """
@@ -936,7 +944,7 @@ class _IntrinsicTemplate(AbstractTemplate, _TemplateTargetHelperMixin):
         """
         Type the intrinsic by the arguments.
         """
-        lower_builtin = self._get_target_registry().lower
+        lower_builtin = self._get_target_registry('intrinsic').lower
         cache_key = self.context, args, tuple(kws.items())
         try:
             return self._impl_cache[cache_key]
@@ -1015,7 +1023,7 @@ class AttributeTemplate(object):
     generic_resolve = NotImplemented
 
 
-class _OverloadAttributeTemplate(AttributeTemplate, _TemplateTargetHelperMixin):
+class _OverloadAttributeTemplate(_TemplateTargetHelperMixin, AttributeTemplate):
     """
     A base class of templates for @overload_attribute functions.
     """
@@ -1030,7 +1038,7 @@ class _OverloadAttributeTemplate(AttributeTemplate, _TemplateTargetHelperMixin):
         cls = type(self)
         attr = cls._attr
 
-        lower_getattr = self._get_target_registry().lower_getattr
+        lower_getattr = self._get_target_registry('attribute').lower_getattr
 
         @lower_getattr(cls.key, attr)
         def getattr_impl(context, builder, typ, value):
@@ -1074,7 +1082,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         attr = self._attr
 
         try:
-            registry = self._get_target_registry()
+            registry = self._get_target_registry('method')
         except InternalTargetMismatchError:
             # Target mismatch. Do not register attribute lookup here.
             pass
