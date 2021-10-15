@@ -1667,7 +1667,7 @@ def numpy_rot90(arr, k=1):
         raise errors.TypingError('The first argument "arr" must be an array')
 
     if arr.ndim < 2:
-        raise ValueError('Input must be >= 2-d.')
+        raise errors.NumbaValueError('Input must be >= 2-d.')
 
     def impl(arr, k=1):
         k = k % 4
@@ -4074,7 +4074,10 @@ def _arange_dtype(*args):
         # were wrapped in NumPy int*() calls it's not possible to detect the
         # difference between `np.arange(10)` and `np.arange(np.int64(10)`.
         NPY_TY = getattr(types, "int%s" % (8 * np.dtype(int).itemsize))
-        dtype = max(bounds + [NPY_TY,])
+
+        # unliteral these types such that `max` works.
+        unliteral_bounds = [types.unliteral(x) for x in bounds]
+        dtype = max(unliteral_bounds + [NPY_TY,])
 
     return dtype
 
@@ -5171,6 +5174,8 @@ def np_flip_ud(a):
 def _build_flip_slice_tuple(tyctx, sz):
     """ Creates a tuple of slices for np.flip indexing like
     `(slice(None, None, -1),) * sz` """
+    if not isinstance(sz, types.IntegerLiteral):
+        raise errors.RequireLiteralValue(sz)
     size = int(sz.literal_value)
     tuple_type = types.UniTuple(dtype=types.slice3_type, count=size)
     sig = tuple_type(sz)
@@ -5625,15 +5630,13 @@ def arr_take_along_axis(arr, indices, axis):
     else:
         check_is_integer(axis, "axis")
         if not isinstance(axis, types.IntegerLiteral):
-            raise ValueError(
-                "axis must be a literal value (i.e. not an argument)"
-            )
+            raise errors.NumbaValueError("axis must be a literal value")
         axis = axis.literal_value
         if axis < 0:
             axis = arr.ndim + axis
 
         if axis < 0 or axis >= arr.ndim:
-            raise ValueError("axis is out of bounds")
+            raise errors.NumbaValueError("axis is out of bounds")
 
         Ni = tuple(range(axis))
         Nk = tuple(range(axis + 1, arr.ndim))

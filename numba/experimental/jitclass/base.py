@@ -269,7 +269,7 @@ class ConstructorTemplate(templates.AbstractTemplate):
         sig = disp_type.get_call_type(self.context, boundargs, kws)
 
         if not isinstance(sig.return_type, types.NoneType):
-            raise TypeError(
+            raise errors.NumbaTypeError(
                 f"__init__() should return None, not '{sig.return_type}'")
 
         # Actual constructor returns an instance value (not None)

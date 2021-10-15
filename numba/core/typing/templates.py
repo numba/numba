@@ -402,6 +402,15 @@ class CallableTemplate(FunctionTemplate):
     def apply(self, args, kws):
         generic = getattr(self, "generic")
         typer = generic()
+        match_sig = inspect.signature(typer)
+        try:
+            match_sig.bind(*args, **kws)
+        except TypeError as e:
+            # bind failed, raise, if there's a
+            # ValueError then there's likely unrecoverable
+            # problems
+            raise TypingError(str(e)) from e
+
         sig = typer(*args, **kws)
 
         # Unpack optional type if no matching signature
@@ -772,7 +781,17 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         jitter = self._get_jit_decorator()
 
         # Get the overload implementation for the given types
-        ovf_result = self._overload_func(*args, **kws)
+        ov_sig = inspect.signature(self._overload_func)
+        try:
+            ov_sig.bind(*args, **kws)
+        except TypeError as e:
+            # bind failed, raise, if there's a
+            # ValueError then there's likely unrecoverable
+            # problems
+            raise TypingError(str(e)) from e
+        else:
+            ovf_result = self._overload_func(*args, **kws)
+
         if ovf_result is None:
             # No implementation => fail typing
             self._impl_cache[cache_key] = None, None

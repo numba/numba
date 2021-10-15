@@ -3,7 +3,7 @@ import sys
 
 from llvmlite import ir
 
-from numba.core import types, utils, config, cgutils
+from numba.core import types, utils, config, cgutils, errors
 from numba import gdb, gdb_init, gdb_breakpoint
 from numba.core.extending import overload, intrinsic
 
@@ -17,7 +17,8 @@ _unix_like = (_platform.startswith('linux') or
 
 def _confirm_gdb():
     if not _unix_like:
-        raise RuntimeError('gdb support is only available on unix-like systems')
+        msg = 'gdb support is only available on unix-like systems'
+        raise errors.NumbaRuntimeError(msg)
     gdbloc = config.GDB_BINARY
     if not (os.path.exists(gdbloc) and os.path.isfile(gdbloc)):
         msg = ('Is gdb present? Location specified (%s) does not exist. The gdb'
@@ -98,6 +99,8 @@ def init_gdb_codegen(cgctx, builder, signature, args,
     # issue command to continue execution from sleep function
     new_args.extend(['-ex', 'c'])
     # then run the user defined args if any
+    if any([not isinstance(x, types.StringLiteral) for x in const_args]):
+        raise errors.RequireLiteralValue(const_args)
     new_args.extend([x.literal_value for x in const_args])
     cmdlang = [cgctx.insert_const_string(mod, x) for x in new_args]
 

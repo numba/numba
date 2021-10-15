@@ -446,6 +446,28 @@ class TestUnicode(BaseTest):
                 self.assertEqual(pyfunc(1, b),
                                  cfunc(1, b), '%s, %s' % (1, b))
 
+    def test_eq_optional(self):
+        # See issue #7474
+        @njit
+        def foo(pred1, pred2):
+            if pred1 > 0:
+                resolved1 = 'concrete'
+            else:
+                resolved1 = None
+            if pred2 < 0:
+                resolved2 = 'concrete'
+            else:
+                resolved2 = None
+
+            # resolved* are Optionals
+            if resolved1 == resolved2:
+                return 10
+            else:
+                return 20
+
+        for (p1, p2) in product(*((-1, 1),) * 2):
+            self.assertEqual(foo(p1, p2), foo.py_func(p1, p2))
+
     def _check_ordering_op(self, usecase):
         pyfunc = usecase
         cfunc = njit(pyfunc)

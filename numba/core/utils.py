@@ -24,6 +24,7 @@ from inspect import Parameter as pyParameter # noqa: F401
 
 from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
                                DEVELOPER_MODE) # noqa: F401
+from numba.core import config
 from numba.core import types
 
 
@@ -178,6 +179,20 @@ def shutting_down(globals=globals):
 # finalizer then register atexit to ensure this ordering.
 weakref.finalize(lambda: None, lambda: None)
 atexit.register(_at_shutdown)
+
+
+def use_new_style_errors():
+    """Returns True if new style errors are to be used, false otherwise"""
+    # This uses `config` so as to make sure it gets the current value from the
+    # module as e.g. some tests mutate the config with `override_config`.
+    return config.CAPTURED_ERRORS == 'new_style'
+
+
+def use_old_style_errors():
+    """Returns True if old style errors are to be used, false otherwise"""
+    # This uses `config` so as to make sure it gets the current value from the
+    # module as e.g. some tests mutate the config with `override_config`.
+    return config.CAPTURED_ERRORS == 'old_style'
 
 
 class ConfigStack:
