@@ -259,7 +259,7 @@ def compile_ptx_for_current_device(pyfunc, args, debug=False, lineinfo=False,
 class DeviceDispatcher(serialize.ReduceMixin):
     """Unmaterialized device function
     """
-    def __init__(self, pyfunc, debug, inline, opt):
+    def __init__(self, pyfunc, sig, debug, inline, opt):
         self.py_func = pyfunc
         self.debug = debug
         self.inline = inline
@@ -269,6 +269,12 @@ class DeviceDispatcher(serialize.ReduceMixin):
         name = getattr(pyfunc, '__name__', 'unknown')
         self.__name__ = f"{name} <CUDA device function>".format(name)
         self._compiling_counter = CompilingCounter()
+        self._can_compile = True
+
+        if sig is not None:
+            argtypes, restype = sigutils.normalize_signature(sig)
+            self.compile(argtypes)
+            self._can_compile = False
 
     def _reduce_states(self):
         return dict(py_func=self.py_func, debug=self.debug, inline=self.inline)
@@ -297,8 +303,11 @@ class DeviceDispatcher(serialize.ReduceMixin):
         A (template, pysig, args, kws) tuple is returned.
         """
         with self._compiling_counter:
-            # Ensure an overload is available
-            self.compile(tuple(args))
+            # Ensure an overload is available, if we can compile.
+            # We proceed with the typing even if we can't because we may be
+            # able to force a cast on the caller side.
+            if self._can_compile:
+                self.compile(tuple(args))
 
             # Create function type for typing
             func_name = self.py_func.__name__
@@ -335,6 +344,10 @@ class DeviceDispatcher(serialize.ReduceMixin):
         Returns the `CompileResult`.
         """
         if args not in self.overloads:
+            #if not self._can_compile:
+            #    breakpoint()
+            #    raise RuntimeError('Compilation disabled')
+
             nvvm_options = {
                 'debug': self.debug,
                 'opt': 3 if self.opt else 0
@@ -391,12 +404,14 @@ class DeviceDispatcher(serialize.ReduceMixin):
         return self.compile(args).library.get_asm_str().encode()
 
 
-def compile_device_dispatcher(pyfunc, debug=False, inline=False, opt=True):
+def compile_device_dispatcher(pyfunc, sig=None, debug=False, inline=False,
+                              opt=True):
     """Create a DeviceDispatcher and register it to the CUDA typing context.
     """
     from .descriptor import cuda_target
 
-    dispatcher = DeviceDispatcher(pyfunc, debug=debug, inline=inline, opt=opt)
+    dispatcher = DeviceDispatcher(pyfunc, sig, debug=debug, inline=inline,
+                                  opt=opt)
 
     class device_function_template(AbstractTemplate):
         key = dispatcher

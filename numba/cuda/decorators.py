@@ -2,7 +2,7 @@ from warnings import warn
 from numba.core import types, config, sigutils
 from numba.core.errors import (DeprecationError, NumbaDeprecationWarning,
                                NumbaInvalidConfigWarning)
-from .compiler import (compile_device, declare_device_function, Dispatcher,
+from .compiler import (declare_device_function, Dispatcher,
                        compile_device_dispatcher)
 from .simulator.kernel import FakeCUDAKernel
 
@@ -109,8 +109,8 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             return Dispatcher(func, [func_or_sig], targetoptions=targetoptions)
 
         def device_jit(func):
-            return compile_device(func, restype, argtypes, inline=inline,
-                                  debug=debug)
+            return compile_device_dispatcher(func, func_or_sig, inline=inline,
+                                             debug=debug)
 
         if device:
             msg = ("Eager compilation of device functions is deprecated "
