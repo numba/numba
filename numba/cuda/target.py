@@ -31,19 +31,20 @@ class CUDATypingContext(typing.BaseContext):
         if isinstance(val, dispatcher.Dispatcher):
             try:
                 # use cached device function
-                val = val.__cudajitdevice
+                val = val.__dispatcher
             except AttributeError:
                 if not val._can_compile:
                     raise ValueError('using cpu function on device '
                                      'but its compilation is disabled')
                 opt = val.targetoptions.get('opt', True)
-                from .decorators import jitdevice
-                jd = jitdevice(val, debug=val.targetoptions.get('debug'),
-                               opt=opt)
+                from .compiler import DeviceDispatcher
+                disp = DeviceDispatcher(val,
+                                        debug=val.targetoptions.get('debug'),
+                                        opt=opt)
                 # cache the device function for future use and to avoid
                 # duplicated copy of the same function.
-                val.__cudajitdevice = jd
-                val = jd
+                val.__dispatcher = disp
+                val = disp
 
         # continue with parent logic
         return super(CUDATypingContext, self).resolve_value_type(val)

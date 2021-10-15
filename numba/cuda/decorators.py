@@ -2,26 +2,13 @@ from warnings import warn
 from numba.core import types, config, sigutils
 from numba.core.errors import (DeprecationError, NumbaDeprecationWarning,
                                NumbaInvalidConfigWarning)
-from .compiler import (declare_device_function, Dispatcher,
-                       compile_device_dispatcher)
+from .compiler import declare_device_function, Dispatcher, DeviceDispatcher
 from .simulator.kernel import FakeCUDAKernel
 
 
 _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "Signatures should be passed as the first "
                                  "positional argument.")
-
-
-def jitdevice(func, link=[], debug=None, inline=False, opt=True,
-              no_cpython_wrapper=None):
-    """Wrapper for device-jit.
-    """
-    # We ignore  the no_cpython_wrapper kwarg - it is passed by the callee when
-    # using overloads, but there is never a CPython wrapper for CUDA anyway.
-    debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
-    if link:
-        raise ValueError("link keyword invalid for device function")
-    return compile_device_dispatcher(func, debug=debug, inline=inline, opt=opt)
 
 
 def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
@@ -109,8 +96,8 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             return Dispatcher(func, [func_or_sig], targetoptions=targetoptions)
 
         def device_jit(func):
-            return compile_device_dispatcher(func, func_or_sig, inline=inline,
-                                             debug=debug)
+            return DeviceDispatcher(func, func_or_sig, inline=inline,
+                                    debug=debug)
 
         if device:
             msg = ("Eager compilation of device functions is deprecated "
@@ -136,7 +123,11 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                 return FakeCUDAKernel(func_or_sig, device=device,
                                       fastmath=fastmath)
             elif device:
-                return jitdevice(func_or_sig, debug=debug, opt=opt, **kws)
+                if kws.get('link'):
+                    raise ValueError("link keyword invalid for device function")
+                inline = kws.get('inline')
+                return DeviceDispatcher(func_or_sig, debug=debug,
+                                        inline=inline, opt=opt)
             else:
                 targetoptions = kws.copy()
                 targetoptions['debug'] = debug

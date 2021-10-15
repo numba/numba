@@ -259,7 +259,7 @@ def compile_ptx_for_current_device(pyfunc, args, debug=False, lineinfo=False,
 class DeviceDispatcher(serialize.ReduceMixin):
     """Unmaterialized device function
     """
-    def __init__(self, pyfunc, sig, debug, inline, opt):
+    def __init__(self, pyfunc, sig=None, debug=False, inline=False, opt=True):
         self.py_func = pyfunc
         self.debug = debug
         self.inline = inline
@@ -275,6 +275,34 @@ class DeviceDispatcher(serialize.ReduceMixin):
             argtypes, restype = sigutils.normalize_signature(sig)
             self.compile(argtypes)
             self._can_compile = False
+
+        dispatcher = self
+
+        class device_function_template(AbstractTemplate):
+            key = dispatcher
+
+            def generic(self, args, kws):
+                assert not kws
+                return dispatcher.compile(args).signature
+
+            def get_template_info(cls):
+                basepath = os.path.dirname(os.path.dirname(numba.__file__))
+                code, firstlineno = inspect.getsourcelines(pyfunc)
+                path = inspect.getsourcefile(pyfunc)
+                sig = str(utils.pysignature(pyfunc))
+                info = {
+                    'kind': "overload",
+                    'name': getattr(cls.key, '__name__', "unknown"),
+                    'sig': sig,
+                    'filename': utils.safe_relpath(path, start=basepath),
+                    'lines': (firstlineno, firstlineno + len(code) - 1),
+                    'docstring': pyfunc.__doc__
+                }
+                return info
+
+        from .descriptor import cuda_target
+        typingctx = cuda_target.typing_context
+        typingctx.insert_user_function(dispatcher, device_function_template)
 
     def _reduce_states(self):
         return dict(py_func=self.py_func, debug=self.debug, inline=self.inline)
@@ -292,7 +320,7 @@ class DeviceDispatcher(serialize.ReduceMixin):
 
     @classmethod
     def _rebuild(cls, py_func, debug, inline):
-        return compile_device_dispatcher(py_func, debug=debug, inline=inline)
+        return DeviceDispatcher(py_func, debug=debug, inline=inline)
 
     def get_call_template(self, args, kws):
         # Copied and simplified from _DispatcherBase.get_call_template.
@@ -402,42 +430,6 @@ class DeviceDispatcher(serialize.ReduceMixin):
                    'set NVVM options.')
             warn(msg, category=NumbaDeprecationWarning)
         return self.compile(args).library.get_asm_str().encode()
-
-
-def compile_device_dispatcher(pyfunc, sig=None, debug=False, inline=False,
-                              opt=True):
-    """Create a DeviceDispatcher and register it to the CUDA typing context.
-    """
-    from .descriptor import cuda_target
-
-    dispatcher = DeviceDispatcher(pyfunc, sig, debug=debug, inline=inline,
-                                  opt=opt)
-
-    class device_function_template(AbstractTemplate):
-        key = dispatcher
-
-        def generic(self, args, kws):
-            assert not kws
-            return dispatcher.compile(args).signature
-
-        def get_template_info(cls):
-            basepath = os.path.dirname(os.path.dirname(numba.__file__))
-            code, firstlineno = inspect.getsourcelines(pyfunc)
-            path = inspect.getsourcefile(pyfunc)
-            sig = str(utils.pysignature(pyfunc))
-            info = {
-                'kind': "overload",
-                'name': getattr(cls.key, '__name__', "unknown"),
-                'sig': sig,
-                'filename': utils.safe_relpath(path, start=basepath),
-                'lines': (firstlineno, firstlineno + len(code) - 1),
-                'docstring': pyfunc.__doc__
-            }
-            return info
-
-    typingctx = cuda_target.typing_context
-    typingctx.insert_user_function(dispatcher, device_function_template)
-    return dispatcher
 
 
 def declare_device_function(name, restype, argtypes):
