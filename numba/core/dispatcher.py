@@ -228,7 +228,7 @@ _CompileStats = collections.namedtuple(
     '_CompileStats', ('cache_path', 'cache_hits', 'cache_misses'))
 
 
-class _CompilingCounter(object):
+class CompilingCounter(object):
     """
     A simple counter that increment in __enter__ and decrement in __exit__.
     """
@@ -289,7 +289,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                                         exact_match_required)
 
         self.doc = py_func.__doc__
-        self._compiling_counter = _CompilingCounter()
+        self._compiling_counter = CompilingCounter()
         weakref.finalize(self, self._make_finalizer())
 
     def _compilation_chain_init_hook(self):
