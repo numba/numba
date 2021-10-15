@@ -289,7 +289,9 @@ class BaseContext(object):
         templates = list(self._get_attribute_templates(typ))
 
         # get the order in which to try templates
-        order = order_by_target_specificity(self, templates, fnkey=attr)
+        from numba.core.target_extension import get_local_target # circular
+        target_hw = get_local_target(self)
+        order = order_by_target_specificity(target_hw, templates, fnkey=attr)
 
         for template in order:
             return_type = template.resolve(typ, attr)
