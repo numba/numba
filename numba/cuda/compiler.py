@@ -256,7 +256,7 @@ def compile_ptx_for_current_device(pyfunc, args, debug=False, lineinfo=False,
                        device=device, fastmath=fastmath, cc=cc, opt=True)
 
 
-class DeviceDispatcher(serialize.ReduceMixin):
+class DeviceDispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
     """Unmaterialized device function
     """
     def __init__(self, pyfunc, sig=None, debug=False, inline=False, opt=True):
