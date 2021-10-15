@@ -1450,10 +1450,26 @@ class PropagateLiterals(FunctionPass):
                                              ir.FreeVar, ir.Global)):
                     continue
 
-                # dont change return stmt in the form
+                # 1) Don't change return stmt in the form
                 # $return_xyz = cast(value=ABC)
+                # 2) Don't propagate literal values that are not primitives
+                # 3) There's a bug in the partial type inference algorithm
+                #    involving PHI instructions. In the code below, the
+                #    partial type inference algorithm infers that
+                #    typemap[z] = 'hello world'. We're are restricting
+                #    literals from propagating if the assignment is coming
+                #    from a PHI node.
+                #
+                #   def foo(x):
+                #       if x > 10:
+                #           z = x + 1
+                #       else:
+                #           z = 'hello world'
+                #       return z
+                #
                 if isinstance(assign.value, ir.Expr) and \
-                        assign.value.op in ('cast'):
+                        assign.value.op in ('cast', 'build_map', 'build_list',
+                                            'build_tuple', 'build_set', 'phi'):
                     continue
 
                 target = assign.target
@@ -1494,6 +1510,21 @@ class LiteralPropagationSubPipelinePass(FunctionPass):
         FunctionPass.__init__(self)
 
     def run_pass(self, state):
+        # Determine whether to even attempt this pass... if there's no
+        # `isinstance` as a global or as a freevar then just skip.
+        found = False
+        func_ir = state.func_ir
+        for blk in func_ir.blocks.values():
+            for asgn in blk.find_insts(ir.Assign):
+                if isinstance(asgn.value, (ir.Global, ir.FreeVar)):
+                    if asgn.value.value is isinstance:
+                        found = True
+                        break
+            if found:
+                break
+        if not found:
+            return False
+
         # run as subpipeline
         from numba.core.compiler_machinery import PassManager
         from numba.core.typed_passes import PartialTypeInference
