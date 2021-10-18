@@ -8,6 +8,7 @@ from numba.tests.support import linux_only
 
 
 @skip_on_cudasim('CUDA Driver API unsupported in the simulator')
+@unittest.skip
 @linux_only
 @skip_on_arm('Managed Alloc support is experimental/untested on ARM')
 class TestManagedAlloc(ContextResettingTestCase):

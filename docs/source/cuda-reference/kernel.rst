@@ -472,7 +472,7 @@ precision parts of the CUDA Toolkit documentation.
    floating point arguments in round to nearest mode. Maps to the ``fma.rn.f16``
    PTX instruction.
 
-   Returns the fp16 result of the fused multiply-add.
+   Returns the 16-bit floating point result of the fused multiply-add.
 
 .. function:: numba.cuda.fp16.hadd (a, b)
 
@@ -497,14 +497,14 @@ precision parts of the CUDA Toolkit documentation.
 
 .. function:: numba.cuda.fp16.hneg (a)
 
-   Perform the negation operation ``-a`` on 1the 6-bit floating point argument.
+   Perform the negation operation ``-a`` on the 16-bit floating point argument.
    Maps to the ``neg.f16`` PTX instruction.
 
    Returns the 16-bit floating point result of the negation.
 
 .. function:: numba.cuda.fp16.habs (a)
 
-   Perform the absolute value operation ``|a|`` on 1the 6-bit floating point argument.
+   Perform the absolute value operation ``|a|`` on the 16-bit floating point argument.
    Maps to the ``abs.f16`` PTX instruction.
 
    Returns the 16-bit floating point result of the absolute value operation.

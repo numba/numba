@@ -405,43 +405,30 @@ def ptx_fma(context, builder, sig, args):
     return builder.fma(*args)
 
 
-@lower(stubs.fp16.hadd, types.float16, types.float16)
-def ptx_hadd(context, builder, sig, args):
-    hadd_fn_type = ir.FunctionType(ir.HalfType(),
-                                   [ir.HalfType(), ir.HalfType()])
-    hadd_inline_asm = "add.f16 $0,$1,$2;"
-    hadd_inline_constraints = "=h,h,h"
-    hadd_inline = ir.InlineAsm(hadd_fn_type, hadd_inline_asm,
-                               hadd_inline_constraints)
-    arg1 = args[0]
-    arg2 = args[1]
-    return builder.call(hadd_inline, [arg1, arg2])
+def lower_fp16_binary(fn, op):
+    @lower(fn, types.float16, types.float16)
+    def ptx_fp16_binary(context, builder, sig, args):
+        fnty = ir.FunctionType(ir.HalfType(),
+                               [ir.HalfType(), ir.HalfType()])
+        asm = ir.InlineAsm(fnty, f'{op}.f16 $0,$1,$2;', '=h,h,h')
+        return builder.call(asm, args)
 
 
-@lower(stubs.fp16.hsub, types.float16, types.float16)
-def ptx_hsub(context, builder, sig, args):
-    hsub_fn_type = ir.FunctionType(ir.HalfType(),
-                                   [ir.HalfType(), ir.HalfType()])
-    hsub_inline_asm = "sub.f16 $0,$1,$2;"
-    hsub_inline_constraints = "=h,h,h"
-    hsub_inline = ir.InlineAsm(hsub_fn_type, hsub_inline_asm,
-                               hsub_inline_constraints)
-    arg1 = args[0]
-    arg2 = args[1]
-    return builder.call(hsub_inline, [arg1, arg2])
+lower_fp16_binary(stubs.fp16.hadd, 'add')
+lower_fp16_binary(stubs.fp16.hsub, 'sub')
+lower_fp16_binary(stubs.fp16.hmul, 'mul')
 
 
-@lower(stubs.fp16.hmul, types.float16, types.float16)
-def ptx_hmul(context, builder, sig, args):
-    hmul_fn_type = ir.FunctionType(ir.HalfType(),
-                                   [ir.HalfType(), ir.HalfType()])
-    hmul_inline_asm = "mul.f16 $0,$1,$2;"
-    hmul_inline_constraints = "=h,h,h"
-    hmul_inline = ir.InlineAsm(hmul_fn_type, hmul_inline_asm,
-                               hmul_inline_constraints)
-    arg1 = args[0]
-    arg2 = args[1]
-    return builder.call(hmul_inline, [arg1, arg2])
+def lower_fp16_unary(fn, op):
+    @lower(fn, types.float16)
+    def ptx_fp16_unary(context, builder, sig, args):
+        fnty = ir.FunctionType(ir.HalfType(), [ir.HalfType()])
+        asm = ir.InlineAsm(fnty, f'{op}.f16 $0,$1;', '=h,h')
+        return builder.call(asm, args)
+
+
+lower_fp16_unary(stubs.fp16.hneg, 'neg')
+lower_fp16_unary(stubs.fp16.habs, 'abs')
 
 
 @lower(stubs.fp16.hfma, types.float16, types.float16, types.float16)
@@ -458,30 +445,6 @@ def ptx_hfma(context, builder, sig, args):
     arg2 = args[1]
     arg3 = args[2]
     return builder.call(hfma_inline, [arg1, arg2, arg3])
-
-
-@lower(stubs.fp16.hneg, types.float16)
-def ptx_hneg(context, builder, sig, args):
-    hneg_fn_type = ir.FunctionType(ir.HalfType(),
-                                   [ir.HalfType()])
-    hneg_inline_asm = "neg.f16 $0,$1;"
-    hneg_inline_constraints = "=h,h"
-    hneg_inline = ir.InlineAsm(hneg_fn_type, hneg_inline_asm,
-                               hneg_inline_constraints)
-    arg1 = args[0]
-    return builder.call(hneg_inline, [arg1])
-
-
-@lower(stubs.fp16.habs, types.float16)
-def ptx_habs(context, builder, sig, args):
-    habs_fn_type = ir.FunctionType(ir.HalfType(),
-                                   [ir.HalfType()])
-    habs_inline_asm = "abs.f16 $0,$1;"
-    habs_inline_constraints = "=h,h"
-    habs_inline = ir.InlineAsm(habs_fn_type, habs_inline_asm,
-                               habs_inline_constraints)
-    arg1 = args[0]
-    return builder.call(habs_inline, [arg1])
 
 # See:
 # https://docs.nvidia.com/cuda/libdevice-users-guide/__nv_cbrt.html#__nv_cbrt

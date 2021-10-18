@@ -60,7 +60,7 @@ def unbox_integer(typ, obj, c):
 
 @box(types.Float)
 def box_float(typ, val, c):
-    if typ == types.float32 or types == types.float16:
+    if typ == types.float32:
         dbval = c.builder.fpext(val, c.pyapi.double)
     else:
         assert typ == types.float64
@@ -72,7 +72,7 @@ def unbox_float(typ, obj, c):
     fobj = c.pyapi.number_float(obj)
     dbval = c.pyapi.float_as_double(fobj)
     c.pyapi.decref(fobj)
-    if typ == types.float32 or types == types.float16:
+    if typ == types.float32:
         val = c.builder.fptrunc(dbval,
                                 c.context.get_argument_type(typ))
     else:
