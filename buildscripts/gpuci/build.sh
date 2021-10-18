@@ -33,12 +33,17 @@ env
 gpuci_logger "Check GPU usage"
 nvidia-smi
 
-gpuci_logger "Activate conda env"
+gpuci_logger "Create testing env"
 . /opt/conda/etc/profile.d/conda.sh
-conda activate rapids
-
-gpuci_logger "Install testing dependencies"
-gpuci_mamba_retry install -y "cudatoolkit=${CUDA_TOOLKIT_VER}"
+gpuci_mamba_retry install -n numba -y \
+                  "python=${PYTHON_VER}" \
+                  "cudatoolkit=${CUDA_TOOLKIT_VER}" \
+                  "llvmlite" \
+                  "numpy" \
+                  "scipy" \
+                  "jinja2" \
+                  "cffi" 
+conda activate numba
 
 gpuci_logger "Install numba"
 python setup.py build_ext --inplace
