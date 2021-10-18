@@ -331,9 +331,9 @@ class DeviceDispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         A (template, pysig, args, kws) tuple is returned.
         """
         with self._compiling_counter:
-            # Ensure an overload is available, if we can compile.
-            # We proceed with the typing even if we can't because we may be
-            # able to force a cast on the caller side.
+            # Ensure an exactly-matching overload is available if we can
+            # compile. We proceed with the typing even if we can't compile
+            # because we may be able to force a cast on the caller side.
             if self._can_compile:
                 self.compile(tuple(args))
 
@@ -372,9 +372,6 @@ class DeviceDispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         Returns the `CompileResult`.
         """
         if args not in self.overloads:
-            #if not self._can_compile:
-            #    breakpoint()
-            #    raise RuntimeError('Compilation disabled')
 
             nvvm_options = {
                 'debug': self.debug,

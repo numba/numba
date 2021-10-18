@@ -152,6 +152,13 @@ class TestDeviceFunc(CUDATestCase):
 
     @skip_on_cudasim('cudasim ignores casting by jit decorator signature')
     def test_device_casting(self):
+        # Ensure that casts to the correct type are forced when calling a
+        # device function with a signature. This test ensures that:
+        #
+        # - We don't compile a new specialization of rgba for float32 when we
+        #   shouldn't
+        # - We insert a cast when calling rgba, as opposed to failing to type.
+
         @cuda.jit('int32(int32, int32, int32, int32)', device=True)
         def rgba(r, g, b, a):
             return (((r & 0xFF) << 16) |
