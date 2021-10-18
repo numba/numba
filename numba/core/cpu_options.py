@@ -105,6 +105,10 @@ class ParallelOptions(object):
             return self._get_values() == other._get_values()
         return NotImplemented
 
+    def __repr__(self):
+        opts = ", ".join(f"{k}={v}" for k, v in self._get_values().items())
+        return f"{self.__class__.__name__}({opts})"
+
 
 class InlineOptions(object):
     """
