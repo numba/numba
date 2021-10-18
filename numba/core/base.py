@@ -13,7 +13,7 @@ from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
 from numba.core import types, utils, typing, datamodel, debuginfo, funcdesc, config, cgutils, imputils
-from numba.core import event, errors
+from numba.core import event, errors, targetconfig
 from numba import _dynfunc, _helperlib
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.pythonapi import PythonAPI
@@ -832,7 +832,7 @@ class BaseContext(object):
             library = codegen.create_library(impl.__name__)
             if flags is None:
 
-                cstk = utils.ConfigStack()
+                cstk = targetconfig.ConfigStack()
                 flags = compiler.Flags()
                 if cstk:
                     tls_flags = cstk.top()
@@ -1128,9 +1128,9 @@ class BaseContext(object):
 
     def create_module(self, name):
         """Create a LLVM module
-        
+
         The default implementation in BaseContext always raises a
-        ``NotImplementedError`` exception. Subclasses should implement 
+        ``NotImplementedError`` exception. Subclasses should implement
         this method.
         """
         raise NotImplementedError

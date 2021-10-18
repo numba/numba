@@ -5,7 +5,8 @@ from functools import partial
 from llvmlite.llvmpy.core import Constant, Type, Builder
 
 from numba.core import (typing, utils, types, ir, debuginfo, funcdesc,
-                        generators, config, ir_utils, cgutils, removerefctpass)
+                        generators, config, ir_utils, cgutils, removerefctpass,
+                        targetconfig)
 from numba.core.errors import (LoweringError, new_error_context, TypingError,
                                LiteralTypingError, UnsupportedError)
 from numba.core.funcdesc import default_mangler
@@ -29,7 +30,7 @@ class BaseLower(object):
         self.call_conv = context.call_conv
         self.generator_info = func_ir.generator_info
         self.metadata = metadata
-        self.flags = utils.ConfigStack.top_or_none()
+        self.flags = targetconfig.ConfigStack.top_or_none()
 
         # Initialize LLVM
         self.module = self.library.create_ir_module(self.fndesc.unique_name)
