@@ -8,7 +8,6 @@ import types as pytypes
 import uuid
 import weakref
 from contextlib import ExitStack, contextmanager
-import threading
 
 from numba import _dispatcher
 from numba.core import (
@@ -25,6 +24,10 @@ from numba.core.retarget import BaseRetarget
 import numba.core.event as ev
 
 
+class _RetargetStack(utils.ThreadLocalStack, stack_name="retarget"):
+    pass
+
+
 class TargetConfigurationStack:
     """The target configuration stack.
 
@@ -33,21 +36,14 @@ class TargetConfigurationStack:
     WARNING: features associated with this class are experimental. The API
     may change without notice.
     """
-    _tls = threading.local()
 
     def __init__(self):
-        tls = self._tls
-        try:
-            tls_stack = tls.stack
-        except AttributeError:
-            tls_stack = tls.stack = list()
-
-        self._stack = tls_stack
+        self._stack = _RetargetStack()
 
     def _push(self, state):
         """Push to the stack
         """
-        self._stack.append(state)
+        self._stack.push(state)
 
     def _pop(self):
         """Pop from the stack
@@ -60,7 +56,7 @@ class TargetConfigurationStack:
         May raise IndexError if the stack is empty. Users should check the size
         of the stack beforehand.
         """
-        return self._stack[-1]
+        return self._stack.top()
 
     def __len__(self):
         """Size of the stack

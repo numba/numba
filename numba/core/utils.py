@@ -195,14 +195,63 @@ def use_old_style_errors():
     return config.CAPTURED_ERRORS == 'old_style'
 
 
+class ThreadLocalStack:
+    """
+
+    Uses the BORG pattern and stores states in threadlocal storage.
+
+    """
+    _tls = threading.local()
+    stack_name: str
+    _registered = {}
+
+    def __init_subclass__(cls, *, stack_name, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # Register stack_name mapping to the new subclass
+        assert stack_name not in cls._registered, "stack_name already in use"
+        cls.stack_name = stack_name
+        cls._registered[stack_name] = cls
+
+    def __init__(self):
+        # This class must not be used directly.
+        assert type(self) is not ThreadLocalStack
+        tls = self._tls
+        attr = f"stack_{self.stack_name}"
+        try:
+            tls_stack = getattr(tls, attr)
+        except AttributeError:
+            tls_stack = list()
+            setattr(tls, attr, tls_stack)
+
+        self._stack = tls_stack
+
+    def push(self, state):
+        """Push to the stack
+        """
+        self._stack.append(state)
+
+    def pop(self):
+        """Pop from the stack
+        """
+        return self._stack.pop()
+
+    def top(self):
+        return self._stack[-1]
+
+    def __len__(self):
+        return len(self._stack)
+
+
+class _FlagsStack(ThreadLocalStack, stack_name="flags"):
+    pass
+
+
 class ConfigStack:
     """A stack for tracking target configurations in the compiler.
 
     It stores the stack in a thread-local class attribute. All instances in the
     same thread will see the same stack.
     """
-    tls = threading.local()
-
     @classmethod
     def top_or_none(cls):
         """Get the TOS or return None if no config is set.
@@ -216,21 +265,16 @@ class ConfigStack:
         return flags
 
     def __init__(self):
-        tls = self.tls
-        try:
-            stk = tls.stack
-        except AttributeError:
-            tls.stack = stk = []
-        self._stk = stk
+        self._stk = _FlagsStack()
 
     def push(self, data):
-        self._stk.append(data)
+        self._stk.push(data)
 
     def pop(self):
         return self._stk.pop()
 
     def top(self):
-        return self._stk[-1]
+        return self._stk.top()
 
     def __len__(self):
         return len(self._stk)
