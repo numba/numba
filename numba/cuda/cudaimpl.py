@@ -441,10 +441,8 @@ def ptx_hfma(context, builder, sig, args):
     hfma_inline_constraints = "=h,h,h,h"
     hfma_inline = ir.InlineAsm(hfma_fn_type, hfma_inline_asm,
                                hfma_inline_constraints)
-    arg1 = args[0]
-    arg2 = args[1]
-    arg3 = args[2]
-    return builder.call(hfma_inline, [arg1, arg2, arg3])
+
+    return builder.call(hfma_inline, args)
 
 # See:
 # https://docs.nvidia.com/cuda/libdevice-users-guide/__nv_cbrt.html#__nv_cbrt
