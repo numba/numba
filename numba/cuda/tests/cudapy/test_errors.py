@@ -72,7 +72,7 @@ class TestJitErrors(CUDATestCase):
             kernel_func[1, 1]()
         excstr = str(raises.exception)
         self.assertIn("resolving callee type: "
-                      "type(<numba.cuda.compiler.DeviceDispatcher object",
+                      "type(<numba.cuda.compiler.Dispatcher object",
                       excstr)
         self.assertIn("NameError: name 'floor' is not defined", excstr)
 

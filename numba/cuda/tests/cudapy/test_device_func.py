@@ -2,7 +2,7 @@ import re
 import types
 
 import numpy as np
-import warnings
+#import warnings
 
 from numba.cuda.testing import unittest, skip_on_cudasim, CUDATestCase
 from numba import cuda, jit, int32
@@ -108,30 +108,13 @@ class TestDeviceFunc(CUDATestCase):
         np.testing.assert_equal(expect, ary)
 
     @skip_on_cudasim('not supported in cudasim')
-    def test_inspect_ptx(self):
-        @cuda.jit(device=True)
-        def foo(x, y):
-            return x + y
-
-        args = (int32, int32)
-        cres = foo.compile(args)
-
-        fname = cres.fndesc.mangled_name
-        # Verify that the function name has "foo" in it as in the python name
-        self.assertIn('foo', fname)
-
-        ptx = foo.inspect_ptx(args)
-        # Check that the compiled function name is in the PTX.
-        self.assertIn(fname, ptx.decode('ascii'))
-
-    @skip_on_cudasim('not supported in cudasim')
     def test_inspect_llvm(self):
         @cuda.jit(device=True)
         def foo(x, y):
             return x + y
 
         args = (int32, int32)
-        cres = foo.compile(args)
+        cres = foo.compile_device(args)
 
         fname = cres.fndesc.mangled_name
         # Verify that the function name has "foo" in it as in the python name
@@ -141,14 +124,15 @@ class TestDeviceFunc(CUDATestCase):
         # Check that the compiled function name is in the LLVM.
         self.assertIn(fname, llvm)
 
-    @skip_on_cudasim('not supported in cudasim')
-    def test_deprecated_eager_device(self):
-        with warnings.catch_warnings(record=True) as w:
-            cuda.jit('int32(int32)', device=True)
-
-        self.assertEqual(len(w), 1)
-        self.assertIn('Eager compilation of device functions is deprecated',
-                      str(w[0].message))
+# Commenting as this should probably be un-deprecated
+#    @skip_on_cudasim('not supported in cudasim')
+#    def test_deprecated_eager_device(self):
+#        with warnings.catch_warnings(record=True) as w:
+#            cuda.jit('int32(int32)', device=True)
+#
+#        self.assertEqual(len(w), 1)
+#        self.assertIn('Eager compilation of device functions is deprecated',
+#                      str(w[0].message))
 
     @skip_on_cudasim('cudasim ignores casting by jit decorator signature')
     def test_device_casting(self):

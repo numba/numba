@@ -1,8 +1,7 @@
 from warnings import warn
 from numba.core import types, config, sigutils
-from numba.core.errors import (DeprecationError, NumbaDeprecationWarning,
-                               NumbaInvalidConfigWarning)
-from .compiler import declare_device_function, Dispatcher, DeviceDispatcher
+from numba.core.errors import DeprecationError, NumbaInvalidConfigWarning
+from .compiler import declare_device_function, Dispatcher
 from .simulator.kernel import FakeCUDAKernel
 
 
@@ -76,6 +75,9 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                " - set debug=False or opt=False.")
         warn(NumbaInvalidConfigWarning(msg))
 
+    if device and kws.get('link'):
+        raise ValueError("link keyword invalid for device function")
+
     if sigutils.is_signature(func_or_sig):
         if config.ENABLE_CUDASIM:
             def jitwrapper(func):
@@ -87,25 +89,16 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
         if restype and not device and restype != types.void:
             raise TypeError("CUDA kernel must have void return type.")
 
-        def kernel_jit(func):
+        def _jit(func):
             targetoptions = kws.copy()
             targetoptions['debug'] = debug
             targetoptions['link'] = link
             targetoptions['opt'] = opt
             targetoptions['fastmath'] = fastmath
+            targetoptions['device'] = device
             return Dispatcher(func, [func_or_sig], targetoptions=targetoptions)
 
-        def device_jit(func):
-            return DeviceDispatcher(func, func_or_sig, inline=inline,
-                                    debug=debug)
-
-        if device:
-            msg = ("Eager compilation of device functions is deprecated "
-                   "(this occurs when a signature is provided)")
-            warn(NumbaDeprecationWarning(msg))
-            return device_jit
-        else:
-            return kernel_jit
+        return _jit
     else:
         if func_or_sig is None:
             if config.ENABLE_CUDASIM:
@@ -122,18 +115,13 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             if config.ENABLE_CUDASIM:
                 return FakeCUDAKernel(func_or_sig, device=device,
                                       fastmath=fastmath)
-            elif device:
-                if kws.get('link'):
-                    raise ValueError("link keyword invalid for device function")
-                inline = kws.get('inline')
-                return DeviceDispatcher(func_or_sig, debug=debug,
-                                        inline=inline, opt=opt)
             else:
                 targetoptions = kws.copy()
                 targetoptions['debug'] = debug
                 targetoptions['opt'] = opt
                 targetoptions['link'] = link
                 targetoptions['fastmath'] = fastmath
+                targetoptions['device'] = device
                 sigs = None
                 return Dispatcher(func_or_sig, sigs,
                                   targetoptions=targetoptions)

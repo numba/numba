@@ -507,7 +507,11 @@ class _Kernel(serialize.ReduceMixin):
     @global_compiler_lock
     def __init__(self, py_func, argtypes, link=None, debug=False,
                  lineinfo=False, inline=False, fastmath=False, extensions=None,
-                 max_registers=None, opt=True):
+                 max_registers=None, opt=True, device=False):
+
+        if device:
+            raise RuntimeError('Cannot compile a device function as a kernel')
+
         super().__init__()
 
         self.py_func = py_func
@@ -871,6 +875,8 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         self.sigs = []
         self.link = targetoptions.pop('link', (),)
         self._can_compile = True
+        self._compiling_counter = CompilingCounter()
+        self._type = self._numba_type_
 
         # Specializations for given sets of argument types
         self.specializations = {}
@@ -912,8 +918,57 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         if sigs:
             if len(sigs) > 1:
                 raise TypeError("Only one signature supported at present")
-            self.compile(sigs[0])
+            if targetoptions['device']:
+                argtypes, restype = sigutils.normalize_signature(sigs[0])
+                self.compile_device(argtypes)
+            else:
+                self.compile(sigs[0])
+
             self._can_compile = False
+
+        if targetoptions.get('device'):
+            self._register_device_function()
+
+    def _register_device_function(self):
+        dispatcher = self
+        pyfunc = self.py_func
+
+        class device_function_template(AbstractTemplate):
+            key = dispatcher
+
+            def generic(self, args, kws):
+                assert not kws
+                return dispatcher.compile(args).signature
+
+            def get_template_info(cls):
+                basepath = os.path.dirname(os.path.dirname(numba.__file__))
+                code, firstlineno = inspect.getsourcelines(pyfunc)
+                path = inspect.getsourcefile(pyfunc)
+                sig = str(utils.pysignature(pyfunc))
+                info = {
+                    'kind': "overload",
+                    'name': getattr(cls.key, '__name__', "unknown"),
+                    'sig': sig,
+                    'filename': utils.safe_relpath(path, start=basepath),
+                    'lines': (firstlineno, firstlineno + len(code) - 1),
+                    'docstring': pyfunc.__doc__
+                }
+                return info
+
+        from .descriptor import cuda_target
+        typingctx = cuda_target.typing_context
+        typingctx.insert_user_function(dispatcher, device_function_template)
+
+    @property
+    def _numba_type_(self):
+        return cuda_types.CUDADispatcher(self)
+
+    @property
+    def is_compiling(self):
+        """
+        Whether a specialization is currently being compiled.
+        """
+        return self._compiling_counter
 
     def configure(self, griddim, blockdim, stream=0, sharedmem=0):
         griddim, blockdim = normalize_kernel_dimensions(griddim, blockdim)
@@ -1068,6 +1123,72 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
             return {sig: overload.regs_per_thread
                     for sig, overload in self.overloads.items()}
 
+    def get_call_template(self, args, kws):
+        # Copied and simplified from _DispatcherBase.get_call_template.
+        """
+        Get a typing.ConcreteTemplate for this dispatcher and the given
+        *args* and *kws* types.  This allows to resolve the return type.
+
+        A (template, pysig, args, kws) tuple is returned.
+        """
+        with self._compiling_counter:
+            # Ensure an exactly-matching overload is available if we can
+            # compile. We proceed with the typing even if we can't compile
+            # because we may be able to force a cast on the caller side.
+            if self._can_compile:
+                self.compile_device(tuple(args))
+
+            # Create function type for typing
+            func_name = self.py_func.__name__
+            name = "CallTemplate({0})".format(func_name)
+
+            # The `key` isn't really used except for diagnosis here,
+            # so avoid keeping a reference to `cfunc`.
+            call_template = typing.make_concrete_template(
+                name, key=func_name, signatures=self.nopython_signatures)
+            pysig = utils.pysignature(self.py_func)
+
+            return call_template, pysig, args, kws
+
+    def get_overload(self, sig):
+        # We give the id of the overload (a CompileResult) because this is used
+        # as a key into a dict of overloads, and this is the only small and
+        # unique property of a CompileResult on CUDA (c.f. the CPU target,
+        # which uses its entry_point, which is a pointer value).
+        args, return_type = sigutils.normalize_signature(sig)
+        return id(self.overloads[args])
+
+    def compile_device(self, args):
+        """Compile the device function for the given argument types.
+
+        Each signature is compiled once by caching the compiled function inside
+        this object.
+
+        Returns the `CompileResult`.
+        """
+        if args not in self.overloads:
+
+            debug = self.targetoptions['debug']
+            inline = self.targetoptions.get('inline')
+
+            nvvm_options = {
+                'debug': debug,
+                'opt': 3 if self.targetoptions['opt'] else 0
+            }
+
+            cres = compile_cuda(self.py_func, None, args, debug=debug,
+                                inline=inline, nvvm_options=nvvm_options)
+            self.overloads[args] = cres
+
+            # The inserted function uses the id of the CompileResult as a key,
+            # consistent with get_overload() above.
+            cres.target_context.insert_user_function(id(cres), cres.fndesc,
+                                                     [cres.library])
+        else:
+            cres = self.overloads[args]
+
+        return cres
+
     def compile(self, sig):
         '''
         Compile and bind to the current context a version of this kernel
@@ -1105,7 +1226,11 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
 
         '''
         if signature is not None:
-            return self.overloads[signature].inspect_llvm()
+            # XXX: Need to check this for all cases
+            if self.targetoptions['device']:
+                return self.overloads[signature].library.get_llvm_str()
+            else:
+                return self.overloads[signature].inspect_llvm()
         else:
             return {sig: overload.inspect_llvm()
                     for sig, overload in self.overloads.items()}
