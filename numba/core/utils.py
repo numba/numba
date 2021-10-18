@@ -196,10 +196,9 @@ def use_old_style_errors():
 
 
 class ThreadLocalStack:
-    """
+    """A TLS stack container.
 
     Uses the BORG pattern and stores states in threadlocal storage.
-
     """
     _tls = threading.local()
     stack_name: str
@@ -236,10 +235,26 @@ class ThreadLocalStack:
         return self._stack.pop()
 
     def top(self):
+        """Get the top item on the stack.
+
+        Raises IndexError if the stack is empty. Users should check the size
+        of the stack beforehand.
+        """
         return self._stack[-1]
 
     def __len__(self):
         return len(self._stack)
+
+    @contextlib.contextmanager
+    def enter(self, state):
+        """A contextmanager that pushes ``state`` for the duration of the
+        context.
+        """
+        self.push(state)
+        try:
+            yield
+        finally:
+            self.pop()
 
 
 class _FlagsStack(ThreadLocalStack, stack_name="flags"):
@@ -267,25 +282,17 @@ class ConfigStack:
     def __init__(self):
         self._stk = _FlagsStack()
 
-    def push(self, data):
-        self._stk.push(data)
-
-    def pop(self):
-        return self._stk.pop()
-
     def top(self):
         return self._stk.top()
 
     def __len__(self):
         return len(self._stk)
 
-    @contextlib.contextmanager
     def enter(self, flags):
-        self.push(flags)
-        try:
-            yield
-        finally:
-            self.pop()
+        """Returns contextmanager that perform ``push(flags)`` on enter and
+        ``pop()`` on exit.
+        """
+        return self._stk.enter(flags)
 
 
 class ConfigOptions(object):
