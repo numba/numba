@@ -217,8 +217,8 @@ class TargetConfig(metaclass=_MetaTargetConfig):
 
     def _summary_args(self):
         """returns a sorted sequence of 2-tuple containing the
-        ``(flag_name, flag_value)`` for flag that are set and its value is not
-        the default value.
+        ``(flag_name, flag_value)`` for flag that are set with a non-default
+        value.
         """
         args = []
         for k in sorted(self.options):
