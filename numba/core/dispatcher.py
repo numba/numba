@@ -271,6 +271,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         self.__code__ = self.func_code
         # a place to keep an active reference to the types of the active call
         self._types_active_call = []
+        # Default argument values match the py_func
+        self.__defaults__ = py_func.__defaults__
 
         argnames = tuple(pysig.parameters)
         default_values = self.py_func.__defaults__ or ()

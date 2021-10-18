@@ -36,11 +36,13 @@ class CUDATypingContext(typing.BaseContext):
                 if not val._can_compile:
                     raise ValueError('using cpu function on device '
                                      'but its compilation is disabled')
-                opt = val.targetoptions.get('opt', True)
-                from .compiler import DeviceDispatcher
-                disp = DeviceDispatcher(val,
-                                        debug=val.targetoptions.get('debug'),
-                                        opt=opt)
+                targetoptions = val.targetoptions.copy()
+                targetoptions['device'] = True
+                targetoptions['debug'] = targetoptions.get('debug', False)
+                targetoptions['opt'] = targetoptions.get('opt', True)
+                sigs = None
+                from .compiler import Dispatcher
+                disp = Dispatcher(val, sigs, targetoptions)
                 # cache the device function for future use and to avoid
                 # duplicated copy of the same function.
                 val.__dispatcher = disp
