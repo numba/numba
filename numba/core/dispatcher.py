@@ -60,7 +60,6 @@ class TargetConfigurationStack:
         return len(self._stack)
 
     @classmethod
-    # @contextmanager
     def switch_target(cls, retarget: BaseRetarget):
         """Returns a contextmanager that pushes a new retarget handler,
         an instance of `numba.core.retarget.BaseRetarget`, onto the

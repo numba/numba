@@ -73,7 +73,7 @@ class ConfigStack:
         return len(self._stk)
 
     def enter(self, flags):
-        """Returns contextmanager that perform ``push(flags)`` on enter and
+        """Returns a contextmanager that performs ``push(flags)`` on enter and
         ``pop()`` on exit.
         """
         return self._stk.enter(flags)
