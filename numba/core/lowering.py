@@ -962,7 +962,8 @@ class Lower(BaseLower):
         )
         qualprefix = fnty.overloads[signature.args]
         mangler = self.context.mangler or default_mangler
-        mangled_name = mangler(qualprefix, signature.args)
+        abi_tags = self.fndesc.abi_tags
+        mangled_name = mangler(qualprefix, signature.args, abi_tags=abi_tags)
         # special case self recursion
         if self.builder.function.name.startswith(mangled_name):
             res = self.context.call_internal(

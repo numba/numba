@@ -2,6 +2,8 @@
 This module contains utils for manipulating target configurations such as
 compiler flags.
 """
+import zlib
+import base64
 
 from types import MappingProxyType
 from numba.core import utils
@@ -149,6 +151,11 @@ class TargetConfig(metaclass=_MetaTargetConfig):
     >>> tc.a_bool_option = True  # invokes the setter
     >>> print(tc.an_int_option)  # print the default
     """
+
+    # Used for compression in mangling.
+    # Set to -15 to disable the header and checksum for smallest output.
+    _ZLIB_CONFIG = {"wbits": -15}
+
     def __init__(self, copy_from=None):
         """
         Parameters
@@ -231,17 +238,13 @@ class TargetConfig(metaclass=_MetaTargetConfig):
         """
         return type(self)(self)
 
-    def summary(self):
+    def summary(self) -> str:
         """Returns a ``str`` that summarizes this instance.
 
         In contrast to ``__repr__``, only options that are explicitly set will
         be shown.
         """
-        args = []
-        for k in self.options:
-            msg = f"{k}={getattr(self, k)}"
-            if self.is_set(k):
-                args.append(msg)
+        args = [f"{k}={v}" for k, v in self._summary_args()]
         clsname = self.__class__.__name__
         return f"{clsname}({', '.join(args)})"
 
@@ -249,3 +252,56 @@ class TargetConfig(metaclass=_MetaTargetConfig):
         if name not in self.options:
             msg = f"{name!r} is not a valid option for {type(self)}"
             raise ValueError(msg)
+
+    def _summary_args(self):
+        """returns a sorted sequence of 2-tuple containing the
+        ``(flag_name, flag_value)`` for flag that are set with a non-default
+        value.
+        """
+        args = []
+        for k in sorted(self.options):
+            opt = self.options[k]
+            if self.is_set(k):
+                flagval = getattr(self, k)
+                if opt.default != flagval:
+                    v = (k, flagval)
+                    args.append(v)
+        return args
+
+    def _make_compression_dictionary(self) -> bytes:
+        """Returns a ``bytes`` object suitable for use as a dictionary for
+        compression.
+        """
+        buf = []
+        buf.append(self.__class__.__name__)
+        for k, opt in self.options.items():
+            buf.append(k)
+            buf.append(str(opt.default))
+        return ''.join(buf).encode()
+
+    def get_mangle_string(self) -> str:
+        """Return a string suitable for symbol mangling.
+        """
+        zdict = self._make_compression_dictionary()
+
+        comp = zlib.compressobj(zdict=zdict, level=zlib.Z_BEST_COMPRESSION,
+                                **self._ZLIB_CONFIG)
+        # The mangled string is a compressed and base64 encoded version of the
+        # summary
+        buf = [comp.compress(self.summary().encode())]
+        buf.append(comp.flush())
+        return base64.b64encode(b''.join(buf)).decode()
+
+    def demangle(self, mangled: str) -> str:
+        """Returns the demangled result from ``.get_mangle_string()``
+        """
+        raw = base64.b64decode(mangled)
+
+        zdict = self._make_compression_dictionary()
+        dc = zlib.decompressobj(zdict=zdict, **self._ZLIB_CONFIG)
+        buf = []
+        while raw:
+            buf.append(dc.decompress(raw))
+            raw = dc.unconsumed_tail
+        buf.append(dc.flush())
+        return b''.join(buf)

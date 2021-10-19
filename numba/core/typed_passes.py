@@ -388,7 +388,7 @@ class NativeLowering(LoweringPass):
                 funcdesc.PythonFunctionDescriptor.from_specialized_function(
                     interp, typemap, restype, calltypes,
                     mangler=targetctx.mangler, inline=flags.forceinline,
-                    noalias=flags.noalias)
+                    noalias=flags.noalias, abi_tags=[flags.get_mangle_string()])
 
             with targetctx.push_code_library(library):
                 lower = lowering.Lower(targetctx, library, fndesc, interp,
