@@ -123,6 +123,47 @@ class TestDeviceFunc(CUDATestCase):
         # Check that the compiled function name is in the LLVM.
         self.assertIn(fname, llvm)
 
+    @skip_on_cudasim('not supported in cudasim')
+    def test_inspect_asm(self):
+        @cuda.jit(device=True)
+        def foo(x, y):
+            return x + y
+
+        args = (int32, int32)
+        cres = foo.compile_device(args)
+
+        fname = cres.fndesc.mangled_name
+        # Verify that the function name has "foo" in it as in the python name
+        self.assertIn('foo', fname)
+
+        ptx = foo.inspect_asm(args)
+        # Check that the compiled function name is in the PTX
+        self.assertIn(fname, ptx)
+
+    @skip_on_cudasim('not supported in cudasim')
+    def test_inspect_sass_disallowed(self):
+        @cuda.jit(device=True)
+        def foo(x, y):
+            return x + y
+
+        with self.assertRaises(RuntimeError) as raises:
+            foo.inspect_sass((int32, int32))
+
+        self.assertIn('Cannot inspect SASS of a device function',
+                      str(raises.exception))
+
+    @skip_on_cudasim('cudasim will allow calling any function')
+    def test_device_func_as_kernel_disallowed(self):
+        @cuda.jit(device=True)
+        def f():
+            pass
+
+        with self.assertRaises(RuntimeError) as raises:
+            f[1, 1]()
+
+        self.assertIn('Cannot compile a device function as a kernel',
+                      str(raises.exception))
+
     @skip_on_cudasim('cudasim ignores casting by jit decorator signature')
     def test_device_casting(self):
         # Ensure that casts to the correct type are forced when calling a
