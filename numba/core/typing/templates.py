@@ -899,8 +899,8 @@ class _TemplateTargetHelperMixin(object):
         from numba.core.target_extension import (_get_local_target_checked,
                                                  dispatcher_registry)
         hwstr = self.metadata.get('target', 'generic')
-        target_hw = _get_local_target_checked(self.context, hwstr, "attribute")
-        # Get resgistry for the current hardware
+        target_hw = _get_local_target_checked(self.context, hwstr, reason)
+        # Get registry for the current hardware
         disp = dispatcher_registry[target_hw]
         tgtctx = disp.targetdescr.target_context
         # This is all workarounds...
