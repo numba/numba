@@ -701,8 +701,12 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         self.sigs = []
         self.link = targetoptions.pop('link', (),)
         self._can_compile = True
-        self._compiling_counter = CompilingCounter()
         self._type = self._numba_type_
+
+        # The compiling counter is only used when compiling device functions as
+        # it is used to detect recursion - recursion is not possible when
+        # compiling a kernel.
+        self._compiling_counter = CompilingCounter()
 
         # Specializations for given sets of argument types
         self.specializations = {}
