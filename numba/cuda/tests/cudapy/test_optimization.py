@@ -66,6 +66,21 @@ class TestOptimization(CUDATestCase):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, ptx)
 
+    def test_device_opt(self):
+        # Optimization should occur by default
+        sig = (float64, float64, float64)
+        device = cuda.jit(sig, device=True)(device_func)
+        ptx = device.inspect_asm(sig)
+        self.assertIn('fma.rn.f64', ptx)
+
+    def test_device_noopt(self):
+        # Optimization disabled
+        sig = (float64, float64, float64)
+        device = cuda.jit(sig, device=True, opt=False)(device_func)
+        ptx = device.inspect_asm(sig)
+        # Fused-multiply adds should be disabled when not optimizing
+        self.assertNotIn('fma.rn.f64', ptx)
+
 
 if __name__ == '__main__':
     unittest.main()

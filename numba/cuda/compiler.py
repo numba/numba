@@ -744,7 +744,7 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         if sigs:
             if len(sigs) > 1:
                 raise TypeError("Only one signature supported at present")
-            if targetoptions['device']:
+            if targetoptions.get('device'):
                 argtypes, restype = sigutils.normalize_signature(sigs[0])
                 self.compile_device(argtypes)
             else:
@@ -845,7 +845,7 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         the extensions have been called, the resulting `(ty, val)` will be
         passed into Numba's default argument marshalling logic.
         '''
-        return self.targetoptions['extensions']
+        return self.targetoptions.get('extensions')
 
     def __call__(self, *args, **kwargs):
         # An attempt to launch an unconfigured kernel
@@ -994,12 +994,12 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         """
         if args not in self.overloads:
 
-            debug = self.targetoptions['debug']
+            debug = self.targetoptions.get('debug')
             inline = self.targetoptions.get('inline')
 
             nvvm_options = {
                 'debug': debug,
-                'opt': 3 if self.targetoptions['opt'] else 0
+                'opt': 3 if self.targetoptions.get('opt') else 0
             }
 
             cres = compile_cuda(self.py_func, None, args, debug=debug,
@@ -1051,15 +1051,19 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
                  for all previously-encountered signatures.
 
         '''
+        device = self.targetoptions.get('device')
         if signature is not None:
-            # XXX: Need to check this for all cases
-            if self.targetoptions['device']:
+            if device:
                 return self.overloads[signature].library.get_llvm_str()
             else:
                 return self.overloads[signature].inspect_llvm()
         else:
-            return {sig: overload.inspect_llvm()
-                    for sig, overload in self.overloads.items()}
+            if device:
+                return {sig: overload.library.get_llvm_str()
+                        for sig, overload in self.overloads.items()}
+            else:
+                return {sig: overload.inspect_llvm()
+                        for sig, overload in self.overloads.items()}
 
     def inspect_asm(self, signature=None):
         '''
@@ -1071,11 +1075,19 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
                  for all previously-encountered signatures.
         '''
         cc = get_current_device().compute_capability
+        device = self.targetoptions.get('device')
         if signature is not None:
-            return self.overloads[signature].inspect_asm(cc)
+            if device:
+                return self.overloads[signature].library.get_asm_str(cc)
+            else:
+                return self.overloads[signature].inspect_asm(cc)
         else:
-            return {sig: overload.inspect_asm(cc)
-                    for sig, overload in self.overloads.items()}
+            if device:
+                return {sig: overload.library.get_asm_str(cc)
+                        for sig, overload in self.overloads.items()}
+            else:
+                return {sig: overload.inspect_asm(cc)
+                        for sig, overload in self.overloads.items()}
 
     def inspect_sass(self, signature=None):
         '''
@@ -1090,6 +1102,9 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
 
         Requires nvdisasm to be available on the PATH.
         '''
+        if self.targetoptions.get('device'):
+            raise RuntimeError('Cannot inspect SASS of a device function')
+
         if signature is not None:
             return self.overloads[signature].inspect_sass()
         else:
