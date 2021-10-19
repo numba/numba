@@ -41,12 +41,10 @@ gpuci_mamba_retry install -n numba -y \
                   "llvmlite" \
                   "numpy" \
                   "scipy" \
-                  "jinja2" \
                   "cffi" 
 conda activate numba
 
 gpuci_logger "Install numba"
-python setup.py build_ext --inplace
 python setup.py develop
 
 gpuci_logger "Check Python version"
