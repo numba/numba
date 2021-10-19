@@ -67,12 +67,13 @@ class TestFlagMangling(TestCase):
         flags.auto_parallel = True
         self.assertLess(len(flags.get_mangle_string()), len(flags.summary()))
 
-    def test_mangled_flags_with_fastmath_parfors(self):
+    def test_mangled_flags_with_fastmath_parfors_inline(self):
         # at least for these control cases
         flags = Flags()
         flags.nrt = True
         flags.auto_parallel = True
         flags.fastmath = True
+        flags.inline = "always"
         self.assertLess(len(flags.get_mangle_string()), len(flags.summary()))
         demangled = flags.demangle(flags.get_mangle_string()).decode()
         # There should be no pointer value in the demangled string.
