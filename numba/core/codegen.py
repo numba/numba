@@ -1053,7 +1053,6 @@ class RuntimeLinker(object):
             # Delete resolved
             del self._unresolved[name]
 
-
 def _proxy(old):
     @functools.wraps(old)
     def wrapper(self, *args, **kwargs):

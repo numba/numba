@@ -288,11 +288,11 @@ class BaseContext(object):
         Load target-specific registries.  Can be overridden by subclasses.
         """
 
-    def mangler(self, name, types):
+    def mangler(self, name, types, *, abi_tags=()):
         """
         Perform name mangling.
         """
-        return funcdesc.default_mangler(name, types)
+        return funcdesc.default_mangler(name, types, abi_tags=abi_tags)
 
     def get_env_name(self, fndesc):
         """Get the environment name given a FunctionDescriptor.
@@ -1128,9 +1128,9 @@ class BaseContext(object):
 
     def create_module(self, name):
         """Create a LLVM module
-        
+
         The default implementation in BaseContext always raises a
-        ``NotImplementedError`` exception. Subclasses should implement 
+        ``NotImplementedError`` exception. Subclasses should implement
         this method.
         """
         raise NotImplementedError
