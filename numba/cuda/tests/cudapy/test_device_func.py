@@ -2,7 +2,6 @@ import re
 import types
 
 import numpy as np
-#import warnings
 
 from numba.cuda.testing import unittest, skip_on_cudasim, CUDATestCase
 from numba import cuda, jit, int32
@@ -123,16 +122,6 @@ class TestDeviceFunc(CUDATestCase):
         llvm = foo.inspect_llvm(args)
         # Check that the compiled function name is in the LLVM.
         self.assertIn(fname, llvm)
-
-# Commenting as this should probably be un-deprecated
-#    @skip_on_cudasim('not supported in cudasim')
-#    def test_deprecated_eager_device(self):
-#        with warnings.catch_warnings(record=True) as w:
-#            cuda.jit('int32(int32)', device=True)
-#
-#        self.assertEqual(len(w), 1)
-#        self.assertIn('Eager compilation of device functions is deprecated',
-#                      str(w[0].message))
 
     @skip_on_cudasim('cudasim ignores casting by jit decorator signature')
     def test_device_casting(self):
