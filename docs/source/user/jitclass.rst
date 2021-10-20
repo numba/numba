@@ -197,8 +197,61 @@ Calling static methods as class attributes is only supported outside of the
 class definition (i.e. code cannot call ``Bag.add()`` from within another method
 of ``Bag``).
 
-See :ghfile:`numba/experimental/jitclass/boxing.py` for the list of supported
-dunder methods.
+
+Supported dunder methods
+------------------------
+
+The following dunder methods may be defined for jitclasses:
+
+* ``__abs__``
+* ``__bool__``
+* ``__complex__``
+* ``__contains__``
+* ``__float__``
+* ``__getitem__``
+* ``__hash__``
+* ``__index__``
+* ``__int__``
+* ``__len__``
+* ``__setitem__``
+* ``__str__``
+* ``__eq__``
+* ``__ne__``
+* ``__ge__``
+* ``__gt__``
+* ``__le__``
+* ``__lt__``
+* ``__add__``
+* ``__floordiv__``
+* ``__lshift__``
+* ``__mod__``
+* ``__mul__``
+* ``__neg__``
+* ``__pos__``
+* ``__pow__``
+* ``__rshift__``
+* ``__sub__``
+* ``__truediv__``
+* ``__and__``
+* ``__or__``
+* ``__xor__``
+* ``__iadd__``
+* ``__ifloordiv__``
+* ``__ilshift__``
+* ``__imod__``
+* ``__imul__``
+* ``__ipow__``
+* ``__irshift__``
+* ``__isub__``
+* ``__itruediv__``
+* ``__iand__``
+* ``__ior__``
+* ``__ixor__``
+
+Refer to the `Python Data Model documentation
+<https://docs.python.org/3/reference/datamodel.html>`_ for descriptions of
+these methods.
+
 
 Limitations
 ===========
