@@ -34,7 +34,7 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
 
 from numba.core.object_mode_passes import (ObjectModeFrontEnd,
                                            ObjectModeBackEnd)
-from numba.core.targetconfig import TargetConfig, Option
+from numba.core.targetconfig import TargetConfig, Option, ConfigStack
 
 
 class Flags(TargetConfig):
@@ -446,7 +446,7 @@ class CompilerBase(object):
         """
         Populate and run compiler pipeline
         """
-        with utils.ConfigStack().enter(self.state.flags.copy()):
+        with ConfigStack().enter(self.state.flags.copy()):
             pms = self.define_pipelines()
             for pm in pms:
                 pipeline_name = pm.pipeline_name

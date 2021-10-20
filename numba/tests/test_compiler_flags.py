@@ -1,6 +1,6 @@
 from numba import njit
 from numba.core.extending import overload
-from numba.core.utils import ConfigStack
+from numba.core.targetconfig import ConfigStack
 from numba.core.compiler import Flags, DEFAULT_FLAGS
 
 from numba.tests.support import TestCase, unittest

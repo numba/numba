@@ -3,7 +3,7 @@
 import inspect
 from contextlib import contextmanager
 
-from numba.core import config
+from numba.core import config, targetconfig
 from numba.core.decorators import jit
 from numba.core.descriptors import TargetDescriptor
 from numba.core.options import TargetOptions, include_default_options
@@ -141,7 +141,7 @@ class UFuncDispatcher(serialize.ReduceMixin):
 
         # Use cache and compiler in a critical section
         with global_compiler_lock:
-            with utils.ConfigStack().enter(flags.copy()):
+            with targetconfig.ConfigStack().enter(flags.copy()):
                 with store_overloads_on_success():
                     # attempt look up of existing
                     cres = self.cache.load_overload(sig, targetctx)

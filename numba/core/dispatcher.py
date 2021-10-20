@@ -7,8 +7,7 @@ import sys
 import types as pytypes
 import uuid
 import weakref
-from contextlib import ExitStack, contextmanager
-import threading
+from contextlib import ExitStack
 
 from numba import _dispatcher
 from numba.core import (
@@ -25,6 +24,16 @@ from numba.core.retarget import BaseRetarget
 import numba.core.event as ev
 
 
+class _RetargetStack(utils.ThreadLocalStack, stack_name="retarget"):
+    def push(self, state):
+        super().push(state)
+        _dispatcher.set_use_tls_target_stack(len(self) > 0)
+
+    def pop(self):
+        super().pop()
+        _dispatcher.set_use_tls_target_stack(len(self) > 0)
+
+
 class TargetConfigurationStack:
     """The target configuration stack.
 
@@ -33,26 +42,9 @@ class TargetConfigurationStack:
     WARNING: features associated with this class are experimental. The API
     may change without notice.
     """
-    _tls = threading.local()
 
     def __init__(self):
-        tls = self._tls
-        try:
-            tls_stack = tls.stack
-        except AttributeError:
-            tls_stack = tls.stack = list()
-
-        self._stack = tls_stack
-
-    def _push(self, state):
-        """Push to the stack
-        """
-        self._stack.append(state)
-
-    def _pop(self):
-        """Pop from the stack
-        """
-        return self._stack.pop()
+        self._stack = _RetargetStack()
 
     def get(self):
         """Get the current target from the top of the stack.
@@ -60,7 +52,7 @@ class TargetConfigurationStack:
         May raise IndexError if the stack is empty. Users should check the size
         of the stack beforehand.
         """
-        return self._stack[-1]
+        return self._stack.top()
 
     def __len__(self):
         """Size of the stack
@@ -68,20 +60,12 @@ class TargetConfigurationStack:
         return len(self._stack)
 
     @classmethod
-    @contextmanager
     def switch_target(cls, retarget: BaseRetarget):
-        """Pushes a new retarget handler, an instance of
-        `numba.core.retarget.BaseRetarget`, onto the target-config stack
-        for the duration of the context-manager.
+        """Returns a contextmanager that pushes a new retarget handler,
+        an instance of `numba.core.retarget.BaseRetarget`, onto the
+        target-config stack for the duration of the context-manager.
         """
-        tc = cls()
-        tc._push(retarget)
-        _dispatcher.set_use_tls_target_stack(True)
-        try:
-            yield
-        finally:
-            tc._pop()
-            _dispatcher.set_use_tls_target_stack(False)
+        return cls()._stack.enter(retarget)
 
 
 class OmittedArg(object):
