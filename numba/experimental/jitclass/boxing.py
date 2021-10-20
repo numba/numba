@@ -135,8 +135,6 @@ def _specialize_box(typ):
         "__ilshift__",
         "__imod__",
         "__imul__",
-        "__ineg__",
-        "__ipos__",
         "__ipow__",
         "__irshift__",
         "__isub__",
