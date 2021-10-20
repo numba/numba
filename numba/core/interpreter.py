@@ -1570,6 +1570,8 @@ class Interpreter(object):
         self.current_block.append(jmp)
 
     def op_POP_BLOCK(self, inst, kind=None):
+        d = ir.Expr.dummy("POP_BLOCK_INFO", "INFO", loc=self.loc)
+        self.store(d, "pop_block_info")
         if kind is None:
             self.syntax_blocks.pop()
         elif kind == 'try':

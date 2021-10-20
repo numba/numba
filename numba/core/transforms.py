@@ -8,7 +8,7 @@ import logging
 
 from numba.core.analysis import compute_cfg_from_blocks, find_top_level_loops
 from numba.core import errors, ir, ir_utils
-from numba.core.analysis import compute_use_defs
+from numba.core.analysis import compute_use_defs, compute_cfg_from_blocks
 from numba.core.utils import PYVERSION
 
 
@@ -350,7 +350,7 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
     vlt = func_ir.variable_lifetime
     blocks = func_ir.blocks.copy()
     cfg = vlt.cfg
-    _legalize_withs_cfg(withs, cfg, blocks)
+    #_legalize_withs_cfg(withs, cfg, blocks)
     # For each with-regions, mutate them according to
     # the kind of contextmanager
     sub_irs = []
@@ -504,7 +504,7 @@ def find_setupwiths(blocks):
 
     Returns a list of ranges for the with-regions.
     """
-    def find_ranges(blocks):
+    def _find_ranges(blocks):
         for blk in blocks.values():
             for ew in blk.find_insts(ir.EnterWith):
                 if PYVERSION < (3, 9):
@@ -527,6 +527,92 @@ def find_setupwiths(blocks):
                             break
                         last_offset = offset
                 yield ew.begin, end
+
+    def find_ranges(blocks):
+
+        def is_setup_with(stmt):
+            return isinstance(stmt, ir.EnterWith)
+
+
+        def is_branch(stmt):
+            return isinstance(stmt, ir.Branch)
+
+
+        def is_terminator(stmt):
+            return isinstance(stmt, ir.Terminator)
+
+        def is_raise(stmt):
+            return isinstance(stmt, ir.Raise)
+
+        def is_pop_block(stmt):
+            return (hasattr(stmt, "value") and
+                    str(stmt.value).startswith("POP_BLOCK_INFO"))
+
+
+        cfg = compute_cfg_from_blocks(blocks)
+        sus_setups, sus_pops = [], []
+        for label, block in blocks.items():
+            for stmt in block.body:
+                if is_setup_with(stmt):
+                    sus_setups.append(label)
+                if is_pop_block(stmt):
+                    sus_pops.append(label)
+
+        # now that we do have the statements, iterate through them in reverse
+        # topo order and from each start looking for pop_blocks
+        pop_block_to_setup_map = {}
+        for setup_block in cfg.topo_sort(sus_setups, reverse=True):
+            # begin pop_block, search
+            to_visit, seen = [], []
+            to_visit.append(setup_block)
+            while to_visit:
+                # get whatever is next and record that we have seen it
+                block = to_visit.pop()
+                seen.append(block)
+                # go through the body of the block, looking for statements
+                for stmt in blocks[block].body:
+                    # raise detected before pop_block
+                    if is_raise(stmt):
+                            raise errors.CompilerError(
+                                'unsupported controlflow due to return/raise '
+                                'statements inside with block'
+                                )
+                    # if a pop_block, process it
+                    if is_pop_block(stmt) and block in sus_pops:
+                        # record the jump target of this block belonging to this setup
+                        pop_block_targets = blocks[block].terminator.get_targets()
+                        assert len(pop_block_targets) == 1
+                        target_block = blocks[pop_block_targets[0]]
+                        if not target_block.terminator.get_targets():
+                            raise errors.CompilerError(
+                                'unsupported controlflow due to return/raise '
+                                'statements inside with block'
+                                )
+                        pop_block_to_setup_map[pop_block_targets[0]] = setup_block
+                        # remove the block from blocks to be matched
+                        sus_pops.remove(block)
+                        # stop looking, we have reached the frontier
+                        break
+                    # if we are still here, by the terminator block,
+                    # add all it's targets to the to_visit stack, unless we
+                    # have seen them already
+                    if is_terminator(stmt):
+                        for t in stmt.get_targets():
+                            if t not in seen:
+                                to_visit.append(t)
+        # remove the pop_block statements
+        for lbl, blk in blocks.items():
+            nb = []
+            for stmt in blk.body:
+                if is_pop_block(stmt):
+                    pass
+                else:
+                    nb.append(stmt)
+            blk.body.clear()
+            blk.body.extend(nb)
+        #respect the interface
+        for p,w in pop_block_to_setup_map.items():
+            yield w, p
 
     def previously_occurred(start, known_ranges):
         for a, b in known_ranges:
