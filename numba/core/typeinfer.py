@@ -25,7 +25,7 @@ from numba.core import types, utils, typing, ir, config
 from numba.core.typing.templates import Signature
 from numba.core.errors import (TypingError, UntypedAttributeError,
                                new_error_context, termcolor, UnsupportedError,
-                               ForceLiteralArg, CompilerError)
+                               ForceLiteralArg, CompilerError, NumbaValueError)
 from numba.core.funcdesc import qualifying_prefix
 
 _logger = logging.getLogger(__name__)
@@ -162,15 +162,23 @@ class ConstraintNetwork(object):
                     )
                     errors.append(utils.chain_exception(new_exc, e))
                 except Exception as e:
-                    _logger.debug("captured error", exc_info=e)
-                    msg = ("Internal error at {con}.\n"
-                           "{err}\nEnable logging at debug level for details.")
-                    new_exc = TypingError(
-                        msg.format(con=constraint, err=str(e)),
-                        loc=constraint.loc,
-                        highlighting=False,
-                    )
-                    errors.append(utils.chain_exception(new_exc, e))
+                    if utils.use_old_style_errors():
+                        _logger.debug("captured error", exc_info=e)
+                        msg = ("Internal error at {con}.\n{err}\n"
+                               "Enable logging at debug level for details.")
+                        new_exc = TypingError(
+                            msg.format(con=constraint, err=str(e)),
+                            loc=constraint.loc,
+                            highlighting=False,
+                        )
+                        errors.append(utils.chain_exception(new_exc, e))
+                    elif utils.use_new_style_errors():
+                        raise e
+                    else:
+                        msg = ("Unknown CAPTURED_ERRORS style: "
+                               f"'{config.CAPTURED_ERRORS}'.")
+                        assert 0, msg
+
         return errors
 
 
@@ -389,10 +397,9 @@ class ExhaustIterConstraint(object):
                         typeinfer.add_type(self.target, tp, loc=self.loc)
                         break
                     else:
-                        raise ValueError("wrong tuple length for %r: "
-                                         "expected %d, got %d"
-                                         % (self.iterator.name, self.count,
-                                            len(tp)))
+                        msg = (f"wrong tuple length for {self.iterator.name}: ",
+                               f"expected {self.count}, got {len(tp)}")
+                        raise NumbaValueError(msg)
                 elif isinstance(tp, types.IterableType):
                     tup = types.UniTuple(dtype=tp.iterator_type.yield_type,
                                          count=self.count)
@@ -582,6 +589,9 @@ class CallConstraint(object):
                 return
 
         # Resolve call type
+        if isinstance(fnty, types.TypeRef):
+            # Unwrap TypeRef
+            fnty = fnty.instance_type
         try:
             sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
         except ForceLiteralArg as e:
@@ -1601,7 +1611,16 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
         # Setting literal_value for globals because they are handled
         # like const value in numba
         lit = types.maybe_literal(gvar.value)
-        self.lock_type(target.name, lit or typ, loc=inst.loc)
+        # The user may have provided the type for this variable already.
+        # In this case, call add_type() to make sure the value type is
+        # consistent. See numba.tests.test_array_reductions
+        # TestArrayReductions.test_array_cumsum for examples.
+        # Variable type locked by using the locals dict.
+        tv = self.typevars[target.name]
+        if tv.locked:
+            tv.add_type(lit or typ, loc=inst.loc)
+        else:
+            self.lock_type(target.name, lit or typ, loc=inst.loc)
         self.assumed_immutables.add(inst)
 
     def typeof_expr(self, inst, target, expr):

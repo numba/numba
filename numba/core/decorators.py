@@ -12,7 +12,6 @@ from numba.core.errors import DeprecationError, NumbaDeprecationWarning
 from numba.stencils.stencil import stencil
 from numba.core import config, extending, sigutils, registry
 
-
 _logger = logging.getLogger(__name__)
 
 
@@ -22,6 +21,7 @@ _logger = logging.getLogger(__name__)
 _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "Signatures should be passed as the first "
                                  "positional argument.")
+
 
 def jit(signature_or_function=None, locals={}, cache=False,
         pipeline_class=None, boundscheck=None, **options):
@@ -152,6 +152,9 @@ def jit(signature_or_function=None, locals={}, cache=False,
         target = options.pop('target')
         warnings.warn("The 'target' keyword argument is deprecated.", NumbaDeprecationWarning)
     else:
+        if "_target" in options:
+            # Set the "target_backend" option if "_target" is defined.
+            options['target_backend'] = options['_target']
         target = options.pop('_target', 'cpu')
 
     options['boundscheck'] = boundscheck
@@ -186,7 +189,9 @@ def jit(signature_or_function=None, locals={}, cache=False,
 
 
 def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
-    dispatcher = registry.dispatcher_registry[target]
+
+    from numba.core.target_extension import resolve_dispatcher_from_str
+    dispatcher = resolve_dispatcher_from_str(target)
 
     def wrapper(func):
         if extending.is_jitted(func):

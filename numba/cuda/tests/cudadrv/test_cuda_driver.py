@@ -5,6 +5,7 @@ from numba.cuda.cudadrv import devices, drvapi
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import skip_on_cudasim
 
+
 ptx1 = '''
     .version 1.4
     .target sm_10, map_f64_to_f32
@@ -61,6 +62,7 @@ ptx2 = '''
 @skip_on_cudasim('CUDA Driver API unsupported in the simulator')
 class TestCudaDriver(CUDATestCase):
     def setUp(self):
+        super().setUp()
         self.assertTrue(len(devices.gpus) > 0)
         self.context = devices.get_context()
         device = self.context.device
@@ -71,6 +73,7 @@ class TestCudaDriver(CUDATestCase):
             self.ptx = ptx1
 
     def tearDown(self):
+        super().tearDown()
         del self.context
 
     def test_cuda_driver_basic(self):
@@ -188,6 +191,29 @@ class TestCudaDriver(CUDATestCase):
                                                                 128, 128)
         self.assertTrue(grid > 0)
         self.assertTrue(block > 0)
+
+
+class TestDevice(CUDATestCase):
+    def test_device_get_uuid(self):
+        # A device UUID looks like:
+        #
+        #     GPU-e6489c45-5b68-3b03-bab7-0e7c8e809643
+        #
+        # To test, we construct an RE that matches this form and verify that
+        # the returned UUID matches.
+        #
+        # Device UUIDs may not conform to parts of the UUID specification (RFC
+        # 4122) pertaining to versions and variants, so we do not extract and
+        # validate the values of these bits.
+
+        h = '[0-9a-f]{%d}'
+        h4 = h % 4
+        h8 = h % 8
+        h12 = h % 12
+        uuid_format = f'^GPU-{h8}-{h4}-{h4}-{h4}-{h12}$'
+
+        dev = devices.get_context().device
+        self.assertRegex(dev.uuid, uuid_format)
 
 
 if __name__ == '__main__':

@@ -451,11 +451,27 @@ def unicode_len(s):
 def unicode_eq(a, b):
     if not (a.is_internal and b.is_internal):
         return
+    if isinstance(a, types.Optional):
+        check_a = a.type
+    else:
+        check_a = a
+    if isinstance(b, types.Optional):
+        check_b = b.type
+    else:
+        check_b = b
     accept = (types.UnicodeType, types.StringLiteral, types.UnicodeCharSeq)
-    a_unicode = isinstance(a, accept)
-    b_unicode = isinstance(b, accept)
+    a_unicode = isinstance(check_a, accept)
+    b_unicode = isinstance(check_b, accept)
     if a_unicode and b_unicode:
         def eq_impl(a, b):
+            # handle Optionals at runtime
+            a_none = a is None
+            b_none = b is None
+            if a_none or b_none:
+                if a_none and b_none:
+                    return True
+                else:
+                    return False
             # the str() is for UnicodeCharSeq, it's a nop else
             a = str(a)
             b = str(b)
@@ -1358,7 +1374,7 @@ def unicode_join(sep, parts):
     elif isinstance(parts, types.IterableType):
         def join_iter_impl(sep, parts):
             parts_list = [p for p in parts]
-            return join_list(sep, parts_list)
+            return sep.join(parts_list)
         return join_iter_impl
     elif isinstance(parts, types.UnicodeType):
         # Temporary workaround until UnicodeType is iterable
@@ -1664,7 +1680,7 @@ def unicode_getitem(s, idx):
                 for i in range(slice_idx.start + slice_idx.step,
                                slice_idx.stop, slice_idx.step):
                     cp = _get_code_point(s, i)
-                    is_ascii |= _codepoint_is_ascii(cp)
+                    is_ascii &= _codepoint_is_ascii(cp)
                     new_kind = _codepoint_to_kind(cp)
                     if kind != new_kind:
                         kind = _pick_kind(kind, new_kind)

@@ -9,7 +9,10 @@ from numba.core.typing.templates import (AttributeTemplate, AbstractTemplate,
 # import time side effect: array operations requires typing support of sequence
 # defined in collections: e.g. array.shape[i]
 from numba.core.typing import collections
-from numba.core.errors import TypingError
+from numba.core.errors import (TypingError, RequireLiteralValue, NumbaTypeError,
+                               NumbaNotImplementedError, NumbaAssertionError,
+                               NumbaKeyError, NumbaIndexError)
+
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
 
@@ -39,8 +42,8 @@ def get_array_index_type(ary, idx):
     for ty in idx:
         if ty is types.ellipsis:
             if ellipsis_met:
-                raise TypeError("only one ellipsis allowed in array index "
-                                "(got %s)" % (idx,))
+                raise NumbaTypeError("only one ellipsis allowed in array index "
+                                     "(got %s)" % (idx,))
             ellipsis_met = True
         elif isinstance(ty, types.SliceType):
             pass
@@ -62,11 +65,12 @@ def get_array_index_type(ary, idx):
                 # We don't support the complicated combination of
                 # advanced indices (and integers are considered part
                 # of them by Numpy).
-                raise NotImplementedError("only one advanced index supported")
+                msg = "only one advanced index supported"
+                raise NumbaNotImplementedError(msg)
             advanced = True
         else:
-            raise TypeError("unsupported array index type %s in %s"
-                            % (ty, idx))
+            raise NumbaTypeError("unsupported array index type %s in %s"
+                                 % (ty, idx))
         (right_indices if ellipsis_met else left_indices).append(ty)
 
     # Only Numpy arrays support advanced indexing
@@ -81,8 +85,8 @@ def get_array_index_type(ary, idx):
 
     n_indices = len(all_indices) - ellipsis_met
     if n_indices > ary.ndim:
-        raise TypeError("cannot index %s with %d indices: %s"
-                        % (ary, n_indices, idx))
+        raise NumbaTypeError("cannot index %s with %d indices: %s"
+                             % (ary, n_indices, idx))
     if n_indices == ary.ndim and ndim == 0 and not ellipsis_met:
         # Full integer indexing => scalar result
         # (note if ellipsis is present, a 0-d view is returned instead)
@@ -174,13 +178,13 @@ class SetItemBuffer(AbstractTemplate):
         if not isinstance(ary, types.Buffer):
             return
         if not ary.mutable:
-            raise TypeError("Cannot modify value of type %s" %(ary,))
+            raise NumbaTypeError(f"Cannot modify value of type {ary}")
         out = get_array_index_type(ary, idx)
         if out is None:
             return
 
         idx = out.index
-        res = out.result
+        res = out.result # res is the result type of the access ary[idx]
         if isinstance(res, types.Array):
             # Indexing produces an array
             if isinstance(val, types.Array):
@@ -192,7 +196,7 @@ class SetItemBuffer(AbstractTemplate):
             elif isinstance(val, types.Sequence):
                 if (res.ndim == 1 and
                     self.context.can_convert(val.dtype, res.dtype)):
-                    # Allow assignement of sequence to 1d array
+                    # Allow assignment of sequence to 1d array
                     res = val
                 else:
                     # NOTE: sequence-to-array broadcasting is unsupported
@@ -214,6 +218,10 @@ class SetItemBuffer(AbstractTemplate):
                     return signature(types.none, newary, idx, res)
                 else:
                     return
+            res = val
+        elif isinstance(val, types.Array) and val.ndim == 0 \
+            and self.context.can_convert(val.dtype, res):
+            # val is an array(T, 0d, O), where T is the type of res, O is order
             res = val
         else:
             return
@@ -417,7 +425,7 @@ class ArrayAttribute(AttributeTemplate):
         kwargs = dict(kws)
         kind = kwargs.pop('kind', types.StringLiteral('quicksort'))
         if not isinstance(kind, types.StringLiteral):
-            raise errors.TypingError('"kind" must be a string literal')
+            raise TypingError('"kind" must be a string literal')
         if kwargs:
             msg = "Unsupported keywords: {!r}"
             raise TypingError(msg.format([k for k in kwargs.keys()]))
@@ -444,6 +452,9 @@ class ArrayAttribute(AttributeTemplate):
         from .npydecl import parse_dtype
         assert not kws
         dtype, = args
+        if isinstance(dtype, types.UnicodeType):
+            raise RequireLiteralValue(("array.astype if dtype is a string it "
+                                       "must be constant"))
         dtype = parse_dtype(dtype)
         if dtype is None:
             return
@@ -473,7 +484,8 @@ class ArrayAttribute(AttributeTemplate):
 
     @bound_function("array.take")
     def resolve_take(self, ary, args, kws):
-        assert not kws
+        if kws:
+            raise NumbaAssertionError("kws not supported")
         argty, = args
         if isinstance(argty, types.Integer):
             sig = signature(ary.dtype, *args)
@@ -555,13 +567,23 @@ class StaticGetItemLiteralRecord(AbstractTemplate):
     def generic(self, args, kws):
         # Resolution of members for records
         record, idx = args
-        if isinstance(record, types.Record) and isinstance(idx, types.StringLiteral):
-            if idx.literal_value not in record.fields:
-                raise KeyError(f"Field '{idx.literal_value}' was not found in record with "
-                               f"fields {tuple(record.fields.keys())}")
-            ret = record.typeof(idx.literal_value)
-            assert ret
-            return signature(ret, *args)
+        if isinstance(record, types.Record):
+            if isinstance(idx, types.StringLiteral):
+                if idx.literal_value not in record.fields:
+                    msg = (f"Field '{idx.literal_value}' was not found in "
+                           f"record with fields {tuple(record.fields.keys())}")
+                    raise NumbaKeyError(msg)
+                ret = record.typeof(idx.literal_value)
+                assert ret
+                return signature(ret, *args)
+            elif isinstance(idx, types.IntegerLiteral):
+                if idx.literal_value >= len(record.fields):
+                    msg = f"Requested index {idx.literal_value} is out of range"
+                    raise NumbaIndexError(msg)
+                field_names = list(record.fields)
+                ret = record.typeof(field_names[idx.literal_value])
+                assert ret
+                return signature(ret, *args)
 
 
 @infer
@@ -571,10 +593,21 @@ class StaticSetItemRecord(AbstractTemplate):
     def generic(self, args, kws):
         # Resolution of members for record and structured arrays
         record, idx, value = args
-        if isinstance(record, types.Record) and isinstance(idx, str):
-            expectedty = record.typeof(idx)
-            if self.context.can_convert(value, expectedty) is not None:
-                return signature(types.void, record, types.literal(idx), value)
+        if isinstance(record, types.Record):
+            if isinstance(idx, str):
+                expectedty = record.typeof(idx)
+                if self.context.can_convert(value, expectedty) is not None:
+                    return signature(types.void, record, types.literal(idx),
+                                     value)
+            elif isinstance(idx, int):
+                if idx >= len(record.fields):
+                    msg = f"Requested index {idx} is out of range"
+                    raise NumbaIndexError(msg)
+                str_field = list(record.fields)[idx]
+                expectedty = record.typeof(str_field)
+                if self.context.can_convert(value, expectedty) is not None:
+                    return signature(types.void, record, types.literal(idx),
+                                     value)
 
 
 @infer_global(operator.setitem)
@@ -584,8 +617,9 @@ class StaticSetItemLiteralRecord(AbstractTemplate):
         target, idx, value = args
         if isinstance(target, types.Record) and isinstance(idx, types.StringLiteral):
             if idx.literal_value not in target.fields:
-                raise KeyError(f"Field '{idx.literal_value}' was not found in record with "
-                               f"fields {tuple(target.fields.keys())}")
+                msg = (f"Field '{idx.literal_value}' was not found in record "
+                       f"with fields {tuple(target.fields.keys())}")
+                raise NumbaKeyError(msg)
             expectedty = target.typeof(idx.literal_value)
             if self.context.can_convert(value, expectedty) is not None:
                 return signature(types.void, target, idx, value)
@@ -634,8 +668,11 @@ def _expand_integer(ty):
 
 
 def generic_homog(self, args, kws):
-    assert not args
-    assert not kws
+    if args:
+        raise NumbaAssertionError("args not supported")
+    if kws:
+        raise NumbaAssertionError("kws not supported")
+
     return signature(self.this.dtype, recvr=self.this)
 
 
@@ -715,8 +752,10 @@ def sum_expand(self, args, kws):
 
 
 def generic_expand_cumulative(self, args, kws):
-    assert not args
-    assert not kws
+    if args:
+        raise NumbaAssertionError("args unsupported")
+    if kws:
+        raise NumbaAssertionError("kwargs unsupported")
     assert isinstance(self.this, types.Array)
     return_type = types.Array(dtype=_expand_integer(self.this.dtype),
                               ndim=1, layout='C')
@@ -773,11 +812,6 @@ for fName in ["mean"]:
 # get promoted to float64 return
 for fName in ["var", "std"]:
     install_array_method(fName, generic_hetero_always_real)
-
-
-# Functions that return an index (intp)
-install_array_method("argmin", generic_index)
-install_array_method("argmax", generic_index)
 
 
 @infer_global(operator.eq)

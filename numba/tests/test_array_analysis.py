@@ -16,7 +16,8 @@ from numba.core import (
     registry,
     utils,
 )
-from numba.tests.support import TestCase, tag, skip_parfors_unsupported
+from numba.tests.support import (TestCase, tag, skip_parfors_unsupported,
+                                 skip_unless_scipy)
 from numba.parfors.array_analysis import EquivSet, ArrayAnalysis
 from numba.core.compiler import Compiler, Flags, PassManager
 from numba.core.ir_utils import remove_dead
@@ -42,6 +43,11 @@ class ExampleClass3700(object):
     def __init__(self, n):
         self.L = n
         self.T = n + 1
+
+
+# test value for test_global_tuple
+GVAL = (1.2,)
+GVAL2 = (3, 4)
 
 
 class TestEquivSet(TestCase):
@@ -391,6 +397,15 @@ class TestArrayAnalysis(TestCase):
         self._compile_and_test(test_tup_arg,
             (types.Tuple((int_arr_typ, int_arr_typ)),), asserts=None)
 
+        def test_arr_in_tup(m):
+            A = np.ones(m)
+            S = (A,)
+            B = np.ones(len(S[0]))
+            return B
+
+        self._compile_and_test(test_arr_in_tup, (types.intp,),
+                               equivs=[self.with_equiv("A", "B")])
+
         T = namedtuple("T", ['a','b'])
         def test_namedtuple(n):
             r = T(n, n)
@@ -611,6 +626,7 @@ class TestArrayAnalysis(TestCase):
                                        self.with_equiv('F', 'D'),],
                                idempotent=False)
 
+    @skip_unless_scipy
     def test_numpy_calls(self):
         def test_zeros(n):
             a = np.zeros(n)
@@ -921,6 +937,16 @@ class TestArrayAnalysis(TestCase):
                                equivs=[self.with_equiv('a', 'c', 'e')],
                                asserts=None)
 
+        # make sure shape of a global tuple of ints is handled properly
+        def test_global_tuple():
+            a = np.ones(GVAL2)
+            b = np.ones(GVAL2)
+
+        self._compile_and_test(test_global_tuple, (),
+                               equivs=[self.with_equiv('a', 'b')],
+                               asserts=None)
+
+
 class TestArrayAnalysisParallelRequired(TestCase):
     """This is to just split out tests that need the parallel backend and
     therefore serialised execution.
@@ -1008,6 +1034,18 @@ class TestArrayAnalysisParallelRequired(TestCase):
         data = np.arange(10.)
         np.testing.assert_array_equal(test_impl(data), test_impl.py_func(data))
 
+    @skip_unsupported
+    def test_global_tuple(self):
+        """make sure a global tuple with non-integer values does not cause errors
+        (test for #6726).
+        """
+
+        def test_impl():
+            d = GVAL[0]
+            return d
+
+        self.assertEqual(njit(test_impl, parallel=True)(), test_impl())
+
 
 class TestArrayAnalysisInterface(TestCase):
     def test_analyze_op_call_interface(self):
@@ -1072,7 +1110,7 @@ class TestArrayAnalysisInterface(TestCase):
                 for i in prange(n):
                     S = np.arange(i)
                     A[i] = S.sum()
-                return A
+                return A + 1
 
             got = njit(parallel=True)(f)(10)
             executed_count = shared['counter']

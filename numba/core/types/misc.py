@@ -38,7 +38,10 @@ class RawPointer(Opaque):
 
 
 class StringLiteral(Literal, Dummy):
-    pass
+
+    def can_convert_to(self, typingctx, other):
+        if isinstance(other, UnicodeType):
+            return Conversion.safe
 
 
 Literal.ctor_map[str] = StringLiteral
@@ -141,17 +144,27 @@ class MemInfoPointer(Type):
 class CPointer(Type):
     """
     Type class for pointers to other types.
+
+    Attributes
+    ----------
+        dtype : The pointee type
+        addrspace : int
+            The address space pointee belongs to.
     """
     mutable = True
 
-    def __init__(self, dtype):
+    def __init__(self, dtype, addrspace=None):
         self.dtype = dtype
-        name = "%s*" % dtype
+        self.addrspace = addrspace
+        if addrspace is not None:
+            name = "%s_%s*" % (dtype, addrspace)
+        else:
+            name = "%s*" % dtype
         super(CPointer, self).__init__(name)
 
     @property
     def key(self):
-        return self.dtype
+        return self.dtype, self.addrspace
 
 
 class EphemeralPointer(CPointer):
@@ -323,6 +336,11 @@ class SliceLiteral(Literal, SliceType):
         name = 'Literal[slice]({})'.format(value)
         members = 2 if value.step is None else 3
         SliceType.__init__(self, name=name, members=members)
+
+    @property
+    def key(self):
+        sl = self.literal_value
+        return sl.start, sl.stop, sl.step
 
 
 Literal.ctor_map[slice] = SliceLiteral

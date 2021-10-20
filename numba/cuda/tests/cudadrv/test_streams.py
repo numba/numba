@@ -47,7 +47,8 @@ class TestCudaStream(CUDATestCase):
             h_src[:] = value_in
             d_ary = cuda.to_device(h_src, stream=stream)
             d_ary.copy_to_host(h_dst, stream=stream)
-            await stream.async_done()
+            done_result = await stream.async_done()
+            self.assertEqual(done_result, stream)
             return h_dst.mean()
 
         values_in = [1, 2, 3, 4]
@@ -59,7 +60,18 @@ class TestCudaStream(CUDATestCase):
     async def test_multiple_async_done(self):
         stream = cuda.stream()
         done_aws = [stream.async_done() for _ in range(4)]
-        await asyncio.gather(*done_aws)
+        done = await asyncio.gather(*done_aws)
+        for d in done:
+            self.assertEqual(d, stream)
+
+    @with_asyncio_loop
+    async def test_multiple_async_done_multiple_streams(self):
+        streams = [cuda.stream() for _ in range(4)]
+        done_aws = [stream.async_done() for stream in streams]
+        done = await asyncio.gather(*done_aws)
+
+        # Ensure we got the four original streams in done
+        self.assertSetEqual(set(done), set(streams))
 
     @with_asyncio_loop
     async def test_cancelled_future(self):

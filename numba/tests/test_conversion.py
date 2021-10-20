@@ -216,6 +216,18 @@ class TestConversion(TestCase):
         tp = types.Optional(types.Buffer(types.intc, 1, 'C'))
         self.check_argument_cleanup(tp, mem)
 
+    def test_stringliteral_to_unicode(self):
+        # See issue #6907, explicit signature on bar() takes a unicode_type but
+        # the call to bar() in foo() is with a StringLiteral
+
+        @jit(types.void(types.unicode_type), nopython=True)
+        def bar(string):
+            pass
+
+        @jit(types.void(), nopython=True)
+        def foo2():
+            bar("literal string")
+
 
 if __name__ == '__main__':
     unittest.main()

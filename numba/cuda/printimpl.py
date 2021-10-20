@@ -1,5 +1,5 @@
 from functools import singledispatch
-from llvmlite.llvmpy.core import Type
+from llvmlite import ir
 from numba.core import types, cgutils
 from numba.core.imputils import Registry
 from numba.cuda import nvvmutils
@@ -7,7 +7,7 @@ from numba.cuda import nvvmutils
 registry = Registry()
 lower = registry.lower
 
-voidptr = Type.pointer(Type.int(8))
+voidptr = ir.PointerType(ir.IntType(8))
 
 
 # NOTE: we don't use @lower here since print_item() doesn't return a LLVM value

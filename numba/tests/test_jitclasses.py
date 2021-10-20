@@ -18,7 +18,7 @@ from numba.core.runtime.nrt import MemInfo
 from numba.experimental import jitclass
 from numba.experimental.jitclass import _box
 from numba.experimental.jitclass.base import JitClassType
-from numba.tests.support import MemoryLeakMixin, TestCase
+from numba.tests.support import MemoryLeakMixin, TestCase, skip_if_typeguard
 
 
 class TestClass1(object):
@@ -634,6 +634,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             access_dunder.py_func(inst)
         self.assertIn("_TestJitClass__value", str(raises.exception))
 
+    @skip_if_typeguard
     def test_annotations(self):
         """
         Methods with annotations should compile fine (issue #1911).

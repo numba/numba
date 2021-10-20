@@ -11,7 +11,7 @@ from numba.core.errors import TypingError
 from numba.np.numpy_support import numpy_version
 import unittest
 from numba.np import numpy_support
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, skip_ppc64le_issue6465
 
 _FS = ('e', 'f')
 
@@ -43,6 +43,10 @@ def get_zero_a(ary, _unused):
 getitem_a = make_getitem('a')
 getitem_b = make_getitem('b')
 getitem_c = make_getitem('c')
+getitem_0 = make_getitem(0)
+getitem_1 = make_getitem(1)
+getitem_2 = make_getitem(2)
+getitem_10 = make_getitem(10)  # OOB
 
 
 def get_a_subarray(ary, i):
@@ -110,6 +114,10 @@ def make_setitem(item):
 setitem_a = make_setitem('a')
 setitem_b = make_setitem('b')
 setitem_c = make_setitem('c')
+setitem_0 = make_setitem(0)
+setitem_1 = make_setitem(1)
+setitem_2 = make_setitem(2)
+setitem_10 = make_setitem(10)  # OOB
 
 
 def set_a_subarray(ary, i, v):
@@ -307,10 +315,15 @@ def set_field4(rec):
     return rec
 
 
+def set_field_slice(arr):
+    arr['k'][:] = 0.0
+    return arr
+
+
 recordtype = np.dtype([('a', np.float64),
                        ('b', np.int16),
                        ('c', np.complex64),
-                       ('d', (np.str, 5))])
+                       ('d', (np.str_, 5))])
 
 recordtype2 = np.dtype([('e', np.int32),
                         ('f', np.float64)], align=True)
@@ -509,6 +522,19 @@ class TestRecordDtype(unittest.TestCase):
         self._test_get_equal(getitem_c)
         self._test_get_equal(getitem_c_subarray)
 
+    def test_getitem_static_int_index(self):
+        self._test_get_equal(getitem_0)
+        self._test_get_equal(getitem_1)
+        self._test_get_equal(getitem_2)
+
+        # this exception on accessing OOB integer index
+        rec = numpy_support.from_dtype(recordtype)
+        with self.assertRaises(TypingError) as raises:
+            self.get_cfunc(getitem_10, (rec[:], types.intp))
+
+        msg = "Requested index 10 is out of range"
+        self.assertIn(msg, str(raises.exception))
+
     def _test_get_two_equal(self, pyfunc):
         '''
         Test with two arrays of the same type
@@ -584,6 +610,24 @@ class TestRecordDtype(unittest.TestCase):
         check(set_c_subarray)
         check(setitem_c)
         check(setitem_c_subarray)
+
+    def test_setitem_static_int_index(self):
+        def check(pyfunc):
+            self._test_set_equal(pyfunc, 3.1415, types.float64)
+            # Test again to check if coercion works
+            self._test_set_equal(pyfunc, 3., types.float32)
+
+        check(setitem_0)
+        check(setitem_1)
+        check(setitem_2)
+
+        # this exception on accessing OOB integer index
+        rec = numpy_support.from_dtype(recordtype)
+        with self.assertRaises(TypingError) as raises:
+            self.get_cfunc(setitem_10, (rec[:], types.intp, types.float64))
+
+        msg = "Requested index 10 is out of range"
+        self.assertIn(msg, str(raises.exception))
 
     def test_set_record(self):
         pyfunc = set_record
@@ -826,6 +870,10 @@ class TestRecordDtype(unittest.TestCase):
         cfunc = self.get_cfunc(pyfunc, (nbrecord,))
         self.assertEqual(cfunc(rec), pyfunc(rec))
 
+        pyfunc = set_field_slice
+        cfunc = self.get_cfunc(pyfunc, (nbrecord,))
+        np.testing.assert_array_equal(cfunc(rec), pyfunc(rec))
+
     def test_structure_dtype_with_titles(self):
         # the following is the definition of int4 vector type from pyopencl
         vecint4 = np.dtype([(('x', 's0'), 'i4'), (('y', 's1'), 'i4'),
@@ -858,7 +906,7 @@ class TestRecordDtype(unittest.TestCase):
         np.testing.assert_equal(expect, got)
 
     def test_record_dtype_with_titles_roundtrip(self):
-        recdtype = np.dtype([(("title a", 'a'), np.float), ('b', np.float)])
+        recdtype = np.dtype([(("title a", 'a'), np.float_), ('b', np.float_)])
         nbtype = numpy_support.from_dtype(recdtype)
         self.assertTrue(nbtype.is_title('title a'))
         self.assertFalse(nbtype.is_title('a'))
@@ -917,6 +965,7 @@ class TestRecordDtypeWithStructArraysAndDispatcher(TestRecordDtypeWithStructArra
         return _get_cfunc_nopython(pyfunc, argspec)
 
 
+@skip_ppc64le_issue6465
 class TestRecordDtypeWithCharSeq(unittest.TestCase):
 
     def _createSampleaArray(self):
@@ -1101,6 +1150,26 @@ class TestRecordArrayGetItem(unittest.TestCase):
             jitfunc(arr[0])
         self.assertIn("Field 'f' was not found in record with fields "
                       "('first', 'second')", str(raises.exception))
+
+    def test_literal_unroll_dynamic_to_static_getitem_transform(self):
+        # See issue #6634
+        keys = ('a', 'b', 'c')
+        n = 5
+
+        def pyfunc(rec):
+            x = np.zeros((n,))
+            for o in literal_unroll(keys):
+                x += rec[o]
+            return x
+
+        dt = np.float64
+        ldd = [np.arange(dt(n)) for x in keys]
+        ldk = [(x, np.float64,) for x in keys]
+        rec = np.rec.fromarrays(ldd, dtype=ldk)
+
+        expected = pyfunc(rec)
+        got = njit(pyfunc)(rec)
+        np.testing.assert_allclose(expected, got)
 
 
 class TestRecordArraySetItem(unittest.TestCase):
@@ -1300,6 +1369,25 @@ class TestSubtyping(TestCase):
         self.assertEqual(len(foo.nopython_signatures), 2)
         self.assertEqual(foo(self.a_rec1) + 1, foo(self.ab_rec1))
         self.assertEqual(foo(self.ab_rec1, flag=1), self.ab_rec1[0] + k + 20)
+
+
+class TestRecordArrayExceptions(TestCase):
+
+    def test_nested_array_in_buffer_raises(self):
+        # see issue #6473
+        @njit()
+        def foo(x):
+            x["y"][0] = 1
+
+        dt = np.dtype([("y", (np.uint64, 5)),])
+        x = np.ones(1, dtype=dt)
+        with self.assertRaises(TypingError) as e:
+            foo(x)
+        ex1 = "The dtype of a Buffer type cannot itself be a Buffer type"
+        ex2 = "unsupported Buffer was: nestedarray(uint64, (5,))"
+        excstr = str(e.exception)
+        self.assertIn(ex1, excstr)
+        self.assertIn(ex2, excstr)
 
 
 if __name__ == '__main__':

@@ -364,7 +364,7 @@ class TestInlinedClosure(TestCase):
             return inner2(inner, x)
 
         def outer20(x):
-            #""" Test calling numpy in closure """
+            """ Test calling numpy in closure """
             z = x + 1
 
             def inner(x):
@@ -372,12 +372,19 @@ class TestInlinedClosure(TestCase):
             return inner(x)
 
         def outer21(x):
-            #""" Test calling numpy import as in closure """
+            """ Test calling numpy import as in closure """
             z = x + 1
 
             def inner(x):
                 return x + np.cos(z)
             return inner(x)
+
+        def outer22():
+            """Test to ensure that unsupported *args raises correctly"""
+            def bar(a, b):
+                pass
+            x = 1, 2
+            bar(*x)
 
         # functions to test that are expected to pass
         f = [outer1, outer2, outer5, outer6, outer7, outer8,
@@ -425,6 +432,12 @@ class TestInlinedClosure(TestCase):
         msg = "The use of yield in a closure is unsupported."
         self.assertIn(msg, str(raises.exception))
 
+        with self.assertRaises(UnsupportedError) as raises:
+            cfunc = jit(nopython=True)(outer22)
+            cfunc()
+        msg = "Calling a closure with *args is unsupported."
+        self.assertIn(msg, str(raises.exception))
+
 
 class TestObjmodeFallback(TestCase):
     # These are all based on tests from real life issues where, predominantly,
@@ -444,7 +457,7 @@ class TestObjmodeFallback(TestCase):
                 [set(np.argwhere(coxv == x).flatten()) for x in groups]
 
         x = np.random.random((10, 10))
-        y = np.abs((np.random.randn(10, 10) * 1.732)).astype(np.int)
+        y = np.abs((np.random.randn(10, 10) * 1.732)).astype(int)
         for d in self.decorators:
             d(numbaFailure)(x, y)
 

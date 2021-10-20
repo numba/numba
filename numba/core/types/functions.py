@@ -9,9 +9,10 @@ from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref
 from .common import Opaque
 from .misc import unliteral
 from numba.core import errors, utils, types, config
-
+from numba.core.typeconv import Conversion
 
 _logger = logging.getLogger(__name__)
+
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -278,12 +279,21 @@ class BaseFunction(Callable):
         return self._impl_keys[sig.args]
 
     def get_call_type(self, context, args, kws):
+
         prefer_lit = [True, False]    # old behavior preferring literal
         prefer_not = [False, True]    # new behavior preferring non-literal
         failures = _ResolutionFailures(context, self, args, kws,
                                        depth=self._depth)
+
+        # get the order in which to try templates
+        from numba.core.target_extension import get_local_target # circular
+        target_hw = get_local_target(context)
+        order = utils.order_by_target_specificity(target_hw, self.templates,
+                                                  fnkey=self.key[0])
+
         self._depth += 1
-        for temp_cls in self.templates:
+
+        for temp_cls in order:
             temp = temp_cls(context)
             # The template can override the default and prefer literal args
             choice = prefer_lit if temp.prefer_literal else prefer_not
@@ -297,8 +307,12 @@ class BaseFunction(Callable):
                                     for k, v in kws.items()}
                         sig = temp.apply(nolitargs, nolitkws)
                 except Exception as e:
-                    sig = None
-                    failures.add_error(temp, False, e, uselit)
+                    if (utils.use_new_style_errors() and not
+                            isinstance(e, errors.NumbaError)):
+                        raise e
+                    else:
+                        sig = None
+                        failures.add_error(temp, False, e, uselit)
                 else:
                     if sig is not None:
                         self._impl_keys[sig.args] = temp.get_impl_key(sig)
@@ -314,10 +328,6 @@ class BaseFunction(Callable):
                             msg = 'No match.'
                         failures.add_error(temp, True, msg, uselit)
 
-        if len(failures) == 0:
-            raise AssertionError("Internal Error. "
-                                 "Function resolution ended with no failures "
-                                 "or successful signature")
         failures.raise_error()
 
     def get_call_signatures(self):
@@ -364,7 +374,10 @@ class BoundFunction(Callable, Opaque):
 
     @property
     def key(self):
-        return self.typing_key, self.this
+        # FIXME: With target-overload, the MethodTemplate can change depending
+        #        on the target.
+        unique_impl = getattr(self.template, "_overload_func", None)
+        return self.typing_key, self.this, unique_impl
 
     def get_impl_key(self, sig):
         """
@@ -386,6 +399,9 @@ class BoundFunction(Callable, Opaque):
                 try:
                     out = template.apply(args, kws)
                 except Exception as exc:
+                    if (utils.use_new_style_errors() and not
+                            isinstance(exc, errors.NumbaError)):
+                        raise exc
                     if isinstance(exc, errors.ForceLiteralArg):
                         raise exc
                     literal_e = exc
@@ -457,6 +473,20 @@ class MakeFunctionLiteral(Literal, Opaque):
     pass
 
 
+class _PickleableWeakRef(weakref.ref):
+    """
+    Allow a weakref to be pickled.
+
+    Note that if the object referred to is not kept alive elsewhere in the
+    pickle, the weakref will immediately expire after being constructed.
+    """
+    def __getnewargs__(self):
+        obj = self()
+        if obj is None:
+            raise ReferenceError("underlying object has vanished")
+        return (obj,)
+
+
 class WeakType(Type):
     """
     Base class for types parametered by a mortal object, to which only
@@ -464,7 +494,7 @@ class WeakType(Type):
     """
 
     def _store_object(self, obj):
-        self._wr = weakref.ref(obj)
+        self._wr = _PickleableWeakRef(obj)
 
     def _get_object(self):
         obj = self._wr()
@@ -524,7 +554,12 @@ class Dispatcher(WeakType, Callable, Dummy):
         A strong reference to the underlying numba.dispatcher.Dispatcher
         instance.
         """
-        return self._get_object()
+        disp = self._get_object()
+        # TODO: improve interface to avoid the dynamic check here
+        if hasattr(disp, "_get_dispatcher_for_current_target"):
+            return disp._get_dispatcher_for_current_target()
+        else:
+            return disp
 
     def get_overload(self, sig):
         """
@@ -540,6 +575,11 @@ class Dispatcher(WeakType, Callable, Dummy):
 
     def unify(self, context, other):
         return utils.unified_function_type((self, other), require_precise=False)
+
+    def can_convert_to(self, typingctx, other):
+        if isinstance(other, types.FunctionType):
+            if self.dispatcher.get_compile_result(other.signature):
+                return Conversion.safe
 
 
 class ObjModeDispatcher(Dispatcher):

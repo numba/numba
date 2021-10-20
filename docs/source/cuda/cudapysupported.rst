@@ -144,9 +144,11 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.gamma`
 * :func:`math.lgamma`
 * :func:`math.log`
+* :func:`math.log2`
 * :func:`math.log10`
 * :func:`math.log1p`
 * :func:`math.sqrt`
+* :func:`math.remainder`: Python 3.7+
 * :func:`math.pow`
 * :func:`math.ceil`
 * :func:`math.floor`

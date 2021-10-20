@@ -432,7 +432,7 @@ class TestSets(BaseTest):
 
         pyfunc = constructor_usecase
         cfunc = jit(nopython=True)(pyfunc)
-        with self.assertRaises(errors.LoweringError) as raises:
+        with self.assertRaises(errors.NumbaValueError) as raises:
             cfunc("abc")
 
         excstr = str(raises.exception)
@@ -810,6 +810,17 @@ class TestExamples(BaseTest):
 
         check(self.duplicates_array(200))
         check(self.sparse_array(200))
+
+    def test_type_coercion_from_update(self):
+        # see issue #6621
+        def impl():
+            i = np.uint64(1)
+            R = set()
+            R.update({1, 2, 3})
+            R.add(i)
+            return R
+        check = self.unordered_checker(impl)
+        check()
 
 
 if __name__ == '__main__':

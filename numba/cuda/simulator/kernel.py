@@ -40,6 +40,23 @@ def _get_kernel_context():
     return _kernel_context
 
 
+class FakeOverload:
+    '''
+    Used only to provide the max_cooperative_grid_blocks method
+    '''
+    def max_cooperative_grid_blocks(self, blockdim):
+        # We can only run one block in a cooperative grid because we have no
+        # mechanism for synchronization between different blocks
+        return 1
+
+
+class FakeOverloadDict(dict):
+    def __getitem__(self, key):
+        # Always return a fake overload for any signature, as we don't keep
+        # track of overloads in the simulator.
+        return FakeOverload()
+
+
 class FakeCUDAKernel(object):
     '''
     Wraps a @cuda.jit-ed function.
@@ -128,16 +145,8 @@ class FakeCUDAKernel(object):
         return self[ntasks, 1, stream, sharedmem]
 
     @property
-    def ptx(self):
-        '''
-        Required in order to proceed through some tests, but serves no
-        functional purpose.
-        '''
-        res = '.const'
-        res += '\n.local'
-        if self._fastmath:
-            res += '\ndiv.full.ftz.f32'
-        return res
+    def overloads(self):
+        return FakeOverloadDict()
 
 
 # Thread emulation
@@ -238,7 +247,7 @@ class BlockManager(object):
         self._grid_dim = grid_dim
         self._block_dim = block_dim
         self._f = f
-        self.block_state = np.zeros(block_dim, dtype=np.bool)
+        self.block_state = np.zeros(block_dim, dtype=np.bool_)
 
     def run(self, grid_point, *args):
         # Create all threads

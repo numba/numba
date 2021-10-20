@@ -6,6 +6,7 @@ from llvmlite import ir
 
 from numba.core import types, cgutils
 from numba.core.pythonapi import box, unbox, reflect, NativeValue
+from numba.core.errors import NumbaNotImplementedError
 
 from numba.cpython import setobj, listobj
 from numba.np import numpy_support
@@ -262,7 +263,9 @@ def unbox_unicodecharseq(typ, obj, c):
 @box(types.Bytes)
 def box_bytes(typ, val, c):
     obj = c.context.make_helper(c.builder, typ, val)
-    return c.pyapi.bytes_from_string_and_size(obj.data, obj.nitems)
+    ret = c.pyapi.bytes_from_string_and_size(obj.data, obj.nitems)
+    c.context.nrt.decref(c.builder, typ, val)
+    return ret
 
 
 @box(types.CharSeq)
@@ -396,8 +399,9 @@ def box_array(typ, val, c):
     if c.context.enable_nrt:
         np_dtype = numpy_support.as_dtype(typ.dtype)
         dtypeptr = c.env_manager.read_const(c.env_manager.add_const(np_dtype))
-        # Steals NRT ref
         newary = c.pyapi.nrt_adapt_ndarray_to_python(typ, val, dtypeptr)
+        # Steals NRT ref
+        c.context.nrt.decref(c.builder, typ, val)
         return newary
     else:
         parent = nativeary.parent
@@ -455,7 +459,7 @@ def unbox_array(typ, obj, c):
     #       need to do better
     try:
         expected_itemsize = numpy_support.as_dtype(typ.dtype).itemsize
-    except NotImplementedError:
+    except NumbaNotImplementedError:
         # Don't check types that can't be `as_dtype()`-ed
         itemsize_mismatch = cgutils.false_bit
     else:

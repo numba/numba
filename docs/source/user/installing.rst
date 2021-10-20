@@ -5,17 +5,16 @@ Installation
 Compatibility
 -------------
 
-Numba is compatible with Python 3.6 or later, and Numpy versions 1.15 or later.
+Numba is compatible with Python 3.7 or later, and Numpy versions 1.17 or later.
 
 Our supported platforms are:
 
 * Linux x86 (32-bit and 64-bit)
-* Linux ppcle64 (POWER8)
+* Linux ppcle64 (POWER8, POWER9)
 * Windows 7 and later (32-bit and 64-bit)
-* OS X 10.9 and later (64-bit)
+* OS X 10.9 and later (64-bit and unofficial support on M1/Arm64)
 * \*BSD (unofficial support only)
-* NVIDIA GPUs of compute capability 2.0 and later
-* AMD ROC dGPUs (linux only and not for AMD Carrizo or Kaveri APU)
+* NVIDIA GPUs of compute capability 3.0 and later
 * ARMv7 (32-bit little-endian, such as Raspberry Pi 2 and 3)
 * ARMv8 (64-bit little-endian, such as the NVIDIA Jetson)
 
@@ -69,22 +68,6 @@ To use CUDA with Numba installed by `pip`, you need to install the `CUDA SDK
 :ref:`cudatoolkit-lookup` for details. Numba can also detect CUDA libraries
 installed system-wide on Linux.
 
-Enabling AMD ROCm GPU Support
------------------------------
-
-The `ROCm Platform <https://rocm.github.io/>`_ allows GPU computing with AMD
-GPUs on Linux.  To enable ROCm support in Numba,  conda is required, so begin
-with an Anaconda or Miniconda installation with Numba 0.40 or later installed.
-Then:
-
-1. Follow the `ROCm installation instructions <https://rocm.github.io/install.html>`_.
-2. Install ``roctools`` conda package from the ``numba`` channel::
-
-    $ conda install -c numba roctools
-
-See the `roc-examples <https://github.com/numba/roc-examples>`_ repository for
-sample notebooks.
-
 
 .. _numba-install-armv7:
 
@@ -116,13 +99,8 @@ Raspberry Pi CPU is 64-bit, Raspbian runs it in 32-bit mode, so look at
 Conda-forge support for AArch64 is still quite experimental and packages are limited,
 but it does work enough for Numba to build and pass tests.  To set up the environment:
 
-* Install `conda4aarch64 <https://github.com/jjhelmus/conda4aarch64/releases>`_.
+* Install `miniforge <https://github.com/conda-forge/miniforge>`_.
   This will create a minimal conda environment.
-* Add the ``c4aarch64`` and ``conda-forge`` channels to your conda
-  configuration::
-
-    $ conda config --add channels c4aarch64
-    $ conda config --add channels conda-forge
 
 * Then you can install Numba from the ``numba`` channel::
 
@@ -234,14 +212,14 @@ vary with target operating system and hardware. The following lists them all
   * ``intel-openmp`` (OSX) - provides OpenMP library support for Numba's
     threading backend.
   * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support
-    into Numba's threading backend
+    into Numba's threading backend (version >= 2021 required).
 
 * Optional runtime are:
 
   * ``scipy`` - provides cython bindings used in Numba's ``np.linalg.*``
     support
   * ``tbb`` - provides the TBB runtime libraries used by Numba's TBB threading
-    backend
+    backend (version >= 2021 required).
   * ``jinja2`` - for "pretty" type annotation output (HTML) via the ``numba``
     CLI
   * ``cffi`` - permits use of CFFI bindings in Numba compiled functions
@@ -265,7 +243,9 @@ vary with target operating system and hardware. The following lists them all
     information on obtaining and installing.
   * ``graphviz`` - for some CFG inspection functionality.
   * ``pickle5`` - provides Python 3.8 pickling features for faster pickling in
-    Python 3.6 and 3.7.
+    Python 3.7.
+  * ``typeguard`` - used by ``runtests.py`` for
+    :ref:`runtime type-checking <type_anno_check>`.
 
 * To build the documentation:
 

@@ -421,15 +421,22 @@ class CFGraph(object):
         post_order = []
         seen = set()
 
-        def _dfs_rec(node):
+        post_order = []
+
+        # DFS
+        def dfs_rec(node):
             if node not in seen:
                 seen.add(node)
+                stack.append((post_order.append, node))
                 for dest in succs[node]:
                     if (node, dest) not in back_edges:
-                        _dfs_rec(dest)
-                post_order.append(node)
+                        stack.append((dfs_rec, dest))
 
-        _dfs_rec(self._entry_point)
+        stack = [(dfs_rec, self._entry_point)]
+        while stack:
+            cb, data = stack.pop()
+            cb(data)
+
         return post_order
 
     def _find_immediate_dominators(self):
@@ -847,6 +854,7 @@ class ControlFlowAnalysis(object):
     def _iter_inst(self):
         for inst in self.bytecode:
             if self._use_new_block(inst):
+                self._guard_with_as(inst)
                 self._start_new_block(inst)
             self._curblock.body.append(inst.offset)
             yield inst
@@ -866,6 +874,18 @@ class ControlFlowAnalysis(object):
         self._curblock = CFBlock(inst.offset)
         self.blocks[inst.offset] = self._curblock
         self.blockseq.append(inst.offset)
+
+    def _guard_with_as(self, current_inst):
+        """Checks if the next instruction after a SETUP_WITH is something other
+        than a POP_TOP, if it is something else it'll be some sort of store
+        which is not supported (this corresponds to `with CTXMGR as VAR(S)`)."""
+        if current_inst.opname == "SETUP_WITH":
+            next_op = self.bytecode[current_inst.next].opname
+            if next_op != "POP_TOP":
+                msg = ("The 'with (context manager) as "
+                       "(variable):' construct is not "
+                       "supported.")
+                raise UnsupportedError(msg)
 
     def op_SETUP_LOOP(self, inst):
         end = inst.get_jump_target()

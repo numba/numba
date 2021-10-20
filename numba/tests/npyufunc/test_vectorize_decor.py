@@ -132,7 +132,7 @@ class BaseVectorizeUnrecognizedArg(unittest.TestCase, CheckWarningsMixin):
         with self.assertRaises(KeyError) as raises:
             f = vectorize(*args, target=target, nonexistent=2)(vector_add)
             f(a, b)
-        self.assertIn("does not support option", str(raises.exception))
+        self.assertIn("Unrecognized options", str(raises.exception))
 
 class TestVectorizeUnrecognizedArg(BaseVectorizeUnrecognizedArg):
     def test_target_cpu_unrecognized_arg(self):

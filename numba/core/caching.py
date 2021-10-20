@@ -115,11 +115,7 @@ class _CacheLocator(metaclass=ABCMeta):
 
     def ensure_cache_path(self):
         path = self.get_cache_path()
-        try:
-            os.makedirs(path)
-        except OSError as e:
-            if e.errno != errno.EEXIST:
-                raise
+        os.makedirs(path, exist_ok=True)
         # Ensure the directory is writable by trying to write a temporary file
         tempfile.TemporaryFile(dir=path).close()
 
@@ -502,7 +498,7 @@ class IndexDataCacheFile(object):
             return
         try:
             return self._load_data(data_name)
-        except EnvironmentError:
+        except OSError:
             # File could have been removed while the index still refers it.
             return
 
@@ -515,11 +511,9 @@ class IndexDataCacheFile(object):
             with open(self._index_path, "rb") as f:
                 version = pickle.load(f)
                 data = f.read()
-        except EnvironmentError as e:
+        except FileNotFoundError:
             # Index doesn't exist yet?
-            if e.errno in (errno.ENOENT,):
-                return {}
-            raise
+            return {}
         if version != self._version:
             # This is another version.  Avoid trying to unpickling the
             # rest of the stream, as that may fail.
@@ -683,7 +677,7 @@ class Cache(_Cache):
             # from several processes (see #2028)
             try:
                 yield
-            except EnvironmentError as e:
+            except OSError as e:
                 if e.errno != errno.EACCES:
                     raise
         else:

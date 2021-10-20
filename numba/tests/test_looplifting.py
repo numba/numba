@@ -2,17 +2,31 @@ from io import StringIO
 import numpy as np
 
 from numba.core import types
-from numba.core.compiler import compile_isolated, Flags
+from numba.core.compiler import compile_extra, Flags
 from numba.tests.support import TestCase, tag, MemoryLeakMixin
 import unittest
 
 
 looplift_flags = Flags()
-looplift_flags.set("enable_pyobject")
-looplift_flags.set("enable_looplift")
+looplift_flags.enable_pyobject = True
+looplift_flags.enable_looplift = True
 
 pyobject_looplift_flags = looplift_flags.copy()
-pyobject_looplift_flags.set("enable_pyobject_looplift")
+pyobject_looplift_flags.enable_pyobject_looplift = True
+
+
+def compile_isolated(pyfunc, argtypes, **kwargs):
+    from numba.core.registry import cpu_target
+
+    kwargs.setdefault('return_type', None)
+    kwargs.setdefault('locals', {})
+    return compile_extra(
+        cpu_target.typing_context,
+        cpu_target.target_context,
+        pyfunc,
+        argtypes,
+        **kwargs,
+    )
 
 
 def lift1(x):
@@ -119,8 +133,14 @@ def reject_npm1(x):
 class TestLoopLifting(MemoryLeakMixin, TestCase):
 
     def try_lift(self, pyfunc, argtypes):
-        cres = compile_isolated(pyfunc, argtypes,
-                                flags=looplift_flags)
+        from numba.core.registry import cpu_target
+
+        cres = compile_extra(
+            cpu_target.typing_context,
+            cpu_target.target_context,
+            pyfunc, argtypes,
+            return_type=None, flags=looplift_flags, locals={},
+        )
         # One lifted loop
         self.assertEqual(len(cres.lifted), 1)
         return cres

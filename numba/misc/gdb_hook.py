@@ -3,7 +3,7 @@ import sys
 
 from llvmlite import ir
 
-from numba.core import types, utils, config, cgutils
+from numba.core import types, utils, config, cgutils, errors
 from numba import gdb, gdb_init, gdb_breakpoint
 from numba.core.extending import overload, intrinsic
 
@@ -17,7 +17,8 @@ _unix_like = (_platform.startswith('linux') or
 
 def _confirm_gdb():
     if not _unix_like:
-        raise RuntimeError('gdb support is only available on unix-like systems')
+        msg = 'gdb support is only available on unix-like systems'
+        raise errors.NumbaRuntimeError(msg)
     gdbloc = config.GDB_BINARY
     if not (os.path.exists(gdbloc) and os.path.isfile(gdbloc)):
         msg = ('Is gdb present? Location specified (%s) does not exist. The gdb'
@@ -98,35 +99,37 @@ def init_gdb_codegen(cgctx, builder, signature, args,
     # issue command to continue execution from sleep function
     new_args.extend(['-ex', 'c'])
     # then run the user defined args if any
+    if any([not isinstance(x, types.StringLiteral) for x in const_args]):
+        raise errors.RequireLiteralValue(const_args)
     new_args.extend([x.literal_value for x in const_args])
     cmdlang = [cgctx.insert_const_string(mod, x) for x in new_args]
 
     # insert getpid, getpid is always successful, call without concern!
     fnty = ir.FunctionType(int32_t, tuple())
-    getpid = mod.get_or_insert_function(fnty, "getpid")
+    getpid = cgutils.get_or_insert_function(mod, fnty, "getpid")
 
     # insert snprintf
     # int snprintf(char *str, size_t size, const char *format, ...);
     fnty = ir.FunctionType(
         int32_t, (char_ptr, intp_t, char_ptr), var_arg=True)
-    snprintf = mod.get_or_insert_function(fnty, "snprintf")
+    snprintf = cgutils.get_or_insert_function(mod, fnty, "snprintf")
 
     # insert fork
     fnty = ir.FunctionType(int32_t, tuple())
-    fork = mod.get_or_insert_function(fnty, "fork")
+    fork = cgutils.get_or_insert_function(mod, fnty, "fork")
 
     # insert execl
     fnty = ir.FunctionType(int32_t, (char_ptr, char_ptr), var_arg=True)
-    execl = mod.get_or_insert_function(fnty, "execl")
+    execl = cgutils.get_or_insert_function(mod, fnty, "execl")
 
     # insert sleep
     fnty = ir.FunctionType(int32_t, (int32_t,))
-    sleep = mod.get_or_insert_function(fnty, "sleep")
+    sleep = cgutils.get_or_insert_function(mod, fnty, "sleep")
 
     # insert break point
     fnty = ir.FunctionType(ir.VoidType(), tuple())
-    breakpoint = mod.get_or_insert_function(fnty,
-                                            "numba_gdb_breakpoint")
+    breakpoint = cgutils.get_or_insert_function(mod, fnty,
+                                                "numba_gdb_breakpoint")
 
     # do the work
     parent_pid = builder.call(getpid, tuple())
@@ -210,8 +213,8 @@ def gen_bp_impl():
         def codegen(cgctx, builder, signature, args):
             mod = builder.module
             fnty = ir.FunctionType(ir.VoidType(), tuple())
-            breakpoint = mod.get_or_insert_function(fnty,
-                                                    "numba_gdb_breakpoint")
+            breakpoint = cgutils.get_or_insert_function(mod, fnty,
+                                                        "numba_gdb_breakpoint")
             builder.call(breakpoint, tuple())
             return cgctx.get_constant(types.none, None)
         return function_sig, codegen

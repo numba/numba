@@ -12,6 +12,7 @@ from numba.core.datamodel import default_manager, models
 from numba.core.registry import cpu_target
 from numba.core.typing import templates
 from numba.core.typing.asnumbatype import as_numba_type
+from numba.core.serialize import disable_pickling
 from numba.experimental.jitclass import _box
 
 ##############################################################################
@@ -77,6 +78,7 @@ def _getargs(fn_sig):
     return args
 
 
+@disable_pickling
 class JitClassType(type):
     """
     The type of any jitclass.
@@ -267,7 +269,7 @@ class ConstructorTemplate(templates.AbstractTemplate):
         sig = disp_type.get_call_type(self.context, boundargs, kws)
 
         if not isinstance(sig.return_type, types.NoneType):
-            raise TypeError(
+            raise errors.NumbaTypeError(
                 f"__init__() should return None, not '{sig.return_type}'")
 
         # Actual constructor returns an instance value (not None)
@@ -300,7 +302,7 @@ class ClassBuilder(object):
     A jitclass builder for a mutable jitclass.  This will register
     typing and implementation hooks to the given typing and target contexts.
     """
-    class_impl_registry = imputils.Registry()
+    class_impl_registry = imputils.Registry('jitclass builder')
     implemented_methods = set()
 
     def __init__(self, class_type, typingctx, targetctx):
@@ -521,8 +523,7 @@ def imp_dtor(context, module, instance_type):
                                      [llvoidptr, llsize, llvoidptr])
 
     fname = "_Dtor.{0}".format(instance_type.name)
-    dtor_fn = module.get_or_insert_function(dtor_ftype,
-                                            name=fname)
+    dtor_fn = cgutils.get_or_insert_function(module, dtor_ftype, fname)
     if dtor_fn.is_declaration:
         # Define
         builder = llvmir.IRBuilder(dtor_fn.append_basic_block())

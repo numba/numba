@@ -1,5 +1,5 @@
 import math
-from numba.core import types
+from numba.core import types, utils
 from numba.core.typing.templates import ConcreteTemplate, signature, Registry
 
 
@@ -26,6 +26,7 @@ infer_global = registry.register_global
 @infer_global(math.gamma)
 @infer_global(math.lgamma)
 @infer_global(math.log)
+@infer_global(math.log2)
 @infer_global(math.log10)
 @infer_global(math.log1p)
 @infer_global(math.radians)
@@ -73,6 +74,15 @@ class Math_binary(ConcreteTemplate):
         signature(types.float32, types.float32, types.float32),
         signature(types.float64, types.float64, types.float64),
     ]
+
+
+if utils.PYVERSION >= (3, 7):
+    @infer_global(math.remainder)
+    class Math_remainder(ConcreteTemplate):
+        cases = [
+            signature(types.float32, types.float32, types.float32),
+            signature(types.float64, types.float64, types.float64),
+        ]
 
 
 @infer_global(math.pow)

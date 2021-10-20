@@ -1,4 +1,3 @@
-import sys
 import multiprocessing as mp
 import itertools
 import traceback
@@ -7,13 +6,10 @@ import pickle
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import (skip_on_cudasim, skip_under_cuda_memcheck,
+from numba.cuda.testing import (skip_on_arm, skip_on_cudasim,
+                                skip_under_cuda_memcheck,
                                 ContextResettingTestCase, ForeignArray)
-from numba.tests.support import linux_only
 import unittest
-
-linux = sys.platform.startswith('linux')
-has_mp_get_context = hasattr(mp, 'get_context')
 
 
 def core_ipc_handle_test(the_work, result_queue):
@@ -81,11 +77,11 @@ def ipc_array_test(ipcarr, result_queue):
     result_queue.put((succ, out))
 
 
-@linux_only
 @skip_under_cuda_memcheck('Hangs cuda-memcheck')
-@unittest.skipUnless(has_mp_get_context, "requires multiprocessing.get_context")
 @skip_on_cudasim('Ipc not available in CUDASIM')
+@skip_on_arm('CUDA IPC not supported on ARM in Numba')
 class TestIpcMemory(ContextResettingTestCase):
+
     def test_ipc_handle(self):
         # prepare data for IPC
         arr = np.arange(10, dtype=np.intp)
@@ -190,18 +186,6 @@ class TestIpcMemory(ContextResettingTestCase):
                 self.check_ipc_array(index, foreign)
 
 
-@unittest.skipIf(linux, 'Only on OS other than Linux')
-@skip_on_cudasim('Ipc not available in CUDASIM')
-class TestIpcNotSupported(ContextResettingTestCase):
-    def test_unsupported(self):
-        arr = np.arange(10, dtype=np.intp)
-        devarr = cuda.to_device(arr)
-        with self.assertRaises(OSError) as raises:
-            devarr.get_ipc_handle()
-        errmsg = str(raises.exception)
-        self.assertIn('OS does not support CUDA IPC', errmsg)
-
-
 def staged_ipc_handle_test(handle, device_num, result_queue):
     def the_work():
         with cuda.gpus[device_num]:
@@ -244,10 +228,9 @@ def staged_ipc_array_test(ipcarr, device_num, result_queue):
     result_queue.put((succ, out))
 
 
-@linux_only
 @skip_under_cuda_memcheck('Hangs cuda-memcheck')
-@unittest.skipUnless(has_mp_get_context, "requires multiprocessing.get_context")
 @skip_on_cudasim('Ipc not available in CUDASIM')
+@skip_on_arm('CUDA IPC not supported on ARM in Numba')
 class TestIpcStaged(ContextResettingTestCase):
     def test_staged(self):
         # prepare data for IPC
