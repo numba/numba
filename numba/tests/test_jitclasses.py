@@ -1163,7 +1163,7 @@ class TestJitClassOverloads(TestCase, MemoryLeakMixin):
                 return "PyList non-empty"
 
     @staticmethod
-    def get_int_warpper():
+    def get_int_wrapper():
         @jitclass([("x", types.intp)])
         class IntWrapper:
             def __init__(self, value):
@@ -1240,9 +1240,8 @@ class TestJitClassOverloads(TestCase, MemoryLeakMixin):
         self.assertEqual(first, second, msg=msg)
 
     def test_overloads(self):
-        """
-        Check that the dunder methods are exposed on ClassInstanceType.
-        """
+        # Check that the dunder methods are exposed on ClassInstanceType.
+
         JitList = jitclass({"x": types.List(types.intp)})(self.PyList)
 
         py_funcs = [
@@ -1452,7 +1451,7 @@ class TestJitClassOverloads(TestCase, MemoryLeakMixin):
         self.assertSame(jit_i(obj), 7)
 
     def test_arithmetic_logical(self):
-        IntWrapper = self.get_int_warpper()
+        IntWrapper = self.get_int_wrapper()
         FloatWrapper = self.get_float_wrapper()
 
         float_py_funcs = [
@@ -1522,7 +1521,7 @@ class TestJitClassOverloads(TestCase, MemoryLeakMixin):
     def test_arithmetic_logical_inplace(self):
 
         # If __i*__ methods are not defined, should fall back to normal methods.
-        JitIntWrapper = self.get_int_warpper()
+        JitIntWrapper = self.get_int_wrapper()
         JitFloatWrapper = self.get_float_wrapper()
 
         PyIntWrapper = JitIntWrapper.mro()[1]
