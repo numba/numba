@@ -1169,6 +1169,12 @@ class TestJitClassOverloads(TestCase, MemoryLeakMixin):
             def __init__(self, value):
                 self.x = value
 
+            def __eq__(self, other):
+                return self.x == other.x
+
+            def __hash__(self):
+                return self.x
+
             def __lshift__(self, other):
                 return IntWrapper(self.x << other.x)
 
@@ -1193,6 +1199,12 @@ class TestJitClassOverloads(TestCase, MemoryLeakMixin):
 
             def __init__(self, value):
                 self.x = value
+
+            def __eq__(self, other):
+                return self.x == other.x
+
+            def __hash__(self):
+                return self.x
 
             def __ge__(self, other):
                 return self.x >= other.x
@@ -1455,8 +1467,8 @@ class TestJitClassOverloads(TestCase, MemoryLeakMixin):
         FloatWrapper = self.get_float_wrapper()
 
         float_py_funcs = [
-            # lambda x, y: x == y,
-            # lambda x, y: x != y,
+            lambda x, y: x == y,
+            lambda x, y: x != y,
             lambda x, y: x >= y,
             lambda x, y: x > y,
             lambda x, y: x <= y,
@@ -1470,6 +1482,8 @@ class TestJitClassOverloads(TestCase, MemoryLeakMixin):
             lambda x, y: x / y,
         ]
         int_py_funcs = [
+            lambda x, y: x == y,
+            lambda x, y: x != y,
             lambda x, y: x << y,
             lambda x, y: x >> y,
             lambda x, y: x & y,
