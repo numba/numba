@@ -117,6 +117,12 @@ The following example demonstrates a product reduction on a two-dimensional arra
 
         return result1
 
+.. note:: When using Python's ``range`` in a numba loop, the induction variable
+          type is ``int64``. This is also the case for numba's ``prange`` when
+          ``parallel=False``. However, for ``parallel=True``, if the range is
+          strictly positive, the type will be ``uint64``.
+
+
 Care should be taken, however, when reducing into slices or elements of an array 
 if the elements specified by the slice or index are written to simultaneously by 
 multiple parallel threads. The compiler may not detect such cases and then a race condition
