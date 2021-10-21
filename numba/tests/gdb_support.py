@@ -84,11 +84,11 @@ class GdbMIDriver(object):
 
     def run(self):
         """gdb command ~= 'run'"""
-        self._run_command('-exec-run', expect=r'\^running.*?$')
+        self._run_command('-exec-run', expect=r'\^running.*\r\n')
 
     def cont(self):
         """gdb command ~= 'continue'"""
-        self._run_command('-exec-continue', expect=r'\^running.*?$')
+        self._run_command('-exec-continue', expect=r'\^running.*\r\n')
 
     def quit(self):
         """gdb command ~= 'quit'"""
@@ -97,11 +97,11 @@ class GdbMIDriver(object):
 
     def next(self):
         """gdb command ~= 'next'"""
-        self._run_command('-exec-next', expect=r'\*stopped,.*?$')
+        self._run_command('-exec-next', expect=r'\*stopped,.*\r\n')
 
     def step(self):
         """gdb command ~= 'step'"""
-        self._run_command('-exec-step', expect=r'\*stopped,.*?$')
+        self._run_command('-exec-step', expect=r'\*stopped,.*\r\n')
 
     def set_breakpoint(self, line=None, symbol=None, condition=None):
         """gdb command ~= 'break'"""
@@ -117,7 +117,7 @@ class GdbMIDriver(object):
 
     def check_hit_breakpoint(self, number=None):
         """Checks that a breakpoint has been hit"""
-        self._captured_expect(r'\*stopped,.*?$')
+        self._captured_expect(r'\*stopped,.*\r\n')
         self.assert_output('*stopped,reason="breakpoint-hit",')
         if number is not None:
             assert isinstance(number, int)
@@ -128,10 +128,10 @@ class GdbMIDriver(object):
         for x in (print_values, low_frame, high_frame):
             assert isinstance(x, int) and x in (0, 1, 2)
         cmd = f'-stack-list-arguments {print_values} {low_frame} {high_frame}'
-        self._run_command(cmd, expect=r'\^done,.*?$')
+        self._run_command(cmd, expect=r'\^done,.*\r\n')
 
     def stack_list_variables(self, print_values=1):
         """gdb command ~= 'info locals'"""
         assert isinstance(print_values, int) and print_values in (0, 1, 2)
         cmd = f'-stack-list-variables {print_values}'
-        self._run_command(cmd, expect=r'\^done,.*?$')
+        self._run_command(cmd, expect=r'\^done,.*\r\n')
