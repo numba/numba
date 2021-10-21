@@ -61,10 +61,38 @@ class BaseLower(object):
                         if self.context.enable_debuginfo
                         else debuginfo.DummyDIBuilder)
 
-        # Debuginfo also requires source to be accurate. Find it and warn if not
+        # debuginfo def location
+        self.defn_loc = self._compute_def_location()
+
+        self.debuginfo = dibuildercls(module=self.module,
+                                      filepath=func_ir.loc.filename,
+                                      cgctx=context)
+
+        # Subclass initialization
+        self.init()
+
+    def init(self):
+        pass
+
+    def init_pyapi(self):
+        """
+        Init the Python API and Environment Manager for the function being
+        lowered.
+        """
+        if self.pyapi is not None:
+            return
+        self.pyapi = self.context.get_python_api(self.builder)
+
+        # Store environment argument for later use
+        self.env_manager = self.context.get_env_manager(self.builder)
+        self.env_body = self.env_manager.env_body
+        self.envarg = self.env_manager.env_ptr
+
+    def _compute_def_location(self):
+        # Debuginfo requires source to be accurate. Find it and warn if not
         # found. If it's not found, use the func_ir line + 1, this assumes that
         # the function definition is decorated with a 1 line jit decorator.
-        self.defn_loc = self.func_ir.loc.with_lineno(self.func_ir.loc.line + 1)
+        defn_loc = self.func_ir.loc.with_lineno(self.func_ir.loc.line + 1)
         if self.context.enable_debuginfo:
             fn = self.func_ir.func_id.func
             try:
@@ -90,31 +118,8 @@ class BaseLower(object):
 
                     func_ir_loc = self.func_ir.loc
                     defn_line = func_ir_loc.line + pydef_offset
-                    self.defn_loc = func_ir_loc.with_lineno(defn_line)
-
-        self.debuginfo = dibuildercls(module=self.module,
-                                      filepath=func_ir.loc.filename,
-                                      cgctx=context)
-
-        # Subclass initialization
-        self.init()
-
-    def init(self):
-        pass
-
-    def init_pyapi(self):
-        """
-        Init the Python API and Environment Manager for the function being
-        lowered.
-        """
-        if self.pyapi is not None:
-            return
-        self.pyapi = self.context.get_python_api(self.builder)
-
-        # Store environment argument for later use
-        self.env_manager = self.context.get_env_manager(self.builder)
-        self.env_body = self.env_manager.env_body
-        self.envarg = self.env_manager.env_ptr
+                    defn_loc = func_ir_loc.with_lineno(defn_line)
+        return defn_loc
 
     def pre_lower(self):
         """
