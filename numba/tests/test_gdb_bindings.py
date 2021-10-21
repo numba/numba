@@ -195,8 +195,8 @@ class TestGdbBinding(TestCase):
             dbgmsg = f'\nSTDOUT={o}\nSTDERR={e}\n'
             self.assertIn('GNU gdb', o, msg=dbgmsg)
             self.assertIn('OK', e, msg=dbgmsg)
-            self.assertTrue('FAIL' not in e, msg=dbgmsg)
-            self.assertTrue('ERROR' not in e, msg=dbgmsg)
+            self.assertNotIn('FAIL', e, msg=dbgmsg)
+            self.assertNotIn('ERROR', e, msg=dbgmsg)
         if 'quick' in name:
             setattr(cls, methname, test_template)
         else:
