@@ -1381,7 +1381,16 @@ class Lower(BaseLower):
         if name in self._blk_local_varmap and not self._disable_sroa_like_opt:
             return self._blk_local_varmap[name]
         ptr = self.getvar(name)
-        return self.builder.load(ptr)
+
+        # Don't associate debuginfo with the load for a function arg else it
+        # creates instructions ahead of the first source line of the
+        # function which then causes problems with breaking on the function
+        # symbol (it hits the symbol, not the first line).
+        if name in self.func_ir.arg_names:
+            with debuginfo.suspend_emission(self.builder):
+                return self.builder.load(ptr)
+        else:
+            return self.builder.load(ptr)
 
     def storevar(self, value, name, argidx=None):
         """
@@ -1396,9 +1405,11 @@ class Lower(BaseLower):
                 not self._disable_sroa_like_opt):
             self._blk_local_varmap[name] = value
         else:
-            # Clean up existing value stored in the variable
-            old = self.loadvar(name)
-            self.decref(fetype, old)
+            if argidx is None:
+                # Clean up existing value stored in the variable, not needed
+                # if it's an arg
+                old = self.loadvar(name)
+                self.decref(fetype, old)
 
             # stack stored variable
             ptr = self.getvar(name)
@@ -1414,6 +1425,8 @@ class Lower(BaseLower):
             # store following reassemble from CC splatting structs as many args
             # to the function) then mark this variable as such.
             if argidx is not None:
+                with debuginfo.suspend_emission(self.builder):
+                    self.builder.store(value, ptr)
                 loc = self.defn_loc # the line with `def <func>`
                 lltype = self.context.get_value_type(fetype)
                 sizeof = self.context.get_abi_sizeof(lltype)
@@ -1422,7 +1435,8 @@ class Lower(BaseLower):
                                              lltype=lltype, size=sizeof,
                                              line=loc.line, datamodel=datamodel,
                                              argidx=argidx)
-            self.builder.store(value, ptr)
+            else:
+                self.builder.store(value, ptr)
 
     def delvar(self, name):
         """

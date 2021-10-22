@@ -10,6 +10,8 @@ from contextlib import contextmanager
 from llvmlite import ir
 from numba.core import cgutils, types
 from numba.core.datamodel.models import ComplexModel, UniTupleModel
+from numba.core import config
+
 
 @contextmanager
 def suspend_emission(builder):
@@ -390,7 +392,7 @@ class DIBuilder(AbstractDIBuilder):
             'file': self.difile,
             'producer': 'Numba',
             'runtimeVersion': 0,
-            'isOptimized': True,
+            'isOptimized': config.OPT != 0,
             'emissionKind': 1,  # 0-NoDebug, 1-FullDebug
         }, is_distinct=True)
 
@@ -430,7 +432,7 @@ class DIBuilder(AbstractDIBuilder):
             'isLocal': False,
             'isDefinition': True,
             'scopeLine': line,
-            'isOptimized': True,
+            'isOptimized': config.OPT != 0,
             'unit': self.dicompileunit,
         }, is_distinct=True)
 
