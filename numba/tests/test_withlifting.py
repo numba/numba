@@ -257,7 +257,9 @@ class TestLiftCall(BaseTestWithLifting):
         self.check_same_semantic(liftcall3)
 
     def test_liftcall4(self):
-        with self.assertRaises(errors.TypingError) as raises:
+        accept = (errors.TypingError, errors.NumbaRuntimeError,
+                  errors.NumbaValueError)
+        with self.assertRaises(accept) as raises:
             njit(liftcall4)()
         # Known error.  We only support one context manager per function
         # for body that are lifted.
@@ -521,7 +523,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         # Check that an error occurred in with-lifting in objmode
         pat = ("During: resolving callee type: "
                "type\(ObjModeLiftedWith\(<.*>\)\)")
-        self.assertRegexpMatches(str(raises.exception), pat)
+        self.assertRegex(str(raises.exception), pat)
 
     def test_case07_mystery_key_error(self):
         # this raises a key error

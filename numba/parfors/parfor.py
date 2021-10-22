@@ -1873,10 +1873,18 @@ class ConvertSetItemPass:
         return self.pass_states.typingctx.resolve_function_type(fnty, tuple(args), {})
 
 
-def _make_index_var(typemap, scope, index_vars, body_block):
+def _make_index_var(typemap, scope, index_vars, body_block, force_tuple=False):
+    """ When generating a SetItem call to an array in a parfor, the general
+    strategy is to generate a tuple if the array is more than 1 dimension.
+    If it is 1 dimensional then you can use a simple variable.  This routine
+    is also used when converting pndindex to parfor but pndindex requires a
+    tuple even if the iteration space is 1 dimensional.  The pndindex use of
+    this function will use force_tuple to make the output index a tuple even
+    if it is one dimensional.
+    """
     ndims = len(index_vars)
     loc = body_block.loc
-    if ndims > 1:
+    if ndims > 1 or force_tuple:
         tuple_var = ir.Var(scope, mk_unique_var(
             "$parfor_index_tuple_var"), loc)
         typemap[tuple_var.name] = types.containers.UniTuple(
@@ -2446,11 +2454,20 @@ class ConvertLoopPass:
                             in_arr, mask_var, mask_typ, mask_indices = result
                         else:
                             in_arr = args[0]
-                        size_vars = equiv_set.get_shape(in_arr
-                                        if mask_indices is None else mask_var)
-                        index_vars, loops = _mk_parfor_loops(
-                            pass_states.typemap, size_vars, scope, loc,
-                        )
+                        assert(isinstance(in_arr, ir.Var))
+                        in_arr_typ = pass_states.typemap[in_arr.name]
+                        if isinstance(in_arr_typ, types.Integer):
+                            index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
+                            pass_states.typemap[index_var.name] = types.uintp
+                            loops = [LoopNest(index_var, 0, in_arr, 1)]
+                            index_vars = [index_var]
+                        else:
+                            size_vars = equiv_set.get_shape(in_arr
+                                          if mask_indices is None else mask_var)
+                            index_vars, loops = _mk_parfor_loops(
+                                pass_states.typemap, size_vars, scope, loc,
+                            )
+                        assert(len(loops) > 0)
                         orig_index = index_vars
                         if mask_indices:
                             # replace mask indices if required;
@@ -2462,6 +2479,7 @@ class ConvertLoopPass:
                         body_block = ir.Block(scope, loc)
                         index_var, index_var_typ = _make_index_var(
                             pass_states.typemap, scope, index_vars, body_block,
+                            force_tuple=True
                         )
                         body = body_block.body + first_body_block.body
                         first_body_block.body = body
@@ -4662,7 +4680,8 @@ def dummy_return_in_loop_body(loop_body):
 class ReduceInfer(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
-        assert len(args) == 3
+        if len(args) != 3:
+            raise errors.NumbaAssertionError("len(args) != 3")
         assert isinstance(args[1], types.Array)
         return signature(args[1].dtype, *args)
 

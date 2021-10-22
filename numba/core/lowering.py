@@ -9,7 +9,8 @@ from functools import partial
 from llvmlite.llvmpy.core import Constant, Type, Builder
 
 from numba.core import (typing, utils, types, ir, debuginfo, funcdesc,
-                        generators, config, ir_utils, cgutils, removerefctpass)
+                        generators, config, ir_utils, cgutils, removerefctpass,
+                        targetconfig)
 from numba.core.errors import (LoweringError, new_error_context, TypingError,
                                LiteralTypingError, UnsupportedError,
                                NumbaWarning)
@@ -34,7 +35,7 @@ class BaseLower(object):
         self.call_conv = context.call_conv
         self.generator_info = func_ir.generator_info
         self.metadata = metadata
-        self.flags = utils.ConfigStack.top_or_none()
+        self.flags = targetconfig.ConfigStack.top_or_none()
 
         # Initialize LLVM
         self.module = self.library.create_ir_module(self.fndesc.unique_name)
@@ -1014,7 +1015,8 @@ class Lower(BaseLower):
         )
         qualprefix = fnty.overloads[signature.args]
         mangler = self.context.mangler or default_mangler
-        mangled_name = mangler(qualprefix, signature.args)
+        abi_tags = self.fndesc.abi_tags
+        mangled_name = mangler(qualprefix, signature.args, abi_tags=abi_tags)
         # special case self recursion
         if self.builder.function.name.startswith(mangled_name):
             res = self.context.call_internal(

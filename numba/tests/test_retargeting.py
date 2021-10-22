@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from numba import njit
 from numba.core import errors, cpu, utils, typing
 from numba.core.descriptors import TargetDescriptor
-from numba.core.dispatcher import TargetConfig
+from numba.core.dispatcher import TargetConfigurationStack
 from numba.core.retarget import BasicRetarget
 from numba.core.extending import overload
 from numba.core.target_extension import (
@@ -154,7 +154,7 @@ class TestRetargeting(unittest.TestCase):
         self.retarget = CustomCPURetarget()
 
     def switch_target(self):
-        return TargetConfig.switch_target(self.retarget)
+        return TargetConfigurationStack.switch_target(self.retarget)
 
     @contextmanager
     def check_retarget_error(self):
