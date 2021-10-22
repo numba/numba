@@ -544,6 +544,9 @@ def find_setupwiths(blocks):
         def is_raise(stmt):
             return isinstance(stmt, ir.Raise)
 
+        def is_return(stmt):
+            return isinstance(stmt, ir.Return)
+
         def is_pop_block(stmt):
             try:
                 if hasattr(stmt, "value"):
@@ -575,6 +578,12 @@ def find_setupwiths(blocks):
                 for stmt in blocks[block].body:
                     # raise detected before pop_block
                     if is_raise(stmt):
+                            raise errors.CompilerError(
+                                'unsupported controlflow due to return/raise '
+                                'statements inside with block'
+                                )
+                    # special case 3.7, return before POP_BLOCK
+                    if PYVERSION < (3, 8) and is_return(stmt):
                             raise errors.CompilerError(
                                 'unsupported controlflow due to return/raise '
                                 'statements inside with block'
