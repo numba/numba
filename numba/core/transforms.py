@@ -545,8 +545,8 @@ def find_setupwiths(blocks):
             return isinstance(stmt, ir.Raise)
 
         def is_pop_block(stmt):
-            return (hasattr(stmt, "value") and
-                    str(stmt.value).startswith("POP_BLOCK_INFO"))
+            if hasattr(stmt, "value"):
+                return str(stmt.value).startswith("POP_BLOCK_INFO")
 
 
         cfg = compute_cfg_from_blocks(blocks)
