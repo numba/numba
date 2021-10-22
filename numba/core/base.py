@@ -567,7 +567,7 @@ class BaseContext(object):
             self.refresh()
             return self.get_function(fn, sig, _firstcall=False)
 
-        raise NotImplementedError("No definition for lowering %s%s" % (key, sig))
+        raise errors.NumbaNotImplementedError("No definition for lowering %s%s" % (key, sig))
 
     def get_generator_desc(self, genty):
         """
