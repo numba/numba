@@ -258,7 +258,7 @@ class TestLiftCall(BaseTestWithLifting):
 
     def test_liftcall4(self):
         accept = (errors.TypingError, errors.NumbaRuntimeError,
-                  errors.NumbaValueError)
+                  errors.NumbaValueError, errors.CompilerError)
         with self.assertRaises(accept) as raises:
             njit(liftcall4)()
         # Known error.  We only support one context manager per function
