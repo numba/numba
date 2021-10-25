@@ -656,3 +656,63 @@ class fp16(Stub):
         Returns the fp16 result of the absolute value.
 
         """
+
+    class heq(Stub):
+        """heq(a, b)
+
+        Perform fp16 comparison, (a == b). Supported
+        on fp16 operands only.
+
+        Returns true if a and b are equivalent and false otherwise.
+
+        """
+
+    class hne(Stub):
+        """hne(a, b)
+
+        Perform fp16 comparison, (a != b). Supported
+        on fp16 operands only.
+
+        Returns true if a and b are not equivalent and false otherwise.
+
+        """
+
+    class hge(Stub):
+        """hge(a, b)
+
+        Perform fp16 comparison, (a >= b). Supported
+        on fp16 operands only.
+
+        Returns true if a is >= b and false otherwise.
+
+        """
+
+    class hgt(Stub):
+        """hgt(a, b)
+
+        Perform fp16 comparison, (a > b). Supported
+        on fp16 operands only.
+
+        Returns true if a is > b and false otherwise.
+
+        """
+
+    class hle(Stub):
+        """hle(a, b)
+
+        Perform fp16 comparison, (a <= b). Supported
+        on fp16 operands only.
+
+        Returns true if a is <= b and false otherwise.
+
+        """
+
+    class hlt(Stub):
+        """hlt(a, b)
+
+        Perform fp16 comparison, (a < b). Supported
+        on fp16 operands only.
+
+        Returns true if a is < b and false otherwise.
+
+        """

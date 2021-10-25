@@ -419,6 +419,43 @@ lower_fp16_binary(stubs.fp16.hsub, 'sub')
 lower_fp16_binary(stubs.fp16.hmul, 'mul')
 
 
+def lower_fp16_comparison(fn, op):
+    @lower(fn, types.float16, types.float16)
+    def ptx_fp16_binary(context, builder, sig, args):
+        temp_reg = '__$t0'
+        reg_pred_fnty = ir.FunctionType(ir.VoidType(),[])
+        reg_pred_asm = ir.InlineAsm(reg_pred_fnty, f".reg .pred {temp_reg}", "")
+        _ = builder.call(reg_pred_asm, [])
+
+        setp_fnty = ir.FunctionType(ir.IntType(1),
+                                    [ir.HalfType(), ir.HalfType()])
+        setp_asm = ir.InlineAsm(setp_fnty,
+                                f"setp.{op}.f16 {temp_reg}, $1, $2",
+                                'h,h')
+        _ = builder.call(setp_asm, args)
+
+        #selp_fnty = ir.FunctionType(ir.IntType(16),[])
+        selp_fnty = ir.FunctionType(ir.HalfType(),[])
+
+        selp_asm = ir.InlineAsm(selp_fnty,
+                                f"selp.u16 $0, 1, 0, {temp_reg}",
+                                '=h')
+        selp = builder.call(selp_asm, [])
+
+        zero = context.get_constant(types.int16, 0)
+        cmp = builder.icmp_unsigned("!=", selp, zero)
+        zext = builder.zext(cmp, ir.IntType(8))
+        return zext
+
+
+lower_fp16_comparison(stubs.fp16.heq, 'eq')
+lower_fp16_comparison(stubs.fp16.hne, 'ne')
+lower_fp16_comparison(stubs.fp16.hge, 'ge')
+lower_fp16_comparison(stubs.fp16.hgt, 'gt')
+lower_fp16_comparison(stubs.fp16.hle, 'le')
+lower_fp16_comparison(stubs.fp16.hlt, 'lt')
+
+
 def lower_fp16_unary(fn, op):
     @lower(fn, types.float16)
     def ptx_fp16_unary(context, builder, sig, args):

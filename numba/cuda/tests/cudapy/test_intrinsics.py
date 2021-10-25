@@ -115,6 +115,9 @@ def simple_habs_scalar(ary, a):
     ary[0] = cuda.fp16.habs(a)
 
 
+def simple_heq_scalar(ary, a, b):
+    ary[0] = cuda.fp16.heq(a, b)
+
 def simple_cbrt(ary, a):
     ary[0] = cuda.cbrt(a)
 
@@ -439,6 +442,14 @@ class TestCudaIntrinsic(CUDATestCase):
         compiled[1, 1](ary, arg1)
         ref = abs(arg1)
         np.testing.assert_allclose(ary[0], ref)
+
+    def test_heq(self):
+        compiled = cuda.jit("void(b1[:], f2, f2)")(simple_heq_scalar)
+        ary = np.zeros(1, dtype=np.bool8)
+        arg1 = np.float16(3.)
+        arg2 = np.float16(3.)
+        compiled[1, 1](ary, arg1, arg2)
+        self.assertTrue(ary[0])
 
     def test_cbrt_f32(self):
         compiled = cuda.jit("void(float32[:], float32)")(simple_cbrt)
