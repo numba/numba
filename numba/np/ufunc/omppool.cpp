@@ -224,7 +224,6 @@ static void launch_threads(int count)
     if(count < 1)
         return;
     omp_set_num_threads(count);
-    omp_set_nested(0x1); // enable nesting, control depth with OMP env var
     _INIT_NUM_THREADS = count;
 }
 
