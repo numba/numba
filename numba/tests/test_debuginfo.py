@@ -98,7 +98,7 @@ class TestDebugInfoEmission(TestCase):
         self.assertEqual('!0', DICompileUnit[:2])
         self.assertIn('!DICompileUnit(language: DW_LANG_C_plus_plus',
                       DICompileUnit)
-        self.assertIn('producer: "Numba"', DICompileUnit)
+        self.assertIn('producer: "clang (Numba)"', DICompileUnit)
 
     def test_DILocation(self):
         """ Tests that DILocation information is reasonable.
