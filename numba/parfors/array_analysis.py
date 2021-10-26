@@ -1297,7 +1297,8 @@ class ArrayAnalysis(object):
             print("analyze_inst:", inst)
         if isinstance(inst, ir.Assign):
             lhs = inst.target
-            typ = self.typemap[lhs.name]
+            typ = (types.intp if lhs.name.startswith("pop_block_info")
+                   else self.typemap[lhs.name])
             shape = None
             if isinstance(typ, types.ArrayCompatible) and typ.ndim == 0:
                 shape = ()
