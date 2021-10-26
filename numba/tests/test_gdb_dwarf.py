@@ -1,6 +1,7 @@
 """Tests for gdb interacting with the DWARF numba generates"""
 from numba.tests.support import TestCase, linux_only
 from numba.tests.gdb_support import needs_gdb, skip_unless_pexpect
+import unittest
 
 
 @linux_only

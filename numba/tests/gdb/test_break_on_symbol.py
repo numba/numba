@@ -4,10 +4,12 @@ from numba.tests.gdb_support import GdbMIDriver
 from numba.tests.support import TestCase, needs_subprocess
 import unittest
 
+
 @njit(debug=True)
 def foo(x):
     z = 7 + x
     return x, z
+
 
 @needs_subprocess
 class Test(TestCase):
@@ -26,6 +28,7 @@ class Test(TestCase):
                   'value="120"}]}]' % sz)
         driver.assert_output(expect)
         driver.quit()
+
 
 if __name__ == '__main__':
     unittest.main()
