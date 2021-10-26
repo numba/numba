@@ -390,7 +390,15 @@ class DIBuilder(AbstractDIBuilder):
         return self.module.add_debug_info('DICompileUnit', {
             'language': ir.DIToken('DW_LANG_C_plus_plus'),
             'file': self.difile,
-            'producer': 'Numba',
+            # Numba has to pretend to be clang to ensure the prologue is skipped
+            # correctly in gdb. See:
+            # https://sourceware.org/git/?p=binutils-gdb.git;a=blob;f=gdb/amd64-tdep.c;h=e563d369d8cb3eb3c2f732c2fa850ec70ba8d63b;hb=a4b0231e179607e47b1cdf1fe15c5dc25e482fad#l2521
+            # Note the "producer_is_llvm" call to specialise the prologue
+            # handling, this is defined here:
+            # https://sourceware.org/git/?p=binutils-gdb.git;a=blob;f=gdb/producer.c;h=cdfd80d904c09394febd18749bb90359b2d128cc;hb=a4b0231e179607e47b1cdf1fe15c5dc25e482fad#l124
+            # and to get a match for this condition the 'producer' must start
+            # with "clang ", hence the following...
+            'producer': 'clang (Numba)',
             'runtimeVersion': 0,
             'isOptimized': config.OPT != 0,
             'emissionKind': 1,  # 0-NoDebug, 1-FullDebug
