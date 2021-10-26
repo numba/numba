@@ -579,13 +579,13 @@ def find_setupwiths(blocks):
                     # raise detected before pop_block
                     if is_raise(stmt):
                             raise errors.CompilerError(
-                                'unsupported controlflow due to return/raise '
+                                'unsupported controlflow due to raise '
                                 'statements inside with block'
                                 )
                     # special case 3.7, return before POP_BLOCK
                     if PYVERSION < (3, 8) and is_return(stmt):
                             raise errors.CompilerError(
-                                'unsupported controlflow due to return/raise '
+                                'unsupported controlflow due to return '
                                 'statements inside with block'
                                 )
                     # if a pop_block, process it
@@ -596,7 +596,7 @@ def find_setupwiths(blocks):
                         target_block = blocks[pop_block_targets[0]]
                         if not target_block.terminator.get_targets():
                             raise errors.CompilerError(
-                                'unsupported controlflow due to return/raise '
+                                'unsupported controlflow due to return '
                                 'statements inside with block'
                                 )
                         pop_block_to_setup_map[pop_block_targets[0]] = setup_block
@@ -637,7 +637,7 @@ def find_setupwiths(blocks):
             if e not in blocks:
                 # this's possible if there's an exit path in the with-block
                 raise errors.CompilerError(
-                    'unsupported controlflow due to return/raise '
+                    'unsupported controlflow due to foo'
                     'statements inside with block'
                     )
             assert s in blocks, 'starting offset is not a label'

@@ -263,8 +263,7 @@ class TestLiftCall(BaseTestWithLifting):
             njit(liftcall4)()
         # Known error.  We only support one context manager per function
         # for body that are lifted.
-        msg = ("Failed in nopython mode pipeline "
-               "(step: Handle with contexts)")
+        msg = ("compiler re-entrant to the same function signature")
         self.assertIn(msg, str(raises.exception))
 
 
@@ -577,7 +576,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         with self.assertRaises(errors.CompilerError) as raises:
             cfoo(x)
         self.assertIn(
-            ('unsupported controlflow due to return/raise statements inside '
+            ('unsupported controlflow due to raise statements inside '
              'with block'),
             str(raises.exception),
         )
@@ -674,7 +673,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         with self.assertRaises(errors.CompilerError) as raises:
             cfoo(x)
         self.assertIn(
-            ('unsupported controlflow due to return/raise statements inside '
+            ('unsupported controlflow due to return statements inside '
              'with block'),
             str(raises.exception),
         )
@@ -740,7 +739,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         cfoo = njit(foo)
         with self.assertRaises(errors.CompilerError) as raises:
             cfoo(x)
-        msg = "unsupported controlflow due to return/raise statements inside with block"
+        msg = "unsupported controlflow due to return statements inside with block"
         #msg = "Does not support with-context that contain branches"
         self.assertIn(msg, str(raises.exception))
 
