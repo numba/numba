@@ -418,6 +418,9 @@ class PyLower(BaseLower):
             # Make null value
             return cgutils.get_null_value(self.pyapi.pyobj)
 
+        elif expr.op == "POP_BLOCK_INFO":
+            return cgutils.get_null_value(self.pyapi.pyobj)
+
         else:
             raise NotImplementedError(expr)
 

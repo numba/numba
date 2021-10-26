@@ -612,16 +612,16 @@ def find_setupwiths(blocks):
                             if t not in seen:
                                 to_visit.append(t)
         # remove the pop_block statements
-        for lbl, blk in blocks.items():
-            nb = []
-            for stmt in blk.body:
-                if is_pop_block(stmt):
-                    pass
-                else:
-                    nb.append(stmt)
-            blk.body.clear()
-            blk.body.extend(nb)
-        #respect the interface
+        #for lbl, blk in blocks.items():
+        #    nb = []
+        #    for stmt in blk.body:
+        #        if is_pop_block(stmt):
+        #            pass
+        #        else:
+        #            nb.append(stmt)
+        #    blk.body.clear()
+        #    blk.body.extend(nb)
+        # respect the interface
         for p,w in pop_block_to_setup_map.items():
             yield w, p
 

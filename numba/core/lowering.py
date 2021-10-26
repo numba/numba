@@ -266,6 +266,8 @@ class BaseLower(object):
         self.call_helper = self.call_conv.init_call_helper(self.builder)
 
     def typeof(self, varname):
+        if varname.startswith('pop_block_info'):
+            return types.pyobject
         return self.fndesc.typemap[varname]
 
     def debug_print(self, msg):
@@ -1293,6 +1295,9 @@ class Lower(BaseLower):
         elif expr.op in self.context.special_ops:
             res = self.context.special_ops[expr.op](self, expr)
             return res
+
+        elif expr.op == "POP_BLOCK_INFO":
+            return self.context.get_constant_null(resty)
 
         raise NotImplementedError(expr)
 
