@@ -22,7 +22,7 @@ class Test(TestCase):
         driver.run() # will hit cpython symbol match
         driver.check_hit_breakpoint(number=1)
         driver.cont() # will hit njit symbol match
-        driver.check_hit_breakpoint(number=1, line=9) # Ensure line number
+        driver.check_hit_breakpoint(number=1, line=10) # Ensure line number
         driver.stack_list_arguments(2)
         expect = ('[frame={level="0",args=[{name="x",type="int%s",'
                   'value="120"}]}]' % sz)
