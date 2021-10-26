@@ -40,7 +40,7 @@ class AbstractDIBuilder(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def mark_subprogram(self, function, fndesc, line):
+    def mark_subprogram(self, function, qualname, argnames, argtypes, line):
         """Emit source location information for the given function.
         """
         pass
@@ -70,7 +70,7 @@ class DummyDIBuilder(AbstractDIBuilder):
     def mark_location(self, builder, line):
         pass
 
-    def mark_subprogram(self, function, fndesc, line):
+    def mark_subprogram(self, function, qualname, argnames, argtypes, line):
         pass
 
     def initialize(self):
@@ -308,9 +308,9 @@ class DIBuilder(AbstractDIBuilder):
     def mark_location(self, builder, line):
         builder.debug_metadata = self._add_location(line)
 
-    def mark_subprogram(self, function, fndesc, line):
-        name = fndesc.qualname
-        argmap = {argname: fndesc.typemap[argname] for argname in fndesc.args}
+    def mark_subprogram(self, function, qualname, argnames, argtypes, line):
+        name = qualname
+        argmap = dict(zip(argnames, argtypes))
         di_subp = self._add_subprogram(name=name, linkagename=function.name,
                                        line=line, function=function,
                                        argmap=argmap)
@@ -492,8 +492,8 @@ class NvvmDIBuilder(DIBuilder):
         md = self._di_location(line)
         call.set_metadata('numba.dbg', md)
 
-    def mark_subprogram(self, function, fndesc, line):
-        self._add_subprogram(name=fndesc.name, linkagename=function.name,
+    def mark_subprogram(self, function, qualname, argnames, argtypes, line):
+        self._add_subprogram(name=qualname, linkagename=function.name,
                              line=line)
 
     #

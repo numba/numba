@@ -131,7 +131,9 @@ class BaseLower(object):
         # EnvironmentManager.
         self.pyapi = None
         self.debuginfo.mark_subprogram(function=self.builder.function,
-                                       fndesc=self.fndesc,
+                                       qualname=self.fndesc.qualname,
+                                       argnames=self.fndesc.args,
+                                       argtypes=self.fndesc.argtypes,
                                        line=self.defn_loc.line)
 
     def post_lower(self):
