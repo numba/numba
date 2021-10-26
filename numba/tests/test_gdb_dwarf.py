@@ -30,3 +30,10 @@ class TestGDBDwarf(TestCase):
 
     def test_conditional_breakpoint(self):
         self._subprocess_test_runner('test_conditional_breakpoint')
+
+    def test_break_on_symbol(self):
+        self._subprocess_test_runner('test_break_on_symbol')
+
+
+if __name__ == '__main__':
+    unittest.main()

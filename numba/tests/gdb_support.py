@@ -32,7 +32,7 @@ class GdbMIDriver(object):
     Driver class for the GDB machine interface:
     https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI.html
     """
-    def __init__(self, file_name, debug=False, timeout=10):
+    def __init__(self, file_name, debug=False, timeout=120):
         if not _HAVE_PEXPECT:
             msg = ("This driver requires the pexpect module. This can be "
                    "obtained via:\n\n$ conda install pexpect")
@@ -113,15 +113,21 @@ class GdbMIDriver(object):
         if line is not None:
             assert isinstance(line, int)
             bp += f'-f {self._file_name}:{line} '
+        if symbol is not None:
+            assert isinstance(symbol, str)
+            bp += f'-f {symbol} '
         self._run_command(bp, expect=r'\^done')
 
-    def check_hit_breakpoint(self, number=None):
+    def check_hit_breakpoint(self, number=None, line=None):
         """Checks that a breakpoint has been hit"""
         self._captured_expect(r'\*stopped,.*\r\n')
         self.assert_output('*stopped,reason="breakpoint-hit",')
         if number is not None:
             assert isinstance(number, int)
             self.assert_output(f'bkptno="{number}"')
+        if line is not None:
+            assert isinstance(line, int)
+            self.assert_output(f'line="{line}"')
 
     def stack_list_arguments(self, print_values=1, low_frame=0, high_frame=0):
         """gdb command ~= 'info args'"""
