@@ -1,5 +1,5 @@
 ##############################################
-# Numba GPU build and test script for CI      #
+# Numba GPU build and test script for CI     #
 ##############################################
 set -e
 NUMARGS=$#
