@@ -592,7 +592,11 @@ def find_setupwiths(blocks):
                     if is_pop_block(stmt) and block in sus_pops:
                         # record the jump target of this block belonging to this setup
                         pop_block_targets = blocks[block].terminator.get_targets()
-                        assert len(pop_block_targets) == 1
+                        if len(pop_block_targets) != 1:
+                            raise errors.CompilerError(
+                                "Does not support with-context that contain branches "
+                                "(i.e. break/return/raise) that can leave the with-context. "
+                            )
                         target_block = blocks[pop_block_targets[0]]
                         if not target_block.terminator.get_targets():
                             raise errors.CompilerError(
