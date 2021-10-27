@@ -1430,7 +1430,7 @@ class PreParforPass(object):
             for i, instr in enumerate(block.body):
                 if isinstance(instr, ir.Assign):
                     lhs = instr.target
-                    lhs_typ = types.intp if lhs.name.startswith("pop_block_info") else self.typemap[lhs.name]
+                    lhs_typ = self.typemap[lhs.name]
                     expr = instr.value
                     if isinstance(expr, ir.Expr) and expr.op == 'call':
                         # Try and inline known calls with their parallel implementations
@@ -1939,9 +1939,7 @@ class ConvertNumpyPass:
                 if isinstance(instr, ir.Assign):
                     expr = instr.value
                     lhs = instr.target
-                    lhs_typ = (types.intp
-                               if lhs.name.startswith("pop_block_info")
-                               else self.pass_states.typemap[lhs.name])
+                    lhs_typ = self.pass_states.typemap[lhs.name]
                     if self._is_C_or_F_order(lhs_typ):
                         if guard(self._is_supported_npycall, expr):
                             new_instr = self._numpy_to_parfor(equiv_set, lhs, expr)

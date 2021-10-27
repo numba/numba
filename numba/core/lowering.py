@@ -266,8 +266,6 @@ class BaseLower(object):
         self.call_helper = self.call_conv.init_call_helper(self.builder)
 
     def typeof(self, varname):
-        if varname.startswith('pop_block_info'):
-            return types.pyobject
         return self.fndesc.typemap[varname]
 
     def debug_print(self, msg):
