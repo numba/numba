@@ -493,8 +493,9 @@ class NvvmDIBuilder(DIBuilder):
         call.set_metadata('numba.dbg', md)
 
     def mark_subprogram(self, function, qualname, argnames, argtypes, line):
+        argmap = dict(zip(argnames, argtypes))
         self._add_subprogram(name=qualname, linkagename=function.name,
-                             line=line)
+                             line=line, function=function, argmap=argmap)
 
     #
     # Helper methods to create the metadata nodes.
