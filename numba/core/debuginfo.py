@@ -495,7 +495,14 @@ class NvvmDIBuilder(DIBuilder):
     def mark_subprogram(self, function, qualname, argnames, argtypes, line):
         argmap = dict(zip(argnames, argtypes))
         self._add_subprogram(name=qualname, linkagename=function.name,
-                             line=line, function=function, argmap=argmap)
+                             line=line)
+
+    def _add_subprogram(self, name, linkagename, line):
+        """Emit subprogram metadata
+        """
+        subp = self._di_subprogram(name, linkagename, line)
+        self.subprograms.append(subp)
+        return subp
 
     #
     # Helper methods to create the metadata nodes.
