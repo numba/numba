@@ -716,3 +716,24 @@ class fp16(Stub):
         Returns true if a is < b and false otherwise.
 
         """
+
+    class hmax(Stub):
+        """hmax(a, b)
+
+        Perform fp16 maximum operation, (a > b) ? a : b. Supported
+        on fp16 operands only.
+
+        Returns a if a is greater than b, returns b otherwise.
+
+        """
+
+    class hmin(Stub):
+        """hmin(a, b)
+
+        Perform fp16 minimum operation, (a < b) ? a : b. Supported
+        on fp16 operands only.
+
+        Returns a if a is less than b, returns b otherwise.
+
+        """
+

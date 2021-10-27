@@ -118,6 +118,27 @@ def simple_habs_scalar(ary, a):
 def simple_heq_scalar(ary, a, b):
     ary[0] = cuda.fp16.heq(a, b)
 
+
+def simple_hne_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hne(a, b)
+
+
+def simple_hge_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hge(a, b)
+
+
+def simple_hgt_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hgt(a, b)
+
+
+def simple_hle_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hle(a, b)
+
+
+def simple_hlt_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hlt(a, b)
+
+
 def simple_cbrt(ary, a):
     ary[0] = cuda.cbrt(a)
 
@@ -450,6 +471,77 @@ class TestCudaIntrinsic(CUDATestCase):
         arg2 = np.float16(3.)
         compiled[1, 1](ary, arg1, arg2)
         self.assertTrue(ary[0])
+        arg2 = np.float(4.)
+        compiled[1, 1](ary, arg1, arg2)
+        self.assertFalse(ary[0])
+
+    def test_hne(self):
+        compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hne_scalar)
+        ary = np.zeros(1, dtype=np.bool8)
+        arg1 = np.float16(3.)
+        arg2 = np.float16(3.)
+        compiled[1, 1](ary, arg1, arg2)
+        self.assertFalse(ary[0])
+        arg2 = np.float(4.)
+        compiled[1, 1](ary, arg1, arg2)
+        self.assertTrue(ary[0])
+
+    def test_hge(self):
+        compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hge_scalar)
+        ary = np.zeros(1, dtype=np.bool8)
+        arg1 = np.float16(3.)
+        arg2 = np.float16(3.)
+        compiled[1, 1](ary, arg1, arg2)
+        self.assertTrue(ary[0])
+        arg1 = np.float(4.)
+        compiled[1, 1](ary, arg1, arg2)
+        self.assertTrue(ary[0])
+        arg1 = np.float(2.98)
+        compiled[1, 1](ary, arg1, arg2)
+        self.assertFalse(ary[0])
+    
+    def test_hgt(self):
+        compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hgt_scalar)
+        ary = np.zeros(1, dtype=np.bool8)
+        arg1 = np.float16(3.)
+        arg2 = np.float16(3.)
+        compiled[1, 1](ary, arg1, arg2)
+        self.assertFalse(ary[0])
+        arg1 = np.float(4.)
+        compiled[1, 1](ary, arg1, arg2)
+        self.assertTrue(ary[0])
+        arg1 = np.float(2.98)
+        compiled[1, 1](ary, arg1, arg2)
+        self.assertFalse(ary[0])
+
+    def test_hle(self):
+        compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hle_scalar)
+        ary = np.zeros(1, dtype=np.bool8)
+        arg1 = np.float16(3.)
+        arg2 = np.float16(3.)
+        compiled[1, 1](ary, arg1, arg2)
+        self.assertTrue(ary[0])
+        arg1 = np.float(4.)
+        compiled[1, 1](ary, arg1, arg2)
+        self.assertFalse(ary[0])
+        arg1 = np.float(2.98)
+        compiled[1, 1](ary, arg1, arg2)
+        self.assertTrue(ary[0])
+    
+    def test_hlt(self):
+        compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hlt_scalar)
+        ary = np.zeros(1, dtype=np.bool8)
+        arg1 = np.float16(3.)
+        arg2 = np.float16(3.)
+        compiled[1, 1](ary, arg1, arg2)
+        self.assertFalse(ary[0])
+        arg1 = np.float(4.)
+        compiled[1, 1](ary, arg1, arg2)
+        self.assertFalse(ary[0])
+        arg1 = np.float(2.98)
+        compiled[1, 1](ary, arg1, arg2)
+        self.assertTrue(ary[0])
+
 
     def test_cbrt_f32(self):
         compiled = cuda.jit("void(float32[:], float32)")(simple_cbrt)

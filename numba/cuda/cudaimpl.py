@@ -422,30 +422,35 @@ lower_fp16_binary(stubs.fp16.hmul, 'mul')
 def lower_fp16_comparison(fn, op):
     @lower(fn, types.float16, types.float16)
     def ptx_fp16_binary(context, builder, sig, args):
-        temp_reg = '__$t0'
-        reg_pred_fnty = ir.FunctionType(ir.VoidType(),[])
-        reg_pred_asm = ir.InlineAsm(reg_pred_fnty, f".reg .pred {temp_reg}", "")
-        _ = builder.call(reg_pred_asm, [])
+        if cuda.current_context().device.compute_capability >= (5,3):
+            temp_reg = '__$$temp3'
+            reg_pred_fnty = ir.FunctionType(ir.VoidType(),[])
+            reg_pred_asm = ir.InlineAsm(reg_pred_fnty, f".reg .pred {temp_reg};", "")
+            _ = builder.call(reg_pred_asm, [])
 
-        setp_fnty = ir.FunctionType(ir.IntType(1),
-                                    [ir.HalfType(), ir.HalfType()])
-        setp_asm = ir.InlineAsm(setp_fnty,
-                                f"setp.{op}.f16 {temp_reg}, $1, $2",
-                                'h,h')
-        _ = builder.call(setp_asm, args)
+            setp_fnty = ir.FunctionType(ir.VoidType(),
+                                        [ir.HalfType(), ir.HalfType()])
+            setp_asm = ir.InlineAsm(setp_fnty,
+                                    f"setp.{op}.f16 {temp_reg}, $0, $1;",
+                                    'h,h')
+            _ = builder.call(setp_asm, args)
 
-        #selp_fnty = ir.FunctionType(ir.IntType(16),[])
-        selp_fnty = ir.FunctionType(ir.HalfType(),[])
+            selp_fnty = ir.FunctionType(ir.HalfType(),[])
 
-        selp_asm = ir.InlineAsm(selp_fnty,
-                                f"selp.u16 $0, 1, 0, {temp_reg}",
-                                '=h')
-        selp = builder.call(selp_asm, [])
+            selp_asm = ir.InlineAsm(selp_fnty,
+                                    f"selp.u16 $0, 1, 0, {temp_reg};",
+                                    '=h')
+            selp = builder.call(selp_asm, [])
 
-        zero = context.get_constant(types.int16, 0)
-        cmp = builder.icmp_unsigned("!=", selp, zero)
-        zext = builder.zext(cmp, ir.IntType(8))
-        return zext
+            zero = context.get_constant(types.int16, 0)
+            cmp = builder.icmp_unsigned("!=",
+                                        builder.bitcast(selp, ir.IntType(16)),
+                                        zero)
+
+            zext = builder.zext(cmp, ir.IntType(8))
+            return zext
+        else:
+            return None
 
 
 lower_fp16_comparison(stubs.fp16.heq, 'eq')
@@ -455,6 +460,48 @@ lower_fp16_comparison(stubs.fp16.hgt, 'gt')
 lower_fp16_comparison(stubs.fp16.hle, 'le')
 lower_fp16_comparison(stubs.fp16.hlt, 'lt')
 
+def lower_fp16_minmax_comparison(fn, op, cond):
+    @lower(fn, types.float16, types.float16)
+    def ptx_fp16_minmax(context, builder, sig, args):
+        # min/max instructions only supported on sm >= 8
+        compute_capability = cuda.current_context().device.compute_capability
+        if compute_capability >= (8, 0):
+            fnty = ir.FunctionType(ir.HalfType(),
+                               [ir.HalfType(), ir.HalfType()])
+            asm = ir.InlineAsm(fnty, f'{op}.f16 $0,$1,$2;', '=h,h,h')
+            return builder.call(asm, args)
+        elif compute_capability >= (5,3):
+            temp_reg = '__$$temp3'
+            reg_pred_fnty = ir.FunctionType(ir.VoidType(),[])
+            reg_pred_asm = ir.InlineAsm(reg_pred_fnty, f".reg .pred {temp_reg};", "")
+            _ = builder.call(reg_pred_asm, [])
+
+            setp_fnty = ir.FunctionType(ir.VoidType(),
+                                        [ir.HalfType(), ir.HalfType()])
+            setp_asm = ir.InlineAsm(setp_fnty,
+                                    f"setp.{cond}.f16 {temp_reg}, $0, $1;",
+                                    'h,h')
+            _ = builder.call(setp_asm, args)
+
+            selp_fnty = ir.FunctionType(ir.HalfType(),[])
+
+            selp_asm = ir.InlineAsm(selp_fnty,
+                                    f"selp.u16 $0, 1, 0, {temp_reg};",
+                                    '=h')
+            selp = builder.call(selp_asm, [])
+
+            zero = context.get_constant(types.int16, 0)
+            cmp = builder.icmp_unsigned("==",
+                                        builder.bitcast(selp, ir.IntType(16)),
+                                        zero)
+
+            select = builder.select(cmp, args[1], args[0])
+            return select
+        else:
+            return None
+
+lower_fp16_minmax_comparison(stubs.fp16.hmax, 'max', 'gt')
+lower_fp16_minmax_comparison(stubs.fp16.hmax, 'min', 'lt')
 
 def lower_fp16_unary(fn, op):
     @lower(fn, types.float16)
