@@ -280,6 +280,28 @@ def invalid_isinstance_usecase(x):
         return 'false branch'
 
 
+def invalid_isinstance_usecase_phi_nopropagate(x):
+    if x > 4:
+        z = 10
+    else:
+        z = 'a'
+    if isinstance(z, int):
+        return True
+    else:
+        return False
+
+
+def invalid_isinstance_optional_usecase(x):
+    if x > 4:
+        z = 10
+    else:
+        z = None
+    if isinstance(z, int):
+        return True
+    else:
+        return False
+
+
 class TestBuiltins(TestCase):
 
     def run_nullary_func(self, pyfunc, flags):
@@ -1052,12 +1074,19 @@ class TestBuiltins(TestCase):
         self.assertEqual(pyfunc_2, cfunc_2)
 
     def test_isinstance_exceptions(self):
-        fn = njit(invalid_isinstance_usecase)
+        fns = [
+            (invalid_isinstance_usecase, 'Cannot infer numba type of python type'),  # noqa: E501
+            (invalid_isinstance_usecase_phi_nopropagate, 'Cannot infer the type of variable'),  # noqa: E501
+            (invalid_isinstance_optional_usecase, 'isinstance cannot handle optional types.'),  # noqa: E501
+        ]
 
-        with self.assertRaises(errors.TypingError) as raises:
-            fn(100)
+        for fn, msg in fns:
+            fn = njit(fn)
 
-        self.assertIn('Cannot infer numba type of python type', str(raises.exception))
+            with self.assertRaises(errors.TypingError) as raises:
+                fn(100)
+
+            self.assertIn(msg, str(raises.exception))
 
     def test_truth(self):
         pyfunc = truth_usecase

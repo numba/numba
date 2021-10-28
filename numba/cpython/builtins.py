@@ -19,6 +19,7 @@ from numba.core.typeconv import Conversion
 from numba.core.errors import TypingError, LoweringError
 from numba.misc.special import literal_unroll
 from numba.core.typing.asnumbatype import as_numba_type
+from numba.core.errors import NumbaTypeError
 
 
 @overload(operator.truth)
@@ -683,6 +684,13 @@ def ol_isinstance(var, typs):
     def false_impl(var, typs):
         return False
 
+    var_ty = as_numba_type(var)
+
+    if isinstance(var_ty, types.Optional):
+        raise NumbaTypeError(
+            f'isinstance cannot handle optional types. '
+            f'Got "{var_ty}"')
+
     # register container types (List, Dict, ...) with types.Any as base type
     as_numba_type.register(tuple, types.Tuple((types.undefined,)))
     as_numba_type.register(list, types.List(types.undefined))
@@ -698,8 +706,6 @@ def ol_isinstance(var, typs):
 
     if not isinstance(t_typs, types.containers.Tuple):
         t_typs = (t_typs, )
-
-    var_ty = as_numba_type(var)
 
     for typ in t_typs:
         if isinstance(typ, types.Function):

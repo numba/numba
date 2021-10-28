@@ -1453,23 +1453,9 @@ class PropagateLiterals(FunctionPass):
                 # 1) Don't change return stmt in the form
                 # $return_xyz = cast(value=ABC)
                 # 2) Don't propagate literal values that are not primitives
-                # 3) There's a bug in the partial type inference algorithm
-                #    involving PHI instructions. In the code below, the
-                #    partial type inference algorithm infers that
-                #    typemap[z] = 'hello world'. We're are restricting
-                #    literals from propagating if the assignment is coming
-                #    from a PHI node.
-                #
-                #   def foo(x):
-                #       if x > 10:
-                #           z = x + 1
-                #       else:
-                #           z = 'hello world'
-                #       return z
-                #
                 if isinstance(assign.value, ir.Expr) and \
                         assign.value.op in ('cast', 'build_map', 'build_list',
-                                            'build_tuple', 'build_set', 'phi'):
+                                            'build_tuple', 'build_set'):
                     continue
 
                 target = assign.target

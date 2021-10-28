@@ -249,6 +249,21 @@ class BuildTupleConstraint(object):
                 typeinfer.add_type(self.target, tup, loc=self.loc)
 
 
+class PhiConstraint(object):
+    def __init__(self, target, incoming_values, loc):
+        self.target = target
+        self.incoming_values = incoming_values
+        self.loc = loc
+
+    def __call__(self, typeinfer):
+        with new_error_context("typing of {0} at {1}", 'Phi', self.loc):
+            typevars = typeinfer.typevars
+            typs = [typevars[i.name].getone() for i in self.incoming_values]
+            unified = typeinfer.context.unify_types(*typs)
+            ty = unified if unified else types.undefined
+            typeinfer.add_type(self.target, ty, loc=self.loc)
+
+
 class _BuildContainerConstraint(object):
 
     def __init__(self, target, items, loc):
@@ -1697,11 +1712,10 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
                                               src=expr.value.name,
                                               loc=inst.loc))
         elif expr.op == 'phi':
-            for iv in expr.incoming_values:
-                if iv is not ir.UNDEFINED:
-                    self.constraints.append(Propagate(dst=target.name,
-                                                      src=iv.name,
-                                                      loc=inst.loc))
+            constraint = PhiConstraint(target.name,
+                                       incoming_values=expr.incoming_values,
+                                       loc=inst.loc)
+            self.constraints.append(constraint)
         elif expr.op == 'make_function':
             self.lock_type(target.name, types.MakeFunctionLiteral(expr),
                            loc=inst.loc, literal_value=expr)
