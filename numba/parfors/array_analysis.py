@@ -1386,12 +1386,12 @@ class ArrayAnalysis(object):
                     )
                 ):
                     shape = self._gen_shape_call(
-                        equiv_set, lhs, typ.ndim, shape, post
+                        equiv_set, lhs, typ.ndim, shape, post, typ
                     )
             elif isinstance(typ, types.UniTuple):
                 if shape and isinstance(typ.dtype, types.Integer):
                     shape = self._gen_shape_call(
-                        equiv_set, lhs, len(typ), shape, post
+                        equiv_set, lhs, len(typ), shape, post, typ
                     )
             elif (
                 isinstance(typ, types.containers.Tuple)
@@ -1401,7 +1401,7 @@ class ArrayAnalysis(object):
                 )
             ):
                 shape = self._gen_shape_call(
-                    equiv_set, lhs, len(typ), shape, post
+                    equiv_set, lhs, len(typ), shape, post, typ
                 )
 
             """ See the comment on the define() function.
@@ -1585,7 +1585,7 @@ class ArrayAnalysis(object):
                 typ = self.typemap[lhs.name]
                 post = []
                 shape = self._gen_shape_call(
-                    equiv_set, lhs, typ.ndim, None, post
+                    equiv_set, lhs, typ.ndim, None, post, typ
                 )
                 self.object_attrs[(canonical_value, expr.attr)] = shape
                 return ArrayAnalysis.AnalyzeResult(shape=shape, post=post)
@@ -3185,7 +3185,18 @@ class ArrayAnalysis(object):
             ir.Assign(value=value, target=var, loc=loc),
         ]
 
-    def _gen_shape_call(self, equiv_set, var, ndims, shape, post):
+    def _get_typ_part(self, typ, i):
+        if isinstance(typ, types.containers.UniTuple):
+            return typ.dtype
+        elif isinstance(typ, types.ArrayCompatible):
+            return types.intp
+        elif isinstance(typ, types.Number):
+            return typ
+        else:
+            dprint(1, "Unhandled case in _get_typ_part:", typ, i)
+            return types.intp
+
+    def _gen_shape_call(self, equiv_set, var, ndims, shape, post, typ):
         # attr call: A_sh_attr = getattr(A, shape)
         if isinstance(shape, ir.Var):
             shape = equiv_set.get_shape(shape)
@@ -3213,6 +3224,7 @@ class ArrayAnalysis(object):
             if ndims < nshapes:
                 shape = shape[(nshapes - ndims) :]
         for i in range(ndims):
+            typi = self._get_typ_part(typ, i)
             skip = False
             if shape and shape[i]:
                 if isinstance(shape[i], ir.Var):
@@ -3232,7 +3244,7 @@ class ArrayAnalysis(object):
                         var.loc,
                     )
                     post.append(ir.Assign(size_val, size_var, var.loc))
-                    self._define(equiv_set, size_var, types.intp, size_val)
+                    self._define(equiv_set, size_var, typi, size_val)
                     skip = True
             if not skip:
                 # get size: Asize0 = A_sh_attr[0]
@@ -3245,7 +3257,7 @@ class ArrayAnalysis(object):
                 use_attr_var = True
                 self.calltypes[getitem] = None
                 post.append(ir.Assign(getitem, size_var, var.loc))
-                self._define(equiv_set, size_var, types.intp, getitem)
+                self._define(equiv_set, size_var, typi, getitem)
             size_vars.append(size_var)
         if use_attr_var and shape_attr_call:
             # only insert shape call if there is any getitem call
