@@ -3193,7 +3193,8 @@ class ArrayAnalysis(object):
         elif isinstance(typ, types.Number):
             return typ
         else:
-            dprint(1, "Unhandled case in _get_typ_part:", typ, i)
+            if config.DEBUG_ARRAY_OPT >= 1:
+                print(1, "Unhandled case in _get_typ_part:", typ, i)
             return types.intp
 
     def _gen_shape_call(self, equiv_set, var, ndims, shape, post, typ):
