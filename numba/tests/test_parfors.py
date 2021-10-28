@@ -1024,11 +1024,7 @@ class TestParforNumPy(TestParforsBase):
             return 3
 
         n = 10
-        cpfunc = self.compile_parallel(test_impl, (numba.typeof((n,n)),))
-        parfor_output = cpfunc.entry_point((n,n))
-        py_output = test_impl((n,n))
-        self.assertEqual(parfor_output, py_output)
-        self.assertEqual(countParfors(test_impl, (types.int64, types.int64)), 1)
+        self.check(test_impl, (n,n))
 
     def test_min(self):
         def test_impl1(A):
