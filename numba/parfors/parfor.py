@@ -3010,6 +3010,7 @@ def _remove_size_arg(call_name, expr):
         # these calls have only a "size" argument or list of ints
         # so remove all args
         expr.args = []
+        expr.vararg = None
 
     if call_name in random_3arg_sizelast:
         # normal, uniform, ... have 3 args, last one is size

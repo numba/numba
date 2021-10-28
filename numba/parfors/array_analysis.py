@@ -1568,7 +1568,7 @@ class ArrayAnalysis(object):
         # TODO: getattr of npytypes.Record
         if expr.attr == "T" and self._isarray(expr.value.name):
             return self._analyze_op_call_numpy_transpose(
-                scope, equiv_set, expr.loc, [expr.value], {}
+                scope, equiv_set, expr.loc, [expr.value], {}, None
             )
         elif expr.attr == "shape":
             shape = equiv_set.get_shape(expr.value)
@@ -2233,8 +2233,10 @@ class ArrayAnalysis(object):
             mod_name = "numpy"
             # Remember that args and expr.args don't alias.
             added_mod_name = True
+            varargs = None
         else:
             args = expr.args
+            varargs = expr.vararg
         fname = "_analyze_op_call_{}_{}".format(mod_name, fname).replace(
             ".", "_"
         )
@@ -2253,6 +2255,7 @@ class ArrayAnalysis(object):
                 loc=expr.loc,
                 args=args,
                 kws=dict(expr.kws),
+                varargs=varargs
             )
             # We want the ability for function fn to modify arguments.
             # If args and expr.args don't alias then we need the extra
@@ -2262,7 +2265,7 @@ class ArrayAnalysis(object):
                 expr.args = args[1:]
             return result
 
-    def _analyze_op_call_builtins_len(self, scope, equiv_set, loc, args, kws):
+    def _analyze_op_call_builtins_len(self, scope, equiv_set, loc, args, kws, varargs):
         # python 3 version of len()
         require(len(args) == 1)
         var = args[0]
@@ -2272,13 +2275,13 @@ class ArrayAnalysis(object):
         return ArrayAnalysis.AnalyzeResult(shape=shape[0], rhs=shape[0])
 
     def _analyze_op_call_numba_parfors_array_analysis_assert_equiv(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         equiv_set.insert_equiv(*args[1:])
         return None
 
     def _analyze_op_call_numba_parfors_array_analysis_wrap_index(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         """ Analyze wrap_index calls added by a previous run of
             Array Analysis
@@ -2321,29 +2324,29 @@ class ArrayAnalysis(object):
             loc=loc,
         )
 
-    def _analyze_op_call_numpy_empty(self, scope, equiv_set, loc, args, kws):
+    def _analyze_op_call_numpy_empty(self, scope, equiv_set, loc, args, kws, varargs):
         return self._analyze_numpy_create_array(
             scope, equiv_set, loc, args, kws
         )
 
     def _analyze_op_call_numba_np_unsafe_ndarray_empty_inferred(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_numpy_create_array(
             scope, equiv_set, loc, args, kws
         )
 
-    def _analyze_op_call_numpy_zeros(self, scope, equiv_set, loc, args, kws):
+    def _analyze_op_call_numpy_zeros(self, scope, equiv_set, loc, args, kws, varargs):
         return self._analyze_numpy_create_array(
             scope, equiv_set, loc, args, kws
         )
 
-    def _analyze_op_call_numpy_ones(self, scope, equiv_set, loc, args, kws):
+    def _analyze_op_call_numpy_ones(self, scope, equiv_set, loc, args, kws, varargs):
         return self._analyze_numpy_create_array(
             scope, equiv_set, loc, args, kws
         )
 
-    def _analyze_op_call_numpy_eye(self, scope, equiv_set, loc, args, kws):
+    def _analyze_op_call_numpy_eye(self, scope, equiv_set, loc, args, kws, varargs):
         if len(args) > 0:
             N = args[0]
         elif "N" in kws:
@@ -2360,13 +2363,13 @@ class ArrayAnalysis(object):
         return ArrayAnalysis.AnalyzeResult(shape=(N, M))
 
     def _analyze_op_call_numpy_identity(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         assert len(args) > 0
         N = args[0]
         return ArrayAnalysis.AnalyzeResult(shape=(N, N))
 
-    def _analyze_op_call_numpy_diag(self, scope, equiv_set, loc, args, kws):
+    def _analyze_op_call_numpy_diag(self, scope, equiv_set, loc, args, kws, varargs):
         # We can only reason about the output shape when the input is 1D or
         # square 2D.
         assert len(args) > 0
@@ -2399,7 +2402,7 @@ class ArrayAnalysis(object):
             return ArrayAnalysis.AnalyzeResult(shape=var)
         return None
 
-    def _analyze_op_call_numpy_ravel(self, scope, equiv_set, loc, args, kws):
+    def _analyze_op_call_numpy_ravel(self, scope, equiv_set, loc, args, kws, varargs):
         assert len(args) == 1
         var = args[0]
         typ = self.typemap[var.name]
@@ -2415,35 +2418,35 @@ class ArrayAnalysis(object):
         # TODO: handle multi-D input arrays (calc array size)
         return None
 
-    def _analyze_op_call_numpy_copy(self, scope, equiv_set, loc, args, kws):
+    def _analyze_op_call_numpy_copy(self, scope, equiv_set, loc, args, kws, varargs):
         return self._analyze_numpy_array_like(scope, equiv_set, args, kws)
 
     def _analyze_op_call_numpy_empty_like(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_numpy_array_like(scope, equiv_set, args, kws)
 
     def _analyze_op_call_numpy_zeros_like(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_numpy_array_like(scope, equiv_set, args, kws)
 
     def _analyze_op_call_numpy_ones_like(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_numpy_array_like(scope, equiv_set, args, kws)
 
     def _analyze_op_call_numpy_full_like(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_numpy_array_like(scope, equiv_set, args, kws)
 
     def _analyze_op_call_numpy_asfortranarray(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_numpy_array_like(scope, equiv_set, args, kws)
 
-    def _analyze_op_call_numpy_reshape(self, scope, equiv_set, loc, args, kws):
+    def _analyze_op_call_numpy_reshape(self, scope, equiv_set, loc, args, kws, varargs):
         n = len(args)
         assert n > 1
         if n == 2:
@@ -2518,7 +2521,7 @@ class ArrayAnalysis(object):
         return ArrayAnalysis.AnalyzeResult(shape=tuple(args[1:]), pre=stmts)
 
     def _analyze_op_call_numpy_transpose(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         in_arr = args[0]
         typ = self.typemap[in_arr.name]
@@ -2537,21 +2540,23 @@ class ArrayAnalysis(object):
         return ArrayAnalysis.AnalyzeResult(shape=tuple(ret))
 
     def _analyze_op_call_numpy_random_rand(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         if len(args) > 0:
             return ArrayAnalysis.AnalyzeResult(shape=tuple(args))
+        elif varargs is not None:
+            return ArrayAnalysis.AnalyzeResult(shape=varargs)
         return None
 
     def _analyze_op_call_numpy_random_randn(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_call_numpy_random_rand(
-            scope, equiv_set, loc, args, kws
+            scope, equiv_set, loc, args, kws, varargs
         )
 
     def _analyze_op_numpy_random_with_size(
-        self, pos, scope, equiv_set, args, kws
+        self, pos, scope, equiv_set, args, kws, varargs
     ):
         if "size" in kws:
             return ArrayAnalysis.AnalyzeResult(shape=kws["size"])
@@ -2560,161 +2565,161 @@ class ArrayAnalysis(object):
         return None
 
     def _analyze_op_call_numpy_random_ranf(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            0, scope, equiv_set, args, kws
+            0, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_random_random_sample(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            0, scope, equiv_set, args, kws
+            0, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_random_sample(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            0, scope, equiv_set, args, kws
+            0, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_random_random(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            0, scope, equiv_set, args, kws
+            0, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_random_standard_normal(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            0, scope, equiv_set, args, kws
+            0, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_random_chisquare(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            1, scope, equiv_set, args, kws
+            1, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_random_weibull(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            1, scope, equiv_set, args, kws
+            1, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_random_power(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            1, scope, equiv_set, args, kws
+            1, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_random_geometric(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            1, scope, equiv_set, args, kws
+            1, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_random_exponential(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            1, scope, equiv_set, args, kws
+            1, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_random_poisson(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            1, scope, equiv_set, args, kws
+            1, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_random_rayleigh(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            1, scope, equiv_set, args, kws
+            1, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_random_normal(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            2, scope, equiv_set, args, kws
+            2, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_random_uniform(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            2, scope, equiv_set, args, kws
+            2, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_random_beta(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            2, scope, equiv_set, args, kws
+            2, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_random_binomial(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            2, scope, equiv_set, args, kws
+            2, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_random_f(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            2, scope, equiv_set, args, kws
+            2, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_random_gamma(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            2, scope, equiv_set, args, kws
+            2, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_random_lognormal(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            2, scope, equiv_set, args, kws
+            2, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_random_laplace(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            2, scope, equiv_set, args, kws
+            2, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_random_randint(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            2, scope, equiv_set, args, kws
+            2, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_random_triangular(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         return self._analyze_op_numpy_random_with_size(
-            3, scope, equiv_set, args, kws
+            3, scope, equiv_set, args, kws, varargs
         )
 
     def _analyze_op_call_numpy_concatenate(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         assert len(args) > 0
         loc = args[0].loc
@@ -2767,7 +2772,7 @@ class ArrayAnalysis(object):
             pre=sum(asserts, [])
         )
 
-    def _analyze_op_call_numpy_stack(self, scope, equiv_set, loc, args, kws):
+    def _analyze_op_call_numpy_stack(self, scope, equiv_set, loc, args, kws, varargs):
         assert len(args) > 0
         loc = args[0].loc
         seq, op = find_build_sequence(self.func_ir, args[0])
@@ -2793,7 +2798,7 @@ class ArrayAnalysis(object):
         new_shape = list(shape[0:axis]) + [n] + list(shape[axis:])
         return ArrayAnalysis.AnalyzeResult(shape=tuple(new_shape), pre=asserts)
 
-    def _analyze_op_call_numpy_vstack(self, scope, equiv_set, loc, args, kws):
+    def _analyze_op_call_numpy_vstack(self, scope, equiv_set, loc, args, kws, varargs):
         assert len(args) == 1
         seq, op = find_build_sequence(self.func_ir, args[0])
         n = len(seq)
@@ -2802,15 +2807,15 @@ class ArrayAnalysis(object):
         require(isinstance(typ, types.ArrayCompatible))
         if typ.ndim < 2:
             return self._analyze_op_call_numpy_stack(
-                scope, equiv_set, loc, args, kws
+                scope, equiv_set, loc, args, kws, varargs
             )
         else:
             kws["axis"] = 0
             return self._analyze_op_call_numpy_concatenate(
-                scope, equiv_set, loc, args, kws
+                scope, equiv_set, loc, args, kws, varargs
             )
 
-    def _analyze_op_call_numpy_hstack(self, scope, equiv_set, loc, args, kws):
+    def _analyze_op_call_numpy_hstack(self, scope, equiv_set, loc, args, kws, varargs):
         assert len(args) == 1
         seq, op = find_build_sequence(self.func_ir, args[0])
         n = len(seq)
@@ -2822,10 +2827,10 @@ class ArrayAnalysis(object):
         else:
             kws["axis"] = 1
         return self._analyze_op_call_numpy_concatenate(
-            scope, equiv_set, loc, args, kws
+            scope, equiv_set, loc, args, kws, varargs
         )
 
-    def _analyze_op_call_numpy_dstack(self, scope, equiv_set, loc, args, kws):
+    def _analyze_op_call_numpy_dstack(self, scope, equiv_set, loc, args, kws, varargs):
         assert len(args) == 1
         seq, op = find_build_sequence(self.func_ir, args[0])
         n = len(seq)
@@ -2835,7 +2840,7 @@ class ArrayAnalysis(object):
         if typ.ndim == 1:
             kws["axis"] = 1
             result = self._analyze_op_call_numpy_stack(
-                scope, equiv_set, loc, args, kws
+                scope, equiv_set, loc, args, kws, varargs
             )
             require(result)
             result.kwargs['shape'] = tuple([1] + list(result.kwargs['shape']))
@@ -2843,24 +2848,24 @@ class ArrayAnalysis(object):
         elif typ.ndim == 2:
             kws["axis"] = 2
             return self._analyze_op_call_numpy_stack(
-                scope, equiv_set, loc, args, kws
+                scope, equiv_set, loc, args, kws, varargs
             )
         else:
             kws["axis"] = 2
             return self._analyze_op_call_numpy_concatenate(
-                scope, equiv_set, loc, args, kws
+                scope, equiv_set, loc, args, kws, varargs
             )
 
-    def _analyze_op_call_numpy_cumsum(self, scope, equiv_set, loc, args, kws):
+    def _analyze_op_call_numpy_cumsum(self, scope, equiv_set, loc, args, kws, varargs):
         # TODO
         return None
 
-    def _analyze_op_call_numpy_cumprod(self, scope, equiv_set, loc, args, kws):
+    def _analyze_op_call_numpy_cumprod(self, scope, equiv_set, loc, args, kws, varargs):
         # TODO
         return None
 
     def _analyze_op_call_numpy_linspace(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         n = len(args)
         num = 50
@@ -2870,7 +2875,7 @@ class ArrayAnalysis(object):
             num = kws["num"]
         return ArrayAnalysis.AnalyzeResult(shape=(num,))
 
-    def _analyze_op_call_numpy_dot(self, scope, equiv_set, loc, args, kws):
+    def _analyze_op_call_numpy_dot(self, scope, equiv_set, loc, args, kws, varargs):
         n = len(args)
         assert n >= 2
         loc = args[0].loc
@@ -2931,7 +2936,7 @@ class ArrayAnalysis(object):
         return ArrayAnalysis.AnalyzeResult(shape=shape, pre=asserts)
 
     def _analyze_op_call_numpy_linalg_inv(
-        self, scope, equiv_set, loc, args, kws
+        self, scope, equiv_set, loc, args, kws, varargs
     ):
         require(len(args) >= 1)
         return ArrayAnalysis.AnalyzeResult(shape=equiv_set._get_shape(args[0]))
