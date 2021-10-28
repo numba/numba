@@ -13,7 +13,7 @@ from numba.core import (typing, utils, types, ir, debuginfo, funcdesc,
                         targetconfig)
 from numba.core.errors import (LoweringError, new_error_context, TypingError,
                                LiteralTypingError, UnsupportedError,
-                               NumbaWarning)
+                               NumbaWarning, NumbaNotImplementedError)
 from numba.core.funcdesc import default_mangler
 from numba.core.environment import Environment
 from numba.core.analysis import compute_use_defs
@@ -468,7 +468,7 @@ class Lower(BaseLower):
             assert signature is not None
             try:
                 impl = self.context.get_function('static_setitem', signature)
-            except NotImplementedError:
+            except NumbaNotImplementedError:
                 return self.lower_setitem(inst.target, inst.index_var,
                                           inst.value, signature)
             else:
@@ -1256,7 +1256,7 @@ class Lower(BaseLower):
                 impl = self.context.get_function("static_getitem", signature)
                 return impl(self.builder,
                             (self.loadvar(expr.value.name), expr.index))
-            except NotImplementedError:
+            except NumbaNotImplementedError:
                 if expr.index_var is None:
                     raise
                 # Fall back on the generic getitem() implementation
