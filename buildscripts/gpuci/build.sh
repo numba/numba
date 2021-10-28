@@ -2,13 +2,6 @@
 # Numba GPU build and test script for CI     #
 ##############################################
 set -e
-NUMARGS=$#
-ARGS=$*
-
-# Arg parsing function
-function hasArg {
-    (( ${NUMARGS} != 0 )) && (echo " ${ARGS} " | grep -q " $1 ")
-}
 
 # Set path and build parallel level
 export PATH=/opt/conda/bin:/usr/local/cuda/bin:$PATH
