@@ -515,7 +515,7 @@ class LoopNest(object):
            all_uses.append(self.step)
        return all_uses
 
-class Parfor(ir.Expr):
+class Parfor(ir.Expr, ir.Stmt):
 
     id_counter = 0
 
@@ -560,7 +560,6 @@ class Parfor(ir.Expr):
             fmt = 'Parallel for-loop #{} is produced from pattern \'{}\' at {}'
             print(fmt.format(
                   self.id, pattern, loc))
-        self.is_terminator = False
 
     def __repr__(self):
         return "id=" + str(self.id) + repr(self.loop_nests) + \

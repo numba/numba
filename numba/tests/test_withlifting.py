@@ -740,7 +740,6 @@ class TestLiftObj(MemoryLeak, TestCase):
         with self.assertRaises(errors.CompilerError) as raises:
             cfoo(x)
         msg = "unsupported controlflow due to return statements inside with block"
-        #msg = "Does not support with-context that contain branches"
         self.assertIn(msg, str(raises.exception))
 
     @unittest.expectedFailure

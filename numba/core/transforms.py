@@ -350,7 +350,6 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
     vlt = func_ir.variable_lifetime
     blocks = func_ir.blocks.copy()
     cfg = vlt.cfg
-    #_legalize_withs_cfg(withs, cfg, blocks)
     # For each with-regions, mutate them according to
     # the kind of contextmanager
     sub_irs = []
@@ -477,57 +476,11 @@ def _cfg_nodes_in_region(cfg, region_begin, region_end):
     return region_nodes
 
 
-def _legalize_withs_cfg(withs, cfg, blocks):
-    """Verify the CFG of the with-context(s).
-    """
-    doms = cfg.dominators()
-    postdoms = cfg.post_dominators()
-
-    # Verify that the with-context has no side-exits
-    for s, e in withs:
-        loc = blocks[s].loc
-        if s not in doms[e]:
-            # Not sure what condition can trigger this error.
-            msg = "Entry of with-context not dominating the exit."
-            raise errors.CompilerError(msg, loc=loc)
-        if e not in postdoms[s]:
-            msg = (
-                "Does not support with-context that contain branches "
-                "(i.e. break/return/raise) that can leave the with-context. "
-                "Details: exit of with-context not post-dominating the entry. "
-            )
-            raise errors.CompilerError(msg, loc=loc)
-
-
 def find_setupwiths(blocks):
     """Find all top-level with.
 
     Returns a list of ranges for the with-regions.
     """
-    def _find_ranges(blocks):
-        for blk in blocks.values():
-            for ew in blk.find_insts(ir.EnterWith):
-                if PYVERSION < (3, 9):
-                    end = ew.end
-                    for offset in blocks:
-                        if ew.end <= offset:
-                            end = offset
-                            break
-                else:
-                    # Since py3.9, the `with finally` handling is injected into
-                    # caller function. However, the numba byteflow doesn't
-                    # account for that block, which is where `ew.end` is
-                    # pointing to. We need to point to the block before
-                    # `ew.end`.
-                    end = ew.end
-                    last_offset = None
-                    for offset in blocks:
-                        if ew.end < offset:
-                            end = last_offset
-                            break
-                        last_offset = offset
-                yield ew.begin, end
-
     def find_ranges(blocks):
 
         def is_setup_with(stmt):
@@ -615,17 +568,7 @@ def find_setupwiths(blocks):
                         for t in stmt.get_targets():
                             if t not in seen:
                                 to_visit.append(t)
-        # remove the pop_block statements
-        #for lbl, blk in blocks.items():
-        #    nb = []
-        #    for stmt in blk.body:
-        #        if is_pop_block(stmt):
-        #            pass
-        #        else:
-        #            nb.append(stmt)
-        #    blk.body.clear()
-        #    blk.body.extend(nb)
-        # respect the interface
+
         for p,w in pop_block_to_setup_map.items():
             yield w, p
 
@@ -638,12 +581,6 @@ def find_setupwiths(blocks):
     known_ranges = []
     for s, e in sorted(find_ranges(blocks)):
         if not previously_occurred(s, known_ranges):
-            if e not in blocks:
-                # this's possible if there's an exit path in the with-block
-                raise errors.CompilerError(
-                    'unsupported controlflow due to foo'
-                    'statements inside with block'
-                    )
             assert s in blocks, 'starting offset is not a label'
             known_ranges.append((s, e))
 

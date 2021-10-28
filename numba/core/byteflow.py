@@ -786,7 +786,7 @@ class TraceRunner(object):
         if blk['kind'] == BlockKind('TRY'):
             state.append(inst, kind='try')
         elif blk['kind'] == BlockKind('WITH'):
-            state.append(inst, kind='with')        # Forces a new block
+            state.append(inst, kind='with')
         state.fork(pc=inst.next)
 
     def op_BINARY_SUBSCR(self, state, inst):
