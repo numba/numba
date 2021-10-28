@@ -354,10 +354,8 @@ class TestNestedArrays(CUDATestCase):
     # Reading records / recarrays
 
     def get_cfunc(self, pyfunc, retty):
-        '''
-        Create a host-callable function for testing CUDA device functions
-        that get a value from a record array
-        '''
+        # Create a host-callable function for testing CUDA device functions
+        # that get a value from a record array
         inner = cuda.jit(device=True)(pyfunc)
 
         @cuda.jit
@@ -372,9 +370,7 @@ class TestNestedArrays(CUDATestCase):
         return host
 
     def test_record_read_array(self):
-        '''
-        Test reading from a 1D array within a structured type
-        '''
+        # Test reading from a 1D array within a structured type
         nbval = np.recarray(1, dtype=recordwitharray)
         nbval[0].h[0] = 15.0
         nbval[0].h[1] = 25.0
@@ -387,9 +383,7 @@ class TestNestedArrays(CUDATestCase):
         np.testing.assert_equal(res, nbval[0].h[1])
 
     def test_record_read_2d_array(self):
-        '''
-        Test reading from a 2D array within a structured type
-        '''
+        # Test reading from a 2D array within a structured type
         nbval = np.recarray(1, dtype=recordwith2darray)
         nbval[0].j = np.asarray([1.5, 2.5, 3.5, 4.5, 5.5, 6.5],
                                 np.float32).reshape(3, 2)
@@ -406,12 +400,10 @@ class TestNestedArrays(CUDATestCase):
         np.testing.assert_equal(res, nbval[0].j[1, 0])
 
     def test_getitem_idx(self):
-        """
-        Test __getitem__ with numerical index
+        # Test __getitem__ with numerical index
 
-        This test returning a record when passing an array and
-        return the first item when passing a record
-        """
+        # This test returning a record when passing an array and
+        # return the first item when passing a record
         nbarr = np.recarray(2, dtype=recordwitharray)
         nbarr[0] = np.array([(1, (2,3))], dtype=recordwitharray)[0]
         for arg, retty in [(nbarr, recordwitharray), (nbarr[0], np.int32)]:
@@ -423,10 +415,9 @@ class TestNestedArrays(CUDATestCase):
 
     # Writing to records / recarrays
 
+    @skip_on_cudasim('Structured array attr access not supported in simulator')
     def test_set_record(self):
-        """
-        Test setting an entire record
-        """
+        # Test setting an entire record
         rec = np.ones(2, dtype=recordwith2darray).view(np.recarray)[0]
         nbarr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
         arr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
@@ -442,12 +433,10 @@ class TestNestedArrays(CUDATestCase):
 
     @unittest.expectedFailure
     def test_getitem_idx_2darray(self):
-        """
-        Test __getitem__ with numerical index
-
-        This test returning a record when passing an array and
-        return the first item when passing a record
-        """
+        # Test __getitem__ with numerical index
+        #
+        # This test returning a record when passing an array and
+        # return the first item when passing a record
         nbarr = np.recarray(2, dtype=recordwith2darray)
         nbarr[0] = np.array([(1, ((1,2),(4,5),(2,3)))],
                             dtype=recordwith2darray)[0]
@@ -461,12 +450,10 @@ class TestNestedArrays(CUDATestCase):
 
     @unittest.expectedFailure
     def test_return_getattr_getitem_fieldname(self):
-        """
-        Test __getitem__ with field name and getattr .field_name
-
-        This tests returning a array of nestedarrays when passing an array and
-        returning a nestedarray when passing a record
-        """
+        # Test __getitem__ with field name and getattr .field_name
+        #
+        # This tests returning a array of nestedarrays when passing an array and
+        # returning a nestedarray when passing a record
         nbarr = np.recarray(2, dtype=recordwitharray)
         nbarr[0] = np.array([(1, (2,3))], dtype=recordwitharray)[0]
         for arg, retty in [(nbarr, recordwitharray), (nbarr[0], np.float32)]:
@@ -479,9 +466,7 @@ class TestNestedArrays(CUDATestCase):
 
     @unittest.expectedFailure
     def test_return_array(self):
-        """
-        Test getitem record AND array within record and returning it
-        """
+        # Test getitem record AND array within record and returning it
         nbval = np.recarray(2, dtype=recordwitharray)
         nbval[0] = np.array([(1, (2,3))], dtype=recordwitharray)[0]
         pyfunc = record_read_array0
@@ -490,11 +475,10 @@ class TestNestedArrays(CUDATestCase):
         arr_res = cfunc(nbval)
         np.testing.assert_equal(arr_expected, arr_res)
 
+    @skip_on_cudasim('Will unexpectedly pass on cudasim')
     @unittest.expectedFailure
     def test_set_array(self):
-        """
-        Test setting an entire array within one record
-        """
+        #Test setting an entire array within one record
         arr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
         rec = arr[0]
         nbarr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
@@ -507,9 +491,7 @@ class TestNestedArrays(CUDATestCase):
 
     @unittest.expectedFailure
     def test_set_arrays(self):
-        """
-        Test setting an entire array of arrays (multiple records)
-        """
+        # Test setting an entire array of arrays (multiple records)
         arr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
         nbarr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
         for pyfunc in (
