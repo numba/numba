@@ -1055,7 +1055,7 @@ class TestArrayAnalysisInterface(TestCase):
             if fname.startswith('_analyze_op_call_'):
                 aoc[fname] = getattr(ArrayAnalysis, fname)
         # check interface
-        def iface_stub(self, scope, equiv_set, loc, args, kws):
+        def iface_stub(self, scope, equiv_set, loc, args, kws, varargs):
             pass
         expected = utils.pysignature(iface_stub)
         for k, v in aoc.items():
