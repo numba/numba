@@ -2265,7 +2265,9 @@ class ArrayAnalysis(object):
                 expr.args = args[1:]
             return result
 
-    def _analyze_op_call_builtins_len(self, scope, equiv_set, loc, args, kws, varargs):
+    def _analyze_op_call_builtins_len(
+        self, scope, equiv_set, loc, args, kws, varargs
+    ):
         # python 3 version of len()
         require(len(args) == 1)
         var = args[0]
@@ -2324,7 +2326,9 @@ class ArrayAnalysis(object):
             loc=loc,
         )
 
-    def _analyze_op_call_numpy_empty(self, scope, equiv_set, loc, args, kws, varargs):
+    def _analyze_op_call_numpy_empty(
+        self, scope, equiv_set, loc, args, kws, varargs
+    ):
         return self._analyze_numpy_create_array(
             scope, equiv_set, loc, args, kws
         )
@@ -2336,17 +2340,23 @@ class ArrayAnalysis(object):
             scope, equiv_set, loc, args, kws
         )
 
-    def _analyze_op_call_numpy_zeros(self, scope, equiv_set, loc, args, kws, varargs):
+    def _analyze_op_call_numpy_zeros(
+        self, scope, equiv_set, loc, args, kws, varargs
+    ):
         return self._analyze_numpy_create_array(
             scope, equiv_set, loc, args, kws
         )
 
-    def _analyze_op_call_numpy_ones(self, scope, equiv_set, loc, args, kws, varargs):
+    def _analyze_op_call_numpy_ones(
+        self, scope, equiv_set, loc, args, kws, varargs
+    ):
         return self._analyze_numpy_create_array(
             scope, equiv_set, loc, args, kws
         )
 
-    def _analyze_op_call_numpy_eye(self, scope, equiv_set, loc, args, kws, varargs):
+    def _analyze_op_call_numpy_eye(
+        self, scope, equiv_set, loc, args, kws, varargs
+    ):
         if len(args) > 0:
             N = args[0]
         elif "N" in kws:
@@ -2369,7 +2379,9 @@ class ArrayAnalysis(object):
         N = args[0]
         return ArrayAnalysis.AnalyzeResult(shape=(N, N))
 
-    def _analyze_op_call_numpy_diag(self, scope, equiv_set, loc, args, kws, varargs):
+    def _analyze_op_call_numpy_diag(
+        self, scope, equiv_set, loc, args, kws, varargs
+    ):
         # We can only reason about the output shape when the input is 1D or
         # square 2D.
         assert len(args) > 0
@@ -2402,7 +2414,9 @@ class ArrayAnalysis(object):
             return ArrayAnalysis.AnalyzeResult(shape=var)
         return None
 
-    def _analyze_op_call_numpy_ravel(self, scope, equiv_set, loc, args, kws, varargs):
+    def _analyze_op_call_numpy_ravel(
+        self, scope, equiv_set, loc, args, kws, varargs
+    ):
         assert len(args) == 1
         var = args[0]
         typ = self.typemap[var.name]
@@ -2418,7 +2432,9 @@ class ArrayAnalysis(object):
         # TODO: handle multi-D input arrays (calc array size)
         return None
 
-    def _analyze_op_call_numpy_copy(self, scope, equiv_set, loc, args, kws, varargs):
+    def _analyze_op_call_numpy_copy(
+        self, scope, equiv_set, loc, args, kws, varargs
+    ):
         return self._analyze_numpy_array_like(scope, equiv_set, args, kws)
 
     def _analyze_op_call_numpy_empty_like(
@@ -2446,7 +2462,9 @@ class ArrayAnalysis(object):
     ):
         return self._analyze_numpy_array_like(scope, equiv_set, args, kws)
 
-    def _analyze_op_call_numpy_reshape(self, scope, equiv_set, loc, args, kws, varargs):
+    def _analyze_op_call_numpy_reshape(
+        self, scope, equiv_set, loc, args, kws, varargs
+    ):
         n = len(args)
         assert n > 1
         if n == 2:
@@ -2772,7 +2790,9 @@ class ArrayAnalysis(object):
             pre=sum(asserts, [])
         )
 
-    def _analyze_op_call_numpy_stack(self, scope, equiv_set, loc, args, kws, varargs):
+    def _analyze_op_call_numpy_stack(
+        self, scope, equiv_set, loc, args, kws, varargs
+    ):
         assert len(args) > 0
         loc = args[0].loc
         seq, op = find_build_sequence(self.func_ir, args[0])
@@ -2798,7 +2818,9 @@ class ArrayAnalysis(object):
         new_shape = list(shape[0:axis]) + [n] + list(shape[axis:])
         return ArrayAnalysis.AnalyzeResult(shape=tuple(new_shape), pre=asserts)
 
-    def _analyze_op_call_numpy_vstack(self, scope, equiv_set, loc, args, kws, varargs):
+    def _analyze_op_call_numpy_vstack(
+        self, scope, equiv_set, loc, args, kws, varargs
+    ):
         assert len(args) == 1
         seq, op = find_build_sequence(self.func_ir, args[0])
         n = len(seq)
@@ -2815,7 +2837,9 @@ class ArrayAnalysis(object):
                 scope, equiv_set, loc, args, kws, varargs
             )
 
-    def _analyze_op_call_numpy_hstack(self, scope, equiv_set, loc, args, kws, varargs):
+    def _analyze_op_call_numpy_hstack(
+        self, scope, equiv_set, loc, args, kws, varargs
+    ):
         assert len(args) == 1
         seq, op = find_build_sequence(self.func_ir, args[0])
         n = len(seq)
@@ -2830,7 +2854,9 @@ class ArrayAnalysis(object):
             scope, equiv_set, loc, args, kws, varargs
         )
 
-    def _analyze_op_call_numpy_dstack(self, scope, equiv_set, loc, args, kws, varargs):
+    def _analyze_op_call_numpy_dstack(
+        self, scope, equiv_set, loc, args, kws, varargs
+    ):
         assert len(args) == 1
         seq, op = find_build_sequence(self.func_ir, args[0])
         n = len(seq)
@@ -2856,11 +2882,15 @@ class ArrayAnalysis(object):
                 scope, equiv_set, loc, args, kws, varargs
             )
 
-    def _analyze_op_call_numpy_cumsum(self, scope, equiv_set, loc, args, kws, varargs):
+    def _analyze_op_call_numpy_cumsum(
+        self, scope, equiv_set, loc, args, kws, varargs
+    ):
         # TODO
         return None
 
-    def _analyze_op_call_numpy_cumprod(self, scope, equiv_set, loc, args, kws, varargs):
+    def _analyze_op_call_numpy_cumprod(
+        self, scope, equiv_set, loc, args, kws, varargs
+    ):
         # TODO
         return None
 
@@ -2875,7 +2905,9 @@ class ArrayAnalysis(object):
             num = kws["num"]
         return ArrayAnalysis.AnalyzeResult(shape=(num,))
 
-    def _analyze_op_call_numpy_dot(self, scope, equiv_set, loc, args, kws, varargs):
+    def _analyze_op_call_numpy_dot(
+        self, scope, equiv_set, loc, args, kws, varargs
+    ):
         n = len(args)
         assert n >= 2
         loc = args[0].loc
