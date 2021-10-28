@@ -22,7 +22,6 @@ from numba.core.overload_glue import glue_lowering
 from numba.core.errors import NumbaValueError
 
 
-
 def get_payload_struct(context, builder, set_type, ptr):
     """
     Given a set value and type, get its payload structure (as a
