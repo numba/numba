@@ -534,13 +534,16 @@ class BaseContext(object):
         lty = self.get_value_type(ty)
         return Constant.null(lty)
 
-    def get_function(self, fn, sig, _firstcall=True):
+    def get_function(self, fn, sig):
         """
         Return the implementation of function *fn* for signature *sig*.
         The return value is a callable with the signature (builder, args).
         """
         assert sig is not None
         sig = sig.as_function()
+        # Reload registries in case something has injected a lowering impl in
+        # the middle of compilation.
+        self.refresh()
         if isinstance(fn, (types.Function, types.BoundFunction,
                            types.Dispatcher)):
             key = fn.get_impl_key(sig)
@@ -560,12 +563,6 @@ class BaseContext(object):
             except errors.NumbaNotImplementedError:
                 # Raise exception for the type instance, for a better error message
                 pass
-
-        # Automatically refresh the context to load new registries if we are
-        # calling the first time.
-        if _firstcall:
-            self.refresh()
-            return self.get_function(fn, sig, _firstcall=False)
 
         raise NotImplementedError("No definition for lowering %s%s" % (key, sig))
 
