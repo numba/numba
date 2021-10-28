@@ -11,6 +11,7 @@ from numba.tests.support import (
 )
 from numba.cuda.cuda_paths import get_conda_ctk
 from numba.cuda.cudadrv import devices, libs
+from numba.cuda.cudadrv.runtime import runtime
 from numba.core import config
 from numba.tests.support import TestCase
 import unittest
@@ -106,6 +107,29 @@ def skip_on_arm(reason):
     return unittest.skipIf(is_arm, reason)
 
 
+def cuda_X_or_above(major, minor):
+    if not config.ENABLE_CUDASIM:
+        toolkit_version = runtime.get_version()
+        return toolkit_version >= (major, minor)
+    else:
+        return True
+
+
+def skip_unless_toolkit_70(fn):
+    return unittest.skipUnless(cuda_X_or_above(7, 0),
+                               "requires toolkit >= 7.0")(fn)
+
+
+def skip_unless_toolkit_90(fn):
+    return unittest.skipUnless(cuda_X_or_above(9, 0),
+                               "requires toolkit >= 9.0")(fn)
+
+
+def skip_unless_toolkit_102(fn):
+    return unittest.skipUnless(cuda_X_or_above(10, 2),
+                               "requires toolkit >= 10.2")(fn)
+
+
 def cc_X_or_above(major, minor):
     if not config.ENABLE_CUDASIM:
         cc = devices.get_context().device.compute_capability
@@ -120,6 +144,10 @@ def skip_unless_cc_32(fn):
 
 def skip_unless_cc_50(fn):
     return unittest.skipUnless(cc_X_or_above(5, 0), "requires cc >= 5.0")(fn)
+
+
+def skip_unless_cc_53(fn):
+    return unittest.skipUnless(cc_X_or_above(5, 3), "requires cc >= 5.3")(fn)
 
 
 def skip_unless_cc_60(fn):

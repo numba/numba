@@ -408,10 +408,19 @@ def ptx_fma(context, builder, sig, args):
 def lower_fp16_binary(fn, op):
     @lower(fn, types.float16, types.float16)
     def ptx_fp16_binary(context, builder, sig, args):
-        fnty = ir.FunctionType(ir.HalfType(),
-                               [ir.HalfType(), ir.HalfType()])
-        asm = ir.InlineAsm(fnty, f'{op}.f16 $0,$1,$2;', '=h,h,h')
-        return builder.call(asm, args)
+        compute_capability = cuda.current_context().device.compute_capability
+        toolkit_version = cuda.runtime.get_version()
+
+        # 16-bit Floating point binary operations add, sub, and mul were
+        # introduced in PTX ISA 4.2 (Cuda 7.0) and SM 5.3
+
+        if toolkit_version >= (7, 0) and compute_capability >= (5, 3):
+            fnty = ir.FunctionType(ir.HalfType(),
+                                   [ir.HalfType(), ir.HalfType()])
+            asm = ir.InlineAsm(fnty, f'{op}.f16 $0,$1,$2;', '=h,h,h')
+            return builder.call(asm, args)
+        else:
+            return None
 
 
 lower_fp16_binary(stubs.fp16.hadd, 'add')
@@ -422,9 +431,24 @@ lower_fp16_binary(stubs.fp16.hmul, 'mul')
 def lower_fp16_unary(fn, op):
     @lower(fn, types.float16)
     def ptx_fp16_unary(context, builder, sig, args):
-        fnty = ir.FunctionType(ir.HalfType(), [ir.HalfType()])
-        asm = ir.InlineAsm(fnty, f'{op}.f16 $0,$1;', '=h,h')
-        return builder.call(asm, args)
+        operation_supported = False
+        compute_capability_supported = \
+            cuda.current_context().device.compute_capability >= (5, 3)
+        toolkit_version = cuda.runtime.get_version()
+
+        if op == 'neg':
+            if toolkit_version >= (9,0) and compute_capability_supported:
+                operation_supported = True
+        elif op == 'abs':
+            if toolkit_version >= (10,2) and compute_capability_supported:
+                operation_supported = True
+
+        if operation_supported:
+            fnty = ir.FunctionType(ir.HalfType(), [ir.HalfType()])
+            asm = ir.InlineAsm(fnty, f'{op}.f16 $0,$1;', '=h,h')
+            return builder.call(asm, args)
+        else:
+            return None
 
 
 lower_fp16_unary(stubs.fp16.hneg, 'neg')
@@ -433,16 +457,25 @@ lower_fp16_unary(stubs.fp16.habs, 'abs')
 
 @lower(stubs.fp16.hfma, types.float16, types.float16, types.float16)
 def ptx_hfma(context, builder, sig, args):
-    hfma_fn_type = ir.FunctionType(ir.HalfType(),
-                                   [ir.HalfType(),
-                                    ir.HalfType(),
-                                    ir.HalfType()])
-    hfma_inline_asm = "fma.rn.f16 $0,$1,$2,$3;"
-    hfma_inline_constraints = "=h,h,h,h"
-    hfma_inline = ir.InlineAsm(hfma_fn_type, hfma_inline_asm,
-                               hfma_inline_constraints)
+    compute_capability = cuda.current_context().device.compute_capability
+    toolkit_version = cuda.runtime.get_version()
 
-    return builder.call(hfma_inline, args)
+    # 16-bit Floating point fused multiply accumulate was
+    # introduced in PTX ISA 4.2 (Cuda 7.0) and SM 5.3
+
+    if toolkit_version >= (7, 0) and compute_capability >= (5, 3):
+        hfma_fn_type = ir.FunctionType(ir.HalfType(),
+                                       [ir.HalfType(),
+                                        ir.HalfType(),
+                                        ir.HalfType()])
+        hfma_inline_asm = "fma.rn.f16 $0,$1,$2,$3;"
+        hfma_inline_constraints = "=h,h,h,h"
+        hfma_inline = ir.InlineAsm(hfma_fn_type, hfma_inline_asm,
+                                   hfma_inline_constraints)
+
+        return builder.call(hfma_inline, args)
+    else:
+        return None
 
 # See:
 # https://docs.nvidia.com/cuda/libdevice-users-guide/__nv_cbrt.html#__nv_cbrt
