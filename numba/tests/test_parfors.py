@@ -1027,6 +1027,15 @@ class TestParforNumPy(TestParforsBase):
         n = 10
         self.check(test_impl, (n,n))
 
+    def test_stararg_mix(self):
+        def test_impl(n, r):
+            A = np.random.randn(r, *n)
+            B = np.sum(A)
+            return B - B
+
+        n = 10
+        self.check(test_impl, (n,n), n)
+
     def test_min(self):
         def test_impl1(A):
             return A.min()
