@@ -8,7 +8,7 @@ import numpy as np
 from numba import jit, typeof
 from numba.core import types
 from numba.core.compiler import compile_isolated
-from numba.core.errors import TypingError, LoweringError
+from numba.core.errors import TypingError, LoweringError, NumbaValueError
 from numba.np.numpy_support import as_dtype, numpy_version
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeak,
                                  MemoryLeakMixin, tag, needs_blas)
@@ -233,6 +233,9 @@ def array_real(a):
 def array_imag(a):
     return np.imag(a)
 
+def np_clip_no_out(a, a_min, a_max):
+    return np.clip(a, a_min, a_max)
+
 def np_clip(a, a_min, a_max, out=None):
     return np.clip(a, a_min, a_max, out)
 
@@ -245,6 +248,8 @@ def array_clip(a, a_min=None, a_max=None, out=None):
 def array_clip_kwargs(a, a_min=None, a_max=None, out=None):
     return a.clip(a_min, a_max, out=out)
 
+def array_clip_no_out(a, a_min, a_max):
+    return a.clip(a_min, a_max)
 
 def array_conj(a):
     return a.conj()
@@ -264,7 +269,6 @@ def array_dot_chain(a, b):
 
 def array_ctor(n, dtype):
     return np.ones(n, dtype=dtype)
-
 
 class TestArrayMethods(MemoryLeakMixin, TestCase):
     """
@@ -471,6 +475,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check(arr, np.int32)
         check(arr, np.float32)
         check(arr, np.complex128)
+        check(arr, "float32")
 
         # F-contiguous
         arr = np.arange(24, dtype=np.int8).reshape((3, 8)).T
@@ -490,6 +495,15 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         with self.assertTypingError() as raises:
             check(arr, dt)
         self.assertIn('cannot convert from int32 to Record',
+                      str(raises.exception))
+        # Check non-Literal string raises
+        unicode_val = "float32"
+        with self.assertTypingError() as raises:
+            @jit(nopython=True)
+            def foo(dtype):
+                np.array([1]).astype(dtype)
+            foo(unicode_val)
+        self.assertIn('array.astype if dtype is a string it must be constant',
                       str(raises.exception))
 
     def check_np_frombuffer(self, pyfunc):
@@ -1219,9 +1233,9 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(foo(a), foo.py_func(a))
         # ndim == 2, axis == -3, BAD
         a = np.ones((1, 2))
-        with self.assertRaises(LoweringError) as raises:
+        with self.assertRaises(NumbaValueError) as raises:
             foo(a)
-        errmsg = "'axis' entry is out of bounds"
+        errmsg = "'axis' entry (-1) is out of bounds"
         self.assertIn(errmsg, str(raises.exception))
         with self.assertRaises(ValueError) as raises:
             foo.py_func(a)
@@ -1358,11 +1372,12 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(pyfunc(z), cfunc(z))
 
     def test_clip(self):
+        has_out = (np_clip, np_clip_kwargs, array_clip, array_clip_kwargs)
+        has_no_out = (np_clip_no_out, array_clip_no_out)
         # TODO: scalars are not tested (issue #3469)
         for a in (np.linspace(-10, 10, 101),
                   np.linspace(-10, 10, 40).reshape(5, 2, 4)):
-            for pyfunc in [np_clip, np_clip_kwargs, array_clip,
-                           array_clip_kwargs]:
+            for pyfunc in has_out + has_no_out:
                 cfunc = jit(nopython=True)(pyfunc)
 
                 msg = "array_clip: must set either max or min"
@@ -1374,11 +1389,12 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
                 np.testing.assert_equal(pyfunc(a, -5, 5), cfunc(a, -5, 5))
 
-                pyout = np.empty_like(a)
-                cout = np.empty_like(a)
-                np.testing.assert_equal(pyfunc(a, -5, 5, pyout),
-                                        cfunc(a, -5, 5, cout))
-                np.testing.assert_equal(pyout, cout)
+                if pyfunc in has_out:
+                    pyout = np.empty_like(a)
+                    cout = np.empty_like(a)
+                    np.testing.assert_equal(pyfunc(a, -5, 5, pyout),
+                                            cfunc(a, -5, 5, cout))
+                    np.testing.assert_equal(pyout, cout)
 
                 # verifies that type-inference is working on the return value
                 # this used to trigger issue #3489
@@ -1464,7 +1480,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         np.testing.assert_array_equal(pyfunc(*args), cfunc(*args))
         args = n, np.dtype('f4')
         np.testing.assert_array_equal(pyfunc(*args), cfunc(*args))
-
 
 class TestArrayComparisons(TestCase):
 

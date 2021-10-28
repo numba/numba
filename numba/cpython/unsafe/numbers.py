@@ -1,6 +1,6 @@
 """ This module provides the unsafe things for targets/numbers.py
 """
-from numba.core import types
+from numba.core import types, errors
 from numba.core.extending import intrinsic
 
 from llvmlite import ir
@@ -29,10 +29,9 @@ def viewer(tyctx, val, viewty):
 def trailing_zeros(typeingctx, src):
     """Counts trailing zeros in the binary representation of an integer."""
     if not isinstance(src, types.Integer):
-        raise TypeError(
-            "trailing_zeros is only defined for integers, but passed value was"
-            " '{}'.".format(src)
-        )
+        msg = ("trailing_zeros is only defined for integers, but value passed "
+               f"was '{src}'.")
+        raise errors.NumbaTypeError(msg)
 
     def codegen(context, builder, signature, args):
         [src] = args
@@ -44,10 +43,9 @@ def trailing_zeros(typeingctx, src):
 def leading_zeros(typeingctx, src):
     """Counts leading zeros in the binary representation of an integer."""
     if not isinstance(src, types.Integer):
-        raise TypeError(
-            "leading_zeros is only defined for integers, but passed value was "
-            "'{}'.".format(src)
-        )
+        msg = ("leading_zeros is only defined for integers, but value passed "
+               f"was '{src}'.")
+        raise errors.NumbaTypeError(msg)
 
     def codegen(context, builder, signature, args):
         [src] = args

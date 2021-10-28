@@ -4,7 +4,6 @@ import numpy as np
 import operator
 
 from numba.core import types, errors
-from numba.core.overload_glue import glue_typing
 from numba import prange
 from numba.parfors.parfor import internal_prange
 
@@ -173,43 +172,43 @@ class BinOp(ConcreteTemplate):
     cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
 
 
-@glue_typing(operator.add)
+@infer_global(operator.add)
 class BinOpAdd(BinOp):
     pass
 
 
-@glue_typing(operator.iadd)
+@infer_global(operator.iadd)
 class BinOpAdd(BinOp):
     pass
 
 
-@glue_typing(operator.sub)
+@infer_global(operator.sub)
 class BinOpSub(BinOp):
     pass
 
 
-@glue_typing(operator.isub)
+@infer_global(operator.isub)
 class BinOpSub(BinOp):
     pass
 
 
-@glue_typing(operator.mul)
+@infer_global(operator.mul)
 class BinOpMul(BinOp):
     pass
 
 
-@glue_typing(operator.imul)
+@infer_global(operator.imul)
 class BinOpMul(BinOp):
     pass
 
 
-@glue_typing(operator.mod)
+@infer_global(operator.mod)
 class BinOpMod(ConcreteTemplate):
     cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
 
-@glue_typing(operator.imod)
+@infer_global(operator.imod)
 class BinOpMod(ConcreteTemplate):
     cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
@@ -243,7 +242,7 @@ class BinOpFloorDiv(ConcreteTemplate):
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
 
-@glue_typing(divmod)
+@infer_global(divmod)
 class DivMod(ConcreteTemplate):
     _tys = machine_ints + sorted(types.real_domain)
     cases = [signature(types.UniTuple(ty, 2), ty, ty) for ty in _tys]
@@ -609,7 +608,10 @@ class StaticGetItemTuple(AbstractTemplate):
         if not isinstance(tup, types.BaseTuple):
             return
         if isinstance(idx, int):
-            ret = tup.types[idx]
+            try:
+                ret = tup.types[idx]
+            except IndexError:
+                raise errors.NumbaIndexError("tuple index out of range")
         elif isinstance(idx, slice):
             ret = types.BaseTuple.from_types(tup.types[idx])
         if ret is not None:
@@ -771,12 +773,12 @@ class SliceAttribute(AttributeTemplate):
     def resolve_indices(self, ty, args, kws):
         assert not kws
         if len(args) != 1:
-            raise TypeError(
+            raise errors.NumbaTypeError(
                 "indices() takes exactly one argument (%d given)" % len(args)
             )
         typ, = args
         if not isinstance(typ, types.Integer):
-            raise TypeError(
+            raise errors.NumbaTypeError(
                 "'%s' object cannot be interpreted as an integer" % typ
             )
         return signature(types.UniTuple(types.intp, 3), types.intp)
@@ -805,13 +807,27 @@ class NumberClassAttribute(AttributeTemplate):
             elif isinstance(val, (types.Number, types.Boolean)):
                  # Scalar constructor, e.g. np.int32(42)
                  return ty
+            elif isinstance(val, (types.NPDatetime, types.NPTimedelta)):
+                # Constructor cast from datetime-like, e.g.
+                # > np.int64(np.datetime64("2000-01-01"))
+                if ty.bitwidth == 64:
+                    return ty
+                else:
+                    msg = (f"Cannot cast {val} to {ty} as {ty} is not 64 bits "
+                           "wide.")
+                    raise errors.TypingError(msg)
             else:
-                # unsupported
-                msg = f"Casting {val} to {ty} directly is unsupported."
-                if isinstance(val, types.Array):
-                    # array casts are supported a different way.
-                    msg += f" Try doing '<array>.astype(np.{ty})' instead"
-                raise errors.TypingError(msg)
+                if (isinstance(val, types.Array) and val.ndim == 0 and
+                    val.dtype == ty):
+                    # This is 0d array -> scalar degrading
+                    return ty
+                else:
+                    # unsupported
+                    msg = f"Casting {val} to {ty} directly is unsupported."
+                    if isinstance(val, types.Array):
+                        # array casts are supported a different way.
+                        msg += f" Try doing '<array>.astype(np.{ty})' instead"
+                    raise errors.TypingError(msg)
 
         return types.Function(make_callable_template(key=ty, typer=typer))
 
@@ -932,7 +948,8 @@ class Bool(AbstractTemplate):
 class Int(AbstractTemplate):
 
     def generic(self, args, kws):
-        assert not kws
+        if kws:
+            raise errors.NumbaAssertionError('kws not supported')
 
         [arg] = args
 
@@ -951,10 +968,10 @@ class Float(AbstractTemplate):
         [arg] = args
 
         if arg not in types.number_domain:
-            raise TypeError("float() only support for numbers")
+            raise errors.NumbaTypeError("float() only support for numbers")
 
         if arg in types.complex_domain:
-            raise TypeError("float() does not support complex")
+            raise errors.NumbaTypeError("float() does not support complex")
 
         if arg in types.integer_domain:
             return signature(types.float64, arg)
@@ -998,8 +1015,8 @@ class Enumerate(AbstractTemplate):
         assert not kws
         it = args[0]
         if len(args) > 1 and not isinstance(args[1], types.Integer):
-            raise TypeError("Only integers supported as start value in "
-                            "enumerate")
+            raise errors.NumbaTypeError("Only integers supported as start "
+                                        "value in enumerate")
         elif len(args) > 2:
             #let python raise its own error
             enumerate(*args)

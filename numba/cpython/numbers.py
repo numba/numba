@@ -15,8 +15,6 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
 from numba.core import typing, types, utils, errors, cgutils, optional
 from numba.core.extending import intrinsic, overload_method
 from numba.cpython.unsafe.numbers import viewer
-from numba.core.overload_glue import glue_lowering
-
 
 def _int_arith_flags(rettype):
     """
@@ -159,7 +157,7 @@ def _int_divmod_impl(context, builder, sig, args, zerodiv_message):
     return quot, rem
 
 
-@glue_lowering(divmod, types.Integer, types.Integer)
+@lower_builtin(divmod, types.Integer, types.Integer)
 def int_divmod_impl(context, builder, sig, args):
     quot, rem = _int_divmod_impl(context, builder, sig, args,
                                  "integer divmod by zero")
@@ -189,8 +187,8 @@ def int_truediv_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@glue_lowering(operator.mod, types.Integer, types.Integer)
-@glue_lowering(operator.imod, types.Integer, types.Integer)
+@lower_builtin(operator.mod, types.Integer, types.Integer)
+@lower_builtin(operator.imod, types.Integer, types.Integer)
 def int_rem_impl(context, builder, sig, args):
     quot, rem = _int_divmod_impl(context, builder, sig, args,
                                  "integer modulo by zero")
@@ -734,7 +732,7 @@ def real_divmod_func_body(context, builder, vx, wx):
     return builder.load(pfloordiv), builder.load(pmod)
 
 
-@glue_lowering(divmod, types.Float, types.Float)
+@lower_builtin(divmod, types.Float, types.Float)
 def real_divmod_impl(context, builder, sig, args, loc=None):
     x, y = args
     quot = cgutils.alloca_once(builder, x.type, name="quot")
@@ -1335,6 +1333,12 @@ def constant_complex(context, builder, ty, pyval):
 @lower_constant(types.Float)
 @lower_constant(types.Boolean)
 def constant_integer(context, builder, ty, pyval):
+    # See https://github.com/numba/numba/issues/6979
+    # llvmlite ir.IntType specialises the formatting of the constant for a
+    # cpython bool. A NumPy np.bool_ is not a cpython bool so force it to be one
+    # so that the constant renders correctly!
+    if isinstance(pyval, np.bool_):
+        pyval = bool(pyval)
     lty = context.get_value_type(ty)
     return lty(pyval)
 

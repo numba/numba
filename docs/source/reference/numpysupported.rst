@@ -274,8 +274,6 @@ The following methods of Numpy arrays are supported in their basic form
 
 * :meth:`~numpy.ndarray.all`
 * :meth:`~numpy.ndarray.any`
-* :meth:`~numpy.ndarray.argmax`
-* :meth:`~numpy.ndarray.argmin`
 * :meth:`~numpy.ndarray.clip`
 * :meth:`~numpy.ndarray.conj`
 * :meth:`~numpy.ndarray.conjugate`
@@ -298,6 +296,8 @@ Other methods
 
 The following methods of Numpy arrays are supported:
 
+* :meth:`~numpy.ndarray.argmax` (``axis`` keyword argument supported).
+* :meth:`~numpy.ndarray.argmin` (``axis`` keyword argument supported).
 * :meth:`~numpy.ndarray.argsort` (``kind`` key word argument supported for
   values ``'quicksort'`` and ``'mergesort'``)
 * :meth:`~numpy.ndarray.astype` (only the 1-argument form)
@@ -336,6 +336,8 @@ The following methods of Numpy arrays are supported:
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
 * :meth:`~numpy.ndarray.__contains__` 
 
+Where applicable, the corresponding top-level NumPy functions (such as
+:func:`numpy.argmax`) are similarly supported.
 
 .. warning::
    Sorting may be slightly slower than Numpy's implementation.
@@ -390,24 +392,24 @@ The following reduction functions are supported:
 
 * :func:`numpy.diff` (only the 2 first arguments)
 * :func:`numpy.median` (only the first argument)
-* :func:`numpy.nancumprod` (only the first argument, requires NumPy >= 1.12))
-* :func:`numpy.nancumsum` (only the first argument, requires NumPy >= 1.12))
+* :func:`numpy.nancumprod` (only the first argument)
+* :func:`numpy.nancumsum` (only the first argument)
 * :func:`numpy.nanmax` (only the first argument)
 * :func:`numpy.nanmean` (only the first argument)
 * :func:`numpy.nanmedian` (only the first argument)
 * :func:`numpy.nanmin` (only the first argument)
-* :func:`numpy.nanpercentile` (only the 2 first arguments,
-  requires NumPy >= 1.11, complex dtypes unsupported)
-* :func:`numpy.nanquantile` (only the 2 first arguments, requires NumPy >= 1.15,
-  complex dtypes unsupported)
+* :func:`numpy.nanpercentile` (only the 2 first arguments, complex dtypes
+  unsupported)
+* :func:`numpy.nanquantile` (only the 2 first arguments, complex dtypes
+  unsupported)
 * :func:`numpy.nanprod` (only the first argument)
 * :func:`numpy.nanstd` (only the first argument)
 * :func:`numpy.nansum` (only the first argument)
 * :func:`numpy.nanvar` (only the first argument)
-* :func:`numpy.percentile` (only the 2 first arguments, requires NumPy >= 1.10,
-  complex dtypes unsupported)
-* :func:`numpy.quantile` (only the 2 first arguments, requires NumPy >= 1.15,
-  complex dtypes unsupported)
+* :func:`numpy.percentile` (only the 2 first arguments, complex dtypes
+  unsupported)
+* :func:`numpy.quantile` (only the 2 first arguments, complex dtypes
+  unsupported)
 
 Other functions
 ---------------
@@ -424,7 +426,7 @@ The following top-level functions are supported:
 * :func:`numpy.array_split`
 * :func:`numpy.asarray` (only the 2 first arguments)
 * :func:`numpy.asarray_chkfinite` (only the 2 first arguments)
-* :func:`numpy.asfarray` 
+* :func:`numpy.asfarray`
 * :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.atleast_1d`
 * :func:`numpy.atleast_2d`
@@ -432,6 +434,7 @@ The following top-level functions are supported:
 * :func:`numpy.bartlett`
 * :func:`numpy.bincount`
 * :func:`numpy.blackman`
+* :func:`numpy.broadcast_to` (only the 2 first arguments)
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate`
 * :func:`numpy.convolve` (only the 2 first arguments)
@@ -479,9 +482,10 @@ The following top-level functions are supported:
 * :func:`numpy.isreal`
 * :func:`numpy.isrealobj`
 * :func:`numpy.isscalar`
-* :func:`numpy.interp` (only the 3 first arguments; requires NumPy >= 1.10)
+* :func:`numpy.interp` (only the 3 first arguments)
 * :func:`numpy.intersect1d` (only first 2 arguments, ar1 and ar2)
 * :func:`numpy.linspace` (only the 3-argument form)
+* :func:`numpy.logspace` (only the 3 first arguments)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
 * :class:`numpy.nditer` (only the first argument)
@@ -508,6 +512,7 @@ The following top-level functions are supported:
 * :func:`numpy.stack`
 * :func:`numpy.swapaxes`
 * :func:`numpy.take` (only the 2 first arguments)
+* :func:`numpy.take_along_axis` (the axis argument must be a literal value)
 * :func:`numpy.transpose`
 * :func:`numpy.trapz` (only the 3 first arguments)
 * :func:`numpy.tri` (only the 3 first arguments; third argument ``k`` must be an integer)
@@ -740,6 +745,7 @@ Math operations
  floor_divide        Yes          Yes
  negative            Yes          Yes
  power               Yes          Yes
+ float_power         Yes          Yes
  remainder           Yes          Yes
  mod                 Yes          Yes
  fmod                Yes          Yes
@@ -759,6 +765,7 @@ Math operations
  log1p               Yes          Yes
  sqrt                Yes          Yes
  square              Yes          Yes
+ cbrt                Yes          Yes
  reciprocal          Yes          Yes
  conjugate           Yes          Yes
  gcd                 Yes          Yes

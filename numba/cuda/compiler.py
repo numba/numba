@@ -18,7 +18,8 @@ from numba.core.compiler_lock import global_compiler_lock
 from numba.core.compiler_machinery import (LoweringPass, PassManager,
                                            register_pass)
 from numba.core.dispatcher import OmittedArg
-from numba.core.errors import NumbaDeprecationWarning
+from numba.core.errors import (NumbaDeprecationWarning,
+                               NumbaInvalidConfigWarning)
 from numba.core.typed_passes import IRLegalization, NativeLowering
 from numba.core.typing.typeof import Purpose, typeof
 from warnings import warn
@@ -212,6 +213,12 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
     :return: (ptx, resty): The PTX code and inferred return type
     :rtype: tuple
     """
+    if debug and opt:
+        msg = ("debug=True with opt=True (the default) "
+               "is not supported by CUDA. This may result in a crash"
+               " - set debug=False or opt=False.")
+        warn(NumbaInvalidConfigWarning(msg))
+
     nvvm_options = {
         'debug': debug,
         'lineinfo': lineinfo,
@@ -225,11 +232,11 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
     if device:
         lib = cres.library
     else:
-        fname = cres.fndesc.llvm_func_name
         tgt = cres.target_context
-        lib, kernel = tgt.prepare_cuda_kernel(cres.library, fname,
-                                              cres.signature.args, debug,
-                                              nvvm_options)
+        filename = cres.type_annotation.filename
+        linenum = int(cres.type_annotation.linenum)
+        lib, kernel = tgt.prepare_cuda_kernel(cres.library, cres.fndesc, debug,
+                                              nvvm_options, filename, linenum)
 
     cc = cc or config.CUDA_DEFAULT_PTX_CC
     ptx = lib.get_asm_str(cc=cc)
@@ -311,8 +318,8 @@ class DeviceDispatcher(serialize.ReduceMixin):
         """
         if args not in self.overloads:
             nvvm_options = {
-                'opt': 3 if self.opt else 0,
                 'debug': self.debug,
+                'opt': 3 if self.opt else 0
             }
 
             cres = compile_cuda(self.py_func, None, args, debug=self.debug,
@@ -535,14 +542,6 @@ class _Kernel(serialize.ReduceMixin):
         self.lineinfo = lineinfo
         self.extensions = extensions or []
 
-        cres = compile_cuda(self.py_func, types.void, self.argtypes,
-                            debug=self.debug,
-                            lineinfo=self.lineinfo,
-                            inline=inline,
-                            fastmath=fastmath)
-        fname = cres.fndesc.llvm_func_name
-        args = cres.signature.args
-
         nvvm_options = {
             'debug': self.debug,
             'lineinfo': self.lineinfo,
@@ -550,9 +549,19 @@ class _Kernel(serialize.ReduceMixin):
             'opt': 3 if opt else 0
         }
 
+        cres = compile_cuda(self.py_func, types.void, self.argtypes,
+                            debug=self.debug,
+                            lineinfo=self.lineinfo,
+                            inline=inline,
+                            fastmath=fastmath,
+                            nvvm_options=nvvm_options)
         tgt_ctx = cres.target_context
-        lib, kernel = tgt_ctx.prepare_cuda_kernel(cres.library, fname, args,
+        code = self.py_func.__code__
+        filename = code.co_filename
+        linenum = code.co_firstlineno
+        lib, kernel = tgt_ctx.prepare_cuda_kernel(cres.library, cres.fndesc,
                                                   debug, nvvm_options,
+                                                  filename, linenum,
                                                   max_registers)
 
         if not link:

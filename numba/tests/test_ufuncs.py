@@ -14,7 +14,7 @@ from numba.core import types, typing, utils
 from numba.core.compiler import compile_isolated, Flags, DEFAULT_FLAGS
 from numba.np.numpy_support import from_dtype
 from numba import jit, vectorize
-from numba.core.errors import LoweringError, TypingError
+from numba.core.errors import LoweringError, TypingError, NumbaTypeError
 from numba.tests.support import TestCase, CompilationCache, MemoryLeakMixin, tag
 from numba.core.typing.npydecl import supported_ufuncs, all_ufuncs
 from numba.np import numpy_support
@@ -313,6 +313,9 @@ class TestUFuncs(BaseUFuncTest, TestCase):
         self.basic_ufunc_test(np.power, flags=flags,
                                positive_only=True)
 
+    def test_float_power_ufunc(self, flags=no_pyobj_flags):
+        self.basic_ufunc_test(np.float_power, flags=flags, kinds="fc")
+
     def test_gcd_ufunc(self, flags=no_pyobj_flags):
         self.basic_ufunc_test(np.gcd, flags=flags, kinds="iu")
 
@@ -381,6 +384,9 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
     def test_square_ufunc(self, flags=no_pyobj_flags):
         self.basic_ufunc_test(np.square, flags=flags)
+
+    def test_cbrt_ufunc(self, flags=no_pyobj_flags):
+        self.basic_ufunc_test(np.cbrt, flags=flags, kinds='f')
 
     def test_reciprocal_ufunc(self, flags=no_pyobj_flags):
         # reciprocal for integers doesn't make much sense and is problematic
@@ -745,7 +751,7 @@ class TestUFuncs(BaseUFuncTest, TestCase):
             self.assertPreciseEqual(result, expected)
 
     def test_implicit_output_npm(self):
-        with self.assertRaises(TypeError):
+        with self.assertRaises(NumbaTypeError):
             def myadd(a0, a1):
                 return np.add(a0, a1)
             arr_ty = types.Array(types.uint64, 1, 'C')
@@ -1332,6 +1338,7 @@ class _LoopTypesTester(TestCase):
              ('arcsin', 'F'): 4,
              ('log10', 'D'): 5,
              ('tanh', 'F'): 2,
+             ('cbrt', 'd'): 2,
              }
 
     def _arg_for_type(self, a_letter_type, index=0):

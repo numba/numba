@@ -19,6 +19,8 @@ from numba.misc import quicksort
 from numba.cpython import slicing
 from numba.extending import intrinsic
 from numba.core.overload_glue import glue_lowering
+from numba.core.errors import NumbaValueError
+
 
 
 def get_payload_struct(context, builder, set_type, ptr):
@@ -206,7 +208,7 @@ class _SetPayload(object):
             if context.data_model_manager[arg].contains_nrt_meminfo():
                 msg = ("Use of reference counted items in 'set()' is "
                        "unsupported, offending type is: '{}'.")
-                raise ValueError(msg.format(arg))
+                raise NumbaValueError(msg.format(arg))
         eqfn = context.get_function(fnty, sig)
 
         one = ir.Constant(intp_t, 1)

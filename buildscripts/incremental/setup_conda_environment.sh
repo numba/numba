@@ -38,7 +38,13 @@ conda list
 # Create a base env first and then add to it...
 # NOTE: gitpython is needed for CI testing to do the test slicing
 # NOTE: pyyaml is used to ensure that the Azure CI config is valid
-conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
+# NOTE: 32 bit linux... do not install NumPy, there's no conda package for >1.15
+# so it has to come from pip later
+if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]]; then
+    conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON pip gitpython pyyaml
+else
+    conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
+fi
 
 # Activate first
 set +v
@@ -48,7 +54,13 @@ set -v
 # Install optional packages into activated env
 if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # Scipy, CFFI, jinja2, IPython and pygments are optional dependencies, but exercised in the test suite
-    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython pygments scipy
+    # pexpect is used to run the
+    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython pygments pexpect
+    # Only install scipy on 64bit, else it'll pull in NumPy, 32bit linux needs
+    # to get scipy from pip
+    if [[ "$CONDA_SUBDIR" != "linux-32" && "$BITS32" != "yes" ]] ; then
+        $CONDA_INSTALL ${EXTRA_CHANNELS} scipy
+    fi
 fi
 
 # Install the compiler toolchain
@@ -62,6 +74,11 @@ elif  [[ $(uname) == Darwin ]]; then
     $CONDA_INSTALL clang_osx-64 clangxx_osx-64
     # Install llvm-openmp and intel-openmp on OSX too
     $CONDA_INSTALL llvm-openmp intel-openmp
+fi
+
+# If on 32bit linux, now pip install NumPy and SciPy (no conda package)
+if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
+    $PIP_INSTALL numpy==$NUMPY scipy
 fi
 
 # Install latest llvmlite build
@@ -82,7 +99,7 @@ if [ "$TEST_PICKLE5" == "yes" ]; then $PIP_INSTALL pickle5; fi
 if [ "$RUN_TYPEGUARD" == "yes" ]; then $CONDA_INSTALL conda-forge::typeguard; fi
 
 # environment dump for debug
-echo "DEBUG ENV:"
-echo "-------------------------------------------------------------------------"
-conda env export
-echo "-------------------------------------------------------------------------"
+# echo "DEBUG ENV:"
+# echo "-------------------------------------------------------------------------"
+# conda env export
+# echo "-------------------------------------------------------------------------"

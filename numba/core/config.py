@@ -68,6 +68,17 @@ def _os_supports_avx():
             return False
 
 
+# Choose how to handle captured errors
+def _validate_captured_errors_style(style_str):
+    rendered_style = str(style_str)
+    if rendered_style not in ('new_style', 'old_style'):
+        msg = ("Invalid style in NUMBA_CAPTURED_ERRORS: "
+               f"{rendered_style}")
+        raise ValueError(msg)
+    else:
+        return rendered_style
+
+
 class _EnvReloader(object):
 
     def __init__(self):
@@ -306,9 +317,24 @@ class _EnvReloader(object):
         DISABLE_JIT = _readenv("NUMBA_DISABLE_JIT", int, 0)
 
         # choose parallel backend to use
+        THREADING_LAYER_PRIORITY = _readenv(
+            "NUMBA_THREADING_LAYER_PRIORITY",
+            lambda string: string.split(),
+            ['tbb', 'omp', 'workqueue'],
+        )
         THREADING_LAYER = _readenv("NUMBA_THREADING_LAYER", str, 'default')
 
+        CAPTURED_ERRORS = _readenv("NUMBA_CAPTURED_ERRORS",
+                                   _validate_captured_errors_style,
+                                   'old_style')
+
         # CUDA Configs
+
+        # Whether to warn about kernel launches where a host array
+        # is used as a parameter, forcing a copy to and from the device.
+        # On by default.
+        CUDA_WARN_ON_IMPLICIT_COPY = _readenv(
+            "NUMBA_CUDA_WARN_ON_IMPLICIT_COPY", int, 1)
 
         # Force CUDA compute capability to a specific version
         FORCE_CUDA_CC = _readenv("NUMBA_FORCE_CUDA_CC", _parse_cc, None)
@@ -355,6 +381,10 @@ class _EnvReloader(object):
         # Whether to generate verbose log messages when JIT linking
         CUDA_VERBOSE_JIT_LOG = _readenv("NUMBA_CUDA_VERBOSE_JIT_LOG", int, 1)
 
+        # Whether the default stream is the per-thread default stream
+        CUDA_PER_THREAD_DEFAULT_STREAM = _readenv(
+            "NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM", int, 0)
+
         # Compute contiguity of device arrays using the relaxed strides
         # checking algorithm.
         NPY_RELAXED_STRIDES_CHECKING = _readenv(
@@ -367,7 +397,12 @@ class _EnvReloader(object):
         DISABLE_HSA = _readenv("NUMBA_DISABLE_HSA", int, 0)
 
         # The default number of threads to use.
-        NUMBA_DEFAULT_NUM_THREADS = max(1, multiprocessing.cpu_count())
+        NUMBA_DEFAULT_NUM_THREADS = max(
+            1,
+            len(os.sched_getaffinity(0))
+            if hasattr(os, "sched_getaffinity")
+            else multiprocessing.cpu_count(),
+        )
 
         # Numba thread pool size (defaults to number of CPUs on the system).
         _NUMBA_NUM_THREADS = _readenv("NUMBA_NUM_THREADS", int,
@@ -401,6 +436,9 @@ class _EnvReloader(object):
         # The default value for the `debug` flag
         DEBUGINFO_DEFAULT = _readenv("NUMBA_DEBUGINFO", int, ENABLE_PROFILING)
         CUDA_DEBUGINFO_DEFAULT = _readenv("NUMBA_CUDA_DEBUGINFO", int, 0)
+
+        EXTEND_VARIABLE_LIFETIMES = _readenv("NUMBA_EXTEND_VARIABLE_LIFETIMES",
+                                             int, 0)
 
         # gdb binary location
         GDB_BINARY = _readenv("NUMBA_GDB_BINARY", str, '/usr/bin/gdb')

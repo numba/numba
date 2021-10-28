@@ -10,7 +10,7 @@ from numba.tests.support import (TestCase, override_config, override_env_config,
                       captured_stdout, forbid_codegen, skip_parfors_unsupported,
                       needs_blas)
 from numba import jit
-from numba.core import types, compiler, config
+from numba.core import types, compiler
 from numba.core.compiler import compile_isolated, Flags
 from numba.core.cpu import ParallelOptions
 from numba.core.errors import NumbaPerformanceWarning
@@ -85,19 +85,12 @@ class DebugTestBase(TestCase):
     def _check_dump_llvm(self, out):
         self.assertIn('--LLVM DUMP', out)
         if compiler.Flags.options["auto_parallel"].default.enabled == False:
-            self.assertIn('%"retval" = alloca', out)
+            self.assertRegex(out, r'store i64 %\"\.\d", i64\* %"retptr"', out)
 
     def _check_dump_func_opt_llvm(self, out):
         self.assertIn('--FUNCTION OPTIMIZED DUMP %s' % self.func_name, out)
         # allocas have been optimized away
-        if config.IS_32BITS:
-            # in 32bit, the RHS is extended from i32
-            self.assertIn('sext i32 %arg.tmp1 to i64', out)
-            # the RHS is a different register
-            self.assertIn('add nsw i64 %arg.tmp0,', out)
-        else:
-            self.assertIn('add nsw i64 %arg.tmp0, %arg.tmp1', out)
-
+        self.assertIn('add nsw i64 %arg.somearg, 1', out)
 
     def _check_dump_optimized_llvm(self, out):
         self.assertIn('--OPTIMIZED DUMP %s' % self.func_name, out)

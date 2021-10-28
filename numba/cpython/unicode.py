@@ -451,11 +451,27 @@ def unicode_len(s):
 def unicode_eq(a, b):
     if not (a.is_internal and b.is_internal):
         return
+    if isinstance(a, types.Optional):
+        check_a = a.type
+    else:
+        check_a = a
+    if isinstance(b, types.Optional):
+        check_b = b.type
+    else:
+        check_b = b
     accept = (types.UnicodeType, types.StringLiteral, types.UnicodeCharSeq)
-    a_unicode = isinstance(a, accept)
-    b_unicode = isinstance(b, accept)
+    a_unicode = isinstance(check_a, accept)
+    b_unicode = isinstance(check_b, accept)
     if a_unicode and b_unicode:
         def eq_impl(a, b):
+            # handle Optionals at runtime
+            a_none = a is None
+            b_none = b is None
+            if a_none or b_none:
+                if a_none and b_none:
+                    return True
+                else:
+                    return False
             # the str() is for UnicodeCharSeq, it's a nop else
             a = str(a)
             b = str(b)

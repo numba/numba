@@ -257,7 +257,9 @@ class TestLiftCall(BaseTestWithLifting):
         self.check_same_semantic(liftcall3)
 
     def test_liftcall4(self):
-        with self.assertRaises(errors.TypingError) as raises:
+        accept = (errors.TypingError, errors.NumbaRuntimeError,
+                  errors.NumbaValueError)
+        with self.assertRaises(accept) as raises:
             njit(liftcall4)()
         # Known error.  We only support one context manager per function
         # for body that are lifted.
@@ -521,7 +523,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         # Check that an error occurred in with-lifting in objmode
         pat = ("During: resolving callee type: "
                "type\(ObjModeLiftedWith\(<.*>\)\)")
-        self.assertRegexpMatches(str(raises.exception), pat)
+        self.assertRegex(str(raises.exception), pat)
 
     def test_case07_mystery_key_error(self):
         # this raises a key error
@@ -1082,6 +1084,20 @@ class TestLiftObj(MemoryLeak, TestCase):
             (r"can't unbox a <class 'list'> "
              r"as a (<class ')?numba.typed.typedlist.List('>)?"),
         )
+
+    def test_objmode_use_of_view(self):
+        # See issue #7158, npm functionality should only be validated if in
+        # npm.
+        @njit
+        def foo(x):
+            with numba.objmode(y="int64[::1]"):
+                y = x.view("int64")
+            return y
+
+        a = np.ones(1, np.int64).view('float64')
+        expected = foo.py_func(a)
+        got = foo(a)
+        self.assertPreciseEqual(expected, got)
 
 
 def case_inner_pyfunc(x):

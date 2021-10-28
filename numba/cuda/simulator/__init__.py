@@ -21,6 +21,7 @@ if config.ENABLE_CUDASIM:
     sys.modules['numba.cuda.cudadrv.driver'] = cudadrv.driver
     sys.modules['numba.cuda.cudadrv.runtime'] = cudadrv.runtime
     sys.modules['numba.cuda.cudadrv.drvapi'] = cudadrv.drvapi
+    sys.modules['numba.cuda.cudadrv.error'] = cudadrv.error
     sys.modules['numba.cuda.cudadrv.nvvm'] = cudadrv.nvvm
 
     from . import compiler

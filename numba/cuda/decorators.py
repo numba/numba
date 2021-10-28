@@ -1,5 +1,7 @@
+from warnings import warn
 from numba.core import types, config, sigutils
-from numba.core.errors import DeprecationError
+from numba.core.errors import (DeprecationError, NumbaDeprecationWarning,
+                               NumbaInvalidConfigWarning)
 from .compiler import (compile_device, declare_device_function, Dispatcher,
                        compile_device_dispatcher)
 from .simulator.kernel import FakeCUDAKernel
@@ -43,8 +45,9 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
     :type link: list
     :param debug: If True, check for exceptions thrown when executing the
        kernel. Since this degrades performance, this should only be used for
-       debugging purposes.  Defaults to False.  (The default value can be
-       overridden by setting environment variable ``NUMBA_CUDA_DEBUGINFO=1``.)
+       debugging purposes. If set to True, then ``opt`` should be set to False.
+       Defaults to False.  (The default value can be overridden by setting
+       environment variable ``NUMBA_CUDA_DEBUGINFO=1``.)
     :param fastmath: When True, enables fastmath optimizations as outlined in
        the :ref:`CUDA Fast Math documentation <cuda-fast-math>`.
     :param max_registers: Request that the kernel is limited to using at most
@@ -80,6 +83,12 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
     fastmath = kws.get('fastmath', False)
 
+    if debug and opt:
+        msg = ("debug=True with opt=True (the default) "
+               "is not supported by CUDA. This may result in a crash"
+               " - set debug=False or opt=False.")
+        warn(NumbaInvalidConfigWarning(msg))
+
     if sigutils.is_signature(func_or_sig):
         if config.ENABLE_CUDASIM:
             def jitwrapper(func):
@@ -104,6 +113,9 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                                   debug=debug)
 
         if device:
+            msg = ("Eager compilation of device functions is deprecated "
+                   "(this occurs when a signature is provided)")
+            warn(NumbaDeprecationWarning(msg))
             return device_jit
         else:
             return kernel_jit

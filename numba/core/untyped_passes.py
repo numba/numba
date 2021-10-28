@@ -595,7 +595,6 @@ class MakeFunctionToJitFunction(FunctionPass):
                                 ok = all([isinstance(getdef(x), ir.Const)
                                           for x in kw_default.items])
                             if not ok:
-                                print("NOT OK")
                                 continue
 
                             pyfunc = convert_code_obj_to_function(node, func_ir)
@@ -1437,7 +1436,7 @@ class LiteralUnroll(FunctionPass):
 
     def run_pass(self, state):
         # Determine whether to even attempt this pass... if there's no
-        # `literal_unroll as a global or as a freevar then just skip.
+        # `literal_unroll` as a global or as a freevar then just skip.
         found = False
         func_ir = state.func_ir
         for blk in func_ir.blocks.values():

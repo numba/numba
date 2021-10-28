@@ -12,8 +12,12 @@ from collections.abc import Sequence
 from types import MethodType, FunctionType
 
 import numba
-from numba.core import types, utils
-from numba.core.errors import TypingError, InternalError
+from numba.core import types, utils, targetconfig
+from numba.core.errors import (
+    TypingError,
+    InternalError,
+    InternalTargetMismatchError,
+)
 from numba.core.cpu_options import InlineOptions
 
 # info store for inliner callback functions e.g. cost model
@@ -398,6 +402,15 @@ class CallableTemplate(FunctionTemplate):
     def apply(self, args, kws):
         generic = getattr(self, "generic")
         typer = generic()
+        match_sig = inspect.signature(typer)
+        try:
+            match_sig.bind(*args, **kws)
+        except TypeError as e:
+            # bind failed, raise, if there's a
+            # ValueError then there's likely unrecoverable
+            # problems
+            raise TypingError(str(e)) from e
+
         sig = typer(*args, **kws)
 
         # Unpack optional type if no matching signature
@@ -688,7 +701,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         Returning a Dispatcher object.  The Dispatcher object is cached
         internally in `self._impl_cache`.
         """
-        flags = utils.ConfigStack.top_or_none()
+        flags = targetconfig.ConfigStack.top_or_none()
         cache_key = self.context, tuple(args), tuple(kws.items()), flags
         try:
             impl, args = self._impl_cache[cache_key]
@@ -768,7 +781,17 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         jitter = self._get_jit_decorator()
 
         # Get the overload implementation for the given types
-        ovf_result = self._overload_func(*args, **kws)
+        ov_sig = inspect.signature(self._overload_func)
+        try:
+            ov_sig.bind(*args, **kws)
+        except TypeError as e:
+            # bind failed, raise, if there's a
+            # ValueError then there's likely unrecoverable
+            # problems
+            raise TypingError(str(e)) from e
+        else:
+            ovf_result = self._overload_func(*args, **kws)
+
         if ovf_result is None:
             # No implementation => fail typing
             self._impl_cache[cache_key] = None, None
@@ -878,32 +901,25 @@ def make_overload_template(func, overload_func, jit_options, strict,
     return type(base)(name, (base,), dct)
 
 
-class _IntrinsicTemplate(AbstractTemplate):
-    """
-    A base class of templates for intrinsic definition
-    """
+class _TemplateTargetHelperMixin(object):
+    """Mixin for helper methods that assist with target/registry resolution"""
 
-    def generic(self, args, kws):
+    def _get_target_registry(self, reason):
+        """Returns the registry for the current target.
+
+        Parameters
+        ----------
+        reason: str
+            Reason for the resolution. Expects a noun.
+        Returns
+        -------
+        reg : a registry suitable for the current target.
         """
-        Type the intrinsic by the arguments.
-        """
-        from numba.core.target_extension import (get_local_target,
-                                                 resolve_target_str,
+        from numba.core.target_extension import (_get_local_target_checked,
                                                  dispatcher_registry)
-        from numba.core.imputils import builtin_registry
-
-        cache_key = self.context, args, tuple(kws.items())
         hwstr = self.metadata.get('target', 'generic')
-        # Get the class for the target declared by the function
-        hw_clazz = resolve_target_str(hwstr)
-        # get the local target
-        target_hw = get_local_target(self.context)
-        # make sure the target_hw is in the MRO for hw_clazz else bail
-        if not target_hw.inherits_from(hw_clazz):
-            msg = (f"Intrinsic being resolved on a target from which it does "
-                   f"not inherit. Local target is {target_hw}, declared "
-                   f"target class is {hw_clazz}.")
-            raise InternalError(msg)
+        target_hw = _get_local_target_checked(self.context, hwstr, reason)
+        # Get registry for the current hardware
         disp = dispatcher_registry[target_hw]
         tgtctx = disp.targetdescr.target_context
         # This is all workarounds...
@@ -935,7 +951,20 @@ class _IntrinsicTemplate(AbstractTemplate):
             # Pick a registry in which to install intrinsics
             registries = iter(tgtctx._registries)
             reg = next(registries)
-        lower_builtin = reg.lower
+        return reg
+
+
+class _IntrinsicTemplate(_TemplateTargetHelperMixin, AbstractTemplate):
+    """
+    A base class of templates for intrinsic definition
+    """
+
+    def generic(self, args, kws):
+        """
+        Type the intrinsic by the arguments.
+        """
+        lower_builtin = self._get_target_registry('intrinsic').lower
+        cache_key = self.context, args, tuple(kws.items())
         try:
             return self._impl_cache[cache_key]
         except KeyError:
@@ -990,27 +1019,11 @@ def make_intrinsic_template(handle, defn, name, kwargs):
 
 
 class AttributeTemplate(object):
-    _initialized = False
-
     def __init__(self, context):
-        self._lazy_class_init()
         self.context = context
 
     def resolve(self, value, attr):
         return self._resolve(value, attr)
-
-    @classmethod
-    def _lazy_class_init(cls):
-        if not cls._initialized:
-            cls.do_class_init()
-            cls._initialized = True
-
-    @classmethod
-    def do_class_init(cls):
-        """
-        Class-wide initialization.  Can be overridden by subclasses to
-        register permanent typing or target hooks.
-        """
 
     def _resolve(self, value, attr):
         fn = getattr(self, "resolve_%s" % attr, None)
@@ -1029,7 +1042,7 @@ class AttributeTemplate(object):
     generic_resolve = NotImplemented
 
 
-class _OverloadAttributeTemplate(AttributeTemplate):
+class _OverloadAttributeTemplate(_TemplateTargetHelperMixin, AttributeTemplate):
     """
     A base class of templates for @overload_attribute functions.
     """
@@ -1038,14 +1051,13 @@ class _OverloadAttributeTemplate(AttributeTemplate):
     def __init__(self, context):
         super(_OverloadAttributeTemplate, self).__init__(context)
         self.context = context
+        self._init_once()
 
-    @classmethod
-    def do_class_init(cls):
-        """
-        Register attribute implementation.
-        """
-        from numba.core.imputils import lower_getattr
+    def _init_once(self):
+        cls = type(self)
         attr = cls._attr
+
+        lower_getattr = self._get_target_registry('attribute').lower_getattr
 
         @lower_getattr(cls.key, attr)
         def getattr_impl(context, builder, typ, value):
@@ -1082,24 +1094,30 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
     """
     is_method = True
 
-    @classmethod
-    def do_class_init(cls):
+    def _init_once(self):
         """
-        Register generic method implementation.
+        Overriding parent definition
         """
-        from numba.core.imputils import lower_builtin
-        attr = cls._attr
+        attr = self._attr
 
-        @lower_builtin((cls.key, attr), cls.key, types.VarArg(types.Any))
-        def method_impl(context, builder, sig, args):
-            typ = sig.args[0]
-            typing_context = context.typing_context
-            fnty = cls._get_function_type(typing_context, typ)
-            sig = cls._get_signature(typing_context, fnty, sig.args, {})
-            call = context.get_function(fnty, sig)
-            # Link dependent library
-            context.add_linking_libs(getattr(call, 'libs', ()))
-            return call(builder, args)
+        try:
+            registry = self._get_target_registry('method')
+        except InternalTargetMismatchError:
+            # Target mismatch. Do not register attribute lookup here.
+            pass
+        else:
+            lower_builtin = registry.lower
+
+            @lower_builtin((self.key, attr), self.key, types.VarArg(types.Any))
+            def method_impl(context, builder, sig, args):
+                typ = sig.args[0]
+                typing_context = context.typing_context
+                fnty = self._get_function_type(typing_context, typ)
+                sig = self._get_signature(typing_context, fnty, sig.args, {})
+                call = context.get_function(fnty, sig)
+                # Link dependent library
+                context.add_linking_libs(getattr(call, 'libs', ()))
+                return call(builder, args)
 
     def _resolve(self, typ, attr):
         if self._attr != attr:
@@ -1132,7 +1150,8 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
 
 def make_overload_attribute_template(typ, attr, overload_func, inline,
                                      prefer_literal=False,
-                                     base=_OverloadAttributeTemplate):
+                                     base=_OverloadAttributeTemplate,
+                                     **kwargs):
     """
     Make a template class for attribute *attr* of *typ* overloaded by
     *overload_func*.
@@ -1145,13 +1164,14 @@ def make_overload_attribute_template(typ, attr, overload_func, inline,
                _inline_overloads={},
                _overload_func=staticmethod(overload_func),
                prefer_literal=prefer_literal,
+               metadata=kwargs,
                )
     obj = type(base)(name, (base,), dct)
     return obj
 
 
 def make_overload_method_template(typ, attr, overload_func, inline,
-                                  prefer_literal=False):
+                                  prefer_literal=False, **kwargs):
     """
     Make a template class for method *attr* of *typ* overloaded by
     *overload_func*.
@@ -1159,6 +1179,7 @@ def make_overload_method_template(typ, attr, overload_func, inline,
     return make_overload_attribute_template(
         typ, attr, overload_func, inline=inline,
         base=_OverloadMethodTemplate, prefer_literal=prefer_literal,
+        **kwargs,
     )
 
 

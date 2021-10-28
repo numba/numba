@@ -375,3 +375,80 @@ Schedule
 
 - In Numba 0.54: ``inspect_ptx()`` will be deprecated.
 - In Numba 0.55: ``inspect_ptx()`` will be removed.
+
+
+Deprecation of eager compilation of CUDA device functions
+=========================================================
+
+In future versions of Numba, the ``device`` kwarg to the ``@cuda.jit`` decorator
+will be obviated, and whether a device function or global kernel is compiled will
+be inferred from the context. With respect to kernel / device functions and lazy
+/ eager compilation, four cases are presently handled:
+
+1. ``device=True``, eager compilation with a signature provided
+2. ``device=False``, eager compilation with a signature provided
+3. ``device=True``, lazy compilation with no signature
+4. ``device=False``, lazy compilation with no signature
+
+The latter two cases can be differentiated without the ``device`` kwarg, because
+it can be inferred from the calling context - if the call is from the host, then
+a global kernel should be compiled, and if the call is from a kernel or another
+device function, then a device function should be compiled.
+
+The first two cases cannot be differentiated in the absence of the ``device``
+kwarg - without it, it will not be clear from a signature alone whether a device
+function or global kernel should be compiled. In order to resolve this, support
+for eager compilation of device functions will be removed. Eager compilation
+with the ``@cuda.jit`` decorator will in future always imply the immediate
+compilation of a global kernel.
+
+Recommendations
+---------------
+
+Any eagerly-compiled device functions should have their signature removed, e.g.:
+
+.. code-block:: python
+
+   @cuda.jit('int32(int32, int32)', device=True)
+   def f(x, y):
+       return x + y
+
+becomes:
+
+
+.. code-block:: python
+
+   @cuda.jit(device=True)
+   def f(x, y):
+       return x + y
+
+Schedule
+--------
+
+- In Numba 0.54: Eager compilation of device functions will be deprecated.
+- In Numba 0.55: Eager compilation of device functions will be unsupported and
+  attempts to eagerly compile device functions will raise an error.
+
+
+.. _rocm_unmaintained:
+
+Dropping support for the ROCm target
+====================================
+
+The `ROCm <https://rocmdocs.amd.com/en/latest/index.html>`_ target has not been
+maintained for a number of years. It's known to be not far from working but has
+essentially bit-rotted in a number of areas. Numba 0.54 includes a new API for
+describing targets and both the CPU and CUDA targets have been ported to use
+this. Due to lack of maintenance, support and user base, the ROCm target is
+not being ported to this API, is being moved to an "unmaintained" status and
+will reside outside of the Numba package. Should there be sufficient interest
+and support for this target in future its status will be reconsidered.
+
+Schedule
+--------
+
+In 0.54.0:
+
+- The ``ROCm`` target is officially unmaintained and the target source code has
+  been moved out of the Numba main repository and into a `separate repository
+  <https://github.com/numba/numba-rocm>`_.

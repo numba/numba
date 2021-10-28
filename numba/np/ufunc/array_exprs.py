@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 import operator
 
-from numba.core import types, utils, ir, rewrites, compiler
+from numba.core import types, targetconfig, ir, rewrites, compiler
 from numba.core.typing import npydecl
 from numba.np.ufunc.dufunc import DUFunc
 
@@ -333,7 +333,7 @@ def _lower_array_expr(lowerer, expr):
     '''Lower an array expression built by RewriteArrayExprs.
     '''
     expr_name = "__numba_array_expr_%s" % (hex(hash(expr)).replace("-", "_"))
-    expr_filename = expr.loc.filename
+    expr_filename = f"__numba_array_expr_synthetic_module_{expr.loc.filename}"
     expr_var_list = expr.list_vars()
     # The expression may use a given variable several times, but we
     # should only create one parameter for it.
@@ -376,8 +376,8 @@ def _lower_array_expr(lowerer, expr):
             inner_sig_args.append(argty)
     inner_sig = outer_sig.return_type.dtype(*inner_sig_args)
 
-    flags = utils.ConfigStack().top_or_none() or compiler.Flags()
-    flags = flags.copy() # make sure it's a clone or a fresh instance
+    flags = targetconfig.ConfigStack().top_or_none()
+    flags = compiler.Flags() if flags is None else flags.copy() # make sure it's a clone or a fresh instance
     # Follow the Numpy error model.  Note this also allows e.g. vectorizing
     # division (issue #1223).
     flags.error_model = 'numpy'
