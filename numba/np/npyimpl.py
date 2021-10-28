@@ -293,7 +293,7 @@ def _build_array(context, builder, array_ty, input_types, inputs):
         # __array_wrap__(source wrapped array, out array) -> out wrapped array
         array_wrap = context.get_function('__array_wrap__',
                                           array_ty(array_wrapper_ty, real_array_ty))
-    except NotImplementedError:
+    except errors.NumbaNotImplementedError:
         # If it's the same priority as a regular array, assume we
         # should use the allocated array unchanged.
         if array_wrapper_ty.array_priority != types.Array.array_priority:

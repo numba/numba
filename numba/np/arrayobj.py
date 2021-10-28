@@ -72,7 +72,7 @@ def make_array(array_type):
             sig = signature(real_array_type, array_type)
             try:
                 array_impl = self._context.get_function('__array__', sig)
-            except NotImplementedError:
+            except errors.NumbaNotImplementedError:
                 return super(ArrayStruct, self)._make_refs(ref)
 
             # Return a wrapped structure and its unwrapped reference

@@ -173,32 +173,32 @@ class BinOp(ConcreteTemplate):
     cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
 
 
-@infer_global(operator.add)
+@glue_typing(operator.add)
 class BinOpAdd(BinOp):
     pass
 
 
-@infer_global(operator.iadd)
+@glue_typing(operator.iadd)
 class BinOpAdd(BinOp):
     pass
 
 
-@infer_global(operator.sub)
+@glue_typing(operator.sub)
 class BinOpSub(BinOp):
     pass
 
 
-@infer_global(operator.isub)
+@glue_typing(operator.isub)
 class BinOpSub(BinOp):
     pass
 
 
-@infer_global(operator.mul)
+@glue_typing(operator.mul)
 class BinOpMul(BinOp):
     pass
 
 
-@infer_global(operator.imul)
+@glue_typing(operator.imul)
 class BinOpMul(BinOp):
     pass
 
