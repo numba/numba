@@ -1021,7 +1021,8 @@ class TestParforNumPy(TestParforsBase):
     def test_stararg(self):
         def test_impl(n):
             A = np.random.randn(*n)
-            return 3
+            B = np.sum(A)
+            return B - B
 
         n = 10
         self.check(test_impl, (n,n))
