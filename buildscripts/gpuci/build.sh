@@ -35,30 +35,32 @@ nvidia-smi
 
 gpuci_logger "Create testing env"
 . /opt/conda/etc/profile.d/conda.sh
-gpuci_mamba_retry create -n numba -y \
+gpuci_mamba_retry create -n numba_ci -y \
                   "python=${PYTHON_VER}" \
                   "cudatoolkit=${CUDA_TOOLKIT_VER}" \
                   "numba/label/dev::llvmlite" \
                   "numpy" \
                   "scipy" \
-                  "cffi" 
-conda activate numba
+                  "cffi" \
+                  "psutil" \
+                  "gcc_linux-64=7" \
+                  "gxx_linux-64=7"
+
+conda activate numba_ci
 
 gpuci_logger "Install numba"
 python setup.py develop
 
-gpuci_logger "Check Python version"
-python --version
+gpuci_logger "Check Compiler versions"
 $CC --version
 $CXX --version
 
 gpuci_logger "Check conda environment"
 conda info
 conda config --show-sources
-conda list --show-channel-urls
 
 gpuci_logger "Dump system information from Numba"
 python -m numba -s
 
 gpuci_logger "Run tests in numba.cuda.tests"
-python -m numba.runtests numba.cuda.tests -m
+python -m numba.runtests numba.cuda.tests -v -m
