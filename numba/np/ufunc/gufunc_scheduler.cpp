@@ -326,6 +326,20 @@ std::vector<RangeActual> create_schedule(const RangeActual &full_space, uintp nu
     }
 }
 
+void print_rangeactual_vector(const std::vector<RangeActual> &rav) {
+    for(uintp i = 0; i < rav.size(); ++i) {
+        printf("sched[%d] = ", (int)i);
+        uintp j;
+        for(j = 0; j < rav[i].start.size(); ++j) {
+            printf("%d ", (int)rav[i].start[j]);
+        }
+        for(j = 0; j < rav[i].end.size(); ++j) {
+            printf("%d ", (int)rav[i].end[j]);
+        }
+        printf("\n");
+    }
+}
+
 /*
     num_dim (D) is the number of dimensions of the iteration space.
     starts is the range-start of each of those dimensions, inclusive.
@@ -350,6 +364,9 @@ extern "C" void do_scheduling_signed(uintp num_dim, intp *starts, intp *ends, ui
 
     RangeActual full_space(num_dim, starts, ends);
     std::vector<RangeActual> ret = create_schedule(full_space, num_threads);
+    if (debug) {
+        print_rangeactual_vector(ret);
+    }
     flatten_schedule(ret, sched);
 }
 
@@ -369,5 +386,8 @@ extern "C" void do_scheduling_unsigned(uintp num_dim, intp *starts, intp *ends, 
 
     RangeActual full_space(num_dim, starts, ends);
     std::vector<RangeActual> ret = create_schedule(full_space, num_threads);
+    if (debug) {
+        print_rangeactual_vector(ret);
+    }
     flatten_schedule(ret, sched);
 }

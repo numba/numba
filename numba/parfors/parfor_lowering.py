@@ -1441,7 +1441,6 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     builder = lowerer.builder
 
     from numba.np.ufunc.parallel import (build_gufunc_wrapper,
-                           get_thread_count,
                            _launch_threads)
 
     if config.DEBUG_ARRAY_OPT:
@@ -1543,22 +1542,6 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         builder.store(stop, builder.gep(dim_stops,
                                         [context.get_constant(types.uintp, i)]))
 
-    sched_size = get_thread_count() * num_dim * 2
-    sched = cgutils.alloca_once(
-        builder, sched_type, size=context.get_constant(
-            types.uintp, sched_size), name="sched")
-    debug_flag = 1 if config.DEBUG_ARRAY_OPT else 0
-    scheduling_fnty = lc.Type.function(
-        intp_ptr_t, [uintp_t, sched_ptr_type, sched_ptr_type, uintp_t, sched_ptr_type, intp_t])
-    if index_var_typ.signed:
-        do_scheduling = cgutils.get_or_insert_function(builder.module,
-                                                       scheduling_fnty,
-                                                       "do_scheduling_signed")
-    else:
-        do_scheduling = cgutils.get_or_insert_function(builder.module,
-                                                       scheduling_fnty,
-                                                       "do_scheduling_unsigned")
-
     get_num_threads = cgutils.get_or_insert_function(
         builder.module, lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
         "get_num_threads")
@@ -1572,6 +1555,29 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                                                   ("Invalid number of threads. "
                                                    "This likely indicates a bug in Numba.",))
 
+    # The size of the schedule is number of activate threads times the
+    # number of dimension times 2 (one for start and one for end.)
+    # Start here with the constant portion that we know at compile time which
+    # is the number of dimensions times 2.
+    sched_size = context.get_constant(types.intp, num_dim * 2)
+    # Get the full sizes by multiplying by the number of dynamic threads,
+    # retrieved above.
+    sched_size = builder.mul(sched_size, num_threads)
+    # Allocate space for the schedule right at this place in the LLVM block.
+    sched = builder.alloca(sched_type, size=sched_size, name="sched")
+    debug_flag = 1 if config.DEBUG_ARRAY_OPT else 0
+    scheduling_fnty = lc.Type.function(
+        intp_ptr_t, [uintp_t, sched_ptr_type, sched_ptr_type, uintp_t, sched_ptr_type, intp_t])
+    if index_var_typ.signed:
+        do_scheduling = cgutils.get_or_insert_function(builder.module,
+                                                       scheduling_fnty,
+                                                       "do_scheduling_signed")
+    else:
+        do_scheduling = cgutils.get_or_insert_function(builder.module,
+                                                       scheduling_fnty,
+                                                       "do_scheduling_unsigned")
+
+
     builder.call(
         do_scheduling, [
             context.get_constant(
@@ -1584,18 +1590,6 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
 
     nredvars = len(redvars)
     ninouts = len(expr_args) - nredvars
-
-    if config.DEBUG_ARRAY_OPT:
-        for i in range(get_thread_count()):
-            cgutils.printf(builder, "sched[" + str(i) + "] = ")
-            for j in range(num_dim * 2):
-                cgutils.printf(
-                    builder, "%d ", builder.load(
-                        builder.gep(
-                            sched, [
-                                context.get_constant(
-                                    types.intp, i * num_dim * 2 + j)])))
-            cgutils.printf(builder, "\n")
 
     def load_potential_tuple_var(x):
         """Given a variable name, if that variable is not a new name
