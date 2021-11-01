@@ -37,7 +37,7 @@ from .drvapi import cu_occupancy_b2d_size, cu_stream_callback_pyobj, cu_uuid
 from numba.cuda.cudadrv import enums, drvapi, _extras
 
 if config.CUDA_USE_CUDA_PYTHON:
-    from cuda import cuda as cuda_driver
+    from cuda import cuda as binding
 
 MIN_REQUIRED_CC = (3, 0)
 
@@ -321,7 +321,7 @@ class Driver(object):
         return safe_call
 
     def _cuda_python_wrap_fn(self, fname):
-        libfn = getattr(cuda_driver, fname)
+        libfn = getattr(binding, fname)
 
         def verbose_cuda_api_call(*args):
             argstr = ", ".join([str(arg) for arg in args])
@@ -380,10 +380,10 @@ class Driver(object):
         if len(retval) == 1:
             retval = retval[0]
 
-        if retcode != cuda_driver.CUresult.CUDA_SUCCESS:
+        if retcode != binding.CUresult.CUDA_SUCCESS:
             msg = "Call to %s results in %s" % (fname, retcode.name)
             _logger.error(msg)
-            if retcode == cuda_driver.CUresult.CUDA_ERROR_NOT_INITIALIZED:
+            if retcode == binding.CUresult.CUDA_ERROR_NOT_INITIALIZED:
                 # Detect forking
                 if self.pid is not None and _getpid() != self.pid:
                     msg = 'pid %s forked from pid %s after CUDA driver init'
@@ -595,7 +595,7 @@ class Device(object):
         """Read attributes lazily
         """
         if config.CUDA_USE_CUDA_PYTHON:
-            code = getattr(cuda_driver.CUdevice_attribute,
+            code = getattr(binding.CUdevice_attribute,
                            f'CU_DEVICE_ATTRIBUTE_{attr}')
             value = driver.cuDeviceGetAttribute(code, self.id)
         else:
@@ -816,7 +816,7 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
         except CudaAPIError as e:
             # is out-of-memory?
             if config.CUDA_USE_CUDA_PYTHON:
-                oom_code = cuda_driver.CUresult.CUDA_ERROR_OUT_OF_MEMORY
+                oom_code = binding.CUresult.CUDA_ERROR_OUT_OF_MEMORY
             else:
                 oom_code = enums.CUDA_ERROR_OUT_OF_MEMORY
 
@@ -921,7 +921,7 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
     def memallocmanaged(self, size, attach_global):
         if config.CUDA_USE_CUDA_PYTHON:
             def allocator():
-                ma_flags = cuda_driver.CUmemAttach_flags
+                ma_flags = binding.CUmemAttach_flags
 
                 if attach_global:
                     flags = ma_flags.CU_MEM_ATTACH_GLOBAL.value
@@ -1299,7 +1299,7 @@ class Context(object):
                                               blocksizelimit, flags):
         b2d_cb = ctypes.CFUNCTYPE(c_size_t, c_int)(b2d_func)
         ptr = int.from_bytes(b2d_cb, byteorder='little')
-        driver_b2d_cb = cuda_driver.CUoccupancyB2DSize(ptr)
+        driver_b2d_cb = binding.CUoccupancyB2DSize(ptr)
         args = [func.handle, driver_b2d_cb, memsize, blocksizelimit]
 
         if not flags:
@@ -1376,7 +1376,7 @@ class Context(object):
         current and peer device is possible.
         """
         if config.CUDA_USE_CUDA_PYTHON:
-            peer_device = cuda_driver.CUdevice(peer_device)
+            peer_device = binding.CUdevice(peer_device)
             can_access_peer = driver.cuDeviceCanAccessPeer(self.device.id,
                                                            peer_device)
         else:
@@ -1413,21 +1413,21 @@ class Context(object):
 
     def get_default_stream(self):
         if config.CUDA_USE_CUDA_PYTHON:
-            handle = cuda_driver.CUstream(0)
+            handle = binding.CUstream(0)
         else:
             handle = drvapi.cu_stream(drvapi.CU_STREAM_DEFAULT)
         return Stream(weakref.proxy(self), handle, None)
 
     def get_legacy_default_stream(self):
         if config.CUDA_USE_CUDA_PYTHON:
-            handle = cuda_driver.CUstream(1)
+            handle = binding.CUstream(1)
         else:
             handle = drvapi.cu_stream(drvapi.CU_STREAM_LEGACY)
         return Stream(weakref.proxy(self), handle, None)
 
     def get_per_thread_default_stream(self):
         if config.CUDA_USE_CUDA_PYTHON:
-            handle = cuda_driver.CUstream(2)
+            handle = binding.CUstream(2)
         else:
             handle = drvapi.cu_stream(drvapi.CU_STREAM_PER_THREAD)
         return Stream(weakref.proxy(self), handle, None)
@@ -1445,7 +1445,7 @@ class Context(object):
         if not isinstance(ptr, int):
             raise TypeError("ptr for external stream must be an int")
         if config.CUDA_USE_CUDA_PYTHON:
-            handle = cuda_driver.CUstream(ptr)
+            handle = binding.CUstream(ptr)
         else:
             handle = drvapi.cu_stream(ptr)
         return Stream(weakref.proxy(self), handle, None,
@@ -1535,7 +1535,7 @@ def load_module_image_cuda_python(context, image):
     jitinfo = bytearray(logsz)
     jiterrors = bytearray(logsz)
 
-    jit_option = cuda_driver.CUjit_option
+    jit_option = binding.CUjit_option
     options = {
         jit_option.CU_JIT_INFO_LOG_BUFFER: jitinfo,
         jit_option.CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES: logsz,
@@ -1848,7 +1848,7 @@ class IpcHandle(object):
     @classmethod
     def _rebuild(cls, handle_ary, size, source_info, offset):
         if config.CUDA_USE_CUDA_PYTHON:
-            handle = cuda_driver.CUipcMemHandle()
+            handle = binding.CUipcMemHandle()
             handle.reserved = handle_ary
         else:
             handle = drvapi.cu_ipc_mem_handle(*handle_ary)
@@ -1944,7 +1944,7 @@ class MemoryPointer(object):
             if size < 0:
                 raise RuntimeError('size cannot be negative')
             if config.CUDA_USE_CUDA_PYTHON:
-                pointer = cuda_driver.CUdeviceptr()
+                pointer = binding.CUdeviceptr()
                 ctypes_ptr = drvapi.cu_device_ptr.from_address(pointer.getPtr())
                 ctypes_ptr.value = base
             else:
@@ -2168,9 +2168,9 @@ class Stream(object):
         if config.CUDA_USE_CUDA_PYTHON:
             default_streams = {
                 0: "<Default CUDA stream on %s>",
-                cuda_driver.CU_STREAM_LEGACY:
+                binding.CU_STREAM_LEGACY:
                     "<Legacy default CUDA stream on %s>",
-                cuda_driver.CU_STREAM_PER_THREAD:
+                binding.CU_STREAM_PER_THREAD:
                     "<Per-thread default CUDA stream on %s>",
             }
             ptr = int(self.handle) or 0
@@ -2230,7 +2230,7 @@ class Stream(object):
         _py_incref(data)
         if config.CUDA_USE_CUDA_PYTHON:
             ptr = int.from_bytes(self._stream_callback, byteorder='little')
-            stream_callback = cuda_driver.CUstreamCallback(ptr)
+            stream_callback = binding.CUstreamCallback(ptr)
             # The callback needs to receive a pointer to the data PyObject
             data = id(data)
         else:
@@ -2304,7 +2304,7 @@ class Event(object):
         completed.
         """
         if config.CUDA_USE_CUDA_PYTHON:
-            hstream = stream.handle if stream else cuda_driver.CUstream(0)
+            hstream = stream.handle if stream else binding.CUstream(0)
         else:
             hstream = stream.handle if stream else 0
         driver.cuEventRecord(self.handle, hstream)
@@ -2320,7 +2320,7 @@ class Event(object):
         All future works submitted to stream will wait util the event completes.
         """
         if config.CUDA_USE_CUDA_PYTHON:
-            hstream = stream.handle if stream else cuda_driver.CUstream(0)
+            hstream = stream.handle if stream else binding.CUstream(0)
         else:
             hstream = stream.handle if stream else 0
         flags = 0
@@ -2466,7 +2466,7 @@ class CudaPythonFunction(Function):
     def cache_config(self, prefer_equal=False, prefer_cache=False,
                      prefer_shared=False):
         prefer_equal = prefer_equal or (prefer_cache and prefer_shared)
-        attr = cuda_driver.CUfunction_attribute
+        attr = binding.CUfunction_attribute
         if prefer_equal:
             flag = attr.CU_FUNC_CACHE_PREFER_EQUAL
         elif prefer_cache:
@@ -2481,7 +2481,7 @@ class CudaPythonFunction(Function):
         return driver.cuFuncGetAttribute(attrid, self.handle)
 
     def read_func_attr_all(self):
-        attr = cuda_driver.CUfunction_attribute
+        attr = binding.CUfunction_attribute
         nregs = self.read_func_attr(attr.CU_FUNC_ATTRIBUTE_NUM_REGS)
         cmem = self.read_func_attr(attr.CU_FUNC_ATTRIBUTE_CONST_SIZE_BYTES)
         lmem = self.read_func_attr(attr.CU_FUNC_ATTRIBUTE_LOCAL_SIZE_BYTES)
@@ -2528,7 +2528,7 @@ def launch_kernel(cufunc_handle,
 
 
 if config.CUDA_USE_CUDA_PYTHON:
-    jitty = cuda_driver.CUjitInputType
+    jitty = binding.CUjitInputType
     FILE_EXTENSION_MAP = {
         'o': jitty.CU_JIT_INPUT_OBJECT,
         'ptx': jitty.CU_JIT_INPUT_PTX,
@@ -2695,7 +2695,7 @@ class CudaPythonLinker(Linker):
         linkerinfo = bytearray(logsz)
         linkererrors = bytearray(logsz)
 
-        jit_option = cuda_driver.CUjit_option
+        jit_option = binding.CUjit_option
 
         options = {
             jit_option.CU_JIT_INFO_LOG_BUFFER: linkerinfo,
@@ -2714,7 +2714,7 @@ class CudaPythonLinker(Linker):
             options[jit_option.CU_JIT_TARGET_FROM_CUCONTEXT] = 1
         else:
             cc_val = cc[0] * 10 + cc[1]
-            cc_enum = getattr(cuda_driver.CUjit_target,
+            cc_enum = getattr(binding.CUjit_target,
                               f'CU_TARGET_COMPUTE_{cc_val}')
             options[jit_option.CU_JIT_TARGET] = cc_enum
 
@@ -2742,7 +2742,7 @@ class CudaPythonLinker(Linker):
         namebuf = name.encode('utf8')
         self._keep_alive += [ptx, namebuf]
         try:
-            input_ptx = cuda_driver.CUjitInputType.CU_JIT_INPUT_PTX
+            input_ptx = binding.CUjitInputType.CU_JIT_INPUT_PTX
             driver.cuLinkAddData(self.handle, input_ptx, ptx, len(ptx),
                                  namebuf, 0, [], [])
         except CudaAPIError as e:
@@ -2755,7 +2755,7 @@ class CudaPythonLinker(Linker):
         try:
             driver.cuLinkAddFile(self.handle, kind, pathbuf, 0, [], [])
         except CudaAPIError as e:
-            if e.code == cuda_driver.CUresult.CUDA_ERROR_FILE_NOT_FOUND:
+            if e.code == binding.CUresult.CUDA_ERROR_FILE_NOT_FOUND:
                 msg = f'{path} not found'
             else:
                 msg = "%s\n%s" % (e, self.error_log)
@@ -2781,9 +2781,9 @@ def get_devptr_for_active_ctx(ptr):
     """
     if ptr != 0:
         if config.CUDA_USE_CUDA_PYTHON:
-            ptr_attrs = cuda_driver.CUpointer_attribute
+            ptr_attrs = binding.CUpointer_attribute
             attr = ptr_attrs.CU_POINTER_ATTRIBUTE_DEVICE_POINTER
-            ptrobj = cuda_driver.CUdeviceptr(ptr)
+            ptrobj = binding.CUdeviceptr(ptr)
             return driver.cuPointerGetAttribute(attr, ptrobj)
         else:
             devptr = drvapi.cu_device_ptr()
@@ -2792,7 +2792,7 @@ def get_devptr_for_active_ctx(ptr):
             return devptr
     else:
         if config.CUDA_USE_CUDA_PYTHON:
-            return cuda_driver.CUdeviceptr()
+            return binding.CUdeviceptr()
         else:
             return drvapi.cu_device_ptr()
 
@@ -2809,7 +2809,7 @@ def device_extents(devmem):
     devptr = device_ctypes_pointer(devmem)
     if config.CUDA_USE_CUDA_PYTHON:
         s, n = driver.cuMemGetAddressRange(devptr)
-        return s, cuda_driver.CUdeviceptr(int(s) + n)
+        return s, binding.CUdeviceptr(int(s) + n)
     else:
         driver.cuMemGetAddressRange(byref(s), byref(n), devptr)
         s, n = s.value, n.value
