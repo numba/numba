@@ -1325,6 +1325,20 @@ class ArrayAnalysis(object):
                     shape = gvalue
                 elif isinstance(gvalue, int):
                     shape = (gvalue,)
+            elif isinstance(inst.value, ir.Arg):
+                if (
+                    isinstance(typ, types.containers.UniTuple)
+                    and isinstance(typ.dtype, types.Integer)
+                ):
+                    shape = inst.value
+                elif (
+                    isinstance(typ, types.containers.Tuple)
+                    and all([isinstance(x,
+                            (types.Integer, types.IntegerLiteral))
+                        for x in typ.types]
+                    )
+                ):
+                    shape = inst.value
 
             if isinstance(shape, ir.Const):
                 if isinstance(shape.value, tuple):
@@ -1379,6 +1393,16 @@ class ArrayAnalysis(object):
                     shape = self._gen_shape_call(
                         equiv_set, lhs, len(typ), shape, post
                     )
+            elif (
+                isinstance(typ, types.containers.Tuple)
+                and all([isinstance(x,
+                        (types.Integer, types.IntegerLiteral))
+                    for x in typ.types]
+                )
+            ):
+                shape = self._gen_shape_call(
+                    equiv_set, lhs, len(typ), shape, post
+                )
 
             """ See the comment on the define() function.
 
@@ -3128,9 +3152,14 @@ class ArrayAnalysis(object):
         # attr call: A_sh_attr = getattr(A, shape)
         if isinstance(shape, ir.Var):
             shape = equiv_set.get_shape(shape)
+
         # already a tuple variable that contains size
         if isinstance(shape, ir.Var):
             attr_var = shape
+            shape_attr_call = None
+            shape = None
+        elif isinstance(shape, ir.Arg):
+            attr_var = var
             shape_attr_call = None
             shape = None
         else:

@@ -12,6 +12,7 @@ import numpy as np
 import unittest
 import numba.core.typing.cffi_utils as cffi_support
 from numba.core import types
+from numba.core.errors import NumbaValueError
 from numba.misc.special import typeof
 from numba.core.dispatcher import OmittedArg
 from numba._dispatcher import compute_fingerprint
@@ -106,7 +107,7 @@ class TestTypeof(ValueTypingTestBase, TestCase):
 
         # Unsupported dtype
         a5 = a1.astype(a1.dtype.newbyteorder())
-        with self.assertRaises(ValueError) as raises:
+        with self.assertRaises(NumbaValueError) as raises:
             typeof(a5)
         self.assertIn("Unsupported array dtype: %s" % (a5.dtype,),
                       str(raises.exception))

@@ -1,5 +1,5 @@
-Version 0.54.1 (23 September, 2021)
------------------------------------
+Version 0.54.1 (7 October, 2021)
+--------------------------------
 
 This is a bugfix release for 0.54.0. It fixes a regression in structured array
 type handling, a potential leak on initialization failure in the CUDA target, a
