@@ -2635,7 +2635,6 @@ class CtypesLinker(Linker):
 
         raw_keys = list(options.keys())
         raw_values = list(options.values())
-        del options
 
         option_keys = (drvapi.cu_jit_option * len(raw_keys))(*raw_keys)
         option_vals = (c_void_p * len(raw_values))(*raw_values)
