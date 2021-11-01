@@ -25,7 +25,12 @@ class CUDADispatcher(types.Dispatcher):
     """The type of CUDA dispatchers"""
     # This type exists (instead of using types.Dispatcher as the type of CUDA
     # dispatchers) so that we can have an alternative lowering for them to the
-    # lowering of CPU dispatchers - since the CPU target has first class
-    # functions, its dispatchers lower to a constant address. However, we need
-    # to lower to a dummy value since CUDA kernels and functions are not first
-    # class functions.
+    # lowering of CPU dispatchers - the CPU target lowers all functions as a
+    # constant address, but we need to lower to a dummy value because it's not
+    # generally valid to use the address of CUDA kernels and functions.
+    #
+    # Notes: it may be a bug in the CPU target that it lowers all functions to a
+    # constant address - it should perhaps only lower first-class functions to
+    # a constant address. Even if that bug is fixed, it is still probably a
+    # good idea to have a separate type for CUDA dispatchers, and this type
+    # might get other differentiation from the CPU dispatcher type in future.
