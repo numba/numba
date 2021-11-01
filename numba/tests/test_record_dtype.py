@@ -1519,7 +1519,7 @@ class TestNestedArrays(TestCase):
         """
         nbval = np.recarray(2, dtype=recordwitharray)
         nbval[0] = np.array([(1, (2,3))], dtype=recordwitharray)[0]
-        for pyfunc in [record_read_array0]:
+        for pyfunc in [record_read_array0, record_read_array0_alt]:
             arr_expected = pyfunc(nbval)
             cfunc = self.get_cfunc(pyfunc, (typeof(nbval),))
             arr_res = cfunc(nbval)
