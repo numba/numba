@@ -2814,13 +2814,13 @@ def device_extents(devmem):
     NOTE: it always returns the extents of the allocation but the extents
     of the device memory view that can be a subsection of the entire allocation.
     """
-    s = drvapi.cu_device_ptr()
-    n = c_size_t()
     devptr = device_ctypes_pointer(devmem)
     if USE_NV_BINDING:
         s, n = driver.cuMemGetAddressRange(devptr)
         return s, binding.CUdeviceptr(int(s) + n)
     else:
+        s = drvapi.cu_device_ptr()
+        n = c_size_t()
         driver.cuMemGetAddressRange(byref(s), byref(n), devptr)
         s, n = s.value, n.value
         return s, s + n
@@ -2906,8 +2906,8 @@ def device_pointer(obj):
     "Get the device pointer as an integer"
     if USE_NV_BINDING:
         return obj.device_ctypes_pointer
-
-    return device_ctypes_pointer(obj).value
+    else:
+        return device_ctypes_pointer(obj).value
 
 
 def device_ctypes_pointer(obj):
