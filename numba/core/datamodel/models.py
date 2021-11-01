@@ -896,10 +896,6 @@ class NestedArrayModel(ArrayModel):
         self._be_type = dmm.lookup(fe_type.dtype).get_data_type()
         super(NestedArrayModel, self).__init__(dmm, fe_type)
 
-    # def get_data_type(self):
-    #     ret = ir.ArrayType(self._be_type, self._fe_type.nitems)
-    #     return ret
-
 
 @register_default(types.Optional)
 class OptionalModel(StructModel):
