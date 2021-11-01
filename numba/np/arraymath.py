@@ -18,7 +18,7 @@ from numba.core import types, cgutils
 from numba.core.extending import overload, overload_method, register_jitable
 from numba.np.numpy_support import as_dtype, type_can_asarray
 from numba.np.numpy_support import numpy_version
-from numba.np.numpy_support import is_nonelike
+from numba.np.numpy_support import is_nonelike, check_is_integer
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                  impl_ret_new_ref, impl_ret_untracked)
 from numba.core.typing import signature
@@ -26,7 +26,9 @@ from numba.np.arrayobj import make_array, load_item, store_item, _empty_nd_impl
 from numba.np.linalg import ensure_blas
 
 from numba.core.extending import intrinsic
-from numba.core.errors import RequireLiteralValue, TypingError
+from numba.core.errors import (RequireLiteralValue, TypingError,
+                               NumbaValueError, NumbaNotImplementedError,
+                               NumbaTypeError)
 from numba.core.overload_glue import glue_lowering
 from numba.cpython.unsafe.tuple import tuple_setitem
 
@@ -328,7 +330,8 @@ def array_sum_axis(context, builder, sig, args):
         if const_axis_val < 0:
             const_axis_val = ty_array.ndim + const_axis_val
         if const_axis_val < 0 or const_axis_val > ty_array.ndim:
-            raise ValueError("'axis' entry is out of bounds")
+            msg = f"'axis' entry ({const_axis_val}) is out of bounds"
+            raise NumbaValueError(msg)
 
         ty_axis = context.typing_context.resolve_value_type(const_axis_val)
         axis_val = context.get_constant(ty_axis, const_axis_val)
@@ -791,7 +794,7 @@ def build_argmax_or_argmin_with_axis_impl(arr, axis, flatten_impl):
     Given a function that implements the logic for handling a flattened
     array, return the implementation function.
     """
-    _check_is_integer(axis, "axis")
+    check_is_integer(axis, "axis")
     retty = arr.dtype
 
     tuple_buffer = tuple(range(arr.ndim))
@@ -1018,11 +1021,6 @@ def greater_than(a, b):
 def check_array(a):
     if a.size == 0:
         raise ValueError('zero-size array to reduction operation not possible')
-
-
-def _check_is_integer(v, name):
-    if not isinstance(v, (int, types.Integer)):
-        raise TypingError('{} must be an integer'.format(name))
 
 
 def nan_min_max_factory(comparison_op, is_complex_dtype):
@@ -1758,7 +1756,7 @@ def _tri_impl(N, M, k):
 def np_tri(N, M=None, k=0):
 
     # we require k to be integer, unlike numpy
-    _check_is_integer(k, 'k')
+    check_is_integer(k, 'k')
 
     def tri_impl(N, M=None, k=0):
         if M is None:
@@ -1795,7 +1793,7 @@ def np_tril_impl_2d(m, k=0):
 def my_tril(m, k=0):
 
     # we require k to be integer, unlike numpy
-    _check_is_integer(k, 'k')
+    check_is_integer(k, 'k')
 
     def np_tril_impl_1d(m, k=0):
         m_2d = _make_square(m)
@@ -1822,10 +1820,10 @@ def my_tril(m, k=0):
 def np_tril_indices(n, k=0, m=None):
 
     # we require integer arguments, unlike numpy
-    _check_is_integer(n, 'n')
-    _check_is_integer(k, 'k')
+    check_is_integer(n, 'n')
+    check_is_integer(k, 'k')
     if not is_nonelike(m):
-        _check_is_integer(m, 'm')
+        check_is_integer(m, 'm')
 
     def np_tril_indices_impl(n, k=0, m=None):
         return np.nonzero(np.tri(n, m, k=k))
@@ -1836,7 +1834,7 @@ def np_tril_indices(n, k=0, m=None):
 def np_tril_indices_from(arr, k=0):
 
     # we require k to be integer, unlike numpy
-    _check_is_integer(k, 'k')
+    check_is_integer(k, 'k')
 
     if arr.ndim != 2:
         raise TypingError("input array must be 2-d")
@@ -1855,7 +1853,7 @@ def np_triu_impl_2d(m, k=0):
 @overload(np.triu)
 def my_triu(m, k=0):
     # we require k to be integer, unlike numpy
-    _check_is_integer(k, 'k')
+    check_is_integer(k, 'k')
 
     def np_triu_impl_1d(m, k=0):
         m_2d = _make_square(m)
@@ -1882,10 +1880,10 @@ def my_triu(m, k=0):
 def np_triu_indices(n, k=0, m=None):
 
     # we require integer arguments, unlike numpy
-    _check_is_integer(n, 'n')
-    _check_is_integer(k, 'k')
+    check_is_integer(n, 'n')
+    check_is_integer(k, 'k')
     if not is_nonelike(m):
-        _check_is_integer(m, 'm')
+        check_is_integer(m, 'm')
 
     def np_triu_indices_impl(n, k=0, m=None):
         return np.nonzero(1 - np.tri(n, m, k=k - 1))
@@ -1896,7 +1894,7 @@ def np_triu_indices(n, k=0, m=None):
 def np_triu_indices_from(arr, k=0):
 
     # we require k to be integer, unlike numpy
-    _check_is_integer(k, 'k')
+    check_is_integer(k, 'k')
 
     if arr.ndim != 2:
         raise TypingError("input array must be 2-d")
@@ -1940,7 +1938,7 @@ def np_ediff1d(ary, to_end=None, to_begin=None):
 
     if isinstance(ary, types.Array):
         if isinstance(ary.dtype, types.Boolean):
-            raise TypeError("Boolean dtype is unsupported (as per NumPy)")
+            raise NumbaTypeError("Boolean dtype is unsupported (as per NumPy)")
             # Numpy tries to do this: return ary[1:] - ary[:-1] which
             # results in a TypeError exception being raised
 
@@ -1957,11 +1955,11 @@ def np_ediff1d(ary, to_end=None, to_begin=None):
 
         if to_begin_dt is not None and not np.can_cast(to_begin_dt, ary_dt):
             msg = "dtype of to_begin must be compatible with input ary"
-            raise TypeError(msg)
+            raise NumbaTypeError(msg)
 
         if to_end_dt is not None and not np.can_cast(to_end_dt, ary_dt):
             msg = "dtype of to_end must be compatible with input ary"
-            raise TypeError(msg)
+            raise NumbaTypeError(msg)
 
     def np_ediff1d_impl(ary, to_end=None, to_begin=None):
         # transform each input into an equivalent 1d array
@@ -3690,7 +3688,7 @@ def np_bincount(a, weights=None, minlength=0):
     if not isinstance(a.dtype, types.Integer):
         return
 
-    _check_is_integer(minlength, 'minlength')
+    check_is_integer(minlength, 'minlength')
 
     if weights not in (None, types.none):
         validate_1d_array_like("bincount", weights)
@@ -3779,7 +3777,7 @@ def searchsorted(a, v, side='left'):
     elif side_val == 'right':
         loop_impl = _searchsorted_right
     else:
-        raise ValueError("Invalid value given for 'side': %s" % side_val)
+        raise NumbaValueError(f"Invalid value given for 'side': {side_val}")
 
     if isinstance(v, types.Array):
         # N-d array and output
@@ -4058,7 +4056,12 @@ def generate_xinfo(np_func, container, attr):
     @overload(np_func)
     def xinfo_impl(arg):
         nbty = getattr(arg, 'dtype', arg)
-        f = np_func(as_dtype(nbty))
+        np_dtype = as_dtype(nbty)
+        try:
+            f = np_func(np_dtype)
+        except ValueError: # This exception instance comes from NumPy
+            # The np function might not support the dtype
+            return None
         data = tuple([getattr(f, x) for x in attr])
 
         def impl(arg):
@@ -4369,36 +4372,36 @@ def np_select(condlist, choicelist, default=0):
 
     # first we check the types of the input parameters
     if not isinstance(condlist, (types.List, types.UniTuple)):
-        raise TypeError('condlist must be a List or a Tuple')
+        raise NumbaTypeError('condlist must be a List or a Tuple')
     if not isinstance(choicelist, (types.List, types.UniTuple)):
-        raise TypeError('choicelist must be a List or a Tuple')
+        raise NumbaTypeError('choicelist must be a List or a Tuple')
     if not isinstance(default, (int, types.Number, types.Boolean)):
-        raise TypeError('default must be a scalar (number or boolean)')
+        raise NumbaTypeError('default must be a scalar (number or boolean)')
     # the types of the parameters have been checked, now we test the types
     # of the content of the parameters
     # implementation note: if in the future numba's np.where accepts tuples
     # as elements of condlist, then the check below should be extended to
     # accept tuples
     if not isinstance(condlist[0], types.Array):
-        raise TypeError('items of condlist must be arrays')
+        raise NumbaTypeError('items of condlist must be arrays')
     if not isinstance(choicelist[0], types.Array):
-        raise TypeError('items of choicelist must be arrays')
+        raise NumbaTypeError('items of choicelist must be arrays')
     # the types of the parameters and their contents have been checked,
     # now we test the dtypes of the content of parameters
     if isinstance(condlist[0], types.Array):
         if not isinstance(condlist[0].dtype, types.Boolean):
-            raise TypeError('condlist arrays must contain booleans')
+            raise NumbaTypeError('condlist arrays must contain booleans')
     if isinstance(condlist[0], types.UniTuple):
         if not (isinstance(condlist[0], types.UniTuple)
                 and isinstance(condlist[0][0], types.Boolean)):
-            raise TypeError('condlist tuples must only contain booleans')
+            raise NumbaTypeError('condlist tuples must only contain booleans')
     # the input types are correct, now we perform checks on the dimensions
     if (isinstance(condlist[0], types.Array) and
             condlist[0].ndim != choicelist[0].ndim):
-        raise TypeError('condlist and choicelist elements must have the '
-                        'same number of dimensions')
+        raise NumbaTypeError('condlist and choicelist elements must have the '
+                             'same number of dimensions')
     if isinstance(condlist[0], types.Array) and condlist[0].ndim < 1:
-        raise TypeError('condlist arrays must be of at least dimension 1')
+        raise NumbaTypeError('condlist arrays must be of at least dimension 1')
 
     return np_select_arr_impl
 
@@ -4415,7 +4418,7 @@ def np_asarray_chkfinite(a, dtype=None):
     else:
         try:
             dt = as_dtype(dtype)
-        except NotImplementedError:
+        except NumbaNotImplementedError:
             raise TypingError('dtype must be a valid Numpy dtype')
 
     def impl(a, dtype=None):

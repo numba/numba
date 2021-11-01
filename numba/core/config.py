@@ -68,6 +68,17 @@ def _os_supports_avx():
             return False
 
 
+# Choose how to handle captured errors
+def _validate_captured_errors_style(style_str):
+    rendered_style = str(style_str)
+    if rendered_style not in ('new_style', 'old_style'):
+        msg = ("Invalid style in NUMBA_CAPTURED_ERRORS: "
+               f"{rendered_style}")
+        raise ValueError(msg)
+    else:
+        return rendered_style
+
+
 class _EnvReloader(object):
 
     def __init__(self):
@@ -306,7 +317,16 @@ class _EnvReloader(object):
         DISABLE_JIT = _readenv("NUMBA_DISABLE_JIT", int, 0)
 
         # choose parallel backend to use
+        THREADING_LAYER_PRIORITY = _readenv(
+            "NUMBA_THREADING_LAYER_PRIORITY",
+            lambda string: string.split(),
+            ['tbb', 'omp', 'workqueue'],
+        )
         THREADING_LAYER = _readenv("NUMBA_THREADING_LAYER", str, 'default')
+
+        CAPTURED_ERRORS = _readenv("NUMBA_CAPTURED_ERRORS",
+                                   _validate_captured_errors_style,
+                                   'old_style')
 
         # CUDA Configs
 
@@ -416,6 +436,9 @@ class _EnvReloader(object):
         # The default value for the `debug` flag
         DEBUGINFO_DEFAULT = _readenv("NUMBA_DEBUGINFO", int, ENABLE_PROFILING)
         CUDA_DEBUGINFO_DEFAULT = _readenv("NUMBA_CUDA_DEBUGINFO", int, 0)
+
+        EXTEND_VARIABLE_LIFETIMES = _readenv("NUMBA_EXTEND_VARIABLE_LIFETIMES",
+                                             int, 0)
 
         # gdb binary location
         GDB_BINARY = _readenv("NUMBA_GDB_BINARY", str, '/usr/bin/gdb')

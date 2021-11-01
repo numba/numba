@@ -11,7 +11,8 @@ from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
 from numba.core import types, utils, ir, generators, cgutils
-from numba.core.errors import ForbiddenConstruct, LoweringError
+from numba.core.errors import (ForbiddenConstruct, LoweringError,
+                               NumbaNotImplementedError)
 from numba.core.lowering import BaseLower
 
 
@@ -165,7 +166,8 @@ class PyLower(BaseLower):
             self.return_exception_raised()
 
         else:
-            raise NotImplementedError(type(inst), inst)
+            msg = f"{type(inst)}, {inst}"
+            raise NumbaNotImplementedError(msg)
 
     @utils.cached_property
     def _omitted_typobj(self):

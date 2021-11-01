@@ -16,7 +16,7 @@ import numpy as np
 from numba import pndindex, literal_unroll
 from numba.core import types, utils, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
-                                    is_fortran)
+                                    is_fortran, check_is_integer)
 from numba.np.numpy_support import type_can_asarray, is_nonelike
 from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_getattr_generic,
@@ -1667,7 +1667,7 @@ def numpy_rot90(arr, k=1):
         raise errors.TypingError('The first argument "arr" must be an array')
 
     if arr.ndim < 2:
-        raise ValueError('Input must be >= 2-d.')
+        raise errors.NumbaValueError('Input must be >= 2-d.')
 
     def impl(arr, k=1):
         k = k % 4
@@ -4094,7 +4094,10 @@ def _arange_dtype(*args):
         # were wrapped in NumPy int*() calls it's not possible to detect the
         # difference between `np.arange(10)` and `np.arange(np.int64(10)`.
         NPY_TY = getattr(types, "int%s" % (8 * np.dtype(int).itemsize))
-        dtype = max(bounds + [NPY_TY,])
+
+        # unliteral these types such that `max` works.
+        unliteral_bounds = [types.unliteral(x) for x in bounds]
+        dtype = max(unliteral_bounds + [NPY_TY,])
 
     return dtype
 
@@ -4323,6 +4326,7 @@ def array_ascontiguousarray(context, builder, sig, args):
 
 
 @lower_builtin("array.astype", types.Array, types.DTypeSpec)
+@lower_builtin("array.astype", types.Array, types.StringLiteral)
 def array_astype(context, builder, sig, args):
     arytype = sig.args[0]
     ary = make_array(arytype)(context, builder, value=args[0])
@@ -5190,6 +5194,8 @@ def np_flip_ud(a):
 def _build_flip_slice_tuple(tyctx, sz):
     """ Creates a tuple of slices for np.flip indexing like
     `(slice(None, None, -1),) * sz` """
+    if not isinstance(sz, types.IntegerLiteral):
+        raise errors.RequireLiteralValue(sz)
     size = int(sz.literal_value)
     tuple_type = types.UniTuple(dtype=types.slice3_type, count=size)
     sig = tuple_type(sz)
@@ -5554,3 +5560,108 @@ def numpy_swapaxes(arr, axis1, axis2):
         return np.transpose(arr, axes_tuple)
 
     return impl
+
+
+@register_jitable
+def _take_along_axis_impl(
+        arr, indices, axis, Ni_orig, Nk_orig, indices_broadcast_shape
+):
+    # Based on example code in
+    # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/shape_base.py#L90-L103
+    # With addition of pre-broadcasting:
+    # https://github.com/numpy/numpy/issues/19704
+
+    # Wrap axis, it's used in tuple_setitem so must be (axis >= 0) to ensure
+    # the GEP is in bounds.
+    if axis < 0:
+        axis = arr.ndim + axis
+
+    # Broadcast the two arrays to matching shapes:
+    arr_shape = list(arr.shape)
+    arr_shape[axis] = 1
+    for i, (d1, d2) in enumerate(zip(arr_shape, indices.shape)):
+        if d1 == 1:
+            new_val = d2
+        elif d2 == 1:
+            new_val = d1
+        else:
+            if d1 != d2:
+                raise ValueError(
+                    "`arr` and `indices` dimensions don't match"
+                )
+            new_val = d1
+        indices_broadcast_shape = tuple_setitem(
+            indices_broadcast_shape, i, new_val
+        )
+    arr_broadcast_shape = tuple_setitem(
+        indices_broadcast_shape, axis, arr.shape[axis]
+    )
+    arr = np.broadcast_to(arr, arr_broadcast_shape)
+    indices = np.broadcast_to(indices, indices_broadcast_shape)
+
+    Ni = Ni_orig
+    if len(Ni_orig) > 0:
+        for i in range(len(Ni)):
+            Ni = tuple_setitem(Ni, i, arr.shape[i])
+    Nk = Nk_orig
+    if len(Nk_orig) > 0:
+        for i in range(len(Nk)):
+            Nk = tuple_setitem(Nk, i, arr.shape[axis + 1 + i])
+
+    J = indices.shape[axis]  # Need not equal M
+    out = np.empty(Ni + (J,) + Nk, arr.dtype)
+
+    np_s_ = (slice(None, None, None),)
+
+    for ii in np.ndindex(Ni):
+        for kk in np.ndindex(Nk):
+            a_1d = arr[ii + np_s_ + kk]
+            indices_1d = indices[ii + np_s_ + kk]
+            out_1d = out[ii + np_s_ + kk]
+            for j in range(J):
+                out_1d[j] = a_1d[indices_1d[j]]
+    return out
+
+
+@overload(np.take_along_axis)
+def arr_take_along_axis(arr, indices, axis):
+    if not isinstance(arr, types.Array):
+        raise errors.TypingError('The first argument "arr" must be an array')
+    if not isinstance(indices, types.Array):
+        raise errors.TypingError(
+            'The second argument "indices" must be an array')
+    if not isinstance(indices.dtype, types.Integer):
+        raise errors.TypingError('The indices array must contain integers')
+    if is_nonelike(axis):
+        arr_ndim = 1
+    else:
+        arr_ndim = arr.ndim
+    if arr_ndim != indices.ndim:
+        # Matches NumPy error:
+        raise errors.TypingError(
+            "`indices` and `arr` must have the same number of dimensions"
+        )
+
+    indices_broadcast_shape = tuple(range(indices.ndim))
+    if is_nonelike(axis):
+        def take_along_axis_impl(arr, indices, axis):
+            return _take_along_axis_impl(arr.flatten(), indices, 0, (), (),
+                                         indices_broadcast_shape)
+    else:
+        check_is_integer(axis, "axis")
+        if not isinstance(axis, types.IntegerLiteral):
+            raise errors.NumbaValueError("axis must be a literal value")
+        axis = axis.literal_value
+        if axis < 0:
+            axis = arr.ndim + axis
+
+        if axis < 0 or axis >= arr.ndim:
+            raise errors.NumbaValueError("axis is out of bounds")
+
+        Ni = tuple(range(axis))
+        Nk = tuple(range(axis + 1, arr.ndim))
+
+        def take_along_axis_impl(arr, indices, axis):
+            return _take_along_axis_impl(arr, indices, axis, Ni, Nk,
+                                         indices_broadcast_shape)
+    return take_along_axis_impl

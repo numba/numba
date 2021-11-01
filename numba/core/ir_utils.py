@@ -2212,7 +2212,7 @@ def check_and_legalize_ir(func_ir):
     enforce_no_dels(func_ir)
     # postprocess and emit ir.Dels
     post_proc = postproc.PostProcessor(func_ir)
-    post_proc.run(True)
+    post_proc.run(True, extend_lifetimes=config.EXTEND_VARIABLE_LIFETIMES)
 
 
 def convert_code_obj_to_function(code_obj, caller_ir):

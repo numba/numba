@@ -69,7 +69,9 @@ def is_supported_version():
 
 
 def cuda_error():
-    """Returns None or an exception if the CUDA driver fails to initialize.
+    """Returns None if there was no error initializing the CUDA driver.
+    If there was an error initializing the driver, a string describing the
+    error is returned.
     """
     return driver.driver.initialization_error
 

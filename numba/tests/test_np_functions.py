@@ -4430,6 +4430,115 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn('The third argument "axis2" is out of bounds for array'
                       ' of given dimension', str(raises.exception))
 
+    def test_take_along_axis(self):
+        a = np.arange(24).reshape((3, 1, 4, 2))
+
+        # For now axis must be literal, test explicitly defined implementations
+        @njit
+        def axis_none(a, i):
+            return np.take_along_axis(a, i, axis=None)
+
+        indices = np.array([1, 2], dtype=np.uint64)
+        self.assertPreciseEqual(axis_none(a, indices),
+                                axis_none.py_func(a, indices))
+
+        def gen(axis):
+            @njit
+            def impl(a, i):
+                return np.take_along_axis(a, i, axis)
+            return impl
+
+        for i in range(-1, a.ndim):
+            jfunc = gen(i)
+            ai = np.argsort(a, axis=i)
+            self.assertPreciseEqual(jfunc(a, ai), jfunc.py_func(a, ai))
+
+    def test_take_along_axis_broadcasting(self):
+        # Based on
+        # https://github.com/numpy/numpy/blob/v1.21.0/numpy/lib/tests/test_shape_base.py#L74-L79
+        # This demonstrates that arrays are broadcast before the algorithm is
+        # applied.
+        arr = np.ones((3, 4, 1))
+        ai = np.ones((1, 2, 5), dtype=np.intp)
+
+        def gen(axis):
+            @njit
+            def impl(a, i):
+                return np.take_along_axis(a, i, axis)
+            return impl
+
+        # Check same axis but expressed as positive/negative value
+        for i in (1, -2):
+            check = gen(i)
+            expected = check.py_func(arr, ai)
+            actual = check(arr, ai)
+            self.assertPreciseEqual(expected, actual)
+            self.assertEqual(actual.shape, (3, 2, 5))
+
+    def test_take_along_axis_exceptions(self):
+        arr2d = np.arange(8).reshape(2, 4)
+        # Valid indices when axis=None is passed to take_along_axis:
+        indices_none = np.array([0, 1], dtype=np.uint64)
+        indices = np.ones((2, 4), dtype=np.uint64)
+
+        # For now axis must be literal, so we need to construct functions with
+        # explicit axis:
+        def gen(axis):
+            @njit
+            def impl(a, i):
+                return np.take_along_axis(a, i, axis)
+            return impl
+
+        with self.assertRaises(TypingError) as raises:
+            gen("a")(arr2d, indices)
+        self.assertIn("axis must be an integer", str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            gen(-3)(arr2d, indices)
+        self.assertIn("axis is out of bounds", str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            gen(2)(arr2d, indices)
+        self.assertIn("axis is out of bounds", str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            gen(None)(12, indices_none)
+        self.assertIn('"arr" must be an array', str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            gen(None)(arr2d, 5)
+        self.assertIn('"indices" must be an array', str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            gen(None)(arr2d, np.array([0.0, 1.0]))
+        self.assertIn(
+            'indices array must contain integers',
+            str(raises.exception)
+        )
+
+        @njit
+        def not_literal_axis(a, i, axis):
+            return np.take_along_axis(a, i, axis)
+
+        with self.assertRaises(TypingError) as raises:
+            not_literal_axis(arr2d, indices, 0)
+        self.assertIn("axis must be a literal value", str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            gen(0)(arr2d, np.array([0, 1], dtype=np.uint64))
+        self.assertIn("must have the same number of dimensions",
+                      str(raises.exception))
+
+        # With axis None, array's ndim is implicitly 1.
+        with self.assertRaises(TypingError) as raises:
+            gen(None)(arr2d, arr2d)
+        self.assertIn("must have the same number of dimensions",
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            gen(0)(arr2d, np.ones((2, 3), dtype=np.uint64))
+        self.assertIn("dimensions don't match", str(raises.exception))
+
 
 class TestNPMachineParameters(TestCase):
     # tests np.finfo, np.iinfo, np.MachAr
