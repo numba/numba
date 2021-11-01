@@ -976,7 +976,6 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
     def test_npm_argument_charseq(self):
         # Test CharSeq as NPM argument
 
-
         def pyfunc(arr, i):
             return arr[i].n
 
@@ -1184,7 +1183,6 @@ class TestRecordArraySetItem(unittest.TestCase):
         # It tests setitem behaviour but also tests that literal_unroll accepts
         # a free variable tuple as argument
 
-
         arr = np.array([1, 2], dtype=recordtype2)
         fs = arr.dtype.names
 
@@ -1306,7 +1304,6 @@ class TestSubtyping(TestCase):
 
     def test_branch_pruning(self):
         # test subtyping behaviour in a case with a dead branch
-
 
         @njit
         def foo(rec, flag=None):
