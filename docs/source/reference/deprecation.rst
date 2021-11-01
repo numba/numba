@@ -452,3 +452,23 @@ In 0.54.0:
 - The ``ROCm`` target is officially unmaintained and the target source code has
   been moved out of the Numba main repository and into a `separate repository
   <https://github.com/numba/numba-rocm>`_.
+
+
+Deprecation of ``BaseContext.add_user_function()``
+==================================================
+
+``add_user_function()``  performs the same function as
+``insert_user_function()``, only with a check that the function has already
+been inserted at least once.  It is now deprecated as it is no longer used
+internally and it is expected that it is not used externally.
+
+Recommendations
+---------------
+
+Replace any uses of ``add_user_function()`` with ``insert_user_function()``.
+
+Schedule
+--------
+
+- In Numba 0.55: ``add_user_function()`` will be deprecated.
+- In Numba 0.56: ``add_user_function()`` will be removed.
