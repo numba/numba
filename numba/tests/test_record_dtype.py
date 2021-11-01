@@ -689,9 +689,8 @@ class TestRecordDtype(unittest.TestCase):
             np.testing.assert_equal(expect, got)
 
     def _test_record_args(self, revargs):
-        """
-        Testing scalar record value as argument
-        """
+        # Testing scalar record value as argument
+
         npval = self.refsample1d.copy()[0]
         nbval = self.nbsample1d.copy()[0]
         attrs = 'abc'
@@ -779,10 +778,8 @@ class TestRecordDtype(unittest.TestCase):
         self.assertEqual(expected, got)
 
     def test_record_return(self):
-        """
-        Testing scalar record value as return value.
-        We can only return a copy of the record.
-        """
+        # Testing scalar record value as return value.
+        # We can only return a copy of the record.
         pyfunc = record_return
         recty = numpy_support.from_dtype(recordtype)
         cfunc = self.get_cfunc(pyfunc, (recty[:], types.intp))
@@ -802,12 +799,11 @@ class TestRecordDtype(unittest.TestCase):
             self.assertEqual(sys.getrefcount(nbary), old_refcnt)
 
     def test_record_arg_transform(self):
-        """
-        Testing that transforming the name of a record type argument to a
-        function does not result in the fields of the record being used to
-        uniquely identify them, and that no other condition results in the
-        transformed name being excessively long.
-        """
+        # Testing that transforming the name of a record type argument to a
+        # function does not result in the fields of the record being used to
+        # uniquely identify them, and that no other condition results in the
+        # transformed name being excessively long.
+
         rec = numpy_support.from_dtype(recordtype3)
         transformed = mangle_type(rec)
         self.assertNotIn('first', transformed)
@@ -826,12 +822,11 @@ class TestRecordDtype(unittest.TestCase):
         self.assertLess(len(transformed), 50)
 
     def test_record_two_arrays(self):
-        """
-        Tests that comparison of NestedArrays by key is working correctly. If
-        the two NestedArrays in recordwith2arrays compare equal (same length
-        and ndim but different shape) incorrect code will be generated for one
-        of the functions.
-        """
+        # Tests that comparison of NestedArrays by key is working correctly. If
+        # the two NestedArrays in recordwith2arrays compare equal (same length
+        # and ndim but different shape) incorrect code will be generated for one
+        # of the functions.
+
         nbrecord = numpy_support.from_dtype(recordwith2arrays)
         rec = np.recarray(1, dtype=recordwith2arrays)[0]
         rec.k[:] = np.arange(200).reshape(10,20)
@@ -970,9 +965,8 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
             self.assertEqual(expected, got)
 
     def test_npm_argument_charseq(self):
-        """
-        Test CharSeq as NPM argument
-        """
+        # Test CharSeq as NPM argument
+
 
         def pyfunc(arr, i):
             return arr[i].n
@@ -989,9 +983,8 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
             self.assertEqual(expected, got)
 
     def test_py_argument_charseq(self):
-        """
-        Test CharSeq as python wrapper argument
-        """
+        # Test CharSeq as python wrapper argument
+
         pyfunc = set_charseq
 
         # compile
@@ -1007,9 +1000,8 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
             np.testing.assert_equal(self.refsample1d, self.nbsample1d)
 
     def test_py_argument_char_seq_near_overflow(self):
-        """
-        Test strings that are as long as the charseq capacity
-        """
+        # Test strings that are as long as the charseq capacity
+
         pyfunc = set_charseq
         # compile
         rectype = numpy_support.from_dtype(recordwithcharseq)
@@ -1029,9 +1021,8 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
         np.testing.assert_equal(self.refsample1d[1:], self.nbsample1d[1:])
 
     def test_py_argument_char_seq_truncate(self):
-        """
-        NumPy silently truncates strings to fix inside charseq
-        """
+        # NumPy silently truncates strings to fix inside charseq
+
         pyfunc = set_charseq
         # compile
         rectype = numpy_support.from_dtype(recordwithcharseq)
@@ -1057,9 +1048,9 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
 
 
 class TestRecordArrayGetItem(unittest.TestCase):
-    """
-    Test getitem when index is Literal[str]
-    """
+
+    # Test getitem when index is Literal[str]
+
     def test_literal_variable(self):
         arr = np.array([1, 2], dtype=recordtype2)
         pyfunc = get_field1
@@ -1073,35 +1064,32 @@ class TestRecordArrayGetItem(unittest.TestCase):
         self.assertEqual(pyfunc(arr[0]), jitfunc(arr[0]))
 
     def test_literal_variable_global_tuple(self):
-        """
-        This tests the getitem of record array when the indexes come from a
-        global tuple. It tests getitem behaviour but also tests that a global
-        tuple is being typed as a tuple of constants.
-        """
+        # This tests the getitem of record array when the indexes come from a
+        # global tuple. It tests getitem behaviour but also tests that a global
+        # tuple is being typed as a tuple of constants.
+
         arr = np.array([1, 2], dtype=recordtype2)
         pyfunc = get_field3
         jitfunc = njit(pyfunc)
         self.assertEqual(pyfunc(arr[0]), jitfunc(arr[0]))
 
     def test_literal_unroll_global_tuple(self):
-        """
-        This tests the getitem of record array when the indexes come from a
-        global tuple and are being unrolled.
-        It tests getitem behaviour but also tests that literal_unroll accepts
-        a global tuple as argument
-        """
+        # This tests the getitem of record array when the indexes come from a
+        # global tuple and are being unrolled.
+        # It tests getitem behaviour but also tests that literal_unroll accepts
+        # a global tuple as argument
+
         arr = np.array([1, 2], dtype=recordtype2)
         pyfunc = get_field4
         jitfunc = njit(pyfunc)
         self.assertEqual(pyfunc(arr[0]), jitfunc(arr[0]))
 
     def test_literal_unroll_free_var_tuple(self):
-        """
-        This tests the getitem of record array when the indexes come from a
-        free variable tuple (not local, not global) and are being unrolled.
-        It tests getitem behaviour but also tests that literal_unroll accepts
-        a free variable tuple as argument
-        """
+        # This tests the getitem of record array when the indexes come from a
+        # free variable tuple (not local, not global) and are being unrolled.
+        # It tests getitem behaviour but also tests that literal_unroll accepts
+        # a free variable tuple as argument
+
         fs = ('e', 'f')
         arr = np.array([1, 2], dtype=recordtype2)
 
@@ -1160,35 +1148,33 @@ class TestRecordArraySetItem(unittest.TestCase):
         self.assertEqual(pyfunc(arr[0].copy()), jitfunc(arr[0].copy()))
 
     def test_literal_variable_global_tuple(self):
-        """
-        This tests the setitem of record array when the indexes come from a
-        global tuple. It tests getitem behaviour but also tests that a global
-        tuple is being typed as a tuple of constants.
-        """
+        # This tests the setitem of record array when the indexes come from a
+        # global tuple. It tests getitem behaviour but also tests that a global
+        # tuple is being typed as a tuple of constants.
+
         arr = np.array([1, 2], dtype=recordtype2)
         pyfunc = set_field3
         jitfunc = njit(pyfunc)
         self.assertEqual(pyfunc(arr[0].copy()), jitfunc(arr[0].copy()))
 
     def test_literal_unroll_global_tuple(self):
-        """
-        This tests the setitem of record array when the indexes come from a
-        global tuple and are being unrolled.
-        It tests setitem behaviour but also tests that literal_unroll accepts
-        a global tuple as argument
-        """
+        # This tests the setitem of record array when the indexes come from a
+        # global tuple and are being unrolled.
+        # It tests setitem behaviour but also tests that literal_unroll accepts
+        # a global tuple as argument
+
         arr = np.array([1, 2], dtype=recordtype2)
         pyfunc = set_field4
         jitfunc = njit(pyfunc)
         self.assertEqual(pyfunc(arr[0].copy()), jitfunc(arr[0].copy()))
 
     def test_literal_unroll_free_var_tuple(self):
-        """
-        This tests the setitem of record array when the indexes come from a
-        free variable tuple (not local, not global) and are being unrolled.
-        It tests setitem behaviour but also tests that literal_unroll accepts
-        a free variable tuple as argument
-        """
+
+        # This tests the setitem of record array when the indexes come from a
+        # free variable tuple (not local, not global) and are being unrolled.
+        # It tests setitem behaviour but also tests that literal_unroll accepts
+        # a free variable tuple as argument
+
 
         arr = np.array([1, 2], dtype=recordtype2)
         fs = arr.dtype.names
@@ -1222,9 +1208,8 @@ class TestSubtyping(TestCase):
         self.func = lambda rec: rec['a']
 
     def test_common_field(self):
-        """
-        Test that subtypes do not require new compilations
-        """
+        # Test that subtypes do not require new compilations
+
         njit_sig = njit(types.float64(typeof(self.a_rec1)))
         functions = [
             njit(self.func),  # jitted function with open njit
@@ -1252,9 +1237,8 @@ class TestSubtyping(TestCase):
         self.assertEqual(2 * self.value + 1, y)
 
     def test_array_field(self):
-        """
-        Tests subtyping with array fields
-        """
+        # Tests subtyping with array fields
+
         rec1 = np.empty(1, dtype=[('a', 'f8', (4,))])[0]
         rec1['a'][0] = 1
         rec2 = np.empty(1, dtype=[('a', 'f8', (4,)), ('b', 'f8')])[0]
@@ -1270,10 +1254,9 @@ class TestSubtyping(TestCase):
         self.assertEqual(self.value, y)
 
     def test_no_subtyping1(self):
-        """
-        test that conversion rules don't allow subtypes with different field
-        names
-        """
+        # test that conversion rules don't allow subtypes with different field
+        # names
+
         c_dtype = np.dtype([('c', 'f8')])
         c_rec1 = np.array([1], dtype=c_dtype)[0]
 
@@ -1289,9 +1272,8 @@ class TestSubtyping(TestCase):
                           str(err.exception))
 
     def test_no_subtyping2(self):
-        """
-        test that conversion rules don't allow smaller records as subtypes
-        """
+        # test that conversion rules don't allow smaller records as subtypes
+
         jit_fc = njit(self.func)
         jit_fc(self.ab_rec1)
         jit_fc.disable_compile()
@@ -1301,10 +1283,9 @@ class TestSubtyping(TestCase):
                           str(err.exception))
 
     def test_no_subtyping3(self):
-        """
-        test that conversion rules don't allow records with fields with same
-        name but incompatible type
-        """
+        # test that conversion rules don't allow records with fields with same
+        # name but incompatible type
+
         other_a_rec = np.array(['a'], dtype=np.dtype([('a', 'U25')]))[0]
         jit_fc = njit(self.func)
         jit_fc(self.a_rec1)
@@ -1315,9 +1296,8 @@ class TestSubtyping(TestCase):
                           str(err.exception))
 
     def test_branch_pruning(self):
-        """
-        test subtyping behaviour in a case with a dead branch
-        """
+        # test subtyping behaviour in a case with a dead branch
+
 
         @njit
         def foo(rec, flag=None):
@@ -1349,9 +1329,8 @@ class TestNestedArrays(TestCase):
         return cres.entry_point
 
     def test_record_write_array(self):
-        '''
-        Testing writing to a 1D array within a structured type
-        '''
+        # Testing writing to a 1D array within a structured type
+
         nbval = np.recarray(1, dtype=recordwitharray)
         nbrecord = numpy_support.from_dtype(recordwitharray)
         cfunc = self.get_cfunc(record_write_array, (nbrecord,))
@@ -1364,9 +1343,8 @@ class TestNestedArrays(TestCase):
         np.testing.assert_equal(expected, nbval)
 
     def test_record_write_2d_array(self):
-        '''
-        Test writing to a 2D array within a structured type
-        '''
+        # Test writing to a 2D array within a structured type
+
         nbval = np.recarray(1, dtype=recordwith2darray)
         nbrecord = numpy_support.from_dtype(recordwith2darray)
         cfunc = self.get_cfunc(record_write_2d_array, (nbrecord,))
@@ -1379,9 +1357,8 @@ class TestNestedArrays(TestCase):
         np.testing.assert_equal(expected, nbval)
 
     def test_record_read_array(self):
-        '''
-        Test reading from a 1D array within a structured type
-        '''
+        # Test reading from a 1D array within a structured type
+
         nbval = np.recarray(1, dtype=recordwitharray)
         nbval[0].h[0] = 15.0
         nbval[0].h[1] = 25.0
@@ -1395,12 +1372,11 @@ class TestNestedArrays(TestCase):
         np.testing.assert_equal(res, nbval[0].h[1])
 
     def test_record_read_arrays(self):
-        """
-        Test reading the array of 1D array
+        # Test reading the array of 1D array
+        #
+        # This array or arrays is created by getitem on the
+        # record array (as opposed to getitem on a record)
 
-        This array or arrays is created by getitem on the
-        record array (as opposed to getitem on a record)
-        """
         nbval = np.recarray(2, dtype=recordwitharray)
         nbval[0].h[0] = 15.0
         nbval[0].h[1] = 25.0
@@ -1412,9 +1388,8 @@ class TestNestedArrays(TestCase):
         np.testing.assert_equal(res, nbval.h)
 
     def test_record_read_2d_array(self):
-        '''
-        Test reading from a 2D array within a structured type
-        '''
+        # Test reading from a 2D array within a structured type
+
         nbval = np.recarray(1, dtype=recordwith2darray)
         nbval[0].j = np.asarray([1.5, 2.5, 3.5, 4.5, 5.5, 6.5],
                                 np.float32).reshape(3, 2)
@@ -1432,9 +1407,8 @@ class TestNestedArrays(TestCase):
         np.testing.assert_equal(res, nbval[0].j[1, 0])
 
     def test_set_record(self):
-        """
-        Test setting an entire record
-        """
+        # Test setting an entire record
+
         rec = np.ones(2, dtype=recordwith2darray).view(np.recarray)[0]
         nbarr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
         arr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
@@ -1447,9 +1421,8 @@ class TestNestedArrays(TestCase):
         np.testing.assert_equal(nbarr, arr)
 
     def test_set_array(self):
-        """
-        Test setting an entire array within one record
-        """
+        # Test setting an entire array within one record
+
         arr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
         rec = arr[0]
         nbarr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
@@ -1462,9 +1435,8 @@ class TestNestedArrays(TestCase):
             np.testing.assert_equal(nbarr, arr)
 
     def test_set_arrays(self):
-        """
-        Test setting an entire array of arrays (multiple records)
-        """
+        # Test setting an entire array of arrays (multiple records)
+
         arr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
         nbarr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
         ty = typeof(nbarr)
@@ -1478,12 +1450,11 @@ class TestNestedArrays(TestCase):
             np.testing.assert_equal(arr_res, arr_expected)
 
     def test_getitem_idx(self):
-        """
-        Test __getitem__ with numerical index
+        # Test __getitem__ with numerical index
 
-        This test returning a record when passing an array and
-        return the first item when passing a record
-        """
+        # This test returning a record when passing an array and
+        # return the first item when passing a record
+
         nbarr = np.recarray(2, dtype=recordwitharray)
         nbarr[0] = np.array([(1, (2,3))], dtype=recordwitharray)[0]
         for arg in [nbarr, nbarr[0]]:
@@ -1495,12 +1466,11 @@ class TestNestedArrays(TestCase):
             np.testing.assert_equal(arr_res, arr_expected)
 
     def test_getitem_idx_2darray(self):
-        """
-        Test __getitem__ with numerical index
+        # Test __getitem__ with numerical index
+        #
+        # This test returning a record when passing an array and
+        # return the first item when passing a record
 
-        This test returning a record when passing an array and
-        return the first item when passing a record
-        """
         nbarr = np.recarray(2, dtype=recordwith2darray)
         nbarr[0] = np.array([(1, ((1,2),(4,5),(2,3)))],
                             dtype=recordwith2darray)[0]
@@ -1513,12 +1483,11 @@ class TestNestedArrays(TestCase):
             np.testing.assert_equal(arr_res, arr_expected)
 
     def test_return_getattr_getitem_fieldname(self):
-        """
-        Test __getitem__ with field name and getattr .field_name
+        # Test __getitem__ with field name and getattr .field_name
+        #
+        # This tests returning a array of nestedarrays when passing an array and
+        # returning a nestedarray when passing a record
 
-        This tests returning a array of nestedarrays when passing an array and
-        returning a nestedarray when passing a record
-        """
         nbarr = np.recarray(2, dtype=recordwitharray)
         nbarr[0] = np.array([(1, (2,3))], dtype=recordwitharray)[0]
         for arg in [nbarr, nbarr[0]]:
@@ -1531,9 +1500,8 @@ class TestNestedArrays(TestCase):
                 np.testing.assert_equal(arr_res, arr_expected)
 
     def test_return_array(self):
-        """
-        Test getitem record AND array within record and returning it
-        """
+        # Test getitem record AND array within record and returning it
+
         nbval = np.recarray(2, dtype=recordwitharray)
         nbval[0] = np.array([(1, (2,3))], dtype=recordwitharray)[0]
         for pyfunc in [record_read_array0, record_read_array0_alt]:
