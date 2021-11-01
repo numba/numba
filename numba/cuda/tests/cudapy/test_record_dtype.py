@@ -146,6 +146,10 @@ def record_read_array1(ary):
     return ary.h[1]
 
 
+def record_read_whole_array(ary):
+    return ary.h
+
+
 def record_read_2d_array00(ary):
     return ary.j[0,0]
 
@@ -381,6 +385,17 @@ class TestNestedArrays(CUDATestCase):
         cfunc = self.get_cfunc(record_read_array1, np.float32)
         res = cfunc(nbval[0])
         np.testing.assert_equal(res, nbval[0].h[1])
+
+    def test_record_read_arrays(self):
+        # Test reading from a 1D array within a structured type
+        nbval = np.recarray(2, dtype=recordwitharray)
+        nbval[0].h[0] = 15.0
+        nbval[0].h[1] = 25.0
+        nbval[1].h[0] = 35.0
+        nbval[1].h[1] = 45.4
+        cfunc = self.get_cfunc(record_read_whole_array, np.float32)
+        res = cfunc(nbval)
+        np.testing.assert_equal(res, nbval.h)
 
     def test_record_read_2d_array(self):
         # Test reading from a 2D array within a structured type
