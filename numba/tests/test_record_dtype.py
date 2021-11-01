@@ -1394,6 +1394,23 @@ class TestNestedArrays(TestCase):
         res = cfunc(nbval[0])
         np.testing.assert_equal(res, nbval[0].h[1])
 
+    def test_record_read_arrays(self):
+        """
+        Test reading the array of 1D array
+
+        This array or arrays is created by getitem on the
+        record array (as opposed to getitem on a record)
+        """
+        nbval = np.recarray(2, dtype=recordwitharray)
+        nbval[0].h[0] = 15.0
+        nbval[0].h[1] = 25.0
+        nbval[1].h[0] = 35.0
+        nbval[1].h[1] = 45.4
+        ty_arr = typeof(nbval)
+        cfunc = self.get_cfunc(record_read_whole_array, (ty_arr,))
+        res = cfunc(nbval)
+        np.testing.assert_equal(res, nbval.h)
+
     def test_record_read_2d_array(self):
         '''
         Test reading from a 2D array within a structured type
