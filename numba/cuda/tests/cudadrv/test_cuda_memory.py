@@ -52,43 +52,30 @@ class TestCudaMemory(ContextResettingTestCase):
 
     def test_derived_pointer(self):
         # Use MemoryPointer.view to create derived pointer
-        if driver.USE_NV_BINDING:
-            def check(m, offset):
-                # create view
-                v1 = m.view(offset)
-                self.assertEqual(int(v1.owner.handle), int(m.handle))
-                self.assertEqual(m.refct, 2)
-                self.assertEqual(int(v1.handle) - offset, int(v1.owner.handle))
-                # create a view
-                v2 = v1.view(offset)
-                self.assertEqual(int(v2.owner.handle), int(m.handle))
-                self.assertEqual(int(v2.owner.handle), int(m.handle))
-                self.assertEqual(int(v2.handle) - offset * 2,
-                                 int(v2.owner.handle))
-                self.assertEqual(m.refct, 3)
-                del v2
-                self.assertEqual(m.refct, 2)
-                del v1
-                self.assertEqual(m.refct, 1)
-        else:
-            def check(m, offset):
-                # create view
-                v1 = m.view(offset)
-                self.assertEqual(v1.owner.handle.value, m.handle.value)
-                self.assertEqual(m.refct, 2)
-                self.assertEqual(v1.handle.value - offset,
-                                 v1.owner.handle.value)
-                # create a view
-                v2 = v1.view(offset)
-                self.assertEqual(v2.owner.handle.value, m.handle.value)
-                self.assertEqual(v2.owner.handle.value, m.handle.value)
-                self.assertEqual(v2.handle.value - offset * 2,
-                                 v2.owner.handle.value)
-                self.assertEqual(m.refct, 3)
-                del v2
-                self.assertEqual(m.refct, 2)
-                del v1
-                self.assertEqual(m.refct, 1)
+
+        def handle_val(mem):
+            if driver.USE_NV_BINDING:
+                return int(mem.handle)
+            else:
+                return mem.handle.value
+
+        def check(m, offset):
+            # create view
+            v1 = m.view(offset)
+            self.assertEqual(handle_val(v1.owner), handle_val(m))
+            self.assertEqual(m.refct, 2)
+            self.assertEqual(handle_val(v1) - offset, handle_val(v1.owner))
+            # create a view
+            v2 = v1.view(offset)
+            self.assertEqual(handle_val(v2.owner), handle_val(m))
+            self.assertEqual(handle_val(v2.owner), handle_val(m))
+            self.assertEqual(handle_val(v2) - offset * 2,
+                             handle_val(v2.owner))
+            self.assertEqual(m.refct, 3)
+            del v2
+            self.assertEqual(m.refct, 2)
+            del v1
+            self.assertEqual(m.refct, 1)
 
         m = self.context.memalloc(1024)
         check(m=m, offset=0)
