@@ -344,6 +344,29 @@ init_ufunc_dispatch(void)
     return result;
 }
 
+
+NUMBA_EXPORT_FUNC(PyObject)
+dufunc_reduce_direct(int *curr_ufunc,PyObject arr,int axis)
+{   
+    int result = 0;
+    PyMethodDef * crnt = PyUFunc_Type.tp_methods;
+    const char * crnt_name = NULL;
+    PyCFunctionWithKeywords curr_ufunc_reduce;
+    for (; crnt->ml_name != NULL; crnt++) {
+        crnt_name = crnt->ml_name;
+        if(crnt_name[0]=='r'){
+            if (strncmp(crnt_name, "reduce", 7) == 0) {
+                curr_ufunc_reduce =
+                    (PyCFunctionWithKeywords)crnt->ml_meth;
+            }
+        }
+    }
+
+    result = (curr_ufunc_reduce != NULL);
+    
+    return curr_ufunc_reduce((PyObject*)curr_ufunc)(arr, axis);
+}
+
 static PyObject *
 dufunc_reduce(PyDUFuncObject * self, PyObject * args, PyObject *kws)
 {
