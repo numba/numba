@@ -2591,6 +2591,7 @@ class Linker(metaclass=ABCMeta):
         """Add code from a file to the link"""
 
     def add_file_guess_ext(self, path):
+        """Add a file to the link, guessing its type from its extension."""
         ext = path.rsplit('.', 1)[1]
         kind = FILE_EXTENSION_MAP[ext]
         self.add_file(path, kind)
