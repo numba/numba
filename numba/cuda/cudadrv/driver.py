@@ -368,17 +368,19 @@ class Driver(object):
         setattr(self, fname, absent_function)
         return absent_function
 
+    def _detect_fork(self):
+        if self.pid is not None and _getpid() != self.pid:
+            msg = 'pid %s forked from pid %s after CUDA driver init'
+            _logger.critical(msg, _getpid(), self.pid)
+            raise CudaDriverError("CUDA initialized before forking")
+
     def _check_ctypes_error(self, fname, retcode):
         if retcode != enums.CUDA_SUCCESS:
             errname = ERROR_MAP.get(retcode, "UNKNOWN_CUDA_ERROR")
             msg = "Call to %s results in %s" % (fname, errname)
             _logger.error(msg)
             if retcode == enums.CUDA_ERROR_NOT_INITIALIZED:
-                # Detect forking
-                if self.pid is not None and _getpid() != self.pid:
-                    msg = 'pid %s forked from pid %s after CUDA driver init'
-                    _logger.critical(msg, _getpid(), self.pid)
-                    raise CudaDriverError("CUDA initialized before forking")
+                self._detect_fork()
             raise CudaAPIError(retcode, msg)
 
     def _check_cuda_python_error(self, fname, returned):
@@ -391,11 +393,7 @@ class Driver(object):
             msg = "Call to %s results in %s" % (fname, retcode.name)
             _logger.error(msg)
             if retcode == binding.CUresult.CUDA_ERROR_NOT_INITIALIZED:
-                # Detect forking
-                if self.pid is not None and _getpid() != self.pid:
-                    msg = 'pid %s forked from pid %s after CUDA driver init'
-                    _logger.critical(msg, _getpid(), self.pid)
-                    raise CudaDriverError("CUDA initialized before forking")
+                self._detect_fork()
             raise CudaAPIError(retcode, msg)
 
         return retval
