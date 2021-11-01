@@ -1,6 +1,5 @@
 from ctypes import byref, c_int, c_void_p, sizeof
 
-from numba import config
 from numba.cuda.cudadrv.driver import (host_to_device, device_to_host, driver,
                                        launch_kernel)
 from numba.cuda.cudadrv import devices, drvapi, driver as _driver
@@ -90,9 +89,9 @@ class TestCudaDriver(CUDATestCase):
         ptr = memory.device_ctypes_pointer
         stream = 0
 
-        if config.CUDA_USE_CUDA_PYTHON:
+        if _driver.USE_NV_BINDING:
             ptr = c_void_p(int(ptr))
-            stream = _driver.cuda_driver.CUstream(stream)
+            stream = _driver.binding.CUstream(stream)
 
         launch_kernel(function.handle,  # Kernel
                       1,   1, 1,        # gx, gy, gz
@@ -120,7 +119,7 @@ class TestCudaDriver(CUDATestCase):
             host_to_device(memory, array, sizeof(array), stream=stream)
 
             ptr = memory.device_ctypes_pointer
-            if config.CUDA_USE_CUDA_PYTHON:
+            if _driver.USE_NV_BINDING:
                 ptr = c_void_p(int(ptr))
 
             launch_kernel(function.handle,  # Kernel
@@ -176,7 +175,7 @@ class TestCudaDriver(CUDATestCase):
         # Test properties of a stream created from an external stream object.
         # We use the driver API directly to create a stream, to emulate an
         # external library creating a stream
-        if config.CUDA_USE_CUDA_PYTHON:
+        if _driver.USE_NV_BINDING:
             handle = driver.cuStreamCreate(0)
             ptr = int(handle)
         else:

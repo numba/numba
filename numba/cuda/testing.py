@@ -10,7 +10,7 @@ from numba.tests.support import (
     redirect_c_stdout,
 )
 from numba.cuda.cuda_paths import get_conda_ctk
-from numba.cuda.cudadrv import devices, libs
+from numba.cuda.cudadrv import driver, devices, libs
 from numba.core import config
 from numba.tests.support import TestCase
 import unittest
@@ -127,7 +127,7 @@ def skip_unless_cc_60(fn):
 
 
 def xfail_with_cuda_python(fn):
-    if config.CUDA_USE_CUDA_PYTHON:
+    if driver.USE_NV_BINDING:
         return unittest.expectedFailure(fn)
     else:
         return fn

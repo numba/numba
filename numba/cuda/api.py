@@ -227,8 +227,8 @@ def open_ipc_array(handle, shape, dtype, strides=None, offset=0):
     # compute size
     size = np.prod(shape) * dtype.itemsize
     # manually recreate the IPC mem handle
-    if config.CUDA_USE_CUDA_PYTHON:
-        driver_handle = driver.cuda_driver.CUipcMemHandle()
+    if driver.USE_NV_BINDING:
+        driver_handle = driver.binding.CUipcMemHandle()
         driver_handle.reserved = handle
     else:
         driver_handle = driver.drvapi.cu_ipc_mem_handle(*handle)

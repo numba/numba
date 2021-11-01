@@ -2,7 +2,7 @@ import numbers
 from ctypes import byref
 import weakref
 
-from numba import config, cuda
+from numba import cuda
 from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 from numba.cuda.cudadrv import driver
 
@@ -81,8 +81,8 @@ class Test3rdPartyContext(CUDATestCase):
     def test_attached_primary(self, extra_work=lambda: None):
         # Emulate primary context creation by 3rd party
         the_driver = driver.driver
-        if config.CUDA_USE_CUDA_PYTHON:
-            dev = driver.cuda_driver.CUdevice(0)
+        if driver.USE_NV_BINDING:
+            dev = driver.binding.CUdevice(0)
             hctx = the_driver.cuDevicePrimaryCtxRetain(dev)
         else:
             dev = 0
@@ -94,7 +94,7 @@ class Test3rdPartyContext(CUDATestCase):
             # Check that the context from numba matches the created primary
             # context.
             my_ctx = cuda.current_context()
-            if config.CUDA_USE_CUDA_PYTHON:
+            if driver.USE_NV_BINDING:
                 self.assertEqual(int(my_ctx.handle), int(ctx.handle))
             else:
                 self.assertEqual(my_ctx.handle.value, ctx.handle.value)
@@ -107,9 +107,9 @@ class Test3rdPartyContext(CUDATestCase):
     def test_attached_non_primary(self):
         # Emulate non-primary context creation by 3rd party
         the_driver = driver.driver
-        if config.CUDA_USE_CUDA_PYTHON:
+        if driver.USE_NV_BINDING:
             flags = 0
-            dev = driver.cuda_driver.CUdevice(0)
+            dev = driver.binding.CUdevice(0)
             hctx = the_driver.cuCtxCreate(flags, dev)
         else:
             hctx = driver.drvapi.cu_context()

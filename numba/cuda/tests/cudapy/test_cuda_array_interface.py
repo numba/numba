@@ -1,7 +1,8 @@
 import numpy as np
 
 from numba import vectorize, guvectorize
-from numba import config, cuda
+from numba import cuda
+from numba.cuda.cudadrv import driver
 from numba.cuda.testing import unittest, ContextResettingTestCase, ForeignArray
 from numba.cuda.testing import skip_on_cudasim, skip_if_external_memmgr
 from numba.tests.support import linux_only, override_config
@@ -11,7 +12,7 @@ from unittest.mock import call, patch
 @skip_on_cudasim('CUDA Array Interface is not supported in the simulator')
 class TestCudaArrayInterface(ContextResettingTestCase):
     def assertPointersEqual(self, a, b):
-        if config.CUDA_USE_CUDA_PYTHON:
+        if driver.USE_NV_BINDING:
             self.assertEqual(int(a.device_ctypes_pointer),
                              int(b.device_ctypes_pointer))
 
@@ -31,7 +32,7 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         self.assertPointersEqual(wrapped, d_arr)
 
     def get_stream_value(self, stream):
-        if config.CUDA_USE_CUDA_PYTHON:
+        if driver.USE_NV_BINDING:
             return int(stream.handle)
         else:
             return stream.handle.value

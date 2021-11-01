@@ -725,8 +725,8 @@ class _Kernel(serialize.ReduceMixin):
         for t, v in zip(self.argument_types, args):
             self._prepare_args(t, v, stream, retr, kernelargs)
 
-        if config.CUDA_USE_CUDA_PYTHON:
-            zero_stream = driver.cuda_driver.CUstream(0)
+        if driver.USE_NV_BINDING:
+            zero_stream = driver.binding.CUstream(0)
         else:
             zero_stream = None
 
@@ -804,7 +804,7 @@ class _Kernel(serialize.ReduceMixin):
 
             ptr = driver.device_pointer(devary)
 
-            if config.CUDA_USE_CUDA_PYTHON:
+            if driver.USE_NV_BINDING:
                 ptr = int(ptr)
 
             data = ctypes.c_void_p(ptr)
@@ -849,7 +849,7 @@ class _Kernel(serialize.ReduceMixin):
         elif isinstance(ty, types.Record):
             devrec = wrap_arg(val).to_device(retr, stream)
             ptr = devrec.device_ctypes_pointer
-            if config.CUDA_USE_CUDA_PYTHON:
+            if driver.USE_NV_BINDING:
                 ptr = ctypes.c_void_p(int(ptr))
             kernelargs.append(ptr)
 

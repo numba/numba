@@ -105,8 +105,8 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
                 self.alloc_size = _driver.device_memory_size(gpu_data)
         else:
             # Make NULL pointer for empty allocation
-            if config.CUDA_USE_CUDA_PYTHON:
-                null = _driver.cuda_driver.CUdeviceptr(0)
+            if _driver.USE_NV_BINDING:
+                null = _driver.binding.CUdeviceptr(0)
             else:
                 null = c_void_p(0)
             gpu_data = _driver.MemoryPointer(context=devices.get_context(),
@@ -118,7 +118,7 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
 
     @property
     def __cuda_array_interface__(self):
-        if config.CUDA_USE_CUDA_PYTHON:
+        if _driver.USE_NV_BINDING:
             if self.device_ctypes_pointer is not None:
                 ptr = int(self.device_ctypes_pointer)
             else:
@@ -201,8 +201,8 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
         """Returns the ctypes pointer to the GPU data buffer
         """
         if self.gpu_data is None:
-            if config.CUDA_USE_CUDA_PYTHON:
-                return _driver.cuda_driver.CUdeviceptr(0)
+            if _driver.USE_NV_BINDING:
+                return _driver.binding.CUdeviceptr(0)
             else:
                 return c_void_p(0)
         else:

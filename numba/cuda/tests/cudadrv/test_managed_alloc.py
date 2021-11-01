@@ -1,7 +1,7 @@
 import numpy as np
 from ctypes import byref, c_size_t
-from numba.cuda.cudadrv.driver import device_memset, driver
-from numba import config, cuda
+from numba.cuda.cudadrv.driver import device_memset, driver, USE_NV_BINDING
+from numba import cuda
 from numba.cuda.testing import unittest, ContextResettingTestCase
 from numba.cuda.testing import skip_on_cudasim, skip_on_arm
 from numba.tests.support import linux_only
@@ -16,7 +16,7 @@ class TestManagedAlloc(ContextResettingTestCase):
         # We use a driver function to directly get the total GPU memory because
         # an EMM plugin may report something different (or not implement
         # get_memory_info at all).
-        if config.CUDA_USE_CUDA_PYTHON:
+        if USE_NV_BINDING:
             free, total = driver.cuMemGetInfo()
             return total
         else:

@@ -122,7 +122,7 @@ class _EnvReloader(object):
         self.validate()
 
     def validate(self):
-        if CUDA_USE_CUDA_PYTHON:  # noqa: F821
+        if CUDA_USE_NVIDIA_BINDING:  # noqa: F821
             try:
                 import cuda  # noqa: F401
             except ImportError as ie:
@@ -184,9 +184,9 @@ class _EnvReloader(object):
         CUDA_LOW_OCCUPANCY_WARNINGS = _readenv(
             "NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS", int, 1)
 
-        # Whether to use the official CUDA Python API
-        CUDA_USE_CUDA_PYTHON = _readenv(
-            "NUMBA_CUDA_USE_CUDA_PYTHON", int, 0)
+        # Whether to use the official CUDA Python API Bindings
+        CUDA_USE_NVIDIA_BINDING = _readenv(
+            "NUMBA_CUDA_USE_NVIDIA_BINDING", int, 0)
 
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)

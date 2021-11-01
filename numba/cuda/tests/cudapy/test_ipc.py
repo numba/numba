@@ -5,7 +5,8 @@ import pickle
 
 import numpy as np
 
-from numba import config, cuda
+from numba import cuda
+from numba.cuda.cudadrv import driver
 from numba.cuda.testing import (skip_on_arm, skip_on_cudasim,
                                 skip_under_cuda_memcheck,
                                 ContextResettingTestCase, ForeignArray)
@@ -92,7 +93,7 @@ class TestIpcMemory(ContextResettingTestCase):
         ipch = ctx.get_ipc_handle(devarr.gpu_data)
 
         # manually prepare for serialization as bytes
-        if config.CUDA_USE_CUDA_PYTHON:
+        if driver.USE_NV_BINDING:
             handle_bytes = ipch.handle.reserved
         else:
             handle_bytes = bytes(ipch.handle)
@@ -139,7 +140,7 @@ class TestIpcMemory(ContextResettingTestCase):
         self.assertIs(ipch_recon.base, None)
         self.assertEqual(ipch_recon.size, ipch.size)
 
-        if config.CUDA_USE_CUDA_PYTHON:
+        if driver.USE_NV_BINDING:
             self.assertEqual(ipch_recon.handle.reserved, ipch.handle.reserved)
         else:
             self.assertEqual(tuple(ipch_recon.handle), tuple(ipch.handle))
@@ -255,7 +256,7 @@ class TestIpcStaged(ContextResettingTestCase):
         buf = pickle.dumps(ipch)
         ipch_recon = pickle.loads(buf)
         self.assertIs(ipch_recon.base, None)
-        if config.CUDA_USE_CUDA_PYTHON:
+        if driver.USE_NV_BINDING:
             self.assertEqual(ipch_recon.handle.reserved, ipch.handle.reserved)
         else:
             self.assertEqual(tuple(ipch_recon.handle), tuple(ipch.handle))

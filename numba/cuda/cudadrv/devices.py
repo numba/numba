@@ -14,8 +14,7 @@ import functools
 import threading
 from contextlib import contextmanager
 
-from .driver import driver
-from numba.core import config
+from .driver import driver, USE_NV_BINDING
 
 
 class _DeviceList(object):
@@ -140,7 +139,7 @@ class _Runtime(object):
             else:
                 return attached_ctx
         else:
-            if config.CUDA_USE_CUDA_PYTHON:
+            if USE_NV_BINDING:
                 devnum = int(devnum)
             return self._activate_context_for(devnum)
 
@@ -158,7 +157,7 @@ class _Runtime(object):
                     # Get primary context for the active device
                     ctx = self.gpus[ac.devnum].get_primary_context()
                     # Is active context the primary context?
-                    if config.CUDA_USE_CUDA_PYTHON:
+                    if USE_NV_BINDING:
                         ctx_handle = int(ctx.handle)
                         ac_ctx_handle = int(ac.context_handle)
                     else:
