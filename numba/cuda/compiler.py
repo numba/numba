@@ -957,7 +957,7 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         # Copied and simplified from _DispatcherBase.get_call_template.
         """
         Get a typing.ConcreteTemplate for this dispatcher and the given
-        *args* and *kws* types.  This allows to resolve the return type.
+        *args* and *kws* types.  This allows resolution of the return type.
 
         A (template, pysig, args, kws) tuple is returned.
         """
@@ -972,8 +972,6 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
             func_name = self.py_func.__name__
             name = "CallTemplate({0})".format(func_name)
 
-            # The `key` isn't really used except for diagnosis here,
-            # so avoid keeping a reference to `cfunc`.
             call_template = typing.make_concrete_template(
                 name, key=func_name, signatures=self.nopython_signatures)
             pysig = utils.pysignature(self.py_func)
