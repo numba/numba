@@ -2554,7 +2554,7 @@ else:
         'a': enums.CU_JIT_INPUT_LIBRARY,
         'lib': enums.CU_JIT_INPUT_LIBRARY,
         'cubin': enums.CU_JIT_INPUT_CUBIN,
-        'fatbin': enums.CU_JIT_INPUT_FATBINAR,
+        'fatbin': enums.CU_JIT_INPUT_FATBINARY,
     }
 
 
