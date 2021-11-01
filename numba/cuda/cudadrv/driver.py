@@ -41,6 +41,10 @@ USE_NV_BINDING = config.CUDA_USE_NVIDIA_BINDING
 
 if USE_NV_BINDING:
     from cuda import cuda as binding
+    # There is no definition of the default stream in the Nvidia bindings (nor
+    # is there at the C/C++ level), so we define it here so we don't need to
+    # use a magic number 0 in places where we want the default stream.
+    CU_STREAM_DEFAULT = 0
 
 MIN_REQUIRED_CC = (3, 0)
 
@@ -1416,28 +1420,33 @@ class Context(object):
 
     def get_default_stream(self):
         if USE_NV_BINDING:
-            handle = binding.CUstream(0)
+            handle = binding.CUstream(CU_STREAM_DEFAULT)
         else:
             handle = drvapi.cu_stream(drvapi.CU_STREAM_DEFAULT)
         return Stream(weakref.proxy(self), handle, None)
 
     def get_legacy_default_stream(self):
         if USE_NV_BINDING:
-            handle = binding.CUstream(1)
+            handle = binding.CUstream(binding.CU_STREAM_LEGACY)
         else:
             handle = drvapi.cu_stream(drvapi.CU_STREAM_LEGACY)
         return Stream(weakref.proxy(self), handle, None)
 
     def get_per_thread_default_stream(self):
         if USE_NV_BINDING:
-            handle = binding.CUstream(2)
+            handle = binding.CUstream(binding.CU_STREAM_PER_THREAD)
         else:
             handle = drvapi.cu_stream(drvapi.CU_STREAM_PER_THREAD)
         return Stream(weakref.proxy(self), handle, None)
 
     def create_stream(self):
         if USE_NV_BINDING:
-            handle = driver.cuStreamCreate(0)
+            # The default stream creation flag, specifying that the created
+            # stream synchronizes with stream 0 (this is different from the
+            # default stream, which we define also as CU_STREAM_DEFAULT when
+            # the NV binding is in use).
+            flags = binding.CUstream_flags.CU_STREAM_DEFAULT.value
+            handle = driver.cuStreamCreate(flags)
         else:
             handle = drvapi.cu_stream()
             driver.cuStreamCreate(byref(handle), 0)
