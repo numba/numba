@@ -386,17 +386,6 @@ class TestNestedArrays(CUDATestCase):
         res = cfunc(nbval[0])
         np.testing.assert_equal(res, nbval[0].h[1])
 
-    def test_record_read_arrays(self):
-        # Test reading from a 1D array within a structured type
-        nbval = np.recarray(2, dtype=recordwitharray)
-        nbval[0].h[0] = 15.0
-        nbval[0].h[1] = 25.0
-        nbval[1].h[0] = 35.0
-        nbval[1].h[1] = 45.4
-        cfunc = self.get_cfunc(record_read_whole_array, np.float32)
-        res = cfunc(nbval)
-        np.testing.assert_equal(res, nbval.h)
-
     def test_record_read_2d_array(self):
         # Test reading from a 2D array within a structured type
         nbval = np.recarray(1, dtype=recordwith2darray)
@@ -478,6 +467,18 @@ class TestNestedArrays(CUDATestCase):
                 cfunc = self.get_cfunc(pyfunc, retty)
                 arr_res = cfunc(arg)
                 np.testing.assert_equal(arr_res, arr_expected)
+
+    @unittest.expectedFailure
+    def test_record_read_arrays(self):
+        # Test reading from a 1D array within a structured type
+        nbval = np.recarray(2, dtype=recordwitharray)
+        nbval[0].h[0] = 15.0
+        nbval[0].h[1] = 25.0
+        nbval[1].h[0] = 35.0
+        nbval[1].h[1] = 45.4
+        cfunc = self.get_cfunc(record_read_whole_array, np.float32)
+        res = cfunc(nbval)
+        np.testing.assert_equal(res, nbval.h)
 
     @unittest.expectedFailure
     def test_return_array(self):
