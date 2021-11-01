@@ -2177,7 +2177,7 @@ class Stream(object):
     def __repr__(self):
         if USE_NV_BINDING:
             default_streams = {
-                0: "<Default CUDA stream on %s>",
+                CU_STREAM_DEFAULT: "<Default CUDA stream on %s>",
                 binding.CU_STREAM_LEGACY:
                     "<Legacy default CUDA stream on %s>",
                 binding.CU_STREAM_PER_THREAD:
