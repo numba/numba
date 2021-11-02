@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from collections.abc import Sequence as pySequence
 from types import MappingProxyType
 
 from .abstract import (
@@ -765,7 +766,7 @@ class LiteralStrKeyDict(Literal, ConstSized, Hashable):
     namedtuple with dict semantics).
     """
 
-    class FakeNamedTuple(object):
+    class FakeNamedTuple(pySequence):
         # This is namedtuple-like and is a workaround for #6518 and #7416.
         # This has the couple of namedtuple properties that are used by Numba's
         # internals but avoids use of an actual namedtuple as it cannot have
@@ -773,6 +774,13 @@ class LiteralStrKeyDict(Literal, ConstSized, Hashable):
         def __init__(self, name, keys):
             self.__name__ = name
             self._fields = tuple(keys)
+            super(LiteralStrKeyDict.FakeNamedTuple, self).__init__()
+
+        def __len__(self):
+            return len(self._fields)
+
+        def __getitem__(self, key):
+            return self._fields[key]
 
     mutable = False
 
