@@ -454,10 +454,10 @@ In 0.54.0:
   <https://github.com/numba/numba-rocm>`_.
 
 
-Deprecation of ``BaseContext.add_user_function()``
-==================================================
+Deprecation of ``numba.core.base.BaseContext.add_user_function()``
+==================================================================
 
-``add_user_function()``  performs the same function as
+``add_user_function()``  offers the same functionality as
 ``insert_user_function()``, only with a check that the function has already
 been inserted at least once.  It is now deprecated as it is no longer used
 internally and it is expected that it is not used externally.
