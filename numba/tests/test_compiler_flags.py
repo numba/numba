@@ -42,7 +42,7 @@ class TestFlagMangling(TestCase):
 
         def check(flags):
             mangled = flags.get_mangle_string()
-            out = flags.demangle(mangled).decode()
+            out = flags.demangle(mangled)
             # Demangle result MUST match summary()
             self.assertEqual(out, flags.summary())
 
@@ -75,7 +75,7 @@ class TestFlagMangling(TestCase):
         flags.fastmath = True
         flags.inline = "always"
         self.assertLess(len(flags.get_mangle_string()), len(flags.summary()))
-        demangled = flags.demangle(flags.get_mangle_string()).decode()
+        demangled = flags.demangle(flags.get_mangle_string())
         # There should be no pointer value in the demangled string.
         self.assertNotIn("0x", demangled)
 
