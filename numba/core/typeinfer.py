@@ -267,6 +267,8 @@ class PhiConstraint(object):
                     else:
                         typs.append(typ[0])
 
+            if typs == []:
+                return
             unified = typeinfer.context.unify_types(*typs)
             ty = unified if unified else types.undefined
             typeinfer.add_type(self.target, ty, loc=self.loc)
