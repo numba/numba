@@ -258,10 +258,22 @@ class PhiConstraint(object):
     def __call__(self, typeinfer):
         with new_error_context("typing of {0} at {1}", 'Phi', self.loc):
             typevars = typeinfer.typevars
-            typs = [typevars[i.name].getone() for i in self.incoming_values]
+            typs = []
+            for var in self.incoming_values:
+                if var is not ir.UNDEFINED:
+                    typ = typevars[var.name].get()
+                    if typ == ():
+                        typeinfer.refine_map[var.name] = self
+                    else:
+                        typs.append(typ[0])
+
             unified = typeinfer.context.unify_types(*typs)
             ty = unified if unified else types.undefined
             typeinfer.add_type(self.target, ty, loc=self.loc)
+
+    def refine(self, typeinfer, target_type):
+        assert target_type.is_precise()
+        self(typeinfer)
 
 
 class _BuildContainerConstraint(object):
