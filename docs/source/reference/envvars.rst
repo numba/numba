@@ -527,7 +527,7 @@ GPU support
    <https://nvidia.github.io/cuda-python/>`_ to make calls to the driver API
    instead of using its own ctypes binding. This defaults to 0 (off), as the
    NVIDIA binding is currently missing support for Per-Thread Default
-   Streams, and profiling.
+   Streams.
 
 Threading Control
 -----------------
