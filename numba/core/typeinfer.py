@@ -270,7 +270,7 @@ class PhiConstraint(object):
             if typs == []:
                 return
             unified = typeinfer.context.unify_types(*typs)
-            ty = unified if unified else types.undefined
+            ty = types.undefined if unified is None else unified
             typeinfer.add_type(self.target, ty, loc=self.loc)
 
     def refine(self, typeinfer, target_type):
@@ -1058,7 +1058,7 @@ class TypeInferer(object):
         for var in self._get_return_vars():
             self.lock_type(var.name, typ, loc=None)
 
-    def build_constraint(self, raise_errors=True):
+    def build_constraint(self):
         for blk in self.blocks.values():
             for inst in blk.body:
                 self.constrain_statement(inst)
