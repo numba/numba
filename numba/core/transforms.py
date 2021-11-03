@@ -572,16 +572,32 @@ def find_setupwiths(blocks):
         for p,w in pop_block_to_setup_map.items():
             yield w, p
 
-    def previously_occurred(start, known_ranges):
+    known_ranges = []
+
+    def within_known_range(start, end, known_ranges):
         for a, b in known_ranges:
-            if start >= a and start < b:
+            # FIXME: this should be a comparison in topological order, right
+            # now we are comparing the integers of the blocks, stuff probably
+            # works by accident.
+            if start > a and end < b:
                 return True
         return False
 
-    known_ranges = []
+    setup_to_pop_block_map = {}
     for s, e in sorted(find_ranges(blocks)):
-        if not previously_occurred(s, known_ranges):
-            assert s in blocks, 'starting offset is not a label'
+        # Look for setup_withs that have multiple pop_blocks each with a
+        # different target.
+        if s not in setup_to_pop_block_map:
+            setup_to_pop_block_map[s] = e
+        else:
+            if setup_to_pop_block_map[s] != e:
+                raise errors.CompilerError(
+                    "Does not support with-context that contain branches "
+                    "(i.e. break/return/raise) that can leave the with-context. "
+                )
+        # Elminate all withs contained within withs, we are only interested in
+        # the outermost with statements so we can lift them.
+        if not within_known_range(s, e, known_ranges):
             known_ranges.append((s, e))
 
     return known_ranges
