@@ -135,6 +135,15 @@ def liftcall4():
             pass
 
 
+def liftcall5():
+    for i in range(10):
+        with call_context:
+            if i == 5:
+                print("A")
+                break
+    return 10
+
+
 def lift_undefiend():
     with undefined_global_var:
         pass
@@ -264,6 +273,14 @@ class TestLiftCall(BaseTestWithLifting):
         # Known error.  We only support one context manager per function
         # for body that are lifted.
         msg = ("compiler re-entrant to the same function signature")
+        self.assertIn(msg, str(raises.exception))
+
+    def test_liftcall5(self):
+        with self.assertRaises(errors.CompilerError) as raises:
+            njit(liftcall5)()
+        # Make sure we can detect a break-within-with and have a reasonable
+        # error.
+        msg = ("Does not support with-context that contain branches")
         self.assertIn(msg, str(raises.exception))
 
 
