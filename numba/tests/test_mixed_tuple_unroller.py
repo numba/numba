@@ -818,7 +818,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             foo(tup)
 
-        self.assertIn("Cannot unify", str(raises.exception))
+        self.assertIn("Cannot infer", str(raises.exception))
 
     def test_16(self):
         # unituple slice and unroll is ok
@@ -1489,7 +1489,7 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             foo()
 
-        self.assertIn("Cannot unify", str(raises.exception))
+        self.assertIn("Cannot infer", str(raises.exception))
 
     def test_13(self):
         # list slice is illegal

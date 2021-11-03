@@ -274,7 +274,8 @@ class PhiConstraint(object):
             typeinfer.add_type(self.target, ty, loc=self.loc)
 
     def refine(self, typeinfer, target_type):
-        assert target_type.is_precise()
+        if not target_type.is_precise():
+            return
         self(typeinfer)
 
 
