@@ -4,7 +4,7 @@ from numba.tests.support import TestCase, override_env_config
 import os
 import sys
 from tempfile import TemporaryDirectory
-import unittest
+
 
 class TestChromeTraceModule(TestCase):
     """
