@@ -19,5 +19,5 @@ class TestChromeTraceModule(TestCase):
                 cmdline = [sys.executable, __file__]
                 run_cmd(cmdline)
                 with open(path) as file:
-                    jfile = json.load(file)
+                    jfile = json.load(file.decode("utf-8"))
                     self.assertTrue(jfile)
