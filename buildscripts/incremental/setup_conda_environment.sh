@@ -54,7 +54,8 @@ set -v
 # Install optional packages into activated env
 if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # Scipy, CFFI, jinja2, IPython and pygments are optional dependencies, but exercised in the test suite
-    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython pygments
+    # pexpect is used to run the
+    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython pygments pexpect
     # Only install scipy on 64bit, else it'll pull in NumPy, 32bit linux needs
     # to get scipy from pip
     if [[ "$CONDA_SUBDIR" != "linux-32" && "$BITS32" != "yes" ]] ; then

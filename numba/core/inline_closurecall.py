@@ -1068,10 +1068,12 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
         # this doesn't work in objmode as it's effectively untyped
         if typed:
             len_func_var = ir.Var(scope, mk_unique_var("len_func"), loc)
-            from numba.cpython.rangeobj import range_iter_len
+            from numba.cpython.rangeobj import length_of_iterator
             stmts.append(_new_definition(func_ir, len_func_var,
-                        ir.Global('range_iter_len', range_iter_len, loc=loc),
-                        loc))
+                                         ir.Global('length_of_iterator',
+                                                   length_of_iterator,
+                                                   loc=loc),
+                                         loc))
             size_val = ir.Expr.call(len_func_var, (iter_var,), (), loc=loc)
         else:
             raise GuardException

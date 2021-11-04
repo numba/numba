@@ -25,9 +25,9 @@ call_trace(Py_tracefunc func, PyObject *obj,
     if (tstate->tracing)
         return 0;
     tstate->tracing++;
-    tstate->use_tracing = 0;
+    tstate->tracing = 0;
     result = func(obj, frame, what, arg);
-    tstate->use_tracing = ((tstate->c_tracefunc != NULL)
+    tstate->tracing = ((tstate->c_tracefunc != NULL)
                            || (tstate->c_profilefunc != NULL));
     tstate->tracing--;
     return result;
@@ -384,7 +384,7 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
     tstate = PyThreadState_GET();
 
-    if (tstate->use_tracing && tstate->c_profilefunc)
+    if (tstate->tracing && tstate->c_profilefunc)
     {
         /*
          * The following code requires some explaining:
@@ -660,7 +660,7 @@ Dispatcher_call(Dispatcher *self, PyObject *args, PyObject *kws)
      * not compile one */
     int exact_match_required = self->can_compile ? 1 : self->exact_match_required;
 
-    if (ts->use_tracing && ts->c_profilefunc) {
+    if (ts->tracing && ts->c_profilefunc) {
         locals = PyEval_GetLocals();
         if (locals == NULL) {
             goto CLEANUP;
@@ -774,7 +774,7 @@ Dispatcher_cuda_call(Dispatcher *self, PyObject *args, PyObject *kws)
      * not compile one */
     int exact_match_required = self->can_compile ? 1 : self->exact_match_required;
 
-    if (ts->use_tracing && ts->c_profilefunc) {
+    if (ts->tracing && ts->c_profilefunc) {
         locals = PyEval_GetLocals();
         if (locals == NULL) {
             goto CLEANUP;
