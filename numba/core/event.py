@@ -32,6 +32,7 @@ import time
 from timeit import default_timer as timer
 from contextlib import contextmanager, ExitStack
 from collections import defaultdict
+from numba.core import config
 
 
 class EventStatus(enum.Enum):
@@ -437,20 +438,19 @@ def _write_chrome_trace(rec):
     for ts, rec in rec.buffer:
         data = rec.data
         cat = str(rec.kind)
-        ph = 'B' if rec.is_start else 'E' 
-        pid = pid 
-        tid = tid  * 1e6 # in microseconds
+        ph = 'B' if rec.is_start else 'E'
+        pid = pid
+        tid = tid * 1e6 # in microseconds
         ts = ts
         name = data['name']
         args = data
         ev = dict(
             cat=cat, pid=pid, tid=tid, ts=ts, ph=ph, name=name, args=args,
-        )   
+        )
         evs.append(ev)
-    return evs 
+    return evs
 
 
-from numba.core import config
 if config.CHROME_TRACE:
     listener = RecordingListener()
     register("numba:run_pass", listener)
