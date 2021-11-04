@@ -344,10 +344,9 @@ dufunc_reduce(PyDUFuncObject * self, PyObject * args, PyObject *kws)
 }
 
 static PyObject *
-dufunc_reduce_direct(PyDUFuncObject * self, int axis, PyObject * args)
+dufunc_reduce_direct(PyDUFuncObject * self, PyObject * args, int axis)
 {
   PyObject *kwargs = Py_BuildValue("{s:L}", "axis", axis);
-// The code segfaults on the following call.
   return dufunc_reduce(self, args, kwargs);
 }
 

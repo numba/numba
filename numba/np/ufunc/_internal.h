@@ -23,7 +23,7 @@ typedef struct {
 } PyDUFuncObject;
 
 NUMBA_EXPORT_FUNC(static PyObject *)
-dufunc_reduce_direct(PyDUFuncObject * self, int axis, PyObject * args);
+dufunc_reduce_direct(PyDUFuncObject * self, PyObject * args, int axis);
 
 int PyUFunc_GeneralizedFunction(PyUFuncObject *ufunc,
                                 PyObject *args, PyObject *kwds,

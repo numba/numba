@@ -339,20 +339,19 @@ def intr_reduce(typcontext, ft, argst, axist):
         f_ir, args_ir, axis_ir = args
 
         ret_ir_type = context.get_value_type(signature.return_type)
-        # args_ir_type = context.get_value_type(types.pyobject)
-        # kws_ir_type = context.get_value_type(types.pyobject)
+
         args_ir_type = args_ir.type
         axis_ir_type = axis_ir.type
 
         fnty = ir.FunctionType(
             ret_ir_type,
-            [f_ir.type, axis_ir_type, args_ir_type]
+            [f_ir.type, args_ir_type, axis_ir_type]
         )
 
         fn = cgutils.get_or_insert_function(
             builder.module, fnty,  "dufunc_reduce_direct"
         )
-        return builder.call(fn, [f_ir, axis_ir, args_ir])
+        return builder.call(fn, [f_ir, args_ir, axis_ir])
 
     return sig, codegen
 
