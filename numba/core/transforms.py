@@ -518,7 +518,7 @@ def find_setupwiths(blocks):
 
         # now that we do have the statements, iterate through them in reverse
         # topo order and from each start looking for pop_blocks
-        pop_block_to_setup_map = {}
+        setup_with_to_pop_blocks_map = defaultdict(set)
         for setup_block in cfg.topo_sort(sus_setups, reverse=True):
             # begin pop_block, search
             to_visit, seen = [], []
@@ -556,7 +556,7 @@ def find_setupwiths(blocks):
                                 'unsupported controlflow due to return '
                                 'statements inside with block'
                                 )
-                        pop_block_to_setup_map[pop_block_targets[0]] = setup_block
+                        setup_with_to_pop_blocks_map[setup_block].add(pop_block_targets[0])
                         # remove the block from blocks to be matched
                         sus_pops.remove(block)
                         # stop looking, we have reached the frontier
@@ -569,8 +569,10 @@ def find_setupwiths(blocks):
                             if t not in seen:
                                 to_visit.append(t)
 
-        for p,w in pop_block_to_setup_map.items():
-            yield w, p
+        for setup_with, pop_blocks in setup_with_to_pop_blocks_map.items():
+            for p in pop_blocks:
+                yield setup_with, p
+
 
     known_ranges = []
 
