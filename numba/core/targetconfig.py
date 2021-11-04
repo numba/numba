@@ -304,4 +304,4 @@ class TargetConfig(metaclass=_MetaTargetConfig):
             buf.append(dc.decompress(raw))
             raw = dc.unconsumed_tail
         buf.append(dc.flush())
-        return b''.join(buf)
+        return b''.join(buf).decode()
