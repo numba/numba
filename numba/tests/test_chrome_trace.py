@@ -23,5 +23,4 @@ class TestChromeTraceModule(TestCase):
                 with open(path) as file:
                     print(file)
                     jfile = json.load(file)
-                    print(jfile)
                     self.assertTrue(jfile)
