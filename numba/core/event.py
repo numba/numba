@@ -454,9 +454,10 @@ def _write_chrome_trace(rec):
 if config.CHROME_TRACE:
     listener = RecordingListener()
     register("nb:run_pass", listener)
+    filename = config.CHROME_TRACE
 
     @atexit.register
     def _():
-        with open("perf.json", "w") as out:
+        with open(filename, "w") as out:
             evs = _write_chrome_trace(listener)
             json.dump(evs, out)
