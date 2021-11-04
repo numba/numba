@@ -2,6 +2,7 @@ from collections import namedtuple, defaultdict
 import copy
 import os
 import sys
+import warnings
 from itertools import permutations, takewhile
 from contextlib import contextmanager
 
@@ -397,6 +398,8 @@ class BaseContext(object):
         self._defns[func].append(impl, impl.signature)
 
     def add_user_function(self, func, fndesc, libs=()):
+        warnings.warn("Use insert_user_function instead",
+                      errors.NumbaDeprecationWarning)
         if func not in self._defns:
             msg = "{func} is not a registered user function"
             raise KeyError(msg.format(func=func))
