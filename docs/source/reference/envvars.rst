@@ -178,7 +178,6 @@ These variables influence what is printed out during compilation of
 
 .. envvar:: NUMBA_CHROME_TRACE
 
-   #TODO: FIX this
    Specify the location of the chrome tracing json file output. 
 
    If not defined, chrome tracing is disabled.

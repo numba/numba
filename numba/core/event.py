@@ -429,6 +429,10 @@ def trigger_event(kind, data=None):
 
 
 def _write_chrome_trace(rec):
+    """ If chrome tracing is enabled,
+        write event information (process/thread id, event name,
+        and duration time to json file.
+    """
     import os
     import threading
 
