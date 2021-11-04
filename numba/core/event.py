@@ -440,7 +440,7 @@ def _write_chrome_trace(rec):
         cat = str(rec.kind)
         ph = 'B' if rec.is_start else 'E'
         pid = pid
-        tid = tid * 1e6 # in microseconds
+        tid = tid
         ts = ts
         name = data['name']
         args = data
@@ -453,7 +453,7 @@ def _write_chrome_trace(rec):
 
 if config.CHROME_TRACE:
     listener = RecordingListener()
-    register("numba:run_pass", listener)
+    register("nb:run_pass", listener)
 
     @atexit.register
     def _():
