@@ -214,6 +214,9 @@ class _EnvReloader(object):
         # Enable tracing support
         TRACE = _readenv("NUMBA_TRACE", int, 0)
 
+        # Enable chrome tracing support
+        CHROME_TRACE = _readenv("NUMBA_CHROME_TRACE", int, 0)
+
         # Enable debugging of type inference
         DEBUG_TYPEINFER = _readenv("NUMBA_DEBUG_TYPEINFER", int, 0)
 

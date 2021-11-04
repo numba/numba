@@ -176,6 +176,10 @@ These variables influence what is printed out during compilation of
    If set to non-zero, trace certain function calls (function entry and exit
    events, including arguments and return values).
 
+.. envvar:: NUMBA_CHROME_TRACE
+
+   If set to non-zero, generates json file for chrome tracing.
+
 .. envvar:: NUMBA_DUMP_BYTECODE
 
    If set to non-zero, print out the Python :py:term:`bytecode` of
