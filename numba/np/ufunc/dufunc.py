@@ -1,3 +1,5 @@
+from llvmlite import ir, binding
+
 from numba import jit, typeof
 from numba.core import cgutils, types, serialize, sigutils
 from numba.core.typing import npydecl
@@ -7,7 +9,6 @@ from numba.core.dispatcher import Dispatcher
 from numba.parfors import array_analysis
 from numba.np.ufunc import ufuncbuilder
 from numba.np import numpy_support
-import llvmlite.llvmpy.core as lc
 from numba.core.extending import intrinsic, overload_method
 
 
@@ -324,32 +325,41 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
 
 array_analysis.MAP_TYPES.append(DUFunc)
 
+binding.add_symbol("dufunc_reduce_direct", _internal.dufunc_reduce_direct)
+
 
 @intrinsic
-def intr_reduce(typcontext, ft, xt, axist):
-    # Return signature of array being returned
-    sig = types.Array(types.intp, 1, 'C')(ft, xt, axist)
-    ft = sig.args[0]
+def intr_reduce(typcontext, ft, argst, axist):
+    # TODO: What should the layout be based on `xt.layout`?
+    assert argst.ndim > 0
+    rett = types.Array(argst.dtype, argst.ndim - 1, 'C')
+    sig = rett(ft, argst, axist)
 
     def codegen(context, builder, signature, args):
-        f_ir, x_ir, axis_ir = args
+        f_ir, args_ir, axis_ir = args
 
-        fnty = lc.Type.function(
-            x_ir.type,
-            [f_ir.type, x_ir.type, axis_ir.type]
+        ret_ir_type = context.get_value_type(signature.return_type)
+        # args_ir_type = context.get_value_type(types.pyobject)
+        # kws_ir_type = context.get_value_type(types.pyobject)
+        args_ir_type = args_ir.type
+        axis_ir_type = axis_ir.type
+
+        fnty = ir.FunctionType(
+            ret_ir_type,
+            [f_ir.type, axis_ir_type, args_ir_type]
         )
 
         fn = cgutils.get_or_insert_function(
             builder.module, fnty,  "dufunc_reduce_direct"
         )
-        return builder.call(fn, [f_ir, x_ir, axis_ir])
+        return builder.call(fn, [f_ir, axis_ir, args_ir])
 
     return sig, codegen
 
 
 @overload_method(types.Function, "reduce")
-def dufunc_reduce(fn, x, axis):
+def dufunc_reduce(fn, args, axis):
     if isinstance(fn.typing_key, DUFunc):
-        def _reduce_impl(fn, x, axis):
-            return intr_reduce(fn, x, axis)
+        def _reduce_impl(fn, args, axis):
+            return intr_reduce(fn, args, axis)
         return _reduce_impl

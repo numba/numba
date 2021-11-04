@@ -5,12 +5,25 @@
 
 #include "../../_pymodule.h"
 #include <structmember.h>
+#include "../../cext/cext.h"
+#include "Python.h"
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include "numpy/ndarrayobject.h"
 #include "numpy/ufuncobject.h"
 
 extern PyObject *ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args);
+
+typedef struct {
+  PyObject_HEAD
+  PyObject      * dispatcher;
+  PyUFuncObject * ufunc;
+  PyObject      * keepalive;
+  int             frozen;
+} PyDUFuncObject;
+
+NUMBA_EXPORT_FUNC(static PyObject *)
+dufunc_reduce_direct(PyDUFuncObject * self, int axis, PyObject * args);
 
 int PyUFunc_GeneralizedFunction(PyUFuncObject *ufunc,
                                 PyObject *args, PyObject *kwds,

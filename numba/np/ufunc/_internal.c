@@ -1,5 +1,7 @@
 #include "_internal.h"
 #include "Python.h"
+#include "methodobject.h"
+
 
 /* A small object that handles deallocation of some of a PyUFunc's fields */
 typedef struct {
@@ -98,15 +100,6 @@ PyTypeObject PyUFuncCleaner_Type = {
 /* ______________________________________________________________________
  * DUFunc: A call-time (hence dynamic) specializable ufunc.
  */
-
-typedef struct {
-    PyObject_HEAD
-    PyObject      * dispatcher;
-    PyUFuncObject * ufunc;
-    PyObject      * keepalive;
-    int             frozen;
-} PyDUFuncObject;
-
 static void
 dufunc_dealloc(PyDUFuncObject *self)
 {
@@ -344,33 +337,18 @@ init_ufunc_dispatch(void)
     return result;
 }
 
-
-NUMBA_EXPORT_FUNC(PyObject)
-dufunc_reduce_direct(int *curr_ufunc,PyObject arr,int axis)
-{   
-    int result = 0;
-    PyMethodDef * crnt = PyUFunc_Type.tp_methods;
-    const char * crnt_name = NULL;
-    PyCFunctionWithKeywords curr_ufunc_reduce;
-    for (; crnt->ml_name != NULL; crnt++) {
-        crnt_name = crnt->ml_name;
-        if(crnt_name[0]=='r'){
-            if (strncmp(crnt_name, "reduce", 7) == 0) {
-                curr_ufunc_reduce =
-                    (PyCFunctionWithKeywords)crnt->ml_meth;
-            }
-        }
-    }
-
-    result = (curr_ufunc_reduce != NULL);
-    
-    return curr_ufunc_reduce((PyObject*)curr_ufunc)(arr, axis);
-}
-
 static PyObject *
 dufunc_reduce(PyDUFuncObject * self, PyObject * args, PyObject *kws)
 {
     return ufunc_dispatch.ufunc_reduce((PyObject*)self->ufunc, args, kws);
+}
+
+static PyObject *
+dufunc_reduce_direct(PyDUFuncObject * self, int axis, PyObject * args)
+{
+  PyObject *kwargs = Py_BuildValue("{s:L}", "axis", axis);
+// The code segfaults on the following call.
+  return dufunc_reduce(self, args, kwargs);
 }
 
 static PyObject *
@@ -699,6 +677,9 @@ MOD_INIT(_internal)
 
     if (m == NULL)
         return MOD_ERROR_VAL;
+
+    PyObject_SetAttrString(m, "dufunc_reduce_direct",
+                           PyLong_FromVoidPtr((void*)&dufunc_reduce_direct));
 
     if (PyType_Ready(&PyUFuncCleaner_Type) < 0)
         return MOD_ERROR_VAL;

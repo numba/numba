@@ -1,6 +1,6 @@
 import numpy as np
 
-from numba import float32, jit, njit
+from numba import float32, jit, njit, vectorize
 from numba.np.ufunc import Vectorize
 from numba.core.errors import TypingError
 from numba.tests.support import TestCase
@@ -139,6 +139,19 @@ class TestUFuncs(TestCase):
 
         msg = "expected array(float64, 1d, C), got None"
         self.assertIn(msg, str(raises.exception))
+
+    def test_reduce(self):
+
+        @vectorize
+        def add_twice(x, y):
+            return 2 * x + 2 * y
+
+        @njit
+        def test_fn(x, axis):
+            return add_twice.reduce(x, axis)
+
+        a = np.arange(2 * 3).reshape((2, 3))
+        self.assertPreciseEqual(test_fn(a, 1), np.sum(a, axis=1))
 
 
 if __name__ == '__main__':
