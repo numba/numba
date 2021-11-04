@@ -15,12 +15,9 @@ class TestChromeTraceModule(TestCase):
         with TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "test_trace.json")
             with override_env_config('NUMBA_CHROME_TRACE', path):
-                print(path)
                 from .chrome_trace_usecase import __file__
-                print(__file__)
                 cmdline = [sys.executable, __file__]
                 run_cmd(cmdline)
                 with open(path) as file:
-                    print(file)
                     jfile = json.load(file)
                     self.assertTrue(jfile)

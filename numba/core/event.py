@@ -464,4 +464,6 @@ if config.CHROME_TRACE:
     def _():
         with open(filename, "w") as out:
             evs = _write_chrome_trace(listener)
+            print("filename: ", filename)
+            print(evs)
             json.dump(evs, out)
