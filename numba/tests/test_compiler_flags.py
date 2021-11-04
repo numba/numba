@@ -1,7 +1,11 @@
+import re
+
 from numba import njit
 from numba.core.extending import overload
 from numba.core.targetconfig import ConfigStack
 from numba.core.compiler import Flags, DEFAULT_FLAGS
+from numba.core import types
+from numba.core.funcdesc import default_mangler
 
 from numba.tests.support import TestCase, unittest
 
@@ -78,6 +82,29 @@ class TestFlagMangling(TestCase):
         demangled = flags.demangle(flags.get_mangle_string())
         # There should be no pointer value in the demangled string.
         self.assertNotIn("0x", demangled)
+
+    def test_demangling_from_mangled_symbols(self):
+        """Test demangling of flags from mangled symbol"""
+        # Use default mangler to mangle the string
+        fname = 'foo'
+        argtypes = types.int32,
+        flags = Flags()
+        flags.nrt = True
+        flags.target_backend = "myhardware"
+        name = default_mangler(
+            fname, argtypes, abi_tags=[flags.get_mangle_string()],
+        )
+        # Find the ABI-tag. Starts with "B"
+        prefix = "_Z3fooB"
+        # Find the length of the ABI-tag
+        m = re.match("[0-9]+", name[len(prefix):])
+        size = m.group(0)
+        # Extract the ABI tag
+        base = len(prefix) + len(size)
+        abi_mangled = name[base:base + int(size)]
+        # Demangle and check
+        demangled = Flags.demangle(abi_mangled).decode()
+        self.assertEqual(demangled, flags.summary())
 
 
 if __name__ == "__main__":
