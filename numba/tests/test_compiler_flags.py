@@ -103,7 +103,7 @@ class TestFlagMangling(TestCase):
         base = len(prefix) + len(size)
         abi_mangled = name[base:base + int(size)]
         # Demangle and check
-        demangled = Flags.demangle(abi_mangled).decode()
+        demangled = Flags.demangle(abi_mangled)
         self.assertEqual(demangled, flags.summary())
 
 
