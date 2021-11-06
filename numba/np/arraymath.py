@@ -4141,11 +4141,12 @@ def _np_correlate_core_impl(ap1, ap2, mode, direction):
         # For "direction", +1 to write the return values out in order 0->N
         # -1 to write them out N->0.
 
-        if not (mode == Mode.VALID or mode == Mode.FULL):
-            raise ValueError("Invalid mode")
-
         n1 = len(ap1)
         n2 = len(ap2)
+
+        if n1 < n2:
+            raise ValueError("'len(ap1)' must greate than 'len(ap2)'")
+
         length = n1
         n = n2
         if mode == Mode.VALID: # mode == valid == 0, correlate default
@@ -4156,11 +4157,13 @@ def _np_correlate_core_impl(ap1, ap2, mode, direction):
             n_right = n - 1
             n_left = n - 1
             length = length + n - 1
+        elif mode == Mode.SAME:
+            n_left = n // 2
+            n_right = n - n_left - 1
         else:
             raise ValueError("Invalid mode")
 
         ret = np.zeros(length, dt)
-        n = n - n_left
 
         if direction == 1:
             idx = 0
@@ -4171,24 +4174,25 @@ def _np_correlate_core_impl(ap1, ap2, mode, direction):
         else:
             raise ValueError("Invalid direction")
 
-        for i in range(n_left):
-            ret[idx] = innerprod(ap1[:idx + 1], ap2[-(idx + 1):])
-            idx = idx + inc
+        for i in range(n - n_left, n):
+            ret[idx] = innerprod(ap1[:i], ap2[-i:])
+            idx += inc
 
         for i in range(n1 - n2 + 1):
             ret[idx] = innerprod(ap1[i : i + n2], ap2)
-            idx = idx + inc
+            idx += inc
 
-        for i in range(n_right, 0, -1):
+        for i in range(n - 1, n - 1 - n_right, -1):
             ret[idx] = innerprod(ap1[-i:], ap2[:i])
-            idx = idx + inc
+            idx += inc
+
         return ret
 
     return impl
 
 
 @overload(np.correlate)
-def _np_correlate(a, v):
+def _np_correlate(a, v, mode="valid"):
     _assert_1d(a, 'np.correlate')
     _assert_1d(v, 'np.correlate')
 
@@ -4219,42 +4223,66 @@ def _np_correlate(a, v):
 
     _NP_PRED = numpy_version > (1, 17)
 
-    def impl(a, v):
+    def impl(a, v, mode="valid"):
         la = len(a)
         lv = len(v)
+
+        if mode == "full":
+            corr_mode = Mode.FULL
+        elif mode == "same":
+            corr_mode = Mode.SAME
+        elif mode == "valid":
+            corr_mode = Mode.VALID
+        else:
+            raise ValueError(
+                "unsupported 'mode',"
+                "supported are 'full', 'same', 'valid'"
+            )
+
         if _NP_PRED is True:
             if la == 0:
                 raise ValueError("'a' cannot be empty")
             if lv == 0:
                 raise ValueError("'v' cannot be empty")
         if la < lv:
-            return _np_correlate_core(b_op(v), a_op(a), Mode.VALID, -1)
+            return _np_correlate_core(b_op(v), a_op(a), corr_mode, -1)
         else:
-            return _np_correlate_core(a_op(a), b_op(v), Mode.VALID, 1)
+            return _np_correlate_core(a_op(a), b_op(v), corr_mode, 1)
 
     return impl
 
 
 @overload(np.convolve)
-def np_convolve(a, v):
+def np_convolve(a, v, mode="full"):
     _assert_1d(a, 'np.convolve')
     _assert_1d(v, 'np.convolve')
 
     Mode = _corr_conv_Mode
 
-    def impl(a, v):
+    def impl(a, v, mode="full"):
         la = len(a)
         lv = len(v)
 
+        if mode == "full":
+            corr_mode = Mode.FULL
+        elif mode == "same":
+            corr_mode = Mode.SAME
+        elif mode == "valid":
+            corr_mode = Mode.VALID
+        else:
+            raise ValueError(
+                "unsupported 'mode',"
+                "supported are 'full', 'same', 'valid'"
+            )
         if la == 0:
             raise ValueError("'a' cannot be empty")
         if lv == 0:
             raise ValueError("'v' cannot be empty")
 
         if la < lv:
-            return _np_correlate_core(v, a[::-1], Mode.FULL, 1)
+            return _np_correlate_core(v, a[::-1], corr_mode, 1)
         else:
-            return _np_correlate_core(a, v[::-1], Mode.FULL, 1)
+            return _np_correlate_core(a, v[::-1], corr_mode, 1)
 
     return impl
 

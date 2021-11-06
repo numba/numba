@@ -437,10 +437,10 @@ The following top-level functions are supported:
 * :func:`numpy.broadcast_to` (only the 2 first arguments)
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate`
-* :func:`numpy.convolve` (only the 2 first arguments)
+* :func:`numpy.convolve` (all arguments)
 * :func:`numpy.copy` (only the first argument)
 * :func:`numpy.corrcoef` (only the 3 first arguments, requires SciPy)
-* :func:`numpy.correlate` (only the 2 first arguments)
+* :func:`numpy.correlate` (all arguments)
 * :func:`numpy.count_nonzero` (axis only supports scalar values)
 * :func:`numpy.cov` (only the 5 first arguments)
 * :func:`numpy.cross` (only the 2 first arguments; at least one of the input

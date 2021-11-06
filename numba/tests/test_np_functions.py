@@ -181,12 +181,12 @@ def split(a, indices, axis=0):
     return np.split(a, indices, axis=axis)
 
 
-def correlate(a, v):
-    return np.correlate(a, v)
+def correlate(a, v, mode="valid"):
+    return np.correlate(a, v, mode=mode)
 
 
-def convolve(a, v):
-    return np.convolve(a, v)
+def convolve(a, v, mode="full"):
+    return np.convolve(a, v, mode=mode)
 
 
 def tri_n(N):
@@ -1178,8 +1178,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         lengths = (1, 2, 3, 7)
         dts = [np.int8, np.int32, np.int64, np.float32, np.float64,
                np.complex64, np.complex128]
+        modes = ["full", "valid", "same"]
 
-        for dt1, dt2, n, m in itertools.product(dts, dts, lengths, lengths):
+        for dt1, dt2, n, m, mode in itertools.product(
+            dts, dts, lengths, lengths, modes
+        ):
             a = np.arange(n, dtype=dt1)
             v = np.arange(m, dtype=dt2)
 
@@ -1188,8 +1191,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             if np.issubdtype(dt2, np.complexfloating):
                 v = (v + 1j * v).astype(dt2)
 
-            expected = pyfunc(a, v)
-            got = cfunc(a, v)
+            expected = pyfunc(a, v, mode=mode)
+            got = cfunc(a, v, mode=mode)
+
             self.assertPreciseEqual(expected, got)
 
         _a = np.arange(12).reshape(4, 3)
