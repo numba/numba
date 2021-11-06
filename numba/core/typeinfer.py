@@ -151,6 +151,8 @@ class ConstraintNetwork(object):
             with typeinfer.warnings.catch_warnings(filename=loc.filename,
                                                    lineno=loc.line):
                 try:
+                    # if isinstance(constraint, Propagate):
+                    #     print(constraint.dst, constraint.src)
                     constraint(typeinfer)
                 except ForceLiteralArg as e:
                     errors.append(e)
@@ -267,11 +269,19 @@ class PhiConstraint(object):
                     else:
                         typs.append(typ[0])
 
-            if typs == []:
-                return
-            unified = typeinfer.context.unify_types(*typs)
-            ty = types.undefined if unified is None else unified
-            typeinfer.add_type(self.target, ty, loc=self.loc)
+            if typs != []:
+                for ty in typs:
+                    typeinfer.add_type(self.target, ty, loc=self.loc)
+
+                # ty = typeinfer.context.unify_types(*typs)
+                # typeinfer.add_type(self.target, ty, loc=self.loc)
+                # if ty is None:
+                #     typeinfer.add_type(self.target, typs[0], loc=self.loc)
+                #     typeinfer.add_type(self.target, typs[1], loc=self.loc)
+                #     # msg = "Cannot unify"
+                #     # raise TypingError(msg)
+                # else:
+                #     typeinfer.add_type(self.target, ty, loc=self.loc)
 
     def refine(self, typeinfer, target_type):
         if not target_type.is_precise():
@@ -1727,10 +1737,15 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
                                               src=expr.value.name,
                                               loc=inst.loc))
         elif expr.op == 'phi':
-            constraint = PhiConstraint(target.name,
-                                       incoming_values=expr.incoming_values,
-                                       loc=inst.loc)
-            self.constraints.append(constraint)
+            for iv in expr.incoming_values:
+                if iv is not ir.UNDEFINED:
+                    self.constraints.append(Propagate(dst=target.name,
+                                                      src=iv.name,
+                                                      loc=inst.loc))
+            # constraint = PhiConstraint(target.name,
+            #                            incoming_values=expr.incoming_values,
+            #                            loc=inst.loc)
+            # self.constraints.append(constraint)
         elif expr.op == 'make_function':
             self.lock_type(target.name, types.MakeFunctionLiteral(expr),
                            loc=inst.loc, literal_value=expr)

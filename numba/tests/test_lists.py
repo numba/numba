@@ -1770,7 +1770,7 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(errors.TypingError) as raises:
             foo(100)
-        expect = "Cannot infer"
+        expect = "Cannot unify LiteralList"
         self.assertIn(expect, str(raises.exception))
 
     def test_index(self):
