@@ -11,6 +11,29 @@ from numba.core import errors, ir, ir_utils
 from numba.core.analysis import compute_use_defs, compute_cfg_from_blocks
 from numba.core.utils import PYVERSION
 
+def is_setup_with(stmt):
+    return isinstance(stmt, ir.EnterWith)
+
+
+def is_branch(stmt):
+    return isinstance(stmt, ir.Branch)
+
+
+def is_terminator(stmt):
+    return isinstance(stmt, ir.Terminator)
+
+def is_raise(stmt):
+    return isinstance(stmt, ir.Raise)
+
+def is_return(stmt):
+    return isinstance(stmt, ir.Return)
+
+def is_pop_block(stmt):
+    try:
+        if hasattr(stmt, "value"):
+            return str(stmt.value).startswith("POP_BLOCK_INFO")
+    except KeyError:
+        return False
 
 _logger = logging.getLogger(__name__)
 
@@ -341,7 +364,8 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
         return cls(func_ir, typingctx, targetctx, myflags, locals, **kwargs)
 
     # find where with-contexts regions are
-    withs = find_setupwiths(func_ir.blocks)
+    withs, func_ir = find_setupwiths(func_ir)
+
     if not withs:
         return func_ir, []
 
@@ -357,7 +381,6 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
         body_blocks = []
         for node in _cfg_nodes_in_region(cfg, blk_start, blk_end):
             body_blocks.append(node)
-
         _legalize_with_head(blocks[blk_start])
         # Find the contextmanager
         cmkind, extra = _get_with_contextmanager(func_ir, blocks, blk_start)
@@ -476,7 +499,7 @@ def _cfg_nodes_in_region(cfg, region_begin, region_end):
     return region_nodes
 
 
-def find_setupwiths(blocks):
+def find_setupwiths(func_ir):
     """Find all top-level with.
 
     Returns a list of ranges for the with-regions.
@@ -508,6 +531,7 @@ def find_setupwiths(blocks):
                 return False
 
         cfg = compute_cfg_from_blocks(blocks)
+
         sus_setups, sus_pops = [], []
         for label, block in blocks.items():
             for stmt in block.body:
@@ -545,18 +569,19 @@ def find_setupwiths(blocks):
                     if is_pop_block(stmt) and block in sus_pops:
                         # record the jump target of this block belonging to this setup
                         pop_block_targets = blocks[block].terminator.get_targets()
-                        if len(pop_block_targets) != 1:
-                            raise errors.CompilerError(
-                                "Does not support with-context that contain branches "
-                                "(i.e. break/return/raise) that can leave the with-context. "
-                            )
-                        target_block = blocks[pop_block_targets[0]]
-                        if not target_block.terminator.get_targets():
-                            raise errors.CompilerError(
-                                'unsupported controlflow due to return '
-                                'statements inside with block'
-                                )
-                        setup_with_to_pop_blocks_map[setup_block].add(pop_block_targets[0])
+                        #if len(pop_block_targets) != 1:
+                        #    raise errors.CompilerError(
+                        #        "Does not support with-context that contain branches "
+                        #        "(i.e. break/return/raise) that can leave the with-context. "
+                        #    )
+                        #target_block = blocks[pop_block_targets[0]]
+                        #if not target_block.terminator.get_targets():
+                        #    raise errors.CompilerError(
+                        #        'unsupported controlflow due to return '
+                        #        'statements inside with block'
+                        #        )
+                        #setup_with_to_pop_blocks_map[setup_block].add(pop_block_targets[0])
+                        setup_with_to_pop_blocks_map[setup_block].add(block)
                         # remove the block from blocks to be matched
                         sus_pops.remove(block)
                         # stop looking, we have reached the frontier
@@ -569,21 +594,28 @@ def find_setupwiths(blocks):
                             if t not in seen:
                                 to_visit.append(t)
 
-        for setup_with, pop_blocks in setup_with_to_pop_blocks_map.items():
-            for p in pop_blocks:
-                yield setup_with, p
+        return setup_with_to_pop_blocks_map
+        #for setup_with, pop_blocks in setup_with_to_pop_blocks_map.items():
+        #    for p in pop_blocks:
+        #        yield setup_with, p
+
+    blocks = func_ir.blocks
+    # itinitial find
+    withs = find_ranges(blocks)
+    # this is the re-write step, only do this, even if there are 
+    # it shoud return the new IR and the new withs
+    func_ir = consolidate_multi_exit_withs(withs, blocks, func_ir)
+
+    # here we need to turn the withs back into a list of tuples so that the
+    # rest of the code can cope
+    withs = [(s,func_ir.blocks[list(p)[0]].terminator.get_targets()[0])
+             for (s,p) in withs.items()]
+    # finally we eliminate any nested withs
+    withs = _eliminate_nested_withs(withs)
+
+    return withs, func_ir
 
 
-    known_ranges = []
-
-    def within_known_range(start, end, known_ranges):
-        for a, b in known_ranges:
-            # FIXME: this should be a comparison in topological order, right
-            # now we are comparing the integers of the blocks, stuff probably
-            # works by accident.
-            if start > a and end < b:
-                return True
-        return False
 
     setup_to_pop_block_map = {}
     for s, e in sorted(find_ranges(blocks)):
@@ -603,3 +635,130 @@ def find_setupwiths(blocks):
             known_ranges.append((s, e))
 
     return known_ranges
+
+def _eliminate_nested_withs(with_ranges):
+    known_ranges = []
+    def within_known_range(start, end, known_ranges):
+        for a, b in known_ranges:
+            # FIXME: this should be a comparison in topological order, right
+            # now we are comparing the integers of the blocks, stuff probably
+            # works by accident.
+            if start > a and end < b:
+                return True
+        return False
+
+    for s, e in sorted(with_ranges):
+        if not within_known_range(s, e, known_ranges):
+            known_ranges.append((s, e))
+
+    return known_ranges
+
+def consolidate_multi_exit_withs(withs: dict, blocks, func_ir):
+    out = []
+    for k in withs:
+        vs : set = withs[k]
+        if len(vs) > 1:
+            func_ir, common = fix_multi_pop_block(func_ir, k, vs)
+            #func_ir.render_dot().view()
+            withs[k] = {common}
+    return func_ir
+    #         raise AssertionError("not supported")
+    #     else:
+    #         [v] = vs
+    #         term : ir.Terminator = blocks[v].terminator
+    #         [target] = term.get_targets()
+    #     out.append((k, target))
+
+    # old = _old_find_setupwiths(blocks)
+    # print('expect', old)
+    # print('got', out)
+    # if set(old) != set(out):
+    #     pass
+    #     # cfg = compute_cfg_from_blocks(blocks)
+    #     # cfg.render_dot().view()
+    # return out
+
+
+def fix_multi_pop_block(func_ir, setup_node, pop_nodes):
+
+    func_ir.render_dot(filename_prefix="before").view()
+    blocks = func_ir.blocks
+
+    any_blk = min(func_ir.blocks.values())
+    scope = any_blk.scope
+    max_key = max(func_ir.blocks) + 1
+
+    common_block = ir.Block(any_blk.scope, loc=any_blk.loc)
+    common_key = max_key
+    max_key += 1
+    blocks[common_key] = common_block
+
+    post_block = ir.Block(any_blk.scope, loc=any_blk.loc)
+    post_key = max_key
+    max_key += 1
+    blocks[post_key] = post_block
+
+    remainings = []
+    for i, k in enumerate(pop_nodes):
+        #import pdb
+        #pdb.set_trace()
+        blk = blocks[k]
+
+        for pt, stmt in enumerate(blk.body):
+            if is_pop_block(stmt):
+                break
+
+        before = blk.body[:pt]
+        after = blk.body[pt:]
+        remainings.append(after)
+
+        blk.body = before
+        loc = blk.loc
+        blk.body.append(ir.Assign(value=ir.Const(i, loc=loc), target=scope.get_or_define("$cp", loc=loc), loc=loc))
+        blk.body.append(ir.Jump(common_key, loc=blk.loc))
+
+    common_block.body.append(remainings[0][0])  # the POP
+    common_block.body.append(ir.Jump(post_key, loc=loc))
+    # make if-else tree to jump to target
+
+    remain_blocks = []
+    for remain in remainings:
+        remain_blocks.append(max_key)
+        max_key += 1
+
+
+    switch_block = post_block
+    for i, remain in enumerate(remainings):
+        import operator
+
+        match_expr = scope.redefine("$cp_check", loc=loc)
+        match_rhs = scope.redefine("$cp_rhs", loc=loc)
+
+        switch_block.body.append(
+            ir.Assign(
+                value=ir.Const(i, loc=loc),
+                target=match_rhs,
+                loc=loc
+            ),
+        )
+
+        switch_block.body.append(
+            ir.Assign(
+                value=ir.Expr.binop(fn=operator.eq, lhs=scope.get("$cp"), rhs=match_rhs, loc=loc),
+                target=match_expr,
+                loc=loc
+            ),
+        )
+
+        # insert jump
+        [jump_target] = remain[-1].get_targets()
+        switch_block.body.append(ir.Branch(match_expr, jump_target, remain_blocks[i], loc=loc))
+
+        switch_block = ir.Block(scope=scope, loc=loc)
+        blocks[remain_blocks[i]] = switch_block
+
+    switch_block.body.append(ir.Jump(jump_target, loc=loc))
+
+    func_ir.render_dot(filename_prefix="after").view()
+    return func_ir, common_key
+    # raise
