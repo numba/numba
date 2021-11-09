@@ -38,6 +38,7 @@ from numba.core.ir_utils import (
     fixup_var_define_in_scope,
     transfer_scope,
     find_max_label,
+    get_global_func_typ,
 )
 from numba.core.analysis import compute_use_defs, compute_live_map, compute_dead_maps, compute_cfg_from_blocks
 from numba.core.typing import signature
@@ -125,6 +126,31 @@ def _lower_parfor_parallel(lowerer, parfor):
         loc = parfor.init_block.loc
         pfbdr = ParforLoweringBuilder(lowerer=lowerer, scope=scope, loc=loc)
 
+        #get_num_threads = cgutils.get_or_insert_function(
+        #    pfbdr.builder.module, lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
+        #    "get_num_threads")
+        #num_threads = pfbdr.builder.call(get_num_threads, [])
+        #num_threads_var = pfbdr.assign(
+        #    rhs=num_threads,
+        #    typ=types.intp,
+        #    name="num_threads_var")
+
+#        get_num_threads = pfbdr.bind_builtin(
+#            "get_num_threads",
+#            lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
+#            signature(types.intp))
+
+        get_num_threads = pfbdr.bind_global_function(
+            fobj=get_global_func_typ(numba.get_num_threads),
+            ftype=signature(types.intp),
+            args=()
+        )
+
+        num_threads_var = pfbdr.assign(
+            rhs=pfbdr.call(get_num_threads, args=[]),
+            typ=types.intp,
+            name="num_threads_var")
+
         # For each reduction variable...
         for i in range(nredvars):
             redvar_typ = lowerer.fndesc.typemap[parfor_redvars[i]]
@@ -132,7 +158,7 @@ def _lower_parfor_parallel(lowerer, parfor):
             redarrvar_typ = redtyp_to_redarraytype(redvar_typ)
             reddtype = redarrvar_typ.dtype
             if config.DEBUG_ARRAY_OPT:
-                print("redvar_typ", redvar_typ, redarrvar_typ, reddtype, types.DType(reddtype))
+                print("redvar_typ", redvar_typ, redarrvar_typ, reddtype, types.DType(reddtype), num_threads_var, type(num_threads_var))
 
             # If this is reduction over an array,
             # the reduction array has just one added per-worker dimension.
@@ -154,11 +180,11 @@ def _lower_parfor_parallel(lowerer, parfor):
             )
 
             # Create var for outer dimension size of reduction array equal to number of threads.
-            num_threads_var = pfbdr.make_const_variable(
-                cval=thread_count,
-                typ=types.intp,
-                name='num_threads',
-            )
+            #num_threads_var = pfbdr.make_const_variable(
+            #    cval=thread_count,
+            #    typ=types.intp,
+            #    name='num_threads',
+            #)
 
             size_var_list = [num_threads_var]
 

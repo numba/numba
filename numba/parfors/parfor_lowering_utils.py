@@ -1,6 +1,6 @@
 from collections import namedtuple
 
-from numba.core import types, ir
+from numba.core import types, ir, cgutils
 from numba.core.ir_utils import mk_unique_var
 from numba.core.typing import signature
 
@@ -32,6 +32,10 @@ class ParforLoweringBuilder:
     def _calltypes(self):
         return self._lowerer.fndesc.calltypes
 
+    @property
+    def builder(self):
+        return self._lowerer.builder
+
     def bind_global_function(self, fobj, ftype, args, kws={}):
         """Binds a global function to a variable.
 
@@ -47,6 +51,7 @@ class ParforLoweringBuilder:
         -------
         callable: _CallableNode
         """
+        print("bind_global_function:", fobj, ftype, args)
         loc = self._loc
         varname = f"{fobj.__name__}_func"
         gvname = f"{fobj.__name__}"
