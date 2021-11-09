@@ -2247,6 +2247,18 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
 
         foo()
 
+    def test_const_key_not_in_dict(self):
+
+        @njit
+        def foo():
+            a = {'not_a': 2j, 'c': 'd', 'e': np.zeros(4)}
+            return a['a']
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+
+        self.assertIn("Key 'a' is not in dict.", str(raises.exception))
+
 
 if __name__ == '__main__':
     unittest.main()
