@@ -1,3 +1,4 @@
+import sys
 from collections import namedtuple, OrderedDict
 import dis
 import inspect
@@ -82,11 +83,18 @@ class ByteCodeInst(object):
 
     def get_jump_target(self):
         assert self.is_jump
-        if self.opcode in JREL_OPS:
-            return self.next + self.arg * 2
+        if sys.version_info >= (3, 10):
+            if self.opcode in JREL_OPS:
+                return self.next + self.arg * 2
+            else:
+                assert self.opcode in JABS_OPS
+                return self.arg * 2 - 2
         else:
-            assert self.opcode in JABS_OPS
-            return self.arg * 2 - 2
+            if self.opcode in JREL_OPS:
+                return self.next + self.arg
+            else:
+                assert self.opcode in JABS_OPS
+                return self.arg
 
     def __repr__(self):
         return '%s(arg=%s, lineno=%d)' % (self.opname, self.arg, self.lineno)

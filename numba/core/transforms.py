@@ -140,7 +140,7 @@ def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
             # Post-Py3.8 DO NOT have multiple exits
             returnto = an_exit
 
-        local_block_ids = set(loop.body) | set(loop.entries)
+        local_block_ids = set(loop.body) | set(loop.entries) | set(loop.exits)
         inputs, outputs = find_region_inout_vars(
             blocks=blocks,
             livemap=livemap,
@@ -234,6 +234,47 @@ def _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
     return liftedloop
 
 
+def _has_multiple_loop_exits(cfg, lpinfo):
+    """Returns True if there are more than one exit in the loop.
+
+    NOTE: "common exits" refer to the situation where a loop exit has another
+    loop exit as successor. In that case, we do not need to alter it.
+    """
+    if len(lpinfo.exits) <= 1:
+        return False
+    exits = set(lpinfo.exits)
+    pdom = cfg.post_dominators()
+
+    # Eliminate blocks that have other blocks as post-dominators.
+    processed = set()
+    remain = exits - processed
+    while remain:
+        node = remain.pop()
+        processed.add(node)
+        exits -= pdom[node] - {node}
+        remain = exits - processed
+
+    return len(exits) > 1
+
+
+def _pre_looplift_transform(func_ir):
+    """Canonicalize loops for looplifting.
+    """
+    from numba.core.postproc import PostProcessor
+
+    cfg = compute_cfg_from_blocks(func_ir.blocks)
+    # For every loop that has multiple exits, combine the exits into one.
+    for loop_info in cfg.loops().values():
+        if _has_multiple_loop_exits(cfg, loop_info):
+            func_ir, _common_key = _fix_multi_exit_blocks(
+                func_ir, loop_info.exits
+            )
+    # Reset and reprocess the func_ir
+    func_ir._reset_analysis_variables()
+    PostProcessor(func_ir).run()
+    return func_ir
+
+
 def loop_lifting(func_ir, typingctx, targetctx, flags, locals):
     """
     Loop lifting transformation.
@@ -241,6 +282,7 @@ def loop_lifting(func_ir, typingctx, targetctx, flags, locals):
     Given a interpreter `func_ir` returns a 2 tuple of
     `(toplevel_interp, [loop0_interp, loop1_interp, ....])`
     """
+    func_ir = _pre_looplift_transform(func_ir)
     blocks = func_ir.blocks.copy()
     cfg = compute_cfg_from_blocks(blocks)
     loopinfos = _loop_lift_get_candidate_infos(cfg, blocks,
@@ -599,7 +641,7 @@ def find_setupwiths(func_ir):
     blocks = func_ir.blocks
     # itinitial find
     withs = find_ranges(blocks)
-    # this is the re-write step, only do this, even if there are 
+    # this is the re-write step, only do this, even if there are
     # it shoud return the new IR and the new withs
     func_ir = consolidate_multi_exit_withs(withs, blocks, func_ir)
 
@@ -702,7 +744,9 @@ def consolidate_multi_exit_withs(withs: dict, blocks, func_ir):
     for k in withs:
         vs : set = withs[k]
         if len(vs) > 1:
-            func_ir, common = fix_multi_pop_block(func_ir, k, vs)
+            func_ir, common = _fix_multi_exit_blocks(
+                func_ir, vs, split_condition=is_pop_block,
+            )
             #func_ir.render_dot().view()
             withs[k] = {common}
     return func_ir
@@ -723,9 +767,7 @@ def consolidate_multi_exit_withs(withs: dict, blocks, func_ir):
     # return out
 
 
-def fix_multi_pop_block(func_ir, setup_node, pop_nodes):
-
-    func_ir.render_dot(filename_prefix="before").view()
+def _fix_multi_exit_blocks(func_ir, exit_nodes, *, split_condition=None):
     blocks = func_ir.blocks
 
     any_blk = min(func_ir.blocks.values())
@@ -743,14 +785,17 @@ def fix_multi_pop_block(func_ir, setup_node, pop_nodes):
     blocks[post_key] = post_block
 
     remainings = []
-    for i, k in enumerate(pop_nodes):
+    for i, k in enumerate(exit_nodes):
         #import pdb
         #pdb.set_trace()
         blk = blocks[k]
 
-        for pt, stmt in enumerate(blk.body):
-            if is_pop_block(stmt):
-                break
+        if split_condition is not None:
+            for pt, stmt in enumerate(blk.body):
+                if split_condition(stmt):
+                    break
+        else:
+            pt = -1
 
         before = blk.body[:pt]
         after = blk.body[pt:]
@@ -759,9 +804,12 @@ def fix_multi_pop_block(func_ir, setup_node, pop_nodes):
         blk.body = before
         loc = blk.loc
         blk.body.append(ir.Assign(value=ir.Const(i, loc=loc), target=scope.get_or_define("$cp", loc=loc), loc=loc))
+        assert not blk.is_terminated
         blk.body.append(ir.Jump(common_key, loc=blk.loc))
 
-    common_block.body.append(remainings[0][0])  # the POP
+    if split_condition is not None:
+        common_block.body.append(remainings[0][0])  # the POP
+    assert not common_block.is_terminated
     common_block.body.append(ir.Jump(post_key, loc=loc))
     # make if-else tree to jump to target
 
@@ -803,6 +851,4 @@ def fix_multi_pop_block(func_ir, setup_node, pop_nodes):
 
     switch_block.body.append(ir.Jump(jump_target, loc=loc))
 
-    func_ir.render_dot(filename_prefix="after").view()
     return func_ir, common_key
-    # raise
