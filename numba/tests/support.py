@@ -66,6 +66,11 @@ skip_py38_or_later = unittest.skipIf(
     "unsupported on py3.8 or later"
 )
 
+skip_unless_py10_or_later = unittest.skipUnless(
+    utils.PYVERSION >= (3, 10),
+    "needs Python 3.10 or later"
+)
+
 _msg = "SciPy needed for test"
 skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
 
