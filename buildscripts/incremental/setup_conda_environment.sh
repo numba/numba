@@ -43,7 +43,7 @@ conda list
 if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]]; then
     conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON pip gitpython pyyaml
 else
-    conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
+    conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON conda-forge::numpy=$NUMPY pip gitpython pyyaml
 fi
 
 # Activate first

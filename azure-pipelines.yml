@@ -12,12 +12,12 @@ jobs:
     name: macOS
     vmImage: macOS-10.14
     matrix:
-      py37_np118:
+      py310_np121:
         PYTHON: '3.7'
         NUMPY: '1.18'
         CONDA_ENV: 'azure_ci'
         TEST_START_INDEX: 0
-      py39_np121:
+      py39_np120:
         PYTHON: '3.9'
         NUMPY: '1.21'
         CONDA_ENV: 'azure_ci'
@@ -111,7 +111,7 @@ jobs:
         NUMPY: '1.20'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 15
-      py39_np121:
+      py310_np121:
         PYTHON: '3.9'
         NUMPY: '1.21'
         CONDA_ENV: azure_ci
