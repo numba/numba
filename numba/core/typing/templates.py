@@ -365,7 +365,7 @@ class AbstractTemplate(FunctionTemplate):
                 else:
                     return x
 
-            args = list(map(unpack_opt, args))
+            args = tuple(map(unpack_opt, args))
             assert not kws  # Not supported yet
             sig = generic(args, kws)
 
