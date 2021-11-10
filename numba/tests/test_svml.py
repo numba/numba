@@ -241,8 +241,14 @@ class TestSVMLGeneration(TestCase):
             p = ctx.Process(target=type(self).mp_runner, args=[testname, q])
             p.start()
             # timeout to avoid hanging and long enough to avoid bailing too early
-            p.join(timeout=10)
-            self.assertEqual(p.exitcode, 0, msg="process ended unexpectedly")
+            term_or_timeout = p.join(timeout=10)
+            exitcode = p.exitcode
+            if term_or_timeout is None:
+                if exitcode is None:
+                    self.fail("Process timed out.")
+                elif exitcode < 0:
+                    self.fail(f"Process terminated with signal {-exitcode}.")
+            self.assertEqual(exitcode, 0, msg="process ended unexpectedly")
             out = q.get()
             status = out['status']
             msg = out['msg']

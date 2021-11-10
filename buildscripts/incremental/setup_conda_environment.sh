@@ -76,9 +76,9 @@ elif  [[ $(uname) == Darwin ]]; then
     $CONDA_INSTALL llvm-openmp intel-openmp
 fi
 
-# If on 32bit linux, now pip install NumPy and SciPy (no conda package)
+# If on 32bit linux, now pip install NumPy (no conda package), SciPy is broken?!
 if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
-    $PIP_INSTALL numpy==$NUMPY scipy
+    $PIP_INSTALL numpy==$NUMPY
 fi
 
 # Install latest llvmlite build
