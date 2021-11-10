@@ -1,6 +1,6 @@
 from collections import namedtuple
 
-from numba.core import types, ir, cgutils
+from numba.core import types, ir
 from numba.core.ir_utils import mk_unique_var
 from numba.core.typing import signature
 
