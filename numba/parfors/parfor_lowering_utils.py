@@ -51,7 +51,6 @@ class ParforLoweringBuilder:
         -------
         callable: _CallableNode
         """
-        print("bind_global_function:", fobj, ftype, args)
         loc = self._loc
         varname = f"{fobj.__name__}_func"
         gvname = f"{fobj.__name__}"
