@@ -4,6 +4,7 @@ set -e
 
 export NUMBA_DEVELOPER_MODE=1
 export NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING=1
+export NUMBA_CAPTURED_ERRORS="new_style"
 export PYTHONFAULTHANDLER=1
 
 unamestr=`uname`

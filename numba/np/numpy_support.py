@@ -110,7 +110,7 @@ def from_dtype(dtype):
             subtype = from_dtype(dtype.subdtype[0])
             return types.NestedArray(subtype, dtype.shape)
 
-    raise NotImplementedError(dtype)
+    raise errors.NumbaNotImplementedError(dtype)
 
 
 _as_dtype_letters = {
@@ -153,8 +153,9 @@ def as_dtype(nbtype):
         return np.dtype(spec)
     if isinstance(nbtype, types.PyObject):
         return np.dtype(object)
-    raise NotImplementedError("%r cannot be represented as a Numpy dtype"
-                              % (nbtype,))
+
+    msg = f"{nbtype} cannot be represented as a NumPy dtype"
+    raise errors.NumbaNotImplementedError(msg)
 
 
 def as_struct_dtype(rec):
@@ -370,11 +371,11 @@ def ufunc_find_matching_loop(ufunc, arg_types):
 
     try:
         np_input_types = [as_dtype(x) for x in input_types]
-    except NotImplementedError:
+    except errors.NumbaNotImplementedError:
         return None
     try:
         np_output_types = [as_dtype(x) for x in output_types]
-    except NotImplementedError:
+    except errors.NumbaNotImplementedError:
         return None
 
     # Whether the inputs are mixed integer / floating-point
@@ -496,7 +497,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                 if ufunc_inputs[0] == 'm':
                     outputs = set_output_dt_units(inputs, outputs, ufunc_inputs)
 
-            except NotImplementedError:
+            except errors.NumbaNotImplementedError:
                 # One of the selected dtypes isn't supported by Numba
                 # (e.g. float16), try other candidates
                 continue

@@ -329,8 +329,16 @@ As a result of the above, public CI is implemented as follows:
       matrix and each combination runs one chunk. This is done for speed,
       because public CI cannot cope with the load else.
 
-If a pull request is changing CUDA code (which cannot be tested on Public CI as
-there's no hardware) or it is making changes to something that the core
+If a Pull Request (PR) changes CUDA code or will affect the CUDA target, it
+needs to be run on `gpuCI <https://gpuci.gpuopenanalytics.com/job/numba/>`_.
+This can be triggered by one of the Numba maintainers commenting ``run gpuCI
+tests`` on the PR discussion. This runs the CUDA testsuite with various CUDA
+toolkit versions on Linux, to provide some initial confidence in the
+correctness of the changes with respect to CUDA. Following approval, the PR
+will also be run on Numba's build farm to test other configurations with CUDA
+(including Windows, which is not tested by gpuCI).
+
+If the PR is not CUDA-related but makes changes to something that the core
 developers consider risky, then it will also be run on the Numba farm just to
 make sure. The Numba project's private build and test farm will actually
 exercise all the applicable tests on all the combinations noted above on real

@@ -1,4 +1,4 @@
-from numba.core import types
+from numba.core import types, errors
 from numba.core.typing.npydecl import (parse_dtype, parse_shape,
                                        register_number_classes)
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
@@ -19,6 +19,8 @@ register_number_classes(register_global)
 class GridFunction(CallableTemplate):
     def generic(self):
         def typer(ndim):
+            if not isinstance(ndim, types.IntegerLiteral):
+                raise errors.RequireLiteralValue(ndim)
             val = ndim.literal_value
             if val == 1:
                 restype = types.int32

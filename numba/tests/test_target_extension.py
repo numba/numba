@@ -529,7 +529,10 @@ class TestTargetHierarchySelection(TestCase):
         def dpu_foo():
             my_func(1)
 
-        with self.assertRaises(errors.TypingError) as raises:
+        # new style errors raise UnsupportedError, old style ends up as
+        # TypingError
+        accept = (errors.UnsupportedError, errors.TypingError)
+        with self.assertRaises(accept) as raises:
             dpu_foo()
 
         msgs = ["Function resolution cannot find any matches for function",
@@ -542,7 +545,7 @@ class TestTargetHierarchySelection(TestCase):
 
     def test_invalid_target_jit(self):
 
-        with self.assertRaises(ValueError) as raises:
+        with self.assertRaises(errors.NumbaValueError) as raises:
             @njit(_target='invalid_silicon')
             def foo():
                 pass
@@ -626,7 +629,8 @@ class TestTargetHierarchySelection(TestCase):
         def cpu_foo_dpu():
             return intrin_math_dpu(3, 4)
 
-        with self.assertRaises(errors.TypingError) as raises:
+        accept = (errors.UnsupportedError, errors.TypingError)
+        with self.assertRaises(accept) as raises:
             cpu_foo_dpu()
 
         msgs = ["Function resolution cannot find any matches for function",
@@ -654,7 +658,8 @@ class TestTargetHierarchySelection(TestCase):
         def dpu_foo_cpu():
             return intrin_math_cpu(3, 4)
 
-        with self.assertRaises(errors.TypingError) as raises:
+        accept = (errors.UnsupportedError, errors.TypingError)
+        with self.assertRaises(accept) as raises:
             dpu_foo_cpu()
 
         msgs = ["Function resolution cannot find any matches for function",

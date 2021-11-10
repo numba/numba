@@ -7,7 +7,7 @@ import operator
 import llvmlite.llvmpy.core as lc
 
 from numba import prange
-from numba.core import types, cgutils
+from numba.core import types, cgutils, errors
 from numba.cpython.listobj import ListIterInstance
 from numba.np.arrayobj import make_array
 from numba.core.imputils import (lower_builtin, lower_cast,
@@ -181,9 +181,10 @@ def range_to_range(context, builder, fromty, toty, val):
     return cgutils.make_anonymous_struct(builder, items)
 
 @intrinsic
-def range_iter_len(typingctx, val):
+def length_of_iterator(typingctx, val):
     """
-    An implementation of len(range_iter) for internal use.
+    An implementation of len(iter) for internal use.
+    Primary use is for array comprehensions (see inline_closurecall).
     """
     if isinstance(val, types.RangeIteratorType):
         val_type = val.yield_type
@@ -213,7 +214,27 @@ def range_iter_len(typingctx, val):
             # array iterates along the outer dimension
             return impl_ret_untracked(context, builder, intp_t, shape[0])
         return signature(types.intp, val), codegen
+    elif isinstance(val, types.UniTupleIter):
+        def codegen(context, builder, sig, args):
+            (iterty,) = sig.args
+            tuplety = iterty.container
+            intp_t = context.get_value_type(types.intp)
+            count_const = intp_t(tuplety.count)
+            return impl_ret_untracked(context, builder, intp_t, count_const)
 
+        return signature(types.intp, val), codegen
+    elif isinstance(val, types.ListTypeIteratorType):
+        def codegen(context, builder, sig, args):
+            (value,) = args
+            intp_t = context.get_value_type(types.intp)
+            from numba.typed.listobject import ListIterInstance
+            iterobj = ListIterInstance(context, builder, sig.args[0], value)
+            return impl_ret_untracked(context, builder, intp_t, iterobj.size)
+        return signature(types.intp, val), codegen
+    else:
+        msg = ('Unsupported iterator found in array comprehension, try '
+               'preallocating the array and filling manually.')
+        raise errors.TypingError(msg)
 
 def make_range_attr(index, attribute):
     @intrinsic

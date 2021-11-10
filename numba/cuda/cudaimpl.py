@@ -8,15 +8,16 @@ import llvmlite.binding as ll
 from numba.core.imputils import Registry
 from numba.core.typing.npydecl import parse_dtype, signature
 from numba.core import types, cgutils
-from .cudadrv import nvvm
+from .cudadrv import nvvm, error
 from numba import cuda
 from numba.cuda import nvvmutils, stubs
-from numba.cuda.types import dim3, grid_group
+from numba.cuda.types import dim3, grid_group, CUDADispatcher
 
 
 registry = Registry()
 lower = registry.lower
 lower_attr = registry.lower_getattr
+lower_constant = registry.lower_constant
 
 
 def initialize_dim3(builder, prefix):
@@ -408,19 +409,27 @@ def ptx_fma(context, builder, sig, args):
 def lower_fp16_binary(fn, op):
     @lower(fn, types.float16, types.float16)
     def ptx_fp16_binary(context, builder, sig, args):
-        compute_capability = cuda.current_context().device.compute_capability
+        compute_capability_supported = \
+            cuda.current_context().device.compute_capability >= (5, 3)
         toolkit_version = cuda.runtime.get_version()
 
         # 16-bit Floating point binary operations add, sub, and mul were
         # introduced in PTX ISA 4.2 (Cuda 7.0) and SM 5.3
 
-        if toolkit_version >= (7, 0) and compute_capability >= (5, 3):
-            fnty = ir.FunctionType(ir.HalfType(),
-                                   [ir.HalfType(), ir.HalfType()])
+        if toolkit_version >= (7, 0) and compute_capability_supported:
+            fnty = ir.FunctionType(ir.IntType(16),
+                                   [ir.IntType(16), ir.IntType(16)])
             asm = ir.InlineAsm(fnty, f'{op}.f16 $0,$1,$2;', '=h,h,h')
             return builder.call(asm, args)
         else:
-            return None
+            if not compute_capability_supported:
+                raise error.CudaSupportError(f"Compute capability < 5.3 does"
+                                             f"not support 16-bit fp"
+                                             f"operation: {op}")
+            else:
+                raise error.CudaSupportError(f"Cuda toolkit < 7.0 does"
+                                             f"not support 16-bit fp"
+                                             f"operation: {op}")
 
 
 lower_fp16_binary(stubs.fp16.hadd, 'add')
@@ -528,11 +537,18 @@ def lower_fp16_unary(fn, op):
                 operation_supported = True
 
         if operation_supported:
-            fnty = ir.FunctionType(ir.HalfType(), [ir.HalfType()])
+            fnty = ir.FunctionType(ir.IntType(16), [ir.IntType(16)])
             asm = ir.InlineAsm(fnty, f'{op}.f16 $0,$1;', '=h,h')
             return builder.call(asm, args)
         else:
-            return None
+            if not compute_capability_supported:
+                raise error.CudaSupportError(f"Compute capability < 5.3 does"
+                                             f"not support 16-bit fp"
+                                             f"operation: {op}")
+            else:
+                raise error.CudaSupportError(f"Cuda toolkit < 10.2 does"
+                                             f"not support 16-bit fp"
+                                             f"operation: {op}")
 
 
 lower_fp16_unary(stubs.fp16.hneg, 'neg')
@@ -541,17 +557,18 @@ lower_fp16_unary(stubs.fp16.habs, 'abs')
 
 @lower(stubs.fp16.hfma, types.float16, types.float16, types.float16)
 def ptx_hfma(context, builder, sig, args):
-    compute_capability = cuda.current_context().device.compute_capability
+    compute_capability_supported = \
+        cuda.current_context().device.compute_capability >= (5, 3)
     toolkit_version = cuda.runtime.get_version()
 
     # 16-bit Floating point fused multiply accumulate was
     # introduced in PTX ISA 4.2 (Cuda 7.0) and SM 5.3
 
-    if toolkit_version >= (7, 0) and compute_capability >= (5, 3):
-        hfma_fn_type = ir.FunctionType(ir.HalfType(),
-                                       [ir.HalfType(),
-                                        ir.HalfType(),
-                                        ir.HalfType()])
+    if toolkit_version >= (7, 0) and compute_capability_supported:
+        hfma_fn_type = ir.FunctionType(ir.IntType(16),
+                                       [ir.IntType(16),
+                                        ir.IntType(16),
+                                        ir.IntType(16)])
         hfma_inline_asm = "fma.rn.f16 $0,$1,$2,$3;"
         hfma_inline_constraints = "=h,h,h,h"
         hfma_inline = ir.InlineAsm(hfma_fn_type, hfma_inline_asm,
@@ -559,7 +576,12 @@ def ptx_hfma(context, builder, sig, args):
 
         return builder.call(hfma_inline, args)
     else:
-        return None
+        if not compute_capability_supported:
+            raise error.CudaSupportError("Compute capability < 5.3 does"
+                                         "not support 16-bit fp fma")
+        else:
+            raise error.CudaSupportError("Cuda toolkit < 7.0 does"
+                                         "not support 16-bit fp fma")
 
 # See:
 # https://docs.nvidia.com/cuda/libdevice-users-guide/__nv_cbrt.html#__nv_cbrt
@@ -1108,3 +1130,8 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
                            itemsize=context.get_constant(types.intp, itemsize),
                            meminfo=None)
     return ary._getvalue()
+
+
+@lower_constant(CUDADispatcher)
+def cuda_dispatcher_const(context, builder, ty, pyval):
+    return context.get_dummy_value()

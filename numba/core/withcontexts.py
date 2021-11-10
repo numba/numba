@@ -441,6 +441,8 @@ def _mutate_with_block_callee(blocks, blk_start, blk_end, inputs, outputs):
     outputs: sequence[str]
         Output variable names
     """
+    if not blocks:
+        raise errors.NumbaValueError("No blocks in with-context block")
     head_blk = min(blocks)
     temp_blk = blocks[head_blk]
     scope = temp_blk.scope

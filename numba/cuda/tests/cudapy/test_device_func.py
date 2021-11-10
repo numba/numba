@@ -2,7 +2,6 @@ import re
 import types
 
 import numpy as np
-import warnings
 
 from numba.cuda.testing import unittest, skip_on_cudasim, CUDATestCase
 from numba import cuda, jit, int32
@@ -108,30 +107,13 @@ class TestDeviceFunc(CUDATestCase):
         np.testing.assert_equal(expect, ary)
 
     @skip_on_cudasim('not supported in cudasim')
-    def test_inspect_ptx(self):
-        @cuda.jit(device=True)
-        def foo(x, y):
-            return x + y
-
-        args = (int32, int32)
-        cres = foo.compile(args)
-
-        fname = cres.fndesc.mangled_name
-        # Verify that the function name has "foo" in it as in the python name
-        self.assertIn('foo', fname)
-
-        ptx = foo.inspect_ptx(args)
-        # Check that the compiled function name is in the PTX.
-        self.assertIn(fname, ptx.decode('ascii'))
-
-    @skip_on_cudasim('not supported in cudasim')
     def test_inspect_llvm(self):
         @cuda.jit(device=True)
         def foo(x, y):
             return x + y
 
         args = (int32, int32)
-        cres = foo.compile(args)
+        cres = foo.compile_device(args)
 
         fname = cres.fndesc.mangled_name
         # Verify that the function name has "foo" in it as in the python name
@@ -142,13 +124,73 @@ class TestDeviceFunc(CUDATestCase):
         self.assertIn(fname, llvm)
 
     @skip_on_cudasim('not supported in cudasim')
-    def test_deprecated_eager_device(self):
-        with warnings.catch_warnings(record=True) as w:
-            cuda.jit('int32(int32)', device=True)
+    def test_inspect_asm(self):
+        @cuda.jit(device=True)
+        def foo(x, y):
+            return x + y
 
-        self.assertEqual(len(w), 1)
-        self.assertIn('Eager compilation of device functions is deprecated',
-                      str(w[0].message))
+        args = (int32, int32)
+        cres = foo.compile_device(args)
+
+        fname = cres.fndesc.mangled_name
+        # Verify that the function name has "foo" in it as in the python name
+        self.assertIn('foo', fname)
+
+        ptx = foo.inspect_asm(args)
+        # Check that the compiled function name is in the PTX
+        self.assertIn(fname, ptx)
+
+    @skip_on_cudasim('not supported in cudasim')
+    def test_inspect_sass_disallowed(self):
+        @cuda.jit(device=True)
+        def foo(x, y):
+            return x + y
+
+        with self.assertRaises(RuntimeError) as raises:
+            foo.inspect_sass((int32, int32))
+
+        self.assertIn('Cannot inspect SASS of a device function',
+                      str(raises.exception))
+
+    @skip_on_cudasim('cudasim will allow calling any function')
+    def test_device_func_as_kernel_disallowed(self):
+        @cuda.jit(device=True)
+        def f():
+            pass
+
+        with self.assertRaises(RuntimeError) as raises:
+            f[1, 1]()
+
+        self.assertIn('Cannot compile a device function as a kernel',
+                      str(raises.exception))
+
+    @skip_on_cudasim('cudasim ignores casting by jit decorator signature')
+    def test_device_casting(self):
+        # Ensure that casts to the correct type are forced when calling a
+        # device function with a signature. This test ensures that:
+        #
+        # - We don't compile a new specialization of rgba for float32 when we
+        #   shouldn't
+        # - We insert a cast when calling rgba, as opposed to failing to type.
+
+        @cuda.jit('int32(int32, int32, int32, int32)', device=True)
+        def rgba(r, g, b, a):
+            return (((r & 0xFF) << 16) |
+                    ((g & 0xFF) << 8) |
+                    ((b & 0xFF) << 0) |
+                    ((a & 0xFF) << 24))
+
+        @cuda.jit
+        def rgba_caller(x, channels):
+            x[0] = rgba(channels[0], channels[1], channels[2], channels[3])
+
+        x = cuda.device_array(1, dtype=np.int32)
+        channels = cuda.to_device(np.asarray([1.0, 2.0, 3.0, 4.0],
+                                             dtype=np.float32))
+
+        rgba_caller[1, 1](x, channels)
+
+        self.assertEqual(0x04010203, x[0])
 
 
 if __name__ == '__main__':

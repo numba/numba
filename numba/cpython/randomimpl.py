@@ -19,6 +19,8 @@ from numba import _helperlib
 from numba.core import types, utils, cgutils
 from numba.np import arrayobj
 from numba.core.overload_glue import glue_lowering
+from numba.core.errors import NumbaTypeError
+
 
 POST_PY38 = utils.PYVERSION >= (3, 8)
 
@@ -1541,7 +1543,7 @@ def dirichlet(alpha, size=None):
                 flat[i + k] /= norm
 
     if not isinstance(alpha, (types.Sequence, types.Array)):
-        raise TypeError(
+        raise NumbaTypeError(
             "np.random.dirichlet(): alpha should be an "
             "array or sequence, got %s" % (alpha,)
         )
@@ -1573,7 +1575,7 @@ def dirichlet(alpha, size=None):
             return out
 
     else:
-        raise TypeError(
+        raise NumbaTypeError(
             "np.random.dirichlet(): size should be int or "
             "tuple of ints or None, got %s" % size
         )

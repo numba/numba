@@ -361,7 +361,7 @@ class FloatModel(PrimitiveModel):
         if fe_type == types.float32:
             be_type = ir.FloatType()
         elif fe_type == types.float16:
-            be_type = ir.HalfType()
+            be_type = ir.IntType(16)
         elif fe_type == types.float64:
             be_type = ir.DoubleType()
         else:
