@@ -203,13 +203,13 @@ class BinOpMul(BinOp):
     pass
 
 
-@infer_global(operator.mod)
+@glue_typing(operator.mod)
 class BinOpMod(ConcreteTemplate):
     cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
 
-@infer_global(operator.imod)
+@glue_typing(operator.imod)
 class BinOpMod(ConcreteTemplate):
     cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]

@@ -189,8 +189,8 @@ def int_truediv_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(operator.mod, types.Integer, types.Integer)
-@lower_builtin(operator.imod, types.Integer, types.Integer)
+@glue_lowering(operator.mod, types.Integer, types.Integer)
+@glue_lowering(operator.imod, types.Integer, types.Integer)
 def int_rem_impl(context, builder, sig, args):
     quot, rem = _int_divmod_impl(context, builder, sig, args,
                                  "integer modulo by zero")
