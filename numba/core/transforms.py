@@ -607,7 +607,7 @@ def find_setupwiths(func_ir):
     # rest of the code can cope
     withs = [(s,list(p)[0])
              for (s,p) in withs.items()]
-    # now we check for return's inside with:
+    # now we check for returns inside with:
     for s,p in withs:
         target_block = blocks[p]
         if is_return(func_ir.blocks[
@@ -628,7 +628,6 @@ def find_setupwiths(func_ir):
 
 
 def _rewrite_return(func_ir, target_block_label):
-    print("foo")
     target_block = func_ir.blocks[target_block_label]
     target_block_successor_label = target_block.terminator.get_targets()[0]
     target_block_successor = func_ir.blocks[target_block_successor_label]
