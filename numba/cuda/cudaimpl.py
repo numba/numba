@@ -11,12 +11,13 @@ from numba.core import types, cgutils
 from .cudadrv import nvvm, error
 from numba import cuda
 from numba.cuda import nvvmutils, stubs
-from numba.cuda.types import dim3, grid_group
+from numba.cuda.types import dim3, grid_group, CUDADispatcher
 
 
 registry = Registry()
 lower = registry.lower
 lower_attr = registry.lower_getattr
+lower_constant = registry.lower_constant
 
 
 def initialize_dim3(builder, prefix):
@@ -1045,3 +1046,8 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
                            itemsize=context.get_constant(types.intp, itemsize),
                            meminfo=None)
     return ary._getvalue()
+
+
+@lower_constant(CUDADispatcher)
+def cuda_dispatcher_const(context, builder, ty, pyval):
+    return context.get_dummy_value()
