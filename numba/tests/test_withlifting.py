@@ -276,12 +276,8 @@ class TestLiftCall(BaseTestWithLifting):
         self.assertIn(msg, str(raises.exception))
 
     def test_liftcall5(self):
-        with self.assertRaises(errors.CompilerError) as raises:
-            njit(liftcall5)()
-        # Make sure we can detect a break-within-with and have a reasonable
-        # error.
-        msg = ("Does not support with-context that contain branches")
-        self.assertIn(msg, str(raises.exception))
+        # checks that the for-with-break construct 
+        njit(liftcall5)()
 
 
 def expected_failure_for_list_arg(fn):
@@ -679,21 +675,13 @@ class TestLiftObj(MemoryLeak, TestCase):
                              msg='there were warnings in dataflow.py')
 
     def test_case14_return_direct_from_objmode_ctx(self):
-        # fails with:
-        # AssertionError: Failed in nopython mode pipeline (step: Handle with contexts)
-        # ending offset is not a label
+        @njit
         def foo(x):
             with objmode_context(x='int64[:]'):
+                x += 1
                 return x
-        x = np.array([1, 2, 3])
-        cfoo = njit(foo)
-        with self.assertRaises(errors.CompilerError) as raises:
-            cfoo(x)
-        self.assertIn(
-            ('unsupported controlflow due to return statements inside '
-             'with block'),
-            str(raises.exception),
-        )
+        result = foo(np.array([1, 2, 3]))
+        np.testing.assert_array_equal(np.array([2, 3, 4]), result)
 
     # No easy way to handle this yet.
     @unittest.expectedFailure
@@ -754,9 +742,9 @@ class TestLiftObj(MemoryLeak, TestCase):
             return ret
         x = np.array([1, 2, 3])
         cfoo = njit(foo)
-        with self.assertRaises(errors.CompilerError) as raises:
+        with self.assertRaises(errors.TypingError) as raises:
             cfoo(x)
-        msg = "unsupported controlflow due to return statements inside with block"
+        msg = "Untyped global name 'foo': Cannot determine Numba type of <class 'function'>"
         self.assertIn(msg, str(raises.exception))
 
     @unittest.expectedFailure

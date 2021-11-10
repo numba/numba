@@ -595,9 +595,6 @@ def find_setupwiths(func_ir):
                                 to_visit.append(t)
 
         return setup_with_to_pop_blocks_map
-        #for setup_with, pop_blocks in setup_with_to_pop_blocks_map.items():
-        #    for p in pop_blocks:
-        #        yield setup_with, p
 
     blocks = func_ir.blocks
     # itinitial find
@@ -608,33 +605,71 @@ def find_setupwiths(func_ir):
 
     # here we need to turn the withs back into a list of tuples so that the
     # rest of the code can cope
-    withs = [(s,func_ir.blocks[list(p)[0]].terminator.get_targets()[0])
+    withs = [(s,list(p)[0])
              for (s,p) in withs.items()]
+    # now we check for return's inside with:
+    for s,p in withs:
+        target_block = blocks[p]
+        if is_return(func_ir.blocks[
+                target_block.terminator.get_targets()[0]].terminator):
+            #func_ir.render_dot(filename_prefix="before").view()
+            _rewrite_return(func_ir, p)
+            #func_ir.render_dot(filename_prefix="after").view()
+
+    # now we need to rewrite the tuple so, we have SETUP_WITH matching the
+    # successor of the block that contains the POP_BLOCK.
+    withs = [(s,func_ir.blocks[p].terminator.get_targets()[0])
+             for (s,p) in withs]
+
     # finally we eliminate any nested withs
     withs = _eliminate_nested_withs(withs)
 
     return withs, func_ir
 
 
+def _rewrite_return(func_ir, target_block_label):
+    print("foo")
+    target_block = func_ir.blocks[target_block_label]
+    target_block_successor_label = target_block.terminator.get_targets()[0]
+    target_block_successor = func_ir.blocks[target_block_successor_label]
+    # create the new return block with an appropriate label
+    max_label = ir_utils.find_max_label(func_ir.blocks)
+    # use 1000 to make sure we move outside of the range
+    new_label = max_label + 1
+    # create the new return block
+    new_block_loc = func_ir.blocks[max_label].loc
+    new_block_scope = ir.Scope(None, loc=new_block_loc)
+    new_block = ir.Block(new_block_scope, loc=new_block_loc)
 
-    setup_to_pop_block_map = {}
-    for s, e in sorted(find_ranges(blocks)):
-        # Look for setup_withs that have multiple pop_blocks each with a
-        # different target.
-        if s not in setup_to_pop_block_map:
-            setup_to_pop_block_map[s] = e
+    # split the block containing the POP_BLOCK into top and bottom
+    found = False
+    top_body, bottom_body = [], []
+    for stmt in target_block.body:
+        if is_pop_block(stmt):
+            top_body.append(stmt)
+            top_body.append(ir.Jump(target_block_successor_label,
+                                             target_block.loc))
+            found = True
+        elif isinstance(stmt, ir.Jump):
+            bottom_body.append(ir.Jump(new_label, target_block.loc))
         else:
-            if setup_to_pop_block_map[s] != e:
-                raise errors.CompilerError(
-                    "Does not support with-context that contain branches "
-                    "(i.e. break/return/raise) that can leave the with-context. "
-                )
-        # Elminate all withs contained within withs, we are only interested in
-        # the outermost with statements so we can lift them.
-        if not within_known_range(s, e, known_ranges):
-            known_ranges.append((s, e))
+            if not found:
+                top_body.append(stmt)
+            else:
+                bottom_body.append(stmt)
+    # get the contents of the return block
+    return_body = func_ir.blocks[target_block_successor_label].body
+    # finally, re-assign all blocks
+    new_block.body.extend(return_body)
+    target_block_successor.body.clear()
+    target_block_successor.body.extend(bottom_body)
+    target_block.body.clear()
+    target_block.body.extend(top_body)
 
-    return known_ranges
+    # finally, append the new return block and rebuild the IR properties
+    func_ir.blocks[new_label] = new_block
+    func_ir._definitions = ir_utils.build_definitions(func_ir.blocks)
+    return func_ir
 
 def _eliminate_nested_withs(with_ranges):
     known_ranges = []

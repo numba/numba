@@ -340,6 +340,7 @@ class _ObjModeContextType(WithContext):
             raise errors.TypingError(msg.format(extra_annotated))
 
         # Verify that all outputs are annotated
+        typeanns["$cp"] = types.int32
         not_annotated = set(stripped_outs) - set(typeanns)
         if not_annotated:
             msg = (
