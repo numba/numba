@@ -465,5 +465,3 @@ if config.CHROME_TRACE:
         with open(filename, "w") as out:
             evs = _write_chrome_trace(listener)
             json.dump(evs, out)
-else:
-    print("Tracing disabled.")
