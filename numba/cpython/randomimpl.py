@@ -1475,9 +1475,12 @@ def multinomial(n, pvals, size=None):
                 # The remaining experiments end up in the last bucket
                 fl[i + plen - 1] = n_experiments
                 
-    if np.sum(pvals) > 1 + 1e-10:
-      raise AssertionError("np.random.multinomial(): Sum of probabilities "
-                           "cannot exceed 1.")
+    p_val_sum = 0.0
+    for i in range(len(pvals)):
+        p_val_sum += pvals[i]
+    if p_val_sum > 1 + 1e-10:
+        raise AssertionError("np.random.multinomial(): Sum of probabilities "
+                             "cannot exceed 1.")
 
     if not isinstance(n, types.Integer):
         raise TypeError("np.random.multinomial(): n should be an "
