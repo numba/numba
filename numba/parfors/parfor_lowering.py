@@ -65,6 +65,7 @@ def _lower_parfor_parallel(lowerer, parfor):
     ensure_parallel_support()
     typingctx = lowerer.context.typing_context
     targetctx = lowerer.context
+    builder = lowerer.builder
     # We copy the typemap here because for race condition variable we'll
     # update their type to array so they can be updated by the gufunc.
     orig_typemap = lowerer.fndesc.typemap
@@ -279,7 +280,7 @@ def _lower_parfor_parallel(lowerer, parfor):
             # Get the LLVM type of the thread count variable.
             ntllvm_type = targetctx.get_value_type(num_thread_type)
             # Create a LLVM variable to hold the loop index.
-            alloc_loop_var = cgutils.alloca_once(pfbdr.builder, ntllvm_type)
+            alloc_loop_var = cgutils.alloca_once(builder, ntllvm_type)
             # Associate this LLVM variable to a Numba IR variable so that
             # we can use setitem IR builder.
             # Create a Numba IR variable.
@@ -292,9 +293,9 @@ def _lower_parfor_parallel(lowerer, parfor):
             lowerer.varmap[numba_ir_loop_index_var.name] = alloc_loop_var
             # Insert a loop into the outputed LLVM that goes from 0 to
             # the current thread count.
-            with cgutils.for_range(pfbdr.builder, lowerer.loadvar(num_threads_var.name), intp=ntllvm_type) as loop:
+            with cgutils.for_range(builder, lowerer.loadvar(num_threads_var.name), intp=ntllvm_type) as loop:
                 # Store the loop index into the alloca'd LLVM loop index variable.
-                pfbdr.builder.store(loop.index, alloc_loop_var)
+                builder.store(loop.index, alloc_loop_var)
                 # Initialize one element of the reduction array using the Numba
                 # IR variable associated with this loop's index.
                 pfbdr.setitem(obj=redarr_var, index=numba_ir_loop_index_var, val=redtoset)
@@ -397,12 +398,12 @@ def _lower_parfor_parallel(lowerer, parfor):
             # For each element in the reduction array created above,
             # apply reduction operator.
             # This for_range inserts a loop from 0 to the thread count.
-            with cgutils.for_range(pfbdr.builder, lowerer.loadvar(num_threads_var.name), intp=ntllvm_type) as loop:
+            with cgutils.for_range(builder, lowerer.loadvar(num_threads_var.name), intp=ntllvm_type) as loop:
                 # This will put the llvm loop.index value into the alloca'd llvm variable
                 # that corresponds to the IR variable numba_ir_loop_index_var.
                 # This reuses alloc_loop_var created above to initialize
                 # the reduction array.
-                pfbdr.builder.store(loop.index, alloc_loop_var)
+                builder.store(loop.index, alloc_loop_var)
 
                 # Read that element from the array into oneelem.
                 oneelemgetitem = pfbdr.getitem(

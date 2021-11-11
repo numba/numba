@@ -32,10 +32,6 @@ class ParforLoweringBuilder:
     def _calltypes(self):
         return self._lowerer.fndesc.calltypes
 
-    @property
-    def builder(self):
-        return self._lowerer.builder
-
     def bind_global_function(self, fobj, ftype, args, kws={}):
         """Binds a global function to a variable.
 
