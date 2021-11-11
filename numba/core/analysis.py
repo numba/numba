@@ -543,8 +543,8 @@ def dead_branch_prune(func_ir, called_args):
         if set(new_incoming) != set(phi.incoming_blocks):
             # Something has changed in the CFG...
             if len(new_incoming) == 1:
-                # There's now just one incoming. Replace the PHI node by a direct
-                # assignment
+                # There's now just one incoming. Replace the PHI node by a
+                # direct assignment
                 idx = phi.incoming_blocks.index(new_incoming[0])
                 phi2asgn[phi].value = phi.incoming_values[idx]
             else:
