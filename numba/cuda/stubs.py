@@ -736,4 +736,3 @@ class fp16(Stub):
         Returns a if a is less than b, returns b otherwise.
 
         """
-

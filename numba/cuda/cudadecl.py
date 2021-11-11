@@ -569,10 +569,10 @@ class CudaFp16Template(AttributeTemplate):
 
     def resolve_hlt(self, mod):
         return types.Function(Cuda_hlt)
-    
+
     def resolve_hmax(self, mod):
         return types.Function(Cuda_hmax)
-    
+
     def resolve_hmin(self, mod):
         return types.Function(Cuda_hmin)
 

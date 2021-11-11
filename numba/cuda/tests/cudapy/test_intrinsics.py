@@ -141,6 +141,14 @@ def simple_hlt_scalar(ary, a, b):
     ary[0] = cuda.fp16.hlt(a, b)
 
 
+def simple_hmax_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hmax(a, b)
+
+
+def simple_hmin_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hmin(a, b)
+
+
 def simple_cbrt(ary, a):
     ary[0] = cuda.cbrt(a)
 
@@ -490,6 +498,7 @@ class TestCudaIntrinsic(CUDATestCase):
         ref = abs(arg1)
         np.testing.assert_allclose(ary[0], ref)
 
+    @skip_unless_cc_53
     def test_heq(self):
         compiled = cuda.jit("void(b1[:], f2, f2)")(simple_heq_scalar)
         ary = np.zeros(1, dtype=np.bool8)
@@ -501,6 +510,7 @@ class TestCudaIntrinsic(CUDATestCase):
         compiled[1, 1](ary, arg1, arg2)
         self.assertFalse(ary[0])
 
+    @skip_unless_cc_53
     def test_hne(self):
         compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hne_scalar)
         ary = np.zeros(1, dtype=np.bool8)
@@ -512,6 +522,7 @@ class TestCudaIntrinsic(CUDATestCase):
         compiled[1, 1](ary, arg1, arg2)
         self.assertTrue(ary[0])
 
+    @skip_unless_cc_53
     def test_hge(self):
         compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hge_scalar)
         ary = np.zeros(1, dtype=np.bool8)
@@ -525,7 +536,8 @@ class TestCudaIntrinsic(CUDATestCase):
         arg1 = np.float(2.98)
         compiled[1, 1](ary, arg1, arg2)
         self.assertFalse(ary[0])
-    
+
+    @skip_unless_cc_53
     def test_hgt(self):
         compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hgt_scalar)
         ary = np.zeros(1, dtype=np.bool8)
@@ -540,6 +552,7 @@ class TestCudaIntrinsic(CUDATestCase):
         compiled[1, 1](ary, arg1, arg2)
         self.assertFalse(ary[0])
 
+    @skip_unless_cc_53
     def test_hle(self):
         compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hle_scalar)
         ary = np.zeros(1, dtype=np.bool8)
@@ -553,7 +566,8 @@ class TestCudaIntrinsic(CUDATestCase):
         arg1 = np.float(2.98)
         compiled[1, 1](ary, arg1, arg2)
         self.assertTrue(ary[0])
-    
+
+    @skip_unless_cc_53
     def test_hlt(self):
         compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hlt_scalar)
         ary = np.zeros(1, dtype=np.bool8)
@@ -568,6 +582,29 @@ class TestCudaIntrinsic(CUDATestCase):
         compiled[1, 1](ary, arg1, arg2)
         self.assertTrue(ary[0])
 
+    @skip_unless_cc_53
+    def test_hmax(self):
+        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hmax_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(3.)
+        arg2 = np.float16(4.)
+        compiled[1, 1](ary, arg1, arg2)
+        np.testing.assert_allclose(ary[0], arg2)
+        arg1 = np.float(5.)
+        compiled[1, 1](ary, arg1, arg2)
+        np.testing.assert_allclose(ary[0], arg1)
+
+    @skip_unless_cc_53
+    def test_hmin(self):
+        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hmin_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(3.)
+        arg2 = np.float16(4.)
+        compiled[1, 1](ary, arg1, arg2)
+        np.testing.assert_allclose(ary[0], arg1)
+        arg1 = np.float(5.)
+        compiled[1, 1](ary, arg1, arg2)
+        np.testing.assert_allclose(ary[0], arg2)
 
     def test_cbrt_f32(self):
         compiled = cuda.jit("void(float32[:], float32)")(simple_cbrt)

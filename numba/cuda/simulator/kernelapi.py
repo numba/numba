@@ -237,6 +237,36 @@ class FakeCUDAFp16(object):
     def habs(self, a):
         return abs(a)
 
+    def heq(self, a, b):
+        return a == b
+
+    def hne(self, a, b):
+        return a != b
+
+    def hge(self, a, b):
+        return a >= b
+
+    def hgt(self, a, b):
+        return a > b
+
+    def hle(self, a, b):
+        return a <= b
+
+    def hlt(self, a, b):
+        return a < b
+
+    def hmax(self, a, b):
+        if a > b:
+            return a
+        else:
+            return b
+
+    def hmin(self, a, b):
+        if a < b:
+            return a
+        else:
+            return b
+
 
 class FakeCUDAModule(object):
     '''

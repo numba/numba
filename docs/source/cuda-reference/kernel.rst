@@ -498,16 +498,50 @@ precision parts of the CUDA Toolkit documentation.
 .. function:: numba.cuda.fp16.hneg (a)
 
    Perform the negation operation ``-a`` on the 16-bit floating point argument.
-   Maps to the ``neg.f16`` PTX instruction.
 
    Returns the 16-bit floating point result of the negation.
 
 .. function:: numba.cuda.fp16.habs (a)
 
    Perform the absolute value operation ``|a|`` on the 16-bit floating point argument.
-   Maps to the ``abs.f16`` PTX instruction.
 
    Returns the 16-bit floating point result of the absolute value operation.
+
+.. function:: numba.cuda.fp16.heq (a, b)
+
+   Perform the comparison operation ``a == b`` on 16-bit floating point arguments.
+
+   Returns the boolean result of comparing ``a`` and ``b`` for equality.
+
+.. function:: numba.cuda.fp16.hne (a, b)
+
+   Perform the comparison operation ``a != b`` on 16-bit floating point arguments.
+
+   Returns the boolean result of comparing ``a`` and ``b`` for inequality.
+
+.. function:: numba.cuda.fp16.hgt (a, b)
+
+   Perform the comparison operation ``a > b`` on 16-bit floating point arguments.
+
+   Returns the boolean result of comparing if ``a`` is greater than ``b``.
+
+.. function:: numba.cuda.fp16.hge (a, b)
+
+   Perform the comparison operation ``a >= b`` on 16-bit floating point arguments.
+
+   Returns the boolean result of comparing if ``a`` is greater or equal to ``b``.
+
+.. function:: numba.cuda.fp16.hlt (a, b)
+
+   Perform the comparison operation ``a < b`` on 16-bit floating point arguments.
+
+   Returns the boolean result of comparing if ``a`` is less than ``b``.
+
+.. function:: numba.cuda.fp16.hle (a, b)
+
+   Perform the comparison operation ``a <= b`` on 16-bit floating point arguments.
+
+   Returns the boolean result of comparing if ``a`` is less or equal to ``b``.
 
 Control Flow Instructions
 ~~~~~~~~~~~~~~~~~~~~~~~~~
