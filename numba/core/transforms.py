@@ -607,6 +607,16 @@ def find_setupwiths(func_ir):
     # rest of the code can cope
     withs = [(s,list(p)[0])
              for (s,p) in withs.items()]
+
+    # check for POP_BLOCKS with multiple outgoing edges
+    for (s,p) in withs:
+        targets = blocks[p].terminator.get_targets()
+        if len(targets) != 1:
+            raise errors.CompilerError(
+                "Does not support with-context that contain branches "
+                "(i.e. break/return/raise) that can leave the with-context. "
+            )
+
     # now we check for returns inside with:
     for s,p in withs:
         target_block = blocks[p]
