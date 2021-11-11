@@ -1735,11 +1735,6 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
                                               src=expr.value.name,
                                               loc=inst.loc))
         elif expr.op == 'phi':
-            # for iv in expr.incoming_values:
-            #     if iv is not ir.UNDEFINED:
-            #         self.constraints.append(Propagate(dst=target.name,
-            #                                           src=iv.name,
-            #                                           loc=inst.loc))
             constraint = PhiConstraint(target.name,
                                        incoming_values=expr.incoming_values,
                                        loc=inst.loc)
