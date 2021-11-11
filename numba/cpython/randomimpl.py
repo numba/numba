@@ -1465,7 +1465,7 @@ def multinomial(n, pvals, size=None):
             # distribution over the remaining number of experiments.
             for j in range(0, plen - 1):
                 p_j = pvals[j]
-                n_j = fl[i + j] = np.random.binomial(n_experiments, p_j / p_sum)
+                n_j = fl[i + j] = np.random.binomial(n_experiments, min(p_j / p_sum, 1))
                 n_experiments -= n_j
                 if n_experiments <= 0:
                     # Note the output was initialized to zero
@@ -1474,6 +1474,9 @@ def multinomial(n, pvals, size=None):
             if n_experiments > 0:
                 # The remaining experiments end up in the last bucket
                 fl[i + plen - 1] = n_experiments
+                
+    if np.sum(pvals) > 1 + 1e-10:
+      raise AssertionError("Sum of probabilities cannot exceed 1.")
 
     if not isinstance(n, types.Integer):
         raise TypeError("np.random.multinomial(): n should be an "
