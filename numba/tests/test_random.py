@@ -1298,6 +1298,16 @@ class TestRandomMultinomial(BaseTest):
         for sample in res.reshape((-1, res.shape[-1])):
             self._check_sample(n, pvals, sample)
 
+    def test_multinomial_4_floating_point(self):
+        """
+        Test multinomial floating point
+        """
+        cfunc = jit(nopython=True)(numpy_multinomial2)
+        # The following values _just_ exceed one in sum
+        n, pvals = 2, np.array([0.4166666666666667, 0.5833333333333334, 0.0])
+        res = cfunc(n, pvals)
+        self._check_sample(n, pvals, res)
+        
 
 class TestRandomDirichlet(BaseTest):
     alpha = np.array([1, 1, 1, 2], dtype=np.float64)
