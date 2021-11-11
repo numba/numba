@@ -437,7 +437,7 @@ def _write_chrome_trace(rec):
     import threading
 
     pid = os.getpid()
-    tid = threading.get_native_id()
+    tid = threading.get_ident()
     evs = []
     for ts, rec in rec.buffer:
         data = rec.data
@@ -464,6 +464,6 @@ if config.CHROME_TRACE:
     def _():
         with open(filename, "w") as out:
             evs = _write_chrome_trace(listener)
-            print("filename: ", filename)
-            print(evs)
             json.dump(evs, out)
+else:
+    print("Tracing disabled.")
