@@ -5,6 +5,7 @@ import itertools
 from types import CodeType, ModuleType
 
 from numba.core import errors, utils, serialize
+from numba.core.utils import PYVERSION
 
 
 opcode_info = namedtuple('opcode_info', ['argsize'])
@@ -82,11 +83,20 @@ class ByteCodeInst(object):
 
     def get_jump_target(self):
         assert self.is_jump
-        if self.opcode in JREL_OPS:
-            return self.next + self.arg
+        # The way the offsets are encoded in the bytecode has changed with
+        # 3.10. For details, see: https://github.com/python/cpython/pull/25069
+        if PYVERSION >= (3, 10):
+            if self.opcode in JREL_OPS:
+                return self.next + self.arg * 2
+            else:
+                assert self.opcode in JABS_OPS
+                return self.arg * 2 - 2
         else:
-            assert self.opcode in JABS_OPS
-            return self.arg
+            if self.opcode in JREL_OPS:
+                return self.next + self.arg
+            else:
+                assert self.opcode in JABS_OPS
+                return self.arg
 
     def __repr__(self):
         return '%s(arg=%s, lineno=%d)' % (self.opname, self.arg, self.lineno)
