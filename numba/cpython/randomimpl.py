@@ -1453,7 +1453,7 @@ def multinomial(n, pvals, size=None):
         
         psum = 0.0
         for i in range(plen):
-            psum += pval[i]
+            psum += pvals[i]
         if psum > 1 + 1e-10:
             raise AssertionError("np.random.multinomial(): Sum of probabilities "
                                  "cannot exceed 1.")
