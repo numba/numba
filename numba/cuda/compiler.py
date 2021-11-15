@@ -15,8 +15,8 @@ from numba.core.typeconv.rules import default_type_manager
 from numba.core.compiler import (CompilerBase, DefaultPassBuilder,
                                  compile_result, Flags, Option)
 from numba.core.compiler_lock import global_compiler_lock
-from numba.core.compiler_machinery import (LoweringPass, PassManager,
-                                           register_pass)
+from numba.core.compiler_machinery import (LoweringPass, AnalysisPass,
+                                           PassManager, register_pass)
 from numba.core.dispatcher import OmittedArg
 from numba.core.errors import NumbaDeprecationWarning
 from numba.core.typed_passes import IRLegalization, NativeLowering
@@ -29,7 +29,7 @@ from .cudadrv import driver
 from .errors import missing_launch_config_msg, normalize_kernel_dimensions
 from .api import get_current_device
 from .args import wrap_arg
-from numba.core.errors import NumbaPerformanceWarning
+from numba.core.errors import NumbaPerformanceWarning, NumbaWarning
 from .descriptor import cuda_target
 
 
@@ -102,6 +102,33 @@ class CreateLibrary(LoweringPass):
         return True
 
 
+@register_pass(mutates_CFG=False, analysis_only=True)
+class CUDALegalization(AnalysisPass):
+
+    _name = "cuda_legalization"
+
+    def __init__(self):
+        AnalysisPass.__init__(self)
+
+    def run_pass(self, state):
+        # Early return if NVVM 7
+        from numba.cuda.cudadrv.nvvm import NVVM
+        if NVVM().is_nvvm70:
+            return False
+        # NVVM < 7, need to check for charseq
+        typmap = state.typemap
+        for k, v in typmap.items():
+            if isinstance(v, types.Array):
+                if isinstance(v.dtype, (types.UnicodeCharSeq, types.CharSeq)):
+                    msg = (f"{k} is a char sequence type, this type is not "
+                           "supported on NVVM < 7 and compilation of this "
+                           "function may cause access violations in the "
+                           "NVIDIA compiler. To use this type NVVM >= 7 is "
+                           "required, try 'conda install cudatoolkit=11'.")
+                    warn(msg, NumbaWarning)
+        return False
+
+
 class CUDACompiler(CompilerBase):
     def define_pipelines(self):
         dpb = DefaultPassBuilder
@@ -112,6 +139,7 @@ class CUDACompiler(CompilerBase):
 
         typed_passes = dpb.define_typed_pipeline(self.state)
         pm.passes.extend(typed_passes.passes)
+        pm.add_pass(CUDALegalization, "CUDA legalization")
 
         lowering_passes = self.define_cuda_lowering_pipeline(self.state)
         pm.passes.extend(lowering_passes.passes)
