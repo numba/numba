@@ -10,7 +10,7 @@ jobs:
 - template: buildscripts/azure/azure-linux-macos.yml
   parameters:
     name: macOS
-    vmImage: macOS-10.14
+    vmImage: macOS-10.15
     matrix:
       py37_np117:
         PYTHON: '3.7'
@@ -120,4 +120,4 @@ jobs:
 - template: buildscripts/azure/azure-windows.yml
   parameters:
     name: Windows
-    vmImage: vs2017-win2016
+    vmImage: windows-2019
