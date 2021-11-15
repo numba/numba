@@ -1076,8 +1076,8 @@ class TestBuiltins(TestCase):
     def test_isinstance_exceptions(self):
         fns = [
             (invalid_isinstance_usecase, 'Cannot infer numba type of python type'),  # noqa: E501
-            (invalid_isinstance_usecase_phi_nopropagate, 'Cannot unify'),  # noqa: E501
-            (invalid_isinstance_optional_usecase, 'isinstance cannot handle optional types.'),  # noqa: E501
+            (invalid_isinstance_usecase_phi_nopropagate, 'isinstance cannot handle'),  # noqa: E501
+            (invalid_isinstance_optional_usecase, 'isinstance cannot handle'),  # noqa: E501
         ]
 
         for fn, msg in fns:

@@ -1446,22 +1446,31 @@ class PropagateLiterals(FunctionPass):
 
         for block in state.func_ir.blocks.values():
             for assign in block.find_insts(ir.Assign):
-                if isinstance(assign.value, (ir.Arg, ir.Const,
-                                             ir.FreeVar, ir.Global)):
+                value = assign.value
+                if isinstance(value, (ir.Arg, ir.Const, ir.FreeVar, ir.Global)):
                     continue
 
                 # 1) Don't change return stmt in the form
                 # $return_xyz = cast(value=ABC)
                 # 2) Don't propagate literal values that are not primitives
-                if isinstance(assign.value, ir.Expr) and \
-                        assign.value.op in ('cast', 'build_map', 'build_list',
-                                            'build_tuple', 'build_set'):
+                if isinstance(value, ir.Expr) and \
+                        value.op in ('cast', 'build_map', 'build_list',
+                                     'build_tuple', 'build_set'):
                     continue
 
                 target = assign.target
                 if not state.flags.enable_ssa:
                     if guard(get_definition, state.func_ir, target.name) is None:  # noqa: E501
                         continue
+
+                if isinstance(value, ir.Expr) and value.op == 'call':
+                    for arg in value.args:
+                        typs = state.func_ir._definitions[arg.name]
+                        is_phi = any([isinstance(typ, ir.Expr) and typ.op == 'phi' for typ in typs])  # noqa: E501
+                        is_isinstance_call = state.func_ir.get_definition(value.func.name).name == 'isinstance'  # noqa: E501
+                        if is_phi and is_isinstance_call:
+                            msg = 'isinstance cannot handle PHI nodes'
+                            raise errors.NumbaTypeError(msg, loc=assign.loc)
 
                 lit = state.typemap.get(target.name, None)
                 if lit and isinstance(lit, types.Literal):
