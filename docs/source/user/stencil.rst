@@ -164,7 +164,7 @@ option::
 The neighborhood option is a tuple of tuples.  The outer tuple's
 length is equal to the number of dimensions of the input array.
 The inner tuple's lengths are always two because
-each element of the outer tuple corresponds to minimum and
+each element of the inner tuple corresponds to minimum and
 maximum index offsets used in the corresponding dimension.
 
 If a user specifies a neighborhood but the kernel accesses elements outside the
