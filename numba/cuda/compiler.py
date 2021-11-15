@@ -120,11 +120,11 @@ class CUDALegalization(AnalysisPass):
         for k, v in typmap.items():
             if isinstance(v, types.Array):
                 if isinstance(v.dtype, (types.UnicodeCharSeq, types.CharSeq)):
-                    msg = (f"{k} is a char sequence type, this type is not "
-                           "supported on NVVM < 7 and compilation of this "
-                           "function may cause access violations in the "
-                           "NVIDIA compiler. To use this type NVVM >= 7 is "
-                           "required, try 'conda install cudatoolkit=11'.")
+                    msg = (f"{k} is a char sequence type. This type is not "
+                           "supported with CUDA toolkit versions < 11.2. To "
+                           "use this type, you need to update your CUDA "
+                           "toolkit - try 'conda install cudatoolkit=11' if "
+                           "you are using conda to manage your environment.")
                     warn(msg, NumbaWarning)
         return False
 
