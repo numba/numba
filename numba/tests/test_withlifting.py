@@ -14,6 +14,7 @@ from numba import njit, typeof, objmode, types
 from numba.core.extending import overload
 from numba.tests.support import (MemoryLeak, TestCase, captured_stdout,
                                  skip_unless_scipy)
+from numba.core.utils import PYVERSION
 from numba.experimental import jitclass
 import unittest
 
@@ -275,6 +276,9 @@ class TestLiftCall(BaseTestWithLifting):
         msg = ("compiler re-entrant to the same function signature")
         self.assertIn(msg, str(raises.exception))
 
+    # 3.7 fails to interpret the bytecode for this example
+    @unittest.skipIf(PYVERSION <= (3, 8),
+                     "unsupported on py3.8 and before")
     def test_liftcall5(self):
         with self.assertRaises(errors.CompilerError) as raises:
             njit(liftcall5)()
