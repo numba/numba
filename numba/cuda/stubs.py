@@ -629,6 +629,16 @@ class fp16(Stub):
 
         """
 
+    class hdiv(Stub):
+        """hdiv(a, b)
+
+        Perform fp16 division, (a / b) in round to nearest mode. Supported
+        on fp16 operands only.
+
+        Returns the fp16 result of the division.
+
+        """
+
     class hfma(Stub):
         """hfma(a, b, c)
 

@@ -436,6 +436,77 @@ lower_fp16_binary(stubs.fp16.hadd, 'add')
 lower_fp16_binary(stubs.fp16.hsub, 'sub')
 lower_fp16_binary(stubs.fp16.hmul, 'mul')
 
+@lower(stubs.fp16.hdiv, types.float16, types.float16)
+def lower_fp16_divide(context, builder, sig, args):
+    compute_capability_supported = \
+        cuda.current_context().device.compute_capability >= (5, 3)
+    toolkit_version = cuda.runtime.get_version()
+    if compute_capability_supported:
+        arg1 = args[0]
+        arg2 = args[1]
+
+        # Convert fp16 args to fp32 so we can implement
+        # division by reciprocal multiplication on fp32
+        # values
+        cvt2float_fnty = ir.FunctionType(ir.FloatType(), [ir.IntType(16)])
+        cvt2float_asm = ir.InlineAsm(cvt2float_fnty,
+                                     "cvt.f32.f16 $0, $1;",
+                                     "=f,h")
+        arg1_fp32 = builder.call(cvt2float_asm, [arg1])
+        arg2_fp32 = builder.call(cvt2float_asm, [arg2])
+
+        rcp_fnty = ir.FunctionType(ir.FloatType(), [ir.FloatType()])
+        rcp_asm = ir.InlineAsm(rcp_fnty,
+                               "rcp.approx.ftz.f32 $0, $1;",
+                               "=f,f")
+        arg2_rcp = builder.call(rcp_asm, [arg2_fp32])
+
+        # Multiply by reciprocal of arg2
+        fmul = builder.fmul(arg1_fp32, arg2_rcp)
+
+        #Convert from fp32 to fp16
+        cvt2fp16_fnty = ir.FunctionType(ir.IntType(16), [ir.FloatType()])
+        cvt2fp16_asm = ir.InlineAsm(cvt2fp16_fnty,
+                                    "cvt.rn.f16.f32 $0, $1;",
+                                    "=h,f")
+        fp16_div = builder.call(cvt2fp16_asm, [fmul])
+        and_cnst = context.get_constant(types.int16, 32767)
+        and_op = builder.and_(fp16_div, and_cnst)
+
+        temp_reg = '__$$temp3'
+        reg_pred_fnty = ir.FunctionType(ir.VoidType(),[])
+        reg_pred_asm = ir.InlineAsm(reg_pred_fnty,
+                                    f".reg .pred {temp_reg};",
+                                    "")
+        _ = builder.call(reg_pred_asm, [])
+
+        setp_fnty = ir.FunctionType(ir.VoidType(),
+                                    [ir.IntType(16), ir.IntType(16)])
+        setp_cnst = context.get_constant(types.int16, 143)
+        setp_asm = ir.InlineAsm(setp_fnty,
+                                f"setp.lt.f16 {temp_reg}, $0, $1;",
+                                'h,h')
+        _ = builder.call(setp_asm, [and_op, setp_cnst])
+
+        selp_fnty = ir.FunctionType(ir.IntType(16),[])
+
+        selp_asm = ir.InlineAsm(selp_fnty,
+                                f"selp.u16 $0, 1, 0, {temp_reg};",
+                                '=h')
+        selp = builder.call(selp_asm, [])
+
+        zero = context.get_constant(types.int16, 0)
+        cmp1 = builder.icmp_unsigned("==",
+                                    builder.bitcast(selp, ir.IntType(16)),
+                                    zero)
+        cmp2 = builder.icmp_unsigned("==",
+                                    builder.bitcast(and_op, ir.IntType(16)),
+                                    zero)
+        or_op = builder.or_(cmp1, cmp2)
+        builder.bitcast(or_op, ir.IntType(1))
+        pass
+    else:
+        return None
 
 def lower_fp16_unary(fn, op):
     @lower(fn, types.float16)

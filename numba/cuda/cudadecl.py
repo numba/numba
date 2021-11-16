@@ -362,6 +362,7 @@ def _genfp16_binary(l_key):
 Cuda_hadd = _genfp16_binary(cuda.fp16.hadd)
 Cuda_hsub = _genfp16_binary(cuda.fp16.hsub)
 Cuda_hmul = _genfp16_binary(cuda.fp16.hmul)
+Cuda_hdiv = _genfp16_binary(cuda.fp16.hdiv)
 Cuda_hneg = _genfp16_unary(cuda.fp16.hneg)
 Cuda_habs = _genfp16_unary(cuda.fp16.habs)
 
@@ -523,6 +524,9 @@ class CudaFp16Template(AttributeTemplate):
 
     def resolve_hmul(self, mod):
         return types.Function(Cuda_hmul)
+
+    def resolve_hdiv(self, mod):
+        return types.Function(Cuda_hdiv)
 
     def resolve_hneg(self, mod):
         return types.Function(Cuda_hneg)
