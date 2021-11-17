@@ -143,6 +143,12 @@ detail""",
         doc="backend"
     )
 
+    dbg_extend_lifetimes = Option(
+        type=bool,
+        default=False,
+        doc="Extend variable lifetime for debugging",
+    )
+
 
 DEFAULT_FLAGS = Flags()
 DEFAULT_FLAGS.nrt = True

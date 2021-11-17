@@ -91,6 +91,8 @@ class DefaultOptions:
 
     target_backend = _mapping("target_backend")
 
+    dbg_extend_lifetimes = _mapping("dbg_extend_lifetimes")
+
 
 def include_default_options(*args):
     """Returns a mixin class with a subset of the options
