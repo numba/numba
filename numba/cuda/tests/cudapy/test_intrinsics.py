@@ -3,8 +3,7 @@ import numpy as np
 import re
 from numba import cuda, int64
 from numba.cuda.testing import (unittest, CUDATestCase, skip_on_cudasim,
-                                skip_unless_toolkit_70, skip_unless_toolkit_90,
-                                skip_unless_toolkit_102, skip_unless_cc_53)
+                                cc_X_or_above, cuda_X_or_above)
 
 
 def simple_threadidx(ary):
@@ -342,129 +341,149 @@ class TestCudaIntrinsic(CUDATestCase):
         compiled[1, 1](ary, 2., 3., 4.)
         np.testing.assert_allclose(ary[0], 2 * 3 + 4)
 
-    @skip_unless_cc_53
-    @skip_unless_toolkit_70
+    def toolkit_and_compute_supported(self, compute_major, compute_minor,
+                                      toolkit_major, toolkit_minor):
+        return cc_X_or_above(compute_major, compute_minor) and \
+            cuda_X_or_above(toolkit_major, toolkit_minor)
+
     def test_hadd(self):
-        compiled = cuda.jit("void(f2[:], f2[:], f2[:])")(simple_hadd)
-        ary = np.zeros(1, dtype=np.float16)
-        arg1 = np.array([3.], dtype=np.float16)
-        arg2 = np.array([4.], dtype=np.float16)
-        compiled[1, 1](ary, arg1, arg2)
-        np.testing.assert_allclose(ary[0], arg1 + arg2)
+        # 16-bit Floating point binary operations add, sub, and mul were
+        # introduced in PTX ISA 4.2 (Cuda 7.0) and SM 5.3
 
-    @skip_unless_cc_53
-    @skip_unless_toolkit_70
+        if self.toolkit_and_compute_supported(5, 3, 7, 0):
+            compiled = cuda.jit("void(f2[:], f2[:], f2[:])")(simple_hadd)
+            ary = np.zeros(1, dtype=np.float16)
+            arg1 = np.array([3.], dtype=np.float16)
+            arg2 = np.array([4.], dtype=np.float16)
+            compiled[1, 1](ary, arg1, arg2)
+            np.testing.assert_allclose(ary[0], arg1 + arg2)
+        else:
+            self.skipTest("Test requires toolkit >= 7.0 and SM >= 5.3")
+
     def test_hadd_scalar(self):
-        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hadd_scalar)
-        ary = np.zeros(1, dtype=np.float16)
-        arg1 = np.float16(3.1415926)
-        arg2 = np.float16(3.)
-        compiled[1, 1](ary, arg1, arg2)
-        ref = arg1 + arg2
-        np.testing.assert_allclose(ary[0], ref)
+        if self.toolkit_and_compute_supported(5, 3, 7, 0):
+            compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hadd_scalar)
+            ary = np.zeros(1, dtype=np.float16)
+            arg1 = np.float16(3.1415926)
+            arg2 = np.float16(3.)
+            compiled[1, 1](ary, arg1, arg2)
+            ref = arg1 + arg2
+            np.testing.assert_allclose(ary[0], ref)
+        else:
+            self.skipTest("Test requires toolkit >= 7.0 and SM >= 5.3")
 
-    @skip_unless_cc_53
-    @skip_unless_toolkit_70
     def test_hfma(self):
-        compiled = cuda.jit("void(f2[:], f2[:], f2[:], f2[:])")(simple_hfma)
-        ary = np.zeros(1, dtype=np.float16)
-        arg1 = np.array([2.], dtype=np.float16)
-        arg2 = np.array([3.], dtype=np.float16)
-        arg3 = np.array([4.], dtype=np.float16)
-        compiled[1, 1](ary, arg1, arg2, arg3)
-        np.testing.assert_allclose(ary[0], arg1 * arg2 + arg3)
+        if self.toolkit_and_compute_supported(5, 3, 7, 0):
+            compiled = cuda.jit("void(f2[:], f2[:], f2[:], f2[:])")(simple_hfma)
+            ary = np.zeros(1, dtype=np.float16)
+            arg1 = np.array([2.], dtype=np.float16)
+            arg2 = np.array([3.], dtype=np.float16)
+            arg3 = np.array([4.], dtype=np.float16)
+            compiled[1, 1](ary, arg1, arg2, arg3)
+            np.testing.assert_allclose(ary[0], arg1 * arg2 + arg3)
+        else:
+            self.skipTest("Test requires toolkit >= 7.0 and SM >= 5.3")
 
-    @skip_unless_cc_53
-    @skip_unless_toolkit_70
     def test_hfma_scalar(self):
-        compiled = cuda.jit("void(f2[:], f2, f2, f2)")(simple_hfma_scalar)
-        ary = np.zeros(1, dtype=np.float16)
-        arg1 = np.float16(2.)
-        arg2 = np.float16(3.)
-        arg3 = np.float16(4.)
-        compiled[1, 1](ary, arg1, arg2, arg3)
-        ref = arg1 * arg2 + arg3
-        np.testing.assert_allclose(ary[0], ref)
+        if self.toolkit_and_compute_supported(5, 3, 7, 0):
+            compiled = cuda.jit("void(f2[:], f2, f2, f2)")(simple_hfma_scalar)
+            ary = np.zeros(1, dtype=np.float16)
+            arg1 = np.float16(2.)
+            arg2 = np.float16(3.)
+            arg3 = np.float16(4.)
+            compiled[1, 1](ary, arg1, arg2, arg3)
+            ref = arg1 * arg2 + arg3
+            np.testing.assert_allclose(ary[0], ref)
+        else:
+            self.skipTest("Test requires toolkit >= 7.0 and SM >= 5.3")
 
-    @skip_unless_cc_53
-    @skip_unless_toolkit_70
     def test_hsub(self):
-        compiled = cuda.jit("void(f2[:], f2[:], f2[:])")(simple_hsub)
-        ary = np.zeros(1, dtype=np.float16)
-        arg1 = np.array([3.], dtype=np.float16)
-        arg2 = np.array([4.], dtype=np.float16)
-        compiled[1, 1](ary, arg1, arg2)
-        np.testing.assert_allclose(ary[0], arg1 - arg2)
+        if self.toolkit_and_compute_supported(5, 3, 7, 0):
+            compiled = cuda.jit("void(f2[:], f2[:], f2[:])")(simple_hsub)
+            ary = np.zeros(1, dtype=np.float16)
+            arg1 = np.array([3.], dtype=np.float16)
+            arg2 = np.array([4.], dtype=np.float16)
+            compiled[1, 1](ary, arg1, arg2)
+            np.testing.assert_allclose(ary[0], arg1 - arg2)
+        else:
+            self.skipTest("Test requires toolkit >= 7.0 and SM >= 5.3")
 
-    @skip_unless_cc_53
-    @skip_unless_toolkit_70
     def test_hsub_scalar(self):
-        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hsub_scalar)
-        ary = np.zeros(1, dtype=np.float16)
-        arg1 = np.float16(3.1415926)
-        arg2 = np.float16(1.57)
-        compiled[1, 1](ary, arg1, arg2)
-        ref = arg1 - arg2
-        np.testing.assert_allclose(ary[0], ref)
+        if self.toolkit_and_compute_supported(5, 3, 7, 0):
+            compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hsub_scalar)
+            ary = np.zeros(1, dtype=np.float16)
+            arg1 = np.float16(3.1415926)
+            arg2 = np.float16(1.57)
+            compiled[1, 1](ary, arg1, arg2)
+            ref = arg1 - arg2
+            np.testing.assert_allclose(ary[0], ref)
+        else:
+            self.skipTest("Test requires toolkit >= 7.0 and SM >= 5.3")
 
-    @skip_unless_cc_53
-    @skip_unless_toolkit_70
     def test_hmul(self):
-        compiled = cuda.jit()(simple_hmul)
-        ary = np.zeros(1, dtype=np.float16)
-        arg1 = np.array([3.], dtype=np.float16)
-        arg2 = np.array([4.], dtype=np.float16)
-        compiled[1, 1](ary, arg1, arg2)
-        np.testing.assert_allclose(ary[0], arg1 * arg2)
+        if self.toolkit_and_compute_supported(5, 3, 7, 0):
+            compiled = cuda.jit()(simple_hmul)
+            ary = np.zeros(1, dtype=np.float16)
+            arg1 = np.array([3.], dtype=np.float16)
+            arg2 = np.array([4.], dtype=np.float16)
+            compiled[1, 1](ary, arg1, arg2)
+            np.testing.assert_allclose(ary[0], arg1 * arg2)
+        else:
+            self.skipTest("Test requires toolkit >= 7.0 and SM >= 5.3")
 
-    @skip_unless_cc_53
-    @skip_unless_toolkit_70
     def test_hmul_scalar(self):
-        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hmul_scalar)
-        ary = np.zeros(1, dtype=np.float16)
-        arg1 = np.float16(3.1415926)
-        arg2 = np.float16(1.57)
-        compiled[1, 1](ary, arg1, arg2)
-        ref = arg1 * arg2
-        np.testing.assert_allclose(ary[0], ref)
+        if self.toolkit_and_compute_supported(5, 3, 7, 0):
+            compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hmul_scalar)
+            ary = np.zeros(1, dtype=np.float16)
+            arg1 = np.float16(3.1415926)
+            arg2 = np.float16(1.57)
+            compiled[1, 1](ary, arg1, arg2)
+            ref = arg1 * arg2
+            np.testing.assert_allclose(ary[0], ref)
+        else:
+            self.skipTest("Test requires toolkit >= 7.0 and SM >= 5.3")
 
-    @skip_unless_cc_53
-    @skip_unless_toolkit_90
     def test_hneg(self):
-        compiled = cuda.jit("void(f2[:], f2[:])")(simple_hneg)
-        ary = np.zeros(1, dtype=np.float16)
-        arg1 = np.array([3.], dtype=np.float16)
-        compiled[1, 1](ary, arg1)
-        np.testing.assert_allclose(ary[0], -arg1)
+        if self.toolkit_and_compute_supported(5, 3, 9, 0):
+            compiled = cuda.jit("void(f2[:], f2[:])")(simple_hneg)
+            ary = np.zeros(1, dtype=np.float16)
+            arg1 = np.array([3.], dtype=np.float16)
+            compiled[1, 1](ary, arg1)
+            np.testing.assert_allclose(ary[0], -arg1)
+        else:
+            self.skipTest("Test requires toolkit >= 9.0 and SM >= 5.3")
 
-    @skip_unless_cc_53
-    @skip_unless_toolkit_90
     def test_hneg_scalar(self):
-        compiled = cuda.jit("void(f2[:], f2)")(simple_hneg_scalar)
-        ary = np.zeros(1, dtype=np.float16)
-        arg1 = np.float16(3.1415926)
-        compiled[1, 1](ary, arg1)
-        ref = -arg1
-        np.testing.assert_allclose(ary[0], ref)
+        if self.toolkit_and_compute_supported(5, 3, 9, 0):
+            compiled = cuda.jit("void(f2[:], f2)")(simple_hneg_scalar)
+            ary = np.zeros(1, dtype=np.float16)
+            arg1 = np.float16(3.1415926)
+            compiled[1, 1](ary, arg1)
+            ref = -arg1
+            np.testing.assert_allclose(ary[0], ref)
+        else:
+            self.skipTest("Test requires toolkit >= 9.0 and SM >= 5.3")
 
-    @skip_unless_cc_53
-    @skip_unless_toolkit_102
     def test_habs(self):
-        compiled = cuda.jit()(simple_habs)
-        ary = np.zeros(1, dtype=np.float16)
-        arg1 = np.array([-3.], dtype=np.float16)
-        compiled[1, 1](ary, arg1)
-        np.testing.assert_allclose(ary[0], abs(arg1))
+        if self.toolkit_and_compute_supported(5, 3, 10, 2):
+            compiled = cuda.jit()(simple_habs)
+            ary = np.zeros(1, dtype=np.float16)
+            arg1 = np.array([-3.], dtype=np.float16)
+            compiled[1, 1](ary, arg1)
+            np.testing.assert_allclose(ary[0], abs(arg1))
+        else:
+            self.skipTest("Test requires toolkit >= 10.2 and SM >= 5.3")
 
-    @skip_unless_cc_53
-    @skip_unless_toolkit_102
     def test_habs_scalar(self):
-        compiled = cuda.jit("void(f2[:], f2)")(simple_habs_scalar)
-        ary = np.zeros(1, dtype=np.float16)
-        arg1 = np.float16(-3.1415926)
-        compiled[1, 1](ary, arg1)
-        ref = abs(arg1)
-        np.testing.assert_allclose(ary[0], ref)
+        if self.toolkit_and_compute_supported(5, 3, 10, 2):
+            compiled = cuda.jit("void(f2[:], f2)")(simple_habs_scalar)
+            ary = np.zeros(1, dtype=np.float16)
+            arg1 = np.float16(-3.1415926)
+            compiled[1, 1](ary, arg1)
+            ref = abs(arg1)
+            np.testing.assert_allclose(ary[0], ref)
+        else:
+            self.skipTest("Test requires toolkit >= 10.2 and SM >= 5.3")
 
     def test_cbrt_f32(self):
         compiled = cuda.jit("void(float32[:], float32)")(simple_cbrt)
