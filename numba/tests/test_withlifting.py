@@ -679,13 +679,21 @@ class TestLiftObj(MemoryLeak, TestCase):
                              msg='there were warnings in dataflow.py')
 
     def test_case14_return_direct_from_objmode_ctx(self):
-        @njit
         def foo(x):
             with objmode_context(x='int64[:]'):
                 x += 1
                 return x
-        result = foo(np.array([1, 2, 3]))
-        np.testing.assert_array_equal(np.array([2, 3, 4]), result)
+
+        if PYVERSION <= (3,8):
+            # 3.8 and below don't support return inside with
+            with self.assertRaises(errors.CompilerError) as raises:
+                cfoo = njit(foo)
+                cfoo(np.array([1, 2, 3]))
+            msg = "unsupported controlflow due to return statements inside with block"
+            self.assertIn(msg, str(raises.exception))
+        else:
+            result = foo(np.array([1, 2, 3]))
+            np.testing.assert_array_equal(np.array([2, 3, 4]), result)
 
     # No easy way to handle this yet.
     @unittest.expectedFailure
@@ -744,11 +752,15 @@ class TestLiftObj(MemoryLeak, TestCase):
                     return 7
             ret = foo(x - 1)
             return ret
-        x = np.array([1, 2, 3])
-        cfoo = njit(foo)
-        with self.assertRaises(errors.TypingError) as raises:
-            cfoo(x)
-        msg = "Untyped global name 'foo': Cannot determine Numba type of <class 'function'>"
+        with self.assertRaises((errors.TypingError, errors.CompilerError)) as raises:
+            cfoo = njit(foo)
+            cfoo(np.array([1, 2, 3]))
+        if PYVERSION <= (3, 7):
+            # 3.7 and below can't handle the return
+            msg = "unsupported controlflow due to return statements inside with block"
+        else:
+            # above can't handle the recursion
+            msg = "Untyped global name 'foo'"
         self.assertIn(msg, str(raises.exception))
 
     @unittest.expectedFailure

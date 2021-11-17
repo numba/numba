@@ -654,15 +654,19 @@ def find_setupwiths(func_ir):
                 "Does not support with-context that contain branches "
                 "(i.e. break/return/raise) that can leave the with-context. "
             )
-
     # now we check for returns inside with:
     for s,p in withs:
         target_block = blocks[p]
         if is_return(func_ir.blocks[
                 target_block.terminator.get_targets()[0]].terminator):
-            #func_ir.render_dot(filename_prefix="before").view()
+            if PYVERSION == (3, 8):
+                # 3.8 needs to bail here, if this is the case, because the
+                # later code can't handle it otherwise
+                raise errors.CompilerError(
+                    "unsupported controlflow due to return statements "
+                    "inside with block"
+                )
             _rewrite_return(func_ir, p)
-            #func_ir.render_dot(filename_prefix="after").view()
 
     # now we need to rewrite the tuple so, we have SETUP_WITH matching the
     # successor of the block that contains the POP_BLOCK.
