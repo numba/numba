@@ -517,113 +517,129 @@ class TestCudaIntrinsic(CUDATestCase):
         else:
             self.skipTest("Test requires toolkit >= 10.2 and SM >= 5.3")
 
-    @skip_unless_cc_53
     def test_heq(self):
-        compiled = cuda.jit("void(b1[:], f2, f2)")(simple_heq_scalar)
-        ary = np.zeros(1, dtype=np.bool8)
-        arg1 = np.float16(3.)
-        arg2 = np.float16(3.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertTrue(ary[0])
-        arg2 = np.float(4.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertFalse(ary[0])
+        if cc_X_or_above(5, 3):
+            compiled = cuda.jit("void(b1[:], f2, f2)")(simple_heq_scalar)
+            ary = np.zeros(1, dtype=np.bool8)
+            arg1 = np.float16(3.)
+            arg2 = np.float16(3.)
+            compiled[1, 1](ary, arg1, arg2)
+            self.assertTrue(ary[0])
+            arg2 = np.float(4.)
+            compiled[1, 1](ary, arg1, arg2)
+            self.assertFalse(ary[0])
+        else:
+            self.skipTest("Test requires SM >= 5.3")
 
-    @skip_unless_cc_53
     def test_hne(self):
-        compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hne_scalar)
-        ary = np.zeros(1, dtype=np.bool8)
-        arg1 = np.float16(3.)
-        arg2 = np.float16(3.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertFalse(ary[0])
-        arg2 = np.float(4.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertTrue(ary[0])
+        if cc_X_or_above(5, 3):
+            compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hne_scalar)
+            ary = np.zeros(1, dtype=np.bool8)
+            arg1 = np.float16(3.)
+            arg2 = np.float16(3.)
+            compiled[1, 1](ary, arg1, arg2)
+            self.assertFalse(ary[0])
+            arg2 = np.float(4.)
+            compiled[1, 1](ary, arg1, arg2)
+            self.assertTrue(ary[0])
+        else:
+            self.skipTest("Test requires SM >= 5.3")
 
-    @skip_unless_cc_53
     def test_hge(self):
-        compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hge_scalar)
-        ary = np.zeros(1, dtype=np.bool8)
-        arg1 = np.float16(3.)
-        arg2 = np.float16(3.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertTrue(ary[0])
-        arg1 = np.float(4.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertTrue(ary[0])
-        arg1 = np.float(2.98)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertFalse(ary[0])
+        if cc_X_or_above(5, 3):
+            compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hge_scalar)
+            ary = np.zeros(1, dtype=np.bool8)
+            arg1 = np.float16(3.)
+            arg2 = np.float16(3.)
+            compiled[1, 1](ary, arg1, arg2)
+            self.assertTrue(ary[0])
+            arg1 = np.float(4.)
+            compiled[1, 1](ary, arg1, arg2)
+            self.assertTrue(ary[0])
+            arg1 = np.float(2.98)
+            compiled[1, 1](ary, arg1, arg2)
+            self.assertFalse(ary[0])
+        else:
+            self.skipTest("Test requires SM >= 5.3")
 
-    @skip_unless_cc_53
     def test_hgt(self):
-        compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hgt_scalar)
-        ary = np.zeros(1, dtype=np.bool8)
-        arg1 = np.float16(3.)
-        arg2 = np.float16(3.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertFalse(ary[0])
-        arg1 = np.float(4.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertTrue(ary[0])
-        arg1 = np.float(2.98)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertFalse(ary[0])
+        if cc_X_or_above(5, 3):
+            compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hgt_scalar)
+            ary = np.zeros(1, dtype=np.bool8)
+            arg1 = np.float16(3.)
+            arg2 = np.float16(3.)
+            compiled[1, 1](ary, arg1, arg2)
+            self.assertFalse(ary[0])
+            arg1 = np.float(4.)
+            compiled[1, 1](ary, arg1, arg2)
+            self.assertTrue(ary[0])
+            arg1 = np.float(2.98)
+            compiled[1, 1](ary, arg1, arg2)
+            self.assertFalse(ary[0])
+        else:
+            self.skipTest("Test requires SM >= 5.3")
 
-    @skip_unless_cc_53
     def test_hle(self):
-        compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hle_scalar)
-        ary = np.zeros(1, dtype=np.bool8)
-        arg1 = np.float16(3.)
-        arg2 = np.float16(3.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertTrue(ary[0])
-        arg1 = np.float(4.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertFalse(ary[0])
-        arg1 = np.float(2.98)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertTrue(ary[0])
+        if cc_X_or_above(5, 3):
+            compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hle_scalar)
+            ary = np.zeros(1, dtype=np.bool8)
+            arg1 = np.float16(3.)
+            arg2 = np.float16(3.)
+            compiled[1, 1](ary, arg1, arg2)
+            self.assertTrue(ary[0])
+            arg1 = np.float(4.)
+            compiled[1, 1](ary, arg1, arg2)
+            self.assertFalse(ary[0])
+            arg1 = np.float(2.98)
+            compiled[1, 1](ary, arg1, arg2)
+            self.assertTrue(ary[0])
+        else:
+            self.skipTest("Test requires SM >= 5.3")
 
-    @skip_unless_cc_53
     def test_hlt(self):
-        compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hlt_scalar)
-        ary = np.zeros(1, dtype=np.bool8)
-        arg1 = np.float16(3.)
-        arg2 = np.float16(3.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertFalse(ary[0])
-        arg1 = np.float(4.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertFalse(ary[0])
-        arg1 = np.float(2.98)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertTrue(ary[0])
+        if cc_X_or_above(5, 3):
+            compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hlt_scalar)
+            ary = np.zeros(1, dtype=np.bool8)
+            arg1 = np.float16(3.)
+            arg2 = np.float16(3.)
+            compiled[1, 1](ary, arg1, arg2)
+            self.assertFalse(ary[0])
+            arg1 = np.float(4.)
+            compiled[1, 1](ary, arg1, arg2)
+            self.assertFalse(ary[0])
+            arg1 = np.float(2.98)
+            compiled[1, 1](ary, arg1, arg2)
+            self.assertTrue(ary[0])
+        else:
+            self.skipTest("Test requires SM >= 5.3")
 
-    @skip_unless_cc_53
     def test_hmax(self):
-        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hmax_scalar)
-        ary = np.zeros(1, dtype=np.float16)
-        arg1 = np.float16(3.)
-        arg2 = np.float16(4.)
-        compiled[1, 1](ary, arg1, arg2)
-        np.testing.assert_allclose(ary[0], arg2)
-        arg1 = np.float(5.)
-        compiled[1, 1](ary, arg1, arg2)
-        np.testing.assert_allclose(ary[0], arg1)
+        if cc_X_or_above(5, 3):
+            compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hmax_scalar)
+            ary = np.zeros(1, dtype=np.float16)
+            arg1 = np.float16(3.)
+            arg2 = np.float16(4.)
+            compiled[1, 1](ary, arg1, arg2)
+            np.testing.assert_allclose(ary[0], arg2)
+            arg1 = np.float(5.)
+            compiled[1, 1](ary, arg1, arg2)
+            np.testing.assert_allclose(ary[0], arg1)
+        else:
+            self.skipTest("Test requires SM >= 5.3")
 
-    @skip_unless_cc_53
     def test_hmin(self):
-        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hmin_scalar)
-        ary = np.zeros(1, dtype=np.float16)
-        arg1 = np.float16(3.)
-        arg2 = np.float16(4.)
-        compiled[1, 1](ary, arg1, arg2)
-        np.testing.assert_allclose(ary[0], arg1)
-        arg1 = np.float(5.)
-        compiled[1, 1](ary, arg1, arg2)
-        np.testing.assert_allclose(ary[0], arg2)
+        if cc_X_or_above(5, 3):
+            compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hmin_scalar)
+            ary = np.zeros(1, dtype=np.float16)
+            arg1 = np.float16(3.)
+            arg2 = np.float16(4.)
+            compiled[1, 1](ary, arg1, arg2)
+            np.testing.assert_allclose(ary[0], arg1)
+            arg1 = np.float(5.)
+            compiled[1, 1](ary, arg1, arg2)
+            np.testing.assert_allclose(ary[0], arg2)
+        else:
+            self.skipTest("Test requires SM >= 5.3")
 
     def test_cbrt_f32(self):
         compiled = cuda.jit("void(float32[:], float32)")(simple_cbrt)
