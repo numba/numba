@@ -18,7 +18,7 @@ from numba.core.compiler_lock import global_compiler_lock
 from numba.core.compiler_machinery import (LoweringPass, AnalysisPass,
                                            PassManager, register_pass)
 from numba.core.dispatcher import OmittedArg
-from numba.core.errors import NumbaDeprecationWarning
+from numba.core.errors import NumbaDeprecationWarning, TypingError
 from numba.core.typed_passes import IRLegalization, NativeLowering
 from numba.core.typing.typeof import Purpose, typeof
 from warnings import warn
@@ -29,7 +29,7 @@ from .cudadrv import driver
 from .errors import missing_launch_config_msg, normalize_kernel_dimensions
 from .api import get_current_device
 from .args import wrap_arg
-from numba.core.errors import NumbaPerformanceWarning, NumbaWarning
+from numba.core.errors import NumbaPerformanceWarning
 from .descriptor import cuda_target
 
 
@@ -125,7 +125,7 @@ class CUDALegalization(AnalysisPass):
                            "use this type, you need to update your CUDA "
                            "toolkit - try 'conda install cudatoolkit=11' if "
                            "you are using conda to manage your environment.")
-                    warn(msg, NumbaWarning)
+                    raise TypingError(msg)
         return False
 
 

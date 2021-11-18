@@ -1,6 +1,7 @@
 import re
 import numpy as np
 from numba import config, cuda
+from numba.core.errors import TypingError
 from numba.cuda.cudadrv.nvvm import NVVM
 from numba.cuda.testing import unittest, skip_on_cudasim, CUDATestCase
 from llvmlite import ir
@@ -79,6 +80,19 @@ class TestConstString(CUDATestCase):
         expected[:-1] = 'XYZ'
         expected[-1] = ''
         np.testing.assert_equal(arr, expected)
+
+    @skip_on_cudasim('Const strings not disallowed on cudasim')
+    def test_const_string_disallowed_nvvm34(self):
+        if NVVM().is_nvvm70:
+            self.skipTest('Character sequences are permitted with NVVM 7.0')
+
+        @cuda.jit
+        def str_assign(arr):
+            arr[0] = "XYZ"
+
+        arr = np.zeros(1, dtype="<U12")
+        with self.assertRaisesRegex(TypingError, '.*is a char sequence.*'):
+            str_assign[1, 1](arr)
 
 
 if __name__ == '__main__':
