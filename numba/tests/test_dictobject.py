@@ -2145,10 +2145,10 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
     def test_dict_value_coercion(self):
         # checks that things coerce or not!
 
-        #    safe convertible: TypedDict
-        p = {(np.int32, np.int32): types.DictType,
-             # unsafe but convertible: TypedDict
-             (np.int8, np.int32): types.DictType,
+        p = {# safe and no conversion: TypedDict
+             (np.int32, np.int32): types.DictType,
+             # safe and convertible: TypedDict
+             (np.int32, np.int8): types.DictType,
              # safe convertible: TypedDict
              (np.complex128, np.int32): types.DictType,
              # unsafe not convertible: LiteralStrKey
@@ -2156,7 +2156,11 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
              # unsafe not convertible: LiteralStrKey
              (np.int32, np.array): types.LiteralStrKeyDict,
              # unsafe not convertible: LiteralStrKey
-             (np.array, np.int32): types.LiteralStrKeyDict,}
+             (np.array, np.int32): types.LiteralStrKeyDict,
+             # unsafe not convertible: LiteralStrKey
+             (np.int8, np.int32): types.LiteralStrKeyDict,
+             # unsafe not convertible: LiteralStrKey (issue #6420 case)
+             (np.int64, np.float64): types.LiteralStrKeyDict,}
 
         def bar(x):
             pass
