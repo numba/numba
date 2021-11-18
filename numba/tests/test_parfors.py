@@ -3964,6 +3964,19 @@ class TestPrangeSpecific(TestPrangeBase):
         )
         self.assertIn("TEST PASSED", out.decode())
 
+    @skip_parfors_unsupported
+    def test_issue7578(self):
+        def test_impl(x):
+            A = np.zeros_like(x)
+            tmp = np.cos(x) # this can be any 1-arity ufunc
+
+            for i in range(len(x)):
+                A[i] = tmp.sum()
+
+            return A
+
+        x = np.arange(10.)
+        self.prange_tester(test_impl, x)
 
 @skip_parfors_unsupported
 @x86_only
