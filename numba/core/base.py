@@ -560,7 +560,7 @@ class BaseContext(object):
             # It's a type instance => try to find a definition for the type class
             try:
                 return self.get_function(type(fn), sig)
-            except errors.NumbaNotImplementedError:
+            except NotImplementedError:
                 # Raise exception for the type instance, for a better error message
                 pass
 
