@@ -149,6 +149,12 @@ detail""",
         doc="Extend variable lifetime for debugging",
     )
 
+    dbg_optnone = Option(
+        type=bool,
+        default=False,
+        doc="Disable opt for debug. Put optnone attribute in LLVM Function."
+    )
+
 
 DEFAULT_FLAGS = Flags()
 DEFAULT_FLAGS.nrt = True

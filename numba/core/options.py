@@ -92,6 +92,7 @@ class DefaultOptions:
     target_backend = _mapping("target_backend")
 
     dbg_extend_lifetimes = _mapping("dbg_extend_lifetimes")
+    dbg_optnone = _mapping("dbg_optnone")
 
 
 def include_default_options(*args):

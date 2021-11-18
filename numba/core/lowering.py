@@ -305,6 +305,11 @@ class BaseLower(object):
     def setup_function(self, fndesc):
         # Setup function
         self.function = self.context.declare_function(self.module, fndesc)
+        print("self.flags.dbg_optnone", self.flags.dbg_optnone)
+        if self.flags.dbg_optnone:
+            self.function.attributes.add("optnone")
+            print(self.function)
+
         self.entry_block = self.function.append_basic_block('entry')
         self.builder = Builder(self.entry_block)
         self.call_helper = self.call_conv.init_call_helper(self.builder)

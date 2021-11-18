@@ -274,7 +274,8 @@ _options_mixin = include_default_options(
     "inline",
     # Add "target_backend" as a accepted option for the CPU in @jit(...)
     "target_backend",
-    "dbg_extend_lifetimes"
+    "dbg_extend_lifetimes",
+    "dbg_optnone",
 )
 
 class CPUTargetOptions(_options_mixin, TargetOptions):
@@ -290,8 +291,11 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
         if not flags.is_set("debuginfo"):
             flags.debuginfo = config.DEBUGINFO_DEFAULT
 
-        if flags.debuginfo and not flags.is_set("dbg_extend_lifetimes"):
-            flags.dbg_extend_lifetimes = True
+        if flags.debuginfo:
+            if not flags.is_set("dbg_extend_lifetimes"):
+                flags.dbg_extend_lifetimes = True
+            if not flags.is_set("dbg_optnone"):
+                flags.dbg_optnone = True
 
         if not flags.is_set("boundscheck"):
             flags.boundscheck = flags.debuginfo
