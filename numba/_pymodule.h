@@ -24,7 +24,6 @@
 #define PyInt_Type PyLong_Type
 #define PyInt_Check PyLong_Check
 #define PyInt_CheckExact PyLong_CheckExact
-// Define object attribute using a temporary variable to avoid memory leak
 #define SetAttrStringFromVoidPointer(m, name, tmp) \
             tmp = PyLong_FromVoidPtr((void *) &name);\
             PyObject_SetAttrString(m, #name, tmp);\

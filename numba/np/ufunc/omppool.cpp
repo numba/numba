@@ -244,7 +244,7 @@ MOD_INIT(omppool)
     if (m == NULL)
         return MOD_ERROR_VAL;
 
-    SetAttrStringFromVoidPointer(m,launch_threads,tmp)
+    SetAttrStringFromVoidPointer(m, launch_threads,tmp)
     SetAttrStringFromVoidPointer(m,synchronize,tmp)
     SetAttrStringFromVoidPointer(m,ready,tmp)
     SetAttrStringFromVoidPointer(m,add_task,tmp)
