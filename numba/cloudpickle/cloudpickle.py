@@ -93,6 +93,7 @@ DEFAULT_PROTOCOL = pickle.HIGHEST_PROTOCOL
 _DYNAMIC_CLASS_TRACKER_BY_CLASS = weakref.WeakKeyDictionary()
 _DYNAMIC_CLASS_TRACKER_BY_ID = weakref.WeakValueDictionary()
 _DYNAMIC_CLASS_TRACKER_LOCK = threading.Lock()
+_DYNAMIC_CLASS_TRACKER_REUSING = weakref.WeakSet()
 
 PYPY = platform.python_implementation() == "PyPy"
 
@@ -117,9 +118,14 @@ def _get_or_create_tracker_id(class_def):
 def _lookup_class_or_track(class_tracker_id, class_def):
     if class_tracker_id is not None:
         with _DYNAMIC_CLASS_TRACKER_LOCK:
+            orig_class_def = class_def
             class_def = _DYNAMIC_CLASS_TRACKER_BY_ID.setdefault(
                 class_tracker_id, class_def)
             _DYNAMIC_CLASS_TRACKER_BY_CLASS[class_def] = class_tracker_id
+            # Check if we are reusing a previous class_def
+            if orig_class_def is not class_def:
+                # Remember the class_def is being reused
+                _DYNAMIC_CLASS_TRACKER_REUSING.add(class_def)
     return class_def
 
 

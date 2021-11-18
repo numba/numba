@@ -14,7 +14,7 @@ from numba.core import types, typing, utils
 from numba.core.compiler import compile_isolated, Flags, DEFAULT_FLAGS
 from numba.np.numpy_support import from_dtype
 from numba import jit, vectorize
-from numba.core.errors import LoweringError, TypingError
+from numba.core.errors import LoweringError, TypingError, NumbaTypeError
 from numba.tests.support import TestCase, CompilationCache, MemoryLeakMixin, tag
 from numba.core.typing.npydecl import supported_ufuncs, all_ufuncs
 from numba.np import numpy_support
@@ -751,7 +751,7 @@ class TestUFuncs(BaseUFuncTest, TestCase):
             self.assertPreciseEqual(result, expected)
 
     def test_implicit_output_npm(self):
-        with self.assertRaises(TypeError):
+        with self.assertRaises(NumbaTypeError):
             def myadd(a0, a1):
                 return np.add(a0, a1)
             arr_ty = types.Array(types.uint64, 1, 'C')

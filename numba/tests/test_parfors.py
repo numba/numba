@@ -1564,6 +1564,30 @@ class TestParfors(TestParforsBase):
             return acc
         self.check(test_impl, 16)
 
+    def test_non_identity_initial(self):
+        # issue #7344
+        def test_impl(A, cond):
+            s = 1
+            for i in prange(A.shape[0]):
+                if cond[i]:
+                    s += 1
+            return s
+        self.check(test_impl, np.ones(10), np.ones(10).astype('bool'))
+
+    def test_if_not_else_reduction(self):
+        # issue #7344
+        def test_impl(A, cond):
+            s = 1
+            t = 10
+            for i in prange(A.shape[0]):
+                if cond[i]:
+                    s += 1
+                    t += 1
+                else:
+                    s += 2
+            return s + t
+        self.check(test_impl, np.ones(10), np.ones(10).astype('bool'))
+
     def test_two_d_array_reduction_reuse(self):
         def test_impl(n):
             shp = (13, 17)
@@ -1849,6 +1873,88 @@ class TestParfors(TestParforsBase):
             return x * 5.0
         x = np.ones((2, 2, 2, 2, 2, 15))
         self.check(test_impl, x)
+
+    def test_tuple_arg(self):
+        def test_impl(x, sz):
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10, 5)
+        self.check(test_impl, np.empty(sz), sz)
+
+    def test_tuple_arg_not_whole_array(self):
+        def test_impl(x, sz):
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10, 5)
+        self.check(test_impl, np.zeros(sz), (10, 3))
+
+    def test_tuple_for_pndindex(self):
+        def test_impl(x):
+            sz = (10, 5)
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10, 5)
+        self.check(test_impl, np.zeros(sz))
+
+    def test_tuple_arg_literal(self):
+        def test_impl(x, first):
+            sz = (first, 5)
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10, 5)
+        self.check(test_impl, np.zeros(sz), 10)
+
+    def test_tuple_of_literal_nonliteral(self):
+        # This test has to be done manually as the self.check uses
+        # compile_isolated and one function cannot "see" the other
+
+        def test_impl(x, sz):
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+
+        def call(x, fn):
+            return fn(x, (10, 3)) # Only want to iterate to the 3rd
+
+        get_input = lambda: np.zeros((10, 10))
+        expected = call(get_input(), test_impl)
+
+        def check(dec):
+            f1 = dec(test_impl)
+            f2 = njit(call) # no parallel semantics in the caller
+            got = f2(get_input(), f1)
+            self.assertPreciseEqual(expected, got)
+
+        for d in (njit, njit(parallel=True)):
+            check(d)
+
+    def test_tuple_arg_1d(self):
+        def test_impl(x, sz):
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10,)
+        self.check(test_impl, np.zeros(sz), sz)
+
+    def test_tuple_arg_1d_literal(self):
+        def test_impl(x):
+            sz = (10,)
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10,)
+        self.check(test_impl, np.zeros(sz))
+
+    def test_int_arg_pndindex(self):
+        def test_impl(x, sz):
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        self.check(test_impl, np.zeros((10, 10)), 3)
 
 
 @skip_parfors_unsupported
@@ -2368,6 +2474,8 @@ class TestParforsMisc(TestParforsBase):
         # sequential_parfor_lowering global variable should remain as False on
         # stack unwind.
 
+        BROKEN_MSG = 'BROKEN_MSG'
+
         @register_pass(mutates_CFG=True, analysis_only=False)
         class BreakParfors(AnalysisPass):
             _name = "break_parfors"
@@ -2385,7 +2493,12 @@ class TestParforsMisc(TestParforsBase):
                             # point it needs to be a set so e.g. set.difference
                             # can be computed, this therefore creates an error
                             # in the right location.
-                            stmt.races = []
+                            class Broken(list):
+
+                                def difference(self, other):
+                                    raise errors.LoweringError(BROKEN_MSG)
+
+                            stmt.races = Broken()
                     return True
 
 
@@ -2411,8 +2524,7 @@ class TestParforsMisc(TestParforsBase):
         with self.assertRaises(errors.LoweringError) as raises:
             foo()
 
-        self.assertIn("'list' object has no attribute 'difference'",
-                      str(raises.exception))
+        self.assertIn(BROKEN_MSG, str(raises.exception))
 
         # assert state has not changed
         self.assertFalse(numba.parfors.parfor.sequential_parfor_lowering)

@@ -11,10 +11,10 @@ from itertools import permutations
 from numba import njit, gdb, gdb_init, gdb_breakpoint, prange
 from numba.core import errors
 from numba import jit
-from numba.misc.gdb_hook import _confirm_gdb
 
 from numba.tests.support import (TestCase, captured_stdout, tag,
                                  skip_parfors_unsupported)
+from numba.tests.gdb_support import needs_gdb
 import unittest
 
 
@@ -34,15 +34,6 @@ not_arm = unittest.skipIf(_is_arm, "testing disabled on ARM")
 _gdb_cond = os.environ.get('GDB_TEST', None) == '1'
 needs_gdb_harness = unittest.skipUnless(_gdb_cond, "needs gdb harness")
 
-# check if gdb is present and working
-try:
-    _confirm_gdb()
-    _HAVE_GDB = True
-except Exception:
-    _HAVE_GDB = False
-
-_msg = "functioning gdb with correct ptrace permissions is required"
-needs_gdb = unittest.skipUnless(_HAVE_GDB, _msg)
 long_running = tag('long_running')
 
 _dbg_njit = njit(debug=True)
@@ -201,10 +192,11 @@ class TestGdbBinding(TestCase):
 
         def test_template(self):
             o, e = self.run_test_in_separate_process(injected_method)
-            self.assertIn('GNU gdb', o)
-            self.assertIn('OK', e)
-            self.assertTrue('FAIL' not in e)
-            self.assertTrue('ERROR' not in e)
+            dbgmsg = f'\nSTDOUT={o}\nSTDERR={e}\n'
+            self.assertIn('GNU gdb', o, msg=dbgmsg)
+            self.assertIn('OK', e, msg=dbgmsg)
+            self.assertNotIn('FAIL', e, msg=dbgmsg)
+            self.assertNotIn('ERROR', e, msg=dbgmsg)
         if 'quick' in name:
             setattr(cls, methname, test_template)
         else:

@@ -426,7 +426,7 @@ The following top-level functions are supported:
 * :func:`numpy.array_split`
 * :func:`numpy.asarray` (only the 2 first arguments)
 * :func:`numpy.asarray_chkfinite` (only the 2 first arguments)
-* :func:`numpy.asfarray` 
+* :func:`numpy.asfarray`
 * :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.atleast_1d`
 * :func:`numpy.atleast_2d`
@@ -434,6 +434,7 @@ The following top-level functions are supported:
 * :func:`numpy.bartlett`
 * :func:`numpy.bincount`
 * :func:`numpy.blackman`
+* :func:`numpy.broadcast_to` (only the 2 first arguments)
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate`
 * :func:`numpy.convolve` (only the 2 first arguments)
@@ -484,6 +485,7 @@ The following top-level functions are supported:
 * :func:`numpy.interp` (only the 3 first arguments)
 * :func:`numpy.intersect1d` (only first 2 arguments, ar1 and ar2)
 * :func:`numpy.linspace` (only the 3-argument form)
+* :func:`numpy.logspace` (only the 3 first arguments)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
 * :class:`numpy.nditer` (only the first argument)
@@ -510,6 +512,7 @@ The following top-level functions are supported:
 * :func:`numpy.stack`
 * :func:`numpy.swapaxes`
 * :func:`numpy.take` (only the 2 first arguments)
+* :func:`numpy.take_along_axis` (the axis argument must be a literal value)
 * :func:`numpy.transpose`
 * :func:`numpy.trapz` (only the 3 first arguments)
 * :func:`numpy.tri` (only the 3 first arguments; third argument ``k`` must be an integer)

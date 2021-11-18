@@ -5,7 +5,7 @@ import operator
 
 from numba import njit, literally
 from numba.core import types, cgutils
-from numba.core.errors import TypingError
+from numba.core.errors import TypingError, NumbaTypeError
 from numba.core.extending import lower_builtin
 from numba.core.extending import models, register_model
 from numba.core.extending import make_attribute_wrapper
@@ -14,6 +14,14 @@ from numba.core.extending import overload
 from numba.core.extending import typeof_impl
 
 import unittest
+
+
+def gen_mock_float():
+    # Stub to overload, pretending to be `float`. The real `float` function is
+    # not used as multiple registrations can collide.
+    def mock_float(x):
+        pass
+    return mock_float
 
 
 class TestExtTypDummy(unittest.TestCase):
@@ -61,39 +69,39 @@ class TestExtTypDummy(unittest.TestCase):
         self.Dummy = Dummy
         self.DummyType = DummyType
 
-    def _add_float_overload(self):
-        @overload(float)
+    def _add_float_overload(self, mock_float_inst):
+        @overload(mock_float_inst)
         def dummy_to_float(x):
             if isinstance(x, self.DummyType):
                 def codegen(x):
                     return float(x.value)
                 return codegen
             else:
-                raise TypeError('cannot type float({})'.format(x))
+                raise NumbaTypeError('cannot type float({})'.format(x))
 
     def test_overload_float(self):
-        self._add_float_overload()
+        mock_float = gen_mock_float()
+        self._add_float_overload(mock_float)
         Dummy = self.Dummy
 
         @njit
         def foo(x):
-            return float(Dummy(x))
+            return mock_float(Dummy(x))
 
         self.assertEqual(foo(123), float(123))
 
     def test_overload_float_error_msg(self):
-        self._add_float_overload()
+        mock_float = gen_mock_float()
+        self._add_float_overload(mock_float)
 
         @njit
         def foo(x):
-            return float(x)
+            return mock_float(x)
 
         with self.assertRaises(TypingError) as raises:
             foo(1j)
 
-        self.assertIn("TypeError: float() does not support complex",
-                      str(raises.exception))
-        self.assertIn("TypeError: cannot type float(complex128)",
+        self.assertIn("cannot type float(complex128)",
                       str(raises.exception))
 
     def test_unboxing(self):
