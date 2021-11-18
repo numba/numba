@@ -48,6 +48,9 @@ def compute_use_defs(blocks):
                 # If lhs not in rhs of the assignment
                 if stmt.target.name not in rhs_set:
                     def_set.add(stmt.target.name)
+            elif isinstance(stmt, (ir.SetItem, ir.StaticSetItem)):
+                def_set.add(stmt.target.name)
+                use_set.add(stmt.target.name)
 
             for var in stmt.list_vars():
                 # do not include locally defined vars to use-map
