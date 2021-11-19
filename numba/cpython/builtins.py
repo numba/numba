@@ -704,7 +704,7 @@ def ol_isinstance(var, typs):
         # corner case - all types in isinstance are the same
         t_typs = (t_typs.key[0])
 
-    if not isinstance(t_typs, types.containers.Tuple):
+    if not isinstance(t_typs, types.Tuple):
         t_typs = (t_typs, )
 
     for typ in t_typs:

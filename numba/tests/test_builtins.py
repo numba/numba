@@ -301,6 +301,14 @@ def invalid_isinstance_usecase(x):
         return 'false branch'
 
 
+def isinstance_usecase_invalid_type(x):
+    # this should be a valid call when x := float
+    if isinstance(x, (float, 'not a type')):
+        return True
+    else:
+        return False
+
+
 def invalid_isinstance_usecase_phi_nopropagate(x):
     if x > 4:
         z = 10
@@ -1117,6 +1125,21 @@ class TestBuiltins(TestCase):
         for inpt, expected in inputs:
             got = cfunc(inpt)
             self.assertEqual(expected, got)
+
+    def test_isinstance_invalid_type(self):
+        pyfunc = isinstance_usecase_invalid_type
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # valid type
+        self.assertTrue(cfunc(3.4))
+
+        # invalid type
+        msg = 'Cannot infer numba type of python type'
+
+        with self.assertRaises(errors.TypingError) as raises:
+            cfunc(100)
+
+        self.assertIn(msg, str(raises.exception))
 
     def test_isinstance_exceptions(self):
         fns = [

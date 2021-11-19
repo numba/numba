@@ -1464,6 +1464,7 @@ class PropagateLiterals(FunctionPass):
 
                 target = assign.target
                 if not flags.enable_ssa:
+                    # SSA is disabled when doing inlining
                     if guard(get_definition, func_ir, target.name) is None:  # noqa: E501
                         continue
 
