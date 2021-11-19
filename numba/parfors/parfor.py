@@ -3472,16 +3472,19 @@ def get_array_indexed_with_parfor_index_internal(loop_body,
     for blk in loop_body:
         for stmt in blk.body:
             if isinstance(stmt, (ir.StaticSetItem, ir.SetItem)):
-                if get_index_var(stmt).name == index:
+                setarray_index = get_index_var(stmt)
+                if (isinstance(setarray_index, ir.Var) and
+                    get_index_var(stmt).name == index):
                     ret_indexed.add(stmt.target.name)
                 else:
                     ret_not_indexed.add(stmt.target.name)
             elif (isinstance(stmt, ir.Assign) and
                   isinstance(stmt.value, ir.Expr) and
                   stmt.value.op in ['getitem', 'static_getitem']):
-                getarray_index = stmt.value.index.name
+                getarray_index = stmt.value.index
                 getarray_name = stmt.value.value.name
-                if getarray_index == index:
+                if (isinstance(getarray_index, ir.Var) and
+                    getarray_index.name == index):
                     ret_indexed.add(getarray_name)
                 else:
                     ret_not_indexed.add(getarray_name)
