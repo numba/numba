@@ -15,10 +15,11 @@ from numba.core.typeconv.rules import default_type_manager
 from numba.core.compiler import (CompilerBase, DefaultPassBuilder,
                                  compile_result, Flags, Option)
 from numba.core.compiler_lock import global_compiler_lock
-from numba.core.compiler_machinery import (LoweringPass, PassManager,
-                                           register_pass)
+from numba.core.compiler_machinery import (LoweringPass, AnalysisPass,
+                                           PassManager, register_pass)
 from numba.core.dispatcher import CompilingCounter, OmittedArg
-from numba.core.errors import NumbaInvalidConfigWarning
+from numba.core.errors import (NumbaPerformanceWarning,
+                               NumbaInvalidConfigWarning, TypingError)
 from numba.core.typed_passes import IRLegalization, NativeLowering
 from numba.core.typing.typeof import Purpose, typeof
 from warnings import warn
@@ -29,7 +30,6 @@ from .cudadrv import driver
 from .errors import missing_launch_config_msg, normalize_kernel_dimensions
 from .api import get_current_device
 from .args import wrap_arg
-from numba.core.errors import NumbaPerformanceWarning
 from .descriptor import cuda_target
 from . import types as cuda_types
 
@@ -103,6 +103,41 @@ class CreateLibrary(LoweringPass):
         return True
 
 
+@register_pass(mutates_CFG=False, analysis_only=True)
+class CUDALegalization(AnalysisPass):
+
+    _name = "cuda_legalization"
+
+    def __init__(self):
+        AnalysisPass.__init__(self)
+
+    def run_pass(self, state):
+        # Early return if NVVM 7
+        from numba.cuda.cudadrv.nvvm import NVVM
+        if NVVM().is_nvvm70:
+            return False
+        # NVVM < 7, need to check for charseq
+        typmap = state.typemap
+
+        def check_dtype(dtype):
+            if isinstance(dtype, (types.UnicodeCharSeq, types.CharSeq)):
+                msg = (f"{k} is a char sequence type. This type is not "
+                       "supported with CUDA toolkit versions < 11.2. To "
+                       "use this type, you need to update your CUDA "
+                       "toolkit - try 'conda install cudatoolkit=11' if "
+                       "you are using conda to manage your environment.")
+                raise TypingError(msg)
+            elif isinstance(dtype, types.Record):
+                for subdtype in dtype.fields.items():
+                    # subdtype is a (name, _RecordField) pair
+                    check_dtype(subdtype[1].type)
+
+        for k, v in typmap.items():
+            if isinstance(v, types.Array):
+                check_dtype(v.dtype)
+        return False
+
+
 class CUDACompiler(CompilerBase):
     def define_pipelines(self):
         dpb = DefaultPassBuilder
@@ -113,6 +148,7 @@ class CUDACompiler(CompilerBase):
 
         typed_passes = dpb.define_typed_pipeline(self.state)
         pm.passes.extend(typed_passes.passes)
+        pm.add_pass(CUDALegalization, "CUDA legalization")
 
         lowering_passes = self.define_cuda_lowering_pipeline(self.state)
         pm.passes.extend(lowering_passes.passes)
