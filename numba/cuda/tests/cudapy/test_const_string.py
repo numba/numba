@@ -108,6 +108,42 @@ class TestConstString(CUDATestCase):
         expected[-1] = b''
         np.testing.assert_equal(arr, expected)
 
+    def test_assign_const_string_in_record(self):
+        self.skip_on_nvvm34()
+
+        @cuda.jit
+        def f(a):
+            a[0]['x'] = 1
+            a[0]['y'] = 'ABC'
+            a[1]['x'] = 2
+            a[1]['y'] = 'XYZ'
+
+        dt = np.dtype([('x', np.int32), ('y', np.dtype('<U12'))])
+        a = np.zeros(2, dt)
+
+        f[1, 1](a)
+
+        reference = np.asarray([(1, 'ABC'), (2, 'XYZ')], dtype=dt)
+        np.testing.assert_array_equal(reference, a)
+
+    def test_assign_const_bytes_in_record(self):
+        self.skip_on_nvvm34()
+
+        @cuda.jit
+        def f(a):
+            a[0]['x'] = 1
+            a[0]['y'] = b'ABC'
+            a[1]['x'] = 2
+            a[1]['y'] = b'XYZ'
+
+        dt = np.dtype([('x', np.float32), ('y', np.dtype('S12'))])
+        a = np.zeros(2, dt)
+
+        f[1, 1](a)
+
+        reference = np.asarray([(1, b'ABC'), (2, b'XYZ')], dtype=dt)
+        np.testing.assert_array_equal(reference, a)
+
     @skip_on_cudasim('Const strings not disallowed on cudasim')
     def test_const_unicode_string_disallowed_nvvm34(self):
         self.skip_on_nvvm70()
@@ -131,6 +167,49 @@ class TestConstString(CUDATestCase):
         arr = np.zeros(1, dtype=b"S12")
         with self.assertRaisesRegex(TypingError, '.*is a char sequence.*'):
             bytes_assign[1, 1](arr)
+
+    @skip_on_cudasim('Const strings not disallowed on cudasim')
+    def test_record_const_unicode_string_disallowed_nvvm34(self):
+        self.skip_on_nvvm70()
+
+        @cuda.jit
+        def str_assign(arr):
+            arr[0]['y'] = "XYZ"
+
+        dt = np.dtype([('x', np.int32), ('y', np.dtype('<U12'))])
+        arr = np.zeros(1, dtype=dt)
+
+        with self.assertRaisesRegex(TypingError, '.*is a char sequence.*'):
+            str_assign[1, 1](arr)
+
+    @skip_on_cudasim('Const strings not disallowed on cudasim')
+    def test_record_const_bytes_disallowed_nvvm34(self):
+        self.skip_on_nvvm70()
+
+        @cuda.jit
+        def str_assign(arr):
+            arr[0]['y'] = b"XYZ"
+
+        dt = np.dtype([('x', np.int32), ('y', np.dtype('S12'))])
+        arr = np.zeros(1, dtype=dt)
+
+        with self.assertRaisesRegex(TypingError, '.*is a char sequence.*'):
+            str_assign[1, 1](arr)
+
+    @skip_on_cudasim('Const strings not disallowed on cudasim')
+    def test_nested_record_const_unicode_string_disallowed_nvvm34(self):
+        self.skip_on_nvvm70()
+
+        @cuda.jit
+        def str_assign(arr):
+            arr[0]['y']['z'] = "XYZ"
+
+        subdt = np.dtype([('z', np.dtype('<U12')), ('a', np.int32)])
+        dt = np.dtype([('x', np.int32), ('y', subdt)])
+        arr = np.zeros(1, dtype=dt)
+
+        with self.assertRaisesRegex(TypingError, '.*is a char sequence.*'):
+            str_assign[1, 1](arr)
 
 
 if __name__ == '__main__':

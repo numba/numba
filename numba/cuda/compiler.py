@@ -118,15 +118,23 @@ class CUDALegalization(AnalysisPass):
             return False
         # NVVM < 7, need to check for charseq
         typmap = state.typemap
+
+        def check_dtype(dtype):
+            if isinstance(dtype, (types.UnicodeCharSeq, types.CharSeq)):
+                msg = (f"{k} is a char sequence type. This type is not "
+                       "supported with CUDA toolkit versions < 11.2. To "
+                       "use this type, you need to update your CUDA "
+                       "toolkit - try 'conda install cudatoolkit=11' if "
+                       "you are using conda to manage your environment.")
+                raise TypingError(msg)
+            elif isinstance(dtype, types.Record):
+                for subdtype in dtype.fields.items():
+                    # subdtype is a (name, _RecordField) pair
+                    check_dtype(subdtype[1].type)
+
         for k, v in typmap.items():
             if isinstance(v, types.Array):
-                if isinstance(v.dtype, (types.UnicodeCharSeq, types.CharSeq)):
-                    msg = (f"{k} is a char sequence type. This type is not "
-                           "supported with CUDA toolkit versions < 11.2. To "
-                           "use this type, you need to update your CUDA "
-                           "toolkit - try 'conda install cudatoolkit=11' if "
-                           "you are using conda to manage your environment.")
-                    raise TypingError(msg)
+                check_dtype(v.dtype)
         return False
 
 
