@@ -501,11 +501,7 @@ def find_setupwiths(blocks):
             return isinstance(stmt, ir.Return)
 
         def is_pop_block(stmt):
-            try:
-                if hasattr(stmt, "value"):
-                    return str(stmt.value).startswith("POP_BLOCK_INFO")
-            except KeyError:
-                return False
+            return isinstance(stmt, ir.PopBlock)
 
         cfg = compute_cfg_from_blocks(blocks)
         sus_setups, sus_pops = [], []

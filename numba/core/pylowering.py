@@ -154,6 +154,9 @@ class PyLower(BaseLower):
         elif isinstance(inst, ir.Del):
             self.delvar(inst.value)
 
+        elif isinstance(inst, ir.PopBlock):
+            pass # this is just a marker
+
         elif isinstance(inst, ir.Raise):
             if inst.exception is not None:
                 exc = self.loadvar(inst.exception.name)
@@ -416,9 +419,6 @@ class PyLower(BaseLower):
 
         elif expr.op == 'null':
             # Make null value
-            return cgutils.get_null_value(self.pyapi.pyobj)
-
-        elif expr.op == "POP_BLOCK_INFO":
             return cgutils.get_null_value(self.pyapi.pyobj)
 
         else:

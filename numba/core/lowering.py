@@ -412,6 +412,9 @@ class Lower(BaseLower):
             retval = self.context.get_return_value(self.builder, ty, val)
             self.call_conv.return_value(self.builder, retval)
 
+        elif isinstance(inst, ir.PopBlock):
+            pass # this is just a marker
+
         elif isinstance(inst, ir.StaticSetItem):
             signature = self.fndesc.calltypes[inst]
             assert signature is not None
@@ -1293,9 +1296,6 @@ class Lower(BaseLower):
         elif expr.op in self.context.special_ops:
             res = self.context.special_ops[expr.op](self, expr)
             return res
-
-        elif expr.op == "POP_BLOCK_INFO":
-            return self.context.get_constant_null(resty)
 
         raise NotImplementedError(expr)
 

@@ -1573,8 +1573,8 @@ class Interpreter(object):
         if kind is None:
             self.syntax_blocks.pop()
         elif kind == 'with':
-            d = ir.Expr.dummy("POP_BLOCK_INFO", "INFO", loc=self.loc)
-            self.store(d, "pop_block_info")
+            d = ir.PopBlock(loc=self.loc)
+            self.current_block.append(d)
         elif kind == 'try':
             self._insert_try_block_end()
 
