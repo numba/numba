@@ -2969,7 +2969,7 @@ class ParforPass(ParforPassStates):
                         stmt.equiv_set = equiv_set
                         next_stmt.equiv_set = equiv_set
                         fused_node, fuse_report = try_fuse(equiv_set, stmt, next_stmt,
-                            self.metadata["parfors"])
+                            self.metadata["parfors"], self.typemap)
                         # accumulate fusion reports
                         self.diagnostics.fusion_reports.append(fuse_report)
                         if fused_node is not None:
@@ -3465,6 +3465,45 @@ def _find_parfors(body):
             yield i, inst
 
 
+def get_array_indexed_with_parfor_index_internal(loop_body,
+                                                 index,
+                                                 ret_indexed,
+                                                 ret_not_indexed):
+    for blk in loop_body:
+        for stmt in blk.body:
+            if isinstance(stmt, (ir.StaticSetItem, ir.SetItem)):
+                if get_index_var(stmt).name == index:
+                    ret_indexed.add(stmt.target.name)
+                else:
+                    ret_not_indexed.add(stmt.target.name)
+            elif (isinstance(stmt, ir.Assign) and
+                  isinstance(stmt.value, ir.Expr) and
+                  stmt.value.op in ['getitem', 'static_getitem']):
+                getarray_index = stmt.value.index.name
+                getarray_name = stmt.value.value.name
+                if getarray_index == index:
+                    ret_indexed.add(getarray_name)
+                else:
+                    ret_not_indexed.add(getarray_name)
+            elif isinstance(stmt, Parfor):
+                get_array_indexed_with_parfor_index_internal(
+                    stmt.loop_body.values(),
+                    index,
+                    ret_indexed,
+                    ret_not_indexed)
+
+
+def get_array_indexed_with_parfor_index(loop_body, index):
+    ret_indexed = set()
+    ret_not_indexed = set()
+    get_array_indexed_with_parfor_index_internal(
+        loop_body,
+        index,
+        ret_indexed,
+        ret_not_indexed)
+    return ret_indexed, ret_not_indexed
+
+
 def get_parfor_outputs(parfor, parfor_params):
     """get arrays that are written to inside the parfor and need to be passed
     as parameters to gufunc.
@@ -3912,7 +3951,7 @@ def get_parfor_writes(parfor):
 
 FusionReport = namedtuple('FusionReport', ['first', 'second', 'message'])
 
-def try_fuse(equiv_set, parfor1, parfor2, metadata):
+def try_fuse(equiv_set, parfor1, parfor2, metadata, typemap):
     """try to fuse parfors and return a fused parfor, otherwise return None
     """
     dprint("try_fuse: trying to fuse \n", parfor1, "\n", parfor2)
@@ -3984,13 +4023,30 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata):
     for uses in p2_usedefs.usemap.values():
         p2_uses |= uses
 
-    if not p1_body_defs.isdisjoint(p2_uses):
-        dprint("try_fuse: parfor2 depends on parfor1 body")
-        msg = ("- fusion failed: parallel loop %s has a dependency on the "
-                "body of parallel loop %s. ")
-        report = FusionReport(parfor1.id, parfor2.id,
-                                msg % (parfor1.id, parfor2.id))
-        return None, report
+    overlap = p1_body_defs.intersection(p2_uses)
+    # overlap are those variable defined in first parfor and used in the second
+    if len(overlap) != 0:
+        is_safe = True # Assume safe until proven otherwise.
+        # Get all the arrays
+        _, p2arraynotindexed = get_array_indexed_with_parfor_index(
+            parfor2.loop_body.values(), parfor2.index_var.name)
+        for var in overlap:
+            vtype = typemap[var]
+            if isinstance(vtype, types.ArrayCompatible):
+                if var in p2arraynotindexed:
+                    is_safe = False
+                    break
+            else:
+                is_safe = False
+                break
+
+        if not is_safe:
+            dprint("try_fuse: parfor2 depends on parfor1 body")
+            msg = ("- fusion failed: parallel loop %s has a dependency on the "
+                    "body of parallel loop %s. ")
+            report = FusionReport(parfor1.id, parfor2.id,
+                                    msg % (parfor1.id, parfor2.id))
+            return None, report
 
     return fuse_parfors_inner(parfor1, parfor2)
 
