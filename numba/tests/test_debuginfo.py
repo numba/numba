@@ -317,7 +317,7 @@ class TestDebugInfoEmission(TestCase):
         """ Tests that DILocation information for undefined vars is associated
         with the line of the function definition (so it ends up in the prologue)
         """
-        @njit(debug=True, no_cfunc_wrapper=True)
+        @njit(debug=True)
         def foo(n):
             if n:
                 if n > 0:

@@ -694,7 +694,6 @@ def ol_isinstance(var, typs):
     # register container types (List, Dict, ...) with types.Any as base type
     as_numba_type.register(tuple, types.Tuple((types.undefined,)))
     as_numba_type.register(list, types.List(types.undefined))
-    as_numba_type.register(dict, types.DictType(types.undefined, types.undefined))
     # set requires the type to be hashable
     as_numba_type.register(set, types.Set(types.undefined))
     as_numba_type.register(types.ListType, types.ListType(types.undefined))
@@ -721,6 +720,7 @@ def ol_isinstance(var, typs):
         types_not_registered = {
             bytes: types.Bytes,
             range: types.RangeType,
+            dict: (types.DictType, types.LiteralStrKeyDict),
         }
         if key in types_not_registered:
             if isinstance(var_ty, types_not_registered[key]):
@@ -743,7 +743,7 @@ def ol_isinstance(var, typs):
                 return true_impl
             elif isinstance(numba_typ, types.Container) and \
                     numba_typ.key[0] == types.undefined:
-                # check for containers (list, tuple, set, dict, ...)
+                # check for containers (list, tuple, set, ...)
                 if isinstance(var_ty, numba_typ.__class__) or \
                     (isinstance(var_ty, types.BaseTuple) and \
                         isinstance(numba_typ, types.BaseTuple)):

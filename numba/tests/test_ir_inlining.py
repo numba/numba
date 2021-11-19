@@ -3,7 +3,6 @@ This tests the inline kwarg to @jit and @overload etc, it has nothing to do with
 LLVM or low level inlining.
 """
 
-from numba.core.compiler_machinery import PassManager
 import operator
 from itertools import product
 import numpy as np
@@ -27,13 +26,7 @@ from numba.core.datamodel.models import OpaqueModel
 from numba.core.cpu import InlineOptions
 from numba.core.compiler import DefaultPassBuilder, CompilerBase
 from numba.core.typed_passes import IRLegalization, InlineOverloads
-from numba.core.untyped_passes import (DeadBranchPrune, FindLiterallyCalls,
-                                       FixupArgs, GenericRewrites, IRProcessing,
-                                       InlineClosureLikes, InlineInlinables,
-                                       LiteralUnroll, MakeFunctionToJitFunction,
-                                       PreserveIR, ReconstructSSA,
-                                       RewriteSemanticConstants,
-                                       TranslateByteCode, WithLifting)
+from numba.core.untyped_passes import PreserveIR
 from numba.core.typing import signature
 from numba.tests.support import (TestCase, unittest, skip_py38_or_later,
                                  MemoryLeakMixin)
@@ -44,41 +37,17 @@ class InlineTestPipeline(CompilerBase):
     metadata store"""
 
     def define_pipelines(self):
-        name = "inliner_custom_pipe"
-        state = self.state
+        pipeline = DefaultPassBuilder.define_nopython_pipeline(
+            self.state, "inliner_custom_pipe")
+        # mangle the default pipeline and inject DCE and IR preservation ahead
+        # of legalisation
 
-        dpb = DefaultPassBuilder
-        pm = PassManager(name)
+        # TODO: add a way to not do this! un-finalizing is not a good idea
+        pipeline._finalized = False
+        pipeline.add_pass_after(PreserveIR, IRLegalization)
 
-        pm = PassManager("inline_tests")
-        pm.add_pass(TranslateByteCode, "analyzing bytecode")
-        pm.add_pass(FixupArgs, "fix up args")
-        pm.add_pass(IRProcessing, "processing IR")
-        pm.add_pass(WithLifting, "Handle with contexts")
-        pm.add_pass(InlineClosureLikes,
-                    "inline calls to locally defined closures")
-        pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
-        pm.add_pass(DeadBranchPrune, "dead branch pruning")
-        pm.add_pass(GenericRewrites, "nopython rewrites")
-        pm.add_pass(MakeFunctionToJitFunction,
-                    "convert make_function into JIT functions")
-        pm.add_pass(InlineInlinables, "inline inlinable functions")
-        pm.add_pass(DeadBranchPrune, "dead branch pruning")
-        pm.add_pass(FindLiterallyCalls, "find literally calls")
-        pm.add_pass(LiteralUnroll, "handles literal_unroll")
-        pm.add_pass(ReconstructSSA, "ssa")
-        pm.finalize()
-
-        typed_passes = dpb.define_typed_pipeline(state)
-        pm.passes.extend(typed_passes.passes)
-
-        lowering_passes = dpb.define_nopython_lowering_pipeline(state)
-        pm.passes.extend(lowering_passes.passes)
-
-        pm.add_pass_after(PreserveIR, IRLegalization)
-
-        pm.finalize()
-        return [pm]
+        pipeline.finalize()
+        return [pipeline]
 
 
 # this global has the same name as the global in inlining_usecases.py, it

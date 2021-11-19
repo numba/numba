@@ -244,7 +244,8 @@ def isinstance_usecase(a):
 
 def isinstance_dict():
     a = {1: 2, 3: 4}
-    if isinstance(a, dict):
+    b = {'a': 10, 'b': np.zeros(3)}
+    if isinstance(a, dict) and isinstance(b, dict):
         return 'dict'
     else:
         return 'not dict'
@@ -263,6 +264,8 @@ def isinstance_usecase_numba_types(a):
             return 'float32'
         elif isinstance(a, types.float64):
             return 'float64'
+    elif isinstance(a, typed.Dict):
+        return 'typed dict'
     else:
         return 'no match'
 
@@ -271,14 +274,24 @@ def isinstance_usecase_numba_types_2():
     # some types cannot be passed as argument to njit functions
     a = b'hello'
     b = range(1, 2)
-    c = dict({2: 3})
-    d = bytearray([1, 2, 3])
+    c = dict()
+    c[2] = 3
     if isinstance(a, bytes) and \
             isinstance(b, range) and \
-            isinstance(c, dict) and \
-            isinstance(d, bytearray):
+            isinstance(c, dict):
         return True
     return False
+
+
+def isinstance_usecase_numba_type_classes(a):
+    if isinstance(a, types.Float):
+        return 'float'
+    elif isinstance(a, types.Integer):
+        return 'int'
+    elif isinstance(a, types.Complex):
+        return 'complex'
+    else:
+        return 'no match'
 
 
 def invalid_isinstance_usecase(x):
@@ -1076,15 +1089,34 @@ class TestBuiltins(TestCase):
             (types.float64(4.0), 'float64'),
             (types.complex64(5j), 'no match'),
             (typed.List([1, 2]), 'typed list'),
+            (typed.Dict.empty(types.int64, types.int64), 'typed dict')
         )
 
         for inpt, expected in inputs:
             got = cfunc(inpt)
             self.assertEqual(expected, got)
 
-        pyfunc_2 = isinstance_usecase_numba_types_2
-        cfunc_2 = isinstance_usecase_numba_types_2
-        self.assertEqual(pyfunc_2(), cfunc_2())
+    def test_isinstance_numba_types_2(self):
+        pyfunc = isinstance_usecase_numba_types_2
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertEqual(pyfunc(), cfunc())
+
+    def test_isinstance_numba_type_classes(self):
+        pyfunc = isinstance_usecase_numba_type_classes
+        cfunc = jit(nopython=True)(pyfunc)
+
+        inputs = (
+            (types.int32(1), 'int'),
+            (types.int64(2), 'int'),
+            (types.float32(3.0), 'float'),
+            (types.float64(4.0), 'float'),
+            (types.complex64(5j), 'complex'),
+            (types.complex128(5j), 'complex'),
+        )
+
+        for inpt, expected in inputs:
+            got = cfunc(inpt)
+            self.assertEqual(expected, got)
 
     def test_isinstance_exceptions(self):
         fns = [
