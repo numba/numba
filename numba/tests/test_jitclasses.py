@@ -1140,7 +1140,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 if isinstance(obj, Foo):  # something that only Foo implements
                     return obj.getValueIncr() + x, 'Foo'
                 else:
-                    return obj.getValue(), 'Bar'
+                    return obj.getValue() + x, 'Bar'
             else:
                 return 'no match'
 

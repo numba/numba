@@ -234,12 +234,20 @@ def isinstance_usecase(a):
         if isinstance(a, tuple):
             return 'tuple'
         else:
-            return a.reverse(), 'list'
+            return 'list'
     elif isinstance(a, set):
         return 'set'
     elif isinstance(a, bytes):
         return 'bytes'
     return 'no match'
+
+
+def isinstance_dict():
+    a = {1: 2, 3: 4}
+    if isinstance(a, dict):
+        return 'dict'
+    else:
+        return 'not dict'
 
 
 def isinstance_usecase_numba_types(a):
@@ -1052,6 +1060,11 @@ class TestBuiltins(TestCase):
             got = cfunc(inpt)
             self.assertEqual(expected, got)
 
+    def test_isinstance_dict(self):
+        pyfunc = isinstance_dict
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertEqual(pyfunc(), cfunc())
+
     def test_isinstance_numba_types(self):
         pyfunc = isinstance_usecase_numba_types
         cfunc = jit(nopython=True)(pyfunc)
@@ -1071,13 +1084,13 @@ class TestBuiltins(TestCase):
 
         pyfunc_2 = isinstance_usecase_numba_types_2
         cfunc_2 = isinstance_usecase_numba_types_2
-        self.assertEqual(pyfunc_2, cfunc_2)
+        self.assertEqual(pyfunc_2(), cfunc_2())
 
     def test_isinstance_exceptions(self):
         fns = [
             (invalid_isinstance_usecase, 'Cannot infer numba type of python type'),  # noqa: E501
-            (invalid_isinstance_usecase_phi_nopropagate, 'isinstance cannot handle'),  # noqa: E501
-            (invalid_isinstance_optional_usecase, 'isinstance cannot handle'),  # noqa: E501
+            (invalid_isinstance_usecase_phi_nopropagate, 'isinstance() cannot determine'),  # noqa: E501
+            (invalid_isinstance_optional_usecase, 'isinstance() cannot determine'),  # noqa: E501
         ]
 
         for fn, msg in fns:

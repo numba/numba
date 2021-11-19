@@ -1438,13 +1438,17 @@ class PropagateLiterals(FunctionPass):
         AU.add_required(ReconstructSSA)
 
     def run_pass(self, state):
-        if not hasattr(state.func_ir, '_definitions') \
-                and not state.flags.enable_ssa:
-            state.func_ir._definitions = build_definitions(state.func_ir.blocks)
+        func_ir = state.func_ir
+        typemap = state.typemap
+        flags = state.flags
+
+        if not hasattr(func_ir, '_definitions') \
+                and not flags.enable_ssa:
+            func_ir._definitions = build_definitions(func_ir.blocks)
 
         changed = False
 
-        for block in state.func_ir.blocks.values():
+        for block in func_ir.blocks.values():
             for assign in block.find_insts(ir.Assign):
                 value = assign.value
                 if isinstance(value, (ir.Arg, ir.Const, ir.FreeVar, ir.Global)):
@@ -1459,20 +1463,46 @@ class PropagateLiterals(FunctionPass):
                     continue
 
                 target = assign.target
-                if not state.flags.enable_ssa:
-                    if guard(get_definition, state.func_ir, target.name) is None:  # noqa: E501
+                if not flags.enable_ssa:
+                    if guard(get_definition, func_ir, target.name) is None:  # noqa: E501
                         continue
 
+                # Numba cannot safely determine if an isinstance call
+                # with a PHI node is True/False. For instance, in
+                # the case below, the partial type inference step can coerce
+                # '$z' to float, so any call to 'isinstance(z, int)' would fail.
+                #
+                #   def fn(x):
+                #       if x > 4:
+                #           z = 1
+                #       else:
+                #           z = 3.14
+                #       if isinstance(z, int):
+                #           print('int')
+                #       else:
+                #           print('float')
+                #
+                # At the moment, one avoid propagating the literal
+                # value if the argument is a PHI node
+
                 if isinstance(value, ir.Expr) and value.op == 'call':
+
+                    fn = guard(get_definition, func_ir, value.func.name)
+                    if fn is None:
+                        continue
+                    if not (isinstance(fn, ir.Global) and fn.name == 'isinstance'):  # noqa: E501
+                        continue
+
                     for arg in value.args:
-                        typs = state.func_ir._definitions[arg.name]
-                        is_phi = any([isinstance(typ, ir.Expr) and typ.op == 'phi' for typ in typs])  # noqa: E501
-                        is_isinstance_call = state.func_ir.get_definition(value.func.name).name == 'isinstance'  # noqa: E501
-                        if is_phi and is_isinstance_call:
-                            msg = 'isinstance cannot handle PHI nodes'
+                        # check if any of the args to isinstance is a PHI node
+                        iv = func_ir._definitions[arg.name]
+                        assert len(iv) == 1  # SSA!
+                        if isinstance(iv[0], ir.Expr) and iv[0].op == 'phi':
+                            msg = (f'isinstance() cannot determine the '
+                                   f'type of {arg.name} due to a branch')
                             raise errors.NumbaTypeError(msg, loc=assign.loc)
 
-                lit = state.typemap.get(target.name, None)
+                lit = typemap.get(target.name, None)
                 if lit and isinstance(lit, types.Literal):
                     # replace assign instruction by ir.Const(lit) iff
                     # lit is a literal value
@@ -1491,7 +1521,7 @@ class PropagateLiterals(FunctionPass):
 
         if changed:
             # Rebuild definitions
-            state.func_ir._definitions = build_definitions(state.func_ir.blocks)
+            func_ir._definitions = build_definitions(func_ir.blocks)
 
         return changed
 

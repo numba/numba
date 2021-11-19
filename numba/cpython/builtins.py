@@ -694,6 +694,7 @@ def ol_isinstance(var, typs):
     # register container types (List, Dict, ...) with types.Any as base type
     as_numba_type.register(tuple, types.Tuple((types.undefined,)))
     as_numba_type.register(list, types.List(types.undefined))
+    as_numba_type.register(dict, types.DictType(types.undefined, types.undefined))
     # set requires the type to be hashable
     as_numba_type.register(set, types.Set(types.undefined))
     as_numba_type.register(types.ListType, types.ListType(types.undefined))
@@ -722,31 +723,30 @@ def ol_isinstance(var, typs):
             range: types.RangeType,
         }
         if key in types_not_registered:
-            if (key == bytes and isinstance(var_ty, types.Bytes)) or \
-                (key == range and isinstance(var_ty, types.RangeType)):
+            if isinstance(var_ty, types_not_registered[key]):
                 return true_impl
             continue
 
-        numba_typ = as_numba_type(key)
-
-        if var_ty == numba_typ:
-            return true_impl
-        elif isinstance(typ, types.TypeRef):
+        if isinstance(typ, types.TypeRef):
             # Case for TypeRef (i.e. isinstance(var, typed.List))
-            # i.e. var_ty == ListType[int64] (instance)
+            #      var_ty == ListType[int64] (instance)
             #         typ == types.ListType  (class)
             return true_impl if type(var_ty) is key else false_impl
-        elif isinstance(numba_typ, types.ClassType) and \
-                isinstance(var_ty, types.ClassInstanceType) and \
-                var_ty.key == numba_typ.instance_type.key:
-            # check for jitclasses
-            return true_impl
-        elif isinstance(numba_typ, types.Container) and \
-                numba_typ.key[0] == types.undefined:
-            # check for containers (list, tuple, set, dict, ...)
-            if isinstance(var_ty, numba_typ.__class__) or \
-                (isinstance(var_ty, types.BaseTuple) and \
-                    isinstance(numba_typ, types.BaseTuple)):
+        else:
+            numba_typ = as_numba_type(key)
+            if var_ty == numba_typ:
                 return true_impl
+            elif isinstance(numba_typ, types.ClassType) and \
+                    isinstance(var_ty, types.ClassInstanceType) and \
+                    var_ty.key == numba_typ.instance_type.key:
+                # check for jitclasses
+                return true_impl
+            elif isinstance(numba_typ, types.Container) and \
+                    numba_typ.key[0] == types.undefined:
+                # check for containers (list, tuple, set, dict, ...)
+                if isinstance(var_ty, numba_typ.__class__) or \
+                    (isinstance(var_ty, types.BaseTuple) and \
+                        isinstance(numba_typ, types.BaseTuple)):
+                    return true_impl
 
     return false_impl

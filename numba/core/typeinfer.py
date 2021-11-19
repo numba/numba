@@ -151,8 +151,6 @@ class ConstraintNetwork(object):
             with typeinfer.warnings.catch_warnings(filename=loc.filename,
                                                    lineno=loc.line):
                 try:
-                    # if isinstance(constraint, Propagate):
-                    #     print(constraint.dst, constraint.src)
                     constraint(typeinfer)
                 except ForceLiteralArg as e:
                     errors.append(e)
