@@ -164,7 +164,7 @@ class TestConstString(CUDATestCase):
         def bytes_assign(arr):
             arr[0] = b"XYZ"
 
-        arr = np.zeros(1, dtype=b"S12")
+        arr = np.zeros(1, dtype="S12")
         with self.assertRaisesRegex(TypingError, '.*is a char sequence.*'):
             bytes_assign[1, 1](arr)
 
