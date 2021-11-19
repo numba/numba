@@ -25,8 +25,9 @@ from numba.core import types, utils, typing, ir, config
 from numba.core.typing.templates import Signature
 from numba.core.errors import (TypingError, UntypedAttributeError,
                                new_error_context, termcolor, UnsupportedError,
-                               ForceLiteralArg, CompilerError)
+                               ForceLiteralArg, CompilerError, NumbaValueError)
 from numba.core.funcdesc import qualifying_prefix
+from numba.core.typeconv import Conversion
 
 _logger = logging.getLogger(__name__)
 
@@ -162,15 +163,23 @@ class ConstraintNetwork(object):
                     )
                     errors.append(utils.chain_exception(new_exc, e))
                 except Exception as e:
-                    _logger.debug("captured error", exc_info=e)
-                    msg = ("Internal error at {con}.\n"
-                           "{err}\nEnable logging at debug level for details.")
-                    new_exc = TypingError(
-                        msg.format(con=constraint, err=str(e)),
-                        loc=constraint.loc,
-                        highlighting=False,
-                    )
-                    errors.append(utils.chain_exception(new_exc, e))
+                    if utils.use_old_style_errors():
+                        _logger.debug("captured error", exc_info=e)
+                        msg = ("Internal error at {con}.\n{err}\n"
+                               "Enable logging at debug level for details.")
+                        new_exc = TypingError(
+                            msg.format(con=constraint, err=str(e)),
+                            loc=constraint.loc,
+                            highlighting=False,
+                        )
+                        errors.append(utils.chain_exception(new_exc, e))
+                    elif utils.use_new_style_errors():
+                        raise e
+                    else:
+                        msg = ("Unknown CAPTURED_ERRORS style: "
+                               f"'{config.CAPTURED_ERRORS}'.")
+                        assert 0, msg
+
         return errors
 
 
@@ -337,12 +346,16 @@ class BuildMapConstraint(object):
                 strkey = all([isinstance(x, types.StringLiteral) for x in ktys])
                 literalvty = all([isinstance(x, types.Literal) for x in vtys])
                 vt0 = types.unliteral(vtys[0])
-                # homogeneous values comes in the form of being able to cast
-                # all the other values in the ctor to the type of the first
 
+                # homogeneous values comes in the form of being able to cast
+                # all the other values in the ctor to the type of the first.
+                # The order is important as `typed.Dict` takes it's type from
+                # the first element.
                 def check(other):
-                    return typeinfer.context.can_convert(other, vt0) is not None
+                    conv = typeinfer.context.can_convert(other, vt0)
+                    return conv is not None and conv < Conversion.unsafe
                 homogeneous = all([check(types.unliteral(x)) for x in vtys])
+
                 # Special cases:
                 # Single key:value in ctor, key is str, value is an otherwise
                 # illegal container type, e.g. LiteralStrKeyDict or
@@ -389,10 +402,9 @@ class ExhaustIterConstraint(object):
                         typeinfer.add_type(self.target, tp, loc=self.loc)
                         break
                     else:
-                        raise ValueError("wrong tuple length for %r: "
-                                         "expected %d, got %d"
-                                         % (self.iterator.name, self.count,
-                                            len(tp)))
+                        msg = (f"wrong tuple length for {self.iterator.name}: ",
+                               f"expected {self.count}, got {len(tp)}")
+                        raise NumbaValueError(msg)
                 elif isinstance(tp, types.IterableType):
                     tup = types.UniTuple(dtype=tp.iterator_type.yield_type,
                                          count=self.count)

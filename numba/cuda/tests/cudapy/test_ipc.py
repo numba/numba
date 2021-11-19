@@ -6,7 +6,8 @@ import pickle
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import (skip_on_cudasim, skip_under_cuda_memcheck,
+from numba.cuda.testing import (skip_on_arm, skip_on_cudasim,
+                                skip_under_cuda_memcheck,
                                 ContextResettingTestCase, ForeignArray)
 import unittest
 
@@ -78,7 +79,9 @@ def ipc_array_test(ipcarr, result_queue):
 
 @skip_under_cuda_memcheck('Hangs cuda-memcheck')
 @skip_on_cudasim('Ipc not available in CUDASIM')
+@skip_on_arm('CUDA IPC not supported on ARM in Numba')
 class TestIpcMemory(ContextResettingTestCase):
+
     def test_ipc_handle(self):
         # prepare data for IPC
         arr = np.arange(10, dtype=np.intp)
@@ -227,6 +230,7 @@ def staged_ipc_array_test(ipcarr, device_num, result_queue):
 
 @skip_under_cuda_memcheck('Hangs cuda-memcheck')
 @skip_on_cudasim('Ipc not available in CUDASIM')
+@skip_on_arm('CUDA IPC not supported on ARM in Numba')
 class TestIpcStaged(ContextResettingTestCase):
     def test_staged(self):
         # prepare data for IPC

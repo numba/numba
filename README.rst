@@ -42,8 +42,8 @@ Supported Platforms
 
 * (Optional) Accelerators and GPUs:
 
-  * NVIDIA GPUs (Kepler architecture or later) via CUDA driver on Linux,
-    Windows, macOS (< 10.14).
+  * NVIDIA GPUs (Kepler architecture or later) via CUDA driver on Linux and
+    Windows.
 
 Dependencies
 ============
@@ -76,17 +76,13 @@ Documentation
 https://numba.readthedocs.io/en/stable/index.html
 
 
-Mailing Lists
-=============
+Contact
+=======
 
 Numba has a discourse forum for discussions:
 
-* https://numba.discourse.groups
+* https://numba.discourse.group
 
-Some old mailing list archives are at:
-
-* https://groups.google.com/a/continuum.io/d/forum/numba-users
-* http://librelist.com/browser/numba/
 
 
 Continuous Integration

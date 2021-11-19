@@ -16,7 +16,7 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
 from numba.core import typing, types, utils, cgutils
 from numba.core.extending import overload, intrinsic
 from numba.core.typeconv import Conversion
-from numba.core.errors import TypingError
+from numba.core.errors import TypingError, LoweringError
 from numba.misc.special import literal_unroll
 
 
@@ -47,7 +47,8 @@ def generic_is(context, builder, sig, args):
     if lhs_type == rhs_type:
             # mutable types
             if lhs_type.mutable:
-                raise NotImplementedError('no default `is` implementation')
+                msg = 'no default `is` implementation'
+                raise LoweringError(msg)
             # immutable types
             else:
                 # fallbacks to `==`

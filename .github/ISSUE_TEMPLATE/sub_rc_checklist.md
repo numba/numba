@@ -30,4 +30,5 @@ labels: task
 
 * [ ] Update release checklist template.
 * [ ] Ping Anaconda Distro team to trigger a build for `defaults` (FINAL ONLY).
+* [ ] Create a release on Github at https://github.com/numba/numba/releases (FINAL ONLY).
 * [ ] Close milestone (and then close this release issue).

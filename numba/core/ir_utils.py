@@ -825,6 +825,8 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                 if (isinstance(expr, ir.Expr) and (expr.op == 'cast' or
                     expr.op in ['getitem', 'static_getitem'])):
                     _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
+                if isinstance(expr, ir.Expr) and expr.op == 'inplace_binop':
+                    _add_alias(lhs, expr.lhs.name, alias_map, arg_aliases)
                 # array attributes like A.T
                 if (isinstance(expr, ir.Expr) and expr.op == 'getattr'
                         and expr.attr in ['T', 'ctypes', 'flat']):
@@ -2210,7 +2212,7 @@ def check_and_legalize_ir(func_ir):
     enforce_no_dels(func_ir)
     # postprocess and emit ir.Dels
     post_proc = postproc.PostProcessor(func_ir)
-    post_proc.run(True)
+    post_proc.run(True, extend_lifetimes=config.EXTEND_VARIABLE_LIFETIMES)
 
 
 def convert_code_obj_to_function(code_obj, caller_ir):

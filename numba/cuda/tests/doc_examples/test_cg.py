@@ -2,17 +2,22 @@
 # "magictoken" is used for markers as beginning and ending of example text.
 
 import unittest
-from numba.cuda.testing import CUDATestCase, skip_on_cudasim
+from numba.cuda.testing import (CUDATestCase, skip_on_cudasim,
+                                skip_if_cudadevrt_missing, skip_unless_cc_60)
 
 
+@skip_if_cudadevrt_missing
+@skip_unless_cc_60
 @skip_on_cudasim("cudasim doesn't support cuda import at non-top-level")
 class TestCooperativeGroups(CUDATestCase):
     def test_ex_grid_sync(self):
         # magictoken.ex_grid_sync_kernel.begin
-        from numba import cuda, int32, void
+        from numba import cuda, int32
         import numpy as np
 
-        @cuda.jit(void(int32[:,::1]))
+        sig = (int32[:,::1],)
+
+        @cuda.jit(sig)
         def sequential_rows(M):
             col = cuda.grid(1)
             g = cuda.cg.this_grid()
@@ -41,7 +46,7 @@ class TestCooperativeGroups(CUDATestCase):
 
         # Skip this test if the grid size used in the example is too large for
         # a cooperative launch on the current GPU
-        mb = sequential_rows.definition.max_cooperative_grid_blocks(blockdim)
+        mb = sequential_rows.overloads[sig].max_cooperative_grid_blocks(blockdim)
         if mb < griddim:
             self.skipTest('Device does not support a large enough coop grid')
 

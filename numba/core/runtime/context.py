@@ -1,6 +1,6 @@
 from llvmlite import ir
 
-from numba.core import types, cgutils
+from numba.core import types, cgutils, errors
 
 
 class NRTContext(object):
@@ -14,7 +14,7 @@ class NRTContext(object):
 
     def _require_nrt(self):
         if not self._enabled:
-            raise RuntimeError("NRT required but not enabled")
+            raise errors.NumbaRuntimeError("NRT required but not enabled")
 
     def allocate(self, builder, size):
         """
