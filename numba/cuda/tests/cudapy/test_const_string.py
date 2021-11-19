@@ -56,13 +56,20 @@ class TestConstStringCodegen(unittest.TestCase):
         self.assertEqual(len(matches), 1)
 
 
+# Inspired by the reproducer from Issue #7041.
 class TestConstString(CUDATestCase):
-    def test_assign_const_string(self):
+
+    def skip_on_nvvm34(self):
         # There is no NVVM on cudasim, but we might as well run this test.
         if not config.ENABLE_CUDASIM and not NVVM().is_nvvm70:
             self.skipTest('Character sequences unsupported on NVVM 3.4')
 
-        # Inspired by the reproducer from Issue #7041.
+    def skip_on_nvvm70(self):
+        if NVVM().is_nvvm70:
+            self.skipTest('Character sequences are permitted with NVVM 7.0')
+
+    def test_assign_const_unicode_string(self):
+        self.skip_on_nvvm34()
 
         @cuda.jit
         def str_assign(arr):
@@ -81,10 +88,29 @@ class TestConstString(CUDATestCase):
         expected[-1] = ''
         np.testing.assert_equal(arr, expected)
 
+    def test_assign_const_byte_string(self):
+        self.skip_on_nvvm34()
+
+        @cuda.jit
+        def bytes_assign(arr):
+            i = cuda.grid(1)
+            if i < len(arr):
+                arr[i] = b"XYZ"
+
+        n_strings = 8
+        arr = np.zeros(n_strings + 1, dtype="S12")
+        bytes_assign[1, n_strings](arr)
+
+        # Expected result, e.g.:
+        #     [b'XYZ' b'XYZ' b'XYZ' b'XYZ' b'XYZ' b'XYZ' b'XYZ' b'XYZ' b'']
+        expected = np.zeros_like(arr)
+        expected[:-1] = b'XYZ'
+        expected[-1] = b''
+        np.testing.assert_equal(arr, expected)
+
     @skip_on_cudasim('Const strings not disallowed on cudasim')
-    def test_const_string_disallowed_nvvm34(self):
-        if NVVM().is_nvvm70:
-            self.skipTest('Character sequences are permitted with NVVM 7.0')
+    def test_const_unicode_string_disallowed_nvvm34(self):
+        self.skip_on_nvvm70()
 
         @cuda.jit
         def str_assign(arr):
@@ -93,6 +119,18 @@ class TestConstString(CUDATestCase):
         arr = np.zeros(1, dtype="<U12")
         with self.assertRaisesRegex(TypingError, '.*is a char sequence.*'):
             str_assign[1, 1](arr)
+
+    @skip_on_cudasim('Const strings not disallowed on cudasim')
+    def test_const_byte_string_disallowed_nvvm34(self):
+        self.skip_on_nvvm70()
+
+        @cuda.jit
+        def bytes_assign(arr):
+            arr[0] = b"XYZ"
+
+        arr = np.zeros(1, dtype=b"S12")
+        with self.assertRaisesRegex(TypingError, '.*is a char sequence.*'):
+            bytes_assign[1, 1](arr)
 
 
 if __name__ == '__main__':
