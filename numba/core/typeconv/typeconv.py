@@ -9,11 +9,10 @@ except ImportError as e:
     dashes = '-' * 80
     msg = (f"Numba could not be imported.\n{dashes}\nIf you are seeing this "
            "message and are undertaking Numba development work, you may need "
-           "to re-run:\n\n$ python setup.py build_ext --inplace\n\nAlso, "
-           f"please check the development set up guide:\n\n{dev_url}."
-           f"\n\n{dashes}\nIf you are not working on Numba development, the "
-           f"original error was: '{str(e)}'. For help, please visit:\n\n"
-           f"{user_url}\n")
+           "to rebuild Numba.\nPlease see the development set up guide:\n\n"
+           f"{dev_url}.\n\n{dashes}\nIf you are not working on Numba "
+           f"development, the original error was: '{str(e)}'.\nFor help, "
+           f"please visit:\n\n{user_url}\n")
     raise ImportError(msg)
 
 from numba.core.typeconv import castgraph, Conversion

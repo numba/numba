@@ -31,14 +31,14 @@ here are some common issues and things to try to fix it.
 #. Your installation has Numba for Python version X but you are running with
    Python version Y.
 
-   This occurs due to a variety of Python environment mixup/mismatch problems.
+   This occurs due to a variety of Python environment mix-up/mismatch problems.
    The most common mismatch comes from installing Numba into the
    site-packages/environment of one version of Python by using a base or
    system installation of Python that is a different version, this typically
    happens through the use of the "wrong" ``pip`` binary. This will obviously
    cause problems as the C-Extensions on which Numba relies are bound to
    specific Python versions. A way to check if this likely the problem is to
-   see if the path to the python at::
+   see if the path to the ``python`` binary at::
 
        python -c 'import sys; print(sys.executable)'
 
@@ -52,7 +52,7 @@ here are some common issues and things to try to fix it.
 
 #. Your core system libraries are too old.
 
-   This is a somewhat rare occurence, but there are occasions when a very old
+   This is a somewhat rare occurrence, but there are occasions when a very old
    (typically out of support) version of Linux is in use it doesn't have a
    ``glibc`` library with sufficiently new versioned symbols for Numba's shared
    libraries to resolve against. The fix for this is to update your OS system
