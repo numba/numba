@@ -726,6 +726,7 @@ def has_no_side_effect(rhs, lives, call_table):
             call_list == [array_analysis.wrap_index] or
             call_list == [prange] or
             call_list == ['prange', numba] or
+            call_list == ['pndindex', numba] or
             call_list == [parfor.internal_prange]):
             return True
         elif (isinstance(call_list[0], _Intrinsic) and
