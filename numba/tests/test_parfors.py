@@ -3416,7 +3416,7 @@ class TestPrangeBasic(TestPrangeBase):
         # issue7105: label conflict in nested parfor
         def test_impl(x, y):
             out = np.zeros(len(y))
-            for idx in range(len(y)):
+            for idx in range(0, len(y)):
                 i0 = y[idx, 0]
                 i1 = y[idx, 1]
                 Pt1 = x[i0]
@@ -3427,18 +3427,17 @@ class TestPrangeBasic(TestPrangeBase):
             return out
 
         X = np.array([[-1., -1.],
-               [-1.,  1.],
-               [ 0.,  0.],
-               [ 1., -1.],
-               [ 1.,  0.],
-               [ 1.,  1.]])
+                      [-1.,  1.],
+                      [ 0.,  0.],
+                      [ 1., -1.],
+                      [ 1.,  0.],
+                      [ 1.,  1.]])
 
-        Y = np.array([
-               [0, 1],
-               [1, 2],
-               [2, 3],
-               [3, 4],
-               [4, 5]])
+        Y = np.array([[0, 1],
+                      [1, 2],
+                      [2, 3],
+                      [3, 4],
+                      [4, 5]])
 
         self.prange_tester(test_impl, X, Y, scheduler_type='unsigned',
                            check_fastmath=True, check_fastmath_result=True)
