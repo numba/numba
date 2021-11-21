@@ -682,9 +682,8 @@ def impl_len(d):
 def impl_len_iters(d):
     """len(dict.keys()), len(dict.values()), len(dict.items())
     """
-    dict_iters = (DictKeysIterableType, DictValuesIterableType,
-                  DictItemsIterableType)
-    if not isinstance(d, dict_iters):
+    if not isinstance(d, (DictKeysIterableType,
+                      DictValuesIterableType, DictItemsIterableType)):
         return
 
     def impl(d):
