@@ -357,6 +357,26 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             keys,
         )
 
+    def test_dict_keys_len(self):
+        """
+        Exercise len(dict.keys())
+        """
+        @njit
+        def foo(keys, vals):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            return len(d.keys())
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+
+        self.assertEqual(
+            foo(keys, vals),
+            len(keys),
+        )
+
     def test_dict_values(self):
         """
         Exercise dict.values
@@ -379,6 +399,32 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             foo(keys, vals),
             vals,
         )
+
+    def test_dict_values_len(self):
+        """
+        Exercise len(dict.keys())
+        """
+        @njit
+        def foo(keys, vals):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            return len(d.values())
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+
+        self.assertEqual(
+            foo(keys, vals),
+            len(vals),
+        )
+
+    def test_dict_items_len(self, d):
+        @njit
+        def foo():
+            return len(d.items())
+        self.assertPreciseEqual(foo({"A":1 ,"B": 4, "C": 5}), 3)
 
     def test_dict_iter(self):
         """
