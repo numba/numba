@@ -19,9 +19,9 @@ export CUDA_REL=${CUDA_VERSION%.*}
 # Test with NVIDIA Bindings on CUDA 11.4
 if [ $CUDA_TOOLKIT_VER == "11.4" ]
 then
-  export NUMBA_CUDA_USE_NVIDIA_BINDINGS=1;
+  export NUMBA_CUDA_USE_NVIDIA_BINDING=1;
 else
-  export NUMBA_CUDA_USE_NVIDIA_BINDINGS=0;
+  export NUMBA_CUDA_USE_NVIDIA_BINDING=0;
 fi;
 
 ################################################################################
@@ -49,7 +49,7 @@ gpuci_mamba_retry create -n numba_ci -y \
 
 conda activate numba_ci
 
-if [ $NUMBA_CUDA_USE_NVIDIA_BINDINGS == "1" ]
+if [ $NUMBA_CUDA_USE_NVIDIA_BINDING == "1" ]
 then
   gpuci_logger "Install NVIDIA CUDA Python bindings";
   gpuci_mamba_retry install nvidia::cuda-python;
