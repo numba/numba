@@ -486,10 +486,8 @@ def find_setupwiths(blocks):
         def is_setup_with(stmt):
             return isinstance(stmt, ir.EnterWith)
 
-
         def is_branch(stmt):
             return isinstance(stmt, ir.Branch)
-
 
         def is_terminator(stmt):
             return isinstance(stmt, ir.Terminator)
