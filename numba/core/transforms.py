@@ -547,7 +547,7 @@ def find_setupwiths(blocks):
                                 "(i.e. break/return/raise) that can leave the with-context. "
                             )
                         target_block = blocks[pop_block_targets[0]]
-                        if not target_block.terminator.get_targets():
+                        if is_return(target_block.terminator):
                             raise errors.CompilerError(
                                 'unsupported controlflow due to return '
                                 'statements inside with block'
