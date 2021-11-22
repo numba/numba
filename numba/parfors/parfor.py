@@ -4020,6 +4020,7 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, typemap):
     p1_body_defs = set()
     for defs in p1_body_usedefs.defmap.values():
         p1_body_defs |= defs
+    p1_body_defs |= get_parfor_writes(parfor1)
 
     p2_usedefs = compute_use_defs(parfor2.loop_body)
     p2_uses = compute_use_defs({0: parfor2.init_block}).usemap[0]
