@@ -528,13 +528,13 @@ def find_setupwiths(blocks):
                     # raise detected before pop_block
                     if is_raise(stmt):
                             raise errors.CompilerError(
-                                'unsupported controlflow due to raise '
+                                'unsupported control flow due to raise '
                                 'statements inside with block'
                                 )
                     # special case 3.7, return before POP_BLOCK
                     if PYVERSION < (3, 8) and is_return(stmt):
                             raise errors.CompilerError(
-                                'unsupported controlflow due to return '
+                                'unsupported control flow due to return '
                                 'statements inside with block'
                                 )
                     # if a pop_block, process it
@@ -543,22 +543,23 @@ def find_setupwiths(blocks):
                         pop_block_targets = blocks[block].terminator.get_targets()
                         if len(pop_block_targets) != 1:
                             raise errors.CompilerError(
-                                "Does not support with-context that contain branches "
+                                "unsupported control flow: with-context contains branches "
                                 "(i.e. break/return/raise) that can leave the with-context. "
                             )
-                        target_block = blocks[pop_block_targets[0]]
+                        pop_block_target = pop_block_targets[0]
+                        target_block = blocks[pop_block_target]
                         if is_return(target_block.terminator):
                             raise errors.CompilerError(
-                                'unsupported controlflow due to return '
+                                'unsupported control flow due to return '
                                 'statements inside with block'
                                 )
-                        setup_with_to_pop_blocks_map[setup_block].add(pop_block_targets[0])
+                        setup_with_to_pop_blocks_map[setup_block].add(pop_block_target)
                         # remove the block from blocks to be matched
                         sus_pops.remove(block)
                         # stop looking, we have reached the frontier
                         break
-                    # if we are still here, by the terminator block,
-                    # add all it's targets to the to_visit stack, unless we
+                    # if we are still here, by the block terminator,
+                    # add all its targets to the to_visit stack, unless we
                     # have seen them already
                     if is_terminator(stmt):
                         for t in stmt.get_targets():
@@ -590,10 +591,10 @@ def find_setupwiths(blocks):
         else:
             if setup_to_pop_block_map[s] != e:
                 raise errors.CompilerError(
-                    "Does not support with-context that contain branches "
+                    ""unsupported control flow: with-context contains branches "
                     "(i.e. break/return/raise) that can leave the with-context. "
                 )
-        # Elminate all withs contained within withs, we are only interested in
+        # Eliminate all withs contained within withs, we are only interested in
         # the outermost with statements so we can lift them.
         if not within_known_range(s, e, known_ranges):
             known_ranges.append((s, e))
