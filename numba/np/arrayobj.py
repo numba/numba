@@ -4167,6 +4167,13 @@ def numpy_linspace_3(context, builder, sig, args):
     # Implementation based on https://github.com/numpy/numpy/blob/v1.20.0/numpy/core/function_base.py#L24 # noqa: E501
     def linspace(start, stop, num):
         arr = np.empty(num, dtype)
+        # The multiply by 1.0 mirrors
+        # https://github.com/numpy/numpy/blob/v1.20.0/numpy/core/function_base.py#L125-L128  # noqa: E501
+        # the side effect of this is important... start and stop become the same
+        # type as `dtype` i.e. 64/128 bits wide (float/complex). This is
+        # important later when used in the `np.divide`.
+        start = start * 1.0
+        stop = stop * 1.0
         if num == 0:
             return arr
         div = num - 1
