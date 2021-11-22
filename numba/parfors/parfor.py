@@ -3469,7 +3469,7 @@ def _find_parfors(body):
 
 
 def _is_indirect_index(func_ir, index, nest_indices):
-    index_def = get_definition(func_ir, index.name)
+    index_def = guard(get_definition, func_ir, index.name)
     if isinstance(index_def, ir.Expr) and index_def.op == 'build_tuple':
         if [x.name for x in index_def.items] == [x.name for x in nest_indices]:
             return True
