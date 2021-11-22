@@ -565,6 +565,9 @@ class Parfor(ir.Expr, ir.Stmt):
         return "id=" + str(self.id) + repr(self.loop_nests) + \
             repr(self.loop_body) + repr(self.index_var)
 
+    def get_loop_nest_vars(self):
+        return [x.index_variable for x in self.loop_nests]
+
     def list_vars(self):
         """list variables used (read/written) in this parfor by
         traversing the body and combining block uses.
@@ -2969,7 +2972,7 @@ class ParforPass(ParforPassStates):
                         stmt.equiv_set = equiv_set
                         next_stmt.equiv_set = equiv_set
                         fused_node, fuse_report = try_fuse(equiv_set, stmt, next_stmt,
-                            self.metadata["parfors"], self.typemap)
+                            self.metadata["parfors"], self.typemap, self)
                         # accumulate fusion reports
                         self.diagnostics.fusion_reports.append(fuse_report)
                         if fused_node is not None:
@@ -3465,16 +3468,31 @@ def _find_parfors(body):
             yield i, inst
 
 
+def _is_indirect_index(func_ir, index, nest_indices):
+    index_def = get_definition(func_ir, index.name)
+    if isinstance(index_def, ir.Expr) and index_def.op == 'build_tuple':
+        if [x.name for x in index_def.items] == [x.name for x in nest_indices]:
+            return True
+
+    return False
+
+
 def get_array_indexed_with_parfor_index_internal(loop_body,
                                                  index,
                                                  ret_indexed,
-                                                 ret_not_indexed):
+                                                 ret_not_indexed,
+                                                 nest_indices,
+                                                 the_pass):
     for blk in loop_body:
         for stmt in blk.body:
             if isinstance(stmt, (ir.StaticSetItem, ir.SetItem)):
                 setarray_index = get_index_var(stmt)
                 if (isinstance(setarray_index, ir.Var) and
-                    get_index_var(stmt).name == index):
+                    (setarray_index.name == index or
+                     _is_indirect_index(
+                         the_pass.func_ir,
+                         setarray_index,
+                         nest_indices))):
                     ret_indexed.add(stmt.target.name)
                 else:
                     ret_not_indexed.add(stmt.target.name)
@@ -3484,7 +3502,11 @@ def get_array_indexed_with_parfor_index_internal(loop_body,
                 getarray_index = stmt.value.index
                 getarray_name = stmt.value.value.name
                 if (isinstance(getarray_index, ir.Var) and
-                    getarray_index.name == index):
+                    (getarray_index.name == index or
+                     _is_indirect_index(
+                         the_pass.func_ir,
+                         getarray_index,
+                         nest_indices))):
                     ret_indexed.add(getarray_name)
                 else:
                     ret_not_indexed.add(getarray_name)
@@ -3493,17 +3515,24 @@ def get_array_indexed_with_parfor_index_internal(loop_body,
                     stmt.loop_body.values(),
                     index,
                     ret_indexed,
-                    ret_not_indexed)
+                    ret_not_indexed,
+                    nest_indices,
+                    the_pass)
 
 
-def get_array_indexed_with_parfor_index(loop_body, index):
+def get_array_indexed_with_parfor_index(loop_body,
+                                        index,
+                                        nest_indices,
+                                        the_pass):
     ret_indexed = set()
     ret_not_indexed = set()
     get_array_indexed_with_parfor_index_internal(
         loop_body,
         index,
         ret_indexed,
-        ret_not_indexed)
+        ret_not_indexed,
+        nest_indices,
+        the_pass)
     return ret_indexed, ret_not_indexed
 
 
@@ -3954,7 +3983,7 @@ def get_parfor_writes(parfor):
 
 FusionReport = namedtuple('FusionReport', ['first', 'second', 'message'])
 
-def try_fuse(equiv_set, parfor1, parfor2, metadata, typemap):
+def try_fuse(equiv_set, parfor1, parfor2, metadata, typemap, the_pass):
     """try to fuse parfors and return a fused parfor, otherwise return None
     """
     dprint("try_fuse: trying to fuse \n", parfor1, "\n", parfor2)
@@ -4033,7 +4062,10 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, typemap):
         is_safe = True # Assume safe until proven otherwise.
         # Get all the arrays
         _, p2arraynotindexed = get_array_indexed_with_parfor_index(
-            parfor2.loop_body.values(), parfor2.index_var.name)
+            parfor2.loop_body.values(),
+            parfor2.index_var.name,
+            parfor2.get_loop_nest_vars(),
+            the_pass)
         for var in overlap:
             vtype = typemap[var]
             if isinstance(vtype, types.ArrayCompatible):
