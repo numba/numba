@@ -503,6 +503,8 @@ def find_setupwiths(blocks):
 
         cfg = compute_cfg_from_blocks(blocks)
         sus_setups, sus_pops = [], []
+        # traverse the cfg and collect all suspected SETUP_WITH and POP_BLOCK
+        # statements so that we can iterate over them
         for label, block in blocks.items():
             for stmt in block.body:
                 if is_setup_with(stmt):
