@@ -591,7 +591,7 @@ def find_setupwiths(blocks):
         else:
             if setup_to_pop_block_map[s] != e:
                 raise errors.CompilerError(
-                    ""unsupported control flow: with-context contains branches "
+                    "unsupported control flow: with-context contains branches "
                     "(i.e. break/return/raise) that can leave the with-context. "
                 )
         # Eliminate all withs contained within withs, we are only interested in
