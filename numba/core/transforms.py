@@ -502,15 +502,15 @@ def find_setupwiths(blocks):
             return isinstance(stmt, ir.PopBlock)
 
         cfg = compute_cfg_from_blocks(blocks)
-        sus_setups, sus_pops = [], []
+        sus_setups, sus_pops = set(), set()
         # traverse the cfg and collect all suspected SETUP_WITH and POP_BLOCK
         # statements so that we can iterate over them
         for label, block in blocks.items():
             for stmt in block.body:
                 if is_setup_with(stmt):
-                    sus_setups.append(label)
+                    sus_setups.add(label)
                 if is_pop_block(stmt):
-                    sus_pops.append(label)
+                    sus_pops.add(label)
 
         # now that we do have the statements, iterate through them in reverse
         # topo order and from each start looking for pop_blocks
