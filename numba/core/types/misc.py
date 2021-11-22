@@ -292,6 +292,9 @@ class ExceptionClass(Callable, Phantom):
         return_type = ExceptionInstance(self.exc_class)
         return [typing.signature(return_type)], False
 
+    def get_impl_key(self, sig):
+        return type(self)
+
     @property
     def key(self):
         return self.exc_class
@@ -424,6 +427,9 @@ class ClassType(Callable, Opaque):
     def get_call_signatures(self):
         return (), True
 
+    def get_impl_key(self, sig):
+        return type(self)
+
     @property
     def methods(self):
         return {k: v.py_func for k, v in self.jit_methods.items()}
@@ -511,6 +517,9 @@ class ContextManager(Callable, Phantom):
 
         posargs = list(args) + [v for k, v in sorted(kws.items())]
         return typing.signature(self, *posargs)
+
+    def get_impl_key(self, sig):
+        return type(self)
 
 
 class UnicodeType(IterableType, Hashable):

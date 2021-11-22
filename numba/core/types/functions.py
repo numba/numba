@@ -665,6 +665,9 @@ class NamedTupleClass(Callable, Opaque):
     def get_call_signatures(self):
         return (), True
 
+    def get_impl_key(self, sig):
+        return type(self)
+
     @property
     def key(self):
         return self.instance_class
@@ -686,6 +689,9 @@ class NumberClass(Callable, DTypeSpec, Opaque):
 
     def get_call_signatures(self):
         return (), True
+
+    def get_impl_key(self, sig):
+        return type(self)
 
     @property
     def key(self):
