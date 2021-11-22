@@ -732,6 +732,9 @@ def ol_isinstance(var, typs):
             #      var_ty == ListType[int64] (instance)
             #         typ == types.ListType  (class)
             return true_impl if type(var_ty) is key else false_impl
+        elif isinstance(typ, types.NamedTupleClass):
+            # Case for NamedTuples
+            return true_impl if issubclass(var_ty.__class__, types.BaseNamedTuple) else false_impl
         else:
             numba_typ = as_numba_type(key)
             if var_ty == numba_typ:

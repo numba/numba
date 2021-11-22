@@ -1126,6 +1126,21 @@ class TestBuiltins(TestCase):
             got = cfunc(inpt)
             self.assertEqual(expected, got)
 
+    def test_isinstance_namedtuple(self):
+        NT = namedtuple('NT', 'x')
+        nt = NT(1)
+
+        def isinstance_usecase_namedtuple(a):
+            if isinstance(a, nt.__class__):
+                return 'namedtuple'
+            else:
+                return 'no match'
+
+        pyfunc = isinstance_usecase_namedtuple
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self.assertEqual(cfunc(nt), 'namedtuple')
+
     def test_isinstance_invalid_type(self):
         pyfunc = isinstance_usecase_invalid_type
         cfunc = jit(nopython=True)(pyfunc)

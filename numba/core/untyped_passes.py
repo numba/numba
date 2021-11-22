@@ -7,6 +7,7 @@ from numba.core.compiler_machinery import (FunctionPass, AnalysisPass,
                                            SSACompliantMixin, register_pass)
 from numba.core import (errors, types, ir, bytecode, postproc, rewrites, config,
                         transforms)
+from numba.core.typed_passes import DeadCodeElimination
 from numba.misc.special import literal_unroll
 from numba.core.analysis import (dead_branch_prune, rewrite_semantic_constants,
                                  find_literally_calls, compute_cfg_from_blocks,
@@ -1562,6 +1563,7 @@ class LiteralPropagationSubPipelinePass(FunctionPass):
         # rewrite consts / dead branch pruning
         pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
         pm.add_pass(DeadBranchPrune, "dead branch pruning")
+        pm.add_pass(DeadCodeElimination, "dead code elimination")
 
         pm.finalize()
         pm.run(state)
