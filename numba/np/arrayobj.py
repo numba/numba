@@ -4172,13 +4172,11 @@ def numpy_linspace_3(context, builder, sig, args):
         div = num - 1
         if div > 0:
             delta = stop - start
-            step = np.divide(delta, div)
+            step = delta / div
             for i in range(0, num):
                 arr[i] = start + (i * step)
         else:
             arr[0] = start
-        if num > 1:
-            arr[-1] = stop
         return arr
 
     res = context.compile_internal(builder, linspace, sig, args)
