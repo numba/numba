@@ -39,8 +39,11 @@ Weekly Meetings
 '''''''''''''''
 
 The core Numba developers have a weekly video conference to discuss roadmap,
-feature planning, and outstanding issues.  These meetings are invite only, but
-minutes will be taken and will be posted to the
+feature planning, and outstanding issues.  These meetings are entirely public,
+details are posted on
+`numba.discourse.group Announcements <https://numba.discourse.group/c/announcements/>`_
+and everyone is welcome to join the discussion. Minutes will be taken and will
+be posted to the
 `Numba wiki <https://github.com/numba/numba/wiki/Meeting-Minutes>`_.
 
 .. _report-numba-bugs:

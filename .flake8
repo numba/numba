@@ -45,7 +45,6 @@ exclude =
     numba/core/dataflow.py
     numba/core/pythonapi.py
     numba/core/decorators.py
-    numba/core/typeconv/typeconv.py
     numba/core/typeconv/rules.py
     numba/core/typeconv/castgraph.py
     numba/core/rewrites/registry.py

@@ -27,6 +27,7 @@ from numba.core.errors import (TypingError, UntypedAttributeError,
                                new_error_context, termcolor, UnsupportedError,
                                ForceLiteralArg, CompilerError, NumbaValueError)
 from numba.core.funcdesc import qualifying_prefix
+from numba.core.typeconv import Conversion
 
 _logger = logging.getLogger(__name__)
 
@@ -345,12 +346,16 @@ class BuildMapConstraint(object):
                 strkey = all([isinstance(x, types.StringLiteral) for x in ktys])
                 literalvty = all([isinstance(x, types.Literal) for x in vtys])
                 vt0 = types.unliteral(vtys[0])
-                # homogeneous values comes in the form of being able to cast
-                # all the other values in the ctor to the type of the first
 
+                # homogeneous values comes in the form of being able to cast
+                # all the other values in the ctor to the type of the first.
+                # The order is important as `typed.Dict` takes it's type from
+                # the first element.
                 def check(other):
-                    return typeinfer.context.can_convert(other, vt0) is not None
+                    conv = typeinfer.context.can_convert(other, vt0)
+                    return conv is not None and conv < Conversion.unsafe
                 homogeneous = all([check(types.unliteral(x)) for x in vtys])
+
                 # Special cases:
                 # Single key:value in ctor, key is str, value is an otherwise
                 # illegal container type, e.g. LiteralStrKeyDict or

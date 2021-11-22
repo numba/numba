@@ -28,7 +28,11 @@ import numpy as np
 
 from numba import testing
 from numba.core import errors, typing, utils, config, cpu
-from numba.core.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
+from numba.core.compiler import (compile_extra, compile_isolated, Flags,
+                                 DEFAULT_FLAGS, CompilerBase,
+                                 DefaultPassBuilder)
+from numba.core.typed_passes import IRLegalization
+from numba.core.untyped_passes import PreserveIR
 import unittest
 from numba.core.runtime import rtsys
 from numba.np import numpy_support
@@ -996,3 +1000,21 @@ def run_in_subprocess(code, flags=None, env=None, timeout=30):
         msg = "process failed with code %s: stderr follows\n%s\n"
         raise AssertionError(msg % (popen.returncode, err.decode()))
     return out, err
+
+
+class IRPreservingTestPipeline(CompilerBase):
+    """ Same as the standard pipeline, but preserves the func_ir into the
+    metadata store after legalisation, useful for testing IR changes"""
+
+    def define_pipelines(self):
+        pipeline = DefaultPassBuilder.define_nopython_pipeline(
+            self.state, "ir_preserving_custom_pipe")
+        # mangle the default pipeline and inject DCE and IR preservation ahead
+        # of legalisation
+
+        # TODO: add a way to not do this! un-finalizing is not a good idea
+        pipeline._finalized = False
+        pipeline.add_pass_after(PreserveIR, IRLegalization)
+
+        pipeline.finalize()
+        return [pipeline]
