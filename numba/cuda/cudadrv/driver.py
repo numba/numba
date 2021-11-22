@@ -442,6 +442,22 @@ class Driver(object):
         """
         return _ActiveContext()
 
+    def get_version(self):
+        """
+        Returns the CUDA Runtime version as a tuple (major, minor).
+        """
+        if USE_NV_BINDING:
+            version = driver.cuDriverGetVersion()
+        else:
+            dv = ctypes.c_int(0)
+            driver.cuDriverGetVersion(ctypes.byref(dv))
+            version = dv.value
+
+        # The version is encoded as (1000 * major) + (10 * minor)
+        major = version // 1000
+        minor = (version - (major * 1000)) // 10
+        return (major, minor)
+
 
 class _ActiveContext(object):
     """An contextmanager object to cache active context to reduce dependency
@@ -3044,3 +3060,10 @@ def profiling():
     profile_start()
     yield
     profile_stop()
+
+
+def get_version():
+    """
+    Return the driver version as a tuple of (major, minor)
+    """
+    return driver.get_version()
