@@ -24,5 +24,5 @@ In future versions of Numba:
 - The internal bindings will be removed.
 
 It is expected that the NVIDIA bindings will be the default in Numba 0.56; at
-present, no specific release is planned for the deprecation and removal of the
+present, no specific release is planned for the deprecation or removal of the
 internal bindings.
