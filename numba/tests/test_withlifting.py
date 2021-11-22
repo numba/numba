@@ -284,7 +284,7 @@ class TestLiftCall(BaseTestWithLifting):
             njit(liftcall5)()
         # Make sure we can detect a break-within-with and have a reasonable
         # error.
-        msg = ("Does not support with-context that contain branches")
+        msg = ("unsupported control flow: with-context contains branches")
         self.assertIn(msg, str(raises.exception))
 
 
@@ -597,7 +597,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         with self.assertRaises(errors.CompilerError) as raises:
             cfoo(x)
         self.assertIn(
-            ('unsupported controlflow due to raise statements inside '
+            ('unsupported control flow due to raise statements inside '
              'with block'),
             str(raises.exception),
         )
@@ -694,7 +694,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         with self.assertRaises(errors.CompilerError) as raises:
             cfoo(x)
         self.assertIn(
-            ('unsupported controlflow due to return statements inside '
+            ('unsupported control flow due to return statements inside '
              'with block'),
             str(raises.exception),
         )
@@ -760,7 +760,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         cfoo = njit(foo)
         with self.assertRaises(errors.CompilerError) as raises:
             cfoo(x)
-        msg = "unsupported controlflow due to return statements inside with block"
+        msg = "unsupported control flow due to return statements inside with block"
         self.assertIn(msg, str(raises.exception))
 
     @unittest.expectedFailure
