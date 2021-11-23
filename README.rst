@@ -42,15 +42,15 @@ Supported Platforms
 
 * (Optional) Accelerators and GPUs:
 
-  * NVIDIA GPUs (Kepler architecture or later) via CUDA driver on Linux,
-    Windows, macOS (< 10.14).
+  * NVIDIA GPUs (Kepler architecture or later) via CUDA driver on Linux and
+    Windows.
 
 Dependencies
 ============
 
 * Python versions: 3.7-3.9
 * llvmlite 0.38.*
-* NumPy >=1.17 (can build with 1.11 for ABI compatibility).
+* NumPy >=1.18 (can build with 1.11 for ABI compatibility).
 
 Optionally:
 
@@ -76,17 +76,13 @@ Documentation
 https://numba.readthedocs.io/en/stable/index.html
 
 
-Mailing Lists
-=============
+Contact
+=======
 
 Numba has a discourse forum for discussions:
 
 * https://numba.discourse.group
 
-Some old mailing list archives are at:
-
-* https://groups.google.com/a/continuum.io/d/forum/numba-users
-* http://librelist.com/browser/numba/
 
 
 Continuous Integration

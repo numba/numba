@@ -15,6 +15,7 @@ from numba.core import types, errors, typing, compiler, cgutils
 from numba.core.typed_passes import type_inference_stage
 from numba.core.registry import cpu_target
 from numba.core.compiler import compile_isolated
+from numba.core.imputils import lower_constant
 from numba.tests.support import (
     TestCase,
     captured_stdout,
@@ -490,6 +491,64 @@ class MkFuncTyping(AbstractTemplate):
 
 def mk_func_test_impl():
     mk_func_input(lambda a: a)
+
+
+# -----------------------------------------------------------------------
+# Define a types derived from types.Callable and overloads for them
+
+
+class MyClass(object):
+    pass
+
+
+class CallableTypeRef(types.Callable):
+
+    def __init__(self, instance_type):
+        self.instance_type = instance_type
+        self.sig_to_impl_key = {}
+        self.compiled_templates = []
+        super(CallableTypeRef, self).__init__('callable_type_ref'
+                                              '[{}]'.format(self.instance_type))
+
+    def get_call_type(self, context, args, kws):
+
+        res_sig = None
+        for template in context._functions[type(self)]:
+            try:
+                res_sig = template.apply(args, kws)
+            except Exception:
+                pass  # for simplicity assume args must match exactly
+            else:
+                compiled_ovlds = getattr(template, '_compiled_overloads', {})
+                if args in compiled_ovlds:
+                    self.sig_to_impl_key[res_sig] = compiled_ovlds[args]
+                    self.compiled_templates.append(template)
+                    break
+
+        return res_sig
+
+    def get_call_signatures(self):
+        sigs = list(self.sig_to_impl_key.keys())
+        return sigs, True
+
+    def get_impl_key(self, sig):
+        return self.sig_to_impl_key[sig]
+
+
+@register_model(CallableTypeRef)
+class CallableTypeModel(models.OpaqueModel):
+
+    def __init__(self, dmm, fe_type):
+
+        models.OpaqueModel.__init__(self, dmm, fe_type)
+
+
+infer_global(MyClass, CallableTypeRef(MyClass))
+
+
+@lower_constant(CallableTypeRef)
+def constant_callable_typeref(context, builder, ty, pyval):
+    return context.get_dummy_value()
 
 
 # -----------------------------------------------------------------------
@@ -1152,6 +1211,31 @@ class TestHighLevelExtending(TestCase):
             "Unknown attribute 'array_alloc' of",
             str(raises.exception),
         )
+
+    def test_overload_callable_typeref(self):
+
+        @overload(CallableTypeRef)
+        def callable_type_call_ovld1(x):
+            if isinstance(x, types.Integer):
+                def impl(x):
+                    return 42.5 + x
+                return impl
+
+        @overload(CallableTypeRef)
+        def callable_type_call_ovld2(x):
+            if isinstance(x, types.UnicodeType):
+                def impl(x):
+                    return '42.5' + x
+
+                return impl
+
+        @njit
+        def foo(a, b):
+            return MyClass(a), MyClass(b)
+
+        args = (4, '4')
+        expected = (42.5 + args[0], '42.5' + args[1])
+        self.assertPreciseEqual(foo(*args), expected)
 
 
 def _assert_cache_stats(cfunc, expect_hit, expect_misses):

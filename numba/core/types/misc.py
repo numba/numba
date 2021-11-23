@@ -218,9 +218,6 @@ class Optional(Type):
         name = "OptionalType(%s)" % self.type
         super(Optional, self).__init__(name)
 
-    def __str__(self):
-        return "%s i.e. the type '%s or None'" % (self.name, self.type)
-
     @property
     def key(self):
         return self.type
@@ -294,6 +291,9 @@ class ExceptionClass(Callable, Phantom):
         from numba.core import typing
         return_type = ExceptionInstance(self.exc_class)
         return [typing.signature(return_type)], False
+
+    def get_impl_key(self, sig):
+        return type(self)
 
     @property
     def key(self):
@@ -427,6 +427,9 @@ class ClassType(Callable, Opaque):
     def get_call_signatures(self):
         return (), True
 
+    def get_impl_key(self, sig):
+        return type(self)
+
     @property
     def methods(self):
         return {k: v.py_func for k, v in self.jit_methods.items()}
@@ -514,6 +517,9 @@ class ContextManager(Callable, Phantom):
 
         posargs = list(args) + [v for k, v in sorted(kws.items())]
         return typing.signature(self, *posargs)
+
+    def get_impl_key(self, sig):
+        return type(self)
 
 
 class UnicodeType(IterableType, Hashable):

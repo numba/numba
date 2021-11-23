@@ -1,5 +1,28 @@
-Version 0.54.0 (30 June, 2021)
-------------------------------
+Version 0.54.1 (7 October, 2021)
+--------------------------------
+
+This is a bugfix release for 0.54.0. It fixes a regression in structured array
+type handling, a potential leak on initialization failure in the CUDA target, a
+regression caused by Numba's vendored cloudpickle module resetting dynamic
+classes and a few minor testing/infrastructure related problems.
+
+* PR `#7348 <https://github.com/numba/numba/pull/7348>`_: test_inspect_cli: Decode exception with default (utf-8) codec (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7360 <https://github.com/numba/numba/pull/7360>`_: CUDA: Fix potential leaks when initialization fails (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7386 <https://github.com/numba/numba/pull/7386>`_: Ensure the NRT is initialized prior to use in external NRT tests. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7388 <https://github.com/numba/numba/pull/7388>`_: Patch cloudpickle to not reset dynamic class each time it is unpickled (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#7393 <https://github.com/numba/numba/pull/7393>`_: skip azure pipeline test if file not present (`esc <https://github.com/esc>`_)
+* PR `#7428 <https://github.com/numba/numba/pull/7428>`_: Fix regression #7355: cannot set items in structured array data types (`Siu Kwan Lam <https://github.com/sklam>`_)
+
+Authors:
+
+* `esc <https://github.com/esc>`_
+* `Graham Markall <https://github.com/gmarkall>`_
+* `Siu Kwan Lam <https://github.com/sklam>`_
+* `stuartarchibald <https://github.com/stuartarchibald>`_
+
+
+Version 0.54.0 (19 August, 2021)
+--------------------------------
 
 This release includes a significant number of new features, important
 refactoring, critical bug fixes and a number of dependency upgrades.
@@ -278,6 +301,12 @@ Pull-Requests:
 * PR `#7271 <https://github.com/numba/numba/pull/7271>`_: Update 3rd party license text. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#7272 <https://github.com/numba/numba/pull/7272>`_: Allow annotations in njit-ed functions (`LunarLanding <https://github.com/LunarLanding>`_)
 * PR `#7273 <https://github.com/numba/numba/pull/7273>`_: Update CHANGE_LOG for 0.54.0rc3. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7285 <https://github.com/numba/numba/pull/7285>`_: CUDA: Fix OOB in test_kernel_arg (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7294 <https://github.com/numba/numba/pull/7294>`_: Continuation of PR #7280, fixing lifetime of TBB task_scheduler_handle (`Sergey Pokhodenko <https://github.com/PokhodenkoSA>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7298 <https://github.com/numba/numba/pull/7298>`_: Use CBC to pin GCC to 7 on most linux and 9 on aarch64. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7312 <https://github.com/numba/numba/pull/7312>`_: Fix #7302. Workaround missing pthread problem on ppc64le (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#7317 <https://github.com/numba/numba/pull/7317>`_: In TBB tsh test switch os.fork for mp fork ctx (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7319 <https://github.com/numba/numba/pull/7319>`_: Update CHANGE_LOG for 0.54.0 final. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 
 Authors:
 

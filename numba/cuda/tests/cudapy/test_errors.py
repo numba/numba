@@ -71,7 +71,8 @@ class TestJitErrors(CUDATestCase):
         with self.assertRaises(TypingError) as raises:
             kernel_func[1, 1]()
         excstr = str(raises.exception)
-        self.assertIn("Overload in function 'dev_func <CUDA device function>'",
+        self.assertIn("resolving callee type: "
+                      "type(<numba.cuda.compiler.Dispatcher object",
                       excstr)
         self.assertIn("NameError: name 'floor' is not defined", excstr)
 

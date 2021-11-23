@@ -22,7 +22,7 @@ except ImportError:
 min_python_version = "3.7"
 max_python_version = "3.10"  # exclusive
 min_numpy_build_version = "1.11"
-min_numpy_run_version = "1.17"
+min_numpy_run_version = "1.18"
 min_llvmlite_version = "0.38.0dev0"
 max_llvmlite_version = "0.39"
 
@@ -395,8 +395,6 @@ metadata = dict(
         "numba.typed": ["py.typed"],
     },
     scripts=["numba/pycc/pycc", "bin/numba"],
-    author="Anaconda, Inc.",
-    author_email="numba-users@continuum.io",
     url="https://numba.pydata.org",
     packages=packages,
     setup_requires=build_requires,

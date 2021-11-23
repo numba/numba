@@ -610,4 +610,4 @@ def numpy_dtype(desc):
             return _make_dtype_object(desc)
         return imp
     else:
-        raise TypeError('unknown dtype descriptor: {}'.format(desc))
+        raise errors.NumbaTypeError('unknown dtype descriptor: {}'.format(desc))

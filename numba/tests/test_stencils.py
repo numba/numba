@@ -20,7 +20,7 @@ from numba.core import types, registry
 from numba.core.compiler import compile_extra, Flags
 from numba.core.cpu import ParallelOptions
 from numba.tests.support import tag, skip_parfors_unsupported, _32bit
-from numba.core.errors import LoweringError, TypingError
+from numba.core.errors import LoweringError, TypingError, NumbaValueError
 import unittest
 
 
@@ -509,14 +509,14 @@ class TestStencil(TestStencilBase):
         np.testing.assert_almost_equal(parfor_output4, expected, decimal=3)
 
         # check error in regular Python path
-        with self.assertRaises(ValueError) as e:
+        with self.assertRaises(NumbaValueError) as e:
             test_impl4(4)
 
         self.assertIn("stencil kernel index is not constant, "
                       "'neighborhood' option required", str(e.exception))
         # check error in njit path
         # TODO: ValueError should be thrown instead of LoweringError
-        with self.assertRaises(LoweringError) as e:
+        with self.assertRaises((LoweringError, NumbaValueError)) as e:
             njit(test_impl4)(4)
 
         self.assertIn("stencil kernel index is not constant, "
@@ -598,7 +598,7 @@ class TestStencil(TestStencilBase):
 
         A = np.arange(12).reshape((3, 4))
         ret = np.ones_like(A)
-        with self.assertRaises(ValueError) as e:
+        with self.assertRaises(NumbaValueError) as e:
             stencil_fn(A, out=ret)
         msg = "cval type does not match stencil return type."
         self.assertIn(msg, str(e.exception))
@@ -606,10 +606,40 @@ class TestStencil(TestStencilBase):
         for compiler in [self.compile_njit, self.compile_parallel]:
             try:
                 compiler(wrapped,())
-            except(ValueError, LoweringError) as e:
+            except(NumbaValueError, LoweringError) as e:
                 self.assertIn(msg, str(e))
             else:
                 raise AssertionError("Expected error was not raised")
+
+    @skip_unsupported
+    def test_out_kwarg_w_cval_np_attr(self):
+        """ Test issue #7286 where the cval is a np attr/string-based numerical
+        constant"""
+        for cval in (np.nan, np.inf, -np.inf, float('inf'), -float('inf')):
+            def kernel(a):
+                return (a[0, 0] - a[1, 0])
+
+            stencil_fn = numba.stencil(kernel, cval=cval)
+
+            def wrapped():
+                A = np.arange(12.).reshape((3, 4))
+                ret = np.ones_like(A)
+                stencil_fn(A, out=ret)
+                return ret
+
+            # stencil function case
+            A = np.arange(12.).reshape((3, 4))
+            expected = np.full_like(A, -4)
+            expected[-1, :] = cval
+            ret = np.ones_like(A)
+            stencil_fn(A, out=ret)
+            np.testing.assert_almost_equal(ret, expected)
+
+            # wrapped function case, check njit, then njit(parallel=True)
+            impls = self.compile_all(wrapped,)
+            for impl in impls:
+                got = impl.entry_point()
+                np.testing.assert_almost_equal(got, expected)
 
 
 class pyStencilGenerator:
@@ -1938,7 +1968,7 @@ class TestManyStencils(TestStencilBase):
 
         def kernel(a):
             return 1.
-        self.check(kernel, a, expected_exception=[ValueError, LoweringError])
+        self.check(kernel, a, expected_exception=[ValueError, NumbaValueError])
 
     def test_basic26(self):
         """3d arr"""
@@ -1970,7 +2000,8 @@ class TestManyStencils(TestStencilBase):
 
         def kernel(a):
             return a[0, int(np.cos(0))]
-        self.check(kernel, a, expected_exception=[ValueError, LoweringError])
+        self.check(kernel, a, expected_exception=[ValueError, NumbaValueError,
+                                                  LoweringError])
 
     def test_basic30(self):
         """signed zeros"""
@@ -2015,7 +2046,8 @@ class TestManyStencils(TestStencilBase):
 
         def kernel(a):
             return a[np.int8(1), 0]
-        self.check(kernel, a, expected_exception=[ValueError, LoweringError])
+        self.check(kernel, a, expected_exception=[ValueError, NumbaValueError,
+                                                  LoweringError])
 
     def test_basic33(self):
         """add 0d array"""
@@ -2039,9 +2071,9 @@ class TestManyStencils(TestStencilBase):
             return a[0, 1]
         a = np.arange(12.).reshape(3, 4)
         ex = self.exception_dict(
-            stencil=ValueError,
+            stencil=NumbaValueError,
             parfor=ValueError,
-            njit=LoweringError)
+            njit=NumbaValueError)
         self.check(kernel, a, options={'cval': 5}, expected_exception=ex)
 
     def test_basic36(self):
@@ -2064,9 +2096,9 @@ class TestManyStencils(TestStencilBase):
             return a[0, 1] + a[0, -1] + a[1, -1] + a[1, -1]
         a = np.arange(12.).reshape(3, 4)
         ex = self.exception_dict(
-            stencil=ValueError,
+            stencil=NumbaValueError,
             parfor=ValueError,
-            njit=LoweringError)
+            njit=NumbaValueError)
         self.check(kernel, a, options={'cval': 1.j}, expected_exception=ex)
 
     def test_basic39(self):
@@ -2198,7 +2230,7 @@ class TestManyStencils(TestStencilBase):
             kernel, a, b, options={
                 'standard_indexing': [
                     'a', 'b']}, expected_exception=[
-                ValueError, LoweringError])
+                ValueError, NumbaValueError])
 
     def test_basic52(self):
         """3 args, standard_indexing on middle arg """
@@ -2339,9 +2371,9 @@ class TestManyStencils(TestStencilBase):
         b = np.arange(12).reshape(3, 4)
         ex = self.exception_dict(
             pyStencil=ValueError,
-            stencil=ValueError,
+            stencil=NumbaValueError,
             parfor=ValueError,
-            njit=LoweringError)
+            njit=NumbaValueError)
         self.check(
             kernel,
             a,
@@ -2363,7 +2395,7 @@ class TestManyStencils(TestStencilBase):
                 'standard_indexing': 'a'},
             expected_exception=[
                 ValueError,
-                LoweringError])
+                NumbaValueError])
 
     def test_basic65(self):
         """basic induced neighborhood test"""
@@ -2692,9 +2724,9 @@ class TestManyStencils(TestStencilBase):
         a = np.arange(12.).reshape(3, 4)
         ex = self.exception_dict(
             pyStencil=ValueError,
-            stencil=ValueError,
+            stencil=NumbaValueError,
             parfor=ValueError,
-            njit=LoweringError)
+            njit=NumbaValueError)
         self.check(
             kernel,
             a,
@@ -2794,6 +2826,17 @@ class TestManyStencils(TestStencilBase):
             return np.median(a[-1:2, 3])
         a = np.arange(20, dtype=np.uint32).reshape(4, 5)
         self.check(kernel, a)
+
+    def test_basic98(self):
+        """ Test issue #7286 where the cval is a np attr/string-based numerical
+        constant"""
+        for cval in (np.nan, np.inf, -np.inf, float('inf'), -float('inf')):
+            def kernel(a):
+                return a[0, 0]
+            a = np.arange(6.).reshape((2, 3))
+            self.check(kernel, a, options={'neighborhood': ((-1, 1), (-1, 1),),
+                       'cval':cval})
+
 
 if __name__ == "__main__":
     unittest.main()
