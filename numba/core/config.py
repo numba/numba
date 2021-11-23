@@ -122,13 +122,17 @@ class _EnvReloader(object):
         self.validate()
 
     def validate(self):
+        global CUDA_USE_NVIDIA_BINDING
+
         if CUDA_USE_NVIDIA_BINDING:  # noqa: F821
             try:
                 import cuda  # noqa: F401
             except ImportError as ie:
                 msg = ("CUDA Python bindings requested, "
-                       "but they are not importable")
-                raise RuntimeError(msg) from ie
+                       f"but they are not importable: {ie.msg}")
+                warnings.warn(msg)
+
+                CUDA_USE_NVIDIA_BINDING = False
 
             if CUDA_PER_THREAD_DEFAULT_STREAM:  # noqa: F821
                 warnings.warn("PTDS is not supported with CUDA Python")
