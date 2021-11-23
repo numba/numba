@@ -224,26 +224,6 @@ supply the keyword argument ``forceobj=True`` to ensure the function is always
 compiled in :term:`object mode`.
 
 
-Deprecation of the target kwarg
-===============================
-There have been a number of users attempting to use the ``target`` keyword
-argument that's meant for internal use only. We are deprecating this argument,
-as alternative solutions are available to achieve the same behaviour.
-
-Recommendations
----------------
-Update the ``jit`` decorator as follows:
-
-* Change ``@numba.jit(..., target='cuda')`` to ``numba.cuda.jit(...)``.
-
-Schedule
---------
-This feature will be moved with respect to this schedule:
-
-* Deprecation warnings will be issued in 0.51.0.
-* The target kwarg will be removed in version 0.54.0.
-
-
 Removal of the role of compute capability for CUDA inspection methods
 =====================================================================
 
