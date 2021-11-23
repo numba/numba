@@ -224,68 +224,6 @@ supply the keyword argument ``forceobj=True`` to ensure the function is always
 compiled in :term:`object mode`.
 
 
-Removal of the role of compute capability for CUDA inspection methods
-=====================================================================
-
-The following methods of the :class:`Dispatcher
-<numba.cuda.compiler.Dispatcher>` class:
-
-- :meth:`inspect_asm <numba.cuda.compiler.Dispatcher.inspect_asm>`
-- :meth:`inspect_llvm <numba.cuda.compiler.Dispatcher.inspect_llvm>`
-- :meth:`inspect_sass <numba.cuda.compiler.Dispatcher.inspect_sass>`
-
-accepted a kwarg called ``compute_capability``. This kwarg is now removed as it
-was problematic - in most cases the returned values erroneously pertained to
-the device in the current context, instead of the requested compute capability.
-
-These methods return a dict of variants, which was previously keyed by a
-``(compute_capability, argtypes)`` tuple. The dict is now only keyed by
-argument types, and items in the dict are for the device in the current
-context.
-
-For specialized Dispatchers (those whose kernels were eagerly compiled by
-providing a signature), the methods previously returned only one variant,
-instead of a dict of variants. For consistency with the CPU target and for
-support for multiple signatures to be added to the CUDA target, these methods
-now always return a dict.
-
-The :meth:`ptx <numba.cuda.compiler.Dispatcher.ptx>` property also returned one
-variant directly for specialized Dispatchers, and a dict for un-specialized
-Dispatchers. It now always returns a dict
-
-Recommendations
----------------
-
-Update calls to these methods such that:
-
-- They are always called when the device for which their output is required is
-  in the current CUDA context.
-- The ``compute_capability`` kwarg is not passed to them.
-- Any use of their results indexes into them using only a tuple of argument
-  types.
-- With specialized Dispatchers, ensure that the returned dict is indexed into
-  using the appropriate signature.
-
-Schedule
---------
-
-In 0.53.0:
-
-- The ``compute_capability`` kwarg was deprecated.
-- Returned values from the inspection methods supported indexing by
-  ``(compute_capability, argtypes)`` and ``argtypes``.
-- The inspection methods and ``ptx`` property of specialized dispatchers returned
-  their result for a single variant, rather than a dict, and produced a
-  warning.
-
-In 0.54.0:
-
-- The ``compute_capability`` kwarg has been removed.
-- ``ptx`` and the inspection methods always return a dict.
-- Support for indexing into the results of these methods using ``(cc,
-  argtypes)`` has been removed.
-
-
 .. _deprecation-strict-strides:
 
 Deprecation of strict strides checking when computing contiguity
