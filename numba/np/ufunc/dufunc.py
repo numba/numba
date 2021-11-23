@@ -10,6 +10,8 @@ from numba.parfors import array_analysis
 from numba.np.ufunc import ufuncbuilder
 from numba.np import numpy_support
 from numba.core.extending import intrinsic, overload_method
+import llvmlite.llvmpy.core as lc
+from llvmlite.llvmpy.core import Type
 
 
 def make_dufunc_kernel(_dufunc):
@@ -333,25 +335,47 @@ def intr_reduce(typcontext, ft, argst, axist):
     # TODO: What should the layout be based on `xt.layout`?
     assert argst.ndim > 0
     rett = types.Array(argst.dtype, argst.ndim - 1, 'C')
+    box_type = argst.box_type
+    arr_dtype = argst.dtype
     sig = rett(ft, argst, axist)
 
     def codegen(context, builder, signature, args):
         f_ir, args_ir, axis_ir = args
 
-        ret_ir_type = context.get_value_type(signature.return_type)
-
-        args_ir_type = args_ir.type
         axis_ir_type = axis_ir.type
 
+        voidptr = Type.pointer(Type.int(8))
+        aryptr = cgutils.alloca_once_value(builder, args_ir)
+        pyobj_type = context.get_argument_type(types.pyobject)
+
+        pyapi = context.get_python_api(builder)
+
+        serial_aryty_pytype = pyapi.unserialize(
+            pyapi.serialize_object(box_type)
+        )
+
         fnty = ir.FunctionType(
-            ret_ir_type,
-            [f_ir.type, args_ir_type, axis_ir_type]
+            pyobj_type,
+            [
+                f_ir.type,
+                voidptr,
+                axis_ir_type,
+                pyobj_type,
+                pyobj_type
+            ]
         )
 
         fn = cgutils.get_or_insert_function(
             builder.module, fnty,  "dufunc_reduce_direct"
         )
-        return builder.call(fn, [f_ir, args_ir, axis_ir])
+        fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
+
+        res_ptr = builder.call(fn, [
+            f_ir, builder.bitcast(aryptr, voidptr), axis_ir,
+            arr_dtype, serial_aryty_pytype
+        ])
+
+        return res_ptr
 
     return sig, codegen
 

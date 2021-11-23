@@ -344,10 +344,12 @@ dufunc_reduce(PyDUFuncObject * self, PyObject * args, PyObject *kws)
 }
 
 static PyObject *
-dufunc_reduce_direct(PyDUFuncObject * self, PyObject * args, int axis)
-{
-  PyObject *kwargs = Py_BuildValue("{s:L}", "axis", axis);
-  return dufunc_reduce(self, args, kwargs);
+dufunc_reduce_direct(PyDUFuncObject * self, arystruct_t * args, int axis, PyTypeObject *retty,  PyArray_Descr *descr)
+{   
+    PyObject * res = NRT_adapt_ndarray_to_python_acqref(args, retty, 2, 1, descr);
+    PyObject *kwargs = Py_BuildValue("{s:L}", "axis", axis);
+    // The code segfaults on the following call.
+    return dufunc_reduce(self, res, kwargs);
 }
 
 static PyObject *

@@ -11,6 +11,8 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include "numpy/ndarrayobject.h"
 #include "numpy/ufuncobject.h"
+#include "../../_arraystruct.h"
+#include "../../../numba/core/runtime/nrt.h"
 
 extern PyObject *ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args);
 
@@ -23,7 +25,7 @@ typedef struct {
 } PyDUFuncObject;
 
 NUMBA_EXPORT_FUNC(static PyObject *)
-dufunc_reduce_direct(PyDUFuncObject * self, PyObject * args, int axis);
+dufunc_reduce_direct(PyDUFuncObject * self, arystruct_t * args, int axis, PyTypeObject *retty,  PyArray_Descr *descr);
 
 int PyUFunc_GeneralizedFunction(PyUFuncObject *ufunc,
                                 PyObject *args, PyObject *kwds,

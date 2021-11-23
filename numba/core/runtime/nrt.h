@@ -269,4 +269,6 @@ VISIBILITY_HIDDEN const NRT_api_functions* NRT_get_api(void);
  */
 VISIBILITY_HIDDEN NRT_ExternalAllocator* _nrt_get_sample_external_allocator(void);
 
+PyObject * NRT_adapt_ndarray_to_python_acqref(arystruct_t* arystruct, PyTypeObject *retty,
+                            int ndim, int writeable, PyArray_Descr *descr)
 #endif /* NUMBA_NRT_H_ */
