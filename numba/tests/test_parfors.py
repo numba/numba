@@ -2828,6 +2828,16 @@ class TestParforsMisc(TestParforsBase):
             return buf
         self.check(test_impl)
 
+    def test_issue7523_generator(self):
+        def test_impl():
+            temp = np.empty(1)
+            for j in range(1):
+                temp[j] = 1
+            yield temp
+
+        cfunc = njit(parallel=True)(test_impl)
+        self.assertEqual(list(test_impl()), list(cfunc()))
+
 
 @skip_parfors_unsupported
 class TestParforsDiagnostics(TestParforsBase):

@@ -3772,15 +3772,16 @@ def parfor_insert_dels(parfor, curr_dead_set):
     dead_map = compute_dead_maps(cfg, blocks, live_map, usedefs.defmap)
 
     # treat loop variables and size variables as live
-    loop_vars = {
-        l.start.name for l in parfor.loop_nests if isinstance(
-            l.start, ir.Var)}
-    loop_vars |= {
-        l.stop.name for l in parfor.loop_nests if isinstance(
-            l.stop, ir.Var)}
-    loop_vars |= {
-        l.step.name for l in parfor.loop_nests if isinstance(
-            l.step, ir.Var)}
+    loop_vars = set()
+    #loop_vars |= {
+    #    l.start.name for l in parfor.loop_nests if isinstance(
+    #        l.start, ir.Var)}
+    #loop_vars |= {
+    #    l.stop.name for l in parfor.loop_nests if isinstance(
+    #        l.stop, ir.Var)}
+    #loop_vars |= {
+    #    l.step.name for l in parfor.loop_nests if isinstance(
+    #        l.step, ir.Var)}
     loop_vars |= {l.index_variable.name for l in parfor.loop_nests}
     # for var_list in parfor.array_analysis.array_size_vars.values():
     #    loop_vars |= {v.name for v in var_list if isinstance(v, ir.Var)}
