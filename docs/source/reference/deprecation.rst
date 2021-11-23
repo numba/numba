@@ -302,26 +302,6 @@ the function accepts.
    this notice has been updated to retain support for passing signatures.
 
 
-Recommendations
----------------
-
-Any eagerly-compiled device functions should have their signature removed, e.g.:
-
-.. code-block:: python
-
-   @cuda.jit('int32(int32, int32)', device=True)
-   def f(x, y):
-       return x + y
-
-becomes:
-
-
-.. code-block:: python
-
-   @cuda.jit(device=True)
-   def f(x, y):
-       return x + y
-
 Schedule
 --------
 
