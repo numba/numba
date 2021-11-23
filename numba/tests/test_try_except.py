@@ -701,7 +701,8 @@ class TestTryExceptOtherControlFlow(TestCase):
         with self.assertRaises(CompilerError) as raises:
             udt()
         if PYVERSION <= (3,7):
-            msg = "unsupported control flow: with-context contains branches"
+            msg = ("unsupported control flow due to return statements inside "
+                   "with block")
         else:
             msg = "Does not support with-context that contain branches"
         self.assertIn(
@@ -728,7 +729,8 @@ class TestTryExceptOtherControlFlow(TestCase):
         with self.assertRaises(CompilerError) as raises:
             test_objmode()
         if PYVERSION <= (3,7):
-            msg = "unsupported control flow: with-context contains branches"
+            msg = ("unsupported control flow due to return statements inside "
+                   "with block")
         else:
             msg = "Does not support with-context that contain branches"
         self.assertIn(
