@@ -264,8 +264,8 @@ with:
 Schedule
 --------
 
-- In Numba 0.54: ``inspect_ptx()`` will be deprecated.
-- In Numba 0.55: ``inspect_ptx()`` will be removed.
+- In Numba 0.54: ``inspect_ptx()`` was deprecated.
+- In Numba 0.55: ``inspect_ptx()`` was removed.
 
 
 Deprecation of eager compilation of CUDA device functions
@@ -274,7 +274,7 @@ Deprecation of eager compilation of CUDA device functions
 In future versions of Numba, the ``device`` kwarg to the ``@cuda.jit`` decorator
 will be obviated, and whether a device function or global kernel is compiled will
 be inferred from the context. With respect to kernel / device functions and lazy
-/ eager compilation, four cases are presently handled:
+/ eager compilation, four cases were handled:
 
 1. ``device=True``, eager compilation with a signature provided
 2. ``device=False``, eager compilation with a signature provided
@@ -288,10 +288,19 @@ device function, then a device function should be compiled.
 
 The first two cases cannot be differentiated in the absence of the ``device``
 kwarg - without it, it will not be clear from a signature alone whether a device
-function or global kernel should be compiled. In order to resolve this, support
-for eager compilation of device functions will be removed. Eager compilation
-with the ``@cuda.jit`` decorator will in future always imply the immediate
-compilation of a global kernel.
+function or global kernel should be compiled. In order to resolve this, device
+functions will no longer be eagerly compiled. When a signature is provided to a
+device function, it will only be used to enforce the types of arguments that
+the function accepts.
+
+.. note::
+
+   In previous releases this notice stated that support for providing
+   signatures to device functions would be removed completely - however, this
+   precludes the common use case of enforcing the types that can be passed to a
+   device function (and the automatic insertion of casts that it implies) so
+   this notice has been updated to retain support for passing signatures.
+
 
 Recommendations
 ---------------
@@ -318,7 +327,7 @@ Schedule
 
 - In Numba 0.54: Eager compilation of device functions will be deprecated.
 - In Numba 0.55: Eager compilation of device functions will be unsupported and
-  attempts to eagerly compile device functions will raise an error.
+  the provision of signatures for device functions will only enforce casting.
 
 
 .. _rocm_unmaintained:
