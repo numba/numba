@@ -521,7 +521,7 @@ GPU support
    Enable warnings if a kernel is launched with host memory which forces a copy to and
    from the device. This option is on by default (default value is 1).
 
-.. envvar:: CUDA_USE_NVIDIA_BINDING
+.. envvar:: NUMBA_CUDA_USE_NVIDIA_BINDING
 
    When set to 1, Numba will use the `NVIDIA CUDA Python binding
    <https://nvidia.github.io/cuda-python/>`_ to make calls to the driver API

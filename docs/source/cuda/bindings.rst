@@ -4,9 +4,12 @@ CUDA Bindings
 Numba supports two bindings to the CUDA Driver APIs: its own internal bindings
 based on ctypes, and the official `NVIDIA CUDA Python bindings
 <https://nvidia.github.io/cuda-python/>`_. Functionality is equivalent between
-the two bindings, with one exception: the NVIDIA bindings presently do not
-support Per-Thread Default Streams (PTDS), and an exception will be raised on
-import if PTDS is enabled along with the NVIDIA bindings. 
+the two bindings, with two exceptions:
+
+* the NVIDIA bindings presently do not support Per-Thread Default Streams
+  (PTDS), and an exception will be raised on import if PTDS is enabled along
+  with the NVIDIA bindings.
+* The profiling APIs are not available with the NVIDIA bindings.
 
 The internal bindings are used by default. If the NVIDIA bindings are installed,
 then they can be used by setting the environment variable
