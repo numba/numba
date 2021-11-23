@@ -659,7 +659,7 @@ def find_setupwiths(func_ir):
                 # 3.8 needs to bail here, if this is the case, because the
                 # later code can't handle it otherwise
                 raise errors.CompilerError(
-                    "unsupported controlflow due to return statements "
+                    "unsupported control flow due to return statements "
                     "inside with block"
                 )
             _rewrite_return(func_ir, p)
