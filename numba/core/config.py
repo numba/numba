@@ -129,8 +129,8 @@ class _EnvReloader(object):
                 import cuda  # noqa: F401
             except ImportError as ie:
                 msg = ("CUDA Python bindings requested (the environment "
-                       "variable NUMBA_CUDA_USE_NVIDIA_BINDING is set). "
-                       f"but they are not importable: {ie.msg}")
+                       "variable NUMBA_CUDA_USE_NVIDIA_BINDING is set), "
+                       f"but they are not importable: {ie.msg}.")
                 warnings.warn(msg)
 
                 CUDA_USE_NVIDIA_BINDING = False
