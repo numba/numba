@@ -633,9 +633,9 @@ function (this is the Numba internal symbol registered as breakpoint with
 compiled Python source. From there, it can be seen that the variables ``a`` and
 ``b`` have been evaluated but ``c`` has not, as demonstrated by printing their
 values, this is precisely as expected given the location of the ``gdb()`` call.
-Issuing a ``break`` on line 9 and then continuing evaluates line ``7`` and ``c``
-is assigned a value as demonstrated by ``info locals`` when the breakpoint it
-hit.
+Issuing a ``break`` on line 9 and then continuing leads to the evaluation of
+line ``7`` and ``c`` is assigned a value as demonstrated by ``info locals``
+when the breakpoint is hit.
 
 Running with ``gdb`` enabled
 ----------------------------
