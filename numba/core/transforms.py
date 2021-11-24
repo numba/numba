@@ -22,14 +22,18 @@ def is_branch(stmt):
 def is_terminator(stmt):
     return isinstance(stmt, ir.Terminator)
 
+
 def is_raise(stmt):
     return isinstance(stmt, ir.Raise)
+
 
 def is_return(stmt):
     return isinstance(stmt, ir.Return)
 
+
 def is_pop_block(stmt):
     return isinstance(stmt, ir.PopBlock)
+
 
 _logger = logging.getLogger(__name__)
 
@@ -544,24 +548,6 @@ def find_setupwiths(func_ir):
     """
     def find_ranges(blocks):
 
-        def is_setup_with(stmt):
-            return isinstance(stmt, ir.EnterWith)
-
-        def is_branch(stmt):
-            return isinstance(stmt, ir.Branch)
-
-        def is_terminator(stmt):
-            return isinstance(stmt, ir.Terminator)
-
-        def is_raise(stmt):
-            return isinstance(stmt, ir.Raise)
-
-        def is_return(stmt):
-            return isinstance(stmt, ir.Return)
-
-        def is_pop_block(stmt):
-            return isinstance(stmt, ir.PopBlock)
-
         cfg = compute_cfg_from_blocks(blocks)
         sus_setups, sus_pops = set(), set()
         # traverse the cfg and collect all suspected SETUP_WITH and POP_BLOCK
@@ -601,20 +587,8 @@ def find_setupwiths(func_ir):
                     # if a pop_block, process it
                     if is_pop_block(stmt) and block in sus_pops:
                         # record the jump target of this block belonging to this setup
+                        # assumption: this block only has a single target
                         pop_block_targets = blocks[block].terminator.get_targets()
-                        #if len(pop_block_targets) != 1:
-                        #    raise errors.CompilerError(
-                        #        "unsupported control flow: with-context contains branches "
-                        #        "(i.e. break/return/raise) that can leave the with-context. "
-                        #    )
-                        #pop_block_target = pop_block_targets[0]
-                        #target_block = blocks[pop_block_target]
-                        #if is_return(target_block.terminator):
-                        #    raise errors.CompilerError(
-                        #        'unsupported control flow due to return '
-                        #        'statements inside with block'
-                        #        )
-                        #setup_with_to_pop_blocks_map[setup_block].add(pop_block_target)
                         setup_with_to_pop_blocks_map[setup_block].add(block)
                         # remove the block from blocks to be matched
                         sus_pops.remove(block)
@@ -633,8 +607,6 @@ def find_setupwiths(func_ir):
     blocks = func_ir.blocks
     # itinitial find
     withs = find_ranges(blocks)
-    # this is the re-write step, only do this, even if there are
-    # it shoud return the new IR and the new withs
     func_ir = consolidate_multi_exit_withs(withs, blocks, func_ir)
 
     # here we need to turn the withs back into a list of tuples so that the
@@ -651,7 +623,7 @@ def find_setupwiths(func_ir):
                 "(i.e. break/return/raise) that can leave the with-context. "
             )
     # now we check for returns inside with:
-    for s,p in withs:
+    for (s,p) in withs:
         target_block = blocks[p]
         if is_return(func_ir.blocks[
                 target_block.terminator.get_targets()[0]].terminator):
@@ -744,24 +716,8 @@ def consolidate_multi_exit_withs(withs: dict, blocks, func_ir):
             func_ir, common = _fix_multi_exit_blocks(
                 func_ir, vs, split_condition=is_pop_block,
             )
-            #func_ir.render_dot().view()
             withs[k] = {common}
     return func_ir
-    #         raise AssertionError("not supported")
-    #     else:
-    #         [v] = vs
-    #         term : ir.Terminator = blocks[v].terminator
-    #         [target] = term.get_targets()
-    #     out.append((k, target))
-
-    # old = _old_find_setupwiths(blocks)
-    # print('expect', old)
-    # print('got', out)
-    # if set(old) != set(out):
-    #     pass
-    #     # cfg = compute_cfg_from_blocks(blocks)
-    #     # cfg.render_dot().view()
-    # return out
 
 
 def _fix_multi_exit_blocks(func_ir, exit_nodes, *, split_condition=None):
@@ -783,8 +739,6 @@ def _fix_multi_exit_blocks(func_ir, exit_nodes, *, split_condition=None):
 
     remainings = []
     for i, k in enumerate(exit_nodes):
-        #import pdb
-        #pdb.set_trace()
         blk = blocks[k]
 
         if split_condition is not None:
