@@ -745,10 +745,8 @@ class TestTupleBuild(TestCase):
 
         with self.assertRaises(errors.UnsupportedError) as raises:
             foo()
-        if utils.PYVERSION == (3, 9):
+        if utils.PYVERSION >= (3, 9):
             msg = "op_LIST_EXTEND at the start of a block"
-        elif utils.PYVERSION == (3, 10):
-            msg = "SPECIALSTRING"
         self.assertIn(msg, str(raises.exception))
 
     def test_build_unpack_with_calls_in_unpack(self):
