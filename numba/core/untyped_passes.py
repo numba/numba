@@ -948,7 +948,7 @@ class MixedContainerUnroller(FunctionPass):
 
         # Note regarding the insertion of the garbage/defeat variables below:
         # These values have been designed and inserted to defeat a specific
-        # beahviour of the cpython optimizer. The optimization was introduced
+        # behaviour of the cpython optimizer. The optimization was introduced
         # in Python 3.10.
 
         # The URL for the BPO is:
