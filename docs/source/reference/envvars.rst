@@ -151,8 +151,8 @@ These variables influence what is printed out during compilation of
 
     If set to non-zero, extend the lifetime of variables to the end of the block
     in which their lifetime ends. This is particularly useful in conjunction
-    with `NUMBA_DEBUGINFO` as it helps with introspection of values. Default is
-    zero.
+    with :envvar:`NUMBA_DEBUGINFO` as it helps with introspection of values.
+    Default is zero.
 
 .. envvar:: NUMBA_GDB_BINARY
 
