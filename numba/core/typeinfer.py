@@ -1400,6 +1400,8 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
             pass
         elif isinstance(inst, (ir.StaticRaise, ir.StaticTryRaise)):
             pass
+        elif isinstance(inst, ir.PopBlock):
+            pass # It's a marker statement
         elif type(inst) in typeinfer_extensions:
             # let external calls handle stmt if type matches
             f = typeinfer_extensions[type(inst)]
@@ -1721,6 +1723,7 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
         elif expr.op == 'make_function':
             self.lock_type(target.name, types.MakeFunctionLiteral(expr),
                            loc=inst.loc, literal_value=expr)
+
         else:
             msg = "Unsupported op-code encountered: %s" % expr
             raise UnsupportedError(msg, loc=inst.loc)

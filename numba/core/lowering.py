@@ -463,6 +463,9 @@ class Lower(BaseLower):
             retval = self.context.get_return_value(self.builder, ty, val)
             self.call_conv.return_value(self.builder, retval)
 
+        elif isinstance(inst, ir.PopBlock):
+            pass # this is just a marker
+
         elif isinstance(inst, ir.StaticSetItem):
             signature = self.fndesc.calltypes[inst]
             assert signature is not None

@@ -923,6 +923,16 @@ class EnterWith(Stmt):
         return [self.contextmanager]
 
 
+class PopBlock(Stmt):
+    """Marker statement for a pop block op code"""
+    def __init__(self, loc):
+        assert isinstance(loc, Loc)
+        self.loc = loc
+
+    def __str__(self):
+        return 'pop_block'
+
+
 class Arg(EqualityCheckMixin, AbstractRHS):
     def __init__(self, name, index, loc):
         assert isinstance(name, str)
