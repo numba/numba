@@ -691,13 +691,6 @@ def ol_isinstance(var, typs):
             f'isinstance cannot handle optional types. '
             f'Got "{var_ty}"')
 
-    # register container types (List, Dict, ...) with types.Any as base type
-    as_numba_type.register(tuple, types.Tuple((types.undefined,)))
-    as_numba_type.register(list, types.List(types.undefined))
-    # set requires the type to be hashable
-    as_numba_type.register(set, types.Set(types.undefined))
-    as_numba_type.register(types.ListType, types.ListType(types.undefined))
-
     t_typs = typs
 
     if isinstance(t_typs, types.UniTuple):
@@ -721,6 +714,9 @@ def ol_isinstance(var, typs):
             bytes: types.Bytes,
             range: types.RangeType,
             dict: (types.DictType, types.LiteralStrKeyDict),
+            list: types.List,
+            tuple: types.BaseTuple,
+            set: types.Set,
         }
         if key in types_not_registered:
             if isinstance(var_ty, types_not_registered[key]):
@@ -732,9 +728,6 @@ def ol_isinstance(var, typs):
             #      var_ty == ListType[int64] (instance)
             #         typ == types.ListType  (class)
             return true_impl if type(var_ty) is key else false_impl
-        elif isinstance(typ, types.NamedTupleClass):
-            # Case for NamedTuples
-            return true_impl if issubclass(var_ty.__class__, types.BaseNamedTuple) else false_impl
         else:
             numba_typ = as_numba_type(key)
             if var_ty == numba_typ:
