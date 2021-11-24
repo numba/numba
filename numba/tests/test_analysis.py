@@ -246,6 +246,8 @@ class TestBranchPrune(TestBranchPruneBase, SerialMixin):
             x_is_none_work = False
             if x is None:
                 x_is_none_work = True
+            else:
+                pass
 
             if x_is_none_work:
                 y = 10
@@ -253,7 +255,15 @@ class TestBranchPrune(TestBranchPruneBase, SerialMixin):
                 y = -3
             return y
 
-        self.assert_prune(impl, (types.NoneType('none'),), [None, None], None)
+        if utils.PYVERSION >= (3, 10):
+            # Python 3.10 creates a block with a NOP in it for the `pass` which
+            # means it gets pruned.
+            self.assert_prune(impl, (types.NoneType('none'),), [False, None],
+                              None)
+        else:
+            self.assert_prune(impl, (types.NoneType('none'),), [None, None],
+                              None)
+
         self.assert_prune(impl, (types.IntegerLiteral(10),), [True, None], 10)
 
     def test_double_if_else_rt_const(self):
