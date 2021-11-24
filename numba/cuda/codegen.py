@@ -167,7 +167,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         if cubin:
             return cubin
 
-        linker = driver.Linker(max_registers=self._max_registers, cc=cc)
+        linker = driver.Linker.new(max_registers=self._max_registers, cc=cc)
 
         ptxes = self._get_ptxes(cc=cc)
         for ptx in ptxes:

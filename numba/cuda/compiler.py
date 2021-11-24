@@ -563,7 +563,12 @@ class _Kernel(serialize.ReduceMixin):
         for t, v in zip(self.argument_types, args):
             self._prepare_args(t, v, stream, retr, kernelargs)
 
-        stream_handle = stream and stream.handle or None
+        if driver.USE_NV_BINDING:
+            zero_stream = driver.binding.CUstream(0)
+        else:
+            zero_stream = None
+
+        stream_handle = stream and stream.handle or zero_stream
 
         # Invoke kernel
         driver.launch_kernel(cufunc.handle,
@@ -634,7 +639,14 @@ class _Kernel(serialize.ReduceMixin):
             parent = ctypes.c_void_p(0)
             nitems = c_intp(devary.size)
             itemsize = c_intp(devary.dtype.itemsize)
-            data = ctypes.c_void_p(driver.device_pointer(devary))
+
+            ptr = driver.device_pointer(devary)
+
+            if driver.USE_NV_BINDING:
+                ptr = int(ptr)
+
+            data = ctypes.c_void_p(ptr)
+
             kernelargs.append(meminfo)
             kernelargs.append(parent)
             kernelargs.append(nitems)
@@ -674,7 +686,10 @@ class _Kernel(serialize.ReduceMixin):
 
         elif isinstance(ty, types.Record):
             devrec = wrap_arg(val).to_device(retr, stream)
-            kernelargs.append(devrec)
+            ptr = devrec.device_ctypes_pointer
+            if driver.USE_NV_BINDING:
+                ptr = ctypes.c_void_p(int(ptr))
+            kernelargs.append(ptr)
 
         elif isinstance(ty, types.BaseTuple):
             assert len(ty) == len(val)

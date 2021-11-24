@@ -10,7 +10,7 @@ recordwith2darray = np.dtype([('i', np.int32),
 
 
 @skip_on_cudasim('Device Array API unsupported in the simulator')
-class Test(CUDATestCase):
+class TestTranspose(CUDATestCase):
 
     def test_transpose(self):
         variants = ((5, 6, np.float64),
