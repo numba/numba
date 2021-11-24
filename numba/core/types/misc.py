@@ -3,6 +3,8 @@ from numba.core.types.common import (Dummy, IterableType, Opaque,
                                      SimpleIteratorType)
 from numba.core.typeconv import Conversion
 from numba.core.errors import TypingError, LiteralTypingError
+from numba.core.ir import UndefinedType
+from numba.core.utils import get_hashable_key
 
 
 class PyObject(Dummy):
@@ -87,11 +89,14 @@ class Omitted(Opaque):
 
     def __init__(self, value):
         self._value = value
+        # Use helper function to support both hashable and non-hashable
+        # values. See discussion in gh #6957.
+        self._value_key = get_hashable_key(value)
         super(Omitted, self).__init__("omitted(default=%r)" % (value,))
 
     @property
     def key(self):
-        return type(self._value), id(self._value)
+        return type(self._value), self._value_key
 
     @property
     def value(self):
