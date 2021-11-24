@@ -1,14 +1,32 @@
 import numpy as np
 from numba.core.compiler import compile_isolated
 from numba.core.errors import TypingError
-from numba import njit
+from numba import njit, cuda
 from numba.core import types
 import struct
 import unittest
 
+from numba.core.types.scalars import Integer
+
+@cuda.jit
+def float16_to_float(r, h1, h2):
+    i = cuda.grid(1)
+    if i >= len(r):
+        return
+    r[i] = cuda.fp16.hadd(h1[i],  h2[i])
+
+@cuda.jit
+def float_add(r, h1, h2):
+    i = cuda.grid(1)
+    if i >= len(r):
+        return
+    r[i] = h1[i] + h2[i]
 
 def float_to_int(x):
     return types.int32(x)
+
+def float_to_int_generic(x, t):
+    return t(x)
 
 
 def int_to_float(x):
@@ -27,6 +45,64 @@ def numpy_scalar_cast_error():
     np.int32(np.zeros((4,)))
 
 class TestCasting(unittest.TestCase):
+    def test_float16_to_float32(self):
+        np.random.seed(1)
+        x = np.random.rand(10).astype(np.float16)
+        y = np.random.rand(10).astype(np.float16)
+        r = np.zeros(x.shape, dtype=np.float32)
+        float16_to_float[1, 32](r, x, y)
+        ref = (x + y).astype(np.float32)
+        np.testing.assert_array_equal(r, ref)
+    
+    def test_float16_to_float64(self):
+        np.random.seed(1)
+        x = np.random.rand(10).astype(np.float16)
+        y = np.random.rand(10).astype(np.float16)
+        r = np.zeros(x.shape, dtype=np.float64)
+        float16_to_float[1, 32](r, x, y)
+        ref = (x + y).astype(np.float64)
+        np.testing.assert_array_equal(r, ref)
+    
+    def test_float32_to_float16(self):
+        np.random.seed(1)
+        x = np.random.rand(10).astype(np.float32)
+        y = np.random.rand(10).astype(np.float32)
+        r = np.zeros(x.shape, dtype=np.float16)
+        float_add[1, 32](r, x, y)
+        ref = (x + y).astype(np.float16)
+        np.testing.assert_array_equal(r, ref)
+    
+    def test_float64_to_float16(self):
+        np.random.seed(1)
+        x = np.random.rand(10).astype(np.float64)
+        y = np.random.rand(10).astype(np.float64)
+        r = np.zeros(x.shape, dtype=np.float16)
+        float_add[1, 32](r, x, y)
+        ref = (x + y).astype(np.float16)
+        np.testing.assert_array_equal(r, ref)
+
+    def test_float16_to_int32(self):
+        pyfunc = float_to_int
+        cr = compile_isolated(pyfunc, [types.float16])
+        cfunc = cr.entry_point
+
+        self.assertEqual(cr.signature.return_type, types.int32)
+        self.assertEqual(cfunc(12.3), pyfunc(12.3))
+        self.assertEqual(cfunc(12.3), int(12.3))
+        self.assertEqual(cfunc(-12.3), pyfunc(-12.3))
+        self.assertEqual(cfunc(-12.3), int(-12.3))
+    
+    def test_float16_to_int16(self):
+        pyfunc = float_to_int
+        cr = compile_isolated(pyfunc, [types.float32])
+        cfunc = cr.entry_point
+
+        self.assertEqual(cr.signature.return_type, types.int16)
+        self.assertEqual(cfunc(12.3), pyfunc(12.3))
+        self.assertEqual(cfunc(12.3), np.int16(12.3))
+        self.assertEqual(cfunc(-12.3), pyfunc(-12.3))
+        self.assertEqual(cfunc(-12.3), np.int16(-12.3))
+    
     def test_float_to_int(self):
         pyfunc = float_to_int
         cr = compile_isolated(pyfunc, [types.float32])
