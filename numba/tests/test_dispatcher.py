@@ -11,6 +11,7 @@ import pickle
 import weakref
 from itertools import chain
 from io import StringIO
+import pytest
 
 import numpy as np
 
@@ -1470,15 +1471,17 @@ class TestCache(BaseCacheUsecasesTest):
 
     def test_ipykernel(self):
         # Test caching in an IPython session using ipykernel
+        # Skip unless ipykernel>=6.0.0 is installed
+        pytest.importorskip("ipykernel", minversion="6.0.0")
+
         base_cmd = [sys.executable, '-m', 'IPython']
         base_cmd += ['--quiet', '--quick', '--no-banner', '--colors=NoColor']
         try:
             ver = subprocess.check_output(base_cmd + ['--version'])
         except subprocess.CalledProcessError as e:
             self.skipTest("ipython not available: return code %d"
-                            % e.returncode)
+                          % e.returncode)
         ver = ver.strip().decode()
-        print("ipython version:", ver)
         # Create test input
         from ipykernel import compiler
         inputfn = compiler.get_tmp_directory()
@@ -1507,15 +1510,15 @@ class TestCache(BaseCacheUsecasesTest):
             # Feed the test input as stdin, to execute it in REPL context
             with open(inputfn, "rb") as stdin:
                 p = subprocess.Popen(base_cmd, stdin=stdin,
-                                        stdout=subprocess.PIPE,
-                                        stderr=subprocess.PIPE,
-                                        universal_newlines=True)
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE,
+                                     universal_newlines=True)
                 out, err = p.communicate()
                 if p.returncode != 42:
                     self.fail("unexpected return code %d\n"
-                                "-- stdout:\n%s\n"
-                                "-- stderr:\n%s\n"
-                                % (p.returncode, out, err))
+                              "-- stdout:\n%s\n"
+                              "-- stderr:\n%s\n"
+                              % (p.returncode, out, err))
                 return err
 
         execute_with_input()
