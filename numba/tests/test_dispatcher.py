@@ -11,7 +11,6 @@ import pickle
 import weakref
 from itertools import chain
 from io import StringIO
-import pytest
 
 import numpy as np
 
@@ -46,6 +45,11 @@ try:
     import pygments
 except ImportError:
     pygments = None
+
+try:
+    import ipykernel
+except ImportError:
+    ipykernel = None
 
 _is_armv7l = platform.machine() == 'armv7l'
 
@@ -1469,10 +1473,10 @@ class TestCache(BaseCacheUsecasesTest):
         err = execute_with_input()
         self.assertIn("cache hits = 1", err.strip())
 
+    @unittest.skipIf((ipykernel is None) or (ipykernel.version_info[0] < 6),
+                     "requires ipykernel >= 6")
     def test_ipykernel(self):
         # Test caching in an IPython session using ipykernel
-        # Skip unless ipykernel>=6.0.0 is installed
-        pytest.importorskip("ipykernel", minversion="6.0.0")
 
         base_cmd = [sys.executable, '-m', 'IPython']
         base_cmd += ['--quiet', '--quick', '--no-banner', '--colors=NoColor']
