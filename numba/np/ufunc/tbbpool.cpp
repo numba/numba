@@ -326,16 +326,16 @@ MOD_INIT(tbbpool)
     {
         md->m_free = (freefunc)unload_tbb;
     }
-    SetAttrStringFromVoidPointer(m,launch_threads,tmp)
-    SetAttrStringFromVoidPointer(m,synchronize,tmp)
-    SetAttrStringFromVoidPointer(m,ready,tmp)
-    SetAttrStringFromVoidPointer(m,add_task,tmp)
-    SetAttrStringFromVoidPointer(m,parallel_for,tmp)
-    SetAttrStringFromVoidPointer(m,do_scheduling_signed,tmp)
-    SetAttrStringFromVoidPointer(m,do_scheduling_unsigned,tmp)
-    SetAttrStringFromVoidPointer(m,set_num_threads,tmp)
-    SetAttrStringFromVoidPointer(m,get_num_threads,tmp)
-    SetAttrStringFromVoidPointer(m,get_thread_id,tmp)
+    SetAttrStringFromVoidPointer(m, launch_threads);
+    SetAttrStringFromVoidPointer(m, synchronize);
+    SetAttrStringFromVoidPointer(m, ready);
+    SetAttrStringFromVoidPointer(m, add_task);
+    SetAttrStringFromVoidPointer(m, parallel_for);
+    SetAttrStringFromVoidPointer(m, do_scheduling_signed);
+    SetAttrStringFromVoidPointer(m, do_scheduling_unsigned);
+    SetAttrStringFromVoidPointer(m, set_num_threads);
+    SetAttrStringFromVoidPointer(m, get_num_threads);
+    SetAttrStringFromVoidPointer(m, get_thread_id);
 
 
     return MOD_SUCCESS_VAL(m);

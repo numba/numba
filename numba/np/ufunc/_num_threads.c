@@ -25,12 +25,12 @@ static int get_num_threads(void)
 MOD_INIT(_num_threads)
 {
     PyObject *m;
-    PyObject *tmp;
     MOD_DEF(m, "_num_threads", "No docs", NULL)
     if (m == NULL)
         return MOD_ERROR_VAL;
-    SetAttrStringFromVoidPointer(m,set_num_threads,tmp)
-    SetAttrStringFromVoidPointer(m,get_num_threads,tmp)
+
+    SetAttrStringFromVoidPointer(m, set_num_threads);
+    SetAttrStringFromVoidPointer(m, get_num_threads);
 
     return MOD_SUCCESS_VAL(m);
 }
