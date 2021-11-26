@@ -310,30 +310,6 @@ Schedule
   the provision of signatures for device functions will only enforce casting.
 
 
-.. _rocm_unmaintained:
-
-Dropping support for the ROCm target
-====================================
-
-The `ROCm <https://rocmdocs.amd.com/en/latest/index.html>`_ target has not been
-maintained for a number of years. It's known to be not far from working but has
-essentially bit-rotted in a number of areas. Numba 0.54 includes a new API for
-describing targets and both the CPU and CUDA targets have been ported to use
-this. Due to lack of maintenance, support and user base, the ROCm target is
-not being ported to this API, is being moved to an "unmaintained" status and
-will reside outside of the Numba package. Should there be sufficient interest
-and support for this target in future its status will be reconsidered.
-
-Schedule
---------
-
-In 0.54.0:
-
-- The ``ROCm`` target is officially unmaintained and the target source code has
-  been moved out of the Numba main repository and into a `separate repository
-  <https://github.com/numba/numba-rocm>`_.
-
-
 Deprecation of ``numba.core.base.BaseContext.add_user_function()``
 ==================================================================
 
