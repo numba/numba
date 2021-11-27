@@ -1516,6 +1516,20 @@ class TestNestedArrays(TestCase):
             arr_res = cfunc(nbval)
             np.testing.assert_equal(arr_expected, arr_res)
 
+    def test_slice_2d_array(self):
+        # test slicing the nestedarray inside a record
+        nbarr = np.recarray(2, dtype=recordwith2darray)
+        nbarr[0] = np.array([(1, ((1,2),(4,5),(2,3)))],
+                            dtype=recordwith2darray)[0]
+
+        funcs = rec_getitem_field_slice_2d, recarray_getitem_field_slice_2d
+        for arg, pyfunc in zip([nbarr[0], nbarr], funcs):
+            ty = typeof(arg)
+            arr_expected = pyfunc(arg)
+            cfunc = self.get_cfunc(pyfunc, (ty,))
+            arr_res = cfunc(arg)
+            np.testing.assert_equal(arr_res, arr_expected)
+
 
 if __name__ == '__main__':
     unittest.main()
