@@ -191,9 +191,10 @@ class ListInstance(_ListPayloadMixin):
         # it's necessary for the dtor which just decref every slot on it.
         self.zfill(idx, self._builder.add(idx, idx.type(1)))
 
-    def setitem(self, idx, val, incref):
+    def setitem(self, idx, val, incref, decref_old_value=True):
         # Decref old data
-        self.decref_value(self.getitem(idx))
+        if decref_old_value:
+            self.decref_value(self.getitem(idx))
 
         ptr = self._gep(idx)
         data_item = self._datamodel.as_data(self._builder, val)
@@ -979,7 +980,7 @@ def list_insert(context, builder, sig, args):
     new_size = builder.add(n, one)
     inst.resize(new_size)
     inst.move(builder.add(index, one), index, builder.sub(n, index))
-    inst.setitem(index, value, incref=True)
+    inst.setitem(index, value, incref=True, decref_old_value=False)
 
     return context.get_dummy_value()
 
