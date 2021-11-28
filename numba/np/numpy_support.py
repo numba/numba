@@ -520,9 +520,9 @@ def ufunc_find_matching_loop(ufunc, arg_types):
             try:
                 inputs = choose_types(input_types, ufunc_inputs)
                 outputs = choose_types(output_types, ufunc_outputs)
-                # if the left operand or both are timedeltas, or we have
-                # 1 datetime and 1 timedelta, then the output
-                # units need to be determined.
+                # if the left operand or both are timedeltas, or the first
+                # argument is datetime and the second argument is timedelta,
+                # then the output units need to be determined.
                 if ufunc_inputs[0] == 'm' or ufunc_inputs == 'Mm':
                     outputs = set_output_dt_units(inputs, outputs,
                                                   ufunc_inputs, ufunc.__name__)
