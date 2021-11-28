@@ -36,7 +36,20 @@ def mk_unique_var(prefix):
     return var
 
 
-_max_label = 0
+class _MaxLabel:
+    def __init__(self, value=0):
+        self._value = value
+
+    def next(self):
+        self._value += 1
+        return self._value
+
+    def update(self, newval):
+        self._value = max(newval, self._value)
+
+
+_the_max_label = _MaxLabel()
+del _MaxLabel
 
 
 def get_unused_var_name(prefix, var_table):
@@ -52,14 +65,14 @@ def get_unused_var_name(prefix, var_table):
 
 
 def next_label():
-    global _max_label
-    _max_label += 1
-    return _max_label
+    return _the_max_label.next()
 
 
-def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
+def mk_alloc(typingctx, typemap, calltypes, lhs, size_var, dtype, scope, loc,
+             lhs_typ):
     """generate an array allocation with np.empty() and return list of nodes.
     size_var can be an int variable or tuple of int variables.
+    lhs_typ is the type of the array being allocated.
     """
     out = []
     ndims = 1
@@ -114,15 +127,44 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
         np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
         typ_var_assign = ir.Assign(np_typ_getattr, typ_var, loc)
     alloc_call = ir.Expr.call(attr_var, [size_var, typ_var], (), loc)
-    if calltypes:
-        calltypes[alloc_call] = typemap[attr_var.name].get_call_type(
-            typing.Context(), [size_typ, types.functions.NumberClass(dtype)], {})
-    # signature(
-    #    types.npytypes.Array(dtype, ndims, 'C'), size_typ,
-    #    types.functions.NumberClass(dtype))
-    alloc_assign = ir.Assign(alloc_call, lhs, loc)
 
-    out.extend([g_np_assign, attr_assign, typ_var_assign, alloc_assign])
+    if calltypes:
+        cac = typemap[attr_var.name].get_call_type(
+            typingctx, [size_typ, types.functions.NumberClass(dtype)], {})
+        # By default, all calls to "empty" are typed as returning a standard
+        # NumPy ndarray.  If we are allocating a ndarray subclass here then
+        # just change the return type to be that of the subclass.
+        cac._return_type = (lhs_typ.copy(layout='C')
+                            if lhs_typ.layout == 'F'
+                            else lhs_typ)
+        calltypes[alloc_call] = cac
+    if lhs_typ.layout == 'F':
+        empty_c_typ = lhs_typ.copy(layout='C')
+        empty_c_var = ir.Var(scope, mk_unique_var("$empty_c_var"), loc)
+        if typemap:
+            typemap[empty_c_var.name] = lhs_typ.copy(layout='C')
+        empty_c_assign = ir.Assign(alloc_call, empty_c_var, loc)
+
+        # attr call: asfortranarray = getattr(g_np_var, asfortranarray)
+        asfortranarray_attr_call = ir.Expr.getattr(g_np_var, "asfortranarray", loc)
+        afa_attr_var = ir.Var(scope, mk_unique_var("$asfortran_array_attr"), loc)
+        if typemap:
+            typemap[afa_attr_var.name] = get_np_ufunc_typ(numpy.asfortranarray)
+        afa_attr_assign = ir.Assign(asfortranarray_attr_call, afa_attr_var, loc)
+        # call asfortranarray
+        asfortranarray_call = ir.Expr.call(afa_attr_var, [empty_c_var], (), loc)
+        if calltypes:
+            calltypes[asfortranarray_call] = typemap[afa_attr_var.name].get_call_type(
+                typingctx, [empty_c_typ], {})
+
+        asfortranarray_assign = ir.Assign(asfortranarray_call, lhs, loc)
+
+        out.extend([g_np_assign, attr_assign, typ_var_assign, empty_c_assign,
+                    afa_attr_assign, asfortranarray_assign])
+    else:
+        alloc_assign = ir.Assign(alloc_call, lhs, loc)
+        out.extend([g_np_assign, attr_assign, typ_var_assign, alloc_assign])
+
     return out
 
 
@@ -141,6 +183,9 @@ def convert_size_to_var(size_var, typemap, scope, loc, nodes):
 def get_np_ufunc_typ(func):
     """get type of the incoming function from builtin registry"""
     for (k, v) in typing.npydecl.registry.globals:
+        if k == func:
+            return v
+    for (k, v) in typing.templates.builtin_registry.globals:
         if k == func:
             return v
     raise RuntimeError("type for func ", func, " not found")
@@ -646,7 +691,13 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
         else:
             lives |= {v.name for v in stmt.list_vars()}
             if isinstance(stmt, ir.Assign):
-                lives.remove(lhs.name)
+                # make sure lhs is not used in rhs, e.g. a = g(a)
+                if isinstance(stmt.value, ir.Expr):
+                    rhs_vars = {v.name for v in stmt.value.list_vars()}
+                    if lhs.name not in rhs_vars:
+                        lives.remove(lhs.name)
+                else:
+                    lives.remove(lhs.name)
 
         new_body.append(stmt)
     new_body.reverse()
@@ -744,6 +795,13 @@ def is_const_call(module_name, func_name):
 alias_analysis_extensions = {}
 alias_func_extensions = {}
 
+def get_canonical_alias(v, alias_map):
+    if v not in alias_map:
+        return v
+
+    v_aliases = sorted(list(alias_map[v]))
+    return v_aliases[0]
+
 def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                                                            arg_aliases=None):
     "find all array aliases and argument aliases to avoid remove as dead"
@@ -774,6 +832,8 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                 if (isinstance(expr, ir.Expr) and (expr.op == 'cast' or
                     expr.op in ['getitem', 'static_getitem'])):
                     _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
+                if isinstance(expr, ir.Expr) and expr.op == 'inplace_binop':
+                    _add_alias(lhs, expr.lhs.name, alias_map, arg_aliases)
                 # array attributes like A.T
                 if (isinstance(expr, ir.Expr) and expr.op == 'getattr'
                         and expr.attr in ['T', 'ctypes', 'flat']):
@@ -1269,7 +1329,7 @@ def simplify_CFG(blocks):
 
 
 arr_math = ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
-            'cumsum', 'cumprod', 'argmin', 'argmax', 'argsort',
+            'cumsum', 'cumprod', 'argmax', 'argmin', 'argsort',
             'nonzero', 'ravel']
 
 
@@ -1606,8 +1666,8 @@ def find_const(func_ir, var):
     require(isinstance(var_def, (ir.Const, ir.Global, ir.FreeVar)))
     return var_def.value
 
-def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
-                        typemap=None, calltypes=None):
+def compile_to_numba_ir(mk_func, glbls, typingctx=None, targetctx=None,
+                        arg_typs=None, typemap=None, calltypes=None):
     """
     Compile a function or a make_function node to Numba IR.
 
@@ -1628,10 +1688,9 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
     remove_dels(f_ir.blocks)
 
     # relabel by adding an offset
-    global _max_label
-    f_ir.blocks = add_offset_to_labels(f_ir.blocks, _max_label + 1)
+    f_ir.blocks = add_offset_to_labels(f_ir.blocks, _the_max_label.next())
     max_label = max(f_ir.blocks.keys())
-    _max_label = max_label
+    _the_max_label.update(max_label)
 
     # rename all variables to avoid conflict
     var_table = get_name_var_table(f_ir.blocks)
@@ -1643,8 +1702,8 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
     # perform type inference if typingctx is available and update type
     # data structures typemap and calltypes
     if typingctx:
-        f_typemap, f_return_type, f_calltypes = typed_passes.type_inference_stage(
-                typingctx, f_ir, arg_typs, None)
+        f_typemap, f_return_type, f_calltypes, _ = typed_passes.type_inference_stage(
+                typingctx, targetctx, f_ir, arg_typs, None)
         # remove argument entries like arg.a from typemap
         arg_names = [vname for vname in f_typemap if vname.startswith("arg.")]
         for a in arg_names:
@@ -1662,12 +1721,15 @@ def _create_function_from_code_obj(fcode, func_env, func_arg, func_clo, glbls):
     * func_clo - string for the closure args
     * glbls - the function globals
     """
-    func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (
-        func_env, func_arg, func_clo)
+    sanitized_co_name = fcode.co_name.replace('<', '_').replace('>', '_')
+    func_text = (f"def closure():\n{func_env}\n"
+                 f"\tdef {sanitized_co_name}({func_arg}):\n"
+                 f"\t\treturn ({func_clo})\n"
+                 f"\treturn {sanitized_co_name}")
     loc = {}
     exec(func_text, glbls, loc)
 
-    f = loc['g']()
+    f = loc['closure']()
     # replace the code body
     f.__code__ = fcode
     f.__name__ = fcode.co_name
@@ -1678,7 +1740,7 @@ def get_ir_of_code(glbls, fcode):
     Compile a code object to get its IR, ir.Del nodes are emitted
     """
     nfree = len(fcode.co_freevars)
-    func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
+    func_env = "\n".join(["\tc_%d = None" % i for i in range(nfree)])
     func_clo = ",".join(["c_%d" % i for i in range(nfree)])
     func_arg = ",".join(["x_%d" % i for i in range(fcode.co_argcount)])
 
@@ -1704,6 +1766,7 @@ def get_ir_of_code(glbls, fcode):
     rewrites.rewrite_registry.apply('before-inference', state)
     # call inline pass to handle cases like stencils and comprehensions
     swapped = {} # TODO: get this from diagnostics store
+    import numba.core.inline_closurecall
     inline_pass = numba.core.inline_closurecall.InlineClosureCallPass(
         ir, numba.core.cpu.ParallelOptions(False), swapped)
     inline_pass.run()
@@ -1739,23 +1802,25 @@ def replace_arg_nodes(block, args):
             stmt.value = args[idx]
     return
 
+
 def replace_returns(blocks, target, return_label):
     """
     Return return statement by assigning directly to target, and a jump.
     """
     for block in blocks.values():
-        casts = []
-        for i, stmt in enumerate(block.body):
-            if isinstance(stmt, ir.Return):
-                assert(i + 1 == len(block.body))
-                block.body[i] = ir.Assign(stmt.value, target, stmt.loc)
-                block.body.append(ir.Jump(return_label, stmt.loc))
-                # remove cast of the returned value
-                for cast in casts:
-                    if cast.target.name == stmt.value.name:
-                        cast.value = cast.value.value
-            elif isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr) and stmt.value.op == 'cast':
-                casts.append(stmt)
+        # some blocks may be empty during transformations
+        if not block.body:
+            continue
+        stmt = block.terminator
+        if isinstance(stmt, ir.Return):
+            block.body.pop()  # remove return
+            cast_stmt = block.body.pop()
+            assert (isinstance(cast_stmt, ir.Assign)
+                and isinstance(cast_stmt.value, ir.Expr)
+                and cast_stmt.value.op == 'cast'), "invalid return cast"
+            block.body.append(ir.Assign(cast_stmt.value.value, target, stmt.loc))
+            block.body.append(ir.Jump(return_label, stmt.loc))
+
 
 def gen_np_call(func_as_str, func, lhs, args, typingctx, typemap, calltypes):
     scope = args[0].scope
@@ -2143,6 +2208,12 @@ def enforce_no_phis(func_ir):
             raise CompilerError(msg, loc=phis[0].loc)
 
 
+def legalize_single_scope(blocks):
+    """Check the given mapping of ir.Block for containing a single scope.
+    """
+    return len({blk.scope for blk in blocks.values()}) == 1
+
+
 def check_and_legalize_ir(func_ir):
     """
     This checks that the IR presented is legal
@@ -2151,7 +2222,7 @@ def check_and_legalize_ir(func_ir):
     enforce_no_dels(func_ir)
     # postprocess and emit ir.Dels
     post_proc = postproc.PostProcessor(func_ir)
-    post_proc.run(True)
+    post_proc.run(True, extend_lifetimes=config.EXTEND_VARIABLE_LIFETIMES)
 
 
 def convert_code_obj_to_function(code_obj, caller_ir):
@@ -2182,7 +2253,7 @@ def convert_code_obj_to_function(code_obj, caller_ir):
                    "variable '%s' in a function that will escape." % x)
             raise TypingError(msg, loc=code_obj.loc)
 
-    func_env = "\n".join(["  c_%d = %s" % (i, x) for i, x in enumerate(freevars)])
+    func_env = "\n".join(["\tc_%d = %s" % (i, x) for i, x in enumerate(freevars)])
     func_clo = ",".join(["c_%d" % i for i in range(nfree)])
     co_varnames = list(fcode.co_varnames)
 
@@ -2220,3 +2291,45 @@ def convert_code_obj_to_function(code_obj, caller_ir):
     # create the function and return it
     return _create_function_from_code_obj(fcode, func_env, func_arg, func_clo,
                                           glbls)
+
+
+def fixup_var_define_in_scope(blocks):
+    """Fixes the mapping of ir.Block to ensure all referenced ir.Var are
+    defined in every scope used by the function. Such that looking up a variable
+    from any scope in this function will not fail.
+
+    Note: This is a workaround. Ideally, all the blocks should refer to the
+    same ir.Scope, but that property is not maintained by all the passes.
+    """
+    # Scan for all used variables
+    used_var = {}
+    for blk in blocks.values():
+        scope = blk.scope
+        for inst in blk.body:
+            for var in inst.list_vars():
+                used_var[var] = inst
+    # Note: not all blocks share a single scope even though they should.
+    # Ensure the scope of each block defines all used variables.
+    for blk in blocks.values():
+        scope = blk.scope
+        for var, inst in used_var.items():
+            # add this variable if it's not in scope
+            if var.name not in scope.localvars:
+                # Note: using a internal method to reuse the same
+                scope.localvars.define(var.name, var)
+
+
+def transfer_scope(block, scope):
+    """Transfer the ir.Block to use the given ir.Scope.
+    """
+    old_scope = block.scope
+    if old_scope is scope:
+        # bypass if the block is already using the given scope
+        return block
+    # Ensure variables are defined in the new scope
+    for var in old_scope.localvars._con.values():
+        if var.name not in scope.localvars:
+            scope.localvars.define(var.name, var)
+    # replace scope
+    block.scope = scope
+    return block

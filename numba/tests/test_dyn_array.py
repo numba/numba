@@ -371,7 +371,7 @@ class TestDynArray(NrtRefCtTest, TestCase):
 
         cfunc = nrtjit(pyfunc)
         size = 10
-        input = np.arange(size, dtype=np.float)
+        input = np.arange(size, dtype=float)
         expected_refct = sys.getrefcount(input)
         swapct = random.randrange(1000)
         expected = pyfunc(swapct, input)
@@ -625,6 +625,26 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
             return pyfunc(n, 'complex128')
         self.check_1d(func)
 
+    def test_1d_dtype_str_alternative_spelling(self):
+        # like test_1d_dtype_str but using the shorthand type spellings
+        pyfunc = self.pyfunc
+        _dtype = 'i4'
+        def func(n):
+            return pyfunc(n, _dtype)
+        self.check_1d(func)
+
+        def func(n):
+            return pyfunc(n, 'c8')
+        self.check_1d(func)
+
+    def test_1d_dtype_str_structured_dtype(self):
+        # test_1d_dtype_str but using a structured dtype
+        pyfunc = self.pyfunc
+        _dtype = "i4, (2,3)f8"
+        def func(n):
+            return pyfunc(n, _dtype)
+        self.check_1d(func)
+
     def test_1d_dtype_non_const_str(self):
         pyfunc = self.pyfunc
 
@@ -640,6 +660,19 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
         restr = r'\b{}\(int.*?, unicode_type\)\B'
         regex = re.compile(restr.format(pyfunc.__name__))
         self.assertRegex(excstr, regex)
+
+    def test_1d_dtype_invalid_str(self):
+        pyfunc = self.pyfunc
+
+        @njit
+        def func(n):
+            return pyfunc(n, 'ABCDEF')
+
+        with self.assertRaises(TypingError) as raises:
+            func(5)
+
+        excstr = str(raises.exception)
+        self.assertIn("Invalid NumPy dtype specified: 'ABCDEF'", excstr)
 
     def test_2d(self):
         pyfunc = self.pyfunc
@@ -675,6 +708,13 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
             return pyfunc((m, n), dtype='complex64')
         self.check_2d(func)
 
+    def test_2d_dtype_str_kwarg_alternative_spelling(self):
+        # as test_2d_dtype_str_kwarg but with the numpy shorthand type spelling
+        pyfunc = self.pyfunc
+        def func(m, n):
+            return pyfunc((m, n), dtype='c8')
+        self.check_2d(func)
+
     def test_alloc_size(self):
         pyfunc = self.pyfunc
         width = types.intp.bitwidth
@@ -690,6 +730,10 @@ class TestNdOnes(TestNdZeros):
     def setUp(self):
         super(TestNdOnes, self).setUp()
         self.pyfunc = np.ones
+
+    @unittest.expectedFailure
+    def test_1d_dtype_str_structured_dtype(self):
+        super().test_1d_dtype_str_structured_dtype()
 
 
 class TestNdFull(ConstructorBaseTest, TestCase):
@@ -723,6 +767,12 @@ class TestNdFull(ConstructorBaseTest, TestCase):
             return np.full(n, 4.5, 'bool_')
         self.check_1d(func)
 
+    def test_1d_dtype_str_alternative_spelling(self):
+        # like test_1d_dtype_str but using the shorthand type spelling
+        def func(n):
+            return np.full(n, 4.5, '?')
+        self.check_1d(func)
+
     def test_1d_dtype_non_const_str(self):
 
         @njit
@@ -737,6 +787,18 @@ class TestNdFull(ConstructorBaseTest, TestCase):
         restr = r'\bfull\(UniTuple\(int.*? x 1\), float64, unicode_type\)\B'
         regex = re.compile(restr)
         self.assertRegex(excstr, regex)
+
+    def test_1d_dtype_invalid_str(self):
+
+        @njit
+        def func(n, fv):
+            return np.full(n, fv, 'ABCDEF')
+
+        with self.assertRaises(TypingError) as raises:
+            func(np.ones(4), 4.5)
+
+        excstr = str(raises.exception)
+        self.assertIn("Invalid NumPy dtype specified: 'ABCDEF'", excstr)
 
     def test_2d(self):
         def func(m, n):
@@ -888,10 +950,10 @@ class TestNdEmptyLike(ConstructorLikeBaseTest, TestCase):
             return pyfunc(arr, dtype='int32')
         self.check_like(func, np.float64)
 
-    def test_like_dtype_str_kwarg(self):
+    def test_like_dtype_str_kwarg_alternative_spelling(self):
         pyfunc = self.pyfunc
         def func(arr):
-            return pyfunc(arr, dtype='int32')
+            return pyfunc(arr, dtype='i4')
         self.check_like(func, np.float64)
 
     def test_like_dtype_non_const_str(self):
@@ -910,6 +972,19 @@ class TestNdEmptyLike(ConstructorLikeBaseTest, TestCase):
         self.assertIn(
             '{}(array(float64, 1d, C), unicode_type)'.format(pyfunc.__name__),
             excstr)
+
+    def test_like_dtype_invalid_str(self):
+        pyfunc = self.pyfunc
+
+        @njit
+        def func(n):
+            return pyfunc(n, 'ABCDEF')
+
+        with self.assertRaises(TypingError) as raises:
+            func(np.ones(4))
+
+        excstr = str(raises.exception)
+        self.assertIn("Invalid NumPy dtype specified: 'ABCDEF'", excstr)
 
 
 class TestNdZerosLike(TestNdEmptyLike):
@@ -985,6 +1060,11 @@ class TestNdFullLike(ConstructorLikeBaseTest, TestCase):
             return np.full_like(arr, 4.5, 'bool_')
         self.check_like(func, np.float64)
 
+    def test_like_dtype_str_kwarg_alternative_spelling(self):
+        def func(arr):
+            return np.full_like(arr, 4.5, dtype='?')
+        self.check_like(func, np.float64)
+
     def test_like_dtype_non_const_str_kwarg(self):
 
         @njit
@@ -998,6 +1078,18 @@ class TestNdFullLike(ConstructorLikeBaseTest, TestCase):
         self.assertIn('No match', excstr)
         self.assertIn('full_like(array(float64, 1d, C), float64, unicode_type)',
                       excstr)
+
+    def test_like_dtype_invalid_str(self):
+
+        @njit
+        def func(arr, fv):
+            return np.full_like(arr, fv, "ABCDEF")
+
+        with self.assertRaises(TypingError) as raises:
+            func(np.ones(4), 3.4)
+
+        excstr = str(raises.exception)
+        self.assertIn("Invalid NumPy dtype specified: 'ABCDEF'", excstr)
 
 
 class TestNdIdentity(BaseTest):
@@ -1142,14 +1234,14 @@ class TestNdDiag(TestCase):
             dfunc = nrtjit(self.py_kw)
             dfunc(d, k=3)
 
-class TestNdArange(BaseTest):
+class TestLinspace(BaseTest):
 
     def test_linspace_2(self):
         def pyfunc(n, m):
             return np.linspace(n, m)
         self.check_outputs(pyfunc,
                            [(0, 4), (1, 100), (-3.5, 2.5), (-3j, 2+3j),
-                            (2, 1), (1+0.5j, 1.5j)], exact=False)
+                            (2, 1), (1+0.5j, 1.5j)])
 
     def test_linspace_3(self):
         def pyfunc(n, m, p):
@@ -1157,8 +1249,17 @@ class TestNdArange(BaseTest):
         self.check_outputs(pyfunc,
                            [(0, 4, 9), (1, 4, 3), (-3.5, 2.5, 8),
                             (-3j, 2+3j, 7), (2, 1, 0),
-                            (1+0.5j, 1.5j, 5), (1, 1e100, 1)],
-                           exact=False)
+                            (1+0.5j, 1.5j, 5), (1, 1e100, 1)])
+
+    def test_linspace_accuracy(self):
+        # Checking linspace reasonably replicates NumPy's algorithm
+        # see https://github.com/numba/numba/issues/6768
+        @nrtjit
+        def foo(n, m, p):
+            return np.linspace(n, m, p)
+
+        n, m, p = 0.0, 1.0, 100
+        self.assertPreciseEqual(foo(n, m, p), foo.py_func(n, m, p))
 
 
 class TestNpyEmptyKeyword(TestCase):

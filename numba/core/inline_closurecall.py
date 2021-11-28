@@ -32,7 +32,6 @@ from numba.core.analysis import (
     compute_use_defs,
     compute_live_variables)
 from numba.core import postproc
-from numba.cpython.rangeobj import range_iter_len
 from numba.np.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
 import numpy as np
 import operator
@@ -52,6 +51,20 @@ def callee_ir_validator(func_ir):
             if isinstance(stmt.value, ir.Yield):
                 msg = "The use of yield in a closure is unsupported."
                 raise errors.UnsupportedError(msg, loc=stmt.loc)
+
+
+def _created_inlined_var_name(function_name, var_name):
+    """Creates a name for an inlined variable based on the function name and the
+    variable name. It does this "safely" to avoid the use of characters that are
+    illegal in python variable names as there are occasions when function
+    generation needs valid python name tokens."""
+    inlined_name = f'{function_name}.{var_name}'
+    # Replace angle brackets, e.g. "<locals>" is replaced with "_locals_"
+    new_name = inlined_name.replace('<', '_').replace('>', '_')
+    # The version "version" of the closure function e.g. foo$2 (id 2) is
+    # rewritten as "foo_v2". Further "." is also replaced with "_".
+    new_name = new_name.replace('.', '_').replace('$', '_v')
+    return new_name
 
 
 class InlineClosureCallPass(object):
@@ -375,14 +388,14 @@ class InlineWorker(object):
         callee_blocks = callee_ir.blocks
 
         # 1. relabel callee_ir by adding an offset
-        max_label = max(ir_utils._max_label, max(caller_ir.blocks.keys()))
+        max_label = max(ir_utils._the_max_label.next(), max(caller_ir.blocks.keys()))
         callee_blocks = add_offset_to_labels(callee_blocks, max_label + 1)
         callee_blocks = simplify_CFG(callee_blocks)
         callee_ir.blocks = callee_blocks
         min_label = min(callee_blocks.keys())
         max_label = max(callee_blocks.keys())
         #    reset globals in ir_utils before we use it
-        ir_utils._max_label = max_label
+        ir_utils._the_max_label.update(max_label)
         self.debug_print("After relabel")
         _debug_dump(callee_ir)
 
@@ -396,7 +409,9 @@ class InlineWorker(object):
         var_dict = {}
         for var in callee_scope.localvars._con.values():
             if not (var.name in callee_freevars):
-                new_var = scope.redefine(mk_unique_var(var.name), loc=var.loc)
+                inlined_name = _created_inlined_var_name(
+                    callee_ir.func_id.unique_name, var.name)
+                new_var = scope.redefine(inlined_name, loc=var.loc)
                 var_dict[var.name] = new_var
         self.debug_print("var_dict = ", var_dict)
         replace_vars(callee_blocks, var_dict)
@@ -413,6 +428,8 @@ class InlineWorker(object):
             if arg_typs is None:
                 raise TypeError('arg_typs should have a value not None')
             self.update_type_and_call_maps(callee_ir, arg_typs)
+            # update_type_and_call_maps replaces blocks
+            callee_blocks = callee_ir.blocks
 
         self.debug_print("After arguments rename: ")
         _debug_dump(callee_ir)
@@ -462,10 +479,13 @@ class InlineWorker(object):
         return self.inline_ir(caller_ir, block, i, callee_ir, freevars,
                               arg_typs=arg_typs)
 
-    def run_untyped_passes(self, func):
+    def run_untyped_passes(self, func, enable_ssa=False):
         """
         Run the compiler frontend's untyped passes over the given Python
         function, and return the function's canonical Numba IR.
+
+        Disable SSA transformation by default, since the call site won't be in SSA
+        form and self.inline_ir depends on this being the case.
         """
         from numba.core.compiler import StateDict, _CompileStatus
         from numba.core.untyped_passes import ExtractByteCode, WithLifting
@@ -478,10 +498,7 @@ class InlineWorker(object):
         state.locals = self.locals
         state.pipeline = self.pipeline
         state.flags = self.flags
-
-        # Disable SSA transformation, the call site won't be in SSA form and
-        # self.inline_ir depends on this being the case.
-        state.flags.enable_ssa = False
+        state.flags.enable_ssa = enable_ssa
 
         state.func_id = bytecode.FunctionIdentity.from_function(func)
 
@@ -507,6 +524,9 @@ class InlineWorker(object):
     def update_type_and_call_maps(self, callee_ir, arg_typs):
         """ Updates the type and call maps based on calling callee_ir with arguments
         from arg_typs"""
+        from numba.core.ssa import reconstruct_ssa
+        from numba.core.typed_passes import PreLowerStripPhis
+
         if not self._permit_update_type_and_call_maps:
             msg = ("InlineWorker instance not configured correctly, typemap or "
                    "calltypes missing in initialization.")
@@ -515,8 +535,13 @@ class InlineWorker(object):
         # call branch pruning to simplify IR and avoid inference errors
         callee_ir._definitions = ir_utils.build_definitions(callee_ir.blocks)
         numba.core.analysis.dead_branch_prune(callee_ir, arg_typs)
-        f_typemap, f_return_type, f_calltypes = typed_passes.type_inference_stage(
-                self.typingctx, callee_ir, arg_typs, None)
+        # callee's typing may require SSA
+        callee_ir = reconstruct_ssa(callee_ir)
+        callee_ir._definitions = ir_utils.build_definitions(callee_ir.blocks)
+        f_typemap, f_return_type, f_calltypes, _ = typed_passes.type_inference_stage(
+                self.typingctx, self.targetctx, callee_ir, arg_typs, None)
+        callee_ir = PreLowerStripPhis()._strip_phi_nodes(callee_ir)
+        callee_ir._definitions = ir_utils.build_definitions(callee_ir.blocks)
         canonicalize_array_math(callee_ir, f_typemap,
                                 f_calltypes, self.typingctx)
         # remove argument entries like arg.a from typemap
@@ -528,8 +553,8 @@ class InlineWorker(object):
 
 
 def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
-                        arg_typs=None, typemap=None, calltypes=None,
-                        work_list=None, callee_validator=None,
+                        targetctx=None, arg_typs=None, typemap=None,
+                        calltypes=None, work_list=None, callee_validator=None,
                         replace_freevars=True):
     """Inline the body of `callee` at its callsite (`i`-th instruction of `block`)
 
@@ -570,14 +595,14 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     callee_blocks = callee_ir.blocks
 
     # 1. relabel callee_ir by adding an offset
-    max_label = max(ir_utils._max_label, max(func_ir.blocks.keys()))
+    max_label = max(ir_utils._the_max_label.next(), max(func_ir.blocks.keys()))
     callee_blocks = add_offset_to_labels(callee_blocks, max_label + 1)
     callee_blocks = simplify_CFG(callee_blocks)
     callee_ir.blocks = callee_blocks
     min_label = min(callee_blocks.keys())
     max_label = max(callee_blocks.keys())
     #    reset globals in ir_utils before we use it
-    ir_utils._max_label = max_label
+    ir_utils._the_max_label.update(max_label)
     debug_print("After relabel")
     _debug_dump(callee_ir)
 
@@ -590,7 +615,9 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     var_dict = {}
     for var in callee_scope.localvars._con.values():
         if not (var.name in callee_code.co_freevars):
-            new_var = scope.redefine(mk_unique_var(var.name), loc=var.loc)
+            inlined_name = _created_inlined_var_name(
+                callee_ir.func_id.unique_name, var.name)
+            new_var = scope.redefine(inlined_name, loc=var.loc)
             var_dict[var.name] = new_var
     debug_print("var_dict = ", var_dict)
     replace_vars(callee_blocks, var_dict)
@@ -627,11 +654,11 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
         callee_ir._definitions = ir_utils.build_definitions(callee_ir.blocks)
         numba.core.analysis.dead_branch_prune(callee_ir, arg_typs)
         try:
-            f_typemap, f_return_type, f_calltypes = typed_passes.type_inference_stage(
-                    typingctx, callee_ir, arg_typs, None)
-        except Exception:
-            f_typemap, f_return_type, f_calltypes = typed_passes.type_inference_stage(
-                    typingctx, callee_ir, arg_typs, None)
+            f_typemap, f_return_type, f_calltypes, _ = typed_passes.type_inference_stage(
+                    typingctx, targetctx, callee_ir, arg_typs, None)
+        except Exception as e:
+            f_typemap, f_return_type, f_calltypes, _ = typed_passes.type_inference_stage(
+                    typingctx, targetctx, callee_ir, arg_typs, None)
             pass
         canonicalize_array_math(callee_ir, f_typemap,
                                 f_calltypes, typingctx)
@@ -686,6 +713,9 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
     """
     if call_expr.op == 'call':
         args = list(call_expr.args)
+        if call_expr.vararg:
+            msg = "Calling a closure with *args is unsupported."
+            raise errors.UnsupportedError(msg, call_expr.loc)
     elif call_expr.op == 'getattr':
         args = [call_expr.value]
     elif ir_utils.is_operator_or_getitem(call_expr):
@@ -1056,9 +1086,12 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
         # this doesn't work in objmode as it's effectively untyped
         if typed:
             len_func_var = ir.Var(scope, mk_unique_var("len_func"), loc)
+            from numba.cpython.rangeobj import length_of_iterator
             stmts.append(_new_definition(func_ir, len_func_var,
-                        ir.Global('range_iter_len', range_iter_len, loc=loc),
-                        loc))
+                                         ir.Global('length_of_iterator',
+                                                   length_of_iterator,
+                                                   loc=loc),
+                                         loc))
             size_val = ir.Expr.call(len_func_var, (iter_var,), (), loc=loc)
         else:
             raise GuardException

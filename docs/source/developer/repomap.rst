@@ -93,6 +93,8 @@ These define aspects of the public Numba interface.
   Numba IR
 - :ghfile:`numba/core/annotations/pretty_annotate.py` - Code highlighting of
   Numba functions and types (both ANSI terminal and HTML)
+- :ghfile:`numba/core/event.py` - A simple event system for applications to
+  listen to specific compiler events.
 
 
 Dispatching
@@ -103,6 +105,8 @@ Dispatching
   for different type signatures.
 - :ghfile:`numba/_dispatcher.cpp` - C++ dispatcher implementation (for speed on
   common data types)
+- :ghfile:`numba/core/retarget.py` - Support for dispatcher objects to switch
+  target via a specific with-context.
 
 
 Compiler Pipeline
@@ -150,6 +154,8 @@ Compiler Pipeline
 - :ghfile:`numba/core/pylowering.py` - Lowering of Numba IR in object mode
 - :ghfile:`numba/core/pythonapi.py` - LLVM IR code generation to interface with
   CPython API
+- :ghfile:`numba/core/targetconfig.py` - Utils for target configurations such
+  as compiler flags.
 
 
 Type Management
@@ -219,6 +225,8 @@ Misc Support
   patterns in LLVM IR
 - :ghfile:`numba/core/utils.py` - Python 2 backports of Python 3 functionality
   (also imports local copy of ``six``)
+- :ghfile:`numba/core/overload_glue.py` - Functions for wrapping split typing
+  and lowering API use cases into overloads.
 - :ghfile:`numba/misc/appdirs.py` - Vendored package for determining application
   config directories on every platform
 - :ghfile:`numba/core/compiler_lock.py` - Global compiler lock because Numba's
@@ -255,7 +263,9 @@ Misc Support
 - :ghfile:`numba/core/caching.py` - Disk cache for compiled functions
 - :ghfile:`numba/np/npdatetime.py` - Helper functions for implementing NumPy
   datetime64 support
-
+- :ghfile:`numba/misc/llvm_pass_timings.py` - Helper to record timings of
+  LLVM passes.
+- :ghfile:`numba/cloudpickle` - Vendored cloudpickle subpackage
 
 Core Python Data Types
 ''''''''''''''''''''''
@@ -571,49 +581,3 @@ Note that the CUDA target does reuse some parts of the CPU target.
 - :ghfile:`numba/cuda/tests/cudadrv/` - Tests of Python wrapper around CUDA
   API
 
-
-ROCm GPU Target
-'''''''''''''''
-
-Note that the ROCm target does reuse some parts of the CPU target, and
-duplicates some code from CUDA target.  A future refactoring could
-pull out the common subset of CUDA and ROCm.  An older version of this
-target was based on the HSA API, so "hsa" appears in many places.
-
-- :ghfile:`numba/roc` - ROCm GPU target for AMD GPUs
-- :ghfile:`numba/roc/descriptor.py` - TargetDescriptor subclass for ROCm
-  target
-- :ghfile:`numba/roc/enums.py` - Internal constants
-- :ghfile:`numba/roc/mathdecl.py` - Declarations of math functions that can
-  be used on device
-- :ghfile:`numba/roc/mathimpl.py` - Implementations of math functions for
-  device
-- :ghfile:`numba/roc/compiler.py` - Compiler pipeline for ROCm target
-- :ghfile:`numba/roc/hlc` - Wrapper around LLVM interface for AMD GPU
-- :ghfile:`numba/roc/initialize.py` - Register ROCm target for ufunc/gufunc
-  compiler
-- :ghfile:`numba/roc/hsadecl.py` - Type signatures for ROCm device API in
-  Python
-- :ghfile:`numba/roc/hsaimpl.py` - Implementations of ROCm device API
-- :ghfile:`numba/roc/dispatch.py` - ufunc/gufunc dispatcher
-- :ghfile:`numba/roc/README.md` - Notes on testing target (should be
-  deleted)
-- :ghfile:`numba/roc/api.py` - Host API for ROCm actions
-- :ghfile:`numba/roc/gcn_occupancy.py` - Heuristic to compute occupancy of
-  kernels
-- :ghfile:`numba/roc/stubs.py` - Host stubs for device functions
-- :ghfile:`numba/roc/vectorizers.py` - Builds ufuncs
-- :ghfile:`numba/roc/target.py` - Target and typing contexts
-- :ghfile:`numba/roc/hsadrv` - Python wrapper around ROCm (based on HSA)
-  driver API calls
-- :ghfile:`numba/roc/codegen.py` - Codegen subclass for ROCm target
-- :ghfile:`numba/roc/decorators.py` - ``@jit`` decorator for kernels and
-  device functions
-- :ghfile:`numba/roc/servicelib/threadlocal.py` - Thread-local stack used by ROC
-  targets
-- :ghfile:`numba/roc/servicelib/service.py` - Should be removed?
-- :ghfile:`numba/roc/tests` - Unit tests for ROCm target
-- :ghfile:`numba/roc/tests/hsapy` - Tests of compiling ROCm kernels written
-  in Python syntax
-- :ghfile:`numba/roc/tests/hsadrv` - Tests of Python wrapper on platform
-  API.

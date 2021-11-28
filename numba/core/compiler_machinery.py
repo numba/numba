@@ -3,10 +3,10 @@ from abc import abstractmethod, ABCMeta
 from collections import namedtuple, OrderedDict
 import inspect
 from numba.core.compiler_lock import global_compiler_lock
-from numba.core import errors, config, transforms
+from numba.core import errors, config, transforms, utils
 from numba.core.tracing import event
 from numba.core.postproc import PostProcessor
-from numba.core.ir_utils import enforce_no_dels
+from numba.core.ir_utils import enforce_no_dels, legalize_single_scope
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -304,7 +304,11 @@ class PassManager(object):
                 else:  # CFG level changes rebuild CFG
                     internal_state.func_ir.blocks = transforms.canonicalize_cfg(
                         internal_state.func_ir.blocks)
-
+            # Check the func_ir has exactly one Scope instance
+            if not legalize_single_scope(internal_state.func_ir.blocks):
+                raise errors.CompilerError(
+                    f"multiple scope in func_ir detected in {pss}",
+                )
         # inject runtimes
         pt = pass_timings(init_time.elapsed, pass_time.elapsed,
                           finalize_time.elapsed)
@@ -333,6 +337,9 @@ class PassManager(object):
             except _EarlyPipelineCompletion as e:
                 raise e
             except Exception as e:
+                if (utils.use_new_style_errors() and not
+                        isinstance(e, errors.NumbaError)):
+                    raise e
                 msg = "Failed in %s mode pipeline (step: %s)" % \
                     (self.pipeline_name, pass_desc)
                 patched_exception = self._patch_error(msg, e)

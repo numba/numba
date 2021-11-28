@@ -3,14 +3,14 @@ Function descriptors.
 """
 
 from collections import defaultdict
-import sys
+import importlib
 
 from numba.core import types, itanium_mangler
 from numba.core.utils import _dynamic_modname, _dynamic_module
 
 
-def default_mangler(name, argtypes):
-    return itanium_mangler.mangle(name, argtypes)
+def default_mangler(name, argtypes, *, abi_tags=()):
+    return itanium_mangler.mangle(name, argtypes, abi_tags=abi_tags)
 
 
 def qualifying_prefix(modname, qualname):
@@ -33,12 +33,12 @@ class FunctionDescriptor(object):
     __slots__ = ('native', 'modname', 'qualname', 'doc', 'typemap',
                  'calltypes', 'args', 'kws', 'restype', 'argtypes',
                  'mangled_name', 'unique_name', 'env_name', 'global_dict',
-                 'inline', 'noalias')
+                 'inline', 'noalias', 'abi_tags')
 
     def __init__(self, native, modname, qualname, unique_name, doc,
                  typemap, restype, calltypes, args, kws, mangler=None,
                  argtypes=None, inline=False, noalias=False, env_name=None,
-                 global_dict=None):
+                 global_dict=None, abi_tags=()):
         self.native = native
         self.modname = modname
         self.global_dict = global_dict
@@ -64,13 +64,16 @@ class FunctionDescriptor(object):
         # The mangled name *must* be unique, else the wrong function can
         # be chosen at link time.
         qualprefix = qualifying_prefix(self.modname, self.unique_name)
-        self.mangled_name = mangler(qualprefix, self.argtypes)
+        self.mangled_name = mangler(
+            qualprefix, self.argtypes, abi_tags=abi_tags,
+        )
         if env_name is None:
             env_name = mangler(".NumbaEnv.{}".format(qualprefix),
-                               self.argtypes)
+                               self.argtypes, abi_tags=abi_tags)
         self.env_name = env_name
         self.inline = inline
         self.noalias = noalias
+        self.abi_tags = abi_tags
 
     def lookup_globals(self):
         """
@@ -90,11 +93,12 @@ class FunctionDescriptor(object):
             return _dynamic_module
         else:
             try:
-                return sys.modules[self.modname]
-            except:
+                # ensure module exist
+                return importlib.import_module(self.modname)
+            except ImportError:
                 raise ModuleNotFoundError(
                     f"can't compile {self.qualname}: "
-                    f"import of module {self.modname} failed")
+                    f"import of module {self.modname} failed") from None
 
     def lookup_function(self):
         """
@@ -161,15 +165,16 @@ class FunctionDescriptor(object):
         return qualname, unique_name, modname, doc, args, kws, global_dict
 
     @classmethod
-    def _from_python_function(cls, func_ir, typemap, restype, calltypes,
-                              native, mangler=None, inline=False, noalias=False):
+    def _from_python_function(cls, func_ir, typemap, restype,
+                              calltypes, native, mangler=None,
+                              inline=False, noalias=False, abi_tags=()):
         (qualname, unique_name, modname, doc, args, kws, global_dict,
-         )= cls._get_function_info(func_ir)
+         ) = cls._get_function_info(func_ir)
 
         self = cls(native, modname, qualname, unique_name, doc,
                    typemap, restype, calltypes,
                    args, kws, mangler=mangler, inline=inline, noalias=noalias,
-                   global_dict=global_dict)
+                   global_dict=global_dict, abi_tags=abi_tags)
         return self
 
 
@@ -181,14 +186,15 @@ class PythonFunctionDescriptor(FunctionDescriptor):
 
     @classmethod
     def from_specialized_function(cls, func_ir, typemap, restype, calltypes,
-                                  mangler, inline, noalias):
+                                  mangler, inline, noalias, abi_tags):
         """
         Build a FunctionDescriptor for a given specialization of a Python
         function (in nopython mode).
         """
         return cls._from_python_function(func_ir, typemap, restype, calltypes,
                                          native=True, mangler=mangler,
-                                         inline=inline, noalias=noalias)
+                                         inline=inline, noalias=noalias,
+                                         abi_tags=abi_tags)
 
     @classmethod
     def from_object_mode_function(cls, func_ir):
@@ -212,8 +218,10 @@ class ExternalFunctionDescriptor(FunctionDescriptor):
 
     def __init__(self, name, restype, argtypes):
         args = ["arg%d" % i for i in range(len(argtypes))]
-        super(ExternalFunctionDescriptor, self).__init__(native=True,
-                modname=None, qualname=name, unique_name=name, doc='',
-                typemap=None, restype=restype, calltypes=None,
-                args=args, kws=None, mangler=lambda a, x: a,
-                argtypes=argtypes)
+
+        super(ExternalFunctionDescriptor, self
+              ).__init__(native=True, modname=None, qualname=name,
+                         unique_name=name, doc='', typemap=None,
+                         restype=restype, calltypes=None, args=args,
+                         kws=None,
+                         mangler=lambda a, x, abi_tags: a, argtypes=argtypes)

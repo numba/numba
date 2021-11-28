@@ -418,12 +418,12 @@ class Expr(Inst):
         return cls(op=op, loc=loc, fn=fn, value=value)
 
     @classmethod
-    def call(cls, func, args, kws, loc, vararg=None):
+    def call(cls, func, args, kws, loc, vararg=None, target=None):
         assert isinstance(func, Var)
         assert isinstance(loc, Loc)
         op = 'call'
         return cls(op=op, loc=loc, func=func, args=args, kws=kws,
-                   vararg=vararg)
+                   vararg=vararg, target=target)
 
     @classmethod
     def build_tuple(cls, items, loc):
@@ -554,8 +554,23 @@ class Expr(Inst):
         This node is not handled by type inference. It is only added by
         post-typing passes.
         """
+        assert isinstance(loc, Loc)
         op = 'null'
         return cls(op=op, loc=loc)
+
+    @classmethod
+    def dummy(cls, op, info, loc):
+        """
+        A node for a dummy value.
+
+        This node is a place holder for carrying information through to a point
+        where it is rewritten into something valid. This node is not handled
+        by type inference or lowering. It's presence outside of the interpreter
+        renders IR as illegal.
+        """
+        assert isinstance(loc, Loc)
+        assert isinstance(op, str)
+        return cls(op=op, info=info, loc=loc)
 
     def __repr__(self):
         if self.op == 'call':
@@ -906,6 +921,16 @@ class EnterWith(Stmt):
 
     def list_vars(self):
         return [self.contextmanager]
+
+
+class PopBlock(Stmt):
+    """Marker statement for a pop block op code"""
+    def __init__(self, loc):
+        assert isinstance(loc, Loc)
+        self.loc = loc
+
+    def __str__(self):
+        return 'pop_block'
 
 
 class Arg(EqualityCheckMixin, AbstractRHS):

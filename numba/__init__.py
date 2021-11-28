@@ -53,6 +53,12 @@ from numba import experimental
 import numba.core.withcontexts
 from numba.core.withcontexts import objmode_context as objmode
 
+# Initialize target extensions
+import numba.core.target_extension
+
+# Initialize typed containers
+import numba.typed
+
 # Keep this for backward compatibility.
 test = runtests.main
 
@@ -66,7 +72,6 @@ __all__ = """
     njit
     stencil
     jit_module
-    jitclass
     typeof
     prange
     gdb
@@ -80,8 +85,8 @@ __all__ = """
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 33, 0)
-_min_llvm_version = (9, 0, 0)
+_min_llvmlite_version = (0, 38, 0)
+_min_llvm_version = (11, 0, 0)
 
 def _ensure_llvm():
     """
@@ -124,11 +129,11 @@ def _ensure_critical_deps():
     from numba.np.numpy_support import numpy_version
     from numba.core.utils import PYVERSION
 
-    if PYVERSION < (3, 6):
-        raise ImportError("Numba needs Python 3.6 or greater")
+    if PYVERSION < (3, 7):
+        raise ImportError("Numba needs Python 3.7 or greater")
 
-    if numpy_version < (1, 15):
-        raise ImportError("Numba needs NumPy 1.15 or greater")
+    if numpy_version < (1, 18):
+        raise ImportError("Numba needs NumPy 1.18 or greater")
 
     try:
         import scipy
@@ -207,6 +212,3 @@ config.USING_SVML = _try_enable_svml()
 # SVML state to "no SVML". See https://github.com/numba/numba/issues/4689 for
 # context.
 # ---------------------- WARNING WARNING WARNING ----------------------------
-
-# Initialize typed containers
-import numba.typed

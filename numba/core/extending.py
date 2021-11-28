@@ -2,6 +2,7 @@ import os
 import uuid
 import weakref
 import collections
+import functools
 
 import numba
 from numba.core import types, errors, utils, config
@@ -57,7 +58,7 @@ _overload_default_jit_options = {'no_cpython_wrapper': True}
 
 
 def overload(func, jit_options={}, strict=True, inline='never',
-             prefer_literal=False):
+             prefer_literal=False, **kwargs):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode.
@@ -109,6 +110,10 @@ def overload(func, jit_options={}, strict=True, inline='never',
     Implementations that can specialize based on literal values should set the
     option to `True`. Note, this option maybe expanded in the near future to
     allow for more control (e.g. disabling non-literal types).
+
+    **kwargs prescribes additional arguments passed through to the overload
+    template. The only accepted key at present is 'target' which is a string
+    corresponding to the target that this overload should be bound against.
     """
     from numba.core.typing.templates import make_overload_template, infer_global
 
@@ -116,9 +121,12 @@ def overload(func, jit_options={}, strict=True, inline='never',
     opts = _overload_default_jit_options.copy()
     opts.update(jit_options)  # let user options override
 
+    # TODO: abort now if the kwarg 'target' relates to an unregistered target,
+    # this requires sorting out the circular imports first.
+
     def decorate(overload_func):
         template = make_overload_template(func, overload_func, opts, strict,
-                                          inline, prefer_literal)
+                                          inline, prefer_literal, **kwargs)
         infer(template)
         if callable(func):
             infer_global(func, types.Function(template))
@@ -189,10 +197,30 @@ def overload_attribute(typ, attr, **kwargs):
     return decorate
 
 
+def _overload_method_common(typ, attr, **kwargs):
+    """Common code for overload_method and overload_classmethod
+    """
+    from numba.core.typing.templates import make_overload_method_template
+
+    def decorate(overload_func):
+        copied_kwargs = kwargs.copy() # avoid mutating parent dict
+        template = make_overload_method_template(
+            typ, attr, overload_func,
+            inline=copied_kwargs.pop('inline', 'never'),
+            prefer_literal=copied_kwargs.pop('prefer_literal', False),
+            **copied_kwargs,
+        )
+        infer_getattr(template)
+        overload(overload_func, **kwargs)(overload_func)
+        return overload_func
+
+    return decorate
+
+
 def overload_method(typ, attr, **kwargs):
     """
     A decorator marking the decorated function as typing and implementing
-    attribute *attr* for the given Numba type in nopython mode.
+    method *attr* for the given Numba type in nopython mode.
 
     *kwargs* are passed to the underlying `@overload` call.
 
@@ -209,19 +237,34 @@ def overload_method(typ, attr, **kwargs):
                     return res
                 return take_impl
     """
-    from numba.core.typing.templates import make_overload_method_template
+    return _overload_method_common(typ, attr, **kwargs)
 
-    def decorate(overload_func):
-        template = make_overload_method_template(
-            typ, attr, overload_func,
-            inline=kwargs.get('inline', 'never'),
-            prefer_literal=kwargs.get('prefer_literal', False)
-        )
-        infer_getattr(template)
-        overload(overload_func, **kwargs)(overload_func)
-        return overload_func
 
-    return decorate
+def overload_classmethod(typ, attr, **kwargs):
+    """
+    A decorator marking the decorated function as typing and implementing
+    classmethod *attr* for the given Numba type in nopython mode.
+
+
+    Similar to ``overload_method``.
+
+
+    Here is an example implementing a classmethod on the Array type to call
+    ``np.arange()``::
+
+        @overload_classmethod(types.Array, "make")
+        def ov_make(cls, nitems):
+            def impl(cls, nitems):
+                return np.arange(nitems)
+            return impl
+
+    The above code will allow the following to work in jit-compiled code::
+
+        @njit
+        def foo(n):
+            return types.Array.make(n)
+    """
+    return _overload_method_common(types.TypeRef(typ), attr, **kwargs)
 
 
 def make_attribute_wrapper(typeclass, struct_attr, python_attr):
@@ -277,9 +320,11 @@ class _Intrinsic(ReduceMixin):
 
     __uuid = None
 
-    def __init__(self, name, defn):
+    def __init__(self, name, defn, **kwargs):
+        self._ctor_kwargs = kwargs
         self._name = name
         self._defn = defn
+        functools.update_wrapper(self, defn)
 
     @property
     def _uuid(self):
@@ -302,10 +347,12 @@ class _Intrinsic(ReduceMixin):
         self._recent.append(self)
 
     def _register(self):
+        # _ctor_kwargs
         from numba.core.typing.templates import (make_intrinsic_template,
                                                  infer_global)
 
-        template = make_intrinsic_template(self, self._defn, self._name)
+        template = make_intrinsic_template(self, self._defn, self._name,
+                                           self._ctor_kwargs)
         infer(template)
         infer_global(self, types.Function(template))
 

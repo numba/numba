@@ -2,7 +2,7 @@ from __future__ import print_function
 
 import numpy as np
 
-from numba import config, cuda, int32, void
+from numba import config, cuda, int32
 from numba.cuda.testing import (unittest, CUDATestCase, skip_on_cudasim,
                                 skip_unless_cc_60, skip_if_cudadevrt_missing)
 
@@ -63,8 +63,8 @@ class TestCudaCooperativeGroups(CUDATestCase):
         this_grid[1, 1](A)
 
         # this_grid should have been determined to be cooperative
-        for key, defn in this_grid.definitions.items():
-            self.assertTrue(defn.cooperative)
+        for key, overload in this_grid.overloads.items():
+            self.assertTrue(overload.cooperative)
 
     @skip_unless_cc_60
     def test_sync_group(self):
@@ -80,9 +80,9 @@ class TestCudaCooperativeGroups(CUDATestCase):
     def test_sync_group_is_cooperative(self):
         A = np.full(1, fill_value=np.nan)
         sync_group[1, 1](A)
-        # this_grid should have been determined to be cooperative
-        for key, defn in this_grid.definitions.items():
-            self.assertTrue(defn.cooperative)
+        # sync_group should have been determined to be cooperative
+        for key, overload in sync_group.overloads.items():
+            self.assertTrue(overload.cooperative)
 
     @skip_on_cudasim("Simulator does not implement linking")
     def test_false_cooperative_doesnt_link_cudadevrt(self):
@@ -94,9 +94,9 @@ class TestCudaCooperativeGroups(CUDATestCase):
         A = np.full(1, fill_value=np.nan)
         no_sync[1, 1](A)
 
-        for key, defn in no_sync.definitions.items():
-            self.assertFalse(defn.cooperative)
-            for link in defn._func.linking:
+        for key, overload in no_sync.overloads.items():
+            self.assertFalse(overload.cooperative)
+            for link in overload._codelibrary._linking_files:
                 self.assertNotIn('cudadevrt', link)
 
     @skip_unless_cc_60
@@ -111,9 +111,11 @@ class TestCudaCooperativeGroups(CUDATestCase):
         blockdim = 32
         griddim = A.shape[1] // blockdim
 
-        c_sequential_rows = cuda.jit(void(int32[:,::1]))(sequential_rows)
+        sig = (int32[:,::1],)
+        c_sequential_rows = cuda.jit(sig)(sequential_rows)
 
-        mb = c_sequential_rows.definition.max_cooperative_grid_blocks(blockdim)
+        overload = c_sequential_rows.overloads[sig]
+        mb = overload.max_cooperative_grid_blocks(blockdim)
         if griddim > mb:
             unittest.skip("GPU cannot support enough cooperative grid blocks")
 
@@ -129,11 +131,12 @@ class TestCudaCooperativeGroups(CUDATestCase):
         # doesn't error, and that varying the number of dimensions of the block
         # whilst keeping the total number of threads constant doesn't change
         # the maximum to validate some of the logic.
-        c_sequential_rows = cuda.jit(void(int32[:,::1]))(sequential_rows)
-        defn = c_sequential_rows.definition
-        blocks1d = defn.max_cooperative_grid_blocks(256)
-        blocks2d = defn.max_cooperative_grid_blocks((16, 16))
-        blocks3d = defn.max_cooperative_grid_blocks((16, 4, 4))
+        sig = (int32[:,::1],)
+        c_sequential_rows = cuda.jit(sig)(sequential_rows)
+        overload = c_sequential_rows.overloads[sig]
+        blocks1d = overload.max_cooperative_grid_blocks(256)
+        blocks2d = overload.max_cooperative_grid_blocks((16, 16))
+        blocks3d = overload.max_cooperative_grid_blocks((16, 4, 4))
         self.assertEqual(blocks1d, blocks2d)
         self.assertEqual(blocks1d, blocks3d)
 

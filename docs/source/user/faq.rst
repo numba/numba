@@ -3,6 +3,75 @@
 Frequently Asked Questions
 ==========================
 
+Installation
+============
+
+Numba could not be imported
+---------------------------
+
+If you are seeing an exception on importing Numba with an error message
+that starts with::
+
+    ImportError: Numba could not be imported.
+
+here are some common issues and things to try to fix it.
+
+#. Your installation has more than one version of Numba a given environment.
+
+   Common ways this occurs include:
+
+   * Installing Numba with conda and then installing again with pip.
+   * Installing Numba with pip and then updating to a new version with pip (pip
+     re-installations don't seem to always clean up very well).
+
+   To fix this the best approach is to create an entirely new environment and
+   install a single version of Numba in that environment using a package manager
+   of your choice.
+
+#. Your installation has Numba for Python version X but you are running with
+   Python version Y.
+
+   This occurs due to a variety of Python environment mix-up/mismatch problems.
+   The most common mismatch comes from installing Numba into the
+   site-packages/environment of one version of Python by using a base or
+   system installation of Python that is a different version, this typically
+   happens through the use of the "wrong" ``pip`` binary. This will obviously
+   cause problems as the C-Extensions on which Numba relies are bound to
+   specific Python versions. A way to check if this likely the problem is to
+   see if the path to the ``python`` binary at::
+
+       python -c 'import sys; print(sys.executable)'
+
+   matches the path to your installation tool and/or matches the reported
+   installation location and if the Python versions match up across all of
+   these. Note that Python version ``X.Y.A`` is compatible with ``X.Y.B``.
+
+   To fix this the best approach is to create an entirely new environment and
+   ensure that the installation tool used to install Numba is the one from that
+   environment/the Python versions at install and run time match.
+
+#. Your core system libraries are too old.
+
+   This is a somewhat rare occurrence, but there are occasions when a very old
+   (typically out of support) version of Linux is in use it doesn't have a
+   ``glibc`` library with sufficiently new versioned symbols for Numba's shared
+   libraries to resolve against. The fix for this is to update your OS system
+   libraries/update your OS.
+
+#. You are using an IDE e.g. Spyder.
+
+   There are some unknown issues in relation to installing Numba via IDEs, but
+   it would appear that these are likely variations of 1. or 2. with the same
+   suggested fixes. Also, try installation from outside of the IDE with the
+   command line.
+
+
+If you have an installation problem which is not one of the above problems,
+please do ask on `numba.discourse.group <https://numba.discourse.group/>`_ and
+if possible include the path where Numba is installed and also the output of::
+
+    python -c 'import sys; print(sys.executable)'
+
 
 Programming
 ===========
@@ -102,8 +171,8 @@ Does Numba vectorize array computations (SIMD)?
 Numba doesn't implement such optimizations by itself, but it lets LLVM
 apply them.
 
-Why my loop is not vectorized?
-------------------------------
+Why has my loop not vectorized?
+-------------------------------
 
 Numba enables the loop-vectorize optimization in LLVM by default.
 While it is a powerful optimization, not all loops are applicable.
@@ -150,6 +219,16 @@ In this case, vectorization is rejected because the vectorized code may behave
 differently.  This is a case to try turning on ``fastmath=True`` to allow
 fastmath instructions.
 
+Why are the ``typed`` containers slower when used from the interpreter?
+-----------------------------------------------------------------------
+
+The Numba ``typed`` containers found in ``numba.typed`` e.g.
+``numba.typed.List`` store their data in an efficient form for access from JIT
+compiled code. When these containers are used from the CPython interpreter, the
+data involved has to be converted from/to the container format. This process is
+relatively costly and as a result impacts performance. In JIT compiled code no
+such penalty exists and so operations on the containers are much quicker and
+often faster than the pure Python equivalent.
 
 Does Numba automatically parallelize code?
 ------------------------------------------
@@ -211,7 +290,7 @@ functions inside the child processes or after the process pool is created.
 However, this is not always possible, as you might want to query the number of
 available GPUs before starting the process pool.  In Python 3, you can change
 the process start method, as described in the `multiprocessing documentation
-<https://docs.python.org/3.6/library/multiprocessing.html#contexts-and-start-methods>`_.
+<https://docs.python.org/3.9/library/multiprocessing.html#contexts-and-start-methods>`_.
 Switching from ``fork`` to ``spawn`` or ``forkserver`` will avoid the CUDA
 initalization issue, although the child processes will not inherit any global
 variables from their parent.

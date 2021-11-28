@@ -25,16 +25,6 @@ def _init():
     Vectorize.target_registry.ondemand['cuda'] = init_cuda_vectorize
     GUVectorize.target_registry.ondemand['cuda'] = init_cuda_guvectorize
 
-    def init_roc_vectorize():
-        from numba.roc.vectorizers import HsaVectorize
-        return HsaVectorize
-
-    def init_roc_guvectorize():
-        from numba.roc.vectorizers import HsaGUFuncVectorize
-        return HsaGUFuncVectorize
-
-    Vectorize.target_registry.ondemand['roc'] = init_roc_vectorize
-    GUVectorize.target_registry.ondemand['roc'] = init_roc_guvectorize
 
 _init()
 del _init

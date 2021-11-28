@@ -196,7 +196,6 @@ numba_signbit(npy_double a)
     return npy_signbit(a);
 }
 
-
 /* Unpack any Python complex-like object into a Py_complex structure */
 NUMBA_EXPORT_FUNC(int)
 numba_complex_adaptor(PyObject* obj, Py_complex *out) {

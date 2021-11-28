@@ -65,6 +65,8 @@ intc                    --               C int-sized integer
 uintc                   --               C int-sized unsigned integer
 intp                    --               pointer-sized integer
 uintp                   --               pointer-sized unsigned integer
+ssize_t                 --               C ssize_t
+size_t                  --               C size_t
 
 float32                 f4               single-precision floating-point number
 float64, double         f8               double-precision floating-point number
@@ -76,9 +78,9 @@ complex128              c16              double-precision complex number
 Arrays
 ------
 
-The easy way to declare array types is to subscript an elementary type
-according to the number of dimensions.  For example a 1-dimension
-single-precision array::
+The easy way to declare :class:`~numba.types.Array` types is to subscript an
+elementary type according to the number of dimensions. For example a 
+1-dimension single-precision array::
 
    >>> numba.float32[:]
    array(float32, 1d, A)

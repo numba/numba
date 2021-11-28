@@ -15,13 +15,14 @@ All functions described here are threadsafe.
 /* Debugging facilities - enabled at compile-time */
 /* #undef NDEBUG */
 #if 0
-#   define NRT_Debug(X) X
+#   define NRT_Debug(X) {X; fflush(stdout); }
 #else
 #   define NRT_Debug(X) if (0) { X; }
 #endif
 
 /* TypeDefs */
 typedef void (*NRT_dtor_function)(void *ptr, size_t size, void *info);
+typedef void (*NRT_dealloc_func)(void *ptr, void *dealloc_info);
 typedef size_t (*NRT_atomic_inc_dec_func)(size_t *ptr);
 typedef int (*NRT_atomic_cas_func)(void * volatile *ptr, void *cmp, void *repl,
                                    void **oldptr);
@@ -31,7 +32,6 @@ typedef struct MemSys NRT_MemSys;
 typedef void *(*NRT_malloc_func)(size_t size);
 typedef void *(*NRT_realloc_func)(void *ptr, size_t new_size);
 typedef void (*NRT_free_func)(void *ptr);
-
 
 /* Memory System API */
 
@@ -99,9 +99,14 @@ VISIBILITY_HIDDEN
 NRT_MemInfo* NRT_MemInfo_new(void *data, size_t size,
                              NRT_dtor_function dtor, void *dtor_info);
 
+/*
+ * The `external_allocator` is for experimental API to customize the allocator.
+ * Set to NULL to use the default builtin allocator.
+ */
 VISIBILITY_HIDDEN
 void NRT_MemInfo_init(NRT_MemInfo *mi, void *data, size_t size,
-                      NRT_dtor_function dtor, void *dtor_info);
+                      NRT_dtor_function dtor, void *dtor_info,
+                      NRT_ExternalAllocator *external_allocator);
 
 /*
  * Returns the refcount of a MemInfo or (size_t)-1 if error.
@@ -115,6 +120,8 @@ size_t NRT_MemInfo_refcount(NRT_MemInfo *mi);
  */
 VISIBILITY_HIDDEN
 NRT_MemInfo *NRT_MemInfo_alloc(size_t size);
+
+NRT_MemInfo *NRT_MemInfo_alloc_external(size_t size, NRT_ExternalAllocator *allocator);
 
 /*
  * The "safe" NRT_MemInfo_alloc performs additional steps to help debug
@@ -140,6 +147,12 @@ VISIBILITY_HIDDEN
 NRT_MemInfo *NRT_MemInfo_alloc_aligned(size_t size, unsigned align);
 VISIBILITY_HIDDEN
 NRT_MemInfo *NRT_MemInfo_alloc_safe_aligned(size_t size, unsigned align);
+
+/*
+ * Experimental.
+ * A variation to use an external allocator.
+ */
+NRT_MemInfo *NRT_MemInfo_alloc_safe_aligned_external(size_t size, unsigned align, NRT_ExternalAllocator *allocator);
 
 /*
  * Internal API.
@@ -181,6 +194,20 @@ size_t NRT_MemInfo_size(NRT_MemInfo* mi);
 
 
 /*
+ * Experimental.
+ * Returns the external allocator
+ */
+VISIBILITY_HIDDEN
+void* NRT_MemInfo_external_allocator(NRT_MemInfo* mi);
+
+/*
+ * Returns the parent MemInfo
+ */
+VISIBILITY_HIDDEN
+void* NRT_MemInfo_parent(NRT_MemInfo* mi);
+
+
+/*
  * NRT API for resizable buffers.
  */
 VISIBILITY_HIDDEN
@@ -209,6 +236,13 @@ void NRT_MemInfo_dump(NRT_MemInfo *mi, FILE *out);
 VISIBILITY_HIDDEN void* NRT_Allocate(size_t size);
 
 /*
+ * Experimental
+ *
+ * An alternative allocator that allows using an external allocator.
+ */
+VISIBILITY_HIDDEN void* NRT_Allocate_External(size_t size, NRT_ExternalAllocator *allocator);
+
+/*
  * Deallocate memory pointed by `ptr`.
  */
 VISIBILITY_HIDDEN void NRT_Free(void *ptr);
@@ -227,5 +261,12 @@ VISIBILITY_HIDDEN void nrt_debug_print(char *fmt, ...);
  * Get API function table.
  */
 VISIBILITY_HIDDEN const NRT_api_functions* NRT_get_api(void);
+
+
+/*
+ * FOR INTERNAL USE ONLY.
+ * Get a sample external allocator for testing
+ */
+VISIBILITY_HIDDEN NRT_ExternalAllocator* _nrt_get_sample_external_allocator(void);
 
 #endif /* NUMBA_NRT_H_ */

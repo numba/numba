@@ -10,10 +10,10 @@ from numba.core.datamodel.testing import test_factory
 
 
 enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
+enable_pyobj_flags.enable_pyobject = True
 
 forceobj_flags = Flags()
-forceobj_flags.set("force_pyobject")
+forceobj_flags.force_pyobject = True
 
 no_pyobj_flags = Flags()
 
@@ -126,6 +126,19 @@ def gen_optional_and_type_unification_error():
     yield 1j
     while True:
         i = yield i
+
+
+def gen_changing_tuple_type():
+    # https://github.com/numba/numba/issues/7295
+    yield 1, 2
+    yield 3, 4
+
+
+def gen_changing_number_type():
+    # additional test for https://github.com/numba/numba/issues/7295
+    yield 1
+    yield 3.5
+    yield 67.8j
 
 
 class TestGenerators(MemoryLeakMixin, TestCase):
@@ -339,6 +352,20 @@ class TestGenerators(MemoryLeakMixin, TestCase):
         msg = ("Can't unify yield type from the following types: complex128, "
                "int%s, none")
         self.assertIn(msg % types.intp.bitwidth, str(e.exception))
+
+    def test_changing_tuple_type(self):
+        # test https://github.com/numba/numba/issues/7295
+        pyfunc = gen_changing_tuple_type
+        expected = list(pyfunc())
+        got = list(njit(pyfunc)())
+        self.assertEqual(expected, got)
+
+    def test_changing_number_type(self):
+        # additional test for https://github.com/numba/numba/issues/7295
+        pyfunc = gen_changing_number_type
+        expected = list(pyfunc())
+        got = list(njit(pyfunc)())
+        self.assertEqual(expected, got)
 
 
 def nrt_gen0(ary):

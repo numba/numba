@@ -4,14 +4,10 @@ Tests for numba.types.
 
 
 from collections import namedtuple
-import contextlib
 import gc
-import importlib
 import os
 import operator
-import shutil
 import sys
-import uuid
 import weakref
 
 import numpy as np
@@ -23,7 +19,7 @@ from numba.core.typing.templates import make_overload_template
 from numba import jit, njit, typeof
 from numba.core.extending import (overload, register_model, models, unbox,
                                   NativeValue, typeof_impl)
-from numba.tests.support import TestCase, temp_directory
+from numba.tests.support import TestCase, create_temp_module
 from numba.tests.enum_usecases import Color, Shake, Shape
 import unittest
 from numba.np import numpy_support
@@ -94,6 +90,14 @@ class TestTypes(TestCase):
 
         # Different dtypes
         self.assertNotEqual(types.DType(types.int32), types.DType(types.int64))
+
+        # CPointer with same addrspace
+        self.assertEqual(types.CPointer(types.float32),
+                         types.CPointer(types.float32))
+
+        # CPointer with different addrspace
+        self.assertNotEqual(types.CPointer(types.float32, 0),
+                            types.CPointer(types.float32, 1))
 
     def test_weaktype(self):
         d = Dummy()
@@ -474,7 +478,7 @@ class TestPickling(TestCase):
         recordtype = np.dtype([('a', np.float64),
                                ('b', np.int32),
                                ('c', np.complex64),
-                               ('d', (np.str, 5))])
+                               ('d', (np.str_, 5))])
         ty = numpy_support.from_dtype(recordtype)
         self.check_pickling(ty)
         self.check_pickling(types.Array(ty, 1, 'A'))
@@ -640,35 +644,10 @@ class FooType(types.Type):
         super(FooType, self).__init__(name='Foo')
 """
 
-    # this is largely copied (with some modifications) from test_jit_module
-    @contextlib.contextmanager
-    def create_temp_module(self, source_lines=None, **jit_options):
-        # Use try/finally so cleanup happens even when an exception is raised
-        try:
-            if source_lines is None:
-                source_lines = self.source_lines
-            tempdir = temp_directory('test_extension_type')
-            # Generate random module name
-            temp_module_name = 'test_extension_type_{}'.format(
-                str(uuid.uuid4()).replace('-', '_'))
-            temp_module_path = os.path.join(tempdir, temp_module_name + '.py')
-
-            with open(temp_module_path, 'w') as f:
-                lines = source_lines.format(jit_options=jit_options)
-                f.write(lines)
-            # Add test_module to sys.path so it can be imported
-            sys.path.insert(0, tempdir)
-            test_module = importlib.import_module(temp_module_name)
-            yield test_module
-        finally:
-            sys.modules.pop(temp_module_name, None)
-            sys.path.remove(tempdir)
-            shutil.rmtree(tempdir)
-
     def test_create_temp_module(self):
         sys_path_original = list(sys.path)
         sys_modules_original = dict(sys.modules)
-        with self.create_temp_module() as test_module:
+        with create_temp_module(self.source_lines) as test_module:
             temp_module_dir = os.path.dirname(test_module.__file__)
             self.assertEqual(temp_module_dir, sys.path[0])
             self.assertEqual(sys.path[1:], sys_path_original)
@@ -681,7 +660,7 @@ class FooType(types.Type):
         try:
             sys_path_original = list(sys.path)
             sys_modules_original = dict(sys.modules)
-            with self.create_temp_module():
+            with create_temp_module(self.source_lines):
                 raise ValueError("Something went wrong!")
         except ValueError:
             # Test that modifications to sys.path / sys.modules are reverted
@@ -690,7 +669,7 @@ class FooType(types.Type):
 
     def test_externally_defined_type_is_external(self):
 
-        with self.create_temp_module(self.source_lines) as test_module:
+        with create_temp_module(self.source_lines) as test_module:
             FooType = test_module.FooType
             self.assertFalse(FooType().is_internal)
 
@@ -763,7 +742,7 @@ class FooType(types.Type):
         # See issue #4970, this checks that unicode eq/ne now ignores extension
         # types.
 
-        with self.create_temp_module(self.source_lines) as test_module:
+        with create_temp_module(self.source_lines) as test_module:
             FooType = test_module.FooType
             self.assertFalse(FooType().is_internal)
 

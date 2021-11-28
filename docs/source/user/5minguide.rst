@@ -12,11 +12,13 @@ part of your code can subsequently run at native machine code speed!
 
 Out of the box Numba works with the following:
 
-* OS: Windows (32 and 64 bit), OSX and Linux (32 and 64 bit)
-* Architecture: x86, x86_64, ppc64le. Experimental on armv7l, armv8l (aarch64).
-* GPUs: Nvidia CUDA. Experimental on AMD ROC.
+* OS: Windows (32 and 64 bit), OSX, Linux (32 and 64 bit). Unofficial support on
+  \*BSD.
+* Architecture: x86, x86_64, ppc64le, armv7l, armv8l (aarch64). Unofficial
+  support on M1/Arm64.
+* GPUs: Nvidia CUDA.
 * CPython
-* NumPy 1.15 - latest
+* NumPy 1.18 - latest
 
 How do I get it?
 ----------------
@@ -215,8 +217,7 @@ ctypes/cffi/cython interoperability:
 GPU targets:
 ~~~~~~~~~~~~
 
-Numba can target `Nvidia CUDA <https://developer.nvidia.com/cuda-zone>`_ and
-(experimentally) `AMD ROC <https://rocm.github.io/>`_ GPUs. You can write a
-kernel in pure Python and have Numba handle the computation and data movement
-(or do this explicitly). Click for Numba documentation on
-:ref:`CUDA <cuda-index>` or :ref:`ROC <roc-index>`.
+Numba can target `Nvidia CUDA <https://developer.nvidia.com/cuda-zone>`_ GPUs.
+You can write a kernel in pure Python and have Numba handle the computation and
+data movement (or do this explicitly). Click for Numba documentation on
+:ref:`CUDA <cuda-index>`.

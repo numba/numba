@@ -2,26 +2,28 @@ import itertools
 import functools
 import sys
 import operator
+from collections import namedtuple
 
 import numpy as np
 
 import unittest
 from numba.core.compiler import compile_isolated, Flags
-from numba import jit, typeof, njit
+from numba import jit, typeof, njit, typed
 from numba.core import errors, types, utils, config
 from numba.tests.support import TestCase, tag
 
+py38orlater = utils.PYVERSION >= (3, 8)
 
 enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
+enable_pyobj_flags.enable_pyobject = True
 
 forceobj_flags = Flags()
-forceobj_flags.set("force_pyobject")
+forceobj_flags.force_pyobject = True
 
 no_pyobj_flags = Flags()
 
 nrt_no_pyobj_flags = Flags()
-nrt_no_pyobj_flags.set("nrt")
+nrt_no_pyobj_flags.nrt = True
 
 
 def abs_usecase(x):
@@ -137,7 +139,6 @@ def min_usecase3(x):
 def min_usecase4():
     return min(())
 
-
 def oct_usecase(x):
     return oct(x)
 
@@ -205,6 +206,18 @@ def pow_op_usecase(x, y):
 
 def pow_usecase(x, y):
     return pow(x, y)
+
+
+def sum_usecase(x):
+    return sum(x)
+
+
+def sum_kwarg_usecase(x, start=0):
+    ret = sum(x, start)
+    if py38orlater:
+        return sum(x, start=start), ret
+    else:
+        return ret
 
 
 class TestBuiltins(TestCase):
@@ -825,7 +838,7 @@ class TestBuiltins(TestCase):
     def test_round2_npm(self):
         self.test_round2(flags=no_pyobj_flags)
 
-    def test_sum(self, flags=enable_pyobj_flags):
+    def test_sum_objmode(self, flags=enable_pyobj_flags):
         pyfunc = sum_usecase
 
         cr = compile_isolated(pyfunc, (types.Dummy('list'),), flags=flags)
@@ -840,9 +853,100 @@ class TestBuiltins(TestCase):
         x = [complex(x, x) for x in range(10)]
         self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
-    def test_sum_npm(self):
-        with self.assertTypingError():
-            self.test_sum(flags=no_pyobj_flags)
+    def test_sum(self):
+        # In Python 3.8 "start" can be specified as a kwarg, so test that too
+        sum_default = njit(sum_usecase)
+        sum_kwarg = njit(sum_kwarg_usecase)
+
+        @njit
+        def sum_range(sz, start=0):
+            tmp = range(sz)
+            ret = sum(tmp, start)
+            if py38orlater:
+                return sum(tmp, start=start), ret
+            else:
+                return ret
+
+        ntpl = namedtuple('ntpl', ['a', 'b'])
+
+        # check call with default kwarg, start=0
+        def args():
+            yield [*range(10)]
+            yield [x + x/10.0 for x in range(10)]
+            yield [x * 1j for x in range(10)]
+            yield (1, 2, 3)
+            yield (1, 2, 3j)
+            # uints will likely end up as floats as `start` is signed, so just
+            # test mixed signed ints
+            yield (np.int64(32), np.int32(2), np.int8(3))
+            tl = typed.List(range(5))
+            yield tl
+            yield np.ones(5)
+            yield ntpl(100, 200)
+            yield ntpl(100, 200j)
+
+        for x in args():
+            self.assertPreciseEqual(sum_default(x), sum_default.py_func(x))
+
+        # Check the uint use case, as start is signed, NumPy will end up with
+        # a float result whereas Numba will end up with an int (see integer
+        # typing NBEP).
+        x = (np.uint64(32), np.uint32(2), np.uint8(3))
+        self.assertEqual(sum_default(x), sum_default.py_func(x))
+
+        # check call with changing default kwarg, start
+        def args_kws():
+            yield [*range(10)], 12
+            yield [x + x/10.0 for x in range(10)], 19j
+            yield [x * 1j for x in range(10)], -2
+            yield (1, 2, 3), 9
+            yield (1, 2, 3j), -0
+            # uints will likely end up as floats as `start` is signed, so just
+            # test mixed signed ints
+            yield (np.int64(32), np.int32(2), np.int8(3)), np.uint32(7)
+            tl = typed.List(range(5))
+            yield tl, 100
+            yield np.ones((5, 5)), 10 * np.ones((5,))
+            yield ntpl(100, 200), -50
+            yield ntpl(100, 200j), 9
+
+        for x, start in args_kws():
+            self.assertPreciseEqual(sum_kwarg(x, start=start),
+                                    sum_kwarg.py_func(x, start=start))
+
+        # check call with range()
+        for start in range(-3, 4):
+            for sz in range(-3, 4):
+                self.assertPreciseEqual(sum_range(sz, start=start),
+                                        sum_range.py_func(sz, start=start))
+
+    def test_sum_exceptions(self):
+        sum_default = njit(sum_usecase)
+        sum_kwarg = njit(sum_kwarg_usecase)
+
+        # check start as string/bytes/bytearray is error
+        msg = "sum() can't sum {}"
+
+        with self.assertRaises(errors.TypingError) as raises:
+            sum_kwarg((1, 2, 3), 'a')
+
+        self.assertIn(msg.format('strings'), str(raises.exception))
+
+        with self.assertRaises(errors.TypingError) as raises:
+            sum_kwarg((1, 2, 3), b'123')
+
+        self.assertIn(msg.format('bytes'), str(raises.exception))
+
+        with self.assertRaises(errors.TypingError) as raises:
+            sum_kwarg((1, 2, 3), bytearray(b'123'))
+
+        self.assertIn(msg.format('bytearray'), str(raises.exception))
+
+        # check invalid type has no impl
+        with self.assertRaises(errors.TypingError) as raises:
+            sum_default('abcd')
+
+        self.assertIn('No implementation', str(raises.exception))
 
     def test_truth(self):
         pyfunc = truth_usecase

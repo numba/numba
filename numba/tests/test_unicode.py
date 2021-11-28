@@ -6,7 +6,7 @@ from numba import njit
 from numba.core import types, utils
 import unittest
 from numba.tests.support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
-from numba.core.errors import TypingError
+from numba.core.errors import TypingError, UnsupportedError
 from numba.cpython.unicode import _MAX_UNICODE
 from numba.core.types.functions import _header_lead
 from numba.extending import overload
@@ -445,6 +445,28 @@ class TestUnicode(BaseTest):
                                  cfunc(a, 1), '%s, %s' % (a, 1))
                 self.assertEqual(pyfunc(1, b),
                                  cfunc(1, b), '%s, %s' % (1, b))
+
+    def test_eq_optional(self):
+        # See issue #7474
+        @njit
+        def foo(pred1, pred2):
+            if pred1 > 0:
+                resolved1 = 'concrete'
+            else:
+                resolved1 = None
+            if pred2 < 0:
+                resolved2 = 'concrete'
+            else:
+                resolved2 = None
+
+            # resolved* are Optionals
+            if resolved1 == resolved2:
+                return 10
+            else:
+                return 20
+
+        for (p1, p2) in product(*((-1, 1),) * 2):
+            self.assertEqual(foo(p1, p2), foo.py_func(p1, p2))
 
     def _check_ordering_op(self, usecase):
         pyfunc = usecase
@@ -2548,6 +2570,45 @@ class TestUnicodeAuxillary(BaseTest):
         inst = "abc"
         self.assertEqual(foo.py_func(inst), foo(inst))
         self.assertIn(types.Hashable, types.unicode_type.__class__.__mro__)
+
+    def test_f_strings(self):
+        """test f-string support, which requires bytecode handling
+        """
+        # requires formatting (FORMAT_VALUE) and concatenation (BUILD_STRINGS)
+        def impl1(a):
+            return f"AA_{a+3}_B"
+
+        # does not require concatenation
+        def impl2(a):
+            return f"{a+2}"
+
+        # no expression
+        def impl3(a):
+            return f"ABC_{a}"
+
+        # format spec not allowed
+        def impl4(a):
+            return f"ABC_{a:0}"
+
+        # corner case: empty string
+        def impl5():
+            return f""  # noqa: F541
+
+        self.assertEqual(impl1(3), njit(impl1)(3))
+        self.assertEqual(impl2(2), njit(impl2)(2))
+        # string input
+        self.assertEqual(impl3("DE"), njit(impl3)("DE"))
+        # check error when input type doesn't have str() implementation
+        with self.assertRaises(TypingError) as raises:
+            njit(impl3)(["A", "B"])
+        msg = "No implementation of function Function(<class 'str'>)"
+        self.assertIn(msg, str(raises.exception))
+        # check error when format spec provided
+        with self.assertRaises(UnsupportedError) as raises:
+            njit(impl4)(["A", "B"])
+        msg = "format spec in f-strings not supported yet"
+        self.assertIn(msg, str(raises.exception))
+        self.assertEqual(impl5(), njit(impl5)())
 
 
 if __name__ == '__main__':

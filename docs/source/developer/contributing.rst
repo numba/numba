@@ -35,19 +35,15 @@ Numba uses Discourse as a forum for longer running threads such as design
 discussions and roadmap planning. There are various categories available and it
 can be reached at: `numba.discourse.group <https://numba.discourse.group/>`_.
 
-Mailing-list
-''''''''''''
-
-We have a public mailing-list that you can e-mail at numba-users@anaconda.com.
-You can subscribe and read the archives on
-`Google Groups <https://groups.google.com/a/continuum.io/forum/#!forum/numba-users>`_.
-
 Weekly Meetings
 '''''''''''''''
 
 The core Numba developers have a weekly video conference to discuss roadmap,
-feature planning, and outstanding issues.  These meetings are invite only, but
-minutes will be taken and will be posted to the
+feature planning, and outstanding issues.  These meetings are entirely public,
+details are posted on
+`numba.discourse.group Announcements <https://numba.discourse.group/c/announcements/>`_
+and everyone is welcome to join the discussion. Minutes will be taken and will
+be posted to the
 `Numba wiki <https://github.com/numba/numba/wiki/Meeting-Minutes>`_.
 
 .. _report-numba-bugs:
@@ -98,10 +94,10 @@ of the llvmlite library::
 
 Then create an environment with the right dependencies::
 
-   $ conda create -n numbaenv python=3.6 llvmlite numpy scipy jinja2 cffi
+   $ conda create -n numbaenv python=3.8 llvmlite numpy scipy jinja2 cffi
 
 .. note::
-   This installs an environment based on Python 3.6, but you can of course
+   This installs an environment based on Python 3.8, but you can of course
    choose another version supported by Numba.  To test additional features,
    you may also need to install ``tbb`` and/or ``llvm-openmp`` and
    ``intel-openmp``.
@@ -118,12 +114,13 @@ Once the environment is activated, you have a dedicated Python with the
 required dependencies::
 
     $ python
-    Python 3.6.6 |Anaconda, Inc.| (default, Jun 28 2018, 11:07:29)
-    [GCC 4.2.1 Compatible Clang 4.0.1 (tags/RELEASE_401/final)] on darwin
+    Python 3.8.5 (default, Sep  4 2020, 07:30:14) 
+    [GCC 7.3.0] :: Anaconda, Inc. on linux
     Type "help", "copyright", "credits" or "license" for more information.
+
     >>> import llvmlite
     >>> llvmlite.__version__
-    '0.24.0'
+    '0.35.0'
 
 
 Building Numba
@@ -291,14 +288,14 @@ Platform support
 ''''''''''''''''
 
 Every commit to the master branch is automatically tested on all of the
-platforms Numba supports. This includes ARMv7, ARMv8, POWER8, as well as both
-AMD and NVIDIA GPUs.  The build system however is internal to Anaconda, so we
-also use `Azure <https://dev.azure.com/numba/numba/_build>`_ to provide public
-continuous integration information for as many combinations as can be supported
-by the service.  Azure CI automatically tests all pull requests on Windows, OS X
-and Linux, as well as a sampling of different Python and NumPy versions. If you
-see problems on platforms you are unfamiliar with, feel free to ask for help in
-your pull request. The Numba core developers can help diagnose cross-platform
+platforms Numba supports. This includes ARMv8, POWER8, and NVIDIA GPUs.
+The build system however is internal to Anaconda, so we also use
+`Azure <https://dev.azure.com/numba/numba/_build>`_ to provide public continuous
+integration information for as many combinations as can be supported by the
+service.  Azure CI automatically tests all pull requests on Windows, OS X and
+Linux, as well as a sampling of different Python and NumPy versions. If you see
+problems on platforms you are unfamiliar with, feel free to ask for help in your
+pull request. The Numba core developers can help diagnose cross-platform
 compatibility issues. Also see the :ref:`continuous integration
 <continuous_integration_testing>` section on how public CI is implemented.
 
@@ -318,7 +315,7 @@ The Numba test suite causes CI systems a lot of grief:
 #. The combination of things that Numba has to test well exceeds the capacity of
    any public CI system, (Python versions x NumPy versions x Operating systems
    x Architectures x feature libraries (e.g. SVML) x threading backends
-   (e.g. OpenMP, TBB)) and then there's CUDA and ROCm too and all their version
+   (e.g. OpenMP, TBB)) and then there's CUDA too and all its version
    variants.
 
 As a result of the above, public CI is implemented as follows:
@@ -335,10 +332,18 @@ As a result of the above, public CI is implemented as follows:
       matrix and each combination runs one chunk. This is done for speed,
       because public CI cannot cope with the load else.
 
-If a pull request is changing CUDA or ROCm code (which cannot be tested on
-Public CI as there's no hardware) or it is making changes to something that the
-core developers consider risky, then it will also be run on the Numba farm just
-to make sure. The Numba project's private build and test farm will actually
+If a Pull Request (PR) changes CUDA code or will affect the CUDA target, it
+needs to be run on `gpuCI <https://gpuci.gpuopenanalytics.com/job/numba/>`_.
+This can be triggered by one of the Numba maintainers commenting ``run gpuCI
+tests`` on the PR discussion. This runs the CUDA testsuite with various CUDA
+toolkit versions on Linux, to provide some initial confidence in the
+correctness of the changes with respect to CUDA. Following approval, the PR
+will also be run on Numba's build farm to test other configurations with CUDA
+(including Windows, which is not tested by gpuCI).
+
+If the PR is not CUDA-related but makes changes to something that the core
+developers consider risky, then it will also be run on the Numba farm just to
+make sure. The Numba project's private build and test farm will actually
 exercise all the applicable tests on all the combinations noted above on real
 hardware!
 
