@@ -243,6 +243,7 @@ class TestArrayScalars(ValueTypingTestBase, TestCase):
 
 class FakeUFunc(object):
     __slots__ = ('nin', 'nout', 'types', 'ntypes')
+    __name__ = "fake ufunc"
 
     def __init__(self, types):
         self.types = types
