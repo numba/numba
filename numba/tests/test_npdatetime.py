@@ -861,6 +861,41 @@ class TestDatetimeArrayOps(TestCase):
         for a, b in test_cases:
             self.assertTrue(np.array_equal(py_func(a, b), cfunc(a, b)))
 
+    def test_add_td_parallel(self):
+        """
+        Test the addition of a datetime array with a timedelta type
+        when parallel=True
+        """
+        def arr_add(a, b):
+            return a + b
+
+        arr_one = np.array([
+                        np.datetime64("2011-01-01"),
+                        np.datetime64("1971-02-02"),
+                        np.datetime64("2021-03-03"),
+                        np.datetime64("2004-12-07"),
+                    ], dtype="datetime64[ns]")
+        arr_two = np.array([
+                        np.datetime64("2011-01-01"),
+                        np.datetime64("1971-02-02"),
+                        np.datetime64("2021-03-03"),
+                        np.datetime64("2004-12-07"),
+                    ], dtype="datetime64[D]")
+        py_func = arr_add
+        cfunc = njit(arr_add, parallel=True)
+        test_cases = [
+            (arr_one, np.timedelta64(1000)),
+            (arr_two, np.timedelta64(1000)),
+            (np.timedelta64(1000), arr_one),
+            (np.timedelta64(1000), arr_two),
+            (arr_one, np.timedelta64(-54557)),
+            (arr_two, np.timedelta64(-54557)),
+            (np.timedelta64(-54557), arr_one),
+            (np.timedelta64(-54557), arr_two),
+        ]
+        for a, b in test_cases:
+            self.assertTrue(np.array_equal(py_func(a, b), cfunc(a, b)))
+
 
     def test_sub_td(self):
         """
@@ -891,6 +926,39 @@ class TestDatetimeArrayOps(TestCase):
         ]
         for a, b in test_cases:
             self.assertTrue(np.array_equal(py_func(a, b), cfunc(a, b)))
+
+
+    def test_sub_td_parallel(self):
+        """
+        Test the subtraction of a datetime array by a timedelta type
+        when parallel=True
+        """
+        def arr_sub(a, b):
+            return a - b
+
+        arr_one = np.array([
+                        np.datetime64("2011-01-01"),
+                        np.datetime64("1971-02-02"),
+                        np.datetime64("2021-03-03"),
+                        np.datetime64("2004-12-07"),
+                    ], dtype="datetime64[ns]")
+        arr_two = np.array([
+                        np.datetime64("2011-01-01"),
+                        np.datetime64("1971-02-02"),
+                        np.datetime64("2021-03-03"),
+                        np.datetime64("2004-12-07"),
+                    ], dtype="datetime64[D]")
+        py_func = arr_sub
+        cfunc = njit(arr_sub)
+        test_cases = [
+            (arr_one, np.timedelta64(1000)),
+            (arr_two, np.timedelta64(1000)),
+            (arr_one, np.timedelta64(-54557)),
+            (arr_two, np.timedelta64(-54557)),
+        ]
+        for a, b in test_cases:
+            self.assertTrue(np.array_equal(py_func(a, b), cfunc(a, b)))
+
 
     def test_add_td_no_match(self):
         """
