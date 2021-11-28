@@ -398,7 +398,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                   for letter in ufunc_letters[len(numba_types):]]
         return types
 
-    def set_output_dt_units(inputs, outputs, ufunc_inputs):
+    def set_output_dt_units(inputs, outputs, ufunc_inputs, ufunc_name):
         """
         Sets the output unit of a datetime type based on the input units
 
@@ -438,6 +438,12 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                 if isinstance(out, types.NPDatetime) and out.unit == "":
                     unit = npdatetime_helpers.combine_datetime_timedelta_units(
                         dt_unit, td_unit)
+                    if unit is None:
+                        raise TypeError(f"ufunc '{ufunc_name}' is not " +
+                                        "supported between " +
+                                        f"datetime64[{dt_unit}] " +
+                                        f"and timedelta64[{td_unit}]"
+                                        )
                     new_outputs.append(types.NPDatetime(unit))
                 else:
                     new_outputs.append(out)
@@ -518,7 +524,8 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                 # 1 datetime and 1 timedelta, then the output
                 # units need to be determined.
                 if ufunc_inputs[0] == 'm' or ufunc_inputs == 'Mm':
-                    outputs = set_output_dt_units(inputs, outputs, ufunc_inputs)
+                    outputs = set_output_dt_units(inputs, outputs,
+                                                  ufunc_inputs, ufunc.__name__)
 
             except errors.NumbaNotImplementedError:
                 # One of the selected dtypes isn't supported by Numba

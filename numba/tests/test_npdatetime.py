@@ -8,6 +8,8 @@ Test np.datetime64 and np.timedelta64 support.
 import contextlib
 import itertools
 import warnings
+import pytest
+import re
 
 import numpy as np
 
@@ -527,10 +529,10 @@ class TestTimedeltaArithmetic(TestCase):
         f = self.jit(hash_usecase)
         def check(a):
             self.assertPreciseEqual(f(a), hash(a))
-        
+
         TD_CASES = ((3,), (-4,), (3, 'ms'), (-4, 'ms'), (27, 'D'),
                     (2, 'D'), (2, 'W'), (2, 'Y'), (3, 'W'),
-                    (365, 'D'), (10000, 'D'), (-10000, 'D'), 
+                    (365, 'D'), (10000, 'D'), (-10000, 'D'),
                     ('NaT',), ('NaT', 'ms'), ('NaT', 'D'), (-1,))
         DT_CASES = (('2014',), ('2016',), ('2000',), ('2014-02',),
                     ('2014-03',), ('2014-04',), ('2016-02',), ('2000-12-31',),
@@ -889,6 +891,37 @@ class TestDatetimeArrayOps(TestCase):
         ]
         for a, b in test_cases:
             self.assertTrue(np.array_equal(py_func(a, b), cfunc(a, b)))
+
+    def test_add_td_no_match(self):
+        """
+        Tests that attempting to add a datetime64 and timedelta64
+        with types that cannot be cast raises a reasonable exception.
+        """
+        @njit
+        def arr_add(a, b):
+            return a + b
+
+        with pytest.raises(TypeError, match=re.escape("ufunc 'add' is not supported between datetime64[ns] and timedelta64[M]")):
+            arr_add(
+                np.array([np.datetime64("2011-01-01"),], dtype="datetime64[ns]"),
+                np.timedelta64(1000,'M')
+            )
+
+
+    def test_sub_td_no_match(self):
+        """
+        Tests that attempting to substract a datetime64 and timedelta64
+        with types that cannot be cast raises a reasonable exception.
+        """
+        @njit
+        def arr_sub(a, b):
+            return a - b
+
+        with pytest.raises(TypeError, match=re.escape("ufunc 'subtract' is not supported between datetime64[ns] and timedelta64[M]")):
+            arr_sub(
+                np.array([np.datetime64("2011-01-01"),], dtype="datetime64[ns]"),
+                np.timedelta64(1000,'M')
+            )
 
 
 if __name__ == '__main__':
