@@ -1059,103 +1059,6 @@ class TestBuiltins(TestCase):
 
         self.assertIn('No implementation', str(raises.exception))
 
-    def test_isinstance(self):
-        pyfunc = isinstance_usecase
-        cfunc = jit(nopython=True)(pyfunc)
-
-        inputs = (
-            3,              # int
-            5.0,            # float
-            "Hello",        # string
-            b'world',       # bytes
-            1j,             # complex
-            [1, 2, 3],      # list
-            (1, 3, 3, 3),   # UniTuple
-            set([1, 2]),    # set
-            (1, 'nba', 2),  # Heterogeneous Tuple
-            # {'hello': 2},   # dict - doesn't work as input
-        )
-
-        for inpt in inputs:
-            expected = pyfunc(inpt)
-            got = cfunc(inpt)
-            self.assertEqual(expected, got)
-
-    def test_isinstance_dict(self):
-        pyfunc = isinstance_dict
-        cfunc = jit(nopython=True)(pyfunc)
-        self.assertEqual(pyfunc(), cfunc())
-
-    def test_isinstance_numba_types(self):
-        pyfunc = isinstance_usecase_numba_types
-        cfunc = jit(nopython=True)(pyfunc)
-
-        inputs = (
-            (types.int32(1), 'int32'),
-            (types.int64(2), 'int64'),
-            (types.float32(3.0), 'float32'),
-            (types.float64(4.0), 'float64'),
-            (types.complex64(5j), 'no match'),
-            (typed.List([1, 2]), 'typed list'),
-            (typed.Dict.empty(types.int64, types.int64), 'typed dict')
-        )
-
-        for inpt, expected in inputs:
-            got = cfunc(inpt)
-            self.assertEqual(expected, got)
-
-    def test_isinstance_numba_types_2(self):
-        pyfunc = isinstance_usecase_numba_types_2
-        cfunc = jit(nopython=True)(pyfunc)
-        self.assertEqual(pyfunc(), cfunc())
-
-    def test_isinstance_numba_type_classes(self):
-        pyfunc = isinstance_usecase_numba_type_classes
-        cfunc = jit(nopython=True)(pyfunc)
-
-        inputs = (
-            (types.int32(1), 'int'),
-            (types.int64(2), 'int'),
-            (types.float32(3.0), 'float'),
-            (types.float64(4.0), 'float'),
-            (types.complex64(5j), 'complex'),
-            (types.complex128(5j), 'complex'),
-        )
-
-        for inpt, expected in inputs:
-            got = cfunc(inpt)
-            self.assertEqual(expected, got)
-
-    def test_isinstance_invalid_type(self):
-        pyfunc = isinstance_usecase_invalid_type
-        cfunc = jit(nopython=True)(pyfunc)
-
-        # valid type
-        self.assertTrue(cfunc(3.4))
-
-        # invalid type
-        msg = 'Cannot infer numba type of python type'
-
-        with self.assertRaises(errors.TypingError) as raises:
-            cfunc(100)
-
-        self.assertIn(msg, str(raises.exception))
-
-    def test_isinstance_exceptions(self):
-        fns = [
-            (invalid_isinstance_usecase, 'Cannot infer numba type of python type'),  # noqa: E501
-            (invalid_isinstance_usecase_phi_nopropagate, 'isinstance() cannot determine'),  # noqa: E501
-            (invalid_isinstance_optional_usecase, 'isinstance() cannot determine'),  # noqa: E501
-        ]
-
-        for fn, msg in fns:
-            fn = njit(fn)
-
-            with self.assertRaises(errors.TypingError) as raises:
-                fn(100)
-
-            self.assertIn(msg, str(raises.exception))
-
     def test_truth(self):
         pyfunc = truth_usecase
         cfunc = jit(nopython=True)(pyfunc)
@@ -1301,6 +1204,110 @@ class TestOperatorMixedTypes(TestCase):
                 expected = func.py_func(x, y)
                 got = func(x, y)
                 self.assertEqual(expected, got)
+
+
+class TestIsinstanceBuiltin(TestCase):
+    def test_isinstance(self):
+        pyfunc = isinstance_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        inputs = (
+            3,              # int
+            5.0,            # float
+            "Hello",        # string
+            b'world',       # bytes
+            1j,             # complex
+            [1, 2, 3],      # list
+            (1, 3, 3, 3),   # UniTuple
+            set([1, 2]),    # set
+            (1, 'nba', 2),  # Heterogeneous Tuple
+            # {'hello': 2},   # dict - doesn't work as input
+        )
+
+        for inpt in inputs:
+            expected = pyfunc(inpt)
+            got = cfunc(inpt)
+            self.assertEqual(expected, got)
+
+    def test_isinstance_dict(self):
+        pyfunc = isinstance_dict
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertEqual(pyfunc(), cfunc())
+
+    def test_isinstance_numba_types(self):
+        pyfunc = isinstance_usecase_numba_types
+        cfunc = jit(nopython=True)(pyfunc)
+
+        inputs = (
+            (types.int32(1), 'int32'),
+            (types.int64(2), 'int64'),
+            (types.float32(3.0), 'float32'),
+            (types.float64(4.0), 'float64'),
+            (types.complex64(5j), 'no match'),
+            (typed.List([1, 2]), 'typed list'),
+            (typed.Dict.empty(types.int64, types.int64), 'typed dict')
+        )
+
+        for inpt, expected in inputs:
+            got = cfunc(inpt)
+            self.assertEqual(expected, got)
+
+    def test_isinstance_numba_types_2(self):
+        pyfunc = isinstance_usecase_numba_types_2
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertEqual(pyfunc(), cfunc())
+
+    def test_isinstance_numba_type_classes(self):
+        pyfunc = isinstance_usecase_numba_type_classes
+        cfunc = jit(nopython=True)(pyfunc)
+
+        inputs = (
+            (types.int32(1), 'int'),
+            (types.int64(2), 'int'),
+            (types.float32(3.0), 'float'),
+            (types.float64(4.0), 'float'),
+            (types.complex64(5j), 'complex'),
+            (types.complex128(5j), 'complex'),
+        )
+
+        for inpt, expected in inputs:
+            got = cfunc(inpt)
+            self.assertEqual(expected, got)
+
+    def test_isinstance_invalid_type(self):
+        pyfunc = isinstance_usecase_invalid_type
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # valid type
+        self.assertTrue(cfunc(3.4))
+
+        # invalid type
+        msg = 'Cannot infer numba type of python type'
+
+        with self.assertRaises(errors.TypingError) as raises:
+            cfunc(100)
+
+        self.assertIn(msg, str(raises.exception))
+
+    def test_isinstance_exceptions(self):
+        fns = [
+            (invalid_isinstance_usecase,
+             'Cannot infer numba type of python type'),
+            (invalid_isinstance_usecase_phi_nopropagate,
+             ('isinstance() cannot determine the type of variable "z" due to a '
+             'branch.')),
+            (invalid_isinstance_optional_usecase,
+             ('isinstance() cannot determine the type of variable "z" due to a '
+             'branch.')),
+        ]
+
+        for fn, msg in fns:
+            fn = njit(fn)
+
+            with self.assertRaises(errors.TypingError) as raises:
+                fn(100)
+
+            self.assertIn(msg, str(raises.exception))
 
 
 if __name__ == '__main__':

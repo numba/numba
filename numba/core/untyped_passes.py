@@ -1500,8 +1500,9 @@ class PropagateLiterals(FunctionPass):
                         iv = func_ir._definitions[arg.name]
                         assert len(iv) == 1  # SSA!
                         if isinstance(iv[0], ir.Expr) and iv[0].op == 'phi':
-                            msg = (f'isinstance() cannot determine the '
-                                   f'type of {arg.name} due to a branch')
+                            msg = ('isinstance() cannot determine the '
+                                   f'type of variable "{arg.unversioned_name}" '
+                                   'due to a branch.')
                             raise errors.NumbaTypeError(msg, loc=assign.loc)
 
                 lit = typemap.get(target.name, None)
