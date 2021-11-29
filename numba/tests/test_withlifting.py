@@ -14,6 +14,7 @@ from numba import njit, typeof, objmode, types
 from numba.core.extending import overload
 from numba.tests.support import (MemoryLeak, TestCase, captured_stdout,
                                  skip_unless_scipy)
+from numba.core.utils import PYVERSION
 from numba.experimental import jitclass
 import unittest
 
@@ -133,6 +134,15 @@ def liftcall4():
     with call_context:
         with call_context:
             pass
+
+
+def liftcall5():
+    for i in range(10):
+        with call_context:
+            if i == 5:
+                print("A")
+                break
+    return 10
 
 
 def lift_undefiend():
@@ -257,12 +267,24 @@ class TestLiftCall(BaseTestWithLifting):
         self.check_same_semantic(liftcall3)
 
     def test_liftcall4(self):
-        with self.assertRaises(errors.TypingError) as raises:
+        accept = (errors.TypingError, errors.NumbaRuntimeError,
+                  errors.NumbaValueError, errors.CompilerError)
+        with self.assertRaises(accept) as raises:
             njit(liftcall4)()
         # Known error.  We only support one context manager per function
         # for body that are lifted.
-        msg = ("Failed in nopython mode pipeline "
-               "(step: Handle with contexts)")
+        msg = ("compiler re-entrant to the same function signature")
+        self.assertIn(msg, str(raises.exception))
+
+    # 3.7 fails to interpret the bytecode for this example
+    @unittest.skipIf(PYVERSION <= (3, 8),
+                     "unsupported on py3.8 and before")
+    def test_liftcall5(self):
+        with self.assertRaises(errors.CompilerError) as raises:
+            njit(liftcall5)()
+        # Make sure we can detect a break-within-with and have a reasonable
+        # error.
+        msg = ("unsupported control flow: with-context contains branches")
         self.assertIn(msg, str(raises.exception))
 
 
@@ -521,7 +543,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         # Check that an error occurred in with-lifting in objmode
         pat = ("During: resolving callee type: "
                "type\(ObjModeLiftedWith\(<.*>\)\)")
-        self.assertRegexpMatches(str(raises.exception), pat)
+        self.assertRegex(str(raises.exception), pat)
 
     def test_case07_mystery_key_error(self):
         # this raises a key error
@@ -575,7 +597,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         with self.assertRaises(errors.CompilerError) as raises:
             cfoo(x)
         self.assertIn(
-            ('unsupported controlflow due to return/raise statements inside '
+            ('unsupported control flow due to raise statements inside '
              'with block'),
             str(raises.exception),
         )
@@ -672,7 +694,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         with self.assertRaises(errors.CompilerError) as raises:
             cfoo(x)
         self.assertIn(
-            ('unsupported controlflow due to return/raise statements inside '
+            ('unsupported control flow due to return statements inside '
              'with block'),
             str(raises.exception),
         )
@@ -738,7 +760,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         cfoo = njit(foo)
         with self.assertRaises(errors.CompilerError) as raises:
             cfoo(x)
-        msg = "Does not support with-context that contain branches"
+        msg = "unsupported control flow due to return statements inside with block"
         self.assertIn(msg, str(raises.exception))
 
     @unittest.expectedFailure

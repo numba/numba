@@ -8,7 +8,7 @@ import logging
 
 from numba.core.analysis import compute_cfg_from_blocks, find_top_level_loops
 from numba.core import errors, ir, ir_utils
-from numba.core.analysis import compute_use_defs
+from numba.core.analysis import compute_use_defs, compute_cfg_from_blocks
 from numba.core.utils import PYVERSION
 
 
@@ -350,7 +350,6 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
     vlt = func_ir.variable_lifetime
     blocks = func_ir.blocks.copy()
     cfg = vlt.cfg
-    _legalize_withs_cfg(withs, cfg, blocks)
     # For each with-regions, mutate them according to
     # the kind of contextmanager
     sub_irs = []
@@ -477,73 +476,127 @@ def _cfg_nodes_in_region(cfg, region_begin, region_end):
     return region_nodes
 
 
-def _legalize_withs_cfg(withs, cfg, blocks):
-    """Verify the CFG of the with-context(s).
-    """
-    doms = cfg.dominators()
-    postdoms = cfg.post_dominators()
-
-    # Verify that the with-context has no side-exits
-    for s, e in withs:
-        loc = blocks[s].loc
-        if s not in doms[e]:
-            # Not sure what condition can trigger this error.
-            msg = "Entry of with-context not dominating the exit."
-            raise errors.CompilerError(msg, loc=loc)
-        if e not in postdoms[s]:
-            msg = (
-                "Does not support with-context that contain branches "
-                "(i.e. break/return/raise) that can leave the with-context. "
-                "Details: exit of with-context not post-dominating the entry. "
-            )
-            raise errors.CompilerError(msg, loc=loc)
-
-
 def find_setupwiths(blocks):
     """Find all top-level with.
 
     Returns a list of ranges for the with-regions.
     """
     def find_ranges(blocks):
-        for blk in blocks.values():
-            for ew in blk.find_insts(ir.EnterWith):
-                if PYVERSION < (3, 9):
-                    end = ew.end
-                    for offset in blocks:
-                        if ew.end <= offset:
-                            end = offset
-                            break
-                else:
-                    # Since py3.9, the `with finally` handling is injected into
-                    # caller function. However, the numba byteflow doesn't
-                    # account for that block, which is where `ew.end` is
-                    # pointing to. We need to point to the block before
-                    # `ew.end`.
-                    end = ew.end
-                    last_offset = None
-                    for offset in blocks:
-                        if ew.end < offset:
-                            end = last_offset
-                            break
-                        last_offset = offset
-                yield ew.begin, end
 
-    def previously_occurred(start, known_ranges):
+        def is_setup_with(stmt):
+            return isinstance(stmt, ir.EnterWith)
+
+        def is_branch(stmt):
+            return isinstance(stmt, ir.Branch)
+
+        def is_terminator(stmt):
+            return isinstance(stmt, ir.Terminator)
+
+        def is_raise(stmt):
+            return isinstance(stmt, ir.Raise)
+
+        def is_return(stmt):
+            return isinstance(stmt, ir.Return)
+
+        def is_pop_block(stmt):
+            return isinstance(stmt, ir.PopBlock)
+
+        cfg = compute_cfg_from_blocks(blocks)
+        sus_setups, sus_pops = set(), set()
+        # traverse the cfg and collect all suspected SETUP_WITH and POP_BLOCK
+        # statements so that we can iterate over them
+        for label, block in blocks.items():
+            for stmt in block.body:
+                if is_setup_with(stmt):
+                    sus_setups.add(label)
+                if is_pop_block(stmt):
+                    sus_pops.add(label)
+
+        # now that we do have the statements, iterate through them in reverse
+        # topo order and from each start looking for pop_blocks
+        setup_with_to_pop_blocks_map = defaultdict(set)
+        for setup_block in cfg.topo_sort(sus_setups, reverse=True):
+            # begin pop_block, search
+            to_visit, seen = [], []
+            to_visit.append(setup_block)
+            while to_visit:
+                # get whatever is next and record that we have seen it
+                block = to_visit.pop()
+                seen.append(block)
+                # go through the body of the block, looking for statements
+                for stmt in blocks[block].body:
+                    # raise detected before pop_block
+                    if is_raise(stmt):
+                            raise errors.CompilerError(
+                                'unsupported control flow due to raise '
+                                'statements inside with block'
+                                )
+                    # special case 3.7, return before POP_BLOCK
+                    if PYVERSION < (3, 8) and is_return(stmt):
+                            raise errors.CompilerError(
+                                'unsupported control flow due to return '
+                                'statements inside with block'
+                                )
+                    # if a pop_block, process it
+                    if is_pop_block(stmt) and block in sus_pops:
+                        # record the jump target of this block belonging to this setup
+                        pop_block_targets = blocks[block].terminator.get_targets()
+                        if len(pop_block_targets) != 1:
+                            raise errors.CompilerError(
+                                "unsupported control flow: with-context contains branches "
+                                "(i.e. break/return/raise) that can leave the with-context. "
+                            )
+                        pop_block_target = pop_block_targets[0]
+                        target_block = blocks[pop_block_target]
+                        if is_return(target_block.terminator):
+                            raise errors.CompilerError(
+                                'unsupported control flow due to return '
+                                'statements inside with block'
+                                )
+                        setup_with_to_pop_blocks_map[setup_block].add(pop_block_target)
+                        # remove the block from blocks to be matched
+                        sus_pops.remove(block)
+                        # stop looking, we have reached the frontier
+                        break
+                    # if we are still here, by the block terminator,
+                    # add all its targets to the to_visit stack, unless we
+                    # have seen them already
+                    if is_terminator(stmt):
+                        for t in stmt.get_targets():
+                            if t not in seen:
+                                to_visit.append(t)
+
+        for setup_with, pop_blocks in setup_with_to_pop_blocks_map.items():
+            for p in pop_blocks:
+                yield setup_with, p
+
+
+    known_ranges = []
+
+    def within_known_range(start, end, known_ranges):
         for a, b in known_ranges:
-            if start >= a and start < b:
+            # FIXME: this should be a comparison in topological order, right
+            # now we are comparing the integers of the blocks, stuff probably
+            # works by accident.
+            if start > a and end < b:
                 return True
         return False
 
-    known_ranges = []
+    setup_to_pop_block_map = {}
     for s, e in sorted(find_ranges(blocks)):
-        if not previously_occurred(s, known_ranges):
-            if e not in blocks:
-                # this's possible if there's an exit path in the with-block
+        # Look for setup_withs that have multiple pop_blocks each with a
+        # different target.
+        if s not in setup_to_pop_block_map:
+            setup_to_pop_block_map[s] = e
+        else:
+            if setup_to_pop_block_map[s] != e:
                 raise errors.CompilerError(
-                    'unsupported controlflow due to return/raise '
-                    'statements inside with block'
-                    )
-            assert s in blocks, 'starting offset is not a label'
+                    "unsupported control flow: with-context contains branches "
+                    "(i.e. break/return/raise) that can leave the with-context. "
+                )
+        # Eliminate all withs contained within withs, we are only interested in
+        # the outermost with statements so we can lift them.
+        if not within_known_range(s, e, known_ranges):
             known_ranges.append((s, e))
 
     return known_ranges

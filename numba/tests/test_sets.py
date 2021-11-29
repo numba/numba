@@ -432,7 +432,7 @@ class TestSets(BaseTest):
 
         pyfunc = constructor_usecase
         cfunc = jit(nopython=True)(pyfunc)
-        with self.assertRaises(errors.LoweringError) as raises:
+        with self.assertRaises(errors.NumbaValueError) as raises:
             cfunc("abc")
 
         excstr = str(raises.exception)

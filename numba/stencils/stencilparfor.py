@@ -19,6 +19,7 @@ from numba.core import  utils, typing
 from numba.core.ir_utils import (get_call_table, mk_unique_var,
                             compile_to_numba_ir, replace_arg_nodes, guard,
                             find_callname, require, find_const, GuardException)
+from numba.core.errors import NumbaValueError
 from numba.core.utils import OPERATORS_TO_BUILTINS
 
 
@@ -278,7 +279,7 @@ class StencilPass(object):
                 cval_ty = typing.typeof.typeof(cval)
                 if not self.typingctx.can_convert(cval_ty, return_type.dtype):
                     msg = "cval type does not match stencil return type."
-                    raise ValueError(msg)
+                    raise NumbaValueError(msg)
 
                 # get slice ref
                 slice_var = ir.Var(scope, mk_unique_var("$py_g_var"), loc)

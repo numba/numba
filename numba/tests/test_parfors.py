@@ -2474,6 +2474,8 @@ class TestParforsMisc(TestParforsBase):
         # sequential_parfor_lowering global variable should remain as False on
         # stack unwind.
 
+        BROKEN_MSG = 'BROKEN_MSG'
+
         @register_pass(mutates_CFG=True, analysis_only=False)
         class BreakParfors(AnalysisPass):
             _name = "break_parfors"
@@ -2491,7 +2493,12 @@ class TestParforsMisc(TestParforsBase):
                             # point it needs to be a set so e.g. set.difference
                             # can be computed, this therefore creates an error
                             # in the right location.
-                            stmt.races = []
+                            class Broken(list):
+
+                                def difference(self, other):
+                                    raise errors.LoweringError(BROKEN_MSG)
+
+                            stmt.races = Broken()
                     return True
 
 
@@ -2517,8 +2524,7 @@ class TestParforsMisc(TestParforsBase):
         with self.assertRaises(errors.LoweringError) as raises:
             foo()
 
-        self.assertIn("'list' object has no attribute 'difference'",
-                      str(raises.exception))
+        self.assertIn(BROKEN_MSG, str(raises.exception))
 
         # assert state has not changed
         self.assertFalse(numba.parfors.parfor.sequential_parfor_lowering)

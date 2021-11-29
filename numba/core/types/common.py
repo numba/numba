@@ -3,6 +3,7 @@ Helper classes / mixins for defining types.
 """
 
 from .abstract import ArrayCompatible, Dummy, IterableType, IteratorType
+from numba.core.errors import NumbaTypeError, NumbaValueError
 
 
 class Opaque(Dummy):
@@ -52,9 +53,9 @@ class Buffer(IterableType, ArrayCompatible):
             msg = ("The dtype of a Buffer type cannot itself be a Buffer type, "
                    "this is unsupported behaviour."
                    "\nThe dtype requested for the unsupported Buffer was: {}.")
-            raise TypeError(msg.format(dtype))
+            raise NumbaTypeError(msg.format(dtype))
         if layout not in self.LAYOUTS:
-            raise ValueError("Invalid layout '%s'" % layout)
+            raise NumbaValueError("Invalid layout '%s'" % layout)
         self.dtype = unliteral(dtype)
         self.ndim = ndim
         self.layout = layout
