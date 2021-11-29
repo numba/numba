@@ -385,11 +385,6 @@ class _EnvReloader(object):
         CUDA_PER_THREAD_DEFAULT_STREAM = _readenv(
             "NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM", int, 0)
 
-        # HSA Configs
-
-        # Disable HSA support
-        DISABLE_HSA = _readenv("NUMBA_DISABLE_HSA", int, 0)
-
         # The default number of threads to use.
         NUMBA_DEFAULT_NUM_THREADS = max(
             1,
