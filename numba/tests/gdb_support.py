@@ -32,7 +32,7 @@ class GdbMIDriver(object):
     Driver class for the GDB machine interface:
     https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI.html
     """
-    def __init__(self, file_name, debug=False, timeout=120):
+    def __init__(self, file_name, debug=False, timeout=120, init_cmds=None):
         if not _HAVE_PEXPECT:
             msg = ("This driver requires the pexpect module. This can be "
                    "obtained via:\n\n$ conda install pexpect")
@@ -46,16 +46,32 @@ class GdbMIDriver(object):
         self._debug = debug
         self._file_name = file_name
         self._timeout = timeout
+        self._init_cmds = init_cmds
         self._drive()
 
     def _drive(self):
         """This function sets up the caputured gdb instance"""
         assert os.path.isfile(self._file_name)
-        cmd = [self._gdb_binary, '--interpreter', 'mi', '--args', self._python,
-               self._file_name]
+        cmd = [self._gdb_binary, '--interpreter', 'mi',]
+        if self._init_cmds is not None:
+            cmd += list(self._init_cmds)
+        cmd += ['--args', self._python, self._file_name]
         self._captured = pexpect.spawn(' '.join(cmd))
         if self._debug:
             self._captured.logfile = sys.stdout.buffer
+
+    def supports_python(self):
+        """Returns True if the underlying gdb implementation has python support
+           False otherwise"""
+        return "python" in self.list_features()
+
+    def supports_numpy(self):
+        """Returns True if the underlying gdb implementation has NumPy support
+           (and by extension Python support) False otherwise"""
+        if not self.supports_python():
+            return False
+        self.interpreter_exec('console', 'python import numpy; print numpy')
+        return "module \'numpy\' from" in self._captured.before.decode()
 
     def _captured_expect(self, expect):
         try:
@@ -141,3 +157,47 @@ class GdbMIDriver(object):
         assert isinstance(print_values, int) and print_values in (0, 1, 2)
         cmd = f'-stack-list-variables {print_values}'
         self._run_command(cmd, expect=r'\^done,.*\r\n')
+
+    def interpreter_exec(self, interpreter=None, command=None):
+        """gdb command ~= 'interpreter-exec'"""
+        if interpreter is None:
+            raise ValueError("interpreter cannot be None")
+        if command is None:
+            raise ValueError("command cannot be None")
+        cmd = f'-interpreter-exec {interpreter} "{command}"'
+        self._run_command(cmd, expect=r'\^done.*\r\n') #NOTE no `,` after done
+
+    def _list_features_raw(self):
+        cmd = '-list-features'
+        self._run_command(cmd, expect=r'\^done,.*\r\n')
+
+    def list_features(self):
+        """No equivalent gdb command? Returns a list of supported gdb
+           features.
+        """
+        self._list_features_raw()
+        output = self._captured.after
+        decoded = output.decode('utf-8')
+        m = re.match('.*features=\\[(.*)\\].*', decoded)
+        assert m is not None, "No match found for features string"
+        g = m.groups()
+        assert len(g) == 1, "Invalid number of match groups found"
+        return g[0].replace('"', '').split(',')
+
+
+def _gdb_has_python():
+    driver = GdbMIDriver(__file__, debug=False,)
+    has_python = driver.supports_python()
+    driver.quit()
+    return has_python
+
+
+def _gdb_has_numpy():
+    driver = GdbMIDriver(__file__, debug=False,)
+    has_numpy = driver.supports_numpy()
+    driver.quit()
+    return has_numpy
+
+
+skip_unless_gdb_has_python = unittest.skipUnless(_gdb_has_python(), _msg)
+skip_unless_gdb_has_numpy = unittest.skipUnless(_gdb_has_numpy(), _msg)

@@ -1,6 +1,8 @@
 """Tests for gdb interacting with the DWARF numba generates"""
 from numba.tests.support import TestCase, linux_only
-from numba.tests.gdb_support import needs_gdb, skip_unless_pexpect
+from numba.tests.gdb_support import (needs_gdb, skip_unless_pexpect,
+                                     skip_unless_gdb_has_numpy)
+
 import unittest
 
 
@@ -34,6 +36,10 @@ class TestGDBDwarf(TestCase):
 
     def test_break_on_symbol(self):
         self._subprocess_test_runner('test_break_on_symbol')
+
+    @skip_unless_gdb_has_numpy
+    def test_test_pretty_print(self):
+        self._subprocess_test_runner('test_pretty_print')
 
 
 if __name__ == '__main__':
