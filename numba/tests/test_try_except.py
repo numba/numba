@@ -704,7 +704,8 @@ class TestTryExceptOtherControlFlow(TestCase):
             msg = ("unsupported control flow due to return statements inside "
                    "with block")
         else:
-            msg = "Does not support with-context that contain branches"
+            msg = ("unsupported control flow: with-context contains branches "
+                   "(i.e. break/return/raise) that can leave the block ")
         self.assertIn(
             msg,
             str(raises.exception),
@@ -732,7 +733,8 @@ class TestTryExceptOtherControlFlow(TestCase):
             msg = ("unsupported control flow due to return statements inside "
                    "with block")
         else:
-            msg = "Does not support with-context that contain branches"
+            msg = ("unsupported control flow: with-context contains branches "
+                   "(i.e. break/return/raise) that can leave the block ")
         self.assertIn(
             msg,
             str(raises.exception),
