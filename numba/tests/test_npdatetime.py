@@ -860,6 +860,7 @@ class TestDatetimeArrayOps(TestCase):
         for a, b in test_cases:
             self.assertTrue(np.array_equal(py_func(a, b), cfunc(a, b)))
 
+    @skip_parfors_unsupported
     def test_add_td_parallel(self):
         """
         Test the addition of a datetime array with a timedelta type
@@ -927,6 +928,7 @@ class TestDatetimeArrayOps(TestCase):
             self.assertTrue(np.array_equal(py_func(a, b), cfunc(a, b)))
 
 
+    @skip_parfors_unsupported
     def test_sub_td_parallel(self):
         """
         Test the subtraction of a datetime array by a timedelta type
