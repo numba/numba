@@ -41,7 +41,34 @@ else
     esac
 fi
 
+# If TEST_THREADING is set in the env, then check that Numba agrees that the
+# environment can support the requested threading.
+function check_sysinfo() {
+    cmd="import os;\
+         from numba.misc.numba_sysinfo import get_sysinfo;\
+         print(get_sysinfo()['$1 Threading'])"
+    python -c "$cmd"
+}
 
+if [[ "$TEST_THREADING" ]]; then
+    if [[ "$TEST_THREADING" == "tbb" ]]; then
+        tstat=$(check_sysinfo "TBB")
+    elif [[ "$TEST_THREADING" == "omp" ]]; then
+        tstat=$(check_sysinfo "OpenMP")
+    elif [[ "$TEST_THREADING" == "workqueue" ]]; then
+        tstat=$(check_sysinfo "Workqueue")
+    else
+        echo "Unknown threading layer requested: $TEST_THREADING"
+        exit 1
+    fi
+    # Check result of query
+    if [[ "$tstat" != "True" ]]; then
+        echo "$TEST_THREADING threading layer set, but could not be loaded."
+        exit 1
+    fi
+fi
+
+# Find catchsegv
 unamestr=`uname`
 if [[ "$unamestr" == 'Linux' ]]; then
     if [[ "${BITS32}" == "yes" ]]; then

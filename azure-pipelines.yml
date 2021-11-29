@@ -21,6 +21,7 @@ jobs:
         PYTHON: '3.9'
         NUMPY: '1.21'
         CONDA_ENV: 'azure_ci'
+        TEST_THREADING: 'tbb'
         TEST_START_INDEX: 1
 
 - template: buildscripts/azure/azure-linux-macos.yml
