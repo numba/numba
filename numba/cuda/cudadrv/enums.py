@@ -170,7 +170,7 @@ CU_JIT_INPUT_PTX = 1
 
 # Bundle of multiple cubins and/or PTX of some device code
 # Applicable options: PTX compiler options, ::CU_JIT_FALLBACK_STRATEGY
-CU_JIT_INPUT_FATBINAR = 2
+CU_JIT_INPUT_FATBINARY = 2
 
 # Host object with embedded device code
 # Applicable options: PTX compiler options, ::CU_JIT_FALLBACK_STRATEGY

@@ -276,6 +276,7 @@ static PyMemberDef dufunc_members[] = {
  */
 
 static struct _ufunc_dispatch {
+    /* Note that the following may also hold `_PyCFunctionFastWithKeywords` */
     PyCFunctionWithKeywords ufunc_reduce;
     PyCFunctionWithKeywords ufunc_accumulate;
     PyCFunctionWithKeywords ufunc_reduceat;
@@ -286,7 +287,7 @@ static struct _ufunc_dispatch {
 } ufunc_dispatch;
 
 static int
-init_ufunc_dispatch(void)
+init_ufunc_dispatch(int *numpy_uses_fastcall)
 {
     int result = 0;
     PyMethodDef * crnt = PyUFunc_Type.tp_methods;
@@ -329,6 +330,16 @@ init_ufunc_dispatch(void)
             result = -1; /* Unknown method */
         }
         if (result < 0) break;
+
+        /* Check whether NumPy uses fastcall (ufunc.at never uses it) */
+        if (strncmp(crnt_name, "at", 3) != 0) {
+            if (*numpy_uses_fastcall == -1) {
+                *numpy_uses_fastcall = crnt->ml_flags & METH_FASTCALL;
+            }
+            else if (*numpy_uses_fastcall != (crnt->ml_flags & METH_FASTCALL)) {
+                return -1;
+            }
+        }
     }
     if (result == 0) {
         /* Sanity check. */
@@ -343,6 +354,7 @@ init_ufunc_dispatch(void)
     }
     return result;
 }
+
 
 static PyObject *
 dufunc_reduce(PyDUFuncObject * self, PyObject * args, PyObject *kws)
@@ -367,6 +379,47 @@ dufunc_outer(PyDUFuncObject * self, PyObject * args, PyObject *kws)
 {
     return ufunc_dispatch.ufunc_outer((PyObject*)self->ufunc, args, kws);
 }
+
+
+/*
+ * The following are the vectorcall versions of the above, since NumPy
+ * uses the FASTCALL/Vectorcall protocol starting with version 1.21.
+ * The only NumPy versions supporting vectorcall use Python 3.7 or higher.
+ */
+static PyObject *
+dufunc_reduce_fast(PyDUFuncObject * self,
+        PyObject *const *args, Py_ssize_t len_args, PyObject *kwnames)
+{
+    return ((_PyCFunctionFastWithKeywords)ufunc_dispatch.ufunc_reduce)(
+            (PyObject*)self->ufunc, args, len_args, kwnames);
+}
+
+static PyObject *
+dufunc_reduceat_fast(PyDUFuncObject * self,
+        PyObject *const *args, Py_ssize_t len_args, PyObject *kwnames)
+{
+    return ((_PyCFunctionFastWithKeywords)ufunc_dispatch.ufunc_reduceat)(
+            (PyObject*)self->ufunc, args, len_args, kwnames);
+}
+
+
+static PyObject *
+dufunc_accumulate_fast(PyDUFuncObject * self,
+        PyObject *const *args, Py_ssize_t len_args, PyObject *kwnames)
+{
+    return ((_PyCFunctionFastWithKeywords)ufunc_dispatch.ufunc_accumulate)(
+            (PyObject*)self->ufunc, args, len_args, kwnames);
+}
+
+
+static PyObject *
+dufunc_outer_fast(PyDUFuncObject * self,
+        PyObject *const *args, Py_ssize_t len_args, PyObject *kwnames)
+{
+    return ((_PyCFunctionFastWithKeywords)ufunc_dispatch.ufunc_outer)(
+            (PyObject*)self->ufunc, args, len_args, kwnames);
+}
+
 
 #if NPY_API_VERSION >= 0x00000008
 static PyObject *
@@ -568,6 +621,41 @@ static struct PyMethodDef dufunc_methods[] = {
     {NULL, NULL, 0, NULL}           /* sentinel */
 };
 
+
+/*
+ * If Python is new enough, NumPy may use fastcall.  In that case we have to
+ * also use fastcall for simplicity and speed.
+ */
+static struct PyMethodDef dufunc_methods_fast[] = {
+    {"reduce",
+        (PyCFunction)dufunc_reduce_fast,
+        METH_FASTCALL | METH_KEYWORDS, NULL },
+    {"accumulate",
+        (PyCFunction)dufunc_accumulate_fast,
+        METH_FASTCALL | METH_KEYWORDS, NULL },
+    {"reduceat",
+        (PyCFunction)dufunc_reduceat_fast,
+        METH_FASTCALL | METH_KEYWORDS, NULL },
+    {"outer",
+        (PyCFunction)dufunc_outer_fast,
+        METH_FASTCALL | METH_KEYWORDS, NULL},
+#if NPY_API_VERSION >= 0x00000008
+    {"at",
+        (PyCFunction)dufunc_at,
+        METH_VARARGS, NULL},
+#endif
+    {"_compile_for_args",
+        (PyCFunction)dufunc__compile_for_args,
+        METH_VARARGS | METH_KEYWORDS,
+        "Abstract method: subclasses should overload _compile_for_args() to compile the ufunc at the given arguments' types."},
+    {"_add_loop",
+        (PyCFunction)dufunc__add_loop,
+        METH_VARARGS,
+        NULL},
+    {NULL, NULL, 0, NULL}           /* sentinel */
+};
+
+
 static PyObject *
 dufunc_getfrozen(PyDUFuncObject * self, void * closure)
 {
@@ -681,8 +769,15 @@ MOD_INIT(_internal)
         return MOD_ERROR_VAL;
 
     PyDUFunc_Type.tp_new = PyType_GenericNew;
-    if (init_ufunc_dispatch() <= 0)
+
+    int numpy_uses_fastcall = -1;
+    if (init_ufunc_dispatch(&numpy_uses_fastcall) <= 0)
         return MOD_ERROR_VAL;
+
+    if (numpy_uses_fastcall) {
+        PyDUFunc_Type.tp_methods = dufunc_methods_fast;
+    }
+
     if (PyType_Ready(&PyDUFunc_Type) < 0)
         return MOD_ERROR_VAL;
     Py_INCREF(&PyDUFunc_Type);

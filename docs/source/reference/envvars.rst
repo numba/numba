@@ -151,8 +151,8 @@ These variables influence what is printed out during compilation of
 
     If set to non-zero, extend the lifetime of variables to the end of the block
     in which their lifetime ends. This is particularly useful in conjunction
-    with `NUMBA_DEBUGINFO` as it helps with introspection of values. Default is
-    zero.
+    with :envvar:`NUMBA_DEBUGINFO` as it helps with introspection of values.
+    Default is zero.
 
 .. envvar:: NUMBA_GDB_BINARY
 
@@ -516,11 +516,18 @@ GPU support
    heuristic needs to check the number of SMs available on the device in the
    current context.
 
-.. envvar:: CUDA_WARN_ON_IMPLICIT_COPY
+.. envvar:: NUMBA_CUDA_WARN_ON_IMPLICIT_COPY
 
    Enable warnings if a kernel is launched with host memory which forces a copy to and
    from the device. This option is on by default (default value is 1).
 
+.. envvar:: NUMBA_CUDA_USE_NVIDIA_BINDING
+
+   When set to 1, Numba will attempt to use the `NVIDIA CUDA Python binding
+   <https://nvidia.github.io/cuda-python/>`_ to make calls to the driver API
+   instead of using its own ctypes binding. This defaults to 0 (off), as the
+   NVIDIA binding is currently missing support for Per-Thread Default
+   Streams and the profiler APIs.
 
 Threading Control
 -----------------

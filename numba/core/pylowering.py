@@ -154,6 +154,9 @@ class PyLower(BaseLower):
         elif isinstance(inst, ir.Del):
             self.delvar(inst.value)
 
+        elif isinstance(inst, ir.PopBlock):
+            pass # this is just a marker
+
         elif isinstance(inst, ir.Raise):
             if inst.exception is not None:
                 exc = self.loadvar(inst.exception.name)
