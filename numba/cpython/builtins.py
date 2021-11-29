@@ -3,6 +3,7 @@ from functools import reduce
 
 import numpy as np
 import operator
+import warnings
 
 from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant
@@ -16,7 +17,8 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
 from numba.core import typing, types, utils, cgutils
 from numba.core.extending import overload, intrinsic
 from numba.core.typeconv import Conversion
-from numba.core.errors import TypingError, LoweringError
+from numba.core.errors import (TypingError, LoweringError,
+                               NumbaExperimentalFeatureWarning)
 from numba.misc.special import literal_unroll
 from numba.core.typing.asnumbatype import as_numba_type
 from numba.core.errors import NumbaTypeError
@@ -679,20 +681,42 @@ def ol_filter(func, iterable):
 
 @overload(isinstance)
 def ol_isinstance(var, typs):
+
     def true_impl(var, typs):
         return True
+
     def false_impl(var, typs):
         return False
 
     var_ty = as_numba_type(var)
 
     if isinstance(var_ty, types.Optional):
-        raise NumbaTypeError(
-            f'isinstance cannot handle optional types. '
-            f'Got "{var_ty}"')
+        msg = f'isinstance cannot handle optional types. Found: "{var_ty}"'
+        raise NumbaTypeError(msg)
+
+    # NOTE: The current implementation of `isinstance` restricts the type of the
+    # instance variable to types that are well known and in common use. The
+    # danger of unrestricted tyoe comparison is that a "default" of `False` is
+    # required and this means that if there is a bug in the logic of the
+    # comparison tree `isinstance` returns False! It's therefore safer to just
+    # reject the compilation as untypable!
+    supported_var_ty = (types.Number, types.Bytes, types.RangeType,
+                        types.DictType, types.LiteralStrKeyDict, types.List,
+                        types.ListType, types.Tuple, types.UniTuple, types.Set,
+                        types.Function, types.ClassType, types.UnicodeType,
+                        types.ClassInstanceType, )
+    if not isinstance(var_ty, supported_var_ty):
+        msg = f'isinstance() does not support variables of type "{var_ty}".'
+        raise NumbaTypeError(msg)
+
+    # Warn about the experimental nature of this feature.
+    msg = "Use of isinstance() detected. This is an experimental feature."
+    warnings.warn(msg, category=NumbaExperimentalFeatureWarning)
 
     t_typs = typs
 
+    # Check the types that the var can be an instance of, it'll be a scalar,
+    # a unituple or a tuple.
     if isinstance(t_typs, types.UniTuple):
         # corner case - all types in isinstance are the same
         t_typs = (t_typs.key[0])
