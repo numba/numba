@@ -422,13 +422,14 @@ def float16_to_float_cast(context, builder, fromty, toty, val):
         raise error.CudaSupportError(f"Cuda target does not support "
                                      f"from fp16 converting to float type "
                                      f"with width {toty.bitwidth}-bits")
-    
+
     cvt2float_fnty = ir.FunctionType(context.get_value_type(toty),
-                                        [ir.IntType(16)])
+                                     [ir.IntType(16)])
     cvt2float_asm = ir.InlineAsm(cvt2float_fnty,
-                                    f"cvt.{conv_type}.f16 $0, $1;",
-                                    f"={conv_constraint},h")
+                                 f"cvt.{conv_type}.f16 $0, $1;",
+                                 f"={conv_constraint},h")
     return builder.call(cvt2float_asm, [val])
+
 
 @lower_cast(types.Float, types.float16)
 def float_to_float16_cast(context, builder, fromty, toty, val):
@@ -446,14 +447,15 @@ def float_to_float16_cast(context, builder, fromty, toty, val):
         raise error.CudaSupportError(f"Cuda target does not support "
                                      f"converting from float type with width "
                                      f" {toty.bitwidth}-bits to fp16")
-    
+
     cvt2float_fnty = ir.FunctionType(ir.IntType(16),
                                      [context.get_value_type(fromty)])
 
     cvt2float_asm = ir.InlineAsm(cvt2float_fnty,
-                                    f"cvt.rn.f16.{conv_type} $0, $1;",
-                                    f"=h,{conv_constraint}")
+                                 f"cvt.rn.f16.{conv_type} $0, $1;",
+                                 f"=h,{conv_constraint}")
     return builder.call(cvt2float_asm, [val])
+
 
 @lower_cast(types.float16, types.Integer)
 def float16_to_integer_cast(context, builder, fromty, toty, val):
@@ -464,11 +466,13 @@ def float16_to_integer_cast(context, builder, fromty, toty, val):
         conv_constraint = "r"
     elif toty.bitwidth == 64:
         conv_constraint = "l"
+    elif toty.bitwidth == 8:
+        conv_constraint = "c"
     else:
         raise error.CudaSupportError(f"Cuda target does not support "
                                      f"from fp16 converting to integer type "
                                      f"with width {toty.bitwidth}-bits")
-    
+
     signedness = ""
     if toty.signed:
         signedness = "s"
@@ -476,11 +480,13 @@ def float16_to_integer_cast(context, builder, fromty, toty, val):
         signedness = "u"
 
     cvt2int_fnty = ir.FunctionType(context.get_value_type(toty),
-                                        [ir.IntType(16)])
+                                   [ir.IntType(16)])
     cvt2int_asm = ir.InlineAsm(cvt2int_fnty,
-                                    f"cvt.rni.{signedness}{toty.bitwidth}.f16 $0, $1;",
-                                    f"={conv_constraint},h")
+                               f"cvt.rni.{signedness}{toty.bitwidth}"
+                               f".f16 $0, $1;",
+                               f"={conv_constraint},h")
     return builder.call(cvt2int_asm, [val])
+
 
 @lower_cast(types.Integer, types.float16)
 def integer_to_float16_cast(context, builder, fromty, toty, val):
@@ -491,11 +497,13 @@ def integer_to_float16_cast(context, builder, fromty, toty, val):
         conv_constraint = "r"
     elif fromty.bitwidth == 64:
         conv_constraint = "l"
+    elif fromty.bitwidth == 8:
+        conv_constraint = "c"
     else:
         raise error.CudaSupportError(f"Cuda target does not support "
                                      f"converting from integer type with "
                                      f"width {toty.bitwidth}-bits to fp16")
-    
+
     signedness = ""
     if toty.signed:
         signedness = "s"
@@ -503,11 +511,13 @@ def integer_to_float16_cast(context, builder, fromty, toty, val):
         signedness = "u"
 
     cvt2fp16_fnty = ir.FunctionType(context.get_value_type(toty),
-                                        [ir.IntType(16)])
+                                    [ir.IntType(16)])
     cvt2fp16_asm = ir.InlineAsm(cvt2fp16_fnty,
-                                    f"cvt.rn.f16.{signedness}{toty.bitwidth}.f16 $0, $1;",
-                                    f"=h,{conv_constraint}")
+                                f"cvt.rn.f16.{signedness}{toty.bitwidth}"
+                                f".f16 $0, $1;",
+                                f"=h,{conv_constraint}")
     return builder.call(cvt2fp16_asm, [val])
+
 
 def lower_fp16_binary(fn, op):
     @lower(fn, types.float16, types.float16)
