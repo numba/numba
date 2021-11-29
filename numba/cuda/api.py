@@ -227,9 +227,13 @@ def open_ipc_array(handle, shape, dtype, strides=None, offset=0):
     # compute size
     size = np.prod(shape) * dtype.itemsize
     # manually recreate the IPC mem handle
-    handle = driver.drvapi.cu_ipc_mem_handle(*handle)
+    if driver.USE_NV_BINDING:
+        driver_handle = driver.binding.CUipcMemHandle()
+        driver_handle.reserved = handle
+    else:
+        driver_handle = driver.drvapi.cu_ipc_mem_handle(*handle)
     # use *IpcHandle* to open the IPC memory
-    ipchandle = driver.IpcHandle(None, handle, size, offset=offset)
+    ipchandle = driver.IpcHandle(None, driver_handle, size, offset=offset)
     yield ipchandle.open_array(current_context(), shape=shape,
                                strides=strides, dtype=dtype)
     ipchandle.close()

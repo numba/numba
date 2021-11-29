@@ -1572,6 +1572,9 @@ class Interpreter(object):
     def op_POP_BLOCK(self, inst, kind=None):
         if kind is None:
             self.syntax_blocks.pop()
+        elif kind == 'with':
+            d = ir.PopBlock(loc=self.loc)
+            self.current_block.append(d)
         elif kind == 'try':
             self._insert_try_block_end()
 
