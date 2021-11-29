@@ -757,7 +757,7 @@ class TestLiftObj(MemoryLeak, TestCase):
             cfoo(np.array([1, 2, 3]))
         if PYVERSION <= (3, 7):
             # 3.7 and below can't handle the return
-            msg = "unsupported control flow due to return statements inside with block"
+            msg = "unsupported control flow: due to return statements inside with block"
         else:
             # above can't handle the recursion
             msg = "Untyped global name 'foo'"
