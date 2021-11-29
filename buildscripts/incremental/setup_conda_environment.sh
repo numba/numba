@@ -53,8 +53,8 @@ set -v
 
 # Install optional packages into activated env
 if [ "${VANILLA_INSTALL}" != "yes" ]; then
-    # Scipy, CFFI, jinja2, IPython and pygments are optional dependencies, but exercised in the test suite
-    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython pygments
+    # Scipy, CFFI, jinja2, IPython, ipython_genutils and pygments are optional dependencies, but exercised in the test suite
+    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipython_genutils pygments
     # Only install scipy on 64bit, else it'll pull in NumPy, 32bit linux needs
     # to get scipy from pip
     if [[ "$CONDA_SUBDIR" != "linux-32" && "$BITS32" != "yes" ]] ; then
@@ -84,7 +84,7 @@ fi
 $CONDA_INSTALL -c numba/label/dev llvmlite
 
 # Install latest ipykernel for testing
-$CONDA_INSTALL ipykernel ipython_genutils
+$CONDA_INSTALL ipykernel
 
 # Install dependencies for building the documentation
 if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx=2.4.4 sphinx_rtd_theme pygments numpydoc; fi
