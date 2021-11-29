@@ -235,10 +235,10 @@ def _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
 
 
 def _has_multiple_loop_exits(cfg, lpinfo):
-    """Returns True if there are more than one exit in the loop.
+    """Returns True if there is more than one exit in the loop.
 
-    NOTE: "common exits" refer to the situation where a loop exit has another
-    loop exit as successor. In that case, we do not need to alter it.
+    NOTE: "common exits" refers to the situation where a loop exit has another
+    loop exit as its successor. In that case, we do not need to alter it.
     """
     if len(lpinfo.exits) <= 1:
         return False
@@ -605,41 +605,41 @@ def find_setupwiths(func_ir):
         return setup_with_to_pop_blocks_map
 
     blocks = func_ir.blocks
-    # itinitial find
+    # initial find
     withs = find_ranges(blocks)
     func_ir = consolidate_multi_exit_withs(withs, blocks, func_ir)
 
     # here we need to turn the withs back into a list of tuples so that the
     # rest of the code can cope
-    withs = [(s,list(p)[0])
-             for (s,p) in withs.items()]
+    withs = [(s, list(p)[0])
+             for (s, p) in withs.items()]
 
     # check for POP_BLOCKS with multiple outgoing edges
-    for (s,p) in withs:
+    for (s, p) in withs:
         targets = blocks[p].terminator.get_targets()
         if len(targets) != 1:
             raise errors.CompilerError(
-                "Does not support with-context that contain branches "
-                "(i.e. break/return/raise) that can leave the with-context. "
+                "unsupported control flow: with-context contains branches "
+                "(i.e. break/return/raise) that can leave the block "
             )
     # now we check for returns inside with:
-    for (s,p) in withs:
+    for (s, p) in withs:
         target_block = blocks[p]
         if is_return(func_ir.blocks[
                 target_block.terminator.get_targets()[0]].terminator):
             if PYVERSION == (3, 8):
                 # 3.8 needs to bail here, if this is the case, because the
-                # later code can't handle it otherwise
+                # later code can't handle it.
                 raise errors.CompilerError(
-                    "unsupported control flow due to return statements "
+                    "unsupported control flow: due to return statements "
                     "inside with block"
                 )
             _rewrite_return(func_ir, p)
 
-    # now we need to rewrite the tuple so, we have SETUP_WITH matching the
+    # now we need to rewrite the tuple such that we have SETUP_WITH matching the
     # successor of the block that contains the POP_BLOCK.
-    withs = [(s,func_ir.blocks[p].terminator.get_targets()[0])
-             for (s,p) in withs]
+    withs = [(s ,func_ir.blocks[p].terminator.get_targets()[0])
+             for (s, p) in withs]
 
     # finally we eliminate any nested withs
     withs = _eliminate_nested_withs(withs)

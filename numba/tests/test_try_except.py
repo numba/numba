@@ -728,7 +728,7 @@ class TestTryExceptOtherControlFlow(TestCase):
 
         with self.assertRaises(CompilerError) as raises:
             test_objmode()
-        if PYVERSION <= (3,7):
+        if PYVERSION == (3,7):
             msg = ("unsupported control flow due to return statements inside "
                    "with block")
         else:
