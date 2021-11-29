@@ -8,7 +8,6 @@ Test np.datetime64 and np.timedelta64 support.
 import contextlib
 import itertools
 import warnings
-import pytest
 import re
 
 import numpy as np
@@ -969,7 +968,7 @@ class TestDatetimeArrayOps(TestCase):
         def arr_add(a, b):
             return a + b
 
-        with pytest.raises(TypeError, match=re.escape("ufunc 'add' is not supported between datetime64[ns] and timedelta64[M]")):
+        with self.assertRaisesRegex(TypeError, re.escape("ufunc 'add' is not supported between datetime64[ns] and timedelta64[M]")):
             arr_add(
                 np.array([np.datetime64("2011-01-01"),], dtype="datetime64[ns]"),
                 np.timedelta64(1000,'M')
@@ -985,7 +984,7 @@ class TestDatetimeArrayOps(TestCase):
         def arr_sub(a, b):
             return a - b
 
-        with pytest.raises(TypeError, match=re.escape("ufunc 'subtract' is not supported between datetime64[ns] and timedelta64[M]")):
+        with self.assertRaisesRegex(TypeError, re.escape("ufunc 'subtract' is not supported between datetime64[ns] and timedelta64[M]")):
             arr_sub(
                 np.array([np.datetime64("2011-01-01"),], dtype="datetime64[ns]"),
                 np.timedelta64(1000,'M')
