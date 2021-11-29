@@ -5,7 +5,7 @@ Tests for enum support.
 
 import numpy as np
 import unittest
-from numba import jit, vectorize, int32
+from numba import jit, vectorize, int8, int16, int32
 
 from numba.tests.support import TestCase
 from .enum_usecases import Color, Shape, Shake, Planet, RequestError, \
@@ -51,11 +51,11 @@ def int_coerce_usecase(x):
         return x + Shape.circle
 
 def int_cast_usecase(x):
-    # Implicit coercion of intenums to ints
-    if x > RequestError.internal_error:
-        return x - RequestError.not_found
+    # Explicit coercion of intenums to ints
+    if x > int16(RequestError.internal_error):
+        return x - int32(RequestError.not_found)
     else:
-        return x + int32 (Shape.circle)
+        return x + int8(Shape.circle)
 
 
 def vectorize_usecase(x):
