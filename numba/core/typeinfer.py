@@ -1400,6 +1400,8 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
             pass
         elif isinstance(inst, (ir.StaticRaise, ir.StaticTryRaise)):
             pass
+        elif isinstance(inst, ir.PopBlock):
+            pass # It's a marker statement
         elif type(inst) in typeinfer_extensions:
             # let external calls handle stmt if type matches
             f = typeinfer_extensions[type(inst)]
@@ -1612,6 +1614,17 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
             if all(literaled):
                 typ = types.Tuple(literaled)
 
+            # if any of the items in the tuple are arrays, they need to be
+            # typed as readonly, mutating an array in a global container
+            # is not supported (should be compile time constant etc).
+            def mark_array_ro(tup):
+                for item in tup.types:
+                    if isinstance(item, types.Array):
+                        item.mutable = False
+                    elif isinstance(item, types.BaseAnonymousTuple):
+                        mark_array_ro(item)
+            mark_array_ro(typ)
+
         self.sentry_modified_builtin(inst, gvar)
         # Setting literal_value for globals because they are handled
         # like const value in numba
@@ -1710,6 +1723,7 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
         elif expr.op == 'make_function':
             self.lock_type(target.name, types.MakeFunctionLiteral(expr),
                            loc=inst.loc, literal_value=expr)
+
         else:
             msg = "Unsupported op-code encountered: %s" % expr
             raise UnsupportedError(msg, loc=inst.loc)

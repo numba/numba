@@ -178,7 +178,8 @@ class SetItemBuffer(AbstractTemplate):
         if not isinstance(ary, types.Buffer):
             return
         if not ary.mutable:
-            raise NumbaTypeError(f"Cannot modify value of type {ary}")
+            msg = f"Cannot modify readonly array of type: {ary}"
+            raise NumbaTypeError(msg)
         out = get_array_index_type(ary, idx)
         if out is None:
             return

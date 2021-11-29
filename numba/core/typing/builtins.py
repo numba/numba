@@ -645,7 +645,10 @@ class StaticGetItemLiteralStrKeyDict(AbstractTemplate):
         if not isinstance(tup, types.LiteralStrKeyDict):
             return
         if isinstance(idx, str):
-            lookup = tup.fields.index(idx)
+            if idx in tup.fields:
+                lookup = tup.fields.index(idx)
+            else:
+                raise errors.NumbaKeyError(f"Key '{idx}' is not in dict.")
             ret = tup.types[lookup]
         if ret is not None:
             sig = signature(ret, *args)

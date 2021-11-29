@@ -68,6 +68,9 @@ The following built-in types support are inherited from CPU nopython mode.
 
 See :ref:`nopython built-in types <pysupported-builtin-types>`.
 
+There is also some very limited support for character sequences (bytes and
+unicode strings) used in NumPy arrays. Note that this support can only be used
+with CUDA 11.2 onwards.
 
 Built-in functions
 ==================

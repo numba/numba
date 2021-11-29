@@ -1714,12 +1714,15 @@ def _create_function_from_code_obj(fcode, func_env, func_arg, func_clo, glbls):
     * func_clo - string for the closure args
     * glbls - the function globals
     """
-    func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (
-        func_env, func_arg, func_clo)
+    sanitized_co_name = fcode.co_name.replace('<', '_').replace('>', '_')
+    func_text = (f"def closure():\n{func_env}\n"
+                 f"\tdef {sanitized_co_name}({func_arg}):\n"
+                 f"\t\treturn ({func_clo})\n"
+                 f"\treturn {sanitized_co_name}")
     loc = {}
     exec(func_text, glbls, loc)
 
-    f = loc['g']()
+    f = loc['closure']()
     # replace the code body
     f.__code__ = fcode
     f.__name__ = fcode.co_name
@@ -1730,7 +1733,7 @@ def get_ir_of_code(glbls, fcode):
     Compile a code object to get its IR, ir.Del nodes are emitted
     """
     nfree = len(fcode.co_freevars)
-    func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
+    func_env = "\n".join(["\tc_%d = None" % i for i in range(nfree)])
     func_clo = ",".join(["c_%d" % i for i in range(nfree)])
     func_arg = ",".join(["x_%d" % i for i in range(fcode.co_argcount)])
 
@@ -2243,7 +2246,7 @@ def convert_code_obj_to_function(code_obj, caller_ir):
                    "variable '%s' in a function that will escape." % x)
             raise TypingError(msg, loc=code_obj.loc)
 
-    func_env = "\n".join(["  c_%d = %s" % (i, x) for i, x in enumerate(freevars)])
+    func_env = "\n".join(["\tc_%d = %s" % (i, x) for i, x in enumerate(freevars)])
     func_clo = ",".join(["c_%d" % i for i in range(nfree)])
     co_varnames = list(fcode.co_varnames)
 

@@ -10,7 +10,7 @@ from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (copy_propagate, apply_copy_propagate,
                             get_name_var_table)
 from numba.core.typed_passes import type_inference_stage
-from numba.tests.test_ir_inlining import InlineTestPipeline
+from numba.tests.support import IRPreservingTestPipeline
 import numpy as np
 import unittest
 
@@ -124,7 +124,7 @@ class TestCopyPropagate(unittest.TestCase):
             b = a + 3
             return b
 
-        j_func = njit(pipeline_class=InlineTestPipeline)(test_impl)
+        j_func = njit(pipeline_class=IRPreservingTestPipeline)(test_impl)
         self.assertEqual(test_impl(5), j_func(5))
 
         # make sure b is the target of the expression assignment, not a temporary

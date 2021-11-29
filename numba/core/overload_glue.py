@@ -128,7 +128,8 @@ class _OverloadWrapper(object):
     def _build(self):
         from numba.core.extending import overload, intrinsic
 
-        @overload(self._function, strict=False)
+        @overload(self._function, strict=False,
+                  jit_options={'forceinline': True})
         def ol_generated(*ol_args, **ol_kwargs):
 
             def body(tyctx):
