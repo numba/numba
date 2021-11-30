@@ -704,7 +704,7 @@ def ol_isinstance(var, typs):
                         types.DictType, types.LiteralStrKeyDict, types.List,
                         types.ListType, types.Tuple, types.UniTuple, types.Set,
                         types.Function, types.ClassType, types.UnicodeType,
-                        types.ClassInstanceType, )
+                        types.ClassInstanceType, types.NoneType, types.Array)
     if not isinstance(var_ty, supported_var_ty):
         msg = f'isinstance() does not support variables of type "{var_ty}".'
         raise NumbaTypeError(msg)
@@ -725,6 +725,7 @@ def ol_isinstance(var, typs):
         t_typs = (t_typs, )
 
     for typ in t_typs:
+
         if isinstance(typ, types.Function):
             key = typ.key[0]  # functions like int(..), float(..), str(..)
         elif isinstance(typ, types.ClassType):
@@ -748,6 +749,12 @@ def ol_isinstance(var, typs):
             continue
 
         if isinstance(typ, types.TypeRef):
+            # Use of Numba type classes is in general not supported as they do
+            # not work when the jit is disabled.
+            if key not in (types.ListType, types.DictType):
+                msg = ("Numba type classes (except numba.typed.* container "
+                       "types) are not supported.")
+                raise NumbaTypeError(msg)
             # Case for TypeRef (i.e. isinstance(var, typed.List))
             #      var_ty == ListType[int64] (instance)
             #         typ == types.ListType  (class)

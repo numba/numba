@@ -7,10 +7,12 @@ from collections import namedtuple
 import numpy as np
 
 import unittest
+import warnings
+
 from numba.core.compiler import compile_isolated, Flags
 from numba import jit, typeof, njit, typed
 from numba.core import errors, types, utils, config
-from numba.tests.support import TestCase, tag
+from numba.tests.support import TestCase, tag, ignore_internal_warnings
 
 py38orlater = utils.PYVERSION >= (3, 8)
 
@@ -283,17 +285,6 @@ def isinstance_usecase_numba_types_2():
     return False
 
 
-def isinstance_usecase_numba_type_classes(a):
-    if isinstance(a, types.Float):
-        return 'float'
-    elif isinstance(a, types.Integer):
-        return 'int'
-    elif isinstance(a, types.Complex):
-        return 'complex'
-    else:
-        return 'no match'
-
-
 def invalid_isinstance_usecase(x):
     if isinstance(x, ('foo',)):
         return 'true branch'
@@ -330,6 +321,12 @@ def invalid_isinstance_optional_usecase(x):
     else:
         return False
 
+def invalid_isinstance_unsupported_type_usecase():
+    ntpl = namedtuple('ntpl', ['a', 'b'])
+    inst = ntpl(1, 2)
+    def impl(x):
+        return isinstance(inst, ntpl)
+    return impl
 
 class TestBuiltins(TestCase):
 
@@ -1222,6 +1219,7 @@ class TestIsinstanceBuiltin(TestCase):
             set([1, 2]),    # set
             (1, 'nba', 2),  # Heterogeneous Tuple
             # {'hello': 2},   # dict - doesn't work as input
+            None,
         )
 
         for inpt in inputs:
@@ -1230,11 +1228,14 @@ class TestIsinstanceBuiltin(TestCase):
             self.assertEqual(expected, got)
 
     def test_isinstance_dict(self):
+        # Tests typed.Dict and LiteralStrKeyDict
         pyfunc = isinstance_dict
         cfunc = jit(nopython=True)(pyfunc)
         self.assertEqual(pyfunc(), cfunc())
 
     def test_isinstance_numba_types(self):
+        # This makes use of type aliasing between python scalars and NumPy
+        # scalars, see also test_numba_types()
         pyfunc = isinstance_usecase_numba_types
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -1256,23 +1257,6 @@ class TestIsinstanceBuiltin(TestCase):
         pyfunc = isinstance_usecase_numba_types_2
         cfunc = jit(nopython=True)(pyfunc)
         self.assertEqual(pyfunc(), cfunc())
-
-    def test_isinstance_numba_type_classes(self):
-        pyfunc = isinstance_usecase_numba_type_classes
-        cfunc = jit(nopython=True)(pyfunc)
-
-        inputs = (
-            (types.int32(1), 'int'),
-            (types.int64(2), 'int'),
-            (types.float32(3.0), 'float'),
-            (types.float64(4.0), 'float'),
-            (types.complex64(5j), 'complex'),
-            (types.complex128(5j), 'complex'),
-        )
-
-        for inpt, expected in inputs:
-            got = cfunc(inpt)
-            self.assertEqual(expected, got)
 
     def test_isinstance_invalid_type(self):
         pyfunc = isinstance_usecase_invalid_type
@@ -1299,6 +1283,8 @@ class TestIsinstanceBuiltin(TestCase):
             (invalid_isinstance_optional_usecase,
              ('isinstance() cannot determine the type of variable "z" due to a '
              'branch.')),
+            (invalid_isinstance_unsupported_type_usecase(),
+             ('isinstance() does not support variables of type "ntpl(')),
         ]
 
         for fn, msg in fns:
@@ -1308,6 +1294,106 @@ class TestIsinstanceBuiltin(TestCase):
                 fn(100)
 
             self.assertIn(msg, str(raises.exception))
+
+    def test_combinations(self):
+        # Combinatorically test common classes and instances
+        def gen_w_arg(clazz_type):
+            def impl(x):
+                return isinstance(x, clazz_type)
+            return impl
+
+        clazz_types = (int, float, complex, str, list, tuple, bytes, set, range,
+                       np.int8, np.float32,)
+        instances = (1, 2.3, 4j, '5', [6,], (7,), b'8', {9,}, None,
+                     (10, 11, 12), (13, 'a', 14j), np.array([15, 16, 17]),
+                     np.int8(18), np.float32(19),
+                     typed.Dict.empty(types.unicode_type, types.float64),
+                     typed.List.empty_list(types.complex128), np.ones(4))
+
+        for ct in clazz_types:
+            fn = njit(gen_w_arg(ct))
+            for x in instances:
+                expected = fn.py_func(x)
+                got = fn(x)
+                self.assertEqual(got, expected)
+
+    def test_numba_types(self):
+        # Check types which are Numba types, this would break without the jit
+        # decorator in all cases except numba.typed containers.
+        def gen_w_arg(clazz_type):
+            def impl():
+                return isinstance(1, clazz_type)
+            return impl
+
+        clazz_types = (types.Integer, types.Float, types.Array,)
+
+        msg = "Numba type classes.*are not supported"
+        for ct in clazz_types:
+            fn = njit(gen_w_arg(ct))
+            with self.assertRaises(errors.TypingError) as raises:
+                fn()
+            self.assertRegex(str(raises.exception), msg)
+
+    def test_python_numpy_scalar_alias_problem(self):
+        # There's a problem due to Python and NumPy scalars being aliased in the
+        # type system. This is because e.g. int scalar values and NumPy np.intp
+        # type alias to types.intp. This test merely records this fact.
+
+        @njit
+        def foo():
+            return isinstance(np.intp(10), int)
+
+        self.assertEqual(foo(), True)
+        self.assertEqual(foo.py_func(), False)
+
+        @njit
+        def bar():
+            return isinstance(1, np.intp)
+
+        self.assertEqual(bar(), True)
+        self.assertEqual(bar.py_func(), False)
+
+    def test_branch_prune(self):
+        # Check that isinstance branches are pruned allowing otherwise
+        # impossible type specific specialisation.
+
+        @njit
+        def foo(x):
+            if isinstance(x, str):
+                return x + 'some_string'
+            elif isinstance(x, complex):
+                return np.imag(x)
+            elif isinstance(x, tuple):
+                return len(x)
+            else:
+                assert 0
+
+        for x in ('string', 1 + 2j, ('a', 3, 4j)):
+            expected = foo.py_func(x)
+            got = foo(x)
+            self.assertEqual(got, expected)
+
+    def test_experimental_warning(self):
+        # Check that if the isinstance feature is in use then an experiemental
+        # warning is raised.
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', errors.NumbaWarning)
+            ignore_internal_warnings()
+
+            @njit
+            def foo(x):
+                return isinstance(x, float)
+
+            foo(1.234)
+
+            self.assertEqual(len(w), 1)
+
+            self.assertEqual(w[0].category,
+                             errors.NumbaExperimentalFeatureWarning)
+            msg = ("Use of isinstance() detected. This is an experimental "
+                   "feature.")
+            self.assertIn(msg, str(w[0].message))
 
 
 if __name__ == '__main__':
