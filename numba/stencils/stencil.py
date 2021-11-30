@@ -607,7 +607,8 @@ class StencilFunc(object):
 
             if "cval" in self.options:
                 cval = self.options["cval"]
-                if return_type.dtype != typing.typeof.typeof(cval):
+                cval_ty = typing.typeof.typeof(cval)
+                if not self._typingctx.can_convert(cval_ty, return_type.dtype):
                     msg = "cval type does not match stencil return type."
                     raise NumbaValueError(msg)
             else:
@@ -618,8 +619,8 @@ class StencilFunc(object):
                 end_items = [":"] * the_array.ndim
                 start_items[dim] = ":-{}".format(self.neighborhood[dim][0])
                 end_items[dim] = "-{}:".format(self.neighborhood[dim][1])
-                func_text += "    " + "{}[{}] = {}\n".format(out_name, ",".join(start_items), cval)
-                func_text += "    " + "{}[{}] = {}\n".format(out_name, ",".join(end_items), cval)
+                func_text += "    " + "{}[{}] = {}\n".format(out_name, ",".join(start_items), cval_as_str(cval))
+                func_text += "    " + "{}[{}] = {}\n".format(out_name, ",".join(end_items), cval_as_str(cval))
         else: # result is present, if cval is set then use it
             if "cval" in self.options:
                 cval = self.options["cval"]
