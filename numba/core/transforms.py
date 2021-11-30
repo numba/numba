@@ -816,18 +816,18 @@ def _fix_multi_exit_blocks(func_ir, exit_nodes, *, split_condition=None):
     # Getting the scope
     any_blk = min(func_ir.blocks.values())
     scope = any_blk.scope
-    # Getting the maximum block key
-    max_key = max(func_ir.blocks) + 1
+    # Getting the maximum block label
+    max_label = max(func_ir.blocks) + 1
     # Define the new common block for the new exit.
     common_block = ir.Block(any_blk.scope, loc=any_blk.loc)
-    common_key = max_key
-    max_key += 1
-    blocks[common_key] = common_block
+    common_label = max_label
+    max_label += 1
+    blocks[common_label] = common_block
     # Define the new block after the exit.
     post_block = ir.Block(any_blk.scope, loc=any_blk.loc)
-    post_key = max_key
-    max_key += 1
-    blocks[post_key] = post_block
+    post_label = max_label
+    max_label += 1
+    blocks[post_label] = post_block
 
     # Adjust each exit node
     remainings = []
@@ -857,20 +857,20 @@ def _fix_multi_exit_blocks(func_ir, exit_nodes, *, split_condition=None):
         )
         # Replace terminator with a jump to the common block
         assert not blk.is_terminated
-        blk.body.append(ir.Jump(common_key, loc=blk.loc))
+        blk.body.append(ir.Jump(common_label, loc=blk.loc))
 
     if split_condition is not None:
         # Move the splitting statement to the common block
         common_block.body.append(remainings[0][0])
     assert not common_block.is_terminated
     # Append jump from common block to post block
-    common_block.body.append(ir.Jump(post_key, loc=loc))
+    common_block.body.append(ir.Jump(post_label, loc=loc))
 
     # Make if-else tree to jump to target
     remain_blocks = []
     for remain in remainings:
-        remain_blocks.append(max_key)
-        max_key += 1
+        remain_blocks.append(max_label)
+        max_label += 1
 
     switch_block = post_block
     for i, remain in enumerate(remainings):
@@ -909,4 +909,4 @@ def _fix_multi_exit_blocks(func_ir, exit_nodes, *, split_condition=None):
     # Add the final jump
     switch_block.body.append(ir.Jump(jump_target, loc=loc))
 
-    return func_ir, common_key
+    return func_ir, common_label
