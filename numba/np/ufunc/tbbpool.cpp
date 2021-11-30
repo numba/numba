@@ -12,6 +12,7 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 #undef _XOPEN_SOURCE
 #endif
 
+#include <tbb/version.h>
 #include <tbb/tbb.h>
 #include <string.h>
 #include <stdio.h>
@@ -27,9 +28,14 @@ Implement parallel vectorize workqueue on top of Intel TBB.
  * from here:
  * https://github.com/intel/tbb/blob/2019_U5/include/tbb/tbb_stddef.h#L29
  */
-#if (TBB_INTERFACE_VERSION >= 12060) || (TBB_INTERFACE_VERSION < 12010)
-#error "TBB version is incompatible, 2021.1 through to 2021.5 required, i.e. 12010 <= TBB_INTERFACE_VERSION < 12060"
-#endif
+#if TBB_INTERFACE_VERSION < 12010
+#error "TBB version is too old, 2021 update 1, i.e. TBB_INTERFACE_VERSION >= 12010 required"
+#elif TBB_INTERFACE_VERSION >= 12060
+#define TSH_ATTACH tbb::attach
+#define TSH_RELEASE(TSH) TSH.release()
+#else
+#define TSH_ATTACH tbb::task_scheduler_handle::get
+#define TSH_RELEASE(TSH) tbb::task_scheduler_handle::release(TSH)
 
 #define _DEBUG 0
 #define _TRACE_SPLIT 0
@@ -235,7 +241,7 @@ static void prepare_fork(void)
         {
             if (!tbb::finalize(tsh, std::nothrow))
             {
-                tbb::task_scheduler_handle::release(tsh);
+                TSH_RELEASE(tsh);
                 puts("Unable to join threads to shut down before fork(). "
                      "This can break multithreading in child processes.\n");
             }
@@ -260,7 +266,7 @@ static void reset_after_fork(void)
 
     if(need_reinit_after_fork)
     {
-        tsh = tbb::task_scheduler_handle::get();
+        tsh = TSH_ATTACH();
         set_main_thread();
         tsh_was_initialized = true;
         need_reinit_after_fork = false;
@@ -298,7 +304,7 @@ static void launch_threads(int count)
     if(count < 1)
         count = tbb::task_arena::automatic;
 
-    tsh = tbb::task_scheduler_handle::get();
+    tsh = TSH_ATTACH();
     tsh_was_initialized = true;
 
     tg = new tbb::task_group;
