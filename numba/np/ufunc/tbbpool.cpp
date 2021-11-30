@@ -30,13 +30,25 @@ Implement parallel vectorize workqueue on top of Intel TBB.
  */
 #if TBB_INTERFACE_VERSION < 12010
 #error "TBB version is too old, 2021 update 1, i.e. TBB_INTERFACE_VERSION >= 12010 required"
-#elif TBB_INTERFACE_VERSION >= 12060
-#define TSH_ATTACH tbb::attach
-#define TSH_RELEASE(TSH) TSH.release()
-#else
-#define TSH_ATTACH tbb::task_scheduler_handle::get
-#define TSH_RELEASE(TSH) tbb::task_scheduler_handle::release(TSH)
 #endif
+
+tbb::task_scheduler_handle tbb_tsh_attach()
+{
+#if TBB_INTERFACE_VERSION >= 12060
+    return tbb::attach();
+#else
+    return tbb::task_scheduler_handle::get();
+#endif
+}
+
+void tbb_tsh_release(tbb::task_scheduler_handle& tsh)
+{
+#if TBB_INTERFACE_VERSION >= 12060
+    tsh.release();
+#else
+    tbb::task_scheduler_handle::release(tsh);
+#endif
+}
 
 #define _DEBUG 0
 #define _TRACE_SPLIT 0
@@ -233,7 +245,7 @@ static void prepare_fork(void)
         {
             if (!tbb::finalize(tsh, std::nothrow))
             {
-                TSH_RELEASE(tsh);
+                tbb_tsh_release(tsh);
                 puts("Unable to join threads to shut down before fork(). "
                      "This can break multithreading in child processes.\n");
             }
@@ -258,7 +270,7 @@ static void reset_after_fork(void)
 
     if(need_reinit_after_fork)
     {
-        tsh = TSH_ATTACH();
+        tsh = tbb_tsh_attach();
         set_main_thread();
         tsh_was_initialized = true;
         need_reinit_after_fork = false;
@@ -296,7 +308,7 @@ static void launch_threads(int count)
     if(count < 1)
         count = tbb::task_arena::automatic;
 
-    tsh = TSH_ATTACH();
+    tsh = tbb_tsh_attach();
     tsh_was_initialized = true;
 
     tg = new tbb::task_group;
