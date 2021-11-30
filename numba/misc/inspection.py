@@ -62,10 +62,12 @@ def disassemble_elf_to_cfg(elf, mangled_symbol):
                 # If the elf is linked then it's necessary to seek as the
                 # DSO ctor/dtor is at the default position
                 if linked:
+                    # r2 only matches up to 61 chars?! found this by experiment!
+                    mangled_symbol_61char = mangled_symbol[:61]
                     # switch off demangle, the seek is on a mangled symbol
                     r.cmd('e bin.demangle=false')
                     # seek to the mangled symbol address
-                    r.cmd(f's `is~ {mangled_symbol}[1]`')
+                    r.cmd(f's `is~ {mangled_symbol_61char}[1]`')
                     # switch demangling back on for output purposes
                     r.cmd('e bin.demangle=true')
                 data = r.cmd('%s' % cmd) # print graph
