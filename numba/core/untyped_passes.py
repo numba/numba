@@ -1564,7 +1564,6 @@ class LiteralPropagationSubPipelinePass(FunctionPass):
         # rewrite consts / dead branch pruning
         pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
         pm.add_pass(DeadBranchPrune, "dead branch pruning")
-        pm.add_pass(DeadCodeElimination, "dead code elimination")
 
         pm.finalize()
         pm.run(state)
