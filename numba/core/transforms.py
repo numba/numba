@@ -5,6 +5,7 @@ Implement transformation on Numba IR
 
 from collections import namedtuple, defaultdict
 import logging
+import operator
 
 from numba.core.analysis import compute_cfg_from_blocks, find_top_level_loops
 from numba.core import errors, ir, ir_utils
@@ -759,62 +760,122 @@ def consolidate_multi_exit_withs(withs: dict, blocks, func_ir):
 
 
 def _fix_multi_exit_blocks(func_ir, exit_nodes, *, split_condition=None):
-    blocks = func_ir.blocks
+    """Modify the FunctionIR to create a single common exit node given the
+    original exit nodes.
 
+    Parameters
+    ----------
+    func_ir :
+        The FunctionIR. Mutated inplace.
+    exit_nodes :
+        A sequence of block keys.
+    split_condition : callable or None
+        If not None, it is a callable with the signature
+        `split_condition(statement)` that determines if the `statement` is the
+        splitting point (e.g. `POP_BLOCK`) in a exit node.
+    """
+
+    # Convert the following:
+    #
+    #     |           |
+    # +-------+   +-------+
+    # | exit0 |   | exit1 |
+    # +-------+   +-------+
+    #     |           |
+    # +-------+   +-------+
+    # | after0|   | after1|
+    # +-------+   +-------+
+    #     |           |
+    #
+    # To roughly:
+    #
+    #     |           |
+    # +-------+   +-------+
+    # | exit0 |   | exit1 |
+    # +-------+   +-------+
+    #     |           |
+    #     +-----+-----+
+    #           |
+    #      +---------+
+    #      | common  |
+    #      +---------+
+    #           |
+    #       +-------+
+    #       | post  |
+    #       +-------+
+    #           |
+    #     +-----+-----+
+    #     |           |
+    # +-------+   +-------+
+    # | after0|   | after1|
+    # +-------+   +-------+
+
+    blocks = func_ir.blocks
+    # Getting the scope
     any_blk = min(func_ir.blocks.values())
     scope = any_blk.scope
+    # Getting the maximum block key
     max_key = max(func_ir.blocks) + 1
-
+    # Define the new common block for the new exit.
     common_block = ir.Block(any_blk.scope, loc=any_blk.loc)
     common_key = max_key
     max_key += 1
     blocks[common_key] = common_block
-
+    # Define the new block after the exit.
     post_block = ir.Block(any_blk.scope, loc=any_blk.loc)
     post_key = max_key
     max_key += 1
     blocks[post_key] = post_block
 
+    # Adjust each exit node
     remainings = []
     for i, k in enumerate(exit_nodes):
         blk = blocks[k]
 
+        # split the block if needed
         if split_condition is not None:
             for pt, stmt in enumerate(blk.body):
                 if split_condition(stmt):
                     break
         else:
+            # no splitting
             pt = -1
 
         before = blk.body[:pt]
         after = blk.body[pt:]
         remainings.append(after)
 
+        # Add control-point variable to mark which exit block this is.
         blk.body = before
         loc = blk.loc
-        blk.body.append(ir.Assign(value=ir.Const(i, loc=loc), target=scope.get_or_define("$cp", loc=loc), loc=loc))
+        blk.body.append(
+            ir.Assign(value=ir.Const(i, loc=loc),
+                      target=scope.get_or_define("$cp", loc=loc),
+                      loc=loc)
+        )
+        # Replace terminator with a jump to the common block
         assert not blk.is_terminated
         blk.body.append(ir.Jump(common_key, loc=blk.loc))
 
     if split_condition is not None:
-        common_block.body.append(remainings[0][0])  # the POP
+        # Move the splitting statement to the common block
+        common_block.body.append(remainings[0][0])
     assert not common_block.is_terminated
+    # Append jump from common block to post block
     common_block.body.append(ir.Jump(post_key, loc=loc))
-    # make if-else tree to jump to target
 
+    # Make if-else tree to jump to target
     remain_blocks = []
     for remain in remainings:
         remain_blocks.append(max_key)
         max_key += 1
 
-
     switch_block = post_block
     for i, remain in enumerate(remainings):
-        import operator
-
         match_expr = scope.redefine("$cp_check", loc=loc)
         match_rhs = scope.redefine("$cp_rhs", loc=loc)
 
+        # Do comparison to match control-point variable to the exit block
         switch_block.body.append(
             ir.Assign(
                 value=ir.Const(i, loc=loc),
@@ -823,21 +884,27 @@ def _fix_multi_exit_blocks(func_ir, exit_nodes, *, split_condition=None):
             ),
         )
 
+        # Add assignment for the comparison
         switch_block.body.append(
             ir.Assign(
-                value=ir.Expr.binop(fn=operator.eq, lhs=scope.get("$cp"), rhs=match_rhs, loc=loc),
+                value=ir.Expr.binop(
+                    fn=operator.eq, lhs=scope.get("$cp"), rhs=match_rhs,
+                    loc=loc,
+                ),
                 target=match_expr,
                 loc=loc
             ),
         )
 
-        # insert jump
+        # Insert jump to the next case
         [jump_target] = remain[-1].get_targets()
-        switch_block.body.append(ir.Branch(match_expr, jump_target, remain_blocks[i], loc=loc))
-
+        switch_block.body.append(
+            ir.Branch(match_expr, jump_target, remain_blocks[i], loc=loc),
+        )
         switch_block = ir.Block(scope=scope, loc=loc)
         blocks[remain_blocks[i]] = switch_block
 
+    # Add the final jump
     switch_block.body.append(ir.Jump(jump_target, loc=loc))
 
     return func_ir, common_key
