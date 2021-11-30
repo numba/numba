@@ -748,6 +748,8 @@ def _eliminate_nested_withs(with_ranges):
     return known_ranges
 
 def consolidate_multi_exit_withs(withs: dict, blocks, func_ir):
+    """Modify the FunctionIR to merge the exit blocks of with constructs.
+    """
     out = []
     for k in withs:
         vs : set = withs[k]
