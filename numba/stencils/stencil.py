@@ -607,8 +607,7 @@ class StencilFunc(object):
 
             if "cval" in self.options:
                 cval = self.options["cval"]
-                cval_ty = typing.typeof.typeof(cval)
-                if not self._typingctx.can_convert(cval_ty, return_type.dtype):
+                if return_type.dtype != typing.typeof.typeof(cval):
                     msg = "cval type does not match stencil return type."
                     raise NumbaValueError(msg)
             else:
