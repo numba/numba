@@ -3,6 +3,7 @@ import itertools
 
 import numpy as np
 
+import numba
 from numba.core.compiler import compile_isolated
 from numba import jit
 from numba.core import errors, ir, types, typing, typeinfer, utils
@@ -10,6 +11,9 @@ from numba.core.typeconv import Conversion
 
 from numba.tests.support import TestCase, tag
 from numba.tests.test_typeconv import CompatibilityTestMixin
+from numba.core.untyped_passes import TranslateByteCode, IRProcessing
+from numba.core.typed_passes import PartialTypeInference
+from numba.core.compiler_machinery import FunctionPass, register_pass
 import unittest
 
 
@@ -757,6 +761,76 @@ class TestFoldArguments(unittest.TestCase):
         for case in cases:
             with self.subTest(**case):
                 self.check_fold_arguments_list_inputs(**case)
+
+
+@register_pass(mutates_CFG=False, analysis_only=True)
+class DummyCR(FunctionPass):
+    """Dummy pass to add "cr" to compiler state to avoid errors in TyperCompiler since
+    it doesn't have lowering.
+    """
+
+    _name = "dummy_cr"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        state.cr = 1  # arbitrary non-None value
+        return True
+
+
+class TyperCompiler(numba.core.compiler.CompilerBase):
+    """A compiler pipeline that skips passes after typing (provides partial typing info
+    but not lowering).
+    """
+
+    def define_pipelines(self):
+        pm = numba.core.compiler_machinery.PassManager("custom_pipeline")
+        pm.add_pass(TranslateByteCode, "analyzing bytecode")
+        pm.add_pass(IRProcessing, "processing IR")
+        pm.add_pass(PartialTypeInference, "do partial typing")
+        pm.add_pass_after(DummyCR, PartialTypeInference)
+        pm.finalize()
+        return [pm]
+
+
+def get_func_typing_errs(func, arg_types):
+    """
+    Get typing errors for function 'func'. It creates a pipeline that runs untyped
+    passes as well as type inference.
+    """
+    typingctx = numba.core.registry.cpu_target.typing_context
+    targetctx = numba.core.registry.cpu_target.target_context
+    library = None
+    return_type = None
+    _locals = {}
+    flags = numba.core.compiler.Flags()
+    flags.nrt = True
+
+    pipeline = TyperCompiler(
+        typingctx, targetctx, library, arg_types, return_type, flags, _locals
+    )
+    pipeline.compile_extra(func)
+    return pipeline.state.typing_errors
+
+
+class TestPartialTypingErrors(unittest.TestCase):
+    """
+    Make sure partial typing stores type errors in compiler state properly
+    """
+    def test_partial_typing_error(self):
+        # example with type unification error
+        def impl(flag):
+            if flag:
+                a = 1
+            else:
+                a = str(1)
+            return a
+
+        typing_errs = get_func_typing_errs(impl, (types.bool_,))
+        self.assertTrue(isinstance(typing_errs, list) and len(typing_errs) == 1)
+        self.assertTrue(isinstance(typing_errs[0], errors.TypingError) and
+                        "Cannot unify" in typing_errs[0].msg)
 
 
 if __name__ == '__main__':

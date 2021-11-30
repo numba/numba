@@ -1,5 +1,6 @@
 import contextlib
 import os
+import platform
 import shutil
 import sys
 
@@ -9,7 +10,7 @@ from numba.tests.support import (
     redirect_c_stdout,
 )
 from numba.cuda.cuda_paths import get_conda_ctk
-from numba.cuda.cudadrv import devices, libs
+from numba.cuda.cudadrv import driver, devices, libs
 from numba.core import config
 from numba.tests.support import TestCase
 import unittest
@@ -23,6 +24,19 @@ class CUDATestCase(SerialMixin, TestCase):
     its tests are run between tests from a CUDATestCase.
     """
 
+    def setUp(self):
+        self._low_occupancy_warnings = config.CUDA_LOW_OCCUPANCY_WARNINGS
+        self._warn_on_implicit_copy = config.CUDA_WARN_ON_IMPLICIT_COPY
+
+        # Disable warnings about low gpu utilization in the test suite
+        config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
+        # Disable warnings about host arrays in the test suite
+        config.CUDA_WARN_ON_IMPLICIT_COPY = 0
+
+    def tearDown(self):
+        config.CUDA_LOW_OCCUPANCY_WARNINGS = self._low_occupancy_warnings
+        config.CUDA_WARN_ON_IMPLICIT_COPY = self._warn_on_implicit_copy
+
 
 class ContextResettingTestCase(CUDATestCase):
     """
@@ -33,8 +47,23 @@ class ContextResettingTestCase(CUDATestCase):
     """
 
     def tearDown(self):
+        super().tearDown()
         from numba.cuda.cudadrv.devices import reset
         reset()
+
+
+def ensure_supported_ccs_initialized():
+    from numba.cuda import is_available as cuda_is_available
+    from numba.cuda.cudadrv import nvvm
+
+    if cuda_is_available():
+        # Ensure that cudart.so is loaded and the list of supported compute
+        # capabilities in the nvvm module is populated before a fork. This is
+        # needed because some compilation tests don't require a CUDA context,
+        # but do use NVVM, and it is required that libcudart.so should be
+        # loaded before a fork (note that the requirement is not explicitly
+        # documented).
+        nvvm.get_supported_ccs()
 
 
 def skip_on_cudasim(reason):
@@ -71,6 +100,12 @@ def skip_with_nvdisasm(reason):
     return unittest.skipIf(nvdisasm_path is not None, reason)
 
 
+def skip_on_arm(reason):
+    cpu = platform.processor()
+    is_arm = cpu.startswith('arm') or cpu.startswith('aarch')
+    return unittest.skipIf(is_arm, reason)
+
+
 def cc_X_or_above(major, minor):
     if not config.ENABLE_CUDASIM:
         cc = devices.get_context().device.compute_capability
@@ -91,7 +126,16 @@ def skip_unless_cc_60(fn):
     return unittest.skipUnless(cc_X_or_above(6, 0), "requires cc >= 6.0")(fn)
 
 
+def xfail_with_cuda_python(fn):
+    if driver.USE_NV_BINDING:
+        return unittest.expectedFailure(fn)
+    else:
+        return fn
+
+
 def cudadevrt_missing():
+    if config.ENABLE_CUDASIM:
+        return False
     try:
         libs.check_static_lib('cudadevrt')
     except FileNotFoundError:

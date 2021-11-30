@@ -66,6 +66,7 @@ the decorator the vectorized function is a couple of orders of magnitude faster.
 | ``ident_loops`` | Yes   |     0.670s     |
 +-----------------+-------+----------------+
 
+.. _fast-math:
 
 Fastmath
 --------

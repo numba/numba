@@ -609,7 +609,7 @@ def real_divmod(context, builder, x, y):
     module = builder.module
     fname = context.mangler(".numba.python.rem", [x.type])
     fnty = Type.function(floatty, (floatty, floatty, Type.pointer(floatty)))
-    fn = module.get_or_insert_function(fnty, fname)
+    fn = cgutils.get_or_insert_function(module, fnty, fname)
 
     if fn.is_declaration:
         fn.linkage = lc.LINKAGE_LINKONCE_ODR
@@ -995,7 +995,7 @@ def complex_power_impl(context, builder, sig, args):
                 types.complex128: "numba_cpow",
                 }[ty]
             fnty = Type.function(Type.void(), [pa.type] * 3)
-            cpow = module.get_or_insert_function(fnty, name=func_name)
+            cpow = cgutils.get_or_insert_function(module, fnty, func_name)
             builder.call(cpow, (pa, pb, pc))
 
     res = builder.load(pc)
@@ -1333,6 +1333,12 @@ def constant_complex(context, builder, ty, pyval):
 @lower_constant(types.Float)
 @lower_constant(types.Boolean)
 def constant_integer(context, builder, ty, pyval):
+    # See https://github.com/numba/numba/issues/6979
+    # llvmlite ir.IntType specialises the formatting of the constant for a
+    # cpython bool. A NumPy np.bool_ is not a cpython bool so force it to be one
+    # so that the constant renders correctly!
+    if isinstance(pyval, np.bool_):
+        pyval = bool(pyval)
     lty = context.get_value_type(ty)
     return lty(pyval)
 

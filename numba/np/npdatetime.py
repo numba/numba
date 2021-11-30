@@ -10,8 +10,11 @@ import llvmlite.llvmpy.core as lc
 
 from numba.core import types, cgutils
 from numba.core.imputils import (lower_builtin, lower_constant,
-                                    impl_ret_untracked)
+                                 impl_ret_untracked, lower_cast)
 from numba.np import npdatetime_helpers, numpy_support, npyfuncs
+from numba.extending import overload_method
+from numba.core.config import IS_32BITS
+from numba.core.errors import LoweringError
 
 # datetime64 and timedelta64 use the same internal representation
 DATETIME64 = TIMEDELTA64 = Type.int(64)
@@ -50,8 +53,8 @@ def scale_timedelta(context, builder, val, srcty, destty):
         srcty.unit, destty.unit)
     if factor is None:
         # This can happen when using explicit output in a ufunc.
-        raise NotImplementedError("cannot convert timedelta64 from %r to %r"
-                                  % (srcty.unit, destty.unit))
+        msg = f"cannot convert timedelta64 from {srcty.unit} to {destty.unit}"
+        raise LoweringError(msg)
     return scale_by_constant(builder, val, factor)
 
 
@@ -573,8 +576,8 @@ def convert_datetime_for_arith(builder, dt_val, src_unit, dest_unit):
     dt_factor = npdatetime_helpers.get_timedelta_conversion_factor(dt_unit, dest_unit)
     if dt_factor is None:
         # This can happen when using explicit output in a ufunc.
-        raise NotImplementedError("cannot convert datetime64 from %r to %r"
-                                  % (src_unit, dest_unit))
+        raise LoweringError("cannot convert datetime64 from %r to %r"
+                                       % (src_unit, dest_unit))
     return scale_by_constant(builder, dt_val, dt_factor)
 
 
@@ -812,3 +815,35 @@ def _cast_to_timedelta(context, builder, val):
 @lower_builtin(np.isnat, types.NPTimedelta)
 def _np_isnat_impl(context, builder, sig, args):
     return npyfuncs.np_datetime_isnat_impl(context, builder, sig, args)
+
+
+@lower_cast(types.NPDatetime, types.Integer)
+@lower_cast(types.NPTimedelta, types.Integer)
+def _cast_npdatetime_int64(context, builder, fromty, toty, val):
+    if toty.bitwidth != 64: # all date time types are 64 bit
+        msg = f"Cannot cast {fromty} to {toty} as {toty} is not 64 bits wide."
+        raise ValueError(msg)
+    return val
+
+
+@overload_method(types.NPTimedelta, '__hash__')
+@overload_method(types.NPDatetime, '__hash__')
+def ol_hash_npdatetime(x):
+    if IS_32BITS:
+        def impl(x):
+            x = np.int64(x)
+            if x < 2**31 - 1:  # x < LONG_MAX
+                y = np.int32(x)
+            else:
+                hi = (np.int64(x) & 0xffffffff00000000) >> 32
+                lo = (np.int64(x) & 0x00000000ffffffff)
+                y = np.int32(lo + (1000003) * hi)
+            if y == -1:
+                y = np.int32(-2)
+            return y
+    else:
+        def impl(x):
+            if np.int64(x) == -1:
+                return np.int64(-2)
+            return np.int64(x)
+    return impl

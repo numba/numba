@@ -9,7 +9,7 @@ from numba.core import config
 import unittest
 
 BOUNDSCHECK_FLAGS = DEFAULT_FLAGS.copy()
-BOUNDSCHECK_FLAGS.set('boundscheck', True)
+BOUNDSCHECK_FLAGS.boundscheck = True
 
 
 def basic_array_access(a):

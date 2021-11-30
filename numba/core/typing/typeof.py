@@ -94,6 +94,9 @@ def _typeof_type(val, c):
     if issubclass(val, np.generic):
         return types.NumberClass(numpy_support.from_dtype(val))
 
+    if issubclass(val, types.Type):
+        return types.TypeRef(val)
+
     from numba.typed import Dict
     if issubclass(val, Dict):
         return types.TypeRef(types.DictType)
@@ -232,8 +235,8 @@ def _typeof_dtype(val, c):
 def _typeof_ndarray(val, c):
     try:
         dtype = numpy_support.from_dtype(val.dtype)
-    except NotImplementedError:
-        raise ValueError("Unsupported array dtype: %s" % (val.dtype,))
+    except errors.NumbaNotImplementedError:
+        raise errors.NumbaValueError(f"Unsupported array dtype: {val.dtype}")
     layout = numpy_support.map_layout(val)
     readonly = not val.flags.writeable
     return types.Array(dtype, val.ndim, layout, readonly=readonly)

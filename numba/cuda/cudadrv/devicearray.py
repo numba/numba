@@ -4,7 +4,6 @@ on the object.  If it exists and evaluate to True, it must define shape,
 strides, dtype and size attributes similar to a NumPy ndarray.
 """
 
-import warnings
 import math
 import functools
 import operator
@@ -14,12 +13,16 @@ from ctypes import c_void_p
 import numpy as np
 
 import numba
-from numba.cuda.cudadrv import driver as _driver
+from numba import _devicearray
 from numba.cuda.cudadrv import devices
-from numba.core import types
+from numba.cuda.cudadrv import driver as _driver
+from numba.core import types, config
 from numba.np.unsafe.ndarray import to_fixed_tuple
 from numba.misc import dummyarray
 from numba.np import numpy_support
+from numba.cuda.api_util import prepare_shape_strides_dtype
+from numba.core.errors import NumbaPerformanceWarning
+from warnings import warn
 
 try:
     lru_cache = getattr(functools, 'lru_cache')(None)
@@ -56,14 +59,13 @@ def require_cuda_ndarray(obj):
         raise ValueError('require an cuda ndarray object')
 
 
-class DeviceNDArrayBase(object):
+class DeviceNDArrayBase(_devicearray.DeviceArray):
     """A on GPU NDArray representation
     """
     __cuda_memory__ = True
     __cuda_ndarray__ = True     # There must be gpu_data attribute
 
-    def __init__(self, shape, strides, dtype, stream=0, writeback=None,
-                 gpu_data=None):
+    def __init__(self, shape, strides, dtype, stream=0, gpu_data=None):
         """
         Args
         ----
@@ -76,8 +78,6 @@ class DeviceNDArrayBase(object):
             data type as np.dtype coercible object.
         stream
             cuda stream.
-        writeback
-            Deprecated.
         gpu_data
             user provided device memory for the ndarray data buffer
         """
@@ -105,28 +105,37 @@ class DeviceNDArrayBase(object):
                 self.alloc_size = _driver.device_memory_size(gpu_data)
         else:
             # Make NULL pointer for empty allocation
+            if _driver.USE_NV_BINDING:
+                null = _driver.binding.CUdeviceptr(0)
+            else:
+                null = c_void_p(0)
             gpu_data = _driver.MemoryPointer(context=devices.get_context(),
-                                             pointer=c_void_p(0), size=0)
+                                             pointer=null, size=0)
             self.alloc_size = 0
 
         self.gpu_data = gpu_data
-
-        self.__writeback = writeback    # should deprecate the use of this
         self.stream = stream
 
     @property
     def __cuda_array_interface__(self):
-        if self.device_ctypes_pointer.value is not None:
-            ptr = self.device_ctypes_pointer.value
+        if _driver.USE_NV_BINDING:
+            if self.device_ctypes_pointer is not None:
+                ptr = int(self.device_ctypes_pointer)
+            else:
+                ptr = 0
         else:
-            ptr = 0
+            if self.device_ctypes_pointer.value is not None:
+                ptr = self.device_ctypes_pointer.value
+            else:
+                ptr = 0
 
         return {
             'shape': tuple(self.shape),
             'strides': None if is_contiguous(self) else tuple(self.strides),
             'data': (ptr, False),
             'typestr': self.dtype.str,
-            'version': 2,
+            'stream': int(self.stream) if self.stream != 0 else None,
+            'version': 3,
         }
 
     def bind(self, stream=0):
@@ -192,7 +201,10 @@ class DeviceNDArrayBase(object):
         """Returns the ctypes pointer to the GPU data buffer
         """
         if self.gpu_data is None:
-            return c_void_p(0)
+            if _driver.USE_NV_BINDING:
+                return _driver.binding.CUdeviceptr(0)
+            else:
+                return c_void_p(0)
         else:
             return self.gpu_data.device_ctypes_pointer
 
@@ -273,14 +285,6 @@ class DeviceNDArrayBase(object):
                 hostary = np.ndarray(shape=self.shape, dtype=self.dtype,
                                      strides=self.strides, buffer=hostary)
         return hostary
-
-    def to_host(self, stream=0):
-        stream = self._default_stream(stream)
-        warnings.warn("to_host() is deprecated and will be removed",
-                      DeprecationWarning)
-        if self.__writeback is None:
-            raise ValueError("no associated writeback array")
-        self.copy_to_host(self.__writeback, stream=stream)
 
     def split(self, section, stream=0):
         """Split the array into equal partition of the `section` size.
@@ -420,6 +424,80 @@ class DeviceRecord(DeviceNDArrayBase):
         """
         return numpy_support.from_dtype(self.dtype)
 
+    @devices.require_context
+    def __getitem__(self, item):
+        return self._do_getitem(item)
+
+    @devices.require_context
+    def getitem(self, item, stream=0):
+        """Do `__getitem__(item)` with CUDA stream
+        """
+        return self._do_getitem(item, stream)
+
+    def _do_getitem(self, item, stream=0):
+        stream = self._default_stream(stream)
+        typ, offset = self.dtype.fields[item]
+        newdata = self.gpu_data.view(offset)
+
+        if typ.shape == ():
+            if typ.names is not None:
+                return DeviceRecord(dtype=typ, stream=stream,
+                                    gpu_data=newdata)
+            else:
+                hostary = np.empty(1, dtype=typ)
+                _driver.device_to_host(dst=hostary, src=newdata,
+                                       size=typ.itemsize,
+                                       stream=stream)
+            return hostary[0]
+        else:
+            shape, strides, dtype = \
+                prepare_shape_strides_dtype(typ.shape,
+                                            None,
+                                            typ.subdtype[0], 'C')
+            return DeviceNDArray(shape=shape, strides=strides,
+                                 dtype=dtype, gpu_data=newdata,
+                                 stream=stream)
+
+    @devices.require_context
+    def __setitem__(self, key, value):
+        return self._do_setitem(key, value)
+
+    @devices.require_context
+    def setitem(self, key, value, stream=0):
+        """Do `__setitem__(key, value)` with CUDA stream
+        """
+        return self._do_setitem(key, value, stream=stream)
+
+    def _do_setitem(self, key, value, stream=0):
+
+        stream = self._default_stream(stream)
+
+        # If the record didn't have a default stream, and the user didn't
+        # provide a stream, then we will use the default stream for the
+        # assignment kernel and synchronize on it.
+        synchronous = not stream
+        if synchronous:
+            ctx = devices.get_context()
+            stream = ctx.get_default_stream()
+
+        # (1) prepare LHS
+
+        typ, offset = self.dtype.fields[key]
+        newdata = self.gpu_data.view(offset)
+
+        lhs = type(self)(dtype=typ, stream=stream, gpu_data=newdata)
+
+        # (2) prepare RHS
+
+        rhs, _ = auto_device(lhs.dtype.type(value), stream=stream)
+
+        # (3) do the copy
+
+        _driver.device_to_device(lhs, rhs, rhs.dtype.itemsize, stream)
+
+        if synchronous:
+            stream.synchronize()
+
 
 @lru_cache
 def _assign_kernel(ndim):
@@ -495,7 +573,10 @@ class DeviceNDArray(DeviceNDArrayBase):
         """
         :return: an `numpy.ndarray`, so copies to the host.
         """
-        return self.copy_to_host().__array__(dtype)
+        if dtype:
+            return self.copy_to_host().__array__(dtype)
+        else:
+            return self.copy_to_host().__array__()
 
     def __len__(self):
         return self.shape[0]
@@ -545,6 +626,7 @@ class DeviceNDArray(DeviceNDArrayBase):
     def __getitem__(self, item):
         return self._do_getitem(item)
 
+    @devices.require_context
     def getitem(self, item, stream=0):
         """Do `__getitem__(item)` with CUDA stream
         """
@@ -560,11 +642,16 @@ class DeviceNDArray(DeviceNDArrayBase):
             newdata = self.gpu_data.view(*extents[0])
 
             if not arr.is_array:
-                # Element indexing
-                hostary = np.empty(1, dtype=self.dtype)
-                _driver.device_to_host(dst=hostary, src=newdata,
-                                       size=self._dummy.itemsize,
-                                       stream=stream)
+                # Check for structured array type (record)
+                if self.dtype.names is not None:
+                    return DeviceRecord(dtype=self.dtype, stream=stream,
+                                        gpu_data=newdata)
+                else:
+                    # Element indexing
+                    hostary = np.empty(1, dtype=self.dtype)
+                    _driver.device_to_host(dst=hostary, src=newdata,
+                                           size=self._dummy.itemsize,
+                                           stream=stream)
                 return hostary[0]
             else:
                 return cls(shape=arr.shape, strides=arr.strides,
@@ -578,14 +665,23 @@ class DeviceNDArray(DeviceNDArrayBase):
     def __setitem__(self, key, value):
         return self._do_setitem(key, value)
 
+    @devices.require_context
     def setitem(self, key, value, stream=0):
         """Do `__setitem__(key, value)` with CUDA stream
         """
-        return self._so_getitem(key, value, stream)
+        return self._do_setitem(key, value, stream=stream)
 
     def _do_setitem(self, key, value, stream=0):
 
         stream = self._default_stream(stream)
+
+        # If the array didn't have a default stream, and the user didn't provide
+        # a stream, then we will use the default stream for the assignment
+        # kernel and synchronize on it.
+        synchronous = not stream
+        if synchronous:
+            ctx = devices.get_context()
+            stream = ctx.get_default_stream()
 
         # (1) prepare LHS
 
@@ -609,7 +705,7 @@ class DeviceNDArray(DeviceNDArrayBase):
 
         # (2) prepare RHS
 
-        rhs, _ = auto_device(value, stream=stream)
+        rhs, _ = auto_device(value, stream=stream, user_explicit=True)
         if rhs.ndim > lhs.ndim:
             raise ValueError("Can't assign %s-D array to %s-D self" % (
                 rhs.ndim,
@@ -627,6 +723,8 @@ class DeviceNDArray(DeviceNDArrayBase):
 
         n_elements = functools.reduce(operator.mul, lhs.shape, 1)
         _assign_kernel(lhs.ndim).forall(n_elements, stream=stream)(lhs, rhs)
+        if synchronous:
+            stream.synchronize()
 
 
 class IpcArrayHandle(object):
@@ -680,6 +778,7 @@ class MappedNDArray(DeviceNDArrayBase, np.ndarray):
 
     def device_setup(self, gpu_data, stream=0):
         self.gpu_data = gpu_data
+        self.stream = stream
 
 
 class ManagedNDArray(DeviceNDArrayBase, np.ndarray):
@@ -689,12 +788,13 @@ class ManagedNDArray(DeviceNDArrayBase, np.ndarray):
 
     def device_setup(self, gpu_data, stream=0):
         self.gpu_data = gpu_data
+        self.stream = stream
 
 
 def from_array_like(ary, stream=0, gpu_data=None):
     "Create a DeviceNDArray object that is like ary."
-    return DeviceNDArray(ary.shape, ary.strides, ary.dtype,
-                         writeback=ary, stream=stream, gpu_data=gpu_data)
+    return DeviceNDArray(ary.shape, ary.strides, ary.dtype, stream=stream,
+                         gpu_data=gpu_data)
 
 
 def from_record_like(rec, stream=0, gpu_data=None):
@@ -748,7 +848,7 @@ def sentry_contiguous(ary):
         raise ValueError(errmsg_contiguous_buffer)
 
 
-def auto_device(obj, stream=0, copy=True):
+def auto_device(obj, stream=0, copy=True, user_explicit=False):
     """
     Create a DeviceRecord or DeviceArray like obj and optionally copy data from
     host to device. If obj already represents device memory, it is returned and
@@ -774,6 +874,15 @@ def auto_device(obj, stream=0, copy=True):
             sentry_contiguous(obj)
             devobj = from_array_like(obj, stream=stream)
         if copy:
+            if config.CUDA_WARN_ON_IMPLICIT_COPY:
+                if (
+                    not user_explicit and
+                    (not isinstance(obj, DeviceNDArray)
+                     and isinstance(obj, np.ndarray))
+                ):
+                    msg = ("Host array used in CUDA kernel will incur "
+                           "copy overhead to/from device.")
+                    warn(NumbaPerformanceWarning(msg))
             devobj.copy_to_device(obj, stream=stream)
         return devobj, True
 

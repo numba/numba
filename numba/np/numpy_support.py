@@ -6,7 +6,7 @@ import numpy as np
 
 from numba.core import errors, types
 from numba.core.typing.templates import signature
-
+from numba.core.errors import TypingError
 
 # re-export
 from numba.core.cgutils import is_nonelike   # noqa: F401
@@ -95,17 +95,22 @@ def from_dtype(dtype):
     try:
         return FROM_DTYPE[dtype]
     except KeyError:
-        char = dtype.char
+        pass
 
+    try:
+        char = dtype.char
+    except AttributeError:
+        pass
+    else:
         if char in 'SU':
             return _from_str_dtype(dtype)
         if char in 'mM':
             return _from_datetime_dtype(dtype)
-        if char in 'V':
+        if char in 'V' and dtype.subdtype is not None:
             subtype = from_dtype(dtype.subdtype[0])
             return types.NestedArray(subtype, dtype.shape)
 
-    raise NotImplementedError(dtype)
+    raise errors.NumbaNotImplementedError(dtype)
 
 
 _as_dtype_letters = {
@@ -148,8 +153,9 @@ def as_dtype(nbtype):
         return np.dtype(spec)
     if isinstance(nbtype, types.PyObject):
         return np.dtype(object)
-    raise NotImplementedError("%r cannot be represented as a Numpy dtype"
-                              % (nbtype,))
+
+    msg = f"{nbtype} cannot be represented as a NumPy dtype"
+    raise errors.NumbaNotImplementedError(msg)
 
 
 def as_struct_dtype(rec):
@@ -279,6 +285,7 @@ def supported_ufunc_loop(ufunc, loop):
     legacy and when implementing new ufuncs the ufunc_db should be preferred,
     as it allows for a more fine-grained incremental support.
     """
+    # NOTE: Assuming ufunc for the CPUContext
     from numba.np import ufunc_db
     loop_sig = loop.ufunc_sig
     try:
@@ -364,11 +371,11 @@ def ufunc_find_matching_loop(ufunc, arg_types):
 
     try:
         np_input_types = [as_dtype(x) for x in input_types]
-    except NotImplementedError:
+    except errors.NumbaNotImplementedError:
         return None
     try:
         np_output_types = [as_dtype(x) for x in output_types]
-    except NotImplementedError:
+    except errors.NumbaNotImplementedError:
         return None
 
     # Whether the inputs are mixed integer / floating-point
@@ -448,7 +455,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
 
     for candidate in ufunc.types:
         ufunc_inputs = candidate[:ufunc.nin]
-        ufunc_outputs = candidate[-ufunc.nout:]
+        ufunc_outputs = candidate[-ufunc.nout:] if ufunc.nout else []
         if 'O' in ufunc_inputs:
             # Skip object arrays
             continue
@@ -486,7 +493,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                 if ufunc_inputs[0] == 'm':
                     outputs = set_output_dt_units(inputs, outputs, ufunc_inputs)
 
-            except NotImplementedError:
+            except errors.NumbaNotImplementedError:
                 # One of the selected dtypes isn't supported by Numba
                 # (e.g. float16), try other candidates
                 continue
@@ -667,3 +674,9 @@ def type_can_asarray(arr):
           types.Number, types.Boolean, types.containers.ListType)
 
     return isinstance(arr, ok)
+
+
+def check_is_integer(v, name):
+    """Raises TypingError if the value is not an integer."""
+    if not isinstance(v, (int, types.Integer)):
+        raise TypingError('{} must be an integer'.format(name))

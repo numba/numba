@@ -1,13 +1,15 @@
 from functools import singledispatch
-from llvmlite.llvmpy.core import Type
+from llvmlite import ir
 from numba.core import types, cgutils
+from numba.core.errors import NumbaWarning
 from numba.core.imputils import Registry
 from numba.cuda import nvvmutils
+from warnings import warn
 
 registry = Registry()
 lower = registry.lower
 
-voidptr = Type.pointer(Type.int(8))
+voidptr = ir.PointerType(ir.IntType(8))
 
 
 # NOTE: we don't use @lower here since print_item() doesn't return a LLVM value
@@ -68,6 +70,12 @@ def print_varargs(context, builder, sig, args):
         values.extend(argvals)
 
     rawfmt = " ".join(formats) + "\n"
+    if len(args) > 32:
+        msg = ('CUDA print() cannot print more than 32 items. '
+               'The raw format string will be emitted by the kernel instead.')
+        warn(msg, NumbaWarning)
+
+        rawfmt = rawfmt.replace('%', '%%')
     fmt = context.insert_string_const_addrspace(builder, rawfmt)
     array = cgutils.make_anonymous_struct(builder, values)
     arrayptr = cgutils.alloca_once_value(builder, array)

@@ -2,7 +2,8 @@
 Calling conventions for Numba-compiled functions.
 """
 
-from collections import namedtuple, Iterable
+from collections import namedtuple
+from collections.abc import Iterable
 import itertools
 
 from llvmlite import ir

@@ -18,7 +18,8 @@ from numba.pycc.decorators import clear_export_registry
 from numba.pycc.platform import find_shared_ending, find_pyext_ending
 from numba.pycc.platform import _external_compiler_ok
 
-from numba.tests.support import TestCase, tag, import_dynamic, temp_directory, has_blas
+from numba.tests.support import (TestCase, tag, import_dynamic, temp_directory,
+                                 has_blas, needs_external_compilers)
 import unittest
 
 
@@ -27,10 +28,6 @@ try:
 except ImportError:
     setuptools = None
 
-# if suitable compilers are not present then skip.
-_skip_reason = 'AOT compatible compilers missing'
-_skip_missing_compilers = unittest.skipIf(not _external_compiler_ok,
-                                          _skip_reason)
 _skip_reason = 'windows only'
 _windows_only = unittest.skipIf(not sys.platform.startswith('win'),
                                 _skip_reason)
@@ -88,7 +85,7 @@ class BasePYCCTest(TestCase):
             sys.modules.pop(name, None)
 
 
-@_skip_missing_compilers
+@needs_external_compilers
 class TestLegacyAPI(BasePYCCTest):
 
     def test_pycc_ctypes_lib(self):
@@ -161,7 +158,7 @@ class TestLegacyAPI(BasePYCCTest):
         self.assertTrue(bc.startswith((bitcode_magic, bitcode_wrapper_magic)), bc)
 
 
-@_skip_missing_compilers
+@needs_external_compilers
 class TestCC(BasePYCCTest):
 
     def setUp(self):
@@ -245,7 +242,7 @@ class TestCC(BasePYCCTest):
         self.check_compile_for_cpu("host")
 
     @unittest.skipIf(sys.platform == 'darwin' and
-                     utils.PYVERSION == (3, 8),
+                     utils.PYVERSION in ((3, 8), (3, 7)),
                      'distutils incorrectly using gcc on python 3.8 builds')
     def test_compile_helperlib(self):
         with self.check_cc_compiled(self._test_module.cc_helperlib) as lib:
@@ -311,6 +308,22 @@ class TestCC(BasePYCCTest):
                 """ % dict(has_blas=has_blas)
             self.check_cc_compiled_in_subprocess(lib, code)
 
+    def test_hashing(self):
+        with self.check_cc_compiled(self._test_module.cc_nrt) as lib:
+            res = lib.hash_literal_str_A()
+            self.assertPreciseEqual(res, hash("A"))
+            res = lib.hash_str("A")
+            self.assertPreciseEqual(res, hash("A"))
+            
+            code = """if 1:
+                from numpy.testing import assert_equal
+                res = lib.hash_literal_str_A()
+                assert_equal(res, hash("A"))
+                res = lib.hash_str("A")
+                assert_equal(res, hash("A"))
+                """
+            self.check_cc_compiled_in_subprocess(lib, code)
+
     def test_c_extension_usecase(self):
         # Test C-extensions
         with self.check_cc_compiled(self._test_module.cc_nrt) as lib:
@@ -320,7 +333,7 @@ class TestCC(BasePYCCTest):
             self.assertPreciseEqual(got, expect)
 
 
-@_skip_missing_compilers
+@needs_external_compilers
 class TestDistutilsSupport(TestCase):
 
     def setUp(self):

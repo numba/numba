@@ -120,16 +120,15 @@ def _container_get_meminfo(context, builder, container_ty, c):
     return conatainer_struct.meminfo
 
 
-def _get_incref_decref(context, module, datamodel, container_type):
+def _get_incref_decref(context, module, datamodel, container_element_type):
     assert datamodel.contains_nrt_meminfo()
 
     fe_type = datamodel.fe_type
     data_ptr_ty = datamodel.get_data_type().as_pointer()
     refct_fnty = ir.FunctionType(ir.VoidType(), [data_ptr_ty])
-    incref_fn = module.get_or_insert_function(
-        refct_fnty,
-        name='.numba_{}_incref${}'.format(container_type, fe_type),
-    )
+    incref_fn = cgutils.get_or_insert_function(
+        module, refct_fnty, '.numba_{}.{}_incref'.format(
+            context.fndesc.mangled_name, container_element_type),)
 
     builder = ir.IRBuilder(incref_fn.append_basic_block())
     context.nrt.incref(
@@ -138,10 +137,9 @@ def _get_incref_decref(context, module, datamodel, container_type):
     )
     builder.ret_void()
 
-    decref_fn = module.get_or_insert_function(
-        refct_fnty,
-        name='.numba_{}_decref${}'.format(container_type, fe_type),
-    )
+    decref_fn = cgutils.get_or_insert_function(
+        module, refct_fnty, name='.numba_{}.{}_decref'.format(
+            context.fndesc.mangled_name, container_element_type),)
     builder = ir.IRBuilder(decref_fn.append_basic_block())
     context.nrt.decref(
         builder, fe_type,
@@ -152,7 +150,7 @@ def _get_incref_decref(context, module, datamodel, container_type):
     return incref_fn, decref_fn
 
 
-def _get_equal(context, module, datamodel, container_type):
+def _get_equal(context, module, datamodel, container_element_type):
     assert datamodel.contains_nrt_meminfo()
 
     fe_type = datamodel.fe_type
@@ -175,17 +173,15 @@ def _get_equal(context, module, datamodel, container_type):
         intres = context.cast(builder, res, types.boolean, types.int32)
         context.call_conv.return_value(builder, intres)
 
-    wrapfn = module.get_or_insert_function(
-        wrapfnty,
-        name='.numba_{}_item_equal.wrap${}'.format(container_type, fe_type)
-    )
+    wrapfn = cgutils.get_or_insert_function(
+        module, wrapfnty, name='.numba_{}.{}_equal.wrap'.format(
+            context.fndesc.mangled_name, container_element_type))
     build_wrapper(wrapfn)
 
     equal_fnty = ir.FunctionType(ir.IntType(32), [data_ptr_ty, data_ptr_ty])
-    equal_fn = module.get_or_insert_function(
-        equal_fnty,
-        name='.numba_{}_item_equal${}'.format(container_type, fe_type),
-    )
+    equal_fn = cgutils.get_or_insert_function(
+        module, equal_fnty, name='.numba_{}.{}_equal'.format(
+            context.fndesc.mangled_name, container_element_type),)
     builder = Builder(equal_fn.append_basic_block())
     lhs = datamodel.load_from_data_pointer(builder, equal_fn.args[0])
     rhs = datamodel.load_from_data_pointer(builder, equal_fn.args[1])

@@ -15,12 +15,14 @@ from numba.core import types, errors, typing, compiler, cgutils
 from numba.core.typed_passes import type_inference_stage
 from numba.core.registry import cpu_target
 from numba.core.compiler import compile_isolated
+from numba.core.imputils import lower_constant
 from numba.tests.support import (
     TestCase,
     captured_stdout,
     temp_directory,
     override_config,
     run_in_new_process_in_cache_dir,
+    skip_if_typeguard,
 )
 from numba.core.errors import LoweringError
 import unittest
@@ -43,6 +45,7 @@ from numba.extending import (
     register_jitable,
     get_cython_function_address,
     is_jitted,
+    overload_classmethod,
 )
 from numba.core.typing.templates import (
     ConcreteTemplate,
@@ -491,6 +494,64 @@ def mk_func_test_impl():
 
 
 # -----------------------------------------------------------------------
+# Define a types derived from types.Callable and overloads for them
+
+
+class MyClass(object):
+    pass
+
+
+class CallableTypeRef(types.Callable):
+
+    def __init__(self, instance_type):
+        self.instance_type = instance_type
+        self.sig_to_impl_key = {}
+        self.compiled_templates = []
+        super(CallableTypeRef, self).__init__('callable_type_ref'
+                                              '[{}]'.format(self.instance_type))
+
+    def get_call_type(self, context, args, kws):
+
+        res_sig = None
+        for template in context._functions[type(self)]:
+            try:
+                res_sig = template.apply(args, kws)
+            except Exception:
+                pass  # for simplicity assume args must match exactly
+            else:
+                compiled_ovlds = getattr(template, '_compiled_overloads', {})
+                if args in compiled_ovlds:
+                    self.sig_to_impl_key[res_sig] = compiled_ovlds[args]
+                    self.compiled_templates.append(template)
+                    break
+
+        return res_sig
+
+    def get_call_signatures(self):
+        sigs = list(self.sig_to_impl_key.keys())
+        return sigs, True
+
+    def get_impl_key(self, sig):
+        return self.sig_to_impl_key[sig]
+
+
+@register_model(CallableTypeRef)
+class CallableTypeModel(models.OpaqueModel):
+
+    def __init__(self, dmm, fe_type):
+
+        models.OpaqueModel.__init__(self, dmm, fe_type)
+
+
+infer_global(MyClass, CallableTypeRef(MyClass))
+
+
+@lower_constant(CallableTypeRef)
+def constant_callable_typeref(context, builder, ty, pyval):
+    return context.get_dummy_value()
+
+
+# -----------------------------------------------------------------------
 
 
 @overload(np.exp)
@@ -543,12 +604,15 @@ class TestLowLevelExtending(TestCase):
         """
         test_ir = compiler.run_frontend(mk_func_test_impl)
         typingctx = cpu_target.typing_context
+        targetctx = cpu_target.target_context
         typingctx.refresh()
-        typemap, _, _ = type_inference_stage(typingctx, test_ir, (), None)
+        targetctx.refresh()
+        typing_res = type_inference_stage(typingctx, targetctx, test_ir, (),
+                                          None)
         self.assertTrue(
             any(
                 isinstance(a, types.MakeFunctionLiteral)
-                for a in typemap.values()
+                for a in typing_res.typemap.values()
             )
         )
 
@@ -1116,6 +1180,63 @@ class TestHighLevelExtending(TestCase):
             foo(obj, 1, 2, (3, (4, 5))), (1, 2, ((3, (4, 5)),)),
         )
 
+    def test_overload_classmethod(self):
+        # Add classmethod to a subclass of Array
+        class MyArray(types.Array):
+            pass
+
+        @overload_classmethod(MyArray, "array_alloc")
+        def ol_array_alloc(cls, nitems):
+            def impl(cls, nitems):
+                arr = np.arange(nitems)
+                return arr
+            return impl
+
+        @njit
+        def foo(nitems):
+            return MyArray.array_alloc(nitems)
+
+        nitems = 13
+        self.assertPreciseEqual(foo(nitems), np.arange(nitems))
+
+        # Check that the base type doesn't get the classmethod
+
+        @njit
+        def no_classmethod_in_base(nitems):
+            return types.Array.array_alloc(nitems)
+
+        with self.assertRaises(errors.TypingError) as raises:
+            no_classmethod_in_base(nitems)
+        self.assertIn(
+            "Unknown attribute 'array_alloc' of",
+            str(raises.exception),
+        )
+
+    def test_overload_callable_typeref(self):
+
+        @overload(CallableTypeRef)
+        def callable_type_call_ovld1(x):
+            if isinstance(x, types.Integer):
+                def impl(x):
+                    return 42.5 + x
+                return impl
+
+        @overload(CallableTypeRef)
+        def callable_type_call_ovld2(x):
+            if isinstance(x, types.UnicodeType):
+                def impl(x):
+                    return '42.5' + x
+
+                return impl
+
+        @njit
+        def foo(a, b):
+            return MyClass(a), MyClass(b)
+
+        args = (4, '4')
+        expected = (42.5 + args[0], '42.5' + args[1])
+        self.assertPreciseEqual(foo(*args), expected)
+
 
 def _assert_cache_stats(cfunc, expect_hit, expect_misses):
     hit = cfunc._cache_hits[cfunc.signatures[0]]
@@ -1126,6 +1247,7 @@ def _assert_cache_stats(cfunc, expect_hit, expect_misses):
         raise AssertionError("cache not used")
 
 
+@skip_if_typeguard
 class TestOverloadMethodCaching(TestCase):
     # Nested multiprocessing.Pool raises AssertionError:
     # "daemonic processes are not allowed to have children"
@@ -1373,6 +1495,26 @@ class TestIntrinsic(TestCase):
         # the second rebuilt object is the same as the first
         second = pickle.loads(pickled)
         self.assertIs(rebuilt._defn, second._defn)
+
+    def test_docstring(self):
+
+        @intrinsic
+        def void_func(typingctx, a: int):
+            """void_func docstring"""
+            sig = types.void(types.int32)
+
+            def codegen(context, builder, signature, args):
+                pass  # do nothing, return None, should be turned into
+                # dummy value
+
+            return sig, codegen
+
+        self.assertEqual("numba.tests.test_extending", void_func.__module__)
+        self.assertEqual("void_func", void_func.__name__)
+        self.assertEqual("TestIntrinsic.test_docstring.<locals>.void_func",
+                         void_func.__qualname__)
+        self.assertDictEqual({'a': int}, void_func.__annotations__)
+        self.assertEqual("void_func docstring", void_func.__doc__)
 
 
 class TestRegisterJitable(unittest.TestCase):
@@ -1703,6 +1845,7 @@ def with_objmode_cache_ov_example(x):
     pass
 
 
+@skip_if_typeguard
 class TestCachingOverloadObjmode(TestCase):
     """Test caching of the use of overload implementations that use
     `with objmode`

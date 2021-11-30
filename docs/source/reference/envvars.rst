@@ -77,6 +77,28 @@ These variables influence what is printed out during compilation of
 
     If set to non-zero, show resources for getting help. Default is zero.
 
+.. envvar:: NUMBA_CAPTURED_ERRORS
+
+    Alters the way in which Numba captures and handles exceptions that do not
+    inherit from ``numba.core.errors.NumbaError`` during compilation (e.g.
+    standard Python exceptions). This does not impact runtime exception
+    handling. Valid values are:
+
+    - ``"old_style"`` (default): this is the exception handling behaviour that
+      is present in Numba versions <= 0.54.x. Numba will capture and wrap all
+      errors occuring in compilation and depending on the compilation phase they
+      will likely materialize as part of the message in a ``TypingError`` or a
+      ``LoweringError``.
+    - ``"new_style"`` this will treat any exception that does not inherit from
+      ``numba.core.errors.NumbaError`` **and** is raised during compilation as a
+      "hard error", i.e. the exception will propagate and compilation will halt.
+      The purpose of this new style is to differentiate between intentionally
+      raised exceptions and those which occur due to mistakes. For example, if
+      an ``AttributeError`` occurs in the typing of an ``@overload`` function,
+      under this new behaviour it is assumed that this a mistake in the
+      implementation and compilation will halt due to this exception. This
+      behaviour will eventually become the default.
+
 .. envvar:: NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING
 
     If set to non-zero error message highlighting is disabled. This is useful
@@ -124,6 +146,13 @@ These variables influence what is printed out during compilation of
    enabling debug info significantly increases the memory consumption
    for each compiled function.
    Default value equals to the value of `NUMBA_ENABLE_PROFILING`.
+
+.. envvar:: NUMBA_EXTEND_VARIABLE_LIFETIMES
+
+    If set to non-zero, extend the lifetime of variables to the end of the block
+    in which their lifetime ends. This is particularly useful in conjunction
+    with :envvar:`NUMBA_DEBUGINFO` as it helps with introspection of values.
+    Default is zero.
 
 .. envvar:: NUMBA_GDB_BINARY
 
@@ -227,6 +256,14 @@ These variables influence what is printed out during compilation of
 .. envvar:: NUMBA_DUMP_ASSEMBLY
 
    Dump the native assembly code of compiled functions.
+
+.. envvar:: NUMBA_LLVM_PASS_TIMINGS
+
+    Set to ``1`` to enable recording of pass timings in LLVM;
+    e.g. ``NUMBA_LLVM_PASS_TIMINGS=1``.
+    See :ref:`developer-llvm-timings`.
+
+    *Default value*: ``0`` (Off)
 
 .. seealso::
    :ref:`numba-troubleshooting` and :ref:`architecture`.
@@ -401,6 +438,97 @@ GPU support
    If set, don't compile and execute code for the GPU, but use the CUDA
    Simulator instead. For debugging purposes.
 
+
+.. envvar:: NUMBA_CUDA_ARRAY_INTERFACE_SYNC
+
+   Whether to synchronize on streams provided by objects imported using the CUDA
+   Array Interface. This defaults to 1. If set to 0, then no synchronization
+   takes place, and the user of Numba (and other CUDA libraries) is responsible
+   for ensuring correctness with respect to synchronization on streams.
+
+.. envvar:: NUMBA_CUDA_LOG_LEVEL
+
+   For debugging purposes. If no other logging is configured, the value of this
+   variable is the logging level for CUDA API calls. The default value is
+   ``CRITICAL`` - to trace all API calls on standard error, set this to
+   ``DEBUG``.
+
+.. envvar:: NUMBA_CUDA_LOG_API_ARGS
+
+   By default the CUDA API call logs only give the names of functions called.
+   Setting this variable to 1 also includes the values of arguments to Driver
+   API calls in the logs.
+
+.. envvar:: NUMBA_CUDA_DRIVER
+
+   Path of the directory in which the CUDA driver libraries are to be found.
+   Normally this should not need to be set as Numba can locate the driver in
+   standard locations. However, this variable can be used if the driver is in a
+   non-standard location.
+
+.. envvar:: NUMBA_CUDA_LOG_SIZE
+
+   Buffer size for logs produced by CUDA driver API operations. This defaults
+   to 1024 and should not normally need to be modified - however, if an error
+   in an API call produces a large amount of output that appears to be
+   truncated (perhaps due to multiple long function names, for example) then
+   this variable can be used to increase the buffer size and view the full
+   error message.
+
+.. envvar:: NUMBA_CUDA_VERBOSE_JIT_LOG
+
+   Whether the CUDA driver should produce verbose log messages. Defaults to 1,
+   indicating that verbose messaging is enabled. This should not need to be
+   modified under normal circumstances.
+
+.. envvar:: NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM
+
+   When set to 1, the default stream is the per-thread default stream. When set
+   to 0, the default stream is the legacy default stream. This defaults to 0,
+   for the legacy default stream. It may default to 1 in a future release of
+   Numba. See `Stream Synchronization Behavior
+   <https://docs.nvidia.com/cuda/cuda-runtime-api/stream-sync-behavior.html>`_
+   for an explanation of the legacy and per-thread default streams.
+
+.. envvar:: NUMBA_NPY_RELAXED_STRIDES_CHECKING
+
+   By default arrays that inherit from ``numba.misc.dummyarray.Array`` (e.g.
+   CUDA device arrays) compute their contiguity using relaxed strides checking,
+   which is the default mechanism used by NumPy since version 1.12
+   (see `NPY_RELAXED_STRIDES_CHECKING
+   <https://numpy.org/doc/stable/release/1.8.0-notes.html#npy-relaxed-strides-checking>`_).
+   Setting ``NUMBA_NPY_RELAXED_STRIDES_CHECKING=0`` reverts back to strict
+   strides checking. This option should not normally be needed, but is provided
+   in case it is needed to work around latent bugs related to strict strides
+   checking.
+
+   Strict strides checking is deprecated and may be removed in future. See
+   :ref:`deprecation-strict-strides`.
+
+.. envvar:: NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS
+
+   Enable warnings if the grid size is too small relative to the number of
+   streaming multiprocessors (SM). This option is on by default (default value is 1).
+
+   The heuristic checked is whether ``gridsize < 2 * (number of SMs)``. NOTE: The absence of
+   a warning does not imply a good gridsize relative to the number of SMs. Disabling
+   this warning will reduce the number of CUDA API calls (during JIT compilation), as the
+   heuristic needs to check the number of SMs available on the device in the
+   current context.
+
+.. envvar:: NUMBA_CUDA_WARN_ON_IMPLICIT_COPY
+
+   Enable warnings if a kernel is launched with host memory which forces a copy to and
+   from the device. This option is on by default (default value is 1).
+
+.. envvar:: NUMBA_CUDA_USE_NVIDIA_BINDING
+
+   When set to 1, Numba will attempt to use the `NVIDIA CUDA Python binding
+   <https://nvidia.github.io/cuda-python/>`_ to make calls to the driver API
+   instead of using its own ctypes binding. This defaults to 0 (off), as the
+   NVIDIA binding is currently missing support for Per-Thread Default
+   Streams and the profiler APIs.
+
 Threading Control
 -----------------
 
@@ -435,3 +563,14 @@ Threading Control
    * ``tbb`` - A threading layer backed by Intel TBB.
    * ``omp`` - A threading layer backed by OpenMP.
    * ``workqueue`` - A simple built-in work-sharing task scheduler.
+
+.. envvar:: NUMBA_THREADING_LAYER_PRIORITY
+
+   This environment variable controls the order in which the libraries used for
+   concurrent execution, for the CPU parallel targets
+   (``@vectorize(target='parallel')``, ``@guvectorize(target='parallel')``
+   and ``@njit(parallel=True)``), are prioritized for use. The variable type is
+   string and by default is ``tbb omp workqueue``, with the priority taken based
+   on position from the left of the string, left most being the highest. Valid
+   values are any permutation of the three choices (for more information about
+   these see :ref:`the threading layer documentation <numba-threading-layer>`.)

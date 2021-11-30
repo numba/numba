@@ -12,10 +12,10 @@ from numba.tests.support import (TestCase, MemoryLeakMixin, CompilationCache,
                                  tag)
 
 enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
+enable_pyobj_flags.enable_pyobject = True
 
 no_pyobj_flags = Flags()
-no_pyobj_flags.set('nrt')
+no_pyobj_flags.nrt = True
 
 
 def from_generic(pyfuncs_to_use):
@@ -46,6 +46,14 @@ def array_reshape(arr, newshape):
 
 def numpy_array_reshape(arr, newshape):
     return np.reshape(arr, newshape)
+
+
+def numpy_broadcast_to(arr, shape):
+    return np.broadcast_to(arr, shape)
+
+
+def numpy_broadcast_to_indexing(arr, shape, idx):
+    return np.broadcast_to(arr, shape)[idx]
 
 
 def flatten_array(a):
@@ -754,6 +762,104 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         val = np.array([-1e100])
         _assert_raises(arr, val)
 
+    def test_broadcast_to(self):
+        pyfunc = numpy_broadcast_to
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Tests taken from
+        # https://github.com/numpy/numpy/blob/75f852edf94a7293e7982ad516bee314d7187c2d/numpy/lib/tests/test_stride_tricks.py#L234-L257  # noqa: E501
+        data = [
+            [np.array(0), (0,)],
+            [np.array(0), (1,)],
+            [np.array(0), (3,)],
+            [np.ones(1), (1,)],
+            [np.ones(1), (2,)],
+            [np.ones(1), (1, 2, 3)],
+            [np.arange(3), (3,)],
+            [np.arange(3), (1, 3)],
+            [np.arange(3), (2, 3)],
+            # test if shape is not a tuple
+            [np.ones(0), 0],
+            [np.ones(1), 1],
+            [np.ones(1), 2],
+            # these cases with size 0 are strange, but they reproduce the behavior
+            # of broadcasting with ufuncs
+            [np.ones(1), (0,)],
+            [np.ones((1, 2)), (0, 2)],
+            [np.ones((2, 1)), (2, 0)],
+            # numpy accepts scalar values as first argument to np.broadcast_to
+            [2, (2, 2)],
+            # tuple input
+            [(1, 2), (2, 2)],
+        ]
+        for input_array, shape in data:
+            expected = pyfunc(input_array, shape)
+            got = cfunc(input_array, shape)
+            self.assertPreciseEqual(got, expected)
+
+    def test_broadcast_to_raises(self):
+        pyfunc = numpy_broadcast_to
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Tests taken from
+        # https://github.com/numpy/numpy/blob/75f852edf94a7293e7982ad516bee314d7187c2d/numpy/lib/tests/test_stride_tricks.py#L260-L276  # noqa: E501
+        data = [
+            [np.zeros((0,)), (), TypingError,
+             'The argument "shape" must be a tuple or an integer.'],
+            [np.zeros((1,)), (), TypingError,
+             'The argument "shape" must be a tuple or an integer.'],
+            [np.zeros((3,)), (), TypingError,
+             'The argument "shape" must be a tuple or an integer.'],
+            [np.zeros((3,)), (1,), ValueError,
+             'operands could not be broadcast together with remapped shapes'],
+            [np.zeros((3,)), (2,), ValueError,
+             'operands could not be broadcast together with remapped shapes'],
+            [np.zeros((3,)), (4,), ValueError,
+             'operands could not be broadcast together with remapped shapes'],
+            [np.zeros((1, 2)), (2, 1), ValueError,
+             'operands could not be broadcast together with remapped shapes'],
+            [np.zeros((1, 1)), (1,), ValueError,
+             'input operand has more dimensions than allowed by the axis remapping'],
+            [np.zeros((2, 2)), (3,), ValueError,
+             'input operand has more dimensions than allowed by the axis remapping'],
+            [np.zeros((1,)), -1, ValueError,
+             'all elements of broadcast shape must be non-negative'],
+            [np.zeros((1,)), (-1,), ValueError,
+             'all elements of broadcast shape must be non-negative'],
+            [np.zeros((1, 2)), (-1, 2), ValueError,
+             'all elements of broadcast shape must be non-negative'],
+            [np.zeros((1, 2)), (1.1, 2.2), TypingError,
+             'The second argument "shape" must be a tuple of integers'],
+            ['hello', (3,), TypingError,
+             'The first argument "array" must be array-like'],
+        ]
+        self.disable_leak_check()
+        for arr, target_shape, err, msg in data:
+            with self.assertRaises(err) as raises:
+                cfunc(arr, target_shape)
+            self.assertIn(msg, str(raises.exception))
+
+    def test_broadcast_to_change_view(self):
+        pyfunc = numpy_broadcast_to
+        cfunc = jit(nopython=True)(pyfunc)
+        input_array = np.zeros(2, dtype=np.int32)
+        shape = (2, 2)
+        view = cfunc(input_array, shape)
+        input_array[0] = 10
+
+        self.assertEqual(input_array.sum(), 10)
+        self.assertEqual(view.sum(), 20)
+
+    def test_broadcast_to_indexing(self):
+        pyfunc = numpy_broadcast_to_indexing
+        cfunc = jit(nopython=True)(pyfunc)
+        data = [
+            [np.ones(2), (2, 2), (1,)],
+        ]
+        for input_array, shape, idx in data:
+            expected = pyfunc(input_array, shape, idx)
+            got = cfunc(input_array, shape, idx)
+            self.assertPreciseEqual(got, expected)
 
     def test_shape(self):
         pyfunc = numpy_shape

@@ -14,10 +14,13 @@ from numba.core import types, typing, utils
 from numba.core.compiler import compile_isolated, Flags, DEFAULT_FLAGS
 from numba.np.numpy_support import from_dtype
 from numba import jit, vectorize
-from numba.core.errors import LoweringError, TypingError
+from numba.core.errors import LoweringError, TypingError, NumbaTypeError
 from numba.tests.support import TestCase, CompilationCache, MemoryLeakMixin, tag
 from numba.core.typing.npydecl import supported_ufuncs, all_ufuncs
 from numba.np import numpy_support
+from numba.core.registry import cpu_target
+from numba.core.base import BaseContext
+from numba.np import ufunc_db
 
 is32bits = tuple.__itemsize__ == 4
 iswindows = sys.platform.startswith('win32')
@@ -26,15 +29,15 @@ iswindows = sys.platform.startswith('win32')
 # of array expressions.
 
 enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
-enable_pyobj_flags.set("no_rewrites")
+enable_pyobj_flags.enable_pyobject = True
+enable_pyobj_flags.no_rewrites = True
 
 no_pyobj_flags = Flags()
-no_pyobj_flags.set("no_rewrites")
+no_pyobj_flags.no_rewrites = True
 
 enable_nrt_flags = Flags()
-enable_nrt_flags.set("nrt")
-enable_nrt_flags.set("no_rewrites")
+enable_nrt_flags.nrt = True
+enable_nrt_flags.no_rewrites = True
 
 
 def _unimplemented(func):
@@ -310,6 +313,9 @@ class TestUFuncs(BaseUFuncTest, TestCase):
         self.basic_ufunc_test(np.power, flags=flags,
                                positive_only=True)
 
+    def test_float_power_ufunc(self, flags=no_pyobj_flags):
+        self.basic_ufunc_test(np.float_power, flags=flags, kinds="fc")
+
     def test_gcd_ufunc(self, flags=no_pyobj_flags):
         self.basic_ufunc_test(np.gcd, flags=flags, kinds="iu")
 
@@ -378,6 +384,9 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
     def test_square_ufunc(self, flags=no_pyobj_flags):
         self.basic_ufunc_test(np.square, flags=flags)
+
+    def test_cbrt_ufunc(self, flags=no_pyobj_flags):
+        self.basic_ufunc_test(np.cbrt, flags=flags, kinds='f')
 
     def test_reciprocal_ufunc(self, flags=no_pyobj_flags):
         # reciprocal for integers doesn't make much sense and is problematic
@@ -742,7 +751,7 @@ class TestUFuncs(BaseUFuncTest, TestCase):
             self.assertPreciseEqual(result, expected)
 
     def test_implicit_output_npm(self):
-        with self.assertRaises(TypeError):
+        with self.assertRaises(NumbaTypeError):
             def myadd(a0, a1):
                 return np.add(a0, a1)
             arr_ty = types.Array(types.uint64, 1, 'C')
@@ -1200,7 +1209,7 @@ class TestScalarUFuncs(TestCase):
                     expected = float(expected)
                 elif np.issubdtype(expected.dtype, np.integer):
                     expected = int(expected)
-                elif np.issubdtype(expected.dtype, np.bool):
+                elif np.issubdtype(expected.dtype, np.bool_):
                     expected = bool(expected)
 
             alltypes = cr.signature.args + (cr.signature.return_type,)
@@ -1329,6 +1338,7 @@ class _LoopTypesTester(TestCase):
              ('arcsin', 'F'): 4,
              ('log10', 'D'): 5,
              ('tanh', 'F'): 2,
+             ('cbrt', 'd'): 2,
              }
 
     def _arg_for_type(self, a_letter_type, index=0):
@@ -1766,6 +1776,34 @@ class TestUFuncCompilationThreadSafety(TestCase):
         for t in threads:
             t.join()
         self.assertFalse(errors)
+
+
+class TestUfuncOnContext(TestCase):
+    def test_cpu_get_ufunc_info(self):
+        # The CPU context defines get_ufunc_info that is the same as
+        # ufunc_db.get_ufunc_info.
+        targetctx = cpu_target.target_context
+        # Check: get_ufunc_info returns a dict
+        add_info = targetctx.get_ufunc_info(np.add)
+        self.assertIsInstance(add_info, dict)
+        # Check: it is the same as ufunc_db.get_ufunc_info
+        expected = ufunc_db.get_ufunc_info(np.add)
+        self.assertEqual(add_info, expected)
+        # Check: KeyError raised on bad key
+        badkey = object()
+        with self.assertRaises(KeyError) as raises:
+            ufunc_db.get_ufunc_info(badkey)
+        self.assertEqual(raises.exception.args, (badkey,))
+
+    def test_base_get_ufunc_info(self):
+        # The BaseContext always raises NotImplementedError
+        targetctx = BaseContext(cpu_target.typing_context, 'cpu')
+        with self.assertRaises(NotImplementedError) as raises:
+            targetctx.get_ufunc_info(np.add)
+        self.assertRegex(
+            str(raises.exception),
+            r"<numba\..*\.BaseContext object at .*> does not support ufunc",
+        )
 
 
 if __name__ == '__main__':

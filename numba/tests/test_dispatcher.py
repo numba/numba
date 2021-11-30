@@ -26,7 +26,7 @@ from numba.np.numpy_support import as_dtype
 from numba.core.caching import _UserWideCacheLocator
 from numba.core.dispatcher import Dispatcher
 from numba.tests.support import (skip_parfors_unsupported, needs_lapack,
-                                 SerialMixin)
+                                 SerialMixin, skip_if_typeguard)
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
 import llvmlite.binding as ll
 import unittest
@@ -1598,6 +1598,7 @@ class TestMultiprocessCache(BaseCacheTest):
         self.assertEqual(res, n * (n - 1) // 2)
 
 
+@skip_if_typeguard
 class TestCacheFileCollision(unittest.TestCase):
     _numba_parallel_test_ = False
 

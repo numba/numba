@@ -11,7 +11,8 @@ import warnings
 import numba.core.config
 import numpy as np
 from collections import defaultdict
-from numba.core.utils import chain_exception
+from numba.core.utils import (chain_exception, use_old_style_errors,
+                              use_new_style_errors)
 from functools import wraps
 from abc import abstractmethod
 
@@ -80,6 +81,20 @@ class NumbaExperimentalFeatureWarning(NumbaWarning):
 class NumbaInvalidConfigWarning(NumbaWarning):
     """
     Warning category for using an invalid configuration.
+    """
+
+
+class NumbaPedanticWarning(NumbaWarning):
+    """
+    Warning category for reporting pedantic messages.
+    """
+    def __init__(self, msg, **kwargs):
+        super().__init__(f"{msg}\n{pedantic_warning_info}")
+
+
+class NumbaIRAssumptionWarning(NumbaPedanticWarning):
+    """
+    Warning category for reporting an IR assumption violation.
     """
 
 # These are needed in the color formatting of errors setup
@@ -314,9 +329,16 @@ else:
             _termcolor_inst = HighlightColorScheme(scheme)
         return _termcolor_inst
 
+
+pedantic_warning_info = """
+This warning came from an internal pedantic check. Please report the warning
+message and traceback, along with a minimal reproducer at:
+https://github.com/numba/numba/issues/new?template=bug_report.md
+"""
+
 feedback_details = """
 Please report the error message and traceback, along with a minimal reproducer
-at: https://github.com/numba/numba/issues/new
+at: https://github.com/numba/numba/issues/new?template=bug_report.md
 
 If more help is needed please feel free to speak to the Numba core developers
 directly at: https://gitter.im/numba/numba
@@ -328,7 +350,7 @@ unsupported_error_info = """
 Unsupported functionality was found in the code Numba was trying to compile.
 
 If this functionality is important to you please file a feature request at:
-https://github.com/numba/numba/issues/new
+https://github.com/numba/numba/issues/new?template=feature_request.md
 """
 
 interpreter_error_info = """
@@ -338,7 +360,8 @@ without Numba? (To temporarily disable Numba JIT, set the `NUMBA_DISABLE_JIT`
 environment variable to non-zero, and then rerun the code).
 
 If the code is valid and the unsupported functionality is important to you
-please file a feature request at: https://github.com/numba/numba/issues/new
+please file a feature request at:
+https://github.com/numba/numba/issues/new?template=feature_request.md
 
 To see Python/NumPy features supported by the latest release of Numba visit:
 https://numba.pydata.org/numba-doc/latest/reference/pysupported.html
@@ -355,7 +378,8 @@ the requirement of compile time constants as arguments to exceptions:
 https://numba.pydata.org/numba-doc/latest/reference/pysupported.html?highlight=exceptions#constructs
 
 If the code is valid and the unsupported functionality is important to you
-please file a feature request at: https://github.com/numba/numba/issues/new
+please file a feature request at:
+https://github.com/numba/numba/issues/new?template=feature_request.md
 
 If you think your code should work with Numba. %s
 """ % feedback_details
@@ -374,7 +398,7 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-doesn-t
 
 If you think your code should work with Numba, please report the error message
 and traceback, along with a minimal reproducer at:
-https://github.com/numba/numba/issues/new
+https://github.com/numba/numba/issues/new?template=bug_report.md
 """
 
 reportable_issue_info = """
@@ -651,6 +675,17 @@ class InternalError(NumbaError):
         self.old_exception = exception
 
 
+class InternalTargetMismatchError(InternalError):
+    """For signalling a target mismatch error occurred internally within the
+    compiler.
+    """
+    def __init__(self, kind, target_hw, hw_clazz):
+        msg = (f"{kind.title()} being resolved on a target from which it does "
+               f"not inherit. Local target is {target_hw}, declared "
+               f"target class is {hw_clazz}.")
+        super().__init__(msg)
+
+
 class RequireLiteralValue(TypingError):
     """
     For signalling that a function's typing requires a constant value for
@@ -713,6 +748,44 @@ class LiteralTypingError(TypingError):
     pass
 
 
+# These Exception classes are just Numba copies of their Python equivalents for
+# use internally in cases where we want e.g. type inference to keep on trying.
+# Exceptions extending from NumbaError are considered "special" by Numba's
+# internals and are treated differently to standard Python exceptions which are
+# permitted to just propagate up the stack.
+
+class NumbaValueError(TypingError):
+    pass
+
+
+class NumbaTypeError(TypingError):
+    pass
+
+
+class NumbaAttributeError(TypingError):
+    pass
+
+
+class NumbaAssertionError(TypingError):
+    pass
+
+
+class NumbaNotImplementedError(TypingError):
+    pass
+
+
+class NumbaKeyError(TypingError):
+    pass
+
+
+class NumbaIndexError(TypingError):
+    pass
+
+
+class NumbaRuntimeError(NumbaError):
+    pass
+
+
 def _format_msg(fmt, args, kwargs):
     return fmt.format(*args, **kwargs)
 
@@ -745,10 +818,23 @@ def new_error_context(fmt_, *args, **kwargs):
     except NumbaError as e:
         e.add_context(_format_msg(fmt_, args, kwargs))
         raise
+    except AssertionError:
+        # Let assertion error pass through for shorter traceback in debugging
+        raise
     except Exception as e:
-        newerr = errcls(e).add_context(_format_msg(fmt_, args, kwargs))
-        tb = sys.exc_info()[2] if numba.core.config.FULL_TRACEBACKS else None
-        raise newerr.with_traceback(tb)
+        if use_old_style_errors():
+            newerr = errcls(e).add_context(_format_msg(fmt_, args, kwargs))
+            if numba.core.config.FULL_TRACEBACKS:
+                tb = sys.exc_info()[2]
+            else:
+                tb = None
+            raise newerr.with_traceback(tb)
+        elif use_new_style_errors():
+            raise e
+        else:
+            msg = ("Unknown CAPTURED_ERRORS style: "
+                   f"'{numba.core.config.CAPTURED_ERRORS}'.")
+            assert 0, msg
 
 
 __all__ += [name for (name, value) in globals().items()

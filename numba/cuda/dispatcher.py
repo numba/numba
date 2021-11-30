@@ -98,6 +98,13 @@ class _CUDAGUFuncCallSteps(GUFuncCallSteps):
         return cuda.is_cuda_array(obj)
 
     def as_device_array(self, obj):
+        # We don't want to call as_cuda_array on objects that are already Numba
+        # device arrays, because this results in exporting the array as a
+        # Producer then importing it as a Consumer, which causes a
+        # synchronization on the array's stream (if it has one) by default.
+        # When we have a Numba device array, we can simply return it.
+        if devicearray.is_cuda_ndarray(obj):
+            return obj
         return cuda.as_cuda_array(obj)
 
     def to_device(self, hostary):
@@ -140,7 +147,7 @@ class CUDAGenerializedUFunc(GenerializedUFunc):
 
 class CUDAUFuncMechanism(UFuncMechanism):
     """
-    Provide OpenCL specialization
+    Provide CUDA specialization
     """
     DEFAULT_STREAM = 0
 
@@ -151,6 +158,13 @@ class CUDAUFuncMechanism(UFuncMechanism):
         return cuda.is_cuda_array(obj)
 
     def as_device_array(self, obj):
+        # We don't want to call as_cuda_array on objects that are already Numba
+        # device arrays, because this results in exporting the array as a
+        # Producer then importing it as a Consumer, which causes a
+        # synchronization on the array's stream (if it has one) by default.
+        # When we have a Numba device array, we can simply return it.
+        if devicearray.is_cuda_ndarray(obj):
+            return obj
         return cuda.as_cuda_array(obj)
 
     def to_device(self, hostary, stream):

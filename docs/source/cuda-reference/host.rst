@@ -84,7 +84,11 @@ the functionality of the selected device:
 
    .. attribute:: name
 
-      The name of the device (e.g. "GeForce GTX 970")
+      The name of the device (e.g. "GeForce GTX 970").
+
+   .. attribute:: uuid
+
+      The UUID of the device (e.g. "GPU-e6489c45-5b68-3b03-bab7-0e7c8e809643").
 
    .. method:: reset
 
@@ -132,7 +136,7 @@ it is not a requirement to insert calls to these functions into user code.
 However, these functions can be used to allow profiling to be performed
 selectively on specific portions of the code. For further information on
 profiling, see the `NVidia Profiler User's Guide
-<docs.nvidia.com/cuda/profiler-users-guide/>`_.
+<https://docs.nvidia.com/cuda/profiler-users-guide/>`_.
 
 .. autofunction:: numba.cuda.profile_start
 .. autofunction:: numba.cuda.profile_stop
@@ -175,6 +179,13 @@ transfers and kernel execution. For further details on streams, see the `CUDA C
 Programming Guide Streams section
 <http://docs.nvidia.com/cuda/cuda-c-programming-guide/#streams>`_.
 
+Numba defaults to using the legacy default stream as the default stream. The
+per-thread default stream can be made the default stream by setting the
+environment variable ``NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM`` to ``1`` (see the
+:ref:`CUDA Environment Variables section <numba-envvars-gpu-support>`).
+Regardless of this setting, the objects representing the legacy and per-thread
+default streams can be constructed using the functions below.
+
 Streams are instances of :class:`numba.cuda.cudadrv.driver.Stream`:
 
 .. autoclass:: numba.cuda.cudadrv.driver.Stream
@@ -213,4 +224,9 @@ accessed through ``cuda.runtime``, which is an instance of the
 :class:`numba.cuda.cudadrv.runtime.Runtime` class:
 
 .. autoclass:: numba.cuda.cudadrv.runtime.Runtime
-   :members: get_version
+   :members: get_version, is_supported_version, supported_versions
+
+Whether the current runtime is officially supported and tested with the current
+version of Numba can also be queried:
+
+.. autofunction:: numba.cuda.is_supported_version

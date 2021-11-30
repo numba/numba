@@ -108,7 +108,7 @@ class TestOptional(TestCase):
     def test_is_this_a_none_objmode(self):
         pyfunc = is_this_a_none
         flags = Flags()
-        flags.set('force_pyobject')
+        flags.force_pyobject = True
         cres = compile_isolated(pyfunc, [types.intp], flags=flags)
         cfunc = cres.entry_point
         self.assertTrue(cres.objectmode)
