@@ -264,8 +264,18 @@ def recarray_getitem_field_return2_2d(ary):
 def rec_getitem_field_slice_2d(rec):
     return rec.j[0]
 
+
 def recarray_getitem_field_slice_2d(ary):
     return ary.j[0][0]
+
+
+def rec_getitem_range_slice_4d(rec):
+    return rec.p[0:2, 0, 1:4, 3:6]
+
+
+def recarray_getitem_range_slice_4d(ary):
+    return ary[0].p[0:2, 0, 1:4, 3:6]
+
 
 def record_read_array0(ary):
     return ary.h[0]
@@ -398,6 +408,9 @@ recordwith2arrays = np.dtype([('k', np.int32, (10, 20)),
 recordwithcharseq = np.dtype([('m', np.int32),
                               ('n', 'S5')])
 
+recordwith4darray = np.dtype([('o', np.int64),
+                              ('p', np.float32, (3, 2, 5, 7)),
+                              ('q', 'U10'),])
 
 class TestRecordDtypeMakeCStruct(unittest.TestCase):
     def test_two_scalars(self):
@@ -1552,6 +1565,22 @@ class TestNestedArrays(TestCase):
         cfunc = self.get_cfunc(pyfunc, (ty,))
         arr_res = cfunc(arg)
         np.testing.assert_equal(arr_res, arr_expected)
+
+    def test_corner_slice(self):
+        # testing corner cases while slicing nested arrays
+        nbarr = np.recarray((1, 2, 3, 5, 7, 13, 17), dtype=recordwith4darray)
+        for index, _ in np.ndenumerate(nbarr):
+            nbarr[index].p = np.random.randint(0, 1000, (3, 2, 5, 7),
+                                               np.int64).astype(np.float32)
+
+        funcs = rec_getitem_range_slice_4d, recarray_getitem_range_slice_4d
+        for arg, pyfunc in zip([nbarr[0], nbarr], funcs):
+            ty = typeof(arg)
+            arr_expected = pyfunc(arg)
+            cfunc = self.get_cfunc(pyfunc, (ty,))
+            arr_res = cfunc(arg)
+            np.testing.assert_equal(arr_res, arr_expected)
+
 
 
 if __name__ == '__main__':
