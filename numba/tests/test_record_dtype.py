@@ -1572,6 +1572,7 @@ class TestNestedArrays(TestCase):
         # testing corner cases while slicing nested arrays
         nbarr = np.recarray((1, 2, 3, 5, 7, 13, 17), dtype=recordwith4darray,
                             order='F')
+        np.random.seed(1)
         for index, _ in np.ndenumerate(nbarr):
             nbarr[index].p = np.random.randint(0, 1000, (3, 2, 5, 7),
                                                np.int64).astype(np.float32)
