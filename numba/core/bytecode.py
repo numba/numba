@@ -1,4 +1,3 @@
-import sys
 from collections import namedtuple, OrderedDict
 import dis
 import inspect
@@ -6,7 +5,7 @@ import itertools
 from types import CodeType, ModuleType
 
 from numba.core import errors, utils, serialize
-
+from numba.core.utils import PYVERSION
 
 opcode_info = namedtuple('opcode_info', ['argsize'])
 
@@ -83,7 +82,7 @@ class ByteCodeInst(object):
 
     def get_jump_target(self):
         assert self.is_jump
-        if sys.version_info >= (3, 10):
+        if PYVERSION >= (3, 10):
             if self.opcode in JREL_OPS:
                 return self.next + self.arg * 2
             else:
