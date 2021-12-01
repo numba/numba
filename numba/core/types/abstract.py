@@ -5,7 +5,7 @@ import weakref
 
 import numpy as np
 
-from numba.core.utils import cached_property
+from numba.core.utils import cached_property, get_hashable_key
 
 # Types are added to a global registry (_typecache) in order to assign
 # them unique integer codes for fast matching in _dispatcher.c.
@@ -278,6 +278,12 @@ class Callable(Type):
         Returns a tuple of (list of signatures, parameterized)
         """
 
+    @abstractmethod
+    def get_impl_key(self, sig):
+        """
+        Returns the impl key for the given signature
+        """
+
 
 class DTypeSpec(Type):
     """
@@ -424,12 +430,7 @@ class Literal(Type):
         self._literal_value = value
         # We want to support constants of non-hashable values, therefore
         # fall back on the value's id() if necessary.
-        try:
-            hash(value)
-        except TypeError:
-            self._key = id(value)
-        else:
-            self._key = value
+        self._key = get_hashable_key(value)
 
     @property
     def literal_value(self):

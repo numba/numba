@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from numba.core.registry import DelayedRegistry, CPUDispatcher
 from numba.core.decorators import jit
+from numba.core.errors import InternalTargetMismatchError, NumbaValueError
 from threading import local as tls
 
 
@@ -17,7 +18,7 @@ class _TargetRegistry(DelayedRegistry):
             msg = "No target is registered against '{}', known targets:\n{}"
             known = '\n'.join([f"{k: <{10}} -> {v}"
                                for k, v in target_registry.items()])
-            raise ValueError(msg.format(item, known)) from None
+            raise NumbaValueError(msg.format(item, known)) from None
 
 
 # Registry mapping target name strings to Target classes
@@ -77,6 +78,35 @@ def resolve_dispatcher_from_str(target_str):
     return dispatcher_registry[target_hw]
 
 
+def _get_local_target_checked(tyctx, hwstr, reason):
+    """Returns the local target if it is compatible with the given target
+    name during a type resolution; otherwise, raises an exception.
+
+    Parameters
+    ----------
+    tyctx: typing context
+    hwstr: str
+        target name to check against
+    reason: str
+        Reason for the resolution. Expects a noun.
+    Returns
+    -------
+    target_hw : Target
+
+    Raises
+    ------
+    InternalTargetMismatchError
+    """
+    # Get the class for the target declared by the function
+    hw_clazz = resolve_target_str(hwstr)
+    # get the local target
+    target_hw = get_local_target(tyctx)
+    # make sure the target_hw is in the MRO for hw_clazz else bail
+    if not target_hw.inherits_from(hw_clazz):
+        raise InternalTargetMismatchError(reason, target_hw, hw_clazz)
+    return target_hw
+
+
 class JitDecorator(ABC):
 
     @abstractmethod
@@ -115,11 +145,6 @@ class CUDA(GPU):
     """
 
 
-class ROCm(GPU):
-    """Mark the target as ROCm.
-    """
-
-
 class NPyUfunc(Target):
     """Mark the target as a ufunc
     """
@@ -132,7 +157,6 @@ target_registry['GPU'] = GPU
 target_registry['gpu'] = GPU
 target_registry['CUDA'] = CUDA
 target_registry['cuda'] = CUDA
-target_registry['ROCm'] = ROCm
 target_registry['npyufunc'] = NPyUfunc
 
 dispatcher_registry = DelayedRegistry(key_type=Target)

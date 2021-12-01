@@ -145,15 +145,15 @@ class BaseTypeInference(FunctionPass):
                     cast = caststmts.get(var)
                     if cast is None or cast.value.name not in argvars:
                         if self._raise_errors:
-                            raise TypeError("Only accept returning of array "
-                                            "passed into the function as "
-                                            "argument")
+                            msg = ("Only accept returning of array passed into "
+                                   "the function as argument")
+                            raise errors.NumbaTypeError(msg)
 
             elif (isinstance(return_type, types.Function) or
                     isinstance(return_type, types.Phantom)):
                 if self._raise_errors:
                     msg = "Can't return function object ({}) in nopython mode"
-                    raise TypeError(msg.format(return_type))
+                    raise errors.NumbaTypeError(msg.format(return_type))
 
         with fallback_context(state, 'Function "%s" has invalid return type'
                               % (state.func_id.func_name,)):
@@ -388,7 +388,7 @@ class NativeLowering(LoweringPass):
                 funcdesc.PythonFunctionDescriptor.from_specialized_function(
                     interp, typemap, restype, calltypes,
                     mangler=targetctx.mangler, inline=flags.forceinline,
-                    noalias=flags.noalias)
+                    noalias=flags.noalias, abi_tags=[flags.get_mangle_string()])
 
             with targetctx.push_code_library(library):
                 lower = lowering.Lower(targetctx, library, fndesc, interp,
@@ -437,6 +437,22 @@ class NativeLowering(LoweringPass):
 
 
 @register_pass(mutates_CFG=False, analysis_only=True)
+class NoPythonSupportedFeatureValidation(AnalysisPass):
+    """NoPython Mode check: Validates the IR to ensure that features in use are
+    in a form that is supported"""
+
+    _name = "nopython_supported_feature_validation"
+
+    def __init__(self):
+        AnalysisPass.__init__(self)
+
+    def run_pass(self, state):
+        raise_on_unsupported_feature(state.func_ir, state.typemap)
+        warn_deprecated(state.func_ir, state.typemap)
+        return False
+
+
+@register_pass(mutates_CFG=False, analysis_only=True)
 class IRLegalization(AnalysisPass):
 
     _name = "ir_legalization"
@@ -445,8 +461,6 @@ class IRLegalization(AnalysisPass):
         AnalysisPass.__init__(self)
 
     def run_pass(self, state):
-        raise_on_unsupported_feature(state.func_ir, state.typemap)
-        warn_deprecated(state.func_ir, state.typemap)
         # NOTE: this function call must go last, it checks and fixes invalid IR!
         check_and_legalize_ir(state.func_ir)
         return True
@@ -829,13 +843,14 @@ class PreLowerStripPhis(FunctionPass):
             for target, rhs in exporters[label]:
                 # If RHS is undefined
                 if rhs is ir.UNDEFINED:
-                    # Put in a NULL initializer
-                    rhs = ir.Expr.null(loc=target.loc)
+                    # Put in a NULL initializer, set the location to be in what
+                    # will eventually materialize as the prologue.
+                    rhs = ir.Expr.null(loc=func_ir.loc)
 
                 assign = ir.Assign(
                     target=target,
                     value=rhs,
-                    loc=target.loc
+                    loc=rhs.loc
                 )
                 # Insert at the earliest possible location; i.e. after the
                 # last assignment to rhs

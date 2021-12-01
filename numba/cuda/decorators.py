@@ -1,25 +1,13 @@
+from warnings import warn
 from numba.core import types, config, sigutils
-from numba.core.errors import DeprecationError
-from .compiler import (compile_device, declare_device_function, Dispatcher,
-                       compile_device_dispatcher)
+from numba.core.errors import DeprecationError, NumbaInvalidConfigWarning
+from .compiler import declare_device_function, Dispatcher
 from .simulator.kernel import FakeCUDAKernel
 
 
 _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "Signatures should be passed as the first "
                                  "positional argument.")
-
-
-def jitdevice(func, link=[], debug=None, inline=False, opt=True,
-              no_cpython_wrapper=None):
-    """Wrapper for device-jit.
-    """
-    # We ignore  the no_cpython_wrapper kwarg - it is passed by the callee when
-    # using overloads, but there is never a CPython wrapper for CUDA anyway.
-    debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
-    if link:
-        raise ValueError("link keyword invalid for device function")
-    return compile_device_dispatcher(func, debug=debug, inline=inline, opt=opt)
 
 
 def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
@@ -43,8 +31,9 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
     :type link: list
     :param debug: If True, check for exceptions thrown when executing the
        kernel. Since this degrades performance, this should only be used for
-       debugging purposes.  Defaults to False.  (The default value can be
-       overridden by setting environment variable ``NUMBA_CUDA_DEBUGINFO=1``.)
+       debugging purposes. If set to True, then ``opt`` should be set to False.
+       Defaults to False.  (The default value can be overridden by setting
+       environment variable ``NUMBA_CUDA_DEBUGINFO=1``.)
     :param fastmath: When True, enables fastmath optimizations as outlined in
        the :ref:`CUDA Fast Math documentation <cuda-fast-math>`.
     :param max_registers: Request that the kernel is limited to using at most
@@ -80,6 +69,15 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
     fastmath = kws.get('fastmath', False)
 
+    if debug and opt:
+        msg = ("debug=True with opt=True (the default) "
+               "is not supported by CUDA. This may result in a crash"
+               " - set debug=False or opt=False.")
+        warn(NumbaInvalidConfigWarning(msg))
+
+    if device and kws.get('link'):
+        raise ValueError("link keyword invalid for device function")
+
     if sigutils.is_signature(func_or_sig):
         if config.ENABLE_CUDASIM:
             def jitwrapper(func):
@@ -91,22 +89,16 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
         if restype and not device and restype != types.void:
             raise TypeError("CUDA kernel must have void return type.")
 
-        def kernel_jit(func):
+        def _jit(func):
             targetoptions = kws.copy()
             targetoptions['debug'] = debug
             targetoptions['link'] = link
             targetoptions['opt'] = opt
             targetoptions['fastmath'] = fastmath
+            targetoptions['device'] = device
             return Dispatcher(func, [func_or_sig], targetoptions=targetoptions)
 
-        def device_jit(func):
-            return compile_device(func, restype, argtypes, inline=inline,
-                                  debug=debug)
-
-        if device:
-            return device_jit
-        else:
-            return kernel_jit
+        return _jit
     else:
         if func_or_sig is None:
             if config.ENABLE_CUDASIM:
@@ -123,14 +115,13 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             if config.ENABLE_CUDASIM:
                 return FakeCUDAKernel(func_or_sig, device=device,
                                       fastmath=fastmath)
-            elif device:
-                return jitdevice(func_or_sig, debug=debug, opt=opt, **kws)
             else:
                 targetoptions = kws.copy()
                 targetoptions['debug'] = debug
                 targetoptions['opt'] = opt
                 targetoptions['link'] = link
                 targetoptions['fastmath'] = fastmath
+                targetoptions['device'] = device
                 sigs = None
                 return Dispatcher(func_or_sig, sigs,
                                   targetoptions=targetoptions)

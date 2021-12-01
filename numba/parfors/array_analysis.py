@@ -89,22 +89,34 @@ def wrap_index(typingctx, idx, size):
     (idx < 0 ? idx + size : idx) because we may have situations
     where idx > size due to the way indices are calculated
     during slice/range analysis.
+
+    Both idx and size have to be Integer types.
+    size should be from the array size vars that array_analysis
+    adds and the bitwidth should match the platform maximum.
     """
-    unified_ty = typingctx.unify_types(idx, size)
-    # Mixing signed and unsigned ints will unify to double which is
-    # no good for indexing.  If the unified type is not an integer
-    # then just use int64 as the common index type.  This does have
-    # some overflow potential if the unsigned value is greater than
-    # 2**63.
-    if not isinstance(unified_ty, types.Integer):
-        unified_ty = types.int64
+    require(isinstance(idx, types.scalars.Integer))
+    require(isinstance(size, types.scalars.Integer))
+
+    # We need both idx and size to be platform size so that we can compare.
+    unified_ty = types.intp if size.signed else types.uintp
+    idx_unified = types.intp if idx.signed else types.uintp
 
     def codegen(context, builder, sig, args):
+        ll_idx_unified_ty = context.get_data_type(idx_unified)
         ll_unified_ty = context.get_data_type(unified_ty)
-        idx = builder.sext(args[0], ll_unified_ty)
-        size = builder.sext(args[1], ll_unified_ty)
+        if idx_unified.signed:
+            idx = builder.sext(args[0], ll_idx_unified_ty)
+        else:
+            idx = builder.zext(args[0], ll_idx_unified_ty)
+        if unified_ty.signed:
+            size = builder.sext(args[1], ll_unified_ty)
+        else:
+            size = builder.zext(args[1], ll_unified_ty)
         neg_size = builder.neg(size)
         zero = llvmlite.ir.Constant(ll_unified_ty, 0)
+        # If idx is unsigned then these signed comparisons will fail in those
+        # cases where the idx has the highest bit set, namely more than 2**63
+        # on 64-bit platforms.
         idx_negative = builder.icmp_signed("<", idx, zero)
         pos_oversize = builder.icmp_signed(">=", idx, size)
         neg_oversize = builder.icmp_signed("<=", idx, neg_size)
@@ -1313,6 +1325,20 @@ class ArrayAnalysis(object):
                     shape = gvalue
                 elif isinstance(gvalue, int):
                     shape = (gvalue,)
+            elif isinstance(inst.value, ir.Arg):
+                if (
+                    isinstance(typ, types.containers.UniTuple)
+                    and isinstance(typ.dtype, types.Integer)
+                ):
+                    shape = inst.value
+                elif (
+                    isinstance(typ, types.containers.Tuple)
+                    and all([isinstance(x,
+                            (types.Integer, types.IntegerLiteral))
+                        for x in typ.types]
+                    )
+                ):
+                    shape = inst.value
 
             if isinstance(shape, ir.Const):
                 if isinstance(shape.value, tuple):
@@ -1367,6 +1393,16 @@ class ArrayAnalysis(object):
                     shape = self._gen_shape_call(
                         equiv_set, lhs, len(typ), shape, post
                     )
+            elif (
+                isinstance(typ, types.containers.Tuple)
+                and all([isinstance(x,
+                        (types.Integer, types.IntegerLiteral))
+                    for x in typ.types]
+                )
+            ):
+                shape = self._gen_shape_call(
+                    equiv_set, lhs, len(typ), shape, post
+                )
 
             """ See the comment on the define() function.
 
@@ -3116,9 +3152,14 @@ class ArrayAnalysis(object):
         # attr call: A_sh_attr = getattr(A, shape)
         if isinstance(shape, ir.Var):
             shape = equiv_set.get_shape(shape)
+
         # already a tuple variable that contains size
         if isinstance(shape, ir.Var):
             attr_var = shape
+            shape_attr_call = None
+            shape = None
+        elif isinstance(shape, ir.Arg):
+            attr_var = var
             shape_attr_call = None
             shape = None
         else:

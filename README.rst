@@ -35,27 +35,26 @@ Supported Platforms
 * Operating systems and CPUs:
 
   - Linux: x86 (32-bit), x86_64, ppc64le (POWER8 and 9), ARMv7 (32-bit),
-    ARMv8 (64-bit)
-  - Windows: x86, x86_64
-  - macOS: x86_64, (M1/Arm64, unofficial support only)
-  - \*BSD: (unofficial support only)
+    ARMv8 (64-bit).
+  - Windows: x86, x86_64.
+  - macOS: x86_64, (M1/Arm64, unofficial support only).
+  - \*BSD: (unofficial support only).
 
 * (Optional) Accelerators and GPUs:
 
-  * NVIDIA GPUs (Kepler architecture or later) via CUDA driver on Linux, Windows,
-    macOS (< 10.14)
-  * AMD GPUs via ROCm driver on Linux
+  * NVIDIA GPUs (Kepler architecture or later) via CUDA driver on Linux and
+    Windows.
 
 Dependencies
 ============
 
 * Python versions: 3.7-3.9
-* llvmlite 0.36.*
-* NumPy >=1.15 (can build with 1.11 for ABI compatibility)
+* llvmlite 0.38.*
+* NumPy >=1.18 (can build with 1.11 for ABI compatibility).
 
 Optionally:
 
-* SciPy >=1.0.0 (for ``numpy.linalg`` support)
+* SciPy >=1.0.0 (for ``numpy.linalg`` support).
 
 
 Installing
@@ -68,7 +67,8 @@ Distribution: https://www.anaconda.com/download
 
    $ conda install numba
 
-For more options, see the Installation Guide: https://numba.readthedocs.io/en/stable/user/installing.html
+For more options, see the Installation Guide:
+https://numba.readthedocs.io/en/stable/user/installing.html
 
 Documentation
 =============
@@ -76,13 +76,13 @@ Documentation
 https://numba.readthedocs.io/en/stable/index.html
 
 
-Mailing Lists
-=============
+Contact
+=======
 
-Join the Numba mailing list numba-users@continuum.io:
-https://groups.google.com/a/continuum.io/d/forum/numba-users
+Numba has a discourse forum for discussions:
 
-Some old archives are at: http://librelist.com/browser/numba/
+* https://numba.discourse.group
+
 
 
 Continuous Integration

@@ -117,6 +117,17 @@ The following example demonstrates a product reduction on a two-dimensional arra
 
         return result1
 
+.. note:: When using Python's ``range`` to induce a loop, Numba types the
+          induction variable as a signed integer. This is also the case for
+          Numba's ``prange`` when ``parallel=False``. However, for
+          ``parallel=True``, if the range is identifiable as strictly positive,
+          the type of the induction variable  will be ``uint64``. The impact of
+          a ``uint64`` induction variable is often most noticable when
+          undertaking operations involving it and a signed integer. Under
+          Numba's type coercion rules, such a case will commonly result in the
+          operation producing a floating point result type.
+
+
 Care should be taken, however, when reducing into slices or elements of an array 
 if the elements specified by the slice or index are written to simultaneously by 
 multiple parallel threads. The compiler may not detect such cases and then a race condition

@@ -1571,7 +1571,7 @@ class ParforPassStates:
             self.typingctx, self.func_ir, self.typemap, self.calltypes,
         )
 
-        ir_utils._max_label = max(func_ir.blocks.keys())
+        ir_utils._the_max_label.update(max(func_ir.blocks.keys()))
         self.flags = flags
         self.metadata = metadata
         if "parfors" not in metadata:
@@ -1873,10 +1873,18 @@ class ConvertSetItemPass:
         return self.pass_states.typingctx.resolve_function_type(fnty, tuple(args), {})
 
 
-def _make_index_var(typemap, scope, index_vars, body_block):
+def _make_index_var(typemap, scope, index_vars, body_block, force_tuple=False):
+    """ When generating a SetItem call to an array in a parfor, the general
+    strategy is to generate a tuple if the array is more than 1 dimension.
+    If it is 1 dimensional then you can use a simple variable.  This routine
+    is also used when converting pndindex to parfor but pndindex requires a
+    tuple even if the iteration space is 1 dimensional.  The pndindex use of
+    this function will use force_tuple to make the output index a tuple even
+    if it is one dimensional.
+    """
     ndims = len(index_vars)
     loc = body_block.loc
-    if ndims > 1:
+    if ndims > 1 or force_tuple:
         tuple_var = ir.Var(scope, mk_unique_var(
             "$parfor_index_tuple_var"), loc)
         typemap[tuple_var.name] = types.containers.UniTuple(
@@ -1993,9 +2001,11 @@ class ConvertNumpyPass:
 
         # generate init block and body
         init_block = ir.Block(scope, loc)
-        init_block.body = mk_alloc(pass_states.typemap, pass_states.calltypes, lhs,
-                                   tuple(size_vars), el_typ, scope, loc,
-                                   pass_states.typemap[lhs.name])
+        init_block.body = mk_alloc(
+            pass_states.typingctx,
+            pass_states.typemap, pass_states.calltypes, lhs,
+            tuple(size_vars), el_typ, scope, loc,
+            pass_states.typemap[lhs.name])
         body_label = next_label()
         body_block = ir.Block(scope, loc)
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
@@ -2077,9 +2087,11 @@ class ConvertNumpyPass:
 
         # generate init block and body
         init_block = ir.Block(scope, loc)
-        init_block.body = mk_alloc(pass_states.typemap, pass_states.calltypes, lhs,
-                                   tuple(size_vars), el_typ, scope, loc,
-                                   pass_states.typemap[lhs.name])
+        init_block.body = mk_alloc(
+            pass_states.typingctx,
+            pass_states.typemap, pass_states.calltypes, lhs,
+            tuple(size_vars), el_typ, scope, loc,
+            pass_states.typemap[lhs.name])
         body_label = next_label()
         body_block = ir.Block(scope, loc)
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
@@ -2302,6 +2314,11 @@ class ConvertLoopPass:
                         and isinstance(inst.value, ir.Expr)
                         and inst.value.op == 'call'
                         and self._is_parallel_loop(inst.value.func.name, call_table)):
+                    # Here we've found a parallel loop, either prange or pndindex.
+                    # We create a parfor from this loop and then overwrite the contents
+                    # of the original loop header block to contain this parfor and then
+                    # a jump to the original loop exit block.  Other blocks in the
+                    # original loop are discarded.
                     body_labels = [ l for l in loop.body if
                                     l in blocks and l != loop.header ]
                     args = inst.value.args
@@ -2437,11 +2454,20 @@ class ConvertLoopPass:
                             in_arr, mask_var, mask_typ, mask_indices = result
                         else:
                             in_arr = args[0]
-                        size_vars = equiv_set.get_shape(in_arr
-                                        if mask_indices is None else mask_var)
-                        index_vars, loops = _mk_parfor_loops(
-                            pass_states.typemap, size_vars, scope, loc,
-                        )
+                        assert(isinstance(in_arr, ir.Var))
+                        in_arr_typ = pass_states.typemap[in_arr.name]
+                        if isinstance(in_arr_typ, types.Integer):
+                            index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
+                            pass_states.typemap[index_var.name] = types.uintp
+                            loops = [LoopNest(index_var, 0, in_arr, 1)]
+                            index_vars = [index_var]
+                        else:
+                            size_vars = equiv_set.get_shape(in_arr
+                                          if mask_indices is None else mask_var)
+                            index_vars, loops = _mk_parfor_loops(
+                                pass_states.typemap, size_vars, scope, loc,
+                            )
+                        assert(len(loops) > 0)
                         orig_index = index_vars
                         if mask_indices:
                             # replace mask indices if required;
@@ -2453,6 +2479,7 @@ class ConvertLoopPass:
                         body_block = ir.Block(scope, loc)
                         index_var, index_var_typ = _make_index_var(
                             pass_states.typemap, scope, index_vars, body_block,
+                            force_tuple=True
                         )
                         body = body_block.body + first_body_block.body
                         first_body_block.body = body
@@ -2540,19 +2567,17 @@ class ConvertLoopPass:
                                     equiv_set,
                                     ("prange", loop_kind, loop_replacing),
                                     pass_states.flags, races=races)
-                    # add parfor to entry block's jump target
-                    jump = blocks[entry].body[-1]
-                    jump.target = list(loop.exits)[0]
-                    blocks[jump.target].body.insert(0, parfor)
+
+                    blocks[loop.header].body = [parfor, ir.Jump(list(loop.exits)[0], loc)]
                     self.rewritten.append(dict(
                         old_loop=loop,
                         new=parfor,
                         reason='loop',
                     ))
                     # remove loop blocks from top level dict
-                    blocks.pop(loop.header)
                     for l in body_labels:
-                        blocks.pop(l)
+                        if l != loop.header:
+                            blocks.pop(l)
                     if config.DEBUG_ARRAY_OPT >= 1:
                         print("parfor from loop")
                         parfor.dump()
@@ -2778,9 +2803,9 @@ class ParforPass(ParforPassStates):
     def _pre_run(self):
         # run array analysis, a pre-requisite for parfor translation
         self.array_analysis.run(self.func_ir.blocks)
-        # NOTE: Prepare _max_label. See #6102
-        ir_utils._max_label = max(ir_utils._max_label,
-                                  ir_utils.find_max_label(self.func_ir.blocks))
+        # NOTE: Prepare _the_max_label. See #6102
+        ir_utils._the_max_label.update(
+            ir_utils.find_max_label(self.func_ir.blocks))
 
     def run(self):
         """run parfor conversion pass: replace Numpy calls
@@ -3252,8 +3277,7 @@ def _find_func_var(typemap, func, avail_vars, loc):
 
 
 def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes, metadata):
-    ir_utils._max_label = max(ir_utils._max_label,
-                              ir_utils.find_max_label(func_ir.blocks))
+    ir_utils._the_max_label.update(ir_utils.find_max_label(func_ir.blocks))
     parfor_found = False
     new_blocks = {}
     scope = next(iter(func_ir.blocks.values())).scope
@@ -3560,15 +3584,10 @@ def get_reduction_init(nodes):
     Get initial value for known reductions.
     Currently, only += and *= are supported.
     """
-    require(len(nodes) >=1)
-    # there could be an extra assignment after the reduce node
+    require(len(nodes) >= 1)
+    # there could be multiple extra assignments after the reduce node
     # See: test_reduction_var_reuse
-    if isinstance(nodes[-1].value, ir.Var):
-        require(len(nodes) >=2)
-        require(nodes[-2].target.name == nodes[-1].value.name)
-        acc_expr = nodes[-2].value
-    else:
-        acc_expr = nodes[-1].value
+    acc_expr = list(filter(lambda x: isinstance(x.value, ir.Expr), nodes))[-1].value
     require(isinstance(acc_expr, ir.Expr) and acc_expr.op=='inplace_binop')
     if acc_expr.fn == operator.iadd or acc_expr.fn == operator.isub:
         return 0, acc_expr.fn
@@ -4661,7 +4680,8 @@ def dummy_return_in_loop_body(loop_body):
 class ReduceInfer(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
-        assert len(args) == 3
+        if len(args) != 3:
+            raise errors.NumbaAssertionError("len(args) != 3")
         assert isinstance(args[1], types.Array)
         return signature(args[1].dtype, *args)
 

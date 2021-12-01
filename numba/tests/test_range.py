@@ -9,7 +9,7 @@ from numba import jit, njit
 from numba.core import types, utils
 from numba.tests.support import tag
 
-from numba.cpython.rangeobj import range_iter_len
+from numba.cpython.rangeobj import length_of_iterator
 def loop1(n):
     s = 0
     for i in range(n):
@@ -40,10 +40,10 @@ def range_len2(a, b):
 def range_len3(a, b, c):
     return len(range(a, b, c))
 def range_iter_len1(a):
-    return range_iter_len(iter(range(a)))
+    return length_of_iterator(iter(range(a)))
 
 def range_iter_len2(a):
-    return range_iter_len(iter(a))
+    return length_of_iterator(iter(a))
 
 def range_attrs(start, stop, step):
     r1 = range(start)

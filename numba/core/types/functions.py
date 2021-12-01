@@ -279,38 +279,17 @@ class BaseFunction(Callable):
         return self._impl_keys[sig.args]
 
     def get_call_type(self, context, args, kws):
-        from numba.core.target_extension import (target_registry,
-                                                 get_local_target)
 
         prefer_lit = [True, False]    # old behavior preferring literal
         prefer_not = [False, True]    # new behavior preferring non-literal
         failures = _ResolutionFailures(context, self, args, kws,
                                        depth=self._depth)
 
-        # get the current target target
+        # get the order in which to try templates
+        from numba.core.target_extension import get_local_target # circular
         target_hw = get_local_target(context)
-
-        # fish out templates that are specific to the target if a target is
-        # specified
-        DEFAULT_TARGET = 'generic'
-        usable = []
-        for ix, temp_cls in enumerate(self.templates):
-            # ? Need to do something about this next line
-            hw = temp_cls.metadata.get('target', DEFAULT_TARGET)
-            if hw is not None:
-                hw_clazz = target_registry[hw]
-                if target_hw.inherits_from(hw_clazz):
-                    usable.append((temp_cls, hw_clazz, ix))
-
-        # sort templates based on target specificity
-        def key(x):
-            return target_hw.__mro__.index(x[1])
-        order = [x[0] for x in sorted(usable, key=key)]
-
-        if not order:
-            msg = (f"Function resolution cannot find any matches for function"
-                   f" '{self.key[0]}' for the current target: '{target_hw}'.")
-            raise errors.UnsupportedError(msg)
+        order = utils.order_by_target_specificity(target_hw, self.templates,
+                                                  fnkey=self.key[0])
 
         self._depth += 1
 
@@ -328,8 +307,12 @@ class BaseFunction(Callable):
                                     for k, v in kws.items()}
                         sig = temp.apply(nolitargs, nolitkws)
                 except Exception as e:
-                    sig = None
-                    failures.add_error(temp, False, e, uselit)
+                    if (utils.use_new_style_errors() and not
+                            isinstance(e, errors.NumbaError)):
+                        raise e
+                    else:
+                        sig = None
+                        failures.add_error(temp, False, e, uselit)
                 else:
                     if sig is not None:
                         self._impl_keys[sig.args] = temp.get_impl_key(sig)
@@ -391,7 +374,10 @@ class BoundFunction(Callable, Opaque):
 
     @property
     def key(self):
-        return self.typing_key, self.this
+        # FIXME: With target-overload, the MethodTemplate can change depending
+        #        on the target.
+        unique_impl = getattr(self.template, "_overload_func", None)
+        return self.typing_key, self.this, unique_impl
 
     def get_impl_key(self, sig):
         """
@@ -413,6 +399,9 @@ class BoundFunction(Callable, Opaque):
                 try:
                     out = template.apply(args, kws)
                 except Exception as exc:
+                    if (utils.use_new_style_errors() and not
+                            isinstance(exc, errors.NumbaError)):
+                        raise exc
                     if isinstance(exc, errors.ForceLiteralArg):
                         raise exc
                     literal_e = exc
@@ -565,7 +554,12 @@ class Dispatcher(WeakType, Callable, Dummy):
         A strong reference to the underlying numba.dispatcher.Dispatcher
         instance.
         """
-        return self._get_object()
+        disp = self._get_object()
+        # TODO: improve interface to avoid the dynamic check here
+        if hasattr(disp, "_get_dispatcher_for_current_target"):
+            return disp._get_dispatcher_for_current_target()
+        else:
+            return disp
 
     def get_overload(self, sig):
         """
@@ -675,6 +669,9 @@ class NamedTupleClass(Callable, Opaque):
     def get_call_signatures(self):
         return (), True
 
+    def get_impl_key(self, sig):
+        return type(self)
+
     @property
     def key(self):
         return self.instance_class
@@ -696,6 +693,9 @@ class NumberClass(Callable, DTypeSpec, Opaque):
 
     def get_call_signatures(self):
         return (), True
+
+    def get_impl_key(self, sig):
+        return type(self)
 
     @property
     def key(self):

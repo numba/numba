@@ -224,16 +224,14 @@ static void prepare_fork(void)
     {
         if(is_main_thread())
         {
-            if (tbb::finalize(tsh, std::nothrow))
+            if (!tbb::finalize(tsh, std::nothrow))
             {
-                tsh_was_initialized = false;
-                need_reinit_after_fork = true;
-            }
-            else
-            {
+                tbb::task_scheduler_handle::release(tsh);
                 puts("Unable to join threads to shut down before fork(). "
                      "This can break multithreading in child processes.\n");
             }
+            tsh_was_initialized = false;
+            need_reinit_after_fork = true;
         }
         else
         {
@@ -255,6 +253,7 @@ static void reset_after_fork(void)
     {
         tsh = tbb::task_scheduler_handle::get();
         set_main_thread();
+        tsh_was_initialized = true;
         need_reinit_after_fork = false;
     }
 }
@@ -325,31 +324,20 @@ MOD_INIT(tbbpool)
     {
         md->m_free = (freefunc)unload_tbb;
     }
-    PyObject_SetAttrString(m, "launch_threads",
-                           PyLong_FromVoidPtr((void*)&launch_threads));
-    PyObject_SetAttrString(m, "synchronize",
-                           PyLong_FromVoidPtr((void*)&synchronize));
-    PyObject_SetAttrString(m, "ready",
-                           PyLong_FromVoidPtr((void*)&ready));
-    PyObject_SetAttrString(m, "add_task",
-                           PyLong_FromVoidPtr((void*)&add_task));
-    PyObject_SetAttrString(m, "parallel_for",
-                           PyLong_FromVoidPtr((void*)&parallel_for));
-    PyObject_SetAttrString(m, "do_scheduling_signed",
-                           PyLong_FromVoidPtr((void*)&do_scheduling_signed));
-    PyObject_SetAttrString(m, "do_scheduling_unsigned",
-                           PyLong_FromVoidPtr((void*)&do_scheduling_unsigned));
-    PyObject_SetAttrString(m, "set_num_threads",
-                           PyLong_FromVoidPtr((void*)&set_num_threads));
-    PyObject_SetAttrString(m, "get_num_threads",
-                           PyLong_FromVoidPtr((void*)&get_num_threads));
-    PyObject_SetAttrString(m, "get_thread_id",
-                           PyLong_FromVoidPtr((void*)&get_thread_id));
-    PyObject_SetAttrString(m, "set_parallel_chunksize",
-                           PyLong_FromVoidPtr((void*)&set_parallel_chunksize));
-    PyObject_SetAttrString(m, "get_parallel_chunksize",
-                           PyLong_FromVoidPtr((void*)&get_parallel_chunksize));
-    PyObject_SetAttrString(m, "get_sched_size",
-                           PyLong_FromVoidPtr((void*)&get_sched_size));
+
+    SetAttrStringFromVoidPointer(m, launch_threads);
+    SetAttrStringFromVoidPointer(m, synchronize);
+    SetAttrStringFromVoidPointer(m, ready);
+    SetAttrStringFromVoidPointer(m, add_task);
+    SetAttrStringFromVoidPointer(m, parallel_for);
+    SetAttrStringFromVoidPointer(m, do_scheduling_signed);
+    SetAttrStringFromVoidPointer(m, do_scheduling_unsigned);
+    SetAttrStringFromVoidPointer(m, set_num_threads);
+    SetAttrStringFromVoidPointer(m, get_num_threads);
+    SetAttrStringFromVoidPointer(m, get_thread_id);
+    SetAttrStringFromVoidPointer(m, set_parallel_chunksize);
+    SetAttrStringFromVoidPointer(m, get_parallel_chunksize);
+    SetAttrStringFromVoidPointer(m, get_sched_size);
+
     return MOD_SUCCESS_VAL(m);
 }

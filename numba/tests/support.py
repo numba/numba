@@ -22,15 +22,21 @@ import traceback
 from contextlib import contextmanager
 import uuid
 import importlib
+import types as pytypes
 
 import numpy as np
 
 from numba import testing
 from numba.core import errors, typing, utils, config, cpu
-from numba.core.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
+from numba.core.compiler import (compile_extra, compile_isolated, Flags,
+                                 DEFAULT_FLAGS, CompilerBase,
+                                 DefaultPassBuilder)
+from numba.core.typed_passes import IRLegalization
+from numba.core.untyped_passes import PreserveIR
 import unittest
 from numba.core.runtime import rtsys
 from numba.np import numpy_support
+from numba.pycc.platform import _external_compiler_ok
 
 
 try:
@@ -112,6 +118,19 @@ except ImportError:
     has_blas = False
 
 needs_blas = unittest.skipUnless(has_blas, "BLAS needs SciPy 1.0+")
+
+# Decorate a test with @needs_subprocess to ensure it doesn't run unless the
+# `SUBPROC_TEST` environment variable is set. Use this in conjunction with:
+# TestCase::subprocess_test_runner which will execute a given test in subprocess
+# with this environment variable set.
+_exec_cond = os.environ.get('SUBPROC_TEST', None) == '1'
+needs_subprocess = unittest.skipUnless(_exec_cond, "needs subprocess harness")
+
+
+# decorate for test needs external compilers
+needs_external_compilers = unittest.skipIf(not _external_compiler_ok,
+                                           ('Compatible external compilers are '
+                                            'missing'))
 
 
 def ignore_internal_warnings():
@@ -501,6 +520,46 @@ class TestCase(unittest.TestCase):
         got = cfunc()
         self.assertPreciseEqual(got, expected)
         return got, expected
+
+    def subprocess_test_runner(self, test_module, test_class=None,
+                               test_name=None, envvars=None, timeout=60):
+        """
+        Runs named unit test(s) as specified in the arguments as:
+        test_module.test_class.test_name. test_module must always be supplied
+        and if no further refinement is made with test_class and test_name then
+        all tests in the module will be run. The tests will be run in a
+        subprocess with environment variables specified in `envvars`.
+        If given, envvars must be a map of form:
+            environment variable name (str) -> value (str)
+        It is most convenient to use this method in conjunction with
+        @needs_subprocess as the decorator will cause the decorated test to be
+        skipped unless the `SUBPROC_TEST` environment variable is set
+        (this special environment variable is set by this method such that the
+        specified test(s) will not be skipped in the subprocess).
+
+
+        Following execution in the subprocess this method will check the test(s)
+        executed without error. The timeout kwarg can be used to allow more time
+        for longer running tests, it defaults to 60 seconds.
+        """
+        themod = self.__module__
+        thecls = type(self).__name__
+        parts = (test_module, test_class, test_name)
+        fully_qualified_test = '.'.join(x for x in parts if x is not None)
+        cmd = [sys.executable, '-m', 'numba.runtests', fully_qualified_test]
+        env_copy = os.environ.copy()
+        env_copy['SUBPROC_TEST'] = '1'
+        envvars = pytypes.MappingProxyType({} if envvars is None else envvars)
+        env_copy.update(envvars)
+        status = subprocess.run(cmd, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, timeout=timeout,
+                                env=env_copy, universal_newlines=True)
+        streams = (f'\ncaptured stdout: {status.stdout}\n'
+                   f'captured stderr: {status.stderr}')
+        self.assertEqual(status.returncode, 0, streams)
+        self.assertIn('OK', status.stderr)
+        self.assertNotIn('FAIL', status.stderr)
+        self.assertNotIn('ERROR', status.stderr)
 
 
 class SerialMixin(object):
@@ -924,9 +983,10 @@ def create_temp_module(source_lines, **jit_options):
         shutil.rmtree(tempdir)
 
 
-def run_in_subprocess(code, flags=None):
+def run_in_subprocess(code, flags=None, env=None, timeout=30):
     """Run a snippet of Python code in a subprocess with flags, if any are
-    given.
+    given. 'env' is passed to subprocess.Popen(). 'timeout' is passed to
+    popen.communicate().
 
     Returns the stdout and stderr of the subprocess after its termination.
     """
@@ -934,9 +994,27 @@ def run_in_subprocess(code, flags=None):
         flags = []
     cmd = [sys.executable,] + flags + ["-c", code]
     popen = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
-    out, err = popen.communicate()
+                             stderr=subprocess.PIPE, env=env)
+    out, err = popen.communicate(timeout=timeout)
     if popen.returncode != 0:
         msg = "process failed with code %s: stderr follows\n%s\n"
         raise AssertionError(msg % (popen.returncode, err.decode()))
     return out, err
+
+
+class IRPreservingTestPipeline(CompilerBase):
+    """ Same as the standard pipeline, but preserves the func_ir into the
+    metadata store after legalisation, useful for testing IR changes"""
+
+    def define_pipelines(self):
+        pipeline = DefaultPassBuilder.define_nopython_pipeline(
+            self.state, "ir_preserving_custom_pipe")
+        # mangle the default pipeline and inject DCE and IR preservation ahead
+        # of legalisation
+
+        # TODO: add a way to not do this! un-finalizing is not a good idea
+        pipeline._finalized = False
+        pipeline.add_pass_after(PreserveIR, IRLegalization)
+
+        pipeline.finalize()
+        return [pipeline]

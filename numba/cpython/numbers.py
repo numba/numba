@@ -1333,6 +1333,12 @@ def constant_complex(context, builder, ty, pyval):
 @lower_constant(types.Float)
 @lower_constant(types.Boolean)
 def constant_integer(context, builder, ty, pyval):
+    # See https://github.com/numba/numba/issues/6979
+    # llvmlite ir.IntType specialises the formatting of the constant for a
+    # cpython bool. A NumPy np.bool_ is not a cpython bool so force it to be one
+    # so that the constant renders correctly!
+    if isinstance(pyval, np.bool_):
+        pyval = bool(pyval)
     lty = context.get_value_type(ty)
     return lty(pyval)
 

@@ -1572,6 +1572,9 @@ class Interpreter(object):
     def op_POP_BLOCK(self, inst, kind=None):
         if kind is None:
             self.syntax_blocks.pop()
+        elif kind == 'with':
+            d = ir.PopBlock(loc=self.loc)
+            self.current_block.append(d)
         elif kind == 'try':
             self._insert_try_block_end()
 
@@ -1715,9 +1718,8 @@ class Interpreter(object):
 
     def op_MAKE_FUNCTION(self, inst, name, code, closure, annotations,
                          kwdefaults, defaults, res):
-        if annotations is not None:
-            msg = "op_MAKE_FUNCTION with annotations is not implemented"
-            raise NotImplementedError(msg)
+        # annotations are ignored by numba but useful for static analysis
+        # re. https://github.com/numba/numba/issues/7269
         if kwdefaults is not None:
             msg = "op_MAKE_FUNCTION with kwdefaults is not implemented"
             raise NotImplementedError(msg)

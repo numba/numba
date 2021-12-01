@@ -31,19 +31,22 @@ class CUDATypingContext(typing.BaseContext):
         if isinstance(val, dispatcher.Dispatcher):
             try:
                 # use cached device function
-                val = val.__cudajitdevice
+                val = val.__dispatcher
             except AttributeError:
                 if not val._can_compile:
                     raise ValueError('using cpu function on device '
                                      'but its compilation is disabled')
-                opt = val.targetoptions.get('opt', True)
-                from .decorators import jitdevice
-                jd = jitdevice(val, debug=val.targetoptions.get('debug'),
-                               opt=opt)
+                targetoptions = val.targetoptions.copy()
+                targetoptions['device'] = True
+                targetoptions['debug'] = targetoptions.get('debug', False)
+                targetoptions['opt'] = targetoptions.get('opt', True)
+                sigs = None
+                from .compiler import Dispatcher
+                disp = Dispatcher(val, sigs, targetoptions)
                 # cache the device function for future use and to avoid
                 # duplicated copy of the same function.
-                val.__cudajitdevice = jd
-                val = jd
+                val.__dispatcher = disp
+                val = disp
 
         # continue with parent logic
         return super(CUDATypingContext, self).resolve_value_type(val)
@@ -86,7 +89,8 @@ class CUDATargetContext(BaseContext):
         # side effect of import needed for numba.cpython.*, the builtins
         # registry is updated at import time.
         from numba.cpython import numbers, tupleobj, slicing # noqa: F401
-        from numba.cpython import rangeobj, unicode # noqa: F401
+        from numba.cpython import rangeobj, iterators # noqa: F401
+        from numba.cpython import unicode, charseq # noqa: F401
         from numba.cpython import cmathimpl
         from numba.np import arrayobj # noqa: F401
         from numba.np import npdatetime # noqa: F401
@@ -122,11 +126,12 @@ class CUDATargetContext(BaseContext):
     def call_conv(self):
         return CUDACallConv(self)
 
-    def mangler(self, name, argtypes):
-        return itanium_mangler.mangle(name, argtypes)
+    def mangler(self, name, argtypes, *, abi_tags=()):
+        return itanium_mangler.mangle(name, argtypes, abi_tags=abi_tags)
 
-    def prepare_cuda_kernel(self, codelib, func_name, argtypes, debug,
-                            nvvm_options, max_registers=None):
+    def prepare_cuda_kernel(self, codelib, fndesc, debug,
+                            nvvm_options, filename, linenum,
+                            max_registers=None):
         """
         Adapt a code library ``codelib`` with the numba compiled CUDA kernel
         with name ``fname`` and arguments ``argtypes`` for NVVM.
@@ -139,29 +144,34 @@ class CUDATargetContext(BaseContext):
 
         codelib:       The CodeLibrary containing the device function to wrap
                        in a kernel call.
-        func_name:     The mangled name of the device function.
-        argtypes:      An iterable of the types of arguments to the kernel.
+        fndesc:        The FunctionDescriptor of the source function.
         debug:         Whether to compile with debug.
         nvvm_options:  Dict of NVVM options used when compiling the new library.
+        filename:      The source filename that the function is contained in.
+        linenum:       The source line that the function is on.
         max_registers: The max_registers argument for the code library.
         """
-        kernel_name = itanium_mangler.prepend_namespace(func_name, ns='cudapy')
+        kernel_name = itanium_mangler.prepend_namespace(
+            fndesc.llvm_func_name, ns='cudapy',
+        )
         library = self.codegen().create_library(f'{codelib.name}_kernel_',
                                                 entry_name=kernel_name,
                                                 nvvm_options=nvvm_options,
                                                 max_registers=max_registers)
         library.add_linking_library(codelib)
-        wrapper = self.generate_kernel_wrapper(library, kernel_name, func_name,
-                                               argtypes, debug)
+        wrapper = self.generate_kernel_wrapper(library, fndesc, kernel_name,
+                                               debug, filename, linenum)
         return library, wrapper
 
-    def generate_kernel_wrapper(self, library, kernel_name, func_name,
-                                argtypes, debug):
+    def generate_kernel_wrapper(self, library, fndesc, kernel_name, debug,
+                                filename, linenum):
         """
         Generate the kernel wrapper in the given ``library``.
-        The function being wrapped have the name ``fname`` and argument types
-        ``argtypes``.  The wrapper function is returned.
+        The function being wrapped is described by ``fndesc``.
+        The wrapper function is returned.
         """
+
+        argtypes = fndesc.argtypes
         arginfo = self.get_arg_packer(argtypes)
         argtys = list(arginfo.argument_types)
         wrapfnty = ir.FunctionType(ir.VoidType(), argtys)
@@ -169,13 +179,22 @@ class CUDATargetContext(BaseContext):
         fnty = ir.FunctionType(ir.IntType(32),
                                [self.call_conv.get_return_type(types.pyobject)]
                                + argtys)
-        func = ir.Function(wrapper_module, fnty, func_name)
+        func = ir.Function(wrapper_module, fnty, fndesc.llvm_func_name)
 
         prefixed = itanium_mangler.prepend_namespace(func.name, ns='cudapy')
         wrapfn = ir.Function(wrapper_module, wrapfnty, prefixed)
         builder = ir.IRBuilder(wrapfn.append_basic_block(''))
 
-        # Define error handling variables
+        if debug:
+            debuginfo = self.DIBuilder(
+                module=wrapper_module, filepath=filename, cgctx=self,
+            )
+            debuginfo.mark_subprogram(
+                wrapfn, kernel_name, fndesc.args, argtypes, linenum,
+            )
+            debuginfo.mark_location(builder, linenum)
+
+        # Define error handling variable
         def define_error_gv(postfix):
             name = wrapfn.name + postfix
             gv = cgutils.add_global_variable(wrapper_module, ir.IntType(32),
@@ -234,6 +253,8 @@ class CUDATargetContext(BaseContext):
 
         nvvm.set_cuda_kernel(wrapfn)
         library.add_ir_module(wrapper_module)
+        if debug:
+            debuginfo.finalize()
         library.finalize()
         wrapfn = library.get_function(wrapfn.name)
         return wrapfn
