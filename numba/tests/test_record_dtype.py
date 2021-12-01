@@ -316,6 +316,7 @@ def record_read_second_arr(ary):
 def get_shape(rec):
     return np.shape(rec.j)
 
+
 def get_charseq(ary, i):
     return ary[i].n
 
@@ -411,6 +412,7 @@ recordwithcharseq = np.dtype([('m', np.int32),
 recordwith4darray = np.dtype([('o', np.int64),
                               ('p', np.float32, (3, 2, 5, 7)),
                               ('q', 'U10'),])
+
 
 class TestRecordDtypeMakeCStruct(unittest.TestCase):
     def test_two_scalars(self):
@@ -1581,7 +1583,6 @@ class TestNestedArrays(TestCase):
             cfunc = self.get_cfunc(pyfunc, (ty,))
             arr_res = cfunc(arg)
             np.testing.assert_equal(arr_res, arr_expected)
-
 
 
 if __name__ == '__main__':
