@@ -199,11 +199,6 @@ class BaseTestWithLifting(TestCase):
         self.assertEqual(len(extracted), expect_count)
         cres = self.compile_ir(new_ir)
 
-        #with captured_stdout() as out:
-        #    cres.entry_point()
-
-        #self.assertEqual(out.getvalue(), expected_stdout)
-
     def compile_ir(self, the_ir, args=(), return_type=None):
         typingctx = self.typingctx
         targetctx = self.targetctx
