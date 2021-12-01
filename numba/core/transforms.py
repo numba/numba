@@ -566,6 +566,7 @@ def find_setupwiths(func_ir):
                         # record the jump target of this block belonging to this setup
                         # assumption: this block only has a single target
                         pop_block_targets = blocks[block].terminator.get_targets()
+                        assert len(pop_block_targets) == 1
                         setup_with_to_pop_blocks_map[setup_block].add(block)
                         # remove the block from blocks to be matched
                         sus_pops.remove(block)
