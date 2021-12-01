@@ -9,6 +9,7 @@
 #include <cmath>
 #include <iostream>
 #include <stdio.h>
+#include <stdint.h>
 #include "gufunc_scheduler.h"
 
 #ifdef _MSC_VER
@@ -91,10 +92,10 @@ public:
     void print() const {
         unsigned i;
         for(i = 0; i < start.size(); ++i) {
-            printf("%ld ", (int64)start[i]);
+            printf("%ld ", (int64_t)start[i]);
         }
         for(i = 0; i < end.size(); ++i) {
-            printf("%ld ", (int64)end[i]);
+            printf("%ld ", (int64_t)end[i]);
         }
     }
 };
