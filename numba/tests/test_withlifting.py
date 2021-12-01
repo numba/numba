@@ -275,8 +275,10 @@ class TestLiftCall(BaseTestWithLifting):
     @unittest.skipIf(PYVERSION <= (3, 8),
                      "unsupported on py3.8 and before")
     def test_liftcall5(self):
-        # checks that the for-with-break construct 
-        njit(liftcall5)()
+        # checks that the for-with-break construct is fine
+        # capture all stdout
+        with captured_stdout() as stream:
+            njit(liftcall5)()
 
 
 def expected_failure_for_list_arg(fn):
