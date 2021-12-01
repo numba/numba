@@ -11,29 +11,6 @@ from numba.core import errors, ir, ir_utils
 from numba.core.analysis import compute_use_defs, compute_cfg_from_blocks
 from numba.core.utils import PYVERSION
 
-def is_setup_with(stmt):
-    return isinstance(stmt, ir.EnterWith)
-
-
-def is_branch(stmt):
-    return isinstance(stmt, ir.Branch)
-
-
-def is_terminator(stmt):
-    return isinstance(stmt, ir.Terminator)
-
-
-def is_raise(stmt):
-    return isinstance(stmt, ir.Raise)
-
-
-def is_return(stmt):
-    return isinstance(stmt, ir.Return)
-
-
-def is_pop_block(stmt):
-    return isinstance(stmt, ir.PopBlock)
-
 
 _logger = logging.getLogger(__name__)
 
@@ -554,9 +531,9 @@ def find_setupwiths(func_ir):
         # statements so that we can iterate over them
         for label, block in blocks.items():
             for stmt in block.body:
-                if is_setup_with(stmt):
+                if ir_utils.is_setup_with(stmt):
                     sus_setups.add(label)
-                if is_pop_block(stmt):
+                if ir_utils.is_pop_block(stmt):
                     sus_pops.add(label)
 
         # now that we do have the statements, iterate through them in reverse
@@ -573,7 +550,7 @@ def find_setupwiths(func_ir):
                 # go through the body of the block, looking for statements
                 for stmt in blocks[block].body:
                     # raise detected before pop_block
-                    if is_raise(stmt):
+                    if ir_utils.is_raise(stmt):
                             raise errors.CompilerError(
                                 'unsupported control flow due to raise '
                                 'statements inside with block'
@@ -585,7 +562,7 @@ def find_setupwiths(func_ir):
                                 'statements inside with block'
                                 )
                     # if a pop_block, process it
-                    if is_pop_block(stmt) and block in sus_pops:
+                    if ir_utils.is_pop_block(stmt) and block in sus_pops:
                         # record the jump target of this block belonging to this setup
                         # assumption: this block only has a single target
                         pop_block_targets = blocks[block].terminator.get_targets()
@@ -597,7 +574,7 @@ def find_setupwiths(func_ir):
                     # if we are still here, by the block terminator,
                     # add all its targets to the to_visit stack, unless we
                     # have seen them already
-                    if is_terminator(stmt):
+                    if ir_utils.is_terminator(stmt):
                         for t in stmt.get_targets():
                             if t not in seen:
                                 to_visit.append(t)
@@ -625,7 +602,7 @@ def find_setupwiths(func_ir):
     # now we check for returns inside with:
     for (s, p) in withs:
         target_block = blocks[p]
-        if is_return(func_ir.blocks[
+        if ir_utils.is_return(func_ir.blocks[
                 target_block.terminator.get_targets()[0]].terminator):
             if PYVERSION == (3, 8):
                 # 3.8 needs to bail here, if this is the case, because the
@@ -664,7 +641,7 @@ def _rewrite_return(func_ir, target_block_label):
     found = False
     top_body, bottom_body = [], []
     for stmt in target_block.body:
-        if is_pop_block(stmt):
+        if ir_utils.is_pop_block(stmt):
             top_body.append(stmt)
             top_body.append(ir.Jump(target_block_successor_label,
                                              target_block.loc))
@@ -714,7 +691,7 @@ def consolidate_multi_exit_withs(withs: dict, blocks, func_ir):
         vs : set = withs[k]
         if len(vs) > 1:
             func_ir, common = _fix_multi_exit_blocks(
-                func_ir, vs, split_condition=is_pop_block,
+                func_ir, vs, split_condition=ir_utils.is_pop_block,
             )
             withs[k] = {common}
     return func_ir
