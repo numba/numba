@@ -2,9 +2,10 @@
 # "magictoken" is used for markers as beginning and ending of example text.
 
 import unittest
-from numba.tests.support import captured_stdout
+from numba.tests.support import captured_stdout, skip_parfors_unsupported
 
 
+@skip_parfors_unsupported
 class ChunksizeExamplesTest(unittest.TestCase):
 
     def test_chunksize_manual(self):
