@@ -81,6 +81,13 @@ class ByteCodeInst(object):
         return self.opcode in TERM_OPS
 
     def get_jump_target(self):
+        # With Python 3.10 the addressing of "bytecode" instructions has
+        # changed from using bytes to using 16-bit words instead. As a
+        # consequence the code to determine where a jump will lead had to be
+        # adapted.
+        # See also:
+        # https://bugs.python.org/issue26647
+        # https://bugs.python.org/issue27129
         assert self.is_jump
         if PYVERSION >= (3, 10):
             if self.opcode in JREL_OPS:
