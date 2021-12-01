@@ -587,15 +587,3 @@ class NestedArray(Array):
     @property
     def key(self):
         return self.dtype, self.shape
-
-    def copy(self, dtype=None, ndim=None, layout=None, readonly=None):
-        if dtype is None:
-            dtype = self.dtype
-        if ndim is None:
-            ndim = self.ndim
-        if layout is None:
-            layout = self.layout
-        if readonly is None:
-            readonly = not self.mutable
-        cls = type(self)
-        return cls(dtype=dtype, shape=self.shape)
