@@ -556,7 +556,7 @@ def find_setupwiths(func_ir):
                                 'statements inside with block'
                                 )
                     # special case 3.7, return before POP_BLOCK
-                    if PYVERSION < (3, 8) and is_return(stmt):
+                    if PYVERSION < (3, 8) and ir_utils.is_return(stmt):
                             raise errors.CompilerError(
                                 'unsupported control flow: due to return '
                                 'statements inside with block'
