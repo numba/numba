@@ -24,9 +24,10 @@ from llvmlite import ir
 
 from numba.np.numpy_support import as_dtype
 from numba.core import types, cgutils, config, errors
+from numba.core.typing import signature
 from numba.np.ufunc.wrappers import _wrapper_info
 from numba.np.ufunc import ufuncbuilder
-from numba.extending import overload
+from numba.extending import overload, intrinsic
 
 _IS_OSX = sys.platform.startswith('darwin')
 _IS_LINUX = sys.platform.startswith('linux')
@@ -680,6 +681,17 @@ def ol_get_thread_id():
     def impl():
         return _get_thread_id()
     return impl
+
+
+@intrinsic
+def _iget_thread_id(typingctx):
+    def codegen(context, builder, signature, args):
+        mod = builder.module
+        fnty = ir.FunctionType(cgutils.intp_t, [])
+        fn = cgutils.get_or_insert_function(mod, fnty, "get_thread_id")
+        #fn.return_value.add_attribute("noalias")
+        return builder.call(fn, [])
+    return signature(types.intp), codegen
 
 
 _DYLD_WORKAROUND_SET = 'NUMBA_DYLD_WORKAROUND' in os.environ

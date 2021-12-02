@@ -1182,7 +1182,7 @@ def _create_gufunc_for_parfor_body(
 
     if len(parfor_redarrs) > 0:
         gufunc_txt += "    " + gufunc_thread_id_var + " = "
-        gufunc_txt += "numba.np.ufunc.parallel._get_thread_id()\n"
+        gufunc_txt += "numba.np.ufunc.parallel._iget_thread_id()\n"
 
     # Add initialization of reduction variables
     for arr, var in zip(parfor_redarrs, parfor_redvars):
