@@ -32,7 +32,7 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 #error "TBB version is incompatible, 2021.1 through to 2021.5 required, i.e. 12010 <= TBB_INTERFACE_VERSION < 12060"
 #endif
 
-tbb::task_scheduler_handle tbb_tsh_attach()
+static tbb::task_scheduler_handle tbb_tsh_attach()
 {
 #if TBB_INTERFACE_VERSION >= 12060
     return tbb::attach();
@@ -41,7 +41,7 @@ tbb::task_scheduler_handle tbb_tsh_attach()
 #endif
 }
 
-void tbb_tsh_release(tbb::task_scheduler_handle& tsh)
+static void tbb_tsh_release(tbb::task_scheduler_handle& tsh)
 {
 #if TBB_INTERFACE_VERSION >= 12060
     tsh.release();
