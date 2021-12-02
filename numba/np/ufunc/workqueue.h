@@ -24,7 +24,7 @@ void launch_threads(int count);
 Automatically assigned to queues of different thread in a round robin fashion.
 */
 static
-void add_task(void *fn, void *args, void *dims, void *steps, void *data);
+void add_task(void *fn, void *args, void *dims, void *steps, void *data, int tid);
 
 /* Wait until all tasks are done */
 static
