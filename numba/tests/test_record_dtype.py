@@ -1502,7 +1502,7 @@ class TestNestedArrays(TestCase):
         # return the first item when passing a record
 
         nbarr = np.recarray(2, dtype=recordwitharray)
-        nbarr[0] = np.array([(1, (2,3))], dtype=recordwitharray)[0]
+        nbarr[0] = np.array([(1, (2, 3))], dtype=recordwitharray)[0]
         for arg in [nbarr, nbarr[0]]:
             ty = typeof(arg)
             pyfunc = recarray_getitem_return
@@ -1549,7 +1549,7 @@ class TestNestedArrays(TestCase):
         # Test getitem record AND array within record and returning it
 
         nbval = np.recarray(2, dtype=recordwitharray)
-        nbval[0] = np.array([(1, (2,3))], dtype=recordwitharray)[0]
+        nbval[0] = np.array([(1, (2, 3))], dtype=recordwitharray)[0]
         for pyfunc in [record_read_array0, record_read_array0_alt]:
             arr_expected = pyfunc(nbval)
             cfunc = self.get_cfunc(pyfunc, (typeof(nbval),))
@@ -1559,7 +1559,7 @@ class TestNestedArrays(TestCase):
     def test_slice_2d_array(self):
         # test slicing the nestedarray inside a record
         nbarr = np.recarray(2, dtype=recordwith2darray)
-        nbarr[0] = np.array([(1, ((1,2),(4,5),(2,3)))],
+        nbarr[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))],
                             dtype=recordwith2darray)[0]
 
         funcs = rec_getitem_field_slice_2d, recarray_getitem_field_slice_2d
@@ -1573,7 +1573,7 @@ class TestNestedArrays(TestCase):
     def test_shape(self):
         # test getting the shape of a nestedarray inside a record
         nbarr = np.recarray(2, dtype=recordwith2darray)
-        nbarr[0] = np.array([(1, ((1,2),(4,5),(2,3)))],
+        nbarr[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))],
                             dtype=recordwith2darray)[0]
 
         arg = nbarr[0]
@@ -1603,9 +1603,9 @@ class TestNestedArrays(TestCase):
 
     def test_broadcast_slice(self):
         nbarr = np.recarray(2, dtype=recordwith2darray)
-        nbarr[0] = np.array([(1, ((1,2),(4,5),(2,3)))],
+        nbarr[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))],
                             dtype=recordwith2darray)[0]
-        nbarr[1] = np.array([(10, ((10,20),(40,50),(20,30)))],
+        nbarr[1] = np.array([(10, ((10, 20), (40, 50), (20, 30)))],
                             dtype=recordwith2darray)[0]
         nbarr = np.broadcast_to(nbarr, (3, 2))
 
