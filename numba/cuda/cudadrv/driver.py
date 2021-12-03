@@ -2814,7 +2814,11 @@ class CudaPythonLinker(Linker):
         # rdc is needed to prevent device functions being optimized away
         opts = [arch, b'-rdc', b'true']
         err, = nvrtc.nvrtcCompileProgram(prog, len(opts), opts)
-        nvrtc_check(err)
+        compile_error = (err == nvrtc.nvrtcResult.NVRTC_ERROR_COMPILATION)
+
+        if not compile_error:
+            # Check for any other error
+            nvrtc_check(err)
 
         # Get log from compilation
         err, log_size = nvrtc.nvrtcGetProgramLogSize(prog)
@@ -2823,11 +2827,18 @@ class CudaPythonLinker(Linker):
         err, = nvrtc.nvrtcGetProgramLog(prog, log)
         nvrtc_check(err)
 
-        # If there's any content in the log, present it as a warning
+        # If the compile failed, provide the log in an exception
+        if compile_error:
+            msg = (f'NVRTC Compilation failure compiling {name}:\n\n'
+                   f'{log.decode()}')
+            raise LinkerError(msg)
+
+        # Otherwise, if there's any content in the log, present it as a warning
         if log_size > 1:
             msg = f"NVRTC log messages compiling {name}:\n\n{log.decode()}"
             warnings.warn(msg)
 
+        # Get the PTX and link it using the normal linker mechanism
         err, ptx_len = nvrtc.nvrtcGetPTXSize(prog)
         nvrtc_check(err)
         ptx = b' ' * ptx_len

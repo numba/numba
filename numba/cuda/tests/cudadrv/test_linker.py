@@ -125,13 +125,34 @@ class TestLinker(CUDATestCase):
         link = os.path.join(os.path.dirname(__file__), 'data', 'warn.cu')
 
         with warnings.catch_warnings(record=True) as w:
-            @cuda.jit('void(int32[::1], int32[::1])', link=[link])
-            def kernel(r, x):
-                r[0] = bar(x[0])
+            @cuda.jit('void(int32)', link=[link])
+            def kernel(x):
+                bar(x)
 
         self.assertEqual(len(w), 1, 'Expected warnings from NVRTC')
+        # Check the warning refers to the log messages
         self.assertIn('NVRTC log messages', str(w[0].message))
+        # Check the message pertaining to the unused variable is provided
         self.assertIn('declared but never referenced', str(w[0].message))
+
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
+    def test_linking_cu_error(self):
+        bar = cuda.declare_device('bar', 'int32(int32)')
+
+        link = os.path.join(os.path.dirname(__file__), 'data', 'error.cu')
+
+        with self.assertRaises(LinkerError) as e:
+            @cuda.jit('void(int32)', link=[link])
+            def kernel(x):
+                bar(x)
+
+        msg = e.exception.args[0]
+        # Check the linker error message refers to the NVRTC compile
+        self.assertIn('NVRTC Compilation failure', msg)
+        # Check the expected error in the CUDA source is reported
+        self.assertIn('identifier "SYNTAX" is undefined', msg)
+        # Check the filename is reported correctly
+        self.assertIn('in the compilation of "error.cu"', msg)
 
     def test_try_to_link_nonexistent(self):
         with self.assertRaises(LinkerError) as e:
