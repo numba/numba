@@ -1549,7 +1549,7 @@ class TestNestedArrays(TestCase):
         # Test getitem record AND array within record and returning it
 
         nbval = np.recarray(2, dtype=recordwitharray)
-        nbval[0] = np.array([(1, (2,3))], dtype=recordwitharray)[0]
+        nbval[0] = np.array([(1, (2, 3))], dtype=recordwitharray)[0]
         for pyfunc in [record_read_array0, record_read_array0_alt]:
             arr_expected = pyfunc(nbval)
             cfunc = self.get_cfunc(pyfunc, (typeof(nbval),))
