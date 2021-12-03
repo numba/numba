@@ -406,7 +406,7 @@ class TestNestedArrays(CUDATestCase):
     def test_getitem_idx(self):
         # Test __getitem__ with numerical index
 
-        # This test returning a record when passing an array and
+        # This tests returning a record when passing an array and
         # return the first item when passing a record
         nbarr = np.recarray(2, dtype=recordwitharray)
         nbarr[0] = np.array([(1, (2,3))], dtype=recordwitharray)[0]
