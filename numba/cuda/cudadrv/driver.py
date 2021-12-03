@@ -2829,6 +2829,8 @@ class CudaPythonLinker(Linker):
 
         # If the compile failed, provide the log in an exception
         if compile_error:
+            err, = nvrtc.nvrtcDestroyProgram(prog)
+            nvrtc_check(err)
             msg = (f'NVRTC Compilation failure compiling {name}:\n\n'
                    f'{log.decode()}')
             raise LinkerError(msg)
@@ -2847,6 +2849,9 @@ class CudaPythonLinker(Linker):
 
         ptx_name = name[:-2] + ".ptx"
         self.add_ptx(ptx, ptx_name)
+
+        err, = nvrtc.nvrtcDestroyProgram(prog)
+        nvrtc_check(err)
 
     def add_file(self, path, kind):
         pathbuf = path.encode("utf8")
