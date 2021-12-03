@@ -39,6 +39,7 @@ from numba.core.ir_utils import (
     fixup_var_define_in_scope,
     transfer_scope,
     find_max_label,
+    get_global_func_typ,
 )
 from numba.core.analysis import compute_use_defs, compute_live_map, compute_dead_maps, compute_cfg_from_blocks
 from numba.core.typing import signature
@@ -64,6 +65,7 @@ def _lower_parfor_parallel(lowerer, parfor):
     ensure_parallel_support()
     typingctx = lowerer.context.typing_context
     targetctx = lowerer.context
+    builder = lowerer.builder
     # We copy the typemap here because for race condition variable we'll
     # update their type to array so they can be updated by the gufunc.
     orig_typemap = lowerer.fndesc.typemap
@@ -120,10 +122,22 @@ def _lower_parfor_parallel(lowerer, parfor):
     redarrs = {}
     if nredvars > 0:
         # reduction arrays outer dimension equal to thread count
-        thread_count = get_thread_count()
         scope = parfor.init_block.scope
         loc = parfor.init_block.loc
         pfbdr = ParforLoweringBuilder(lowerer=lowerer, scope=scope, loc=loc)
+
+        # Get the Numba internal function to call to get the thread count.
+        get_num_threads = pfbdr.bind_global_function(
+            fobj=numba.get_num_threads,
+            ftype=get_global_func_typ(numba.get_num_threads),
+            args=()
+        )
+
+        # Insert the call to assign the thread count to a variable.
+        num_threads_var = pfbdr.assign(
+            rhs=pfbdr.call(get_num_threads, args=[]),
+            typ=types.intp,
+            name="num_threads_var")
 
         # For each reduction variable...
         for i in range(nredvars):
@@ -142,7 +156,9 @@ def _lower_parfor_parallel(lowerer, parfor):
                     redvar_typ,
                     redarrvar_typ,
                     reddtype,
-                    types.DType(reddtype)
+                    types.DType(reddtype),
+                    num_threads_var,
+                    type(num_threads_var)
                 )
 
             # If this is reduction over an array,
@@ -165,11 +181,11 @@ def _lower_parfor_parallel(lowerer, parfor):
             )
 
             # Create var for outer dimension size of reduction array equal to number of threads.
-            num_threads_var = pfbdr.make_const_variable(
-                cval=thread_count,
-                typ=types.intp,
-                name='num_threads',
-            )
+            #num_threads_var = pfbdr.make_const_variable(
+            #    cval=thread_count,
+            #    typ=types.intp,
+            #    name='num_threads',
+            #)
 
             size_var_list = [num_threads_var]
 
@@ -269,12 +285,33 @@ def _lower_parfor_parallel(lowerer, parfor):
                     lowerer.lower_inst(res_print)
 
 
-            # For each thread, initialize the per-worker reduction array to the current reduction array value.
-            for j in range(thread_count):
-                index_var = pfbdr.make_const_variable(
-                    cval=j, typ=types.uintp, name="index_var",
-                )
-                pfbdr.setitem(obj=redarr_var, index=index_var, val=redtoset)
+            # For each thread, initialize the per-worker reduction array to
+            # the current reduction array value.
+
+            # Get the Numba type of the variable that holds the thread count.
+            num_thread_type = typemap[num_threads_var.name]
+            # Get the LLVM type of the thread count variable.
+            ntllvm_type = targetctx.get_value_type(num_thread_type)
+            # Create a LLVM variable to hold the loop index.
+            alloc_loop_var = cgutils.alloca_once(builder, ntllvm_type)
+            # Associate this LLVM variable to a Numba IR variable so that
+            # we can use setitem IR builder.
+            # Create a Numba IR variable.
+            numba_ir_loop_index_var = ir.Var(scope,
+                                             mk_unique_var("loop_index"), loc)
+            # Give that variable the right type.
+            typemap[numba_ir_loop_index_var.name] = num_thread_type
+            # Associate this Numba variable to the LLVm variable in the
+            # lowerer's varmap.
+            lowerer.varmap[numba_ir_loop_index_var.name] = alloc_loop_var
+            # Insert a loop into the outputed LLVM that goes from 0 to
+            # the current thread count.
+            with cgutils.for_range(builder, lowerer.loadvar(num_threads_var.name), intp=ntllvm_type) as loop:
+                # Store the loop index into the alloca'd LLVM loop index variable.
+                builder.store(loop.index, alloc_loop_var)
+                # Initialize one element of the reduction array using the Numba
+                # IR variable associated with this loop's index.
+                pfbdr.setitem(obj=redarr_var, index=numba_ir_loop_index_var, val=redtoset)
 
     # compile parfor body as a separate function to be used with GUFuncWrapper
     flags = parfor.flags.copy()
@@ -342,7 +379,6 @@ def _lower_parfor_parallel(lowerer, parfor):
 
     if nredvars > 0:
         # Perform the final reduction across the reduction array created above.
-        thread_count = get_thread_count()
         scope = parfor.init_block.scope
         loc = parfor.init_block.loc
 
@@ -371,16 +407,19 @@ def _lower_parfor_parallel(lowerer, parfor):
                 print("res_print", res_print)
                 lowerer.lower_inst(res_print)
 
-            # For each element in the reduction array created above.
-            for j in range(thread_count):
-                # Create index var to access that element.
-                index_var = pfbdr.make_const_variable(
-                    cval=j, typ=types.uintp, name="index_var",
-                )
+            # For each element in the reduction array created above,
+            # apply reduction operator.
+            # This for_range inserts a loop from 0 to the thread count.
+            with cgutils.for_range(builder, lowerer.loadvar(num_threads_var.name), intp=ntllvm_type) as loop:
+                # This will put the llvm loop.index value into the alloca'd llvm variable
+                # that corresponds to the IR variable numba_ir_loop_index_var.
+                # This reuses alloc_loop_var created above to initialize
+                # the reduction array.
+                builder.store(loop.index, alloc_loop_var)
 
                 # Read that element from the array into oneelem.
                 oneelemgetitem = pfbdr.getitem(
-                    obj=redarr, index=index_var, typ=redvar_typ,
+                    obj=redarr, index=numba_ir_loop_index_var, typ=redvar_typ,
                 )
                 oneelem = pfbdr.assign(
                     rhs=oneelemgetitem,
@@ -402,11 +441,15 @@ def _lower_parfor_parallel(lowerer, parfor):
                         name="str_const",
                     )
 
-                    res_print = ir.Print(args=[lhs, index_var, oneelem, init_var, ir.Var(scope, name, loc)],
+                    res_print = ir.Print(args=[lhs,
+                                               numba_ir_loop_index_var,
+                                               oneelem,
+                                               init_var,
+                                               ir.Var(scope, name, loc)],
                                          vararg=None, loc=loc)
                     lowerer.fndesc.calltypes[res_print] = signature(types.none,
                                                              typemap[lhs.name],
-                                                             typemap[index_var.name],
+                                                             typemap[numba_ir_loop_index_var.name],
                                                              typemap[oneelem.name],
                                                              typemap[init_var.name],
                                                              typemap[name])
@@ -491,21 +534,25 @@ def _lower_parfor_parallel(lowerer, parfor):
                             name="str_const",
                         )
 
-                        res_print = ir.Print(args=[lhs, index_var, oneelem, init_var, ir.Var(scope, name, loc)],
+                        res_print = ir.Print(args=[lhs,
+                                                   numba_ir_loop_index_var,
+                                                   oneelem,
+                                                   init_var,
+                                                   ir.Var(scope, name, loc)],
                                              vararg=None, loc=loc)
                         lowerer.fndesc.calltypes[res_print] = signature(types.none,
                                                                  typemap[lhs.name],
-                                                                 typemap[index_var.name],
+                                                                 typemap[numba_ir_loop_index_var.name],
                                                                  typemap[oneelem.name],
                                                                  typemap[init_var.name],
                                                                  typemap[name])
                         print("res_print2", res_print)
                         lowerer.lower_inst(res_print)
 
-
         # Cleanup reduction variable
         for v in redarrs.values():
             lowerer.lower_inst(ir.Del(v.name, loc=loc))
+
     # Restore the original typemap of the function that was replaced temporarily at the
     # Beginning of this function.
     lowerer.fndesc.typemap = orig_typemap
@@ -1454,7 +1501,6 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     builder = lowerer.builder
 
     from numba.np.ufunc.parallel import (build_gufunc_wrapper,
-                           get_thread_count,
                            _launch_threads)
 
     if config.DEBUG_ARRAY_OPT:
