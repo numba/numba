@@ -66,13 +66,18 @@ class TestLinker(CUDATestCase):
         linker = Linker.new()
         del linker
 
-    def test_linking(self):
+    def _test_linking(self, eager=False):
         global bar  # must be a global; other it is recognized as a freevar
         bar = cuda.declare_device('bar', 'int32(int32)')
 
         link = os.path.join(os.path.dirname(__file__), 'data', 'jitlink.ptx')
 
-        @cuda.jit('void(int32[:], int32[:])', link=[link])
+        if eager:
+            args = ['void(int32[:], int32[:])']
+        else:
+            args = []
+
+        @cuda.jit(*args, link=[link])
         def foo(x, y):
             i = cuda.grid(1)
             x[i] += bar(y[i])
@@ -83,6 +88,12 @@ class TestLinker(CUDATestCase):
         foo[1, 1](A, B)
 
         self.assertTrue(A[0] == 123 + 2 * 321)
+
+    def test_linking_lazy_compile(self):
+        self._test_linking(eager=False)
+
+    def test_linking_eager_compile(self):
+        self._test_linking(eager=True)
 
     def test_try_to_link_nonexistent(self):
         with self.assertRaises(LinkerError) as e:
