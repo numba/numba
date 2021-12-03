@@ -1,7 +1,8 @@
 import os.path
 import numpy as np
+import warnings
 from numba.cuda.testing import unittest
-from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import skip_on_cudasim, skip_unless_cuda_python
 from numba.cuda.testing import CUDATestCase
 from numba.cuda.cudadrv.driver import Linker, LinkerError
 from numba.cuda import require_context
@@ -94,6 +95,43 @@ class TestLinker(CUDATestCase):
 
     def test_linking_eager_compile(self):
         self._test_linking(eager=True)
+
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
+    def test_linking_cu(self):
+        bar = cuda.declare_device('bar', 'int32(int32)')
+
+        link = os.path.join(os.path.dirname(__file__), 'data', 'jitlink.cu')
+
+        @cuda.jit(link=[link])
+        def kernel(r, x):
+            i = cuda.grid(1)
+
+            if i < len(r):
+                r[i] = bar(x[i])
+
+        x = np.arange(10, dtype=np.int32)
+        r = np.zeros_like(x)
+
+        kernel[1, 32](r, x)
+
+        # Matches the operation of bar() in jitlink.cu
+        expected = x * 2
+        np.testing.assert_array_equal(r, expected)
+
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
+    def test_linking_cu_log_warning(self):
+        bar = cuda.declare_device('bar', 'int32(int32)')
+
+        link = os.path.join(os.path.dirname(__file__), 'data', 'warn.cu')
+
+        with warnings.catch_warnings(record=True) as w:
+            @cuda.jit('void(int32[::1], int32[::1])', link=[link])
+            def kernel(r, x):
+                r[0] = bar(x[0])
+
+        self.assertEqual(len(w), 1, 'Expected warnings from NVRTC')
+        self.assertIn('NVRTC log messages', str(w[0].message))
+        self.assertIn('declared but never referenced', str(w[0].message))
 
     def test_try_to_link_nonexistent(self):
         with self.assertRaises(LinkerError) as e:

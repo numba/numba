@@ -133,6 +133,10 @@ def xfail_with_cuda_python(fn):
         return fn
 
 
+def skip_unless_cuda_python(reason):
+    return unittest.skipIf(not driver.USE_NV_BINDING, reason)
+
+
 def cudadevrt_missing():
     if config.ENABLE_CUDASIM:
         return False

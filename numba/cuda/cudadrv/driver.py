@@ -40,7 +40,7 @@ from numba.cuda.cudadrv import enums, drvapi, _extras
 USE_NV_BINDING = config.CUDA_USE_NVIDIA_BINDING
 
 if USE_NV_BINDING:
-    from cuda import cuda as binding
+    from cuda import cuda as binding, nvrtc
     # There is no definition of the default stream in the Nvidia bindings (nor
     # is there at the C/C++ level), so we define it here so we don't need to
     # use a magic number 0 in places where we want the default stream.
@@ -2603,14 +2603,26 @@ class Linker(metaclass=ABCMeta):
         """Add PTX source in a string to the link"""
 
     @abstractmethod
+    def add_cu(self, cu, name):
+        """Add CUDA source in a string to the link"""
+
+    @abstractmethod
     def add_file(self, path, kind):
         """Add code from a file to the link"""
+
+    def add_cu_file(self, path):
+        with open(path, 'rb') as f:
+            cu = f.read()
+        self.add_cu(cu, os.path.basename(path))
 
     def add_file_guess_ext(self, path):
         """Add a file to the link, guessing its type from its extension."""
         ext = path.rsplit('.', 1)[1]
-        kind = FILE_EXTENSION_MAP[ext]
-        self.add_file(path, kind)
+        if ext == 'cu':
+            self.add_cu_file(path)
+        else:
+            kind = FILE_EXTENSION_MAP[ext]
+            self.add_file(path, kind)
 
     @abstractmethod
     def complete(self):
@@ -2697,6 +2709,10 @@ class CtypesLinker(Linker):
                 msg = "%s\n%s" % (e, self.error_log)
             raise LinkerError(msg)
 
+    def add_cu(self, path, name):
+        raise NotImplementedError("Linking CUDA source files is not supported "
+                                  "with the ctypes binding. ")
+
     def complete(self):
         cubin = c_void_p(0)
         size = c_size_t(0)
@@ -2710,6 +2726,17 @@ class CtypesLinker(Linker):
         assert size > 0, 'linker returned a zero sized cubin'
         del self._keep_alive[:]
         return cubin, size
+
+
+def nvrtc_check(err):
+    if isinstance(err, binding.CUresult):
+        if err != binding.CUresult.CUDA_SUCCESS:
+            raise RuntimeError('CUDA Error calling NVRTC: {}'.format(err))
+    elif isinstance(err, nvrtc.nvrtcResult):
+        if err != nvrtc.nvrtcResult.NVRTC_SUCCESS:
+            raise RuntimeError('NVRTC Error: {}'.format(err))
+    else:
+        raise RuntimeError('Unknown error type: {}'.format(err))
 
 
 class CudaPythonLinker(Linker):
@@ -2773,6 +2800,42 @@ class CudaPythonLinker(Linker):
                                  namebuf, 0, [], [])
         except CudaAPIError as e:
             raise LinkerError("%s\n%s" % (e, self.error_log))
+
+    def add_cu(self, cu, name):
+        err, prog = nvrtc.nvrtcCreateProgram(cu, name.encode(), 0, [], [])
+        nvrtc_check(err)
+
+        with driver.get_active_context() as ac:
+            dev = driver.get_device(ac.devnum)
+            major, minor = dev.compute_capability
+
+        arch = bytes(f'--gpu-architecture=compute_{major}{minor}', 'ascii')
+
+        # rdc is needed to prevent device functions being optimized away
+        opts = [arch, b'-rdc', b'true']
+        err, = nvrtc.nvrtcCompileProgram(prog, len(opts), opts)
+        nvrtc_check(err)
+
+        # Get log from compilation
+        err, log_size = nvrtc.nvrtcGetProgramLogSize(prog)
+        nvrtc_check(err)
+        log = b' ' * log_size
+        err, = nvrtc.nvrtcGetProgramLog(prog, log)
+        nvrtc_check(err)
+
+        # If there's any content in the log, present it as a warning
+        if log_size > 1:
+            msg = f"NVRTC log messages compiling {name}:\n\n{log.decode()}"
+            warnings.warn(msg)
+
+        err, ptx_len = nvrtc.nvrtcGetPTXSize(prog)
+        nvrtc_check(err)
+        ptx = b' ' * ptx_len
+        err, = nvrtc.nvrtcGetPTX(prog, ptx)
+        nvrtc_check(err)
+
+        ptx_name = name[:-2] + ".ptx"
+        self.add_ptx(ptx, ptx_name)
 
     def add_file(self, path, kind):
         pathbuf = path.encode("utf8")
