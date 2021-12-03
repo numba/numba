@@ -1502,7 +1502,7 @@ class TestNestedArrays(TestCase):
         # return the first item when passing a record
 
         nbarr = np.recarray(2, dtype=recordwitharray)
-        nbarr[0] = np.array([(1, (2,3))], dtype=recordwitharray)[0]
+        nbarr[0] = np.array([(1, (2, 3))], dtype=recordwitharray)[0]
         for arg in [nbarr, nbarr[0]]:
             ty = typeof(arg)
             pyfunc = recarray_getitem_return
