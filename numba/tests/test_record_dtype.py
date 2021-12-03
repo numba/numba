@@ -1603,9 +1603,9 @@ class TestNestedArrays(TestCase):
 
     def test_broadcast_slice(self):
         nbarr = np.recarray(2, dtype=recordwith2darray)
-        nbarr[0] = np.array([(1, ((1,2),(4,5),(2,3)))],
+        nbarr[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))],
                             dtype=recordwith2darray)[0]
-        nbarr[1] = np.array([(10, ((10,20),(40,50),(20,30)))],
+        nbarr[1] = np.array([(10, ((10, 20), (40, 50), (20, 30)))],
                             dtype=recordwith2darray)[0]
         nbarr = np.broadcast_to(nbarr, (3, 2))
 
