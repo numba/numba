@@ -2521,7 +2521,7 @@ def array_record_getattr(context, builder, typ, value, attr):
         shape += [context.get_constant(types.intp, i) for i in dtype.shape]
         populate_array(rary,
                        data=newdataptr,
-                       shape=cgutils.pack_array(builder, shape),
+                       shape=shape,
                        strides=strides,
                        itemsize=context.get_constant(types.intp, datasize),
                        meminfo=array.meminfo,
