@@ -1573,7 +1573,7 @@ class TestNestedArrays(TestCase):
     def test_shape(self):
         # test getting the shape of a nestedarray inside a record
         nbarr = np.recarray(2, dtype=recordwith2darray)
-        nbarr[0] = np.array([(1, ((1,2),(4,5),(2,3)))],
+        nbarr[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))],
                             dtype=recordwith2darray)[0]
 
         arg = nbarr[0]
