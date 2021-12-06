@@ -159,7 +159,7 @@ def record_read_2d_array10(ary):
 
 
 def record_read_2d_array01(ary):
-    return ary.j[0,1]
+    return ary.j[0, 1]
 
 
 class TestRecordDtype(CUDATestCase):
