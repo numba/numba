@@ -375,6 +375,7 @@ class TestCudaIntrinsic(CUDATestCase):
         else:
             self.skipTest("Test requires toolkit >= 7.0 and SM >= 5.3")
 
+    @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_hadd_ptx(self):
         if self.compute_supported(5,3) and self.toolkit_supported(7,0):
             args = (f2[:], f2, f2)
@@ -408,6 +409,7 @@ class TestCudaIntrinsic(CUDATestCase):
         else:
             self.skipTest("Test requires toolkit >= 7.0 and SM >= 5.3")
 
+    @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_hfma_ptx(self):
         if self.compute_supported(5,3) and self.toolkit_supported(7,0):
             args = (f2[:], f2, f2, f2)
@@ -439,6 +441,7 @@ class TestCudaIntrinsic(CUDATestCase):
         else:
             self.skipTest("Test requires toolkit >= 7.0 and SM >= 5.3")
 
+    @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_hsub_ptx(self):
         if self.compute_supported(5,3) and self.toolkit_supported(7,0):
             args = (f2[:], f2, f2)
@@ -470,6 +473,7 @@ class TestCudaIntrinsic(CUDATestCase):
         else:
             self.skipTest("Test requires toolkit >= 7.0 and SM >= 5.3")
 
+    @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_hmul_ptx(self):
         if self.compute_supported(5,3) and self.toolkit_supported(7,0):
             args = (f2[:], f2, f2)
@@ -499,6 +503,7 @@ class TestCudaIntrinsic(CUDATestCase):
         else:
             self.skipTest("Test requires toolkit >= 9.0 and SM >= 5.3")
 
+    @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_hneg_ptx(self):
         if self.compute_supported(5,3) and self.toolkit_supported(9,0):
             args = (f2[:], f2)
@@ -528,6 +533,7 @@ class TestCudaIntrinsic(CUDATestCase):
         else:
             self.skipTest("Test requires toolkit >= 10.2 and SM >= 5.3")
 
+    @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_habs_ptx(self):
         if self.compute_supported(5,3) and self.toolkit_supported(10,2):
             args = (f2[:], f2)
