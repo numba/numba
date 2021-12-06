@@ -408,17 +408,6 @@ class _EnvReloader(object):
         CUDA_PER_THREAD_DEFAULT_STREAM = _readenv(
             "NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM", int, 0)
 
-        # Compute contiguity of device arrays using the relaxed strides
-        # checking algorithm.
-        NPY_RELAXED_STRIDES_CHECKING = _readenv(
-            "NUMBA_NPY_RELAXED_STRIDES_CHECKING",
-            int, 1)
-
-        # HSA Configs
-
-        # Disable HSA support
-        DISABLE_HSA = _readenv("NUMBA_DISABLE_HSA", int, 0)
-
         # The default number of threads to use.
         NUMBA_DEFAULT_NUM_THREADS = max(
             1,
