@@ -225,7 +225,7 @@ def _has_multiple_loop_exits(cfg, lpinfo):
 
     # Eliminate blocks that have other blocks as post-dominators.
     processed = set()
-    remain = exits - processed
+    remain = exits
     while remain:
         node = remain.pop()
         processed.add(node)
@@ -774,7 +774,7 @@ def _fix_multi_exit_blocks(func_ir, exit_nodes, *, split_condition=None):
     func_ir :
         The FunctionIR. Mutated inplace.
     exit_nodes :
-        A sequence of block keys.
+        The original exit nodes. A sequence of block keys.
     split_condition : callable or None
         If not None, it is a callable with the signature
         `split_condition(statement)` that determines if the `statement` is the
