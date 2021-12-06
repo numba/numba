@@ -1766,7 +1766,7 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
                 l = ['a', 1, 2j]
             else:
                 l = ['b', 2]
-            return l[0]
+            return l[0], l[1], l[0], l[1] # defeat py310 inliner
 
         with self.assertRaises(errors.TypingError) as raises:
             foo(100)

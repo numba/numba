@@ -246,8 +246,6 @@ class TestBranchPrune(TestBranchPruneBase, SerialMixin):
             x_is_none_work = False
             if x is None:
                 x_is_none_work = True
-            else:
-                pass  # force the True branch exit to be on backbone
 
             if x_is_none_work:
                 y = 10
