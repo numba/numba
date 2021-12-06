@@ -225,7 +225,7 @@ def _has_multiple_loop_exits(cfg, lpinfo):
 
     # Eliminate blocks that have other blocks as post-dominators.
     processed = set()
-    remain = exits
+    remain = set(exits) # create a copy to work on
     while remain:
         node = remain.pop()
         processed.add(node)
