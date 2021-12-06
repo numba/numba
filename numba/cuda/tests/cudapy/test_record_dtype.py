@@ -151,7 +151,7 @@ def record_read_whole_array(ary):
 
 
 def record_read_2d_array00(ary):
-    return ary.j[0,0]
+    return ary.j[0, 0]
 
 
 def record_read_2d_array10(ary):
