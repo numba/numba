@@ -279,6 +279,9 @@ class TestLiftCall(BaseTestWithLifting):
         # capture all stdout
         with captured_stdout() as stream:
             njit(liftcall5)()
+        # A single 'A' character will be printed
+        self.assertIn('A', str(stream.getvalue()))
+
 
 
 def expected_failure_for_list_arg(fn):
