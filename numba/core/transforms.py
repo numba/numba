@@ -585,7 +585,7 @@ def find_setupwiths(func_ir):
     # containing SETUP_WITH statements to a set of indices of blocks containing
     # POP_BLOCK statements
     with_ranges_dict = find_ranges(blocks)
-    # rewrite the CFG in case there are multipel POP_BLOCK statements for one
+    # rewrite the CFG in case there are multiple POP_BLOCK statements for one
     # with
     func_ir = consolidate_multi_exit_withs(with_ranges_dict, blocks, func_ir)
 
@@ -618,10 +618,10 @@ def find_setupwiths(func_ir):
 
     # now we need to rewrite the tuple such that we have SETUP_WITH matching the
     # successor of the block that contains the POP_BLOCK.
-    with_ranges_tuple = [(s ,func_ir.blocks[p].terminator.get_targets()[0])
+    with_ranges_tuple = [(s, func_ir.blocks[p].terminator.get_targets()[0])
              for (s, p) in with_ranges_tuple]
 
-    # finally we check for nested with statemenst and reject them
+    # finally we check for nested with statements and reject them
     with_ranges_tuple = _eliminate_nested_withs(with_ranges_tuple)
 
     return with_ranges_tuple, func_ir
@@ -779,7 +779,7 @@ def _fix_multi_exit_blocks(func_ir, exit_nodes, *, split_condition=None):
         If not None, it is a callable with the signature
         `split_condition(statement)` that determines if the `statement` is the
         splitting point (e.g. `POP_BLOCK`) in an exit node.
-        If it's None, the exit node is not splitted.
+        If it's None, the exit node is not split.
     """
 
     # Convert the following:

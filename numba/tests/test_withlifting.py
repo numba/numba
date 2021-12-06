@@ -139,10 +139,11 @@ def liftcall4():
 def liftcall5():
     for i in range(10):
         with call_context:
+            print(i)
             if i == 5:
                 print("A")
                 break
-    return 10
+    return i
 
 
 def lift_undefiend():
@@ -198,6 +199,11 @@ class BaseTestWithLifting(TestCase):
         )
         self.assertEqual(len(extracted), expect_count)
         cres = self.compile_ir(new_ir)
+
+        with captured_stdout() as out:
+            cres.entry_point()
+
+        self.assertEqual(out.getvalue(), expected_stdout)
 
     def compile_ir(self, the_ir, args=(), return_type=None):
         typingctx = self.typingctx
@@ -275,13 +281,9 @@ class TestLiftCall(BaseTestWithLifting):
     @unittest.skipIf(PYVERSION <= (3, 8),
                      "unsupported on py3.8 and before")
     def test_liftcall5(self):
-        # checks that the for-with-break construct is fine
-        # capture all stdout
-        with captured_stdout() as stream:
-            njit(liftcall5)()
-        # A single 'A' character will be printed
-        self.assertIn('A', str(stream.getvalue()))
-
+        self.check_extracted_with(liftcall5, expect_count=1,
+                                  expected_stdout="0\n1\n2\n3\n4\n5\nA\n")
+        self.check_same_semantic(liftcall5)
 
 
 def expected_failure_for_list_arg(fn):
