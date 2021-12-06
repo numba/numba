@@ -581,25 +581,29 @@ def find_setupwiths(func_ir):
         return setup_with_to_pop_blocks_map
 
     blocks = func_ir.blocks
-    # initial find
-    withs = find_ranges(blocks)
-    func_ir = consolidate_multi_exit_withs(withs, blocks, func_ir)
+    # initial find, will return a dictionary, mapping indices of blocks
+    # containing SETUP_WITH statements to a set of indices of blocks containing
+    # POP_BLOCK statements
+    with_ranges_dict = find_ranges(blocks)
+    # rewrite the CFG in case there are multipel POP_BLOCK statements for one
+    # with
+    func_ir = consolidate_multi_exit_withs(with_ranges_dict, blocks, func_ir)
 
     # here we need to turn the withs back into a list of tuples so that the
     # rest of the code can cope
-    withs = [(s, list(p)[0])
-             for (s, p) in withs.items()]
+    with_ranges_tuple = [(s, list(p)[0])
+             for (s, p) in with_ranges_dict.items()]
 
-    # check for POP_BLOCKS with multiple outgoing edges
-    for (_, p) in withs:
+    # check for POP_BLOCKS with multiple outgoing edges and reject
+    for (_, p) in with_ranges_tuple:
         targets = blocks[p].terminator.get_targets()
         if len(targets) != 1:
             raise errors.CompilerError(
                 "unsupported control flow: with-context contains branches "
                 "(i.e. break/return/raise) that can leave the block "
             )
-    # now we check for returns inside with:
-    for (_, p) in withs:
+    # now we check for returns inside with and reject them
+    for (_, p) in with_ranges_tuple:
         target_block = blocks[p]
         if ir_utils.is_return(func_ir.blocks[
                 target_block.terminator.get_targets()[0]].terminator):
@@ -614,13 +618,13 @@ def find_setupwiths(func_ir):
 
     # now we need to rewrite the tuple such that we have SETUP_WITH matching the
     # successor of the block that contains the POP_BLOCK.
-    withs = [(s ,func_ir.blocks[p].terminator.get_targets()[0])
-             for (s, p) in withs]
+    with_ranges_tuple = [(s ,func_ir.blocks[p].terminator.get_targets()[0])
+             for (s, p) in with_ranges_tuple]
 
-    # finally we eliminate any nested withs
-    withs = _eliminate_nested_withs(withs)
+    # finally we check for nested with statemenst and reject them
+    with_ranges_tuple = _eliminate_nested_withs(with_ranges_tuple)
 
-    return withs, func_ir
+    return with_ranges_tuple, func_ir
 
 
 def _rewrite_return(func_ir, target_block_label):
