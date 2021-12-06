@@ -778,7 +778,8 @@ def _fix_multi_exit_blocks(func_ir, exit_nodes, *, split_condition=None):
     split_condition : callable or None
         If not None, it is a callable with the signature
         `split_condition(statement)` that determines if the `statement` is the
-        splitting point (e.g. `POP_BLOCK`) in a exit node.
+        splitting point (e.g. `POP_BLOCK`) in an exit node.
+        If it's None, the exit node is not splitted.
     """
 
     # Convert the following:
@@ -823,12 +824,12 @@ def _fix_multi_exit_blocks(func_ir, exit_nodes, *, split_condition=None):
     # Getting the maximum block label
     max_label = max(func_ir.blocks) + 1
     # Define the new common block for the new exit.
-    common_block = ir.Block(any_blk.scope, loc=any_blk.loc)
+    common_block = ir.Block(any_blk.scope, loc=ir.unknown_loc)
     common_label = max_label
     max_label += 1
     blocks[common_label] = common_block
     # Define the new block after the exit.
-    post_block = ir.Block(any_blk.scope, loc=any_blk.loc)
+    post_block = ir.Block(any_blk.scope, loc=ir.unknown_loc)
     post_label = max_label
     max_label += 1
     blocks[post_label] = post_block
@@ -861,7 +862,7 @@ def _fix_multi_exit_blocks(func_ir, exit_nodes, *, split_condition=None):
         )
         # Replace terminator with a jump to the common block
         assert not blk.is_terminated
-        blk.body.append(ir.Jump(common_label, loc=blk.loc))
+        blk.body.append(ir.Jump(common_label, loc=ir.unknown_loc))
 
     if split_condition is not None:
         # Move the splitting statement to the common block
@@ -877,6 +878,7 @@ def _fix_multi_exit_blocks(func_ir, exit_nodes, *, split_condition=None):
         max_label += 1
 
     switch_block = post_block
+    loc = ir.unknown_loc
     for i, remain in enumerate(remainings):
         match_expr = scope.redefine("$cp_check", loc=loc)
         match_rhs = scope.redefine("$cp_rhs", loc=loc)
