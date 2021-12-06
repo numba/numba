@@ -65,10 +65,10 @@ static void reset_after_fork(void);
 static void
 add_task_internal(void *fn, void *args, void *dims, void *steps, void *data, int tid);
 
+static pthread_key_t tidkey;
+
 /* PThread */
 #ifdef NUMBA_PTHREAD
-
-static pthread_key_t tidkey;
 
 typedef struct
 {
@@ -233,7 +233,7 @@ numba_new_thread(void *worker, void *arg)
 static int
 get_thread_id(void)
 {
-    return (int)pthread_getspecific(tidkey);
+    return (int)(intptr_t)pthread_getspecific(tidkey);
 }
 
 #endif
