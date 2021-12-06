@@ -2,6 +2,8 @@ import itertools
 import numpy as np
 import re
 from numba import cuda, int64
+from numba.cuda import compile_ptx
+from numba.core.types import f2
 from numba.cuda.testing import (unittest, CUDATestCase, skip_on_cudasim,
                                 cc_X_or_above, cuda_X_or_above)
 
@@ -373,6 +375,14 @@ class TestCudaIntrinsic(CUDATestCase):
         else:
             self.skipTest("Test requires toolkit >= 7.0 and SM >= 5.3")
 
+    def test_hadd_ptx(self):
+        if self.compute_supported(5,3) and self.toolkit_supported(7,0):
+            args = (f2[:], f2, f2)
+            ptx, _ = compile_ptx(simple_hadd_scalar, args)
+            self.assertIn('add.f16', ptx)
+        else:
+            self.skipTest("Test requires toolkit >= 7.0 and SM >= 5.3")
+
     def test_hfma(self):
         if self.compute_supported(5,3) and self.toolkit_supported(7,0):
             compiled = cuda.jit("void(f2[:], f2[:], f2[:], f2[:])")(simple_hfma)
@@ -395,6 +405,14 @@ class TestCudaIntrinsic(CUDATestCase):
             compiled[1, 1](ary, arg1, arg2, arg3)
             ref = arg1 * arg2 + arg3
             np.testing.assert_allclose(ary[0], ref)
+        else:
+            self.skipTest("Test requires toolkit >= 7.0 and SM >= 5.3")
+
+    def test_hfma_ptx(self):
+        if self.compute_supported(5,3) and self.toolkit_supported(7,0):
+            args = (f2[:], f2, f2, f2)
+            ptx, _ = compile_ptx(simple_hfma_scalar, args)
+            self.assertIn('fma.rn.f16', ptx)
         else:
             self.skipTest("Test requires toolkit >= 7.0 and SM >= 5.3")
 
@@ -421,6 +439,14 @@ class TestCudaIntrinsic(CUDATestCase):
         else:
             self.skipTest("Test requires toolkit >= 7.0 and SM >= 5.3")
 
+    def test_hsub_ptx(self):
+        if self.compute_supported(5,3) and self.toolkit_supported(7,0):
+            args = (f2[:], f2, f2)
+            ptx, _ = compile_ptx(simple_hsub_scalar, args)
+            self.assertIn('sub.f16', ptx)
+        else:
+            self.skipTest("Test requires toolkit >= 7.0 and SM >= 5.3")
+
     def test_hmul(self):
         if self.compute_supported(5,3) and self.toolkit_supported(7,0):
             compiled = cuda.jit()(simple_hmul)
@@ -441,6 +467,14 @@ class TestCudaIntrinsic(CUDATestCase):
             compiled[1, 1](ary, arg1, arg2)
             ref = arg1 * arg2
             np.testing.assert_allclose(ary[0], ref)
+        else:
+            self.skipTest("Test requires toolkit >= 7.0 and SM >= 5.3")
+
+    def test_hmul_ptx(self):
+        if self.compute_supported(5,3) and self.toolkit_supported(7,0):
+            args = (f2[:], f2, f2)
+            ptx, _ = compile_ptx(simple_hmul_scalar, args)
+            self.assertIn('mul.f16', ptx)
         else:
             self.skipTest("Test requires toolkit >= 7.0 and SM >= 5.3")
 
@@ -465,6 +499,14 @@ class TestCudaIntrinsic(CUDATestCase):
         else:
             self.skipTest("Test requires toolkit >= 9.0 and SM >= 5.3")
 
+    def test_hneg_ptx(self):
+        if self.compute_supported(5,3) and self.toolkit_supported(9,0):
+            args = (f2[:], f2)
+            ptx, _ = compile_ptx(simple_hneg_scalar, args)
+            self.assertIn('neg.f16', ptx)
+        else:
+            self.skipTest("Test requires toolkit >= 9.0 and SM >= 5.3")
+
     def test_habs(self):
         if self.compute_supported(5,3) and self.toolkit_supported(10,2):
             compiled = cuda.jit()(simple_habs)
@@ -483,6 +525,14 @@ class TestCudaIntrinsic(CUDATestCase):
             compiled[1, 1](ary, arg1)
             ref = abs(arg1)
             np.testing.assert_allclose(ary[0], ref)
+        else:
+            self.skipTest("Test requires toolkit >= 10.2 and SM >= 5.3")
+
+    def test_habs_ptx(self):
+        if self.compute_supported(5,3) and self.toolkit_supported(10,2):
+            args = (f2[:], f2)
+            ptx, _ = compile_ptx(simple_habs_scalar, args)
+            self.assertIn('abs.f16', ptx)
         else:
             self.skipTest("Test requires toolkit >= 10.2 and SM >= 5.3")
 
