@@ -591,7 +591,7 @@ def find_setupwiths(func_ir):
              for (s, p) in withs.items()]
 
     # check for POP_BLOCKS with multiple outgoing edges
-    for (s, p) in withs:
+    for (_, p) in withs:
         targets = blocks[p].terminator.get_targets()
         if len(targets) != 1:
             raise errors.CompilerError(
@@ -599,7 +599,7 @@ def find_setupwiths(func_ir):
                 "(i.e. break/return/raise) that can leave the block "
             )
     # now we check for returns inside with:
-    for (s, p) in withs:
+    for (_, p) in withs:
         target_block = blocks[p]
         if ir_utils.is_return(func_ir.blocks[
                 target_block.terminator.get_targets()[0]].terminator):
