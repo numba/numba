@@ -2512,7 +2512,6 @@ def array_record_getattr(context, builder, typ, value, attr):
         builder, array.data, constoffset,  return_type=rary.data.type,
     )
     if isinstance(dtype, types.NestedArray):
-        datasize = context.get_abi_sizeof(context.get_data_type(dtype.dtype))
         # new shape = recarray shape + inner dimension from nestedarray
         shape = cgutils.unpack_tuple(builder, array.shape, typ.ndim)
         shape += [context.get_constant(types.intp, i) for i in dtype.shape]
