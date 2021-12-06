@@ -118,7 +118,7 @@ def recarray_write_array_of_nestedarray_broadcast(ary):
 
 
 def recarray_write_array_of_nestedarray(ary):
-    ary.j[:, :, :] = np.ones((2, 3, 2), dtype=np.float64)
+    ary.j[:, :, :] = np.ones((2, 3, 2))
     return ary
 
 
