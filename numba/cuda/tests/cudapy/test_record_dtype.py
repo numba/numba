@@ -409,7 +409,7 @@ class TestNestedArrays(CUDATestCase):
         # This tests returning a record when passing an array and
         # returning the first item when passing a record
         nbarr = np.recarray(2, dtype=recordwitharray)
-        nbarr[0] = np.array([(1, (2,3))], dtype=recordwitharray)[0]
+        nbarr[0] = np.array([(1, (2, 3))], dtype=recordwitharray)[0]
         for arg, retty in [(nbarr, recordwitharray), (nbarr[0], np.int32)]:
             pyfunc = recarray_getitem_return
             arr_expected = pyfunc(arg)
