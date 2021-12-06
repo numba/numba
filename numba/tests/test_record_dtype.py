@@ -1535,7 +1535,7 @@ class TestNestedArrays(TestCase):
         # returning a nestedarray when passing a record
 
         nbarr = np.recarray(2, dtype=recordwitharray)
-        nbarr[0] = np.array([(1, (2,3))], dtype=recordwitharray)[0]
+        nbarr[0] = np.array([(1, (2, 3))], dtype=recordwitharray)[0]
         for arg in [nbarr, nbarr[0]]:
             for pyfunc in [recarray_getitem_field_return,
                            recarray_getitem_field_return2]:
