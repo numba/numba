@@ -66,7 +66,7 @@ class TestLinker(CUDATestCase):
         linker = Linker.new()
         del linker
 
-    def _test_linking(self, eager=False):
+    def _test_linking(self, eager):
         global bar  # must be a global; other it is recognized as a freevar
         bar = cuda.declare_device('bar', 'int32(int32)')
 
