@@ -142,7 +142,7 @@ numba_new_thread(void *worker, void *arg)
 static int
 get_thread_id(void)
 {
-    return (int)pthread_getspecific(tidkey);
+    return (int)(intptr_t)pthread_getspecific(tidkey);
 }
 
 #endif
@@ -517,7 +517,7 @@ void thread_worker(void *arg)
         queue_state_wait(queue, READY, RUNNING);
 
         task = &queue->task;
-        pthread_setspecific(tidkey, (void*)task->tid);
+        pthread_setspecific(tidkey, (void*)(intptr_t)task->tid);
         task->func(task->args, task->dims, task->steps, task->data);
 
         /* Task is done. */
