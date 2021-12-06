@@ -46,24 +46,21 @@ fi
 function check_sysinfo() {
     cmd="import os;\
          from numba.misc.numba_sysinfo import get_sysinfo;\
-         print(get_sysinfo()['$1 Threading'])"
+         assert get_sysinfo()['$1 Threading'] is True, 'Threading layer $1 '\
+         'is not supported';\
+         print('Threading layer $1 is supported')"
     python -c "$cmd"
 }
 
 if [[ "$TEST_THREADING" ]]; then
     if [[ "$TEST_THREADING" == "tbb" ]]; then
-        tstat=$(check_sysinfo "TBB")
+        check_sysinfo "TBB"
     elif [[ "$TEST_THREADING" == "omp" ]]; then
-        tstat=$(check_sysinfo "OpenMP")
+        check_sysinfo "OpenMP"
     elif [[ "$TEST_THREADING" == "workqueue" ]]; then
-        tstat=$(check_sysinfo "Workqueue")
+        check_sysinfo "Workqueue"
     else
         echo "Unknown threading layer requested: $TEST_THREADING"
-        exit 1
-    fi
-    # Check result of query
-    if [[ "$tstat" != "True" ]]; then
-        echo "$TEST_THREADING threading layer set, but could not be loaded."
         exit 1
     fi
 fi
