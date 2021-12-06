@@ -654,7 +654,7 @@ def ol_get_num_threads():
     _launch_threads()
 
     def impl():
-        num_threads = _get_num_threads()
+        num_threads = _iget_num_threads()
         if num_threads <= 0:
             print("Broken thread_id: ", _get_thread_id())
             print("num_threads: ", num_threads)
@@ -662,6 +662,18 @@ def ol_get_num_threads():
                                "This likely indicates a bug in Numba.")
         return num_threads
     return impl
+
+
+@intrinsic
+def _iget_num_threads(typingctx):
+    _launch_threads()
+
+    def codegen(context, builder, signature, args):
+        mod = builder.module
+        fnty = ir.FunctionType(cgutils.intp_t, [])
+        fn = cgutils.get_or_insert_function(mod, fnty, "get_num_threads")
+        return builder.call(fn, [])
+    return signature(types.intp), codegen
 
 
 def _get_thread_id():
@@ -689,7 +701,6 @@ def _iget_thread_id(typingctx):
         mod = builder.module
         fnty = ir.FunctionType(cgutils.intp_t, [])
         fn = cgutils.get_or_insert_function(mod, fnty, "get_thread_id")
-        #fn.return_value.add_attribute("noalias")
         return builder.call(fn, [])
     return signature(types.intp), codegen
 

@@ -111,8 +111,7 @@ def _lower_parfor_parallel(lowerer, parfor):
 
     parfor_output_arrays = numba.parfors.parfor.get_parfor_outputs(
         parfor, parfor.params)
-    parfor_redvars, parfor_reddict = numba.parfors.parfor.get_parfor_reductions(
-        lowerer.func_ir, parfor, parfor.params, lowerer.fndesc.calltypes)
+    parfor_redvars, parfor_reddict = parfor.redvars, parfor.reddict
     if config.DEBUG_ARRAY_OPT:
         print("parfor_redvars:", parfor_redvars)
         print("parfor_reddict:", parfor_reddict)
@@ -128,8 +127,8 @@ def _lower_parfor_parallel(lowerer, parfor):
 
         # Get the Numba internal function to call to get the thread count.
         get_num_threads = pfbdr.bind_global_function(
-            fobj=numba.get_num_threads,
-            ftype=get_global_func_typ(numba.get_num_threads),
+            fobj=numba.np.ufunc.parallel._iget_num_threads,
+            ftype=get_global_func_typ(numba.np.ufunc.parallel._iget_num_threads),
             args=()
         )
 
@@ -141,10 +140,11 @@ def _lower_parfor_parallel(lowerer, parfor):
 
         # For each reduction variable...
         for i in range(nredvars):
+            red_name = parfor_redvars[i]
             # Get the type of the reduction variable.
-            redvar_typ = lowerer.fndesc.typemap[parfor_redvars[i]]
+            redvar_typ = lowerer.fndesc.typemap[red_name]
             # Get the ir.Var for the reduction variable.
-            redvar = ir.Var(scope, parfor_redvars[i], loc)
+            redvar = ir.Var(scope, red_name, loc)
             # Get the type of the array that holds the per-thread
             # reduction variables.
             redarrvar_typ = redtyp_to_redarraytype(redvar_typ)
@@ -152,7 +152,7 @@ def _lower_parfor_parallel(lowerer, parfor):
             if config.DEBUG_ARRAY_OPT:
                 print(
                     "reduction_info",
-                    parfor_redvars[i],
+                    red_name,
                     redvar_typ,
                     redarrvar_typ,
                     reddtype,
@@ -225,7 +225,7 @@ def _lower_parfor_parallel(lowerer, parfor):
             # Remember mapping of original reduction array to the newly created per-worker reduction array.
             redarrs[redvar.name] = redarr_var
 
-            init_val = parfor_reddict[parfor_redvars[i]][0]
+            init_val = parfor_reddict[red_name][0]
             if init_val is not None:
                 if isinstance(redvar_typ, types.npytypes.Array):
                     # Create an array of identity values for the reduction.
@@ -407,16 +407,7 @@ def _lower_parfor_parallel(lowerer, parfor):
                 print("res_print", res_print)
                 lowerer.lower_inst(res_print)
 
-            # For each element in the reduction array created above,
-            # apply reduction operator.
-            # This for_range inserts a loop from 0 to the thread count.
-            with cgutils.for_range(builder, lowerer.loadvar(num_threads_var.name), intp=ntllvm_type) as loop:
-                # This will put the llvm loop.index value into the alloca'd llvm variable
-                # that corresponds to the IR variable numba_ir_loop_index_var.
-                # This reuses alloc_loop_var created above to initialize
-                # the reduction array.
-                builder.store(loop.index, alloc_loop_var)
-
+            def process_one_red_elem(red_elem_index):
                 # Read that element from the array into oneelem.
                 oneelemgetitem = pfbdr.getitem(
                     obj=redarr, index=numba_ir_loop_index_var, typ=redvar_typ,
@@ -548,6 +539,19 @@ def _lower_parfor_parallel(lowerer, parfor):
                                                                  typemap[name])
                         print("res_print2", res_print)
                         lowerer.lower_inst(res_print)
+
+            # For each element in the reduction array created above,
+            # apply reduction operator.
+            # This for_range inserts a loop from 0 to the thread count.
+            with cgutils.for_range(builder,
+                                   lowerer.loadvar(num_threads_var.name),
+                                   intp=ntllvm_type) as loop:
+                # This will put the llvm loop.index value into the alloca'd llvm variable
+                # that corresponds to the IR variable numba_ir_loop_index_var.
+                # This reuses alloc_loop_var created above to initialize
+                # the reduction array.
+                builder.store(loop.index, alloc_loop_var)
+                process_one_red_elem(numba_ir_loop_index_var)
 
         # Cleanup reduction variable
         for v in redarrs.values():

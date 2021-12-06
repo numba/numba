@@ -618,3 +618,19 @@ def find_literally_calls(func_ir, argtypes):
         if not isinstance(query_arg, (types.Literal, types.InitialValue)):
             loc = first_loc[pos]
             raise errors.ForceLiteralArg(marked_args, loc=loc)
+
+
+ir_extension_use_alloca = {}
+
+
+def must_use_alloca(blocks):
+    use_alloca_vars = set()
+
+    for ir_block in blocks.values():
+        for stmt in ir_block.body:
+            if type(stmt) in ir_extension_use_alloca:
+                func = ir_extension_use_alloca[type(stmt)]
+                func(stmt, use_alloca_vars)
+                continue
+
+    return use_alloca_vars
