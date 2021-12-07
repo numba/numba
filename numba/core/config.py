@@ -390,9 +390,11 @@ class _EnvReloader(object):
 
             return 1
 
+        NUMBA_DEFAULT_NUM_THREADS = num_threads_default()
+
         # Numba thread pool size (defaults to number of CPUs on the system).
         _NUMBA_NUM_THREADS = _readenv("NUMBA_NUM_THREADS", int,
-                                      num_threads_default)
+                                      NUMBA_DEFAULT_NUM_THREADS)
         if ('NUMBA_NUM_THREADS' in globals()
                 and globals()['NUMBA_NUM_THREADS'] != _NUMBA_NUM_THREADS):
 
