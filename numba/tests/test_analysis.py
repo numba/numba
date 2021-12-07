@@ -11,7 +11,11 @@ from numba.core.inline_closurecall import InlineClosureCallPass
 from numba.tests.support import TestCase, MemoryLeakMixin, SerialMixin
 
 from numba.core.analysis import dead_branch_prune, rewrite_semantic_constants
-from numba.core.untyped_passes import ReconstructSSA
+from numba.core.untyped_passes import (ReconstructSSA, TranslateByteCode,
+                                       IRProcessing, DeadBranchPrune,
+                                       PreserveIR)
+from numba.core.compiler import DefaultPassBuilder, CompilerBase, PassManager
+
 
 _GLOBAL = 123
 
@@ -865,6 +869,72 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
 
         self.assertPreciseEqual(foo.py_func()[0], 666.)
         self.assertPreciseEqual(foo()[0], 666.)
+
+
+class TestBranchPruneSSA(MemoryLeakMixin, TestCase):
+    # Tests SSA rewiring of phi nodes after branch pruning.
+
+    class SSAPrunerCompiler(CompilerBase):
+        def define_pipelines(self):
+            # This is a simple pipeline that does branch pruning on IR in SSA
+            # form, then types and lowers as per the standard nopython pipeline.
+            pm = PassManager("testing pm")
+            pm.add_pass(TranslateByteCode, "analyzing bytecode")
+            pm.add_pass(IRProcessing, "processing IR")
+            # SSA early
+            pm.add_pass(ReconstructSSA, "ssa")
+            pm.add_pass(DeadBranchPrune, "dead branch pruning")
+            # type and then lower as usual
+            pm.add_pass(PreserveIR, "preserves the IR as metadata")
+            dpb = DefaultPassBuilder
+            typed_passes = dpb.define_typed_pipeline(self.state)
+            pm.passes.extend(typed_passes.passes)
+            lowering_passes = dpb.define_nopython_lowering_pipeline(self.state)
+            pm.passes.extend(lowering_passes.passes)
+            pm.finalize()
+            return [pm]
+
+    def test_ssa_update_phi(self):
+        # This checks that dead branch pruning is rewiring phi nodes correctly
+        # after a block containing an incoming for a phi is removed.
+
+        @njit(pipeline_class=self.SSAPrunerCompiler)
+        def impl(p=None, q=None):
+            z = 1
+            r = False
+            if p is None:
+                r = True # live
+
+            if r and q is not None:
+                z = 20 # dead
+
+            # one of the incoming blocks for z is dead, the phi needs an update
+            # were this not done, it would refer to variables that do not exist
+            # and result in a lowering error.
+            return z, r
+
+        self.assertPreciseEqual(impl(), impl.py_func())
+
+    def test_ssa_replace_phi(self):
+        # This checks that when a phi only has one incoming, because the other
+        # has been pruned, that a direct assignment is used instead.
+
+        @njit(pipeline_class=self.SSAPrunerCompiler)
+        def impl(p=None):
+            z = 0
+            if p is None:
+                z = 10
+            else:
+                z = 20
+
+            return z
+
+        self.assertPreciseEqual(impl(), impl.py_func())
+        func_ir = impl.overloads[impl.signatures[0]].metadata['preserved_ir']
+
+        # check the func_ir, make sure there's no phi nodes
+        for blk in func_ir.blocks.values():
+            self.assertFalse([*blk.find_exprs('phi')])
 
 
 class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
