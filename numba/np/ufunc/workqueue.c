@@ -145,14 +145,14 @@ get_thread_id(void)
     return (int)(intptr_t)pthread_getspecific(tidkey);
 }
 
-static int
+static void
 set_thread_id(int tid)
 {
     pthread_setspecific(tidkey, (void*)(intptr_t)tid);
 }
 
 static void
-platform_launch()
+platform_launch(void)
 {
     pthread_key_create(&tidkey, NULL);
 }
@@ -250,14 +250,14 @@ get_thread_id(void)
     return (int)(intptr_t)TlsGetValue(tidkey);
 }
 
-static int
+static void
 set_thread_id(int tid)
 {
     TlsSetValue(tidkey, (void*)(intptr_t)tid);
 }
 
 static void
-platform_launch()
+platform_launch(void)
 {
     tidkey = TlsAlloc();
 }
