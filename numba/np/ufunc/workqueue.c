@@ -65,10 +65,10 @@ static void reset_after_fork(void);
 static void
 add_task_internal(void *fn, void *args, void *dims, void *steps, void *data, int tid);
 
-static pthread_key_t tidkey;
-
 /* PThread */
 #ifdef NUMBA_PTHREAD
+
+static pthread_key_t tidkey;
 
 typedef struct
 {
@@ -145,10 +145,24 @@ get_thread_id(void)
     return (int)(intptr_t)pthread_getspecific(tidkey);
 }
 
+static int
+set_thread_id(int tid)
+{
+    pthread_setspecific(tidkey, (void*)(intptr_t)tid);
+}
+
+static void
+platform_launch()
+{
+    pthread_key_create(&tidkey, NULL);
+}
+
 #endif
 
 /* Win Thread */
 #ifdef NUMBA_WINTHREAD
+
+DWORD tidkey;
 
 typedef struct
 {
@@ -233,7 +247,19 @@ numba_new_thread(void *worker, void *arg)
 static int
 get_thread_id(void)
 {
-    return (int)(intptr_t)pthread_getspecific(tidkey);
+    return (int)(intptr_t)TlsGetValue(tidkey);
+}
+
+static int
+set_thread_id(int tid)
+{
+    TlsSetValue(tidkey, (void*)(intptr_t)tid);
+}
+
+static void
+platform_launch()
+{
+    tidkey = TlsAlloc();
 }
 
 #endif
@@ -517,7 +543,7 @@ void thread_worker(void *arg)
         queue_state_wait(queue, READY, RUNNING);
 
         task = &queue->task;
-        pthread_setspecific(tidkey, (void*)(intptr_t)task->tid);
+        set_thread_id(task->tid);
         task->func(task->args, task->dims, task->steps, task->data);
 
         /* Task is done. */
@@ -529,7 +555,7 @@ static void launch_threads(int count)
 {
     if (!queues)
     {
-        pthread_key_create(&tidkey, NULL);
+        platform_launch();
 
         /* If queues are not yet allocated,
            create them, one for each thread. */
