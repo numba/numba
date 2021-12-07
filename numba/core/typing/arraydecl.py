@@ -170,6 +170,7 @@ class GetItemBuffer(AbstractTemplate):
         if out is not None:
             return signature(out.result, ary, out.index)
 
+
 @infer_global(operator.setitem)
 class SetItemBuffer(AbstractTemplate):
     def generic(self, args, kws):
@@ -185,7 +186,7 @@ class SetItemBuffer(AbstractTemplate):
             return
 
         idx = out.index
-        res = out.result # res is the result type of the access ary[idx]
+        res = out.result  # res is the result type of the access ary[idx]
         if isinstance(res, types.Array):
             # Indexing produces an array
             if isinstance(val, types.Array):
@@ -220,8 +221,8 @@ class SetItemBuffer(AbstractTemplate):
                 else:
                     return
             res = val
-        elif isinstance(val, types.Array) and val.ndim == 0 \
-            and self.context.can_convert(val.dtype, res):
+        elif (isinstance(val, types.Array) and val.ndim == 0
+              and self.context.can_convert(val.dtype, res)):
             # val is an array(T, 0d, O), where T is the type of res, O is order
             res = val
         else:
@@ -492,7 +493,7 @@ class ArrayAttribute(AttributeTemplate):
             sig = signature(ary.dtype, *args)
         elif isinstance(argty, types.Array):
             sig = signature(argty.copy(layout='C', dtype=ary.dtype), *args)
-        elif isinstance(argty, types.List): # 1d lists only
+        elif isinstance(argty, types.List):  # 1d lists only
             sig = signature(types.Array(ary.dtype, 1, 'C'), *args)
         elif isinstance(argty, types.BaseTuple):
             sig = signature(types.Array(ary.dtype, np.ndim(argty), 'C'), *args)
@@ -504,7 +505,15 @@ class ArrayAttribute(AttributeTemplate):
         # Resolution of other attributes, for record arrays
         if isinstance(ary.dtype, types.Record):
             if attr in ary.dtype.fields:
-                return ary.copy(dtype=ary.dtype.typeof(attr), layout='A')
+                attr_dtype = ary.dtype.typeof(attr)
+                if isinstance(attr_dtype, types.NestedArray):
+                    return ary.copy(
+                        dtype=attr_dtype.dtype,
+                        ndim=ary.ndim + attr_dtype.ndim,
+                        layout='A'
+                    )
+                else:
+                    return ary.copy(dtype=attr_dtype, layout='A')
 
 
 @infer_getattr
@@ -524,6 +533,7 @@ class DTypeAttr(AttributeTemplate):
             return None  # other types not supported yet
         return types.StringLiteral(val)
 
+
 @infer
 class StaticGetItemArray(AbstractTemplate):
     key = "static_getitem"
@@ -532,10 +542,19 @@ class StaticGetItemArray(AbstractTemplate):
         # Resolution of members for record and structured arrays
         ary, idx = args
         if (isinstance(ary, types.Array) and isinstance(idx, str) and
-            isinstance(ary.dtype, types.Record)):
+                isinstance(ary.dtype, types.Record)):
             if idx in ary.dtype.fields:
-                ret = ary.copy(dtype=ary.dtype.typeof(idx), layout='A')
-                return signature(ret, *args)
+                attr_dtype = ary.dtype.typeof(idx)
+                if isinstance(attr_dtype, types.NestedArray):
+                    ret = ary.copy(
+                        dtype=attr_dtype.dtype,
+                        ndim=ary.ndim + attr_dtype.ndim,
+                        layout='A'
+                    )
+                    return signature(ret, *args)
+                else:
+                    ret = ary.copy(dtype=attr_dtype, layout='A')
+                    return signature(ret, *args)
 
 
 @infer_getattr
@@ -546,6 +565,7 @@ class RecordAttribute(AttributeTemplate):
         ret = record.typeof(attr)
         assert ret
         return ret
+
 
 @infer
 class StaticGetItemRecord(AbstractTemplate):
@@ -770,6 +790,7 @@ def generic_hetero_real(self, args, kws):
         return signature(types.float64, recvr=self.this)
     return signature(self.this.dtype, recvr=self.this)
 
+
 def generic_hetero_always_real(self, args, kws):
     assert not args
     assert not kws
@@ -779,15 +800,18 @@ def generic_hetero_always_real(self, args, kws):
         return signature(self.this.dtype.underlying_float, recvr=self.this)
     return signature(self.this.dtype, recvr=self.this)
 
+
 def generic_index(self, args, kws):
     assert not args
     assert not kws
     return signature(types.intp, recvr=self.this)
 
+
 def install_array_method(name, generic, prefer_literal=True):
     my_attr = {"key": "array." + name, "generic": generic,
                "prefer_literal": prefer_literal}
     temp_class = type("Array_" + name, (AbstractTemplate,), my_attr)
+
     def array_attribute_attachment(self, ary):
         return types.BoundFunction(temp_class, ary)
 

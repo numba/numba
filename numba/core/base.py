@@ -972,6 +972,11 @@ class BaseContext(object):
         if self.strict_alignment:
             offset = rectyp.offset(attr)
             elemty = rectyp.typeof(attr)
+            if isinstance(elemty, types.NestedArray):
+                # For a NestedArray we need to consider the data type of
+                # elements of the array for alignment, not the array structure
+                # itself
+                elemty = elemty.dtype
             align = self.get_abi_alignment(self.get_data_type(elemty))
             if offset % align:
                 msg = "{rec}.{attr} of type {type} is not aligned".format(
