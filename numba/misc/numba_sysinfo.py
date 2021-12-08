@@ -421,13 +421,7 @@ def get_sysinfo():
         return "Unknown import problem."
 
     try:
-        # check import is ok, this means the DSO linkage is working
         from numba.np.ufunc import tbbpool  # NOQA
-        # check that the version is compatible, this is a check performed at
-        # runtime (well, compile time), it will also ImportError if there's
-        # a problem.
-        from numba.np.ufunc.parallel import _check_tbb_version_compatible
-        _check_tbb_version_compatible()
         sys_info[_tbb_thread] = True
     except ImportError as e:
         # might be a missing symbol due to e.g. tbb libraries missing
