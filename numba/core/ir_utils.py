@@ -2326,23 +2326,3 @@ def transfer_scope(block, scope):
     # replace scope
     block.scope = scope
     return block
-
-
-def is_setup_with(stmt):
-    return isinstance(stmt, ir.EnterWith)
-
-
-def is_terminator(stmt):
-    return isinstance(stmt, ir.Terminator)
-
-
-def is_raise(stmt):
-    return isinstance(stmt, ir.Raise)
-
-
-def is_return(stmt):
-    return isinstance(stmt, ir.Return)
-
-
-def is_pop_block(stmt):
-    return isinstance(stmt, ir.PopBlock)

@@ -139,11 +139,10 @@ def liftcall4():
 def liftcall5():
     for i in range(10):
         with call_context:
-            print(i)
             if i == 5:
                 print("A")
                 break
-    return i
+    return 10
 
 
 def lift_undefiend():
@@ -165,7 +164,7 @@ gv_type = types.intp
 class TestWithFinding(TestCase):
     def check_num_of_with(self, func, expect_count):
         the_ir = get_func_ir(func)
-        ct = len(find_setupwiths(the_ir)[0])
+        ct = len(find_setupwiths(the_ir.blocks))
         self.assertEqual(ct, expect_count)
 
     def test_lift1(self):
@@ -281,9 +280,12 @@ class TestLiftCall(BaseTestWithLifting):
     @unittest.skipIf(PYVERSION <= (3, 8),
                      "unsupported on py3.8 and before")
     def test_liftcall5(self):
-        self.check_extracted_with(liftcall5, expect_count=1,
-                                  expected_stdout="0\n1\n2\n3\n4\n5\nA\n")
-        self.check_same_semantic(liftcall5)
+        with self.assertRaises(errors.CompilerError) as raises:
+            njit(liftcall5)()
+        # Make sure we can detect a break-within-with and have a reasonable
+        # error.
+        msg = ("unsupported control flow: with-context contains branches")
+        self.assertIn(msg, str(raises.exception))
 
 
 def expected_failure_for_list_arg(fn):
@@ -681,21 +683,21 @@ class TestLiftObj(MemoryLeak, TestCase):
                              msg='there were warnings in dataflow.py')
 
     def test_case14_return_direct_from_objmode_ctx(self):
+        # fails with:
+        # AssertionError: Failed in nopython mode pipeline (step: Handle with contexts)
+        # ending offset is not a label
         def foo(x):
             with objmode_context(x='int64[:]'):
-                x += 1
                 return x
-
-        if PYVERSION <= (3,8):
-            # 3.8 and below don't support return inside with
-            with self.assertRaises(errors.CompilerError) as raises:
-                cfoo = njit(foo)
-                cfoo(np.array([1, 2, 3]))
-            msg = "unsupported control flow: due to return statements inside with block"
-            self.assertIn(msg, str(raises.exception))
-        else:
-            result = foo(np.array([1, 2, 3]))
-            np.testing.assert_array_equal(np.array([2, 3, 4]), result)
+        x = np.array([1, 2, 3])
+        cfoo = njit(foo)
+        with self.assertRaises(errors.CompilerError) as raises:
+            cfoo(x)
+        self.assertIn(
+            ('unsupported control flow due to return statements inside '
+             'with block'),
+            str(raises.exception),
+        )
 
     # No easy way to handle this yet.
     @unittest.expectedFailure
@@ -754,15 +756,11 @@ class TestLiftObj(MemoryLeak, TestCase):
                     return 7
             ret = foo(x - 1)
             return ret
-        with self.assertRaises((errors.TypingError, errors.CompilerError)) as raises:
-            cfoo = njit(foo)
-            cfoo(np.array([1, 2, 3]))
-        if PYVERSION <= (3, 7):
-            # 3.7 and below can't handle the return
-            msg = "unsupported control flow: due to return statements inside with block"
-        else:
-            # above can't handle the recursion
-            msg = "Untyped global name 'foo'"
+        x = np.array([1, 2, 3])
+        cfoo = njit(foo)
+        with self.assertRaises(errors.CompilerError) as raises:
+            cfoo(x)
+        msg = "unsupported control flow due to return statements inside with block"
         self.assertIn(msg, str(raises.exception))
 
     @unittest.expectedFailure
