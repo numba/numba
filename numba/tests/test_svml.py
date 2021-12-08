@@ -186,11 +186,14 @@ class TestSVMLGeneration(TestCase):
     @classmethod
     def mp_runner(cls, testname, outqueue):
         method = getattr(cls, testname)
+        print('==', testname, method)
         try:
             ok, msg = method()
+            print('==', ok, msg)
         except Exception:
             msg = traceback.format_exc()
             ok = False
+            print('== ERR', msg)
         outqueue.put({'status': ok, 'msg': msg})
 
     @classmethod
