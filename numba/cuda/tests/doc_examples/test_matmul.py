@@ -22,10 +22,12 @@ class TestMatMul(CUDATestCase):
         # Prevent output from this test showing up when running the test suite
         self._captured_stdout = captured_stdout()
         self._captured_stdout.__enter__()
+        super().setUp()
 
     def tearDown(self):
         # No exception type, value, or traceback
         self._captured_stdout.__exit__(None, None, None)
+        super().tearDown()
 
     def test_ex_matmul(self):
         """Test of matrix multiplication on various cases."""
