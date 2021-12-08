@@ -17,7 +17,7 @@ from numba.tests.support import TestCase, tag, override_env_config
 import unittest
 
 needs_svml = unittest.skipUnless(config.USING_SVML,
-                                 "SVML tests need SVML to be present")
+                                 "SVML tests need SVML to be present ")
 
 # a map of float64 vector lenghs with corresponding CPU architecture
 vlen2cpu = {2: 'nehalem', 4: 'haswell', 8: 'skylake-avx512'}
