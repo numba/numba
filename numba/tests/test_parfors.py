@@ -3524,7 +3524,7 @@ class TestPrangeBasic(TestPrangeBase):
                            scheduler_type='unsigned',
                            check_fastmath=True)
 
-    def test_prange_28(self):
+    def test_prange28(self):
         # issue7105: label conflict in nested parfor
         def test_impl(x, y):
             out = np.zeros(len(y))
@@ -3553,6 +3553,21 @@ class TestPrangeBasic(TestPrangeBase):
 
         self.prange_tester(test_impl, X, Y, scheduler_type='unsigned',
                            check_fastmath=True, check_fastmath_result=True)
+
+    def test_prange29(self):
+        # issue7630: SSA renaming in prange header
+        def test_impl(flag):
+            result = 0
+            if flag:
+                for i in range(1000000):
+                    result += 1
+            else:
+                for i in range(1000000):
+                    result -= 3
+            return result
+
+        self.prange_tester(test_impl, True)
+        self.prange_tester(test_impl, False)
 
 
 @skip_parfors_unsupported
