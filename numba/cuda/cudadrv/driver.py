@@ -87,6 +87,10 @@ class LinkerError(RuntimeError):
     pass
 
 
+class NvrtcError(RuntimeError):
+    pass
+
+
 class CudaAPIError(CudaDriverError):
     def __init__(self, code, msg):
         self.code = code
@@ -2728,15 +2732,86 @@ class CtypesLinker(Linker):
         return cubin, size
 
 
-def nvrtc_check(err):
-    if isinstance(err, binding.CUresult):
-        if err != binding.CUresult.CUDA_SUCCESS:
-            raise RuntimeError('CUDA Error calling NVRTC: {}'.format(err))
-    elif isinstance(err, nvrtc.nvrtcResult):
-        if err != nvrtc.nvrtcResult.NVRTC_SUCCESS:
-            raise RuntimeError('NVRTC Error: {}'.format(err))
-    else:
-        raise RuntimeError('Unknown error type: {}'.format(err))
+class NvrtcProgram:
+    """NvrtcProgram is for the managing the lifetime of nvrtcProgram objects.
+
+    If an error occurs during an NVRTC call, an exception is raised. When an
+    instance of this class is deleted, it attempts to delete the underlying
+    nvrtcProgram."""
+
+    def __init__(self, src, name):
+        # Create an nvrtcProgram
+        err, program = nvrtc.nvrtcCreateProgram(src, name.encode(), 0, [], [])
+        self.check(err)
+        self._program = program
+
+        with driver.get_active_context() as ac:
+            dev = driver.get_device(ac.devnum)
+            major, minor = dev.compute_capability
+
+        # Compilation options:
+        # - Compile for the current device's compute capability.
+        # - The CUDA include path is added.
+        # - Relocatable Device Code (rdc) is needed to prevent device functions
+        #   being optimized away.
+        arch = f'--gpu-architecture=compute_{major}{minor}'.encode()
+        include = f'-I{config.CUDA_INCLUDE_PATH}'.encode()
+        opts = [arch, include, b'-rdc', b'true']
+
+        # Compile the program
+        err, = nvrtc.nvrtcCompileProgram(self._program, len(opts), opts)
+
+        # First check whether the call failed due to a "normal" compiler error
+        compile_error = (err == nvrtc.nvrtcResult.NVRTC_ERROR_COMPILATION)
+        if not compile_error:
+            # Check for any other error
+            self.check(err)
+
+        # Get log from compilation
+        err, log_size = nvrtc.nvrtcGetProgramLogSize(self._program)
+        self.check(err)
+        log = b' ' * log_size
+        err, = nvrtc.nvrtcGetProgramLog(self._program, log)
+        self.check(err)
+
+        # If the compile failed, provide the log in an exception
+        if compile_error:
+            msg = (f'NVRTC Compilation failure compiling {name}:\n\n'
+                   f'{log.decode()}')
+            raise NvrtcError(msg)
+
+        # Otherwise, if there's any content in the log, present it as a warning
+        if log_size > 1:
+            msg = f"NVRTC log messages compiling {name}:\n\n{log.decode()}"
+            warnings.warn(msg)
+
+        # Get and cache the PTX
+        err, ptx_len = nvrtc.nvrtcGetPTXSize(self._program)
+        self.check(err)
+        ptx = b' ' * ptx_len
+        err, = nvrtc.nvrtcGetPTX(self._program, ptx)
+        self.check(err)
+
+        self._ptx = ptx
+
+    def __del__(self):
+        if self._program:
+            err, = nvrtc.nvrtcDestroyProgram(self._program)
+            self.check(err)
+
+    @property
+    def ptx(self):
+        return self._ptx
+
+    def check(self, err):
+        if isinstance(err, binding.CUresult):
+            if err != binding.CUresult.CUDA_SUCCESS:
+                raise RuntimeError('CUDA Error calling NVRTC: {}'.format(err))
+        elif isinstance(err, nvrtc.nvrtcResult):
+            if err != nvrtc.nvrtcResult.NVRTC_SUCCESS:
+                raise RuntimeError('NVRTC Error: {}'.format(err))
+        else:
+            raise RuntimeError('Unknown error type: {}'.format(err))
 
 
 class CudaPythonLinker(Linker):
@@ -2802,57 +2877,11 @@ class CudaPythonLinker(Linker):
             raise LinkerError("%s\n%s" % (e, self.error_log))
 
     def add_cu(self, cu, name):
-        err, prog = nvrtc.nvrtcCreateProgram(cu, name.encode(), 0, [], [])
-        nvrtc_check(err)
+        program = NvrtcProgram(cu, name)
 
-        with driver.get_active_context() as ac:
-            dev = driver.get_device(ac.devnum)
-            major, minor = dev.compute_capability
-
-        arch = bytes(f'--gpu-architecture=compute_{major}{minor}', 'ascii')
-
-        # rdc is needed to prevent device functions being optimized away
-        include = f'-I{config.CUDA_INCLUDE_PATH}'.encode()
-        opts = [arch, b'-rdc', b'true', include]
-        err, = nvrtc.nvrtcCompileProgram(prog, len(opts), opts)
-        compile_error = (err == nvrtc.nvrtcResult.NVRTC_ERROR_COMPILATION)
-
-        if not compile_error:
-            # Check for any other error
-            nvrtc_check(err)
-
-        # Get log from compilation
-        err, log_size = nvrtc.nvrtcGetProgramLogSize(prog)
-        nvrtc_check(err)
-        log = b' ' * log_size
-        err, = nvrtc.nvrtcGetProgramLog(prog, log)
-        nvrtc_check(err)
-
-        # If the compile failed, provide the log in an exception
-        if compile_error:
-            err, = nvrtc.nvrtcDestroyProgram(prog)
-            nvrtc_check(err)
-            msg = (f'NVRTC Compilation failure compiling {name}:\n\n'
-                   f'{log.decode()}')
-            raise LinkerError(msg)
-
-        # Otherwise, if there's any content in the log, present it as a warning
-        if log_size > 1:
-            msg = f"NVRTC log messages compiling {name}:\n\n{log.decode()}"
-            warnings.warn(msg)
-
-        # Get the PTX and link it using the normal linker mechanism
-        err, ptx_len = nvrtc.nvrtcGetPTXSize(prog)
-        nvrtc_check(err)
-        ptx = b' ' * ptx_len
-        err, = nvrtc.nvrtcGetPTX(prog, ptx)
-        nvrtc_check(err)
-
+        # Link the program's PTX using the normal linker mechanism
         ptx_name = name[:-2] + ".ptx"
-        self.add_ptx(ptx, ptx_name)
-
-        err, = nvrtc.nvrtcDestroyProgram(prog)
-        nvrtc_check(err)
+        self.add_ptx(program.ptx, ptx_name)
 
     def add_file(self, path, kind):
         pathbuf = path.encode("utf8")
