@@ -29,8 +29,6 @@ def compile_to_ir(func):
     state.func_ir = func_ir
     state.typemap = None
     state.calltypes = None
-    # Transform to SSA
-    ReconstructSSA().run_pass(state)
     # call this to get print etc rewrites
     rewrites.rewrite_registry.apply('before-inference', state)
     return func_ir
@@ -514,21 +512,21 @@ class TestBranchPrune(TestBranchPruneBase, SerialMixin):
         # break
 
         def impl(array, x, a=None):
-            b = 2
+            b = 0
             if x < 4:
                 b = 12
-            if a is None: # known true
-                a = 7 # live
+            if a is None:
+                a = 0
             else:
-                b = 15 # dead
-            if a < 0: # valid as a result of the redefinition of 'a'
+                b = 12
+            if a < 0:
                 return 10
             return 30 + b + a
 
         self.assert_prune(impl,
                           (types.Array(types.float64, 2, 'C'),
                            types.float64, types.NoneType('none'),),
-                          [None, False, None],
+                          [None, None, None],
                           np.zeros((2, 3)), 1., None)
 
     def test_redefinition_analysis_different_block_can_exec(self):

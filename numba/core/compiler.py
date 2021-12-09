@@ -626,8 +626,6 @@ class DefaultPassBuilder(object):
         if state.flags.enable_ssa:
             pm.add_pass(ReconstructSSA, "ssa")
 
-        #pm.add_pass(LiteralPropagationSubPipelinePass, "Literal propagation")
-
         pm.finalize()
         return pm
 

@@ -492,42 +492,9 @@ def dead_branch_prune(func_ir, called_args):
                         repl_idx = defns.index(cond)
                         defns[repl_idx] = x.value
 
-    # Check post dominators of dead nodes from in the original CFG for use of
-    # vars that are being removed in the dead blocks which might be referred to
-    # by phi nodes.
-    #
-    # Multiple things to fix up:
-    #
-    # 1. Cases like:
-    #
-    # A        A
-    # |\       |
-    # | B  --> B
-    # |/       |
-    # C        C
-    #
-    # i.e. the branch is dead but the block is still alive. In this case CFG
-    # simplification will fuse A-B-C and any phi in C can be updated as an
-    # direct assignment from the last assigned version in the dominators of the
-    # fused block.
-    #
-    # 2. Cases like:
-    #
-    #   A        A
-    #  / \       |
-    # B   C  --> B
-    #  \ /       |
-    #   D        D
-    #
-    # i.e. the block C is dead. In this case the phis in D need updating to
-    # reflect the collapse of the phi condition. This should result in a direct
-    # assignment of the surviving version in B to the LHS of the phi in D.
-
-    new_cfg = compute_cfg_from_blocks(func_ir.blocks)
-    dead_blocks = new_cfg.dead_nodes()
-
     # Remove dead blocks, this is safe as it relies on the CFG only.
-    for dead in dead_blocks:
+    cfg = compute_cfg_from_blocks(func_ir.blocks)
+    for dead in cfg.dead_nodes():
         del func_ir.blocks[dead]
 
     # if conditions were nullified then consts were rewritten, update
