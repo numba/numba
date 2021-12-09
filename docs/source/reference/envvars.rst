@@ -519,7 +519,8 @@ GPU support
    The location of the CUDA include files. This is used when linking CUDA C/C++
    sources to Python kernels, and needs to be correctly set for CUDA includes to
    be available to linked C/C++ sources. On Linux, it defaults to
-   `/usr/local/cuda/include`. On Windows, the default is **TBC**.
+   ``/usr/local/cuda/include``. On Windows, the default is
+   ``$env:CUDA_PATH\include``.
 
 
 Threading Control

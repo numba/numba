@@ -409,8 +409,16 @@ class _EnvReloader(object):
             "NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM", int, 0)
 
         # Location of the CUDA include files
+        if IS_WIN32:
+            cuda_path = os.environ.get('CUDA_PATH')
+            if cuda_path:
+                default_cuda_include_path = os.path.join(cuda_path, "include")
+            else:
+                default_cuda_include_path = "cuda_include_not_found"
+        else:
+            default_cuda_include_path = "/usr/local/cuda/include"
         CUDA_INCLUDE_PATH = _readenv("NUMBA_CUDA_INCLUDE_PATH", str,
-                                     "/usr/local/cuda/include")
+                                     default_cuda_include_path)
 
         # Threading settings
 

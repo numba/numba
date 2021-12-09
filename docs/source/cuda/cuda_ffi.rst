@@ -112,8 +112,8 @@ of NVRTC subject to the following considerations:
 - It is only available when using the NVIDIA Bindings. See
   :envvar:`NUMBA_CUDA_USE_NVIDIA_BINDING`.
 - The CUDA include path is assumed by default to be ``/usr/local/cuda/include``
-  on Linux and **TBC** on Windows. It can be modified using the environment
-  variable :envvar:`NUMBA_CUDA_INCLUDE_PATH`.
+  on Linux and ``$env:CUDA_PATH\include`` on Windows. It can be modified using
+  the environment variable :envvar:`NUMBA_CUDA_INCLUDE_PATH`.
 - The CUDA include folder will be made available to NVRTC on the include path;
   additional includes are not supported.
 
