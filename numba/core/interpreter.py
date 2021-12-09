@@ -381,7 +381,7 @@ class Interpreter(object):
         # post process the IR to rewrite opcodes/byte sequences that are too
         # involved to risk handling as part of direct interpretation
         peepholes = []
-        if PYVERSION == (3, 9):
+        if PYVERSION in [(3, 9), (3, 10)]:
             peepholes.append(peep_hole_list_to_tuple)
         peepholes.append(peep_hole_delete_with_exit)
 
@@ -1788,10 +1788,10 @@ class Interpreter(object):
         # control flow in a tuple unpack like:
         # `(*(1, (2,) if predicate else (3,)))`
         # this cannot be handled as present so raise
+        msg = ("An unsupported bytecode sequence has been encountered: "
+               "op_LIST_EXTEND at the start of a block.\n\nThis could be "
+               "due to the use of a branch in a tuple unpacking statement.")
         if not self.current_block.body:
-            msg = ("An unsupported bytecode sequence has been encountered: "
-                   "op_LIST_EXTEND at the start of a block.\n\nThis could be "
-                   "due to the use of a branch in a tuple unpacking statement.")
             raise errors.UnsupportedError(msg)
 
         # is last emitted statement a build_tuple?
@@ -1821,6 +1821,8 @@ class Interpreter(object):
                 else:
                     ok = False
                     break
+        if ok and build_empty_list is None:
+            raise errors.UnsupportedError(msg)
         if ok:
             stmts = self.current_block.body
             build_tuple_asgn = self.current_block.body[-1]

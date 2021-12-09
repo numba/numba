@@ -630,6 +630,11 @@ class PyLower(BaseLower):
             self.builder.store(cgutils.get_null_value(ltype), ptr)
         return ptr
 
+    def _alloca_var(self, name, fetype):
+        # This is here for API compatibility with lowering.py::Lower.
+        # NOTE: fetype is unused
+        return self.alloca(name)
+
     def incref(self, value):
         self.pyapi.incref(value)
 
