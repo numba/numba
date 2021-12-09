@@ -8,6 +8,7 @@ Contents in this file are referenced from the sphinx-generated docs.
 """
 import unittest
 from numba.cuda.testing import CUDATestCase, skip_on_cudasim
+from numba.tests.support import captured_stdout
 
 
 @skip_on_cudasim("cudasim doesn't support cuda import at non-top-level")
@@ -16,6 +17,17 @@ class TestMatMul(CUDATestCase):
     Text matrix multiplication using simple, shared memory/square, and shared
     memory/nonsquare cases.
     """
+
+    def setUp(self):
+        # Prevent output from this test showing up when running the test suite
+        self._captured_stdout = captured_stdout()
+        self._captured_stdout.__enter__()
+        super().setUp()
+
+    def tearDown(self):
+        # No exception type, value, or traceback
+        self._captured_stdout.__exit__(None, None, None)
+        super().tearDown()
 
     def test_ex_matmul(self):
         """Test of matrix multiplication on various cases."""
