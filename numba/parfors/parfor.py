@@ -2568,7 +2568,13 @@ class ConvertLoopPass:
                                     ("prange", loop_kind, loop_replacing),
                                     pass_states.flags, races=races)
 
-                    blocks[loop.header].body = [parfor, ir.Jump(list(loop.exits)[0], loc)]
+                    blocks[loop.header].body = [parfor]
+                    # We have to insert the header_body after the parfor because in
+                    # a Numba loop this will be executed one more time before the
+                    # branch and may contain instructions such as variable renamings
+                    # that are relied upon later.
+                    blocks[loop.header].body.extend(header_body)
+                    blocks[loop.header].body.append(ir.Jump(list(loop.exits)[0], loc))
                     self.rewritten.append(dict(
                         old_loop=loop,
                         new=parfor,
