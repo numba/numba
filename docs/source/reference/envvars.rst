@@ -490,21 +490,6 @@ GPU support
    <https://docs.nvidia.com/cuda/cuda-runtime-api/stream-sync-behavior.html>`_
    for an explanation of the legacy and per-thread default streams.
 
-.. envvar:: NUMBA_NPY_RELAXED_STRIDES_CHECKING
-
-   By default arrays that inherit from ``numba.misc.dummyarray.Array`` (e.g.
-   CUDA device arrays) compute their contiguity using relaxed strides checking,
-   which is the default mechanism used by NumPy since version 1.12
-   (see `NPY_RELAXED_STRIDES_CHECKING
-   <https://numpy.org/doc/stable/release/1.8.0-notes.html#npy-relaxed-strides-checking>`_).
-   Setting ``NUMBA_NPY_RELAXED_STRIDES_CHECKING=0`` reverts back to strict
-   strides checking. This option should not normally be needed, but is provided
-   in case it is needed to work around latent bugs related to strict strides
-   checking.
-
-   Strict strides checking is deprecated and may be removed in future. See
-   :ref:`deprecation-strict-strides`.
-
 .. envvar:: NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS
 
    Enable warnings if the grid size is too small relative to the number of
