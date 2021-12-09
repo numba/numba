@@ -2812,7 +2812,8 @@ class CudaPythonLinker(Linker):
         arch = bytes(f'--gpu-architecture=compute_{major}{minor}', 'ascii')
 
         # rdc is needed to prevent device functions being optimized away
-        opts = [arch, b'-rdc', b'true']
+        include = f'-I{config.CUDA_INCLUDE_PATH}'.encode()
+        opts = [arch, b'-rdc', b'true', include]
         err, = nvrtc.nvrtcCompileProgram(prog, len(opts), opts)
         compile_error = (err == nvrtc.nvrtcResult.NVRTC_ERROR_COMPILATION)
 

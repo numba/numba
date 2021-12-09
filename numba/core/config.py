@@ -408,6 +408,12 @@ class _EnvReloader(object):
         CUDA_PER_THREAD_DEFAULT_STREAM = _readenv(
             "NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM", int, 0)
 
+        # Location of the CUDA include files
+        CUDA_INCLUDE_PATH = _readenv("NUMBA_CUDA_INCLUDE_PATH", str,
+                                     "/usr/local/cuda/include")
+
+        # Threading settings
+
         # The default number of threads to use.
         NUMBA_DEFAULT_NUM_THREADS = max(
             1,
