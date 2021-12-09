@@ -986,9 +986,10 @@ class MixedContainerUnroller(FunctionPass):
         b = ('def foo():\n\tif PLACEHOLDER_INDEX in (%s,):\n\t\t'
              'SENTINEL = None\n%s\n\telse:\n\t\t'
              'raise RuntimeError("Unreachable")\n\t'
-             'temp_defeat_garbage = None\n\t'     # defeat optimizer
-             'obvious_defeat_pattern = None\n\t'  # defeat optimizer
-             'return None\n\t'                    # defeat optimizer
+             'py310_defeat1 = 1\n\t'
+             'py310_defeat2 = 2\n\t'
+             'py310_defeat3 = 3\n\t'
+             'py310_defeat4 = 4\n\t'
              )
         keys = [k for k in data.keys()]
 
