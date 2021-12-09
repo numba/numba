@@ -129,7 +129,8 @@ class TestCompiledDict(TestCase):
         # Test that Optional cannot be used as value for Dict
         @njit
         def foo(choice):
-            k = {1: 2.5 if choice else None}
+            optional = 2.5 if choice else None
+            k = {1: optional}
             return k
 
         with self.assertRaises(TypingError) as raises:

@@ -362,6 +362,11 @@ class TestDebugInfoEmission(TestCase):
                 c = 5
             else:
                 c = 1
+            # prevents inline of return on py310
+            py310_defeat1 = 1  # noqa
+            py310_defeat2 = 2  # noqa
+            py310_defeat3 = 3  # noqa
+            py310_defeat4 = 4  # noqa
             return c
 
         sig = (types.intp,)

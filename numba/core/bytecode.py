@@ -88,6 +88,7 @@ class ByteCodeInst(object):
         # See also:
         # https://bugs.python.org/issue26647
         # https://bugs.python.org/issue27129
+        # https://github.com/python/cpython/pull/25069
         assert self.is_jump
         if PYVERSION >= (3, 10):
             if self.opcode in JREL_OPS:
