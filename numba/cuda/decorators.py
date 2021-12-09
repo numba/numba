@@ -129,5 +129,14 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
 
 
 def declare_device(name, sig):
+    """
+    Declare the signature of a foreign function. Returns a descriptor that can
+    be used to call the function from a Python kernel.
+
+    :param name: The name of the foreign function.
+    :type name: str
+    :param sig: The Numba signature of the function.
+    :type sig: str
+    """
     argtypes, restype = sigutils.normalize_signature(sig)
     return declare_device_function(name, restype, argtypes)

@@ -514,6 +514,14 @@ GPU support
    NVIDIA binding is currently missing support for Per-Thread Default
    Streams and the profiler APIs.
 
+.. envvar:: NUMBA_CUDA_INCLUDE_PATH
+
+   The location of the CUDA include files. This is used when linking CUDA C/C++
+   sources to Python kernels, and needs to be correctly set for CUDA includes to
+   be available to linked C/C++ sources. On Linux, it defaults to
+   `/usr/local/cuda/include`. On Windows, the default is **TBC**.
+
+
 Threading Control
 -----------------
 
