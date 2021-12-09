@@ -21,7 +21,6 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
                                        CanonicalizeLoopExit,
                                        CanonicalizeLoopEntry, LiteralUnroll,
                                        ReconstructSSA,
-                                       LiteralPropagationSubPipelinePass,
                                        )
 
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,

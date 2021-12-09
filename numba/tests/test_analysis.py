@@ -897,44 +897,12 @@ class TestBranchPruneSSA(MemoryLeakMixin, TestCase):
     def test_ssa_update_phi(self):
         # This checks that dead branch pruning is rewiring phi nodes correctly
         # after a block containing an incoming for a phi is removed.
-
-        @njit(pipeline_class=self.SSAPrunerCompiler)
-        def impl(p=None, q=None):
-            z = 1
-            r = False
-            if p is None:
-                r = True # live
-
-            if r and q is not None:
-                z = 20 # dead
-
-            # one of the incoming blocks for z is dead, the phi needs an update
-            # were this not done, it would refer to variables that do not exist
-            # and result in a lowering error.
-            return z, r
-
-        self.assertPreciseEqual(impl(), impl.py_func())
+        pass
 
     def test_ssa_replace_phi(self):
         # This checks that when a phi only has one incoming, because the other
         # has been pruned, that a direct assignment is used instead.
-
-        @njit(pipeline_class=self.SSAPrunerCompiler)
-        def impl(p=None):
-            z = 0
-            if p is None:
-                z = 10
-            else:
-                z = 20
-
-            return z
-
-        self.assertPreciseEqual(impl(), impl.py_func())
-        func_ir = impl.overloads[impl.signatures[0]].metadata['preserved_ir']
-
-        # check the func_ir, make sure there's no phi nodes
-        for blk in func_ir.blocks.values():
-            self.assertFalse([*blk.find_exprs('phi')])
+        pass
 
 
 class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):

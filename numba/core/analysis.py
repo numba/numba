@@ -402,15 +402,6 @@ def dead_branch_prune(func_ir, called_args):
         print("before".center(80, '-'))
         print(func_ir.dump())
 
-    phi2lbl = dict()
-    phi2asgn = dict()
-    for lbl, blk in func_ir.blocks.items():
-        for stmt in blk.body:
-            if isinstance(stmt, ir.Assign):
-                if isinstance(stmt.value, ir.Expr) and stmt.value.op == 'phi':
-                    phi2lbl[stmt.value] = lbl
-                    phi2asgn[stmt.value] = stmt
-
     # This looks for branches where:
     # at least one arg of the condition is in input args and const
     # at least one an arg of the condition is a const
@@ -534,35 +525,6 @@ def dead_branch_prune(func_ir, called_args):
 
     new_cfg = compute_cfg_from_blocks(func_ir.blocks)
     dead_blocks = new_cfg.dead_nodes()
-
-    # for all phis that are still in live blocks.
-    for phi, lbl in phi2lbl.items():
-        if lbl in dead_blocks:
-            continue
-        new_incoming = [x[0] for x in new_cfg.predecessors(lbl)]
-        if set(new_incoming) != set(phi.incoming_blocks):
-            # Something has changed in the CFG...
-            if len(new_incoming) == 1:
-                # There's now just one incoming. Replace the PHI node by a
-                # direct assignment
-                idx = phi.incoming_blocks.index(new_incoming[0])
-                phi2asgn[phi].value = phi.incoming_values[idx]
-            else:
-                # There's more than one incoming still, then look through the
-                # incoming and remove dead
-                ic_val_tmp = []
-                ic_blk_tmp = []
-                for ic_val, ic_blk in zip(phi.incoming_values,
-                                          phi.incoming_blocks):
-                    if ic_blk in dead_blocks:
-                        continue
-                    else:
-                        ic_val_tmp.append(ic_val)
-                        ic_blk_tmp.append(ic_blk)
-                phi.incoming_values.clear()
-                phi.incoming_values.extend(ic_val_tmp)
-                phi.incoming_blocks.clear()
-                phi.incoming_blocks.extend(ic_blk_tmp)
 
     # Remove dead blocks, this is safe as it relies on the CFG only.
     for dead in dead_blocks:
