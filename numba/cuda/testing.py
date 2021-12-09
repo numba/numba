@@ -106,6 +106,15 @@ def skip_on_arm(reason):
     return unittest.skipIf(is_arm, reason)
 
 
+def skip_if_cuda_includes_missing(fn):
+    # Skip when cuda.h is not available - generally this should indicate
+    # whether the CUDA includes are available or not
+    cuda_h = os.path.join(config.CUDA_INCLUDE_PATH, 'cuda.h')
+    cuda_h_file = (os.path.exists(cuda_h) and os.path.isfile(cuda_h))
+    reason = 'CUDA include dir not available on this system'
+    return unittest.skipUnless(cuda_h_file, reason)(fn)
+
+
 def cc_X_or_above(major, minor):
     if not config.ENABLE_CUDASIM:
         cc = devices.get_context().device.compute_capability

@@ -2,7 +2,8 @@ import os.path
 import numpy as np
 import warnings
 from numba.cuda.testing import unittest
-from numba.cuda.testing import skip_on_cudasim, skip_unless_cuda_python
+from numba.cuda.testing import (skip_on_cudasim, skip_unless_cuda_python,
+                                skip_if_cuda_includes_missing)
 from numba.cuda.testing import CUDATestCase
 from numba.cuda.cudadrv.driver import Linker, LinkerError, NvrtcError
 from numba.cuda import require_context
@@ -147,12 +148,24 @@ class TestLinker(CUDATestCase):
                 bar(x)
 
         msg = e.exception.args[0]
-        # Check the linker error message refers to the NVRTC compile
+        # Check the error message refers to the NVRTC compile
         self.assertIn('NVRTC Compilation failure', msg)
         # Check the expected error in the CUDA source is reported
         self.assertIn('identifier "SYNTAX" is undefined', msg)
         # Check the filename is reported correctly
         self.assertIn('in the compilation of "error.cu"', msg)
+
+    @skip_if_cuda_includes_missing
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
+    def test_linking_cu_cuda_include(self):
+        link = os.path.join(os.path.dirname(__file__), 'data',
+                            'cuda_include.cu')
+
+        # An exception will be raised when linking this kernel due to the
+        # compile failure if CUDA includes cannot be found by Nvrtc.
+        @cuda.jit('void()', link=[link])
+        def kernel():
+            pass
 
     def test_try_to_link_nonexistent(self):
         with self.assertRaises(LinkerError) as e:
