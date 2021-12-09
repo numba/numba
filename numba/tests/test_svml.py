@@ -240,8 +240,10 @@ class TestSVMLGeneration(TestCase):
             q = ctx.Queue()
             p = ctx.Process(target=type(self).mp_runner, args=[testname, q])
             p.start()
-            # timeout to avoid hanging and long enough to avoid bailing too early
-            term_or_timeout = p.join(timeout=10)
+            # timeout to avoid hanging and long enough to avoid bailing too
+            # early. Note: this was timeout=10 but that seemed to caused
+            # intermittent failures on heavily loaded machines.
+            term_or_timeout = p.join(timeout=30)
             exitcode = p.exitcode
             if term_or_timeout is None:
                 if exitcode is None:
