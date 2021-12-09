@@ -62,7 +62,7 @@ if [[ "$PYTHON" != "3.10" && "$VANILLA_INSTALL" != "yes" ]]; then
     # Scipy, CFFI, jinja2, IPython, ipython_genutils and pygments are optional dependencies,
     # but exercised in the test suite
     # pexpect is used to run the gdb test suite
-    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel ipython_genutils pygments pexpect
+    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel pygments pexpect
     # Only install scipy on 64bit, else it'll pull in NumPy, 32bit linux needs
     # to get scipy from pip
     if [[ "$CONDA_SUBDIR" != "linux-32" && "$BITS32" != "yes" ]] ; then
@@ -87,7 +87,7 @@ fi
 if [[ "$PYTHON" == "3.10" ]] ; then
     $PIP_INSTALL -U pip
     pip --version
-    $PIP_INSTALL gitpython pyyaml cffi jinja2 ipython ipykernel ipython_genutils pygments pexpect scipy numpy
+    $PIP_INSTALL gitpython pyyaml cffi jinja2 ipython ipykernel pygments pexpect scipy numpy
 # If on 32bit linux, now pip install NumPy (no conda package), SciPy is broken?!
 elif [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
     $PIP_INSTALL numpy==$NUMPY
