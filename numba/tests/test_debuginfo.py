@@ -347,7 +347,8 @@ class TestDebugInfoEmission(TestCase):
                 groups = match.groups()
                 self.assertEqual(len(groups), 1)
                 associated_lines.add(int(groups[0]))
-        self.assertEqual(len(associated_lines), 3) # 3 versions of 'c'
+        # 3 versions of 'c': `c = 0`, `return c`, `c+=1`
+        self.assertEqual(len(associated_lines), 3)
         self.assertIn(pysrc_line_start, associated_lines)
 
     def test_DILocation_versioned_variables(self):
