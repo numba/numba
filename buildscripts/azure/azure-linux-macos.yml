@@ -24,6 +24,7 @@ jobs:
 
     - script: |
         export PATH=$HOME/miniconda3/bin:$PATH
+        export MACOSX_SDK_VERSION=10.15
         buildscripts/incremental/build.sh
       displayName: 'Build'
 
