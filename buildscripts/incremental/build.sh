@@ -14,6 +14,7 @@ fi
 
 
 export MACOSX_SDK_VERSION=10.15
+SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
 python setup.py build_ext -q --inplace --debug $EXTRA_BUILD_EXT_FLAGS
 # (note we don't install to avoid problems with extra long Windows paths
 #  during distutils-dependent tests -- e.g. test_pycc)
