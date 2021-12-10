@@ -15,6 +15,7 @@ fi
 
 if [[ $(uname) == "Darwin" ]]; then
     export MACOSX_SDK_VERSION=10.15
+    export MACOSX_DEPLOYMENT_TARGET=10.15
     export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
     export OSX_SDK_DIR="$(xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs"
     export USING_SYSTEM_SDK_DIR=1
