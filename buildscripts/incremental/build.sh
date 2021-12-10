@@ -1,5 +1,6 @@
 #!/bin/bash
 
+source  activate
 conda activate $CONDA_ENV
 
 # Make sure any error below is reported as such
