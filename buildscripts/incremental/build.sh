@@ -15,9 +15,10 @@ fi
 
 if [[ $(uname) == "Darwin" ]]; then
     export MACOSX_SDK_VERSION=10.15
-    SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
-    OSX_SDK_DIR="$(xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs"
-    USING_SYSTEM_SDK_DIR=1
+    export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+    export OSX_SDK_DIR="$(xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs"
+    export USING_SYSTEM_SDK_DIR=1
+    export CPATH=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include
     plutil -replace MinimumSDKVersion -string ${MACOSX_SDK_VERSION} $(xcode-select -p)/Platforms/MacOSX.platform/Info.plist
     plutil -replace DTSDKName -string macosx${MACOSX_SDK_VERSION}internal $(xcode-select -p)/Platforms/MacOSX.platform/Info.plist
 fi
