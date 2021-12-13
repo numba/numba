@@ -56,12 +56,14 @@ source activate $CONDA_ENV
 set -v
 
 # Install optional packages into activated env
+
 echo "PYTHON=$PYTHON"
 echo "VANILLA_INSTALL=$VANILLA_INSTALL"
 if [[ "$PYTHON" != "3.10" && "$VANILLA_INSTALL" != "yes" ]]; then
-    # Scipy, CFFI, jinja2, IPython, ipython_genutils and pygments are optional dependencies,
-    # but exercised in the test suite
-    # pexpect is used to run the gdb test suite
+    # Scipy, CFFI, jinja2, IPython, and pygments are optional dependencies,
+    # but exercised in the test suite.
+    # pexpect is used to run the gdb tests.
+    # ipykernel is used for testing ipython behaviours.
     $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel pygments pexpect
     # Only install scipy on 64bit, else it'll pull in NumPy, 32bit linux needs
     # to get scipy from pip
@@ -96,6 +98,7 @@ fi
 
 # Install latest llvmlite build
 $CONDA_INSTALL -c numba/label/dev llvmlite
+
 
 # Install dependencies for building the documentation
 if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx=2.4.4 docutils=0.17 sphinx_rtd_theme pygments numpydoc; fi

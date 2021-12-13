@@ -70,6 +70,8 @@ test:
     - intel-openmp             # [osx]
     # This is for driving gdb tests
     - pexpect                  # [linux64]
+    # For testing ipython
+    - ipykernel
     # Need these for AOT. Do not init msvc as it may not be present
     - {{ compiler('c') }}      # [not (win or armv6l or armv7l or aarch64)]
     - {{ compiler('cxx') }}    # [not (win or armv6l or armv7l or aarch64)]
