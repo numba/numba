@@ -2496,7 +2496,11 @@ def array_record_getattr(context, builder, typ, value, attr):
     dtype = rectype.typeof(attr)
     offset = rectype.offset(attr)
 
-    resty = typ.copy(dtype=dtype, layout='A')
+    if isinstance(dtype, types.NestedArray):
+        resty = typ.copy(
+            dtype=dtype.dtype, ndim=typ.ndim + dtype.ndim, layout='A')
+    else:
+        resty = typ.copy(dtype=dtype, layout='A')
 
     raryty = make_array(resty)
 
@@ -2507,11 +2511,24 @@ def array_record_getattr(context, builder, typ, value, attr):
     newdataptr = cgutils.pointer_add(
         builder, array.data, constoffset,  return_type=rary.data.type,
     )
-    datasize = context.get_abi_sizeof(context.get_data_type(dtype))
+    if isinstance(dtype, types.NestedArray):
+        # new shape = recarray shape + inner dimension from nestedarray
+        shape = cgutils.unpack_tuple(builder, array.shape, typ.ndim)
+        shape += [context.get_constant(types.intp, i) for i in dtype.shape]
+        # new strides = recarray strides + strides of the inner nestedarray
+        strides = cgutils.unpack_tuple(builder, array.strides, typ.ndim)
+        strides += [context.get_constant(types.intp, i) for i in dtype.strides]
+        # New datasize = size of elements of the nestedarray
+        datasize = context.get_abi_sizeof(context.get_data_type(dtype.dtype))
+    else:
+        # New shape, strides, and datasize match the underlying array
+        shape = array.shape
+        strides = array.strides
+        datasize = context.get_abi_sizeof(context.get_data_type(dtype))
     populate_array(rary,
                    data=newdataptr,
-                   shape=array.shape,
-                   strides=array.strides,
+                   shape=shape,
+                   strides=strides,
                    itemsize=context.get_constant(types.intp, datasize),
                    meminfo=array.meminfo,
                    parent=array.parent)

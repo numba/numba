@@ -21,6 +21,7 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
                                        CanonicalizeLoopExit,
                                        CanonicalizeLoopEntry, LiteralUnroll,
                                        ReconstructSSA,
+                                       LiteralPropagationSubPipelinePass,
                                        )
 
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
@@ -625,6 +626,8 @@ class DefaultPassBuilder(object):
 
         if state.flags.enable_ssa:
             pm.add_pass(ReconstructSSA, "ssa")
+
+        pm.add_pass(LiteralPropagationSubPipelinePass, "Literal propagation")
 
         pm.finalize()
         return pm
