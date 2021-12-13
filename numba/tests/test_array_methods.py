@@ -8,7 +8,7 @@ import numpy as np
 from numba import jit, typeof
 from numba.core import types
 from numba.core.compiler import compile_isolated
-from numba.core.errors import TypingError, LoweringError
+from numba.core.errors import TypingError, LoweringError, NumbaValueError
 from numba.np.numpy_support import as_dtype, numpy_version
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeak,
                                  MemoryLeakMixin, tag, needs_blas)
@@ -1233,9 +1233,9 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(foo(a), foo.py_func(a))
         # ndim == 2, axis == -3, BAD
         a = np.ones((1, 2))
-        with self.assertRaises(LoweringError) as raises:
+        with self.assertRaises(NumbaValueError) as raises:
             foo(a)
-        errmsg = "'axis' entry is out of bounds"
+        errmsg = "'axis' entry (-1) is out of bounds"
         self.assertIn(errmsg, str(raises.exception))
         with self.assertRaises(ValueError) as raises:
             foo.py_func(a)

@@ -11,7 +11,8 @@ from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
 from numba.core import types, utils, ir, generators, cgutils
-from numba.core.errors import ForbiddenConstruct, LoweringError
+from numba.core.errors import (ForbiddenConstruct, LoweringError,
+                               NumbaNotImplementedError)
 from numba.core.lowering import BaseLower
 
 
@@ -153,6 +154,9 @@ class PyLower(BaseLower):
         elif isinstance(inst, ir.Del):
             self.delvar(inst.value)
 
+        elif isinstance(inst, ir.PopBlock):
+            pass # this is just a marker
+
         elif isinstance(inst, ir.Raise):
             if inst.exception is not None:
                 exc = self.loadvar(inst.exception.name)
@@ -165,7 +169,8 @@ class PyLower(BaseLower):
             self.return_exception_raised()
 
         else:
-            raise NotImplementedError(type(inst), inst)
+            msg = f"{type(inst)}, {inst}"
+            raise NumbaNotImplementedError(msg)
 
     @utils.cached_property
     def _omitted_typobj(self):
@@ -624,6 +629,11 @@ class PyLower(BaseLower):
             ptr = self.builder.alloca(ltype, name=name)
             self.builder.store(cgutils.get_null_value(ltype), ptr)
         return ptr
+
+    def _alloca_var(self, name, fetype):
+        # This is here for API compatibility with lowering.py::Lower.
+        # NOTE: fetype is unused
+        return self.alloca(name)
 
     def incref(self, value):
         self.pyapi.incref(value)

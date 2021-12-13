@@ -42,15 +42,15 @@ Supported Platforms
 
 * (Optional) Accelerators and GPUs:
 
-  * NVIDIA GPUs (Kepler architecture or later) via CUDA driver on Linux,
-    Windows, macOS (< 10.14).
+  * NVIDIA GPUs (Kepler architecture or later) via CUDA driver on Linux and
+    Windows.
 
 Dependencies
 ============
 
-* Python versions: 3.7-3.9
+* Python versions: 3.7-3.10
 * llvmlite 0.38.*
-* NumPy >=1.17 (can build with 1.11 for ABI compatibility).
+* NumPy >=1.18 (can build with 1.11 for ABI compatibility).
 
 Optionally:
 

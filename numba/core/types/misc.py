@@ -3,6 +3,8 @@ from numba.core.types.common import (Dummy, IterableType, Opaque,
                                      SimpleIteratorType)
 from numba.core.typeconv import Conversion
 from numba.core.errors import TypingError, LiteralTypingError
+from numba.core.ir import UndefinedType
+from numba.core.utils import get_hashable_key
 
 
 class PyObject(Dummy):
@@ -87,11 +89,14 @@ class Omitted(Opaque):
 
     def __init__(self, value):
         self._value = value
+        # Use helper function to support both hashable and non-hashable
+        # values. See discussion in gh #6957.
+        self._value_key = get_hashable_key(value)
         super(Omitted, self).__init__("omitted(default=%r)" % (value,))
 
     @property
     def key(self):
-        return type(self._value), id(self._value)
+        return type(self._value), self._value_key
 
     @property
     def value(self):
@@ -218,9 +223,6 @@ class Optional(Type):
         name = "OptionalType(%s)" % self.type
         super(Optional, self).__init__(name)
 
-    def __str__(self):
-        return "%s i.e. the type '%s or None'" % (self.name, self.type)
-
     @property
     def key(self):
         return self.type
@@ -294,6 +296,9 @@ class ExceptionClass(Callable, Phantom):
         from numba.core import typing
         return_type = ExceptionInstance(self.exc_class)
         return [typing.signature(return_type)], False
+
+    def get_impl_key(self, sig):
+        return type(self)
 
     @property
     def key(self):
@@ -427,6 +432,9 @@ class ClassType(Callable, Opaque):
     def get_call_signatures(self):
         return (), True
 
+    def get_impl_key(self, sig):
+        return type(self)
+
     @property
     def methods(self):
         return {k: v.py_func for k, v in self.jit_methods.items()}
@@ -514,6 +522,9 @@ class ContextManager(Callable, Phantom):
 
         posargs = list(args) + [v for k, v in sorted(kws.items())]
         return typing.signature(self, *posargs)
+
+    def get_impl_key(self, sig):
+        return type(self)
 
 
 class UnicodeType(IterableType, Hashable):

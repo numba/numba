@@ -78,7 +78,7 @@ def type_inference_stage(typingctx, targetctx, interp, args, return_type,
         for k, v in locals.items():
             infer.seed_type(k, v)
 
-        infer.build_constraint(raise_errors=raise_errors)
+        infer.build_constraint()
         # return errors in case of partial typing
         errs = infer.propagate(raise_errors=raise_errors)
         typemap, restype, calltypes = infer.unify(raise_errors=raise_errors)
@@ -145,15 +145,15 @@ class BaseTypeInference(FunctionPass):
                     cast = caststmts.get(var)
                     if cast is None or cast.value.name not in argvars:
                         if self._raise_errors:
-                            raise TypeError("Only accept returning of array "
-                                            "passed into the function as "
-                                            "argument")
+                            msg = ("Only accept returning of array passed into "
+                                   "the function as argument")
+                            raise errors.NumbaTypeError(msg)
 
             elif (isinstance(return_type, types.Function) or
                     isinstance(return_type, types.Phantom)):
                 if self._raise_errors:
                     msg = "Can't return function object ({}) in nopython mode"
-                    raise TypeError(msg.format(return_type))
+                    raise errors.NumbaTypeError(msg.format(return_type))
 
         with fallback_context(state, 'Function "%s" has invalid return type'
                               % (state.func_id.func_name,)):
@@ -388,7 +388,7 @@ class NativeLowering(LoweringPass):
                 funcdesc.PythonFunctionDescriptor.from_specialized_function(
                     interp, typemap, restype, calltypes,
                     mangler=targetctx.mangler, inline=flags.forceinline,
-                    noalias=flags.noalias)
+                    noalias=flags.noalias, abi_tags=[flags.get_mangle_string()])
 
             with targetctx.push_code_library(library):
                 lower = lowering.Lower(targetctx, library, fndesc, interp,

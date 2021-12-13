@@ -402,7 +402,6 @@ def dead_branch_prune(func_ir, called_args):
         print("before".center(80, '-'))
         print(func_ir.dump())
 
-    # orig_cfg = compute_cfg_from_blocks(func_ir.blocks)
     phi2lbl = dict()
     phi2asgn = dict()
     for lbl, blk in func_ir.blocks.items():
@@ -535,7 +534,6 @@ def dead_branch_prune(func_ir, called_args):
 
     new_cfg = compute_cfg_from_blocks(func_ir.blocks)
     dead_blocks = new_cfg.dead_nodes()
-    new_dominators = new_cfg.dominators()
 
     # for all phis that are still in live blocks.
     for phi, lbl in phi2lbl.items():
@@ -545,38 +543,10 @@ def dead_branch_prune(func_ir, called_args):
         if set(new_incoming) != set(phi.incoming_blocks):
             # Something has changed in the CFG...
             if len(new_incoming) == 1:
-                # There's now just one incoming, scan up the IR to find the
-                # version of the variable that dominates and replace the phi
-                # with that.
-                ic = new_incoming[0]
-                order = []
-
-                def walk(label):
-                    order.append(label)
-                    pred = [x for x in new_cfg.predecessors(label)]
-                    if pred:
-                        pick_one = pred[0][0]
-                        if len(pred) == 1:
-                            walk(pick_one)
-                        else:
-                            next_label = new_dominators[pick_one] - {pick_one}
-                            if next_label:
-                                walk(next(iter(next_label)))
-                walk(ic)
-
-                found = None
-                for pred_lbl in order:
-                    for stmt in func_ir.blocks[pred_lbl].body:
-                        if isinstance(stmt, ir.Assign):
-                            if stmt.target in phi.incoming_values:
-                                found = stmt.target
-                                break
-                    else:
-                        continue
-                    break
-                assert found
-                # replace the phi with direct assignment
-                phi2asgn[phi].value = found
+                # There's now just one incoming. Replace the PHI node by a
+                # direct assignment
+                idx = phi.incoming_blocks.index(new_incoming[0])
+                phi2asgn[phi].value = phi.incoming_values[idx]
             else:
                 # There's more than one incoming still, then look through the
                 # incoming and remove dead
