@@ -16,8 +16,8 @@ fi
 if [[ $(uname) == "Darwin" ]]; then
     # The following is suggested in https://docs.conda.io/projects/conda-build/en/latest/resources/compiler-tools.html?highlight=SDK#macos-sdk
     wget -q https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.10.sdk.tar.xz
-    shasum -c ./MacOSX10.10.sdk.checksum
-    tar -xf MacOSX10.10.sdk.tar.xz
+    shasum -c ./buildscripts/incremental/MacOSX10.10.sdk.checksum
+    tar -xf ./MacOSX10.10.sdk.tar.xz
     export SDKROOT=`pwd`/MacOSX10.10.sdk
 fi
 python setup.py build_ext -q --inplace --debug $EXTRA_BUILD_EXT_FLAGS --verbose
