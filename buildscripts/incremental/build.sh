@@ -14,16 +14,8 @@ else
 fi
 
 if [[ $(uname) == "Darwin" ]]; then
-#     export MACOSX_SDK_VERSION=10.15
-#     export MACOSX_DEPLOYMENT_TARGET=10.15
-#     export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
-#     export OSX_SDK_DIR="$(xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs"
-#     export USING_SYSTEM_SDK_DIR=1
-#     export CPATH=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include
-#     plutil -replace MinimumSDKVersion -string ${MACOSX_SDK_VERSION} $(xcode-select -p)/Platforms/MacOSX.platform/Info.plist
-#     plutil -replace DTSDKName -string macosx${MACOSX_SDK_VERSION}internal $(xcode-select -p)/Platforms/MacOSX.platform/Info.plist
-
-    wget https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.10.sdk.tar.xz
+    # The following is suggested in https://docs.conda.io/projects/conda-build/en/latest/resources/compiler-tools.html?highlight=SDK#macos-sdk
+    wget -q https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.10.sdk.tar.xz
     tar -xf MacOSX10.10.sdk.tar.xz
     export SDKROOT=`pwd`/MacOSX10.10.sdk
 fi
