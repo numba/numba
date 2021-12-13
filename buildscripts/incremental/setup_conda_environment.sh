@@ -78,9 +78,9 @@ if [[ $(uname) == Linux ]]; then
         $CONDA_INSTALL gcc_linux-64 gxx_linux-64
     fi
 elif  [[ $(uname) == Darwin ]]; then
-    $CONDA_INSTALL clang_osx-64 clangxx_osx-64
-    # Install llvm-openmp and intel-openmp on OSX too
-    $CONDA_INSTALL llvm-openmp intel-openmp
+    #$CONDA_INSTALL clang_osx-64 clangxx_osx-64
+    ## Install llvm-openmp and intel-openmp on OSX too
+    #$CONDA_INSTALL llvm-openmp intel-openmp
 fi
 
 # `pip install` all the dependencies on Python 3.10
