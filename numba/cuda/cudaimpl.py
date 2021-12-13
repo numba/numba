@@ -430,16 +430,6 @@ def float16_to_float_cast(context, builder, fromty, toty, val):
     return builder.call(cvt2float_asm, [val])
 
 
-@lower_cast(types.IntegerLiteral, types.float16)
-def literal_int_to_number(context, builder, fromty, toty, val):
-    lit = context.get_constant_generic(
-        builder,
-        fromty.literal_type,
-        fromty.literal_value,
-    )
-    return context.cast(builder, lit, fromty.literal_type, toty)
-
-
 @lower_cast(types.Float, types.float16)
 def float_to_float16_cast(context, builder, fromty, toty, val):
     if fromty.bitwidth == toty.bitwidth:
@@ -496,6 +486,7 @@ def float16_to_integer_cast(context, builder, fromty, toty, val):
 
 
 @lower_cast(types.Integer, types.float16)
+@lower_cast(types.IntegerLiteral, types.float16)
 def integer_to_float16_cast(context, builder, fromty, toty, val):
     if fromty.bitwidth == 16:
         conv_constraint = "h"

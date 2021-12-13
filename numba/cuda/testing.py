@@ -115,16 +115,6 @@ def cuda_X_or_above(major, minor):
         return True
 
 
-def skip_unless_toolkit_70(fn):
-    return unittest.skipUnless(cuda_X_or_above(7, 0),
-                               "requires toolkit >= 7.0")(fn)
-
-
-def skip_unless_toolkit_90(fn):
-    return unittest.skipUnless(cuda_X_or_above(9, 0),
-                               "requires toolkit >= 9.0")(fn)
-
-
 def skip_unless_toolkit_102(fn):
     return unittest.skipUnless(cuda_X_or_above(10, 2),
                                "requires toolkit >= 10.2")(fn)

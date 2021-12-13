@@ -47,6 +47,18 @@ def to_float16(x):
     return (np.float16(x) * np.float16(0.5))
 
 
+def cuda_to_float16_lit(x):
+    # When division and operators on float16 types are supported, this should
+    # be changed to match the implementation in to_float32.
+    return cuda.fp16.hmul(np.float16(x), 2)
+
+
+def to_float16_lit(x):
+    # When division and operators on float16 types are supported, this should
+    # be changed to match the implementation in to_float32.
+    return np.float16(x) * 2
+
+
 def to_float32(x):
     return np.float32(x) / np.float32(2)
 
@@ -132,6 +144,11 @@ class TestCasting(CUDATestCase):
             with self.subTest(toty=toty):
                 cfunc = self._create_wrapped(pyfunc, np.int64, toty)
                 self.assertEqual(cfunc(321), pyfunc(321))
+
+    def test_int_literal_to_float(self):
+        cfunc = self._create_wrapped(cuda_to_float16_lit, np.float16,
+                                     np.float16)
+        self.assertEqual(cfunc(321.0), to_float16_lit(321.0))
 
     @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_int_to_float16_ptx(self):

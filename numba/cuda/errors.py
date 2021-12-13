@@ -14,8 +14,7 @@ class KernelRuntimeError(RuntimeError):
 
 
 class CudaLoweringError(LoweringError):
-    def __init__(self, msg, loc=None):
-        super(LoweringError, self).__init__(msg, loc=loc)
+    pass
 
 
 _launch_help_url = ("https://numba.pydata.org/numba-doc/"
