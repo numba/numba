@@ -23,7 +23,7 @@ if [[ $(uname) == "Darwin" ]]; then
     plutil -replace MinimumSDKVersion -string ${MACOSX_SDK_VERSION} $(xcode-select -p)/Platforms/MacOSX.platform/Info.plist
     plutil -replace DTSDKName -string macosx${MACOSX_SDK_VERSION}internal $(xcode-select -p)/Platforms/MacOSX.platform/Info.plist
 fi
-python setup.py build_ext -q --inplace --debug $EXTRA_BUILD_EXT_FLAGS
+python setup.py build_ext -q --inplace --debug $EXTRA_BUILD_EXT_FLAGS --verbose
 # (note we don't install to avoid problems with extra long Windows paths
 #  during distutils-dependent tests -- e.g. test_pycc)
 
