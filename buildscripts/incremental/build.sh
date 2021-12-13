@@ -13,7 +13,7 @@ else
     EXTRA_BUILD_EXT_FLAGS=""
 fi
 
-# if [[ $(uname) == "Darwin" ]]; then
+if [[ $(uname) == "Darwin" ]]; then
 #     export MACOSX_SDK_VERSION=10.15
 #     export MACOSX_DEPLOYMENT_TARGET=10.15
 #     export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
@@ -22,7 +22,11 @@ fi
 #     export CPATH=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include
 #     plutil -replace MinimumSDKVersion -string ${MACOSX_SDK_VERSION} $(xcode-select -p)/Platforms/MacOSX.platform/Info.plist
 #     plutil -replace DTSDKName -string macosx${MACOSX_SDK_VERSION}internal $(xcode-select -p)/Platforms/MacOSX.platform/Info.plist
-# fi
+
+    wget https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.10.sdk.tar.xz
+    tar -xf MacOSX10.10.sdk.tar.xz
+    export SDKROOT=`pwd`/MacOSX10.10.sdk
+fi
 python setup.py build_ext -q --inplace --debug $EXTRA_BUILD_EXT_FLAGS --verbose
 # (note we don't install to avoid problems with extra long Windows paths
 #  during distutils-dependent tests -- e.g. test_pycc)
