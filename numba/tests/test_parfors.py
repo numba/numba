@@ -3562,7 +3562,7 @@ class TestPrangeBasic(TestPrangeBase):
                 for i in range(1):
                     result += 1
             else:
-                for i in range(1000000):
+                for i in range(1):
                     result -= 3
             return result
 
