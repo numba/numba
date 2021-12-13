@@ -2570,7 +2570,7 @@ class ConvertLoopPass:
 
                     blocks[loop.header].body = [parfor]
                     # We have to insert the header_body after the parfor because in
-                    # a Numba loop this will be executed one more time before the
+                    # a Numba loop this will be executed one more times before the
                     # branch and may contain instructions such as variable renamings
                     # that are relied upon later.
                     blocks[loop.header].body.extend(header_body)
