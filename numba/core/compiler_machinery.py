@@ -103,6 +103,13 @@ class CompilerPass(metaclass=ABCMeta):
         return self._analysis[pass_name]
 
 
+class SSACompliantMixin(object):
+    """ Mixin to indicate a pass is SSA form compliant. Nothing is asserted
+    about this condition at present.
+    """
+    pass
+
+
 class FunctionPass(CompilerPass):
     """ Base class for function passes
     """
@@ -362,7 +369,7 @@ class PassManager(object):
 
         def resolve_requires(key, rmap):
             def walk(lkey, rmap):
-                dep_set = set(rmap[lkey])
+                dep_set = rmap[lkey] if lkey in rmap else set()
                 if dep_set:
                     for x in dep_set:
                         dep_set |= (walk(x, rmap))

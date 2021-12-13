@@ -1618,12 +1618,15 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
             # typed as readonly, mutating an array in a global container
             # is not supported (should be compile time constant etc).
             def mark_array_ro(tup):
+                newtup = []
                 for item in tup.types:
                     if isinstance(item, types.Array):
-                        item.mutable = False
+                        item = item.copy(readonly=True)
                     elif isinstance(item, types.BaseAnonymousTuple):
-                        mark_array_ro(item)
-            mark_array_ro(typ)
+                        item = mark_array_ro(item)
+                    newtup.append(item)
+                return types.BaseTuple.from_types(newtup)
+            typ = mark_array_ro(typ)
 
         self.sentry_modified_builtin(inst, gvar)
         # Setting literal_value for globals because they are handled

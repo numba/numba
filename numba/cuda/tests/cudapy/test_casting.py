@@ -1,66 +1,78 @@
-import struct
 import numpy as np
 
+from numba.cuda import compile_ptx
+from numba.core.types import f2, i1, i2, i4, i8, u1, u2, u4, u8
 from numba import cuda
 from numba.core import types
-from numba.cuda.testing import CUDATestCase
+from numba.cuda.testing import CUDATestCase, skip_on_cudasim
+import itertools
 import unittest
 
 
-@cuda.jit
-def float16_to_float(r, h1, h2):
-    i = cuda.grid(1)
-    if i >= len(r):
-        return
-    r[i] = cuda.fp16.hadd(h1[i],  h2[i])
-
-
-@cuda.jit
-def float_add(r, h1, h2):
-    i = cuda.grid(1)
-    if i >= len(r):
-        return
-    r[i] = h1[i] + h2[i]
-
-
-def float_to_complex(x):
-    return types.complex128(x)
-
-
-def float_to_int64(x):
-    return np.int64(x)
-
-
-def float_to_int(x):
-    return np.int32(x)
-
-
-def float_to_int16(x):
-    return np.int16(x)
-
-
-def float_to_int8(x):
+def to_int8(x):
     return np.int8(x)
 
 
-def int_to_float(x):
-    return np.float64(x) / 2
+def to_int16(x):
+    return np.int16(x)
 
 
-def float_to_unsigned(x):
-    return types.uint32(x)
+def to_int32(x):
+    return np.int32(x)
 
 
-def float_to_unsigned64(x):
-    return types.uint64(x)
+def to_int64(x):
+    return np.int64(x)
 
 
-def float_to_unsigned16(x):
+def to_uint8(x):
+    return np.uint8(x)
+
+
+def to_uint16(x):
     return np.uint16(x)
 
 
-def float_to_unsigned8(x):
-    return np.uint8(x)
+def to_uint32(x):
+    return types.uint32(x)
+
+
+def to_uint64(x):
+    return types.uint64(x)
+
+
+def to_float16(x):
+    # When division and operators on float16 types are supported, this should
+    # be changed to match the implementation in to_float32.
+    return (np.float16(x) * np.float16(0.5))
+
+
+def cuda_to_float16_lit(x):
+    # When division and operators on float16 types are supported, this should
+    # be changed to match the implementation in to_float32.
+    return cuda.fp16.hmul(np.float16(x), 2)
+
+
+def to_float16_lit(x):
+    # When division and operators on float16 types are supported, this should
+    # be changed to match the implementation in to_float32.
+    return np.float16(x) * 2
+
+
+def to_float32(x):
+    return np.float32(x) / np.float32(2)
+
+
+def to_float64(x):
+    return np.float64(x) / np.float64(2)
+
+
+def to_complex64(x):
+    return np.complex64(x)
+
+
+def to_complex128(x):
+    return np.complex128(x)
 
 
 class TestCasting(CUDATestCase):
@@ -81,139 +93,123 @@ class TestCasting(CUDATestCase):
         return wrapper_fn
 
     def test_float_to_int(self):
-        pyfunc = float_to_int
-        cfunc = self._create_wrapped(pyfunc, np.float32, np.int32)
+        pyfuncs = (to_int8, to_int16, to_int32, to_int64)
+        totys = (np.int8, np.int16, np.int32, np.int64)
+        fromtys = (np.float16, np.float32, np.float64)
 
-        self.assertEqual(cfunc(12.3), pyfunc(12.3))
-        self.assertEqual(cfunc(12.3), int(12.3))
-        self.assertEqual(cfunc(-12.3), pyfunc(-12.3))
-        self.assertEqual(cfunc(-12.3), int(-12.3))
+        for pyfunc, toty in zip(pyfuncs, totys):
+            for fromty in fromtys:
+                with self.subTest(fromty=fromty, toty=toty):
+                    cfunc = self._create_wrapped(pyfunc, fromty, toty)
+                    self.assertEqual(cfunc(12.3), pyfunc(12.3))
+                    self.assertEqual(cfunc(12.3), int(12.3))
+                    self.assertEqual(cfunc(-12.3), pyfunc(-12.3))
+                    self.assertEqual(cfunc(-12.3), int(-12.3))
+
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_float16_to_int_ptx(self):
+        pyfuncs = (to_int8, to_int16, to_int32, to_int64)
+        sizes = (8, 16, 32, 64)
+
+        for pyfunc, size in zip(pyfuncs, sizes):
+            ptx, _ = compile_ptx(pyfunc, [f2], device=True)
+            self.assertIn(f"cvt.rni.s{size}.f16", ptx)
+
+    def test_float_to_uint(self):
+        pyfuncs = (to_int8, to_int16, to_int32, to_int64)
+        totys = (np.uint8, np.uint16, np.uint32, np.uint64)
+        fromtys = (np.float16, np.float32, np.float64)
+
+        for pyfunc, toty in zip(pyfuncs, totys):
+            for fromty in fromtys:
+                with self.subTest(fromty=fromty, toty=toty):
+                    cfunc = self._create_wrapped(pyfunc, fromty, toty)
+                    self.assertEqual(cfunc(12.3), pyfunc(12.3))
+                    self.assertEqual(cfunc(12.3), int(12.3))
+
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_float16_to_uint_ptx(self):
+        pyfuncs = (to_uint8, to_uint16, to_uint32, to_uint64)
+        sizes = (8, 16, 32, 64)
+
+        for pyfunc, size in zip(pyfuncs, sizes):
+            ptx, _ = compile_ptx(pyfunc, [f2], device=True)
+            self.assertIn(f"cvt.rni.u{size}.f16", ptx)
 
     def test_int_to_float(self):
-        pyfunc = int_to_float
-        cfunc = self._create_wrapped(pyfunc, np.int64, np.float64)
+        pyfuncs = (to_float16, to_float32, to_float64)
+        totys = (np.float16, np.float32, np.float64)
 
-        self.assertEqual(cfunc(321), pyfunc(321))
-        self.assertEqual(cfunc(321), 321. / 2)
+        for pyfunc, toty in zip(pyfuncs, totys):
+            with self.subTest(toty=toty):
+                cfunc = self._create_wrapped(pyfunc, np.int64, toty)
+                self.assertEqual(cfunc(321), pyfunc(321))
 
-    def test_float_to_unsigned(self):
-        pyfunc = float_to_unsigned
-        cfunc = self._create_wrapped(pyfunc, np.float32, np.uint32)
+    def test_int_literal_to_float(self):
+        cfunc = self._create_wrapped(cuda_to_float16_lit, np.float16,
+                                     np.float16)
+        self.assertEqual(cfunc(321.0), to_float16_lit(321.0))
 
-        self.assertEqual(cfunc(3.21), pyfunc(3.21))
-        self.assertEqual(cfunc(3.21),
-                         struct.unpack('I', struct.pack('i', 3))[0])
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_int_to_float16_ptx(self):
+        fromtys = (i1, i2, i4, i8)
+        sizes = (8, 16, 32, 64)
 
-    def test_float16_to_unsigned(self):
-        pyfunc = float_to_unsigned
-        cfunc = self._create_wrapped(pyfunc, np.float16, np.uint32)
+        for ty, size in zip(fromtys, sizes):
+            ptx, _ = compile_ptx(to_float16, [ty], device=True)
+            self.assertIn(f"cvt.rn.f16.s{size}", ptx)
 
-        self.assertEqual(cfunc(3.21), pyfunc(3.21))
-        self.assertEqual(cfunc(3.21),
-                         struct.unpack('I', struct.pack('i', 3))[0])
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_uint_to_float16_ptx(self):
+        fromtys = (u1, u2, u4, u8)
+        sizes = (8, 16, 32, 64)
 
-    def test_float16_to_unsigned16(self):
-        pyfunc = float_to_unsigned16
-        cfunc = self._create_wrapped(pyfunc, np.float16, np.uint16)
+        for ty, size in zip(fromtys, sizes):
+            ptx, _ = compile_ptx(to_float16, [ty], device=True)
+            self.assertIn(f"cvt.rn.f16.u{size}", ptx)
 
-        self.assertEqual(cfunc(3.21), pyfunc(3.21))
-        self.assertEqual(cfunc(3.21),
-                         struct.unpack('H', struct.pack('h', 3))[0])
+    def test_float_to_float(self):
+        pyfuncs = (to_float16, to_float32, to_float64)
+        tys = (np.float16, np.float32, np.float64)
 
-    def test_float16_to_unsigned8(self):
-        pyfunc = float_to_unsigned8
-        cfunc = self._create_wrapped(pyfunc, np.float16, np.uint16)
+        for (pyfunc, fromty), toty in itertools.product(zip(pyfuncs, tys), tys):
+            with self.subTest(fromty=fromty, toty=toty):
+                cfunc = self._create_wrapped(pyfunc, fromty, toty)
+                # For this test we cannot use the pyfunc for comparison because
+                # the CUDA target doesn't yet implement division (or operators)
+                # for float16 values, so we test by comparing with the computed
+                # expression instead.
+                np.testing.assert_allclose(cfunc(12.3),
+                                           toty(12.3) / toty(2), rtol=0.0003)
+                np.testing.assert_allclose(cfunc(-12.3),
+                                           toty(-12.3) / toty(2), rtol=0.0003)
 
-        self.assertEqual(cfunc(3.21), pyfunc(3.21))
-        self.assertEqual(cfunc(3.21),
-                         struct.unpack('B', struct.pack('b', 3))[0])
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_float16_to_float_ptx(self):
+        pyfuncs = (to_float32, to_float64)
+        postfixes = ("f32", "f64")
 
-    def test_float16_to_unsigned64(self):
-        pyfunc = float_to_unsigned64
-        cfunc = self._create_wrapped(pyfunc, np.float16, np.uint64)
+        for pyfunc, postfix in zip(pyfuncs, postfixes):
+            ptx, _ = compile_ptx(pyfunc, [f2], device=True)
+            self.assertIn(f"cvt.{postfix}.f16", ptx)
 
-        self.assertEqual(cfunc(3.21), pyfunc(3.21))
-        self.assertEqual(cfunc(3.21),
-                         struct.unpack('L', struct.pack('l', 3))[0])
+    def test_float_to_complex(self):
+        pyfuncs = (to_complex64, to_complex128)
+        totys = (np.complex64, np.complex128)
+        fromtys = (np.float16, np.float32, np.float64)
 
-    def test_float16_to_float32(self):
-        np.random.seed(1)
-        x = np.random.rand(10).astype(np.float16)
-        y = np.random.rand(10).astype(np.float16)
-        r = np.zeros(x.shape, dtype=np.float32)
-        float16_to_float[1, 32](r, x, y)
-        ref = (x + y).astype(np.float32)
-        np.testing.assert_array_equal(r, ref)
-
-    def test_float16_to_float64(self):
-        np.random.seed(1)
-        x = np.random.rand(10).astype(np.float16)
-        y = np.random.rand(10).astype(np.float16)
-        r = np.zeros(x.shape, dtype=np.float64)
-        float16_to_float[1, 32](r, x, y)
-        ref = (x + y).astype(np.float64)
-        np.testing.assert_array_equal(r, ref)
-
-    def test_float16_to_complex(self):
-        pyfunc = float_to_complex
-        cfunc = self._create_wrapped(pyfunc, np.float16, np.complex128)
-
-        np.testing.assert_allclose(cfunc(-3.21), pyfunc(-3.21), rtol=0.05)
-        np.testing.assert_allclose(cfunc(-3.21), -3.21 + 0j, rtol=0.05)
-
-    def test_float32_to_float16(self):
-        np.random.seed(1)
-        x = np.random.rand(10).astype(np.float32)
-        y = np.random.rand(10).astype(np.float32)
-        r = np.zeros(x.shape, dtype=np.float16)
-        float_add[1, 32](r, x, y)
-        ref = (x + y).astype(np.float16)
-        np.testing.assert_array_equal(r, ref)
-
-    def test_float64_to_float16(self):
-        np.random.seed(1)
-        x = np.random.rand(10).astype(np.float64)
-        y = np.random.rand(10).astype(np.float64)
-        r = np.zeros(x.shape, dtype=np.float16)
-        float_add[1, 32](r, x, y)
-        ref = (x + y).astype(np.float16)
-        np.testing.assert_array_equal(r, ref)
-
-    def test_float16_to_int64(self):
-        pyfunc = float_to_int64
-        cfunc = self._create_wrapped(pyfunc, np.float16, np.int64)
-
-        self.assertEqual(cfunc(12.3), pyfunc(12.3))
-        self.assertEqual(cfunc(12.3), int(12.3))
-        self.assertEqual(cfunc(-12.3), pyfunc(-12.3))
-        self.assertEqual(cfunc(-12.3), int(-12.3))
-
-    def test_float16_to_int32(self):
-        pyfunc = float_to_int
-        cfunc = self._create_wrapped(pyfunc, np.float16, np.int32)
-
-        self.assertEqual(cfunc(12.3), pyfunc(12.3))
-        self.assertEqual(cfunc(12.3), int(12.3))
-        self.assertEqual(cfunc(-12.3), pyfunc(-12.3))
-        self.assertEqual(cfunc(-12.3), int(-12.3))
-
-    def test_float16_to_int16(self):
-        pyfunc = float_to_int16
-        cfunc = self._create_wrapped(pyfunc, np.float16, np.int16)
-
-        self.assertEqual(cfunc(12.3), pyfunc(12.3))
-        self.assertEqual(cfunc(12.3), np.int16(12.3))
-        self.assertEqual(cfunc(-12.3), pyfunc(-12.3))
-        self.assertEqual(cfunc(-12.3), np.int16(-12.3))
-
-    def test_float16_to_int8(self):
-        pyfunc = float_to_int8
-        cfunc = self._create_wrapped(pyfunc, np.float16, np.int8)
-
-        self.assertEqual(cfunc(12.3), pyfunc(12.3))
-        self.assertEqual(cfunc(12.3), np.int16(12.3))
-        self.assertEqual(cfunc(-12.3), pyfunc(-12.3))
-        self.assertEqual(cfunc(-12.3), np.int16(-12.3))
+        for pyfunc, toty in zip(pyfuncs, totys):
+            for fromty in fromtys:
+                with self.subTest(fromty=fromty, toty=toty):
+                    cfunc = self._create_wrapped(pyfunc, fromty, toty)
+                    # Here we need to explicitly cast the input to the pyfunc
+                    # to match the casting that is automatically applied when
+                    # passing the input to the cfunc as part of wrapping it in
+                    # an array of type fromtype.
+                    np.testing.assert_allclose(cfunc(3.21),
+                                               pyfunc(fromty(3.21)))
+                    np.testing.assert_allclose(cfunc(-3.21),
+                                               pyfunc(fromty(-3.21)) + 0j)
 
 
 if __name__ == '__main__':

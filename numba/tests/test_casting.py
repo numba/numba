@@ -1,12 +1,11 @@
 import numpy as np
 from numba.core.compiler import compile_isolated
 from numba.core.errors import TypingError
-from numba import njit, cuda
+from numba import njit
 from numba.core import types
 import struct
 import unittest
 
-from numba.core.types.scalars import Integer
 
 def float_to_int(x):
     return types.int32(x)

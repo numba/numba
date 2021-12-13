@@ -60,7 +60,7 @@ def get_state_ptr(context, builder, name):
     If the state isn't initialized, it is lazily initialized with
     system entropy.
     """
-    assert name in ('py', 'np')
+    assert name in ('py', 'np', 'internal')
     func_name = "numba_get_%s_random_state" % name
     fnty = ir.FunctionType(rnd_state_ptr_t, ())
     fn = cgutils.get_or_insert_function(builder.module, fnty, func_name)
@@ -82,6 +82,11 @@ def get_np_state_ptr(context, builder):
     """
     return get_state_ptr(context, builder, 'np')
 
+def get_internal_state_ptr(context, builder):
+    """
+    Get a pointer to the thread-local internal random state.
+    """
+    return get_state_ptr(context, builder, 'internal')
 
 # Accessors
 def get_index_ptr(builder, state_ptr):

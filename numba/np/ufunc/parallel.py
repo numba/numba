@@ -344,9 +344,9 @@ def _check_tbb_version_compatible():
     try:
         # first check that the TBB version is new enough
         if _IS_WINDOWS:
-            libtbb_name = 'tbb'
+            libtbb_name = 'tbb12.dll'
         elif _IS_OSX:
-            libtbb_name = 'libtbb.dylib'
+            libtbb_name = 'libtbb.12.dylib'
         elif _IS_LINUX:
             libtbb_name = 'libtbb.so.12'
         else:
