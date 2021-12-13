@@ -567,7 +567,7 @@ def lower_fp16_comparison(fn, op):
             zext = builder.zext(cmp, ir.IntType(8))
             return zext
         else:
-            raise error.CudaSupportError(f"Compute capability < 5.3 does"
+            raise errors.CudaLoweringError(f"Compute capability < 5.3 does"
                                          f"not support 16-bit fp"
                                          f"operation: {op}")
 
@@ -620,7 +620,7 @@ def lower_fp16_minmax_comparison(fn, op, cond):
             select = builder.select(cmp, args[1], args[0])
             return select
         else:
-            raise error.CudaSupportError(f"Compute capability < 5.3 does"
+            raise errors.CudaLoweringError(f"Compute capability < 5.3 does"
                                          f"not support 16-bit fp"
                                          f"operation: {op}")
 
