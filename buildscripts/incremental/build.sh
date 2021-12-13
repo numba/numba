@@ -26,7 +26,7 @@ fi
 
 echo "Compile gufunc scheduler"
 
-clang -Wno-unused-result -Wsign-compare -Wunreachable-code -DNDEBUG -fwrapv -O2 -Wall -fPIC -O2 -isystem /Users/runner/miniconda3/envs/azure_ci/include -arch x86_64 -I/Users/runner/miniconda3/envs/azure_ci/include -fPIC -O2 -isystem /Users/runner/miniconda3/envs/azure_ci/include -arch x86_64 -g -I/Users/runner/miniconda3/envs/azure_ci/include -I/Users/runner/miniconda3/envs/azure_ci/include/python3.9 -c numba/np/ufunc/gufunc_scheduler.cpp -o build/temp.macosx-10.9-x86_64-3.9/numba/np/ufunc/gufunc_scheduler.o -std=c++11
+clang -Wno-unused-result -Wsign-compare -Wunreachable-code -DNDEBUG -fwrapv -O2 -Wall -fPIC -O2 -isystem /Users/runner/miniconda3/envs/azure_ci/include -arch x86_64 -I/Users/runner/miniconda3/envs/azure_ci/include -fPIC -O2 -isystem /Users/runner/miniconda3/envs/azure_ci/include -arch x86_64 -g -I/Users/runner/miniconda3/envs/azure_ci/include -I/Users/runner/miniconda3/envs/azure_ci/include/python3.9 -c numba/np/ufunc/gufunc_scheduler.cpp -o gufunc_scheduler.o -std=c++11
 
 echo "Compile gufunc scheduler finished"
 
