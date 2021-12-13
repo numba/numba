@@ -3559,7 +3559,7 @@ class TestPrangeBasic(TestPrangeBase):
         def test_impl(flag):
             result = 0
             if flag:
-                for i in range(1000000):
+                for i in range(1):
                     result += 1
             else:
                 for i in range(1000000):
