@@ -31,10 +31,10 @@ Highlights of core changes:
 * For users of the Numba extension API, Numba now has a new error handling mode
   whereby it will treat all exceptions that do not inherit from
   ``numba.errors.NumbaException`` as a "hard error" and immediately unwind the
-  stack. This makes it much easier to debug when writing ``@overload``s etc from
-  the extension API as there's now no confusion between Python errors and Numba
-  errors. This feature can be enabled by setting the environment variable:
-  ``NUMBA_CAPTURED_ERRORS='new_style'``.
+  stack. This makes it much easier to debug when writing ``@overload``\s etc
+  from the extension API as there's now no confusion between Python errors and
+  Numba errors. This feature can be enabled by setting the environment
+  variable: ``NUMBA_CAPTURED_ERRORS='new_style'``.
 * The threading layer selection priority can now be changed via the environment
   variable ``NUMBA_THREADING_LAYER_PRIORITY``.
 
