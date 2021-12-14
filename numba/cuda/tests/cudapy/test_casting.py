@@ -47,18 +47,6 @@ def to_float16(x):
     return (np.float16(x) * np.float16(0.5))
 
 
-def cuda_to_float16_lit(x):
-    # When division and operators on float16 types are supported, this should
-    # be changed to match the implementation in to_float32.
-    return cuda.fp16.hmul(np.float16(x), 2)
-
-
-def to_float16_lit(x):
-    # When division and operators on float16 types are supported, this should
-    # be changed to match the implementation in to_float32.
-    return np.float16(x) * 2
-
-
 def to_float32(x):
     return np.float32(x) / np.float32(2)
 
@@ -73,6 +61,33 @@ def to_complex64(x):
 
 def to_complex128(x):
     return np.complex128(x)
+
+
+# Since multiplication of float16 is not supported via the operator * on
+# float16s yet, and the host does not implement cuda.fp16.*, we need two
+# versions of the following functions:
+#
+# - The device version uses cuda.fp16.hmul
+# - The host version uses the * operator
+
+def cuda_int_literal_to_float16(x):
+    # Note that we need to use `2` and not `np.float16(2)` to ensure that this
+    # types as a literal int and not a const float16.
+    return cuda.fp16.hmul(np.float16(x), 2)
+
+
+def reference_int_literal_to_float16(x):
+    return np.float16(x) * np.float16(2)
+
+
+def cuda_float_literal_to_float16(x):
+    # Note that `2.5` types as a const float64 and not a literal float, but
+    # this case is provided in case that changes in future.
+    return cuda.fp16.hmul(np.float16(x), 2.5)
+
+
+def reference_float_literal_to_float16(x):
+    return np.float16(x) * np.float16(2.5)
 
 
 class TestCasting(CUDATestCase):
@@ -145,10 +160,16 @@ class TestCasting(CUDATestCase):
                 cfunc = self._create_wrapped(pyfunc, np.int64, toty)
                 self.assertEqual(cfunc(321), pyfunc(321))
 
-    def test_int_literal_to_float(self):
-        cfunc = self._create_wrapped(cuda_to_float16_lit, np.float16,
-                                     np.float16)
-        self.assertEqual(cfunc(321.0), to_float16_lit(321.0))
+    def test_literal_to_float16(self):
+        cudafuncs = (cuda_int_literal_to_float16,
+                     cuda_float_literal_to_float16)
+        hostfuncs = (reference_int_literal_to_float16,
+                     reference_float_literal_to_float16)
+
+        for cudafunc, hostfunc in zip(cudafuncs, hostfuncs):
+            with self.subTest(func=cudafunc):
+                cfunc = self._create_wrapped(cudafunc, np.float16, np.float16)
+                self.assertEqual(cfunc(321), hostfunc(321))
 
     @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_int_to_float16_ptx(self):
