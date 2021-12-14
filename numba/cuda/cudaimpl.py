@@ -406,28 +406,26 @@ def ptx_fma(context, builder, sig, args):
     return builder.fma(*args)
 
 
+def float16_float_ty_constraint(bitwidth):
+    typemap = {32: ('f32', 'f'), 64: ('f64', 'd')}
+
+    try:
+        return typemap[bitwidth]
+    except KeyError:
+        msg = f"Conversion between float16 and float{bitwidth} unsupported"
+        raise errors.CudaLoweringError(msg)
+
+
 @lower_cast(types.float16, types.Float)
 def float16_to_float_cast(context, builder, fromty, toty, val):
     if fromty.bitwidth == toty.bitwidth:
         return val
 
-    if toty.bitwidth == 32:
-        conv_type = "f32"
-        conv_constraint = "f"
-    elif toty.bitwidth == 64:
-        conv_type = "f64"
-        conv_constraint = "d"
-    else:
-        raise errors.CudaLoweringError(f"Cuda target does not support "
-                                       f"from fp16 converting to float type "
-                                       f"with width {toty.bitwidth}-bits")
+    ty, constraint = float16_float_ty_constraint(toty.bitwidth)
 
-    cvt2float_fnty = ir.FunctionType(context.get_value_type(toty),
-                                     [ir.IntType(16)])
-    cvt2float_asm = ir.InlineAsm(cvt2float_fnty,
-                                 f"cvt.{conv_type}.f16 $0, $1;",
-                                 f"={conv_constraint},h")
-    return builder.call(cvt2float_asm, [val])
+    fnty = ir.FunctionType(context.get_value_type(toty), [ir.IntType(16)])
+    asm = ir.InlineAsm(fnty, f"cvt.{ty}.f16 $0, $1;", f"={constraint},h")
+    return builder.call(asm, [val])
 
 
 @lower_cast(types.Float, types.float16)
@@ -435,94 +433,54 @@ def float_to_float16_cast(context, builder, fromty, toty, val):
     if fromty.bitwidth == toty.bitwidth:
         return val
 
-    if fromty.bitwidth == 32:
-        conv_type = "f32"
-        conv_constraint = "f"
-    elif fromty.bitwidth == 64:
-        conv_type = "f64"
-        conv_constraint = "d"
-    else:
-        raise errors.CudaLoweringError(f"Cuda target does not support "
-                                       f"converting from float type with width "
-                                       f" {toty.bitwidth}-bits to fp16")
+    ty, constraint = float16_float_ty_constraint(fromty.bitwidth)
 
-    cvt2float_fnty = ir.FunctionType(ir.IntType(16),
-                                     [context.get_value_type(fromty)])
+    fnty = ir.FunctionType(ir.IntType(16), [context.get_value_type(fromty)])
+    asm = ir.InlineAsm(fnty, f"cvt.rn.f16.{ty} $0, $1;", f"=h,{constraint}")
+    return builder.call(asm, [val])
 
-    cvt2float_asm = ir.InlineAsm(cvt2float_fnty,
-                                 f"cvt.rn.f16.{conv_type} $0, $1;",
-                                 f"=h,{conv_constraint}")
-    return builder.call(cvt2float_asm, [val])
+
+def float16_int_constraint(bitwidth):
+    typemap = { 8: 'c', 16: 'h', 32: 'r', 64: 'l' }
+
+    try:
+        return typemap[bitwidth]
+    except KeyError:
+        msg = f"Conversion between float16 and int{bitwidth} unsupported"
+        raise errors.CudaLoweringError(msg)
 
 
 @lower_cast(types.float16, types.Integer)
 def float16_to_integer_cast(context, builder, fromty, toty, val):
+    bitwidth = toty.bitwidth
+    constraint = float16_int_constraint(bitwidth)
+    signedness = 's' if toty.signed else 'u'
 
-    if toty.bitwidth == 16:
-        conv_constraint = "h"
-    elif toty.bitwidth == 32:
-        conv_constraint = "r"
-    elif toty.bitwidth == 64:
-        conv_constraint = "l"
-    elif toty.bitwidth == 8:
-        conv_constraint = "c"
-    else:
-        raise errors.CudaLoweringError(f"Cuda target does not support "
-                                       f"from fp16 converting to integer type "
-                                       f"with width {toty.bitwidth}-bits")
-
-    if toty.signed:
-        signedness = "s"
-    else:
-        signedness = "u"
-
-    cvt2int_fnty = ir.FunctionType(context.get_value_type(toty),
-                                   [ir.IntType(16)])
-    cvt2int_asm = ir.InlineAsm(cvt2int_fnty,
-                               f"cvt.rni.{signedness}{toty.bitwidth}"
-                               f".f16 $0, $1;",
-                               f"={conv_constraint},h")
-    return builder.call(cvt2int_asm, [val])
+    fnty = ir.FunctionType(context.get_value_type(toty), [ir.IntType(16)])
+    asm = ir.InlineAsm(fnty,
+                       f"cvt.rni.{signedness}{bitwidth}.f16 $0, $1;",
+                       f"={constraint},h")
+    return builder.call(asm, [val])
 
 
 @lower_cast(types.Integer, types.float16)
 @lower_cast(types.IntegerLiteral, types.float16)
 def integer_to_float16_cast(context, builder, fromty, toty, val):
-    if fromty.bitwidth == 16:
-        conv_constraint = "h"
-    elif fromty.bitwidth == 32:
-        conv_constraint = "r"
-    elif fromty.bitwidth == 64:
-        conv_constraint = "l"
-    elif fromty.bitwidth == 8:
-        conv_constraint = "c"
-    else:
-        raise errors.CudaLoweringError(f"Cuda target does not support "
-                                       f"converting from integer type with "
-                                       f"width {toty.bitwidth}-bits to fp16")
+    bitwidth = fromty.bitwidth
+    constraint = float16_int_constraint(bitwidth)
+    signedness = 's' if fromty.signed else 'u'
 
-    if fromty.signed:
-        signedness = "s"
-    else:
-        signedness = "u"
-
-    cvt2fp16_fnty = ir.FunctionType(context.get_value_type(toty),
-                                    [context.get_value_type(fromty)])
-    cvt2fp16_asm = ir.InlineAsm(cvt2fp16_fnty,
-                                f"cvt.rn.f16.{signedness}{fromty.bitwidth} "
-                                f"$0, $1;",
-                                f"=h,{conv_constraint}")
-    return builder.call(cvt2fp16_asm, [val])
+    fnty = ir.FunctionType(ir.IntType(16),
+                           [context.get_value_type(fromty)])
+    asm = ir.InlineAsm(fnty,
+                       f"cvt.rn.f16.{signedness}{bitwidth} $0, $1;",
+                       f"=h,{constraint}")
+    return builder.call(asm, [val])
 
 
 def lower_fp16_binary(fn, op):
     @lower(fn, types.float16, types.float16)
     def ptx_fp16_binary(context, builder, sig, args):
-
-        # 16-bit Floating point binary operations add, sub, and mul were
-        # introduced in PTX ISA 4.2 (Cuda 7.0) and SM 5.3
-        # The minimum toolkit we support is 9.2
-
         fnty = ir.FunctionType(ir.IntType(16),
                                [ir.IntType(16), ir.IntType(16)])
         asm = ir.InlineAsm(fnty, f'{op}.f16 $0,$1,$2;', '=h,h,h')
@@ -534,42 +492,69 @@ lower_fp16_binary(stubs.fp16.hsub, 'sub')
 lower_fp16_binary(stubs.fp16.hmul, 'mul')
 
 
+@lower(stubs.fp16.hneg, types.float16)
+def ptx_fp16_hneg(context, builder, sig, args):
+    fnty = ir.FunctionType(ir.IntType(16), [ir.IntType(16)])
+    asm = ir.InlineAsm(fnty, 'neg.f16 $0, $1;', '=h,h')
+    return builder.call(asm, args)
+
+
+@lower(stubs.fp16.habs, types.float16)
+def ptx_fp16_habs(context, builder, sig, args):
+    if cuda.runtime.get_version() < (10, 2):
+        # CUDA < 10.2 does not support abs.f16. For these versions, we mask
+        # off the sign bit to compute abs instead. We determine whether or
+        # not to do this based on the runtime version so that our behaviour
+        # is consistent with the version of NVVM we're using to go from
+        # NVVM IR -> PTX.
+        inst = 'and.b16 $0, $1, 0x7FFF;'
+    else:
+        inst = 'abs.f16 $0, $1;'
+
+    fnty = ir.FunctionType(ir.IntType(16), [ir.IntType(16)])
+    asm = ir.InlineAsm(fnty, inst, '=h,h')
+    return builder.call(asm, args)
+
+
+@lower(stubs.fp16.hfma, types.float16, types.float16, types.float16)
+def ptx_hfma(context, builder, sig, args):
+    argtys = [ir.IntType(16), ir.IntType(16), ir.IntType(16)]
+    fnty = ir.FunctionType(ir.IntType(16), argtys)
+    asm = ir.InlineAsm(fnty, "fma.rn.f16 $0,$1,$2,$3;", "=h,h,h,h")
+    return builder.call(asm, args)
+
+
 def lower_fp16_comparison(fn, op):
     @lower(fn, types.float16, types.float16)
-    def ptx_fp16_binary(context, builder, sig, args):
-        if cuda.current_context().device.compute_capability >= (5,3):
-            temp_reg = '__$$temp3'
-            reg_pred_fnty = ir.FunctionType(ir.VoidType(),[])
-            reg_pred_asm = ir.InlineAsm(reg_pred_fnty,
-                                        f".reg .pred {temp_reg};",
-                                        "")
-            _ = builder.call(reg_pred_asm, [])
+    def ptx_fp16_comparison(context, builder, sig, args):
+        temp_reg = '__$$temp3'
+        reg_pred_fnty = ir.FunctionType(ir.VoidType(),[])
+        reg_pred_asm = ir.InlineAsm(reg_pred_fnty,
+                                    f".reg .pred {temp_reg};",
+                                    "")
+        _ = builder.call(reg_pred_asm, [])
 
-            setp_fnty = ir.FunctionType(ir.VoidType(),
-                                        [ir.IntType(16), ir.IntType(16)])
-            setp_asm = ir.InlineAsm(setp_fnty,
-                                    f"setp.{op}.f16 {temp_reg}, $0, $1;",
-                                    'h,h')
-            _ = builder.call(setp_asm, args)
+        setp_fnty = ir.FunctionType(ir.VoidType(),
+                                    [ir.IntType(16), ir.IntType(16)])
+        setp_asm = ir.InlineAsm(setp_fnty,
+                                f"setp.{op}.f16 {temp_reg}, $0, $1;",
+                                'h,h')
+        _ = builder.call(setp_asm, args)
 
-            selp_fnty = ir.FunctionType(ir.IntType(16),[])
+        selp_fnty = ir.FunctionType(ir.IntType(16),[])
 
-            selp_asm = ir.InlineAsm(selp_fnty,
-                                    f"selp.u16 $0, 1, 0, {temp_reg};",
-                                    '=h')
-            selp = builder.call(selp_asm, [])
+        selp_asm = ir.InlineAsm(selp_fnty,
+                                f"selp.u16 $0, 1, 0, {temp_reg};",
+                                '=h')
+        selp = builder.call(selp_asm, [])
 
-            zero = context.get_constant(types.int16, 0)
-            cmp = builder.icmp_unsigned("!=",
-                                        builder.bitcast(selp, ir.IntType(16)),
-                                        zero)
+        zero = context.get_constant(types.int16, 0)
+        cmp = builder.icmp_unsigned("!=",
+                                    builder.bitcast(selp, ir.IntType(16)),
+                                    zero)
 
-            zext = builder.zext(cmp, ir.IntType(8))
-            return zext
-        else:
-            raise errors.CudaLoweringError(f"Compute capability < 5.3 does"
-                                         f"not support 16-bit fp"
-                                         f"operation: {op}")
+        zext = builder.zext(cmp, ir.IntType(8))
+        return zext
 
 
 lower_fp16_comparison(stubs.fp16.heq, 'eq')
@@ -590,7 +575,7 @@ def lower_fp16_minmax_comparison(fn, op, cond):
                                    [ir.IntType(16), ir.IntType(16)])
             asm = ir.InlineAsm(fnty, f'{op}.f16 $0,$1,$2;', '=h,h,h')
             return builder.call(asm, args)
-        elif compute_capability >= (5,3):
+        else:
             temp_reg = '__$$temp3'
             reg_pred_fnty = ir.FunctionType(ir.VoidType(),[])
             reg_pred_asm = ir.InlineAsm(reg_pred_fnty,
@@ -619,58 +604,10 @@ def lower_fp16_minmax_comparison(fn, op, cond):
 
             select = builder.select(cmp, args[1], args[0])
             return select
-        else:
-            raise errors.CudaLoweringError(f"Compute capability < 5.3 does"
-                                         f"not support 16-bit fp"
-                                         f"operation: {op}")
 
 
 lower_fp16_minmax_comparison(stubs.fp16.hmax, 'max', 'gt')
 lower_fp16_minmax_comparison(stubs.fp16.hmin, 'min', 'lt')
-
-
-def lower_fp16_unary(fn, op):
-    @lower(fn, types.float16)
-    def ptx_fp16_unary(context, builder, sig, args):
-        operation_supported = False
-        toolkit_version = cuda.runtime.get_version()
-
-        if op == 'neg':
-            operation_supported = True
-        elif op == 'abs':
-            if toolkit_version >= (10,2):
-                operation_supported = True
-
-        if operation_supported:
-            fnty = ir.FunctionType(ir.IntType(16), [ir.IntType(16)])
-            asm = ir.InlineAsm(fnty, f'{op}.f16 $0,$1;', '=h,h')
-            return builder.call(asm, args)
-        else:
-            raise errors.CudaLoweringError(f"Cuda toolkit < 10.2 does"
-                                           f"not support 16-bit fp"
-                                           f"operation: {op}")
-
-
-lower_fp16_unary(stubs.fp16.hneg, 'neg')
-lower_fp16_unary(stubs.fp16.habs, 'abs')
-
-
-@lower(stubs.fp16.hfma, types.float16, types.float16, types.float16)
-def ptx_hfma(context, builder, sig, args):
-
-    # 16-bit Floating point fused multiply accumulate was
-    # introduced in PTX ISA 4.2 (Cuda 7.0)
-
-    hfma_fn_type = ir.FunctionType(ir.IntType(16),
-                                   [ir.IntType(16),
-                                    ir.IntType(16),
-                                    ir.IntType(16)])
-    hfma_inline_asm = "fma.rn.f16 $0,$1,$2,$3;"
-    hfma_inline_constraints = "=h,h,h,h"
-    hfma_inline = ir.InlineAsm(hfma_fn_type, hfma_inline_asm,
-                               hfma_inline_constraints)
-
-    return builder.call(hfma_inline, args)
 
 # See:
 # https://docs.nvidia.com/cuda/libdevice-users-guide/__nv_cbrt.html#__nv_cbrt

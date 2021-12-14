@@ -341,22 +341,18 @@ def _genfp16_unary(l_key):
     @register
     class Cuda_fp16_unary(ConcreteTemplate):
         key = l_key
+        cases = [signature(types.float16, types.float16)]
 
-        cases = [
-            signature(types.float16, types.float16)
-        ]
     return Cuda_fp16_unary
 
 
 def _genfp16_binary(l_key):
     @register
-    class Cuda_fp16(ConcreteTemplate):
+    class Cuda_fp16_binary(ConcreteTemplate):
         key = l_key
+        cases = [signature(types.float16, types.float16, types.float16)]
 
-        cases = [
-            signature(types.float16, types.float16, types.float16)
-        ]
-    return Cuda_fp16
+    return Cuda_fp16_binary
 
 
 def _genfp16_binary_comparison(l_key):
