@@ -349,10 +349,9 @@ class TestCudaIntrinsic(CUDATestCase):
     def compute_supported(self, compute_major, compute_minor):
         return cc_X_or_above(compute_major, compute_minor)
 
-    def test_hadd(self):
-        # 16-bit Floating point binary operations add, sub, and mul were
-        # introduced in PTX ISA 4.2 (Cuda 7.0) and SM 5.3
+    # FP16 add, sub, and mul require CC >= 5.3
 
+    def test_hadd(self):
         if self.compute_supported(5,3):
             compiled = cuda.jit("void(f2[:], f2[:], f2[:])")(simple_hadd)
             ary = np.zeros(1, dtype=np.float16)
@@ -361,7 +360,7 @@ class TestCudaIntrinsic(CUDATestCase):
             compiled[1, 1](ary, arg1, arg2)
             np.testing.assert_allclose(ary[0], arg1 + arg2)
         else:
-            self.skipTest("Test requires SM >= 5.3")
+            self.skipTest("Test requires hardware with CC >= 5.3")
 
     def test_hadd_scalar(self):
         if self.compute_supported(5,3):
@@ -373,7 +372,7 @@ class TestCudaIntrinsic(CUDATestCase):
             ref = arg1 + arg2
             np.testing.assert_allclose(ary[0], ref)
         else:
-            self.skipTest("Test requires SM >= 5.3")
+            self.skipTest("Test requires hardware with CC >= 5.3")
 
     @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_hadd_ptx(self):
@@ -391,7 +390,7 @@ class TestCudaIntrinsic(CUDATestCase):
             compiled[1, 1](ary, arg1, arg2, arg3)
             np.testing.assert_allclose(ary[0], arg1 * arg2 + arg3)
         else:
-            self.skipTest("Test requires SM >= 5.3")
+            self.skipTest("Test requires hardware with CC >= 5.3")
 
     def test_hfma_scalar(self):
         if self.compute_supported(5,3):
@@ -404,7 +403,7 @@ class TestCudaIntrinsic(CUDATestCase):
             ref = arg1 * arg2 + arg3
             np.testing.assert_allclose(ary[0], ref)
         else:
-            self.skipTest("Test requires SM >= 5.3")
+            self.skipTest("Test requires hardware with CC >= 5.3")
 
     @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_hfma_ptx(self):
@@ -421,7 +420,7 @@ class TestCudaIntrinsic(CUDATestCase):
             compiled[1, 1](ary, arg1, arg2)
             np.testing.assert_allclose(ary[0], arg1 - arg2)
         else:
-            self.skipTest("Test requires SM >= 5.3")
+            self.skipTest("Test requires hardware with CC >= 5.3")
 
     def test_hsub_scalar(self):
         if self.compute_supported(5,3):
@@ -433,7 +432,7 @@ class TestCudaIntrinsic(CUDATestCase):
             ref = arg1 - arg2
             np.testing.assert_allclose(ary[0], ref)
         else:
-            self.skipTest("Test requires SM >= 5.3")
+            self.skipTest("Test requires hardware with CC >= 5.3")
 
     @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_hsub_ptx(self):
@@ -450,7 +449,7 @@ class TestCudaIntrinsic(CUDATestCase):
             compiled[1, 1](ary, arg1, arg2)
             np.testing.assert_allclose(ary[0], arg1 * arg2)
         else:
-            self.skipTest("Test requires SM >= 5.3")
+            self.skipTest("Test requires hardware with CC >= 5.3")
 
     def test_hmul_scalar(self):
         if self.compute_supported(5,3):
@@ -462,7 +461,7 @@ class TestCudaIntrinsic(CUDATestCase):
             ref = arg1 * arg2
             np.testing.assert_allclose(ary[0], ref)
         else:
-            self.skipTest("Test requires SM >= 5.3")
+            self.skipTest("Test requires hardware with CC >= 5.3")
 
     @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_hmul_ptx(self):
@@ -478,7 +477,7 @@ class TestCudaIntrinsic(CUDATestCase):
             compiled[1, 1](ary, arg1)
             np.testing.assert_allclose(ary[0], -arg1)
         else:
-            self.skipTest("Test requires SM >= 5.3")
+            self.skipTest("Test requires hardware with CC >= 5.3")
 
     def test_hneg_scalar(self):
         if self.compute_supported(5,3):
@@ -489,7 +488,7 @@ class TestCudaIntrinsic(CUDATestCase):
             ref = -arg1
             np.testing.assert_allclose(ary[0], ref)
         else:
-            self.skipTest("Test requires SM >= 5.3")
+            self.skipTest("Test requires hardware with CC >= 5.3")
 
     @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_hneg_ptx(self):
@@ -505,7 +504,8 @@ class TestCudaIntrinsic(CUDATestCase):
             compiled[1, 1](ary, arg1)
             np.testing.assert_allclose(ary[0], abs(arg1))
         else:
-            self.skipTest("Test requires toolkit >= 10.2 and SM >= 5.3")
+            self.skipTest("Test requires CUDA toolkit >= 10.2 "
+                          "and hardware with CC >= 5.3")
 
     def test_habs_scalar(self):
         if self.compute_supported(5,3) and self.toolkit_supported(10,2):
@@ -516,7 +516,8 @@ class TestCudaIntrinsic(CUDATestCase):
             ref = abs(arg1)
             np.testing.assert_allclose(ary[0], ref)
         else:
-            self.skipTest("Test requires toolkit >= 10.2 and SM >= 5.3")
+            self.skipTest("Test requires CUDA toolkit >= 10.2 "
+                          "and hardware with CC >= 5.3")
 
     @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_habs_ptx(self):
@@ -525,7 +526,7 @@ class TestCudaIntrinsic(CUDATestCase):
             ptx, _ = compile_ptx(simple_habs_scalar, args, cc=(5, 3))
             self.assertIn('abs.f16', ptx)
         else:
-            self.skipTest("Test requires toolkit >= 10.2")
+            self.skipTest("Test requires CUDA toolkit >= 10.2")
 
     def test_cbrt_f32(self):
         compiled = cuda.jit("void(float32[:], float32)")(simple_cbrt)
