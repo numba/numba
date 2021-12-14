@@ -117,7 +117,7 @@ def cuda_X_or_above(major, minor):
 
 def skip_unless_toolkit_102(fn):
     return unittest.skipUnless(cuda_X_or_above(10, 2),
-                               "requires toolkit >= 10.2")(fn)
+                               "requires CUDA toolkit >= 10.2")(fn)
 
 
 def cc_X_or_above(major, minor):
