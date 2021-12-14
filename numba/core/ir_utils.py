@@ -117,9 +117,10 @@ def mk_alloc(typingctx, typemap, calltypes, lhs, size_var, dtype, scope, loc,
     # If dtype is a datetime/timedelta with a unit,
     # then it won't return a valid type and instead can be created
     # with a string. i.e. "datetime64[ns]")
-    if isinstance(dtype, (types.NPDatetime, types.NPTimedelta)) and dtype.unit != '':
-        typename_const = ir.Const(dtype_str, loc)
-        typ_var_assign = ir.Assign(typename_const, typ_var, loc)
+    if (isinstance(dtype, (types.NPDatetime, types.NPTimedelta)) and
+        dtype.unit != ''):
+            typename_const = ir.Const(dtype_str, loc)
+            typ_var_assign = ir.Assign(typename_const, typ_var, loc)
     else:
         if dtype_str=='bool':
             # empty doesn't like 'bool' sometimes (e.g. kmeans example)
