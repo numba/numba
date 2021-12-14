@@ -453,8 +453,8 @@ def float16_int_constraint(bitwidth):
 @lower_cast(types.float16, types.Integer)
 def float16_to_integer_cast(context, builder, fromty, toty, val):
     bitwidth = toty.bitwidth
-    signedness = 's' if toty.signed else 'u'
     constraint = float16_int_constraint(bitwidth)
+    signedness = 's' if toty.signed else 'u'
 
     fnty = ir.FunctionType(context.get_value_type(toty), [ir.IntType(16)])
     asm = ir.InlineAsm(fnty,
@@ -467,10 +467,10 @@ def float16_to_integer_cast(context, builder, fromty, toty, val):
 @lower_cast(types.IntegerLiteral, types.float16)
 def integer_to_float16_cast(context, builder, fromty, toty, val):
     bitwidth = fromty.bitwidth
-    signedness = 's' if fromty.signed else 'u'
     constraint = float16_int_constraint(bitwidth)
+    signedness = 's' if fromty.signed else 'u'
 
-    fnty = ir.FunctionType(context.get_value_type(toty),
+    fnty = ir.FunctionType(ir.IntType(16),
                            [context.get_value_type(fromty)])
     asm = ir.InlineAsm(fnty,
                        f"cvt.rn.f16.{signedness}{bitwidth} $0, $1;",
@@ -492,20 +492,28 @@ lower_fp16_binary(stubs.fp16.hsub, 'sub')
 lower_fp16_binary(stubs.fp16.hmul, 'mul')
 
 
-def lower_fp16_unary(fn, op):
-    @lower(fn, types.float16)
-    def ptx_fp16_unary(context, builder, sig, args):
-        if op == 'abs' and cuda.runtime.get_version() < (10, 2):
-            msg = f"CUDA toolkit >= 10.2 required for {op}(float16)"
-            raise errors.CudaLoweringError(msg)
-
-        fnty = ir.FunctionType(ir.IntType(16), [ir.IntType(16)])
-        asm = ir.InlineAsm(fnty, f'{op}.f16 $0,$1;', '=h,h')
-        return builder.call(asm, args)
+@lower(stubs.fp16.hneg, types.float16)
+def ptx_fp16_hneg(context, builder, sig, args):
+    fnty = ir.FunctionType(ir.IntType(16), [ir.IntType(16)])
+    asm = ir.InlineAsm(fnty, 'neg.f16 $0, $1;', '=h,h')
+    return builder.call(asm, args)
 
 
-lower_fp16_unary(stubs.fp16.hneg, 'neg')
-lower_fp16_unary(stubs.fp16.habs, 'abs')
+@lower(stubs.fp16.habs, types.float16)
+def ptx_fp16_habs(context, builder, sig, args):
+    if cuda.runtime.get_version() < (10, 2):
+        # CUDA < 10.2 does not support abs.f16. For these versions, we mask
+        # off the sign bit to compute abs instead. We determine whether or
+        # not to do this based on the runtime version so that our behaviour
+        # is consistent with the version of NVVM we're using to go from
+        # NVVM IR -> PTX.
+        inst = 'and.b16 $0, $1, 0x7FFF;'
+    else:
+        inst = 'abs.f16 $0, $1;'
+
+    fnty = ir.FunctionType(ir.IntType(16), [ir.IntType(16)])
+    asm = ir.InlineAsm(fnty, inst, '=h,h')
+    return builder.call(asm, args)
 
 
 @lower(stubs.fp16.hfma, types.float16, types.float16, types.float16)

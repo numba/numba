@@ -11,7 +11,6 @@ from numba.tests.support import (
 )
 from numba.cuda.cuda_paths import get_conda_ctk
 from numba.cuda.cudadrv import driver, devices, libs
-from numba.cuda.cudadrv.runtime import runtime
 from numba.core import config
 from numba.tests.support import TestCase
 import unittest
@@ -105,19 +104,6 @@ def skip_on_arm(reason):
     cpu = platform.processor()
     is_arm = cpu.startswith('arm') or cpu.startswith('aarch')
     return unittest.skipIf(is_arm, reason)
-
-
-def cuda_X_or_above(major, minor):
-    if not config.ENABLE_CUDASIM:
-        toolkit_version = runtime.get_version()
-        return toolkit_version >= (major, minor)
-    else:
-        return True
-
-
-def skip_unless_toolkit_102(fn):
-    return unittest.skipUnless(cuda_X_or_above(10, 2),
-                               "requires CUDA toolkit >= 10.2")(fn)
 
 
 def cc_X_or_above(major, minor):
