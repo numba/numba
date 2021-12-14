@@ -24,5 +24,9 @@
 #define PyInt_Type PyLong_Type
 #define PyInt_Check PyLong_Check
 #define PyInt_CheckExact PyLong_CheckExact
+#define SetAttrStringFromVoidPointer(m, name) do { \
+        PyObject *tmp = PyLong_FromVoidPtr((void *) &name); \
+        PyObject_SetAttrString(m, #name, tmp); \
+        Py_DECREF(tmp); } while (0)
 
 #endif /* NUMBA_PY_MODULE_H_ */

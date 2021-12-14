@@ -1,10 +1,11 @@
 import unittest
 from numba.cuda.testing import ContextResettingTestCase
 from numba import cuda
-from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import skip_on_cudasim, xfail_with_cuda_python
 
 
 @skip_on_cudasim('CUDA Profiler unsupported in the simulator')
+@xfail_with_cuda_python
 class TestProfiler(ContextResettingTestCase):
     def test_profiling(self):
         with cuda.profiling():

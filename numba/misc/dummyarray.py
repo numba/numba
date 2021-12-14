@@ -165,12 +165,9 @@ class Array(object):
         self.itemsize = itemsize
         self.size = functools.reduce(operator.mul, self.shape, 1)
         self.extent = self._compute_extent()
-        if config.NPY_RELAXED_STRIDES_CHECKING:
-            self.flags = self._relaxed_compute_layout()
-        else:
-            self.flags = self._compute_layout()
+        self.flags = self._compute_layout()
 
-    def _relaxed_compute_layout(self):
+    def _compute_layout(self):
         # The logic here is based on that in _UpdateContiguousFlags from
         # numpy/core/src/multiarray/flagsobject.c in NumPy v1.19.1 (commit
         # 13661ac70).
@@ -206,30 +203,6 @@ class Array(object):
                     return flags
                 sd *= dim.size
 
-        return flags
-
-    def _compute_layout(self):
-        flags = {}
-
-        if not self.dims:
-            # Records have no dims, and we can treat them as contiguous
-            flags['F_CONTIGUOUS'] = True
-            flags['C_CONTIGUOUS'] = True
-            return flags
-
-        leftmost = self.dims[0].is_contiguous(self.itemsize)
-        rightmost = self.dims[-1].is_contiguous(self.itemsize)
-
-        def is_contig(traverse):
-            last = next(traverse)
-            for dim in traverse:
-                if last.size != 0 and last.size * last.stride != dim.stride:
-                    return False
-                last = dim
-            return True
-
-        flags['F_CONTIGUOUS'] = leftmost and is_contig(iter(self.dims))
-        flags['C_CONTIGUOUS'] = rightmost and is_contig(reversed(self.dims))
         return flags
 
     def _compute_extent(self):

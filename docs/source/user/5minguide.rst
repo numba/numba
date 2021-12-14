@@ -18,7 +18,7 @@ Out of the box Numba works with the following:
   support on M1/Arm64.
 * GPUs: Nvidia CUDA.
 * CPython
-* NumPy 1.17 - latest
+* NumPy 1.18 - latest
 
 How do I get it?
 ----------------

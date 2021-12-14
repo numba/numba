@@ -2122,6 +2122,11 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
                 a = {'BAD_KEY': 2j, 'c': 'd', 'e': np.zeros(4)}
             else:
                 a = {'a': 5j, 'c': 'CAT', 'e': np.zeros((5,))}
+            # prevents inline of return on py310
+            py310_defeat1 = 1  # noqa
+            py310_defeat2 = 2  # noqa
+            py310_defeat3 = 3  # noqa
+            py310_defeat4 = 4  # noqa
             return a['a']
 
         with self.assertRaises(TypingError) as raises:
@@ -2135,6 +2140,11 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
                 a = {'a': 2j, 'c': 'd', 'e': np.zeros((4, 3))}
             else:
                 a = {'a': 5j, 'c': 'CAT', 'e': np.zeros((5,))}
+            # prevents inline of return on py310
+            py310_defeat1 = 1  # noqa
+            py310_defeat2 = 2  # noqa
+            py310_defeat3 = 3  # noqa
+            py310_defeat4 = 4  # noqa
             return a['a']
 
         with self.assertRaises(TypingError) as raises:
@@ -2145,10 +2155,10 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
     def test_dict_value_coercion(self):
         # checks that things coerce or not!
 
-        #    safe convertible: TypedDict
-        p = {(np.int32, np.int32): types.DictType,
-             # unsafe but convertible: TypedDict
-             (np.int8, np.int32): types.DictType,
+        p = {# safe and no conversion: TypedDict
+             (np.int32, np.int32): types.DictType,
+             # safe and convertible: TypedDict
+             (np.int32, np.int8): types.DictType,
              # safe convertible: TypedDict
              (np.complex128, np.int32): types.DictType,
              # unsafe not convertible: LiteralStrKey
@@ -2156,7 +2166,11 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
              # unsafe not convertible: LiteralStrKey
              (np.int32, np.array): types.LiteralStrKeyDict,
              # unsafe not convertible: LiteralStrKey
-             (np.array, np.int32): types.LiteralStrKeyDict,}
+             (np.array, np.int32): types.LiteralStrKeyDict,
+             # unsafe not convertible: LiteralStrKey
+             (np.int8, np.int32): types.LiteralStrKeyDict,
+             # unsafe not convertible: LiteralStrKey (issue #6420 case)
+             (np.int64, np.float64): types.LiteralStrKeyDict,}
 
         def bar(x):
             pass
@@ -2246,6 +2260,38 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
             bar(d)
 
         foo()
+
+    def test_const_key_not_in_dict(self):
+
+        @njit
+        def foo():
+            a = {'not_a': 2j, 'c': 'd', 'e': np.zeros(4)}
+            return a['a']
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+
+        self.assertIn("Key 'a' is not in dict.", str(raises.exception))
+
+    def test_uncommon_identifiers(self):
+        # Tests uncommon identifiers like numerical values and operators in
+        # the key fields. See #6518 and #7416.
+
+        # Numerical values in keys
+        @njit
+        def foo():
+            d = {'0': np.ones(5), '1': 4}
+            return len(d)
+
+        self.assertPreciseEqual(foo(), foo.py_func())
+
+        # operators in keys
+        @njit
+        def bar():
+            d = {'+': np.ones(5), 'x--': 4}
+            return len(d)
+
+        self.assertPreciseEqual(bar(), bar.py_func())
 
 
 if __name__ == '__main__':

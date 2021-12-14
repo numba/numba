@@ -1,4 +1,5 @@
 import numbers
+from numba.core.errors import LoweringError
 
 
 class KernelRuntimeError(RuntimeError):
@@ -10,6 +11,10 @@ class KernelRuntimeError(RuntimeError):
              "\t%s")
         msg = t % (self.tid, self.ctaid, self.msg)
         super(KernelRuntimeError, self).__init__(msg)
+
+
+class CudaLoweringError(LoweringError):
+    pass
 
 
 _launch_help_url = ("https://numba.pydata.org/numba-doc/"

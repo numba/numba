@@ -347,7 +347,8 @@ class TestDebugInfoEmission(TestCase):
                 groups = match.groups()
                 self.assertEqual(len(groups), 1)
                 associated_lines.add(int(groups[0]))
-        self.assertEqual(len(associated_lines), 3) # 3 versions of 'c'
+        # 3 versions of 'c': `c = 0`, `return c`, `c+=1`
+        self.assertEqual(len(associated_lines), 3)
         self.assertIn(pysrc_line_start, associated_lines)
 
     def test_DILocation_versioned_variables(self):
@@ -362,6 +363,11 @@ class TestDebugInfoEmission(TestCase):
                 c = 5
             else:
                 c = 1
+            # prevents inline of return on py310
+            py310_defeat1 = 1  # noqa
+            py310_defeat2 = 2  # noqa
+            py310_defeat3 = 3  # noqa
+            py310_defeat4 = 4  # noqa
             return c
 
         sig = (types.intp,)

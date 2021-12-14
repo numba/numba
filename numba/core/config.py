@@ -3,7 +3,6 @@ import sys
 import os
 import re
 import warnings
-import multiprocessing
 
 # YAML needed to use file based Numba config
 try:
@@ -119,6 +118,25 @@ class _EnvReloader(object):
             # Store a copy
             self.old_environ = dict(new_environ)
 
+        self.validate()
+
+    def validate(self):
+        global CUDA_USE_NVIDIA_BINDING
+
+        if CUDA_USE_NVIDIA_BINDING:  # noqa: F821
+            try:
+                import cuda  # noqa: F401
+            except ImportError as ie:
+                msg = ("CUDA Python bindings requested (the environment "
+                       "variable NUMBA_CUDA_USE_NVIDIA_BINDING is set), "
+                       f"but they are not importable: {ie.msg}.")
+                warnings.warn(msg)
+
+                CUDA_USE_NVIDIA_BINDING = False
+
+            if CUDA_PER_THREAD_DEFAULT_STREAM:  # noqa: F821
+                warnings.warn("PTDS is not supported with CUDA Python")
+
     def process_environ(self, environ):
         def _readenv(name, ctor, default):
             value = environ.get(name)
@@ -169,6 +187,10 @@ class _EnvReloader(object):
         # under utilize the GPU due to low occupancy. On by default.
         CUDA_LOW_OCCUPANCY_WARNINGS = _readenv(
             "NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS", int, 1)
+
+        # Whether to use the official CUDA Python API Bindings
+        CUDA_USE_NVIDIA_BINDING = _readenv(
+            "NUMBA_CUDA_USE_NVIDIA_BINDING", int, 0)
 
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)
@@ -385,24 +407,22 @@ class _EnvReloader(object):
         CUDA_PER_THREAD_DEFAULT_STREAM = _readenv(
             "NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM", int, 0)
 
-        # Compute contiguity of device arrays using the relaxed strides
-        # checking algorithm.
-        NPY_RELAXED_STRIDES_CHECKING = _readenv(
-            "NUMBA_NPY_RELAXED_STRIDES_CHECKING",
-            int, 1)
-
-        # HSA Configs
-
-        # Disable HSA support
-        DISABLE_HSA = _readenv("NUMBA_DISABLE_HSA", int, 0)
-
         # The default number of threads to use.
-        NUMBA_DEFAULT_NUM_THREADS = max(
-            1,
-            len(os.sched_getaffinity(0))
-            if hasattr(os, "sched_getaffinity")
-            else multiprocessing.cpu_count(),
-        )
+        def num_threads_default():
+            try:
+                sched_getaffinity = os.sched_getaffinity
+            except AttributeError:
+                pass
+            else:
+                return max(1, len(sched_getaffinity(0)))
+
+            cpu_count = os.cpu_count()
+            if cpu_count is not None:
+                return max(1, cpu_count)
+
+            return 1
+
+        NUMBA_DEFAULT_NUM_THREADS = num_threads_default()
 
         # Numba thread pool size (defaults to number of CPUs on the system).
         _NUMBA_NUM_THREADS = _readenv("NUMBA_NUM_THREADS", int,

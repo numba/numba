@@ -466,6 +466,10 @@ precision parts of the CUDA Toolkit documentation.
 16-bit Floating Point Intrinsics
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+The following functions are used to operate on 16-bit floating point operands.
+These functions return a 16-bit floating point result.
+
+
 .. function:: numba.cuda.fp16.hfma (a, b, c)
 
    Perform the fused multiply-add operation ``(a * b) + c`` on 16-bit
