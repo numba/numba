@@ -436,11 +436,12 @@ lower_fp16_binary(stubs.fp16.hadd, 'add')
 lower_fp16_binary(stubs.fp16.hsub, 'sub')
 lower_fp16_binary(stubs.fp16.hmul, 'mul')
 
+
 @lower(stubs.fp16.hdiv, types.float16, types.float16)
 def lower_fp16_divide(context, builder, sig, args):
     compute_capability_supported = \
         cuda.current_context().device.compute_capability >= (5, 3)
-    toolkit_version = cuda.runtime.get_version()
+
     if compute_capability_supported:
         arg1 = args[0]
         arg2 = args[1]
@@ -497,16 +498,43 @@ def lower_fp16_divide(context, builder, sig, args):
 
         zero = context.get_constant(types.int16, 0)
         cmp1 = builder.icmp_unsigned("==",
-                                    builder.bitcast(selp, ir.IntType(16)),
-                                    zero)
+                                     builder.bitcast(selp, ir.IntType(16)),
+                                     zero)
         cmp2 = builder.icmp_unsigned("==",
-                                    builder.bitcast(and_op, ir.IntType(16)),
-                                    zero)
+                                     builder.bitcast(and_op, ir.IntType(16)),
+                                     zero)
         or_op = builder.or_(cmp1, cmp2)
-        builder.bitcast(or_op, ir.IntType(1))
-        pass
+        or_cond = builder.bitcast(or_op, ir.IntType(1))
+        fall_thru_bb = builder.append_basic_block()
+        true_bb = builder.append_basic_block()
+        builder.cbranch(or_cond, true_bb, fall_thru_bb)
+        entry_bb = builder.block
+
+        #Fall thru branch
+        builder.position_at_start(fall_thru_bb)
+        float_zero = context.get_constant(types.float32, -0.0)
+        neg_f = builder.fsub(float_zero, arg2_fp32)
+        fname = 'llvm.nvvm.fma.rn.f'
+        lmod = builder.module
+        fnty = ir.FunctionType(ir.FloatType(),
+                               (ir.FloatType(),
+                               ir.FloatType(),
+                               ir.FloatType()))
+        fma_func = cgutils.get_or_insert_function(lmod, fnty, fname)
+        fma1 = builder.call(fma_func, [neg_f, fmul, arg2_fp32])
+        fma2 = builder.call(fma_func, [arg2_rcp, fma1, fmul])
+        fp32_to_f16 = builder.call(cvt2fp16_asm, [fma2])
+        builder.goto_block(true_bb)
+
+        #True branch
+        builder.position_at_start(true_bb)
+        phi_node = builder.phi(ir.IntType(16))
+        phi_node.add_incoming(fp16_div, entry_bb)
+        phi_node.add_incoming(fp32_to_f16, fall_thru_bb)
+        return phi_node
     else:
         return None
+
 
 def lower_fp16_unary(fn, op):
     @lower(fn, types.float16)
