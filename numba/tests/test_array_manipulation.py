@@ -57,6 +57,10 @@ def numpy_broadcast_shapes(*args):
     return np.broadcast_shapes(*args)
 
 
+def numpy_broadcast_arrays(*args):
+    return np.broadcast_arrays(*args)
+
+
 def numpy_broadcast_to_indexing(arr, shape, idx):
     return np.broadcast_to(arr, shape)[idx]
 
@@ -767,6 +771,118 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         val = np.array([-1e100])
         _assert_raises(arr, val)
 
+    def test_shape(self):
+        pyfunc = numpy_shape
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(x):
+            expected = pyfunc(x)
+            got = cfunc(x)
+            self.assertPreciseEqual(got, expected)
+
+        # check arrays
+        for t in [(), (1,), (2, 3,), (4, 5, 6)]:
+            arr = np.empty(t)
+            check(arr)
+
+        # check some types that go via asarray
+        for t in [1, False, [1,], [[1, 2,],[3, 4]], (1,), (1, 2, 3)]:
+            check(arr)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc('a')
+
+        self.assertIn("The argument to np.shape must be array-like",
+                      str(raises.exception))
+
+    def test_flatnonzero_basic(self):
+        pyfunc = numpy_flatnonzero
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(-5, 5)
+            yield np.full(5, fill_value=0)
+            yield np.array([])
+            a = self.random.randn(100)
+            a[np.abs(a) > 0.2] = 0.0
+            yield a
+            yield a.reshape(5, 5, 4)
+            yield a.reshape(50, 2, order='F')
+            yield a.reshape(25, 4)[1::2]
+            yield a * 1j
+
+        for a in a_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+    def test_argwhere_basic(self):
+        pyfunc = numpy_argwhere
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(-5, 5) > 2
+            yield np.full(5, fill_value=0)
+            yield np.full(5, fill_value=1)
+            yield np.array([])
+            yield np.array([-1.0, 0.0, 1.0])
+            a = self.random.randn(100)
+            yield a > 0.2
+            yield a.reshape(5, 5, 4) > 0.5
+            yield a.reshape(50, 2, order='F') > 0.5
+            yield a.reshape(25, 4)[1::2] > 0.5
+            yield a == a - 1
+            yield a > -a
+
+        for a in a_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+    @staticmethod
+    def array_like_variations():
+        yield ((1.1, 2.2), (3.3, 4.4), (5.5, 6.6))
+        yield (0.0, 1.0, 0.0, -6.0)
+        yield ([0, 1], [2, 3])
+        yield ()
+        yield np.nan
+        yield 0
+        yield 1
+        yield False
+        yield True
+        yield (True, False, True)
+        yield 2 + 1j
+        # the following are not array-like, but NumPy does not raise
+        yield None
+        yield 'a_string'
+        yield ''
+
+
+    def test_flatnonzero_array_like(self):
+        pyfunc = numpy_flatnonzero
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for a in self.array_like_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+    def test_argwhere_array_like(self):
+        pyfunc = numpy_argwhere
+        cfunc = jit(nopython=True)(pyfunc)
+        for a in self.array_like_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+
+class TestArrayBroadcast(MemoryLeakMixin, TestCase):
+    """
+    Check broadcast functions
+    """
+    def setUp(self):
+        super(TestArrayBroadcast, self).setUp()
+
     def test_broadcast_to(self):
         pyfunc = numpy_broadcast_to
         cfunc = jit(nopython=True)(pyfunc)
@@ -872,7 +988,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             cfunc = jit(nopython=True)(pyfunc)
 
             # Tests taken from
-            # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/tests/test_stride_tricks.py#L296-L334
+            # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/tests/test_stride_tricks.py#L296-L334  # noqa: E501
             data = [
                 # [[], ()],
                 [()],
@@ -914,7 +1030,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             self.disable_leak_check()
 
             # Tests taken from
-            # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/tests/test_stride_tricks.py#L337-L351
+            # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/tests/test_stride_tricks.py#L337-L351  # noqa: E501
             data = [
                 [(3,), (4,)],
                 [(2, 3), (2,)],
@@ -930,109 +1046,102 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                 self.assertIn("shape mismatch: objects cannot be broadcast to a single shape",
                             str(raises.exception))
 
-    def test_shape(self):
-        pyfunc = numpy_shape
-        cfunc = jit(nopython=True)(pyfunc)
+    def broadcast_arrays_assert_correct_shape(self, input_shapes, expected_shape):
+        # Broadcast a list of arrays with the given input shapes and check the
+        # common output shape.
 
-        def check(x):
-            expected = pyfunc(x)
-            got = cfunc(x)
-            self.assertPreciseEqual(got, expected)
+        inarrays = [np.zeros(s) for s in input_shapes]
+        outarrays = numpy_broadcast_arrays(*inarrays)
+        expected = [expected_shape] * len(inarrays)
+        got = [a.shape for a in outarrays]
+        self.assertPreciseEqual(expected, got)
 
-        # check arrays
-        for t in [(), (1,), (2, 3,), (4, 5, 6)]:
-            arr = np.empty(t)
-            check(arr)
+    def test_broadcast_arrays_same_input_shapes(self):
+        # Tests taken from
+        # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/tests/test_stride_tricks.py#L83-L107  # noqa: E501
+        # Check that the final shape is just the input shape.
 
-        # check some types that go via asarray
-        for t in [1, False, [1,], [[1, 2,],[3, 4]], (1,), (1, 2, 3)]:
-            check(arr)
+        data = [
+            # (),
+            (1,),
+            (3,),
+            (0, 1),
+            (0, 3),
+            (1, 0),
+            (3, 0),
+            (1, 3),
+            (3, 1),
+            (3, 3),
+        ]
+        for shape in data:
+            input_shapes = [shape]
+            # Single input.
+            self.broadcast_arrays_assert_correct_shape(input_shapes, shape)
+            # Double input.
+            input_shapes2 = [shape, shape]
+            self.broadcast_arrays_assert_correct_shape(input_shapes2, shape)
+            # Triple input.
+            input_shapes3 = [shape, shape, shape]
+            self.broadcast_arrays_assert_correct_shape(input_shapes3, shape)
 
-        with self.assertRaises(TypingError) as raises:
-            cfunc('a')
+    def test_broadcast_arrays_two_compatible_by_ones_input_shapes(self):
+        # Tests taken from
+        # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/tests/test_stride_tricks.py#L110-L132
+        # Check that two different input shapes of the same length, but some have
+        # ones, broadcast to the correct shape.
 
-        self.assertIn("The argument to np.shape must be array-like",
-                      str(raises.exception))
+        data = [
+            [[(1,), (3,)], (3,)],
+            [[(1, 3), (3, 3)], (3, 3)],
+            [[(3, 1), (3, 3)], (3, 3)],
+            [[(1, 3), (3, 1)], (3, 3)],
+            [[(1, 1), (3, 3)], (3, 3)],
+            [[(1, 1), (1, 3)], (1, 3)],
+            [[(1, 1), (3, 1)], (3, 1)],
+            [[(1, 0), (0, 0)], (0, 0)],
+            [[(0, 1), (0, 0)], (0, 0)],
+            [[(1, 0), (0, 1)], (0, 0)],
+            [[(1, 1), (0, 0)], (0, 0)],
+            [[(1, 1), (1, 0)], (1, 0)],
+            [[(1, 1), (0, 1)], (0, 1)],
+        ]
+        for input_shapes, expected_shape in data:
+            self.broadcast_arrays_assert_correct_shape(input_shapes, expected_shape)
+            # Reverse the input shapes since broadcasting should be symmetric.
+            self.broadcast_arrays_assert_correct_shape(input_shapes[::-1], expected_shape)
 
-    def test_flatnonzero_basic(self):
-        pyfunc = numpy_flatnonzero
-        cfunc = jit(nopython=True)(pyfunc)
+    def test_broadcast_arrays_two_compatible_by_prepending_ones_input_shapes(self):
+        # Tests taken from
+        # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/tests/test_stride_tricks.py#L135-L164
+        # Check that two different input shapes (of different lengths) broadcast
+        # to the correct shape.
 
-        def a_variations():
-            yield np.arange(-5, 5)
-            yield np.full(5, fill_value=0)
-            yield np.array([])
-            a = self.random.randn(100)
-            a[np.abs(a) > 0.2] = 0.0
-            yield a
-            yield a.reshape(5, 5, 4)
-            yield a.reshape(50, 2, order='F')
-            yield a.reshape(25, 4)[1::2]
-            yield a * 1j
-
-        for a in a_variations():
-            expected = pyfunc(a)
-            got = cfunc(a)
-            self.assertPreciseEqual(expected, got)
-
-    def test_argwhere_basic(self):
-        pyfunc = numpy_argwhere
-        cfunc = jit(nopython=True)(pyfunc)
-
-        def a_variations():
-            yield np.arange(-5, 5) > 2
-            yield np.full(5, fill_value=0)
-            yield np.full(5, fill_value=1)
-            yield np.array([])
-            yield np.array([-1.0, 0.0, 1.0])
-            a = self.random.randn(100)
-            yield a > 0.2
-            yield a.reshape(5, 5, 4) > 0.5
-            yield a.reshape(50, 2, order='F') > 0.5
-            yield a.reshape(25, 4)[1::2] > 0.5
-            yield a == a - 1
-            yield a > -a
-
-        for a in a_variations():
-            expected = pyfunc(a)
-            got = cfunc(a)
-            self.assertPreciseEqual(expected, got)
-
-    @staticmethod
-    def array_like_variations():
-        yield ((1.1, 2.2), (3.3, 4.4), (5.5, 6.6))
-        yield (0.0, 1.0, 0.0, -6.0)
-        yield ([0, 1], [2, 3])
-        yield ()
-        yield np.nan
-        yield 0
-        yield 1
-        yield False
-        yield True
-        yield (True, False, True)
-        yield 2 + 1j
-        # the following are not array-like, but NumPy does not raise
-        yield None
-        yield 'a_string'
-        yield ''
-
-
-    def test_flatnonzero_array_like(self):
-        pyfunc = numpy_flatnonzero
-        cfunc = jit(nopython=True)(pyfunc)
-
-        for a in self.array_like_variations():
-            expected = pyfunc(a)
-            got = cfunc(a)
-            self.assertPreciseEqual(expected, got)
-
-    def test_argwhere_array_like(self):
-        pyfunc = numpy_argwhere
-        cfunc = jit(nopython=True)(pyfunc)
-        for a in self.array_like_variations():
-            expected = pyfunc(a)
-            got = cfunc(a)
-            self.assertPreciseEqual(expected, got)
+        data = [
+            [[(), (3,)], (3,)],
+            [[(3,), (3, 3)], (3, 3)],
+            [[(3,), (3, 1)], (3, 3)],
+            [[(1,), (3, 3)], (3, 3)],
+            [[(), (3, 3)], (3, 3)],
+            [[(1, 1), (3,)], (1, 3)],
+            [[(1,), (3, 1)], (3, 1)],
+            [[(1,), (1, 3)], (1, 3)],
+            [[(), (1, 3)], (1, 3)],
+            [[(), (3, 1)], (3, 1)],
+            [[(), (0,)], (0,)],
+            [[(0,), (0, 0)], (0, 0)],
+            [[(0,), (0, 1)], (0, 0)],
+            [[(1,), (0, 0)], (0, 0)],
+            [[(), (0, 0)], (0, 0)],
+            [[(1, 1), (0,)], (1, 0)],
+            [[(1,), (0, 1)], (0, 1)],
+            [[(1,), (1, 0)], (1, 0)],
+            [[(), (1, 0)], (1, 0)],
+            [[(), (0, 1)], (0, 1)],
+        ]
+        for input_shapes, expected_shape in data:
+            self.broadcast_arrays_assert_correct_shape(input_shapes, expected_shape)
+            # Reverse the input shapes since broadcasting should be symmetric.
+            self.broadcast_arrays_assert_correct_shape(input_shapes[::-1], expected_shape)
 
 
 if __name__ == '__main__':
