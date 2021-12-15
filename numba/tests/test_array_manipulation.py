@@ -1049,9 +1049,11 @@ class TestArrayBroadcast(MemoryLeakMixin, TestCase):
     def broadcast_arrays_assert_correct_shape(self, input_shapes, expected_shape):
         # Broadcast a list of arrays with the given input shapes and check the
         # common output shape.
+        pyfunc = numpy_broadcast_arrays
+        cfunc = jit(nopython=True)(pyfunc)
 
         inarrays = [np.zeros(s) for s in input_shapes]
-        outarrays = numpy_broadcast_arrays(*inarrays)
+        outarrays = cfunc(*inarrays)
         expected = [expected_shape] * len(inarrays)
         got = [a.shape for a in outarrays]
         self.assertPreciseEqual(expected, got)
@@ -1060,6 +1062,8 @@ class TestArrayBroadcast(MemoryLeakMixin, TestCase):
         # Tests taken from
         # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/tests/test_stride_tricks.py#L83-L107  # noqa: E501
         # Check that the final shape is just the input shape.
+        pyfunc = numpy_broadcast_arrays
+        cfunc = jit(nopython=True)(pyfunc)
 
         data = [
             # (),
@@ -1142,6 +1146,28 @@ class TestArrayBroadcast(MemoryLeakMixin, TestCase):
             self.broadcast_arrays_assert_correct_shape(input_shapes, expected_shape)
             # Reverse the input shapes since broadcasting should be symmetric.
             self.broadcast_arrays_assert_correct_shape(input_shapes[::-1], expected_shape)
+
+    def test_broadcast_arrays_incompatible_shapes_raise_valueerror(self):
+        # Check that a ValueError is raised for incompatible shapes.
+        pyfunc = numpy_broadcast_arrays
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self.disable_leak_check()
+
+        data = [
+            [(3,), (4,)],
+            [(2, 3), (2,)],
+            [(3,), (3,), (4,)],
+            [(1, 3, 4), (2, 3, 3)],
+        ]
+        for input_shapes in data:
+            for shape in [input_shapes, input_shapes[::-1]]:
+                # Reverse the input shapes since broadcasting should be symmetric.
+                with self.assertRaises(ValueError) as raises:
+                    inarrays = [np.zeros(s) for s in shape]
+                    cfunc(*inarrays)
+                self.assertIn("shape mismatch: objects cannot be broadcast to a single shape",
+                            str(raises.exception))
 
 
 if __name__ == '__main__':
