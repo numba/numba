@@ -59,6 +59,7 @@ C2CODE = {
     'unsigned long long': 'y', # unsigned __int64
     '__int128': 'n',
     'unsigned __int128': 'o',
+    'half' : 'Dh',
     'float': 'f',
     'double': 'd',
     'long double': 'e', # __float80
@@ -78,6 +79,7 @@ N2C = {
     types.int32: 'int',
     types.uint64: 'unsigned long long',
     types.int64: 'long long',
+    types.float16: 'half',
     types.float32: 'float',
     types.float64: 'double',
 }

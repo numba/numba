@@ -661,6 +661,10 @@ class _Kernel(serialize.ReduceMixin):
             cval = getattr(ctypes, "c_%s" % ty)(val)
             kernelargs.append(cval)
 
+        elif ty == types.float16:
+            cval = ctypes.c_uint16(np.float16(val).view(np.uint16))
+            kernelargs.append(cval)
+
         elif ty == types.float64:
             cval = ctypes.c_double(val)
             kernelargs.append(cval)
