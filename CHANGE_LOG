@@ -41,6 +41,7 @@ Highlights of core changes:
 Highlights of changes for the CUDA target:
 
 * Support for NVIDIA's CUDA Python bindings.
+* Support for 16-bit floating point numbers and their basic operations via intrinsics.
 * Streams are provided in the ``Stream.async_done`` result, making it easier to
   implement asynchronous work queues.
 * Support for structured types in device arrays, character sequences in NumPy
@@ -80,6 +81,7 @@ Pull-Requests:
 * PR `#6075 <https://github.com/numba/numba/pull/6075>`_: add np.float_power and np.cbrt (`Guilherme Leobas <https://github.com/guilhermeleobas>`_)
 * PR `#7047 <https://github.com/numba/numba/pull/7047>`_: Support __hash__ for numpy.datetime64 (`Guilherme Leobas <https://github.com/guilhermeleobas>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#7057 <https://github.com/numba/numba/pull/7057>`_: Fix #7041: Add charseq registry to CUDA target (`Graham Markall <https://github.com/gmarkall>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7082 <https://github.com/numba/numba/pull/7082>`_: Added Add/Sub between datetime64 array and timedelta64 scalar (`Nick Riasanovsky <https://github.com/njriasan>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#7119 <https://github.com/numba/numba/pull/7119>`_: Add support for `np.broadcast_to` (`Guilherme Leobas <https://github.com/guilhermeleobas>`_)
 * PR `#7129 <https://github.com/numba/numba/pull/7129>`_: Add support for axis keyword argument to np.argmin() (`Itamar Turner-Trauring <https://github.com/itamarst>`_)
 * PR `#7132 <https://github.com/numba/numba/pull/7132>`_: gh #7131 Support for astype with literal strings (`Nick Riasanovsky <https://github.com/njriasan>`_)
@@ -168,7 +170,7 @@ Pull-Requests:
 * PR `#7456 <https://github.com/numba/numba/pull/7456>`_: Fix invalid codegen for #7451. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#7457 <https://github.com/numba/numba/pull/7457>`_: Factor out target registry selection logic (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#7459 <https://github.com/numba/numba/pull/7459>`_: Include compiler flags in symbol mangling (`Siu Kwan Lam <https://github.com/sklam>`_)
-* PR `#7460 <https://github.com/numba/numba/pull/7460>`_: Testhound/fp16 support (`Michael Collison <https://github.com/testhound>`_ `Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7460 <https://github.com/numba/numba/pull/7460>`_: Add FP16 support for CUDA (`Michael Collison <https://github.com/testhound>`_ `Graham Markall <https://github.com/gmarkall>`_)
 * PR `#7461 <https://github.com/numba/numba/pull/7461>`_: Support NVIDIA's CUDA Python bindings (`Graham Markall <https://github.com/gmarkall>`_)
 * PR `#7465 <https://github.com/numba/numba/pull/7465>`_: Update changelog for 0.54.1 release (`Siu Kwan Lam <https://github.com/sklam>`_)
 * PR `#7477 <https://github.com/numba/numba/pull/7477>`_: Fix unicode operator.eq handling of Optional types. (`stuartarchibald <https://github.com/stuartarchibald>`_)
