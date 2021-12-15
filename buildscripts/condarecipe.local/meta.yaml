@@ -35,21 +35,21 @@ requirements:
     - numpy
     - setuptools
     # On channel https://anaconda.org/numba/
-    - llvmlite >=0.38.0dev0,<0.38
+    - llvmlite >=0.38.0rc1,<0.39
     # TBB devel version is to match TBB libs.
     # 2020.3 is the last version with the "old" ABI
     # NOTE: ppc64le exclusion is temporary until packages are more generally
     #       available.
-    - tbb-devel >=2021       # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
+    - tbb-devel 2021.*       # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
   run:
     - python >=3.7
-    - numpy >=1.18
+    - numpy >=1.18,<1.22
     - setuptools
     # On channel https://anaconda.org/numba/
-    - llvmlite >=0.38.0dev0,<0.38
+    - llvmlite >=0.38.0rc1,<0.39
   run_constrained:
     # If TBB is present it must be at least version 2021
-    - tbb >=2021    # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
+    - tbb 2021.*    # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
     # avoid confusion from openblas bugs
     - libopenblas !=0.3.6      # [x86_64]
     # CUDA 9.2 or later is required for CUDA support
@@ -66,7 +66,7 @@ test:
     - scipy                    # [not (armv6l or armv7l)]
     - ipython                  # [not (armv6l or armv7l or aarch64)]
     - setuptools
-    - tbb  >=2021              # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
+    - tbb  2021.*              # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
     - intel-openmp             # [osx]
     # This is for driving gdb tests
     - pexpect                  # [linux64]
