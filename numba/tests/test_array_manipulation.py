@@ -766,6 +766,110 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         val = np.array([-1e100])
         _assert_raises(arr, val)
 
+    def test_shape(self):
+        pyfunc = numpy_shape
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(x):
+            expected = pyfunc(x)
+            got = cfunc(x)
+            self.assertPreciseEqual(got, expected)
+
+        # check arrays
+        for t in [(), (1,), (2, 3,), (4, 5, 6)]:
+            arr = np.empty(t)
+            check(arr)
+
+        # check some types that go via asarray
+        for t in [1, False, [1,], [[1, 2,],[3, 4]], (1,), (1, 2, 3)]:
+            check(arr)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc('a')
+
+        self.assertIn("The argument to np.shape must be array-like",
+                      str(raises.exception))
+
+    def test_flatnonzero_basic(self):
+        pyfunc = numpy_flatnonzero
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(-5, 5)
+            yield np.full(5, fill_value=0)
+            yield np.array([])
+            a = self.random.randn(100)
+            a[np.abs(a) > 0.2] = 0.0
+            yield a
+            yield a.reshape(5, 5, 4)
+            yield a.reshape(50, 2, order='F')
+            yield a.reshape(25, 4)[1::2]
+            yield a * 1j
+
+        for a in a_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+    def test_argwhere_basic(self):
+        pyfunc = numpy_argwhere
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(-5, 5) > 2
+            yield np.full(5, fill_value=0)
+            yield np.full(5, fill_value=1)
+            yield np.array([])
+            yield np.array([-1.0, 0.0, 1.0])
+            a = self.random.randn(100)
+            yield a > 0.2
+            yield a.reshape(5, 5, 4) > 0.5
+            yield a.reshape(50, 2, order='F') > 0.5
+            yield a.reshape(25, 4)[1::2] > 0.5
+            yield a == a - 1
+            yield a > -a
+
+        for a in a_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+    @staticmethod
+    def array_like_variations():
+        yield ((1.1, 2.2), (3.3, 4.4), (5.5, 6.6))
+        yield (0.0, 1.0, 0.0, -6.0)
+        yield ([0, 1], [2, 3])
+        yield ()
+        yield np.nan
+        yield 0
+        yield 1
+        yield False
+        yield True
+        yield (True, False, True)
+        yield 2 + 1j
+        # the following are not array-like, but NumPy does not raise
+        yield None
+        yield 'a_string'
+        yield ''
+
+
+    def test_flatnonzero_array_like(self):
+        pyfunc = numpy_flatnonzero
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for a in self.array_like_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+    def test_argwhere_array_like(self):
+        pyfunc = numpy_argwhere
+        cfunc = jit(nopython=True)(pyfunc)
+        for a in self.array_like_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
 
 class TestArrayBroadcast(MemoryLeakMixin, TestCase):
     """
