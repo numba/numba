@@ -209,7 +209,7 @@ Pull-Requests:
 * PR `#7636 <https://github.com/numba/numba/pull/7636>`_: Copy prange loop header to after the parfor. (`Todd A. Anderson <https://github.com/DrTodd13>`_)
 * PR `#7637 <https://github.com/numba/numba/pull/7637>`_: Increase the timeout on the SVML tests for loaded machines. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#7645 <https://github.com/numba/numba/pull/7645>`_: In debuginfo, do not add noinline to functions marked alwaysinline (`stuartarchibald <https://github.com/stuartarchibald>`_)
-* PR `#7650 <https://github.com/numba/numba/pull/7650>`_: Move Azure builds to OSX 10.15 (`stuartarchibald <https://github.com/stuartarchibald>`_ `esc <https://github.com/esc>`_ `Siu Kwan Lam <https://github.com/sklam>_)`
+* PR `#7650 <https://github.com/numba/numba/pull/7650>`_: Move Azure builds to OSX 10.15 (`stuartarchibald <https://github.com/stuartarchibald>`_ `esc <https://github.com/esc>`_ `Siu Kwan Lam <https://github.com/sklam>`_)
 
 Authors:
 
