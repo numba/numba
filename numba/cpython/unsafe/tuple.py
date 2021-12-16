@@ -40,7 +40,7 @@ def build_int_tuple(tyctx, sz):
         raise errors.RequireLiteralValue(sz)
 
     size = int(sz.literal_value)
-    tuple_type = types.UniTuple(dtype=types.int64, count=size)
+    tuple_type = types.UniTuple(dtype=types.intp, count=size)
     sig = tuple_type(sz)
 
     def codegen(context, builder, signature, args):
