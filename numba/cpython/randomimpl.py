@@ -1586,3 +1586,58 @@ def dirichlet(alpha, size=None):
         )
 
     return dirichlet_impl
+
+# ------------------------------------------------------------------------
+# np.random.noncentral_chisquare
+
+@overload(np.random.noncentral_chisquare)
+def noncentral_chisquare(df, nonc, size=None):
+
+    @register_jitable
+    def noncentral_chisquare_single(df, nonc):
+
+        if df <= 0:
+            raise ValueError("df <= 0")
+        if nonc < 0:
+            raise ValueError("nonc < 0")
+
+        if np.isnan(nonc):
+            return np.nan
+
+        if df > 1:
+            chi2 = np.random.chisquare(df-1)
+            n = np.random.standard_normal() + np.sqrt(nonc)
+            return chi2 + n * n
+        else:
+            i = np.random.poisson(nonc/2.0)
+            return np.random.chisquare(df + 2 * i)
+
+    if size in (None, types.none):
+        def noncentral_chisquare_impl(df, nonc, size=None):
+            return noncentral_chisquare_single(df, nonc)
+
+    elif isinstance(size, types.Integer):
+
+        def noncentral_chisquare_impl(df, nonc, size=None):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx, _ in enumerate(out_flat):
+                out_flat[idx] = noncentral_chisquare_single(df, nonc)
+            return out
+
+    elif isinstance(size, (types.UniTuple)) and isinstance(size.dtype, types.Integer):
+
+        def noncentral_chisquare_impl(df, nonc, size=None):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx, _ in enumerate(out_flat):
+                out_flat[idx] = noncentral_chisquare_single(df, nonc)
+            return out
+
+    else:
+        raise NumbaTypeError(
+            "np.random.noncentral_chisquare(): size should be int or "
+            "tuple of ints or None, got %s" % size
+        )
+
+    return noncentral_chisquare_impl
