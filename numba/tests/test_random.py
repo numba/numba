@@ -69,6 +69,12 @@ def numpy_dirichlet(alpha, size):
 def numpy_dirichlet_default(alpha):
     return np.random.dirichlet(alpha)
 
+def numpy_noncentral_chisquare(df, nonc, size):
+    return np.random.noncentral_chisquare(df, nonc, size=size)
+
+def numpy_noncentral_chisquare_default(df, nonc):
+    return np.random.noncentral_chisquare(df, nonc)
+
 def numpy_check_rand(seed, a, b):
     np.random.seed(seed)
     expected = np.random.random((a, b))
@@ -1373,6 +1379,76 @@ class TestRandomDirichlet(BaseTest):
                 "tuple of ints or None, got",
                 str(raises.exception),
             )
+
+class TestRandomNoncentralChiSquare(BaseTest):
+
+    def _check_sample(self, size, sample):
+
+        """Check output structure"""
+        if size is not None:
+            self.assertIsInstance(sample, np.ndarray)
+            self.assertEqual(sample.dtype, np.float64)
+            
+            if type(size) is int:
+                self.assertEqual(sample.shape, (size,))
+            else:
+                self.assertEqual(sample.shape, size)
+        else:
+             self.assertIsInstance(sample, float)
+
+        """Check statistical properties"""
+        for val in np.nditer(sample):
+            self.assertGreaterEqual(val, 0)
+
+    def test_noncentral_chisquare_default(self):
+        """
+        Test noncentral_chisquare(df, nonc, size=None)
+        """
+        cfunc = jit(nopython=True)(numpy_noncentral_chisquare_default)
+        inputs = (
+            (1, 5),
+            (5, 1),
+            (100000, 1),
+            (1, 10000),
+        )
+        for input in inputs:
+            res = cfunc(input[0], input[1])
+            self._check_sample(None, res)
+
+    # def test_dirichlet(self):
+    #     """
+    #     Test dirichlet(alpha, size=None)
+    #     """
+    #     cfunc = jit(nopython=True)(numpy_dirichlet)
+    #     sizes = (None, (10,), (10, 10))
+    #     alphas = (
+    #         self.alpha,
+    #         tuple(self.alpha),
+    #         np.array([1, 1, 10000, 1], dtype=np.float64),
+    #         np.array([1, 1, 1.5, 1], dtype=np.float64),
+    #     )
+
+    #     for alpha, size in itertools.product(alphas, sizes):
+    #         res = cfunc(alpha, size)
+    #         self._check_sample(alpha, size, res)
+
+    # def test_dirichlet_exceptions(self):
+    #     cfunc = jit(nopython=True)(numpy_dirichlet)
+    #     alpha = tuple((0, 1, 1))
+    #     with self.assertRaises(ValueError) as raises:
+    #         cfunc(alpha, 1)
+    #     self.assertIn("dirichlet: alpha must be > 0.0", str(raises.exception))
+        
+    #     alpha = self.alpha
+    #     sizes = (True, 3j, 1.5, (1.5, 1), (3j, 1), (3j, 3j), (np.int8(3), np.int64(7)))
+    #     for size in sizes:
+    #         with self.assertRaises(TypingError) as raises:
+    #             cfunc(alpha, size)
+    #         self.assertIn(
+    #             "np.random.dirichlet(): size should be int or "
+    #             "tuple of ints or None, got",
+    #             str(raises.exception),
+    #         )
 
 @jit(nopython=True, nogil=True)
 def py_extract_randomness(seed, out):
