@@ -1,7 +1,7 @@
 import logging
 import warnings
 
-from pkg_resources import iter_entry_points
+from importlib.metadata import entry_points
 
 _already_initialized = False
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ def init_all():
     # Must put this here to avoid extensions re-triggering initialization
     _already_initialized = True
 
-    for entry_point in iter_entry_points('numba_extensions', 'init'):
+    for entry_point in (item for item in entry_points().get('numba_extensions', []) if item.name == "init"):
         logger.debug('Loading extension: %s', entry_point)
         try:
             func = entry_point.load()
