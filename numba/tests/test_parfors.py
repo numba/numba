@@ -3569,6 +3569,26 @@ class TestPrangeBasic(TestPrangeBase):
         self.prange_tester(test_impl, True)
         self.prange_tester(test_impl, False)
 
+    def test_prange30(self):
+        # issue7675: broadcast setitem
+        def test_impl(x, par, numthreads):
+            n_par = par.shape[0]
+            n_x = len(x)
+            result = np.zeros((n_par, n_x), dtype=np.float64)
+            chunklen = (len(x) + numthreads - 1) // numthreads
+
+            for i in range(numthreads):
+                start = i * chunklen
+                stop = (i + 1) * chunklen
+                result[:, start:stop] = x[start:stop] * par[:]
+
+            return result
+
+        x = np.array(np.arange(0, 6, 1.0))
+        par = np.array([1.0, 2.0, 3.0])
+
+        self.prange_tester(test_impl, x, par, 2)
+
 
 @skip_parfors_unsupported
 class TestPrangeSpecific(TestPrangeBase):
