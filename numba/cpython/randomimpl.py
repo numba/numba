@@ -1595,7 +1595,8 @@ def noncentral_chisquare(df, nonc, size=None):
 
     @register_jitable
     def noncentral_chisquare_single(df, nonc):
-
+        # identical to numpy implementation 
+        
         if df <= 0:
             raise ValueError("df <= 0")
         if nonc < 0:
@@ -1608,6 +1609,7 @@ def noncentral_chisquare(df, nonc, size=None):
             chi2 = np.random.chisquare(df-1)
             n = np.random.standard_normal() + np.sqrt(nonc)
             return chi2 + n * n
+
         else:
             i = np.random.poisson(nonc/2.0)
             return np.random.chisquare(df + 2 * i)
