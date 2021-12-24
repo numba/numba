@@ -360,7 +360,7 @@ build_requires = ['numpy >={}'.format(min_numpy_build_version)]
 install_requires = [
     'llvmlite >={},<{}'.format(min_llvmlite_version, max_llvmlite_version),
     'numpy >={}'.format(min_numpy_run_version),
-    'backports.entry-points-selectable; python_version < "3.9"'
+    'importlib-metadata >= 3.6; python_version < "3.9"'
 ]
 
 metadata = dict(

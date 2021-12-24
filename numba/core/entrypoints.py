@@ -5,12 +5,12 @@ from numba.core.config import PYVERSION
 
 if PYVERSION < (3, 9):
     try:
-        from backports.entry_points_selectable import entry_points
+        from importlib.metadata import entry_points
     except ImportError as ex:
         raise ImportError(
             "backports.entry-points-selectable is required for Python version < 3.9, "
             "try:\n"
-            "$ conda/pip install backports.entry-points-selectable"
+            "$ conda/pip install importlib.metadata"
         ) from ex
 else:
     from importlib.metadata import entry_points
