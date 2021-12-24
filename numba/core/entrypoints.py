@@ -21,7 +21,7 @@ def _entry_points_sequence():
     try:
         return raw_eps.select(group="numba_extensions", name="init")
     except AttributeError as e:
-        return (item for item in raw_eps.get("numba_extensions") if item.name=="init")
+        return (item for item in raw_eps.get("numba_extensions", ()) if item.name=="init")
 
 
 _already_initialized = False
