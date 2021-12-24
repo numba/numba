@@ -27,14 +27,16 @@ class _DummyClass(object):
     def __repr__(self):
         return '_DummyClass(%f, %f)' % self.value
 
+
 my_entrypoint = importlib_metadata.EntryPoint(
     'init', '_test_numba_extension:init_func', 'numba_extensions',
 )
 
+
 class mockOfEntryPoint(object):
     def select(self, group, name):
-        assert group=="numba_extensions"
-        assert name=="init"
+        assert group == "numba_extensions"
+        assert name == "init"
         yield my_entrypoint
 
 
@@ -47,7 +49,9 @@ class TestEntrypoints(TestCase):
         # loosely based on Pandas test from:
         #   https://github.com/pandas-dev/pandas/pull/27488
 
-        for fake_ep in [mockOfEntryPoint(), {'numba_extensions': (my_entrypoint,)}]:
+        for fake_ep in [mockOfEntryPoint(),
+                       {'numba_extensions':
+                        (my_entrypoint,)}]:
             try:
                 # will remove this module at the end of the test
                 mod = mock.Mock(__name__='_test_numba_extension')
