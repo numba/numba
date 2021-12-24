@@ -198,7 +198,7 @@ vary with target operating system and hardware. The following lists them all
 
 * Required run time:
 
-  * ``setuptools``
+  * ``importlib_metadata`` (for Python versions < 3.8)
   * ``numpy``
   * ``llvmlite``
 
