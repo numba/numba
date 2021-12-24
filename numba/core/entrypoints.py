@@ -5,15 +5,15 @@ from numba.core.config import PYVERSION
 
 if PYVERSION < (3, 9):
     try:
-        import importlib_metadata
+        from backports.entry_points_selectable import entry_points
     except ImportError as ex:
         raise ImportError(
-            "importlib_metadata backport is required for Python version < 3.9, "
+            "backports.entry-points-selectable is required for Python version < 3.9, "
             "try:\n"
-            "$ conda/pip install importlib_metadata"
+            "$ conda/pip install backports.entry-points-selectable"
         ) from ex
 else:
-    from importlib import metadata as importlib_metadata
+    from importlib.metadata import entry_points
 
 
 _already_initialized = False
@@ -32,16 +32,13 @@ def init_all():
     # Must put this here to avoid extensions re-triggering initialization
     _already_initialized = True
 
-    for entry_point in importlib_metadata.entry_points().get(
-        "numba_extensions", ()
-    ):
-        if entry_point.name == "init":
-            logger.debug('Loading extension: %s', entry_point)
-            try:
-                func = entry_point.load()
-                func()
-            except Exception as e:
-                msg = (f"Numba extension module '{entry_point.module}' "
-                       f"failed to load due to '{type(e).__name__}({str(e)})'.")
-                warnings.warn(msg, stacklevel=2)
-                logger.debug('Extension loading failed for: %s', entry_point)
+    for entry_point in entry_points(group="numba_extensions", name="init"):
+        logger.debug('Loading extension: %s', entry_point)
+        try:
+            func = entry_point.load()
+            func()
+        except Exception as e:
+            msg = (f"Numba extension module '{entry_point.module}' "
+                   f"failed to load due to '{type(e).__name__}({str(e)})'.")
+            warnings.warn(msg, stacklevel=2)
+            logger.debug('Extension loading failed for: %s', entry_point)
