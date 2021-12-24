@@ -105,29 +105,23 @@ class TestEntrypoints(TestCase):
                 'numba_extensions',
             )
 
+            from numba.core import entrypoints
+            # Allow reinitialization
+            entrypoints._already_initialized = False
             with mock.patch.object(
                 importlib_metadata,
                 'entry_points',
                 return_value={'numba_extensions': (my_entrypoint,)},
-            ):
-
-                from numba.core import entrypoints
-                # Allow reinitialization
-                entrypoints._already_initialized = False
-
-                with warnings.catch_warnings(record=True) as w:
+            ), warnings.catch_warnings(record=True) as w:
                     entrypoints.init_all()
-
-                bad_str = "Numba extension '_test_numba_bad_extension:init_func'"
-                for x in w:
-                    if bad_str in str(x):
-                        break
-                else:
-                    raise ValueError("Expected warning message not found")
-
-                # was our init function called?
-                self.assertEqual(counters['init'], 1)
-
+            bad_str = "Numba extension '_test_numba_bad_extension:init_func'"
+            for x in w:
+                if bad_str in str(x):
+                    break
+            else:
+                raise ValueError("Expected warning message not found")
+            # was our init function called?
+            self.assertEqual(counters['init'], 1)
         finally:
             # remove fake module
             if mod.__name__ in sys.modules:
