@@ -27,6 +27,16 @@ class _DummyClass(object):
     def __repr__(self):
         return '_DummyClass(%f, %f)' % self.value
 
+my_entrypoint = importlib_metadata.EntryPoint(
+    'init', '_test_numba_extension:init_func', 'numba_extensions',
+)
+
+class mockOfEntryPoint(object):
+    def select(self, group, name):
+        assert group=="numba_extensions"
+        assert name=="init"
+        yield my_entrypoint
+
 
 class TestEntrypoints(TestCase):
     """
@@ -37,39 +47,34 @@ class TestEntrypoints(TestCase):
         # loosely based on Pandas test from:
         #   https://github.com/pandas-dev/pandas/pull/27488
 
-        mod = mock.Mock(__name__='_test_numba_extension')
+        for fake_ep in [mockOfEntryPoint(), {'numba_extensions': (my_entrypoint,)}]:
+            try:
+                # will remove this module at the end of the test
+                sys.modules[mod.__name__] = mock.Mock(__name__='_test_numba_extension')
 
-        try:
-            # will remove this module at the end of the test
-            sys.modules[mod.__name__] = mod
+                with mock.patch.object(
+                    importlib_metadata,
+                    'entry_points',
+                    return_value=fake_ep,
+                ):
 
-            my_entrypoint = importlib_metadata.EntryPoint(
-                'init', '_test_numba_extension:init_func', 'numba_extensions',
-            )
+                    from numba.core import entrypoints
 
-            with mock.patch.object(
-                importlib_metadata,
-                'entry_points',
-                return_value={'numba_extensions': (my_entrypoint,)},
-            ):
+                    # Allow reinitialization
+                    entrypoints._already_initialized = False
 
-                from numba.core import entrypoints
+                    entrypoints.init_all()
 
-                # Allow reinitialization
-                entrypoints._already_initialized = False
+                    # was our init function called?
+                    mod.init_func.assert_called_once()
 
-                entrypoints.init_all()
-
-                # was our init function called?
-                mod.init_func.assert_called_once()
-
-                # ensure we do not initialize twice
-                entrypoints.init_all()
-                mod.init_func.assert_called_once()
-        finally:
-            # remove fake module
-            if mod.__name__ in sys.modules:
-                del sys.modules[mod.__name__]
+                    # ensure we do not initialize twice
+                    entrypoints.init_all()
+                    mod.init_func.assert_called_once()
+            finally:
+                # remove fake module
+                if mod.__name__ in sys.modules:
+                    del sys.modules[mod.__name__]
 
     def test_entrypoint_tolerance(self):
         # loosely based on Pandas test from:

@@ -5,7 +5,7 @@ from numba.core.config import PYVERSION
 
 if PYVERSION < (3, 9):
     try:
-        from importlib_metadata import entry_points
+        import importlib_metadata
 
     except ImportError as ex:
         raise ImportError(
@@ -14,10 +14,10 @@ if PYVERSION < (3, 9):
             "$ conda/pip install importlib.metadata"
         ) from ex
 else:
-    from importlib.metadata import entry_points
+    import importlib.metadata as importlib_metadata
 
 def _entry_points_sequence():
-    raw_eps = entry_points()
+    raw_eps = importlib_metadata.entry_points()
     try:
         return raw_eps.select(group="numba_extensions", name="init")
     except AttributeError as e:
