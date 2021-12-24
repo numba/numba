@@ -118,7 +118,7 @@ class TestEntrypoints(TestCase):
                 with warnings.catch_warnings(record=True) as w:
                     entrypoints.init_all()
 
-                bad_str = "Numba extension module '_test_numba_bad_extension'"
+                bad_str = "Numba extension '_test_numba_bad_extension:init_func'"
                 for x in w:
                     if bad_str in str(x):
                         break
