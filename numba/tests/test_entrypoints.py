@@ -8,7 +8,7 @@ import os
 import subprocess
 import threading
 
-from numba import config, njit
+from numba import njit
 from numba.tests.support import TestCase
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
 
