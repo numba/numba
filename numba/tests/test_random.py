@@ -1406,49 +1406,65 @@ class TestRandomNoncentralChiSquare(BaseTest):
         """
         cfunc = jit(nopython=True)(numpy_noncentral_chisquare_default)
         inputs = (
+            (0.5, 1), # test branch when df < 1
             (1, 5),
             (5, 1),
             (100000, 1),
             (1, 10000),
         )
         for input in inputs:
-            res = cfunc(input[0], input[1])
+            df, nonc = input
+            res = cfunc(df, nonc)
             self._check_sample(None, res)
+            nonc = np.nan
+            res = cfunc(df, nonc) # test branch when nonc is nan
+            self.assertTrue(np.isnan(res))
 
-    # def test_dirichlet(self):
-    #     """
-    #     Test dirichlet(alpha, size=None)
-    #     """
-    #     cfunc = jit(nopython=True)(numpy_dirichlet)
-    #     sizes = (None, (10,), (10, 10))
-    #     alphas = (
-    #         self.alpha,
-    #         tuple(self.alpha),
-    #         np.array([1, 1, 10000, 1], dtype=np.float64),
-    #         np.array([1, 1, 1.5, 1], dtype=np.float64),
-    #     )
 
-    #     for alpha, size in itertools.product(alphas, sizes):
-    #         res = cfunc(alpha, size)
-    #         self._check_sample(alpha, size, res)
+    def test_noncentral_chisquare(self):
+        """
+        Test noncentral_chisquare(df, nonc, size)
+        """
+        cfunc = jit(nopython=True)(numpy_noncentral_chisquare)
+        sizes = (None, (10,), (10, 10))
+        inputs = (
+            (0.5, 1),
+            (1, 5),
+            (5, 1),
+            (100000, 1),
+            (1, 10000),
+        )
 
-    # def test_dirichlet_exceptions(self):
-    #     cfunc = jit(nopython=True)(numpy_dirichlet)
-    #     alpha = tuple((0, 1, 1))
-    #     with self.assertRaises(ValueError) as raises:
-    #         cfunc(alpha, 1)
-    #     self.assertIn("dirichlet: alpha must be > 0.0", str(raises.exception))
+        for input, size in itertools.product(inputs, sizes):
+            df, nonc = input
+            res = cfunc(df, nonc, size)
+            self._check_sample(size, res)
+            nonc = np.nan
+            res = cfunc(df, nonc, size)
+            self.assertTrue(np.isnan(res).all())
+
+    def test_noncentral_chisquare_exceptions(self):
+        cfunc = jit(nopython=True)(numpy_noncentral_chisquare)
+        df, nonc = 0, 1
+        with self.assertRaises(ValueError) as raises:
+            cfunc(df, nonc, 1)
+        self.assertIn("df <= 0", str(raises.exception))
         
-    #     alpha = self.alpha
-    #     sizes = (True, 3j, 1.5, (1.5, 1), (3j, 1), (3j, 3j), (np.int8(3), np.int64(7)))
-    #     for size in sizes:
-    #         with self.assertRaises(TypingError) as raises:
-    #             cfunc(alpha, size)
-    #         self.assertIn(
-    #             "np.random.dirichlet(): size should be int or "
-    #             "tuple of ints or None, got",
-    #             str(raises.exception),
-    #         )
+        df, nonc = 1, -1
+        with self.assertRaises(ValueError) as raises:
+            cfunc(df, nonc, 1)
+        self.assertIn("nonc < 0", str(raises.exception))        
+
+        df, nonc = 1, 1
+        sizes = (True, 3j, 1.5, (1.5, 1), (3j, 1), (3j, 3j), (np.int8(3), np.int64(7)))
+        for size in sizes:
+            with self.assertRaises(TypingError) as raises:
+                cfunc(df, nonc, size)
+            self.assertIn(
+                "np.random.noncentral_chisquare(): size should be int or "
+                "tuple of ints or None, got",
+                str(raises.exception),
+            )
 
 @jit(nopython=True, nogil=True)
 def py_extract_randomness(seed, out):
