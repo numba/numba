@@ -1,17 +1,30 @@
 import logging
 import warnings
 
-from importlib.metadata import entry_points
+from numba.core.config import PYVERSION
+
+if PYVERSION < (3, 9):
+    try:
+        from backports.entry_points_selectable import entry_points
+    except ImportError as ex:
+        raise ImportError(
+            "backports.entry-points-selectable is required for Python version < 3.9, "
+            "try:\n"
+            "$ conda/pip install backports.entry-points-selectable"
+        ) from ex
+else:
+    from importlib.metadata import entry_points
+
 
 _already_initialized = False
 logger = logging.getLogger(__name__)
 
 
 def init_all():
-    '''Execute all `numba_extensions` entry points with the name `init`
+    """Execute all `numba_extensions` entry points with the name `init`
 
     If extensions have already been initialized, this function does nothing.
-    '''
+    """
     global _already_initialized
     if _already_initialized:
         return
@@ -19,13 +32,13 @@ def init_all():
     # Must put this here to avoid extensions re-triggering initialization
     _already_initialized = True
 
-    for entry_point in (item for item in entry_points().get('numba_extensions', []) if item.name == "init"):
+    for entry_point in entry_points(group="numba_extensions", name="init"):
         logger.debug('Loading extension: %s', entry_point)
         try:
             func = entry_point.load()
             func()
         except Exception as e:
-            msg = "Numba extension module '{}' failed to load due to '{}({})'."
-            warnings.warn(msg.format(entry_point.module_name, type(e).__name__,
-                                     str(e)), stacklevel=2)
+            msg = (f"Numba extension module '{entry_point.module}' "
+                   f"failed to load due to '{type(e).__name__}({str(e)})'.")
+            warnings.warn(msg, stacklevel=2)
             logger.debug('Extension loading failed for: %s', entry_point)
