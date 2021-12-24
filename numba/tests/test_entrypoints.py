@@ -50,7 +50,8 @@ class TestEntrypoints(TestCase):
         for fake_ep in [mockOfEntryPoint(), {'numba_extensions': (my_entrypoint,)}]:
             try:
                 # will remove this module at the end of the test
-                sys.modules[mod.__name__] = mock.Mock(__name__='_test_numba_extension')
+                mod = mock.Mock(__name__='_test_numba_extension')
+                sys.modules[mod.__name__] = mod
 
                 with mock.patch.object(
                     importlib_metadata,
