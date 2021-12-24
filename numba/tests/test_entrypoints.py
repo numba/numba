@@ -50,8 +50,8 @@ class TestEntrypoints(TestCase):
         #   https://github.com/pandas-dev/pandas/pull/27488
 
         for fake_ep in [mockOfEntryPoint(),
-                       {'numba_extensions':
-                        (my_entrypoint,)}]:
+                        {'numba_extensions':
+                         (my_entrypoint,)}]:
             try:
                 # will remove this module at the end of the test
                 mod = mock.Mock(__name__='_test_numba_extension')

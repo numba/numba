@@ -4,12 +4,12 @@ import warnings
 
 try:
     import importlib.metadata as importlib_metadata
-except ImportError as ex:
+except ImportError:
     try:
         import importlib_metadata
     except ImportError as ex:
         raise ImportError(
-            "backports.entry-points-selectable is required for Python version < 3.9, "
+            "importlib_metadata is required for Python version < 3.8, "
             "try:\n"
             "$ conda/pip install importlib.metadata"
         ) from ex
@@ -19,9 +19,9 @@ def _entry_points_sequence():
     raw_eps = importlib_metadata.entry_points()
     try:
         return raw_eps.select(group="numba_extensions", name="init")
-    except AttributeError as _:
-        return (item for item in raw_eps.get("numba_extensions", ())
-                                 if item.name == "init")
+    except AttributeError:
+        eps = raw_eps.get("numba_extensions", ())
+        return (item for item in eps if item.name == "init")
 
 
 _already_initialized = False
