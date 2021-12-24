@@ -84,7 +84,7 @@ elif  [[ $(uname) == Darwin ]]; then
     # Install llvm-openmp and intel-openmp on OSX too
     $CONDA_INSTALL llvm-openmp intel-openmp
 fi
-
+if [ $PYTHON \< "3.8" ]; then $CONDA_INSTALL importlib_metadata; fi
 # `pip install` all the dependencies on Python 3.10
 if [[ "$PYTHON" == "3.10" ]] ; then
     $PIP_INSTALL -U pip
