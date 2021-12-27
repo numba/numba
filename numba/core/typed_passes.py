@@ -186,7 +186,7 @@ class AnnotateTypes(AnalysisPass):
         """
         # add back in dels.
         post_proc = postproc.PostProcessor(state.func_ir)
-        post_proc.run(emit_dels=True)
+        post_proc.run(emit_dels=True, extend_lifetimes=config.EXTEND_VARIABLE_LIFETIMES)
 
         state.type_annotation = type_annotations.TypeAnnotation(
             func_ir=state.func_ir.copy(),
