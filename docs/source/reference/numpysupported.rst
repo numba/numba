@@ -659,7 +659,6 @@ Distributions
 * :func:`numpy.random.beta`
 * :func:`numpy.random.binomial`
 * :func:`numpy.random.chisquare`
-* :func:`numpy.random.noncentral_chisquare`
 * :func:`numpy.random.dirichlet`
 * :func:`numpy.random.exponential`
 * :func:`numpy.random.f`
@@ -673,6 +672,7 @@ Distributions
 * :func:`numpy.random.logseries`
 * :func:`numpy.random.multinomial`
 * :func:`numpy.random.negative_binomial`
+* :func:`numpy.random.noncentral_chisquare`
 * :func:`numpy.random.normal`
 * :func:`numpy.random.pareto`
 * :func:`numpy.random.poisson`
