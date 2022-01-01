@@ -4348,7 +4348,7 @@ def array_ascontiguousarray_scalar(a):
     return _array_ascontiguous_scalar(a)
 
 
-@overload(np.ascontiguousarray)
+@overload(np.asfortranarray)
 def array_asfortran_scalar(a):
     return _array_ascontiguous_scalar(a)
 
