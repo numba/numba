@@ -4331,6 +4331,28 @@ def array_ascontiguousarray(context, builder, sig, args):
     return _as_layout_array(context, builder, sig, args, output_layout='C')
 
 
+def _array_ascontiguous_scalar(a):
+    """common between ascontiguousarray and asfortranarray"""
+    if isinstance(a, (types.Number, types.Boolean, )):
+        dtype = a
+
+        def impl(a):
+            ary = np.empty((1, ), dtype=dtype)
+            ary[0] = a
+            return ary
+        return impl
+
+
+@overload(np.ascontiguousarray)
+def array_ascontiguousarray_scalar(a):
+    return _array_ascontiguous_scalar(a)
+
+
+@overload(np.ascontiguousarray)
+def array_asfortran_scalar(a):
+    return _array_ascontiguous_scalar(a)
+
+
 @lower_builtin("array.astype", types.Array, types.DTypeSpec)
 @lower_builtin("array.astype", types.Array, types.StringLiteral)
 def array_astype(context, builder, sig, args):
