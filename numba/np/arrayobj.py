@@ -1389,11 +1389,11 @@ if numpy_version >= (1, 20):
         def impl(*args):
             # discover the number of dimensions
             m = 0
-            for arg in literal_unroll(args):
-                if isinstance(arg, int):
+            for val in literal_unroll(args):
+                if isinstance(val, int):
                     m = max(m, 1)
                 else:
-                    m = max(m, len(arg))
+                    m = max(m, len(val))
 
             # propagate args
             r = [1] * m
@@ -1413,7 +1413,7 @@ if numpy_version >= (1, 20):
                                          " to a single shape")
                 else:
                     for i in range(len(arg)):
-                        # don't use the same because it violates SSA
+                        # don't use the same name because it violates SSA
                         k_ = m - len(arg) + i
                         tmp_ = arg[i]
                         if tmp_ == 1:
