@@ -4,7 +4,7 @@ import itertools
 import numpy as np
 
 from numba.core.compiler import compile_isolated
-from numba import njit, jit, typeof, literally
+from numba import njit, jit, typeof, literally, prange
 from numba.core import types, errors, utils
 from numba.tests.support import TestCase, MemoryLeakMixin, tag
 import unittest
@@ -778,9 +778,30 @@ class TestTupleBuild(TestCase):
             a = (1.2, 1.3)
             return a[0]
 
-        cfunc = jit(nopython=True)(pyfunc)
+        cfunc = jit(nopython=True, parallel=True)(pyfunc)
         self.assertEqual(cfunc(), pyfunc())
 
+    def test_untraced_value_parfor(self):
+        # This is a test for issue #6478.
+        def pyfunc(arr):
+            a = (1.2, 1.3)
+            n1 = len(arr)
+            arr2 = np.empty(n1, np.float64)
+            for i in prange(n1):
+                arr2[i] = arr[i] * a[0]
+            n2 = len(arr2)
+            arr3 = np.empty(n2, np.float64)
+            for j in prange(n2):
+                arr3[j] = arr2[j] - a[1]
+            total = 0.0
+            n3 = len(arr3)
+            for k in prange(n3):
+                total += arr3[k]
+            return total + a[0]
+
+        arr = np.arange(100)
+        cfunc = jit(nopython=True, parallel=True)(pyfunc)
+        self.assertEqual(cfunc(arr), pyfunc(arr))
 
 if __name__ == '__main__':
     unittest.main()
