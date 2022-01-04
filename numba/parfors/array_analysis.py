@@ -5,6 +5,7 @@
 
 import numpy
 import operator
+import warnings
 from numba.core import types, ir, config, cgutils, errors
 from numba.core.ir_utils import (
     mk_unique_var,
@@ -450,10 +451,9 @@ class ShapeEquivSet(EquivSet):
             return tuple(self._get_names(x)[0] for x in obj)
         elif isinstance(obj, int):
             return (obj,)
-        else:
-            raise NotImplementedError(
-                "ShapeEquivSet does not support {}".format(obj)
-            )
+        warnings.warn(errors.NumbaPerformanceWarning(
+            f"Ignoring untracked object type {type(obj)} in ShapeEquivSet"))
+        return ()
 
     def is_equiv(self, *objs):
         """Overload EquivSet.is_equiv to handle Numba IR variables and
