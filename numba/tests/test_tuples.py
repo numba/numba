@@ -772,6 +772,15 @@ class TestTupleBuild(TestCase):
 
         check((10, 20))
 
+    def test_untraced_value_tuple(self):
+        # This is a test for issue #6478.
+        def pyfunc():
+            a = (1.2, 1.3)
+            return a[0]
+
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertEqual(cfunc(), pyfunc())
+
 
 if __name__ == '__main__':
     unittest.main()
