@@ -207,7 +207,7 @@ class TestSlices(MemoryLeakMixin, TestCase):
         self.assertNotEqual(sl1, sl2)
         self.assertEqual(sl1, sl3)
 
-    def test_literal_slice_argument(self):
+    def test_literal_slice_boxing(self):
         """
             Tests that a literal slice can be used
             as an argument to a JIT function.

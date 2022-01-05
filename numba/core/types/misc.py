@@ -561,7 +561,16 @@ class LiteralKeyWrapper:
         from numba.core.types import literal
         self._literal_typ = literal(literal_value)
 
-    @property
-    def key(self):
+    def __hash__(self):
         # Reuse the key from the literal type
-        return self._literal_typ.key
+        return hash(self._literal_typ.key)
+
+    def __eq__(self, other):
+        """
+            Treat two LiteralKeys as equal if they have the same
+            type literal and the literal values are the same.
+        """
+        if isinstance(other, LiteralKeyWrapper):
+            if type(self._literal_typ) == type(other._literal_typ):
+                return self._literal_typ.literal_value == other._literal_typ.literal_value
+        return False
