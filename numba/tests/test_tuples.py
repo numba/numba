@@ -6,7 +6,7 @@ import numpy as np
 from numba.core.compiler import compile_isolated
 from numba import njit, jit, typeof, literally, prange
 from numba.core import types, errors, utils
-from numba.tests.support import TestCase, MemoryLeakMixin, tag
+from numba.tests.support import TestCase, MemoryLeakMixin, tag, skip_parfors_unsupported
 import unittest
 
 
@@ -772,6 +772,7 @@ class TestTupleBuild(TestCase):
 
         check((10, 20))
 
+    @skip_parfors_unsupported
     def test_untraced_value_tuple(self):
         # This is a test for issue #6478.
         def pyfunc():
@@ -781,6 +782,7 @@ class TestTupleBuild(TestCase):
         cfunc = jit(nopython=True, parallel=True)(pyfunc)
         self.assertEqual(cfunc(), pyfunc())
 
+    @skip_parfors_unsupported
     def test_untraced_value_parfor(self):
         # This is a test for issue #6478.
         def pyfunc(arr):
@@ -801,7 +803,7 @@ class TestTupleBuild(TestCase):
 
         arr = np.arange(100)
         cfunc = jit(nopython=True, parallel=True)(pyfunc)
-        self.assertEqual(cfunc(arr), pyfunc(arr))
+        self.assertPreciseEqual(cfunc(arr), pyfunc(arr), prec="double")
 
 if __name__ == '__main__':
     unittest.main()

@@ -5,7 +5,7 @@
 
 import numpy
 import operator
-import warnings
+import logging
 from numba.core import types, ir, config, cgutils, errors
 from numba.core.ir_utils import (
     mk_unique_var,
@@ -31,6 +31,8 @@ from numba.core.extending import intrinsic, register_jitable
 import llvmlite.llvmpy.core as lc
 import llvmlite
 from numba.np.unsafe.ndarray import to_fixed_tuple
+
+_logger = logging.getLogger(__name__)
 
 UNKNOWN_CLASS = -1
 CONST_CLASS = 0
@@ -451,8 +453,8 @@ class ShapeEquivSet(EquivSet):
             return tuple(self._get_names(x)[0] for x in obj)
         elif isinstance(obj, int):
             return (obj,)
-        warnings.warn(errors.NumbaPerformanceWarning(
-            f"Ignoring untracked object type {type(obj)} in ShapeEquivSet"))
+        _logger.debug(
+            f"Ignoring untracked object type {type(obj)} in ShapeEquivSet")
         return ()
 
     def is_equiv(self, *objs):
