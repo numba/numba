@@ -1365,20 +1365,22 @@ class PythonAPI(object):
             ])
         return struct
 
-    def serialize_object(self, obj):
+    def serialize_object(self, obj, key=None):
         """
         Serialize the given object in the bitcode, and return it
         as a pointer to a {i8* data, i32 length}, structure constant
         (suitable for passing to unserialize()).
         """
+        if key is None:
+            obj = key
         try:
-            gv = self.module.__serialized[obj]
+            gv = self.module.__serialized[key]
         except KeyError:
             struct = self.serialize_uncached(obj)
             name = ".const.picklebuf.%s" % (id(obj) if config.DIFF_IR == 0 else "DIFF_IR")
             gv = self.context.insert_unique_const(self.module, name, struct)
             # Make the id() (and hence the name) unique while populating the module.
-            self.module.__serialized[obj] = gv
+            self.module.__serialized[key] = gv
         return gv
 
     def c_api_error(self):

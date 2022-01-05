@@ -1082,7 +1082,14 @@ def box_literal(typ, val, c):
     # which we can directly return.
     retval = typ.literal_value
     # Serialize the value into the IR
-    return c.pyapi.unserialize(c.pyapi.serialize_object(retval))
+    # Some literals may not be hashable (i.e. slice, list),
+    # so we provide a wrapper aroudn the literal type as a key.
+    try:
+        hash(retval)
+        key = None
+    except TypeError:
+        key = types.LiteralKeyWrapper(retval)
+    return c.pyapi.unserialize(c.pyapi.serialize_object(retval, key=key))
 
 
 @box(types.MemInfoPointer)
