@@ -26,9 +26,10 @@ There are three threading layers available and they are named as follows:
 * ``workqueue`` -A simple built-in work-sharing task scheduler.
 
 In practice, the only threading layer guaranteed to be present is ``workqueue``.
-The ``omp`` layer requires the presence of a suitable (3.0 or greater) OpenMP
-runtime library.  The ``tbb`` layer requires the presence of Intel's TBB
-libraries, these can be obtained via the conda command::
+The ``omp`` layer requires the presence of a suitable (2.0 or greater on
+Windows, 3.0 or greater otherwise) OpenMP runtime library.  The ``tbb`` layer
+requires the presence of Intel's TBB libraries, these can be obtained via the
+conda command::
 
     $ conda install tbb
 
