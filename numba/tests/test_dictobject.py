@@ -402,7 +402,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
 
     def test_dict_values_len(self):
         """
-        Exercise len(dict.keys())
+        Exercise len(dict.values())
         """
         @njit
         def foo(keys, vals):
@@ -421,6 +421,9 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         )
 
     def test_dict_items_len(self):
+        """
+        Exercise len(dict.items())
+        """
         @njit
         def foo(keys, vals):
             d = dictobject.new_dict(int32, float64)
