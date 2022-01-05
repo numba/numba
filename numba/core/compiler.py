@@ -558,7 +558,8 @@ class DefaultPassBuilder(object):
                     "ensure features that are in use are in a valid form")
         pm.add_pass(IRLegalization,
                     "ensure IR is legal prior to lowering")
-
+        # Annotate only once legalized
+        pm.add_pass(AnnotateTypes, "annotate types")
         # lower
         pm.add_pass(NativeLowering, "native lowering")
         pm.add_pass(NoPythonBackend, "nopython mode backend")
@@ -572,7 +573,6 @@ class DefaultPassBuilder(object):
         pm = PassManager(name)
         # typing
         pm.add_pass(NopythonTypeInference, "nopython frontend")
-        pm.add_pass(AnnotateTypes, "annotate types")
 
         # strip phis
         pm.add_pass(PreLowerStripPhis, "remove phis nodes")
@@ -657,8 +657,8 @@ class DefaultPassBuilder(object):
         # convert any remaining closures into functions
         pm.add_pass(MakeFunctionToJitFunction,
                     "convert make_function into JIT functions")
-        pm.add_pass(AnnotateTypes, "annotate types")
         pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
+        pm.add_pass(AnnotateTypes, "annotate types")
         pm.add_pass(ObjectModeBackEnd, "object mode backend")
         pm.finalize()
         return pm
