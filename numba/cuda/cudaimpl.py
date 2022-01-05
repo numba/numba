@@ -526,6 +526,7 @@ def lower_fp16_divide(context, builder, sig, args):
                                     "cvt.rn.f16.f32 $0, $1;",
                                     "=h,f")
         fp16_div = builder.call(cvt2fp16_asm, [fmul])
+        
         and_cnst = context.get_constant(types.int16, 32767)
         and_op = builder.and_(fp16_div, and_cnst)
 
@@ -560,15 +561,19 @@ def lower_fp16_divide(context, builder, sig, args):
                                      zero)
         or_op = builder.or_(cmp1, cmp2)
         or_cond = builder.bitcast(or_op, ir.IntType(1))
+        
+        
+        entry_bb = builder.block
         fall_thru_bb = builder.append_basic_block()
         true_bb = builder.append_basic_block()
         builder.cbranch(or_cond, true_bb, fall_thru_bb)
-        entry_bb = builder.block
 
         #Fall thru branch
         builder.position_at_start(fall_thru_bb)
-        float_zero = context.get_constant(types.float32, -0.0)
+
+        float_zero = context.get_constant(types.float32, 0.0)
         neg_f = builder.fsub(float_zero, arg2_fp32)
+
         fname = 'llvm.nvvm.fma.rn.f'
         lmod = builder.module
         fnty = ir.FunctionType(ir.FloatType(),
@@ -579,7 +584,7 @@ def lower_fp16_divide(context, builder, sig, args):
         fma1 = builder.call(fma_func, [neg_f, fmul, arg2_fp32])
         fma2 = builder.call(fma_func, [arg2_rcp, fma1, fmul])
         fp32_to_f16 = builder.call(cvt2fp16_asm, [fma2])
-        builder.goto_block(true_bb)
+        builder.branch(true_bb)
 
         #True branch
         builder.position_at_start(true_bb)

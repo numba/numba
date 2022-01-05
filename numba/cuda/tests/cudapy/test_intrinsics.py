@@ -102,6 +102,10 @@ def simple_hmul_scalar(ary, a, b):
     ary[0] = cuda.fp16.hmul(a, b)
 
 
+def simple_hdiv_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hdiv(a, b)
+
+
 def simple_hneg(ary, a):
     ary[0] = cuda.fp16.hneg(a[0])
 
@@ -444,6 +448,27 @@ class TestCudaIntrinsic(CUDATestCase):
         args = (f2[:], f2, f2)
         ptx, _ = compile_ptx(simple_hmul_scalar, args, cc=(5, 3))
         self.assertIn('mul.f16', ptx)
+
+    @skip_unless_cc_53
+    def test_hdiv_scalar(self):
+        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hdiv_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(3.1415926)
+        arg2 = np.float16(1.57)
+        compiled[1, 1](ary, arg1, arg2)
+        ref = arg1 / arg2
+        np.testing.assert_allclose(ary[0], ref)
+
+    @skip_unless_cc_53
+    def test_hdiv_scalar2(self):
+        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hdiv_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arry1 = np.random.randint(-65504, 65505, size = 500).astype(np.float16)
+        arry2 = np.random.randint(-65504, 65505, size = 500).astype(np.float16)
+        for arg1, arg2 in np.nditer([arry1, arry2]):
+            compiled[1, 1](ary, arg1, arg2)
+            ref = arg1 / arg2
+            np.testing.assert_allclose(ary[0], ref)
 
     @skip_unless_cc_53
     def test_hneg(self):
