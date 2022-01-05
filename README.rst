@@ -13,6 +13,10 @@ Numba
 .. image:: https://zenodo.org/badge/3659275.svg
    :target: https://zenodo.org/badge/latestdoi/3659275
    :alt: Zenodo DOI
+   
+.. image:: https://img.shields.io/pypi/v/numba.svg
+   :target: https://pypi.python.org/pypi/numba/
+   :alt: PyPI
 
 A Just-In-Time Compiler for Numerical Functions in Python
 #########################################################
