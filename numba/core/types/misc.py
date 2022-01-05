@@ -570,7 +570,9 @@ class LiteralKeyWrapper:
             Treat two LiteralKeys as equal if they have the same
             type literal and the literal values are the same.
         """
-        if isinstance(other, LiteralKeyWrapper):
-            if type(self._literal_typ) == type(other._literal_typ):
-                return self._literal_typ.literal_value == other._literal_typ.literal_value
-        return False
+        return (
+            isinstance(other, LiteralKeyWrapper)
+            and type(self._literal_typ) == type(other._literal_typ)
+            and self._literal_typ.literal_value
+                == other._literal_typ.literal_value
+        )
