@@ -86,6 +86,11 @@ if [[ "$archstr" == 'ppc64le' ]]; then
     TEST_NPROCS=16
 fi
 
+# setup SDKROOT on Mac
+if [[ $(uname) == "Darwin" ]]; then
+    export SDKROOT=`pwd`/MacOSX10.10.sdk
+fi
+
 # First check that the test discovery works
 python -m numba.tests.test_runtests
 
