@@ -1372,7 +1372,7 @@ class PythonAPI(object):
         (suitable for passing to unserialize()).
         """
         if key is None:
-            obj = key
+            key = obj
         try:
             gv = self.module.__serialized[key]
         except KeyError:
