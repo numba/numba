@@ -573,6 +573,7 @@ class LiteralKeyWrapper:
         return (
             isinstance(other, LiteralKeyWrapper)
             and type(self._literal_typ) == type(other._literal_typ)
+            and not self._literal_typ.is_mutable
             and self._literal_typ.literal_value
                 == other._literal_typ.literal_value
         )
