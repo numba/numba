@@ -20,7 +20,8 @@ from numba.core.compiler_machinery import (LoweringPass, AnalysisPass,
 from numba.core.dispatcher import CompilingCounter, OmittedArg
 from numba.core.errors import (NumbaPerformanceWarning,
                                NumbaInvalidConfigWarning, TypingError)
-from numba.core.typed_passes import IRLegalization, NativeLowering
+from numba.core.typed_passes import (IRLegalization, NativeLowering,
+                                     AnnotateTypes)
 from numba.core.typing.typeof import Purpose, typeof
 from warnings import warn
 import numba
@@ -161,6 +162,7 @@ class CUDACompiler(CompilerBase):
         # legalise
         pm.add_pass(IRLegalization,
                     "ensure IR is legal prior to lowering")
+        pm.add_pass(AnnotateTypes, "annotate types")
 
         # lower
         pm.add_pass(CreateLibrary, "create library")
