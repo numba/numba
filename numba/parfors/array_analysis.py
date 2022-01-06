@@ -483,7 +483,7 @@ class ShapeEquivSet(EquivSet):
         return the scalar value, or None otherwise.
         """
         names = self._get_names(obj)
-        if len(names) > 1:
+        if len(names) != 1:
             return None
         return super(ShapeEquivSet, self).get_equiv_const(names[0])
 
@@ -502,7 +502,7 @@ class ShapeEquivSet(EquivSet):
         """Return the set of equivalent objects.
         """
         names = self._get_names(obj)
-        if len(names) > 1:
+        if len(names) != 1:
             return None
         return super(ShapeEquivSet, self).get_equiv_set(names[0])
 
