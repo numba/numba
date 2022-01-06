@@ -783,6 +783,16 @@ class TestTupleBuild(TestCase):
         self.assertEqual(cfunc(), pyfunc())
 
     @skip_parfors_unsupported
+    def test_recursive_untraced_value_tuple(self):
+        # This is a test for issue #6478.
+        def pyfunc():
+            a = ((1.2, 1.3),)
+            return a[0][0]
+
+        cfunc = jit(nopython=True, parallel=True)(pyfunc)
+        self.assertEqual(cfunc(), pyfunc())
+
+    @skip_parfors_unsupported
     def test_untraced_value_parfor(self):
         # This is a test for issue #6478.
         def pyfunc(arr):
