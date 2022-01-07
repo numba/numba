@@ -406,6 +406,11 @@ def set_field_slice(arr):
     return arr
 
 
+def assign_array_to_nested(dest):
+    tmp = (np.arange(3) + 1).astype(np.int16)
+    dest['array1'] = tmp
+
+
 recordtype = np.dtype([('a', np.float64),
                        ('b', np.int16),
                        ('c', np.complex64),
@@ -432,6 +437,8 @@ recordwithcharseq = np.dtype([('m', np.int32),
 recordwith4darray = np.dtype([('o', np.int64),
                               ('p', np.float32, (3, 2, 5, 7)),
                               ('q', 'U10'),])
+
+nested_array1_dtype = np.dtype([("array1", np.int16, (3,))], align=True)
 
 
 class TestRecordDtypeMakeCStruct(unittest.TestCase):
@@ -1643,6 +1650,42 @@ class TestNestedArrays(TestCase):
             cfunc = self.get_cfunc(pyfunc, (ty,))
             arr_res = cfunc(arg)
             np.testing.assert_equal(arr_res, arr_expected)
+
+    def test_assign_array_to_nested(self):
+        got = np.zeros(2, dtype=nested_array1_dtype)
+        expected = np.zeros(2, dtype=nested_array1_dtype)
+
+        cfunc = njit(assign_array_to_nested)
+        cfunc(got[0])
+        assign_array_to_nested(expected[0])
+
+        np.testing.assert_array_equal(expected, got)
+
+    def test_issue_7693(self):
+        src_dtype = np.dtype([
+            ("user", np.float64),
+            ("array", np.int16, (3,))],
+            align=True)
+
+        dest_dtype = np.dtype([
+            ("user1", np.float64),
+            ("array1", np.int16, (3,))],
+            align=True)
+
+        @njit
+        def copy(index, src, dest):
+            dest['user1'] = src[index]['user']
+            dest['array1'] = src[index]['array']
+
+        source = np.zeros(2, dtype=src_dtype)
+        got = np.zeros(2, dtype=dest_dtype)
+        expected = np.zeros(2, dtype=dest_dtype)
+
+        source[0] = (1.2, [1, 2, 3])
+        copy(0, source, got[0])
+        copy.py_func(0, source, expected[0])
+
+        np.testing.assert_array_equal(expected, got)
 
 
 if __name__ == '__main__':

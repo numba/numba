@@ -2612,7 +2612,7 @@ def record_setattr(context, builder, sig, args, attr):
         builder.store(dataval, dptr, align=align)
     else:
         dptr = cgutils.get_record_member(builder, target, offset,
-                                     context.get_data_type(elemty))
+                                         context.get_data_type(elemty))
         val = context.cast(builder, val, valty, elemty)
         align = None if typ.aligned else 1
         context.pack_value(builder, elemty, val, dptr, align=align)
