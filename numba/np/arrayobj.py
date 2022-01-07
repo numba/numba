@@ -2601,11 +2601,12 @@ def record_setattr(context, builder, sig, args, attr):
 
     if isinstance(elemty, types.NestedArray):
         # TODO: assert both sides are arrays
-        dptr = cgutils.get_record_member(builder, target, offset,
-                                     context.get_data_type(elemty))
+        arr_model = context.data_model_manager[elemty]
+        be_arr_ty = ir.ArrayType(arr_model._be_type, arr_model._fe_type.nitems)
+        dptr = cgutils.get_record_member(builder, target, offset, be_arr_ty)
 
         dataval_ptr = context.data_model_manager[elemty].get(builder, val, 'data')
-        dataval_ptr = builder.bitcast(dataval_ptr, context.get_data_type(elemty).as_pointer())
+        dataval_ptr = builder.bitcast(dataval_ptr, be_arr_ty.as_pointer())
         align = None if typ.aligned else 1
         dataval = builder.load(dataval_ptr)
         builder.store(dataval, dptr, align=align)
