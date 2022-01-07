@@ -2599,11 +2599,22 @@ def record_setattr(context, builder, sig, args, attr):
     offset = typ.offset(attr)
     elemty = typ.typeof(attr)
 
-    dptr = cgutils.get_record_member(builder, target, offset,
+    if isinstance(elemty, types.NestedArray):
+        # TODO: assert both sides are arrays
+        dptr = cgutils.get_record_member(builder, target, offset,
                                      context.get_data_type(elemty))
-    val = context.cast(builder, val, valty, elemty)
-    align = None if typ.aligned else 1
-    context.pack_value(builder, elemty, val, dptr, align=align)
+
+        dataval_ptr = context.data_model_manager[elemty].get(builder, val, 'data')
+        dataval_ptr = builder.bitcast(dataval_ptr, context.get_data_type(elemty).as_pointer())
+        align = None if typ.aligned else 1
+        dataval = builder.load(dataval_ptr)
+        builder.store(dataval, dptr, align=align)
+    else:
+        dptr = cgutils.get_record_member(builder, target, offset,
+                                     context.get_data_type(elemty))
+        val = context.cast(builder, val, valty, elemty)
+        align = None if typ.aligned else 1
+        context.pack_value(builder, elemty, val, dptr, align=align)
 
 
 @lower_builtin('static_getitem', types.Record, types.StringLiteral)
