@@ -240,6 +240,10 @@ def recarray_write_array_of_nestedarray_broadcast(ary):
     return ary
 
 
+def record_setitem_array(rec_source, rec_dest):
+    rec_dest['j'] = rec_source['j']
+
+
 def recarray_write_array_of_nestedarray(ary):
     ary.j[:, :, :] = np.ones((2, 3, 2), dtype=np.float64)
     return ary
@@ -1494,6 +1498,23 @@ class TestNestedArrays(TestCase):
             cfunc = self.get_cfunc(pyfunc, (ty,))
             arr_res = cfunc(nbarr)
             np.testing.assert_equal(arr_res, arr_expected)
+
+
+    def test_setitem(self):
+        nbarr1 = np.recarray(2, dtype=recordwith2darray)
+        nbarr1[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))],
+                            dtype=recordwith2darray)[0]
+        nbarr2 = np.recarray(2, dtype=recordwith2darray)
+        nbarr2[0] = np.array([(10, ((10, 20), (40, 50), (20, 30)))],
+                            dtype=recordwith2darray)[0]
+
+        pyfunc = record_setitem_array
+        args = nbarr1[0], nbarr2[0]
+        arr_expected = pyfunc(*args)
+        cfunc = self.get_cfunc(pyfunc, tuple((typeof(arg) for arg in args)))
+        arr_res = cfunc(*args)
+        np.testing.assert_equal(arr_res, arr_expected)
+
 
     def test_getitem_idx(self):
         # Test __getitem__ with numerical index
