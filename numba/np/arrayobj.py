@@ -2605,7 +2605,7 @@ def record_setattr(context, builder, sig, args, attr):
         be_arr_ty = ir.ArrayType(arr_model._be_type, arr_model._fe_type.nitems)
         dptr = cgutils.get_record_member(builder, target, offset, be_arr_ty)
 
-        dataval_ptr = context.data_model_manager[elemty].get(builder, val, 'data')
+        dataval_ptr = arr_model.get(builder, val, 'data')
         dataval_ptr = builder.bitcast(dataval_ptr, be_arr_ty.as_pointer())
         align = None if typ.aligned else 1
         dataval = builder.load(dataval_ptr)
