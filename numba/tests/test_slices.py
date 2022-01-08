@@ -5,7 +5,7 @@ import sys
 
 import numpy as np
 
-from numba import jit, typeof, TypingError
+from numba import jit, literally, njit, typeof, TypingError
 from numba.core import utils, types
 from numba.tests.support import TestCase, MemoryLeakMixin
 from numba.core.types.functions import _header_lead
@@ -206,6 +206,26 @@ class TestSlices(MemoryLeakMixin, TestCase):
 
         self.assertNotEqual(sl1, sl2)
         self.assertEqual(sl1, sl3)
+
+    def test_literal_slice_boxing(self):
+        """
+            Tests that a literal slice can be used
+            as an argument to a JIT function.
+        """
+        @njit
+        def f(x):
+            return literally(x)
+
+        slices = (
+            slice(1, 4, 2),
+            slice(1, 2),
+            slice(1),
+            slice(None, 1, 1),
+            slice(1, None, 1),
+            slice(None, None, 1)
+        )
+        for sl in slices:
+            self.assertEqual(sl, f(sl))
 
 
 if __name__ == '__main__':

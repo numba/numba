@@ -379,6 +379,22 @@ def unbox_slice(typ, obj, c):
     sli.step = step
     return NativeValue(sli._getvalue(), is_error=c.builder.not_(ok))
 
+@box(types.SliceLiteral)
+def box_slice_literal(typ, val, c):
+    slice_lit = typ.literal_value
+    slice_fields = []
+    for field_name in ("start", "stop", "step"):
+        field_obj = getattr(slice_lit, field_name)
+        field_val = (
+            c.pyapi.make_none()
+            if field_obj is None
+            else c.pyapi.from_native_value(
+                types.literal(field_obj), field_obj, c.env_manager
+            )
+        )
+        slice_fields.append(field_val)
+    slice_val = c.pyapi.slice_new(*slice_fields)
+    return slice_val
 
 @unbox(types.StringLiteral)
 def unbox_string_literal(typ, obj, c):
