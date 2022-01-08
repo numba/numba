@@ -394,6 +394,8 @@ def box_slice_literal(typ, val, c):
         )
         slice_fields.append(field_val)
     slice_val = c.pyapi.slice_new(*slice_fields)
+    for field_obj in slice_fields:
+        c.pyapi.decref(field_obj)
     return slice_val
 
 @unbox(types.StringLiteral)
