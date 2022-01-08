@@ -1506,22 +1506,19 @@ class TestNestedArrays(TestCase):
             arr_res = cfunc(nbarr)
             np.testing.assert_equal(arr_res, arr_expected)
 
-
     def test_setitem(self):
         nbarr1 = np.recarray(2, dtype=recordwith2darray)
         nbarr1[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))],
-                            dtype=recordwith2darray)[0]
+                             dtype=recordwith2darray)[0]
         nbarr2 = np.recarray(2, dtype=recordwith2darray)
         nbarr2[0] = np.array([(10, ((10, 20), (40, 50), (20, 30)))],
-                            dtype=recordwith2darray)[0]
-
+                             dtype=recordwith2darray)[0]
         pyfunc = record_setitem_array
         args = nbarr1[0], nbarr2[0]
         arr_expected = pyfunc(*args)
         cfunc = self.get_cfunc(pyfunc, tuple((typeof(arg) for arg in args)))
         arr_res = cfunc(*args)
         np.testing.assert_equal(arr_res, arr_expected)
-
 
     def test_getitem_idx(self):
         # Test __getitem__ with numerical index
