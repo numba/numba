@@ -1051,6 +1051,9 @@ class BaseContext(object):
             dataptr = ary.ctypes.data
             data = self.add_dynamic_addr(builder, dataptr, info=str(type(dataptr)))
             rt_addr = self.add_dynamic_addr(builder, id(ary), info=str(type(ary)))
+            # save constant array in target context to be added to function
+            # overload metadata later
+            self.global_arrays.append(ary)
         else:
             # Handle data: reify the flattened array in "C" or "F" order as a
             # global array of bytes.

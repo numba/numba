@@ -388,6 +388,8 @@ class NativeLowering(LoweringPass):
                     mangler=targetctx.mangler, inline=flags.forceinline,
                     noalias=flags.noalias, abi_tags=[flags.get_mangle_string()])
 
+            # save constant global arrays to be used below
+            targetctx.global_arrays = []
             with targetctx.push_code_library(library):
                 lower = lowering.Lower(targetctx, library, fndesc, interp,
                                        metadata=metadata)
@@ -425,6 +427,10 @@ class NativeLowering(LoweringPass):
                 state['cr'] = _LowerResult(fndesc, call_helper,
                                            cfunc=cfunc, env=env)
 
+            # save constant global arrays in overload metadata so they are not
+            # garbage collected before execution
+            metadata["global_arrs"] = targetctx.global_arrays
+            targetctx.global_arrays = []
             # capture pruning stats
             post_stats = llvm.passmanagers.dump_refprune_stats()
             metadata['prune_stats'] = post_stats - pre_stats
