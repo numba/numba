@@ -305,11 +305,12 @@ class BaseLower(object):
     def setup_function(self, fndesc):
         # Setup function
         self.function = self.context.declare_function(self.module, fndesc)
-        print("self.flags.dbg_optnone", self.flags.dbg_optnone)
         if self.flags.dbg_optnone:
-            self.function.attributes.add("optnone")
-            print(self.function)
-
+            attrset = self.function.attributes
+            attrset.add("optnone")
+            # optnone requires noinline unless it has alwaysinline
+            if "alwaysinline" not in attrset:
+                attrset.add("noinline")
         self.entry_block = self.function.append_basic_block('entry')
         self.builder = Builder(self.entry_block)
         self.call_helper = self.call_conv.init_call_helper(self.builder)
