@@ -151,8 +151,8 @@ These variables influence what is printed out during compilation of
 
     If set to non-zero, extend the lifetime of variables to the end of the block
     in which their lifetime ends. This is particularly useful in conjunction
-    with `NUMBA_DEBUGINFO` as it helps with introspection of values. Default is
-    zero.
+    with :envvar:`NUMBA_DEBUGINFO` as it helps with introspection of values.
+    Default is zero.
 
 .. envvar:: NUMBA_GDB_BINARY
 
@@ -490,21 +490,6 @@ GPU support
    <https://docs.nvidia.com/cuda/cuda-runtime-api/stream-sync-behavior.html>`_
    for an explanation of the legacy and per-thread default streams.
 
-.. envvar:: NUMBA_NPY_RELAXED_STRIDES_CHECKING
-
-   By default arrays that inherit from ``numba.misc.dummyarray.Array`` (e.g.
-   CUDA device arrays) compute their contiguity using relaxed strides checking,
-   which is the default mechanism used by NumPy since version 1.12
-   (see `NPY_RELAXED_STRIDES_CHECKING
-   <https://numpy.org/doc/stable/release/1.8.0-notes.html#npy-relaxed-strides-checking>`_).
-   Setting ``NUMBA_NPY_RELAXED_STRIDES_CHECKING=0`` reverts back to strict
-   strides checking. This option should not normally be needed, but is provided
-   in case it is needed to work around latent bugs related to strict strides
-   checking.
-
-   Strict strides checking is deprecated and may be removed in future. See
-   :ref:`deprecation-strict-strides`.
-
 .. envvar:: NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS
 
    Enable warnings if the grid size is too small relative to the number of
@@ -516,11 +501,18 @@ GPU support
    heuristic needs to check the number of SMs available on the device in the
    current context.
 
-.. envvar:: CUDA_WARN_ON_IMPLICIT_COPY
+.. envvar:: NUMBA_CUDA_WARN_ON_IMPLICIT_COPY
 
    Enable warnings if a kernel is launched with host memory which forces a copy to and
    from the device. This option is on by default (default value is 1).
 
+.. envvar:: NUMBA_CUDA_USE_NVIDIA_BINDING
+
+   When set to 1, Numba will attempt to use the `NVIDIA CUDA Python binding
+   <https://nvidia.github.io/cuda-python/>`_ to make calls to the driver API
+   instead of using its own ctypes binding. This defaults to 0 (off), as the
+   NVIDIA binding is currently missing support for Per-Thread Default
+   Streams and the profiler APIs.
 
 Threading Control
 -----------------

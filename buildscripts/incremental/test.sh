@@ -41,7 +41,31 @@ else
     esac
 fi
 
+# If TEST_THREADING is set in the env, then check that Numba agrees that the
+# environment can support the requested threading.
+function check_sysinfo() {
+    cmd="import os;\
+         from numba.misc.numba_sysinfo import get_sysinfo;\
+         assert get_sysinfo()['$1 Threading'] is True, 'Threading layer $1 '\
+         'is not supported';\
+         print('Threading layer $1 is supported')"
+    python -c "$cmd"
+}
 
+if [[ "$TEST_THREADING" ]]; then
+    if [[ "$TEST_THREADING" == "tbb" ]]; then
+        check_sysinfo "TBB"
+    elif [[ "$TEST_THREADING" == "omp" ]]; then
+        check_sysinfo "OpenMP"
+    elif [[ "$TEST_THREADING" == "workqueue" ]]; then
+        check_sysinfo "Workqueue"
+    else
+        echo "Unknown threading layer requested: $TEST_THREADING"
+        exit 1
+    fi
+fi
+
+# Find catchsegv
 unamestr=`uname`
 if [[ "$unamestr" == 'Linux' ]]; then
     if [[ "${BITS32}" == "yes" ]]; then
@@ -60,6 +84,11 @@ fi
 archstr=`uname -m`
 if [[ "$archstr" == 'ppc64le' ]]; then
     TEST_NPROCS=16
+fi
+
+# setup SDKROOT on Mac
+if [[ $(uname) == "Darwin" ]]; then
+    export SDKROOT=`pwd`/MacOSX10.10.sdk
 fi
 
 # First check that the test discovery works

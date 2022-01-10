@@ -3,24 +3,25 @@ trigger:
 
 variables:
   # Change the following along with adding new TEST_START_INDEX.
-  TEST_COUNT: 19
+  TEST_COUNT: 20
 
 jobs:
 # Mac and Linux use the same template with different matrixes
 - template: buildscripts/azure/azure-linux-macos.yml
   parameters:
     name: macOS
-    vmImage: macOS-10.14
+    vmImage: macOS-10.15
     matrix:
-      py37_np117:
+      py37_np118:
         PYTHON: '3.7'
-        NUMPY: '1.17'
+        NUMPY: '1.18'
         CONDA_ENV: 'azure_ci'
         TEST_START_INDEX: 0
-      py39_np120:
+      py39_np121:
         PYTHON: '3.9'
-        NUMPY: '1.20'
+        NUMPY: '1.21'
         CONDA_ENV: 'azure_ci'
+        TEST_THREADING: 'tbb'
         TEST_START_INDEX: 1
 
 - template: buildscripts/azure/azure-linux-macos.yml
@@ -28,96 +29,101 @@ jobs:
     name: Linux
     vmImage: ubuntu-18.04
     matrix:
-      py37_np117_32bit:
+      py37_np118_32bit:
         # 32 bit linux only has np 1.15
         PYTHON: '3.7'
-        NUMPY: '1.17'
+        NUMPY: '1.18'
         CONDA_ENV: azure_ci
         BITS32: yes
         TEST_START_INDEX: 2
-      py37_np117_cov:
+      py37_np118_cov:
         PYTHON: '3.7'
-        NUMPY: '1.17'
+        NUMPY: '1.18'
         CONDA_ENV: azure_ci
         RUN_COVERAGE: yes
         RUN_FLAKE8: yes
         RUN_MYPY: yes
         TEST_START_INDEX: 3
-      py37_np117_vanilla:
+      py37_np118_vanilla:
         PYTHON: '3.7'
-        NUMPY: '1.17'
+        NUMPY: '1.18'
         CONDA_ENV: azure_ci
         VANILLA_INSTALL: yes
         TEST_START_INDEX: 4
-      py37_np117_tbb:
+      py37_np118_tbb:
         PYTHON: '3.7'
-        NUMPY: '1.17'
+        NUMPY: '1.18'
         CONDA_ENV: azure_ci
         TEST_THREADING: 'tbb'
         TEST_START_INDEX: 5
-      py37_np117_omp:
+      py37_np118_omp:
         PYTHON: '3.7'
-        NUMPY: '1.17'
+        NUMPY: '1.18'
         CONDA_ENV: azure_ci
         TEST_THREADING: omp
         TEST_START_INDEX: 6
-      py37_np117_workqueue:
+      py37_np118_workqueue:
         PYTHON: '3.7'
-        NUMPY: '1.17'
+        NUMPY: '1.18'
         CONDA_ENV: azure_ci
         TEST_THREADING: workqueue
         TEST_START_INDEX: 7
-      py37_np118_doc:
+      py37_np119_doc:
         PYTHON: '3.7'
-        NUMPY: '1.18'
+        NUMPY: '1.19'
         CONDA_ENV: azure_ci
         BUILD_DOC: yes
         TEST_START_INDEX: 8
-      py37_np118_pickle5:
+      py37_np119_pickle5:
         PYTHON: '3.7'
-        NUMPY: '1.18'
+        NUMPY: '1.19'
         CONDA_ENV: azure_ci
         TEST_PICKLE5: yes
         TEST_START_INDEX: 9
-      py37_np119_svml:
+      py37_np120_svml:
         PYTHON: '3.7'
-        NUMPY: '1.19'
+        NUMPY: '1.20'
         CONDA_ENV: azure_ci
         TEST_SVML: yes
         TEST_START_INDEX: 10
-      py37_np120:
+      py37_np121:
         PYTHON: '3.7'
-        NUMPY: '1.20'
+        NUMPY: '1.21'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 11
-      py38_np118:
-        PYTHON: '3.8'
-        NUMPY: '1.18'
-        CONDA_ENV: azure_ci
-        TEST_START_INDEX: 12
-      py38_np119_typeguard:
+      py38_np119:
         PYTHON: '3.8'
         NUMPY: '1.19'
+        CONDA_ENV: azure_ci
+        TEST_START_INDEX: 12
+      py38_np120_typeguard:
+        PYTHON: '3.8'
+        NUMPY: '1.20'
         CONDA_ENV: azure_ci
         RUN_TYPEGUARD: yes
         TEST_START_INDEX: 13
-      py38_np120:
+      py38_np121:
         PYTHON: '3.8'
-        NUMPY: '1.20'
+        NUMPY: '1.21'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 14
-      py39_np119:
-        PYTHON: '3.9'
-        NUMPY: '1.19'
-        CONDA_ENV: azure_ci
-        TEST_START_INDEX: 15
       py39_np120:
         PYTHON: '3.9'
         NUMPY: '1.20'
         CONDA_ENV: azure_ci
+        TEST_START_INDEX: 15
+      py39_np121:
+        PYTHON: '3.9'
+        NUMPY: '1.21'
+        CONDA_ENV: azure_ci
         TEST_START_INDEX: 16
+      py310_np121:
+        PYTHON: '3.10'
+        NUMPY: '1.21'
+        CONDA_ENV: azure_ci
+        TEST_START_INDEX: 17
 
 - template: buildscripts/azure/azure-windows.yml
   parameters:
     name: Windows
-    vmImage: vs2017-win2016
+    vmImage: windows-2019

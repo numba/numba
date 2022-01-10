@@ -2,6 +2,7 @@ from collections import namedtuple
 import inspect
 import re
 import numpy as np
+import math
 
 from numba.tests.support import TestCase, override_config, needs_subprocess
 from numba import jit, njit
@@ -57,6 +58,62 @@ class TestDebugInfo(TestCase):
             def bar(x):
                 return x
             self._check(bar, sig=(types.int32,), expect=False)
+
+    def test_llvm_inliner_flag_conflict(self):
+        # bar will be marked as 'alwaysinline', but when DEBUGINFO_DEFAULT is
+        # set functions are marked as 'noinline' this results in a conflict.
+        # baz will be marked as 'noinline' as a result of DEBUGINFO_DEFAULT
+
+        @njit(forceinline=True)
+        def bar(x):
+            return math.sin(x)
+
+        @njit(forceinline=False)
+        def baz(x):
+            return math.cos(x)
+
+        @njit
+        def foo(x):
+            a = bar(x)
+            b = baz(x)
+            return a, b
+
+        # check it compiles
+        with override_config('DEBUGINFO_DEFAULT', 1):
+            result = foo(np.pi)
+
+        self.assertPreciseEqual(result, foo.py_func(np.pi))
+
+        # check the LLVM IR has bar marked as 'alwaysinline' and baz as noinline
+        full_ir = foo.inspect_llvm(foo.signatures[0])
+        module = llvm.parse_assembly(full_ir)
+        name = foo.overloads[foo.signatures[0]].fndesc.mangled_name
+        funcs = [x for x in module.functions if x.name == name]
+        self.assertEqual(len(funcs), 1)
+        func = funcs[0]
+
+        # find the function calls and save the associated statements
+        f_names = []
+        for blk in func.blocks:
+            for stmt in blk.instructions:
+                if stmt.opcode == 'call':
+                    # stmt.function.name  This is the function being called
+                    f_names.append(str(stmt).strip())
+
+        # Need to check there's two specific things in the calls in the IR
+        # 1. a call to the llvm.sin.f64 intrinsic, this is from the inlined bar
+        # 2. a call to the baz function, this is from the noinline baz
+        found_sin = False
+        found_baz = False
+        baz_name = baz.overloads[baz.signatures[0]].fndesc.mangled_name
+        for x in f_names:
+            if not found_sin and re.match('.*llvm.sin.f64.*', x):
+                found_sin = True
+            if not found_baz and re.match(f'.*{baz_name}.*', x):
+                found_baz = True
+
+        self.assertTrue(found_sin)
+        self.assertTrue(found_baz)
 
 
 class TestDebugInfoEmission(TestCase):
@@ -347,7 +404,8 @@ class TestDebugInfoEmission(TestCase):
                 groups = match.groups()
                 self.assertEqual(len(groups), 1)
                 associated_lines.add(int(groups[0]))
-        self.assertEqual(len(associated_lines), 3) # 3 versions of 'c'
+        # 3 versions of 'c': `c = 0`, `return c`, `c+=1`
+        self.assertEqual(len(associated_lines), 3)
         self.assertIn(pysrc_line_start, associated_lines)
 
     def test_DILocation_versioned_variables(self):
@@ -362,6 +420,11 @@ class TestDebugInfoEmission(TestCase):
                 c = 5
             else:
                 c = 1
+            # prevents inline of return on py310
+            py310_defeat1 = 1  # noqa
+            py310_defeat2 = 2  # noqa
+            py310_defeat3 = 3  # noqa
+            py310_defeat4 = 4  # noqa
             return c
 
         sig = (types.intp,)

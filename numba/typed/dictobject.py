@@ -17,6 +17,7 @@ from numba.core.extending import (
     models,
     lower_builtin,
     lower_cast,
+    make_attribute_wrapper,
 )
 from numba.core.imputils import iternext_impl, impl_ret_untracked
 from numba.core import types, cgutils
@@ -101,6 +102,12 @@ class DictIterModel(models.StructModel):
             ('state', types.voidptr),    # iterator state in C code
         ]
         super(DictIterModel, self).__init__(dmm, fe_type, members)
+
+
+# Make _parent available to make len simple
+make_attribute_wrapper(DictItemsIterableType, "parent", "_parent")
+make_attribute_wrapper(DictKeysIterableType, "parent", "_parent")
+make_attribute_wrapper(DictValuesIterableType, "parent", "_parent")
 
 
 def _raise_if_error(context, builder, status, msg):
@@ -667,6 +674,20 @@ def impl_len(d):
 
     def impl(d):
         return _dict_length(d)
+
+    return impl
+
+
+@overload(len)
+def impl_len_iters(d):
+    """len(dict.keys()), len(dict.values()), len(dict.items())
+    """
+    if not isinstance(d, (DictKeysIterableType,
+                      DictValuesIterableType, DictItemsIterableType)):
+        return
+
+    def impl(d):
+        return _dict_length(d._parent)
 
     return impl
 

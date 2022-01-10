@@ -6,6 +6,7 @@ import pickle
 import numpy as np
 
 from numba import cuda
+from numba.cuda.cudadrv import driver
 from numba.cuda.testing import (skip_on_arm, skip_on_cudasim,
                                 skip_under_cuda_memcheck,
                                 ContextResettingTestCase, ForeignArray)
@@ -92,7 +93,10 @@ class TestIpcMemory(ContextResettingTestCase):
         ipch = ctx.get_ipc_handle(devarr.gpu_data)
 
         # manually prepare for serialization as bytes
-        handle_bytes = bytes(ipch.handle)
+        if driver.USE_NV_BINDING:
+            handle_bytes = ipch.handle.reserved
+        else:
+            handle_bytes = bytes(ipch.handle)
         size = ipch.size
 
         # spawn new process for testing
@@ -134,8 +138,12 @@ class TestIpcMemory(ContextResettingTestCase):
         buf = pickle.dumps(ipch)
         ipch_recon = pickle.loads(buf)
         self.assertIs(ipch_recon.base, None)
-        self.assertEqual(tuple(ipch_recon.handle), tuple(ipch.handle))
         self.assertEqual(ipch_recon.size, ipch.size)
+
+        if driver.USE_NV_BINDING:
+            self.assertEqual(ipch_recon.handle.reserved, ipch.handle.reserved)
+        else:
+            self.assertEqual(tuple(ipch_recon.handle), tuple(ipch.handle))
 
         # spawn new process for testing
         ctx = mp.get_context('spawn')
@@ -248,7 +256,10 @@ class TestIpcStaged(ContextResettingTestCase):
         buf = pickle.dumps(ipch)
         ipch_recon = pickle.loads(buf)
         self.assertIs(ipch_recon.base, None)
-        self.assertEqual(tuple(ipch_recon.handle), tuple(ipch.handle))
+        if driver.USE_NV_BINDING:
+            self.assertEqual(ipch_recon.handle.reserved, ipch.handle.reserved)
+        else:
+            self.assertEqual(tuple(ipch_recon.handle), tuple(ipch.handle))
         self.assertEqual(ipch_recon.size, ipch.size)
 
         # Test on every CUDA devices

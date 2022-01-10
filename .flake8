@@ -45,7 +45,6 @@ exclude =
     numba/core/dataflow.py
     numba/core/pythonapi.py
     numba/core/decorators.py
-    numba/core/typeconv/typeconv.py
     numba/core/typeconv/rules.py
     numba/core/typeconv/castgraph.py
     numba/core/rewrites/registry.py
@@ -174,7 +173,6 @@ exclude =
     numba/tests/test_profiler.py
     numba/tests/test_numpyadapt.py
     numba/tests/test_stencils.py
-    numba/tests/test_annotations.py
     numba/tests/cache_usecases.py
     numba/tests/true_div_usecase.py
     numba/tests/test_dataflow.py

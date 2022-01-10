@@ -589,3 +589,70 @@ class nanosleep(Stub):
     `ns`, specified in nanoseconds.
     '''
     _description_ = '<nansleep()>'
+
+#-------------------------------------------------------------------------------
+# Floating point 16
+
+
+class fp16(Stub):
+    """Namespace for fp16 operations
+    """
+    _description_ = '<fp16>'
+
+    class hadd(Stub):
+        """hadd(a, b)
+
+        Perform fp16 addition, (a + b) in round to nearest mode. Supported
+        on fp16 operands only.
+
+        Returns the fp16 result of the addition.
+
+        """
+
+    class hsub(Stub):
+        """hsub(a, b)
+
+        Perform fp16 subtraction, (a - b) in round to nearest mode. Supported
+        on fp16 operands only.
+
+        Returns the fp16 result of the subtraction.
+
+        """
+
+    class hmul(Stub):
+        """hmul(a, b)
+
+        Perform fp16 multiplication, (a * b) in round to nearest mode. Supported
+        on fp16 operands only.
+
+        Returns the fp16 result of the multiplication.
+
+        """
+
+    class hfma(Stub):
+        """hfma(a, b, c)
+
+        Perform fp16 multiply and accumulate, (a * b) + c in round to nearest
+        mode. Supported on fp16 operands only.
+
+        Returns the fp16 result of the multiplication.
+
+        """
+
+    class hneg(Stub):
+        """hneg(a)
+
+        Perform fp16 negation, -(a). Supported on fp16 operands only.
+
+        Returns the fp16 result of the negation.
+
+        """
+
+    class habs(Stub):
+        """habs(a)
+
+        Perform fp16 absolute value, |a|. Supported on fp16 operands only.
+
+        Returns the fp16 result of the absolute value.
+
+        """
