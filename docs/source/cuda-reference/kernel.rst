@@ -502,6 +502,7 @@ These functions return a 16-bit floating point result.
 .. function:: numba.cuda.fp16.hneg (a)
 
    Perform the negation operation ``-a`` on the 16-bit floating point argument.
+   Maps to the ``neg.f16`` PTX instruction.
 
    Returns the 16-bit floating point result of the negation.
 
