@@ -361,7 +361,7 @@ def _genfp16_binary_comparison(l_key):
         key = l_key
 
         cases = [
-            signature(types.boolean, types.float16, types.float16)
+            signature(types.b1, types.float16, types.float16)
         ]
     return Cuda_fp16_cmp
 

@@ -663,7 +663,7 @@ class fp16(Stub):
         Perform fp16 comparison, (a == b). Supported
         on fp16 operands only.
 
-        Returns true if a and b are equivalent and false otherwise.
+        Returns True if a and b are equal and False otherwise.
 
         """
 
@@ -673,7 +673,7 @@ class fp16(Stub):
         Perform fp16 comparison, (a != b). Supported
         on fp16 operands only.
 
-        Returns true if a and b are not equivalent and false otherwise.
+        Returns True if a and b are not equal and False otherwise.
 
         """
 
@@ -683,7 +683,7 @@ class fp16(Stub):
         Perform fp16 comparison, (a >= b). Supported
         on fp16 operands only.
 
-        Returns true if a is >= b and false otherwise.
+        Returns True if a is >= b and False otherwise.
 
         """
 
@@ -693,7 +693,7 @@ class fp16(Stub):
         Perform fp16 comparison, (a > b). Supported
         on fp16 operands only.
 
-        Returns true if a is > b and false otherwise.
+        Returns True if a is > b and False otherwise.
 
         """
 
@@ -703,7 +703,7 @@ class fp16(Stub):
         Perform fp16 comparison, (a <= b). Supported
         on fp16 operands only.
 
-        Returns true if a is <= b and false otherwise.
+        Returns True if a is <= b and False otherwise.
 
         """
 
@@ -713,7 +713,7 @@ class fp16(Stub):
         Perform fp16 comparison, (a < b). Supported
         on fp16 operands only.
 
-        Returns true if a is < b and false otherwise.
+        Returns True if a is < b and False otherwise.
 
         """
 

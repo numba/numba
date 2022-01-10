@@ -515,37 +515,47 @@ These functions return a 16-bit floating point result.
 
    Perform the comparison operation ``a == b`` on 16-bit floating point arguments.
 
-   Returns the boolean result of comparing ``a`` and ``b`` for equality.
+   Returns a boolean.
 
 .. function:: numba.cuda.fp16.hne (a, b)
 
    Perform the comparison operation ``a != b`` on 16-bit floating point arguments.
 
-   Returns the boolean result of comparing ``a`` and ``b`` for inequality.
+   Returns a boolean.
 
 .. function:: numba.cuda.fp16.hgt (a, b)
 
    Perform the comparison operation ``a > b`` on 16-bit floating point arguments.
 
-   Returns the boolean result of comparing if ``a`` is greater than ``b``.
+   Returns a boolean.
 
 .. function:: numba.cuda.fp16.hge (a, b)
 
    Perform the comparison operation ``a >= b`` on 16-bit floating point arguments.
 
-   Returns the boolean result of comparing if ``a`` is greater or equal to ``b``.
+   Returns a boolean.
 
 .. function:: numba.cuda.fp16.hlt (a, b)
 
    Perform the comparison operation ``a < b`` on 16-bit floating point arguments.
 
-   Returns the boolean result of comparing if ``a`` is less than ``b``.
+   Returns a boolean.
 
 .. function:: numba.cuda.fp16.hle (a, b)
 
    Perform the comparison operation ``a <= b`` on 16-bit floating point arguments.
 
-   Returns the boolean result of comparing if ``a`` is less or equal to ``b``.
+.. function:: numba.cuda.fp16.hmax (a, b)
+
+   Perform the operation ``a if a > b else b.
+
+   Returns a 16-bit floating point value.
+
+.. function:: numba.cuda.fp16.hmin (a, b)
+
+   Perform the operation ``a if a < b else b.
+
+   Returns a 16-bit floating point value.
 
 Control Flow Instructions
 ~~~~~~~~~~~~~~~~~~~~~~~~~

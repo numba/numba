@@ -256,16 +256,10 @@ class FakeCUDAFp16(object):
         return a < b
 
     def hmax(self, a, b):
-        if a > b:
-            return a
-        else:
-            return b
+        return max(a, b)
 
     def hmin(self, a, b):
-        if a < b:
-            return a
-        else:
-            return b
+        return min(a, b)
 
 
 class FakeCUDAModule(object):
