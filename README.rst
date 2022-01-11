@@ -13,6 +13,10 @@ Numba
 .. image:: https://zenodo.org/badge/3659275.svg
    :target: https://zenodo.org/badge/latestdoi/3659275
    :alt: Zenodo DOI
+   
+.. image:: https://img.shields.io/pypi/v/numba.svg
+   :target: https://pypi.python.org/pypi/numba/
+   :alt: PyPI
 
 A Just-In-Time Compiler for Numerical Functions in Python
 #########################################################
@@ -49,7 +53,7 @@ Dependencies
 ============
 
 * Python versions: 3.7-3.10
-* llvmlite 0.38.*
+* llvmlite 0.39.*
 * NumPy >=1.18 (can build with 1.11 for ABI compatibility).
 
 Optionally:

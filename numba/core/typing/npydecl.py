@@ -455,7 +455,8 @@ def parse_shape(shape):
     if isinstance(shape, types.Integer):
         ndim = 1
     elif isinstance(shape, (types.Tuple, types.UniTuple)):
-        if all(isinstance(s, types.Integer) for s in shape):
+        int_tys = (types.Integer, types.IntEnumMember)
+        if all(isinstance(s, int_tys) for s in shape):
             ndim = len(shape)
     return ndim
 
