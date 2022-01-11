@@ -463,8 +463,8 @@ class TestCudaIntrinsic(CUDATestCase):
     def test_hdiv_scalar2(self):
         compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hdiv_scalar)
         ary = np.zeros(1, dtype=np.float16)
-        arry1 = np.random.randint(-65504, 65505, size = 500).astype(np.float16)
-        arry2 = np.random.randint(-65504, 65505, size = 500).astype(np.float16)
+        arry1 = np.random.randint(-65504, 65505, size=500).astype(np.float16)
+        arry2 = np.random.randint(-65504, 65505, size=500).astype(np.float16)
         for arg1, arg2 in np.nditer([arry1, arry2]):
             compiled[1, 1](ary, arg1, arg2)
             ref = arg1 / arg2

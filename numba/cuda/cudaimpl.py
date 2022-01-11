@@ -12,6 +12,7 @@ from .cudadrv import nvvm
 from numba import cuda
 from numba.cuda import nvvmutils, stubs, errors
 from numba.cuda.types import dim3, grid_group, CUDADispatcher
+from llvmlite.ir._utils import DuplicatedNameError
 
 
 registry = Registry()
@@ -492,108 +493,122 @@ lower_fp16_binary(stubs.fp16.hsub, 'sub')
 lower_fp16_binary(stubs.fp16.hmul, 'mul')
 
 
+def get_temp_predicate_register(builder):
+    f = builder.function
+    # It's possible a function could be called multiple times
+    # when lowering which can result in duplicate register predicate
+    # names. We detect this case and generate non-duplicate temporary
+    # names.
+
+    try:
+        temp_reg = f.scope.register('__$$temp1', deduplicate=False)
+    except DuplicatedNameError:
+        basename = '__$$temp'
+        count = 2
+        temp_reg = "{0}{1}".format(basename, count)
+        while f.scope.is_used(temp_reg):
+            count = count + 1
+            temp_reg = "{0}{1}".format(basename, count)
+        f.scope.register(temp_reg, deduplicate=False)
+
+    return temp_reg
+
+
 @lower(stubs.fp16.hdiv, types.float16, types.float16)
 def lower_fp16_divide(context, builder, sig, args):
-    compute_capability_supported = \
-        cuda.current_context().device.compute_capability >= (5, 3)
+    arg1 = args[0]
+    arg2 = args[1]
 
-    if compute_capability_supported:
-        arg1 = args[0]
-        arg2 = args[1]
+    # Convert fp16 args to fp32 so we can implement
+    # division by reciprocal multiplication on fp32
+    # values
+    cvt2float_fnty = ir.FunctionType(ir.FloatType(), [ir.IntType(16)])
+    cvt2float_asm = ir.InlineAsm(cvt2float_fnty,
+                                 "cvt.f32.f16 $0, $1;",
+                                 "=f,h")
+    arg1_fp32 = builder.call(cvt2float_asm, [arg1])
+    arg2_fp32 = builder.call(cvt2float_asm, [arg2])
 
-        # Convert fp16 args to fp32 so we can implement
-        # division by reciprocal multiplication on fp32
-        # values
-        cvt2float_fnty = ir.FunctionType(ir.FloatType(), [ir.IntType(16)])
-        cvt2float_asm = ir.InlineAsm(cvt2float_fnty,
-                                     "cvt.f32.f16 $0, $1;",
-                                     "=f,h")
-        arg1_fp32 = builder.call(cvt2float_asm, [arg1])
-        arg2_fp32 = builder.call(cvt2float_asm, [arg2])
+    rcp_fnty = ir.FunctionType(ir.FloatType(), [ir.FloatType()])
+    rcp_asm = ir.InlineAsm(rcp_fnty,
+                           "rcp.approx.ftz.f32 $0, $1;",
+                           "=f,f")
+    arg2_rcp = builder.call(rcp_asm, [arg2_fp32])
 
-        rcp_fnty = ir.FunctionType(ir.FloatType(), [ir.FloatType()])
-        rcp_asm = ir.InlineAsm(rcp_fnty,
-                               "rcp.approx.ftz.f32 $0, $1;",
-                               "=f,f")
-        arg2_rcp = builder.call(rcp_asm, [arg2_fp32])
+    # Multiply by reciprocal of arg2
+    fmul = builder.fmul(arg1_fp32, arg2_rcp)
 
-        # Multiply by reciprocal of arg2
-        fmul = builder.fmul(arg1_fp32, arg2_rcp)
+    #Convert from fp32 to fp16
+    cvt2fp16_fnty = ir.FunctionType(ir.IntType(16), [ir.FloatType()])
+    cvt2fp16_asm = ir.InlineAsm(cvt2fp16_fnty,
+                                "cvt.rn.f16.f32 $0, $1;",
+                                "=h,f")
+    fp16_div = builder.call(cvt2fp16_asm, [fmul])
 
-        #Convert from fp32 to fp16
-        cvt2fp16_fnty = ir.FunctionType(ir.IntType(16), [ir.FloatType()])
-        cvt2fp16_asm = ir.InlineAsm(cvt2fp16_fnty,
-                                    "cvt.rn.f16.f32 $0, $1;",
-                                    "=h,f")
-        fp16_div = builder.call(cvt2fp16_asm, [fmul])
-        
-        and_cnst = context.get_constant(types.int16, 32767)
-        and_op = builder.and_(fp16_div, and_cnst)
+    and_cnst = context.get_constant(types.int16, 32767)
+    and_op = builder.and_(fp16_div, and_cnst)
 
-        temp_reg = '__$$temp3'
-        reg_pred_fnty = ir.FunctionType(ir.VoidType(),[])
-        reg_pred_asm = ir.InlineAsm(reg_pred_fnty,
-                                    f".reg .pred {temp_reg};",
-                                    "")
-        _ = builder.call(reg_pred_asm, [])
+    temp_reg = get_temp_predicate_register(builder)
+    reg_pred_fnty = ir.FunctionType(ir.VoidType(),[])
+    reg_pred_asm = ir.InlineAsm(reg_pred_fnty,
+                                f".reg .pred {temp_reg};",
+                                "")
+    _ = builder.call(reg_pred_asm, [])
 
-        setp_fnty = ir.FunctionType(ir.VoidType(),
-                                    [ir.IntType(16), ir.IntType(16)])
-        setp_cnst = context.get_constant(types.int16, 143)
-        setp_asm = ir.InlineAsm(setp_fnty,
-                                f"setp.lt.f16 {temp_reg}, $0, $1;",
-                                'h,h')
-        _ = builder.call(setp_asm, [and_op, setp_cnst])
+    setp_fnty = ir.FunctionType(ir.VoidType(),
+                                [ir.IntType(16), ir.IntType(16)])
+    setp_cnst = context.get_constant(types.int16, 143)
+    setp_asm = ir.InlineAsm(setp_fnty,
+                            f"setp.lt.f16 {temp_reg}, $0, $1;",
+                            'h,h')
+    _ = builder.call(setp_asm, [and_op, setp_cnst])
 
-        selp_fnty = ir.FunctionType(ir.IntType(16),[])
+    selp_fnty = ir.FunctionType(ir.IntType(16),[])
 
-        selp_asm = ir.InlineAsm(selp_fnty,
-                                f"selp.u16 $0, 1, 0, {temp_reg};",
-                                '=h')
-        selp = builder.call(selp_asm, [])
+    selp_asm = ir.InlineAsm(selp_fnty,
+                            f"selp.u16 $0, 1, 0, {temp_reg};",
+                            '=h')
+    selp = builder.call(selp_asm, [])
 
-        zero = context.get_constant(types.int16, 0)
-        cmp1 = builder.icmp_unsigned("==",
-                                     builder.bitcast(selp, ir.IntType(16)),
-                                     zero)
-        cmp2 = builder.icmp_unsigned("==",
-                                     builder.bitcast(and_op, ir.IntType(16)),
-                                     zero)
-        or_op = builder.or_(cmp1, cmp2)
-        or_cond = builder.bitcast(or_op, ir.IntType(1))
-        
-        
-        entry_bb = builder.block
-        fall_thru_bb = builder.append_basic_block()
-        true_bb = builder.append_basic_block()
-        builder.cbranch(or_cond, true_bb, fall_thru_bb)
+    zero = context.get_constant(types.int16, 0)
+    cmp1 = builder.icmp_unsigned("==",
+                                 builder.bitcast(selp, ir.IntType(16)),
+                                 zero)
+    cmp2 = builder.icmp_unsigned("==",
+                                 builder.bitcast(and_op, ir.IntType(16)),
+                                 zero)
+    or_op = builder.or_(cmp1, cmp2)
+    or_cond = builder.bitcast(or_op, ir.IntType(1))
 
-        #Fall thru branch
-        builder.position_at_start(fall_thru_bb)
+    entry_bb = builder.block
+    fall_thru_bb = builder.append_basic_block()
+    true_bb = builder.append_basic_block()
+    builder.cbranch(or_cond, true_bb, fall_thru_bb)
 
-        float_zero = context.get_constant(types.float32, 0.0)
-        neg_f = builder.fsub(float_zero, arg2_fp32)
+    #Fall thru branch
+    builder.position_at_start(fall_thru_bb)
 
-        fname = 'llvm.nvvm.fma.rn.f'
-        lmod = builder.module
-        fnty = ir.FunctionType(ir.FloatType(),
-                               (ir.FloatType(),
-                               ir.FloatType(),
-                               ir.FloatType()))
-        fma_func = cgutils.get_or_insert_function(lmod, fnty, fname)
-        fma1 = builder.call(fma_func, [neg_f, fmul, arg2_fp32])
-        fma2 = builder.call(fma_func, [arg2_rcp, fma1, fmul])
-        fp32_to_f16 = builder.call(cvt2fp16_asm, [fma2])
-        builder.branch(true_bb)
+    float_zero = context.get_constant(types.float32, 0.0)
+    neg_f = builder.fsub(float_zero, arg2_fp32)
 
-        #True branch
-        builder.position_at_start(true_bb)
-        phi_node = builder.phi(ir.IntType(16))
-        phi_node.add_incoming(fp16_div, entry_bb)
-        phi_node.add_incoming(fp32_to_f16, fall_thru_bb)
-        return phi_node
-    else:
-        return None
+    fname = 'llvm.nvvm.fma.rn.f'
+    lmod = builder.module
+    fnty = ir.FunctionType(ir.FloatType(),
+                           (ir.FloatType(),
+                            ir.FloatType(),
+                            ir.FloatType()))
+    fma_func = cgutils.get_or_insert_function(lmod, fnty, fname)
+    fma1 = builder.call(fma_func, [neg_f, fmul, arg2_fp32])
+    fma2 = builder.call(fma_func, [arg2_rcp, fma1, fmul])
+    fp32_to_f16 = builder.call(cvt2fp16_asm, [fma2])
+    builder.branch(true_bb)
+
+    #True branch
+    builder.position_at_start(true_bb)
+    phi_node = builder.phi(ir.IntType(16))
+    phi_node.add_incoming(fp16_div, entry_bb)
+    phi_node.add_incoming(fp32_to_f16, fall_thru_bb)
+    return phi_node
 
 
 @lower(stubs.fp16.hneg, types.float16)
