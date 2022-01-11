@@ -186,17 +186,23 @@ class GdbMIDriver(object):
 
 
 def _gdb_has_python():
-    driver = GdbMIDriver(__file__, debug=False,)
-    has_python = driver.supports_python()
-    driver.quit()
-    return has_python
+    if _HAVE_PEXPECT and _HAVE_GDB:
+        driver = GdbMIDriver(__file__, debug=False,)
+        has_python = driver.supports_python()
+        driver.quit()
+        return has_python
+    else:
+        return False
 
 
 def _gdb_has_numpy():
-    driver = GdbMIDriver(__file__, debug=False,)
-    has_numpy = driver.supports_numpy()
-    driver.quit()
-    return has_numpy
+    if _HAVE_PEXPECT and _HAVE_GDB:
+        driver = GdbMIDriver(__file__, debug=False,)
+        has_numpy = driver.supports_numpy()
+        driver.quit()
+        return has_numpy
+    else:
+        return False
 
 
 skip_unless_gdb_has_python = unittest.skipUnless(_gdb_has_python(), _msg)
