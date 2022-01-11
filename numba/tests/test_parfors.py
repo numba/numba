@@ -1956,6 +1956,47 @@ class TestParfors(TestParforsBase):
             return x
         self.check(test_impl, np.zeros((10, 10)), 3)
 
+    def test_untraced_value_tuple(self):
+        # This is a test for issue #6478.
+        def test_impl():
+            a = (1.2, 1.3)
+            return a[0]
+
+        with self.assertRaises(AssertionError) as raises:
+            self.check(test_impl)
+        self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
+
+    def test_recursive_untraced_value_tuple(self):
+        # This is a test for issue #6478.
+        def test_impl():
+            a = ((1.2, 1.3),)
+            return a[0][0]
+
+        with self.assertRaises(AssertionError) as raises:
+            self.check(test_impl)
+        self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
+
+    def test_untraced_value_parfor(self):
+        # This is a test for issue #6478.
+        def test_impl(arr):
+            a = (1.2, 1.3)
+            n1 = len(arr)
+            arr2 = np.empty(n1, np.float64)
+            for i in prange(n1):
+                arr2[i] = arr[i] * a[0]
+            n2 = len(arr2)
+            arr3 = np.empty(n2, np.float64)
+            for j in prange(n2):
+                arr3[j] = arr2[j] - a[1]
+            total = 0.0
+            n3 = len(arr3)
+            for k in prange(n3):
+                total += arr3[k]
+            return total + a[0]
+
+        arr = np.arange(100)
+        self.assertEqual(countParfors(test_impl, (arr,)), 1)
+
 
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
