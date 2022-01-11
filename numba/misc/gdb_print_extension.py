@@ -27,16 +27,18 @@ class NumbaArrayPrinter:
             NULL = 0x0
 
             # raw data refs
-            nitems = int(self.val["nitems"])
+            # nitems = int(self.val["nitems"])
             data = self.val['data']
             rshp = self.val["shape"]
             itemsize = self.val["itemsize"]
+            rstrides = self.val["strides"]
 
             # type information decode, simple type:
             ty_str = str(self.val.type)
             if HAVE_NUMPY and ('unaligned' in ty_str or 'Record' in ty_str):
-                ty_str = ty_str.lstrip('unaligned').strip()
+                ty_str = ty_str.replace('unaligned ','').strip()
                 matcher = re.compile(r"array\((Record.*), (.*), (.*)\)\ \(.*")
+                # NOTE: need to deal with "Alignment" else dtype size is wrong
                 arr_info = [x.strip() for x in matcher.match(ty_str).groups()]
                 dtype_str, ndim_str, order_str = arr_info
                 field_dts = re.match(
@@ -52,27 +54,40 @@ class NumbaArrayPrinter:
                     struct_entries.append((name, dtype))
                     # The dtype is actually a record of some sort
                 dtype_str = struct_entries
-
             else:  # simple type
                 matcher = re.compile(r"array\((.*),(.*),(.*)\)\ \(.*")
                 arr_info = [x.strip() for x in matcher.match(ty_str).groups()]
                 dtype_str, ndim_str, order_str = arr_info
 
-            # shape extraction
-            fields = rshp.type.fields()
-            lo, hi = fields[0].type.range()
-            shape = tuple([int(rshp[x]) for x in range(lo, hi + 1)])
+            def dwarr2inttuple(dwarr):
+                """Converts a gdb handle to a dwarf array to a tuple of ints"""
+                fields = dwarr.type.fields()
+                lo, hi = fields[0].type.range()
+                return tuple([int(dwarr[x]) for x in range(lo, hi + 1)])
+
+            # shape/strides extraction
+            shape = dwarr2inttuple(rshp)
+            strides = dwarr2inttuple(rstrides)
 
             # if data is not NULL
             if data != NULL:
                 if HAVE_NUMPY:
-                    # TODO: Deal with order and non-contiguous data
+                    # The data extent in bytes is:
+                    # sum(shape * strides)
+                    # get the data, then wire to as_strided
+                    shp_arr = np.array([x - 1 for x in shape])
+                    strd_arr = np.array(strides)
+                    extent = np.sum(shp_arr * strd_arr)
+                    extent += int(itemsize)
                     dtype_clazz = np.dtype(dtype_str)
                     dtype = dtype_clazz  # .type
                     this_proc = gdb.selected_inferior()
-                    mem = this_proc.read_memory(int(data), nitems * itemsize)
-                    new_arr = np.frombuffer(mem, dtype=dtype).reshape(shape)
-                    return str(new_arr)
+                    mem = this_proc.read_memory(int(data), extent)
+                    arr_data = np.frombuffer(mem, dtype=dtype)
+                    new_arr = np.lib.stride_tricks.as_strided(arr_data,
+                                                              shape=shape,
+                                                              strides=strides,)
+                    return '\n' + str(new_arr)
                 # Catch all for no NumPy
                 return "array([...], dtype=%s, shape=%s)" % (dtype_str, shape)
             else:
@@ -80,7 +95,7 @@ class NumbaArrayPrinter:
                 buf = list(["NULL/Uninitialized"])
                 return "array([" + ', '.join(buf) + "]" + ")"
         except Exception as e:
-            return 'Failed to parse. %s' % e
+            return 'array[Exception: Failed to parse. %s]' % e
 
 
 class NumbaComplexPrinter:

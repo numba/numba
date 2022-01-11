@@ -40,9 +40,9 @@ class Test(TestCase):
         driver.check_hit_breakpoint(2)
         driver.stack_list_variables(1)
         # 'z' should be populated
-        expect = (r'\{name="z",value="\{meminfo = 0x[0-9a-f]+.*, '
-                  r'parent = 0x[0-9a-f]+.*, nitems = 5, itemsize = 8, '
-                  r'data = 0x[0-9a-f]+.*, shape = \{5\}, strides = \{8\}\}"\}')
+        expect = (r'^.*\{name="z",value="\{meminfo = 0x[0-9a-f]+ .*, '
+                  r'parent = 0x0, nitems = 5, itemsize = 8, '
+                  r'data = 0x[0-9a-f]+, shape = \{5\}, strides = \{8\}\}.*$')
         driver.assert_regex_output(expect)
         driver.quit()
 

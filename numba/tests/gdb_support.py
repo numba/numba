@@ -94,7 +94,8 @@ class GdbMIDriver(object):
         regex."""
         output = self._captured.after
         decoded = output.decode('utf-8')
-        found = re.search(expected, decoded)
+        done_str = decoded.splitlines()[0]
+        found = re.match(expected, done_str)
         assert found, f'decoded={decoded}\nexpected={expected})'
 
     def _run_command(self, command, expect=''):
