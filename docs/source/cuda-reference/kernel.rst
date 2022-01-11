@@ -548,13 +548,13 @@ These functions return a 16-bit floating point result.
 
 .. function:: numba.cuda.fp16.hmax (a, b)
 
-   Perform the operation ``a if a > b else b.
+   Perform the operation ``a if a > b else b.``
 
    Returns a 16-bit floating point value.
 
 .. function:: numba.cuda.fp16.hmin (a, b)
 
-   Perform the operation ``a if a < b else b.
+   Perform the operation ``a if a < b else b.``
 
    Returns a 16-bit floating point value.
 
