@@ -205,5 +205,7 @@ def _gdb_has_numpy():
         return False
 
 
+_msg = "functioning gdb present, but it does not python"
 skip_unless_gdb_has_python = unittest.skipUnless(_gdb_has_python(), _msg)
+_msg = "functioning gdb present and has Python, but it does not have NumPy"
 skip_unless_gdb_has_numpy = unittest.skipUnless(_gdb_has_numpy(), _msg)
