@@ -2600,7 +2600,6 @@ def record_setattr(context, builder, sig, args, attr):
     elemty = typ.typeof(attr)
 
     if isinstance(elemty, types.NestedArray):
-        # TODO: assert both sides are arrays
         arr_model = context.data_model_manager[elemty]
         be_arr_ty = ir.ArrayType(arr_model._be_type, arr_model._fe_type.nitems)
         dptr = cgutils.get_record_member(builder, target, offset, be_arr_ty)
