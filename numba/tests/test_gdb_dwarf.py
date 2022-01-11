@@ -1,7 +1,6 @@
 """Tests for gdb interacting with the DWARF numba generates"""
 from numba.tests.support import TestCase, linux_only
-from numba.tests.gdb_support import (needs_gdb, skip_unless_pexpect,
-                                     skip_unless_gdb_has_numpy)
+from numba.tests.gdb_support import needs_gdb, skip_unless_pexpect, GdbMIDriver
 
 import unittest
 
@@ -17,6 +16,20 @@ class TestGDBDwarf(TestCase):
     # care about this) and doing this prevents constant churn and permits the
     # reuse of the existing subprocess_test_runner harness.
     _NUMBA_OPT_0_ENV = {'NUMBA_OPT': '0'}
+
+    def _gdb_has_python():
+        """Returns True if gdb has Python support, False otherwise"""
+        driver = GdbMIDriver(__file__, debug=False,)
+        has_python = driver.supports_python()
+        driver.quit()
+        return has_python
+
+    def _gdb_has_numpy(self):
+        """Returns True if gdb has NumPy support, False otherwise"""
+        driver = GdbMIDriver(__file__, debug=False,)
+        has_numpy = driver.supports_numpy()
+        driver.quit()
+        return has_numpy
 
     def _subprocess_test_runner(self, test_mod):
         themod = f'numba.tests.gdb.{test_mod}'
@@ -37,8 +50,11 @@ class TestGDBDwarf(TestCase):
     def test_break_on_symbol(self):
         self._subprocess_test_runner('test_break_on_symbol')
 
-    @skip_unless_gdb_has_numpy
     def test_test_pretty_print(self):
+        if not self._gdb_has_numpy():
+            _msg = "Cannot find gdb with NumPy support"
+            self.skipTest(_msg)
+
         self._subprocess_test_runner('test_pretty_print')
 
 
