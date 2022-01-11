@@ -17,13 +17,6 @@ class TestGDBDwarf(TestCase):
     # reuse of the existing subprocess_test_runner harness.
     _NUMBA_OPT_0_ENV = {'NUMBA_OPT': '0'}
 
-    def _gdb_has_python():
-        """Returns True if gdb has Python support, False otherwise"""
-        driver = GdbMIDriver(__file__, debug=False,)
-        has_python = driver.supports_python()
-        driver.quit()
-        return has_python
-
     def _gdb_has_numpy(self):
         """Returns True if gdb has NumPy support, False otherwise"""
         driver = GdbMIDriver(__file__, debug=False,)

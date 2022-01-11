@@ -70,7 +70,10 @@ class GdbMIDriver(object):
            (and by extension Python support) False otherwise"""
         if not self.supports_python():
             return False
-        self.interpreter_exec('console', 'python import numpy; print numpy')
+        # Some gdb's have python 2!
+        cmd = ('python from __future__ import print_function;'
+               'import numpy; print(numpy)')
+        self.interpreter_exec('console', cmd)
         return "module \'numpy\' from" in self._captured.before.decode()
 
     def _captured_expect(self, expect):
@@ -165,7 +168,7 @@ class GdbMIDriver(object):
         if command is None:
             raise ValueError("command cannot be None")
         cmd = f'-interpreter-exec {interpreter} "{command}"'
-        self._run_command(cmd, expect=r'\^done.*\r\n') #NOTE no `,` after done
+        self._run_command(cmd, expect=r'\^(done|error).*\r\n') #NOTE no `,`
 
     def _list_features_raw(self):
         cmd = '-list-features'
