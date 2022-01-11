@@ -97,6 +97,8 @@ recordwitharray = np.dtype(
 recordwith2darray = np.dtype([('i', np.int32),
                               ('j', np.float32, (3, 2))])
 
+nested_array1_dtype = np.dtype([("array1", np.int16, (3,))], align=True)
+
 
 # Functions used for "full array" tests
 
@@ -115,6 +117,10 @@ def recarray_set_record(ary, rec):
 def recarray_write_array_of_nestedarray_broadcast(ary):
     ary.j[:, :, :] = 1
     return ary
+
+
+def record_setitem_array(rec_source, rec_dest):
+    rec_dest['j'] = rec_source['j']
 
 
 def recarray_write_array_of_nestedarray(ary):
@@ -160,6 +166,10 @@ def record_read_2d_array10(ary):
 
 def record_read_2d_array01(ary):
     return ary.j[0, 1]
+
+
+def assign_array_to_nested(dest, src):
+    dest['array1'] = src
 
 
 class TestRecordDtype(CUDATestCase):
@@ -403,6 +413,20 @@ class TestNestedArrays(CUDATestCase):
         res = cfunc(nbval[0])
         np.testing.assert_equal(res, nbval[0].j[1, 0])
 
+    def test_setitem(self):
+        nbarr1 = np.recarray(2, dtype=recordwith2darray)
+        nbarr1[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))],
+                             dtype=recordwith2darray)[0]
+        nbarr2 = np.recarray(2, dtype=recordwith2darray)
+        nbarr2[0] = np.array([(10, ((10, 20), (40, 50), (20, 30)))],
+                             dtype=recordwith2darray)[0]
+        pyfunc = record_setitem_array
+        args = nbarr1[0], nbarr2[0]
+        arr_expected = pyfunc(*args)
+        cfunc = cuda.jit(pyfunc)
+        arr_res = cfunc[1, 1](*args)
+        np.testing.assert_equal(arr_res, arr_expected)
+
     def test_getitem_idx(self):
         # Test __getitem__ with numerical index
 
@@ -430,6 +454,45 @@ class TestNestedArrays(CUDATestCase):
         kernel = cuda.jit(pyfunc)
         kernel[1, 1](nbarr, rec)
         np.testing.assert_equal(nbarr, arr)
+
+    def test_assign_array_to_nested(self):
+        src = (np.arange(3) + 1).astype(np.int16)
+        got = np.zeros(2, dtype=nested_array1_dtype)
+        expected = np.zeros(2, dtype=nested_array1_dtype)
+
+        pyfunc = assign_array_to_nested
+        kernel = cuda.jit(pyfunc)
+
+        kernel[1, 1](got[0], src)
+        pyfunc(expected[0], src)
+
+        np.testing.assert_array_equal(expected, got)
+
+    def test_issue_7693(self):
+        src_dtype = np.dtype([
+            ("user", np.float64),
+            ("array", np.int16, (3,))],
+            align=True)
+
+        dest_dtype = np.dtype([
+            ("user1", np.float64),
+            ("array1", np.int16, (3,))],
+            align=True)
+
+        @cuda.jit
+        def copy(index, src, dest):
+            dest['user1'] = src[index]['user']
+            dest['array1'] = src[index]['array']
+
+        source = np.zeros(2, dtype=src_dtype)
+        got = np.zeros(2, dtype=dest_dtype)
+        expected = np.zeros(2, dtype=dest_dtype)
+
+        source[0] = (1.2, [1, 2, 3])
+        copy[1, 1](0, source, got[0])
+        copy.py_func(0, source, expected[0])
+
+        np.testing.assert_array_equal(expected, got)
 
     # Reading and returning arrays from recarrays - the following functions are
     # all xfailed because CUDA cannot handle returning arrays from device
