@@ -155,7 +155,10 @@ class NumbaUnicodeTypePrinter:
                 except UnicodeDecodeError as e:
                     buf = "ERROR: %s" % str(e)
             else:
-                buf = mem.decode('utf-8')
+                if isinstance(mem, memoryview):
+                    buf = bytes(mem).decode()
+                else:
+                    buf = mem.decode('utf-8')
         else:
             buf = str(data)
         return "'%s'" % buf
