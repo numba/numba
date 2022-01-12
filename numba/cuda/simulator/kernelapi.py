@@ -228,6 +228,9 @@ class FakeCUDAFp16(object):
     def hmul(self, a, b):
         return a * b
 
+    def hdiv(self, a, b):
+        return a / b
+
     def hfma(self, a, b, c):
         return a * b + c
 
