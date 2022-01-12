@@ -422,8 +422,12 @@ class DIBuilder(AbstractDIBuilder):
 
         for idx, (name, nbtype) in enumerate(argmap.items()):
             name = name.replace('.', '$')    # for gdb to work correctly
-            datamodel = self.cgctx.data_model_manager[nbtype]
-            lltype = self.cgctx.get_value_type(nbtype)
+            use_ty = nbtype
+            if isinstance(nbtype, types.Omitted):
+                resolver = self.cgctx.typing_context.resolve_value_type
+                use_ty = resolver(nbtype.value)
+            datamodel = self.cgctx.data_model_manager[use_ty]
+            lltype = self.cgctx.get_value_type(use_ty)
             size = self.cgctx.get_abi_sizeof(lltype)
             mdtype = self._var_type(lltype, size, datamodel=datamodel)
             md.append(mdtype)
