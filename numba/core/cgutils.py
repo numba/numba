@@ -1034,7 +1034,7 @@ def memcpy(builder, dst, src, count):
         builder.store(builder.load(in_ptr), out_ptr)
 
 
-def _raw_memcpy(builder, func_name, dst, src, count, itemsize, align):
+def _raw_memcpy(builder, func_name, dst, src, count, itemsize):
     size_t = count.type
     if isinstance(itemsize, int):
         itemsize = ir.Constant(size_t, itemsize)
@@ -1048,21 +1048,21 @@ def _raw_memcpy(builder, func_name, dst, src, count, itemsize, align):
                           is_volatile])
 
 
-def raw_memcpy(builder, dst, src, count, itemsize, align=1):
+def raw_memcpy(builder, dst, src, count, itemsize):
     """
     Emit a raw memcpy() call for `count` items of size `itemsize`
     from `src` to `dest`.
     """
-    return _raw_memcpy(builder, 'llvm.memcpy', dst, src, count, itemsize, align)
+    return _raw_memcpy(builder, 'llvm.memcpy', dst, src, count, itemsize)
 
 
-def raw_memmove(builder, dst, src, count, itemsize, align=1):
+def raw_memmove(builder, dst, src, count, itemsize):
     """
     Emit a raw memmove() call for `count` items of size `itemsize`
     from `src` to `dest`.
     """
     return _raw_memcpy(builder, 'llvm.memmove', dst, src, count,
-                       itemsize, align)
+                       itemsize)
 
 
 def muladd_with_overflow(builder, a, b, c):
