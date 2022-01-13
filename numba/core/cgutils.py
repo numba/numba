@@ -10,6 +10,7 @@ import functools
 from llvmlite import ir
 
 from numba.core import utils, types, config, debuginfo
+from numba.core.errors import TypingError
 import numba.core.datamodel
 
 
@@ -1013,7 +1014,7 @@ def cbranch_or_continue(builder, cond, bbtrue):
     return bbcont
 
 
-def memcpy(builder, dst, src, count):
+def memcpy(builder, dst, src, count, itemsize=1):
     """
     Emit a memcpy to the builder.
 
@@ -1023,15 +1024,20 @@ def memcpy(builder, dst, src, count):
     Assumes
     -------
     * dst.type == src.type
-    * count is positive
+    * count is not negative
+    * itemsize is positive
     """
-    # Note this does seem to be optimized as a raw memcpy() by LLVM
-    # whenever possible...
-    assert dst.type == src.type
-    with for_range(builder, count, intp=count.type) as loop:
-        out_ptr = builder.gep(dst, [loop.index])
-        in_ptr = builder.gep(src, [loop.index])
-        builder.store(builder.load(in_ptr), out_ptr)
+    if dst.type != src.type:
+        msg = f'memcpy requires the same types; got {dst.type} and {src.type}'
+        raise TypingError(msg)
+
+    if isinstance(count, int):
+        count = ir.Constant(intp_t, count)
+
+    if isinstance(itemsize, int):
+        itemsize = ir.Constant(intp_t, itemsize)
+
+    _raw_memcpy(builder, 'llvm.memcpy', dst, src, count, itemsize)
 
 
 def _raw_memcpy(builder, func_name, dst, src, count, itemsize):
@@ -1046,14 +1052,6 @@ def _raw_memcpy(builder, func_name, dst, src, count, itemsize):
                           builder.bitcast(src, voidptr_t),
                           builder.mul(count, itemsize),
                           is_volatile])
-
-
-def raw_memcpy(builder, dst, src, count, itemsize):
-    """
-    Emit a raw memcpy() call for `count` items of size `itemsize`
-    from `src` to `dest`.
-    """
-    return _raw_memcpy(builder, 'llvm.memcpy', dst, src, count, itemsize)
 
 
 def raw_memmove(builder, dst, src, count, itemsize):

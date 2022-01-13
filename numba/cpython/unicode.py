@@ -1609,7 +1609,7 @@ def _strncpy(dst, dst_offset, src, src_offset, n):
         dst_byte_offset = byte_width * dst_offset
         nbytes = n * byte_width
         memcpy_region(dst._data, dst_byte_offset, src._data,
-                      src_byte_offset, nbytes, align=1)
+                      src_byte_offset, nbytes)
     else:
         for i in range(n):
             _set_code_point(dst, dst_offset + i,

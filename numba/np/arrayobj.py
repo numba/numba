@@ -4226,8 +4226,7 @@ def _array_copy(context, builder, sig, args):
     assert rettype.layout in "CF"
     if arytype.layout == rettype.layout:
         # Fast path: memcpy
-        cgutils.raw_memcpy(builder, dest_data, src_data, ary.nitems,
-                           ary.itemsize)
+        cgutils.memcpy(builder, dest_data, src_data, ary.nitems, ary.itemsize)
 
     else:
         src_strides = cgutils.unpack_tuple(builder, ary.strides)

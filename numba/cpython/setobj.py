@@ -1086,9 +1086,8 @@ class SetInstance(object):
                     payload.fill = src_payload.fill
                     payload.finger = zero
                     payload.mask = mask
-                    cgutils.raw_memcpy(builder, payload.entries,
-                                       src_payload.entries, nentries,
-                                       entry_size)
+                    cgutils.memcpy(builder, payload.entries,
+                                   src_payload.entries, nentries, entry_size)
 
                     if DEBUG_ALLOCS:
                         context.printf(builder,
