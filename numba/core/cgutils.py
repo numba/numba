@@ -1018,49 +1018,40 @@ def memcpy(builder, dst, src, count, itemsize=1):
     """
     Emit a memcpy to the builder.
 
-    Copies each element of dst to src. Unlike the C equivalent, each element
-    can be any LLVM type.
-
-    Assumes
-    -------
-    * dst.type == src.type
-    * count is not negative
-    * itemsize is positive
+    Source and destination types can be any type, but the types must be the
+    same.
     """
     if dst.type != src.type:
         msg = f'memcpy requires the same types; got {dst.type} and {src.type}'
         raise TypingError(msg)
 
+    _raw_mem_intrinsic(builder, 'llvm.memcpy', dst, src, count, itemsize)
+
+
+def memmove(builder, dst, src, count, itemsize):
+    """
+    Emit a memmove to the builder.
+
+    Source and destination types can be any type, but the types must be the
+    same.
+    """
+    _raw_mem_intrinsic(builder, 'llvm.memmove', dst, src, count, itemsize)
+
+
+def _raw_mem_intrinsic(builder, func_name, dst, src, count, itemsize):
     if isinstance(count, int):
         count = ir.Constant(intp_t, count)
 
     if isinstance(itemsize, int):
         itemsize = ir.Constant(intp_t, itemsize)
 
-    _raw_memcpy(builder, 'llvm.memcpy', dst, src, count, itemsize)
-
-
-def _raw_memcpy(builder, func_name, dst, src, count, itemsize):
-    size_t = count.type
-    if isinstance(itemsize, int):
-        itemsize = ir.Constant(size_t, itemsize)
-
     memcpy = builder.module.declare_intrinsic(func_name,
-                                              [voidptr_t, voidptr_t, size_t])
+                                              [voidptr_t, voidptr_t, intp_t])
     is_volatile = false_bit
     builder.call(memcpy, [builder.bitcast(dst, voidptr_t),
                           builder.bitcast(src, voidptr_t),
                           builder.mul(count, itemsize),
                           is_volatile])
-
-
-def raw_memmove(builder, dst, src, count, itemsize):
-    """
-    Emit a raw memmove() call for `count` items of size `itemsize`
-    from `src` to `dest`.
-    """
-    return _raw_memcpy(builder, 'llvm.memmove', dst, src, count,
-                       itemsize)
 
 
 def muladd_with_overflow(builder, a, b, c):
