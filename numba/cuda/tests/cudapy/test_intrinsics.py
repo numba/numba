@@ -106,6 +106,15 @@ def simple_hdiv_scalar(ary, a, b):
     ary[0] = cuda.fp16.hdiv(a, b)
 
 
+@cuda.jit(device=True)
+def simple_hdiv_scalar2(a, b):
+    return cuda.fp16.hdiv(a, b)
+
+
+def simple_hdiv_unique(ary, a, b):
+    ary[0] = simple_hdiv_scalar2(a,b) + simple_hdiv_scalar2(b, a)
+
+
 def simple_hneg(ary, a):
     ary[0] = cuda.fp16.hneg(a[0])
 
@@ -469,6 +478,16 @@ class TestCudaIntrinsic(CUDATestCase):
             compiled[1, 1](ary, arg1, arg2)
             ref = arg1 / arg2
             np.testing.assert_allclose(ary[0], ref)
+
+    @skip_unless_cc_53
+    def test_hdiv_unique_reg_predicate(self):
+        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hdiv_unique)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(3.1415926)
+        arg2 = np.float16(1.57)
+        compiled[1, 1](ary, arg1, arg2)
+        ref = (arg1 / arg2) + (arg2 / arg1)
+        np.testing.assert_allclose(ary[0], ref)
 
     @skip_unless_cc_53
     def test_hneg(self):

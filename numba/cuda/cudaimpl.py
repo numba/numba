@@ -12,7 +12,6 @@ from .cudadrv import nvvm
 from numba import cuda
 from numba.cuda import nvvmutils, stubs, errors
 from numba.cuda.types import dim3, grid_group, CUDADispatcher
-from llvmlite.ir._utils import DuplicatedNameError
 
 
 registry = Registry()
@@ -493,27 +492,6 @@ lower_fp16_binary(stubs.fp16.hsub, 'sub')
 lower_fp16_binary(stubs.fp16.hmul, 'mul')
 
 
-def get_temp_predicate_register(builder):
-    f = builder.function
-    # It's possible a function could be called multiple times
-    # when lowering which can result in duplicate register predicate
-    # names. We detect this case and generate non-duplicate temporary
-    # names.
-
-    try:
-        temp_reg = f.scope.register('__$$temp1', deduplicate=False)
-    except DuplicatedNameError:
-        basename = '__$$temp'
-        count = 2
-        temp_reg = "{0}{1}".format(basename, count)
-        while f.scope.is_used(temp_reg):
-            count = count + 1
-            temp_reg = "{0}{1}".format(basename, count)
-        f.scope.register(temp_reg, deduplicate=False)
-
-    return temp_reg
-
-
 @lower(stubs.fp16.hdiv, types.float16, types.float16)
 def lower_fp16_divide(context, builder, sig, args):
     arg1 = args[0]
@@ -548,10 +526,11 @@ def lower_fp16_divide(context, builder, sig, args):
     and_cnst = context.get_constant(types.int16, 32767)
     and_op = builder.and_(fp16_div, and_cnst)
 
-    temp_reg = get_temp_predicate_register(builder)
+    #temp_reg = get_temp_predicate_register()
+    temp_reg = '__$$temp3'
     reg_pred_fnty = ir.FunctionType(ir.VoidType(),[])
     reg_pred_asm = ir.InlineAsm(reg_pred_fnty,
-                                f".reg .pred {temp_reg};",
+                                f"{{ .reg .pred {temp_reg};",
                                 "")
     _ = builder.call(reg_pred_asm, [])
 
@@ -566,7 +545,7 @@ def lower_fp16_divide(context, builder, sig, args):
     selp_fnty = ir.FunctionType(ir.IntType(16),[])
 
     selp_asm = ir.InlineAsm(selp_fnty,
-                            f"selp.u16 $0, 1, 0, {temp_reg};",
+                            f"selp.u16 $0, 1, 0, {temp_reg};}}",
                             '=h')
     selp = builder.call(selp_asm, [])
 
