@@ -2548,8 +2548,7 @@ def array_record_getitem(context, builder, sig, args):
 @lower_getattr_generic(types.Record)
 def record_getattr(context, builder, typ, value, attr):
     """
-    Generic getattr() implementation for records: fetch the given
-    record member, i.e. a scalar.
+    Generic getattr() implementation for records: get the given record member.
     """
     context.sentry_record_alignment(typ, attr)
     offset = typ.offset(attr)
@@ -2589,8 +2588,7 @@ def record_getattr(context, builder, typ, value, attr):
 @lower_setattr_generic(types.Record)
 def record_setattr(context, builder, sig, args, attr):
     """
-    Generic setattr() implementation for records: set the given
-    record member, i.e. a scalar.
+    Generic setattr() implementation for records: set the given record member.
     """
     typ, valty = sig.args
     target, val = args
@@ -2600,16 +2598,16 @@ def record_setattr(context, builder, sig, args, attr):
     elemty = typ.typeof(attr)
 
     if isinstance(elemty, types.NestedArray):
-        arr_model = context.data_model_manager[elemty]
-        be_arr_ty = ir.ArrayType(arr_model._be_type, arr_model._fe_type.nitems)
-        dptr = cgutils.get_record_member(builder, target, offset, be_arr_ty)
-
-        dataval_ptr = arr_model.get(builder, val, 'data')
-        dataval_ptr = builder.bitcast(dataval_ptr, be_arr_ty.as_pointer())
-        align = None if typ.aligned else 1
-        dataval = builder.load(dataval_ptr)
-        builder.store(dataval, dptr, align=align)
+        # Copy the data from the RHS into the nested array
+        val_struct = cgutils.create_struct_proxy(valty)(context, builder,
+                                                        value=args[1])
+        src = val_struct.data
+        dest = cgutils.get_record_member(builder, target, offset,
+                                         src.type.pointee)
+        cgutils.memcpy(builder, dest, src,
+                       context.get_constant(types.intp, elemty.nitems))
     else:
+        # Set the given scalar record member
         dptr = cgutils.get_record_member(builder, target, offset,
                                          context.get_data_type(elemty))
         val = context.cast(builder, val, valty, elemty)

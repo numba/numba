@@ -99,6 +99,8 @@ recordwith2darray = np.dtype([('i', np.int32),
 
 nested_array1_dtype = np.dtype([("array1", np.int16, (3,))], align=True)
 
+nested_array2_dtype = np.dtype([("array2", np.int16, (3, 2))], align=True)
+
 
 # Functions used for "full array" tests
 
@@ -170,6 +172,10 @@ def record_read_2d_array01(ary):
 
 def assign_array_to_nested(dest, src):
     dest['array1'] = src
+
+
+def assign_array_to_nested_2d(dest, src):
+    dest['array2'] = src
 
 
 class TestRecordDtype(CUDATestCase):
@@ -461,6 +467,19 @@ class TestNestedArrays(CUDATestCase):
         expected = np.zeros(2, dtype=nested_array1_dtype)
 
         pyfunc = assign_array_to_nested
+        kernel = cuda.jit(pyfunc)
+
+        kernel[1, 1](got[0], src)
+        pyfunc(expected[0], src)
+
+        np.testing.assert_array_equal(expected, got)
+
+    def test_assign_array_to_nested_2d(self):
+        src = (np.arange(6) + 1).astype(np.int16).reshape((3, 2))
+        got = np.zeros(2, dtype=nested_array2_dtype)
+        expected = np.zeros(2, dtype=nested_array2_dtype)
+
+        pyfunc = assign_array_to_nested_2d
         kernel = cuda.jit(pyfunc)
 
         kernel[1, 1](got[0], src)

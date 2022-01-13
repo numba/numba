@@ -411,6 +411,11 @@ def assign_array_to_nested(dest):
     dest['array1'] = tmp
 
 
+def assign_array_to_nested_2d(dest):
+    tmp = (np.arange(6) + 1).astype(np.int16).reshape((3, 2))
+    dest['array2'] = tmp
+
+
 recordtype = np.dtype([('a', np.float64),
                        ('b', np.int16),
                        ('c', np.complex64),
@@ -439,6 +444,8 @@ recordwith4darray = np.dtype([('o', np.int64),
                               ('q', 'U10'),])
 
 nested_array1_dtype = np.dtype([("array1", np.int16, (3,))], align=True)
+
+nested_array2_dtype = np.dtype([("array2", np.int16, (3, 2))], align=True)
 
 
 class TestRecordDtypeMakeCStruct(unittest.TestCase):
@@ -1655,6 +1662,16 @@ class TestNestedArrays(TestCase):
         cfunc = njit(assign_array_to_nested)
         cfunc(got[0])
         assign_array_to_nested(expected[0])
+
+        np.testing.assert_array_equal(expected, got)
+
+    def test_assign_array_to_nested_2d(self):
+        got = np.zeros(2, dtype=nested_array2_dtype)
+        expected = np.zeros(2, dtype=nested_array2_dtype)
+
+        cfunc = njit(assign_array_to_nested_2d)
+        cfunc(got[0])
+        assign_array_to_nested_2d(expected[0])
 
         np.testing.assert_array_equal(expected, got)
 
