@@ -4,10 +4,10 @@ Version 0.55.0 (13 January, 2021)
 This release includes a significant number important dependency upgrades along
 with a number of new features and bug fixes.
 
-NOTE: Due to CVE-2021-33430 this release has bypassed the usual release process
-so as to promptly provide a Numba release that supports NumPy 1.21. A single
-release candidate (RC1) was made and a few issues were reported, these are
-summarised as follows and will be fixed in a subsequent 0.55.1 release.
+NOTE: Due to NumPy CVE-2021-33430 this release has bypassed the usual release
+process so as to promptly provide a Numba release that supports NumPy 1.21. A
+single release candidate (RC1) was made and a few issues were reported, these
+are summarised as follows and will be fixed in a subsequent 0.55.1 release.
 
 Known issues with this release:
 
