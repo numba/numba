@@ -3,12 +3,16 @@ import inspect
 import re
 import numpy as np
 import math
+from textwrap import dedent
+import unittest
+import warnings
 
-from numba.tests.support import TestCase, override_config, needs_subprocess
+from numba.tests.support import (TestCase, override_config, needs_subprocess,
+                                 ignore_internal_warnings)
 from numba import jit, njit
 from numba.core import types, utils
 from numba.core.datamodel import default_manager
-import unittest
+from numba.core.errors import NumbaDebugInfoWarning
 import llvmlite.binding as llvm
 
 #NOTE: These tests are potentially sensitive to changes in SSA or lowering
@@ -635,6 +639,50 @@ class TestDebugInfoEmission(TestCase):
         base_ty = metadata_definition_map[md_base_ty]
         self.assertEqual(base_ty, ('!DIBasicType(name: "i8", size: 8, '
                                    'encoding: DW_ATE_unsigned)'))
+
+    def test_missing_source(self):
+        strsrc = """
+        def foo():
+            return 1
+        """
+        l = dict()
+        exec(dedent(strsrc), {}, l)
+        foo = njit(debug=True)(l['foo'])
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaDebugInfoWarning)
+            ignore_internal_warnings()
+            foo()
+
+        self.assertEqual(len(w), 1)
+        found = w[0]
+        self.assertEqual(found.category, NumbaDebugInfoWarning)
+        msg = str(found.message)
+        # make sure the warning contains the right message
+        self.assertIn('Could not find source for function', msg)
+        # and refers to the offending function
+        self.assertIn(str(foo.py_func), msg)
+
+    def test_unparsable_indented_source(self):
+
+        @njit(debug=True)
+        def foo():
+# NOTE: THIS COMMENT MUST START AT COLUMN 0 FOR THIS SAMPLE CODE TO BE VALID # noqa: E115, E501
+            return 1
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaDebugInfoWarning)
+            ignore_internal_warnings()
+            foo()
+
+        self.assertEqual(len(w), 1)
+        found = w[0]
+        self.assertEqual(found.category, NumbaDebugInfoWarning)
+        msg = str(found.message)
+        # make sure the warning contains the right message
+        self.assertIn('Could not parse the source for function', msg)
+        # and refers to the offending function
+        self.assertIn(str(foo.py_func), msg)
 
 
 if __name__ == '__main__':

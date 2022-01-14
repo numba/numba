@@ -13,7 +13,7 @@ from numba.core import (typing, utils, types, ir, debuginfo, funcdesc,
                         targetconfig)
 from numba.core.errors import (LoweringError, new_error_context, TypingError,
                                LiteralTypingError, UnsupportedError,
-                               NumbaWarning)
+                               NumbaDebugInfoWarning)
 from numba.core.funcdesc import default_mangler
 from numba.core.environment import Environment
 from numba.core.analysis import compute_use_defs
@@ -100,19 +100,32 @@ class BaseLower(object):
                 raw_source_str, _ = inspect.getsourcelines(fn)
             except OSError:
                 msg = ("Could not find source for function: "
-                       f"{self.func_ir.func_id.func}")
-                warnings.warn(NumbaWarning(msg))
+                       f"{self.func_ir.func_id.func}. Debug line information "
+                       "may be inaccurate.")
+                warnings.warn(NumbaDebugInfoWarning(msg))
             else:
                 # Parse the source and find the line with `def <func>` in it, it
                 # is assumed that if the compilation has made it this far that
                 # the source is at least legal and has valid syntax.
 
-                # join the source as a block and dedent it
+                # Join the source as a block and dedent it.
                 source_str = textwrap.dedent(''.join(raw_source_str))
-                src_ast = ast.parse(source_str)
+                # Deal with unparsable source (see #7730), this can be caused
+                # by continuation lines/comments at indent levels that are
+                # invalid when the just function source is parsed in isolation.
+                src_ast = None
+                try:
+                    src_ast = ast.parse(source_str)
+                except IndentationError:
+                    msg = ("Could not parse the source for function: "
+                           f"{self.func_ir.func_id.func}. Debug line "
+                           "information may be inaccurate. This is often "
+                           "caused by comments/docstrings/line continuation "
+                           "that is at a lesser indent level than the source.")
+                    warnings.warn(NumbaDebugInfoWarning(msg))
                 # pull the definition out of the AST, only if it seems valid
                 # i.e. one thing in the body
-                if len(src_ast.body) == 1:
+                if src_ast is not None and len(src_ast.body) == 1:
                     pydef = src_ast.body.pop()
                     # -1 as lines start at 1 and this is an offset.
                     pydef_offset = pydef.lineno - 1
