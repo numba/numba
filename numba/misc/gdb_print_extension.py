@@ -32,17 +32,19 @@ class NumbaArrayPrinter:
             rshp = self.val["shape"]
             itemsize = self.val["itemsize"]
             rstrides = self.val["strides"]
+            is_aligned = False
 
             # type information decode, simple type:
             ty_str = str(self.val.type)
-            if HAVE_NUMPY and ('unaligned' in ty_str or 'Record' in ty_str):
+            if HAVE_NUMPY and ('aligned' in ty_str or 'Record' in ty_str):
                 ty_str = ty_str.replace('unaligned ','').strip()
                 matcher = re.compile(r"array\((Record.*), (.*), (.*)\)\ \(.*")
                 # NOTE: need to deal with "Alignment" else dtype size is wrong
                 arr_info = [x.strip() for x in matcher.match(ty_str).groups()]
                 dtype_str, ndim_str, order_str = arr_info
-                field_dts = re.match(
-                    'Record\\((.*\\[.*\\])', dtype_str).groups()[0].split(',')
+                rstr = 'Record\\((.*\\[.*\\]);([0-9]+);(True|False)'
+                fields, balign, is_aligned = re.match(rstr, dtype_str).groups()
+                field_dts = fields.split(',')
                 struct_entries = []
                 for f in field_dts:
                     name, stuff = f.split('[')
@@ -79,7 +81,7 @@ class NumbaArrayPrinter:
                     strd_arr = np.array(strides)
                     extent = np.sum(shp_arr * strd_arr)
                     extent += int(itemsize)
-                    dtype_clazz = np.dtype(dtype_str)
+                    dtype_clazz = np.dtype(dtype_str, align=is_aligned)
                     dtype = dtype_clazz  # .type
                     this_proc = gdb.selected_inferior()
                     mem = this_proc.read_memory(int(data), extent)
