@@ -1020,6 +1020,11 @@ def memcpy(builder, dst, src, count, itemsize=1):
 
     Source and destination types can be any type, but the types must be the
     same.
+
+    Call either as:
+
+    - memcpy(builder, dst, src, len), or
+    - memcpy(builder, dst, src, count, itemsize)
     """
     if dst.type != src.type:
         msg = f'memcpy requires the same types; got {dst.type} and {src.type}'
@@ -1028,12 +1033,17 @@ def memcpy(builder, dst, src, count, itemsize=1):
     _raw_mem_intrinsic(builder, 'llvm.memcpy', dst, src, count, itemsize)
 
 
-def memmove(builder, dst, src, count, itemsize):
+def memmove(builder, dst, src, count, itemsize=1):
     """
     Emit a memmove to the builder.
 
     Source and destination types can be any type, but the types must be the
     same.
+
+    Call either as:
+
+    - memmove(builder, dst, src, len), or
+    - memmove(builder, dst, src, count, itemsize)
     """
     _raw_mem_intrinsic(builder, 'llvm.memmove', dst, src, count, itemsize)
 
@@ -1045,13 +1055,18 @@ def _raw_mem_intrinsic(builder, func_name, dst, src, count, itemsize):
     if isinstance(itemsize, int):
         itemsize = ir.Constant(intp_t, itemsize)
 
+    if isinstance(itemsize, ir.Constant) and itemsize.constant == 1:
+        length = count
+    else:
+        length = builder.mul(count, itemsize)
+
     memcpy = builder.module.declare_intrinsic(func_name,
                                               [voidptr_t, voidptr_t, intp_t])
     is_volatile = false_bit
-    builder.call(memcpy, [builder.bitcast(dst, voidptr_t),
+    builder.call(memcpy, (builder.bitcast(dst, voidptr_t),
                           builder.bitcast(src, voidptr_t),
-                          builder.mul(count, itemsize),
-                          is_volatile])
+                          length,
+                          is_volatile))
 
 
 def muladd_with_overflow(builder, a, b, c):
