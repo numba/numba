@@ -485,10 +485,19 @@ GPU support
 
    When set to 1, the default stream is the per-thread default stream. When set
    to 0, the default stream is the legacy default stream. This defaults to 0,
-   for the legacy default stream. It may default to 1 in a future release of
-   Numba. See `Stream Synchronization Behavior
+   for the legacy default stream. See `Stream Synchronization Behavior
    <https://docs.nvidia.com/cuda/cuda-runtime-api/stream-sync-behavior.html>`_
    for an explanation of the legacy and per-thread default streams.
+
+   This variable only takes effect when using Numba's internal CUDA bindings;
+   when using the NVIDIA bindings, use the variable
+   ``CUDA_PYTHON_CUDA_PER_THREAD_DEFAULT_STREAM`` instead.
+
+   .. seealso::
+
+      The `Default Stream section
+      <https://nvidia.github.io/cuda-python/release/11.6.0-notes.html#default-stream>`_
+      in the NVIDIA Bindings documentation.
 
 .. envvar:: NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS
 

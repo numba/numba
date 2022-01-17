@@ -247,7 +247,7 @@ vary with target operating system and hardware. The following lists them all
   * ``typeguard`` - used by ``runtests.py`` for
     :ref:`runtime type-checking <type_anno_check>`.
   * ``cuda-python`` - The NVIDIA CUDA Python bindings. See :ref:`cuda-bindings`.
-    Numba is tested with Version 11.5 of the bindings.
+    Numba requires Version 11.6 or greater.
 
 * To build the documentation:
 
