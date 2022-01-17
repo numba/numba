@@ -49,6 +49,26 @@ class TestMatMul(CUDATestCase):
                 C[i, j] = tmp
         # magictoken.ex_matmul.end
 
+        # magictoken.ex_run_matmul.begin
+        x_h = np.arange(16).reshape([4, 4])
+        y_h = np.ones([4, 4])
+        z_h = np.zeros([4, 4])
+
+        x_d = cuda.to_device(x_h)
+        y_d = cuda.to_device(y_h)
+        z_d = cuda.to_device(z_h)
+
+        threadsperblock = (16, 16)
+        blockspergrid_x = math.ceil(z_h.shape[0] / threadsperblock[0])
+        blockspergrid_y = math.ceil(z_h.shape[1] / threadsperblock[1])
+        blockspergrid = (blockspergrid_x, blockspergrid_y)
+
+        matmul[blockspergrid, threadsperblock](x_d, y_d, z_d)
+        z_h = z_d.copy_to_host()
+        print(z_h)
+        print(x_h @ y_h)
+        # magictoken.ex_run_matmul.end
+
         # magictoken.ex_fast_matmul.begin
         # Controls threads per block and shared memory usage.
         # The computation will be done on blocks of TPBxTPB elements.
