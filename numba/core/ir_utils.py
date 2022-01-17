@@ -754,9 +754,9 @@ def has_no_side_effect(rhs, lives, call_table):
         return rhs.lhs.name not in lives
     if isinstance(rhs, ir.Yield):
         return False
-    # if isinstance(rhs, ir.Expr) and rhs.op == 'pair_first':
-    #     # don't remove pair_first since prange looks for it
-    #     return False
+    if isinstance(rhs, ir.Expr) and rhs.op == 'pair_first':
+        # don't remove pair_first since prange looks for it
+        return False
     return True
 
 is_pure_extensions = []

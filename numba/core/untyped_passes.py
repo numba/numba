@@ -11,14 +11,14 @@ from numba.misc.special import literal_unroll
 from numba.core.analysis import (dead_branch_prune, rewrite_semantic_constants,
                                  find_literally_calls, compute_cfg_from_blocks,
                                  compute_use_defs)
-from numba.core.ir_utils import (dead_code_elimination, guard,
-                                 resolve_func_from_module, simplify_CFG,
+from numba.core.ir_utils import (guard, resolve_func_from_module, simplify_CFG,
                                  GuardException, convert_code_obj_to_function,
                                  mk_unique_var, build_definitions,
                                  replace_var_names, get_name_var_table,
                                  compile_to_numba_ir, get_definition,
                                  find_max_label, rename_labels,
                                  transfer_scope, fixup_var_define_in_scope,
+                                 dead_code_elimination,
                                  )
 from numba.core.ssa import reconstruct_ssa
 from numba.core import interpreter
@@ -1710,6 +1710,7 @@ class DeadLoopElimination(FunctionPass):
         for arg in call_expr.args:
             # only one arg?
             if self.is_arg_constsized(state, arg):
+                # store the call expr to be removed later
                 self.dead_vars.append(func_ir.get_assignee(call_expr))
                 return True
         return False
@@ -1720,20 +1721,30 @@ class DeadLoopElimination(FunctionPass):
         for loop in cfg.loops().values():
             header = state.func_ir.blocks[loop.header]
             for expr in header.find_exprs('iternext'):
-                defn = state.func_ir.get_definition(expr.value.name)
-                if isinstance(defn, ir.Expr) and defn.op == 'getiter':
-                    # defn := getiter(value=Var)
-                    if self.is_arg_constsized(state, defn.value) or \
-                       self.match_iter(state, defn):
-                        dead_loops.append(loop)
+                expr = guard(get_definition, state.func_ir, expr.value.name)
+                if expr:
+                    if isinstance(expr, ir.Expr) and expr.op == 'getiter':
+                        # expr := getiter(value=Var)
+                        if self.is_arg_constsized(state, expr.value) or \
+                           self.match_iter(state, expr):
+                            dead_loops.append(loop)
         return dead_loops
 
     def remove_dead_loops(self, state, dead_loops):
         for loop in dead_loops:
+            # change branch into a direct jump to exit
             header = state.func_ir.blocks[loop.header]
             term = header.terminator
             header.insert_before_terminator(ir.Jump(term.falsebr, term.loc))
             header.remove(term)
+
+            # iterate over header and remove "pair_first", since
+            # dead_code_elimination won't remove it
+            for inst in header.find_insts(ir.Assign):
+                expr = inst.value
+                if isinstance(expr, ir.Expr) and expr.op == 'pair_first':
+                    header.remove(inst)
+
         dead_branch_prune(state.func_ir, state.args)
 
         for var in self.dead_vars:
@@ -1749,9 +1760,10 @@ class DeadLoopElimination(FunctionPass):
         from numba.core.compiler_machinery import PassManager
         from numba.core.typed_passes import PartialTypeInference
         pm = PassManager("dead_loop_elimination_subpipeline")
-        pm.add_pass(GenericRewrites, "Generic Rewrites")
-        pm.add_pass(RewriteSemanticConstants, "Semantic const")
-        pm.add_pass(DeadBranchPrune, "Dead branch prune")
+        if not state.flags.no_rewrites:
+            pm.add_pass(RewriteSemanticConstants, "Semantic const")
+            pm.add_pass(DeadBranchPrune, "Dead branch prune")
+            pm.add_pass(GenericRewrites, "Generic Rewrites")
         pm.add_pass(PartialTypeInference, "performs partial type inference")
         pm.finalize()
         pm.run(state)
