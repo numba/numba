@@ -615,16 +615,13 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
 
             x = np.ones(2**20, np.float32)
             foo(*([x]*8))
-            print("@%s@" % threading_layer())
+            assert threading_layer() == "omp", "omp not found"
         """
         cmdline = [sys.executable, '-c', runme]
         env = os.environ.copy()
         env['NUMBA_THREADING_LAYER'] = "omp"
         env['OMP_STACKSIZE'] = "100K"
-        out, err = self.run_cmd(cmdline, env=env)
-        if self._DEBUG:
-            print(out, err)
-        self.assertIn("@omp@", out)
+        self.run_cmd(cmdline, env=env)
 
     @skip_no_tbb
     def test_single_thread_tbb(self):
@@ -643,16 +640,13 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
                 return acc
 
             foo(100)
-            print("@%s@" % threading_layer())
+            assert threading_layer() == "tbb", "tbb not found"
         """
         cmdline = [sys.executable, '-c', runme]
         env = os.environ.copy()
         env['NUMBA_THREADING_LAYER'] = "tbb"
         env['NUMBA_NUM_THREADS'] = "1"
-        out, err = self.run_cmd(cmdline, env=env)
-        if self._DEBUG:
-            print(out, err)
-        self.assertIn("@tbb@", out)
+        self.run_cmd(cmdline, env=env)
 
     def test_workqueue_aborts_on_nested_parallelism(self):
         """
