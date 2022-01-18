@@ -26,12 +26,27 @@ class NumbaArrayPrinter:
         try:
             NULL = 0x0
 
-            # raw data refs
-            # nitems = int(self.val["nitems"])
-            data = self.val['data']
-            rshp = self.val["shape"]
+            # Raw data references, these need unpacking/interpreting.
+
+            # Member "data" is...
+            # DW_TAG_member of DIDerivedType, tag of DW_TAG_pointer_type
+            # encoding e.g. DW_ATE_float
+            data = self.val["data"]
+
+            # Member "itemsize" is...
+            # DW_TAG_member of DIBasicType encoding DW_ATE_signed
             itemsize = self.val["itemsize"]
+
+            # Members "shape" and "strides" are...
+            # DW_TAG_member of DIDerivedType, the type is a DICompositeType
+            # (it's a Numba UniTuple) with tag: DW_TAG_array_type, i.e. it's an
+            # array repr, it has a basetype of e.g. DW_ATE_unsigned and also
+            # "elements" which are referenced with a DISubrange(count: <const>)
+            # to say how many elements are in the array.
+            rshp = self.val["shape"]
             rstrides = self.val["strides"]
+
+            # bool on whether the data is aligned.
             is_aligned = False
 
             # type information decode, simple type:
@@ -43,15 +58,21 @@ class NumbaArrayPrinter:
                 arr_info = [x.strip() for x in matcher.match(ty_str).groups()]
                 dtype_str, ndim_str, order_str = arr_info
                 rstr = 'Record\\((.*\\[.*\\]);([0-9]+);(True|False)'
-                fields, balign, is_aligned = re.match(rstr, dtype_str).groups()
+                rstr_match = re.match(rstr, dtype_str)
+                # balign is unused, it's the alignment
+                fields, balign, is_aligned_str = rstr_match.groups()
+                is_aligned = is_aligned_str == 'True'
                 field_dts = fields.split(',')
                 struct_entries = []
                 for f in field_dts:
-                    name, stuff = f.split('[')
-                    dt_as_str = stuff.split(';')[0].split('=')[1]
-                    if "unichr" in dt_as_str:
-                        raise ValueError
+                    name, *dt_part = f.split('[')
+                    if len(dt_part) > 1:
+                        raise TypeError(f'Unsupported sub-type: {f}')
                     else:
+                        dt_part = dt_part[0]
+                        if "nestedarray" in dt_part:
+                            raise TypeError(f'Unsupported sub-type: {f}')
+                        dt_as_str = dt_part.split(';')[0].split('=')[1]
                         dtype = np.dtype(dt_as_str)
                     struct_entries.append((name, dtype))
                     # The dtype is actually a record of some sort
@@ -60,9 +81,12 @@ class NumbaArrayPrinter:
                 matcher = re.compile(r"array\((.*),(.*),(.*)\)\ \(.*")
                 arr_info = [x.strip() for x in matcher.match(ty_str).groups()]
                 dtype_str, ndim_str, order_str = arr_info
+                # fix up unichr dtype
+                if 'unichr x ' in dtype_str:
+                    dtype_str = dtype_str[1:-1].replace('unichr x ', '<U')
 
             def dwarr2inttuple(dwarr):
-                """Converts a gdb handle to a dwarf array to a tuple of ints"""
+                # Converts a gdb handle to a dwarf array to a tuple of ints
                 fields = dwarr.type.fields()
                 lo, hi = fields[0].type.range()
                 return tuple([int(dwarr[x]) for x in range(lo, hi + 1)])
@@ -77,12 +101,12 @@ class NumbaArrayPrinter:
                     # The data extent in bytes is:
                     # sum(shape * strides)
                     # get the data, then wire to as_strided
-                    shp_arr = np.array([x - 1 for x in shape])
+                    shp_arr = np.array([max(0, x - 1) for x in shape])
                     strd_arr = np.array(strides)
                     extent = np.sum(shp_arr * strd_arr)
                     extent += int(itemsize)
                     dtype_clazz = np.dtype(dtype_str, align=is_aligned)
-                    dtype = dtype_clazz  # .type
+                    dtype = dtype_clazz
                     this_proc = gdb.selected_inferior()
                     mem = this_proc.read_memory(int(data), extent)
                     arr_data = np.frombuffer(mem, dtype=dtype)

@@ -30,7 +30,7 @@ class Test(TestCase):
         foo()
 
         extension = os.path.join('numba', 'misc', 'gdb_print_extension.py')
-        driver = GdbMIDriver(__file__, init_cmds=['-x', extension], debug=True)
+        driver = GdbMIDriver(__file__, init_cmds=['-x', extension], debug=False)
         driver.set_breakpoint(line=28)
         driver.run()
         driver.check_hit_breakpoint(1)
