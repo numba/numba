@@ -214,3 +214,6 @@ config.USING_SVML = _try_enable_svml()
 # SVML state to "no SVML". See https://github.com/numba/numba/issues/4689 for
 # context.
 # ---------------------- WARNING WARNING WARNING ----------------------------
+
+from . import _version
+__version__ = _version.get_versions()['version']
