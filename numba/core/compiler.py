@@ -87,7 +87,7 @@ class Flags(TargetConfig):
     forceinline = Option(
         type=bool,
         default=False,
-        doc="TODO",
+        doc="Force inlining of the function. Overrides dbg_optnone.",
     )
     no_cpython_wrapper = Option(
         type=bool,
@@ -147,13 +147,15 @@ detail""",
     dbg_extend_lifetimes = Option(
         type=bool,
         default=False,
-        doc="Extend variable lifetime for debugging",
+        doc=("Extend variable lifetime for debugging. "
+             "This automatically turns on with debug=True."),
     )
 
     dbg_optnone = Option(
         type=bool,
         default=False,
-        doc="Disable opt for debug. Put optnone attribute in LLVM Function."
+        doc=("Disable optimization for debug. "
+             "Equivalent to adding optnone attribute in the LLVM Function.")
     )
 
 
