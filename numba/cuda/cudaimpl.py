@@ -4,7 +4,6 @@ import math
 
 from llvmlite import ir
 import llvmlite.binding as ll
-from llvmlite.ir._utils import DuplicatedNameError
 
 from numba.core.imputils import Registry, lower_cast
 from numba.core.typing.npydecl import parse_dtype, signature
@@ -525,35 +524,14 @@ def ptx_hfma(context, builder, sig, args):
     return builder.call(asm, args)
 
 
-def get_temp_predicate_register(builder):
-    f = builder.function
-    # It's possible a function could be called multiple times
-    # when lowering which can result in duplicate register predicate
-    # names. We detect this case and generate non-duplicate temporary
-    # names.
-
-    try:
-        temp_reg = f.scope.register('__$$temp1', deduplicate=False)
-    except DuplicatedNameError:
-        basename = '__$$temp'
-        count = 2
-        temp_reg = "{0}{1}".format(basename, count)
-        while f.scope.is_used(temp_reg):
-            count = count + 1
-            temp_reg = "{0}{1}".format(basename, count)
-        f.scope.register(temp_reg, deduplicate=False)
-
-    return temp_reg
-
-
 def lower_fp16_comparison(fn, op):
     @lower(fn, types.float16, types.float16)
     def ptx_fp16_comparison(context, builder, sig, args):
-        temp_reg = get_temp_predicate_register(builder)
+        temp_reg = '__$$temp3'
 
         reg_pred_fnty = ir.FunctionType(ir.VoidType(),[])
         reg_pred_asm = ir.InlineAsm(reg_pred_fnty,
-                                    f".reg .pred {temp_reg};",
+                                    f"{{ .reg .pred {temp_reg};",
                                     "")
         _ = builder.call(reg_pred_asm, [])
 
@@ -567,7 +545,7 @@ def lower_fp16_comparison(fn, op):
         selp_fnty = ir.FunctionType(ir.IntType(16),[])
 
         selp_asm = ir.InlineAsm(selp_fnty,
-                                f"selp.u16 $0, 1, 0, {temp_reg};",
+                                f"selp.u16 $0, 1, 0, {temp_reg};}}",
                                 '=h')
         selp = builder.call(selp_asm, [])
 
@@ -576,7 +554,6 @@ def lower_fp16_comparison(fn, op):
                                     builder.bitcast(selp, ir.IntType(16)),
                                     zero)
 
-        #zext = builder.zext(cmp, ir.IntType(8))
         return cmp
 
 
@@ -599,10 +576,10 @@ def lower_fp16_minmax_comparison(fn, op, cond):
             asm = ir.InlineAsm(fnty, f'{op}.f16 $0,$1,$2;', '=h,h,h')
             return builder.call(asm, args)
         else:
-            temp_reg = get_temp_predicate_register(builder)
+            temp_reg = '__$$temp3'
             reg_pred_fnty = ir.FunctionType(ir.VoidType(),[])
             reg_pred_asm = ir.InlineAsm(reg_pred_fnty,
-                                        f".reg .pred {temp_reg};",
+                                        f"{{ .reg .pred {temp_reg};",
                                         "")
             _ = builder.call(reg_pred_asm, [])
 
@@ -616,7 +593,7 @@ def lower_fp16_minmax_comparison(fn, op, cond):
             selp_fnty = ir.FunctionType(ir.IntType(16),[])
 
             selp_asm = ir.InlineAsm(selp_fnty,
-                                    f"selp.u16 $0, 1, 0, {temp_reg};",
+                                    f"selp.u16 $0, 1, 0, {temp_reg};}}",
                                     '=h')
             selp = builder.call(selp_asm, [])
 

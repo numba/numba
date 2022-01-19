@@ -1,5 +1,6 @@
 import itertools
 import numpy as np
+import operator
 import re
 from numba import cuda, int64
 from numba.cuda import compile_ptx
@@ -140,6 +141,20 @@ def simple_hle_scalar(ary, a, b):
 
 def simple_hlt_scalar(ary, a, b):
     ary[0] = cuda.fp16.hlt(a, b)
+
+
+@cuda.jit(device=True)
+def test1(x, y):
+    return cuda.fp16.hlt(x, y)
+
+
+@cuda.jit(device=True)
+def test2(x, y):
+    return cuda.fp16.hlt(x, y)
+
+
+def test_predicate_reg(r, a, b, c):
+    r[0] = test1(a, b) and test2(b, c)
 
 
 def simple_hmax_scalar(ary, a, b):
@@ -527,87 +542,45 @@ class TestCudaIntrinsic(CUDATestCase):
             self.assertIn('abs.f16', ptx)
 
     @skip_unless_cc_53
-    def test_heq(self):
-        compiled = cuda.jit("void(b1[:], f2, f2)")(simple_heq_scalar)
-        ary = np.zeros(1, dtype=np.bool8)
-        arg1 = np.float16(3.)
-        arg2 = np.float16(3.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertTrue(ary[0])
-        arg2 = np.float(4.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertFalse(ary[0])
+    def test_fp16_comparison(self):
+        fns = (simple_heq_scalar, simple_hne_scalar, simple_hge_scalar,
+               simple_hgt_scalar, simple_hle_scalar, simple_hlt_scalar)
+        ops = (operator.eq, operator.ne, operator.ge,
+               operator.gt, operator.le, operator.lt)
+
+        for fn, op in zip(fns, ops):
+            with self.subTest(op=op):
+                kernel = cuda.jit("void(b1[:], f2, f2)")(fn)
+
+                expected = np.zeros(1, dtype=np.bool8)
+                got = np.zeros(1, dtype=np.bool8)
+                arg2 = np.float16(2)
+                arg3 = np.float16(3)
+                arg4 = np.float16(4)
+
+                # Check with equal arguments
+                kernel[1, 1](got, arg3, arg3)
+                expected = op(arg3, arg3)
+                self.assertEqual(expected, got[0])
+
+                # Check with LHS < RHS
+                kernel[1, 1](got, arg3, arg4)
+                expected = op(arg3, arg4)
+                self.assertEqual(expected, got[0])
+
+                # Check with LHS > RHS
+                kernel[1, 1](got, arg3, arg2)
+                expected = op(arg3, arg2)
+                self.assertEqual(expected, got[0])
 
     @skip_unless_cc_53
-    def test_hne(self):
-        compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hne_scalar)
+    def test_register_predicate_unique(self):
+        compiled = cuda.jit("void(b1[:], f2, f2, f2)")(test_predicate_reg)
         ary = np.zeros(1, dtype=np.bool8)
-        arg1 = np.float16(3.)
+        arg1 = np.float16(2.)
         arg2 = np.float16(3.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertFalse(ary[0])
-        arg2 = np.float(4.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertTrue(ary[0])
-
-    @skip_unless_cc_53
-    def test_hge(self):
-        compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hge_scalar)
-        ary = np.zeros(1, dtype=np.bool8)
-        arg1 = np.float16(3.)
-        arg2 = np.float16(3.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertTrue(ary[0])
-        arg1 = np.float(4.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertTrue(ary[0])
-        arg1 = np.float(2.98)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertFalse(ary[0])
-
-    @skip_unless_cc_53
-    def test_hgt(self):
-        compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hgt_scalar)
-        ary = np.zeros(1, dtype=np.bool8)
-        arg1 = np.float16(3.)
-        arg2 = np.float16(3.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertFalse(ary[0])
-        arg1 = np.float(4.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertTrue(ary[0])
-        arg1 = np.float(2.98)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertFalse(ary[0])
-
-    @skip_unless_cc_53
-    def test_hle(self):
-        compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hle_scalar)
-        ary = np.zeros(1, dtype=np.bool8)
-        arg1 = np.float16(3.)
-        arg2 = np.float16(3.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertTrue(ary[0])
-        arg1 = np.float(4.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertFalse(ary[0])
-        arg1 = np.float(2.98)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertTrue(ary[0])
-
-    @skip_unless_cc_53
-    def test_hlt(self):
-        compiled = cuda.jit("void(b1[:], f2, f2)")(simple_hlt_scalar)
-        ary = np.zeros(1, dtype=np.bool8)
-        arg1 = np.float16(3.)
-        arg2 = np.float16(3.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertFalse(ary[0])
-        arg1 = np.float(4.)
-        compiled[1, 1](ary, arg1, arg2)
-        self.assertFalse(ary[0])
-        arg1 = np.float(2.98)
-        compiled[1, 1](ary, arg1, arg2)
+        arg3 = np.float16(4.)
+        compiled[1, 1](ary, arg1, arg2, arg3)
         self.assertTrue(ary[0])
 
     @skip_unless_cc_53

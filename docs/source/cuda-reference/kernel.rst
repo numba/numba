@@ -546,6 +546,8 @@ These functions return a 16-bit floating point result.
 
    Perform the comparison operation ``a <= b`` on 16-bit floating point arguments.
 
+   Returns a boolean.
+
 .. function:: numba.cuda.fp16.hmax (a, b)
 
    Perform the operation ``a if a > b else b.``
