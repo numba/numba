@@ -5,6 +5,7 @@ import subprocess
 import json
 
 from .numba_sysinfo import display_sysinfo, get_sysinfo
+from .numba_gdbinfo import display_gdbinfo
 
 
 def make_parser():
@@ -25,6 +26,8 @@ def make_parser():
                         help='Output source annotation as html')
     parser.add_argument('-s', '--sysinfo', action="store_true",
                         help='Output system information for bug reporting')
+    parser.add_argument('-g', '--gdbinfo', action="store_true",
+                        help='Output system information about gdb')
     parser.add_argument('--sys-json', nargs=1,
                         help='Saves the system info dict as a json file')
     parser.add_argument('filename', nargs='?', help='Python source filename')
@@ -45,6 +48,12 @@ def main():
     if args.sysinfo:
         print("System info:")
         display_sysinfo()
+
+    if args.gdbinfo:
+        print("GDB info:")
+        display_gdbinfo()
+
+    if args.sysinfo or args.gdbinfo:
         sys.exit(0)
 
     if args.sys_json:

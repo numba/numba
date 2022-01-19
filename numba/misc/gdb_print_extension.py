@@ -65,13 +65,15 @@ class NumbaArrayPrinter:
                 field_dts = fields.split(',')
                 struct_entries = []
                 for f in field_dts:
-                    name, *dt_part = f.split('[')
+                    splitted = f.split('[')
+                    name = splitted[0]
+                    dt_part = splitted[1:]
                     if len(dt_part) > 1:
-                        raise TypeError(f'Unsupported sub-type: {f}')
+                        raise TypeError('Unsupported sub-type: %s' % f)
                     else:
                         dt_part = dt_part[0]
                         if "nestedarray" in dt_part:
-                            raise TypeError(f'Unsupported sub-type: {f}')
+                            raise TypeError('Unsupported sub-type: %s' % f)
                         dt_as_str = dt_part.split(';')[0].split('=')[1]
                         dtype = np.dtype(dt_as_str)
                     struct_entries.append((name, dtype))
