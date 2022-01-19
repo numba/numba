@@ -16,7 +16,8 @@ from numba.core.typing.templates import signature
 from numba.core.analysis import (compute_live_map, compute_use_defs,
                             compute_cfg_from_blocks)
 from numba.core.errors import (TypingError, UnsupportedError,
-                               NumbaPendingDeprecationWarning)
+                               NumbaPendingDeprecationWarning,
+                               CompilerError)
 
 import copy
 
