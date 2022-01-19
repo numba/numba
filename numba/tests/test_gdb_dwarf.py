@@ -61,8 +61,7 @@ class TestGDBPrettyPrinterLogic(TestCase):
     # representation of Numba array and dtypes as it parses these
     # representations and recreates NumPy array/dtypes based on them!
 
-    @classmethod
-    def setUpClass(self):
+    def setUp(self):
         # Patch sys.modules with mock gdb modules such that the
         # numba.misc.gdb_print_extension can import ok, the rest of the gdb
         # classes etc are implemented later
@@ -88,8 +87,7 @@ class TestGDBPrettyPrinterLogic(TestCase):
         si = SelectedInferior()
         gdb.configure_mock(**{'selected_inferior': lambda :si})
 
-    @classmethod
-    def tearDownClass(self):
+    def tearDown(self):
         # drop the sys.modules patch
         self.patched_sys.stop()
 
