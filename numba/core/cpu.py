@@ -296,8 +296,6 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
             if not flags.is_set("dbg_extend_lifetimes"):
                 # auto turn on extend-lifetimes if debuginfo is on.
                 flags.dbg_extend_lifetimes = True
-            if not flags.is_set("dbg_optnone"):
-                flags.dbg_optnone = True
 
         if not flags.is_set("boundscheck"):
             flags.boundscheck = flags.debuginfo
@@ -312,6 +310,10 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
         flags.inherit_if_not_set("target_backend")
 
         flags.inherit_if_not_set("forceinline")
+
+        if flags.forceinline:
+            # forceinline turns off optnone, just like clang.
+            flags.optnone = False
 
 # ----------------------------------------------------------------------------
 # Internal
