@@ -309,8 +309,8 @@ class BaseLower(object):
             attrset = self.function.attributes
             attrset.add("optnone")
             # optnone requires noinline unless it has alwaysinline
-            if "alwaysinline" not in attrset:
-                attrset.add("noinline")
+            attrset.discard("alwaysinline")
+            attrset.add("noinline")
         self.entry_block = self.function.append_basic_block('entry')
         self.builder = Builder(self.entry_block)
         self.call_helper = self.call_conv.init_call_helper(self.builder)

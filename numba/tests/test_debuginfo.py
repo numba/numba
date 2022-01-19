@@ -595,6 +595,42 @@ class TestDebugInfoEmission(TestCase):
             data_type = metadata_definition_map[base_type_marker]
             self.assertRegex(data_type, expected[field])
 
+    def test_debug_optnone(self):
+        def foo():
+            n = 10
+            c = 0
+            for i in range(n):
+                c += i
+            return c
+
+        foo_debug = njit(debug=True)(foo)
+        foo_debug_optnone = njit(debug=True, dbg_optnone=True)(foo)
+
+        expected = foo()
+        test_list = [foo_debug, foo_debug_optnone]
+        firstline = foo.__code__.co_firstlineno
+        expected_lines_list = [
+            {0, firstline + 5},
+            set(range(firstline + 1, firstline + 6))
+        ]
+
+        for udt, expected_lines in zip(test_list, expected_lines_list):
+            got = udt()
+            self.assertEqual(got, expected)
+
+            # Compare the line locations in the debug info.
+            # The default version optimizes out most of the function with only
+            # the return statement remaining.
+            # The optnone version have all the lines still in there.
+            mdlist = self._get_metadata(udt, udt.signatures[0])
+            lines = set()
+            for md in mdlist:
+                m = re.match(r"!\d+ = !DILocation\(line: (\d+),", md)
+                if m:
+                    ln = int(m.group(1))
+                    lines.add(ln)
+            self.assertEqual(lines, expected_lines)
+
 
 if __name__ == '__main__':
     unittest.main()

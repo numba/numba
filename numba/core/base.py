@@ -431,7 +431,8 @@ class BaseContext(object):
         fn = cgutils.get_or_insert_function(module, fnty, fndesc.mangled_name)
         self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes, noalias=fndesc.noalias)
         if fndesc.inline:
-            fn.attributes.add('alwaysinline')
+            if 'noinline' not in fn.attributes:
+                fn.attributes.add('alwaysinline')
         return fn
 
     def declare_external_function(self, module, fndesc):

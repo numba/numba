@@ -294,6 +294,7 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
 
         if flags.debuginfo:
             if not flags.is_set("dbg_extend_lifetimes"):
+                # auto turn on extend-lifetimes if debuginfo is on.
                 flags.dbg_extend_lifetimes = True
             if not flags.is_set("dbg_optnone"):
                 flags.dbg_optnone = True
