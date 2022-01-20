@@ -3790,7 +3790,7 @@ def numpy_full_nd(context, builder, sig, args):
     def full(shape, value):
         arr = np.empty(shape, type(value))
         arr_flat = arr.flat
-        for idx, _ in enumerate(arr_flat):
+        for idx in range(len(arr_flat)):
             arr_flat[idx] = value
         return arr
 
@@ -3805,7 +3805,7 @@ def numpy_full_dtype_nd(context, builder, sig, args):
     def full(shape, value, dtype):
         arr = np.empty(shape, dtype)
         arr_flat = arr.flat
-        for idx, _ in enumerate(arr_flat):
+        for idx in range(len(arr_flat)):
             arr_flat[idx] = value
         return arr
 
@@ -3819,7 +3819,7 @@ def numpy_full_like_nd(context, builder, sig, args):
     def full_like(arr, value):
         arr = np.empty_like(arr)
         arr_flat = arr.flat
-        for idx, _ in enumerate(arr_flat):
+        for idx in range(len(arr_flat)):
             arr_flat[idx] = value
         return arr
 
@@ -3834,7 +3834,7 @@ def numpy_full_like_nd_type_spec(context, builder, sig, args):
     def full_like(arr, value, dtype):
         arr = np.empty_like(arr, dtype)
         arr_flat = arr.flat
-        for idx, _ in enumerate(arr_flat):
+        for idx in range(len(arr_flat)):
             arr_flat[idx] = value
         return arr
 
@@ -3848,7 +3848,7 @@ def numpy_ones_nd(context, builder, sig, args):
     def ones(shape):
         arr = np.empty(shape)
         arr_flat = arr.flat
-        for idx, _ in enumerate(arr_flat):
+        for idx in range(len(arr_flat)):
             arr_flat[idx] = 1
         return arr
 
@@ -3865,7 +3865,7 @@ def numpy_ones_dtype_nd(context, builder, sig, args):
     def ones(shape, dtype):
         arr = np.empty(shape, dtype)
         arr_flat = arr.flat
-        for idx, _ in enumerate(arr_flat):
+        for idx in range(len(arr_flat)):
             arr_flat[idx] = 1
         return arr
 
@@ -3879,7 +3879,7 @@ def numpy_ones_like_nd(context, builder, sig, args):
     def ones_like(arr):
         arr = np.empty_like(arr)
         arr_flat = arr.flat
-        for idx, _ in enumerate(arr_flat):
+        for idx in range(len(arr_flat)):
             arr_flat[idx] = 1
         return arr
 
@@ -3894,7 +3894,7 @@ def numpy_ones_like_dtype_nd(context, builder, sig, args):
     def ones_like(arr, dtype):
         arr = np.empty_like(arr, dtype)
         arr_flat = arr.flat
-        for idx, _ in enumerate(arr_flat):
+        for idx in range(len(arr_flat)):
             arr_flat[idx] = 1
         return arr
 
