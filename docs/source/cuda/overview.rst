@@ -41,7 +41,7 @@ Numba supports CUDA-enabled GPUs with Compute Capability 3.0 or greater.
 Support for devices with Compute Capability less than 5.3 is deprecated, and
 will be removed in the next Numba release (0.56).
 
-Devices with Compute Capability 5.3 or greater include:
+Devices with Compute Capability 5.3 or greater include (but are not limited to):
 
 - Embedded platforms: NVIDIA Jetson Nano, TX1, TX2, Xavier NX, AGX Xavier.
 - Desktop / Server GPUs: All GPUs with Pascal microarchitecture or later. E.g.

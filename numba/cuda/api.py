@@ -478,7 +478,7 @@ def detect():
         if cc < (3, 0):
             support = '[NOT SUPPORTED: CC < 3.0]'
         elif cc < (5, 3):
-            support = '[SUPPORTED  (DEPRECATED)]'
+            support = '[SUPPORTED (DEPRECATED)]'
             supported_count += 1
         else:
             support = '[SUPPORTED]'
