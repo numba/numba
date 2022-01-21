@@ -129,7 +129,7 @@ def mangle_abi_tag(abi_tag: str) -> str:
     return "B" + _len_encoded(_escape_string(abi_tag))
 
 
-def mangle_identifier(ident, template_params='', *, abi_tags=()):
+def mangle_identifier(ident, template_params='', *, abi_tags=(), uid=None):
     """
     Mangle the identifier with optional template parameters and abi_tags.
 
@@ -141,7 +141,11 @@ def mangle_identifier(ident, template_params='', *, abi_tags=()):
     m = re.match(r"(.*)(\$\d+)$", ident)
     if m:
         ident, ver = m.groups()
+        if uid is not None:
+            assert ver == f"${uid}"
         abi_tags = (ver, *abi_tags)
+    elif uid is not None:
+        abi_tags = (f"${uid}", *abi_tags)
     parts = [_len_encoded(_escape_string(x)) for x in ident.split('.')]
     enc_abi_tags = list(map(mangle_abi_tag, abi_tags))
     extras = template_params + ''.join(enc_abi_tags)
@@ -223,12 +227,12 @@ def mangle_c(ident, argtys):
     return PREFIX + mangle_identifier(ident) + mangle_args_c(argtys)
 
 
-def mangle(ident, argtys, *, abi_tags=()):
+def mangle(ident, argtys, *, abi_tags=(), uid):
     """
     Mangle identifier with Numba type objects and abi-tags.
     """
     return ''.join([PREFIX,
-                    mangle_identifier(ident, abi_tags=abi_tags),
+                    mangle_identifier(ident, abi_tags=abi_tags, uid=uid),
                     mangle_args(argtys)])
 
 

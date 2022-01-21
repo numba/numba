@@ -126,8 +126,9 @@ class CUDATargetContext(BaseContext):
     def call_conv(self):
         return CUDACallConv(self)
 
-    def mangler(self, name, argtypes, *, abi_tags=()):
-        return itanium_mangler.mangle(name, argtypes, abi_tags=abi_tags)
+    def mangler(self, name, argtypes, *, abi_tags=(), uid):
+        return itanium_mangler.mangle(name, argtypes, abi_tags=abi_tags,
+                                      uid=uid)
 
     def prepare_cuda_kernel(self, codelib, fndesc, debug,
                             nvvm_options, filename, linenum,
