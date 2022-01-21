@@ -137,6 +137,11 @@ def mangle_identifier(ident, template_params='', *, abi_tags=()):
 
     This treats '.' as '::' in C++.
     """
+    import re
+    m = re.match(r"(.*)(\$\d+)$", ident)
+    if m:
+        ident, ver = m.groups()
+        abi_tags = (ver, *abi_tags)
     parts = [_len_encoded(_escape_string(x)) for x in ident.split('.')]
     enc_abi_tags = list(map(mangle_abi_tag, abi_tags))
     extras = template_params + ''.join(enc_abi_tags)
