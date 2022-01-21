@@ -490,7 +490,7 @@ GPU support
    for an explanation of the legacy and per-thread default streams.
 
    This variable only takes effect when using Numba's internal CUDA bindings;
-   when using the NVIDIA bindings, use the variable
+   when using the NVIDIA bindings, use the environment variable
    ``CUDA_PYTHON_CUDA_PER_THREAD_DEFAULT_STREAM`` instead.
 
    .. seealso::

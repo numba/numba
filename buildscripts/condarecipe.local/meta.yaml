@@ -57,7 +57,7 @@ requirements:
     # scipy 1.0 or later
     - scipy >=1.0
     # CUDA Python 11.6 or later
-    - cuda-python >= 11.6
+    - cuda-python >=11.6
 
 test:
   requires:
