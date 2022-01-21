@@ -562,12 +562,16 @@ assert numba.threading_layer() == captured_envvar[0],\
         ]
         self.run_cmd(cmd, env=env)
 
+    @skip_no_omp
+    @skip_no_tbb
     def test_valid_env_var(self):
         default = ['tbb', 'omp', 'workqueue']
         for p in itertools.permutations(default):
             env_var = ' '.join(p)
             self.each_env_var(env_var)
 
+    @skip_no_omp
+    @skip_no_tbb
     def test_invalid_env_var(self):
         env_var = 'tbb omp workqueue notvalidhere'
         with self.assertRaises(AssertionError) as raises:
