@@ -140,6 +140,7 @@ def mangle_identifier(ident, template_params='', *, abi_tags=(), uid=None):
     import re
     m = re.match(r"(.*)(\$\d+)$", ident)
     if m:
+        raise ValueError("unexpected")
         ident, ver = m.groups()
         if uid is not None:
             assert ver == f"${uid}"

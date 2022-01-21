@@ -289,7 +289,7 @@ class BaseContext(object):
         Load target-specific registries.  Can be overridden by subclasses.
         """
 
-    def mangler(self, name, types, *, abi_tags=(), uid):
+    def mangler(self, name, types, *, abi_tags=(), uid=None):
         """
         Perform name mangling.
         """
