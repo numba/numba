@@ -1,6 +1,7 @@
 import numpy as np
-from numba import cuda, float32, int32, void
+from numba import cuda, float32, int32, void, types
 from numba.core.errors import TypingError
+from numba.core.extending import models, register_model, make_attribute_wrapper
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import skip_on_cudasim
 
@@ -51,6 +52,25 @@ def udt_invalid_3(A):
     sa = cuda.shared.array(shape=(1, A[0]), dtype=float32)
     i = cuda.grid(1)
     A[i] = sa[i, 0]
+
+
+class TestStructModelType(types.Type):
+    def __init__(self):
+        super().__init__(name="TestStructModelType")
+
+
+test_struct_model_type = TestStructModelType()
+
+
+@register_model(TestStructModelType)
+class TestStructModel(models.StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [("x", float32), ("y", float32)]
+        super().__init__(dmm, fe_type, members)
+
+
+make_attribute_wrapper(TestStructModelType, 'x', 'x')
+make_attribute_wrapper(TestStructModelType, 'y', 'y')
 
 
 class TestSharedMemoryCreation(CUDATestCase):
@@ -139,12 +159,12 @@ class TestSharedMemoryCreation(CUDATestCase):
                       "dtype=class(float32))",
                       str(raises.exception))
 
-    def check_dtype(self, f):
+    def check_dtype(self, f, dtype):
         # Find the typing of the dtype argument to cuda.shared.array
         annotation = next(iter(f.overloads.values()))._type_annotation
         l_dtype = annotation.typemap['s'].dtype
         # Ensure that the typing is correct
-        self.assertEqual(l_dtype, int32)
+        self.assertEqual(l_dtype, dtype)
 
     @skip_on_cudasim("Can't check typing in simulator")
     def test_numba_dtype(self):
@@ -155,7 +175,7 @@ class TestSharedMemoryCreation(CUDATestCase):
             s[0] = x[0]
             x[0] = s[0]
 
-        self.check_dtype(f)
+        self.check_dtype(f, int32)
 
     @skip_on_cudasim("Can't check typing in simulator")
     def test_numpy_dtype(self):
@@ -166,7 +186,7 @@ class TestSharedMemoryCreation(CUDATestCase):
             s[0] = x[0]
             x[0] = s[0]
 
-        self.check_dtype(f)
+        self.check_dtype(f, int32)
 
     @skip_on_cudasim("Can't check typing in simulator")
     def test_string_dtype(self):
@@ -177,7 +197,7 @@ class TestSharedMemoryCreation(CUDATestCase):
             s[0] = x[0]
             x[0] = s[0]
 
-        self.check_dtype(f)
+        self.check_dtype(f, int32)
 
     @skip_on_cudasim("Can't check typing in simulator")
     def test_invalid_string_dtype(self):
@@ -189,6 +209,14 @@ class TestSharedMemoryCreation(CUDATestCase):
                 s = cuda.shared.array(10, dtype='int33')
                 s[0] = x[0]
                 x[0] = s[0]
+
+    def test_type_with_struct_data_model(self):
+        @cuda.jit(void(test_struct_model_type[::1]))
+        def f(x):
+            s = cuda.shared.array(10, dtype=test_struct_model_type)
+            s[0] = x[0]
+            x[0] = s[0]
+        self.check_dtype(f, test_struct_model_type)
 
 
 if __name__ == '__main__':
