@@ -426,19 +426,6 @@ class TestSets(BaseTest):
         with self.assertRaises(KeyError) as raises:
             cfunc((1, 2, 3), (5, ))
 
-    def test_refcounted_types_forbidden(self):
-        # References are leaked on exception
-        self.disable_leak_check()
-
-        pyfunc = constructor_usecase
-        cfunc = jit(nopython=True)(pyfunc)
-        with self.assertRaises(errors.NumbaValueError) as raises:
-            cfunc("abc")
-
-        excstr = str(raises.exception)
-        self.assertIn("Use of reference counted items in 'set()'", excstr)
-        self.assertIn("offending type is: 'unicode_type'", excstr)
-
     def test_discard(self):
         pyfunc = discard_usecase
         check = self.unordered_checker(pyfunc)

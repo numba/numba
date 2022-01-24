@@ -202,11 +202,6 @@ class _SetPayload(object):
         tyctx = context.typing_context
         fnty = tyctx.resolve_value_type(operator.eq)
         sig = fnty.get_call_type(tyctx, (dtype, dtype), {})
-        for arg in sig.args:
-            if context.data_model_manager[arg].contains_nrt_meminfo():
-                msg = ("Use of reference counted items in 'set()' is "
-                       "unsupported, offending type is: '{}'.")
-                raise NumbaValueError(msg.format(arg))
         eqfn = context.get_function(fnty, sig)
 
         one = ir.Constant(intp_t, 1)
@@ -1120,7 +1115,7 @@ def _imp_dtor(context, module, set_type):
         [llvoidptr, llsize, llvoidptr],
     )
     fname = "_numba_set_dtor"
-    fn = module.get_or_insert_function(fnty, name=fname)
+    fn = cgutils.get_or_insert_function(module, fnty, name=fname)
 
     if fn.is_declaration:
         # Set linkage
