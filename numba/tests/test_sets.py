@@ -666,6 +666,14 @@ class TestTupleSets(OtherTypesTest, BaseTest):
         return list(zip(b, c, d))
 
 
+class TestUnicodeSets(OtherTypesTest, BaseTest):
+    """
+    Test sets with unicode keys.
+    """
+    def _range(self, stop):
+        return ['A{}'.format(i) for i in range(int(stop))]
+
+
 class TestUnboxing(BaseTest):
     """
     Test unboxing of Python sets into native Numba sets.

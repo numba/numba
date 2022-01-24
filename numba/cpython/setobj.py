@@ -423,6 +423,7 @@ class SetInstance(object):
 
         old_hash = entry.hash
         entry.hash = h
+        context.nrt.incref(builder, self._ty.dtype, item)
         entry.key = item
         # used++
         used = payload.used
@@ -449,6 +450,7 @@ class SetInstance(object):
             entry = payload.get_entry(i)
             old_hash = entry.hash
             entry.hash = h
+            context.nrt.incref(builder, self._ty.dtype, item)
             entry.key = item
             # used++
             used = payload.used
@@ -466,6 +468,7 @@ class SetInstance(object):
     def _remove_entry(self, payload, entry, do_resize=True):
         # Mark entry deleted
         entry.hash = ir.Constant(entry.hash.type, DELETED)
+        self._context.nrt.decref(self._builder, self._ty.dtype, entry.key)
         # used--
         used = payload.used
         one = ir.Constant(used.type, 1)
@@ -952,6 +955,7 @@ class SetInstance(object):
             entry = loop.entry
             self._add_key(payload, entry.key, entry.hash,
                           do_resize=False)
+            context.nrt.decref(builder, self._ty.dtype, entry.key)
 
         self._free_payload(old_payload.ptr)
 
@@ -964,6 +968,10 @@ class SetInstance(object):
         """
         context = self._context
         builder = self._builder
+
+        with self.payload._iterate() as loop:
+            entry = loop.entry
+            context.nrt.decref(builder, self._ty.dtype, entry.key)
 
         # Free old payload
         self._free_payload(self.payload.ptr)
@@ -1005,11 +1013,13 @@ class SetInstance(object):
         with builder.if_then(builder.load(ok), likely=True):
             if realloc:
                 meminfo = self._set.meminfo
-                ptr = context.nrt.meminfo_varsize_alloc(builder, meminfo,
-                                                        size=allocsize)
+                ptr = context.nrt.meminfo_varsize_realloc(builder, meminfo,
+                                                         size=allocsize)
                 alloc_ok = cgutils.is_null(builder, ptr)
             else:
-                meminfo = context.nrt.meminfo_new_varsize(builder, size=allocsize)
+                dtor = _imp_dtor(context, builder.module, self._ty)
+                meminfo = context.nrt.meminfo_new_varsize_dtor(
+                    builder, allocsize, builder.bitcast(dtor, cgutils.voidptr_t))
                 alloc_ok = cgutils.is_null(builder, meminfo)
 
             with builder.if_else(cgutils.is_null(builder, meminfo),
@@ -1089,6 +1099,9 @@ class SetInstance(object):
                     cgutils.raw_memcpy(builder, payload.entries,
                                        src_payload.entries, nentries,
                                        entry_size)
+                    with src_payload._iterate() as loop:
+                        entry = loop.entry
+                        context.nrt.incref(builder, self._ty.dtype, entry.key)
 
                     if DEBUG_ALLOCS:
                         context.printf(builder,
@@ -1097,6 +1110,31 @@ class SetInstance(object):
 
         return builder.load(ok)
 
+def _imp_dtor(context, module, set_type):
+    """Define the dtor for set
+    """
+    llvoidptr = context.get_value_type(types.voidptr)
+    llsize = context.get_value_type(types.uintp)
+    fnty = ir.FunctionType(
+        ir.VoidType(),
+        [llvoidptr, llsize, llvoidptr],
+    )
+    fname = "_numba_set_dtor"
+    fn = module.get_or_insert_function(fnty, name=fname)
+
+    if fn.is_declaration:
+        # Set linkage
+        fn.linkage = 'linkonce_odr'
+        # Define
+        builder = ir.IRBuilder(fn.append_basic_block())
+        set_ptr = builder.bitcast(fn.args[0], cgutils.voidptr_t.as_pointer())
+        payload = _SetPayload(context, builder, set_type, set_ptr)
+        with payload._iterate() as loop:
+            entry = loop.entry
+            context.nrt.decref(builder, set_type.dtype, entry.key)
+        builder.ret_void()
+
+    return fn
 
 class SetIterInstance(object):
 
