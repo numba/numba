@@ -1018,12 +1018,7 @@ class Lower(BaseLower):
         argvals = self.fold_call_args(
             fnty, signature, expr.args, expr.vararg, expr.kws,
         )
-        from numba.core.bytecode import FunctionIdentity
-        pyfunc = fnty.dispatcher_type.dispatcher.py_func
-        func_id = FunctionIdentity.from_function(pyfunc)
-        uid = func_id.unique_id
-
-        qualprefix = fnty.overloads[signature.args]
+        qualprefix, uid = fnty.overloads[signature.args]
         mangler = self.context.mangler or default_mangler
         abi_tags = self.fndesc.abi_tags
         mangled_name = mangler(qualprefix, signature.args, abi_tags=abi_tags,

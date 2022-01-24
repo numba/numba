@@ -33,7 +33,7 @@ class FunctionDescriptor(object):
     __slots__ = ('native', 'modname', 'qualname', 'doc', 'typemap',
                  'calltypes', 'args', 'kws', 'restype', 'argtypes',
                  'mangled_name', 'unique_name', 'env_name', 'global_dict',
-                 'inline', 'noalias', 'abi_tags')
+                 'inline', 'noalias', 'abi_tags', 'uid')
 
     def __init__(self, native, modname, qualname, unique_name, doc,
                  typemap, restype, calltypes, args, kws, mangler=None,
@@ -64,6 +64,7 @@ class FunctionDescriptor(object):
         # The mangled name *must* be unique, else the wrong function can
         # be chosen at link time.
         qualprefix = qualifying_prefix(self.modname, self.qualname)
+        self.uid = uid
         self.mangled_name = mangler(
             qualprefix, self.argtypes, abi_tags=abi_tags, uid=uid,
         )

@@ -307,22 +307,12 @@ class FunctionIdentity(serialize.ReduceMixin):
     (the two might be distinct, e.g. in the `@generated_jit` case).
     """
     _unique_ids = itertools.count(1)
-    _cache = {}
 
     @classmethod
     def from_function(cls, pyfunc):
         """
         Create the FunctionIdentity of the given function.
         """
-        if pyfunc in cls._cache:
-            obj = cls._cache[pyfunc]
-        else:
-            obj = cls._make_from_function(pyfunc)
-            cls._cache[pyfunc] = obj
-        return obj
-
-    @classmethod
-    def _make_from_function(cls, pyfunc):
         func = get_function_object(pyfunc)
         code = get_code_object(func)
         pysig = utils.pysignature(func)
