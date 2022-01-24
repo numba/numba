@@ -1018,11 +1018,11 @@ class Lower(BaseLower):
         argvals = self.fold_call_args(
             fnty, signature, expr.args, expr.vararg, expr.kws,
         )
-        qualprefix, uid = fnty.overloads[signature.args]
+        rec_ov = fnty.get_overloads(signature.args)
         mangler = self.context.mangler or default_mangler
         abi_tags = self.fndesc.abi_tags
-        mangled_name = mangler(qualprefix, signature.args, abi_tags=abi_tags,
-                               uid=uid)
+        mangled_name = mangler(rec_ov.qualname, signature.args,
+                               abi_tags=abi_tags, uid=rec_ov.uid)
         # special case self recursion
         if self.builder.function.name.startswith(mangled_name):
             res = self.context.call_internal(
