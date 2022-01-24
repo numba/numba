@@ -9,7 +9,7 @@ from numba.core import types, itanium_mangler
 from numba.core.utils import _dynamic_modname, _dynamic_module
 
 
-def default_mangler(name, argtypes, *, abi_tags=(), uid):
+def default_mangler(name, argtypes, *, abi_tags=(), uid=None):
     return itanium_mangler.mangle(name, argtypes, abi_tags=abi_tags, uid=uid)
 
 

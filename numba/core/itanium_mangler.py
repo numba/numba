@@ -228,7 +228,7 @@ def mangle_c(ident, argtys):
     return PREFIX + mangle_identifier(ident) + mangle_args_c(argtys)
 
 
-def mangle(ident, argtys, *, abi_tags=(), uid):
+def mangle(ident, argtys, *, abi_tags=(), uid=None):
     """
     Mangle identifier with Numba type objects and abi-tags.
     """
