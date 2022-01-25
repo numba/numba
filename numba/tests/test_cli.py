@@ -113,7 +113,7 @@ class TestCLI(TestCase):
         self.assertIn("GDB info", o)
         # It's not known a priori whether the extension is supported, this just
         # checks that the last logical item in the output is printed.
-        self.assertIn("Numba printing extension supported", o)
+        self.assertIn("Numba printing extension support", o)
 
 
 class TestGDBCLIInfo(TestCase):
