@@ -194,7 +194,7 @@ class TestGDBPrettyPrinterLogic(TestCase):
 
         for _ in range(n_tests):
 
-            shape = np.random.randint(1, high=6, size=np.random.randint(1, 5))
+            shape = np.random.randint(1, high=12, size=np.random.randint(1, 5))
             tmp = np.arange(np.prod(shape)).reshape(shape)
 
             slices = []
