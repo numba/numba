@@ -3798,8 +3798,9 @@ def numpy_full_nd(context, builder, sig, args):
 
     def full(shape, value):
         arr = np.empty(shape, type(value))
-        for idx in np.ndindex(arr.shape):
-            arr[idx] = value
+        arr_flat = arr.flat
+        for idx in range(len(arr_flat)):
+            arr_flat[idx] = value
         return arr
 
     res = context.compile_internal(builder, full, sig, args)
@@ -3812,8 +3813,9 @@ def numpy_full_dtype_nd(context, builder, sig, args):
 
     def full(shape, value, dtype):
         arr = np.empty(shape, dtype)
-        for idx in np.ndindex(arr.shape):
-            arr[idx] = value
+        arr_flat = arr.flat
+        for idx in range(len(arr_flat)):
+            arr_flat[idx] = value
         return arr
 
     res = context.compile_internal(builder, full, sig, args)
@@ -3825,8 +3827,9 @@ def numpy_full_like_nd(context, builder, sig, args):
 
     def full_like(arr, value):
         arr = np.empty_like(arr)
-        for idx in np.ndindex(arr.shape):
-            arr[idx] = value
+        arr_flat = arr.flat
+        for idx in range(len(arr_flat)):
+            arr_flat[idx] = value
         return arr
 
     res = context.compile_internal(builder, full_like, sig, args)
@@ -3839,8 +3842,9 @@ def numpy_full_like_nd_type_spec(context, builder, sig, args):
 
     def full_like(arr, value, dtype):
         arr = np.empty_like(arr, dtype)
-        for idx in np.ndindex(arr.shape):
-            arr[idx] = value
+        arr_flat = arr.flat
+        for idx in range(len(arr_flat)):
+            arr_flat[idx] = value
         return arr
 
     res = context.compile_internal(builder, full_like, sig, args)
@@ -3852,8 +3856,9 @@ def numpy_ones_nd(context, builder, sig, args):
 
     def ones(shape):
         arr = np.empty(shape)
-        for idx in np.ndindex(arr.shape):
-            arr[idx] = 1
+        arr_flat = arr.flat
+        for idx in range(len(arr_flat)):
+            arr_flat[idx] = 1
         return arr
 
     valty = sig.return_type.dtype
@@ -3868,8 +3873,9 @@ def numpy_ones_dtype_nd(context, builder, sig, args):
 
     def ones(shape, dtype):
         arr = np.empty(shape, dtype)
-        for idx in np.ndindex(arr.shape):
-            arr[idx] = 1
+        arr_flat = arr.flat
+        for idx in range(len(arr_flat)):
+            arr_flat[idx] = 1
         return arr
 
     res = context.compile_internal(builder, ones, sig, args)
@@ -3881,8 +3887,9 @@ def numpy_ones_like_nd(context, builder, sig, args):
 
     def ones_like(arr):
         arr = np.empty_like(arr)
-        for idx in np.ndindex(arr.shape):
-            arr[idx] = 1
+        arr_flat = arr.flat
+        for idx in range(len(arr_flat)):
+            arr_flat[idx] = 1
         return arr
 
     res = context.compile_internal(builder, ones_like, sig, args)
@@ -3895,8 +3902,9 @@ def numpy_ones_like_dtype_nd(context, builder, sig, args):
 
     def ones_like(arr, dtype):
         arr = np.empty_like(arr, dtype)
-        for idx in np.ndindex(arr.shape):
-            arr[idx] = 1
+        arr_flat = arr.flat
+        for idx in range(len(arr_flat)):
+            arr_flat[idx] = 1
         return arr
 
     res = context.compile_internal(builder, ones_like, sig, args)
@@ -4338,6 +4346,30 @@ def array_asfortranarray(context, builder, sig, args):
 @glue_lowering(np.ascontiguousarray, types.Array)
 def array_ascontiguousarray(context, builder, sig, args):
     return _as_layout_array(context, builder, sig, args, output_layout='C')
+
+
+@overload(np.ascontiguousarray)
+def array_ascontiguousarray_scalar(a):
+    """
+    This is an implementation for scalar.
+    For arrays, see `array_ascontiguousarray`.
+    """
+    if isinstance(a, (types.Number, types.Boolean,)):
+        def impl(a):
+            return np.ascontiguousarray(np.array(a))
+        return impl
+
+
+@overload(np.asfortranarray)
+def array_asfortranarray_scalar(a):
+    """
+    This is an implementation for scalar.
+    For arrays, see `array_asfortranarray`.
+    """
+    if isinstance(a, (types.Number, types.Boolean,)):
+        def impl(a):
+            return np.asfortranarray(np.array(a))
+        return impl
 
 
 @lower_builtin("array.astype", types.Array, types.DTypeSpec)

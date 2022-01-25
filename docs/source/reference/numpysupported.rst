@@ -654,7 +654,7 @@ Permutations
 Distributions
 '''''''''''''
 
-.. warning:: The `size` argument is not supported in the following functions.
+The following functions support all arguments. 
 
 * :func:`numpy.random.beta`
 * :func:`numpy.random.binomial`

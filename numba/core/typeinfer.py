@@ -1155,7 +1155,7 @@ precise type that can be inferred from the other variables. Whilst sometimes
 the type of empty lists can be inferred, this is not always the case, see this
 documentation for help:
 
-https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-untyped-list-problem
+https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-untyped-list-problem
 """
             if offender is not None:
                 # This block deals with imprecise lists
