@@ -39,7 +39,7 @@ Limitations
    several different signatures under different names).
 
 #. Exported functions do not check the types of the arguments that are passed
-   to them; the callee is expected to provide arguments of the correct type.
+   to them; the caller is expected to provide arguments of the correct type.
 
 #. AOT compilation produces generic code for your CPU's architectural family
    (for example "x86-64"), while JIT compilation produces code optimized
