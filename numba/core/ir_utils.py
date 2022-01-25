@@ -2218,9 +2218,12 @@ def check_and_legalize_ir(func_ir, flags: "numba.core.compiler.Flags"):
     enforce_no_dels(func_ir)
     # postprocess and emit ir.Dels
     post_proc = postproc.PostProcessor(func_ir)
-    ext_life = flags.dbg_extend_lifetimes or bool(config.EXTEND_VARIABLE_LIFETIMES)
+    if flags.is_set("dbg_extend_lifetimes"):
+        # function level setting take precedence over env-var config
+        ext_life = flags.dbg_extend_lifetimes
+    else:
+        ext_life = bool(config.EXTEND_VARIABLE_LIFETIMES)
     post_proc.run(True, extend_lifetimes=ext_life)
-
 
 def convert_code_obj_to_function(code_obj, caller_ir):
     """
