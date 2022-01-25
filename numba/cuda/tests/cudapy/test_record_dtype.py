@@ -420,18 +420,22 @@ class TestNestedArrays(CUDATestCase):
         np.testing.assert_equal(res, nbval[0].j[1, 0])
 
     def test_setitem(self):
-        nbarr1 = np.recarray(2, dtype=recordwith2darray)
-        nbarr1[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))],
-                             dtype=recordwith2darray)[0]
-        nbarr2 = np.recarray(2, dtype=recordwith2darray)
-        nbarr2[0] = np.array([(10, ((10, 20), (40, 50), (20, 30)))],
-                             dtype=recordwith2darray)[0]
+        def gen():
+            nbarr1 = np.recarray(1, dtype=recordwith2darray)
+            nbarr1[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))],
+                                 dtype=recordwith2darray)[0]
+            nbarr2 = np.recarray(1, dtype=recordwith2darray)
+            nbarr2[0] = np.array([(10, ((10, 20), (40, 50), (20, 30)))],
+                                 dtype=recordwith2darray)[0]
+            return nbarr1[0], nbarr2[0]
         pyfunc = record_setitem_array
-        args = nbarr1[0], nbarr2[0]
-        arr_expected = pyfunc(*args)
+        pyargs = gen()
+        pyfunc(*pyargs)
+
         cfunc = cuda.jit(pyfunc)
-        arr_res = cfunc[1, 1](*args)
-        np.testing.assert_equal(arr_res, arr_expected)
+        cuargs = gen()
+        cfunc[1, 1](*cuargs)
+        np.testing.assert_equal(pyargs, cuargs)
 
     def test_getitem_idx(self):
         # Test __getitem__ with numerical index
