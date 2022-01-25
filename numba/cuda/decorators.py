@@ -130,4 +130,8 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
 
 def declare_device(name, sig):
     argtypes, restype = sigutils.normalize_signature(sig)
+    if restype is None:
+        msg = 'Return type must be provided for device declarations'
+        raise TypeError(msg)
+
     return declare_device_function(name, restype, argtypes)
