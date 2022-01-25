@@ -87,7 +87,7 @@ class Flags(TargetConfig):
     forceinline = Option(
         type=bool,
         default=False,
-        doc="Force inlining of the function. Overrides dbg_optnone.",
+        doc="Force inlining of the function. Overrides _dbg_optnone.",
     )
     no_cpython_wrapper = Option(
         type=bool,

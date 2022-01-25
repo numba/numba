@@ -604,7 +604,7 @@ class TestDebugInfoEmission(TestCase):
             return c
 
         foo_debug = njit(debug=True)(foo)
-        foo_debug_optnone = njit(debug=True, dbg_optnone=True)(foo)
+        foo_debug_optnone = njit(debug=True, _dbg_optnone=True)(foo)
 
         expected = foo()
         test_list = [foo_debug, foo_debug_optnone]

@@ -275,8 +275,8 @@ _options_mixin = include_default_options(
     "forceinline",
     # Add "target_backend" as a accepted option for the CPU in @jit(...)
     "target_backend",
-    "dbg_extend_lifetimes",
-    "dbg_optnone",
+    "_dbg_extend_lifetimes",
+    "_dbg_optnone",
 )
 
 class CPUTargetOptions(_options_mixin, TargetOptions):
