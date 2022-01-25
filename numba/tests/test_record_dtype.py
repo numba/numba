@@ -1531,6 +1531,17 @@ class TestNestedArrays(TestCase):
         cfunc(*nbargs)
         np.testing.assert_equal(pyargs, nbargs)
 
+    def test_setitem_whole_array_error(self):
+        # Ensure we raise a suitable error when attempting to assign an
+        # array to a whole array's worth of nested arrays.
+        nbarr1 = np.recarray(1, dtype=recordwith2darray)
+        nbarr2 = np.recarray(1, dtype=recordwith2darray)
+        args = (nbarr1, nbarr2)
+        pyfunc = record_setitem_array
+        errmsg = "unsupported array index type"
+        with self.assertRaisesRegex(TypingError, errmsg):
+            self.get_cfunc(pyfunc, tuple((typeof(arg) for arg in args)))
+
     def test_getitem_idx(self):
         # Test __getitem__ with numerical index
 
