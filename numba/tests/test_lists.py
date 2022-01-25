@@ -920,6 +920,15 @@ class TestListManagedElements(ManagedListTestCase):
 
         self._check_element_equal(pyfunc)
 
+    def test_reflect_insert(self):
+        """make sure list.insert() doesn't crash for refcounted objects (see #7553)
+        """
+
+        def pyfunc(con):
+            con.insert(1, np.arange(4).astype(np.intp))
+
+        self._check_element_equal(pyfunc)
+
     def test_append(self):
         def pyfunc():
             con = []
@@ -1766,7 +1775,7 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
                 l = ['a', 1, 2j]
             else:
                 l = ['b', 2]
-            return l[0]
+            return l[0], l[1], l[0], l[1] # defeat py310 inliner
 
         with self.assertRaises(errors.TypingError) as raises:
             foo(100)

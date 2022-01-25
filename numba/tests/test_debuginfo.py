@@ -1,9 +1,13 @@
+from collections import namedtuple
 import inspect
 import re
+import numpy as np
+import math
 
 from numba.tests.support import TestCase, override_config, needs_subprocess
 from numba import jit, njit
-from numba.core import types
+from numba.core import types, utils
+from numba.core.datamodel import default_manager
 import unittest
 import llvmlite.binding as llvm
 
@@ -55,6 +59,62 @@ class TestDebugInfo(TestCase):
                 return x
             self._check(bar, sig=(types.int32,), expect=False)
 
+    def test_llvm_inliner_flag_conflict(self):
+        # bar will be marked as 'alwaysinline', but when DEBUGINFO_DEFAULT is
+        # set functions are marked as 'noinline' this results in a conflict.
+        # baz will be marked as 'noinline' as a result of DEBUGINFO_DEFAULT
+
+        @njit(forceinline=True)
+        def bar(x):
+            return math.sin(x)
+
+        @njit(forceinline=False)
+        def baz(x):
+            return math.cos(x)
+
+        @njit
+        def foo(x):
+            a = bar(x)
+            b = baz(x)
+            return a, b
+
+        # check it compiles
+        with override_config('DEBUGINFO_DEFAULT', 1):
+            result = foo(np.pi)
+
+        self.assertPreciseEqual(result, foo.py_func(np.pi))
+
+        # check the LLVM IR has bar marked as 'alwaysinline' and baz as noinline
+        full_ir = foo.inspect_llvm(foo.signatures[0])
+        module = llvm.parse_assembly(full_ir)
+        name = foo.overloads[foo.signatures[0]].fndesc.mangled_name
+        funcs = [x for x in module.functions if x.name == name]
+        self.assertEqual(len(funcs), 1)
+        func = funcs[0]
+
+        # find the function calls and save the associated statements
+        f_names = []
+        for blk in func.blocks:
+            for stmt in blk.instructions:
+                if stmt.opcode == 'call':
+                    # stmt.function.name  This is the function being called
+                    f_names.append(str(stmt).strip())
+
+        # Need to check there's two specific things in the calls in the IR
+        # 1. a call to the llvm.sin.f64 intrinsic, this is from the inlined bar
+        # 2. a call to the baz function, this is from the noinline baz
+        found_sin = False
+        found_baz = False
+        baz_name = baz.overloads[baz.signatures[0]].fndesc.mangled_name
+        for x in f_names:
+            if not found_sin and re.match('.*llvm.sin.f64.*', x):
+                found_sin = True
+            if not found_baz and re.match(f'.*{baz_name}.*', x):
+                found_baz = True
+
+        self.assertTrue(found_sin)
+        self.assertTrue(found_baz)
+
 
 class TestDebugInfoEmission(TestCase):
     """ Tests that debug info is emitted correctly.
@@ -95,7 +155,7 @@ class TestDebugInfoEmission(TestCase):
         self.assertEqual('!0', DICompileUnit[:2])
         self.assertIn('!DICompileUnit(language: DW_LANG_C_plus_plus',
                       DICompileUnit)
-        self.assertIn('producer: "Numba"', DICompileUnit)
+        self.assertIn('producer: "clang (Numba)"', DICompileUnit)
 
     def test_DILocation(self):
         """ Tests that DILocation information is reasonable.
@@ -210,7 +270,10 @@ class TestDebugInfoEmission(TestCase):
                 groups = matched.groups()
                 self.assertEqual(len(groups), 1)
                 dbg_line = int(groups[0])
-                self.assertEqual(dbg_line, pysrc_line_start)
+                # +1 for the decorator on Python 3.8+, `inspect` changed, also
+                # recall that Numba's DWARF refers to the "def" line
+                defline = pysrc_line_start + (utils.PYVERSION >= (3, 8))
+                self.assertEqual(dbg_line, defline)
                 break
         else:
             self.fail('Assertion on DILocalVariable not made')
@@ -341,7 +404,8 @@ class TestDebugInfoEmission(TestCase):
                 groups = match.groups()
                 self.assertEqual(len(groups), 1)
                 associated_lines.add(int(groups[0]))
-        self.assertEqual(len(associated_lines), 3) # 3 versions of 'c'
+        # 3 versions of 'c': `c = 0`, `return c`, `c+=1`
+        self.assertEqual(len(associated_lines), 3)
         self.assertIn(pysrc_line_start, associated_lines)
 
     def test_DILocation_versioned_variables(self):
@@ -356,6 +420,11 @@ class TestDebugInfoEmission(TestCase):
                 c = 5
             else:
                 c = 1
+            # prevents inline of return on py310
+            py310_defeat1 = 1  # noqa
+            py310_defeat2 = 2  # noqa
+            py310_defeat3 = 3  # noqa
+            py310_defeat4 = 4  # noqa
             return c
 
         sig = (types.intp,)
@@ -384,6 +453,147 @@ class TestDebugInfoEmission(TestCase):
 
         # check that the DILocation from the DI for `c` matches the python src
         self.assertEqual(associated_lines, py_lines)
+
+    def test_numeric_scalars(self):
+        """ Tests that dwarf info is correctly emitted for numeric scalars."""
+
+        DI = namedtuple('DI', 'name bits encoding')
+
+        type_infos = {np.float32: DI("float32", 32, "DW_ATE_float"),
+                      np.float64: DI("float64", 64, "DW_ATE_float"),
+                      np.int8: DI("int8", 8, "DW_ATE_signed"),
+                      np.int16: DI("int16", 16, "DW_ATE_signed"),
+                      np.int32: DI("int32", 32, "DW_ATE_signed"),
+                      np.int64: DI("int64", 64, "DW_ATE_signed"),
+                      np.uint8: DI("uint8", 8, "DW_ATE_unsigned"),
+                      np.uint16: DI("uint16", 16, "DW_ATE_unsigned"),
+                      np.uint32: DI("uint32", 32, "DW_ATE_unsigned"),
+                      np.uint64: DI("uint64", 64, "DW_ATE_unsigned"),
+                      np.complex64: DI("complex64", 64,
+                                       "DW_TAG_structure_type"),
+                      np.complex128: DI("complex128", 128,
+                                        "DW_TAG_structure_type"),}
+
+        for ty, dwarf_info in type_infos.items():
+
+            @njit(debug=True)
+            def foo():
+                a = ty(10)
+                return a
+
+            metadata = self._get_metadata(foo, sig=())
+            metadata_definition_map = dict()
+            meta_definition_split = re.compile(r'(![0-9]+) = (.*)')
+            for line in metadata:
+                matched = meta_definition_split.match(line)
+                if matched:
+                    dbg_val, info = matched.groups()
+                    metadata_definition_map[dbg_val] = info
+
+            for k, v in metadata_definition_map.items():
+                if 'DILocalVariable(name: "a"' in v:
+                    lvar = metadata_definition_map[k]
+                    break
+            else:
+                assert 0, "missing DILocalVariable 'a'"
+
+            type_marker = re.match('.*type: (![0-9]+).*', lvar).groups()[0]
+            type_decl = metadata_definition_map[type_marker]
+
+            if 'DW_ATE' in dwarf_info.encoding:
+                expected = (f'!DIBasicType(name: "{dwarf_info.name}", '
+                            f'size: {dwarf_info.bits}, '
+                            f'encoding: {dwarf_info.encoding})')
+                self.assertEqual(type_decl, expected)
+            else: # numerical complex type
+                # Don't match the whole string, just the known parts
+                raw_flt = 'float' if dwarf_info.bits == 64 else 'double'
+                expected = (f'distinct !DICompositeType('
+                            f'tag: {dwarf_info.encoding}, '
+                            f'name: "{dwarf_info.name} '
+                            f'({{{raw_flt}, {raw_flt}}})", '
+                            f'size: {dwarf_info.bits}')
+                self.assertIn(expected, type_decl)
+
+    def test_arrays(self):
+
+        @njit(debug=True)
+        def foo():
+            a = np.ones((2, 3), dtype=np.float64)
+            return a
+
+        metadata = self._get_metadata(foo, sig=())
+        metadata_definition_map = dict()
+        meta_definition_split = re.compile(r'(![0-9]+) = (.*)')
+        for line in metadata:
+            matched = meta_definition_split.match(line)
+            if matched:
+                dbg_val, info = matched.groups()
+                metadata_definition_map[dbg_val] = info
+
+        for k, v in metadata_definition_map.items():
+            if 'DILocalVariable(name: "a"' in v:
+                lvar = metadata_definition_map[k]
+                break
+        else:
+            assert 0, "missing DILocalVariable 'a'"
+
+        type_marker = re.match('.*type: (![0-9]+).*', lvar).groups()[0]
+        type_decl = metadata_definition_map[type_marker]
+
+        # check type
+        self.assertIn("!DICompositeType(tag: DW_TAG_structure_type", type_decl)
+        # check name encoding
+        self.assertIn(f'name: "{str(types.float64[:, ::1])}', type_decl)
+
+        # pop out the "elements" of the composite type
+        match_elements = re.compile(r'.*elements: (![0-9]+),.*')
+        elem_matches = match_elements.match(type_decl).groups()
+        self.assertEqual(len(elem_matches), 1)
+        elem_match = elem_matches[0]
+        # The match should be something like, it's the elements from an array
+        # data model.
+        # !{!35, !36, !37, !39, !40, !43, !45}'
+        struct_markers = metadata_definition_map[elem_match]
+        struct_pattern = '!{' + '(![0-9]+), ' * 6 + '(![0-9]+)}'
+        match_struct = re.compile(struct_pattern)
+        struct_member_matches = match_struct.match(struct_markers).groups()
+        self.assertIsNotNone(struct_member_matches is not None)
+        data_model = default_manager.lookup(types.float64[:, ::1])
+        self.assertEqual(len(struct_member_matches), len(data_model._fields))
+
+        ptr_size = types.intp.bitwidth
+        ptr_re = (r'!DIDerivedType\(tag: DW_TAG_pointer_type, '
+                  rf'baseType: ![0-9]+, size: {ptr_size}\)')
+        int_re = (rf'!DIBasicType\(name: "int{ptr_size}", size: {ptr_size}, '
+                  r'encoding: DW_ATE_signed\)')
+        utuple_re = (r'!DICompositeType\(tag: DW_TAG_array_type, '
+                     rf'name: "UniTuple\(int{ptr_size} x 2\) '
+                     rf'\(\[2 x i{ptr_size}\]\)", baseType: ![0-9]+, '
+                     rf'size: {2 * ptr_size}, elements: ![0-9]+, '
+                     rf'identifier: "\[2 x i{ptr_size}\]"\)')
+        expected = {'meminfo': ptr_re,
+                    'parent': ptr_re,
+                    'nitems': int_re,
+                    'itemsize': int_re,
+                    'data': ptr_re,
+                    'shape': utuple_re,
+                    'strides': utuple_re}
+
+        # look for `baseType: <>` for the type
+        base_type_pattern = r'!DIDerivedType\(.*, baseType: (![0-9]+),.*'
+        base_type_matcher = re.compile(base_type_pattern)
+
+        for ix, field in enumerate(data_model._fields):
+            derived_type = metadata_definition_map[struct_member_matches[ix]]
+            self.assertIn("DIDerivedType", derived_type)
+            self.assertIn(f'name: "{field}"', derived_type)
+            base_type_match = base_type_matcher.match(derived_type)
+            base_type_matches = base_type_match.groups()
+            self.assertEqual(len(base_type_matches), 1)
+            base_type_marker = base_type_matches[0]
+            data_type = metadata_definition_map[base_type_marker]
+            self.assertRegex(data_type, expected[field])
 
 
 if __name__ == '__main__':

@@ -311,7 +311,7 @@ class TestLiteralDispatch(TestCase):
             if isinstance(y, types.IntegerLiteral):
                 # This error is however suppressed because a non-literal
                 # version is valid.
-                raise ValueError("oops")
+                raise errors.NumbaValueError("oops")
             else:
                 def impl(x, y):
                     return hidden(x, y)

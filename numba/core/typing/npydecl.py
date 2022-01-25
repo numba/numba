@@ -11,7 +11,8 @@ from numba.np.numpy_support import (ufunc_find_matching_loop,
                              supported_ufunc_loop, as_dtype,
                              from_dtype, as_dtype, resolve_output_type,
                              carray, farray, _ufunc_loop_sig)
-from numba.core.errors import TypingError, NumbaPerformanceWarning
+from numba.core.errors import (TypingError, NumbaPerformanceWarning,
+                               NumbaTypeError, NumbaAssertionError)
 from numba import pndindex
 from numba.core.overload_glue import glue_typing
 
@@ -147,7 +148,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
                         # raise TypeError here because
                         # NumpyRulesArrayOperator.generic is capturing
                         # TypingError
-                        raise TypeError(msg)
+                        raise NumbaTypeError(msg)
                     elif not issubclass(output_type, types.Array):
                         msg = (f"ufunc {ufunc} on {array_ufunc_type}"
                                f"cannot return non-array {output_type}")
@@ -454,7 +455,8 @@ def parse_shape(shape):
     if isinstance(shape, types.Integer):
         ndim = 1
     elif isinstance(shape, (types.Tuple, types.UniTuple)):
-        if all(isinstance(s, types.Integer) for s in shape):
+        int_tys = (types.Integer, types.IntEnumMember)
+        if all(isinstance(s, int_tys) for s in shape):
             ndim = len(shape)
     return ndim
 
@@ -786,9 +788,9 @@ def _homogeneous_dims(context, func_name, arrays):
     ndim = arrays[0].ndim
     for a in arrays:
         if a.ndim != ndim:
-            raise TypeError("%s(): all the input arrays "
-                            "must have same number of dimensions"
-                            % func_name)
+            msg = (f"{func_name}(): all the input arrays must have same number "
+                   "of dimensions")
+            raise NumbaTypeError(msg)
     return ndim
 
 def _sequence_of_arrays(context, func_name, arrays,
@@ -1224,8 +1226,10 @@ class DiagCtor(CallableTemplate):
 class Take(AbstractTemplate):
 
     def generic(self, args, kws):
-        assert not kws
-        assert len(args) == 2
+        if kws:
+            raise NumbaAssertionError("kws not supported")
+        if len(args) != 2:
+            raise NumbaAssertionError("two arguments are required")
         arr, ind = args
         if isinstance(ind, types.Number):
             retty = arr.dtype
@@ -1256,27 +1260,27 @@ class NumbaCArray(CallableTemplate):
             elif isinstance(ptr, types.CPointer):
                 ptr_dtype = ptr.dtype
             else:
-                raise TypeError("%s(): pointer argument expected, got '%s'"
-                                % (func_name, ptr))
+                raise NumbaTypeError("%s(): pointer argument expected, got '%s'"
+                                     % (func_name, ptr))
 
             if dtype is types.none:
                 if ptr_dtype is None:
-                    raise TypeError("%s(): explicit dtype required for void* argument"
-                                    % (func_name,))
+                    raise NumbaTypeError("%s(): explicit dtype required for void* argument"
+                                         % (func_name,))
                 dtype = ptr_dtype
             elif isinstance(dtype, types.DTypeSpec):
                 dtype = dtype.dtype
                 if ptr_dtype is not None and dtype != ptr_dtype:
-                    raise TypeError("%s(): mismatching dtype '%s' for pointer type '%s'"
-                                    % (func_name, dtype, ptr))
+                    raise NumbaTypeError("%s(): mismatching dtype '%s' for pointer type '%s'"
+                                         % (func_name, dtype, ptr))
             else:
-                raise TypeError("%s(): invalid dtype spec '%s'"
-                                % (func_name, dtype))
+                raise NumbaTypeError("%s(): invalid dtype spec '%s'"
+                                     % (func_name, dtype))
 
             ndim = parse_shape(shape)
             if ndim is None:
-                raise TypeError("%s(): invalid shape '%s'"
-                                % (func_name, shape))
+                raise NumbaTypeError("%s(): invalid shape '%s'"
+                                     % (func_name, shape))
 
             return types.Array(dtype, ndim, self.layout)
 

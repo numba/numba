@@ -10,6 +10,7 @@ import numpy as np
 
 import unittest
 from numba.core import types
+from numba.core.errors import NumbaNotImplementedError
 from numba.tests.support import TestCase
 from numba.tests.enum_usecases import Shake, RequestError
 from numba.np import numpy_support
@@ -67,7 +68,7 @@ class TestFromDtype(TestCase):
         # Non-native alignments are unsupported (except for 1-byte types)
         foreign_align = '>' if sys.byteorder == 'little' else '<'
         for letter in 'hHiIlLqQfdFD':
-            self.assertRaises(NotImplementedError, f,
+            self.assertRaises(NumbaNotImplementedError, f,
                               np.dtype(foreign_align + letter))
 
     def test_string_types(self):
@@ -242,6 +243,7 @@ class TestArrayScalars(ValueTypingTestBase, TestCase):
 
 class FakeUFunc(object):
     __slots__ = ('nin', 'nout', 'types', 'ntypes')
+    __name__ = "fake ufunc"
 
     def __init__(self, types):
         self.types = types
@@ -338,7 +340,14 @@ class TestUFuncs(TestCase):
                     'mM->M', output_types=(types.NPDatetime('ms'),))
         check_exact(np_add, (types.NPDatetime('s'), types.NPTimedelta('s')),
                     'Mm->M', output_types=(types.NPDatetime('s'),))
-
+        check_exact(np_add, (types.NPDatetime('s'), types.NPTimedelta('')),
+                    'Mm->M', output_types=(types.NPDatetime('s'),))
+        check_exact(np_add, (types.NPDatetime('ns'), types.NPTimedelta('')),
+                    'Mm->M', output_types=(types.NPDatetime('ns'),))
+        check_exact(np_add, (types.NPTimedelta(''), types.NPDatetime('s')),
+                    'mM->M', output_types=(types.NPDatetime('s'),))
+        check_exact(np_add, (types.NPTimedelta(''), types.NPDatetime('ns')),
+                    'mM->M', output_types=(types.NPDatetime('ns'),))
         check_exact(np_mul, (types.NPTimedelta('s'), types.int64),
                     'mq->m', output_types=(types.NPTimedelta('s'),))
         check_exact(np_mul, (types.float64, types.NPTimedelta('s')),

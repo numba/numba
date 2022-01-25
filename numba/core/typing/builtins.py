@@ -608,7 +608,10 @@ class StaticGetItemTuple(AbstractTemplate):
         if not isinstance(tup, types.BaseTuple):
             return
         if isinstance(idx, int):
-            ret = tup.types[idx]
+            try:
+                ret = tup.types[idx]
+            except IndexError:
+                raise errors.NumbaIndexError("tuple index out of range")
         elif isinstance(idx, slice):
             ret = types.BaseTuple.from_types(tup.types[idx])
         if ret is not None:
@@ -642,7 +645,10 @@ class StaticGetItemLiteralStrKeyDict(AbstractTemplate):
         if not isinstance(tup, types.LiteralStrKeyDict):
             return
         if isinstance(idx, str):
-            lookup = tup.fields.index(idx)
+            if idx in tup.fields:
+                lookup = tup.fields.index(idx)
+            else:
+                raise errors.NumbaKeyError(f"Key '{idx}' is not in dict.")
             ret = tup.types[lookup]
         if ret is not None:
             sig = signature(ret, *args)
@@ -770,12 +776,12 @@ class SliceAttribute(AttributeTemplate):
     def resolve_indices(self, ty, args, kws):
         assert not kws
         if len(args) != 1:
-            raise TypeError(
+            raise errors.NumbaTypeError(
                 "indices() takes exactly one argument (%d given)" % len(args)
             )
         typ, = args
         if not isinstance(typ, types.Integer):
-            raise TypeError(
+            raise errors.NumbaTypeError(
                 "'%s' object cannot be interpreted as an integer" % typ
             )
         return signature(types.UniTuple(types.intp, 3), types.intp)
@@ -801,7 +807,7 @@ class NumberClassAttribute(AttributeTemplate):
                 sig = fnty.get_call_type(self.context, (val, types.DType(ty)),
                                          {})
                 return sig.return_type
-            elif isinstance(val, (types.Number, types.Boolean)):
+            elif isinstance(val, (types.Number, types.Boolean, types.IntEnumMember)):
                  # Scalar constructor, e.g. np.int32(42)
                  return ty
             elif isinstance(val, (types.NPDatetime, types.NPTimedelta)):
@@ -945,7 +951,8 @@ class Bool(AbstractTemplate):
 class Int(AbstractTemplate):
 
     def generic(self, args, kws):
-        assert not kws
+        if kws:
+            raise errors.NumbaAssertionError('kws not supported')
 
         [arg] = args
 
@@ -964,10 +971,10 @@ class Float(AbstractTemplate):
         [arg] = args
 
         if arg not in types.number_domain:
-            raise TypeError("float() only support for numbers")
+            raise errors.NumbaTypeError("float() only support for numbers")
 
         if arg in types.complex_domain:
-            raise TypeError("float() does not support complex")
+            raise errors.NumbaTypeError("float() does not support complex")
 
         if arg in types.integer_domain:
             return signature(types.float64, arg)
@@ -1011,8 +1018,8 @@ class Enumerate(AbstractTemplate):
         assert not kws
         it = args[0]
         if len(args) > 1 and not isinstance(args[1], types.Integer):
-            raise TypeError("Only integers supported as start value in "
-                            "enumerate")
+            raise errors.NumbaTypeError("Only integers supported as start "
+                                        "value in enumerate")
         elif len(args) > 2:
             #let python raise its own error
             enumerate(*args)

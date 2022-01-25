@@ -2,6 +2,7 @@ from collections import namedtuple, defaultdict
 import copy
 import os
 import sys
+import warnings
 from itertools import permutations, takewhile
 from contextlib import contextmanager
 
@@ -13,7 +14,7 @@ from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
 from numba.core import types, utils, typing, datamodel, debuginfo, funcdesc, config, cgutils, imputils
-from numba.core import event
+from numba.core import event, errors, targetconfig
 from numba import _dynfunc, _helperlib
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.pythonapi import PythonAPI
@@ -54,7 +55,7 @@ class OverloadSelector(object):
         if candidates:
             return candidates[self._best_signature(candidates)]
         else:
-            raise NotImplementedError(self, sig)
+            raise errors.NumbaNotImplementedError(f'{self}, {sig}')
 
     def _select_compatible(self, sig):
         """
@@ -80,7 +81,7 @@ class OverloadSelector(object):
                 msg = ["{n} ambiguous signatures".format(n=len(same))]
                 for sig in same:
                     msg += ["{0} => {1}".format(sig, candidates[sig])]
-                raise TypeError('\n'.join(msg))
+                raise errors.NumbaTypeError('\n'.join(msg))
         return ordered[0]
 
     def _sort_signatures(self, candidates):
@@ -288,11 +289,11 @@ class BaseContext(object):
         Load target-specific registries.  Can be overridden by subclasses.
         """
 
-    def mangler(self, name, types):
+    def mangler(self, name, types, *, abi_tags=()):
         """
         Perform name mangling.
         """
-        return funcdesc.default_mangler(name, types)
+        return funcdesc.default_mangler(name, types, abi_tags=abi_tags)
 
     def get_env_name(self, fndesc):
         """Get the environment name given a FunctionDescriptor.
@@ -397,6 +398,8 @@ class BaseContext(object):
         self._defns[func].append(impl, impl.signature)
 
     def add_user_function(self, func, fndesc, libs=()):
+        warnings.warn("Use insert_user_function instead",
+                      errors.NumbaDeprecationWarning)
         if func not in self._defns:
             msg = "{func} is not a registered user function"
             raise KeyError(msg.format(func=func))
@@ -541,8 +544,7 @@ class BaseContext(object):
         """
         assert sig is not None
         sig = sig.as_function()
-        if isinstance(fn, (types.Function, types.BoundFunction,
-                           types.Dispatcher)):
+        if isinstance(fn, types.Callable):
             key = fn.get_impl_key(sig)
             overloads = self._defns[key]
         else:
@@ -551,7 +553,7 @@ class BaseContext(object):
 
         try:
             return _wrap_impl(overloads.find(sig.args), self, sig)
-        except NotImplementedError:
+        except errors.NumbaNotImplementedError:
             pass
         if isinstance(fn, types.Type):
             # It's a type instance => try to find a definition for the type class
@@ -613,13 +615,13 @@ class BaseContext(object):
         overloads = self._getattrs[attr]
         try:
             return overloads.find((typ,))
-        except NotImplementedError:
+        except errors.NumbaNotImplementedError:
             pass
         # Lookup generic getattr implementation for this type
         overloads = self._getattrs[None]
         try:
             return overloads.find((typ,))
-        except NotImplementedError:
+        except errors.NumbaNotImplementedError:
             pass
 
         raise NotImplementedError("No definition for lowering %s.%s" % (typ, attr))
@@ -643,13 +645,13 @@ class BaseContext(object):
         overloads = self._setattrs[attr]
         try:
             return wrap_setattr(overloads.find((typ, valty)))
-        except NotImplementedError:
+        except errors.NumbaNotImplementedError:
             pass
         # Lookup generic setattr implementation for this type
         overloads = self._setattrs[None]
         try:
             return wrap_setattr(overloads.find((typ, valty)))
-        except NotImplementedError:
+        except errors.NumbaNotImplementedError:
             pass
 
         raise NotImplementedError("No definition for lowering %s.%s = %s"
@@ -709,8 +711,8 @@ class BaseContext(object):
         try:
             impl = self._casts.find((fromty, toty))
             return impl(self, builder, fromty, toty, val)
-        except NotImplementedError:
-            raise NotImplementedError(
+        except errors.NumbaNotImplementedError:
+            raise errors.NumbaNotImplementedError(
                 "Cannot cast %s to %s: %s" % (fromty, toty, val))
 
     def generic_compare(self, builder, key, argtypes, args):
@@ -832,7 +834,7 @@ class BaseContext(object):
             library = codegen.create_library(impl.__name__)
             if flags is None:
 
-                cstk = utils.ConfigStack()
+                cstk = targetconfig.ConfigStack()
                 flags = compiler.Flags()
                 if cstk:
                     tls_flags = cstk.top()
@@ -970,6 +972,11 @@ class BaseContext(object):
         if self.strict_alignment:
             offset = rectyp.offset(attr)
             elemty = rectyp.typeof(attr)
+            if isinstance(elemty, types.NestedArray):
+                # For a NestedArray we need to consider the data type of
+                # elements of the array for alignment, not the array structure
+                # itself
+                elemty = elemty.dtype
             align = self.get_abi_alignment(self.get_data_type(elemty))
             if offset % align:
                 msg = "{rec}.{attr} of type {type} is not aligned".format(
@@ -1128,9 +1135,9 @@ class BaseContext(object):
 
     def create_module(self, name):
         """Create a LLVM module
-        
+
         The default implementation in BaseContext always raises a
-        ``NotImplementedError`` exception. Subclasses should implement 
+        ``NotImplementedError`` exception. Subclasses should implement
         this method.
         """
         raise NotImplementedError

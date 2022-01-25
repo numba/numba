@@ -120,6 +120,7 @@ static int rnd_globally_initialized;
 
 static THREAD_LOCAL(rnd_state_t) numba_py_random_state;
 static THREAD_LOCAL(rnd_state_t) numba_np_random_state;
+static THREAD_LOCAL(rnd_state_t) numba_internal_random_state;
 
 /* Seed the state with random bytes */
 static int
@@ -159,6 +160,7 @@ rnd_atfork_child(void)
 {
     numba_py_random_state.is_initialized = 0;
     numba_np_random_state.is_initialized = 0;
+    numba_internal_random_state.is_initialized = 0;
 }
 #endif
 
@@ -173,6 +175,7 @@ numba_rnd_ensure_global_init(void)
 #endif
         numba_py_random_state.is_initialized = 0;
         numba_np_random_state.is_initialized = 0;
+        numba_internal_random_state.is_initialized = 0;
         rnd_globally_initialized = 1;
     }
 }
@@ -242,6 +245,14 @@ numba_get_np_random_state(void)
     return state;
 }
 
+NUMBA_EXPORT_FUNC(rnd_state_t *)
+numba_get_internal_random_state(void)
+{
+    rnd_state_t *state = &numba_internal_random_state;
+    if (!state->is_initialized)
+        rnd_implicit_init(state);
+    return state;
+}
 
 /*
  * Python-exposed helpers for state management and testing.

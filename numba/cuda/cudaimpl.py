@@ -5,18 +5,19 @@ import math
 from llvmlite import ir
 import llvmlite.binding as ll
 
-from numba.core.imputils import Registry
+from numba.core.imputils import Registry, lower_cast
 from numba.core.typing.npydecl import parse_dtype, signature
 from numba.core import types, cgutils
 from .cudadrv import nvvm
 from numba import cuda
-from numba.cuda import nvvmutils, stubs
-from numba.cuda.types import dim3, grid_group
+from numba.cuda import nvvmutils, stubs, errors
+from numba.cuda.types import dim3, grid_group, CUDADispatcher
 
 
 registry = Registry()
 lower = registry.lower
 lower_attr = registry.lower_getattr
+lower_constant = registry.lower_constant
 
 
 def initialize_dim3(builder, prefix):
@@ -403,6 +404,124 @@ def ptx_popc(context, builder, sig, args):
 @lower(stubs.fma, types.Any, types.Any, types.Any)
 def ptx_fma(context, builder, sig, args):
     return builder.fma(*args)
+
+
+def float16_float_ty_constraint(bitwidth):
+    typemap = {32: ('f32', 'f'), 64: ('f64', 'd')}
+
+    try:
+        return typemap[bitwidth]
+    except KeyError:
+        msg = f"Conversion between float16 and float{bitwidth} unsupported"
+        raise errors.CudaLoweringError(msg)
+
+
+@lower_cast(types.float16, types.Float)
+def float16_to_float_cast(context, builder, fromty, toty, val):
+    if fromty.bitwidth == toty.bitwidth:
+        return val
+
+    ty, constraint = float16_float_ty_constraint(toty.bitwidth)
+
+    fnty = ir.FunctionType(context.get_value_type(toty), [ir.IntType(16)])
+    asm = ir.InlineAsm(fnty, f"cvt.{ty}.f16 $0, $1;", f"={constraint},h")
+    return builder.call(asm, [val])
+
+
+@lower_cast(types.Float, types.float16)
+def float_to_float16_cast(context, builder, fromty, toty, val):
+    if fromty.bitwidth == toty.bitwidth:
+        return val
+
+    ty, constraint = float16_float_ty_constraint(fromty.bitwidth)
+
+    fnty = ir.FunctionType(ir.IntType(16), [context.get_value_type(fromty)])
+    asm = ir.InlineAsm(fnty, f"cvt.rn.f16.{ty} $0, $1;", f"=h,{constraint}")
+    return builder.call(asm, [val])
+
+
+def float16_int_constraint(bitwidth):
+    typemap = { 8: 'c', 16: 'h', 32: 'r', 64: 'l' }
+
+    try:
+        return typemap[bitwidth]
+    except KeyError:
+        msg = f"Conversion between float16 and int{bitwidth} unsupported"
+        raise errors.CudaLoweringError(msg)
+
+
+@lower_cast(types.float16, types.Integer)
+def float16_to_integer_cast(context, builder, fromty, toty, val):
+    bitwidth = toty.bitwidth
+    constraint = float16_int_constraint(bitwidth)
+    signedness = 's' if toty.signed else 'u'
+
+    fnty = ir.FunctionType(context.get_value_type(toty), [ir.IntType(16)])
+    asm = ir.InlineAsm(fnty,
+                       f"cvt.rni.{signedness}{bitwidth}.f16 $0, $1;",
+                       f"={constraint},h")
+    return builder.call(asm, [val])
+
+
+@lower_cast(types.Integer, types.float16)
+@lower_cast(types.IntegerLiteral, types.float16)
+def integer_to_float16_cast(context, builder, fromty, toty, val):
+    bitwidth = fromty.bitwidth
+    constraint = float16_int_constraint(bitwidth)
+    signedness = 's' if fromty.signed else 'u'
+
+    fnty = ir.FunctionType(ir.IntType(16),
+                           [context.get_value_type(fromty)])
+    asm = ir.InlineAsm(fnty,
+                       f"cvt.rn.f16.{signedness}{bitwidth} $0, $1;",
+                       f"=h,{constraint}")
+    return builder.call(asm, [val])
+
+
+def lower_fp16_binary(fn, op):
+    @lower(fn, types.float16, types.float16)
+    def ptx_fp16_binary(context, builder, sig, args):
+        fnty = ir.FunctionType(ir.IntType(16),
+                               [ir.IntType(16), ir.IntType(16)])
+        asm = ir.InlineAsm(fnty, f'{op}.f16 $0,$1,$2;', '=h,h,h')
+        return builder.call(asm, args)
+
+
+lower_fp16_binary(stubs.fp16.hadd, 'add')
+lower_fp16_binary(stubs.fp16.hsub, 'sub')
+lower_fp16_binary(stubs.fp16.hmul, 'mul')
+
+
+@lower(stubs.fp16.hneg, types.float16)
+def ptx_fp16_hneg(context, builder, sig, args):
+    fnty = ir.FunctionType(ir.IntType(16), [ir.IntType(16)])
+    asm = ir.InlineAsm(fnty, 'neg.f16 $0, $1;', '=h,h')
+    return builder.call(asm, args)
+
+
+@lower(stubs.fp16.habs, types.float16)
+def ptx_fp16_habs(context, builder, sig, args):
+    if cuda.runtime.get_version() < (10, 2):
+        # CUDA < 10.2 does not support abs.f16. For these versions, we mask
+        # off the sign bit to compute abs instead. We determine whether or
+        # not to do this based on the runtime version so that our behaviour
+        # is consistent with the version of NVVM we're using to go from
+        # NVVM IR -> PTX.
+        inst = 'and.b16 $0, $1, 0x7FFF;'
+    else:
+        inst = 'abs.f16 $0, $1;'
+
+    fnty = ir.FunctionType(ir.IntType(16), [ir.IntType(16)])
+    asm = ir.InlineAsm(fnty, inst, '=h,h')
+    return builder.call(asm, args)
+
+
+@lower(stubs.fp16.hfma, types.float16, types.float16, types.float16)
+def ptx_hfma(context, builder, sig, args):
+    argtys = [ir.IntType(16), ir.IntType(16), ir.IntType(16)]
+    fnty = ir.FunctionType(ir.IntType(16), argtys)
+    asm = ir.InlineAsm(fnty, "fma.rn.f16 $0,$1,$2,$3;", "=h,h,h,h")
+    return builder.call(asm, args)
 
 # See:
 # https://docs.nvidia.com/cuda/libdevice-users-guide/__nv_cbrt.html#__nv_cbrt
@@ -951,3 +1070,8 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
                            itemsize=context.get_constant(types.intp, itemsize),
                            meminfo=None)
     return ary._getvalue()
+
+
+@lower_constant(CUDADispatcher)
+def cuda_dispatcher_const(context, builder, ty, pyval):
+    return context.get_dummy_value()

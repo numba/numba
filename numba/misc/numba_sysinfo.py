@@ -58,6 +58,8 @@ _llvm_version = 'LLVM Version'
 _cu_dev_init = 'CUDA Device Init'
 _cu_drv_ver = 'CUDA Driver Version'
 _cu_rt_ver = 'CUDA Runtime Version'
+_cu_nvidia_bindings = 'NVIDIA CUDA Bindings'
+_cu_nvidia_bindings_used = 'NVIDIA CUDA Bindings In Use'
 _cu_detect_out, _cu_lib_test = 'CUDA Detect Output', 'CUDA Lib Test'
 # SVML info
 _svml_state, _svml_loaded = 'SVML State', 'SVML Lib Loaded'
@@ -352,9 +354,7 @@ def get_sysinfo():
             sys_info[_cu_detect_out] = output.getvalue()
             output.close()
 
-            dv = ctypes.c_int(0)
-            cudriver.cuDriverGetVersion(ctypes.byref(dv))
-            sys_info[_cu_drv_ver] = dv.value
+            sys_info[_cu_drv_ver] = cudriver.get_version()
 
             rtver = ctypes.c_int(0)
             curuntime.cudaRuntimeGetVersion(ctypes.byref(rtver))
@@ -365,6 +365,16 @@ def get_sysinfo():
                 cudadrv.libs.test(sys.platform, print_paths=False)
             sys_info[_cu_lib_test] = output.getvalue()
             output.close()
+
+            try:
+                from cuda import cuda  # noqa: F401
+                nvidia_bindings_available = True
+            except ImportError:
+                nvidia_bindings_available = False
+            sys_info[_cu_nvidia_bindings] = nvidia_bindings_available
+
+            nv_binding_used = bool(cudadrv.driver.USE_NV_BINDING)
+            sys_info[_cu_nvidia_bindings_used] = nv_binding_used
         except Exception as e:
             _warning_log.append(
                 "Warning (cuda): Probing CUDA failed "
@@ -411,7 +421,13 @@ def get_sysinfo():
         return "Unknown import problem."
 
     try:
+        # check import is ok, this means the DSO linkage is working
         from numba.np.ufunc import tbbpool  # NOQA
+        # check that the version is compatible, this is a check performed at
+        # runtime (well, compile time), it will also ImportError if there's
+        # a problem.
+        from numba.np.ufunc.parallel import _check_tbb_version_compatible
+        _check_tbb_version_compatible()
         sys_info[_tbb_thread] = True
     except ImportError as e:
         # might be a missing symbol due to e.g. tbb libraries missing
@@ -544,7 +560,10 @@ def display_sysinfo(info=None, sep_pos=45):
         ("__CUDA Information__",),
         ("CUDA Device Initialized", info.get(_cu_dev_init, '?')),
         ("CUDA Driver Version", info.get(_cu_drv_ver, '?')),
-        ("CUDA Runtime Version",info.get(_cu_rt_ver, '?')),
+        ("CUDA Runtime Version", info.get(_cu_rt_ver, '?')),
+        ("CUDA NVIDIA Bindings Available", info.get(_cu_nvidia_bindings, '?')),
+        ("CUDA NVIDIA Bindings In Use",
+         info.get(_cu_nvidia_bindings_used, '?')),
         ("CUDA Detect Output:",),
         (info.get(_cu_detect_out, "None"),),
         ("CUDA Libraries Test Output:",),

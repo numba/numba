@@ -4,7 +4,7 @@ from copy import deepcopy, copy
 import warnings
 
 from numba.core.compiler_machinery import (FunctionPass, AnalysisPass,
-                                           register_pass)
+                                           SSACompliantMixin, register_pass)
 from numba.core import (errors, types, ir, bytecode, postproc, rewrites, config,
                         transforms)
 from numba.misc.special import literal_unroll
@@ -153,7 +153,7 @@ class RewriteSemanticConstants(FunctionPass):
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
-class DeadBranchPrune(FunctionPass):
+class DeadBranchPrune(SSACompliantMixin, FunctionPass):
     _name = "dead_branch_prune"
 
     def __init__(self):
@@ -946,9 +946,51 @@ class MixedContainerUnroller(FunctionPass):
         """
         elif_tplt = "\n\telif PLACEHOLDER_INDEX in (%s,):\n\t\tSENTINEL = None"
 
+        # Note regarding the insertion of the garbage/defeat variables below:
+        # These values have been designed and inserted to defeat a specific
+        # behaviour of the cpython optimizer. The optimization was introduced
+        # in Python 3.10.
+
+        # The URL for the BPO is:
+        # https://bugs.python.org/issue44626
+        # The code for the optimization can be found at:
+        # https://github.com/python/cpython/blob/d41abe8/Python/compile.c#L7533-L7557
+
+        # Essentially the CPython optimizer will inline the exit block under
+        # certain circumstances and thus replace the jump with a return if the
+        # exit block is small enough.  This is an issue for unroller, as it
+        # looks for a jump, not a return, when it inserts the generated switch
+        # table.
+
+        # Part of the condition for this optimization to be applied is that the
+        # exit block not exceed a certain (4 at the time of writing) number of
+        # bytecode instructions. We defeat the optimizer by inserting a
+        # sufficient number of instructions so that the exit block is big
+        # enough. We don't care about this garbage, because the generated exit
+        # block is discarded anyway when we smash the switch table into the
+        # original function and so all the inserted garbage is dropped again.
+
+        # The final lines of the stacktrace w/o this will look like:
+        #
+        #  File "/numba/numba/core/untyped_passes.py", line 830, \
+        #       in inject_loop_body
+        #   sentinel_exits.add(blk.body[-1].target)
+        # AttributeError: Failed in nopython mode pipeline \
+        #       (step: handles literal_unroll)
+        # Failed in literal_unroll_subpipeline mode pipeline \
+        #       (step: performs mixed container unroll)
+        # 'Return' object has no attribute 'target'
+        #
+        # Which indicates that a Return has been found instead of a Jump
+
         b = ('def foo():\n\tif PLACEHOLDER_INDEX in (%s,):\n\t\t'
              'SENTINEL = None\n%s\n\telse:\n\t\t'
-             'raise RuntimeError("Unreachable")')
+             'raise RuntimeError("Unreachable")\n\t'
+             'py310_defeat1 = 1\n\t'
+             'py310_defeat2 = 2\n\t'
+             'py310_defeat3 = 3\n\t'
+             'py310_defeat4 = 4\n\t'
+             )
         keys = [k for k in data.keys()]
 
         elifs = []
@@ -1426,6 +1468,152 @@ class IterLoopCanonicalization(FunctionPass):
         return mutated
 
 
+@register_pass(mutates_CFG=False, analysis_only=False)
+class PropagateLiterals(FunctionPass):
+    """Implement literal propagation based on partial type inference"""
+    _name = "PropagateLiterals"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def get_analysis_usage(self, AU):
+        AU.add_required(ReconstructSSA)
+
+    def run_pass(self, state):
+        func_ir = state.func_ir
+        typemap = state.typemap
+        flags = state.flags
+
+        if not hasattr(func_ir, '_definitions') \
+                and not flags.enable_ssa:
+            func_ir._definitions = build_definitions(func_ir.blocks)
+
+        changed = False
+
+        for block in func_ir.blocks.values():
+            for assign in block.find_insts(ir.Assign):
+                value = assign.value
+                if isinstance(value, (ir.Arg, ir.Const, ir.FreeVar, ir.Global)):
+                    continue
+
+                # 1) Don't change return stmt in the form
+                # $return_xyz = cast(value=ABC)
+                # 2) Don't propagate literal values that are not primitives
+                if isinstance(value, ir.Expr) and \
+                        value.op in ('cast', 'build_map', 'build_list',
+                                     'build_tuple', 'build_set'):
+                    continue
+
+                target = assign.target
+                if not flags.enable_ssa:
+                    # SSA is disabled when doing inlining
+                    if guard(get_definition, func_ir, target.name) is None:  # noqa: E501
+                        continue
+
+                # Numba cannot safely determine if an isinstance call
+                # with a PHI node is True/False. For instance, in
+                # the case below, the partial type inference step can coerce
+                # '$z' to float, so any call to 'isinstance(z, int)' would fail.
+                #
+                #   def fn(x):
+                #       if x > 4:
+                #           z = 1
+                #       else:
+                #           z = 3.14
+                #       if isinstance(z, int):
+                #           print('int')
+                #       else:
+                #           print('float')
+                #
+                # At the moment, one avoid propagating the literal
+                # value if the argument is a PHI node
+
+                if isinstance(value, ir.Expr) and value.op == 'call':
+
+                    fn = guard(get_definition, func_ir, value.func.name)
+                    if fn is None:
+                        continue
+                    if not (isinstance(fn, ir.Global) and fn.name == 'isinstance'):  # noqa: E501
+                        continue
+
+                    for arg in value.args:
+                        # check if any of the args to isinstance is a PHI node
+                        iv = func_ir._definitions[arg.name]
+                        assert len(iv) == 1  # SSA!
+                        if isinstance(iv[0], ir.Expr) and iv[0].op == 'phi':
+                            msg = ('isinstance() cannot determine the '
+                                   f'type of variable "{arg.unversioned_name}" '
+                                   'due to a branch.')
+                            raise errors.NumbaTypeError(msg, loc=assign.loc)
+
+                lit = typemap.get(target.name, None)
+                if lit and isinstance(lit, types.Literal):
+                    # replace assign instruction by ir.Const(lit) iff
+                    # lit is a literal value
+                    rhs = ir.Const(lit.literal_value, assign.loc)
+                    new_assign = ir.Assign(rhs, target, assign.loc)
+
+                    # replace instruction
+                    block.insert_after(new_assign, assign)
+                    block.remove(assign)
+
+                    changed = True
+
+        # reset type inference now we are done with the partial results
+        state.typemap = None
+        state.calltypes = None
+
+        if changed:
+            # Rebuild definitions
+            func_ir._definitions = build_definitions(func_ir.blocks)
+
+        return changed
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class LiteralPropagationSubPipelinePass(FunctionPass):
+    """Implement literal propagation based on partial type inference"""
+    _name = "LiteralPropagation"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        # Determine whether to even attempt this pass... if there's no
+        # `isinstance` as a global or as a freevar then just skip.
+        found = False
+        func_ir = state.func_ir
+        for blk in func_ir.blocks.values():
+            for asgn in blk.find_insts(ir.Assign):
+                if isinstance(asgn.value, (ir.Global, ir.FreeVar)):
+                    if asgn.value.value is isinstance:
+                        found = True
+                        break
+            if found:
+                break
+        if not found:
+            return False
+
+        # run as subpipeline
+        from numba.core.compiler_machinery import PassManager
+        from numba.core.typed_passes import PartialTypeInference
+        pm = PassManager("literal_propagation_subpipeline")
+
+        pm.add_pass(PartialTypeInference, "performs partial type inference")
+        pm.add_pass(PropagateLiterals, "performs propagation of literal values")
+
+        # rewrite consts / dead branch pruning
+        pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
+        pm.add_pass(DeadBranchPrune, "dead branch pruning")
+
+        pm.finalize()
+        pm.run(state)
+        return True
+
+    def get_analysis_usage(self, AU):
+        AU.add_required(ReconstructSSA)
+
+
 @register_pass(mutates_CFG=True, analysis_only=False)
 class LiteralUnroll(FunctionPass):
     """Implement the literal_unroll semantics"""
@@ -1436,7 +1624,7 @@ class LiteralUnroll(FunctionPass):
 
     def run_pass(self, state):
         # Determine whether to even attempt this pass... if there's no
-        # `literal_unroll as a global or as a freevar then just skip.
+        # `literal_unroll` as a global or as a freevar then just skip.
         found = False
         func_ir = state.func_ir
         for blk in func_ir.blocks.values():

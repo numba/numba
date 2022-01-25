@@ -31,12 +31,12 @@ scheme for them to avoid leading digits.
 
 import re
 
-from numba.core import types, utils
+from numba.core import types
 
 
-# According the scheme, valid characters for mangled names are [a-zA-Z0-9_$].
-# We borrow the '$' as the escape character to encode invalid char into
-# '$xx' where 'xx' is the hex codepoint.
+# According the scheme, valid characters for mangled names are [a-zA-Z0-9_].
+# We borrow the '_' as the escape character to encode invalid char into
+# '_xx' where 'xx' is the hex codepoint.
 _re_invalid_char = re.compile(r'[^a-z0-9_]', re.I)
 
 PREFIX = "_Z"
@@ -59,6 +59,7 @@ C2CODE = {
     'unsigned long long': 'y', # unsigned __int64
     '__int128': 'n',
     'unsigned __int128': 'o',
+    'half' : 'Dh',
     'float': 'f',
     'double': 'd',
     'long double': 'e', # __float80
@@ -78,6 +79,7 @@ N2C = {
     types.int32: 'int',
     types.uint64: 'unsigned long long',
     types.int64: 'long long',
+    types.float16: 'half',
     types.float32: 'float',
     types.float64: 'double',
 }
@@ -93,8 +95,9 @@ def _escape_string(text):
     Multibyte characters are encoded into utf8 and converted into the above
     hex format.
     """
+
     def repl(m):
-        return ''.join(('$%02x' % ch)
+        return ''.join(('_%02x' % ch)
                        for ch in m.group(0).encode('utf8'))
     ret = re.sub(_re_invalid_char, repl, text)
     # Return str if we got a unicode (for py2)
@@ -122,19 +125,25 @@ def _len_encoded(string):
     return '%u%s' % (len(string), string)
 
 
-def mangle_identifier(ident, template_params=''):
+def mangle_abi_tag(abi_tag: str) -> str:
+    return "B" + _len_encoded(_escape_string(abi_tag))
+
+
+def mangle_identifier(ident, template_params='', *, abi_tags=()):
     """
-    Mangle the identifier with optional template parameters.
+    Mangle the identifier with optional template parameters and abi_tags.
 
     Note:
 
     This treats '.' as '::' in C++.
     """
     parts = [_len_encoded(_escape_string(x)) for x in ident.split('.')]
+    enc_abi_tags = list(map(mangle_abi_tag, abi_tags))
+    extras = template_params + ''.join(enc_abi_tags)
     if len(parts) > 1:
-        return 'N%s%sE' % (''.join(parts), template_params)
+        return 'N%s%sE' % (''.join(parts), extras)
     else:
-        return '%s%s' % (parts[0], template_params)
+        return '%s%s' % (parts[0], extras)
 
 
 def mangle_type_c(typ):
@@ -209,11 +218,13 @@ def mangle_c(ident, argtys):
     return PREFIX + mangle_identifier(ident) + mangle_args_c(argtys)
 
 
-def mangle(ident, argtys):
+def mangle(ident, argtys, *, abi_tags=()):
     """
-    Mangle identifier with Numba type objects and arbitrary values.
+    Mangle identifier with Numba type objects and abi-tags.
     """
-    return PREFIX + mangle_identifier(ident) + mangle_args(argtys)
+    return ''.join([PREFIX,
+                    mangle_identifier(ident, abi_tags=abi_tags),
+                    mangle_args(argtys)])
 
 
 def prepend_namespace(mangled, ns):
@@ -243,5 +254,3 @@ def _split_mangled_ident(mangled):
     ctlen = len(str(ct))
     at = ctlen + ct
     return mangled[:at], mangled[at:]
-
-
