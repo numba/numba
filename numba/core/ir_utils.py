@@ -2218,7 +2218,7 @@ def check_and_legalize_ir(func_ir, flags: "numba.core.compiler.Flags"):
     enforce_no_dels(func_ir)
     # postprocess and emit ir.Dels
     post_proc = postproc.PostProcessor(func_ir)
-    ext_life = flags.dbg_extend_lifetimes or config.EXTEND_VARIABLE_LIFETIMES
+    ext_life = flags.dbg_extend_lifetimes or bool(config.EXTEND_VARIABLE_LIFETIMES)
     post_proc.run(True, extend_lifetimes=ext_life)
 
 
