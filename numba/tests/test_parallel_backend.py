@@ -10,6 +10,7 @@ import os
 import random
 import subprocess
 import sys
+import textwrap
 import threading
 import unittest
 
@@ -528,37 +529,34 @@ class TestThreadingLayerPriority(ThreadLayerTestHelper):
 
     def each_env_var(self, env_var: str):
         """Test setting priority via env var NUMBA_THREADING_LAYER_PRIORITY.
-
-        :return: threading_layer_priority, stderr
-            (containing ``@threading_layer@``)
         """
-        env = os.environ.copy()
+        env = dict()
         env['NUMBA_THREADING_LAYER'] = 'default'
         env['NUMBA_THREADING_LAYER_PRIORITY'] = env_var
 
         code = f"""
-import numba
+                import numba
 
-# trigger threading layer decision
-# hence catching invalid THREADING_LAYER_PRIORITY
-@numba.jit(
-    'float64[::1](float64[::1], float64[::1])',
-    nopython=True,
-    parallel=True,
-)
-def plus(x, y):
-    return x + y
+                # trigger threading layer decision
+                # hence catching invalid THREADING_LAYER_PRIORITY
+                @numba.jit(
+                    'float64[::1](float64[::1], float64[::1])',
+                    nopython=True,
+                    parallel=True,
+                )
+                def plus(x, y):
+                    return x + y
 
-captured_envvar = list("{env_var}".split())
-assert numba.config.THREADING_LAYER_PRIORITY == captured_envvar, \
-    "priority mismatch"
-assert numba.threading_layer() == captured_envvar[0],\
-    "selected backend mismatch"
-"""
+                captured_envvar = list("{env_var}".split())
+                assert numba.config.THREADING_LAYER_PRIORITY == \
+                    captured_envvar, "priority mismatch"
+                assert numba.threading_layer() == captured_envvar[0],\
+                    "selected backend mismatch"
+                """
         cmd = [
             sys.executable,
             '-c',
-            code,
+            textwrap.dedent(code),
         ]
         self.run_cmd(cmd, env=env)
 
