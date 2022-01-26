@@ -138,14 +138,9 @@ class TestCudaLocalMem(CUDATestCase):
 
         darrx = cuda.device_array((10,), dtype="float32")
         darry = cuda.device_array((10,), dtype="float32")
-        # dout = cuda.device_array((10,), dtype=TestStruct)
 
         f[1, 1](darrx, darry)
         arrx, arry = darrx.copy_to_host(), darry.copy_to_host()
-        # out = dout.copy_to_host()
-        # for i, obj in enumerate(out):
-        # assert out[i].x == i
-        # assert out[i].y == i * 2
 
         for i, x in enumerate(arrx):
             assert x == i
