@@ -1,9 +1,9 @@
 import numpy as np
-from numba import cuda, float32, int32, void, types
+from numba import cuda, float32, int32, void
 from numba.core.errors import TypingError
-from numba.core.extending import models, register_model, make_attribute_wrapper
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import skip_on_cudasim
+from .utils import test_struct_model_type
 
 GLOBAL_CONSTANT = 5
 GLOBAL_CONSTANT_2 = 6
@@ -52,25 +52,6 @@ def udt_invalid_3(A):
     sa = cuda.shared.array(shape=(1, A[0]), dtype=float32)
     i = cuda.grid(1)
     A[i] = sa[i, 0]
-
-
-class TestStructModelType(types.Type):
-    def __init__(self):
-        super().__init__(name="TestStructModelType")
-
-
-test_struct_model_type = TestStructModelType()
-
-
-@register_model(TestStructModelType)
-class TestStructModel(models.StructModel):
-    def __init__(self, dmm, fe_type):
-        members = [("x", float32), ("y", float32)]
-        super().__init__(dmm, fe_type, members)
-
-
-make_attribute_wrapper(TestStructModelType, 'x', 'x')
-make_attribute_wrapper(TestStructModelType, 'y', 'y')
 
 
 class TestSharedMemoryCreation(CUDATestCase):

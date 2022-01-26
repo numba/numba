@@ -1,8 +1,9 @@
 import numpy as np
 
-from numba import cuda, int32, complex128, void
+from numba import cuda, int32, complex128, void, float32
 from numba.core.errors import TypingError
 from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
+from .utils import test_struct_model_type, TestStruct
 
 
 def culocal(A, B):
@@ -61,12 +62,12 @@ class TestCudaLocalMem(CUDATestCase):
         jculocalcomplex[1, 1](A, B)
         self.assertTrue(np.all(A == B))
 
-    def check_dtype(self, f):
+    def check_dtype(self, f, dtype):
         # Find the typing of the dtype argument to cuda.local.array
         annotation = next(iter(f.overloads.values()))._type_annotation
         l_dtype = annotation.typemap['l'].dtype
         # Ensure that the typing is correct
-        self.assertEqual(l_dtype, int32)
+        self.assertEqual(l_dtype, dtype)
 
     @skip_on_cudasim("Can't check typing in simulator")
     def test_numba_dtype(self):
@@ -77,7 +78,7 @@ class TestCudaLocalMem(CUDATestCase):
             l[0] = x[0]
             x[0] = l[0]
 
-        self.check_dtype(f)
+        self.check_dtype(f, int32)
 
     @skip_on_cudasim("Can't check typing in simulator")
     def test_numpy_dtype(self):
@@ -88,7 +89,7 @@ class TestCudaLocalMem(CUDATestCase):
             l[0] = x[0]
             x[0] = l[0]
 
-        self.check_dtype(f)
+        self.check_dtype(f, int32)
 
     @skip_on_cudasim("Can't check typing in simulator")
     def test_string_dtype(self):
@@ -99,7 +100,7 @@ class TestCudaLocalMem(CUDATestCase):
             l[0] = x[0]
             x[0] = l[0]
 
-        self.check_dtype(f)
+        self.check_dtype(f, int32)
 
     @skip_on_cudasim("Can't check typing in simulator")
     def test_invalid_string_dtype(self):
@@ -111,6 +112,45 @@ class TestCudaLocalMem(CUDATestCase):
                 l = cuda.local.array(10, dtype='int33')
                 l[0] = x[0]
                 x[0] = l[0]
+
+    def test_type_with_struct_data_model(self):
+        @cuda.jit(void(test_struct_model_type[::1]))
+        def f(x):
+            l = cuda.local.array(10, dtype=test_struct_model_type)
+            l[0] = x[0]
+            x[0] = l[0]
+
+        self.check_dtype(f, test_struct_model_type)
+
+    def test_struct_model_type_arr(self):
+        @cuda.jit(void(float32[::1], float32[::1]))
+        def f(outx, outy):
+            # Test creation
+            arr = cuda.local.array(10, dtype=test_struct_model_type)
+            # Test set to arr
+            for i in range(len(arr)):
+                obj = TestStruct(float32(i), float32(i * 2))
+                arr[i] = obj
+            # Test get from arr
+            for i in range(len(arr)):
+                outx[i] = arr[i].x
+                outy[i] = arr[i].y
+
+        darrx = cuda.device_array((10,), dtype="float32")
+        darry = cuda.device_array((10,), dtype="float32")
+        # dout = cuda.device_array((10,), dtype=TestStruct)
+
+        f[1, 1](darrx, darry)
+        arrx, arry = darrx.copy_to_host(), darry.copy_to_host()
+        # out = dout.copy_to_host()
+        # for i, obj in enumerate(out):
+        # assert out[i].x == i
+        # assert out[i].y == i * 2
+
+        for i, x in enumerate(arrx):
+            assert x == i
+        for i, y in enumerate(arry):
+            assert y == i * 2
 
 
 if __name__ == '__main__':

@@ -1,10 +1,11 @@
-from numba import cuda, int32, float64
+from numba import cuda, int32, float64, void, float32
 
 from numba.cuda.testing import unittest, CUDATestCase
 
 import numpy as np
 from numba.np import numpy_support as nps
 
+from .utils import test_struct_model_type, TestStruct
 
 recordwith2darray = np.dtype([('i', np.int32),
                               ('j', np.float32, (3, 2))])
@@ -373,6 +374,36 @@ class TestSharedMemory(CUDATestCase):
         sm_slice_copy[nblocks, nthreads, 0, nshared](arr, d_result, chunksize)
         host_result = d_result.copy_to_host()
         np.testing.assert_array_equal(arr, host_result)
+
+    def test_struct_model_type(self):
+        @cuda.jit(void(float32[::1], float32[::1]))
+        def f(outx, outy):
+            # Test creation
+            arr = cuda.shared.array(10, dtype=test_struct_model_type)
+            # Test set to arr
+            for i in range(len(arr)):
+                obj = TestStruct(float32(i), float32(i * 2))
+                arr[i] = obj
+            # Test get from arr
+            for i in range(len(arr)):
+                outx[i] = arr[i].x
+                outy[i] = arr[i].y
+
+        darrx = cuda.device_array((10,), dtype="float32")
+        darry = cuda.device_array((10,), dtype="float32")
+        # dout = cuda.device_array((10,), dtype=TestStruct)
+
+        f[1, 1](darrx, darry)
+        arrx, arry = darrx.copy_to_host(), darry.copy_to_host()
+        # out = dout.copy_to_host()
+        # for i, obj in enumerate(out):
+        # assert out[i].x == i
+        # assert out[i].y == i * 2
+
+        for i, x in enumerate(arrx):
+            assert x == i
+        for i, y in enumerate(arry):
+            assert y == i * 2
 
 
 if __name__ == '__main__':
