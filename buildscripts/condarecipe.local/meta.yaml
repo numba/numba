@@ -46,8 +46,8 @@ requirements:
     - python >=3.7
     - numpy >=1.18
     - setuptools
-    # On channel https://anaconda.org/numba/
     - importlib_metadata       # [py<39]
+    # On channel https://anaconda.org/numba/
     - llvmlite >=0.39.0dev0,<0.39
   run_constrained:
     # If TBB is present it must be at least version 2021
