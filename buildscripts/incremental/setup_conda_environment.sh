@@ -96,7 +96,8 @@ elif [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
 fi
 
 # Install latest llvmlite build
-$CONDA_INSTALL -c numba/label/dev llvmlite
+# hack for release0.55 branch
+$CONDA_INSTALL -c numba/label/dev llvmlite=0.38
 
 
 # Install dependencies for building the documentation
