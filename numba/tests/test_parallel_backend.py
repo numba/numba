@@ -530,7 +530,7 @@ class TestThreadingLayerPriority(ThreadLayerTestHelper):
     def each_env_var(self, env_var: str):
         """Test setting priority via env var NUMBA_THREADING_LAYER_PRIORITY.
         """
-        env = dict()
+        env = os.environ.copy()
         env['NUMBA_THREADING_LAYER'] = 'default'
         env['NUMBA_THREADING_LAYER_PRIORITY'] = env_var
 
