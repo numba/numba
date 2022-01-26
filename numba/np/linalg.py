@@ -2253,7 +2253,7 @@ def _get_norm_impl(a, ord_flag, axis):
     elif a.ndim == 2:
         # 2D cases
 
-        if axis < 0 or axis >= 2:
+        if axis != None and axis not in (0, 1):
             raise ValueError("Invalid axis for 2d array.")
 
         # handle "ord" being "None"
