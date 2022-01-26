@@ -307,10 +307,9 @@ class BaseLower(object):
         self.function = self.context.declare_function(self.module, fndesc)
         if self.flags.dbg_optnone:
             attrset = self.function.attributes
-            attrset.add("optnone")
-            # optnone requires noinline unless it has alwaysinline
-            attrset.discard("alwaysinline")
-            attrset.add("noinline")
+            if "alwaysinline" not in attrset:
+                attrset.add("optnone")
+                attrset.add("noinline")
         self.entry_block = self.function.append_basic_block('entry')
         self.builder = Builder(self.entry_block)
         self.call_helper = self.call_conv.init_call_helper(self.builder)

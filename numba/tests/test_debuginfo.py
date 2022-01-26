@@ -596,6 +596,24 @@ class TestDebugInfoEmission(TestCase):
             self.assertRegex(data_type, expected[field])
 
     def test_debug_optnone(self):
+        def get_debug_lines(fn):
+            # Get the lines contained in the debug info
+            mdlist = self._get_metadata(fn, fn.signatures[0])
+            lines = set()
+            for md in mdlist:
+                m = re.match(r"!\d+ = !DILocation\(line: (\d+),", md)
+                if m:
+                    ln = int(m.group(1))
+                    lines.add(ln)
+            return lines
+
+        def get_func_attrs(fn):
+            cres = fn.overloads[fn.signatures[0]]
+            lib = cres.library
+            fn = lib._final_module.get_function(cres.fndesc.mangled_name)
+            attrs = set(b' '.join(fn.attributes).split())
+            return attrs
+
         def foo():
             n = 10
             c = 0
@@ -605,31 +623,48 @@ class TestDebugInfoEmission(TestCase):
 
         foo_debug = njit(debug=True)(foo)
         foo_debug_optnone = njit(debug=True, _dbg_optnone=True)(foo)
+        foo_debug_optnone_inline = njit(debug=True, _dbg_optnone=True,
+                                        forceinline=True)(foo)
 
-        expected = foo()
-        test_list = [foo_debug, foo_debug_optnone]
         firstline = foo.__code__.co_firstlineno
-        expected_lines_list = [
-            {0, firstline + 5},
-            set(range(firstline + 1, firstline + 6))
-        ]
 
-        for udt, expected_lines in zip(test_list, expected_lines_list):
-            got = udt()
-            self.assertEqual(got, expected)
+        expected_info = {}
+        expected_info[foo_debug] = dict(
+            # just the dummy line-0 and the line of the return statement
+            lines={0, firstline + 5},
+            must_have_attrs=set(),
+            must_not_have_attrs=set([b"optnone"]),
+        )
+        expected_info[foo_debug_optnone] = dict(
+            # all the lines should be included
+            lines=set(range(firstline + 1, firstline + 6)),
+            must_have_attrs=set([b"optnone"]),
+            must_not_have_attrs=set(),
+        )
+        expected_info[foo_debug_optnone_inline] = dict(
+            # optnone=True is overriden by forceinline, so this looks like the
+            # foo_debug version
+            lines={0, firstline + 5},
+            must_have_attrs=set([b"alwaysinline"]),
+            must_not_have_attrs=set([b"optnone"]),
+        )
 
-            # Compare the line locations in the debug info.
-            # The default version optimizes out most of the function with only
-            # the return statement remaining.
-            # The optnone version have all the lines still in there.
-            mdlist = self._get_metadata(udt, udt.signatures[0])
-            lines = set()
-            for md in mdlist:
-                m = re.match(r"!\d+ = !DILocation\(line: (\d+),", md)
-                if m:
-                    ln = int(m.group(1))
-                    lines.add(ln)
-            self.assertEqual(lines, expected_lines)
+        expected_ret = foo()
+
+        for udt, expected in expected_info.items():
+            with self.subTest(udt.targetoptions):
+                got = udt()
+                self.assertEqual(got, expected_ret)
+
+                # Compare the line locations in the debug info.
+                self.assertEqual(get_debug_lines(udt), expected["lines"])
+
+                # Check for attributes on the LLVM function
+                attrs = get_func_attrs(udt)
+                must_have = expected["must_have_attrs"]
+                self.assertEqual(attrs & must_have, must_have)
+                must_not_have = expected["must_not_have_attrs"]
+                self.assertFalse(attrs & must_not_have)
 
 
 if __name__ == '__main__':
