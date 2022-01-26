@@ -207,7 +207,7 @@ class DIBuilder(AbstractDIBuilder):
             # Struct type
             meta = []
             offset = 0
-            if datamodel is None:
+            if datamodel is None or not datamodel.inner_models():
                 name = f"Anonymous struct ({str(lltype)})"
                 for field_id, element in enumerate(lltype.elements):
                     size = self.cgctx.get_abi_sizeof(element)

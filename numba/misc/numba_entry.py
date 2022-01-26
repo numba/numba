@@ -18,10 +18,6 @@ def make_parser():
                         help='Dump the optimized llvm assembly')
     parser.add_argument('--dump-assembly', action='store_true',
                         help='Dump the LLVM generated assembly')
-    parser.add_argument('--dump-cfg', action="store_true",
-                        help='[Deprecated] Dump the control flow graph')
-    parser.add_argument('--dump-ast', action="store_true",
-                        help='[Deprecated] Dump the AST')
     parser.add_argument('--annotate-html', nargs=1,
                         help='Output source annotation as html')
     parser.add_argument('-s', '--sysinfo', action="store_true",
@@ -37,13 +33,6 @@ def make_parser():
 def main():
     parser = make_parser()
     args = parser.parse_args()
-
-    if args.dump_cfg:
-        print("CFG dump is removed.")
-        sys.exit(1)
-    if args.dump_ast:
-        print("AST dump is removed.  Numba no longer depends on AST.")
-        sys.exit(1)
 
     if args.sysinfo:
         print("System info:")
