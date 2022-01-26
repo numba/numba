@@ -64,7 +64,7 @@ class PostProcessor(object):
     A post-processor for Numba IR.
     """
 
-    def __init__(self, func_ir: ir.FunctionIR):
+    def __init__(self, func_ir):
         self.func_ir = func_ir
 
     def run(self, emit_dels: bool = False, extend_lifetimes: bool = False):
