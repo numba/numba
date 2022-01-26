@@ -107,7 +107,8 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                                           fastmath=fastmath)
             else:
                 def autojitwrapper(func):
-                    return jit(func, device=device, debug=debug, opt=opt, **kws)
+                    return jit(func, device=device, debug=debug, opt=opt,
+                               link=link, **kws)
 
             return autojitwrapper
         # func_or_sig is a function
@@ -129,4 +130,8 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
 
 def declare_device(name, sig):
     argtypes, restype = sigutils.normalize_signature(sig)
+    if restype is None:
+        msg = 'Return type must be provided for device declarations'
+        raise TypeError(msg)
+
     return declare_device_function(name, restype, argtypes)

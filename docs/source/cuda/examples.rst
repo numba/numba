@@ -27,6 +27,15 @@ Here is a naïve implementation of matrix multiplication using a CUDA kernel:
    :dedent: 8
    :linenos:
 
+An example usage of this function is as follows:
+
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_matmul.py
+   :language: python
+   :caption: from ``test_ex_matmul`` in ``numba/cuda/tests/doc_examples/test_matmul.py``
+   :start-after: magictoken.ex_run_matmul.begin
+   :end-before: magictoken.ex_run_matmul.end
+   :dedent: 8
+   :linenos:
 
 This implementation is straightforward and intuitive but performs poorly,
 because the same matrix elements will be loaded multiple times from device
@@ -56,7 +65,7 @@ It synchronizes again after the computation to ensure all threads
 have finished with the data in shared memory before overwriting it
 in the next loop iteration.
 
-An example usage of this function is as follows:
+An example usage of the ``fast_matmul`` function is as follows:
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_matmul.py
    :language: python

@@ -12,7 +12,7 @@ class Test(TestCase):
     def test(self):
         @njit(debug=True)
         def foo(x):
-            z = 7 + x # break here
+            z = np.ones_like(x) # break here
             return x, z
 
         tmp = np.ones(5)

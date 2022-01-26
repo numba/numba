@@ -135,7 +135,11 @@ class _EnvReloader(object):
                 CUDA_USE_NVIDIA_BINDING = False
 
             if CUDA_PER_THREAD_DEFAULT_STREAM:  # noqa: F821
-                warnings.warn("PTDS is not supported with CUDA Python")
+                warnings.warn("PTDS support is handled by CUDA Python when "
+                              "using the NVIDIA binding. Please set the "
+                              "environment variable "
+                              "CUDA_PYTHON_CUDA_PER_THREAD_DEFAULT_STREAM to 1 "
+                              "instead.")
 
     def process_environ(self, environ):
         def _readenv(name, ctor, default):
