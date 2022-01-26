@@ -2119,9 +2119,9 @@ def raise_on_unsupported_feature(func_ir, typemap):
                "in a function is unsupported (strange things happen!), use "
                "numba.gdb_breakpoint() to create additional breakpoints "
                "instead.\n\nRelevant documentation is available here:\n"
-               "https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html"
-               "/troubleshoot.html#using-numba-s-direct-gdb-bindings-in-"
-               "nopython-mode\n\nConflicting calls found at:\n %s")
+               "https://numba.readthedocs.io/en/stable/user/troubleshoot.html"
+               "#using-numba-s-direct-gdb-bindings-in-nopython-mode\n\n"
+               "Conflicting calls found at:\n %s")
         buf = '\n'.join([x.strformat() for x in gdb_calls])
         raise UnsupportedError(msg % buf)
 
@@ -2137,7 +2137,7 @@ def warn_deprecated(func_ir, typemap):
                 arg = name.split('.')[1]
                 fname = func_ir.func_id.func_qualname
                 tyname = 'list' if isinstance(ty, types.List) else 'set'
-                url = ("https://numba.pydata.org/numba-doc/latest/reference/"
+                url = ("https://numba.readthedocs.io/en/stable/reference/"
                        "deprecation.html#deprecation-of-reflection-for-list-and"
                        "-set-types")
                 msg = ("\nEncountered the use of a type that is scheduled for "

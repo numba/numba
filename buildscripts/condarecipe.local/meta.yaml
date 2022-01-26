@@ -35,7 +35,7 @@ requirements:
     - numpy
     - setuptools
     # On channel https://anaconda.org/numba/
-    - llvmlite >=0.38.0dev0,<0.38
+    - llvmlite >=0.39.0dev0,<0.39
     # TBB devel version is to match TBB libs.
     # 2020.3 is the last version with the "old" ABI
     # NOTE: ppc64le exclusion is temporary until packages are more generally
@@ -46,7 +46,7 @@ requirements:
     - numpy >=1.18
     - setuptools
     # On channel https://anaconda.org/numba/
-    - llvmlite >=0.38.0dev0,<0.38
+    - llvmlite >=0.39.0dev0,<0.39
   run_constrained:
     # If TBB is present it must be at least version 2021
     - tbb >=2021    # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
@@ -56,6 +56,8 @@ requirements:
     - cudatoolkit >=9.2
     # scipy 1.0 or later
     - scipy >=1.0
+    # CUDA Python 11.6 or later
+    - cuda-python >=11.6
 
 test:
   requires:

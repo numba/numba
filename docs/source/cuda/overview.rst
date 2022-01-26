@@ -64,10 +64,12 @@ CUDA Bindings
 
 Numba supports interacting with the CUDA Driver API via the `NVIDIA CUDA Python
 bindings <https://nvidia.github.io/cuda-python/>`_ and its own ctypes-based
-binding. The ctypes-based binding is presently the default as Per-Thread
-Default Streams and the profiler APIs are not supported with the NVIDIA
-bindings, but otherwise functionality is equivalent between the two. You can
-install the NVIDIA bindings with::
+bindings. Functionality is equivalent between the two bindings. The
+ctypes-based bindings are presently the default, but the NVIDIA bindings will
+be used by default (if they are available in the environment) in a future Numba
+release.
+
+You can install the NVIDIA bindings with::
 
    $ conda install nvidia::cuda-python
 

@@ -15,11 +15,13 @@ labels: task
     - [ ] "PR with changelog entries".
 * [ ] Create X.Y release branch.
 * [ ] Pin llvmlite to `>=0.A.0rc1,<0.A+1.0`.
+* [ ] Pin NumPy if needed
+* [ ] Pin tbb if needed
 * [ ] Annotated tag X.Y.Zrc1 on release branch.
 * [ ] Build and upload conda packages on buildfarm (check "upload").
 * [ ] Build wheels (`$PYTHON_VERSIONS`) on the buildfarm.
-* [ ] Upload wheels and sdist to PyPI (upload from `ci_artifacts`).
 * [ ] Verify packages uploaded to Anaconda Cloud and move to `numba/label/main`.
+* [ ] Upload wheels and sdist to PyPI (upload from `ci_artifacts`).
 * [ ] Verify wheels for all platforms arrived on PyPi.
 * [ ] Initialize and verify ReadTheDocs build.
 * [ ] Clean up `ci_artifacts`.
