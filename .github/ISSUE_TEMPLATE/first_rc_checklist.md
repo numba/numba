@@ -11,6 +11,7 @@ labels: task
 
 * [ ] Merge to master.
     - [ ] "remaining Pull-Requests from milestone".
+* [ ] Review deprecation schedule and notices. Make PRs if need be.
 * [ ] Merge change log changes.
     - [ ] "PR with changelog entries".
 * [ ] Create X.Y release branch.
