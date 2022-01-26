@@ -443,8 +443,8 @@ JIT options for debug
 * ``_dbg_optnone`` (bool). Set to ``True`` to disable all LLVM optimization passes 
   on the function. Defaults to ``False``. See :envvar:`NUMBA_OPT` for a global setting
   to disable optimization.
-* ``_dbg_extend_lifetimes`` (bool). Set to ``True` to extend object lifetimes to match 
-  closer to Python semantic for the function. Automatically set to ``True` when 
+* ``_dbg_extend_lifetimes`` (bool). Set to ``True`` to extend object lifetimes to match 
+  closer to Python semantic for the function. Automatically set to ``True`` when 
   ``debug=True``; otherwise, defaults to ``False``. Users can explicitly set this option 
   to ``False`` to retain  semantic of normal execution of compiled code.
   See :envvar:`NUMBA_EXTEND_VARIABLE_LIFETIMES` for a global option to extend object 
