@@ -125,7 +125,8 @@ class TestGDBCLIInfo(TestCase):
         self._patches = []
 
         mock_init = lambda self: None
-        mock.patch.object(_GDBTestWrapper, '__init__', mock_init)
+        self._patches.append(mock.patch.object(_GDBTestWrapper, '__init__',
+                                               mock_init))
 
         bpath = 'numba.misc.numba_gdbinfo._GDBTestWrapper.gdb_binary'
         self._patches.append(mock.patch(bpath, 'PATH_TO_GDB'))
