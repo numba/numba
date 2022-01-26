@@ -97,6 +97,12 @@ class NumbaIRAssumptionWarning(NumbaPedanticWarning):
     Warning category for reporting an IR assumption violation.
     """
 
+
+class NumbaDebugInfoWarning(NumbaWarning):
+    """
+    Warning category for an issue with the emission of debug information.
+    """
+
 # These are needed in the color formatting of errors setup
 
 
