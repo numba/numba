@@ -2548,8 +2548,7 @@ def array_record_getitem(context, builder, sig, args):
 @lower_getattr_generic(types.Record)
 def record_getattr(context, builder, typ, value, attr):
     """
-    Generic getattr() implementation for records: fetch the given
-    record member, i.e. a scalar.
+    Generic getattr() implementation for records: get the given record member.
     """
     context.sentry_record_alignment(typ, attr)
     offset = typ.offset(attr)
@@ -2589,8 +2588,7 @@ def record_getattr(context, builder, typ, value, attr):
 @lower_setattr_generic(types.Record)
 def record_setattr(context, builder, sig, args, attr):
     """
-    Generic setattr() implementation for records: set the given
-    record member, i.e. a scalar.
+    Generic setattr() implementation for records: set the given record member.
     """
     typ, valty = sig.args
     target, val = args
@@ -2599,11 +2597,22 @@ def record_setattr(context, builder, sig, args, attr):
     offset = typ.offset(attr)
     elemty = typ.typeof(attr)
 
-    dptr = cgutils.get_record_member(builder, target, offset,
-                                     context.get_data_type(elemty))
-    val = context.cast(builder, val, valty, elemty)
-    align = None if typ.aligned else 1
-    context.pack_value(builder, elemty, val, dptr, align=align)
+    if isinstance(elemty, types.NestedArray):
+        # Copy the data from the RHS into the nested array
+        val_struct = cgutils.create_struct_proxy(valty)(context, builder,
+                                                        value=args[1])
+        src = val_struct.data
+        dest = cgutils.get_record_member(builder, target, offset,
+                                         src.type.pointee)
+        cgutils.memcpy(builder, dest, src,
+                       context.get_constant(types.intp, elemty.nitems))
+    else:
+        # Set the given scalar record member
+        dptr = cgutils.get_record_member(builder, target, offset,
+                                         context.get_data_type(elemty))
+        val = context.cast(builder, val, valty, elemty)
+        align = None if typ.aligned else 1
+        context.pack_value(builder, elemty, val, dptr, align=align)
 
 
 @lower_builtin('static_getitem', types.Record, types.StringLiteral)
