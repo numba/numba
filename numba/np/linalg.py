@@ -2149,7 +2149,7 @@ def _oneD_norm_2_impl(a):
     return impl
 
 
-def _get_norm_impl(a, ord_flag):
+def _get_norm_impl(a, ord_flag, axis):
     # This function is quite involved as norm supports a large
     # range of values to select different norm types via kwarg `ord`.
     # The implementation below branches on dimension of the input
@@ -2164,6 +2164,11 @@ def _get_norm_impl(a, ord_flag):
     # The return type is always a float, numba differs from numpy in
     # that it returns an input precision specific value whereas numpy
     # always returns np.float64.
+
+    # This function supports computing the norm of an array along a specific
+    # axis. By default, axis=None which means that the `ord` norm of the array
+    # is computed. Specifying an axis computes the norm of the array along
+    # the specified axis.
     nb_ret_type = getattr(a.dtype, "underlying_float", a.dtype)
     np_ret_type = np_support.as_dtype(nb_ret_type)
 
@@ -2176,12 +2181,17 @@ def _get_norm_impl(a, ord_flag):
     if a.ndim == 1:
         # 1D cases
 
+        # The specified axis index can't be greater than the number of
+        # dimensions of the array.
+        if axis != None:
+            raise ValueError("Invalid axis for 1d array.")
+
         # handle "ord" being "None", must be done separately
         if ord_flag in (None, types.none):
-            def oneD_impl(a, ord=None):
+            def oneD_impl(a, ord=None, axis=None):
                 return _oneD_norm_2(a)
         else:
-            def oneD_impl(a, ord=None):
+            def oneD_impl(a, ord=None, axis=None):
                 n = len(a)
 
                 # Shortcut to handle zero length arrays
@@ -2243,6 +2253,9 @@ def _get_norm_impl(a, ord_flag):
     elif a.ndim == 2:
         # 2D cases
 
+        if axis < 0 or axis >= 2:
+            raise ValueError("Invalid axis for 2d array.")
+
         # handle "ord" being "None"
         if ord_flag in (None, types.none):
             # Force `a` to be C-order, so that we can take a contiguous
@@ -2263,18 +2276,29 @@ def _get_norm_impl(a, ord_flag):
 
             # Compute the Frobenius norm, this is the L2,2 induced norm of `A`
             # which is the L2-norm of A.ravel() and so can be computed via BLAS
-            def twoD_impl(a, ord=None):
-                n = a.size
-                if n == 0:
-                    # reshape() currently doesn't support zero-sized arrays
-                    return 0.0
-                a_c = array_prepare(a)
-                return _oneD_norm_2(a_c.reshape(n))
+            def twoD_impl(a, ord=None, axis=None):
+                if axis == None:
+                    n = a.size
+                    if n == 0:
+                        # reshape() currently doesn't support zero-sized arrays
+                        return 0.0
+                    a_c = array_prepare(a)
+                    return _oneD_norm_2(a_c.reshape(n))
+                else:
+                    # Compute the norm along a specific axis
+                    a_c = array_prepare(a)
+                    nrm_axis = np.zeros(a.shape[axis])
+                    for idx in range(a.shape[axis]):
+                        if axis == 0:
+                            nrm_axis[idx] = _oneD_norm_2(a_c[idx])
+                        else:
+                            nrm_axis[idx] = _oneD_norm_2(a_c[:, idx])
+                    return nrm_axis
         else:
             # max value for this dtype
             max_val = np.finfo(np_ret_type.type).max
 
-            def twoD_impl(a, ord=None):
+            def twoD_impl(a, ord=None, axis=None):
                 n = a.shape[-1]
                 m = a.shape[-2]
 
@@ -2349,12 +2373,13 @@ def _get_norm_impl(a, ord_flag):
 
 
 @overload(np.linalg.norm)
-def norm_impl(a, ord=None):
+def norm_impl(a, ord=None, axis=None):
+    # TODO: axis=None???
     ensure_lapack()
 
     _check_linalg_1_or_2d_matrix(a, "norm")
 
-    return _get_norm_impl(a, ord)
+    return _get_norm_impl(a, ord, axis)
 
 
 @overload(np.linalg.cond)
