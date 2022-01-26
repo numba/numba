@@ -292,11 +292,14 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
         if not flags.is_set("debuginfo"):
             flags.debuginfo = config.DEBUGINFO_DEFAULT
 
-        if flags.debuginfo:
-            if not flags.is_set("dbg_extend_lifetimes"):
+        if not flags.is_set("dbg_extend_lifetimes"):
+            if flags.debuginfo:
                 # auto turn on extend-lifetimes if debuginfo is on and
                 # dbg_extend_lifetimes is not set
                 flags.dbg_extend_lifetimes = True
+            else:
+                # set flag using env-var config
+                flags.dbg_extend_lifetimes = config.EXTEND_VARIABLE_LIFETIMES
 
         if not flags.is_set("boundscheck"):
             flags.boundscheck = flags.debuginfo
