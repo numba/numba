@@ -407,8 +407,11 @@ Known issues:
 
 * Stepping depends heavily on optimization level. At full optimization
   (equivalent to O3), most of the variables are optimized out. It is often
-  beneficial to use the environment variable :envvar:`NUMBA_OPT` to adjust the
-  optimization level and :envvar:`NUMBA_EXTEND_VARIABLE_LIFETIMES` to extend
+  beneficial to use the jit option ``_dbg_optnone=True`` 
+  or the environment variable :envvar:`NUMBA_OPT` to adjust the 
+  optimization level and the jit option ``_dbg_extend_lifetimes=True`` 
+  (which is on by default if ``debug=True``) or
+  :envvar:`NUMBA_EXTEND_VARIABLE_LIFETIMES` to extend
   the lifetime of variables to the end of their scope so as to get a debugging
   experience closer to the semantics of Python execution.
 
@@ -432,6 +435,20 @@ Internal details:
   ``x``, ``x.1`` and ``x.2``.)
 
 * When debug is enabled, inlining of functions at LLVM IR level is disabled.
+
+JIT options for debug
+---------------------
+
+* ``debug`` (bool). Set to ``True`` to enable debug info. Defaults to ``False``.
+* ``_dbg_optnone`` (bool). Set to ``True`` to disable all LLVM optimization passes 
+  on the function. Defaults to ``False``. See :envvar:`NUMBA_OPT` for a global setting
+  to disable optimization.
+* ``_dbg_extend_lifetimes`` (bool). Set to ``True` to extend object lifetimes to match 
+  closer to Python semantic for the function. Automatically set to ``True` when 
+  ``debug=True``; otherwise, defaults to ``False``. Users can explicitly set this option 
+  to ``False`` to retain  semantic of normal execution of compiled code.
+  See :envvar:`NUMBA_EXTEND_VARIABLE_LIFETIMES` for a global option to extend object 
+  lifetimes.
 
 Example debug usage
 -------------------
