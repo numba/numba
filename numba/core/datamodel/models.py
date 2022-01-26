@@ -160,8 +160,11 @@ class OmittedArgDataModel(DataModel):
     A data model for omitted arguments.  Only the "argument" representation
     is defined, other representations raise a NotImplementedError.
     """
-    # Omitted arguments don't produce any LLVM function argument.
+    # Omitted arguments are using a dummy value type
+    def get_value_type(self):
+        return ir.LiteralStructType([])
 
+    # Omitted arguments don't produce any LLVM function argument.
     def get_argument_type(self):
         return ()
 
