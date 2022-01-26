@@ -75,15 +75,8 @@ class TestEntrypoints(TestCase):
         # loosely based on Pandas test from:
         #   https://github.com/pandas-dev/pandas/pull/27488
 
-        # FIXME: Python 2 workaround because nonlocal doesn't exist
-        counters = {'init': 0}
-
-        def init_function():
-            counters['init'] += 1
-            raise ValueError("broken")
-
-        mod = types.ModuleType("_test_numba_bad_extension")
-        mod.init_func = init_function
+        mod = mock.Mock(__name__='_test_numba_bad_extension')
+        mod.configure_mock(**{'init_func.side_effect': ValueError('broken')})
 
         try:
             # will remove this module at the end of the test
@@ -116,7 +109,7 @@ class TestEntrypoints(TestCase):
                     raise ValueError("Expected warning message not found")
 
                 # was our init function called?
-                self.assertEqual(counters['init'], 1)
+                mod.init_func.assert_called_once()
 
         finally:
             # remove fake module
