@@ -2184,7 +2184,7 @@ def _get_norm_impl(a, ord_flag, axis):
         # The specified axis index can't be greater than the number of
         # dimensions of the array.
         if axis != None:
-            raise ValueError("Invalid axis for 1d array.")
+            raise ValueError("Invalid axis for array.")
 
         # handle "ord" being "None", must be done separately
         if ord_flag in (None, types.none):
@@ -2254,7 +2254,7 @@ def _get_norm_impl(a, ord_flag, axis):
         # 2D cases
 
         if axis != None and axis not in (0, 1):
-            raise ValueError("Invalid axis for 2d array.")
+            raise ValueError("Invalid axis for array.")
 
         # handle "ord" being "None"
         if ord_flag in (None, types.none):
