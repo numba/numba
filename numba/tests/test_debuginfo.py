@@ -628,13 +628,14 @@ class TestDebugInfoEmission(TestCase):
         # fetch out and assert the last argument type, should be void *
         md_fn_arg = [x.strip() for x in disubr_types_groups[0].split(',')][-1]
         arg_ty = metadata_definition_map[md_fn_arg]
-        ptr_size = types.intp.bitwidth
-        self.assertRegex(arg_ty, r'!DIDerivedType\(tag: DW_TAG_pointer_type, '
-                                 rf'baseType: ![0-9]+, size: {ptr_size}\)')
-        md_base_ty = re.match(r'.*baseType: (![0-9]+),.*', arg_ty).groups()[0]
+        expected_arg_ty = (r'^.*!DICompositeType\(tag: DW_TAG_structure_type, '
+                           r'name: "Anonymous struct \({}\)", elements: '
+                           r'(![0-9]+), identifier: "{}"\)')
+        self.assertRegex(arg_ty, expected_arg_ty)
+        md_base_ty = re.match(expected_arg_ty, arg_ty).groups()[0]
         base_ty = metadata_definition_map[md_base_ty]
-        self.assertEqual(base_ty, ('!DIBasicType(name: "i8", size: 8, '
-                                   'encoding: DW_ATE_unsigned)'))
+        # expect ir.LiteralStructType([])
+        self.assertEqual(base_ty, ('!{}'))
 
 
 if __name__ == '__main__':
