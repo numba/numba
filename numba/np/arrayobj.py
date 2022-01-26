@@ -30,9 +30,7 @@ from numba.core.extending import (register_jitable, overload, overload_method,
                                   intrinsic)
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
-from numba.cpython.unsafe.tuple import (build_int_tuple,
-                                        tuple_setitem,
-                                        build_full_slice_tuple)
+from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
 from numba.core.overload_glue import glue_lowering
 from numba.core.extending import overload_classmethod
 
@@ -1403,6 +1401,7 @@ def numpy_broadcast_shapes_list(r, m, shape):
 def numpy_broadcast_arrays(*args):
     # number of dimensions
     m = max([arr.ndim for arr in args])
+    tup_init = (0,) * m
 
     def impl(*args):
         # find out the output shape
@@ -1413,7 +1412,7 @@ def numpy_broadcast_arrays(*args):
         for array in literal_unroll(args):
             numpy_broadcast_shapes_list(shape, m, array.shape)
 
-        tup = build_int_tuple(m)
+        tup = tup_init
 
         for i in range(m):
             tup = tuple_setitem(tup, i, shape[i])
