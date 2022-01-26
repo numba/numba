@@ -157,6 +157,18 @@ class TestDebugInfoEmission(TestCase):
                 metadata_definition_map[dbg_val] = info
         return metadata_definition_map
 
+    def _get_lines_from_debuginfo(self, metadata):
+        # Get the lines contained in the debug info
+        md_def_map = self._get_metadata_map(metadata)
+
+        lines = set()
+        for md in md_def_map.values():
+            m = re.match(r"!DILocation\(line: (\d+),", md)
+            if m:
+                ln = int(m.group(1))
+                lines.add(ln)
+        return lines
+
     def test_DW_LANG(self):
 
         @njit(debug=True)
@@ -592,14 +604,8 @@ class TestDebugInfoEmission(TestCase):
 
     def test_debug_optnone(self):
         def get_debug_lines(fn):
-            # Get the lines contained in the debug info
-            mdlist = self._get_metadata(fn, fn.signatures[0])
-            lines = set()
-            for md in mdlist:
-                m = re.match(r"!\d+ = !DILocation\(line: (\d+),", md)
-                if m:
-                    ln = int(m.group(1))
-                    lines.add(ln)
+            metadata = self._get_metadata(fn, fn.signatures[0])
+            lines = self._get_lines_from_debuginfo(metadata)
             return lines
 
         def get_func_attrs(fn):
