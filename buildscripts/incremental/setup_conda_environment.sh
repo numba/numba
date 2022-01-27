@@ -89,7 +89,7 @@ fi
 if [[ "$PYTHON" == "3.10" ]] ; then
     $PIP_INSTALL -U pip
     pip --version
-    $PIP_INSTALL gitpython pyyaml cffi jinja2 ipython ipykernel pygments pexpect scipy numpy
+    $PIP_INSTALL gitpython pyyaml cffi jinja2 ipython ipykernel pygments pexpect scipy numpy<1.22
 # If on 32bit linux, now pip install NumPy (no conda package), SciPy is broken?!
 elif [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
     $PIP_INSTALL numpy==$NUMPY
