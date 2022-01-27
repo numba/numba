@@ -2183,7 +2183,7 @@ def _get_norm_impl(a, ord_flag, axis):
 
         # The specified axis index can't be greater than the number of
         # dimensions of the array.
-        if axis != None:
+        if axis not in (None, types.none):
             raise ValueError("Invalid axis for array.")
 
         # handle "ord" being "None", must be done separately
@@ -2253,7 +2253,7 @@ def _get_norm_impl(a, ord_flag, axis):
     elif a.ndim == 2:
         # 2D cases
 
-        if axis != None and axis not in (0, 1):
+        if axis not in (0, 1, None, types.none):
             raise ValueError("Invalid axis for array.")
 
         # handle "ord" being "None"
@@ -2374,7 +2374,6 @@ def _get_norm_impl(a, ord_flag, axis):
 
 @overload(np.linalg.norm)
 def norm_impl(a, ord=None, axis=None):
-    # TODO: axis=None???
     ensure_lapack()
 
     _check_linalg_1_or_2d_matrix(a, "norm")
