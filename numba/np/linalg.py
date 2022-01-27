@@ -2253,10 +2253,6 @@ def _get_norm_impl(a, ord_flag, axis):
     elif a.ndim == 2:
         # 2D cases
 
-        if not np_support.is_nonelike(axis) \
-            or not isinstance(axis, (types.Integer, int)):
-            raise ValueError("Invalid axis for array.")
-
         # handle "ord" being "None"
         if ord_flag in (None, types.none):
             # Force `a` to be C-order, so that we can take a contiguous
@@ -2292,7 +2288,7 @@ def _get_norm_impl(a, ord_flag, axis):
                         else:
                             raise ValueError("Invalid axis for array.")
                     return nrm_axis
-            else:
+            elif np_support.is_nonelike(axis):
                 def twoD_impl(a, ord=None, axis=None):
                     n = a.size
                     if n == 0:
@@ -2300,6 +2296,8 @@ def _get_norm_impl(a, ord_flag, axis):
                         return 0.0
                     a_c = array_prepare(a)
                     return _oneD_norm_2(a_c.reshape(n))
+            else:
+                raise ValueError("Invaldi axis for array.")
         else:
             # max value for this dtype
             max_val = np.finfo(np_ret_type.type).max
@@ -2374,7 +2372,7 @@ def _get_norm_impl(a, ord_flag, axis):
                     else:
                         # replicate numpy error
                         raise ValueError("Invalid norm order for matrices.")
-            else:
+            elif np_support.is_nonelike(axis):
                 def twoD_impl(a, ord=None, axis=None):
                     n = a.shape[-1]
                     m = a.shape[-2]
@@ -2444,6 +2442,8 @@ def _get_norm_impl(a, ord_flag, axis):
                     else:
                         # replicate numpy error
                         raise ValueError("Invalid norm order for matrices.")
+            else:
+                raise ValueError("Invalid axis for array.")
         return twoD_impl
     else:
         assert 0  # unreachable
