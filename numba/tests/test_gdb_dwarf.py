@@ -26,7 +26,7 @@ class TestGDBDwarf(TestCase):
     def test_basic(self):
         self._subprocess_test_runner('test_basic')
 
-    def test_array(self):
+    def test_array_arg(self):
         self._subprocess_test_runner('test_array_arg')
 
     def test_conditional_breakpoint(self):
