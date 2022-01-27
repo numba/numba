@@ -5,6 +5,14 @@ This is a bugfix release that closes all the remaining issues from the
 accelerated release of 0.55.0 and also any release critical regressions
 discovered since then.
 
+CUDA target deprecation notices:
+
+* Support for CUDA toolkits < 10.2 is deprecated and will be removed in Numba
+  0.56.
+* Support for devices with Compute Capability < 5.3 is deprecated and will be
+  removed in Numba 0.56.
+
+
 Pull-Requests:
 
 * PR `#7755 <https://github.com/numba/numba/pull/7755>`_: CUDA: Deprecate support for CC < 5.3 and CTK < 10.2 (`Graham Markall <https://github.com/gmarkall>`_)
