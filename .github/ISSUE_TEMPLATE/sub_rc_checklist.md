@@ -19,6 +19,7 @@ labels: task
 * [ ] Verify packages uploaded to Anaconda Cloud and move to
   `numba/label/main`.
 * [ ] Build wheels (`$PYTHON_VERSIONS`) on the buildfarm.
+* [ ] Build sdist locally using `python setup.py sdist --user=ci --group=numba` with umask `0022`.
 * [ ] Upload wheels and sdist to PyPI (upload from `ci_artifacts`).
 * [ ] Verify wheels for all platforms arrived on PyPi.
 * [ ] Verify ReadTheDocs build.
