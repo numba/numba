@@ -161,6 +161,18 @@ class TestDebugInfoEmission(TestCase):
                 metadata_definition_map[dbg_val] = info
         return metadata_definition_map
 
+    def _get_lines_from_debuginfo(self, metadata):
+        # Get the lines contained in the debug info
+        md_def_map = self._get_metadata_map(metadata)
+
+        lines = set()
+        for md in md_def_map.values():
+            m = re.match(r"!DILocation\(line: (\d+),", md)
+            if m:
+                ln = int(m.group(1))
+                lines.add(ln)
+        return lines
+
     def test_DW_LANG(self):
 
         @njit(debug=True)
@@ -593,6 +605,71 @@ class TestDebugInfoEmission(TestCase):
             base_type_marker = base_type_matches[0]
             data_type = metadata_definition_map[base_type_marker]
             self.assertRegex(data_type, expected[field])
+
+    def test_debug_optnone(self):
+        def get_debug_lines(fn):
+            metadata = self._get_metadata(fn, fn.signatures[0])
+            lines = self._get_lines_from_debuginfo(metadata)
+            return lines
+
+        def get_func_attrs(fn):
+            cres = fn.overloads[fn.signatures[0]]
+            lib = cres.library
+            fn = lib._final_module.get_function(cres.fndesc.mangled_name)
+            attrs = set(b' '.join(fn.attributes).split())
+            return attrs
+
+        def foo():
+            n = 10
+            c = 0
+            for i in range(n):
+                c += i
+            return c
+
+        foo_debug = njit(debug=True)(foo)
+        foo_debug_optnone = njit(debug=True, _dbg_optnone=True)(foo)
+        foo_debug_optnone_inline = njit(debug=True, _dbg_optnone=True,
+                                        forceinline=True)(foo)
+
+        firstline = foo.__code__.co_firstlineno
+
+        expected_info = {}
+        expected_info[foo_debug] = dict(
+            # just the dummy line-0 and the line of the return statement
+            lines={0, firstline + 5},
+            must_have_attrs=set(),
+            must_not_have_attrs=set([b"optnone"]),
+        )
+        expected_info[foo_debug_optnone] = dict(
+            # all the lines should be included
+            lines=set(range(firstline + 1, firstline + 6)),
+            must_have_attrs=set([b"optnone"]),
+            must_not_have_attrs=set(),
+        )
+        expected_info[foo_debug_optnone_inline] = dict(
+            # optnone=True is overriden by forceinline, so this looks like the
+            # foo_debug version
+            lines={0, firstline + 5},
+            must_have_attrs=set([b"alwaysinline"]),
+            must_not_have_attrs=set([b"optnone"]),
+        )
+
+        expected_ret = foo()
+
+        for udt, expected in expected_info.items():
+            with self.subTest(udt.targetoptions):
+                got = udt()
+                self.assertEqual(got, expected_ret)
+
+                # Compare the line locations in the debug info.
+                self.assertEqual(get_debug_lines(udt), expected["lines"])
+
+                # Check for attributes on the LLVM function
+                attrs = get_func_attrs(udt)
+                must_have = expected["must_have_attrs"]
+                self.assertEqual(attrs & must_have, must_have)
+                must_not_have = expected["must_not_have_attrs"]
+                self.assertFalse(attrs & must_not_have)
 
     def test_omitted_arg(self):
         # See issue 7726

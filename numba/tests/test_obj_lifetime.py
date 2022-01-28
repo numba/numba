@@ -2,6 +2,8 @@ import collections
 import sys
 import weakref
 import gc
+import operator
+from itertools import takewhile
 
 import unittest
 from numba import njit
@@ -442,6 +444,59 @@ class TestExtendingVariableLifetimes(SerialMixin, TestCase):
         # 4 dels (a, b, c, d) then the return.
         expect = [*((ir.Assign,) * 4), ir.Assign, *((ir.Del,) * 4), ir.Return]
         check(del_at_block_end_ir, expect)
+
+    def test_dbg_extend_lifetimes(self):
+
+        def get_ir(**options):
+            class IRPreservingCompiler(CompilerBase):
+
+                def define_pipelines(self):
+                    pm = DefaultPassBuilder.define_nopython_pipeline(self.state)
+                    pm.add_pass_after(PreserveIR, IRLegalization)
+                    pm.finalize()
+                    return [pm]
+
+            @njit(pipeline_class=IRPreservingCompiler, **options)
+            def foo():
+                a = 10
+                b = 20
+                c = a + b
+                # a and b are now unused, standard behaviour is ir.Del for them here
+                d = c / c
+                return d
+
+            foo()
+            cres = foo.overloads[foo.signatures[0]]
+            func_ir = cres.metadata['preserved_ir']
+
+            return func_ir
+
+        # _dbg_extend_lifetimes is on when debug=True
+        ir_debug = get_ir(debug=True)
+        # explicitly turn on _dbg_extend_lifetimes
+        ir_debug_ext = get_ir(debug=True, _dbg_extend_lifetimes=True)
+        # explicitly turn off _dbg_extend_lifetimes
+        ir_debug_no_ext = get_ir(debug=True, _dbg_extend_lifetimes=False)
+
+        def is_del_grouped_at_the_end(fir):
+            [blk] = fir.blocks.values()
+            # Mark all statements that are ir.Del
+            inst_is_del = [isinstance(stmt, ir.Del) for stmt in blk.body]
+            # Get the leading segment that are not dels
+            not_dels = list(takewhile(operator.not_, inst_is_del))
+            # Compute the starting position of the dels
+            begin = len(not_dels)
+            # Get the remaining segment that are all dels
+            all_dels = list(takewhile(operator.truth, inst_is_del[begin:]))
+            # Compute the ending position of the dels
+            end = begin + len(all_dels)
+            # If the dels are all grouped at the end (before the terminator),
+            # the end position will be the last position of the list
+            return end == len(inst_is_del) - 1
+
+        self.assertTrue(is_del_grouped_at_the_end(ir_debug))
+        self.assertTrue(is_del_grouped_at_the_end(ir_debug_ext))
+        self.assertFalse(is_del_grouped_at_the_end(ir_debug_no_ext))
 
 
 if __name__ == "__main__":

@@ -460,7 +460,7 @@ class IRLegalization(AnalysisPass):
 
     def run_pass(self, state):
         # NOTE: this function call must go last, it checks and fixes invalid IR!
-        check_and_legalize_ir(state.func_ir)
+        check_and_legalize_ir(state.func_ir, flags=state.flags)
         return True
 
 

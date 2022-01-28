@@ -432,6 +432,9 @@ class BaseContext(object):
         self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes, noalias=fndesc.noalias)
         if fndesc.inline:
             fn.attributes.add('alwaysinline')
+            # alwaysinline overrides optnone
+            fn.attributes.discard('noinline')
+            fn.attributes.discard('optnone')
         return fn
 
     def declare_external_function(self, module, fndesc):
