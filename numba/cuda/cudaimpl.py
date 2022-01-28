@@ -496,6 +496,11 @@ lower_fp16_binary(stubs.fp16.hmul, 'mul')
 def lower_fp16_divide(context, builder, sig, args):
     arg1 = args[0]
     arg2 = args[1]
+    # Floating point 16 division algorithm implemented
+    # using Newton Rapson algorithm.
+
+    # x = arg1, y = arg2
+    # Implement x/y
 
     # Convert fp16 args to fp32 so we can implement
     # division by reciprocal multiplication on fp32
@@ -508,25 +513,49 @@ def lower_fp16_divide(context, builder, sig, args):
     arg2_fp32 = builder.call(cvt2float_asm, [arg2])
 
     rcp_fnty = ir.FunctionType(ir.FloatType(), [ir.FloatType()])
+
+    # Obtain a gross estimate of the reciprocal of argument 2 (y)
+    # which will be refined. This is the first step in the Newton
+    # Rapson method.
+
+    # y0 = 1/y * (1-err), here y0 is not a precise 1/y
+    # it is an approximation and the term 'err' stands for the
+    # relative error of the approximation.
+
     rcp_asm = ir.InlineAsm(rcp_fnty,
                            "rcp.approx.ftz.f32 $0, $1;",
                            "=f,f")
     arg2_rcp = builder.call(rcp_asm, [arg2_fp32])
 
-    # Multiply by reciprocal of arg2
+    # Implement fp32 division via multiplication by
+    # reciprocal of arg2
+
+    # Our objective is to get a quotient x/y, correctly rounded to nearest
+    # even in fp16 format, so we can do q0 = x * yn.
+
+    # We need to perform one more Newton iteration to eliminate the error
+    # from the multiplication.
+
+    # Mathematically we have: q0 = x * 1/y * (1 - err)
+    # So err (correction_term) = x - y*q0 = fma(-y, q0, x)
+    # And q1 = err*yn + q0 = fma(err, yn, q0)
     fmul = builder.fmul(arg1_fp32, arg2_rcp)
 
-    #Convert from fp32 to fp16
+    # Convert fp32 division result to fp16
     cvt2fp16_fnty = ir.FunctionType(ir.IntType(16), [ir.FloatType()])
     cvt2fp16_asm = ir.InlineAsm(cvt2fp16_fnty,
                                 "cvt.rn.f16.f32 $0, $1;",
                                 "=h,f")
     fp16_div = builder.call(cvt2fp16_asm, [fmul])
 
+    # Before performing a second Newton Rapson iteration
+    # filter out small denormal values and zero.
+    # If either case is true skip the second iteration.
+
     and_cnst = context.get_constant(types.int16, 32767)
     and_op = builder.and_(fp16_div, and_cnst)
 
-    #temp_reg = get_temp_predicate_register()
+    # Check for small denormals
     temp_reg = '__$$temp3'
     reg_pred_fnty = ir.FunctionType(ir.VoidType(),[])
     reg_pred_asm = ir.InlineAsm(reg_pred_fnty,
@@ -553,9 +582,12 @@ def lower_fp16_divide(context, builder, sig, args):
     cmp1 = builder.icmp_unsigned("==",
                                  builder.bitcast(selp, ir.IntType(16)),
                                  zero)
+
+    # Check for zero result
     cmp2 = builder.icmp_unsigned("==",
                                  builder.bitcast(and_op, ir.IntType(16)),
                                  zero)
+    # Filter out denormal and precise zero
     or_op = builder.or_(cmp1, cmp2)
     or_cond = builder.bitcast(or_op, ir.IntType(1))
 
@@ -564,7 +596,7 @@ def lower_fp16_divide(context, builder, sig, args):
     true_bb = builder.append_basic_block()
     builder.cbranch(or_cond, true_bb, fall_thru_bb)
 
-    #Fall thru branch
+    # Fall through branch (Second Newton Rapson iteration)
     builder.position_at_start(fall_thru_bb)
 
     float_zero = context.get_constant(types.float32, 0.0)
@@ -577,6 +609,11 @@ def lower_fp16_divide(context, builder, sig, args):
                             ir.FloatType(),
                             ir.FloatType()))
     fma_func = cgutils.get_or_insert_function(lmod, fnty, fname)
+
+    # Mathematically we have: q0 = x * 1/y * (1 - err)
+    # So err (correction_term) = x - y*q0 = fma(-y, q0, x)
+    # And q1 = err*yn + q0 = fma(err, yn, q0)
+
     fma1 = builder.call(fma_func, [neg_f, fmul, arg2_fp32])
     fma2 = builder.call(fma_func, [arg2_rcp, fma1, fmul])
     fp32_to_f16 = builder.call(cvt2fp16_asm, [fma2])

@@ -106,13 +106,21 @@ def simple_hdiv_scalar(ary, a, b):
     ary[0] = cuda.fp16.hdiv(a, b)
 
 
+def simple_hdiv_kernel(ary, array_a, array_b):
+    i = cuda.grid(1)
+    if i < ary.size:
+        a = array_a[i]
+        b = array_b[i]
+        ary[i] = cuda.fp16.hdiv(a, b)
+
+
 @cuda.jit(device=True)
-def simple_hdiv_scalar2(a, b):
+def simple_hdiv_device(a, b):
     return cuda.fp16.hdiv(a, b)
 
 
 def simple_hdiv_unique(ary, a, b):
-    ary[0] = simple_hdiv_scalar2(a,b) + simple_hdiv_scalar2(b, a)
+    ary[0] = simple_hdiv_device(a, b) + simple_hdiv_device(b, a)
 
 
 def simple_hneg(ary, a):
@@ -469,25 +477,60 @@ class TestCudaIntrinsic(CUDATestCase):
         np.testing.assert_allclose(ary[0], ref)
 
     @skip_unless_cc_53
-    def test_hdiv_scalar2(self):
-        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hdiv_scalar)
-        ary = np.zeros(1, dtype=np.float16)
+    def test_hdiv(self):
+        compiled = cuda.jit("void(f2[:], f2[:], f2[:])")(simple_hdiv_kernel)
         arry1 = np.random.randint(-65504, 65505, size=500).astype(np.float16)
         arry2 = np.random.randint(-65504, 65505, size=500).astype(np.float16)
-        for arg1, arg2 in np.nditer([arry1, arry2]):
-            compiled[1, 1](ary, arg1, arg2)
-            ref = arg1 / arg2
-            np.testing.assert_allclose(ary[0], ref)
+        ary = np.zeros_like(arry1, dtype=np.float16)
+
+        compiled.forall(ary.size)(ary, arry1, arry2)
+        ref = arry1 / arry2
+        np.testing.assert_allclose(ary, ref)
 
     @skip_unless_cc_53
-    def test_hdiv_unique_reg_predicate(self):
-        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hdiv_unique)
-        ary = np.zeros(1, dtype=np.float16)
-        arg1 = np.float16(3.1415926)
-        arg2 = np.float16(1.57)
-        compiled[1, 1](ary, arg1, arg2)
-        ref = (arg1 / arg2) + (arg2 / arg1)
-        np.testing.assert_allclose(ary[0], ref)
+    def test_hdiv_denormal(self):
+        compiled = cuda.jit("void(f2[:], f2[:], f2[:])")(simple_hdiv_kernel)
+
+        # This test is designed to test divison of fp16 constants that
+        # result in small denormal numbers that should not be further
+        # iterated using the Newton Raphson algorithm used in the hdiv
+        # intrinisc. A smaple of values were extracted from the Nvidia hdiv
+        # test suite
+        arry1 = np.array([0x5b, 0xaf, 0xcb, 0x13b, 0x157, 0x173, 0x18f,
+                          0x1ab, 0x26f, 0x28b, 0x2a7, 0x2c3,
+                          0x2df, 0x2fb, 0x317, 0x333, 0x34f, 0x36b, 0x4b,
+                          0xa9, 0xb6, 0xc3, 0x13b, 0x15e, 0x177, 0x179,
+                          0x196, 0x1b3, 0x22b, 0x267, 0x276]).astype(np.float16)
+
+        arry2 = np.array([0x4b00, 0x4b00, 0x4b00, 0x4b00, 0x4b00, 0x4b00,
+                          0x4b00, 0x4b00, 0x4b00, 0x4b00, 0x4b00, 0x4b00,
+                          0x4b00, 0x4b00, 0x4b00, 0x4b00, 0x4b00, 0x4b00,
+                          0x4f80, 0x4e80, 0x4f00, 0x4f80, 0x4f80, 0x4f00,
+                          0x4f80, 0x4e80, 0x4f00, 0x4f80, 0x4f80, 0x4f80,
+                          0x4f00]).astype(np.float16)
+
+        ary = np.zeros_like(arry1, dtype=np.float16)
+        compiled.forall(ary.size)(ary, arry1, arry2)
+        ref = arry1 / arry2
+        np.testing.assert_allclose(ary, ref)
+
+    @skip_unless_cc_53
+    def test_hdiv_unique_reg_predicate2(self):
+        args = (f2[:], f2, f2)
+        ptx, _ = compile_ptx(simple_hdiv_unique, args, cc=(5, 3))
+
+        # Look for two .reg .pred __$temp3 lines preceded by a '{'
+        # which disambiguates (via nesting) the variable names.
+
+        predicate_count = 0
+        for line in ptx.split('\n'):
+            if '{ .reg .pred __$temp3;' in line:
+                predicate_count += 1
+
+        expected = 2
+        self.assertEqual(expected, predicate_count,
+                         (f'Got {predicate_count} predicate instructions, '
+                          f'expected {expected}'))
 
     @skip_unless_cc_53
     def test_hneg(self):
