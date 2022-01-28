@@ -751,8 +751,7 @@ def ol_isinstance(var, typs):
         if isinstance(typ, types.TypeRef):
             # Use of Numba type classes is in general not supported as they do
             # not work when the jit is disabled.
-            if key not in (types.ListType, types.DictType, types.Tuple,
-                           types.UniTuple):
+            if key not in (types.ListType, types.DictType):
                 msg = ("Numba type classes (except numba.typed.* container "
                        "types) are not supported.")
                 raise NumbaTypeError(msg)

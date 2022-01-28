@@ -1398,7 +1398,7 @@ if numpy_version >= (1, 20):
             # propagate args
             r = [1] * m
             for arg in literal_unroll(args):
-                if isinstance(arg, types.Tuple):
+                if isinstance(arg, tuple) and len(arg) == 0:
                     pass
                 elif isinstance(arg, int):
                     k = m - 1
