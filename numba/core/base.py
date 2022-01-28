@@ -289,11 +289,11 @@ class BaseContext(object):
         Load target-specific registries.  Can be overridden by subclasses.
         """
 
-    def mangler(self, name, types, *, abi_tags=()):
+    def mangler(self, name, types, *, abi_tags=(), uid=None):
         """
         Perform name mangling.
         """
-        return funcdesc.default_mangler(name, types, abi_tags=abi_tags)
+        return funcdesc.default_mangler(name, types, abi_tags=abi_tags, uid=uid)
 
     def get_env_name(self, fndesc):
         """Get the environment name given a FunctionDescriptor.
