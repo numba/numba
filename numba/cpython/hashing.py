@@ -18,7 +18,8 @@ from numba.core.extending import (
 from numba.core import errors
 from numba.core import types, utils
 from numba.core.unsafe.bytes import grab_byte, grab_uint64_t
-from numba.cpython.randomimpl import get_state_ptr, get_next_int, const_int
+from numba.cpython.randomimpl import (const_int, get_next_int, get_next_int32,
+                                      get_state_ptr)
 
 _py38_or_later = utils.PYVERSION >= (3, 8)
 _py310_or_later = utils.PYVERSION >= (3, 10)
@@ -137,11 +138,23 @@ def _prng_random_hash(tyctx):
 
     def impl(cgctx, builder, signature, args):
         state_ptr = get_state_ptr(cgctx, builder, "internal")
-        bits = const_int(types.intp.bitwidth)
-        value = get_next_int(cgctx, builder, state_ptr, bits, False)
+        bits = const_int(_hash_width)
+
+        # Why not just use get_next_int() with the correct bitwidth?
+        # get_next_int() always returns an i64, because the bitwidth it is
+        # passed may not be a compile-time constant, so it needs to allocate
+        # the largest unit of storage that may be required. Therefore, if the
+        # hash width is 32, then we need to use get_next_int32() to ensure we
+        # don't return a wider-than-expected hash, even if everything above
+        # the low 32 bits would have been zero.
+        if _hash_width == 32:
+            value = get_next_int32(cgctx, builder, state_ptr)
+        else:
+            value = get_next_int(cgctx, builder, state_ptr, bits, False)
+
         return value
 
-    sig = types.intp()
+    sig = _Py_hash_t()
     return sig, impl
 
 

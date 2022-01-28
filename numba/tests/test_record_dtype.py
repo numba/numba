@@ -240,6 +240,10 @@ def recarray_write_array_of_nestedarray_broadcast(ary):
     return ary
 
 
+def record_setitem_array(rec_source, rec_dest):
+    rec_dest['j'] = rec_source['j']
+
+
 def recarray_write_array_of_nestedarray(ary):
     ary.j[:, :, :] = np.ones((2, 3, 2), dtype=np.float64)
     return ary
@@ -402,6 +406,16 @@ def set_field_slice(arr):
     return arr
 
 
+def assign_array_to_nested(dest):
+    tmp = (np.arange(3) + 1).astype(np.int16)
+    dest['array1'] = tmp
+
+
+def assign_array_to_nested_2d(dest):
+    tmp = (np.arange(6) + 1).astype(np.int16).reshape((3, 2))
+    dest['array2'] = tmp
+
+
 recordtype = np.dtype([('a', np.float64),
                        ('b', np.int16),
                        ('c', np.complex64),
@@ -428,6 +442,10 @@ recordwithcharseq = np.dtype([('m', np.int32),
 recordwith4darray = np.dtype([('o', np.int64),
                               ('p', np.float32, (3, 2, 5, 7)),
                               ('q', 'U10'),])
+
+nested_array1_dtype = np.dtype([("array1", np.int16, (3,))], align=True)
+
+nested_array2_dtype = np.dtype([("array2", np.int16, (3, 2))], align=True)
 
 
 class TestRecordDtypeMakeCStruct(unittest.TestCase):
@@ -1495,6 +1513,35 @@ class TestNestedArrays(TestCase):
             arr_res = cfunc(nbarr)
             np.testing.assert_equal(arr_res, arr_expected)
 
+    def test_setitem(self):
+        def gen():
+            nbarr1 = np.recarray(1, dtype=recordwith2darray)
+            nbarr1[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))],
+                                 dtype=recordwith2darray)[0]
+            nbarr2 = np.recarray(1, dtype=recordwith2darray)
+            nbarr2[0] = np.array([(10, ((10, 20), (40, 50), (20, 30)))],
+                                 dtype=recordwith2darray)[0]
+            return nbarr1[0], nbarr2[0]
+        pyfunc = record_setitem_array
+        pyargs = gen()
+        pyfunc(*pyargs)
+
+        nbargs = gen()
+        cfunc = self.get_cfunc(pyfunc, tuple((typeof(arg) for arg in nbargs)))
+        cfunc(*nbargs)
+        np.testing.assert_equal(pyargs, nbargs)
+
+    def test_setitem_whole_array_error(self):
+        # Ensure we raise a suitable error when attempting to assign an
+        # array to a whole array's worth of nested arrays.
+        nbarr1 = np.recarray(1, dtype=recordwith2darray)
+        nbarr2 = np.recarray(1, dtype=recordwith2darray)
+        args = (nbarr1, nbarr2)
+        pyfunc = record_setitem_array
+        errmsg = "unsupported array index type"
+        with self.assertRaisesRegex(TypingError, errmsg):
+            self.get_cfunc(pyfunc, tuple((typeof(arg) for arg in args)))
+
     def test_getitem_idx(self):
         # Test __getitem__ with numerical index
 
@@ -1622,6 +1669,52 @@ class TestNestedArrays(TestCase):
             cfunc = self.get_cfunc(pyfunc, (ty,))
             arr_res = cfunc(arg)
             np.testing.assert_equal(arr_res, arr_expected)
+
+    def test_assign_array_to_nested(self):
+        got = np.zeros(2, dtype=nested_array1_dtype)
+        expected = np.zeros(2, dtype=nested_array1_dtype)
+
+        cfunc = njit(assign_array_to_nested)
+        cfunc(got[0])
+        assign_array_to_nested(expected[0])
+
+        np.testing.assert_array_equal(expected, got)
+
+    def test_assign_array_to_nested_2d(self):
+        got = np.zeros(2, dtype=nested_array2_dtype)
+        expected = np.zeros(2, dtype=nested_array2_dtype)
+
+        cfunc = njit(assign_array_to_nested_2d)
+        cfunc(got[0])
+        assign_array_to_nested_2d(expected[0])
+
+        np.testing.assert_array_equal(expected, got)
+
+    def test_issue_7693(self):
+        src_dtype = np.dtype([
+            ("user", np.float64),
+            ("array", np.int16, (3,))],
+            align=True)
+
+        dest_dtype = np.dtype([
+            ("user1", np.float64),
+            ("array1", np.int16, (3,))],
+            align=True)
+
+        @njit
+        def copy(index, src, dest):
+            dest['user1'] = src[index]['user']
+            dest['array1'] = src[index]['array']
+
+        source = np.zeros(2, dtype=src_dtype)
+        got = np.zeros(2, dtype=dest_dtype)
+        expected = np.zeros(2, dtype=dest_dtype)
+
+        source[0] = (1.2, [1, 2, 3])
+        copy(0, source, got[0])
+        copy.py_func(0, source, expected[0])
+
+        np.testing.assert_array_equal(expected, got)
 
 
 if __name__ == '__main__':

@@ -320,7 +320,7 @@ class ParforPass(FunctionPass):
             # parfor calls the compiler chain again with a string
             if not (config.DISABLE_PERFORMANCE_WARNINGS or
                     state.func_ir.loc.filename == '<string>'):
-                url = ("https://numba.pydata.org/numba-doc/latest/user/"
+                url = ("https://numba.readthedocs.io/en/stable/user/"
                        "parallel.html#diagnostics")
                 msg = ("\nThe keyword argument 'parallel=True' was specified "
                        "but no transformation for parallel execution was "
@@ -460,7 +460,7 @@ class IRLegalization(AnalysisPass):
 
     def run_pass(self, state):
         # NOTE: this function call must go last, it checks and fixes invalid IR!
-        check_and_legalize_ir(state.func_ir)
+        check_and_legalize_ir(state.func_ir, flags=state.flags)
         return True
 
 
