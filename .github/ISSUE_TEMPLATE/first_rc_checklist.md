@@ -9,7 +9,7 @@ labels: task
 
 ## Numba X.Y.Z
 
-* [ ] Merge to master.
+* [ ] Merge to main.
     - [ ] "remaining Pull-Requests from milestone".
 * [ ] Review deprecation schedule and notices. Make PRs if need be.
 * [ ] Merge change log changes.
@@ -31,8 +31,8 @@ labels: task
 
 ### Post Release:
 
-* [ ] Tag X.Y+1.0dev0 to start new development cycle on `master`.
-* [ ] Update llvmlite dependency spec to match next version via PR to `master`.
+* [ ] Tag X.Y+1.0dev0 to start new development cycle on `main`.
+* [ ] Update llvmlite dependency spec to match next version via PR to `main`.
 * [ ] Update release checklist template with any additional bullet points that
       may have arisen during the release.
 * [ ] Close milestone (and then close this release issue).
