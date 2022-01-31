@@ -514,8 +514,8 @@ class TestCudaIntrinsic(CUDATestCase):
         ref = arry1 / arry2
         np.testing.assert_allclose(ary, ref)
 
-    @skip_unless_cc_53
-    def test_hdiv_unique_reg_predicate2(self):
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_hdiv_unique_reg_predicate(self):
         args = (f2[:], f2, f2)
         ptx, _ = compile_ptx(simple_hdiv_unique, args, cc=(5, 3))
 
