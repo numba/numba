@@ -1008,8 +1008,8 @@ class SetInstance(object):
         with builder.if_then(builder.load(ok), likely=True):
             if realloc:
                 meminfo = self._set.meminfo
-                ptr = context.nrt.meminfo_varsize_realloc(builder, meminfo,
-                                                         size=allocsize)
+                ptr = context.nrt.meminfo_varsize_alloc(builder, meminfo,
+                                                          size=allocsize)
                 alloc_ok = cgutils.is_null(builder, ptr)
             else:
                 dtor = _imp_dtor(context, builder.module, self._ty)
@@ -1017,7 +1017,7 @@ class SetInstance(object):
                     builder, allocsize, builder.bitcast(dtor, cgutils.voidptr_t))
                 alloc_ok = cgutils.is_null(builder, meminfo)
 
-            with builder.if_else(cgutils.is_null(builder, meminfo),
+            with builder.if_else(alloc_ok,
                                  likely=False) as (if_error, if_ok):
                 with if_error:
                     builder.store(cgutils.false_bit, ok)
@@ -1036,7 +1036,7 @@ class SetInstance(object):
 
                     if DEBUG_ALLOCS:
                         context.printf(builder,
-                                       "allocated %zd bytes for set at %p: mask = %zd\n",
+                                      "allocated %zd bytes for set at %p: mask = %zd\n",
                                        allocsize, payload.ptr, new_mask)
 
         return builder.load(ok)
@@ -1077,7 +1077,8 @@ class SetInstance(object):
                                             nentries))
 
         with builder.if_then(builder.load(ok), likely=True):
-            meminfo = context.nrt.meminfo_new_varsize(builder, size=allocsize)
+            dtor = _imp_dtor(context, builder.module, self._ty)
+            meminfo = context.nrt.meminfo_new_varsize_dtor(builder, allocsize, builder.bitcast(dtor, cgutils.voidptr_t))
             alloc_ok = cgutils.is_null(builder, meminfo)
 
             with builder.if_else(cgutils.is_null(builder, meminfo),
