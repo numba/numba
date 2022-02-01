@@ -1226,6 +1226,7 @@ def set_constructor(context, builder, sig, args):
     inst = SetInstance.allocate(context, builder, set_type, n)
     with for_iter(context, builder, items_type, items) as loop:
         inst.add(loop.value)
+        context.nrt.decref(builder, set_type.dtype, loop.value)
 
     return impl_ret_new_ref(context, builder, set_type, inst.value)
 

@@ -920,7 +920,7 @@ def box_set(typ, val, c):
     inst = setobj.SetInstance(c.context, c.builder, typ, val)
     obj = inst.parent
     res = cgutils.alloca_once_value(c.builder, obj)
-
+    
     with c.builder.if_else(cgutils.is_not_null(c.builder, obj)) as (has_parent, otherwise):
         with has_parent:
             # Set is actually reflected => return the original object
