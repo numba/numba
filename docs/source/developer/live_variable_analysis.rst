@@ -10,7 +10,7 @@ Numba uses reference-counting for garbage collection, a technique that
 requires cooperation by the compiler.  The Numba IR encodes the location
 where a decref must be inserted.  These locations are determined by live
 variable analysis.  The corresponding source code is the ``_insert_var_dels()``
-method in https://github.com/numba/numba/blob/master/numba/interpreter.py.
+method in https://github.com/numba/numba/blob/main/numba/interpreter.py.
 
 
 In Python semantic, once a variable is defined inside a function, it is alive
