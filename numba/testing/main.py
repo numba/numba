@@ -207,7 +207,7 @@ class NumbaTestProgram(unittest.main):
         parser.add_argument('-g', '--gitdiff', dest='gitdiff', type=git_diff_str,
                             default=False, nargs='?',
                             help=('Run tests from changes made against '
-                                  'origin/master as identified by `git diff`. '
+                                  'origin/main as identified by `git diff`. '
                                   'If set to "ancestor", the diff compares '
                                   'against the common ancestor.'))
         return parser
@@ -399,9 +399,9 @@ def _choose_gitdiff_tests(tests, *, use_common_ancestor=False):
     path = os.path.join('numba', 'tests')
     if use_common_ancestor:
         print(f"Git diff by common ancestor")
-        target = 'origin/master...HEAD'
+        target = 'origin/main...HEAD'
     else:
-        target = 'origin/master..HEAD'
+        target = 'origin/main..HEAD'
     gdiff_paths = repo.git.diff(target, path, name_only=True).split()
     # normalise the paths as they are unix style from repo.git.diff
     gdiff_paths = [os.path.normpath(x) for x in gdiff_paths]
