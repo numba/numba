@@ -1359,6 +1359,7 @@ def set_update(context, builder, sig, args):
         # set instance
         casted = context.cast(builder, loop.value, items_type.dtype, inst.dtype)
         inst.add(casted)
+        context.nrt.decref(builder, items_type.dtype, loop.value)
 
     if n is not None:
         # If we pre-grew the set, downsize in case there were many collisions
