@@ -1596,6 +1596,7 @@ def noncentral_chisquare(df, nonc, size=None):
     @register_jitable
     def noncentral_chisquare_single(df, nonc):
         # identical to numpy implementation from distributions.c
+        # https://github.com/numpy/numpy/blob/c65bc212ec1987caefba0ea7efe6a55803318de9/numpy/random/src/distributions/distributions.c
         
         if df <= 0:
             raise ValueError("df <= 0")
