@@ -1115,7 +1115,8 @@ def _imp_dtor(context, module, set_type):
         ir.VoidType(),
         [llvoidptr, llsize, llvoidptr],
     )
-    fname = "_numba_set_dtor"
+    fname = f"_numba_set_dtor_{set_type}"
+
     fn = cgutils.get_or_insert_function(module, fnty, name=fname)
 
     if fn.is_declaration:

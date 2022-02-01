@@ -601,18 +601,17 @@ class TestSets(BaseTest):
 class OtherTypesTest(object):
 
     def test_constructor(self):
-        # pyfunc = empty_constructor_usecase
-        # cfunc = jit(nopython=True)(pyfunc)
-        # self.assertPreciseEqual(cfunc(), pyfunc())
+        pyfunc = empty_constructor_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertPreciseEqual(cfunc(), pyfunc())
 
         pyfunc = constructor_usecase
         cfunc = jit(nopython=True)(pyfunc)
         def check(arg):
             self.assertPreciseEqual(pyfunc(arg), cfunc(arg))
 
-        print(self.duplicates_array(200))
         check(self.duplicates_array(200))
-        # check(self.sparse_array(200))
+        check(self.sparse_array(200))
 
     def test_iterator(self):
         pyfunc = iterator_usecase
