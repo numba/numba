@@ -184,10 +184,10 @@ class TestGDBCLIInfo(TestCase):
             return CompletedProcess('INVALID_BINARY', 1)
 
         with mock.patch.object(_GDBTestWrapper, 'check_launch', mock_fn):
-            with self.assertRaises(ValueError) as raises:
-                collect_gdbinfo()
-            self.assertRegex(str(raises.exception),
-                             'gdb at.*does not appear to work.')
+            info = collect_gdbinfo()
+            self.assertIn("Testing gdb binary failed.", info.binary_loc)
+            self.assertIn("gdb at 'PATH_TO_GDB' does not appear to work",
+                          info.binary_loc)
 
     def test_no_python(self):
         def mock_fn(self):
