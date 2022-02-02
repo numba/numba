@@ -253,12 +253,6 @@ def isinstance_dict():
         return 'not dict'
 
 
-def isinstance_numba_tuple():
-    a = (1, 2, 3)
-    b = (1, 2.0, 'hello')
-    return isinstance(a, types.UniTuple) and isinstance(b, types.Tuple)
-
-
 def isinstance_usecase_numba_types(a):
     if isinstance(a, typed.List):
         return 'typed list'
@@ -1339,12 +1333,6 @@ class TestIsinstanceBuiltin(TestCase):
             with self.assertRaises(errors.TypingError) as raises:
                 fn()
             self.assertRegex(str(raises.exception), msg)
-
-    def test_isinstance_numba_tuple_type(self):
-        pyfunc = isinstance_numba_tuple
-        cfunc = jit(nopython=True)(pyfunc)
-        got = cfunc()
-        self.assertTrue(got)
 
     def test_python_numpy_scalar_alias_problem(self):
         # There's a problem due to Python and NumPy scalars being aliased in the
