@@ -1073,7 +1073,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
     def test_broadcast_arrays_non_array_input(self):
         pyfunc = numpy_broadcast_arrays
         cfunc = jit(nopython=True)(pyfunc)
-        outarrays = cfunc(2, np.zeros((1, 3), dtype=np.int64))
+        outarrays = cfunc(np.intp(2), np.zeros((1, 3), dtype=np.intp))
         expected = [(1, 3), (1, 3)]
         got = [a.shape for a in outarrays]
         self.assertPreciseEqual(expected, got)
