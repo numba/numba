@@ -10,7 +10,7 @@ from tempfile import TemporaryDirectory
 from unittest import mock
 
 import unittest
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, linux_only
 import numba.misc.numba_sysinfo as nsi
 from numba.tests.gdb_support import needs_gdb
 from numba.misc.numba_gdbinfo import collect_gdbinfo
@@ -235,6 +235,7 @@ class TestGDBCLIInfo(TestCase):
             self.assertEqual(collected.np_ver, 'Unknown')
 
 
+@linux_only
 class TestGDBCLIInfoBrokenGdbs(TestCase):
     # In these tests, it's necessary to actually run the entry point in an env
     # with the env var set as it's in part testing the processing of the
