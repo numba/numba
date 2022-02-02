@@ -1399,18 +1399,32 @@ def numpy_broadcast_shapes_list(r, m, shape):
 
 @overload(np.broadcast_arrays)
 def numpy_broadcast_arrays(*args):
+
+    for idx, arg in enumerate(args):
+        if not type_can_asarray(arg):
+            raise errors.TypingError(f'Argument "{idx}" must '
+                                     'be array-like')
+
     # number of dimensions
-    m = max([arr.ndim for arr in args])
+    m = 0
+    for idx, arg in enumerate(args):
+        if isinstance(arg, types.ArrayCompatible):
+            m = max(m, arg.ndim)
+        elif isinstance(arg, (types.Number, types.StringLiteral,
+                              types.Boolean)):
+            m = max(m, 1)
+
+    # m = max([arr.ndim for arr in args])
     tup_init = (0,) * m
 
     def impl(*args):
         # find out the output shape
         # we can't call np.broadcast_shapes here since args may have arrays
         # with different shapes and it is not possible to create a list
-        # with those shapes dinamically
+        # with those shapes dynamically
         shape = [1] * m
         for array in literal_unroll(args):
-            numpy_broadcast_shapes_list(shape, m, array.shape)
+            numpy_broadcast_shapes_list(shape, m, np.asarray(array).shape)
 
         tup = tup_init
 
@@ -1420,7 +1434,7 @@ def numpy_broadcast_arrays(*args):
         # numpy checks if the input arrays have the same shape as `shape`
         outs = []
         for array in literal_unroll(args):
-            outs.append(np.broadcast_to(array, tup))
+            outs.append(np.broadcast_to(np.asarray(array), tup))
         return outs
 
     return impl

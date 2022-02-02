@@ -1070,6 +1070,27 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             # Reverse the input shapes since broadcasting should be symmetric.
             self.broadcast_arrays_assert_correct_shape(input_shapes[::-1], expected_shape)
 
+    def test_broadcast_arrays_non_array_input(self):
+        pyfunc = numpy_broadcast_arrays
+        cfunc = jit(nopython=True)(pyfunc)
+        outarrays = cfunc(2, np.zeros((1, 3), dtype=np.int64))
+        expected = [(1, 3), (1, 3)]
+        got = [a.shape for a in outarrays]
+        self.assertPreciseEqual(expected, got)
+
+
+    def test_broadcast_arrays_invalid_input(self):
+        pyfunc = numpy_broadcast_arrays
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            arr = np.zeros(3, dtype=np.int64)
+            s = 'hello world'
+            cfunc(arr, s)
+        self.assertIn('Argument "1" must be array-like', str(raises.exception))
+
     def test_broadcast_arrays_incompatible_shapes_raise_valueerror(self):
         # Check that a ValueError is raised for incompatible shapes.
         pyfunc = numpy_broadcast_arrays
@@ -1091,6 +1112,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                     cfunc(*inarrays)
                 self.assertIn("shape mismatch: objects cannot be broadcast to a single shape",
                             str(raises.exception))
+
 
 
 if __name__ == '__main__':
