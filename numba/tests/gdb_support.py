@@ -5,16 +5,24 @@ import sys
 import unittest
 from numba.core import config
 from numba.misc.gdb_hook import _confirm_gdb
+from numba.misc.numba_gdbinfo import collect_gdbinfo
 
 # check if gdb is present and working
 try:
-    _confirm_gdb(need_ptrace_attach=False) # The driver launches as `gdb EXE`.
+    _confirm_gdb(need_ptrace_attach=False)  # The driver launches as `gdb EXE`.
     _HAVE_GDB = True
+    _gdb_info = collect_gdbinfo()
+    _GDB_HAS_PY3 = _gdb_info.py_ver.startswith('3')
 except Exception:
     _HAVE_GDB = False
+    _GDB_HAS_PY3 = False
 
 _msg = "functioning gdb with correct ptrace permissions is required"
 needs_gdb = unittest.skipUnless(_HAVE_GDB, _msg)
+
+_msg = "gdb with python 3 support needed"
+needs_gdb_py3 = unittest.skipUnless(_GDB_HAS_PY3, _msg)
+
 
 try:
     import pexpect
@@ -52,7 +60,7 @@ class GdbMIDriver(object):
     def _drive(self):
         """This function sets up the caputured gdb instance"""
         assert os.path.isfile(self._file_name)
-        cmd = [self._gdb_binary, '--interpreter', 'mi',]
+        cmd = [self._gdb_binary, '--interpreter', 'mi']
         if self._init_cmds is not None:
             cmd += list(self._init_cmds)
         cmd += ['--args', self._python, self._file_name]
@@ -169,7 +177,7 @@ class GdbMIDriver(object):
         if command is None:
             raise ValueError("command cannot be None")
         cmd = f'-interpreter-exec {interpreter} "{command}"'
-        self._run_command(cmd, expect=r'\^(done|error).*\r\n') #NOTE no `,`
+        self._run_command(cmd, expect=r'\^(done|error).*\r\n')  # NOTE no `,`
 
     def _list_features_raw(self):
         cmd = '-list-features'
