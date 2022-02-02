@@ -945,6 +945,7 @@ class SetInstance(object):
                                               (errmsg,))
 
         # Re-insert old entries
+        # Both `_iterate` and `_add_key` incref, so manually decref to balance
         payload = self.payload
         with old_payload._iterate() as loop:
             entry = loop.entry
@@ -964,6 +965,7 @@ class SetInstance(object):
         context = self._context
         builder = self._builder
 
+        # decref all of the previous entries
         with self.payload._iterate() as loop:
             entry = loop.entry
             context.nrt.decref(builder, self._ty.dtype, entry.key)
@@ -1009,9 +1011,10 @@ class SetInstance(object):
             if realloc:
                 meminfo = self._set.meminfo
                 ptr = context.nrt.meminfo_varsize_alloc(builder, meminfo,
-                                                          size=allocsize)
+                                                        size=allocsize)
                 alloc_ok = cgutils.is_null(builder, ptr)
             else:
+                # create destructor to be called upon set destruction
                 dtor = _imp_dtor(context, builder.module, self._ty)
                 meminfo = context.nrt.meminfo_new_varsize_dtor(
                     builder, allocsize, builder.bitcast(dtor, cgutils.voidptr_t))
@@ -1036,7 +1039,7 @@ class SetInstance(object):
 
                     if DEBUG_ALLOCS:
                         context.printf(builder,
-                                      "allocated %zd bytes for set at %p: mask = %zd\n",
+                                       "allocated %zd bytes for set at %p: mask = %zd\n",
                                        allocsize, payload.ptr, new_mask)
 
         return builder.load(ok)
@@ -1077,12 +1080,12 @@ class SetInstance(object):
                                             nentries))
 
         with builder.if_then(builder.load(ok), likely=True):
+            # create destructor for new meminfo
             dtor = _imp_dtor(context, builder.module, self._ty)
             meminfo = context.nrt.meminfo_new_varsize_dtor(builder, allocsize, builder.bitcast(dtor, cgutils.voidptr_t))
             alloc_ok = cgutils.is_null(builder, meminfo)
 
-            with builder.if_else(cgutils.is_null(builder, meminfo),
-                                 likely=False) as (if_error, if_ok):
+            with builder.if_else(alloc_ok, likely=False) as (if_error, if_ok):
                 with if_error:
                     builder.store(cgutils.false_bit, ok)
                 with if_ok:
@@ -1092,12 +1095,17 @@ class SetInstance(object):
                     payload.fill = src_payload.fill
                     payload.finger = zero
                     payload.mask = mask
+
+                    # instead of using `_add_key` for every entry, since the
+                    # size of the new set is the same, we can just copy the
+                    # data directly without having to re-compute the hash
                     cgutils.raw_memcpy(builder, payload.entries,
                                        src_payload.entries, nentries,
                                        entry_size)
+                    # increment the refcounts to simulate `_add_key` for each
+                    # element
                     with src_payload._iterate() as loop:
-                        entry = loop.entry
-                        context.nrt.incref(builder, self._ty.dtype, entry.key)
+                        context.nrt.incref(builder, self._ty.dtype, loop.entry.key)
 
                     if DEBUG_ALLOCS:
                         context.printf(builder,
@@ -1111,10 +1119,12 @@ def _imp_dtor(context, module, set_type):
     """
     llvoidptr = context.get_value_type(types.voidptr)
     llsize = context.get_value_type(types.uintp)
+    # create a dtor function that takes (void* set, size_t size, void* dtor_info)
     fnty = ir.FunctionType(
         ir.VoidType(),
         [llvoidptr, llsize, llvoidptr],
     )
+    # create type-specific name
     fname = f"_numba_set_dtor_{set_type}"
 
     fn = cgutils.get_or_insert_function(module, fnty, name=fname)
@@ -1223,6 +1233,8 @@ def set_constructor(context, builder, sig, args):
 
     # If the argument has a len(), preallocate the set so as to
     # avoid resizes.
+    # both `addg and `for_iter` incref each item in the set, so manually decref
+    # the items to avoid a leak from the double incref
     n = call_len(context, builder, items_type, items)
     inst = SetInstance.allocate(context, builder, set_type, n)
     with for_iter(context, builder, items_type, items) as loop:
@@ -1359,6 +1371,8 @@ def set_update(context, builder, sig, args):
         # set instance
         casted = context.cast(builder, loop.value, items_type.dtype, inst.dtype)
         inst.add(casted)
+        # decref each item to counter balance the double incref from `add` +
+        # `for_iter`
         context.nrt.decref(builder, items_type.dtype, loop.value)
 
     if n is not None:
