@@ -1,21 +1,23 @@
+from collections import namedtuple, defaultdict
 import ast
 import inspect
-import operator
 import textwrap
+import operator
 import warnings
-from collections import defaultdict, namedtuple
 from functools import partial
 
-from llvmlite.llvmpy.core import Builder, Constant, Type
-from numba.core import (cgutils, config, debuginfo, funcdesc, generators, ir,
-                        ir_utils, removerefctpass, targetconfig, types, typing,
-                        utils)
-from numba.core.analysis import compute_use_defs
-from numba.core.environment import Environment
-from numba.core.errors import (LiteralTypingError, LoweringError, NumbaWarning,
-                               TypingError, UnsupportedError,
-                               new_error_context)
+from llvmlite.llvmpy.core import Constant, Type, Builder
+
+from numba.core import (typing, utils, types, ir, debuginfo, funcdesc,
+                        generators, config, ir_utils, cgutils, removerefctpass,
+                        targetconfig)
+from numba.core.errors import (LoweringError, new_error_context, TypingError,
+                               LiteralTypingError, UnsupportedError,
+                               NumbaWarning)
 from numba.core.funcdesc import default_mangler
+from numba.core.environment import Environment
+from numba.core.analysis import compute_use_defs
+
 
 _VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
 
@@ -192,10 +194,10 @@ class BaseLower(object):
             print(("LLVM DUMP %s" % self.fndesc).center(80, '-'))
             if config.HIGHLIGHT_DUMPS:
                 try:
-                    from numba.misc.dump_style import by_colorscheme
                     from pygments import highlight
-                    from pygments.formatters import Terminal256Formatter
                     from pygments.lexers import LlvmLexer as lexer
+                    from pygments.formatters import Terminal256Formatter
+                    from numba.misc.dump_style import by_colorscheme
                     print(highlight(self.module.__repr__(), lexer(),
                                     Terminal256Formatter(
                                         style=by_colorscheme())))
@@ -529,7 +531,6 @@ class Lower(BaseLower):
             valuety = self.typeof(inst.value.name)
             assert signature is not None
             assert signature.args[0] == targetty
-            breakpoint()
             impl = self.context.get_setattr(inst.attr, signature)
 
             # Convert argument to match
