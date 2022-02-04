@@ -1,4 +1,5 @@
 from numba import cuda, int32, float64, void, float32
+from numba.core.errors import TypingError
 
 from numba.cuda.testing import unittest, CUDATestCase
 
@@ -374,6 +375,21 @@ class TestSharedMemory(CUDATestCase):
         sm_slice_copy[nblocks, nthreads, 0, nshared](arr, d_result, chunksize)
         host_result = d_result.copy_to_host()
         np.testing.assert_array_equal(arr, host_result)
+
+    def test_invalid_array_type(self):
+        rgx = ".*Cannot infer the type of variable 'arr'.*"
+
+        def unsupported_type():
+            arr = cuda.shared.array(10, dtype=np.dtype('O')) # noqa: F841
+        with self.assertRaisesRegex(TypingError, rgx):
+            cuda.jit(void())(unsupported_type)
+
+        rgx = ".*Invalid NumPy dtype specified: 'int33'.*"
+
+        def invalid_string_type():
+            arr = cuda.shared.array(10, dtype='int33') # noqa: F841
+        with self.assertRaisesRegex(TypingError, rgx):
+            cuda.jit(void())(invalid_string_type)
 
     def test_struct_model_type_static(self):
         nthreads = 64
