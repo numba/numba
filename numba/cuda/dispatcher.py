@@ -1,4 +1,3 @@
-import inspect
 import numpy as np
 import os
 import sys
@@ -9,7 +8,6 @@ from numba.core import config, serialize, sigutils, types, typing, utils
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.dispatcher import Dispatcher as uber_Dispatcher
 from numba.core.errors import NumbaPerformanceWarning
-from numba.core.typing.templates import AbstractTemplate
 from numba.core.typing.typeof import Purpose, typeof
 
 from numba.cuda.api import get_current_device
@@ -494,9 +492,6 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
 
             self._can_compile = False
 
-        #if targetoptions.get('device'):
-        #    self._register_device_function()
-
     def _make_finalizer(self):
         # Dummy finalizer whilst _DispatcherBase assumes the existence of a
         # finalizer
@@ -504,47 +499,9 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
             pass
         return finalizer
 
-    def _register_device_function(self):
-        dispatcher = self
-        pyfunc = self.py_func
-
-        class device_function_template(AbstractTemplate):
-            key = dispatcher
-
-            def generic(self, args, kws):
-                assert not kws
-                return dispatcher.compile(args).signature
-
-            def get_template_info(cls):
-                basepath = os.path.dirname(
-                    os.path.dirname(os.path.dirname(cuda.__file__)))
-                code, firstlineno = inspect.getsourcelines(pyfunc)
-                path = inspect.getsourcefile(pyfunc)
-                sig = str(utils.pysignature(pyfunc))
-                info = {
-                    'kind': "overload",
-                    'name': getattr(cls.key, '__name__', "unknown"),
-                    'sig': sig,
-                    'filename': utils.safe_relpath(path, start=basepath),
-                    'lines': (firstlineno, firstlineno + len(code) - 1),
-                    'docstring': pyfunc.__doc__
-                }
-                return info
-
-        from .descriptor import cuda_target
-        typingctx = cuda_target.typing_context
-        typingctx.insert_user_function(dispatcher, device_function_template)
-
     @property
     def _numba_type_(self):
         return cuda_types.CUDADispatcher(self)
-
-    @property
-    def is_compiling(self):
-        """
-        Whether a specialization is currently being compiled.
-        """
-        return self._compiling_counter
 
     def configure(self, griddim, blockdim, stream=0, sharedmem=0):
         griddim, blockdim = normalize_kernel_dimensions(griddim, blockdim)
