@@ -374,11 +374,11 @@ class _Kernel(serialize.ReduceMixin):
 
 
 class ForAll(object):
-    def __init__(self, kernel, ntasks, tpb, stream, sharedmem):
+    def __init__(self, dispatcher, ntasks, tpb, stream, sharedmem):
         if ntasks < 0:
             raise ValueError("Can't create ForAll with negative task count: %s"
                              % ntasks)
-        self.kernel = kernel
+        self.dispatcher = dispatcher
         self.ntasks = ntasks
         self.thread_per_block = tpb
         self.stream = stream
@@ -388,16 +388,17 @@ class ForAll(object):
         if self.ntasks == 0:
             return
 
-        if self.kernel.specialized:
-            kernel = self.kernel
+        if self.dispatcher.specialized:
+            specialized = self.dispatcher
         else:
-            kernel = self.kernel.specialize(*args)
-        blockdim = self._compute_thread_per_block(kernel)
+            specialized = self.dispatcher.specialize(*args)
+        blockdim = self._compute_thread_per_block(specialized)
         griddim = (self.ntasks + blockdim - 1) // blockdim
 
-        return kernel[griddim, blockdim, self.stream, self.sharedmem](*args)
+        return specialized[griddim, blockdim, self.stream,
+                           self.sharedmem](*args)
 
-    def _compute_thread_per_block(self, kernel):
+    def _compute_thread_per_block(self, dispatcher):
         tpb = self.thread_per_block
         # Prefer user-specified config
         if tpb != 0:
@@ -405,11 +406,11 @@ class ForAll(object):
         # Else, ask the driver to give a good config
         else:
             ctx = get_context()
-            # Kernel is specialized, so there's only one definition - get it so
-            # we can get the cufunc from the code library
-            defn = next(iter(kernel.overloads.values()))
+            # Dispatcher is specialized, so there's only one definition - get
+            # it so we can get the cufunc from the code library
+            kernel = next(iter(dispatcher.overloads.values()))
             kwargs = dict(
-                func=defn._codelibrary.get_cufunc(),
+                func=kernel._codelibrary.get_cufunc(),
                 b2d_func=0,     # dynamic-shared memory is constant to blksz
                 memsize=self.sharedmem,
                 blocksizelimit=1024,
@@ -495,7 +496,7 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
         return self.configure(*args)
 
     def forall(self, ntasks, tpb=0, stream=0, sharedmem=0):
-        """Returns a 1D-configured kernel for a given number of tasks.
+        """Returns a 1D-configured dispatcher for a given number of tasks.
 
         This assumes that:
 
@@ -507,11 +508,12 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
         :param ntasks: The number of tasks.
         :param tpb: The size of a block. An appropriate value is chosen if this
                     parameter is not supplied.
-        :param stream: The stream on which the configured kernel will be
+        :param stream: The stream on which the configured dispatcher will be
                        launched.
         :param sharedmem: The number of bytes of dynamic shared memory required
                           by the kernel.
-        :return: A configured kernel, ready to launch on a set of arguments."""
+        :return: A configured dispatcher, ready to launch on a set of
+                 arguments."""
 
         return ForAll(self, ntasks, tpb=tpb, stream=stream, sharedmem=sharedmem)
 
