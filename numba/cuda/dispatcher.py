@@ -43,6 +43,10 @@ class _Kernel(serialize.ReduceMixin):
 
         super().__init__()
 
+        # Emulate a CompileResult so that _DispatcherBase.nopython_signatures
+        # can be used as-is
+        self.objectmode = False
+
         self.py_func = py_func
         self.argtypes = argtypes
         self.debug = debug
@@ -559,17 +563,6 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
         argtypes = [self.typeof_pyval(a) for a in args]
         return self.compile(tuple(argtypes))
 
-    def _search_new_conversions(self, *args, **kws):
-        # Based on _DispatcherBase._search_new_conversions
-        assert not kws
-        args = [self.typeof_pyval(a) for a in args]
-        found = False
-        for sig in self.nopython_signatures:
-            conv = self.typingctx.install_possible_conversions(args, sig.args)
-            if conv:
-                found = True
-        return found
-
     def typeof_pyval(self, val):
         # Based on _DispatcherBase.typeof_pyval, but differs from it to support
         # the CUDA Array Interface.
@@ -583,11 +576,6 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
                               Purpose.argument)
             else:
                 raise
-
-    @property
-    def nopython_signatures(self):
-        # Based on _DispatcherBase.nopython_signatures
-        return [kernel.signature for kernel in self.overloads.values()]
 
     def specialize(self, *args):
         '''
