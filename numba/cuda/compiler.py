@@ -1,7 +1,8 @@
 from numba.core.typing.templates import ConcreteTemplate
 from numba.core import types, typing, funcdesc, config, compiler
-from numba.core.compiler import (CompilerBase, DefaultPassBuilder,
-                                 Flags, Option, CompileResult, CR_FIELDS)
+from numba.core.compiler import (sanitize_compile_result_entries, CompilerBase,
+                                 DefaultPassBuilder, Flags, Option,
+                                 CompileResult)
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.compiler_machinery import (LoweringPass, AnalysisPass,
                                            PassManager, register_pass)
@@ -51,20 +52,9 @@ class CUDACompileResult(CompileResult):
         return id(self)
 
 
-def compile_result(**kws):
-    keys = set(kws.keys())
-    fieldset = set(CR_FIELDS)
-    badnames = keys - fieldset
-    if badnames:
-        raise NameError(*badnames)
-    missing = fieldset - keys
-    for k in missing:
-        kws[k] = None
-    # Avoid keeping alive traceback variables
-    err = kws['typing_error']
-    if err is not None:
-        kws['typing_error'] = err.with_traceback(None)
-    return CUDACompileResult(**kws)
+def cuda_compile_result(**entries):
+    entries = sanitize_compile_result_entries(entries)
+    return CUDACompileResult(**entries)
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
@@ -82,7 +72,7 @@ class CUDABackend(LoweringPass):
         lowered = state['cr']
         signature = typing.signature(state.return_type, *state.args)
 
-        state.cr = compile_result(
+        state.cr = cuda_compile_result(
             typing_context=state.typingctx,
             target_context=state.targetctx,
             typing_error=state.status.fail_reason,
@@ -92,7 +82,6 @@ class CUDABackend(LoweringPass):
             signature=signature,
             fndesc=lowered.fndesc,
         )
-
         return True
 
 
