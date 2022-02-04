@@ -41,7 +41,7 @@ class CUDATypingContext(typing.BaseContext):
                 targetoptions['debug'] = targetoptions.get('debug', False)
                 targetoptions['opt'] = targetoptions.get('opt', True)
                 sigs = None
-                from .compiler import Dispatcher
+                from numba.cuda.dispatcher import Dispatcher
                 disp = Dispatcher(val, sigs, targetoptions)
                 # cache the device function for future use and to avoid
                 # duplicated copy of the same function.

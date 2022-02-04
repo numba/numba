@@ -1,8 +1,9 @@
 from warnings import warn
 from numba.core import types, config, sigutils
 from numba.core.errors import DeprecationError, NumbaInvalidConfigWarning
-from .compiler import declare_device_function, Dispatcher
-from .simulator.kernel import FakeCUDAKernel
+from numba.cuda.compiler import declare_device_function
+from numba.cuda.dispatcher import Dispatcher
+from numba.cuda.simulator.kernel import FakeCUDAKernel
 
 
 _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
