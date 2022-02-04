@@ -50,6 +50,14 @@ class _Kernel(serialize.ReduceMixin):
         # target with slight modifications.
         self.objectmode = False
 
+        # The finalizer constructed by _DispatcherBase._make_finalizer also
+        # expects overloads to be a CompileResult. It uses the entry_point to
+        # remove a CompileResult from a target context. However, since we never
+        # insert kernels into a target context (there is no need because they
+        # cannot be called by other functions, only through the dispatcher) it
+        # suffices to pretend we have an entry point of None.
+        self.entry_point = None
+
         self.py_func = py_func
         self.argtypes = argtypes
         self.debug = debug
@@ -484,13 +492,6 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         # If we produced specialized dispatchers, we cache them for each set of
         # argument types
         self.specializations = {}
-
-    def _make_finalizer(self):
-        # Dummy finalizer whilst _DispatcherBase assumes the existence of a
-        # finalizer
-        def finalizer():
-            pass
-        return finalizer
 
     @property
     def _numba_type_(self):
