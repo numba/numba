@@ -7,14 +7,14 @@ import functools
 
 from numba.core import config, serialize, sigutils, types, typing, utils
 from numba.core.compiler_lock import global_compiler_lock
-from numba.core.dispatcher import _DispatcherBase
+from numba.core.dispatcher import Dispatcher as uber_Dispatcher
 from numba.core.errors import NumbaPerformanceWarning
 from numba.core.typing.templates import AbstractTemplate
 from numba.core.typing.typeof import Purpose, typeof
 
 from numba.cuda.api import get_current_device
 from numba.cuda.args import wrap_arg
-from numba.cuda.compiler import compile_cuda
+from numba.cuda.compiler import compile_cuda, CUDACompiler
 from numba.cuda.cudadrv import driver
 from numba.cuda.cudadrv.devices import get_context
 from numba.cuda.cudadrv.libs import get_cudalib
@@ -444,7 +444,7 @@ class _LaunchConfiguration:
                                     self.stream, self.sharedmem)
 
 
-class Dispatcher(_DispatcherBase, serialize.ReduceMixin):
+class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
     '''
     CUDA Dispatcher object. When configured and called, the dispatcher will
     specialize itself for the given arguments (if no suitable specialized
@@ -462,21 +462,13 @@ class Dispatcher(_DispatcherBase, serialize.ReduceMixin):
 
     targetdescr = cuda_target
 
-    def __init__(self, py_func, sigs, targetoptions):
-        self.typingctx = self.targetdescr.typing_context
-        self.targetctx = self.targetdescr.target_context
-
-        pysig = utils.pysignature(py_func)
-        arg_count = len(pysig.parameters)
-        can_fallback = False # CUDA cannot fallback to object mode
-
-        _DispatcherBase.__init__(self, arg_count, py_func, pysig, can_fallback,
-                                 exact_match_required=False)
-
+    def __init__(self, py_func, sigs, targetoptions,
+                 pipeline_class=CUDACompiler):
         # TODO: Check if this fixes the cuda docstring jit issue
-        functools.update_wrapper(self, py_func)
 
-        self.targetoptions = targetoptions
+        super().__init__(py_func, pipeline_class=pipeline_class)
+
+        # CUDA-specific stuff - hopefully some of it can be removed ASAP
 
         self.sigs = []
         self.link = targetoptions.pop('link', (),)
@@ -501,8 +493,8 @@ class Dispatcher(_DispatcherBase, serialize.ReduceMixin):
 
             self._can_compile = False
 
-        if targetoptions.get('device'):
-            self._register_device_function()
+        #if targetoptions.get('device'):
+        #    self._register_device_function()
 
     def _make_finalizer(self):
         # Dummy finalizer whilst _DispatcherBase assumes the existence of a
