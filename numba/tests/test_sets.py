@@ -59,8 +59,8 @@ def iterator_usecase(arg):
 def update_usecase(a, b, c):
     s = set()
     s.update(a)
-    s.update(b)
-    s.update(c)
+    # s.update(b)
+    # s.update(c)
     return list(s)
 
 def bool_usecase(arg):
@@ -140,7 +140,7 @@ def copy_usecase_empty(a):
     s = set(a)
     s.clear()
     ss = s.copy()
-    s.add(42)
+    s.add(a)
     return len(ss), list(ss)
 
 def copy_usecase_deleted(a, b):
@@ -369,7 +369,6 @@ class TestSets(BaseTest):
         def check(arg):
             self.assertPreciseEqual(pyfunc(arg), cfunc(arg))
 
-        check((1, 2, 3, 2, 7))
         check(self.duplicates_array(200))
         check(self.sparse_array(200))
 
@@ -377,14 +376,14 @@ class TestSets(BaseTest):
         pyfunc = set_return_usecase
         cfunc = jit(nopython=True)(pyfunc)
 
-        arg = (1, 2, 3, 2, 7)
+        arg = self.duplicates_array(200)
+        print(arg)
         self.assertEqual(cfunc(arg), set(arg))
 
     def test_iterator(self):
         pyfunc = iterator_usecase
         check = self.unordered_checker(pyfunc)
 
-        check((1, 2, 3, 2, 7))
         check(self.duplicates_array(200))
         check(self.sparse_array(200))
 
@@ -392,29 +391,19 @@ class TestSets(BaseTest):
         pyfunc = update_usecase
         check = self.unordered_checker(pyfunc)
 
-        a, b, c = (1, 2, 4, 9), (2, 3, 5, 11, 42), (4, 5, 6, 42)
-        check(a, b, c)
-
         a = self.sparse_array(50)
         b = self.duplicates_array(50)
         c = self.sparse_array(50)
         check(a, b, c)
-
-    def test_bool(self):
-        pyfunc = bool_usecase
-        check = self.unordered_checker(pyfunc)
-
-        check([1])
-        check([1, 2])
-        check([False, False])
-        check([True, False])
+        import gc
+        gc.collect()
 
     def test_remove(self):
         pyfunc = remove_usecase
         check = self.unordered_checker(pyfunc)
 
-        a = (1, 2, 3, 5, 8, 42)
-        b = (5, 2, 8)
+        a = self.sparse_array(50)
+        b = a[::10]
         check(a, b)
 
     def test_remove_error(self):
@@ -423,16 +412,18 @@ class TestSets(BaseTest):
 
         pyfunc = remove_usecase
         cfunc = jit(nopython=True)(pyfunc)
+
+        # ensure that there will be a key error
+        items = tuple(set(self.sparse_array(50)))
+        a = items[1:]
+        b = (items[0],)
         with self.assertRaises(KeyError) as raises:
-            cfunc((1, 2, 3), (5, ))
+            cfunc(a, b)
 
     def test_discard(self):
         pyfunc = discard_usecase
         check = self.unordered_checker(pyfunc)
 
-        a = (1, 2, 3, 5, 8, 42)
-        b = (5, 2, 8)
-        check(a, b)
         a = self.sparse_array(50)
         b = self.sparse_array(50)
         check(a, b)
@@ -446,13 +437,17 @@ class TestSets(BaseTest):
         """
         pyfunc = add_discard_usecase
         check = self.unordered_checker(pyfunc)
-        check((1,), 5, 5)
+
+        # ensure a and b are different
+        a = b = None
+        while a == b:
+            a, b = self.sparse_array(2)
+        check((a,), b, b)
 
     def test_pop(self):
         pyfunc = pop_usecase
         check = self.unordered_checker(pyfunc)
 
-        check((2, 3, 55, 11, 8, 42))
         check(self.sparse_array(50))
 
     def test_contains(self):
@@ -461,15 +456,12 @@ class TestSets(BaseTest):
         def check(a, b):
             self.assertPreciseEqual(pyfunc(a, b), cfunc(a, b))
 
-        a = (1, 2, 3, 5, 42)
-        b = (5, 2, 8, 3)
+        a = self.sparse_array(50)
+        b = self.sparse_array(50)
         check(a, b)
 
     def _test_xxx_update(self, pyfunc):
         check = self.unordered_checker(pyfunc)
-
-        a, b = (1, 2, 4, 11), (2, 3, 5, 11, 42)
-        check(a, b)
 
         sizes = (0, 50, 500)
         for na, nb in itertools.product(sizes, sizes):
@@ -491,7 +483,7 @@ class TestSets(BaseTest):
         def check(a, b):
             self.assertPreciseEqual(pyfunc(a, b), cfunc(a, b))
 
-        a, b = map(set, [(1, 2, 4, 11), (2, 3, 5, 11, 42)])
+        a, b = map(set, [self.sparse_array(10), self.sparse_array(15)])
         args = [a & b, a - b, a | b, a ^ b]
         args = [tuple(x) for x in args]
         for a, b in itertools.product(args, args):
@@ -510,19 +502,18 @@ class TestSets(BaseTest):
         pyfunc = clear_usecase
         check = self.unordered_checker(pyfunc)
 
-        check((1, 2, 4, 11))
         check(self.sparse_array(50))
 
     def test_copy(self):
         # Source set doesn't have any deleted entries
         pyfunc = copy_usecase
         check = self.unordered_checker(pyfunc)
-        check((1, 2, 4, 11))
         check(self.sparse_array(50))
 
         pyfunc = copy_usecase_empty
         check = self.unordered_checker(pyfunc)
-        check((1,))
+        a, = self.sparse_array(1)
+        check(a)
 
         # Source set has deleted entries
         pyfunc = copy_usecase_deleted
@@ -597,40 +588,22 @@ class TestSets(BaseTest):
     def test_ixor(self):
         self._test_set_operator(make_inplace_operator_usecase('^='))
 
+class TestTypeSpecific(BaseTest):
+    """
+    Test type-specific set operations.
+    """
 
-class OtherTypesTest(object):
-
-    def test_constructor(self):
-        pyfunc = empty_constructor_usecase
-        cfunc = jit(nopython=True)(pyfunc)
-        self.assertPreciseEqual(cfunc(), pyfunc())
-
-        pyfunc = constructor_usecase
-        cfunc = jit(nopython=True)(pyfunc)
-        def check(arg):
-            self.assertPreciseEqual(pyfunc(arg), cfunc(arg))
-
-        check(self.duplicates_array(200))
-        check(self.sparse_array(200))
-
-    def test_iterator(self):
-        pyfunc = iterator_usecase
+    def test_bool(self):
+        pyfunc = bool_usecase
         check = self.unordered_checker(pyfunc)
 
-        check(self.duplicates_array(200))
-        check(self.sparse_array(200))
-
-    def test_update(self):
-        pyfunc = update_usecase
-        check = self.unordered_checker(pyfunc)
-
-        a = self.sparse_array(50)
-        b = self.duplicates_array(50)
-        c = self.sparse_array(50)
-        check(a, b, c)
+        check([1])
+        check([1, 2])
+        check([False, False])
+        check([True, False])
 
 
-class TestFloatSets(OtherTypesTest, BaseTest):
+class TestFloatSets(TestSets):
     """
     Test sets with floating-point keys.
     """
@@ -641,7 +614,7 @@ class TestFloatSets(OtherTypesTest, BaseTest):
         return np.arange(stop, dtype=np.float32) * np.float32(0.1)
 
 
-class TestTupleSets(OtherTypesTest, BaseTest):
+class TestTupleSets(TestSets):
     """
     Test sets with tuple keys.
     """
@@ -653,7 +626,7 @@ class TestTupleSets(OtherTypesTest, BaseTest):
         return list(zip(b, c, d))
 
 
-class TestUnicodeSets(OtherTypesTest, BaseTest):
+class TestUnicodeSets(TestSets):
     """
     Test sets with unicode keys.
     """

@@ -945,7 +945,7 @@ class SetInstance(object):
                                               (errmsg,))
 
         # Re-insert old entries
-        # Both `_iterate` and `_add_key` incref, so manually decref to balance
+        # Decref to balance incref from `_add_key`
         payload = self.payload
         with old_payload._iterate() as loop:
             entry = loop.entry
@@ -1233,7 +1233,7 @@ def set_constructor(context, builder, sig, args):
 
     # If the argument has a len(), preallocate the set so as to
     # avoid resizes.
-    # both `addg and `for_iter` incref each item in the set, so manually decref
+    # both `add` and `for_iter` incref each item in the set, so manually decref
     # the items to avoid a leak from the double incref
     n = call_len(context, builder, items_type, items)
     inst = SetInstance.allocate(context, builder, set_type, n)
