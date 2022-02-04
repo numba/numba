@@ -29,6 +29,12 @@ class CUDAFlags(Flags):
     )
 
 
+# FIXME: Update this comment
+# We give the id of the overload (a CompileResult) because this is used
+# as a key into a dict of overloads, and this is the only small and
+# unique property of a CompileResult on CUDA (c.f. the CPU target,
+# which uses its entry_point, which is a pointer value).
+
 class CUDACompileResult(CompileResult):
     @property
     def entry_point(self):

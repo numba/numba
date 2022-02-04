@@ -731,14 +731,7 @@ class Dispatcher(_DispatcherBase, serialize.ReduceMixin):
 
             return call_template, pysig, args, kws
 
-#    def get_overload(self, sig):
-#        # We give the id of the overload (a CompileResult) because this is used
-#        # as a key into a dict of overloads, and this is the only small and
-#        # unique property of a CompileResult on CUDA (c.f. the CPU target,
-#        # which uses its entry_point, which is a pointer value).
-#        args, return_type = sigutils.normalize_signature(sig)
-#        return id(self.overloads[args])
-
+    # XXX: Delete this and call the class CUDADispatcher
     def __repr__(self):
         return f"numba.cuda.dispatcher.Dispatcher({self.py_func})"
 
@@ -764,8 +757,6 @@ class Dispatcher(_DispatcherBase, serialize.ReduceMixin):
                                 inline=inline, nvvm_options=nvvm_options)
             self.overloads[args] = cres
 
-            # The inserted function uses the id of the CompileResult as a key,
-            # consistent with get_overload() above.
             cres.target_context.insert_user_function(cres.entry_point,
                                                      cres.fndesc,
                                                      [cres.library])
