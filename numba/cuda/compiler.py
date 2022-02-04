@@ -9,7 +9,7 @@ from numba.core.errors import NumbaInvalidConfigWarning, TypingError
 from numba.core.typed_passes import (IRLegalization, NativeLowering,
                                      AnnotateTypes)
 from warnings import warn
-from .api import get_current_device
+from numba.cuda.api import get_current_device
 
 
 def _nvvm_options_type(x):
