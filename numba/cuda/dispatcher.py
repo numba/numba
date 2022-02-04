@@ -466,7 +466,8 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
                  pipeline_class=CUDACompiler):
         # TODO: Check if this fixes the cuda docstring jit issue
 
-        super().__init__(py_func, pipeline_class=pipeline_class)
+        super().__init__(py_func, targetoptions=targetoptions,
+                         pipeline_class=pipeline_class)
 
         # CUDA-specific stuff - hopefully some of it can be removed ASAP
 
