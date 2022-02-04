@@ -99,15 +99,15 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             targetoptions['fastmath'] = fastmath
             targetoptions['device'] = device
             targetoptions['extensions'] = extensions
+
             disp = Dispatcher(func, targetoptions=targetoptions)
-            # TODO: Support multiple signatures by compiling in a loop over
-            # signatures.
+
             if device:
                 disp.compile_device(argtypes)
-                disp._specialized = True
             else:
                 disp.compile(argtypes)
-                disp._specialized = True
+
+            disp._specialized = True
             disp.disable_compile()
 
             return disp
