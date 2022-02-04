@@ -43,8 +43,11 @@ class _Kernel(serialize.ReduceMixin):
 
         super().__init__()
 
-        # Emulate a CompileResult so that _DispatcherBase.nopython_signatures
-        # can be used as-is
+        # _DispatcherBase.nopython_signatures() expects this attribute to be
+        # present, because it assumes an overload is a CompileResult. In the
+        # CUDA target, _Kernel instances are stored instead, so we provide this
+        # attribute here to avoid duplicating nopython_signatures() in the CUDA
+        # target with slight modifications.
         self.objectmode = False
 
         self.py_func = py_func
@@ -466,17 +469,20 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
     targetdescr = cuda_target
 
     def __init__(self, py_func, targetoptions, pipeline_class=CUDACompiler):
-        # TODO: Check if this fixes the cuda docstring jit issue
-
         super().__init__(py_func, targetoptions=targetoptions,
                          pipeline_class=pipeline_class)
-
-        # CUDA-specific stuff - hopefully some of it can be removed ASAP
-
-        self._specialized = False
         self._type = self._numba_type_
 
-        # Specializations for given sets of argument types
+        # The following properties are for specialization of CUDADisptachers. A
+        # specialized CUDADispatcher is one that is compiled for exactly one
+        # set of argument types, and bypasses some argument type checking for
+        # faster kernel launches.
+
+        # Is this a specialized dispatcher?
+        self._specialized = False
+
+        # If we produced specialized dispatchers, we cache them for each set of
+        # argument types
         self.specializations = {}
 
     def _make_finalizer(self):
