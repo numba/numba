@@ -1,4 +1,3 @@
-import collections
 import inspect
 import numpy as np
 import os
@@ -8,9 +7,8 @@ import functools
 
 from numba.core import config, serialize, sigutils, types, typing, utils
 from numba.core.compiler_lock import global_compiler_lock
-from numba.core.dispatcher import CompilingCounter, OmittedArg
+from numba.core.dispatcher import _DispatcherBase
 from numba.core.errors import NumbaPerformanceWarning
-from numba.core.typeconv.rules import default_type_manager
 from numba.core.typing.templates import AbstractTemplate
 from numba.core.typing.typeof import Purpose, typeof
 
@@ -446,7 +444,7 @@ class _LaunchConfiguration:
                                     self.stream, self.sharedmem)
 
 
-class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
+class Dispatcher(_DispatcherBase, serialize.ReduceMixin):
     '''
     CUDA Dispatcher object. When configured and called, the dispatcher will
     specialize itself for the given arguments (if no suitable specialized
@@ -465,53 +463,32 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
     targetdescr = cuda_target
 
     def __init__(self, py_func, sigs, targetoptions):
-        self.py_func = py_func
+        self.typingctx = self.targetdescr.typing_context
+        self.targetctx = self.targetdescr.target_context
+
+        pysig = utils.pysignature(py_func)
+        arg_count = len(pysig.parameters)
+        can_fallback = False # CUDA cannot fallback to object mode
+
+        _DispatcherBase.__init__(self, arg_count, py_func, pysig, can_fallback,
+                                 exact_match_required=False)
+
+        # TODO: Check if this fixes the cuda docstring jit issue
+        functools.update_wrapper(self, py_func)
+
+        self.targetoptions = targetoptions
+
         self.sigs = []
         self.link = targetoptions.pop('link', (),)
         self._can_compile = True
         self._type = self._numba_type_
 
-        # The compiling counter is only used when compiling device functions as
-        # it is used to detect recursion - recursion is not possible when
-        # compiling a kernel.
-        self._compiling_counter = CompilingCounter()
-
         # Specializations for given sets of argument types
         self.specializations = {}
-
-        # A mapping of signatures to compile results
-        self.overloads = collections.OrderedDict()
-
-        self.targetoptions = targetoptions
 
         # defensive copy
         self.targetoptions['extensions'] = \
             list(self.targetoptions.get('extensions', []))
-
-        self.typingctx = self.targetdescr.typing_context
-
-        self._tm = default_type_manager
-
-        pysig = utils.pysignature(py_func)
-        arg_count = len(pysig.parameters)
-        argnames = tuple(pysig.parameters)
-        default_values = self.py_func.__defaults__ or ()
-        defargs = tuple(OmittedArg(val) for val in default_values)
-        can_fallback = False # CUDA cannot fallback to object mode
-
-        try:
-            lastarg = list(pysig.parameters.values())[-1]
-        except IndexError:
-            has_stararg = False
-        else:
-            has_stararg = lastarg.kind == lastarg.VAR_POSITIONAL
-
-        exact_match_required = False
-
-        _dispatcher.Dispatcher.__init__(self, self._tm.get_pointer(),
-                                        arg_count, self._fold_args, argnames,
-                                        defargs, can_fallback, has_stararg,
-                                        exact_match_required)
 
         if sigs:
             if len(sigs) > 1:
@@ -526,6 +503,13 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
 
         if targetoptions.get('device'):
             self._register_device_function()
+
+    def _make_finalizer(self):
+        # Dummy finalizer whilst _DispatcherBase assumes the existence of a
+        # finalizer
+        def finalizer():
+            pass
+        return finalizer
 
     def _register_device_function(self):
         dispatcher = self
