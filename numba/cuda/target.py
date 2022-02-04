@@ -42,7 +42,7 @@ class CUDATypingContext(typing.BaseContext):
                 targetoptions['opt'] = targetoptions.get('opt', True)
                 sigs = None
                 from numba.cuda.dispatcher import Dispatcher
-                disp = Dispatcher(val, sigs, targetoptions)
+                disp = Dispatcher(val.py_func, sigs, targetoptions)
                 # cache the device function for future use and to avoid
                 # duplicated copy of the same function.
                 val.__dispatcher = disp

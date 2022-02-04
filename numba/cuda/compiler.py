@@ -1,7 +1,7 @@
 from numba.core.typing.templates import ConcreteTemplate
 from numba.core import types, typing, funcdesc, config, compiler
 from numba.core.compiler import (CompilerBase, DefaultPassBuilder,
-                                 compile_result, Flags, Option)
+                                 Flags, Option, CompileResult, CR_FIELDS)
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.compiler_machinery import (LoweringPass, AnalysisPass,
                                            PassManager, register_pass)
@@ -29,6 +29,28 @@ class CUDAFlags(Flags):
     )
 
 
+class CUDACompileResult(CompileResult):
+    @property
+    def entry_point(self):
+        return id(self)
+
+
+def compile_result(**kws):
+    keys = set(kws.keys())
+    fieldset = set(CR_FIELDS)
+    badnames = keys - fieldset
+    if badnames:
+        raise NameError(*badnames)
+    missing = fieldset - keys
+    for k in missing:
+        kws[k] = None
+    # Avoid keeping alive traceback variables
+    err = kws['typing_error']
+    if err is not None:
+        kws['typing_error'] = err.with_traceback(None)
+    return CUDACompileResult(**kws)
+
+
 @register_pass(mutates_CFG=True, analysis_only=False)
 class CUDABackend(LoweringPass):
 
@@ -54,6 +76,7 @@ class CUDABackend(LoweringPass):
             signature=signature,
             fndesc=lowered.fndesc,
         )
+
         return True
 
 
