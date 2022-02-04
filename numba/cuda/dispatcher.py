@@ -469,27 +469,10 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
         # CUDA-specific stuff - hopefully some of it can be removed ASAP
 
         self._specialized = False
-        self.link = targetoptions.pop('link', (),)
-        #self._can_compile = True
         self._type = self._numba_type_
 
         # Specializations for given sets of argument types
         self.specializations = {}
-
-        # defensive copy
-        self.targetoptions['extensions'] = \
-            list(self.targetoptions.get('extensions', []))
-
-        #if sigs:
-        #    if len(sigs) > 1:
-        #        raise TypeError("Only one signature supported at present")
-        #    if targetoptions.get('device'):
-        #        argtypes, restype = sigutils.normalize_signature(sigs[0])
-        #        self.compile_device(argtypes)
-        #    else:
-        #        self.compile(sigs[0])
-
-        #    self._can_compile = False
 
     def _make_finalizer(self):
         # Dummy finalizer whilst _DispatcherBase assumes the existence of a
@@ -620,7 +603,6 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
             return specialization
 
         targetoptions = self.targetoptions
-        targetoptions['link'] = self.link
         specialization = Dispatcher(self.py_func, targetoptions=targetoptions)
         specialization.compile(argtypes)
         specialization.disable_compile()
@@ -730,7 +712,7 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
         if kernel is None:
             if not self._can_compile:
                 raise RuntimeError("Compilation disabled")
-            kernel = _Kernel(self.py_func, argtypes, link=self.link,
+            kernel = _Kernel(self.py_func, argtypes,
                              **self.targetoptions)
             # Inspired by _DispatcherBase.add_overload, but differs slightly
             # because we're inserting a _Kernel object instead of a compiled

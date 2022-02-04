@@ -69,6 +69,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
 
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
     fastmath = kws.get('fastmath', False)
+    extensions = kws.get('extensions', [])
 
     if debug and opt:
         msg = ("debug=True with opt=True (the default) "
@@ -97,7 +98,10 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             targetoptions['opt'] = opt
             targetoptions['fastmath'] = fastmath
             targetoptions['device'] = device
+            targetoptions['extensions'] = extensions
             disp = Dispatcher(func, targetoptions=targetoptions)
+            # TODO: Support multiple signatures by compiling in a loop over
+            # signatures.
             if device:
                 disp.compile_device(argtypes)
                 disp._specialized = True
@@ -133,6 +137,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                 targetoptions['link'] = link
                 targetoptions['fastmath'] = fastmath
                 targetoptions['device'] = device
+                targetoptions['extensions'] = extensions
                 return Dispatcher(func_or_sig, targetoptions=targetoptions)
 
 
