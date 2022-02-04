@@ -600,9 +600,6 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
         self.specializations[cc, argtypes] = specialization
         return specialization
 
-    def disable_compile(self, val=True):
-        self._can_compile = not val
-
     @property
     def specialized(self):
         """
@@ -631,6 +628,9 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
 
     def get_call_template(self, args, kws):
         # Copied and simplified from _DispatcherBase.get_call_template.
+        #
+        # This seems to have some necessary differences to the _DispatcherBase
+        # version to force casts where necessay? XXX
         """
         Get a typing.ConcreteTemplate for this dispatcher and the given
         *args* and *kws* types.  This allows resolution of the return type.
