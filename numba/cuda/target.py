@@ -42,8 +42,7 @@ class CUDATypingContext(typing.BaseContext):
                 targetoptions['device'] = True
                 targetoptions['debug'] = targetoptions.get('debug', False)
                 targetoptions['opt'] = targetoptions.get('opt', True)
-                sigs = None
-                disp = CUDADispatcher(val.py_func, sigs, targetoptions)
+                disp = CUDADispatcher(val.py_func, targetoptions)
                 # cache the device function for future use and to avoid
                 # duplicated copy of the same function.
                 val.__dispatcher = disp

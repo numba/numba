@@ -97,7 +97,16 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             targetoptions['opt'] = opt
             targetoptions['fastmath'] = fastmath
             targetoptions['device'] = device
-            return Dispatcher(func, [func_or_sig], targetoptions=targetoptions)
+            disp = Dispatcher(func, targetoptions=targetoptions)
+            if device:
+                disp.compile_device(argtypes)
+                disp._specialized = True
+            else:
+                disp.compile(argtypes)
+                disp._specialized = True
+            disp.disable_compile()
+
+            return disp
 
         return _jit
     else:
@@ -124,9 +133,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                 targetoptions['link'] = link
                 targetoptions['fastmath'] = fastmath
                 targetoptions['device'] = device
-                sigs = None
-                return Dispatcher(func_or_sig, sigs,
-                                  targetoptions=targetoptions)
+                return Dispatcher(func_or_sig, targetoptions=targetoptions)
 
 
 def declare_device(name, sig):

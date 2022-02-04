@@ -460,8 +460,7 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
 
     targetdescr = cuda_target
 
-    def __init__(self, py_func, sigs, targetoptions,
-                 pipeline_class=CUDACompiler):
+    def __init__(self, py_func, targetoptions, pipeline_class=CUDACompiler):
         # TODO: Check if this fixes the cuda docstring jit issue
 
         super().__init__(py_func, targetoptions=targetoptions,
@@ -469,9 +468,9 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
 
         # CUDA-specific stuff - hopefully some of it can be removed ASAP
 
-        self.sigs = []
+        self._specialized = False
         self.link = targetoptions.pop('link', (),)
-        self._can_compile = True
+        #self._can_compile = True
         self._type = self._numba_type_
 
         # Specializations for given sets of argument types
@@ -481,16 +480,16 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
         self.targetoptions['extensions'] = \
             list(self.targetoptions.get('extensions', []))
 
-        if sigs:
-            if len(sigs) > 1:
-                raise TypeError("Only one signature supported at present")
-            if targetoptions.get('device'):
-                argtypes, restype = sigutils.normalize_signature(sigs[0])
-                self.compile_device(argtypes)
-            else:
-                self.compile(sigs[0])
+        #if sigs:
+        #    if len(sigs) > 1:
+        #        raise TypeError("Only one signature supported at present")
+        #    if targetoptions.get('device'):
+        #        argtypes, restype = sigutils.normalize_signature(sigs[0])
+        #        self.compile_device(argtypes)
+        #    else:
+        #        self.compile(sigs[0])
 
-            self._can_compile = False
+        #    self._can_compile = False
 
     def _make_finalizer(self):
         # Dummy finalizer whilst _DispatcherBase assumes the existence of a
@@ -622,8 +621,10 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
 
         targetoptions = self.targetoptions
         targetoptions['link'] = self.link
-        specialization = Dispatcher(self.py_func, [types.void(*argtypes)],
-                                    targetoptions)
+        specialization = Dispatcher(self.py_func, targetoptions=targetoptions)
+        specialization.compile(argtypes)
+        specialization.disable_compile()
+        specialization._specialized = True
         self.specializations[cc, argtypes] = specialization
         return specialization
 
@@ -635,7 +636,7 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
         """
         True if the Dispatcher has been specialized.
         """
-        return len(self.sigs) == 1 and not self._can_compile
+        return self._specialized
 
     def get_regs_per_thread(self, signature=None):
         '''
@@ -739,7 +740,6 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
             self.overloads[argtypes] = kernel
 
             kernel.bind()
-            self.sigs.append(sig)
         return kernel
 
     def inspect_llvm(self, signature=None):
@@ -832,11 +832,11 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
             defn.bind()
 
     @classmethod
-    def _rebuild(cls, py_func, sigs, targetoptions):
+    def _rebuild(cls, py_func, targetoptions):
         """
         Rebuild an instance.
         """
-        instance = cls(py_func, sigs, targetoptions)
+        instance = cls(py_func, targetoptions)
         return instance
 
     def _reduce_states(self):
@@ -844,5 +844,5 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
         Reduce the instance for serialization.
         Compiled definitions are discarded.
         """
-        return dict(py_func=self.py_func, sigs=self.sigs,
+        return dict(py_func=self.py_func,
                     targetoptions=self.targetoptions)
