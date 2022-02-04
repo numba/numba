@@ -1,4 +1,4 @@
-from numba import types, float32
+from numba import types, int32
 from numba.core.extending import (
     models,
     register_model,
@@ -32,7 +32,7 @@ def typeof_teststruct(val, c):
 @register_model(TestStructModelType)
 class TestStructModel(models.StructModel):
     def __init__(self, dmm, fe_type):
-        members = [("x", float32), ("y", float32)]
+        members = [("x", int32), ("y", int32)]
         super().__init__(dmm, fe_type, members)
 
 
@@ -43,12 +43,12 @@ make_attribute_wrapper(TestStructModelType, 'y', 'y')
 @type_callable(TestStruct)
 def type_test_struct(context):
     def typer(x, y):
-        if isinstance(x, types.Float) and isinstance(y, types.Float):
+        if isinstance(x, types.Integer) and isinstance(y, types.Integer):
             return test_struct_model_type
     return typer
 
 
-@lower(TestStruct, types.Float, types.Float)
+@lower(TestStruct, types.Integer, types.Integer)
 def lower_test_type_ctor(context, builder, sig, args):
     obj = cgutils.create_struct_proxy(test_struct_model_type)(context, builder)
     obj.x = args[0]

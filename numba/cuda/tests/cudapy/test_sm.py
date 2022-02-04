@@ -1,4 +1,4 @@
-from numba import cuda, int32, float64, void, float32
+from numba import cuda, int32, float64, void
 from numba.core.errors import TypingError
 
 from numba.cuda.testing import unittest, CUDATestCase
@@ -394,7 +394,7 @@ class TestSharedMemory(CUDATestCase):
     def test_struct_model_type_static(self):
         nthreads = 64
 
-        @cuda.jit(void(float32[::1], float32[::1]))
+        @cuda.jit(void(int32[::1], int32[::1]))
         def write_then_reverse_read_static(outx, outy):
             # Test creation
             arr = cuda.shared.array(nthreads, dtype=test_struct_model_type)
@@ -404,7 +404,7 @@ class TestSharedMemory(CUDATestCase):
 
             if i < len(outx) and i < len(outy):
                 # Test set to arr
-                obj = TestStruct(float32(i), float32(i * 2))
+                obj = TestStruct(int32(i), int32(i * 2))
                 arr[i] = obj
 
                 cuda.syncthreads()
@@ -412,16 +412,16 @@ class TestSharedMemory(CUDATestCase):
                 outx[i] = arr[ri].x
                 outy[i] = arr[ri].y
 
-        darrx = cuda.device_array((nthreads,), dtype="float32")
-        darry = cuda.device_array((nthreads,), dtype="float32")
+        darrx = cuda.device_array((nthreads,), dtype="int32")
+        darry = cuda.device_array((nthreads,), dtype="int32")
 
         write_then_reverse_read_static[1, nthreads](darrx, darry)
         arrx, arry = darrx.copy_to_host(), darry.copy_to_host()
 
         for i, x in enumerate(arrx):
-            assert x == nthreads - i - 1
+            self.assertEqual(x, nthreads - i - 1)
         for i, y in enumerate(arry):
-            assert y == (nthreads - i - 1) * 2
+            self.assertEqual(y, (nthreads - i - 1) * 2)
 
 
 if __name__ == '__main__':
