@@ -215,7 +215,7 @@ class CUDAUFuncMechanism(UFuncMechanism):
                                          gpu_data=ary.gpu_data)
 
 
-class _KernelConfiguration:
+class _LaunchConfiguration:
     def __init__(self, dispatcher, griddim, blockdim, stream, sharedmem):
         self.dispatcher = dispatcher
         self.griddim = griddim
@@ -364,7 +364,7 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
 
     def configure(self, griddim, blockdim, stream=0, sharedmem=0):
         griddim, blockdim = normalize_kernel_dimensions(griddim, blockdim)
-        return _KernelConfiguration(self, griddim, blockdim, stream, sharedmem)
+        return _LaunchConfiguration(self, griddim, blockdim, stream, sharedmem)
 
     def __getitem__(self, args):
         if len(args) not in [2, 3, 4]:
