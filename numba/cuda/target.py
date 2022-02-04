@@ -3,7 +3,7 @@ import llvmlite.binding as ll
 from llvmlite import ir
 
 from numba.core import typing, types, debuginfo, itanium_mangler, cgutils
-from numba.core.dispatcher import Dispatcher as uber_Dispatcher
+from numba.core.dispatcher import Dispatcher
 from numba.core.utils import cached_property
 from numba.core.base import BaseContext
 from numba.core.callconv import MinimalCallConv
@@ -28,8 +28,8 @@ class CUDATypingContext(typing.BaseContext):
 
     def resolve_value_type(self, val):
         # treat other dispatcher object as another device function
-        from numba.cuda.dispatcher import Dispatcher as CUDADispatcher
-        if (isinstance(val, uber_Dispatcher) and not
+        from numba.cuda.dispatcher import CUDADispatcher
+        if (isinstance(val, Dispatcher) and not
                 isinstance(val, CUDADispatcher)):
             try:
                 # use cached device function

@@ -6,7 +6,7 @@ import functools
 
 from numba.core import config, serialize, sigutils, types, typing, utils
 from numba.core.compiler_lock import global_compiler_lock
-from numba.core.dispatcher import Dispatcher as uber_Dispatcher
+from numba.core.dispatcher import Dispatcher
 from numba.core.errors import NumbaPerformanceWarning
 from numba.core.typing.typeof import Purpose, typeof
 
@@ -447,7 +447,7 @@ class _LaunchConfiguration:
                                     self.stream, self.sharedmem)
 
 
-class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
+class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
     '''
     CUDA Dispatcher object. When configured and called, the dispatcher will
     specialize itself for the given arguments (if no suitable specialized
@@ -593,7 +593,8 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
             return specialization
 
         targetoptions = self.targetoptions
-        specialization = Dispatcher(self.py_func, targetoptions=targetoptions)
+        specialization = CUDADispatcher(self.py_func,
+                                        targetoptions=targetoptions)
         specialization.compile(argtypes)
         specialization.disable_compile()
         specialization._specialized = True
@@ -627,10 +628,10 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
                     for sig, overload in self.overloads.items()}
 
     def get_call_template(self, args, kws):
-        # Copied and simplified from _DispatcherBase.get_call_template.
-        #
-        # This seems to have some necessary differences to the _DispatcherBase
-        # version to force casts where necessay? XXX
+        # Originally copied from _DispatcherBase.get_call_template. This
+        # version deviates slightly from the _DispatcherBase version in order
+        # to force casts when calling device functions. See e.g.
+        # TestDeviceFunc.test_device_casting, added in PR #7496.
         """
         Get a typing.ConcreteTemplate for this dispatcher and the given
         *args* and *kws* types.  This allows resolution of the return type.
@@ -653,10 +654,6 @@ class Dispatcher(uber_Dispatcher, serialize.ReduceMixin):
             pysig = utils.pysignature(self.py_func)
 
             return call_template, pysig, args, kws
-
-    # XXX: Delete this and call the class CUDADispatcher
-    def __repr__(self):
-        return f"numba.cuda.dispatcher.Dispatcher({self.py_func})"
 
     def compile_device(self, args):
         """Compile the device function for the given argument types.

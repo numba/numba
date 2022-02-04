@@ -2,7 +2,7 @@ from warnings import warn
 from numba.core import types, config, sigutils
 from numba.core.errors import DeprecationError, NumbaInvalidConfigWarning
 from numba.cuda.compiler import declare_device_function
-from numba.cuda.dispatcher import Dispatcher
+from numba.cuda.dispatcher import CUDADispatcher
 from numba.cuda.simulator.kernel import FakeCUDAKernel
 
 
@@ -100,7 +100,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             targetoptions['device'] = device
             targetoptions['extensions'] = extensions
 
-            disp = Dispatcher(func, targetoptions=targetoptions)
+            disp = CUDADispatcher(func, targetoptions=targetoptions)
 
             if device:
                 disp.compile_device(argtypes)
@@ -138,7 +138,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                 targetoptions['fastmath'] = fastmath
                 targetoptions['device'] = device
                 targetoptions['extensions'] = extensions
-                return Dispatcher(func_or_sig, targetoptions=targetoptions)
+                return CUDADispatcher(func_or_sig, targetoptions=targetoptions)
 
 
 def declare_device(name, sig):
