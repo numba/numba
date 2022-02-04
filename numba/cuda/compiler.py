@@ -9,7 +9,6 @@ from numba.core.errors import NumbaInvalidConfigWarning, TypingError
 from numba.core.typed_passes import (IRLegalization, NativeLowering,
                                      AnnotateTypes)
 from warnings import warn
-from .cudadrv.devices import get_context
 from .api import get_current_device
 
 
@@ -283,48 +282,3 @@ class ExternFunction(object):
     def __init__(self, name, sig):
         self.name = name
         self.sig = sig
-
-
-class ForAll(object):
-    def __init__(self, kernel, ntasks, tpb, stream, sharedmem):
-        if ntasks < 0:
-            raise ValueError("Can't create ForAll with negative task count: %s"
-                             % ntasks)
-        self.kernel = kernel
-        self.ntasks = ntasks
-        self.thread_per_block = tpb
-        self.stream = stream
-        self.sharedmem = sharedmem
-
-    def __call__(self, *args):
-        if self.ntasks == 0:
-            return
-
-        if self.kernel.specialized:
-            kernel = self.kernel
-        else:
-            kernel = self.kernel.specialize(*args)
-        blockdim = self._compute_thread_per_block(kernel)
-        griddim = (self.ntasks + blockdim - 1) // blockdim
-
-        return kernel[griddim, blockdim, self.stream, self.sharedmem](*args)
-
-    def _compute_thread_per_block(self, kernel):
-        tpb = self.thread_per_block
-        # Prefer user-specified config
-        if tpb != 0:
-            return tpb
-        # Else, ask the driver to give a good config
-        else:
-            ctx = get_context()
-            # Kernel is specialized, so there's only one definition - get it so
-            # we can get the cufunc from the code library
-            defn = next(iter(kernel.overloads.values()))
-            kwargs = dict(
-                func=defn._codelibrary.get_cufunc(),
-                b2d_func=0,     # dynamic-shared memory is constant to blksz
-                memsize=self.sharedmem,
-                blocksizelimit=1024,
-            )
-            _, tpb = ctx.get_max_potential_block_size(**kwargs)
-            return tpb
