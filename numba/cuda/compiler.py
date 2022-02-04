@@ -29,11 +29,21 @@ class CUDAFlags(Flags):
     )
 
 
-# FIXME: Update this comment
-# We give the id of the overload (a CompileResult) because this is used
-# as a key into a dict of overloads, and this is the only small and
-# unique property of a CompileResult on CUDA (c.f. the CPU target,
-# which uses its entry_point, which is a pointer value).
+# The CUDACompileResult has a specially-defined entry point equal to its id.
+# This is because the entry point is used as a key into a dict of overloads by
+# the base dispatcher. The id of the CCR is the only small and unique property
+# of a CompileResult in the CUDA target (c.f. the CPU target, which uses its
+# entry_point, which is a pointer value).
+#
+# This does feel a little hackish, and there are two ways in which this could
+# be improved:
+#
+# 1. We could change the core of Numba so that each CompileResult has its own
+#    unique ID that can be used as a key - e.g. a count, similar to the way in
+#    which types have unique counts.
+# 2. At some future time when kernel launch uses a compiled function, the entry
+#    point will no longer need to be a synthetic value, but will instead be a
+#    pointer to the compiled function as in the CPU target.
 
 class CUDACompileResult(CompileResult):
     @property
