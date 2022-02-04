@@ -375,30 +375,37 @@ class TestSharedMemory(CUDATestCase):
         host_result = d_result.copy_to_host()
         np.testing.assert_array_equal(arr, host_result)
 
-    def test_struct_model_type(self):
+    def test_struct_model_type_static(self):
+        nthreads = 64
+
         @cuda.jit(void(float32[::1], float32[::1]))
-        def f(outx, outy):
+        def write_then_reverse_read_static(outx, outy):
             # Test creation
-            arr = cuda.shared.array(10, dtype=test_struct_model_type)
-            # Test set to arr
-            for i in range(len(arr)):
+            arr = cuda.shared.array(nthreads, dtype=test_struct_model_type)
+
+            i = cuda.grid(1)
+            ri = nthreads - i - 1
+
+            if i < len(outx) and i < len(outy):
+                # Test set to arr
                 obj = TestStruct(float32(i), float32(i * 2))
                 arr[i] = obj
-            # Test get from arr
-            for i in range(len(arr)):
-                outx[i] = arr[i].x
-                outy[i] = arr[i].y
 
-        darrx = cuda.device_array((10,), dtype="float32")
-        darry = cuda.device_array((10,), dtype="float32")
+                cuda.syncthreads()
+                # Test get from arr
+                outx[i] = arr[ri].x
+                outy[i] = arr[ri].y
 
-        f[1, 1](darrx, darry)
+        darrx = cuda.device_array((nthreads,), dtype="float32")
+        darry = cuda.device_array((nthreads,), dtype="float32")
+
+        write_then_reverse_read_static[1, nthreads](darrx, darry)
         arrx, arry = darrx.copy_to_host(), darry.copy_to_host()
 
         for i, x in enumerate(arrx):
-            assert x == i
+            assert x == nthreads - i - 1
         for i, y in enumerate(arry):
-            assert y == i * 2
+            assert y == (nthreads - i - 1) * 2
 
 
 if __name__ == '__main__':
