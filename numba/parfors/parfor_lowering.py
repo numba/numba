@@ -1,22 +1,17 @@
-import ast
 import copy
-from collections import OrderedDict
-import linecache
-import os
-import sys
 import operator
 
-import numpy as np
 import types as pytypes
 import operator
 import warnings
+from dataclasses import make_dataclass
 
+import numpy as np
 import llvmlite.llvmpy.core as lc
-import llvmlite.ir.values as liv
 
 import numba
 from numba.parfors import parfor
-from numba.core import types, ir, config, compiler, lowering, sigutils, cgutils
+from numba.core import types, ir, config, compiler, sigutils, cgutils
 from numba.core.ir_utils import (
     add_offset_to_labels,
     replace_var_names,
@@ -28,21 +23,20 @@ from numba.core.ir_utils import (
     visit_vars_inner,
     get_definition,
     guard,
-    find_callname,
     get_call_table,
     is_pure,
     get_np_ufunc_typ,
     get_unused_var_name,
-    find_potential_aliases,
     is_const_call,
     fixup_var_define_in_scope,
     transfer_scope,
     find_max_label,
 )
-from numba.core.analysis import compute_use_defs, compute_live_map, compute_dead_maps, compute_cfg_from_blocks
 from numba.core.typing import signature
-from numba.parfors.parfor import print_wrapped, ensure_parallel_support
-from numba.core.errors import NumbaParallelSafetyWarning, NotDefinedError, CompilerError
+from numba.parfors.parfor import ensure_parallel_support
+from numba.core.errors import (
+    NumbaParallelSafetyWarning, NotDefinedError, CompilerError, InternalError,
+)
 from numba.parfors.parfor_lowering_utils import ParforLoweringBuilder
 
 
@@ -198,7 +192,7 @@ def _lower_parfor_parallel(lowerer, parfor):
             # Remember mapping of original reduction array to the newly created per-worker reduction array.
             redarrs[redvar.name] = redarr_var
 
-            init_val = parfor_reddict[parfor_redvars[i]][0]
+            init_val = parfor_reddict[parfor_redvars[i]].init_val
             if init_val is not None:
                 if isinstance(redvar_typ, types.npytypes.Array):
                     # Create an array of identity values for the reduction.
@@ -331,171 +325,13 @@ def _lower_parfor_parallel(lowerer, parfor):
     if config.DEBUG_ARRAY_OPT:
         sys.stdout.flush()
 
-    if nredvars > 0:
-        # Perform the final reduction across the reduction array created above.
-        thread_count = get_thread_count()
-        scope = parfor.init_block.scope
-        loc = parfor.init_block.loc
+    _parfor_lowering_finalize_reduction(
+        parfor, redarrs, lowerer, parfor_reddict,
+    )
 
-        # For each reduction variable...
-        for i in range(nredvars):
-            name = parfor_redvars[i]
-            redarr = redarrs[name]
-            redvar_typ = lowerer.fndesc.typemap[name]
-            if config.DEBUG_ARRAY_OPT:
-                print("post-gufunc reduction:", name, redarr, redvar_typ)
-
-            if config.DEBUG_ARRAY_OPT_RUNTIME:
-                res_print_str = "res_print"
-                strconsttyp = types.StringLiteral(res_print_str)
-
-                lhs = pfbdr.make_const_variable(
-                    cval=res_print_str,
-                    typ=strconsttyp,
-                    name="str_const",
-                )
-                res_print = ir.Print(args=[lhs, redarr], vararg=None, loc=loc)
-                lowerer.fndesc.calltypes[res_print] = signature(types.none,
-                                                         typemap[lhs.name],
-                                                         typemap[redarr.name])
-                print("res_print", res_print)
-                lowerer.lower_inst(res_print)
-
-            # For each element in the reduction array created above.
-            for j in range(thread_count):
-                # Create index var to access that element.
-                index_var = pfbdr.make_const_variable(
-                    cval=j, typ=types.uintp, name="index_var",
-                )
-
-                # Read that element from the array into oneelem.
-                oneelemgetitem = pfbdr.getitem(
-                    obj=redarr, index=index_var, typ=redvar_typ,
-                )
-                oneelem = pfbdr.assign(
-                    rhs=oneelemgetitem,
-                    typ=redvar_typ,
-                    name="redelem",
-                )
-
-                init_var = pfbdr.assign_inplace(
-                    rhs=oneelem, typ=redvar_typ, name=name + "#init",
-                )
-
-                if config.DEBUG_ARRAY_OPT_RUNTIME:
-                    res_print_str = "res_print1 for thread " + str(j) + ":"
-                    strconsttyp = types.StringLiteral(res_print_str)
-
-                    lhs = pfbdr.make_const_variable(
-                        cval=res_print_str,
-                        typ=strconsttyp,
-                        name="str_const",
-                    )
-
-                    res_print = ir.Print(args=[lhs, index_var, oneelem, init_var, ir.Var(scope, name, loc)],
-                                         vararg=None, loc=loc)
-                    lowerer.fndesc.calltypes[res_print] = signature(types.none,
-                                                             typemap[lhs.name],
-                                                             typemap[index_var.name],
-                                                             typemap[oneelem.name],
-                                                             typemap[init_var.name],
-                                                             typemap[name])
-                    print("res_print1", res_print)
-                    lowerer.lower_inst(res_print)
-
-                # generate code for combining reduction variable with thread output
-                for inst in parfor_reddict[name][1]:
-                    # If we have a case where a parfor body has an array reduction like A += B
-                    # and A and B have different data types then the reduction in the parallel
-                    # region will operate on those differeing types.  However, here, after the
-                    # parallel region, we are summing across the reduction array and that is
-                    # guaranteed to have the same data type so we need to change the reduction
-                    # nodes so that the right-hand sides have a type equal to the reduction-type
-                    # and therefore the left-hand side.
-                    if isinstance(inst, ir.Assign):
-                        rhs = inst.value
-                        # We probably need to generalize this since it only does substitutions in
-                        # inplace_binops.
-                        if (isinstance(rhs, ir.Expr) and rhs.op == 'inplace_binop' and
-                            rhs.rhs.name == init_var.name):
-                            if config.DEBUG_ARRAY_OPT:
-                                print("Adding call to reduction", rhs)
-                            if rhs.fn == operator.isub:
-                                rhs.fn = operator.iadd
-                                rhs.immutable_fn = operator.add
-                            if rhs.fn == operator.itruediv or rhs.fn == operator.ifloordiv:
-                                rhs.fn = operator.imul
-                                rhs.immutable_fn = operator.mul
-                            if config.DEBUG_ARRAY_OPT:
-                                print("After changing sub to add or div to mul", rhs)
-                            # Get calltype of rhs.
-                            ct = lowerer.fndesc.calltypes[rhs]
-                            assert(len(ct.args) == 2)
-                            # Create new arg types replace the second arg type with the reduction var type.
-                            ctargs = (ct.args[0], redvar_typ)
-                            # Update the signature of the call.
-                            ct = ct.replace(args=ctargs)
-                            # Remove so we can re-insert since calltypes is unique dict.
-                            lowerer.fndesc.calltypes.pop(rhs)
-                            # Add calltype back in for the expr with updated signature.
-                            lowerer.fndesc.calltypes[rhs] = ct
-                    lowerer.lower_inst(inst)
-                    # Only process reduction statements post-gufunc execution
-                    # until we see an assignment with a left-hand side to the
-                    # reduction variable's name.  This fixes problems with
-                    # cases where there are multiple assignments to the
-                    # reduction variable in the parfor.
-                    if isinstance(inst, ir.Assign):
-                        try:
-                            reduction_var = scope.get_exact(name)
-                        except NotDefinedError:
-                            # Ideally, this shouldn't happen. The redvar name
-                            # missing from scope indicates an error from
-                            # other rewrite passes.
-                            is_same_source_var = name == inst.target.name
-                        else:
-                            # Because of SSA, the redvar and target var of
-                            # the current assignment would be different even
-                            # though they refer to the same source-level var.
-                            redvar_unver_name = reduction_var.unversioned_name
-                            target_unver_name = inst.target.unversioned_name
-                            is_same_source_var = redvar_unver_name == target_unver_name
-
-                        if is_same_source_var:
-                            # If redvar is different from target var, add an
-                            # assignment to put target var into redvar.
-                            if name != inst.target.name:
-                                pfbdr.assign_inplace(
-                                    rhs=inst.target, typ=redvar_typ,
-                                    name=name,
-                                )
-                            break
-
-                    if config.DEBUG_ARRAY_OPT_RUNTIME:
-                        res_print_str = "res_print2 for thread " + str(j) + ":"
-                        strconsttyp = types.StringLiteral(res_print_str)
-
-                        lhs = pfbdr.make_const_variable(
-                            cval=res_print_str,
-                            typ=strconsttyp,
-                            name="str_const",
-                        )
-
-                        res_print = ir.Print(args=[lhs, index_var, oneelem, init_var, ir.Var(scope, name, loc)],
-                                             vararg=None, loc=loc)
-                        lowerer.fndesc.calltypes[res_print] = signature(types.none,
-                                                                 typemap[lhs.name],
-                                                                 typemap[index_var.name],
-                                                                 typemap[oneelem.name],
-                                                                 typemap[init_var.name],
-                                                                 typemap[name])
-                        print("res_print2", res_print)
-                        lowerer.lower_inst(res_print)
-
-
-        # Cleanup reduction variable
-        for v in redarrs.values():
-            lowerer.lower_inst(ir.Del(v.name, loc=loc))
+    # Cleanup reduction variable
+    for v in redarrs.values():
+        lowerer.lower_inst(ir.Del(v.name, loc=loc))
     # Restore the original typemap of the function that was replaced temporarily at the
     # Beginning of this function.
     lowerer.fndesc.typemap = orig_typemap
@@ -503,6 +339,250 @@ def _lower_parfor_parallel(lowerer, parfor):
     if config.DEBUG_ARRAY_OPT:
         print("_lower_parfor_parallel done")
 
+
+_ReductionInfo = make_dataclass(
+    "_ReductionInfo",
+    [
+        "redvar_info",
+        "redvar_name",
+        "redvar_typ",
+        "redarr_var",
+        "redarr_typ",
+        "init_val",
+    ],
+    frozen=True,
+)
+
+
+def _parfor_lowering_finalize_reduction(
+        parfor,
+        redarrs,
+        lowerer,
+        parfor_reddict,
+    ):
+    """Emit code to finalize the reduction from the intermediate values of
+    each thread.
+    """
+    from numba.np.ufunc.parallel import get_thread_count
+    thread_count = get_thread_count()
+
+    # For each reduction variable
+    for redvar_name, redarr_var in redarrs.items():
+        # Pseudo-code for this loop body:
+        #     tmp = redarr[0]
+        #     for i in range(1, thread_count):
+        #         tmp = reduce_op(redarr[i], tmp)
+        #     reduction_result = tmp
+        redvar_typ = lowerer.fndesc.typemap[redvar_name]
+        redarr_typ = lowerer.fndesc.typemap[redarr_var.name]
+        init_val = lowerer.loadvar(redvar_name)
+
+        reduce_info = _ReductionInfo(
+            redvar_info = parfor_reddict[redvar_name],
+            redvar_name=redvar_name,
+            redvar_typ=redvar_typ,
+            redarr_var=redarr_var,
+            redarr_typ=redarr_typ,
+            init_val=init_val,
+        )
+        # generate code for combining reduction variable with thread output
+        handler = (_lower_trivial_inplace_binops
+                   if reduce_info.redvar_info.redop is not None
+                   else _lower_non_trivial_reduce)
+        handler(parfor, lowerer, thread_count, reduce_info)
+
+
+class ParforsUnexpectedReduceNodeError(InternalError):
+    def __init__(self, inst):
+        super().__init__(f"Unknown reduce instruction node: {inst}")
+
+
+def _lower_trivial_inplace_binops(parfor, lowerer, thread_count, reduce_info):
+    """Lower trivial inplace-binop reduction.
+    """
+    for inst in reduce_info.redvar_info.reduce_nodes:
+        # Var assigns to Var?
+        if _lower_var_to_var_assign(lowerer, inst):
+            pass
+        # Is inplace-binop for the reduction?
+        elif _is_inplace_binop_and_rhs_is_init(inst, reduce_info.redvar_name):
+            fn = inst.value.fn
+            redvar_result = _emit_binop_reduce_call(
+                fn, lowerer, thread_count, reduce_info,
+            )
+            lowerer.storevar(redvar_result, name=inst.target.name)
+        # Otherwise?
+        else:
+            raise ParforsUnexpectedReduceNodeError(inst)
+
+        # XXX: This seems like a hack to stop the loop with this condition.
+        if _fix_redvar_name_ssa_mismatch(parfor, lowerer, inst,
+                                   reduce_info.redvar_name):
+            break
+
+
+def _lower_non_trivial_reduce(parfor, lowerer, thread_count, reduce_info):
+    """Lower non-trivial reduction such as call to `functools.reduce()`.
+    """
+    ctx = lowerer.context
+    init_name = f"{reduce_info.redvar_name}#init"
+    # The init_name variable is not defined at this point.
+    lowerer.fndesc.typemap.setdefault(init_name, reduce_info.redvar_typ)
+    # Emit a sequence of the reduction operation for each intermediate result
+    # of each thread.
+    for tid in range(thread_count):
+        for inst in reduce_info.redvar_info.reduce_nodes:
+            # Var assigns to Var?
+            if _lower_var_to_var_assign(lowerer, inst):
+                pass
+            # The reduction operation?
+            elif (isinstance(inst, ir.Assign)
+                    and any(var.name == init_name for var in inst.list_vars())):
+                elem = _emit_getitem_call(
+                    ctx.get_constant(types.intp, tid), lowerer, reduce_info,
+                )
+                lowerer.storevar(elem, init_name)
+                lowerer.lower_inst(inst)
+            # Otherwise?
+            else:
+                raise ParforsUnexpectedReduceNodeError(inst)
+
+            # XXX: This seems like a hack to stop the loop with this condition.
+            if _fix_redvar_name_ssa_mismatch(parfor, lowerer, inst,
+                                       reduce_info.redvar_name):
+                break
+
+
+def _lower_var_to_var_assign(lowerer, inst):
+    """Lower Var->Var assignment.
+
+    Returns True if-and-only-if `inst` is a Var->Var assignment.
+    """
+    if isinstance(inst, ir.Assign) and isinstance(inst.value, ir.Var):
+        loaded = lowerer.loadvar(inst.value.name)
+        lowerer.storevar(loaded, name=inst.target.name)
+        return True
+    return False
+
+def _emit_getitem_call(idx, lowerer, reduce_info):
+    """Emit call to ``redarr_var[idx]``
+    """
+    def reducer_getitem(redarr, index):
+        return redarr[index]
+
+    builder = lowerer.builder
+    ctx = lowerer.context
+    redarr_typ = reduce_info.redarr_typ
+    arg_arr = lowerer.loadvar(reduce_info.redarr_var.name)
+    args = (arg_arr, idx)
+    sig = signature(reduce_info.redvar_typ, redarr_typ, types.intp)
+    elem = ctx.compile_internal(builder, reducer_getitem, sig, args)
+    return elem
+
+
+def _emit_binop_reduce_call(binop, lowerer, thread_count, reduce_info):
+    """Emit call to the ``binop`` for the reduction variable.
+    """
+
+    def reduction_add(thread_count, redarr, init):
+        c = init
+        for i in range(thread_count):
+            c += redarr[i]
+        return c
+
+    def reduction_mul(thread_count, redarr, init):
+        c = init
+        for i in range(thread_count):
+            c *= redarr[i]
+        return c
+
+    kernel = {
+        operator.iadd: reduction_add,
+        operator.isub: reduction_add,
+        operator.imul: reduction_mul,
+        operator.ifloordiv: reduction_mul,
+        operator.itruediv: reduction_mul,
+    }[binop]
+
+    ctx = lowerer.context
+    builder = lowerer.builder
+    redarr_typ = reduce_info.redarr_typ
+    arg_arr = lowerer.loadvar(reduce_info.redarr_var.name)
+
+    if config.DEBUG_ARRAY_OPT_RUNTIME:
+        init_var = reduce_info.redarr_var.scope.get(reduce_info.redvar_name)
+        res_print = ir.Print(
+            args=[reduce_info.redarr_var, init_var], vararg=None,
+            loc=lowerer.loc,
+        )
+        typemap = lowerer.fndesc.typemap
+        lowerer.fndesc.calltypes[res_print] = signature(
+            types.none, typemap[reduce_info.redarr_var.name],
+            typemap[init_var.name],
+        )
+        lowerer.lower_inst(res_print)
+
+    arg_thread_count = ctx.get_constant_generic(
+        builder, types.uintp, thread_count,
+    )
+    args = (arg_thread_count, arg_arr, reduce_info.init_val)
+    sig = signature(
+        reduce_info.redvar_typ, types.uintp, redarr_typ, reduce_info.redvar_typ,
+    )
+
+    redvar_result = ctx.compile_internal(builder, kernel, sig, args)
+    return redvar_result
+
+
+def _is_inplace_binop_and_rhs_is_init(inst, redvar_name):
+    """Is ``inst`` a inplace-binop and the RHS is the reduction init?
+    """
+    if not isinstance(inst, ir.Assign):
+        return False
+    rhs = inst.value
+    if not isinstance(rhs, ir.Expr):
+        return False
+    if rhs.op != "inplace_binop":
+        return False
+    if rhs.rhs.name != f"{redvar_name}#init":
+        return False
+    return True
+
+
+def _fix_redvar_name_ssa_mismatch(parfor, lowerer, inst, redvar_name):
+    """Fix reduction variable name mismatch due to SSA.
+    """
+    # Only process reduction statements post-gufunc execution
+    # until we see an assignment with a left-hand side to the
+    # reduction variable's name.  This fixes problems with
+    # cases where there are multiple assignments to the
+    # reduction variable in the parfor.
+    scope = parfor.init_block.scope
+    if isinstance(inst, ir.Assign):
+        try:
+            reduction_var = scope.get_exact(redvar_name)
+        except NotDefinedError:
+            # Ideally, this shouldn't happen. The redvar name
+            # missing from scope indicates an error from
+            # other rewrite passes.
+            is_same_source_var = redvar_name == inst.target.name
+        else:
+            # Because of SSA, the redvar and target var of
+            # the current assignment would be different even
+            # though they refer to the same source-level var.
+            redvar_unver_name = reduction_var.unversioned_name
+            target_unver_name = inst.target.unversioned_name
+            is_same_source_var = redvar_unver_name == target_unver_name
+
+        if is_same_source_var:
+            # If redvar is different from target var, add an
+            # assignment to put target var into redvar.
+            if redvar_name != inst.target.name:
+                val = lowerer.loadvar(inst.target.name)
+                lowerer.storevar(val, name=redvar_name)
+                return True
+
+    return False
 
 def _create_shape_signature(
         get_shape_classes,
