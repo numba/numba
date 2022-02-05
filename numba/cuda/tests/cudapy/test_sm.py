@@ -1,7 +1,7 @@
 from numba import cuda, int32, float64, void
 from numba.core.errors import TypingError
 
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 
 import numpy as np
 from numba.np import numpy_support as nps
@@ -376,6 +376,7 @@ class TestSharedMemory(CUDATestCase):
         host_result = d_result.copy_to_host()
         np.testing.assert_array_equal(arr, host_result)
 
+    @skip_on_cudasim("Can't check typing in simulator")
     def test_invalid_array_type(self):
         rgx = ".*Cannot infer the type of variable 'arr'.*"
 
