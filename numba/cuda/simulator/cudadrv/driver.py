@@ -2,6 +2,7 @@
 Most of the driver API is unsupported in the simulator, but some stubs are
 provided to allow tests to import correctly.
 '''
+import contextlib
 
 
 def device_memset(dst, val, size, stream=0):
@@ -45,6 +46,24 @@ class CudaAPIError(RuntimeError):
 def launch_kernel(*args, **kwargs):
     msg = 'Launching kernels directly is not supported in the simulator'
     raise RuntimeError(msg)
+
+
+def event_elapsed_time(evtstart, evtend):
+    raise ValueError("Recording events in simulator is not supported yet.")
+
+
+def profile_start():
+    pass
+
+
+def profile_stop():
+    pass
+
+
+@contextlib.contextmanager
+def profiling():
+    """No real profiling in simulator."""
+    yield
 
 
 USE_NV_BINDING = False

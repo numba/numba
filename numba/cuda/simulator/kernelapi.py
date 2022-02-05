@@ -10,6 +10,7 @@ import traceback
 
 import numpy as np
 
+from numba.core.types.npytypes import Record
 from numba.np import numpy_support
 
 
@@ -95,6 +96,7 @@ class FakeCUDAShared(object):
         self._dynshared = np.zeros(dynshared_size, dtype=np.byte)
 
     def array(self, shape, dtype):
+        is_record_dtype = isinstance(dtype, Record)
         dtype = numpy_support.as_dtype(dtype)
         # Dynamic shared memory is requested with size 0 - this all shares the
         # same underlying memory
@@ -112,7 +114,11 @@ class FakeCUDAShared(object):
         caller = stack[-2][0:2]
         res = self._allocations.get(caller)
         if res is None:
-            res = np.empty(shape, dtype)
+            res = (
+                np.empty(shape, dtype)
+                if not is_record_dtype
+                else np.recarray(shape, dtype)
+            )
             self._allocations[caller] = res
         return res
 
