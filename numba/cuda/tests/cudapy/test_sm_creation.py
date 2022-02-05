@@ -191,6 +191,7 @@ class TestSharedMemoryCreation(CUDATestCase):
                 s[0] = x[0]
                 x[0] = s[0]
 
+    @skip_on_cudasim("Can't check typing in simulator")
     def test_type_with_struct_data_model(self):
         @cuda.jit(void(test_struct_model_type[::1]))
         def f(x):
