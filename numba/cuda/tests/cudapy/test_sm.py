@@ -392,6 +392,7 @@ class TestSharedMemory(CUDATestCase):
         with self.assertRaisesRegex(TypingError, rgx):
             cuda.jit(void())(invalid_string_type)
 
+    @skip_on_cudasim("Struct model array unsupported in simulator")
     def test_struct_model_type_static(self):
         nthreads = 64
 
