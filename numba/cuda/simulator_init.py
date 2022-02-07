@@ -1,14 +1,6 @@
 # We import * from simulator here because * is imported from simulator_init by
 # numba.cuda.__init__.
-from .simulator import *
-from .stubs import (threadIdx, blockIdx, blockDim, gridDim, laneid,
-                    warpsize, syncthreads, syncthreads_count, syncwarp,
-                    syncthreads_and, syncthreads_or, shared, local,
-                    const, grid, gridsize, atomic, shfl_sync_intrinsic,
-                    vote_sync_intrinsic, match_any_sync, match_all_sync,
-                    threadfence_block, threadfence_system,
-                    threadfence, selp, popc, brev, clz, ffs, fma, cbrt,
-                    cg, activemask, lanemask_lt, nanosleep)
+from .simulator import *  # noqa: F403, F401
 
 
 def is_available():
