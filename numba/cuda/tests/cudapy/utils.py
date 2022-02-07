@@ -1,6 +1,19 @@
+from numba import types
 from numba.core import config
+
+class TestStruct:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+class TestStructModelType(types.Type):
+    def __init__(self):
+        super().__init__(name="TestStructModelType")
+
+test_struct_model_type = TestStructModelType()
+
 if not config.ENABLE_CUDASIM:
-    from numba import types, int32
+    from numba import int32
     from numba.core.extending import (
         models,
         register_model,
@@ -10,17 +23,6 @@ if not config.ENABLE_CUDASIM:
     )
     from numba.cuda.cudaimpl import lower
     from numba.core import cgutils
-
-    class TestStruct:
-        def __init__(self, x, y):
-            self.x = x
-            self.y = y
-
-    class TestStructModelType(types.Type):
-        def __init__(self):
-            super().__init__(name="TestStructModelType")
-
-    test_struct_model_type = TestStructModelType()
 
     @typeof_impl.register(TestStruct)
     def typeof_teststruct(val, c):
