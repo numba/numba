@@ -1,16 +1,16 @@
-from numba import types, int32
-from numba.core.extending import (
-    models,
-    register_model,
-    make_attribute_wrapper,
-    typeof_impl,
-    type_callable
-)
-from numba.cuda.cudaimpl import lower
-from numba.core import cgutils
 from numba.core import config
-
 if not config.ENABLE_CUDASIM:
+    from numba import types, int32
+    from numba.core.extending import (
+        models,
+        register_model,
+        make_attribute_wrapper,
+        typeof_impl,
+        type_callable
+    )
+    from numba.cuda.cudaimpl import lower
+    from numba.core import cgutils
+
     class TestStruct:
         def __init__(self, x, y):
             self.x = x
