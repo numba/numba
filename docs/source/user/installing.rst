@@ -165,9 +165,9 @@ otherwise build by default along with information on configuration options.
   * For Linux and Windows it is necessary to provide OpenMP C headers and
     runtime  libraries compatible with the compiler tool chain mentioned above,
     and for these to be accessible to the compiler via standard flags.
-  * For OSX the conda packages ``llvm-openmp`` and ``intel-openmp`` provide
-    suitable C headers and libraries. If the compilation requirements are not
-    met the OpenMP threading backend will not be compiled
+  * For OSX the conda package ``llvm-openmp`` provides suitable C headers and
+    libraries. If the compilation requirements are not met the OpenMP threading
+    backend will not be compiled.
 
 .. envvar:: NUMBA_DISABLE_TBB (default: not set)
 
@@ -209,8 +209,6 @@ vary with target operating system and hardware. The following lists them all
 
   * ``llvm-openmp`` (OSX) - provides headers for compiling OpenMP support into
     Numba's threading backend
-  * ``intel-openmp`` (OSX) - provides OpenMP library support for Numba's
-    threading backend.
   * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support
     into Numba's threading backend (version >= 2021 required).
 
@@ -223,8 +221,10 @@ vary with target operating system and hardware. The following lists them all
   * ``jinja2`` - for "pretty" type annotation output (HTML) via the ``numba``
     CLI
   * ``cffi`` - permits use of CFFI bindings in Numba compiled functions
-  * ``intel-openmp`` - (OSX) provides OpenMP library support for Numba's OpenMP
-    threading backend
+  * ``llvm-openmp`` - (OSX) provides OpenMP library support for Numba's OpenMP
+    threading backend.
+  * ``intel-openmp`` - (OSX) provides an alternative OpenMP library for use with
+    Numba's OpenMP threading backend.
   * ``ipython`` - if in use, caching will use IPython's cache
     directories/caching still works
   * ``pyyaml`` - permits the use of a ``.numba_config.yaml``
