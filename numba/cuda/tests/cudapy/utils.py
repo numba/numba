@@ -1,16 +1,20 @@
 from numba import types
 from numba.core import config
 
+
 class TestStruct:
     def __init__(self, x, y):
         self.x = x
         self.y = y
 
+
 class TestStructModelType(types.Type):
     def __init__(self):
         super().__init__(name="TestStructModelType")
 
+
 test_struct_model_type = TestStructModelType()
+
 
 if not config.ENABLE_CUDASIM:
     from numba import int32
