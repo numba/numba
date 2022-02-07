@@ -98,6 +98,8 @@ fi
 # Install latest llvmlite build
 $CONDA_INSTALL -c numba/label/dev llvmlite
 
+# Install importlib-metadata for Python < 3.9
+if [ $PYTHON \< "3.9" ]; then $CONDA_INSTALL importlib_metadata; fi
 
 # Install dependencies for building the documentation
 if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx=2.4.4 docutils=0.17 sphinx_rtd_theme pygments numpydoc; fi

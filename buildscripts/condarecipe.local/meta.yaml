@@ -34,6 +34,7 @@ requirements:
     - python
     - numpy
     - setuptools
+    - importlib_metadata       # [py<39]
     # On channel https://anaconda.org/numba/
     - llvmlite >=0.39.0dev0,<0.39
     # TBB devel version is to match TBB libs.
@@ -45,6 +46,7 @@ requirements:
     - python >=3.7
     - numpy >=1.18
     - setuptools
+    - importlib_metadata       # [py<39]
     # On channel https://anaconda.org/numba/
     - llvmlite >=0.39.0dev0,<0.39
   run_constrained:
