@@ -38,6 +38,19 @@ For more information about Numba, see the Numba homepage:
 https://numba.pydata.org and the online documentation:
 https://numba.readthedocs.io/en/stable/index.html
 
+Installation
+============
+
+Please follow the instuctions:
+
+https://numba.readthedocs.io/en/stable/user/installing.html
+
+Demo
+====
+
+Please have a look and the demo notebooks via the mybinder service:
+
+https://mybinder.org/v2/gh/numba/numba-examples/master?filepath=notebooks
 
 Contact
 =======
