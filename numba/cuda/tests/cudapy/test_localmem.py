@@ -136,11 +136,10 @@ class TestCudaLocalMem(CUDATestCase):
                 outx[i] = arr[i].x
                 outy[i] = arr[i].y
 
-        darrx = cuda.device_array((10,), dtype="int32")
-        darry = cuda.device_array((10,), dtype="int32")
+        arrx = np.array((10,), dtype="int32")
+        arry = np.array((10,), dtype="int32")
 
-        f[1, 1](darrx, darry)
-        arrx, arry = darrx.copy_to_host(), darry.copy_to_host()
+        f[1, 1](arrx, arry)
 
         for i, x in enumerate(arrx):
             self.assertEqual(x, i)

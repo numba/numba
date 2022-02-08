@@ -414,11 +414,10 @@ class TestSharedMemory(CUDATestCase):
                 outx[i] = arr[ri].x
                 outy[i] = arr[ri].y
 
-        darrx = cuda.device_array((nthreads,), dtype="int32")
-        darry = cuda.device_array((nthreads,), dtype="int32")
+        arrx = np.zeros((nthreads,), dtype="int32")
+        arry = np.zeros((nthreads,), dtype="int32")
 
-        write_then_reverse_read_static[1, nthreads](darrx, darry)
-        arrx, arry = darrx.copy_to_host(), darry.copy_to_host()
+        write_then_reverse_read_static[1, nthreads](arrx, arry)
 
         for i, x in enumerate(arrx):
             self.assertEqual(x, nthreads - i - 1)
