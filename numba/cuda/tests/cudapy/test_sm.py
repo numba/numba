@@ -6,7 +6,7 @@ from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 import numpy as np
 from numba.np import numpy_support as nps
 
-from .utils import test_struct_model_type, TestStruct
+from .extensions_usecases import test_struct_model_type, TestStruct
 
 recordwith2darray = np.dtype([('i', np.int32),
                               ('j', np.float32, (3, 2))])
