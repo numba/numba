@@ -533,7 +533,7 @@ numba_attempt_nocopy_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *
 }
 
 /*
- * Cython utilities.
+ * Cython and f2py utilities
  */
 
 /* Fetch the address of the given function, as exposed by
@@ -563,7 +563,42 @@ import_cython_function(const char *module_name, const char *function_name)
     }
     /* 2.7+ => Cython exports a PyCapsule */
     capsule_name = PyCapsule_GetName(cobj);
-    if (capsule_name != NULL) {
+    if (PyCapsule_IsValid(cobj,capsule_name)!=0) {
+        res = PyCapsule_GetPointer(cobj, capsule_name);
+    }
+    Py_DECREF(cobj);
+    return res;
+}
+
+static void *
+import_f2py_function(const char *module_name, const char *function_name)
+{
+    PyObject *module,*func, *cobj;
+    void *res = NULL;
+    const char *capsule_name;
+
+    module = PyImport_ImportModule(module_name);
+    if (module == NULL)
+        return NULL;
+    
+    func = PyObject_GetAttrString(module, (char *)function_name);
+    Py_DECREF(module);
+    if (func == NULL)
+        return NULL;
+    
+    cobj = PyObject_GetAttrString(func, "_cpointer");
+    Py_DECREF(func);
+    
+    if (cobj == NULL) {
+        PyErr_Clear();
+        PyErr_Format(PyExc_ValueError,
+                     "No _cpointer attribute found in function '%s' of '%s'",
+                     function_name,module_name);
+        return NULL;
+    }
+    /* f2py exports PyCapsule */
+    capsule_name = PyCapsule_GetName(cobj);
+    if (PyCapsule_IsValid(cobj,capsule_name)!=0){
         res = PyCapsule_GetPointer(cobj, capsule_name);
     }
     Py_DECREF(cobj);
@@ -582,6 +617,31 @@ _numba_import_cython_function(PyObject *self, PyObject *args)
         return NULL;
     }
     p = import_cython_function(module_name, function_name);
+    if (p == NULL) {
+        return NULL;
+    }
+    res = PyLong_FromVoidPtr(p);
+    if (res == NULL) {
+      PyErr_SetString(PyExc_RuntimeError,
+                      "Could not convert function address to int");
+      return NULL;
+    }
+    return res;
+}
+
+NUMBA_EXPORT_FUNC(PyObject *)
+_numba_import_f2py_function(PyObject *self, PyObject *args)
+{
+    const char *module_name;
+    const char *function_name;
+    
+    void *p = NULL;
+    PyObject *res;
+
+    if (!PyArg_ParseTuple(args, "ss", &module_name, &function_name)) {
+        return NULL;
+    }
+    p = import_f2py_function(module_name, function_name);
     if (p == NULL) {
         return NULL;
     }

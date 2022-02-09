@@ -229,6 +229,7 @@ static PyMethodDef ext_methods[] = {
     { "rnd_set_state", (PyCFunction) _numba_rnd_set_state, METH_VARARGS, NULL },
     { "rnd_shuffle", (PyCFunction) _numba_rnd_shuffle, METH_O, NULL },
     { "_import_cython_function", (PyCFunction) _numba_import_cython_function, METH_VARARGS, NULL },
+    { "_import_f2py_function", (PyCFunction) _numba_import_f2py_function, METH_VARARGS, NULL },
     { NULL },
 };
 

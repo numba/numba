@@ -463,6 +463,23 @@ def get_cython_function_address(module_name, function_name):
     """
     return _import_cython_function(module_name, function_name)
 
+def get_f2py_function_address(module_name, function_name):
+    """
+    Get the address of a f2py function.
+
+    Args
+    ----
+    module_name:
+        Name of the f2py module
+    function_name:
+        Name of the f2py function
+
+    Returns
+    -------
+    A Python int containing the address of the function
+
+    """
+    return _import_f2py_function(module_name, function_name)
 
 def include_path():
     """Returns the C include directory path.
