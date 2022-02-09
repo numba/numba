@@ -2309,45 +2309,81 @@ def _get_norm_impl(a, ord_flag, axis):
                     m = a.shape[-2]
 
                     if a.size == 0:
-                        return 0.0
+                        return np.zeros(1, dtype=a.dtype)
 
                     if axis not in (0, 1):
                         raise ValueError("Invalid axis for array.")
 
                     if ord == np.inf and axis == 0:
-                        # max of abs across columns
-                        # max(abs(a), axis=0)
-                        axis_nrms = np.zeros(m)
-                        for i in range(m):
-                            for j in range(n):
-                                axis_nrms[i] = max(abs(a[i, j]), axis_nrms[i])
-                        return axis_nrms
-
-                    elif ord == np.inf and axis == 1:
                         # max of abs across rows
-                        # max(abs(a), axis=1)
+                        # max(abs(a), axis=0)
                         axis_nrms = np.zeros(n)
                         for j in range(n):
                             for i in range(m):
                                 axis_nrms[j] = max(abs(a[i, j]), axis_nrms[j])
                         return axis_nrms
 
+                    elif ord == np.inf and axis == 1:
+                        # max of abs across columns
+                        # max(abs(a), axis=1)
+                        axis_nrms = np.zeros(m)
+                        for i in range(m):
+                            for j in range(n):
+                                axis_nrms[i] = max(abs(a[i, j]), axis_nrms[i])
+                        return axis_nrms
+
+                    elif ord == -np.inf and axis == 0:
+                        # min of abs across rows
+                        # min(abs(a), axis=0)
+                        axis_nrms = np.full(n, max_val)
+                        for j in range(n):
+                            for i in range(m):
+                                axis_nrms[j] = min(abs(a[i, j]), axis_nrms[j])
+                        return axis_nrms
+
+                    elif ord == -np.inf and axis == 1:
+                        # min of abs across columns
+                        # min(abs(a), axis=1)
+                        axis_nrms = np.full(m, max_val)
+                        for i in range(m):
+                            for j in range(n):
+                                axis_nrms[i] = min(abs(a[i, j]), axis_nrms[i])
+                        return axis_nrms
+
                     elif ord == 1 and axis == 0:
-                        # sum of abs across cols
+                        # sum of abs across rows
                         # sum(abs(a), axis=0)
+                        axis_nrms = np.zeros(n)
+                        for j in range(n):
+                            for i in range(m):
+                                axis_nrms[j] += abs(a[i, j])
+                        return axis_nrms
+
+                    elif ord == 1 and axis == 1:
+                        # sum of abs across columns
+                        # sum(abs(a), axis=1)
                         axis_nrms = np.zeros(m)
                         for i in range(m):
                             for j in range(n):
                                 axis_nrms[i] += abs(a[i, j])
                         return axis_nrms
 
-                    elif ord == 1 and axis == 1:
-                        # sum of abs across rows
-                        # sum(abs(a), axis=1)
-                        axis_nrms = np.zeros(n)
+                    elif ord == -1 and axis == 0:
+                        # min of sum of abs across rows
+                        # min(sum(abs(a)), axis=0)
+                        axis_nrms = np.full(n, max_val)
                         for j in range(n):
                             for i in range(m):
                                 axis_nrms[j] += abs(a[i, j])
+                        return axis_nrms
+
+                    elif ord == -1 and axis == 1:
+                        # sum of abs across columns
+                        # sum(abs(a), axis=1)
+                        axis_nrms = np.zeros(m)
+                        for i in range(m):
+                            for j in range(n):
+                                axis_nrms[i] += abs(a[i, j])
                         return axis_nrms
 
                     elif ord == 2 and axis == 0:
