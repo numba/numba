@@ -2279,12 +2279,13 @@ def _get_norm_impl(a, ord_flag, axis):
                 def twoD_impl(a, ord=None, axis=None):
                     # Compute the norm along a specific axis
                     a_c = array_prepare(a)
-                    nrm_axis = np.zeros(a_c.shape[axis])
-                    for idx in range(a_c.shape[axis]):
+                    # Trick: a_c.shape[0] if axis = 1, a_c.shape[1] if axis = 0
+                    nrm_axis = np.zeros(a_c.shape[1 - axis])
+                    for idx in range(len(nrm_axis)):
                         if axis == 0:
-                            nrm_axis[idx] = _oneD_norm_2(a_c[idx])
-                        elif axis == 1:
                             nrm_axis[idx] = _oneD_norm_2(a_c[:, idx])
+                        elif axis == 1:
+                            nrm_axis[idx] = _oneD_norm_2(a_c[idx])
                         else:
                             raise ValueError("Invalid axis for array.")
                     return nrm_axis
