@@ -2391,9 +2391,7 @@ def _get_norm_impl(a, ord_flag, axis):
                         # sqrt(sum(a ** 2), axis=0)
                         axis_nrms = np.zeros(n, dtype=np_ret_type)
                         for j in range(n):
-                            for i in range(m):
-                                axis_nrms[j] += a[i, j] ** 2
-                            axis_nrms[j] = axis_nrms[j] ** 0.5
+                            axis_nrms[j] = _oneD_norm_2(a[:, j])
                         return axis_nrms
 
                     elif ord == 2 and axis == 1:
@@ -2401,9 +2399,7 @@ def _get_norm_impl(a, ord_flag, axis):
                         # sqrt(sum(a ** 2), axis=1)
                         axis_nrms = np.zeros(m, dtype=np_ret_type)
                         for i in range(m):
-                            for j in range(n):
-                                axis_nrms[i] += a[i, j] ** 2
-                            axis_nrms[i] = axis_nrms[i] ** 0.5
+                            axis_nrms[i] = _oneD_norm_2(a[i, :])
                         return axis_nrms
 
                     else:
