@@ -2181,11 +2181,6 @@ def _get_norm_impl(a, ord_flag, axis):
     if a.ndim == 1:
         # 1D cases
 
-        # For 1d arrays, axis must always be None since there is only one
-        # possible axis along with a norm can be computed.
-        if not np_support.is_nonelike(axis):
-            raise ValueError("Invalid axis for array.")
-
         # handle "ord" being "None", must be done separately
         if ord_flag in (None, types.none):
             def oneD_impl(a, ord=None, axis=None):
@@ -2301,7 +2296,7 @@ def _get_norm_impl(a, ord_flag, axis):
                     a_c = array_prepare(a)
                     return _oneD_norm_2(a_c.reshape(n))
             else:
-                raise ValueError("Invaldi axis for array.")
+                raise ValueError("Invalid axis for array.")
         else:
             # max value for this dtype
             max_val = np.finfo(np_ret_type.type).max
