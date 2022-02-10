@@ -6,7 +6,7 @@ import numpy as np
 
 from numba import int8, int16, int32
 from numba import cuda, vectorize
-from numba.tests.support import TestCase
+from numba.cuda.testing import unittest, CUDATestCase
 from numba.tests.enum_usecases import (
     Color,
     Shape,
@@ -16,7 +16,7 @@ from numba.tests.enum_usecases import (
 )
 
 
-class EnumTest(TestCase):
+class EnumTest(CUDATestCase):
 
     pairs = [
         (Color.red, Color.red),
@@ -44,7 +44,7 @@ class EnumTest(TestCase):
     def test_getattr_getitem(self):
         @cuda.jit
         def f(out):
-            # Lookup of a enum member on its class
+            # Lookup of an enum member on its class
             out[0] = Color.red == Color.green
             out[1] = Color['red'] == Color['green']
 
@@ -55,7 +55,7 @@ class EnumTest(TestCase):
         ]))
 
     def test_return_from_device_func(self):
-        @cuda.jit
+        @cuda.jit(device=True)
         def helper(pred):
             return Color.red if pred else Color.green
 
@@ -70,12 +70,12 @@ class EnumTest(TestCase):
             Color.red == Color.red, Color.green == Color.green
         ]))
 
-    def test_int_coerse(self):
+    def test_int_coerce(self):
         @cuda.jit
         def f(out):
             # Implicit coercion of intenums to ints
             out[0] = Shape.square - RequestError.not_found
-            out[1] = int32(Shape.circle > IntEnumWithNegatives.one)
+            out[1] = Shape.circle > IntEnumWithNegatives.one
 
         arr = np.zeros((2,), dtype=np.int32)
         f[1, 1](arr)
@@ -114,3 +114,7 @@ class EnumTest(TestCase):
         expected = np.array([f(x) for x in arr])
         got = cuda_func(arr)
         self.assertPreciseEqual(expected, got)
+
+
+if __name__ == '__main__':
+    unittest.main()
