@@ -2133,8 +2133,6 @@ class TestLinalgNorm(TestLinalgSystems):
         # standard 2D input
         for size, dtype, order, nrm_type, arr_axis in \
                 product(sizes, self.dtypes, 'FC', nrm_types, arr_axes):
-            if nrm_type == -2 and arr_axis is not None:
-                continue
             # check a full rank matrix
             a = self.specific_sample_matrix(size, dtype, order)
             check(a, ord=nrm_type, axis=arr_axis)

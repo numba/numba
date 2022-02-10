@@ -2403,25 +2403,27 @@ def _get_norm_impl(a, ord_flag, axis):
                             axis_nrms[i] = _oneD_norm_2(a[i, :])
                         return axis_nrms
 
-                    # elif ord == -2 and axis == 0:
-                    #     # min SV across rows
-                    #     axis_nrms = np.zeros(n, dtype=np_ret_type)
-                    #     for j in range(n):
-                    #         tmp = np.zeros((m, 1), dtype=np_ret_type)
-                    #         for i in range(m):
-                    #             tmp[i] = a[i, j]
-                    #         axis_nrms[j] = _compute_singular_values(tmp)[-1]
-                    #     return axis_nrms
+                    elif ord == -2 and axis == 0:
+                        # inverse root sum of squared coefs across rows
+                        # sum(abs(a)**(-2))**(-1/2)
+                        axis_nrms = np.zeros(n, dtype=np_ret_type)
+                        for j in range(n):
+                            tmp = 0.
+                            for i in range(m):
+                                tmp += 1 / pow(abs(a[i, j]), 2)
+                            axis_nrms[j] = 1 / pow(tmp, 0.5)
+                        return axis_nrms
 
-                    # elif ord == -2 and axis == 1:
-                    #     # min SV across columns
-                    #     axis_nrms = np.zeros(m, dtype=np_ret_type)
-                    #     for i in range(m):
-                    #         tmp = np.zeros((n, 1), dtype=np_ret_type)
-                    #         for j in range(n):
-                    #             tmp[j] = a[i, j]
-                    #         axis_nrms[i] = _compute_singular_values(tmp)[-1]
-                    #     return axis_nrms
+                    elif ord == -2 and axis == 1:
+                        # inverse root sum of squared coefs across columns
+                        # sum(abs(a)**(-2))**(-1/2)
+                        axis_nrms = np.zeros(m, dtype=np_ret_type)
+                        for i in range(m):
+                            tmp = 0.
+                            for j in range(n):
+                                tmp += 1 / pow(abs(a[i, j]), 2)
+                            axis_nrms[i] = 1 / pow(tmp, 0.5)
+                        return axis_nrms
 
                     else:
                         # replicate numpy error
