@@ -27,80 +27,80 @@ class EnumTest(CUDATestCase):
     ]
 
     def test_compare(self):
-        @cuda.jit
         def f(a, b, out):
             out[0] = a == b
             out[1] = a != b
             out[2] = a is b
             out[3] = a is not b
 
-        arr = np.zeros((4,), dtype=np.bool_)
+        cuda_f = cuda.jit()(f)
         for a, b in self.pairs:
-            f[1, 1](a, b, arr)
-            self.assertPreciseEqual(arr, np.array([
-                a == b, a != b, a is b, a is not b
-            ]))
+            got = np.zeros((4,), dtype=np.bool_)
+            expect = got.copy()
+            cuda_f[1, 1](a, b, got)
+            f(a, b, expect)
+            self.assertPreciseEqual(expect, got)
 
     def test_getattr_getitem(self):
-        @cuda.jit
         def f(out):
             # Lookup of an enum member on its class
             out[0] = Color.red == Color.green
             out[1] = Color['red'] == Color['green']
 
-        arr = np.zeros((2,), dtype=np.bool_)
-        f[1, 1](arr)
-        self.assertPreciseEqual(arr, np.array([
-            Color.red == Color.green, Color['red'] == Color['green']
-        ]))
+        cuda_f = cuda.jit()(f)
+        got = np.zeros((2,), dtype=np.bool_)
+        expect = got.copy()
+        cuda_f[1, 1](got)
+        f(expect)
+        self.assertPreciseEqual(expect, got)
 
     def test_return_from_device_func(self):
         @cuda.jit(device=True)
         def helper(pred):
             return Color.red if pred else Color.green
 
-        @cuda.jit
         def f(pred, out):
             out[0] = helper(pred) == Color.red
             out[1] = helper(not pred) == Color.green
 
-        arr = np.zeros((2,), dtype=np.bool_)
-        f[1, 1](True, arr)
-        self.assertPreciseEqual(arr, np.array([
+        cuda_f = cuda.jit()(f)
+        got = np.zeros((2,), dtype=np.bool_)
+        cuda_f[1, 1](True, got)
+        self.assertPreciseEqual(got, np.array([
             Color.red == Color.red, Color.green == Color.green
         ]))
 
     def test_int_coerce(self):
-        @cuda.jit
-        def f(out):
+        def f(x, out):
             # Implicit coercion of intenums to ints
-            out[0] = Shape.square - RequestError.not_found
-            out[1] = Shape.circle > IntEnumWithNegatives.one
+            if x > RequestError.internal_error:
+                out[0] = x - RequestError.not_found
+            else:
+                out[0] = x + Shape.circle
 
-        arr = np.zeros((2,), dtype=np.int32)
-        f[1, 1](arr)
-        self.assertPreciseEqual(arr, np.array([
-            Shape.square - RequestError.not_found,
-            Shape.circle > IntEnumWithNegatives.one
-        ], dtype=arr.dtype))
+        cuda_f = cuda.jit()(f)
+        for x in [300, 450, 550]:
+            got = np.zeros((1,), dtype=np.int32)
+            expect = got.copy()
+            cuda_f[1, 1](x, got)
+            f(x, expect)
+            self.assertPreciseEqual(expect, got)
 
     def test_int_cast(self):
-        @cuda.jit
-        def f(x, out0, out1, out2):
+        def f(x, out):
             # Explicit coercion of intenums to ints
-            out0[0] = x > int16(RequestError.internal_error)
-            out1[0] = x - int32(RequestError.not_found)
-            out2[0] = x + int8(Shape.circle)
+            if x > int16(RequestError.internal_error):
+                out[0] = x - int32(RequestError.not_found)
+            else:
+                out[0] = x + int8(Shape.circle)
 
-        arr0 = np.zeros((1,), dtype=np.int16)
-        arr1 = np.zeros((1,), dtype=np.int32)
-        arr2 = np.zeros((1,), dtype=np.int8)
-        x = np.int8(10)
-
-        f[1, 1](x, arr0, arr1, arr2)
-        self.assertEqual(arr0[0], x > np.int16(RequestError.internal_error))
-        self.assertEqual(arr1[0], x - np.int32(RequestError.not_found))
-        self.assertEqual(arr2[0], x + np.int8(Shape.circle))
+        cuda_f = cuda.jit()(f)
+        for x in [300, 450, 550]:
+            got = np.zeros((1,), dtype=np.int32)
+            expect = got.copy()
+            cuda_f[1, 1](x, got)
+            f(x, expect)
+            self.assertEqual(expect, got)
 
     @skip_on_cudasim("ufuncs are unsupported on simulator.")
     def test_vectorize(self):
