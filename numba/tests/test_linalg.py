@@ -2132,7 +2132,7 @@ class TestLinalgNorm(TestLinalgSystems):
 
         # standard 2D input
         for size, dtype, order, nrm_type, arr_axis in \
-                product(sizes, self.dtypes, 'C', nrm_types, arr_axes):
+                product(sizes, self.dtypes, 'FC', nrm_types, arr_axes):
             print(size, nrm_type, order, arr_axis)
             # check a full rank matrix
             a = self.specific_sample_matrix(size, dtype, order)
@@ -2143,7 +2143,7 @@ class TestLinalgNorm(TestLinalgSystems):
         nrm_types = [None]
         arr_axes = [None]
         for dtype, nrm_type, order, arr_axis in \
-                product(self.dtypes, nrm_types, 'C', arr_axes):
+                product(self.dtypes, nrm_types, 'FC', arr_axes):
             a = self.specific_sample_matrix((17, 13), dtype, order)
             print("next session:", size, nrm_type, order, arr_axis)
             # contig for C order

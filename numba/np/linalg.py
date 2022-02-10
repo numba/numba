@@ -2275,15 +2275,14 @@ def _get_norm_impl(a, ord_flag, axis):
                     # Compute the norm along a specific axis
                     m = a.shape[-2]
                     n = a.shape[-1]
-                    a_c = array_prepare(a)
                     if axis == 0:
                         nrm_axis = np.zeros(n, dtype=np_ret_type)
                         for j in range(n):
-                            nrm_axis[j] = _oneD_norm_2(a_c[:, j])
+                            nrm_axis[j] = _oneD_norm_2(a[:, j])
                     elif axis == 1:
                         nrm_axis = np.zeros(m, dtype=np_ret_type)
                         for i in range(m):
-                            nrm_axis[i] = _oneD_norm_2(a_c[i, :])
+                            nrm_axis[i] = _oneD_norm_2(a[i, :])
                     else:
                         raise ValueError("Invalid axis for array.")
                     return nrm_axis
