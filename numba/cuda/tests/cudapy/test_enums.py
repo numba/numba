@@ -6,7 +6,7 @@ import numpy as np
 
 from numba import int8, int16, int32
 from numba import cuda, vectorize
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 from numba.tests.enum_usecases import (
     Color,
     Shape,
@@ -102,6 +102,7 @@ class EnumTest(CUDATestCase):
         self.assertEqual(arr1[0], x - np.int32(RequestError.not_found))
         self.assertEqual(arr2[0], x + np.int8(Shape.circle))
 
+    @skip_on_cudasim("ufuncs are unsupported on simulator.")
     def test_vectorize(self):
         def f(x):
             if x != RequestError.not_found:
