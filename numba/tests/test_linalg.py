@@ -2127,7 +2127,7 @@ class TestLinalgNorm(TestLinalgSystems):
         # test: column vector, tall, wide, square, row vector
         # prime sizes
         sizes = [(7, 1), (11, 5), (5, 11), (3, 3), (1, 7)]
-        nrm_types = [None, np.inf, -np.inf, 1, 2] # -1, -2
+        nrm_types = [None, np.inf, -np.inf, 1, -1, 2] # -2
         arr_axes = [None, 0, 1]
 
         # standard 2D input
