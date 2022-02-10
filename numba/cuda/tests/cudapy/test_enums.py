@@ -36,10 +36,10 @@ class EnumTest(CUDATestCase):
         cuda_f = cuda.jit()(f)
         for a, b in self.pairs:
             got = np.zeros((4,), dtype=np.bool_)
-            expect = got.copy()
+            expected = got.copy()
             cuda_f[1, 1](a, b, got)
-            f(a, b, expect)
-            self.assertPreciseEqual(expect, got)
+            f(a, b, expected)
+            self.assertPreciseEqual(expected, got)
 
     def test_getattr_getitem(self):
         def f(out):
@@ -49,10 +49,10 @@ class EnumTest(CUDATestCase):
 
         cuda_f = cuda.jit()(f)
         got = np.zeros((2,), dtype=np.bool_)
-        expect = got.copy()
+        expected = got.copy()
         cuda_f[1, 1](got)
-        f(expect)
-        self.assertPreciseEqual(expect, got)
+        f(expected)
+        self.assertPreciseEqual(expected, got)
 
     def test_return_from_device_func(self):
         @cuda.jit(device=True)
@@ -81,10 +81,10 @@ class EnumTest(CUDATestCase):
         cuda_f = cuda.jit()(f)
         for x in [300, 450, 550]:
             got = np.zeros((1,), dtype=np.int32)
-            expect = got.copy()
+            expected = got.copy()
             cuda_f[1, 1](x, got)
-            f(x, expect)
-            self.assertPreciseEqual(expect, got)
+            f(x, expected)
+            self.assertPreciseEqual(expected, got)
 
     def test_int_cast(self):
         def f(x, out):
@@ -97,10 +97,10 @@ class EnumTest(CUDATestCase):
         cuda_f = cuda.jit()(f)
         for x in [300, 450, 550]:
             got = np.zeros((1,), dtype=np.int32)
-            expect = got.copy()
+            expected = got.copy()
             cuda_f[1, 1](x, got)
-            f(x, expect)
-            self.assertEqual(expect, got)
+            f(x, expected)
+            self.assertEqual(expected, got)
 
     @skip_on_cudasim("ufuncs are unsupported on simulator.")
     def test_vectorize(self):
