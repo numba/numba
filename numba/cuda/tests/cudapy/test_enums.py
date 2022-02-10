@@ -55,20 +55,25 @@ class EnumTest(CUDATestCase):
         self.assertPreciseEqual(expected, got)
 
     def test_return_from_device_func(self):
-        @cuda.jit(device=True)
-        def helper(pred):
+        def inner(pred):
             return Color.red if pred else Color.green
 
-        def f(pred, out):
-            out[0] = helper(pred) == Color.red
-            out[1] = helper(not pred) == Color.green
+        def _make_test_func(inner, jitter):
+            inner = jitter(inner)
 
-        cuda_f = cuda.jit()(f)
+            def f(pred, out):
+                out[0] = inner(pred) == Color.red
+                out[1] = inner(not pred) == Color.green
+            return jitter(f)
+
+        f = _make_test_func(inner, lambda x:x)
+        cuda_f = _make_test_func(inner, cuda.jit())
+
         got = np.zeros((2,), dtype=np.bool_)
+        expected = got.copy()
+        f(True, expected)
         cuda_f[1, 1](True, got)
-        self.assertPreciseEqual(got, np.array([
-            Color.red == Color.red, Color.green == Color.green
-        ]))
+        self.assertPreciseEqual(expected, got)
 
     def test_int_coerce(self):
         def f(x, out):
