@@ -358,6 +358,18 @@ class _Kernel(serialize.ReduceMixin):
             kernelargs.append(ctypes.c_double(val.real))
             kernelargs.append(ctypes.c_double(val.imag))
 
+        elif isinstance(ty, types.EnumMember):
+            try:
+                self._prepare_args(
+                    ty.dtype, val.value, stream, retr, kernelargs
+                )
+            except Exception as e:
+                if isinstance(e, NotImplementedError):
+                    raise NotImplementedError(
+                        f"Unsupported value for Enum {val}"
+                    ) from e
+                raise
+
         elif isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
             kernelargs.append(ctypes.c_int64(val.view(np.int64)))
 
