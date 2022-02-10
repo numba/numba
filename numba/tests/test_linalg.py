@@ -2127,13 +2127,14 @@ class TestLinalgNorm(TestLinalgSystems):
         # test: column vector, tall, wide, square, row vector
         # prime sizes
         sizes = [(7, 1), (11, 5), (5, 11), (3, 3), (1, 7)]
-        nrm_types = [None, np.inf, -np.inf, 1, -1, 2] # -2
+        nrm_types = [None, np.inf, -np.inf, 1, -1, 2, -2]
         arr_axes = [None, 0, 1]
 
         # standard 2D input
         for size, dtype, order, nrm_type, arr_axis in \
                 product(sizes, self.dtypes, 'FC', nrm_types, arr_axes):
-            print(size, nrm_type, order, arr_axis)
+            if nrm_type == -2 and arr_axis:
+                pass
             # check a full rank matrix
             a = self.specific_sample_matrix(size, dtype, order)
             check(a, ord=nrm_type, axis=arr_axis)
@@ -2145,7 +2146,6 @@ class TestLinalgNorm(TestLinalgSystems):
         for dtype, nrm_type, order, arr_axis in \
                 product(self.dtypes, nrm_types, 'FC', arr_axes):
             a = self.specific_sample_matrix((17, 13), dtype, order)
-            print("next session:", size, nrm_type, order, arr_axis)
             # contig for C order
             check(a[:3], ord=nrm_type, axis=arr_axis)
 
