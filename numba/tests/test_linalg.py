@@ -607,7 +607,7 @@ class TestLinalgBase(TestCase):
 
     def assert_invalid_array_axis(self, cfunc, args):
         """
-        For use in norm() and cond() tests.
+        For use in norm() tests.
         """
         msg = "Invalid axis for array."
         self.assert_error(cfunc, args, msg, ValueError)
@@ -2274,14 +2274,6 @@ class TestLinalgCond(TestLinalgBase):
         # assert raises for an invalid norm kind kwarg
         self.assert_invalid_norm_kind(cfunc, (np.array([[1., 2.], [3., 4.]],
                                                        dtype=np.float64), 6))
-
-        # assert 1D input raises for invalid axis kwarg
-        self.assert_invalid_array_axis(cfunc, (np.array([1., 2., 3.],
-                                                        dtype=np.float64), 1))
-
-        # assert 2D input raises for invalid axis kwarg
-        self.assert_invalid_array_axis(cfunc, (np.array([[1., 2.], [3., 4.]],
-                                                        dtype=np.float64), 2))
 
 
 class TestLinalgMatrixRank(TestLinalgSystems):
