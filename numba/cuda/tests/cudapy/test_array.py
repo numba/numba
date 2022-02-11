@@ -250,10 +250,14 @@ class TestCudaArray(CUDATestCase):
         d_a = cuda.to_device(a)
         result = np.zeros((n,))
 
-        func[1, 128](a, result)
+        # Todo: this order matters, it shouldn't
         func[1, 128](d_a, result)
+        func[1, 128](a, result)
 
-        self.assertEqual(1, len(func.overloads))
+        # CPU compiled call site needs two overloads
+        self.assertEqual(2, len(func.overloads))
+
+        # TODO: can a single kernel be generated? Suspect not.
 
 
 if __name__ == '__main__':

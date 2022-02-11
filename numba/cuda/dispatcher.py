@@ -4,10 +4,13 @@ import sys
 import ctypes
 import functools
 
-from numba.core import config, serialize, sigutils, types, typing, utils
+from numba.core import (config, serialize, sigutils, types, typing, utils,
+                        cgutils)
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.dispatcher import Dispatcher
 from numba.core.errors import NumbaPerformanceWarning
+from numba.core.extending import overload
+from numba import objmode
 from numba.core.typing.typeof import Purpose, typeof
 
 from numba.cuda.api import get_current_device
@@ -23,8 +26,170 @@ from numba.cuda import types as cuda_types
 
 from numba import cuda
 from numba import _dispatcher
+from numba import njit, types
+from numba.extending import intrinsic
+from numba.core import cgutils
+import llvmlite
+
 
 from warnings import warn
+
+def maybe_push_to_device(*args, **kwargs):
+    pass
+
+
+@overload(maybe_push_to_device)
+def ol_cuda_to_device(obj, stream=0, copy=True, to=None):
+    if isinstance(obj, types.Array) and not isinstance(obj, cuda_types.CUDADeviceArray):
+        retty = cuda_types.CUDADeviceArray(obj.dtype, obj.ndim, obj.layout)
+        def impl(obj, stream=0, copy=True, to=None):
+            with objmode(d_a=retty):
+                d_a = cuda.to_device(obj, stream=stream, copy=copy, to=to)
+            return d_a
+    else:
+        def impl(obj, stream=0, copy=True, to=None):
+            return obj
+    return impl
+
+
+def maybe_pull_from_device(*args, **kwargs):
+    pass
+
+
+@overload(maybe_pull_from_device)
+def ol_cuda_to_host(obj, ary):
+    if (isinstance(obj, cuda_types.CUDADeviceArray) and
+            (isinstance(ary, types.Array) and not
+                isinstance(ary, cuda_types.CUDADeviceArray))):
+        def impl(obj, ary):
+            with objmode():
+                obj.copy_to_host(ary)
+    else:
+        def impl(obj, ary):
+            pass
+    return impl
+
+
+def compile_launcher(func_ptr, args):
+    drv_launch = driver.driver.lib['cuLaunchKernel']
+    c_uint64 = ctypes.c_uint64
+    c_uint = ctypes.c_uint
+    c_voidp = ctypes.c_void_p
+    argtypes = (c_uint64, c_uint, c_uint, c_uint, c_uint, c_uint, c_uint,
+                c_uint, c_uint64, c_voidp, c_uint64)
+    drv_launch.argtypes = argtypes
+    drv_launch.return_type = ctypes.c_int
+
+    argrnge = range(len(args))
+    synthetic_call_site = ', '.join([f'arg{x}' for x in argrnge])
+    device_synthetic_call_site = ', '.join([f'd_arg{x}' for x in argrnge])
+
+    auto_to_device = '; '.join([f"d_arg{x} = maybe_push_to_device(arg{x})" for x in argrnge])
+    auto_to_host = '; '.join([f"maybe_pull_from_device(d_arg{x}, arg{x})" for x in argrnge])
+
+    generated_flatten = \
+    f"""if 1:
+    @intrinsic
+    def flatten(tyctx, {synthetic_call_site}):
+        retty = types.voidptr
+        sig = retty({synthetic_call_site})
+
+        def impl(cgctx, builder, signature, llargs):
+            # First work out how many args there are going to be once the
+            # python level args are splatted.
+            zfill=True
+            argtys = signature.args
+            arginfo = cgctx.call_conv._get_arg_packer(argtys)
+
+            ll_unpacked_args = arginfo.as_arguments(builder, llargs)
+            nargs = len(ll_unpacked_args)
+
+            # This isn't quite right yet in terms of types but it works.
+            # All CUDA needs is an array of addresses. In C it's void**, the
+            # code gen below just writes in long longs.
+            ll_voidptr = cgctx.get_value_type(types.voidptr)
+            ll_uint64 = cgctx.get_value_type(types.uint64)
+            param_ty = llvmlite.ir.types.ArrayType(ll_uint64, nargs)
+            buf = cgutils.alloca_once(builder, param_ty, zfill=zfill, name="array_buf") # ptr to array
+            deref = cgctx.get_constant(types.int32, 0)
+
+            for idx, item in enumerate(ll_unpacked_args):
+                item_ptr = cgutils.alloca_once(builder, item.type, zfill=zfill)
+                builder.store(item, item_ptr)
+                item_addr = builder.ptrtoint(item_ptr, ll_uint64)
+                index = cgctx.get_constant(types.int32, idx)
+                ptr = builder.gep(buf, [deref, index], inbounds=True, name="gep_in_arr")
+                builder.store(item_addr, ptr)
+
+            vp = cgctx.get_value_type(types.voidptr)
+            ret = builder.bitcast(buf, vp)
+            return ret
+        return sig, impl
+    """
+    generated_launch = \
+    f"""if 1:
+    @njit
+    def launcher(gx, gy, gz, bx, by, bz, sharedmem, stream, {synthetic_call_site}):
+        # unwinding all this with a load of verbosity is not actually
+        # necessary, it just helps with debugging it from gdb.
+        if stream is None:
+            _s = uint64(0)
+        else:
+            _s = uint64(stream)
+
+        # Shove arrays onto the device if needed
+        {auto_to_device}
+
+        flattened = flatten({device_synthetic_call_site})
+        a_fptr = uint64(func_ptr)
+        a_gx = uint32(gx)
+        a_gy = uint32(gy)
+        a_gz = uint32(gz)
+        a_bx = uint32(bx)
+        a_by = uint32(by)
+        a_bz = uint32(bz)
+        a_smem = uint32(sharedmem)
+        a_stream = _s
+        a_flattened = flattened
+        a_extras = uint64(0) # nullptr
+        launched = drv_launch(a_fptr,
+                                a_gx,
+                                a_gy,
+                                a_gz,
+                                a_bx,
+                                a_by,
+                                a_bz,
+                                a_smem,
+                                a_stream,
+                                a_flattened,
+                                a_extras,
+                                )
+
+        # Copy back to host if needed
+        {auto_to_host}
+
+        return launched
+    """
+    l=dict()
+    g={'llvmlite': llvmlite,
+       'njit': njit,
+       'types': types,
+       'intrinsic': intrinsic,
+       'cgutils': cgutils,
+       'func_ptr': func_ptr,
+       'uint32': types.uint32,
+       'uint64': types.uint64,
+       'drv_launch': drv_launch,
+       'maybe_push_to_device': maybe_push_to_device,
+       'maybe_pull_from_device': maybe_pull_from_device}
+
+    exec(generated_flatten, g, l)
+
+    g['flatten'] = l['flatten']
+    exec(generated_launch, g, l)
+    launcher = l['launcher']
+
+    return launcher
 
 
 class _Kernel(serialize.ReduceMixin):
@@ -63,6 +228,7 @@ class _Kernel(serialize.ReduceMixin):
         self.debug = debug
         self.lineinfo = lineinfo
         self.extensions = extensions or []
+        self._launcher = None
 
         nvvm_options = {
             'debug': self.debug,
@@ -230,11 +396,13 @@ class _Kernel(serialize.ReduceMixin):
         return active_per_sm * sm_count
 
     def launch(self, args, griddim, blockdim, stream=0, sharedmem=0):
+        from .cudadrv import enums
         # Prepare kernel
         cufunc = self._codelibrary.get_cufunc()
 
         if self.debug:
             excname = cufunc.name + "__errcode__"
+            # this is a MemoryPointer and size of the pointer
             excmem, excsz = cufunc.module.get_global_symbol(excname)
             assert excsz == ctypes.sizeof(ctypes.c_int)
             excval = ctypes.c_int()
@@ -243,10 +411,6 @@ class _Kernel(serialize.ReduceMixin):
         # Prepare arguments
         retr = []                       # hold functors for writeback
 
-        kernelargs = []
-        for t, v in zip(self.argument_types, args):
-            self._prepare_args(t, v, stream, retr, kernelargs)
-
         if driver.USE_NV_BINDING:
             zero_stream = driver.binding.CUstream(0)
         else:
@@ -254,15 +418,61 @@ class _Kernel(serialize.ReduceMixin):
 
         stream_handle = stream and stream.handle or zero_stream
 
-        # Invoke kernel
-        driver.launch_kernel(cufunc.handle,
-                             *griddim,
-                             *blockdim,
-                             sharedmem,
-                             stream_handle,
-                             kernelargs,
-                             cooperative=self.cooperative)
+        gx, gy, gz = griddim
+        bx, by, bz = blockdim
 
+
+        if self.cooperative:
+            kernelargs = []
+            for t, v in zip(self.argument_types, args):
+                self._prepare_args(t, v, stream, retr, kernelargs)
+
+            param_vals = []
+            for arg in kernelargs:
+                if driver.is_device_memory(arg):
+                    ptr = driver.device_ctypes_pointer(arg)
+                    param_vals.append(ctypes.addressof(ptr))
+                else:
+                    param_vals.append(ctypes.addressof(arg))
+
+            params = (ctypes.c_void_p * len(param_vals))(*param_vals)
+
+            driver.driver.cuLaunchCooperativeKernel(cufunc.handle,
+                                                    gx, gy, gz,
+                                                    bx, by, bz,
+                                                    sharedmem,
+                                                    stream_handle,
+                                                    params)
+        else:
+            # Compile launcher
+            if self._launcher is None:
+                self._launcher = compile_launcher(cufunc.handle.value, args)
+
+            # Stream should be ctypes.c_void_p wrapped in a driver.Stream or None.
+            if isinstance(stream, cuda.cudadrv.driver.Stream):
+                stream_handle = stream.handle.value
+            else:
+                stream_handle = stream
+            # Execute the JIT launch
+            retcode = self._launcher(gx, gy, gz, bx, by,
+                                     bz, sharedmem, stream_handle, *args)
+            if retcode != enums.CUDA_SUCCESS:
+                errname = ERROR_MAP.get(retcode, "UNKNOWN_CUDA_ERROR")
+                msg = f"Kernel launch results in {errname}"
+                raise CudaAPIError(retcode, msg)
+
+
+        # Invoke kernel
+#        driver.launch_kernel(cufunc.handle,
+#                             *griddim,
+#                             *blockdim,
+#                             sharedmem,
+#                             stream_handle,
+#                             kernelargs,
+#                             cooperative=self.cooperative)
+
+        # Now the kernel has run, poke at the memory in the kernel to see if
+        # there's an exception
         if self.debug:
             driver.device_to_host(ctypes.addressof(excval), excmem, excsz)
             if excval.value != 0:

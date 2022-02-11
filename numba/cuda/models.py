@@ -3,7 +3,7 @@ from llvmlite import ir
 from numba.core.datamodel.registry import register_default
 from numba.core.extending import register_model, models
 from numba.core import types
-from numba.cuda.types import Dim3, GridGroup, CUDADispatcher
+from numba.cuda.types import Dim3, GridGroup, CUDADispatcher, CUDADeviceArray
 
 
 @register_model(Dim3)
@@ -39,3 +39,4 @@ class FloatModel(models.PrimitiveModel):
 
 
 register_model(CUDADispatcher)(models.OpaqueModel)
+register_model(CUDADeviceArray)(models.ArrayModel)

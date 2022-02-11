@@ -6,6 +6,7 @@ from numba.core import config
 
 
 class TestException(CUDATestCase):
+
     def test_exception(self):
         def foo(ary):
             x = cuda.threadIdx.x

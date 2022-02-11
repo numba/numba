@@ -94,7 +94,9 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
         self.shape = tuple(shape)
         self.strides = tuple(strides)
         self.dtype = dtype
+        self.itemsize = dtype.itemsize
         self.size = int(functools.reduce(operator.mul, self.shape, 1))
+        self.nitems = self.size # for the struct model
         # prepare gpu memory
         if self.size > 0:
             if gpu_data is None:
@@ -102,7 +104,17 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
                     self.shape, self.strides, self.dtype.itemsize)
                 gpu_data = devices.get_context().memalloc(self.alloc_size)
             else:
-                self.alloc_size = _driver.device_memory_size(gpu_data)
+                try:
+                    # NOTE THIS IS A HACK, gpu_data comes in as an int from
+                    # unboxing the raw ptr from memory model types.Array.data
+                    if isinstance(gpu_data, int):
+                        import ctypes as ct
+                        vp= ct.c_void_p(gpu_data)
+                        nbytes = _driver.memory_size_from_info(self.shape, self.strides, self.dtype.itemsize)
+                        gpu_data = _driver.MemoryPointer(devices.get_context(), vp, nbytes)
+                    self.alloc_size = _driver.device_memory_size(gpu_data)
+                except Exception as e:
+                    print("++++++++++++++++++++++++++++++++++++ EXCEPTION", e)
         else:
             # Make NULL pointer for empty allocation
             if _driver.USE_NV_BINDING:
@@ -194,7 +206,8 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
             layout = 'A'
 
         dtype = numpy_support.from_dtype(self.dtype)
-        return types.Array(dtype, self.ndim, layout)
+        from numba.cuda.types import CUDADeviceArray
+        return CUDADeviceArray(dtype, self.ndim, layout)
 
     @property
     def device_ctypes_pointer(self):
@@ -267,6 +280,7 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
             raise NotImplementedError(msg.format(self.strides))
         assert self.alloc_size >= 0, "Negative memory size"
         stream = self._default_stream(stream)
+
         if ary is None:
             hostary = np.empty(shape=self.alloc_size, dtype=np.byte)
         else:
