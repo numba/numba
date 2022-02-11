@@ -550,19 +550,20 @@ class TestTimedeltaArithmetic(TestCase):
                              (TD,) * len(TD_CASES) + (DT,) * len(TD_CASES)):
             check(typ(*case))
 
-    def test_min(self):
-        f = self.jit(min_usecase)
+    def test_min_max(self):
+        min_f = self.jit(min_usecase)
+        max_f = self.jit(max_usecase)
         def check(a, b):
-            self.assertPreciseEqual(f(a, b), min(a, b))
+            self.assertPreciseEqual(min_f(a, b), min(a, b))
+            self.assertPreciseEqual(max_f(a, b), max(a, b))
 
-        # TODO: write usecases
-
-    def test_max(self):
-        f = self.jit(max_usecase)
-        def check(a, b):
-            self.assertPreciseEqual(f(a, b), max(a, b))
-
-        # TODO: write usecases
+        check(TD(1), TD(2))
+        check(TD(1), TD(1))
+        check(TD(2), TD(1))
+        check(TD(1, 's'), TD(2, 's'))
+        check(TD(1, 's'), TD(1, 's'))
+        check(TD(2, 's'), TD(1, 's'))
+        check(TD('Nat'), TD('Nat'))
 
 
 class TestTimedeltaArithmeticNoPython(TestTimedeltaArithmetic):
@@ -791,6 +792,21 @@ class TestDatetimeArithmetic(TestCase):
                 check_eq(a, b, True)
                 check_lt(a, b + np.timedelta64(1, unit), True)
                 check_lt(b - np.timedelta64(1, unit), a, True)
+
+    def test_min_max(self):
+        min_f = self.jit(min_usecase)
+        max_f = self.jit(max_usecase)
+        def check(a, b):
+            self.assertPreciseEqual(min_f(a, b), min(a, b))
+            self.assertPreciseEqual(max_f(a, b), max(a, b))
+
+        check(DT(1, 'ns'), DT(2, 'ns'))
+        check(DT(1, 'ns'), DT(1, 'ns'))
+        check(DT(2, 'ns'), DT(1, 'ns'))
+        check(DT(1, 's'), DT(2, 's'))
+        check(DT(1, 's'), DT(1, 's'))
+        check(DT(2, 's'), DT(1, 's'))
+        check(DT('Nat', 'ns'), DT('Nat', 'ns'))
 
 
 class TestDatetimeArithmeticNoPython(TestDatetimeArithmetic):
