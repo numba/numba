@@ -419,6 +419,12 @@ def _lower_trivial_inplace_binops(parfor, lowerer, thread_count, reduce_info):
         if _fix_redvar_name_ssa_mismatch(parfor, lowerer, inst,
                                    reduce_info.redvar_name):
             break
+    if config.DEBUG_ARRAY_OPT_RUNTIME:
+        varname = reduce_info.redvar_name
+        lowerer.print_variable(
+            f"{parfor.loc}: parfor {fn.__name__} reduction {varname} =",
+            varname,
+        )
 
 
 def _lower_non_trivial_reduce(parfor, lowerer, thread_count, reduce_info):
@@ -443,6 +449,7 @@ def _lower_non_trivial_reduce(parfor, lowerer, thread_count, reduce_info):
                 )
                 lowerer.storevar(elem, init_name)
                 lowerer.lower_inst(inst)
+
             # Otherwise?
             else:
                 raise ParforsUnexpectedReduceNodeError(inst)
@@ -452,6 +459,12 @@ def _lower_non_trivial_reduce(parfor, lowerer, thread_count, reduce_info):
                                        reduce_info.redvar_name):
                 break
 
+    if config.DEBUG_ARRAY_OPT_RUNTIME:
+        varname = reduce_info.redvar_name
+        lowerer.print_variable(
+            f"{parfor.loc}: parfor non-trivial reduction {varname} =",
+            varname,
+        )
 
 def _lower_var_to_var_assign(lowerer, inst):
     """Lower Var->Var assignment.
