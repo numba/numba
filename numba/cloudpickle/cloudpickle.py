@@ -203,6 +203,10 @@ def _lookup_module_and_qualname(obj, name=None):
 
     module_name = _whichmodule(obj, name)
 
+    if module_name not in sys.modules:
+        del obj.__module__
+        return None
+
     if module_name is None:
         # In this case, obj.__module__ is None AND obj was not found in any
         # imported module. obj is thus treated as dynamic.
