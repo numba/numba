@@ -481,13 +481,14 @@ def get_type_min_value(typ):
 @lower_builtin(get_type_min_value, types.DType)
 def lower_get_type_min_value(context, builder, sig, args):
     typ = sig.args[0].dtype
-    bw = typ.bitwidth
 
     if isinstance(typ, types.Integer):
+        bw = typ.bitwidth
         lty = ir.IntType(bw)
         val = typ.minval
         res = ir.Constant(lty, val)
     elif isinstance(typ, types.Float):
+        bw = typ.bitwidth
         if bw == 32:
             lty = ir.FloatType()
         elif bw == 64:
@@ -496,19 +497,25 @@ def lower_get_type_min_value(context, builder, sig, args):
             raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
         npty = getattr(np, 'float{}'.format(bw))
         res = ir.Constant(lty, -np.inf)
+    elif isinstance(typ, (types.NPDatetime, types.NPTimedelta)):
+        bw = 64
+        lty = ir.IntType(bw)
+        val = types.uint64.minval
+        res = ir.Constant(lty, val)
     return impl_ret_untracked(context, builder, lty, res)
 
 @lower_builtin(get_type_max_value, types.NumberClass)
 @lower_builtin(get_type_max_value, types.DType)
 def lower_get_type_max_value(context, builder, sig, args):
     typ = sig.args[0].dtype
-    bw = typ.bitwidth
 
     if isinstance(typ, types.Integer):
+        bw = typ.bitwidth
         lty = ir.IntType(bw)
         val = typ.maxval
         res = ir.Constant(lty, val)
     elif isinstance(typ, types.Float):
+        bw = typ.bitwidth
         if bw == 32:
             lty = ir.FloatType()
         elif bw == 64:
@@ -517,6 +524,11 @@ def lower_get_type_max_value(context, builder, sig, args):
             raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
         npty = getattr(np, 'float{}'.format(bw))
         res = ir.Constant(lty, np.inf)
+    elif isinstance(typ, (types.NPDatetime, types.NPTimedelta)):
+        bw = 64
+        lty = ir.IntType(bw)
+        val = types.int64.maxval
+        res = ir.Constant(lty, val)
     return impl_ret_untracked(context, builder, lty, res)
 
 # -----------------------------------------------------------------------------

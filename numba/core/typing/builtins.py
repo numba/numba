@@ -881,7 +881,7 @@ class MinMaxBase(AbstractTemplate):
 
     def _unify_minmax(self, tys):
         for ty in tys:
-            if not isinstance(ty, types.Number):
+            if not isinstance(ty, (types.Number, types.NPDatetime, types.NPTimedelta)):
                 return
         return self.context.unify_types(*tys)
 
@@ -1103,8 +1103,11 @@ class MinValInfer(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         assert len(args) == 1
-        assert isinstance(args[0], (types.DType, types.NumberClass))
-        return signature(args[0].dtype, *args)
+        if isinstance(args[0], (types.DType, types.NumberClass)):
+            return signature(args[0].dtype, *args)
+        elif isinstance(args[0], (types.NPDatetime, types.NPTimedelta)):
+            return signature(args[0], *args)
+        assert False
 
 
 #------------------------------------------------------------------------------

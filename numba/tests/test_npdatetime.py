@@ -79,6 +79,12 @@ def abs_usecase(x):
 def hash_usecase(x):
     return hash(x)
 
+def min_usecase(x, y):
+    return min(x, y)
+
+def max_usecase(x, y):
+    return max(x, y)
+
 def make_add_constant(const):
     def add_constant(x):
         return x + const
@@ -544,6 +550,20 @@ class TestTimedeltaArithmetic(TestCase):
                              (TD,) * len(TD_CASES) + (DT,) * len(TD_CASES)):
             check(typ(*case))
 
+    def test_min(self):
+        f = self.jit(min_usecase)
+        def check(a, b):
+            self.assertPreciseEqual(f(a, b), min(a, b))
+
+        # TODO: write usecases
+
+    def test_max(self):
+        f = self.jit(max_usecase)
+        def check(a, b):
+            self.assertPreciseEqual(f(a, b), max(a, b))
+
+        # TODO: write usecases
+
 
 class TestTimedeltaArithmeticNoPython(TestTimedeltaArithmetic):
 
@@ -902,6 +922,81 @@ class TestDatetimeArrayOps(TestCase):
 
     def test_sub_td_no_match(self):
         self._test_add_sub_td_no_match(np.subtract)
+
+    def _test_min_max(self, operation, parallel, method):
+        if method:
+            if operation is np.min:
+                def impl(arr):
+                    return arr.min()
+            else:
+                def impl(arr):
+                    return arr.max()
+        else:
+            def impl(arr):
+                return operation(arr)
+
+        py_func = impl
+        cfunc = njit(parallel=parallel)(impl)
+
+        test_cases = [
+            np.array([
+                DT("2011-01-01", "ns"),
+                DT("1971-02-02", "ns"),
+                DT("2021-03-03", "ns"),
+                DT("2004-12-07", "ns"),
+            ]),
+            np.array([
+                DT("2011-01-01", "D"),
+                DT("1971-02-02", "D"),
+                DT("2021-03-03", "D"),
+                DT("2004-12-07", "D"),
+            ]),
+            np.array([
+                TD(1, "ns"),
+                TD(2, "ns"),
+                TD(3, "ns"),
+                TD(4, "ns"),
+            ]),
+            np.array([
+                TD(1, "D"),
+                TD(2, "D"),
+                TD(3, "D"),
+                TD(4, "D"),
+            ]),
+        ]
+
+        for arr in test_cases:
+            self.assertEqual(py_func(arr), cfunc(arr))
+
+
+
+    def test_min_func(self):
+        self._test_min_max(np.min, False, False)
+
+    @skip_parfors_unsupported
+    def test_min_func_parallel(self):
+        self._test_min_max(np.min, True, False)
+
+    def test_max_func(self):
+        self._test_min_max(np.max, False, False)
+
+    @skip_parfors_unsupported
+    def test_max_func_parallel(self):
+        self._test_min_max(np.max, True, False)
+
+    def test_min_method(self):
+        self._test_min_max(np.min, False, True)
+
+    @skip_parfors_unsupported
+    def test_min_method_parallel(self):
+        self._test_min_max(np.min, True, True)
+
+    def test_max_method(self):
+        self._test_min_max(np.max, False, True)
+
+    @skip_parfors_unsupported
+    def test_max_method_parallel(self):
+        self._test_min_max(np.max, True, True)
 
 
 if __name__ == '__main__':
