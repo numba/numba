@@ -30,10 +30,10 @@ class CUDAFlags(Flags):
     )
 
 
-# The CUDACompileResult has a specially-defined entry point equal to its id.
+# The CUDACompileResult (CCR) has a specially-defined entry point equal to its id.
 # This is because the entry point is used as a key into a dict of overloads by
 # the base dispatcher. The id of the CCR is the only small and unique property
-# of a CompileResult in the CUDA target (c.f. the CPU target, which uses its
+# of a CompileResult in the CUDA target (cf. the CPU target, which uses its
 # entry_point, which is a pointer value).
 #
 # This does feel a little hackish, and there are two ways in which this could

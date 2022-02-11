@@ -481,7 +481,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
                          pipeline_class=pipeline_class)
         self._type = self._numba_type_
 
-        # The following properties are for specialization of CUDADisptachers. A
+        # The following properties are for specialization of CUDADispatchers. A
         # specialized CUDADispatcher is one that is compiled for exactly one
         # set of argument types, and bypasses some argument type checking for
         # faster kernel launches.
