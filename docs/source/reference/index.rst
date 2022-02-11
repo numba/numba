@@ -14,3 +14,4 @@ Reference Manual
    pysemantics.rst
    fpsemantics.rst
    deprecation.rst
+   support_info.rst
