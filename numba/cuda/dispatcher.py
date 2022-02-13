@@ -373,6 +373,14 @@ class _Kernel(serialize.ReduceMixin):
             for t, v in zip(ty, val):
                 self._prepare_args(t, v, stream, retr, kernelargs)
 
+        elif isinstance(ty, types.EnumMember):
+            try:
+                self._prepare_args(
+                    ty.dtype, val.value, stream, retr, kernelargs
+                )
+            except NotImplementedError:
+                raise NotImplementedError(ty, val)
+
         else:
             raise NotImplementedError(ty, val)
 
