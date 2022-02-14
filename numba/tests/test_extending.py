@@ -44,6 +44,7 @@ from numba.extending import (
     _Intrinsic,
     register_jitable,
     get_cython_function_address,
+    get_f2py_function_address,
     is_jitted,
     overload_classmethod,
 )
@@ -1582,6 +1583,48 @@ class TestImportCythonFunction(unittest.TestCase):
             "'scipy.special.cython_special'"
         )
         self.assertEqual(msg, str(raises.exception))
+ 
+
+ class TestImportF2PYFunction(unittest.TestCase):
+    @unittest.skipIf(sc is None, "Only run if SciPy >= 0.19 is installed")
+    def test_getting_function(self):
+        addr = get_f2py_function_address(
+            "scipy.interpolate.dfitpack", "splev"
+        )
+        dble_p=ctypes.POINTER(ctypes.c_double)
+        int_p =ctypes.POINTER(ctypes.c_longlong)
+
+        functype = ctypes.CFUNCTYPE(ctypes.c_void_p,
+                   dble_p,int_p,dble_p,int_p,dble_p,dble_p,int_p,int_p,int_p)
+        SPLEV = functype(addr)
+        
+        from numba.cpython.unsafe.stack_arr import val_to_ptr,ptr_to_val
+        @njit('float64[::1](float64[::1],float64[::1],int64,' + 
+                                      'float64[::1],int64)')
+        def splev_wrapped(t,c,k,x,e):
+            y=np.empty(x.shape[0],dtype=np.float64)
+            
+            n_arr=val_to_ptr(nb.int64(t.shape[0]))
+            k_arr=val_to_ptr(nb.int64(k))
+            m_arr=val_to_ptr(nb.int64(x.shape[0]))
+            e_arr=val_to_ptr(nb.int64(e))
+            ier_arr=val_to_ptr(nb.int64(0))
+            
+            SPLEV(t.ctypes,n_arr,c.ctypes,k_arr,x.ctypes,
+                y.ctypes,m_arr,e_arr,ier_arr)
+            
+            return y
+        
+        x, dx = np.linspace(10,100,200, retstep=True)
+        y = np.sin(x)
+
+        coeff_1 = interpolate.splrep(x,y, k=3)
+
+        x2 = np.linspace(0,110,1000) 
+        np.random.shuffle(x2)
+
+        self.assertEqual(interpolate.splev(x2, coeff_1), 
+            splev_wrapped(coeff_1[0],coeff_1[1],coeff_1[2],x2,0))
 
 
 @overload_method(
