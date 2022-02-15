@@ -1055,6 +1055,18 @@ class TestDatetimeArrayOps(TestCase):
     def test_np_min_func(self):
         self._test_min_max(np.min, False, False)
 
+    def test_min_method(self):
+        self._test_min_max(np.min, False, True)
+
+    def test_max_func(self):
+        self._test_min_max(max, False, False)
+
+    def test_np_max_func(self):
+        self._test_min_max(np.max, False, False)
+
+    def test_max_method(self):
+        self._test_min_max(np.max, False, True)
+
     @skip_parfors_unsupported
     def test_min_func_parallel(self):
         self._test_min_max(min, True, False)
@@ -1063,11 +1075,9 @@ class TestDatetimeArrayOps(TestCase):
     def test_np_min_func_parallel(self):
         self._test_min_max(np.min, True, False)
 
-    def test_max_func(self):
-        self._test_min_max(max, False, False)
-
-    def test_np_max_func(self):
-        self._test_min_max(np.max, False, False)
+    @skip_parfors_unsupported
+    def test_min_method_parallel(self):
+        self._test_min_max(np.min, True, True)
 
     @skip_parfors_unsupported
     def test_max_func_parallel(self):
@@ -1076,16 +1086,6 @@ class TestDatetimeArrayOps(TestCase):
     @skip_parfors_unsupported
     def test_np_max_func_parallel(self):
         self._test_min_max(np.max, True, False)
-
-    def test_min_method(self):
-        self._test_min_max(np.min, False, True)
-
-    @skip_parfors_unsupported
-    def test_min_method_parallel(self):
-        self._test_min_max(np.min, True, True)
-
-    def test_max_method(self):
-        self._test_min_max(np.max, False, True)
 
     @skip_parfors_unsupported
     def test_max_method_parallel(self):

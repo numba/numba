@@ -129,6 +129,8 @@ def min_parallel_impl(return_type, arg):
             return in_arr[()]
     elif arg.ndim == 1:
         if isinstance(arg.dtype, (types.NPDatetime, types.NPTimedelta)):
+            # starting in NumPy 1.18, NaT is always returned if it is in the array
+            # prior to 1.18, NaT is skipped unless it is the only value in the array
             if numpy_version >= (1, 18):
                 def min_1(in_arr):
                     numba.parfors.parfor.init_prange()
@@ -136,18 +138,21 @@ def min_parallel_impl(return_type, arg):
                     val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
                     for i in numba.parfors.parfor.internal_prange(len(in_arr)):
                         if np.isnat(in_arr[i]):
-                            return in_arr[i]
-                        val = min(val, in_arr[i])
+                            val = in_arr[i]
+                        elif not np.isnat(val):
+                            val = min(val, in_arr[i])
                     return val
             else:
                 def min_1(in_arr):
                     numba.parfors.parfor.init_prange()
                     min_checker(len(in_arr))
-                    val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
+                    # assign val initially to NaT (int64 min)
+                    val = types.int64.minval
                     for i in numba.parfors.parfor.internal_prange(len(in_arr)):
-                        if np.isnat(in_arr[i]):
-                            continue
-                        val = min(val, in_arr[i])
+                        if np.isnat(val):
+                            val = in_arr[i]
+                        else:
+                            val = min(val, in_arr[i])
                     return val
         else:
             def min_1(in_arr):
@@ -173,25 +178,30 @@ def max_parallel_impl(return_type, arg):
             return in_arr[()]
     elif arg.ndim == 1:
         if isinstance(arg.dtype, (types.NPDatetime, types.NPTimedelta)):
+            # starting in NumPy 1.18, NaT is always returned if it is in the array
+            # prior to 1.18, NaT is skipped unless it is the only value in the array
             if numpy_version >= (1, 18):
                 def min_1(in_arr):
                     numba.parfors.parfor.init_prange()
-                    min_checker(len(in_arr))
-                    val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
+                    max_checker(len(in_arr))
+                    val = numba.cpython.builtins.get_type_min_value(in_arr.dtype)
                     for i in numba.parfors.parfor.internal_prange(len(in_arr)):
                         if np.isnat(in_arr[i]):
-                            return in_arr[i]
-                        val = max(val, in_arr[i])
+                            val = in_arr[i]
+                        elif not np.isnat(val):
+                            val = max(val, in_arr[i])
                     return val
             else:
                 def min_1(in_arr):
                     numba.parfors.parfor.init_prange()
-                    min_checker(len(in_arr))
-                    val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
+                    max_checker(len(in_arr))
+                    # assign val initially to NaT (int64 min)
+                    val = types.int64.minval
                     for i in numba.parfors.parfor.internal_prange(len(in_arr)):
-                        if np.isnat(in_arr[i]):
-                            continue
-                        val = max(val, in_arr[i])
+                        if np.isnat(val):
+                            val = in_arr[i]
+                        else:
+                            val = max(val, in_arr[i])
                     return val
         else:
             def max_1(in_arr):
