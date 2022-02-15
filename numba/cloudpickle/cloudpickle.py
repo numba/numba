@@ -203,10 +203,6 @@ def _lookup_module_and_qualname(obj, name=None):
 
     module_name = _whichmodule(obj, name)
 
-    if module_name not in sys.modules:
-        del obj.__module__
-        return None
-
     if module_name is None:
         # In this case, obj.__module__ is None AND obj was not found in any
         # imported module. obj is thus treated as dynamic.
@@ -224,6 +220,7 @@ def _lookup_module_and_qualname(obj, name=None):
         # types.ModuleType. The other possibility is that module was removed
         # from sys.modules after obj was created/imported. But this case is not
         # supported, as the standard pickle does not support it either.
+        del obj.__module__
         return None
 
     try:
