@@ -960,6 +960,35 @@ def ptx_atomic_cas_tuple(context, builder, sig, args):
                         'with %s array' % dtype)
 
 
+@lower(stubs.atomic.cas_element, types.Array, types.intp, types.Any, types.Any)
+def ptx_atomic_cas_element_tuple(context, builder, sig, args):
+
+    aryty, indty, oldty, valty = sig.args
+    ary, inds, old, val = args
+    dtype = aryty.dtype
+
+    indty, indices = _normalize_indices(context, builder, indty, inds)
+
+    if dtype != valty:
+        raise TypeError("expect %s but got %s" % (dtype, valty))
+
+    if aryty.ndim != len(indty):
+        raise TypeError("indexing %d-D array with %d-D index" %
+                        (aryty.ndim, len(indty)))
+
+    lary = context.make_array(aryty)(context, builder, ary)
+    ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices,
+                                   wraparound=True)
+
+    if aryty.dtype in (cuda.cudadecl.integer_numba_types):
+        lmod = builder.module
+        bitwidth = aryty.dtype.bitwidth
+        return nvvmutils.atomic_cmpxchg(builder, lmod, bitwidth, ptr, old, val)
+    else:
+        raise TypeError('Unimplemented atomic cas_element '
+                        'with %s array' % dtype)
+
+
 # -----------------------------------------------------------------------------
 
 @lower(stubs.nanosleep, types.uint32)

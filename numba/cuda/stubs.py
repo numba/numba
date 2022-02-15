@@ -577,6 +577,15 @@ class atomic(Stub):
         Returns the current value as if it is loaded atomically.
         """
 
+    class cas_element(Stub):
+        """cas_element(ary, idx, old, val)
+
+        Conditionally assign ``val`` to the element ary[idx] of an 1D array
+        ``ary`` if the current value of ary[idx] matches ``old``.
+
+        Returns the current value as if it is loaded atomically.
+        """
+
 
 #-------------------------------------------------------------------------------
 # timers
