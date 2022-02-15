@@ -27,7 +27,7 @@ import operator
 import numba.core.ir
 from numba.core import types, typing, utils, errors, ir, analysis, postproc, rewrites, typeinfer, config, ir_utils
 from numba import prange, pndindex
-from numba.np.numpy_support import as_dtype
+from numba.np.numpy_support import as_dtype, numpy_version
 from numba.core.typing.templates import infer_global, AbstractTemplate
 from numba.stencils.stencilparfor import StencilPass
 from numba.core.extending import register_jitable
@@ -128,13 +128,35 @@ def min_parallel_impl(return_type, arg):
         def min_1(in_arr):
             return in_arr[()]
     elif arg.ndim == 1:
-        def min_1(in_arr):
-            numba.parfors.parfor.init_prange()
-            min_checker(len(in_arr))
-            val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
-            for i in numba.parfors.parfor.internal_prange(len(in_arr)):
-                val = min(val, in_arr[i])
-            return val
+        if isinstance(arg.dtype, (types.NPDatetime, types.NPTimedelta)):
+            if numpy_version >= (1, 18):
+                def min_1(in_arr):
+                    numba.parfors.parfor.init_prange()
+                    min_checker(len(in_arr))
+                    val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
+                    for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                        if np.isnat(in_arr[i]):
+                            return in_arr[i]
+                        val = min(val, in_arr[i])
+                    return val
+            else:
+                def min_1(in_arr):
+                    numba.parfors.parfor.init_prange()
+                    min_checker(len(in_arr))
+                    val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
+                    for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                        if np.isnat(in_arr[i]):
+                            continue
+                        val = min(val, in_arr[i])
+                    return val
+        else:
+            def min_1(in_arr):
+                numba.parfors.parfor.init_prange()
+                min_checker(len(in_arr))
+                val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
+                for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                    val = min(val, in_arr[i])
+                return val
     else:
         def min_1(in_arr):
             numba.parfors.parfor.init_prange()
@@ -150,13 +172,35 @@ def max_parallel_impl(return_type, arg):
         def max_1(in_arr):
             return in_arr[()]
     elif arg.ndim == 1:
-        def max_1(in_arr):
-            numba.parfors.parfor.init_prange()
-            max_checker(len(in_arr))
-            val = numba.cpython.builtins.get_type_min_value(in_arr.dtype)
-            for i in numba.parfors.parfor.internal_prange(len(in_arr)):
-                val = max(val, in_arr[i])
-            return val
+        if isinstance(arg.dtype, (types.NPDatetime, types.NPTimedelta)):
+            if numpy_version >= (1, 18):
+                def min_1(in_arr):
+                    numba.parfors.parfor.init_prange()
+                    min_checker(len(in_arr))
+                    val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
+                    for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                        if np.isnat(in_arr[i]):
+                            return in_arr[i]
+                        val = max(val, in_arr[i])
+                    return val
+            else:
+                def min_1(in_arr):
+                    numba.parfors.parfor.init_prange()
+                    min_checker(len(in_arr))
+                    val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
+                    for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                        if np.isnat(in_arr[i]):
+                            continue
+                        val = max(val, in_arr[i])
+                    return val
+        else:
+            def max_1(in_arr):
+                numba.parfors.parfor.init_prange()
+                max_checker(len(in_arr))
+                val = numba.cpython.builtins.get_type_min_value(in_arr.dtype)
+                for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                    val = max(val, in_arr[i])
+                return val
     else:
         def max_1(in_arr):
             numba.parfors.parfor.init_prange()

@@ -500,7 +500,7 @@ def lower_get_type_min_value(context, builder, sig, args):
     elif isinstance(typ, (types.NPDatetime, types.NPTimedelta)):
         bw = 64
         lty = ir.IntType(bw)
-        val = types.uint64.minval
+        val = types.int64.minval + 1 # minval is NaT, so minval + 1 is the smallest value
         res = ir.Constant(lty, val)
     return impl_ret_untracked(context, builder, lty, res)
 

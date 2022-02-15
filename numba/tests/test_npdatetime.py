@@ -550,20 +550,23 @@ class TestTimedeltaArithmetic(TestCase):
                              (TD,) * len(TD_CASES) + (DT,) * len(TD_CASES)):
             check(typ(*case))
 
-    def test_min_max(self):
-        min_f = self.jit(min_usecase)
-        max_f = self.jit(max_usecase)
+    def _test_min_max(self, usecase):
+        f = self.jit(usecase)
         def check(a, b):
-            self.assertPreciseEqual(min_f(a, b), min(a, b))
-            self.assertPreciseEqual(max_f(a, b), max(a, b))
+            self.assertPreciseEqual(f(a, b), usecase(a, b))
 
-        check(TD(1), TD(2))
-        check(TD(1), TD(1))
-        check(TD(2), TD(1))
-        check(TD(1, 's'), TD(2, 's'))
-        check(TD(1, 's'), TD(1, 's'))
-        check(TD(2, 's'), TD(1, 's'))
-        check(TD('Nat'), TD('Nat'))
+        for cases in (
+            (TD(0), TD(1), TD(2), TD('NaT')),
+            (TD(0, 's'), TD(1, 's'), TD(2, 's'), TD('NaT', 's')),
+        ):
+            for a, b in itertools.product(cases, cases):
+                check(a, b)
+
+    def test_min(self):
+        self._test_min_max(min_usecase)
+
+    def test_max(self):
+        self._test_min_max(max_usecase)
 
 
 class TestTimedeltaArithmeticNoPython(TestTimedeltaArithmetic):
@@ -793,21 +796,23 @@ class TestDatetimeArithmetic(TestCase):
                 check_lt(a, b + np.timedelta64(1, unit), True)
                 check_lt(b - np.timedelta64(1, unit), a, True)
 
-    def test_min_max(self):
-        min_f = self.jit(min_usecase)
-        max_f = self.jit(max_usecase)
+    def _test_min_max(self, usecase):
+        f = self.jit(usecase)
         def check(a, b):
-            self.assertPreciseEqual(min_f(a, b), min(a, b))
-            self.assertPreciseEqual(max_f(a, b), max(a, b))
+            self.assertPreciseEqual(f(a, b), usecase(a, b))
 
-        check(DT(1, 'ns'), DT(2, 'ns'))
-        check(DT(1, 'ns'), DT(1, 'ns'))
-        check(DT(2, 'ns'), DT(1, 'ns'))
-        check(DT(1, 's'), DT(2, 's'))
-        check(DT(1, 's'), DT(1, 's'))
-        check(DT(2, 's'), DT(1, 's'))
-        check(DT('Nat', 'ns'), DT('Nat', 'ns'))
+        for cases in (
+            (DT(0, 'ns'), DT(1, 'ns'), DT(2, 'ns'), DT('NaT', 'ns')),
+            (DT(0, 's'), DT(1, 's'), DT(2, 's'), DT('NaT', 's')),
+        ):
+            for a, b in itertools.product(cases, cases):
+                check(a, b)
 
+    def test_min(self):
+        self._test_min_max(min_usecase)
+
+    def test_max(self):
+        self._test_min_max(max_usecase)
 
 class TestDatetimeArithmeticNoPython(TestDatetimeArithmetic):
 
@@ -956,16 +961,48 @@ class TestDatetimeArrayOps(TestCase):
 
         test_cases = [
             np.array([
+                DT(0, "ns"),
+                DT(1, "ns"),
+                DT(2, "ns"),
+                DT(3, "ns"),
+            ]),
+            np.array([
                 DT("2011-01-01", "ns"),
                 DT("1971-02-02", "ns"),
+                DT("1900-01-01", "ns"),
                 DT("2021-03-03", "ns"),
                 DT("2004-12-07", "ns"),
             ]),
             np.array([
                 DT("2011-01-01", "D"),
                 DT("1971-02-02", "D"),
+                DT("1900-01-01", "D"),
                 DT("2021-03-03", "D"),
                 DT("2004-12-07", "D"),
+            ]),
+            np.array([
+                DT("2011-01-01", "ns"),
+                DT("1971-02-02", "ns"),
+                DT("1900-01-01", "ns"),
+                DT("2021-03-03", "ns"),
+                DT("2004-12-07", "ns"),
+                DT("NaT", "ns"),
+            ]),
+            np.array([
+                DT("NaT", "ns"),
+                DT("2011-01-01", "ns"),
+                DT("1971-02-02", "ns"),
+                DT("1900-01-01", "ns"),
+                DT("2021-03-03", "ns"),
+                DT("2004-12-07", "ns"),
+            ]),
+            np.array([
+                DT("NaT", "ns"),
+            ]),
+            np.array([
+                DT("NaT", "ns"),
+                DT("NaT", "ns"),
+                DT("NaT", "ns"),
             ]),
             np.array([
                 TD(1, "ns"),
@@ -979,25 +1016,65 @@ class TestDatetimeArrayOps(TestCase):
                 TD(3, "D"),
                 TD(4, "D"),
             ]),
+            np.array([
+                TD("NaT", "ns"),
+                TD(1, "ns"),
+                TD(2, "ns"),
+                TD(3, "ns"),
+                TD(4, "ns"),
+            ]),
+            np.array([
+                TD(1, "ns"),
+                TD(2, "ns"),
+                TD(3, "ns"),
+                TD(4, "ns"),
+                TD("NaT", "ns"),
+            ]),
+            np.array([
+                TD("NaT", "ns"),
+            ]),
+            np.array([
+                TD("NaT", "ns"),
+                TD("NaT", "ns"),
+                TD("NaT", "ns"),
+            ]),
         ]
 
         for arr in test_cases:
-            self.assertEqual(py_func(arr), cfunc(arr))
-
-
+            py_res = py_func(arr)
+            c_res = cfunc(arr)
+            if np.isnat(py_res) or np.isnat(c_res):
+                self.assertTrue(np.isnat(py_res))
+                self.assertTrue(np.isnat(c_res))
+            else:
+                self.assertEqual(py_res, c_res)
 
     def test_min_func(self):
+        self._test_min_max(min, False, False)
+
+    def test_np_min_func(self):
         self._test_min_max(np.min, False, False)
 
     @skip_parfors_unsupported
     def test_min_func_parallel(self):
+        self._test_min_max(min, True, False)
+
+    @skip_parfors_unsupported
+    def test_np_min_func_parallel(self):
         self._test_min_max(np.min, True, False)
 
     def test_max_func(self):
+        self._test_min_max(max, False, False)
+
+    def test_np_max_func(self):
         self._test_min_max(np.max, False, False)
 
     @skip_parfors_unsupported
     def test_max_func_parallel(self):
+        self._test_min_max(max, True, False)
+
+    @skip_parfors_unsupported
+    def test_np_max_func_parallel(self):
         self._test_min_max(np.max, True, False)
 
     def test_min_method(self):
