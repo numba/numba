@@ -119,6 +119,52 @@ the function's name will be mangled. To find out the mangled name of
 your function you can check the extension module's ``__pyx_capi__``
 attribute.
 
+Importing F2PY Functions
+--------------------------
+
+The function ``get_f2py_function_address`` obtains the address of a
+C function in a F2PY extension module. The address can be used to
+access the C function via a :func:`ctypes.CFUNCTYPE` callback, thus
+allowing use of the C function inside a Numba jitted function. For
+example, call scipy.interpolate.dfitpack.splev::
+
+    import numba as nb
+    import numpy as np
+    import ctypes
+    from scipy import interpolate
+    from numba.core.extending import get_f2py_function_address
+
+    dble_p=ctypes.POINTER(ctypes.c_double)
+    int_p =ctypes.POINTER(ctypes.c_longlong)
+
+    #Calling siganture
+    functype = ctypes.CFUNCTYPE(ctypes.c_void_p,
+                                dble_p,int_p,dble_p,int_p,dble_p,dble_p,int_p,int_p,int_p)
+
+    #Get function pointer and create ctypes function
+    func_ptr=get_f2py_function_address("scipy.interpolate.dfitpack","splev")
+    SPLEV = functype(func_ptr)
+
+You can access ``SPLEV`` from Numba in the following way::
+
+    from numba.cpython.unsafe.stack_arr import val_to_ptr,ptr_to_val
+
+    #float64[::1] -> ensure contiguous array, call np.ascontiguousarray or 
+    #np.asfortranarray instead to ensure to pass a pointer to a contiguous array
+    @nb.njit('float64[::1](float64[::1],float64[::1],int64,float64[::1],int64)')
+    def splev_wrapped(t,c,k,x,e):
+        y=np.empty(x.shape[0],dtype=np.float64)
+
+        n_arr=val_to_ptr(nb.int64(t.shape[0]))
+        k_arr=val_to_ptr(nb.int64(k))
+        m_arr=val_to_ptr(nb.int64(x.shape[0]))
+        e_arr=val_to_ptr(nb.int64(e))
+        ier_arr=val_to_ptr(nb.int64(0))
+
+        SPLEV(t.ctypes,n_arr,c.ctypes,k_arr,x.ctypes,
+            y.ctypes,m_arr,e_arr,ier_arr)
+        return y
+
 Implementing intrinsics
 -----------------------
 
