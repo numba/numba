@@ -1642,7 +1642,7 @@ class TestImportF2PYFunction(unittest.TestCase):
     @unittest.skipIf(sc is None, "Only run if SciPy >= 0.19 is installed")
     def test_missing_function(self):
         with self.assertRaises(ValueError) as raises:
-            get_cython_function_address(
+            get_f2py_function_address(
                 "scipy.interpolate.dfitpack", "foo"
             )
         msg = ("module 'scipy.interpolate.dfitpack' has no attribute 'foo'")
