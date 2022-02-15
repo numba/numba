@@ -35,19 +35,15 @@ Numba uses Discourse as a forum for longer running threads such as design
 discussions and roadmap planning. There are various categories available and it
 can be reached at: `numba.discourse.group <https://numba.discourse.group/>`_.
 
-Mailing-list
-''''''''''''
-
-We have a public mailing-list that you can e-mail at numba-users@anaconda.com.
-You can subscribe and read the archives on
-`Google Groups <https://groups.google.com/a/continuum.io/forum/#!forum/numba-users>`_.
-
 Weekly Meetings
 '''''''''''''''
 
 The core Numba developers have a weekly video conference to discuss roadmap,
-feature planning, and outstanding issues.  These meetings are invite only, but
-minutes will be taken and will be posted to the
+feature planning, and outstanding issues.  These meetings are entirely public,
+details are posted on
+`numba.discourse.group Announcements <https://numba.discourse.group/c/announcements/>`_
+and everyone is welcome to join the discussion. Minutes will be taken and will
+be posted to the
 `Numba wiki <https://github.com/numba/numba/wiki/Meeting-Minutes>`_.
 
 .. _report-numba-bugs:
@@ -103,8 +99,7 @@ Then create an environment with the right dependencies::
 .. note::
    This installs an environment based on Python 3.8, but you can of course
    choose another version supported by Numba.  To test additional features,
-   you may also need to install ``tbb`` and/or ``llvm-openmp`` and
-   ``intel-openmp``.
+   you may also need to install ``tbb`` and/or ``llvm-openmp``.
 
 To activate the environment for the current shell session::
 
@@ -281,7 +276,7 @@ imported with an ``pt`` prefix. For example, ``typing.Dict`` is imported as ``fr
 Stability
 '''''''''
 
-The repository's ``master`` branch is expected to be stable at all times.
+The repository's ``main`` branch is expected to be stable at all times.
 This translates into the fact that the test suite passes without errors
 on all supported platforms (see below).  This also means that a pull request
 also needs to pass the test suite before it is merged in.
@@ -291,7 +286,7 @@ also needs to pass the test suite before it is merged in.
 Platform support
 ''''''''''''''''
 
-Every commit to the master branch is automatically tested on all of the
+Every commit to the main branch is automatically tested on all of the
 platforms Numba supports. This includes ARMv8, POWER8, and NVIDIA GPUs.
 The build system however is internal to Anaconda, so we also use
 `Azure <https://dev.azure.com/numba/numba/_build>`_ to provide public continuous
@@ -336,8 +331,16 @@ As a result of the above, public CI is implemented as follows:
       matrix and each combination runs one chunk. This is done for speed,
       because public CI cannot cope with the load else.
 
-If a pull request is changing CUDA code (which cannot be tested on Public CI as
-there's no hardware) or it is making changes to something that the core
+If a Pull Request (PR) changes CUDA code or will affect the CUDA target, it
+needs to be run on `gpuCI <https://gpuci.gpuopenanalytics.com/job/numba/>`_.
+This can be triggered by one of the Numba maintainers commenting ``run gpuCI
+tests`` on the PR discussion. This runs the CUDA testsuite with various CUDA
+toolkit versions on Linux, to provide some initial confidence in the
+correctness of the changes with respect to CUDA. Following approval, the PR
+will also be run on Numba's build farm to test other configurations with CUDA
+(including Windows, which is not tested by gpuCI).
+
+If the PR is not CUDA-related but makes changes to something that the core
 developers consider risky, then it will also be run on the Numba farm just to
 make sure. The Numba project's private build and test farm will actually
 exercise all the applicable tests on all the combinations noted above on real
@@ -461,4 +464,4 @@ Finally, use ``git push`` to update the website.
 
 
 .. _typeguard: https://typeguard.readthedocs.io/en/latest/
-.. _runtests.py: https://github.com/numba/numba/blob/master/runtests.py
+.. _runtests.py: https://github.com/numba/numba/blob/main/runtests.py

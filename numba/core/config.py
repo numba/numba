@@ -2,8 +2,8 @@ import platform
 import sys
 import os
 import re
+import shutil
 import warnings
-import multiprocessing
 
 # YAML needed to use file based Numba config
 try:
@@ -68,6 +68,17 @@ def _os_supports_avx():
             return False
 
 
+# Choose how to handle captured errors
+def _validate_captured_errors_style(style_str):
+    rendered_style = str(style_str)
+    if rendered_style not in ('new_style', 'old_style'):
+        msg = ("Invalid style in NUMBA_CAPTURED_ERRORS: "
+               f"{rendered_style}")
+        raise ValueError(msg)
+    else:
+        return rendered_style
+
+
 class _EnvReloader(object):
 
     def __init__(self):
@@ -107,6 +118,29 @@ class _EnvReloader(object):
             self.process_environ(new_environ)
             # Store a copy
             self.old_environ = dict(new_environ)
+
+        self.validate()
+
+    def validate(self):
+        global CUDA_USE_NVIDIA_BINDING
+
+        if CUDA_USE_NVIDIA_BINDING:  # noqa: F821
+            try:
+                import cuda  # noqa: F401
+            except ImportError as ie:
+                msg = ("CUDA Python bindings requested (the environment "
+                       "variable NUMBA_CUDA_USE_NVIDIA_BINDING is set), "
+                       f"but they are not importable: {ie.msg}.")
+                warnings.warn(msg)
+
+                CUDA_USE_NVIDIA_BINDING = False
+
+            if CUDA_PER_THREAD_DEFAULT_STREAM:  # noqa: F821
+                warnings.warn("PTDS support is handled by CUDA Python when "
+                              "using the NVIDIA binding. Please set the "
+                              "environment variable "
+                              "CUDA_PYTHON_CUDA_PER_THREAD_DEFAULT_STREAM to 1 "
+                              "instead.")
 
     def process_environ(self, environ):
         def _readenv(name, ctor, default):
@@ -158,6 +192,10 @@ class _EnvReloader(object):
         # under utilize the GPU due to low occupancy. On by default.
         CUDA_LOW_OCCUPANCY_WARNINGS = _readenv(
             "NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS", int, 1)
+
+        # Whether to use the official CUDA Python API Bindings
+        CUDA_USE_NVIDIA_BINDING = _readenv(
+            "NUMBA_CUDA_USE_NVIDIA_BINDING", int, 0)
 
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)
@@ -306,7 +344,16 @@ class _EnvReloader(object):
         DISABLE_JIT = _readenv("NUMBA_DISABLE_JIT", int, 0)
 
         # choose parallel backend to use
+        THREADING_LAYER_PRIORITY = _readenv(
+            "NUMBA_THREADING_LAYER_PRIORITY",
+            lambda string: string.split(),
+            ['tbb', 'omp', 'workqueue'],
+        )
         THREADING_LAYER = _readenv("NUMBA_THREADING_LAYER", str, 'default')
+
+        CAPTURED_ERRORS = _readenv("NUMBA_CAPTURED_ERRORS",
+                                   _validate_captured_errors_style,
+                                   'old_style')
 
         # CUDA Configs
 
@@ -365,24 +412,22 @@ class _EnvReloader(object):
         CUDA_PER_THREAD_DEFAULT_STREAM = _readenv(
             "NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM", int, 0)
 
-        # Compute contiguity of device arrays using the relaxed strides
-        # checking algorithm.
-        NPY_RELAXED_STRIDES_CHECKING = _readenv(
-            "NUMBA_NPY_RELAXED_STRIDES_CHECKING",
-            int, 1)
-
-        # HSA Configs
-
-        # Disable HSA support
-        DISABLE_HSA = _readenv("NUMBA_DISABLE_HSA", int, 0)
-
         # The default number of threads to use.
-        NUMBA_DEFAULT_NUM_THREADS = max(
-            1,
-            len(os.sched_getaffinity(0))
-            if hasattr(os, "sched_getaffinity")
-            else multiprocessing.cpu_count(),
-        )
+        def num_threads_default():
+            try:
+                sched_getaffinity = os.sched_getaffinity
+            except AttributeError:
+                pass
+            else:
+                return max(1, len(sched_getaffinity(0)))
+
+            cpu_count = os.cpu_count()
+            if cpu_count is not None:
+                return max(1, cpu_count)
+
+            return 1
+
+        NUMBA_DEFAULT_NUM_THREADS = num_threads_default()
 
         # Numba thread pool size (defaults to number of CPUs on the system).
         _NUMBA_NUM_THREADS = _readenv("NUMBA_NUM_THREADS", int,
@@ -417,8 +462,15 @@ class _EnvReloader(object):
         DEBUGINFO_DEFAULT = _readenv("NUMBA_DEBUGINFO", int, ENABLE_PROFILING)
         CUDA_DEBUGINFO_DEFAULT = _readenv("NUMBA_CUDA_DEBUGINFO", int, 0)
 
+        EXTEND_VARIABLE_LIFETIMES = _readenv("NUMBA_EXTEND_VARIABLE_LIFETIMES",
+                                             int, 0)
+
         # gdb binary location
-        GDB_BINARY = _readenv("NUMBA_GDB_BINARY", str, '/usr/bin/gdb')
+        def which_gdb(path_or_bin):
+            gdb = shutil.which(path_or_bin)
+            return gdb if gdb is not None else path_or_bin
+
+        GDB_BINARY = _readenv("NUMBA_GDB_BINARY", which_gdb, 'gdb')
 
         # CUDA Memory management
         CUDA_MEMORY_MANAGER = _readenv("NUMBA_CUDA_MEMORY_MANAGER", str,

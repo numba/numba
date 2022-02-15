@@ -7,7 +7,7 @@ import re
 import numpy as np
 
 from numba import njit
-from numba.core import typing, types
+from numba.core import types
 from numba.core.compiler import compile_isolated, Flags
 from numba.core.runtime import (
     rtsys,
@@ -25,7 +25,7 @@ from numba.core.unsafe.nrt import NRT_get_api
 
 from numba.tests.support import (MemoryLeakMixin, TestCase, temp_directory,
                                  import_dynamic)
-from numba.core import cpu
+from numba.core.registry import cpu_target
 import unittest
 
 enable_nrt_flags = Flags()
@@ -82,7 +82,7 @@ class TestNrtMemInfo(unittest.TestCase):
         # Reset the Dummy class
         Dummy.alive = 0
         # initialize the NRT (in case the tests are run in isolation)
-        cpu.CPUContext(typing.Context())
+        cpu_target.target_context
 
     def test_meminfo_refct_1(self):
         d = Dummy()
@@ -554,6 +554,10 @@ br i1 %.294, label %B42, label %B160
 class TestNrtExternalCFFI(MemoryLeakMixin, TestCase):
     """Testing the use of externally compiled C code that use NRT
     """
+    def setUp(self):
+        # initialize the NRT (in case the tests are run in isolation)
+        super(TestNrtExternalCFFI, self).setUp()
+        cpu_target.target_context
 
     def compile_cffi_module(self, name, source, cdef):
         from cffi import FFI

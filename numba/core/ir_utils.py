@@ -7,22 +7,17 @@ import numpy
 
 import types as pytypes
 import collections
-import operator
 import warnings
-
-from llvmlite import ir as lir
 
 import numba
 from numba.core.extending import _Intrinsic
-from numba.core import types, utils, typing, ir, analysis, postproc, rewrites, config, cgutils
-from numba.core.typing.templates import (signature, infer_global,
-                                         AbstractTemplate)
-from numba.core.imputils import impl_ret_untracked
+from numba.core import types, typing, ir, analysis, postproc, rewrites, config
+from numba.core.typing.templates import signature
 from numba.core.analysis import (compute_live_map, compute_use_defs,
                             compute_cfg_from_blocks)
 from numba.core.errors import (TypingError, UnsupportedError,
-                               NumbaPendingDeprecationWarning, NumbaWarning,
-                               feedback_details, CompilerError)
+                               NumbaPendingDeprecationWarning,
+                               CompilerError)
 
 import copy
 
@@ -108,17 +103,25 @@ def mk_alloc(typingctx, typemap, calltypes, lhs, size_var, dtype, scope, loc,
     if typemap:
         typemap[attr_var.name] = get_np_ufunc_typ(numpy.empty)
     attr_assign = ir.Assign(empty_attr_call, attr_var, loc)
+     # Assume str(dtype) returns a valid type
+    dtype_str = str(dtype)
     # alloc call: lhs = empty_attr(size_var, typ_var)
     typ_var = ir.Var(scope, mk_unique_var("$np_typ_var"), loc)
     if typemap:
         typemap[typ_var.name] = types.functions.NumberClass(dtype)
-    # assuming str(dtype) returns valid np dtype string
-    dtype_str = str(dtype)
-    if dtype_str=='bool':
-        # empty doesn't like 'bool' sometimes (e.g. kmeans example)
-        dtype_str = 'bool_'
-    np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
-    typ_var_assign = ir.Assign(np_typ_getattr, typ_var, loc)
+    # If dtype is a datetime/timedelta with a unit,
+    # then it won't return a valid type and instead can be created
+    # with a string. i.e. "datetime64[ns]")
+    if (isinstance(dtype, (types.NPDatetime, types.NPTimedelta)) and
+        dtype.unit != ''):
+            typename_const = ir.Const(dtype_str, loc)
+            typ_var_assign = ir.Assign(typename_const, typ_var, loc)
+    else:
+        if dtype_str=='bool':
+            # empty doesn't like 'bool' sometimes (e.g. kmeans example)
+            dtype_str = 'bool_'
+        np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
+        typ_var_assign = ir.Assign(np_typ_getattr, typ_var, loc)
     alloc_call = ir.Expr.call(attr_var, [size_var, typ_var], (), loc)
 
     if calltypes:
@@ -1714,12 +1717,15 @@ def _create_function_from_code_obj(fcode, func_env, func_arg, func_clo, glbls):
     * func_clo - string for the closure args
     * glbls - the function globals
     """
-    func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (
-        func_env, func_arg, func_clo)
+    sanitized_co_name = fcode.co_name.replace('<', '_').replace('>', '_')
+    func_text = (f"def closure():\n{func_env}\n"
+                 f"\tdef {sanitized_co_name}({func_arg}):\n"
+                 f"\t\treturn ({func_clo})\n"
+                 f"\treturn {sanitized_co_name}")
     loc = {}
     exec(func_text, glbls, loc)
 
-    f = loc['g']()
+    f = loc['closure']()
     # replace the code body
     f.__code__ = fcode
     f.__name__ = fcode.co_name
@@ -1730,7 +1736,7 @@ def get_ir_of_code(glbls, fcode):
     Compile a code object to get its IR, ir.Del nodes are emitted
     """
     nfree = len(fcode.co_freevars)
-    func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
+    func_env = "\n".join(["\tc_%d = None" % i for i in range(nfree)])
     func_clo = ",".join(["c_%d" % i for i in range(nfree)])
     func_arg = ",".join(["x_%d" % i for i in range(fcode.co_argcount)])
 
@@ -2113,9 +2119,9 @@ def raise_on_unsupported_feature(func_ir, typemap):
                "in a function is unsupported (strange things happen!), use "
                "numba.gdb_breakpoint() to create additional breakpoints "
                "instead.\n\nRelevant documentation is available here:\n"
-               "https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html"
-               "/troubleshoot.html#using-numba-s-direct-gdb-bindings-in-"
-               "nopython-mode\n\nConflicting calls found at:\n %s")
+               "https://numba.readthedocs.io/en/stable/user/troubleshoot.html"
+               "#using-numba-s-direct-gdb-bindings-in-nopython-mode\n\n"
+               "Conflicting calls found at:\n %s")
         buf = '\n'.join([x.strformat() for x in gdb_calls])
         raise UnsupportedError(msg % buf)
 
@@ -2131,7 +2137,7 @@ def warn_deprecated(func_ir, typemap):
                 arg = name.split('.')[1]
                 fname = func_ir.func_id.func_qualname
                 tyname = 'list' if isinstance(ty, types.List) else 'set'
-                url = ("https://numba.pydata.org/numba-doc/latest/reference/"
+                url = ("https://numba.readthedocs.io/en/stable/reference/"
                        "deprecation.html#deprecation-of-reflection-for-list-and"
                        "-set-types")
                 msg = ("\nEncountered the use of a type that is scheduled for "
@@ -2204,7 +2210,7 @@ def legalize_single_scope(blocks):
     return len({blk.scope for blk in blocks.values()}) == 1
 
 
-def check_and_legalize_ir(func_ir):
+def check_and_legalize_ir(func_ir, flags: "numba.core.compiler.Flags"):
     """
     This checks that the IR presented is legal
     """
@@ -2212,8 +2218,7 @@ def check_and_legalize_ir(func_ir):
     enforce_no_dels(func_ir)
     # postprocess and emit ir.Dels
     post_proc = postproc.PostProcessor(func_ir)
-    post_proc.run(True)
-
+    post_proc.run(True, extend_lifetimes=flags.dbg_extend_lifetimes)
 
 def convert_code_obj_to_function(code_obj, caller_ir):
     """
@@ -2243,7 +2248,7 @@ def convert_code_obj_to_function(code_obj, caller_ir):
                    "variable '%s' in a function that will escape." % x)
             raise TypingError(msg, loc=code_obj.loc)
 
-    func_env = "\n".join(["  c_%d = %s" % (i, x) for i, x in enumerate(freevars)])
+    func_env = "\n".join(["\tc_%d = %s" % (i, x) for i, x in enumerate(freevars)])
     func_clo = ",".join(["c_%d" % i for i in range(nfree)])
     co_varnames = list(fcode.co_varnames)
 
@@ -2323,3 +2328,23 @@ def transfer_scope(block, scope):
     # replace scope
     block.scope = scope
     return block
+
+
+def is_setup_with(stmt):
+    return isinstance(stmt, ir.EnterWith)
+
+
+def is_terminator(stmt):
+    return isinstance(stmt, ir.Terminator)
+
+
+def is_raise(stmt):
+    return isinstance(stmt, ir.Raise)
+
+
+def is_return(stmt):
+    return isinstance(stmt, ir.Return)
+
+
+def is_pop_block(stmt):
+    return isinstance(stmt, ir.PopBlock)

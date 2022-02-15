@@ -4,11 +4,13 @@
 Tests the parallel backend
 """
 import faulthandler
+import itertools
 import multiprocessing
 import os
 import random
 import subprocess
 import sys
+import textwrap
 import threading
 import unittest
 
@@ -523,6 +525,77 @@ TestThreadingLayerSelection.generate()
 
 
 @skip_parfors_unsupported
+class TestThreadingLayerPriority(ThreadLayerTestHelper):
+
+    def each_env_var(self, env_var: str):
+        """Test setting priority via env var NUMBA_THREADING_LAYER_PRIORITY.
+        """
+        env = os.environ.copy()
+        env['NUMBA_THREADING_LAYER'] = 'default'
+        env['NUMBA_THREADING_LAYER_PRIORITY'] = env_var
+
+        code = f"""
+                import numba
+
+                # trigger threading layer decision
+                # hence catching invalid THREADING_LAYER_PRIORITY
+                @numba.jit(
+                    'float64[::1](float64[::1], float64[::1])',
+                    nopython=True,
+                    parallel=True,
+                )
+                def plus(x, y):
+                    return x + y
+
+                captured_envvar = list("{env_var}".split())
+                assert numba.config.THREADING_LAYER_PRIORITY == \
+                    captured_envvar, "priority mismatch"
+                assert numba.threading_layer() == captured_envvar[0],\
+                    "selected backend mismatch"
+                """
+        cmd = [
+            sys.executable,
+            '-c',
+            textwrap.dedent(code),
+        ]
+        self.run_cmd(cmd, env=env)
+
+    @skip_no_omp
+    @skip_no_tbb
+    def test_valid_env_var(self):
+        default = ['tbb', 'omp', 'workqueue']
+        for p in itertools.permutations(default):
+            env_var = ' '.join(p)
+            self.each_env_var(env_var)
+
+    @skip_no_omp
+    @skip_no_tbb
+    def test_invalid_env_var(self):
+        env_var = 'tbb omp workqueue notvalidhere'
+        with self.assertRaises(AssertionError) as raises:
+            self.each_env_var(env_var)
+        for msg in (
+            "THREADING_LAYER_PRIORITY invalid:",
+            "It must be a permutation of"
+        ):
+            self.assertIn(f"{msg}", str(raises.exception))
+
+    @skip_no_omp
+    def test_omp(self):
+        for env_var in ("omp tbb workqueue", "omp workqueue tbb"):
+            self.each_env_var(env_var)
+
+    @skip_no_tbb
+    def test_tbb(self):
+        for env_var in ("tbb omp workqueue", "tbb workqueue omp"):
+            self.each_env_var(env_var)
+
+    def test_workqueue(self):
+        for env_var in ("workqueue tbb omp", "workqueue omp tbb"):
+            self.each_env_var(env_var)
+
+
+@skip_parfors_unsupported
 class TestMiscBackendIssues(ThreadLayerTestHelper):
     """
     Checks fixes for the issues with threading backends implementation
@@ -544,16 +617,13 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
 
             x = np.ones(2**20, np.float32)
             foo(*([x]*8))
-            print("@%s@" % threading_layer())
+            assert threading_layer() == "omp", "omp not found"
         """
         cmdline = [sys.executable, '-c', runme]
         env = os.environ.copy()
         env['NUMBA_THREADING_LAYER'] = "omp"
         env['OMP_STACKSIZE'] = "100K"
-        out, err = self.run_cmd(cmdline, env=env)
-        if self._DEBUG:
-            print(out, err)
-        self.assertIn("@omp@", out)
+        self.run_cmd(cmdline, env=env)
 
     @skip_no_tbb
     def test_single_thread_tbb(self):
@@ -572,16 +642,13 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
                 return acc
 
             foo(100)
-            print("@%s@" % threading_layer())
+            assert threading_layer() == "tbb", "tbb not found"
         """
         cmdline = [sys.executable, '-c', runme]
         env = os.environ.copy()
         env['NUMBA_THREADING_LAYER'] = "tbb"
         env['NUMBA_NUM_THREADS'] = "1"
-        out, err = self.run_cmd(cmdline, env=env)
-        if self._DEBUG:
-            print(out, err)
-        self.assertIn("@tbb@", out)
+        self.run_cmd(cmdline, env=env)
 
     def test_workqueue_aborts_on_nested_parallelism(self):
         """

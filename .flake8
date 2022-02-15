@@ -36,7 +36,6 @@ exclude =
     numba/misc/numba_entry.py
     numba/stencils/stencilparfor.py
     numba/core/ir.py
-    numba/core/itanium_mangler.py
     numba/core/generators.py
     numba/misc/appdirs.py
     numba/core/caching.py
@@ -46,7 +45,6 @@ exclude =
     numba/core/dataflow.py
     numba/core/pythonapi.py
     numba/core/decorators.py
-    numba/core/typeconv/typeconv.py
     numba/core/typeconv/rules.py
     numba/core/typeconv/castgraph.py
     numba/core/rewrites/registry.py
@@ -112,7 +110,6 @@ exclude =
     numba/tests/test_func_lifetime.py
     numba/tests/test_typeinfer.py
     numba/tests/test_return_values.py
-    numba/tests/test_mangling.py
     numba/tests/test_npdatetime.py
     numba/tests/test_fancy_indexing.py
     numba/tests/support.py
@@ -176,7 +173,6 @@ exclude =
     numba/tests/test_profiler.py
     numba/tests/test_numpyadapt.py
     numba/tests/test_stencils.py
-    numba/tests/test_annotations.py
     numba/tests/cache_usecases.py
     numba/tests/true_div_usecase.py
     numba/tests/test_dataflow.py
@@ -198,7 +194,6 @@ exclude =
     numba/tests/test_cgutils.py
     numba/tests/test_complex.py
     numba/tests/test_hashing.py
-    numba/tests/test_itanium_mangler.py
     numba/tests/test_sys_stdin_assignment.py
     numba/tests/test_ufuncs.py
     numba/tests/pdlike_usecase.py
@@ -266,3 +261,4 @@ per-file-ignores =
     # the test code is already indented by 8 spaces)
     numba/cuda/tests/doc_examples/test_random.py:E501
     numba/cuda/tests/doc_examples/test_cg.py:E501
+    numba/cuda/tests/doc_examples/test_matmul.py:E501

@@ -2,7 +2,7 @@ import multiprocessing as mp
 import logging
 import traceback
 from numba.cuda.testing import unittest, CUDATestCase
-from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import skip_on_cudasim, skip_with_cuda_python
 
 
 def child_test():
@@ -102,6 +102,7 @@ def child_test_wrapper(result_queue):
 
 @skip_on_cudasim('Streams not supported on the simulator')
 class TestPTDS(CUDATestCase):
+    @skip_with_cuda_python('Function names unchanged for PTDS with NV Binding')
     def test_ptds(self):
         # Run a test with PTDS enabled in a child process
         ctx = mp.get_context('spawn')

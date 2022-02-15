@@ -745,7 +745,6 @@ class TestTupleBuild(TestCase):
 
         with self.assertRaises(errors.UnsupportedError) as raises:
             foo()
-
         msg = "op_LIST_EXTEND at the start of a block"
         self.assertIn(msg, str(raises.exception))
 

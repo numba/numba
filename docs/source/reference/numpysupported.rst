@@ -512,6 +512,7 @@ The following top-level functions are supported:
 * :func:`numpy.stack`
 * :func:`numpy.swapaxes`
 * :func:`numpy.take` (only the 2 first arguments)
+* :func:`numpy.take_along_axis` (the axis argument must be a literal value)
 * :func:`numpy.transpose`
 * :func:`numpy.trapz` (only the 3 first arguments)
 * :func:`numpy.tri` (only the 3 first arguments; third argument ``k`` must be an integer)
@@ -653,7 +654,7 @@ Permutations
 Distributions
 '''''''''''''
 
-.. warning:: The `size` argument is not supported in the following functions.
+The following functions support all arguments. 
 
 * :func:`numpy.random.beta`
 * :func:`numpy.random.binomial`

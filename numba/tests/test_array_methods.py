@@ -8,7 +8,7 @@ import numpy as np
 from numba import jit, typeof
 from numba.core import types
 from numba.core.compiler import compile_isolated
-from numba.core.errors import TypingError, LoweringError
+from numba.core.errors import TypingError, LoweringError, NumbaValueError
 from numba.np.numpy_support import as_dtype, numpy_version
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeak,
                                  MemoryLeakMixin, tag, needs_blas)
@@ -475,6 +475,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check(arr, np.int32)
         check(arr, np.float32)
         check(arr, np.complex128)
+        check(arr, "float32")
 
         # F-contiguous
         arr = np.arange(24, dtype=np.int8).reshape((3, 8)).T
@@ -494,6 +495,15 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         with self.assertTypingError() as raises:
             check(arr, dt)
         self.assertIn('cannot convert from int32 to Record',
+                      str(raises.exception))
+        # Check non-Literal string raises
+        unicode_val = "float32"
+        with self.assertTypingError() as raises:
+            @jit(nopython=True)
+            def foo(dtype):
+                np.array([1]).astype(dtype)
+            foo(unicode_val)
+        self.assertIn('array.astype if dtype is a string it must be constant',
                       str(raises.exception))
 
     def check_np_frombuffer(self, pyfunc):
@@ -586,11 +596,22 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_np_copy(self):
         self.check_layout_dependent_func(np_copy)
 
+    def check_ascontiguousarray_scalar(self, pyfunc):
+        def check_scalar(x):
+            cres = compile_isolated(pyfunc, (typeof(x), ))
+            expected = pyfunc(x)
+            got = cres.entry_point(x)
+            self.assertPreciseEqual(expected, got)
+        for x in [42, 42.0, 42j, np.float32(42), np.float64(42), True]:
+            check_scalar(x)
+
     def test_np_asfortranarray(self):
         self.check_layout_dependent_func(np_asfortranarray)
+        self.check_ascontiguousarray_scalar(np_asfortranarray)
 
     def test_np_ascontiguousarray(self):
         self.check_layout_dependent_func(np_ascontiguousarray)
+        self.check_ascontiguousarray_scalar(np_ascontiguousarray)
 
     def check_np_frombuffer_allocated(self, pyfunc):
         def run(shape):
@@ -1223,9 +1244,9 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(foo(a), foo.py_func(a))
         # ndim == 2, axis == -3, BAD
         a = np.ones((1, 2))
-        with self.assertRaises(LoweringError) as raises:
+        with self.assertRaises(NumbaValueError) as raises:
             foo(a)
-        errmsg = "'axis' entry is out of bounds"
+        errmsg = "'axis' entry (-1) is out of bounds"
         self.assertIn(errmsg, str(raises.exception))
         with self.assertRaises(ValueError) as raises:
             foo.py_func(a)

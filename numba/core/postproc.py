@@ -67,7 +67,7 @@ class PostProcessor(object):
     def __init__(self, func_ir):
         self.func_ir = func_ir
 
-    def run(self, emit_dels=False):
+    def run(self, emit_dels: bool = False, extend_lifetimes: bool = False):
         """
         Run the following passes over Numba IR:
         - canonicalize the CFG
@@ -94,7 +94,7 @@ class PostProcessor(object):
         # Emit del nodes, do this last as the generator info parsing generates
         # and then strips dels as part of its analysis.
         if emit_dels:
-            self._insert_var_dels()
+            self._insert_var_dels(extend_lifetimes=extend_lifetimes)
 
     def _populate_generator_info(self):
         """
@@ -154,7 +154,7 @@ class PostProcessor(object):
         gi.state_vars = sorted(st)
         self.remove_dels()
 
-    def _insert_var_dels(self):
+    def _insert_var_dels(self, extend_lifetimes=False):
         """
         Insert del statements for each variable.
         Returns a 2-tuple of (variable definition map, variable deletion map)
@@ -172,9 +172,11 @@ class PostProcessor(object):
         branch and return) are deleted by the successors or the caller.
         """
         vlt = self.func_ir.variable_lifetime
-        self._patch_var_dels(vlt.deadmaps.internal, vlt.deadmaps.escaping)
+        self._patch_var_dels(vlt.deadmaps.internal, vlt.deadmaps.escaping,
+                             extend_lifetimes=extend_lifetimes)
 
-    def _patch_var_dels(self, internal_dead_map, escaping_dead_map):
+    def _patch_var_dels(self, internal_dead_map, escaping_dead_map,
+                        extend_lifetimes=False):
         """
         Insert delete in each block
         """
@@ -199,15 +201,28 @@ class PostProcessor(object):
             # rewrite body and insert dels
             body = []
             lastloc = ir_block.loc
+            del_store = []
             for stmt, delete_set in reversed(delete_pts):
-                lastloc = stmt.loc
+                # If using extended lifetimes then the Dels are all put at the
+                # block end just ahead of the terminator, so associate their
+                # location with the terminator.
+                if extend_lifetimes:
+                    lastloc = ir_block.body[-1].loc
+                else:
+                    lastloc = stmt.loc
                 # Ignore dels (assuming no user inserted deletes)
                 if not isinstance(stmt, ir.Del):
                     body.append(stmt)
                 # note: the reverse sort is not necessary for correctness
                 #       it is just to minimize changes to test for now
                 for var_name in sorted(delete_set, reverse=True):
-                    body.append(ir.Del(var_name, loc=lastloc))
+                    delnode = ir.Del(var_name, loc=lastloc)
+                    if extend_lifetimes:
+                        del_store.append(delnode)
+                    else:
+                        body.append(delnode)
+            if extend_lifetimes:
+                body.extend(del_store)
             body.append(ir_block.body[-1])  # terminator
             ir_block.body = body
 

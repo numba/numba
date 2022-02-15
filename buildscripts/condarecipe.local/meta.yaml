@@ -27,26 +27,27 @@ requirements:
   build:
     - {{ compiler('c') }}      # [not (armv6l or armv7l or aarch64)]
     - {{ compiler('cxx') }}    # [not (armv6l or armv7l or aarch64)]
-    # both of these are needed on osx, llvm for the headers, Intel for the lib
+    # OpenMP headers from llvm needed for OSX.
     - llvm-openmp              # [osx]
-    - intel-openmp             # [osx]
   host:
     - python
     - numpy
     - setuptools
+    - importlib_metadata       # [py<39]
     # On channel https://anaconda.org/numba/
-    - llvmlite >=0.38.0dev0,<0.38
+    - llvmlite >=0.39.0dev0,<0.39
     # TBB devel version is to match TBB libs.
     # 2020.3 is the last version with the "old" ABI
     # NOTE: ppc64le exclusion is temporary until packages are more generally
     #       available.
     - tbb-devel >=2021       # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
   run:
-    - python >=3.6
-    - numpy >=1.17
+    - python >=3.7
+    - numpy >=1.18
     - setuptools
+    - importlib_metadata       # [py<39]
     # On channel https://anaconda.org/numba/
-    - llvmlite >=0.38.0dev0,<0.38
+    - llvmlite >=0.39.0dev0,<0.39
   run_constrained:
     # If TBB is present it must be at least version 2021
     - tbb >=2021    # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
@@ -56,6 +57,8 @@ requirements:
     - cudatoolkit >=9.2
     # scipy 1.0 or later
     - scipy >=1.0
+    # CUDA Python 11.6 or later
+    - cuda-python >=11.6
 
 test:
   requires:
@@ -67,7 +70,11 @@ test:
     - ipython                  # [not (armv6l or armv7l or aarch64)]
     - setuptools
     - tbb  >=2021              # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
-    - intel-openmp             # [osx]
+    - llvm-openmp              # [osx]
+    # This is for driving gdb tests
+    - pexpect                  # [linux64]
+    # For testing ipython
+    - ipykernel
     # Need these for AOT. Do not init msvc as it may not be present
     - {{ compiler('c') }}      # [not (win or armv6l or armv7l or aarch64)]
     - {{ compiler('cxx') }}    # [not (win or armv6l or armv7l or aarch64)]

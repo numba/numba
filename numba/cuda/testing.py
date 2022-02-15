@@ -10,7 +10,7 @@ from numba.tests.support import (
     redirect_c_stdout,
 )
 from numba.cuda.cuda_paths import get_conda_ctk
-from numba.cuda.cudadrv import devices, libs
+from numba.cuda.cudadrv import driver, devices, libs
 from numba.core import config
 from numba.tests.support import TestCase
 import unittest
@@ -122,8 +122,16 @@ def skip_unless_cc_50(fn):
     return unittest.skipUnless(cc_X_or_above(5, 0), "requires cc >= 5.0")(fn)
 
 
+def skip_unless_cc_53(fn):
+    return unittest.skipUnless(cc_X_or_above(5, 3), "requires cc >= 5.3")(fn)
+
+
 def skip_unless_cc_60(fn):
     return unittest.skipUnless(cc_X_or_above(6, 0), "requires cc >= 6.0")(fn)
+
+
+def skip_with_cuda_python(reason):
+    return unittest.skipIf(driver.USE_NV_BINDING, reason)
 
 
 def cudadevrt_missing():

@@ -1,3 +1,326 @@
+Version 0.55.1 (27 January, 2022)
+---------------------------------
+
+This is a bugfix release that closes all the remaining issues from the
+accelerated release of 0.55.0 and also any release critical regressions
+discovered since then.
+
+CUDA target deprecation notices:
+
+* Support for CUDA toolkits < 10.2 is deprecated and will be removed in Numba
+  0.56.
+* Support for devices with Compute Capability < 5.3 is deprecated and will be
+  removed in Numba 0.56.
+
+
+Pull-Requests:
+
+* PR `#7755 <https://github.com/numba/numba/pull/7755>`_: CUDA: Deprecate support for CC < 5.3 and CTK < 10.2 (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7749 <https://github.com/numba/numba/pull/7749>`_: Refactor threading layer priority tests to not use stdout/stderr (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7744 <https://github.com/numba/numba/pull/7744>`_: Fix issues with locating/parsing source during DebugInfo emission. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7712 <https://github.com/numba/numba/pull/7712>`_: Fixing issue 7693 (`Graham Markall <https://github.com/gmarkall>`_ `luk-f-a <https://github.com/luk-f-a>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7729 <https://github.com/numba/numba/pull/7729>`_: Handle Omitted/OmittedArgDataModel in DI generation. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7788 <https://github.com/numba/numba/pull/7788>`_: Avoid issue with DI gen for arrayexprs. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7752 <https://github.com/numba/numba/pull/7752>`_: Fix #7751: Use original filename for array exprs (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7748 <https://github.com/numba/numba/pull/7748>`_: Fix #7713: Ensure _prng_random_hash return has correct bitwidth (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7745 <https://github.com/numba/numba/pull/7745>`_: Fix the release year for Numba 0.55 change log entry. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7740 <https://github.com/numba/numba/pull/7740>`_: CUDA Python 11.6 support (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7724 <https://github.com/numba/numba/pull/7724>`_: Update URLs in error messages to refer to RTD docs. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7709 <https://github.com/numba/numba/pull/7709>`_: CUDA: Fixes missing type annotation pass following #7704 (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7704 <https://github.com/numba/numba/pull/7704>`_: Move the type annotation pass to post legalization. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7619 <https://github.com/numba/numba/pull/7619>`_: CUDA: Fix linking with PTX when compiling lazily (`Graham Markall <https://github.com/gmarkall>`_)
+
+Authors:
+
+* `Graham Markall <https://github.com/gmarkall>`_
+* `luk-f-a <https://github.com/luk-f-a>`_
+* `stuartarchibald <https://github.com/stuartarchibald>`_
+
+Version 0.55.0 (13 January, 2022)
+---------------------------------
+
+This release includes a significant number important dependency upgrades along
+with a number of new features and bug fixes.
+
+NOTE: Due to NumPy CVE-2021-33430 this release has bypassed the usual release
+process so as to promptly provide a Numba release that supports NumPy 1.21. A
+single release candidate (RC1) was made and a few issues were reported, these
+are summarised as follows and will be fixed in a subsequent 0.55.1 release.
+
+Known issues with this release:
+
+* Incorrect result copying array-typed field of structured array (`#7693 <https://github.com/numba/numba/pull/7693>`_)
+* Two issues in DebugInfo generation (`#7726 <https://github.com/numba/numba/pull/7726>`_, `#7730 <https://github.com/numba/numba/pull/7730>`_)
+* Compilation failure for ``hash`` of floating point values on 32 bit Windows
+  when using Python 3.10 (`#7713 <https://github.com/numba/numba/pull/7713>`_).
+
+Highlights of core dependency upgrades:
+
+* Support for Python 3.10
+* Support for NumPy 1.21
+
+Python language support enhancements:
+
+* Experimental support for ``isinstance``.
+
+NumPy features/enhancements:
+
+The following functions are now supported:
+
+* ``np.broadcast_to``
+* ``np.float_power``
+* ``np.cbrt``
+* ``np.logspace``
+* ``np.take_along_axis``
+* ``np.average``
+* ``np.argmin`` gains support for the ``axis`` kwarg.
+* ``np.ndarray.astype`` gains support for types expressed as literal strings.
+
+Highlights of core changes:
+
+* For users of the Numba extension API, Numba now has a new error handling mode
+  whereby it will treat all exceptions that do not inherit from
+  ``numba.errors.NumbaException`` as a "hard error" and immediately unwind the
+  stack. This makes it much easier to debug when writing ``@overload``\s etc
+  from the extension API as there's now no confusion between Python errors and
+  Numba errors. This feature can be enabled by setting the environment
+  variable: ``NUMBA_CAPTURED_ERRORS='new_style'``.
+* The threading layer selection priority can now be changed via the environment
+  variable ``NUMBA_THREADING_LAYER_PRIORITY``.
+
+Highlights of changes for the CUDA target:
+
+* Support for NVIDIA's CUDA Python bindings.
+* Support for 16-bit floating point numbers and their basic operations via
+  intrinsics.
+* Streams are provided in the ``Stream.async_done`` result, making it easier to
+  implement asynchronous work queues.
+* Support for structured types in device arrays, character sequences in NumPy
+  arrays, and some array operations on nested arrays.
+* Much underlying refactoring to align the CUDA target more closely with the
+  CPU target, which lays the groudwork for supporting the high level extension
+  API in CUDA in future releases.
+
+Intel also kindly sponsored research and development into native debug (DWARF)
+support and handling per-function compilation flags:
+
+* Line number/location tracking is much improved.
+* Numba's internal representation of containers (e.g. tuples, arrays) are now
+  encoded as structures.
+* Numba's per-function compilation flags are encoded into the ABI field of the
+  mangled name of the function such that it's possible to compile and
+  differentiate between versions of the same function with different flags set.
+
+General deprecation notices:
+
+* There are no new general deprecations.
+
+CUDA target deprecation notices:
+
+* There are no new CUDA target deprecations.
+
+Version support/dependency changes:
+
+* Python 3.10 is supported.
+* NumPy version 1.21 is supported.
+* The minimum supported NumPy version is raised to 1.18 for runtime (compilation
+  however remains compatible with NumPy 1.11).
+
+
+Pull-Requests:
+
+* PR `#6075 <https://github.com/numba/numba/pull/6075>`_: add np.float_power and np.cbrt (`Guilherme Leobas <https://github.com/guilhermeleobas>`_)
+* PR `#7047 <https://github.com/numba/numba/pull/7047>`_: Support __hash__ for numpy.datetime64 (`Guilherme Leobas <https://github.com/guilhermeleobas>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7057 <https://github.com/numba/numba/pull/7057>`_: Fix #7041: Add charseq registry to CUDA target (`Graham Markall <https://github.com/gmarkall>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7082 <https://github.com/numba/numba/pull/7082>`_: Added Add/Sub between datetime64 array and timedelta64 scalar (`Nick Riasanovsky <https://github.com/njriasan>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7119 <https://github.com/numba/numba/pull/7119>`_: Add support for `np.broadcast_to` (`Guilherme Leobas <https://github.com/guilhermeleobas>`_)
+* PR `#7129 <https://github.com/numba/numba/pull/7129>`_: Add support for axis keyword argument to np.argmin() (`Itamar Turner-Trauring <https://github.com/itamarst>`_)
+* PR `#7132 <https://github.com/numba/numba/pull/7132>`_: gh #7131 Support for astype with literal strings (`Nick Riasanovsky <https://github.com/njriasan>`_)
+* PR `#7177 <https://github.com/numba/numba/pull/7177>`_: Add debug infomation support based on datamodel. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7185 <https://github.com/numba/numba/pull/7185>`_: Add get_impl_key as abstract method to types.Callable (`Alexey Kozlov <https://github.com/kozlov-alexey>`_)
+* PR `#7186 <https://github.com/numba/numba/pull/7186>`_: Add support for np.logspace. (`Guoqiang QI <https://github.com/guoqiangqi>`_)
+* PR `#7189 <https://github.com/numba/numba/pull/7189>`_: CUDA: Skip IPC tests on ARM (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7190 <https://github.com/numba/numba/pull/7190>`_: CUDA: Fix test_pinned on Jetson (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7192 <https://github.com/numba/numba/pull/7192>`_: Fix missing import in array.argsort impl and add more tests. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7196 <https://github.com/numba/numba/pull/7196>`_: Fixes for lineinfo emission (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7197 <https://github.com/numba/numba/pull/7197>`_: don't post to python announce on the first RC (`esc <https://github.com/esc>`_)
+* PR `#7202 <https://github.com/numba/numba/pull/7202>`_: Initial implementation of np.take_along_axis (`Itamar Turner-Trauring <https://github.com/itamarst>`_)
+* PR `#7203 <https://github.com/numba/numba/pull/7203>`_: remove duplicate changelog entries (`esc <https://github.com/esc>`_)
+* PR `#7216 <https://github.com/numba/numba/pull/7216>`_: Update CHANGE_LOG for 0.54.0rc2 (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7219 <https://github.com/numba/numba/pull/7219>`_: bump llvmlite dependency to 0.38.0dev0 for Numba 0.55.0dev0 (`esc <https://github.com/esc>`_)
+* PR `#7220 <https://github.com/numba/numba/pull/7220>`_: update release checklist post 0.54rc1+2 (`esc <https://github.com/esc>`_)
+* PR `#7221 <https://github.com/numba/numba/pull/7221>`_: Show GPU UUIDs in cuda.detect() output (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7222 <https://github.com/numba/numba/pull/7222>`_: CUDA: Warn when debug=True and opt=True (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7223 <https://github.com/numba/numba/pull/7223>`_: Replace assertion errors on IR assumption violation (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#7226 <https://github.com/numba/numba/pull/7226>`_: Add support for structured types in Device Arrays (`Michael Collison <https://github.com/testhound>`_)
+* PR `#7227 <https://github.com/numba/numba/pull/7227>`_: FIX: Typo (`Srinath Kailasa <https://github.com/skailasa>`_)
+* PR `#7230 <https://github.com/numba/numba/pull/7230>`_: PR #7171 bugfix only (`stuartarchibald <https://github.com/stuartarchibald>`_ `Todd A. Anderson <https://github.com/DrTodd13>`_)
+* PR `#7234 <https://github.com/numba/numba/pull/7234>`_: add THREADING_LAYER_PRIORITY & NUMBA_THREADING_LAYER_PRIORITY (`Kolen Cheung <https://github.com/ickc>`_)
+* PR `#7235 <https://github.com/numba/numba/pull/7235>`_: replace wordings of WIP by draft PR (`Kolen Cheung <https://github.com/ickc>`_)
+* PR `#7236 <https://github.com/numba/numba/pull/7236>`_: CUDA: Skip managed alloc tests on ARM (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7237 <https://github.com/numba/numba/pull/7237>`_: fix a typo in a string (`Kolen Cheung <https://github.com/ickc>`_)
+* PR `#7241 <https://github.com/numba/numba/pull/7241>`_: Set aliasing information for inplace_binops.. (`Todd A. Anderson <https://github.com/DrTodd13>`_)
+* PR `#7242 <https://github.com/numba/numba/pull/7242>`_: FIX: typo (`Srinath Kailasa <https://github.com/skailasa>`_)
+* PR `#7244 <https://github.com/numba/numba/pull/7244>`_: Implement partial literal propagation pass (support 'isinstance') (`Guilherme Leobas <https://github.com/guilhermeleobas>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7247 <https://github.com/numba/numba/pull/7247>`_: Solve memory leak to fix issue #7210  (`Siu Kwan Lam <https://github.com/sklam>`_ `Graham Markall <https://github.com/gmarkall>`_ `ysheffer <https://github.com/ysheffer>`_)
+* PR `#7251 <https://github.com/numba/numba/pull/7251>`_: Fix #6001: typed.List ignores ctor arguments with JIT disabled (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7256 <https://github.com/numba/numba/pull/7256>`_: Fix link to the discourse forum in README (`Kenichi Maehashi <https://github.com/kmaehashi>`_)
+* PR `#7257 <https://github.com/numba/numba/pull/7257>`_: Use normal list constructor in List.__new__() (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7260 <https://github.com/numba/numba/pull/7260>`_: Support typed lists in `heapq` (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7263 <https://github.com/numba/numba/pull/7263>`_: Updated issue URL for error messages #7261 (`DeviousLab <https://github.com/DeviousLab>`_)
+* PR `#7265 <https://github.com/numba/numba/pull/7265>`_: Fix linspace to use np.divide and clamp to stop. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7266 <https://github.com/numba/numba/pull/7266>`_: CUDA: Skip multi-GPU copy test with peer access disabled (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7267 <https://github.com/numba/numba/pull/7267>`_: Fix #7258. Bug in SROA optimization (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#7271 <https://github.com/numba/numba/pull/7271>`_: Update 3rd party license text. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7272 <https://github.com/numba/numba/pull/7272>`_: Allow annotations in njit-ed functions (`LunarLanding <https://github.com/LunarLanding>`_)
+* PR `#7273 <https://github.com/numba/numba/pull/7273>`_: Update CHANGE_LOG for 0.54.0rc3. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7283 <https://github.com/numba/numba/pull/7283>`_: Added NPM to Glossary and linked to mentions (`Nihal Shetty <https://github.com/nihalshetty-boop>`_)
+* PR `#7285 <https://github.com/numba/numba/pull/7285>`_: CUDA: Fix OOB in test_kernel_arg (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7288 <https://github.com/numba/numba/pull/7288>`_: Handle cval as a np attr in stencil generation. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7294 <https://github.com/numba/numba/pull/7294>`_: Continuation of PR #7280, fixing lifetime of TBB task_scheduler_handle (`Sergey Pokhodenko <https://github.com/PokhodenkoSA>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7296 <https://github.com/numba/numba/pull/7296>`_: Fix generator lowering not casting to the actual yielded type (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#7298 <https://github.com/numba/numba/pull/7298>`_: Use CBC to pin GCC to 7 on most linux and 9 on aarch64. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7304 <https://github.com/numba/numba/pull/7304>`_: Continue PR#3655: add support for np.average (`Hadia Ahmed <https://github.com/hadia206>`_ `slnguyen <https://github.com/slnguyen>`_)
+* PR `#7307 <https://github.com/numba/numba/pull/7307>`_: Prevent mutation of arrays in global tuples. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7309 <https://github.com/numba/numba/pull/7309>`_: Update MapConstraint to handle type coercion for typed.Dict correctly. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7312 <https://github.com/numba/numba/pull/7312>`_: Fix #7302. Workaround missing pthread problem on ppc64le (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#7315 <https://github.com/numba/numba/pull/7315>`_: Link ELF obj as DSO for radare2 disassembly CFG (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7316 <https://github.com/numba/numba/pull/7316>`_: Use float64 for consistent typing in heapq tests. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7317 <https://github.com/numba/numba/pull/7317>`_: In TBB tsh test switch os.fork for mp fork ctx (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7319 <https://github.com/numba/numba/pull/7319>`_: Update CHANGE_LOG for 0.54.0 final. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7329 <https://github.com/numba/numba/pull/7329>`_: Improve documentation in reference to CUDA local memory (`Sterling Baird <https://github.com/sgbaird>`_)
+* PR `#7330 <https://github.com/numba/numba/pull/7330>`_: Cuda matmul docs (`Sterling Baird <https://github.com/sgbaird>`_)
+* PR `#7340 <https://github.com/numba/numba/pull/7340>`_: Add size_t and ssize_t types (`Bruce Merry <https://github.com/bmerry>`_)
+* PR `#7345 <https://github.com/numba/numba/pull/7345>`_: Add check for ipykernel file in IPython cache locator (`Sahil Gupta <https://github.com/sahil1105>`_)
+* PR `#7347 <https://github.com/numba/numba/pull/7347>`_: fix:updated url for error report and feature rquest using issue template (`DEBARGHA SAHA <https://github.com/Stark-developer01>`_)
+* PR `#7349 <https://github.com/numba/numba/pull/7349>`_: Allow arbitrary walk-back in reduction nodes to find inplace_binop. (`Todd A. Anderson <https://github.com/DrTodd13>`_)
+* PR `#7359 <https://github.com/numba/numba/pull/7359>`_: Extend support for nested arrays inside numpy records (`Graham Markall <https://github.com/gmarkall>`_ `luk-f-a <https://github.com/luk-f-a>`_)
+* PR `#7375 <https://github.com/numba/numba/pull/7375>`_: CUDA: Run doctests as part of numba.cuda.tests and fix test_cg (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7395 <https://github.com/numba/numba/pull/7395>`_: Fix #7394 and #6550 & Added test & improved error message (`MegaIng <https://github.com/MegaIng>`_)
+* PR `#7397 <https://github.com/numba/numba/pull/7397>`_: Add option to catch only Numba `numba.core.errors` derived exceptions. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7398 <https://github.com/numba/numba/pull/7398>`_: Add support for arrayanalysis of tuple args. (`Todd A. Anderson <https://github.com/DrTodd13>`_)
+* PR `#7403 <https://github.com/numba/numba/pull/7403>`_: Fix for issue 7402: implement missing numpy ufunc interface (`Guilherme Leobas <https://github.com/guilhermeleobas>`_)
+* PR `#7404 <https://github.com/numba/numba/pull/7404>`_: fix typo in literal_unroll docs (`esc <https://github.com/esc>`_)
+* PR `#7419 <https://github.com/numba/numba/pull/7419>`_: insert missing backtick in comment (`esc <https://github.com/esc>`_)
+* PR `#7422 <https://github.com/numba/numba/pull/7422>`_: Update Omitted Type to use Hashable Values as Keys for Caching (`Nick Riasanovsky <https://github.com/njriasan>`_)
+* PR `#7429 <https://github.com/numba/numba/pull/7429>`_: Update CHANGE_LOG for 0.54.1 (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7432 <https://github.com/numba/numba/pull/7432>`_: add github release task to checklist (`esc <https://github.com/esc>`_)
+* PR `#7440 <https://github.com/numba/numba/pull/7440>`_: Refactor TargetConfig naming. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7441 <https://github.com/numba/numba/pull/7441>`_: Permit any string as a key in literalstrkeydict type. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7442 <https://github.com/numba/numba/pull/7442>`_: Add some diagnostics to SVML test failures. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7443 <https://github.com/numba/numba/pull/7443>`_: Refactor template selection logic for targets. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7444 <https://github.com/numba/numba/pull/7444>`_: use correct variable name in closure (`esc <https://github.com/esc>`_)
+* PR `#7447 <https://github.com/numba/numba/pull/7447>`_: cleanup Numba metadata (`esc <https://github.com/esc>`_)
+* PR `#7453 <https://github.com/numba/numba/pull/7453>`_: CUDA: Provide stream in async_done result (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7456 <https://github.com/numba/numba/pull/7456>`_: Fix invalid codegen for #7451. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7457 <https://github.com/numba/numba/pull/7457>`_: Factor out target registry selection logic (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7459 <https://github.com/numba/numba/pull/7459>`_: Include compiler flags in symbol mangling (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#7460 <https://github.com/numba/numba/pull/7460>`_: Add FP16 support for CUDA (`Michael Collison <https://github.com/testhound>`_ `Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7461 <https://github.com/numba/numba/pull/7461>`_: Support NVIDIA's CUDA Python bindings (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7465 <https://github.com/numba/numba/pull/7465>`_: Update changelog for 0.54.1 release (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#7477 <https://github.com/numba/numba/pull/7477>`_: Fix unicode operator.eq handling of Optional types. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7479 <https://github.com/numba/numba/pull/7479>`_: CUDA: Print format string and warn for > 32 print() args (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7483 <https://github.com/numba/numba/pull/7483>`_: NumPy 1.21 support (`Sebastian Berg <https://github.com/seberg>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7484 <https://github.com/numba/numba/pull/7484>`_: Fixed outgoing link to nvidia documentation. (`Dhruv Patel <https://github.com/DhruvPatel01>`_)
+* PR `#7493 <https://github.com/numba/numba/pull/7493>`_: Consolidate TLS stacks in target configuration (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#7496 <https://github.com/numba/numba/pull/7496>`_: CUDA: Use a single dispatcher class for all kinds of functions (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7498 <https://github.com/numba/numba/pull/7498>`_: refactor  with-detection logic (`stuartarchibald <https://github.com/stuartarchibald>`_ `esc <https://github.com/esc>`_)
+* PR `#7499 <https://github.com/numba/numba/pull/7499>`_: Add build scripts for CUDA testing on gpuCI  (`Charles Blackmon-Luca <https://github.com/charlesbluca>`_ `Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7500 <https://github.com/numba/numba/pull/7500>`_: Update parallel.rst (`Julius Bier Kirkegaard <https://github.com/juliusbierk>`_)
+* PR `#7506 <https://github.com/numba/numba/pull/7506>`_: Enhance Flags mangling/demangling (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#7514 <https://github.com/numba/numba/pull/7514>`_: Fixup cuda debuginfo emission for 7177 (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#7525 <https://github.com/numba/numba/pull/7525>`_: Make sure` demangle()` returns `str` type. (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#7538 <https://github.com/numba/numba/pull/7538>`_: Fix `@overload_glue` performance regression. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7539 <https://github.com/numba/numba/pull/7539>`_: Fix str decode issue from merge #7525/#7506 (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7546 <https://github.com/numba/numba/pull/7546>`_: Fix handling of missing const key in LiteralStrKeyDict (`Siu Kwan Lam <https://github.com/sklam>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7547 <https://github.com/numba/numba/pull/7547>`_: Remove 32bit linux scipy installation. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7548 <https://github.com/numba/numba/pull/7548>`_: Correct evaluation order in assert statement (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7552 <https://github.com/numba/numba/pull/7552>`_: Prepend the inlined function name to inlined variables. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7557 <https://github.com/numba/numba/pull/7557>`_: Python3.10 v2 (`stuartarchibald <https://github.com/stuartarchibald>`_ `esc <https://github.com/esc>`_)
+* PR `#7560 <https://github.com/numba/numba/pull/7560>`_: Refactor with detection py310 (`Siu Kwan Lam <https://github.com/sklam>`_ `esc <https://github.com/esc>`_)
+* PR `#7561 <https://github.com/numba/numba/pull/7561>`_: fix a typo (`Kolen Cheung <https://github.com/ickc>`_)
+* PR `#7567 <https://github.com/numba/numba/pull/7567>`_: Update docs to note meetings are public. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7570 <https://github.com/numba/numba/pull/7570>`_: Update the docs and error message for errors when importing Numba. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7580 <https://github.com/numba/numba/pull/7580>`_: Fix #7507. catch `NotImplementedError` in `.get_function()`  (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#7581 <https://github.com/numba/numba/pull/7581>`_: Add support for casting from int enums (`Michael Collison <https://github.com/testhound>`_)
+* PR `#7583 <https://github.com/numba/numba/pull/7583>`_: Make numba.types.Optional __str__ less verbose. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7588 <https://github.com/numba/numba/pull/7588>`_: Fix casting of start/stop in linspace (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7591 <https://github.com/numba/numba/pull/7591>`_: Remove deprecations (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7596 <https://github.com/numba/numba/pull/7596>`_: Fix max symbol match length for r2 (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7597 <https://github.com/numba/numba/pull/7597>`_: Update gdb docs for new DWARF enhancements. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7603 <https://github.com/numba/numba/pull/7603>`_: Fix list.insert() for refcounted values (`Ehsan Totoni <https://github.com/ehsantn>`_)
+* PR `#7605 <https://github.com/numba/numba/pull/7605>`_: Fix TBB 2021 DSO names on OSX/Win and make TBB reporting consistent (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7606 <https://github.com/numba/numba/pull/7606>`_: Ensure a prescribed threading layer can load in CI. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7610 <https://github.com/numba/numba/pull/7610>`_: Fix #7609. Type should not be mutated. (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#7618 <https://github.com/numba/numba/pull/7618>`_: Fix the doc build: docutils 0.18 not compatible with pinned sphinx (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7626 <https://github.com/numba/numba/pull/7626>`_: Fix issues with package dependencies. (`stuartarchibald <https://github.com/stuartarchibald>`_ `esc <https://github.com/esc>`_)
+* PR `#7627 <https://github.com/numba/numba/pull/7627>`_: PR 7321 continued (`stuartarchibald <https://github.com/stuartarchibald>`_ `Eric Wieser <https://github.com/eric-wieser>`_)
+* PR `#7628 <https://github.com/numba/numba/pull/7628>`_: Move to using windows-2019 images in Azure (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7632 <https://github.com/numba/numba/pull/7632>`_: Capture output in CUDA matmul doctest (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7636 <https://github.com/numba/numba/pull/7636>`_: Copy prange loop header to after the parfor. (`Todd A. Anderson <https://github.com/DrTodd13>`_)
+* PR `#7637 <https://github.com/numba/numba/pull/7637>`_: Increase the timeout on the SVML tests for loaded machines. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7645 <https://github.com/numba/numba/pull/7645>`_: In debuginfo, do not add noinline to functions marked alwaysinline (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7650 <https://github.com/numba/numba/pull/7650>`_: Move Azure builds to OSX 10.15 (`stuartarchibald <https://github.com/stuartarchibald>`_ `esc <https://github.com/esc>`_ `Siu Kwan Lam <https://github.com/sklam>`_)
+
+Authors:
+
+* `Bruce Merry <https://github.com/bmerry>`_
+* `Charles Blackmon-Luca <https://github.com/charlesbluca>`_
+* `DeviousLab <https://github.com/DeviousLab>`_
+* `Dhruv Patel <https://github.com/DhruvPatel01>`_
+* `Todd A. Anderson <https://github.com/DrTodd13>`_
+* `Ehsan Totoni <https://github.com/ehsantn>`_
+* `Eric Wieser <https://github.com/eric-wieser>`_
+* `esc <https://github.com/esc>`_
+* `Graham Markall <https://github.com/gmarkall>`_
+* `Guilherme Leobas <https://github.com/guilhermeleobas>`_
+* `Guoqiang QI <https://github.com/guoqiangqi>`_
+* `Hadia Ahmed <https://github.com/hadia206>`_
+* `Kolen Cheung <https://github.com/ickc>`_
+* `Itamar Turner-Trauring <https://github.com/itamarst>`_
+* `Julius Bier Kirkegaard <https://github.com/juliusbierk>`_
+* `Kenichi Maehashi <https://github.com/kmaehashi>`_
+* `Alexey Kozlov <https://github.com/kozlov-alexey>`_
+* `luk-f-a <https://github.com/luk-f-a>`_
+* `LunarLanding <https://github.com/LunarLanding>`_
+* `MegaIng <https://github.com/MegaIng>`_
+* `Nihal Shetty <https://github.com/nihalshetty-boop>`_
+* `Nick Riasanovsky <https://github.com/njriasan>`_
+* `Sergey Pokhodenko <https://github.com/PokhodenkoSA>`_
+* `Sahil Gupta <https://github.com/sahil1105>`_
+* `Sebastian Berg <https://github.com/seberg>`_
+* `Sterling Baird <https://github.com/sgbaird>`_
+* `Srinath Kailasa <https://github.com/skailasa>`_
+* `Siu Kwan Lam <https://github.com/sklam>`_
+* `slnguyen <https://github.com/slnguyen>`_
+* `DEBARGHA SAHA <https://github.com/Stark-developer01>`_
+* `stuartarchibald <https://github.com/stuartarchibald>`_
+* `Michael Collison <https://github.com/testhound>`_
+* `ysheffer <https://github.com/ysheffer>`_
+
+Version 0.54.1 (7 October, 2021)
+--------------------------------
+
+This is a bugfix release for 0.54.0. It fixes a regression in structured array
+type handling, a potential leak on initialization failure in the CUDA target, a
+regression caused by Numba's vendored cloudpickle module resetting dynamic
+classes and a few minor testing/infrastructure related problems.
+
+* PR `#7348 <https://github.com/numba/numba/pull/7348>`_: test_inspect_cli: Decode exception with default (utf-8) codec (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7360 <https://github.com/numba/numba/pull/7360>`_: CUDA: Fix potential leaks when initialization fails (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#7386 <https://github.com/numba/numba/pull/7386>`_: Ensure the NRT is initialized prior to use in external NRT tests. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#7388 <https://github.com/numba/numba/pull/7388>`_: Patch cloudpickle to not reset dynamic class each time it is unpickled (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#7393 <https://github.com/numba/numba/pull/7393>`_: skip azure pipeline test if file not present (`esc <https://github.com/esc>`_)
+* PR `#7428 <https://github.com/numba/numba/pull/7428>`_: Fix regression #7355: cannot set items in structured array data types (`Siu Kwan Lam <https://github.com/sklam>`_)
+
+Authors:
+
+* `esc <https://github.com/esc>`_
+* `Graham Markall <https://github.com/gmarkall>`_
+* `Siu Kwan Lam <https://github.com/sklam>`_
+* `stuartarchibald <https://github.com/stuartarchibald>`_
+
+
 Version 0.54.0 (19 August, 2021)
 --------------------------------
 

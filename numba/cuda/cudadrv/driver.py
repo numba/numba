@@ -37,6 +37,15 @@ from .drvapi import cu_occupancy_b2d_size, cu_stream_callback_pyobj, cu_uuid
 from numba.cuda.cudadrv import enums, drvapi, _extras
 
 
+USE_NV_BINDING = config.CUDA_USE_NVIDIA_BINDING
+
+if USE_NV_BINDING:
+    from cuda import cuda as binding
+    # There is no definition of the default stream in the Nvidia bindings (nor
+    # is there at the C/C++ level), so we define it here so we don't need to
+    # use a magic number 0 in places where we want the default stream.
+    CU_STREAM_DEFAULT = 0
+
 MIN_REQUIRED_CC = (3, 0)
 
 
@@ -221,9 +230,12 @@ class Driver(object):
             self.lib = find_driver()
         except CudaSupportError as e:
             self.is_initialized = True
-            self.initialization_error = e
+            self.initialization_error = e.msg
 
-    def initialize(self):
+    def ensure_initialized(self):
+        if self.is_initialized:
+            return
+
         # lazily initialize logger
         global _logger
         _logger = make_logger()
@@ -233,14 +245,19 @@ class Driver(object):
             _logger.info('init')
             self.cuInit(0)
         except CudaAPIError as e:
-            self.initialization_error = e
-            raise CudaSupportError("Error at driver init: \n%s:" % e)
+            description = f"{e.msg} ({e.code})"
+            self.initialization_error = description
+            raise CudaSupportError(f"Error at driver init: {description}")
         else:
             self.pid = _getpid()
 
         self._initialize_extras()
 
     def _initialize_extras(self):
+        if USE_NV_BINDING:
+            # The extras are only needed when using Numba's ctypes bindings
+            return
+
         # set pointer to original cuIpcOpenMemHandle
         set_proto = ctypes.CFUNCTYPE(None, c_void_p)
         set_cuIpcOpenMemHandle = set_proto(_extras.set_cuIpcOpenMemHandle)
@@ -252,64 +269,90 @@ class Driver(object):
                                       ctypes.c_uint)
         call_cuIpcOpenMemHandle = call_proto(_extras.call_cuIpcOpenMemHandle)
         call_cuIpcOpenMemHandle.__name__ = 'call_cuIpcOpenMemHandle'
-        safe_call = self._wrap_api_call('call_cuIpcOpenMemHandle',
-                                        call_cuIpcOpenMemHandle)
+        safe_call = self._ctypes_wrap_fn('call_cuIpcOpenMemHandle',
+                                         call_cuIpcOpenMemHandle)
         # override cuIpcOpenMemHandle
         self.cuIpcOpenMemHandle = safe_call
 
     @property
     def is_available(self):
-        if not self.is_initialized:
-            self.initialize()
+        self.ensure_initialized()
         return self.initialization_error is None
 
     def __getattr__(self, fname):
         # First request of a driver API function
-        try:
-            proto = API_PROTOTYPES[fname]
-        except KeyError:
-            raise AttributeError(fname)
-        restype = proto[0]
-        argtypes = proto[1:]
-
-        # Initialize driver
-        if not self.is_initialized:
-            self.initialize()
+        self.ensure_initialized()
 
         if self.initialization_error is not None:
             raise CudaSupportError("Error at driver init: \n%s:" %
                                    self.initialization_error)
 
-        # Find function in driver library
-        libfn = self._find_api(fname)
-        libfn.restype = restype
-        libfn.argtypes = argtypes
+        if USE_NV_BINDING:
+            return self._cuda_python_wrap_fn(fname)
+        else:
+            return self._ctypes_wrap_fn(fname)
 
-        safe_call = self._wrap_api_call(fname, libfn)
-        setattr(self, fname, safe_call)
-        return safe_call
+    def _ctypes_wrap_fn(self, fname, libfn=None):
+        # Wrap a CUDA driver function by default
+        if libfn is None:
+            try:
+                proto = API_PROTOTYPES[fname]
+            except KeyError:
+                raise AttributeError(fname)
+            restype = proto[0]
+            argtypes = proto[1:]
 
-    def _wrap_api_call(self, fname, libfn):
+            # Find function in driver library
+            libfn = self._find_api(fname)
+            libfn.restype = restype
+            libfn.argtypes = argtypes
+
         def verbose_cuda_api_call(*args):
             argstr = ", ".join([str(arg) for arg in args])
             _logger.debug('call driver api: %s(%s)', libfn.__name__, argstr)
             retcode = libfn(*args)
-            self._check_error(fname, retcode)
+            self._check_ctypes_error(fname, retcode)
 
         def safe_cuda_api_call(*args):
             _logger.debug('call driver api: %s', libfn.__name__)
             retcode = libfn(*args)
-            self._check_error(fname, retcode)
+            self._check_ctypes_error(fname, retcode)
 
         if config.CUDA_LOG_API_ARGS:
             wrapper = verbose_cuda_api_call
         else:
             wrapper = safe_cuda_api_call
 
-        return functools.wraps(libfn)(wrapper)
+        safe_call = functools.wraps(libfn)(wrapper)
+        setattr(self, fname, safe_call)
+        return safe_call
+
+    def _cuda_python_wrap_fn(self, fname):
+        libfn = getattr(binding, fname)
+
+        def verbose_cuda_api_call(*args):
+            argstr = ", ".join([str(arg) for arg in args])
+            _logger.debug('call driver api: %s(%s)', libfn.__name__, argstr)
+            return self._check_cuda_python_error(fname, libfn(*args))
+
+        def safe_cuda_api_call(*args):
+            _logger.debug('call driver api: %s', libfn.__name__)
+            return self._check_cuda_python_error(fname, libfn(*args))
+
+        if config.CUDA_LOG_API_ARGS:
+            wrapper = verbose_cuda_api_call
+        else:
+            wrapper = safe_cuda_api_call
+
+        safe_call = functools.wraps(libfn)(wrapper)
+        setattr(self, fname, safe_call)
+        return safe_call
 
     def _find_api(self, fname):
-        if config.CUDA_PER_THREAD_DEFAULT_STREAM:
+        # We use alternatively-named functions for PTDS with the Numba ctypes
+        # binding. For the NVidia binding, it handles linking to the correct
+        # variant.
+        if config.CUDA_PER_THREAD_DEFAULT_STREAM and not USE_NV_BINDING:
             variants = ('_v2_ptds', '_v2_ptsz', '_ptds', '_ptsz', '_v2', '')
         else:
             variants = ('_v2', '')
@@ -328,18 +371,35 @@ class Driver(object):
         setattr(self, fname, absent_function)
         return absent_function
 
-    def _check_error(self, fname, retcode):
+    def _detect_fork(self):
+        if self.pid is not None and _getpid() != self.pid:
+            msg = 'pid %s forked from pid %s after CUDA driver init'
+            _logger.critical(msg, _getpid(), self.pid)
+            raise CudaDriverError("CUDA initialized before forking")
+
+    def _check_ctypes_error(self, fname, retcode):
         if retcode != enums.CUDA_SUCCESS:
             errname = ERROR_MAP.get(retcode, "UNKNOWN_CUDA_ERROR")
             msg = "Call to %s results in %s" % (fname, errname)
             _logger.error(msg)
             if retcode == enums.CUDA_ERROR_NOT_INITIALIZED:
-                # Detect forking
-                if self.pid is not None and _getpid() != self.pid:
-                    msg = 'pid %s forked from pid %s after CUDA driver init'
-                    _logger.critical(msg, _getpid(), self.pid)
-                    raise CudaDriverError("CUDA initialized before forking")
+                self._detect_fork()
             raise CudaAPIError(retcode, msg)
+
+    def _check_cuda_python_error(self, fname, returned):
+        retcode = returned[0]
+        retval = returned[1:]
+        if len(retval) == 1:
+            retval = retval[0]
+
+        if retcode != binding.CUresult.CUDA_SUCCESS:
+            msg = "Call to %s results in %s" % (fname, retcode.name)
+            _logger.error(msg)
+            if retcode == binding.CUresult.CUDA_ERROR_NOT_INITIALIZED:
+                self._detect_fork()
+            raise CudaAPIError(retcode, msg)
+
+        return retval
 
     def get_device(self, devnum=0):
         dev = self.devices.get(devnum)
@@ -349,6 +409,9 @@ class Driver(object):
         return weakref.proxy(dev)
 
     def get_device_count(self):
+        if USE_NV_BINDING:
+            return self.cuDeviceGetCount()
+
         count = c_int()
         self.cuDeviceGetCount(byref(count))
         return count.value
@@ -370,14 +433,33 @@ class Driver(object):
         """
         with self.get_active_context() as ac:
             if ac.devnum is not None:
-                popped = drvapi.cu_context()
-                driver.cuCtxPopCurrent(byref(popped))
-                return popped
+                if USE_NV_BINDING:
+                    return driver.cuCtxPopCurrent()
+                else:
+                    popped = drvapi.cu_context()
+                    driver.cuCtxPopCurrent(byref(popped))
+                    return popped
 
     def get_active_context(self):
         """Returns an instance of ``_ActiveContext``.
         """
         return _ActiveContext()
+
+    def get_version(self):
+        """
+        Returns the CUDA Runtime version as a tuple (major, minor).
+        """
+        if USE_NV_BINDING:
+            version = driver.cuDriverGetVersion()
+        else:
+            dv = ctypes.c_int(0)
+            driver.cuDriverGetVersion(ctypes.byref(dv))
+            version = dv.value
+
+        # The version is encoded as (1000 * major) + (10 * minor)
+        major = version // 1000
+        minor = (version - (major * 1000)) // 10
+        return (major, minor)
 
 
 class _ActiveContext(object):
@@ -396,16 +478,24 @@ class _ActiveContext(object):
             hctx, devnum = self._tls_cache.ctx_devnum
         # Not cached. Query the driver API.
         else:
-            hctx = drvapi.cu_context(0)
-            driver.cuCtxGetCurrent(byref(hctx))
-            hctx = hctx if hctx.value else None
+            if USE_NV_BINDING:
+                hctx = driver.cuCtxGetCurrent()
+                if int(hctx) == 0:
+                    hctx = None
+            else:
+                hctx = drvapi.cu_context(0)
+                driver.cuCtxGetCurrent(byref(hctx))
+                hctx = hctx if hctx.value else None
 
             if hctx is None:
                 devnum = None
             else:
-                hdevice = drvapi.cu_device()
-                driver.cuCtxGetDevice(byref(hdevice))
-                devnum = hdevice.value
+                if USE_NV_BINDING:
+                    devnum = int(driver.cuCtxGetDevice())
+                else:
+                    hdevice = drvapi.cu_device()
+                    driver.cuCtxGetDevice(byref(hdevice))
+                    devnum = hdevice.value
 
                 self._tls_cache.ctx_devnum = (hctx, devnum)
                 is_top = True
@@ -464,10 +554,20 @@ class Device(object):
             raise RuntimeError(errmsg)
 
     def __init__(self, devnum):
-        got_devnum = c_int()
-        driver.cuDeviceGet(byref(got_devnum), devnum)
-        assert devnum == got_devnum.value, "Driver returned another device"
-        self.id = got_devnum.value
+        if USE_NV_BINDING:
+            result = driver.cuDeviceGet(devnum)
+            self.id = result
+            got_devnum = int(result)
+        else:
+            result = c_int()
+            driver.cuDeviceGet(byref(result), devnum)
+            got_devnum = result.value
+            self.id = got_devnum
+
+        msg = f"Driver returned device {got_devnum} instead of {devnum}"
+        if devnum != got_devnum:
+            raise RuntimeError(msg)
+
         self.attributes = {}
 
         # Read compute capability
@@ -476,19 +576,32 @@ class Device(object):
 
         # Read name
         bufsz = 128
-        buf = (c_char * bufsz)()
-        driver.cuDeviceGetName(buf, bufsz, self.id)
-        self.name = buf.value
+
+        if USE_NV_BINDING:
+            buf = driver.cuDeviceGetName(bufsz, self.id)
+            name = buf.decode('utf-8').rstrip('\0')
+        else:
+            buf = (c_char * bufsz)()
+            driver.cuDeviceGetName(buf, bufsz, self.id)
+            name = buf.value
+
+        self.name = name
 
         # Read UUID
-        uuid = cu_uuid()
-        driver.cuDeviceGetUuid(byref(uuid), self.id)
+        if USE_NV_BINDING:
+            uuid = driver.cuDeviceGetUuid(self.id)
+            uuid_vals = tuple(uuid.bytes)
+        else:
+            uuid = cu_uuid()
+            driver.cuDeviceGetUuid(byref(uuid), self.id)
+            uuid_vals = tuple(bytes(uuid))
+
         b = '%02x'
         b2 = b * 2
         b4 = b * 4
         b6 = b * 6
         fmt = f'GPU-{b4}-{b2}-{b2}-{b2}-{b6}'
-        self.uuid = fmt % tuple(bytes(uuid))
+        self.uuid = fmt % uuid_vals
 
         self.primary_context = None
 
@@ -505,16 +618,22 @@ class Device(object):
     def __getattr__(self, attr):
         """Read attributes lazily
         """
-        try:
-            code = DEVICE_ATTRIBUTES[attr]
-        except KeyError:
-            raise AttributeError(attr)
+        if USE_NV_BINDING:
+            code = getattr(binding.CUdevice_attribute,
+                           f'CU_DEVICE_ATTRIBUTE_{attr}')
+            value = driver.cuDeviceGetAttribute(code, self.id)
+        else:
+            try:
+                code = DEVICE_ATTRIBUTES[attr]
+            except KeyError:
+                raise AttributeError(attr)
 
-        value = c_int()
-        driver.cuDeviceGetAttribute(byref(value), code, self.id)
-        setattr(self, attr, value.value)
+            result = c_int()
+            driver.cuDeviceGetAttribute(byref(result), code, self.id)
+            value = result.value
 
-        return value.value
+        setattr(self, attr, value)
+        return value
 
     def __hash__(self):
         return hash(self.id)
@@ -536,10 +655,12 @@ class Device(object):
             return self.primary_context
 
         met_requirement_for_device(self)
-
         # create primary context
-        hctx = drvapi.cu_context()
-        driver.cuDevicePrimaryCtxRetain(byref(hctx), self.id)
+        if USE_NV_BINDING:
+            hctx = driver.cuDevicePrimaryCtxRetain(self.id)
+        else:
+            hctx = drvapi.cu_context()
+            driver.cuDevicePrimaryCtxRetain(byref(hctx), self.id)
 
         ctx = Context(weakref.proxy(self), hctx)
         self.primary_context = ctx
@@ -715,14 +836,19 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
         is retried.  If it fails in the second attempt, the error is reraised.
         """
         try:
-            allocator()
+            return allocator()
         except CudaAPIError as e:
             # is out-of-memory?
-            if e.code == enums.CUDA_ERROR_OUT_OF_MEMORY:
+            if USE_NV_BINDING:
+                oom_code = binding.CUresult.CUDA_ERROR_OUT_OF_MEMORY
+            else:
+                oom_code = enums.CUDA_ERROR_OUT_OF_MEMORY
+
+            if e.code == oom_code:
                 # clear pending deallocations
                 self.deallocations.clear()
                 # try again
-                allocator()
+                return allocator()
             else:
                 raise
 
@@ -733,7 +859,6 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
         It is recommended that this method is not overridden by EMM Plugin
         implementations - instead, use the :class:`BaseCUDAMemoryManager`.
         """
-        pointer = c_void_p()
         flags = 0
         if mapped:
             flags |= enums.CU_MEMHOSTALLOC_DEVICEMAP
@@ -742,20 +867,35 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
         if wc:
             flags |= enums.CU_MEMHOSTALLOC_WRITECOMBINED
 
-        def allocator():
-            driver.cuMemHostAlloc(byref(pointer), size, flags)
+        if USE_NV_BINDING:
+            def allocator():
+                return driver.cuMemHostAlloc(size, flags)
 
-        if mapped:
-            self._attempt_allocation(allocator)
+            if mapped:
+                pointer = self._attempt_allocation(allocator)
+            else:
+                pointer = allocator()
+
+            alloc_key = pointer
         else:
-            allocator()
+            pointer = c_void_p()
 
-        finalizer = _hostalloc_finalizer(self, pointer, size, mapped)
+            def allocator():
+                driver.cuMemHostAlloc(byref(pointer), size, flags)
+
+            if mapped:
+                self._attempt_allocation(allocator)
+            else:
+                allocator()
+
+            alloc_key = pointer.value
+
+        finalizer = _hostalloc_finalizer(self, pointer, alloc_key, size, mapped)
         ctx = weakref.proxy(self.context)
 
         if mapped:
             mem = MappedMemory(ctx, pointer, size, finalizer=finalizer)
-            self.allocations[mem.handle.value] = mem
+            self.allocations[alloc_key] = mem
             return mem.own()
         else:
             return PinnedMemory(ctx, pointer, size, finalizer=finalizer)
@@ -766,8 +906,13 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
         It is recommended that this method is not overridden by EMM Plugin
         implementations - instead, use the :class:`BaseCUDAMemoryManager`.
         """
-        if isinstance(pointer, int):
+        if isinstance(pointer, int) and not USE_NV_BINDING:
             pointer = c_void_p(pointer)
+
+        if USE_NV_BINDING:
+            alloc_key = pointer
+        else:
+            alloc_key = pointer.value
 
         # possible flags are "portable" (between context)
         # and "device-map" (map host memory to device thus no need
@@ -785,36 +930,54 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
         else:
             allocator()
 
-        finalizer = _pin_finalizer(self, pointer, mapped)
+        finalizer = _pin_finalizer(self, pointer, alloc_key, mapped)
         ctx = weakref.proxy(self.context)
 
         if mapped:
             mem = MappedMemory(ctx, pointer, size, owner=owner,
                                finalizer=finalizer)
-            self.allocations[mem.handle.value] = mem
+            self.allocations[alloc_key] = mem
             return mem.own()
         else:
             return PinnedMemory(ctx, pointer, size, owner=owner,
                                 finalizer=finalizer)
 
     def memallocmanaged(self, size, attach_global):
-        ptr = drvapi.cu_device_ptr()
+        if USE_NV_BINDING:
+            def allocator():
+                ma_flags = binding.CUmemAttach_flags
 
-        def allocator():
-            flags = c_uint()
-            if attach_global:
-                flags = enums.CU_MEM_ATTACH_GLOBAL
-            else:
-                flags = enums.CU_MEM_ATTACH_HOST
+                if attach_global:
+                    flags = ma_flags.CU_MEM_ATTACH_GLOBAL.value
+                else:
+                    flags = ma_flags.CU_MEM_ATTACH_HOST.value
 
-            driver.cuMemAllocManaged(byref(ptr), size, flags)
+                return driver.cuMemAllocManaged(size, flags)
 
-        self._attempt_allocation(allocator)
+            ptr = self._attempt_allocation(allocator)
 
-        finalizer = _alloc_finalizer(self, ptr, size)
+            alloc_key = ptr
+
+        else:
+            ptr = drvapi.cu_device_ptr()
+
+            def allocator():
+                flags = c_uint()
+                if attach_global:
+                    flags = enums.CU_MEM_ATTACH_GLOBAL
+                else:
+                    flags = enums.CU_MEM_ATTACH_HOST
+
+                driver.cuMemAllocManaged(byref(ptr), size, flags)
+
+            self._attempt_allocation(allocator)
+
+            alloc_key = ptr.value
+
+        finalizer = _alloc_finalizer(self, ptr, alloc_key, size)
         ctx = weakref.proxy(self.context)
         mem = ManagedMemory(ctx, ptr, size, finalizer=finalizer)
-        self.allocations[ptr.value] = mem
+        self.allocations[alloc_key] = mem
         return mem.own()
 
     def reset(self):
@@ -850,10 +1013,14 @@ class GetIpcHandleMixin:
         populated with the underlying ``ipc_mem_handle``.
         """
         base, end = device_extents(memory)
-        ipchandle = drvapi.cu_ipc_mem_handle()
-        driver.cuIpcGetMemHandle(byref(ipchandle), base)
+        if USE_NV_BINDING:
+            ipchandle = driver.cuIpcGetMemHandle(base)
+            offset = int(memory.handle) - int(base)
+        else:
+            ipchandle = drvapi.cu_ipc_mem_handle()
+            driver.cuIpcGetMemHandle(byref(ipchandle), base)
+            offset = memory.handle.value - base
         source_info = self.context.device.get_device_identity()
-        offset = memory.handle.value - base
 
         return IpcHandle(memory, ipchandle, memory.size, source_info,
                          offset=offset)
@@ -870,24 +1037,38 @@ class NumbaCUDAMemoryManager(GetIpcHandleMixin, HostOnlyCUDAMemoryManager):
             self.deallocations.memory_capacity = self.get_memory_info().total
 
     def memalloc(self, size):
-        ptr = drvapi.cu_device_ptr()
+        if USE_NV_BINDING:
+            def allocator():
+                return driver.cuMemAlloc(size)
 
-        def allocator():
-            driver.cuMemAlloc(byref(ptr), size)
+            ptr = self._attempt_allocation(allocator)
+            alloc_key = ptr
+        else:
+            ptr = drvapi.cu_device_ptr()
 
-        self._attempt_allocation(allocator)
+            def allocator():
+                driver.cuMemAlloc(byref(ptr), size)
 
-        finalizer = _alloc_finalizer(self, ptr, size)
+            self._attempt_allocation(allocator)
+            alloc_key = ptr.value
+
+        finalizer = _alloc_finalizer(self, ptr, alloc_key, size)
         ctx = weakref.proxy(self.context)
         mem = AutoFreePointer(ctx, ptr, size, finalizer=finalizer)
-        self.allocations[ptr.value] = mem
+        self.allocations[alloc_key] = mem
         return mem.own()
 
     def get_memory_info(self):
-        free = c_size_t()
-        total = c_size_t()
-        driver.cuMemGetInfo(byref(free), byref(total))
-        return MemoryInfo(free=free.value, total=total.value)
+        if USE_NV_BINDING:
+            free, total = driver.cuMemGetInfo()
+        else:
+            free = c_size_t()
+            total = c_size_t()
+            driver.cuMemGetInfo(byref(free), byref(total))
+            free = free.value
+            total = total.value
+
+        return MemoryInfo(free=free, total=total)
 
     @property
     def interface_version(self):
@@ -1076,16 +1257,32 @@ class Context(object):
         :param blocksize: block size the kernel is intended to be launched with
         :param memsize: per-block dynamic shared memory usage intended, in bytes
         """
-
-        retval = c_int()
-        if not flags:
-            driver.cuOccupancyMaxActiveBlocksPerMultiprocessor(byref(retval),
-                                                               func.handle,
-                                                               blocksize,
-                                                               memsize)
+        args = (func, blocksize, memsize, flags)
+        if USE_NV_BINDING:
+            return self._cuda_python_active_blocks_per_multiprocessor(*args)
         else:
-            driver.cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
-                byref(retval), func.handle, blocksize, memsize, flags)
+            return self._ctypes_active_blocks_per_multiprocessor(*args)
+
+    def _cuda_python_active_blocks_per_multiprocessor(self, func, blocksize,
+                                                      memsize, flags):
+        ps = [func.handle, blocksize, memsize]
+
+        if not flags:
+            return driver.cuOccupancyMaxActiveBlocksPerMultiprocessor(*ps)
+
+        ps.append(flags)
+        return driver.cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(*ps)
+
+    def _ctypes_active_blocks_per_multiprocessor(self, func, blocksize,
+                                                 memsize, flags):
+        retval = c_int()
+        args = (byref(retval), func.handle, blocksize, memsize)
+
+        if not flags:
+            driver.cuOccupancyMaxActiveBlocksPerMultiprocessor(*args)
+        else:
+            driver.cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(*args)
+
         return retval.value
 
     def get_max_potential_block_size(self, func, b2d_func, memsize,
@@ -1100,23 +1297,40 @@ class Context(object):
         :param blocksizelimit: maximum block size the kernel is designed to
                                handle
         """
+        args = (func, b2d_func, memsize, blocksizelimit, flags)
+        if USE_NV_BINDING:
+            return self._cuda_python_max_potential_block_size(*args)
+        else:
+            return self._ctypes_max_potential_block_size(*args)
 
+    def _ctypes_max_potential_block_size(self, func, b2d_func, memsize,
+                                         blocksizelimit, flags):
         gridsize = c_int()
         blocksize = c_int()
         b2d_cb = cu_occupancy_b2d_size(b2d_func)
+        args = [byref(gridsize), byref(blocksize), func.handle, b2d_cb,
+                memsize, blocksizelimit]
+
         if not flags:
-            driver.cuOccupancyMaxPotentialBlockSize(byref(gridsize),
-                                                    byref(blocksize),
-                                                    func.handle, b2d_cb,
-                                                    memsize, blocksizelimit)
+            driver.cuOccupancyMaxPotentialBlockSize(*args)
         else:
-            driver.cuOccupancyMaxPotentialBlockSizeWithFlags(byref(gridsize),
-                                                             byref(blocksize),
-                                                             func.handle,
-                                                             b2d_cb, memsize,
-                                                             blocksizelimit,
-                                                             flags)
+            args.append(flags)
+            driver.cuOccupancyMaxPotentialBlockSizeWithFlags(*args)
+
         return (gridsize.value, blocksize.value)
+
+    def _cuda_python_max_potential_block_size(self, func, b2d_func, memsize,
+                                              blocksizelimit, flags):
+        b2d_cb = ctypes.CFUNCTYPE(c_size_t, c_int)(b2d_func)
+        ptr = int.from_bytes(b2d_cb, byteorder='little')
+        driver_b2d_cb = binding.CUoccupancyB2DSize(ptr)
+        args = [func.handle, driver_b2d_cb, memsize, blocksizelimit]
+
+        if not flags:
+            return driver.cuOccupancyMaxPotentialBlockSize(*args)
+        else:
+            args.append(flags)
+            return driver.cuOccupancyMaxPotentialBlockSizeWithFlags(*args)
 
     def prepare_for_use(self):
         """Initialize the context for use.
@@ -1137,7 +1351,10 @@ class Context(object):
         must be at the top of the context stack, otherwise an error will occur.
         """
         popped = driver.pop_active_context()
-        assert popped.value == self.handle.value
+        if USE_NV_BINDING:
+            assert int(popped) == int(self.handle)
+        else:
+            assert popped.value == self.handle.value
 
     def memalloc(self, bytesize):
         return self.memory_manager.memalloc(bytesize)
@@ -1161,9 +1378,13 @@ class Context(object):
 
     def open_ipc_handle(self, handle, size):
         # open the IPC handle to get the device pointer
-        dptr = drvapi.cu_device_ptr()
         flags = 1  # CU_IPC_MEM_LAZY_ENABLE_PEER_ACCESS
-        driver.cuIpcOpenMemHandle(byref(dptr), handle, flags)
+        if USE_NV_BINDING:
+            dptr = driver.cuIpcOpenMemHandle(handle, flags)
+        else:
+            dptr = drvapi.cu_device_ptr()
+            driver.cuIpcOpenMemHandle(byref(dptr), handle, flags)
+
         # wrap it
         return MemoryPointer(context=weakref.proxy(self), pointer=dptr,
                              size=size)
@@ -1178,59 +1399,96 @@ class Context(object):
         """Returns a bool indicating whether the peer access between the
         current and peer device is possible.
         """
-        can_access_peer = c_int()
-        driver.cuDeviceCanAccessPeer(
-            byref(can_access_peer),
-            self.device.id,
-            peer_device,
-        )
+        if USE_NV_BINDING:
+            peer_device = binding.CUdevice(peer_device)
+            can_access_peer = driver.cuDeviceCanAccessPeer(self.device.id,
+                                                           peer_device)
+        else:
+            can_access_peer = c_int()
+            driver.cuDeviceCanAccessPeer(byref(can_access_peer),
+                                         self.device.id, peer_device,)
+
         return bool(can_access_peer)
 
     def create_module_ptx(self, ptx):
         if isinstance(ptx, str):
             ptx = ptx.encode('utf8')
-        image = c_char_p(ptx)
+        if USE_NV_BINDING:
+            image = ptx
+        else:
+            image = c_char_p(ptx)
         return self.create_module_image(image)
 
     def create_module_image(self, image):
         module = load_module_image(self, image)
-        self.modules[module.handle.value] = module
+        if USE_NV_BINDING:
+            key = module.handle
+        else:
+            key = module.handle.value
+        self.modules[key] = module
         return weakref.proxy(module)
 
     def unload_module(self, module):
-        del self.modules[module.handle.value]
+        if USE_NV_BINDING:
+            key = module.handle
+        else:
+            key = module.handle.value
+        del self.modules[key]
 
     def get_default_stream(self):
-        handle = drvapi.cu_stream(drvapi.CU_STREAM_DEFAULT)
+        if USE_NV_BINDING:
+            handle = binding.CUstream(CU_STREAM_DEFAULT)
+        else:
+            handle = drvapi.cu_stream(drvapi.CU_STREAM_DEFAULT)
         return Stream(weakref.proxy(self), handle, None)
 
     def get_legacy_default_stream(self):
-        handle = drvapi.cu_stream(drvapi.CU_STREAM_LEGACY)
+        if USE_NV_BINDING:
+            handle = binding.CUstream(binding.CU_STREAM_LEGACY)
+        else:
+            handle = drvapi.cu_stream(drvapi.CU_STREAM_LEGACY)
         return Stream(weakref.proxy(self), handle, None)
 
     def get_per_thread_default_stream(self):
-        handle = drvapi.cu_stream(drvapi.CU_STREAM_PER_THREAD)
+        if USE_NV_BINDING:
+            handle = binding.CUstream(binding.CU_STREAM_PER_THREAD)
+        else:
+            handle = drvapi.cu_stream(drvapi.CU_STREAM_PER_THREAD)
         return Stream(weakref.proxy(self), handle, None)
 
     def create_stream(self):
-        handle = drvapi.cu_stream()
-        driver.cuStreamCreate(byref(handle), 0)
+        if USE_NV_BINDING:
+            # The default stream creation flag, specifying that the created
+            # stream synchronizes with stream 0 (this is different from the
+            # default stream, which we define also as CU_STREAM_DEFAULT when
+            # the NV binding is in use).
+            flags = binding.CUstream_flags.CU_STREAM_DEFAULT.value
+            handle = driver.cuStreamCreate(flags)
+        else:
+            handle = drvapi.cu_stream()
+            driver.cuStreamCreate(byref(handle), 0)
         return Stream(weakref.proxy(self), handle,
                       _stream_finalizer(self.deallocations, handle))
 
     def create_external_stream(self, ptr):
         if not isinstance(ptr, int):
             raise TypeError("ptr for external stream must be an int")
-        handle = drvapi.cu_stream(ptr)
+        if USE_NV_BINDING:
+            handle = binding.CUstream(ptr)
+        else:
+            handle = drvapi.cu_stream(ptr)
         return Stream(weakref.proxy(self), handle, None,
                       external=True)
 
     def create_event(self, timing=True):
-        handle = drvapi.cu_event()
         flags = 0
         if not timing:
             flags |= enums.CU_EVENT_DISABLE_TIMING
-        driver.cuEventCreate(byref(handle), flags)
+        if USE_NV_BINDING:
+            handle = driver.cuEventCreate(flags)
+        else:
+            handle = drvapi.cu_event()
+            driver.cuEventCreate(byref(handle), flags)
         return Event(weakref.proxy(self), handle,
                      finalizer=_event_finalizer(self.deallocations, handle))
 
@@ -1260,6 +1518,13 @@ def load_module_image(context, image):
     """
     image must be a pointer
     """
+    if USE_NV_BINDING:
+        return load_module_image_cuda_python(context, image)
+    else:
+        return load_module_image_ctypes(context, image)
+
+
+def load_module_image_ctypes(context, image):
     logsz = config.CUDA_LOG_SIZE
 
     jitinfo = (c_char * logsz)()
@@ -1286,23 +1551,58 @@ def load_module_image(context, image):
 
     info_log = jitinfo.value
 
-    return Module(weakref.proxy(context), handle, info_log,
-                  _module_finalizer(context, handle))
+    return CtypesModule(weakref.proxy(context), handle, info_log,
+                        _module_finalizer(context, handle))
 
 
-def _alloc_finalizer(memory_manager, handle, size):
+def load_module_image_cuda_python(context, image):
+    """
+    image must be a pointer
+    """
+    logsz = config.CUDA_LOG_SIZE
+
+    jitinfo = bytearray(logsz)
+    jiterrors = bytearray(logsz)
+
+    jit_option = binding.CUjit_option
+    options = {
+        jit_option.CU_JIT_INFO_LOG_BUFFER: jitinfo,
+        jit_option.CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES: logsz,
+        jit_option.CU_JIT_ERROR_LOG_BUFFER: jiterrors,
+        jit_option.CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES: logsz,
+        jit_option.CU_JIT_LOG_VERBOSE: config.CUDA_VERBOSE_JIT_LOG,
+    }
+
+    option_keys = [k for k in options.keys()]
+    option_vals = [v for v in options.values()]
+
+    try:
+        handle = driver.cuModuleLoadDataEx(image, len(options), option_keys,
+                                           option_vals)
+    except CudaAPIError as e:
+        err_string = jiterrors.decode('utf-8')
+        msg = "cuModuleLoadDataEx error:\n%s" % err_string
+        raise CudaAPIError(e.code, msg)
+
+    info_log = jitinfo.decode('utf-8')
+
+    return CudaPythonModule(weakref.proxy(context), handle, info_log,
+                            _module_finalizer(context, handle))
+
+
+def _alloc_finalizer(memory_manager, ptr, alloc_key, size):
     allocations = memory_manager.allocations
     deallocations = memory_manager.deallocations
 
     def core():
         if allocations:
-            del allocations[handle.value]
-        deallocations.add_item(driver.cuMemFree, handle, size)
+            del allocations[alloc_key]
+        deallocations.add_item(driver.cuMemFree, ptr, size)
 
     return core
 
 
-def _hostalloc_finalizer(memory_manager, handle, size, mapped):
+def _hostalloc_finalizer(memory_manager, ptr, alloc_key, size, mapped):
     """
     Finalize page-locked host memory allocated by `context.memhostalloc`.
 
@@ -1319,13 +1619,13 @@ def _hostalloc_finalizer(memory_manager, handle, size, mapped):
 
     def core():
         if mapped and allocations:
-            del allocations[handle.value]
-        deallocations.add_item(driver.cuMemFreeHost, handle, size)
+            del allocations[alloc_key]
+        deallocations.add_item(driver.cuMemFreeHost, ptr, size)
 
     return core
 
 
-def _pin_finalizer(memory_manager, handle, mapped):
+def _pin_finalizer(memory_manager, ptr, alloc_key, mapped):
     """
     Finalize temporary page-locking of host memory by `context.mempin`.
 
@@ -1342,8 +1642,8 @@ def _pin_finalizer(memory_manager, handle, mapped):
 
     def core():
         if mapped and allocations:
-            del allocations[handle.value]
-        driver.cuMemHostUnregister(handle)
+            del allocations[alloc_key]
+        driver.cuMemHostUnregister(ptr)
 
     return core
 
@@ -1366,6 +1666,11 @@ def _module_finalizer(context, handle):
     dealloc = context.deallocations
     modules = context.modules
 
+    if USE_NV_BINDING:
+        key = handle
+    else:
+        key = handle.value
+
     def core():
         shutting_down = utils.shutting_down  # early bind
 
@@ -1373,7 +1678,7 @@ def _module_finalizer(context, handle):
             # If we are not shutting down, we must be called due to
             # Context.reset() of Context.unload_module().  Both must have
             # cleared the module reference from the context.
-            assert shutting_down() or handle.value not in modules
+            assert shutting_down() or key not in modules
             driver.cuModuleUnload(handle)
 
         dealloc.add_item(module_unload, handle)
@@ -1432,10 +1737,14 @@ class _StagedIpcImpl(object):
         from numba import cuda
 
         srcdev = Device.from_identity(self.source_info)
+        if USE_NV_BINDING:
+            srcdev_id = int(srcdev.id)
+        else:
+            srcdev_id = srcdev.id
 
         impl = _CudaIpcImpl(parent=self.parent)
         # Open context on the source device.
-        with cuda.gpus[srcdev.id]:
+        with cuda.gpus[srcdev_id]:
             source_ptr = impl.open(cuda.devices.get_context())
 
         # Allocate GPU buffer.
@@ -1445,7 +1754,7 @@ class _StagedIpcImpl(object):
         device_to_device(newmem, source_ptr, self.size)
 
         # Cleanup source context
-        with cuda.gpus[srcdev.id]:
+        with cuda.gpus[srcdev_id]:
             impl.close()
 
         return newmem
@@ -1552,7 +1861,10 @@ class IpcHandle(object):
 
     def __reduce__(self):
         # Preprocess the IPC handle, which is defined as a byte array.
-        preprocessed_handle = tuple(self.handle)
+        if USE_NV_BINDING:
+            preprocessed_handle = self.handle.reserved
+        else:
+            preprocessed_handle = tuple(self.handle)
         args = (
             self.__class__,
             preprocessed_handle,
@@ -1564,7 +1876,11 @@ class IpcHandle(object):
 
     @classmethod
     def _rebuild(cls, handle_ary, size, source_info, offset):
-        handle = drvapi.cu_ipc_mem_handle(*handle_ary)
+        if USE_NV_BINDING:
+            handle = binding.CUipcMemHandle()
+            handle.reserved = handle_ary
+        else:
+            handle = drvapi.cu_ipc_mem_handle(*handle_ary)
         return cls(base=None, handle=handle, size=size,
                    source_info=source_info, offset=offset)
 
@@ -1647,16 +1963,21 @@ class MemoryPointer(object):
             size = stop - start
 
         # Handle NULL/empty memory buffer
-        if self.device_pointer.value is None:
+        if not self.device_pointer_value:
             if size != 0:
                 raise RuntimeError("non-empty slice into empty slice")
             view = self      # new view is just a reference to self
         # Handle normal case
         else:
-            base = self.device_pointer.value + start
+            base = self.device_pointer_value + start
             if size < 0:
                 raise RuntimeError('size cannot be negative')
-            pointer = drvapi.cu_device_ptr(base)
+            if USE_NV_BINDING:
+                pointer = binding.CUdeviceptr()
+                ctypes_ptr = drvapi.cu_device_ptr.from_address(pointer.getPtr())
+                ctypes_ptr.value = base
+            else:
+                pointer = drvapi.cu_device_ptr(base)
             view = MemoryPointer(self.context, pointer, size, owner=self.owner)
 
         if isinstance(self.owner, (MemoryPointer, OwnedPointer)):
@@ -1669,6 +1990,13 @@ class MemoryPointer(object):
     @property
     def device_ctypes_pointer(self):
         return self.device_pointer
+
+    @property
+    def device_pointer_value(self):
+        if USE_NV_BINDING:
+            return int(self.device_pointer) or None
+        else:
+            return self.device_pointer.value
 
 
 class AutoFreePointer(MemoryPointer):
@@ -1711,8 +2039,15 @@ class MappedMemory(AutoFreePointer):
     def __init__(self, context, pointer, size, owner=None, finalizer=None):
         self.owned = owner
         self.host_pointer = pointer
-        devptr = drvapi.cu_device_ptr()
-        driver.cuMemHostGetDevicePointer(byref(devptr), pointer, 0)
+
+        if USE_NV_BINDING:
+            devptr = driver.cuMemHostGetDevicePointer(pointer, 0)
+            self._bufptr_ = self.host_pointer
+        else:
+            devptr = drvapi.cu_device_ptr()
+            driver.cuMemHostGetDevicePointer(byref(devptr), pointer, 0)
+            self._bufptr_ = self.host_pointer.value
+
         self.device_pointer = devptr
         super(MappedMemory, self).__init__(context, devptr, size,
                                            finalizer=finalizer)
@@ -1720,7 +2055,6 @@ class MappedMemory(AutoFreePointer):
 
         # For buffer interface
         self._buflen_ = self.size
-        self._bufptr_ = self.host_pointer.value
 
     def own(self):
         return MappedOwnedPointer(weakref.proxy(self))
@@ -1755,7 +2089,10 @@ class PinnedMemory(mviewbuf.MemAlloc):
 
         # For buffer interface
         self._buflen_ = self.size
-        self._bufptr_ = self.host_pointer.value
+        if USE_NV_BINDING:
+            self._bufptr_ = self.host_pointer
+        else:
+            self._bufptr_ = self.host_pointer.value
 
         if finalizer is not None:
             weakref.finalize(self, finalizer)
@@ -1793,7 +2130,10 @@ class ManagedMemory(AutoFreePointer):
 
         # For buffer interface
         self._buflen_ = self.size
-        self._bufptr_ = self.device_pointer.value
+        if USE_NV_BINDING:
+            self._bufptr_ = self.device_pointer
+        else:
+            self._bufptr_ = self.device_pointer.value
 
     def own(self):
         return ManagedOwnedPointer(weakref.proxy(self))
@@ -1847,17 +2187,31 @@ class Stream(object):
             weakref.finalize(self, finalizer)
 
     def __int__(self):
-        # The default stream's handle.value is 0, which gives `None`
-        return self.handle.value or drvapi.CU_STREAM_DEFAULT
+        if USE_NV_BINDING:
+            return int(self.handle)
+        else:
+            # The default stream's handle.value is 0, which gives `None`
+            return self.handle.value or drvapi.CU_STREAM_DEFAULT
 
     def __repr__(self):
-        default_streams = {
-            drvapi.CU_STREAM_DEFAULT: "<Default CUDA stream on %s>",
-            drvapi.CU_STREAM_LEGACY: "<Legacy default CUDA stream on %s>",
-            drvapi.CU_STREAM_PER_THREAD:
-                "<Per-thread default CUDA stream on %s>",
-        }
-        ptr = self.handle.value or drvapi.CU_STREAM_DEFAULT
+        if USE_NV_BINDING:
+            default_streams = {
+                CU_STREAM_DEFAULT: "<Default CUDA stream on %s>",
+                binding.CU_STREAM_LEGACY:
+                    "<Legacy default CUDA stream on %s>",
+                binding.CU_STREAM_PER_THREAD:
+                    "<Per-thread default CUDA stream on %s>",
+            }
+            ptr = int(self.handle) or 0
+        else:
+            default_streams = {
+                drvapi.CU_STREAM_DEFAULT: "<Default CUDA stream on %s>",
+                drvapi.CU_STREAM_LEGACY: "<Legacy default CUDA stream on %s>",
+                drvapi.CU_STREAM_PER_THREAD:
+                    "<Per-thread default CUDA stream on %s>",
+            }
+            ptr = self.handle.value or drvapi.CU_STREAM_DEFAULT
+
         if ptr in default_streams:
             return default_streams[ptr] % self.context
         elif self.external:
@@ -1903,7 +2257,14 @@ class Stream(object):
         """
         data = (self, callback, arg)
         _py_incref(data)
-        driver.cuStreamAddCallback(self.handle, self._stream_callback, data, 0)
+        if USE_NV_BINDING:
+            ptr = int.from_bytes(self._stream_callback, byteorder='little')
+            stream_callback = binding.CUstreamCallback(ptr)
+            # The callback needs to receive a pointer to the data PyObject
+            data = id(data)
+        else:
+            stream_callback = self._stream_callback
+        driver.cuStreamAddCallback(self.handle, stream_callback, data, 0)
 
     @staticmethod
     @cu_stream_callback_pyobj
@@ -1919,7 +2280,7 @@ class Stream(object):
     def async_done(self) -> asyncio.futures.Future:
         """
         Return an awaitable that resolves once all preceding stream operations
-        are complete.
+        are complete. The result of the awaitable is the current stream.
         """
         loop = asyncio.get_running_loop() if utils.PYVERSION >= (3, 7) \
             else asyncio.get_event_loop()
@@ -1929,7 +2290,7 @@ class Stream(object):
             if future.done():
                 return
             elif status == 0:
-                future.set_result(None)
+                future.set_result(self)
             else:
                 future.set_exception(Exception(f"Stream error {status}"))
 
@@ -1971,7 +2332,10 @@ class Event(object):
         queued in the stream at the time of the call to ``record()`` has been
         completed.
         """
-        hstream = stream.handle if stream else 0
+        if USE_NV_BINDING:
+            hstream = stream.handle if stream else binding.CUstream(0)
+        else:
+            hstream = stream.handle if stream else 0
         driver.cuEventRecord(self.handle, hstream)
 
     def synchronize(self):
@@ -1984,7 +2348,10 @@ class Event(object):
         """
         All future works submitted to stream will wait util the event completes.
         """
-        hstream = stream.handle if stream else 0
+        if USE_NV_BINDING:
+            hstream = stream.handle if stream else binding.CUstream(0)
+        else:
+            hstream = stream.handle if stream else 0
         flags = 0
         driver.cuStreamWaitEvent(hstream, self.handle, flags)
 
@@ -1996,12 +2363,17 @@ def event_elapsed_time(evtstart, evtend):
     '''
     Compute the elapsed time between two events in milliseconds.
     '''
-    msec = c_float()
-    driver.cuEventElapsedTime(byref(msec), evtstart.handle, evtend.handle)
-    return msec.value
+    if USE_NV_BINDING:
+        return driver.cuEventElapsedTime(evtstart.handle, evtend.handle)
+    else:
+        msec = c_float()
+        driver.cuEventElapsedTime(byref(msec), evtstart.handle, evtend.handle)
+        return msec.value
 
 
-class Module(object):
+class Module(metaclass=ABCMeta):
+    """Abstract base class for modules"""
+
     def __init__(self, context, handle, info_log, finalizer=None):
         self.context = context
         self.handle = handle
@@ -2010,13 +2382,25 @@ class Module(object):
             self._finalizer = weakref.finalize(self, finalizer)
 
     def unload(self):
+        """Unload this module from the context"""
         self.context.unload_module(self)
+
+    @abstractmethod
+    def get_function(self, name):
+        """Returns a Function object encapsulating the named function"""
+
+    @abstractmethod
+    def get_global_symbol(self, name):
+        """Return a MemoryPointer referring to the named symbol"""
+
+
+class CtypesModule(Module):
 
     def get_function(self, name):
         handle = drvapi.cu_function()
         driver.cuModuleGetFunction(byref(handle), self.handle,
                                    name.encode('utf8'))
-        return Function(weakref.proxy(self), handle, name)
+        return CtypesFunction(weakref.proxy(self), handle, name)
 
     def get_global_symbol(self, name):
         ptr = drvapi.cu_device_ptr()
@@ -2026,11 +2410,22 @@ class Module(object):
         return MemoryPointer(self.context, ptr, size), size.value
 
 
+class CudaPythonModule(Module):
+
+    def get_function(self, name):
+        handle = driver.cuModuleGetFunction(self.handle, name.encode('utf8'))
+        return CudaPythonFunction(weakref.proxy(self), handle, name)
+
+    def get_global_symbol(self, name):
+        ptr, size = driver.cuModuleGetGlobal(self.handle, name.encode('utf8'))
+        return MemoryPointer(self.context, ptr, size), size
+
+
 FuncAttr = namedtuple("FuncAttr", ["regs", "shared", "local", "const",
                                    "maxthreads"])
 
 
-class Function(object):
+class Function(metaclass=ABCMeta):
     griddim = 1, 1, 1
     blockdim = 1, 1, 1
     stream = 0
@@ -2040,10 +2435,31 @@ class Function(object):
         self.module = module
         self.handle = handle
         self.name = name
-        self.attrs = self._read_func_attr_all()
+        self.attrs = self.read_func_attr_all()
 
     def __repr__(self):
         return "<CUDA function %s>" % self.name
+
+    @property
+    def device(self):
+        return self.module.context.device
+
+    @abstractmethod
+    def cache_config(self, prefer_equal=False, prefer_cache=False,
+                     prefer_shared=False):
+        """Set the cache configuration for this function."""
+
+    @abstractmethod
+    def read_func_attr(self, attrid):
+        """Return the value of the attribute with given ID."""
+
+    @abstractmethod
+    def read_func_attr_all(self):
+        """Return a FuncAttr object with the values of various function
+        attributes."""
+
+
+class CtypesFunction(Function):
 
     def cache_config(self, prefer_equal=False, prefer_cache=False,
                      prefer_shared=False):
@@ -2058,25 +2474,49 @@ class Function(object):
             flag = enums.CU_FUNC_CACHE_PREFER_NONE
         driver.cuFuncSetCacheConfig(self.handle, flag)
 
-    @property
-    def device(self):
-        return self.module.context.device
-
-    def _read_func_attr(self, attrid):
-        """
-        Read CUfunction attributes
-        """
+    def read_func_attr(self, attrid):
         retval = c_int()
         driver.cuFuncGetAttribute(byref(retval), attrid, self.handle)
         return retval.value
 
-    def _read_func_attr_all(self):
-        nregs = self._read_func_attr(enums.CU_FUNC_ATTRIBUTE_NUM_REGS)
-        cmem = self._read_func_attr(enums.CU_FUNC_ATTRIBUTE_CONST_SIZE_BYTES)
-        lmem = self._read_func_attr(enums.CU_FUNC_ATTRIBUTE_LOCAL_SIZE_BYTES)
-        smem = self._read_func_attr(enums.CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES)
-        maxtpb = self._read_func_attr(
+    def read_func_attr_all(self):
+        nregs = self.read_func_attr(enums.CU_FUNC_ATTRIBUTE_NUM_REGS)
+        cmem = self.read_func_attr(enums.CU_FUNC_ATTRIBUTE_CONST_SIZE_BYTES)
+        lmem = self.read_func_attr(enums.CU_FUNC_ATTRIBUTE_LOCAL_SIZE_BYTES)
+        smem = self.read_func_attr(enums.CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES)
+        maxtpb = self.read_func_attr(
             enums.CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK)
+        return FuncAttr(regs=nregs, const=cmem, local=lmem, shared=smem,
+                        maxthreads=maxtpb)
+
+
+class CudaPythonFunction(Function):
+
+    def cache_config(self, prefer_equal=False, prefer_cache=False,
+                     prefer_shared=False):
+        prefer_equal = prefer_equal or (prefer_cache and prefer_shared)
+        attr = binding.CUfunction_attribute
+        if prefer_equal:
+            flag = attr.CU_FUNC_CACHE_PREFER_EQUAL
+        elif prefer_cache:
+            flag = attr.CU_FUNC_CACHE_PREFER_L1
+        elif prefer_shared:
+            flag = attr.CU_FUNC_CACHE_PREFER_SHARED
+        else:
+            flag = attr.CU_FUNC_CACHE_PREFER_NONE
+        driver.cuFuncSetCacheConfig(self.handle, flag)
+
+    def read_func_attr(self, attrid):
+        return driver.cuFuncGetAttribute(attrid, self.handle)
+
+    def read_func_attr_all(self):
+        attr = binding.CUfunction_attribute
+        nregs = self.read_func_attr(attr.CU_FUNC_ATTRIBUTE_NUM_REGS)
+        cmem = self.read_func_attr(attr.CU_FUNC_ATTRIBUTE_CONST_SIZE_BYTES)
+        lmem = self.read_func_attr(attr.CU_FUNC_ATTRIBUTE_LOCAL_SIZE_BYTES)
+        smem = self.read_func_attr(attr.CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES)
+        maxtpb = self.read_func_attr(
+            attr.CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK)
         return FuncAttr(regs=nregs, const=cmem, local=lmem, shared=smem,
                         maxthreads=maxtpb)
 
@@ -2089,14 +2529,15 @@ def launch_kernel(cufunc_handle,
                   args,
                   cooperative=False):
 
-    param_vals = []
-    for arg in args:
-        if is_device_memory(arg):
-            param_vals.append(addressof(device_ctypes_pointer(arg)))
-        else:
-            param_vals.append(addressof(arg))
+    param_ptrs = [addressof(arg) for arg in args]
+    params = (c_void_p * len(param_ptrs))(*param_ptrs)
 
-    params = (c_void_p * len(param_vals))(*param_vals)
+    if USE_NV_BINDING:
+        params_for_launch = addressof(params)
+        extra = 0
+    else:
+        params_for_launch = params
+        extra = None
 
     if cooperative:
         driver.cuLaunchCooperativeKernel(cufunc_handle,
@@ -2104,28 +2545,86 @@ def launch_kernel(cufunc_handle,
                                          bx, by, bz,
                                          sharedmem,
                                          hstream,
-                                         params)
+                                         params_for_launch)
     else:
         driver.cuLaunchKernel(cufunc_handle,
                               gx, gy, gz,
                               bx, by, bz,
                               sharedmem,
                               hstream,
-                              params,
-                              None)
+                              params_for_launch,
+                              extra)
 
 
-FILE_EXTENSION_MAP = {
-    'o': enums.CU_JIT_INPUT_OBJECT,
-    'ptx': enums.CU_JIT_INPUT_PTX,
-    'a': enums.CU_JIT_INPUT_LIBRARY,
-    'lib': enums.CU_JIT_INPUT_LIBRARY,
-    'cubin': enums.CU_JIT_INPUT_CUBIN,
-    'fatbin': enums.CU_JIT_INPUT_FATBINAR,
-}
+if USE_NV_BINDING:
+    jitty = binding.CUjitInputType
+    FILE_EXTENSION_MAP = {
+        'o': jitty.CU_JIT_INPUT_OBJECT,
+        'ptx': jitty.CU_JIT_INPUT_PTX,
+        'a': jitty.CU_JIT_INPUT_LIBRARY,
+        'lib': jitty.CU_JIT_INPUT_LIBRARY,
+        'cubin': jitty.CU_JIT_INPUT_CUBIN,
+        'fatbin': jitty.CU_JIT_INPUT_FATBINARY,
+    }
+else:
+    FILE_EXTENSION_MAP = {
+        'o': enums.CU_JIT_INPUT_OBJECT,
+        'ptx': enums.CU_JIT_INPUT_PTX,
+        'a': enums.CU_JIT_INPUT_LIBRARY,
+        'lib': enums.CU_JIT_INPUT_LIBRARY,
+        'cubin': enums.CU_JIT_INPUT_CUBIN,
+        'fatbin': enums.CU_JIT_INPUT_FATBINARY,
+    }
 
 
-class Linker(object):
+class Linker(metaclass=ABCMeta):
+    """Abstract base class for linkers"""
+
+    @classmethod
+    def new(cls, max_registers=0, lineinfo=False, cc=None):
+        if USE_NV_BINDING:
+            return CudaPythonLinker(max_registers, lineinfo, cc)
+        else:
+            return CtypesLinker(max_registers, lineinfo, cc)
+
+    @abstractmethod
+    def __init__(self, max_registers, lineinfo, cc):
+        pass
+
+    @property
+    @abstractmethod
+    def info_log(self):
+        """Return the info log from the linker invocation"""
+
+    @property
+    @abstractmethod
+    def error_log(self):
+        """Return the error log from the linker invocation"""
+
+    @abstractmethod
+    def add_ptx(self, ptx, name):
+        """Add PTX source in a string to the link"""
+
+    @abstractmethod
+    def add_file(self, path, kind):
+        """Add code from a file to the link"""
+
+    def add_file_guess_ext(self, path):
+        """Add a file to the link, guessing its type from its extension."""
+        ext = path.rsplit('.', 1)[1]
+        kind = FILE_EXTENSION_MAP[ext]
+        self.add_file(path, kind)
+
+    @abstractmethod
+    def complete(self):
+        """Complete the link. Returns (cubin, size)
+
+        cubin is a pointer to a internal buffer of cubin owned by the linker;
+        thus, it should be loaded before the linker is destroyed.
+        """
+
+
+class CtypesLinker(Linker):
     """
     Links for current device if no CC given
     """
@@ -2155,7 +2654,6 @@ class Linker(object):
 
         raw_keys = list(options.keys())
         raw_values = list(options.values())
-        del options
 
         option_keys = (drvapi.cu_jit_option * len(raw_keys))(*raw_keys)
         option_vals = (c_void_p * len(raw_values))(*raw_values)
@@ -2202,18 +2700,7 @@ class Linker(object):
                 msg = "%s\n%s" % (e, self.error_log)
             raise LinkerError(msg)
 
-    def add_file_guess_ext(self, path):
-        ext = path.rsplit('.', 1)[1]
-        kind = FILE_EXTENSION_MAP[ext]
-        self.add_file(path, kind)
-
     def complete(self):
-        '''
-        Returns (cubin, size)
-            cubin is a pointer to a internal buffer of cubin owned
-            by the linker; thus, it should be loaded before the linker
-            is destroyed.
-        '''
         cubin = c_void_p(0)
         size = c_size_t(0)
 
@@ -2228,41 +2715,115 @@ class Linker(object):
         return cubin, size
 
 
+class CudaPythonLinker(Linker):
+    """
+    Links for current device if no CC given
+    """
+    def __init__(self, max_registers=0, lineinfo=False, cc=None):
+        logsz = config.CUDA_LOG_SIZE
+        linkerinfo = bytearray(logsz)
+        linkererrors = bytearray(logsz)
+
+        jit_option = binding.CUjit_option
+
+        options = {
+            jit_option.CU_JIT_INFO_LOG_BUFFER: linkerinfo,
+            jit_option.CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES: logsz,
+            jit_option.CU_JIT_ERROR_LOG_BUFFER: linkererrors,
+            jit_option.CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES: logsz,
+            jit_option.CU_JIT_LOG_VERBOSE: 1,
+        }
+        if max_registers:
+            options[jit_option.CU_JIT_MAX_REGISTERS] = max_registers
+        if lineinfo:
+            options[jit_option.CU_JIT_GENERATE_LINE_INFO] = 1
+
+        if cc is None:
+            # No option value is needed, but we need something as a placeholder
+            options[jit_option.CU_JIT_TARGET_FROM_CUCONTEXT] = 1
+        else:
+            cc_val = cc[0] * 10 + cc[1]
+            cc_enum = getattr(binding.CUjit_target,
+                              f'CU_TARGET_COMPUTE_{cc_val}')
+            options[jit_option.CU_JIT_TARGET] = cc_enum
+
+        raw_keys = list(options.keys())
+        raw_values = list(options.values())
+
+        self.handle = driver.cuLinkCreate(len(raw_keys), raw_keys, raw_values)
+
+        weakref.finalize(self, driver.cuLinkDestroy, self.handle)
+
+        self.linker_info_buf = linkerinfo
+        self.linker_errors_buf = linkererrors
+
+        self._keep_alive = [linkerinfo, linkererrors, raw_keys, raw_values]
+
+    @property
+    def info_log(self):
+        return self.linker_info_buf.decode('utf8')
+
+    @property
+    def error_log(self):
+        return self.linker_errors_buf.decode('utf8')
+
+    def add_ptx(self, ptx, name='<cudapy-ptx>'):
+        namebuf = name.encode('utf8')
+        self._keep_alive += [ptx, namebuf]
+        try:
+            input_ptx = binding.CUjitInputType.CU_JIT_INPUT_PTX
+            driver.cuLinkAddData(self.handle, input_ptx, ptx, len(ptx),
+                                 namebuf, 0, [], [])
+        except CudaAPIError as e:
+            raise LinkerError("%s\n%s" % (e, self.error_log))
+
+    def add_file(self, path, kind):
+        pathbuf = path.encode("utf8")
+        self._keep_alive.append(pathbuf)
+
+        try:
+            driver.cuLinkAddFile(self.handle, kind, pathbuf, 0, [], [])
+        except CudaAPIError as e:
+            if e.code == binding.CUresult.CUDA_ERROR_FILE_NOT_FOUND:
+                msg = f'{path} not found'
+            else:
+                msg = "%s\n%s" % (e, self.error_log)
+            raise LinkerError(msg)
+
+    def complete(self):
+        try:
+            cubin, size = driver.cuLinkComplete(self.handle)
+        except CudaAPIError as e:
+            raise LinkerError("%s\n%s" % (e, self.error_log))
+
+        assert size > 0, 'linker returned a zero sized cubin'
+        del self._keep_alive[:]
+        return cubin, size
+
+
 # -----------------------------------------------------------------------------
-
-
-def _device_pointer_attr(devmem, attr, odata):
-    """Query attribute on the device pointer
-    """
-    error = driver.cuPointerGetAttribute(byref(odata), attr,
-                                         device_ctypes_pointer(devmem))
-    driver.check_error(error, "Failed to query pointer attribute")
-
-
-def device_pointer_type(devmem):
-    """Query the device pointer type: host, device, array, unified?
-    """
-    ptrtype = c_int(0)
-    _device_pointer_attr(devmem, enums.CU_POINTER_ATTRIBUTE_MEMORY_TYPE,
-                         ptrtype)
-    map = {
-        enums.CU_MEMORYTYPE_HOST: 'host',
-        enums.CU_MEMORYTYPE_DEVICE: 'device',
-        enums.CU_MEMORYTYPE_ARRAY: 'array',
-        enums.CU_MEMORYTYPE_UNIFIED: 'unified',
-    }
-    return map[ptrtype.value]
 
 
 def get_devptr_for_active_ctx(ptr):
     """Query the device pointer usable in the current context from an arbitrary
     pointer.
     """
-    devptr = drvapi.cu_device_ptr()
     if ptr != 0:
-        attr = enums.CU_POINTER_ATTRIBUTE_DEVICE_POINTER
-        driver.cuPointerGetAttribute(byref(devptr), attr, ptr)
-    return devptr
+        if USE_NV_BINDING:
+            ptr_attrs = binding.CUpointer_attribute
+            attr = ptr_attrs.CU_POINTER_ATTRIBUTE_DEVICE_POINTER
+            ptrobj = binding.CUdeviceptr(ptr)
+            return driver.cuPointerGetAttribute(attr, ptrobj)
+        else:
+            devptr = drvapi.cu_device_ptr()
+            attr = enums.CU_POINTER_ATTRIBUTE_DEVICE_POINTER
+            driver.cuPointerGetAttribute(byref(devptr), attr, ptr)
+            return devptr
+    else:
+        if USE_NV_BINDING:
+            return binding.CUdeviceptr()
+        else:
+            return drvapi.cu_device_ptr()
 
 
 def device_extents(devmem):
@@ -2272,12 +2833,16 @@ def device_extents(devmem):
     NOTE: it always returns the extents of the allocation but the extents
     of the device memory view that can be a subsection of the entire allocation.
     """
-    s = drvapi.cu_device_ptr()
-    n = c_size_t()
     devptr = device_ctypes_pointer(devmem)
-    driver.cuMemGetAddressRange(byref(s), byref(n), devptr)
-    s, n = s.value, n.value
-    return s, s + n
+    if USE_NV_BINDING:
+        s, n = driver.cuMemGetAddressRange(devptr)
+        return s, binding.CUdeviceptr(int(s) + n)
+    else:
+        s = drvapi.cu_device_ptr()
+        n = c_size_t()
+        driver.cuMemGetAddressRange(byref(s), byref(n), devptr)
+        s, n = s.value, n.value
+        return s, s + n
 
 
 def device_memory_size(devmem):
@@ -2288,7 +2853,10 @@ def device_memory_size(devmem):
     sz = getattr(devmem, '_cuda_memsize_', None)
     if sz is None:
         s, e = device_extents(devmem)
-        sz = e - s
+        if USE_NV_BINDING:
+            sz = int(e) - int(s)
+        else:
+            sz = e - s
         devmem._cuda_memsize_ = sz
     assert sz >= 0, "{} length array".format(sz)
     return sz
@@ -2355,7 +2923,10 @@ def host_memory_size(obj):
 
 def device_pointer(obj):
     "Get the device pointer as an integer"
-    return device_ctypes_pointer(obj).value
+    if USE_NV_BINDING:
+        return obj.device_ctypes_pointer
+    else:
+        return device_ctypes_pointer(obj).value
 
 
 def device_ctypes_pointer(obj):
@@ -2492,3 +3063,10 @@ def profiling():
     profile_start()
     yield
     profile_stop()
+
+
+def get_version():
+    """
+    Return the driver version as a tuple of (major, minor)
+    """
+    return driver.get_version()

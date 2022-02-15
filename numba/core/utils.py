@@ -24,6 +24,7 @@ from inspect import Parameter as pyParameter # noqa: F401
 
 from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
                                DEVELOPER_MODE) # noqa: F401
+from numba.core import config
 from numba.core import types
 
 
@@ -180,49 +181,77 @@ weakref.finalize(lambda: None, lambda: None)
 atexit.register(_at_shutdown)
 
 
-class ConfigStack:
-    """A stack for tracking target configurations in the compiler.
+def use_new_style_errors():
+    """Returns True if new style errors are to be used, false otherwise"""
+    # This uses `config` so as to make sure it gets the current value from the
+    # module as e.g. some tests mutate the config with `override_config`.
+    return config.CAPTURED_ERRORS == 'new_style'
 
-    It stores the stack in a thread-local class attribute. All instances in the
-    same thread will see the same stack.
+
+def use_old_style_errors():
+    """Returns True if old style errors are to be used, false otherwise"""
+    # This uses `config` so as to make sure it gets the current value from the
+    # module as e.g. some tests mutate the config with `override_config`.
+    return config.CAPTURED_ERRORS == 'old_style'
+
+
+class ThreadLocalStack:
+    """A TLS stack container.
+
+    Uses the BORG pattern and stores states in threadlocal storage.
     """
-    tls = threading.local()
+    _tls = threading.local()
+    stack_name: str
+    _registered = {}
 
-    @classmethod
-    def top_or_none(cls):
-        """Get the TOS or return None if no config is set.
-        """
-        self = cls()
-        if self:
-            flags = self.top()
-        else:
-            # Note: should this be the default flag for the target instead?
-            flags = None
-        return flags
+    def __init_subclass__(cls, *, stack_name, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # Register stack_name mapping to the new subclass
+        assert stack_name not in cls._registered, \
+            f"stack_name: '{stack_name}' already in use"
+        cls.stack_name = stack_name
+        cls._registered[stack_name] = cls
 
     def __init__(self):
-        tls = self.tls
+        # This class must not be used directly.
+        assert type(self) is not ThreadLocalStack
+        tls = self._tls
+        attr = f"stack_{self.stack_name}"
         try:
-            stk = tls.stack
+            tls_stack = getattr(tls, attr)
         except AttributeError:
-            tls.stack = stk = []
-        self._stk = stk
+            tls_stack = list()
+            setattr(tls, attr, tls_stack)
 
-    def push(self, data):
-        self._stk.append(data)
+        self._stack = tls_stack
+
+    def push(self, state):
+        """Push to the stack
+        """
+        self._stack.append(state)
 
     def pop(self):
-        return self._stk.pop()
+        """Pop from the stack
+        """
+        return self._stack.pop()
 
     def top(self):
-        return self._stk[-1]
+        """Get the top item on the stack.
+
+        Raises IndexError if the stack is empty. Users should check the size
+        of the stack beforehand.
+        """
+        return self._stack[-1]
 
     def __len__(self):
-        return len(self._stk)
+        return len(self._stack)
 
     @contextlib.contextmanager
-    def enter(self, flags):
-        self.push(flags)
+    def enter(self, state):
+        """A contextmanager that pushes ``state`` for the duration of the
+        context.
+        """
+        self.push(state)
         try:
             yield
         finally:
@@ -277,6 +306,45 @@ class ConfigOptions(object):
 
     def __hash__(self):
         return hash(tuple(sorted(self._values.items())))
+
+
+def order_by_target_specificity(target, templates, fnkey=''):
+    """This orders the given templates from most to least specific against the
+    current "target". "fnkey" is an indicative typing key for use in the
+    exception message in the case that there's no usable templates for the
+    current "target".
+    """
+    # No templates... return early!
+    if templates == []:
+        return []
+
+    from numba.core.target_extension import target_registry
+
+    # fish out templates that are specific to the target if a target is
+    # specified
+    DEFAULT_TARGET = 'generic'
+    usable = []
+    for ix, temp_cls in enumerate(templates):
+        # ? Need to do something about this next line
+        md = getattr(temp_cls, "metadata", {})
+        hw = md.get('target', DEFAULT_TARGET)
+        if hw is not None:
+            hw_clazz = target_registry[hw]
+            if target.inherits_from(hw_clazz):
+                usable.append((temp_cls, hw_clazz, ix))
+
+    # sort templates based on target specificity
+    def key(x):
+        return target.__mro__.index(x[1])
+    order = [x[0] for x in sorted(usable, key=key)]
+
+    if not order:
+        msg = (f"Function resolution cannot find any matches for function "
+               f"'{fnkey}' for the current target: '{target}'.")
+        from numba.core.errors import UnsupportedError
+        raise UnsupportedError(msg)
+
+    return order
 
 
 class SortedMap(Mapping):
@@ -636,3 +704,19 @@ class _RedirectSubpackage(ModuleType):
     def __reduce__(self):
         args = (self.__old_module_states, self.__new_module)
         return _RedirectSubpackage, args
+
+
+def get_hashable_key(value):
+    """
+        Given a value, returns a key that can be used
+        as a hash. If the value is hashable, we return
+        the value, otherwise we return id(value).
+
+        See discussion in gh #6957
+    """
+    try:
+        hash(value)
+    except TypeError:
+        return id(value)
+    else:
+        return value

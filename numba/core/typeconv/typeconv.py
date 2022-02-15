@@ -3,18 +3,17 @@ try:
     # Numba, if it fails to import, provide some feedback
     from numba.core.typeconv import _typeconv
 except ImportError as e:
-    from numba.core.errors import feedback_details as reportme
-    import sys
-    url = "https://numba.pydata.org/numba-doc/latest/developer/contributing.html"
+    base_url = "https://numba.readthedocs.io/en/stable"
+    dev_url = f"{base_url}/developer/contributing.html"
+    user_url = f"{base_url}/user/faq.html#numba-could-not-be-imported"
     dashes = '-' * 80
-    msg = ("Numba could not be imported.\nIf you are seeing this message and "
-           "are undertaking Numba development work, you may need to re-run:\n\n"
-           "python setup.py build_ext --inplace\n\n(Also, please check the "
-           "development set up guide %s.)\n\nIf you are not working on Numba "
-           "development:\n%s\nThe original error was: '%s'\n" + dashes + "\nIf "
-           "possible please include the following in your error report:\n\n"
-           "sys.executable: %s\n")
-    raise ImportError(msg % (url, reportme, str(e), sys.executable))
+    msg = (f"Numba could not be imported.\n{dashes}\nIf you are seeing this "
+           "message and are undertaking Numba development work, you may need "
+           "to rebuild Numba.\nPlease see the development set up guide:\n\n"
+           f"{dev_url}.\n\n{dashes}\nIf you are not working on Numba "
+           f"development, the original error was: '{str(e)}'.\nFor help, "
+           f"please visit:\n\n{user_url}\n")
+    raise ImportError(msg)
 
 from numba.core.typeconv import castgraph, Conversion
 from numba.core import types
@@ -23,11 +22,9 @@ from numba.core import types
 class TypeManager(object):
 
     # The character codes used by the C/C++ API (_typeconv.cpp)
-    _conversion_codes = {
-        Conversion.safe: ord("s"),
-        Conversion.unsafe: ord("u"),
-        Conversion.promote: ord("p"),
-        }
+    _conversion_codes = {Conversion.safe: ord("s"),
+                         Conversion.unsafe: ord("u"),
+                         Conversion.promote: ord("p"),}
 
     def __init__(self):
         self._ptr = _typeconv.new_type_manager()
@@ -129,4 +126,3 @@ class TypeCastingRules(object):
             self._tm.set_unsafe_convert(a, b)
         else:
             raise AssertionError(rel)
-

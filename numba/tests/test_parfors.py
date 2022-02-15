@@ -62,8 +62,9 @@ class TestParforsRunner(TestCase):
 
     _numba_parallel_test_ = False
 
-    # Each test class can run for 30 minutes before time out.
-    _TIMEOUT = 1800
+    # Each test class can run for 30 minutes before time out. Extend this to an
+    # hour on aarch64 (some public CI systems were timing out).
+    _TIMEOUT = 1800 if platform.machine() != 'aarch64' else 3600
 
     """This is the test runner for all the parfors tests, it runs them in
     subprocesses as described above. The convention for the test method naming
@@ -1564,6 +1565,30 @@ class TestParfors(TestParforsBase):
             return acc
         self.check(test_impl, 16)
 
+    def test_non_identity_initial(self):
+        # issue #7344
+        def test_impl(A, cond):
+            s = 1
+            for i in prange(A.shape[0]):
+                if cond[i]:
+                    s += 1
+            return s
+        self.check(test_impl, np.ones(10), np.ones(10).astype('bool'))
+
+    def test_if_not_else_reduction(self):
+        # issue #7344
+        def test_impl(A, cond):
+            s = 1
+            t = 10
+            for i in prange(A.shape[0]):
+                if cond[i]:
+                    s += 1
+                    t += 1
+                else:
+                    s += 2
+            return s + t
+        self.check(test_impl, np.ones(10), np.ones(10).astype('bool'))
+
     def test_two_d_array_reduction_reuse(self):
         def test_impl(n):
             shp = (13, 17)
@@ -1849,6 +1874,88 @@ class TestParfors(TestParforsBase):
             return x * 5.0
         x = np.ones((2, 2, 2, 2, 2, 15))
         self.check(test_impl, x)
+
+    def test_tuple_arg(self):
+        def test_impl(x, sz):
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10, 5)
+        self.check(test_impl, np.empty(sz), sz)
+
+    def test_tuple_arg_not_whole_array(self):
+        def test_impl(x, sz):
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10, 5)
+        self.check(test_impl, np.zeros(sz), (10, 3))
+
+    def test_tuple_for_pndindex(self):
+        def test_impl(x):
+            sz = (10, 5)
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10, 5)
+        self.check(test_impl, np.zeros(sz))
+
+    def test_tuple_arg_literal(self):
+        def test_impl(x, first):
+            sz = (first, 5)
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10, 5)
+        self.check(test_impl, np.zeros(sz), 10)
+
+    def test_tuple_of_literal_nonliteral(self):
+        # This test has to be done manually as the self.check uses
+        # compile_isolated and one function cannot "see" the other
+
+        def test_impl(x, sz):
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+
+        def call(x, fn):
+            return fn(x, (10, 3)) # Only want to iterate to the 3rd
+
+        get_input = lambda: np.zeros((10, 10))
+        expected = call(get_input(), test_impl)
+
+        def check(dec):
+            f1 = dec(test_impl)
+            f2 = njit(call) # no parallel semantics in the caller
+            got = f2(get_input(), f1)
+            self.assertPreciseEqual(expected, got)
+
+        for d in (njit, njit(parallel=True)):
+            check(d)
+
+    def test_tuple_arg_1d(self):
+        def test_impl(x, sz):
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10,)
+        self.check(test_impl, np.zeros(sz), sz)
+
+    def test_tuple_arg_1d_literal(self):
+        def test_impl(x):
+            sz = (10,)
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        sz = (10,)
+        self.check(test_impl, np.zeros(sz))
+
+    def test_int_arg_pndindex(self):
+        def test_impl(x, sz):
+            for i in numba.pndindex(sz):
+                x[i] = 1
+            return x
+        self.check(test_impl, np.zeros((10, 10)), 3)
 
 
 @skip_parfors_unsupported
@@ -2368,6 +2475,8 @@ class TestParforsMisc(TestParforsBase):
         # sequential_parfor_lowering global variable should remain as False on
         # stack unwind.
 
+        BROKEN_MSG = 'BROKEN_MSG'
+
         @register_pass(mutates_CFG=True, analysis_only=False)
         class BreakParfors(AnalysisPass):
             _name = "break_parfors"
@@ -2385,7 +2494,12 @@ class TestParforsMisc(TestParforsBase):
                             # point it needs to be a set so e.g. set.difference
                             # can be computed, this therefore creates an error
                             # in the right location.
-                            stmt.races = []
+                            class Broken(list):
+
+                                def difference(self, other):
+                                    raise errors.LoweringError(BROKEN_MSG)
+
+                            stmt.races = Broken()
                     return True
 
 
@@ -2411,8 +2525,7 @@ class TestParforsMisc(TestParforsBase):
         with self.assertRaises(errors.LoweringError) as raises:
             foo()
 
-        self.assertIn("'list' object has no attribute 'difference'",
-                      str(raises.exception))
+        self.assertIn(BROKEN_MSG, str(raises.exception))
 
         # assert state has not changed
         self.assertFalse(numba.parfors.parfor.sequential_parfor_lowering)
@@ -2473,16 +2586,16 @@ class TestParforsMisc(TestParforsBase):
     def test_oversized_tuple_as_arg_to_kernel(self):
 
         @njit(parallel=True)
-        def oversize_tuple():
+        def oversize_tuple(idx):
             big_tup = (1,2,3,4)
             z = 0
             for x in prange(10):
-                z += big_tup[0]
+                z += big_tup[idx]
             return z
 
         with override_env_config('NUMBA_PARFOR_MAX_TUPLE_SIZE', '3'):
             with self.assertRaises(errors.UnsupportedParforsError) as raises:
-                oversize_tuple()
+                oversize_tuple(0)
 
         errstr = str(raises.exception)
         self.assertIn("Use of a tuple", errstr)
@@ -3412,7 +3525,7 @@ class TestPrangeBasic(TestPrangeBase):
                            scheduler_type='unsigned',
                            check_fastmath=True)
 
-    def test_prange_28(self):
+    def test_prange28(self):
         # issue7105: label conflict in nested parfor
         def test_impl(x, y):
             out = np.zeros(len(y))
@@ -3441,6 +3554,21 @@ class TestPrangeBasic(TestPrangeBase):
 
         self.prange_tester(test_impl, X, Y, scheduler_type='unsigned',
                            check_fastmath=True, check_fastmath_result=True)
+
+    def test_prange29(self):
+        # issue7630: SSA renaming in prange header
+        def test_impl(flag):
+            result = 0
+            if flag:
+                for i in range(1):
+                    result += 1
+            else:
+                for i in range(1):
+                    result -= 3
+            return result
+
+        self.prange_tester(test_impl, True)
+        self.prange_tester(test_impl, False)
 
 
 @skip_parfors_unsupported

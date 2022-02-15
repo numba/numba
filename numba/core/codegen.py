@@ -838,16 +838,18 @@ class CPUCodeLibrary(CodeLibrary):
         self._sentry_cache_disable_inspection()
         return _CFG(self, name, py_func, **kwargs)
 
-    def get_disasm_cfg(self):
+    def get_disasm_cfg(self, mangled_name):
         """
-        Get the CFG of the disassembly of the ELF object
+        Get the CFG of the disassembly of the ELF object at symbol mangled_name.
 
         Requires python package: r2pipe
         Requires radare2 binary on $PATH.
         Notebook rendering requires python package: graphviz
+        Optionally requires a compiler toolchain (via pycc) to link the ELF to
+        get better disassembly results.
         """
         elf = self._get_compiled_object()
-        return disassemble_elf_to_cfg(elf)
+        return disassemble_elf_to_cfg(elf, mangled_name)
 
     @classmethod
     def _dump_elf(cls, buf):
@@ -1052,7 +1054,6 @@ class RuntimeLinker(object):
             self._resolved.append((name, ptr))   # keep ptr alive
             # Delete resolved
             del self._unresolved[name]
-
 
 def _proxy(old):
     @functools.wraps(old)
@@ -1281,7 +1282,7 @@ class CPUCodegen(Codegen):
             raise RuntimeError(
                 "LLVM will produce incorrect floating-point code "
                 "in the current locale %s.\nPlease read "
-                "https://numba.pydata.org/numba-doc/latest/user/faq.html#llvm-locale-bug "
+                "https://numba.readthedocs.io/en/stable/user/faq.html#llvm-locale-bug "
                 "for more information."
                 % (loc,))
         raise AssertionError("Unexpected IR:\n%s\n" % (ir_out,))

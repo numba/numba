@@ -10,7 +10,7 @@ import numpy as np
 
 from .cudadrv import devicearray, devices, driver
 from numba.core import config
-
+from numba.cuda.api_util import prepare_shape_strides_dtype
 
 # NDarray device helper
 
@@ -40,7 +40,7 @@ def from_cuda_array_interface(desc, owner=None, sync=True):
     strides = desc.get('strides')
     dtype = np.dtype(desc['typestr'])
 
-    shape, strides, dtype = _prepare_shape_strides_dtype(
+    shape, strides, dtype = prepare_shape_strides_dtype(
         shape, strides, dtype, order='C')
     size = driver.memory_size_from_info(shape, strides, dtype.itemsize)
 
@@ -131,8 +131,8 @@ def device_array(shape, dtype=np.float_, strides=None, order='C', stream=0):
 
     Allocate an empty device ndarray. Similar to :meth:`numpy.empty`.
     """
-    shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
-                                                         order)
+    shape, strides, dtype = prepare_shape_strides_dtype(shape, strides, dtype,
+                                                        order)
     return devicearray.DeviceNDArray(shape=shape, strides=strides, dtype=dtype,
                                      stream=stream)
 
@@ -155,8 +155,8 @@ def managed_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
                           *host*, and memory is only accessible by devices
                           with Compute Capability 6.0 and later.
     """
-    shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
-                                                         order)
+    shape, strides, dtype = prepare_shape_strides_dtype(shape, strides, dtype,
+                                                        order)
     bytesize = driver.memory_size_from_info(shape, strides, dtype.itemsize)
     buffer = current_context().memallocmanaged(bytesize,
                                                attach_global=attach_global)
@@ -174,8 +174,8 @@ def pinned_array(shape, dtype=np.float_, strides=None, order='C'):
     Allocate an :class:`ndarray <numpy.ndarray>` with a buffer that is pinned
     (pagelocked).  Similar to :func:`np.empty() <numpy.empty>`.
     """
-    shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
-                                                         order)
+    shape, strides, dtype = prepare_shape_strides_dtype(shape, strides, dtype,
+                                                        order)
     bytesize = driver.memory_size_from_info(shape, strides,
                                             dtype.itemsize)
     buffer = current_context().memhostalloc(bytesize)
@@ -198,8 +198,8 @@ def mapped_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
         to write by the host and to read by the device, but slower to
         write by the host and slower to write by the device.
     """
-    shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
-                                                         order)
+    shape, strides, dtype = prepare_shape_strides_dtype(shape, strides, dtype,
+                                                        order)
     bytesize = driver.memory_size_from_info(shape, strides, dtype.itemsize)
     buffer = current_context().memhostalloc(bytesize, mapped=True)
     npary = np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
@@ -227,9 +227,13 @@ def open_ipc_array(handle, shape, dtype, strides=None, offset=0):
     # compute size
     size = np.prod(shape) * dtype.itemsize
     # manually recreate the IPC mem handle
-    handle = driver.drvapi.cu_ipc_mem_handle(*handle)
+    if driver.USE_NV_BINDING:
+        driver_handle = driver.binding.CUipcMemHandle()
+        driver_handle.reserved = handle
+    else:
+        driver_handle = driver.drvapi.cu_ipc_mem_handle(*handle)
     # use *IpcHandle* to open the IPC memory
-    ipchandle = driver.IpcHandle(None, handle, size, offset=offset)
+    ipchandle = driver.IpcHandle(None, driver_handle, size, offset=offset)
     yield ipchandle.open_array(current_context(), shape=shape,
                                strides=strides, dtype=dtype)
     ipchandle.close()
@@ -238,35 +242,6 @@ def open_ipc_array(handle, shape, dtype, strides=None, offset=0):
 def synchronize():
     "Synchronize the current context."
     return current_context().synchronize()
-
-
-def _prepare_shape_strides_dtype(shape, strides, dtype, order):
-    dtype = np.dtype(dtype)
-    if isinstance(shape, int):
-        shape = (shape,)
-    if isinstance(strides, int):
-        strides = (strides,)
-    else:
-        strides = strides or _fill_stride_by_order(shape, dtype, order)
-    return shape, strides, dtype
-
-
-def _fill_stride_by_order(shape, dtype, order):
-    nd = len(shape)
-    if nd == 0:
-        return ()
-    strides = [0] * nd
-    if order == 'C':
-        strides[-1] = dtype.itemsize
-        for d in reversed(range(nd - 1)):
-            strides[d] = strides[d + 1] * shape[d + 1]
-    elif order == 'F':
-        strides[0] = dtype.itemsize
-        for d in range(1, nd):
-            strides[d] = strides[d - 1] * shape[d - 1]
-    else:
-        raise ValueError('must be either C/F order')
-    return tuple(strides)
 
 
 def _contiguous_strides_like_array(ary):
@@ -500,8 +475,11 @@ def detect():
         if os.name == "nt":
             attrs += [('Compute Mode', 'TCC' if tcc else 'WDDM')]
         attrs += [('FP32/FP64 Performance Ratio', fp32_to_fp64_ratio)]
-        if cc < (2, 0):
-            support = '[NOT SUPPORTED: CC < 2.0]'
+        if cc < (3, 0):
+            support = '[NOT SUPPORTED: CC < 3.0]'
+        elif cc < (5, 3):
+            support = '[SUPPORTED (DEPRECATED)]'
+            supported_count += 1
         else:
             support = '[SUPPORTED]'
             supported_count += 1

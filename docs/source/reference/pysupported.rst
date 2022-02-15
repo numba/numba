@@ -392,7 +392,7 @@ than to act as a token to permit the use of this feature. Example use:
     from numba import njit, literal_unroll
 
     @njit
-    def foo()
+    def foo():
         heterogeneous_tuple = (1, 2j, 3.0, "a")
         for i in literal_unroll(heterogeneous_tuple):
             print(i)
@@ -918,6 +918,10 @@ Built-in functions
 
 The following built-in functions are supported:
 
+.. warning::
+  Support for ``isinstance`` is an experimental feature. This feature is
+  automatically enabled by simply using ``isinstance`` in JIT compiled code.
+
 * :func:`abs`
 * :class:`bool`
 * :func:`chr`
@@ -929,6 +933,7 @@ The following built-in functions are supported:
 * :func:`hash` (see :ref:`pysupported-hashing` below)
 * :class:`int`: only the one-argument form
 * :func:`iter`: only the one-argument form
+* :func:`isinstance` (experimental support only)
 * :func:`len`
 * :func:`min`
 * :func:`map`

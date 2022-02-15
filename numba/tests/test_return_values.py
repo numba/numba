@@ -8,7 +8,7 @@ import math
 import unittest
 from numba.core.compiler import compile_isolated, Flags
 from numba.core import types
-from numba.core.errors import TypingError
+from numba.core.errors import TypingError, NumbaTypeError
 
 
 enable_pyobj_flags = Flags()
@@ -40,7 +40,7 @@ class TestReturnValues(unittest.TestCase):
             result = cfunc()
 
     def test_nopython_func_npm(self):
-        with self.assertRaises(TypeError):
+        with self.assertRaises(NumbaTypeError):
             self.test_nopython_func(flags=no_pyobj_flags)
 
     def test_pyobj_func(self, flags=enable_pyobj_flags):
@@ -70,7 +70,7 @@ class TestReturnValues(unittest.TestCase):
             result = cfunc()
 
     def test_module_func_npm(self):
-        with self.assertRaises(TypeError):
+        with self.assertRaises(NumbaTypeError):
             self.test_module_func(flags=no_pyobj_flags)
 
 

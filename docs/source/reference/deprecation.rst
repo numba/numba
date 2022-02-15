@@ -224,116 +224,7 @@ supply the keyword argument ``forceobj=True`` to ensure the function is always
 compiled in :term:`object mode`.
 
 
-Deprecation of the target kwarg
-===============================
-There have been a number of users attempting to use the ``target`` keyword
-argument that's meant for internal use only. We are deprecating this argument,
-as alternative solutions are available to achieve the same behaviour.
-
-Recommendations
----------------
-Update the ``jit`` decorator as follows:
-
-* Change ``@numba.jit(..., target='cuda')`` to ``numba.cuda.jit(...)``.
-
-Schedule
---------
-This feature will be moved with respect to this schedule:
-
-* Deprecation warnings will be issued in 0.51.0.
-* The target kwarg will be removed in version 0.54.0.
-
-
-Removal of the role of compute capability for CUDA inspection methods
-=====================================================================
-
-The following methods of the :class:`Dispatcher
-<numba.cuda.compiler.Dispatcher>` class:
-
-- :meth:`inspect_asm <numba.cuda.compiler.Dispatcher.inspect_asm>`
-- :meth:`inspect_llvm <numba.cuda.compiler.Dispatcher.inspect_llvm>`
-- :meth:`inspect_sass <numba.cuda.compiler.Dispatcher.inspect_sass>`
-
-accepted a kwarg called ``compute_capability``. This kwarg is now removed as it
-was problematic - in most cases the returned values erroneously pertained to
-the device in the current context, instead of the requested compute capability.
-
-These methods return a dict of variants, which was previously keyed by a
-``(compute_capability, argtypes)`` tuple. The dict is now only keyed by
-argument types, and items in the dict are for the device in the current
-context.
-
-For specialized Dispatchers (those whose kernels were eagerly compiled by
-providing a signature), the methods previously returned only one variant,
-instead of a dict of variants. For consistency with the CPU target and for
-support for multiple signatures to be added to the CUDA target, these methods
-now always return a dict.
-
-The :meth:`ptx <numba.cuda.compiler.Dispatcher.ptx>` property also returned one
-variant directly for specialized Dispatchers, and a dict for un-specialized
-Dispatchers. It now always returns a dict
-
-Recommendations
----------------
-
-Update calls to these methods such that:
-
-- They are always called when the device for which their output is required is
-  in the current CUDA context.
-- The ``compute_capability`` kwarg is not passed to them.
-- Any use of their results indexes into them using only a tuple of argument
-  types.
-- With specialized Dispatchers, ensure that the returned dict is indexed into
-  using the appropriate signature.
-
-Schedule
---------
-
-In 0.53.0:
-
-- The ``compute_capability`` kwarg was deprecated.
-- Returned values from the inspection methods supported indexing by
-  ``(compute_capability, argtypes)`` and ``argtypes``.
-- The inspection methods and ``ptx`` property of specialized dispatchers returned
-  their result for a single variant, rather than a dict, and produced a
-  warning.
-
-In 0.54.0:
-
-- The ``compute_capability`` kwarg has been removed.
-- ``ptx`` and the inspection methods always return a dict.
-- Support for indexing into the results of these methods using ``(cc,
-  argtypes)`` has been removed.
-
-
 .. _deprecation-strict-strides:
-
-Deprecation of strict strides checking when computing contiguity
-================================================================
-
-The contiguity of device arrays (the ``'C_CONTIGUOUS'`` and ``'F_CONTIGUOUS'``
-elements of the flags of a device array) are computed using relaxed strides
-checking, which matches the default in NumPy since Version 1.12. A config
-variable, :envvar:`NUMBA_NPY_RELAXED_STRIDES_CHECKING`, is provided to force
-computation of these flags using strict strides checking.
-
-This flag is provided to work around any bugs that may be exposed by strict
-strides checking, and will be removed in future.
-
-Schedule
---------
-
-In 0.54.0:
-
-- Relaxed strides checking will become the default.
-- Strict strides checking will be deprecated.
-
-In 0.55.0:
-
-- Strict strides checking will be removed, if there are no reports of bugs
-  related to relaxed strides checking in 0.54.0 onwards. This plan will be
-  re-examined if bugs related to relaxed strides checking are reported, but may
-  not necessarily change as a result.
 
 
 Deprecation of the ``inspect_ptx()`` method
@@ -373,8 +264,8 @@ with:
 Schedule
 --------
 
-- In Numba 0.54: ``inspect_ptx()`` will be deprecated.
-- In Numba 0.55: ``inspect_ptx()`` will be removed.
+- In Numba 0.54: ``inspect_ptx()`` was deprecated.
+- In Numba 0.55: ``inspect_ptx()`` was removed.
 
 
 Deprecation of eager compilation of CUDA device functions
@@ -383,7 +274,7 @@ Deprecation of eager compilation of CUDA device functions
 In future versions of Numba, the ``device`` kwarg to the ``@cuda.jit`` decorator
 will be obviated, and whether a device function or global kernel is compiled will
 be inferred from the context. With respect to kernel / device functions and lazy
-/ eager compilation, four cases are presently handled:
+/ eager compilation, four cases were handled:
 
 1. ``device=True``, eager compilation with a signature provided
 2. ``device=False``, eager compilation with a signature provided
@@ -397,58 +288,67 @@ device function, then a device function should be compiled.
 
 The first two cases cannot be differentiated in the absence of the ``device``
 kwarg - without it, it will not be clear from a signature alone whether a device
-function or global kernel should be compiled. In order to resolve this, support
-for eager compilation of device functions will be removed. Eager compilation
-with the ``@cuda.jit`` decorator will in future always imply the immediate
-compilation of a global kernel.
+function or global kernel should be compiled. In order to resolve this, device
+functions will no longer be eagerly compiled. When a signature is provided to a
+device function, it will only be used to enforce the types of arguments that
+the function accepts.
 
-Recommendations
----------------
+.. note::
 
-Any eagerly-compiled device functions should have their signature removed, e.g.:
+   In previous releases this notice stated that support for providing
+   signatures to device functions would be removed completely - however, this
+   precludes the common use case of enforcing the types that can be passed to a
+   device function (and the automatic insertion of casts that it implies) so
+   this notice has been updated to retain support for passing signatures.
 
-.. code-block:: python
-
-   @cuda.jit('int32(int32, int32)', device=True)
-   def f(x, y):
-       return x + y
-
-becomes:
-
-
-.. code-block:: python
-
-   @cuda.jit(device=True)
-   def f(x, y):
-       return x + y
 
 Schedule
 --------
 
 - In Numba 0.54: Eager compilation of device functions will be deprecated.
 - In Numba 0.55: Eager compilation of device functions will be unsupported and
-  attempts to eagerly compile device functions will raise an error.
+  the provision of signatures for device functions will only enforce casting.
 
 
-.. _rocm_unmaintained:
+Deprecation of ``numba.core.base.BaseContext.add_user_function()``
+==================================================================
 
-Dropping support for the ROCm target
-====================================
+``add_user_function()``  offers the same functionality as
+``insert_user_function()``, only with a check that the function has already
+been inserted at least once.  It is now deprecated as it is no longer used
+internally and it is expected that it is not used externally.
 
-The `ROCm <https://rocmdocs.amd.com/en/latest/index.html>`_ target has not been
-maintained for a number of years. It's known to be not far from working but has
-essentially bit-rotted in a number of areas. Numba 0.54 includes a new API for
-describing targets and both the CPU and CUDA targets have been ported to use
-this. Due to lack of maintenance, support and user base, the ROCm target is
-not being ported to this API, is being moved to an "unmaintained" status and
-will reside outside of the Numba package. Should there be sufficient interest
-and support for this target in future its status will be reconsidered.
+Recommendations
+---------------
+
+Replace any uses of ``add_user_function()`` with ``insert_user_function()``.
 
 Schedule
 --------
 
-In 0.54.0:
+- In Numba 0.55: ``add_user_function()`` will be deprecated.
+- In Numba 0.56: ``add_user_function()`` will be removed.
 
-- The ``ROCm`` target is officially unmaintained and the target source code has
-  been moved out of the Numba main repository and into a `separate repository
-  <https://github.com/numba/numba-rocm>`_.
+
+Deprecation of CUDA Toolkits < 10.2 and devices with CC < 5.3
+=============================================================
+
+Support for:
+
+- Devices with Compute Capability < 5.3, and
+- CUDA toolkits less than 10.2
+
+is deprecated and will be removed in future.
+
+Recommendations
+---------------
+
+- For devices of Compute Capability 3.0 - 5.2, Numba 0.55.1 or earlier will be
+  required.
+- CUDA toolkit 10.2 or later (ideally 11.2 or later) should be installed.
+
+Schedule
+--------
+
+- In Numba 0.55.1: support for CC < 5.3 and CUDA toolkits < 10.2 are deprecated.
+- In Numba 0.56: support for CC < 5.3 and CUDA toolkits < 10.2 will be removed.

@@ -13,6 +13,10 @@ Numba
 .. image:: https://zenodo.org/badge/3659275.svg
    :target: https://zenodo.org/badge/latestdoi/3659275
    :alt: Zenodo DOI
+   
+.. image:: https://img.shields.io/pypi/v/numba.svg
+   :target: https://pypi.python.org/pypi/numba/
+   :alt: PyPI
 
 A Just-In-Time Compiler for Numerical Functions in Python
 #########################################################
@@ -42,15 +46,15 @@ Supported Platforms
 
 * (Optional) Accelerators and GPUs:
 
-  * NVIDIA GPUs (Kepler architecture or later) via CUDA driver on Linux,
-    Windows, macOS (< 10.14).
+  * NVIDIA GPUs (Kepler architecture or later) via CUDA driver on Linux and
+    Windows.
 
 Dependencies
 ============
 
-* Python versions: 3.7-3.9
-* llvmlite 0.38.*
-* NumPy >=1.17 (can build with 1.11 for ABI compatibility).
+* Python versions: 3.7-3.10
+* llvmlite 0.39.*
+* NumPy >=1.18 (can build with 1.11 for ABI compatibility).
 
 Optionally:
 
@@ -76,22 +80,18 @@ Documentation
 https://numba.readthedocs.io/en/stable/index.html
 
 
-Mailing Lists
-=============
+Contact
+=======
 
 Numba has a discourse forum for discussions:
 
 * https://numba.discourse.group
 
-Some old mailing list archives are at:
-
-* https://groups.google.com/a/continuum.io/d/forum/numba-users
-* http://librelist.com/browser/numba/
 
 
 Continuous Integration
 ======================
 
-.. image:: https://dev.azure.com/numba/numba/_apis/build/status/numba.numba?branchName=master
-    :target: https://dev.azure.com/numba/numba/_build/latest?definitionId=1?branchName=master
+.. image:: https://dev.azure.com/numba/numba/_apis/build/status/numba.numba?branchName=main
+    :target: https://dev.azure.com/numba/numba/_build/latest?definitionId=1?branchName=main
     :alt: Azure Pipelines
