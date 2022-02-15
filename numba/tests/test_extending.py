@@ -1585,7 +1585,7 @@ class TestImportCythonFunction(unittest.TestCase):
         self.assertEqual(msg, str(raises.exception))
  
 
- class TestImportF2PYFunction(unittest.TestCase):
+class TestImportF2PYFunction(unittest.TestCase):
     @unittest.skipIf(sc is None, "Only run if SciPy >= 0.19 is installed")
     def test_getting_function(self):
         addr = get_f2py_function_address(
