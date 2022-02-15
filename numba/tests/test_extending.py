@@ -68,6 +68,7 @@ try:
         sc = None
     else:
         import scipy.special.cython_special as sc
+        from scipy import interpolate
 except ImportError:
     sc = None
 
@@ -1583,7 +1584,7 @@ class TestImportCythonFunction(unittest.TestCase):
             "'scipy.special.cython_special'"
         )
         self.assertEqual(msg, str(raises.exception))
- 
+
 
 class TestImportF2PYFunction(unittest.TestCase):
     @unittest.skipIf(sc is None, "Only run if SciPy >= 0.19 is installed")
@@ -1599,16 +1600,20 @@ class TestImportF2PYFunction(unittest.TestCase):
         SPLEV = functype(addr)
         
         from numba.cpython.unsafe.stack_arr import val_to_ptr,ptr_to_val
+        from numba import int64
+        from numpy import empty,linspace,sin,random
+        import numpy as np
+        
         @njit('float64[::1](float64[::1],float64[::1],int64,' + 
                                       'float64[::1],int64)')
         def splev_wrapped(t,c,k,x,e):
             y=np.empty(x.shape[0],dtype=np.float64)
             
-            n_arr=val_to_ptr(nb.int64(t.shape[0]))
-            k_arr=val_to_ptr(nb.int64(k))
-            m_arr=val_to_ptr(nb.int64(x.shape[0]))
-            e_arr=val_to_ptr(nb.int64(e))
-            ier_arr=val_to_ptr(nb.int64(0))
+            n_arr=val_to_ptr(int64(t.shape[0]))
+            k_arr=val_to_ptr(int64(k))
+            m_arr=val_to_ptr(int64(x.shape[0]))
+            e_arr=val_to_ptr(int64(e))
+            ier_arr=val_to_ptr(int64(0))
             
             SPLEV(t.ctypes,n_arr,c.ctypes,k_arr,x.ctypes,
                 y.ctypes,m_arr,e_arr,ier_arr)
@@ -1625,6 +1630,23 @@ class TestImportF2PYFunction(unittest.TestCase):
 
         self.assertEqual(interpolate.splev(x2, coeff_1), 
             splev_wrapped(coeff_1[0],coeff_1[1],coeff_1[2],x2,0))
+
+    def test_missing_module(self):
+        with self.assertRaises(ImportError) as raises:
+            get_f2py_function_address("fakemodule", "fakefunction")
+        # The quotes are not there in Python 2
+        msg = "No module named '?fakemodule'?"
+        match = re.match(msg, str(raises.exception))
+        self.assertIsNotNone(match)
+
+    @unittest.skipIf(sc is None, "Only run if SciPy >= 0.19 is installed")
+    def test_missing_function(self):
+        with self.assertRaises(ValueError) as raises:
+            get_cython_function_address(
+                "scipy.interpolate.dfitpack", "foo"
+            )
+        msg = ("module 'scipy.interpolate.dfitpack' has no attribute 'foo'")
+        self.assertEqual(msg, str(raises.exception))
 
 
 @overload_method(
