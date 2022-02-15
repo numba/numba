@@ -733,7 +733,7 @@ lower(math.degrees, types.f4)(gen_deg_rad(_rad2deg))
 lower(math.degrees, types.f8)(gen_deg_rad(_rad2deg))
 
 
-def _normalize_indices(context, builder, indty, inds):
+def _normalize_indices(context, builder, aryty, indty, valty, inds):
     """
     Convert integer indices into tuple of intp
     """
@@ -744,6 +744,15 @@ def _normalize_indices(context, builder, indty, inds):
         indices = cgutils.unpack_tuple(builder, inds, count=len(indty))
     indices = [context.cast(builder, i, t, types.intp)
                for t, i in zip(indty, indices)]
+
+    dtype = aryty.dtype
+    if dtype != valty:
+        raise TypeError("expect %s but got %s" % (dtype, valty))
+
+    if aryty.ndim != len(indty):
+        raise TypeError("indexing %d-D array with %d-D index" %
+                        (aryty.ndim, len(indty)))
+
     return indty, indices
 
 
@@ -752,22 +761,15 @@ def _atomic_dispatcher(dispatch_fn):
         # The common argument handling code
         aryty, indty, valty = sig.args
         ary, inds, val = args
-        dtype = aryty.dtype
 
-        indty, indices = _normalize_indices(context, builder, indty, inds)
-
-        if dtype != valty:
-            raise TypeError("expect %s but got %s" % (dtype, valty))
-
-        if aryty.ndim != len(indty):
-            raise TypeError("indexing %d-D array with %d-D index" %
-                            (aryty.ndim, len(indty)))
+        indty, indices = _normalize_indices(context, builder, aryty, indty,
+                                            valty, inds)
 
         lary = context.make_array(aryty)(context, builder, ary)
         ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices,
                                        wraparound=True)
         # dispatcher to implementation base on dtype
-        return dispatch_fn(context, builder, dtype, ptr, val)
+        return dispatch_fn(context, builder, aryty.dtype, ptr, val)
     return imp
 
 
@@ -965,16 +967,9 @@ def ptx_atomic_cas_element_tuple(context, builder, sig, args):
 
     aryty, indty, oldty, valty = sig.args
     ary, inds, old, val = args
-    dtype = aryty.dtype
 
-    indty, indices = _normalize_indices(context, builder, indty, inds)
-
-    if dtype != valty:
-        raise TypeError("expect %s but got %s" % (dtype, valty))
-
-    if aryty.ndim != len(indty):
-        raise TypeError("indexing %d-D array with %d-D index" %
-                        (aryty.ndim, len(indty)))
+    indty, indices = _normalize_indices(context, builder, aryty, indty,
+                                        valty, inds)
 
     lary = context.make_array(aryty)(context, builder, ary)
     ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices,
@@ -986,7 +981,7 @@ def ptx_atomic_cas_element_tuple(context, builder, sig, args):
         return nvvmutils.atomic_cmpxchg(builder, lmod, bitwidth, ptr, old, val)
     else:
         raise TypeError('Unimplemented atomic cas_element '
-                        'with %s array' % dtype)
+                        'with %s array' % aryty.dtype)
 
 
 # -----------------------------------------------------------------------------
