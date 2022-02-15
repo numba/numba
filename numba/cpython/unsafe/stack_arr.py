@@ -14,8 +14,8 @@ def val_to_ptr(typingctx, data):
     def impl(context, builder, signature, args):
         ptr = cgutils.alloca_once_value(builder,args[0])
         return ptr
-    sig = types.CPointer((typeof(data).instance_type)
-                         (typeof(data).instance_type))
+    sig = types.CPointer(typeof(data).instance_type)(typeof(
+        data).instance_type)
     return sig, impl
 
 
