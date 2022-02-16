@@ -24,13 +24,15 @@ from collections import defaultdict, OrderedDict, namedtuple
 from contextlib import contextmanager
 import operator
 
+from llvmlite import ir as lir
+from numba.core.imputils import impl_ret_untracked
 import numba.core.ir
 from numba.core import types, typing, utils, errors, ir, analysis, postproc, rewrites, typeinfer, config, ir_utils
 from numba import prange, pndindex
 from numba.np.numpy_support import as_dtype, numpy_version
 from numba.core.typing.templates import infer_global, AbstractTemplate
 from numba.stencils.stencilparfor import StencilPass
-from numba.core.extending import register_jitable
+from numba.core.extending import register_jitable, lower_builtin
 
 from numba.core.ir_utils import (
     mk_unique_var,
@@ -121,6 +123,26 @@ class internal_prange(object):
     def __new__(cls, *args):
         return range(*args)
 
+def _get_nat(typ):
+    return types.int64.minval
+
+@infer_global(_get_nat)
+@infer_global(_get_nat)
+class _NatInfer(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        assert len(args) == 1
+        assert isinstance(args[0], (types.DType))
+        return signature(args[0].dtype, *args)
+
+@lower_builtin(_get_nat, types.DType)
+def lower_get_nat(context, builder, sig, args):
+    bw = 64
+    lty = lir.IntType(bw)
+    val = types.int64.minval
+    res = lir.Constant(lty, val)
+    return impl_ret_untracked(context, builder, lty, res)
+
 def min_parallel_impl(return_type, arg):
     # XXX: use prange for 1D arrays since pndindex returns a 1-tuple instead of
     # integer. This causes type and fusion issues.
@@ -129,31 +151,22 @@ def min_parallel_impl(return_type, arg):
             return in_arr[()]
     elif arg.ndim == 1:
         if isinstance(arg.dtype, (types.NPDatetime, types.NPTimedelta)):
-            # starting in NumPy 1.18, NaT is always returned if it is in the array
-            # prior to 1.18, NaT is skipped unless it is the only value in the array
-            if numpy_version >= (1, 18):
-                def min_1(in_arr):
-                    numba.parfors.parfor.init_prange()
-                    min_checker(len(in_arr))
-                    val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
-                    for i in numba.parfors.parfor.internal_prange(len(in_arr)):
-                        if np.isnat(in_arr[i]):
-                            val = in_arr[i]
-                        elif not np.isnat(val):
-                            val = min(val, in_arr[i])
-                    return val
-            else:
-                def min_1(in_arr):
-                    numba.parfors.parfor.init_prange()
-                    min_checker(len(in_arr))
-                    # assign val initially to NaT (int64 min)
-                    val = types.int64.minval
-                    for i in numba.parfors.parfor.internal_prange(len(in_arr)):
-                        if np.isnat(val):
-                            val = in_arr[i]
-                        else:
-                            val = min(val, in_arr[i])
-                    return val
+            # NaT is always returned if it is in the array
+            def min_1(in_arr):
+                numba.parfors.parfor.init_prange()
+                min_checker(len(in_arr))
+                val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
+                has_nat = False
+                for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                    has_nat = has_nat | np.isnat(in_arr[i])
+
+                if has_nat:
+                    return _get_nat(in_arr.dtype)
+
+                for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                    val = min(val, in_arr[i])
+
+                return val
         else:
             def min_1(in_arr):
                 numba.parfors.parfor.init_prange()
@@ -178,31 +191,22 @@ def max_parallel_impl(return_type, arg):
             return in_arr[()]
     elif arg.ndim == 1:
         if isinstance(arg.dtype, (types.NPDatetime, types.NPTimedelta)):
-            # starting in NumPy 1.18, NaT is always returned if it is in the array
-            # prior to 1.18, NaT is skipped unless it is the only value in the array
-            if numpy_version >= (1, 18):
-                def min_1(in_arr):
-                    numba.parfors.parfor.init_prange()
-                    max_checker(len(in_arr))
-                    val = numba.cpython.builtins.get_type_min_value(in_arr.dtype)
-                    for i in numba.parfors.parfor.internal_prange(len(in_arr)):
-                        if np.isnat(in_arr[i]):
-                            val = in_arr[i]
-                        elif not np.isnat(val):
-                            val = max(val, in_arr[i])
-                    return val
-            else:
-                def min_1(in_arr):
-                    numba.parfors.parfor.init_prange()
-                    max_checker(len(in_arr))
-                    # assign val initially to NaT (int64 min)
-                    val = types.int64.minval
-                    for i in numba.parfors.parfor.internal_prange(len(in_arr)):
-                        if np.isnat(val):
-                            val = in_arr[i]
-                        else:
-                            val = max(val, in_arr[i])
-                    return val
+            # NaT is always returned if it is in the array
+            def max_1(in_arr):
+                numba.parfors.parfor.init_prange()
+                max_checker(len(in_arr))
+                val = numba.cpython.builtins.get_type_min_value(in_arr.dtype)
+                has_nat = False
+                for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                    has_nat = has_nat | np.isnat(in_arr[i])
+
+                if has_nat:
+                    return _get_nat(in_arr.dtype)
+
+                for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                    val = max(val, in_arr[i])
+
+                return val
         else:
             def max_1(in_arr):
                 numba.parfors.parfor.init_prange()

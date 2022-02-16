@@ -997,6 +997,7 @@ class TestDatetimeArrayOps(TestCase):
                 DT("2004-12-07", "ns"),
             ]),
             np.array([
+                DT("1971-02-02", "ns"),
                 DT("NaT", "ns"),
             ]),
             np.array([
@@ -1069,10 +1070,6 @@ class TestDatetimeArrayOps(TestCase):
 
     @skip_parfors_unsupported
     def test_min_func_parallel(self):
-        self._test_min_max(min, True, False)
-
-    @skip_parfors_unsupported
-    def test_np_min_func_parallel(self):
         self._test_min_max(np.min, True, False)
 
     @skip_parfors_unsupported
@@ -1081,10 +1078,6 @@ class TestDatetimeArrayOps(TestCase):
 
     @skip_parfors_unsupported
     def test_max_func_parallel(self):
-        self._test_min_max(max, True, False)
-
-    @skip_parfors_unsupported
-    def test_np_max_func_parallel(self):
         self._test_min_max(np.max, True, False)
 
     @skip_parfors_unsupported
