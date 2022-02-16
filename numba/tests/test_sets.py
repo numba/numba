@@ -140,7 +140,7 @@ def copy_usecase_empty(a):
     s = set(a)
     s.clear()
     ss = s.copy()
-    s.add(a)
+    s.add(a[0])
     return len(ss), list(ss)
 
 def copy_usecase_deleted(a, b):
@@ -467,6 +467,9 @@ class TestSets(BaseTest):
         for na, nb in itertools.product(sizes, sizes):
             a = self.sparse_array(na)
             b = self.sparse_array(nb)
+            # empty lists cannot be passed to njit functions due to typing restrictions
+            if self._is_empty_list(a) or self._is_empty_list(b):
+                continue
             check(a, b)
 
     def test_difference_update(self):
@@ -512,7 +515,7 @@ class TestSets(BaseTest):
 
         pyfunc = copy_usecase_empty
         check = self.unordered_checker(pyfunc)
-        a, = self.sparse_array(1)
+        a = self.sparse_array(1)
         check(a)
 
         # Source set has deleted entries
@@ -521,6 +524,9 @@ class TestSets(BaseTest):
         check((1, 2, 4, 11), 2)
         a = self.sparse_array(50)
         check(a, a[len(a) // 2])
+
+    def _is_empty_list(self, a):
+        return isinstance(a, list) and len(a) == 0
 
     def _test_set_operator(self, pyfunc):
         check = self.unordered_checker(pyfunc)
@@ -532,6 +538,9 @@ class TestSets(BaseTest):
         for na, nb in itertools.product(sizes, sizes):
             a = self.sparse_array(na)
             b = self.sparse_array(nb)
+            # empty lists cannot be passed to njit functions due to typing restrictions
+            if self._is_empty_list(a) or self._is_empty_list(b):
+                continue
             check(a, b)
 
     def test_difference(self):

@@ -550,6 +550,8 @@ class SetInstance(object):
         payload = self.payload
         with payload._next_entry() as entry:
             builder.store(entry.key, key)
+            # incref since the value is returned but _remove_entry() decrefs
+            context.nrt.incref(builder, self._ty.dtype, entry.key)
             self._remove_entry(payload, entry)
 
         return builder.load(key)
