@@ -1602,8 +1602,8 @@ class TestImportF2PYFunction(unittest.TestCase):
         from numba.cpython.unsafe.stack_arr import val_to_ptr
         from numba import int64
 
-        @njit('float64[::1](float64[::1],float64[::1],int64,' +
-              'float64[::1],int64)')
+        @njit('float64[::1](float64[::1], float64[::1], int64,' +
+              'float64[::1], int64)')
         def splev_wrapped(t, c, k, x, e):
             y = np.empty(x.shape[0], dtype=np.float64)
 
