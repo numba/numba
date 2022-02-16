@@ -1621,7 +1621,7 @@ class TestImportF2PYFunction(unittest.TestCase):
         x, dx = np.linspace(10, 100, 200, retstep=True)
         y = np.sin(x)
 
-        coeff_1 = interpolate.splrep(x,y, k=3)
+        coeff_1 = interpolate.splrep(x, y, k=3)
 
         x2 = np.linspace(0,110,1000)
         np.random.shuffle(x2)
