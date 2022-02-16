@@ -32,7 +32,7 @@ def ptr_to_val(typingctx, data):
 
 
 @intrinsic
-def intr_stack_empty_alloc(typingctx,shape,dtype):
+def intr_stack_empty_alloc(typingctx, shape, dtype):
     size = 1
     if isinstance(shape,types.scalars.IntegerLiteral):
         size = shape.literal_value
