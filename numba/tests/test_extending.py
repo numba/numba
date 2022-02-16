@@ -69,6 +69,8 @@ try:
     else:
         import scipy.special.cython_special as sc
         from scipy import interpolate
+        from numba.cpython.unsafe.stack_arr import val_to_ptr
+        from numba import int64
 except ImportError:
     sc = None
 
@@ -1568,10 +1570,8 @@ class TestImportCythonFunction(unittest.TestCase):
     def test_missing_module(self):
         with self.assertRaises(ImportError) as raises:
             get_cython_function_address("fakemodule", "fakefunction")
-        # The quotes are not there in Python 2
-        msg = "No module named '?fakemodule'?"
-        match = re.match(msg, str(raises.exception))
-        self.assertIsNotNone(match)
+        msg = "No module named 'fakemodule'"
+        self.assertRegex(msg, str(raises.exception))
 
     @unittest.skipIf(sc is None, "Only run if SciPy >= 0.19 is installed")
     def test_missing_function(self):
@@ -1589,21 +1589,21 @@ class TestImportCythonFunction(unittest.TestCase):
 class TestImportF2PYFunction(unittest.TestCase):
     @unittest.skipIf(sc is None, "Only run if SciPy >= 0.19 is installed")
     def test_getting_function(self):
+        np.random.seed(0)
         addr = get_f2py_function_address(
             "scipy.interpolate.dfitpack", "splev"
         )
         dble_p = ctypes.POINTER(ctypes.c_double)
         int_p = ctypes.POINTER(ctypes.c_longlong)
 
-        functype = ctypes.CFUNCTYPE(ctypes.c_void_p, dble_p, int_p, dble_p, int_p,
-                                    dble_p, dble_p, int_p, int_p, int_p)
+        functype = ctypes.CFUNCTYPE(ctypes.c_void_p, dble_p, int_p, dble_p,
+                                    int_p, dble_p, dble_p, int_p, int_p, int_p)
         SPLEV = functype(addr)
 
-        from numba.cpython.unsafe.stack_arr import val_to_ptr
-        from numba import int64
+        sig = "float64[::1](float64[::1], float64[::1], int64," \
+              " float64[::1], int64)"
 
-        @njit('float64[::1](float64[::1], float64[::1], int64,' +
-              'float64[::1], int64)')
+        @njit(sig)
         def splev_wrapped(t, c, k, x, e):
             y = np.empty(x.shape[0], dtype=np.float64)
 
@@ -1625,17 +1625,15 @@ class TestImportF2PYFunction(unittest.TestCase):
 
         x2 = np.linspace(0, 110, 1000)
         np.random.shuffle(x2)
-        isclose = np.allclose(interpolate.splev(x2, coeff_1), splev_wrapped(
-                              coeff_1[0], coeff_1[1], coeff_1[2], x2, 0))
-        self.assertEqual(isclose,True)
+        np.testing.assert_allclose(
+            interpolate.splev(x2, coeff_1),
+            splev_wrapped(coeff_1[0], coeff_1[1], coeff_1[2], x2, 0))
 
     def test_missing_module(self):
         with self.assertRaises(ImportError) as raises:
             get_f2py_function_address("fakemodule", "fakefunction")
-        # The quotes are not there in Python 2
-        msg = "No module named '?fakemodule'?"
-        match = re.match(msg, str(raises.exception))
-        self.assertIsNotNone(match)
+        msg = "No module named 'fakemodule'"
+        self.assertRegex(msg, str(raises.exception))
 
     @unittest.skipIf(sc is None, "Only run if SciPy >= 0.19 is installed")
     def test_missing_function(self):
