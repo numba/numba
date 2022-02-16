@@ -1595,8 +1595,8 @@ class TestImportF2PYFunction(unittest.TestCase):
         dble_p = ctypes.POINTER(ctypes.c_double)
         int_p = ctypes.POINTER(ctypes.c_longlong)
 
-        functype = ctypes.CFUNCTYPE(ctypes.c_void_p,dble_p,int_p,dble_p,int_p,
-                                    dble_p,dble_p,int_p,int_p,int_p)
+        functype = ctypes.CFUNCTYPE(ctypes.c_void_p, dble_p, int_p, dble_p, int_p,
+                                    dble_p, dble_p, int_p, int_p, int_p)
         SPLEV = functype(addr)
 
         from numba.cpython.unsafe.stack_arr import val_to_ptr
