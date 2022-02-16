@@ -59,8 +59,8 @@ def iterator_usecase(arg):
 def update_usecase(a, b, c):
     s = set()
     s.update(a)
-    # s.update(b)
-    # s.update(c)
+    s.update(b)
+    s.update(c)
     return list(s)
 
 def bool_usecase(arg):
@@ -377,7 +377,6 @@ class TestSets(BaseTest):
         cfunc = jit(nopython=True)(pyfunc)
 
         arg = self.duplicates_array(200)
-        print(arg)
         self.assertEqual(cfunc(arg), set(arg))
 
     def test_iterator(self):
@@ -395,8 +394,6 @@ class TestSets(BaseTest):
         b = self.duplicates_array(50)
         c = self.sparse_array(50)
         check(a, b, c)
-        import gc
-        gc.collect()
 
     def test_remove(self):
         pyfunc = remove_usecase
