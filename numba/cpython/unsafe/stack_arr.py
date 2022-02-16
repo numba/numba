@@ -36,7 +36,7 @@ def intr_stack_empty_alloc(typingctx,shape,dtype):
     size = 1
     if isinstance(shape,types.scalars.IntegerLiteral):
         size = shape.literal_value
-        sig = types.CPointer(dtype.dtype)(types.int64,dtype)
+        sig = types.CPointer(dtype.dtype)(types.int64, dtype)
 
     elif isinstance(shape, (types.containers.Tuple,
                             types.containers.UniTuple)):
