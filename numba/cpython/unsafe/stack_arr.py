@@ -64,7 +64,7 @@ def stack_empty(shape,dtype,order="C"):
     Please note: - Arrays allocated on the stack can't be returned.
                  - Stack size is limited
     """
-    arr_ptr = intr_stack_empty_alloc(shape,dtype)
+    arr_ptr = intr_stack_empty_alloc(shape, dtype)
     if order == "C":
         return carray(arr_ptr, shape)
     elif order == "F":
