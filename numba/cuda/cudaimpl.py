@@ -489,8 +489,11 @@ def lower_fp16_binary(fn, op):
 
 
 lower_fp16_binary(stubs.fp16.hadd, 'add')
+lower_fp16_binary(operator.add, 'add')
 lower_fp16_binary(stubs.fp16.hsub, 'sub')
+lower_fp16_binary(operator.sub, 'sub')
 lower_fp16_binary(stubs.fp16.hmul, 'mul')
+lower_fp16_binary(operator.mul, 'mul')
 
 
 @lower(stubs.fp16.hneg, types.float16)
@@ -498,6 +501,11 @@ def ptx_fp16_hneg(context, builder, sig, args):
     fnty = ir.FunctionType(ir.IntType(16), [ir.IntType(16)])
     asm = ir.InlineAsm(fnty, 'neg.f16 $0, $1;', '=h,h')
     return builder.call(asm, args)
+
+
+@lower(operator.neg, types.float16)
+def operator_hneg(context, builder, sig, args):
+    return ptx_fp16_hneg(context, builder, sig, args)
 
 
 @lower(stubs.fp16.habs, types.float16)
@@ -515,6 +523,11 @@ def ptx_fp16_habs(context, builder, sig, args):
     fnty = ir.FunctionType(ir.IntType(16), [ir.IntType(16)])
     asm = ir.InlineAsm(fnty, inst, '=h,h')
     return builder.call(asm, args)
+
+
+@lower(abs, types.float16)
+def operator_habs(context, builder, sig, args):
+    return ptx_fp16_habs(context, builder, sig, args)
 
 
 @lower(stubs.fp16.hfma, types.float16, types.float16, types.float16)

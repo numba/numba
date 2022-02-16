@@ -1,3 +1,4 @@
+import operator
 from numba.core import types, errors
 from numba.core.typing.npydecl import (parse_dtype, parse_shape,
                                        register_number_classes)
@@ -360,6 +361,39 @@ Cuda_hsub = _genfp16_binary(cuda.fp16.hsub)
 Cuda_hmul = _genfp16_binary(cuda.fp16.hmul)
 Cuda_hneg = _genfp16_unary(cuda.fp16.hneg)
 Cuda_habs = _genfp16_unary(cuda.fp16.habs)
+
+
+class FP16BinOp(ConcreteTemplate):
+    cases = [signature(types.float16, types.float16, types.float16)]
+
+
+@register_global(operator.add)
+class BinOpFP16Add(FP16BinOp):
+    pass
+
+
+@register_global(operator.sub)
+class BinOpFP16Sub(FP16BinOp):
+    pass
+
+
+@register_global(operator.mul)
+class BinOpFP16Mul(FP16BinOp):
+    pass
+
+
+class FP16UnaryOp(ConcreteTemplate):
+    cases = [signature(types.float16, types.float16)]
+
+
+@register_global(operator.neg)
+class BinOpFP16Neg(FP16UnaryOp):
+    pass
+
+
+@register_global(abs)
+class BinOpFP16Abs(FP16UnaryOp):
+    pass
 
 
 # generate atomic operations
