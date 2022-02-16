@@ -387,12 +387,12 @@ class FP16UnaryOp(ConcreteTemplate):
 
 
 @register_global(operator.neg)
-class BinOpFP16Neg(FP16UnaryOp):
+class UnaryOpFP16Neg(FP16UnaryOp):
     pass
 
 
-@register_global(abs)
-class BinOpFP16Abs(FP16UnaryOp):
+@register_global(operator.abs)
+class UnaryOpFP16Abs(FP16UnaryOp):
     pass
 
 
