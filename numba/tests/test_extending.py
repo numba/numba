@@ -1604,8 +1604,8 @@ class TestImportF2PYFunction(unittest.TestCase):
 
         @njit('float64[::1](float64[::1],float64[::1],int64,' +
               'float64[::1],int64)')
-        def splev_wrapped(t,c,k,x,e):
-            y = np.empty(x.shape[0],dtype=np.float64)
+        def splev_wrapped(t, c, k, x, e):
+            y = np.empty(x.shape[0], dtype=np.float64)
 
             n_arr = val_to_ptr(int64(t.shape[0]))
             k_arr = val_to_ptr(int64(k))
