@@ -1613,8 +1613,8 @@ class TestImportF2PYFunction(unittest.TestCase):
             e_arr = val_to_ptr(int64(e))
             ier_arr = val_to_ptr(int64(0))
 
-            SPLEV(t.ctypes,n_arr,c.ctypes,k_arr,x.ctypes,
-                  y.ctypes,m_arr,e_arr,ier_arr)
+            SPLEV(t.ctypes, n_arr, c.ctypes, k_arr, x.ctypes,
+                  y.ctypes, m_arr, e_arr, ier_arr)
 
             return y
 
