@@ -593,7 +593,7 @@ import_f2py_function(const char *module_name, const char *function_name)
         PyErr_Clear();
         PyErr_Format(PyExc_ValueError,
                      "No _cpointer attribute found in function '%s' of '%s'",
-                     function_name,module_name);
+                     function_name, module_name);
         return NULL;
     }
     /* f2py exports PyCapsule */
