@@ -1623,7 +1623,7 @@ class TestImportF2PYFunction(unittest.TestCase):
 
         coeff_1 = interpolate.splrep(x, y, k=3)
 
-        x2 = np.linspace(0,110,1000)
+        x2 = np.linspace(0, 110, 1000)
         np.random.shuffle(x2)
         isclose = np.allclose(interpolate.splev(x2, coeff_1), splev_wrapped(
                               coeff_1[0],coeff_1[1],coeff_1[2],x2,0))
