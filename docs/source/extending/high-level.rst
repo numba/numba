@@ -137,7 +137,7 @@ example, call scipy.interpolate.dfitpack.splev::
     dble_p=ctypes.POINTER(ctypes.c_double)
     int_p =ctypes.POINTER(ctypes.c_longlong)
 
-    #Calling siganture
+    #Calling signature
     functype = ctypes.CFUNCTYPE(ctypes.c_void_p,
                                 dble_p,int_p,dble_p,int_p,dble_p,dble_p,int_p,int_p,int_p)
 
