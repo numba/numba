@@ -126,7 +126,7 @@ The function ``get_f2py_function_address`` obtains the address of a
 C function in a F2PY extension module. The address can be used to
 access the C function via a :func:`ctypes.CFUNCTYPE` callback, thus
 allowing use of the C function inside a Numba jitted function. For
-example, call scipy.interpolate.dfitpack.splev::
+example, call ``scipy.interpolate.dfitpack.splev``::
 
     import numba as nb
     import numpy as np
