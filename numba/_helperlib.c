@@ -563,7 +563,7 @@ import_cython_function(const char *module_name, const char *function_name)
     }
     /* 2.7+ => Cython exports a PyCapsule */
     capsule_name = PyCapsule_GetName(cobj);
-    if (PyCapsule_IsValid(cobj,capsule_name)!=0) {
+    if (PyCapsule_IsValid(cobj, capsule_name) != 0) {
         res = PyCapsule_GetPointer(cobj, capsule_name);
     }
     Py_DECREF(cobj);
