@@ -51,7 +51,7 @@ def intr_stack_empty_alloc(typingctx,shape,dtype):
 
     def impl(context, builder, signature, args):
         ty = context.get_value_type(dtype.dtype)
-        ptr = cgutils.alloca_once(builder, ty,size=size)
+        ptr = cgutils.alloca_once(builder, ty, size=size)
         return ptr
     return sig, impl
 
