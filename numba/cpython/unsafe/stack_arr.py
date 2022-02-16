@@ -66,9 +66,9 @@ def stack_empty(shape,dtype,order="C"):
     """
     arr_ptr = intr_stack_empty_alloc(shape,dtype)
     if order == "C":
-        return carray(arr_ptr,shape)
+        return carray(arr_ptr, shape)
     elif order == "F":
-        return farray(arr_ptr,shape)
+        return farray(arr_ptr, shape)
     else:
         raise errors.UnsupportedError(
             "order must be one of 'C', 'F'")
