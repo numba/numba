@@ -43,7 +43,7 @@ def intr_stack_empty_alloc(typingctx,shape,dtype):
         for i in range(len(shape)):
             size *= shape[i].literal_value
 
-        sig = types.CPointer(dtype.dtype)(typeof(shape).instance_type,dtype)
+        sig = types.CPointer(dtype.dtype)(typeof(shape).instance_type, dtype)
     else:
         raise errors.TypingError(
             "Shape must be IntegerLiteral " +
