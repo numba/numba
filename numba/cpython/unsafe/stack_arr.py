@@ -38,8 +38,8 @@ def intr_stack_empty_alloc(typingctx,shape,dtype):
         size = shape.literal_value
         sig = types.CPointer(dtype.dtype)(types.int64,dtype)
 
-    elif isinstance(shape,(types.containers.Tuple,
-                           types.containers.UniTuple)):
+    elif isinstance(shape, (types.containers.Tuple,
+                            types.containers.UniTuple)):
         for i in range(len(shape)):
             size *= shape[i].literal_value
 
