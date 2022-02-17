@@ -783,7 +783,6 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
                 'fastmath': fastmath
             }
 
-            # TODO: add test case for device function fastmath
             cres = compile_cuda(self.py_func, None, args,
                                 debug=debug,
                                 inline=inline,
