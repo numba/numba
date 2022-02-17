@@ -111,8 +111,8 @@ class EnumTest(CUDATestCase):
                 return RequestError.dummy
 
         cuda_func = vectorize("int64(int64)", target='cuda')(f)
-        arr = np.array([2, 404, 500, 404])
-        expected = np.array([f(x) for x in arr])
+        arr = np.array([2, 404, 500, 404], dtype=np.int64)
+        expected = np.array([f(x) for x in arr], dtype=np.int64)
         got = cuda_func(arr)
         self.assertPreciseEqual(expected, got)
 
