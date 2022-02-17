@@ -366,17 +366,17 @@ Cuda_habs = _genfp16_unary(cuda.fp16.habs)
 class FP16BinOp(ConcreteTemplate):
     cases = [signature(types.float16, types.float16, types.float16)]
 
-
+@register_global(operator.iadd)
 @register_global(operator.add)
 class BinOpFP16Add(FP16BinOp):
     pass
 
-
+@register_global(operator.isub)
 @register_global(operator.sub)
 class BinOpFP16Sub(FP16BinOp):
     pass
 
-
+@register_global(operator.imul)
 @register_global(operator.mul)
 class BinOpFP16Mul(FP16BinOp):
     pass

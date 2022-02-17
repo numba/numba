@@ -490,10 +490,13 @@ def lower_fp16_binary(fn, op):
 
 lower_fp16_binary(stubs.fp16.hadd, 'add')
 lower_fp16_binary(operator.add, 'add')
+lower_fp16_binary(operator.iadd, 'add')
 lower_fp16_binary(stubs.fp16.hsub, 'sub')
 lower_fp16_binary(operator.sub, 'sub')
+lower_fp16_binary(operator.isub, 'sub')
 lower_fp16_binary(stubs.fp16.hmul, 'mul')
 lower_fp16_binary(operator.mul, 'mul')
+lower_fp16_binary(operator.imul, 'mul')
 
 
 @lower(stubs.fp16.hneg, types.float16)
