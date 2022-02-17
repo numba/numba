@@ -27,9 +27,13 @@ class TestFastMathOption(CUDATestCase):
     def _test_fast_math_common(self, pyfunc, sig, device, criterion):
 
         # Test jit code path
-        fastver = cuda.jit(sig, device=device, fastmath=True)(pyfunc)
-        slowver = cuda.jit(sig, device=device)(pyfunc)
-        criterion.check(self, fastver.ptx[sig], slowver.ptx[sig])
+        # For device function, the advised way to retrieve ptx is through
+        # compile_ptx_*. See:
+        # https://numba.readthedocs.io/en/stable/reference/deprecation.html#deprecation-of-the-inspect-ptx-method # noqa E501
+        if not device:
+            fastver = cuda.jit(sig, device=device, fastmath=True)(pyfunc)
+            slowver = cuda.jit(sig, device=device)(pyfunc)
+            criterion.check(self, fastver.ptx[sig], slowver.ptx[sig])
 
         # Test compile_ptx code path
         fastptx, _ = compile_ptx_for_current_device(
@@ -62,10 +66,11 @@ class TestFastMathOption(CUDATestCase):
             return op(x, y)
 
         self._test_fast_math_common(
-            kernel, (float32[::1], float32), device=False, criterion=criterion
+            kernel,
+            (float32[::1], float32, float32), device=False, criterion=criterion
         )
         self._test_fast_math_common(
-            device, (float32,), device=True, criterion=criterion
+            device, (float32, float32), device=True, criterion=criterion
         )
 
     def test_cosf(self):
@@ -142,8 +147,10 @@ class TestFastMathOption(CUDATestCase):
     def test_divf(self):
         self._test_fast_math_binary(
             truediv, FastMathCriterion(
-                fast_expected=['div.approx.ftz.f32 ', 'div.rn.f32'],
-                slow_unexpected=['div.approx.ftz.f32 ', 'div.rn.f32'],
+                fast_expected=['div.approx.ftz.f32 '],
+                fast_unexpected=['div.rn.f32'],
+                slow_expected=['div.rn.f32'],
+                slow_unexpected=['div.approx.ftz.f32 '],
             )
         )
 
