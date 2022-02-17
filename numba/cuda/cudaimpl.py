@@ -494,8 +494,8 @@ lower_fp16_binary(stubs.fp16.hmul, 'mul')
 
 @lower(stubs.fp16.hdiv, types.float16, types.float16)
 def lower_fp16_divide(context, builder, sig, args):
-    arg1 = args[0]
-    arg2 = args[1]
+    x = args[0]
+    y = args[1]
     # Floating point 16 division algorithm implemented
     # using Newton Rapson algorithm.
 
@@ -509,8 +509,8 @@ def lower_fp16_divide(context, builder, sig, args):
     cvt2float_asm = ir.InlineAsm(cvt2float_fnty,
                                  "cvt.f32.f16 $0, $1;",
                                  "=f,h")
-    arg1_fp32 = builder.call(cvt2float_asm, [arg1])
-    arg2_fp32 = builder.call(cvt2float_asm, [arg2])
+    x_fp32 = builder.call(cvt2float_asm, [x])
+    y_fp32 = builder.call(cvt2float_asm, [y])
 
     rcp_fnty = ir.FunctionType(ir.FloatType(), [ir.FloatType()])
 
@@ -525,7 +525,7 @@ def lower_fp16_divide(context, builder, sig, args):
     rcp_asm = ir.InlineAsm(rcp_fnty,
                            "rcp.approx.ftz.f32 $0, $1;",
                            "=f,f")
-    arg2_rcp = builder.call(rcp_asm, [arg2_fp32])
+    yn = builder.call(rcp_asm, [y_fp32])
 
     # Implement fp32 division via multiplication by
     # reciprocal of arg2
@@ -539,14 +539,14 @@ def lower_fp16_divide(context, builder, sig, args):
     # Mathematically we have: q0 = x * 1/y * (1 - err)
     # So err (correction_term) = x - y*q0 = fma(-y, q0, x)
     # And q1 = err*yn + q0 = fma(err, yn, q0)
-    fmul = builder.fmul(arg1_fp32, arg2_rcp)
+    q0 = builder.fmul(x_fp32, yn)
 
     # Convert fp32 division result to fp16
     cvt2fp16_fnty = ir.FunctionType(ir.IntType(16), [ir.FloatType()])
     cvt2fp16_asm = ir.InlineAsm(cvt2fp16_fnty,
                                 "cvt.rn.f16.f32 $0, $1;",
                                 "=h,f")
-    fp16_div = builder.call(cvt2fp16_asm, [fmul])
+    fp16_div = builder.call(cvt2fp16_asm, [q0])
 
     # Before performing a second Newton Rapson iteration
     # filter out small denormal values and zero.
@@ -561,7 +561,7 @@ def lower_fp16_divide(context, builder, sig, args):
     reg_pred_asm = ir.InlineAsm(reg_pred_fnty,
                                 f"{{ .reg .pred {temp_reg};",
                                 "")
-    _ = builder.call(reg_pred_asm, [])
+    builder.call(reg_pred_asm, [])
 
     setp_fnty = ir.FunctionType(ir.VoidType(),
                                 [ir.IntType(16), ir.IntType(16)])
@@ -569,7 +569,7 @@ def lower_fp16_divide(context, builder, sig, args):
     setp_asm = ir.InlineAsm(setp_fnty,
                             f"setp.lt.f16 {temp_reg}, $0, $1;",
                             'h,h')
-    _ = builder.call(setp_asm, [and_op, setp_cnst])
+    builder.call(setp_asm, [and_op, setp_cnst])
 
     selp_fnty = ir.FunctionType(ir.IntType(16),[])
 
@@ -600,7 +600,7 @@ def lower_fp16_divide(context, builder, sig, args):
     builder.position_at_start(fall_thru_bb)
 
     float_zero = context.get_constant(types.float32, 0.0)
-    neg_f = builder.fsub(float_zero, arg2_fp32)
+    neg_y = builder.fsub(float_zero, y_fp32)
 
     fname = 'llvm.nvvm.fma.rn.f'
     lmod = builder.module
@@ -614,9 +614,9 @@ def lower_fp16_divide(context, builder, sig, args):
     # So err (correction_term) = x - y*q0 = fma(-y, q0, x)
     # And q1 = err*yn + q0 = fma(err, yn, q0)
 
-    fma1 = builder.call(fma_func, [neg_f, fmul, arg2_fp32])
-    fma2 = builder.call(fma_func, [arg2_rcp, fma1, fmul])
-    fp32_to_f16 = builder.call(cvt2fp16_asm, [fma2])
+    err = builder.call(fma_func, [neg_y, q0, x_fp32])
+    q1 = builder.call(fma_func, [yn, err, q0])
+    fp32_to_f16 = builder.call(cvt2fp16_asm, [q1])
     builder.branch(true_bb)
 
     #True branch
