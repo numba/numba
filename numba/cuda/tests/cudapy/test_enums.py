@@ -33,7 +33,7 @@ class EnumTest(CUDATestCase):
             out[2] = a is b
             out[3] = a is not b
 
-        cuda_f = cuda.jit()(f)
+        cuda_f = cuda.jit(f)
         for a, b in self.pairs:
             got = np.zeros((4,), dtype=np.bool_)
             expected = got.copy()
@@ -47,7 +47,7 @@ class EnumTest(CUDATestCase):
             out[0] = Color.red == Color.green
             out[1] = Color['red'] == Color['green']
 
-        cuda_f = cuda.jit()(f)
+        cuda_f = cuda.jit(f)
         got = np.zeros((2,), dtype=np.bool_)
         expected = got.copy()
         cuda_f[1, 1](got)
@@ -78,7 +78,7 @@ class EnumTest(CUDATestCase):
             else:
                 out[0] = x + Shape.circle
 
-        cuda_f = cuda.jit()(f)
+        cuda_f = cuda.jit(f)
         for x in [300, 450, 550]:
             got = np.zeros((1,), dtype=np.int32)
             expected = got.copy()
@@ -94,7 +94,7 @@ class EnumTest(CUDATestCase):
             else:
                 out[0] = x + int8(Shape.circle)
 
-        cuda_f = cuda.jit()(f)
+        cuda_f = cuda.jit(f)
         for x in [300, 450, 550]:
             got = np.zeros((1,), dtype=np.int32)
             expected = got.copy()
@@ -111,8 +111,8 @@ class EnumTest(CUDATestCase):
                 return RequestError.dummy
 
         cuda_func = vectorize("int64(int64)", target='cuda')(f)
-        arr = np.array([2, 404, 500, 404])
-        expected = np.array([f(x) for x in arr])
+        arr = np.array([2, 404, 500, 404], dtype=np.int64)
+        expected = np.array([f(x) for x in arr], dtype=np.int64)
         got = cuda_func(arr)
         self.assertPreciseEqual(expected, got)
 
