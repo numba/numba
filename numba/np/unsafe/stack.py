@@ -114,4 +114,3 @@ def zeros(shape, dtype, order="C"):
     else:
         raise errors.UnsupportedError(
             "order must be one of 'C', 'F'")
-
