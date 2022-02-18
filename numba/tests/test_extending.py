@@ -6,7 +6,6 @@ import multiprocessing
 import ctypes
 import warnings
 from distutils.version import LooseVersion
-import re
 
 import numpy as np
 
@@ -69,7 +68,7 @@ try:
     else:
         import scipy.special.cython_special as sc
         from scipy import interpolate
-        from numba.cpython.unsafe.stack_arr import val_to_ptr
+        from numba.np.unsafe.stack import val_to_ptr
         from numba import int64
 except ImportError:
     sc = None
