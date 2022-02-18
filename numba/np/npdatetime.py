@@ -849,5 +849,7 @@ def ol_hash_npdatetime(x):
     return impl
 
 
-lower_builtin(npdatetime_helpers.datetime_minimum, types.VarArg(types.Any))(datetime_minimum_impl)
-lower_builtin(npdatetime_helpers.datetime_maximum, types.VarArg(types.Any))(datetime_maximum_impl)
+lower_builtin(npdatetime_helpers.datetime_minimum, types.NPDatetime, types.NPDatetime)(datetime_minimum_impl)
+lower_builtin(npdatetime_helpers.datetime_minimum, types.NPTimedelta, types.NPTimedelta)(datetime_minimum_impl)
+lower_builtin(npdatetime_helpers.datetime_minimum, types.NPDatetime, types.NPDatetime)(datetime_maximum_impl)
+lower_builtin(npdatetime_helpers.datetime_minimum, types.NPTimedelta, types.NPTimedelta)(datetime_maximum_impl)
