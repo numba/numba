@@ -1410,8 +1410,7 @@ def numpy_broadcast_arrays(*args):
     for idx, arg in enumerate(args):
         if isinstance(arg, types.ArrayCompatible):
             m = max(m, arg.ndim)
-        elif isinstance(arg, (types.Number, types.StringLiteral,
-                              types.Boolean)):
+        elif isinstance(arg, types.Number):
             m = max(m, 1)
 
     # m = max([arr.ndim for arr in args])
