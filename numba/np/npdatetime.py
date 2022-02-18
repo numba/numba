@@ -847,3 +847,7 @@ def ol_hash_npdatetime(x):
                 return np.int64(-2)
             return np.int64(x)
     return impl
+
+
+lower_builtin(npdatetime_helpers.datetime_minimum, types.VarArg(types.Any))(datetime_minimum_impl)
+lower_builtin(npdatetime_helpers.datetime_maximum, types.VarArg(types.Any))(datetime_maximum_impl)
