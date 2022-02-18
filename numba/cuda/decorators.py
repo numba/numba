@@ -2,7 +2,7 @@ from warnings import warn
 from numba.core import types, config, sigutils
 from numba.core.errors import DeprecationError, NumbaInvalidConfigWarning
 from numba.cuda.compiler import declare_device_function
-from numba.cuda.dispatcher import Dispatcher
+from numba.cuda.dispatcher import CUDADispatcher
 from numba.cuda.simulator.kernel import FakeCUDAKernel
 
 
@@ -69,6 +69,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
 
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
     fastmath = kws.get('fastmath', False)
+    extensions = kws.get('extensions', [])
 
     if debug and opt:
         msg = ("debug=True with opt=True (the default) "
@@ -97,7 +98,19 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             targetoptions['opt'] = opt
             targetoptions['fastmath'] = fastmath
             targetoptions['device'] = device
-            return Dispatcher(func, [func_or_sig], targetoptions=targetoptions)
+            targetoptions['extensions'] = extensions
+
+            disp = CUDADispatcher(func, targetoptions=targetoptions)
+
+            if device:
+                disp.compile_device(argtypes)
+            else:
+                disp.compile(argtypes)
+
+            disp._specialized = True
+            disp.disable_compile()
+
+            return disp
 
         return _jit
     else:
@@ -124,9 +137,8 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                 targetoptions['link'] = link
                 targetoptions['fastmath'] = fastmath
                 targetoptions['device'] = device
-                sigs = None
-                return Dispatcher(func_or_sig, sigs,
-                                  targetoptions=targetoptions)
+                targetoptions['extensions'] = extensions
+                return CUDADispatcher(func_or_sig, targetoptions=targetoptions)
 
 
 def declare_device(name, sig):

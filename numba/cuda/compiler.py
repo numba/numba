@@ -1,7 +1,8 @@
 from numba.core.typing.templates import ConcreteTemplate
 from numba.core import types, typing, funcdesc, config, compiler
-from numba.core.compiler import (CompilerBase, DefaultPassBuilder,
-                                 compile_result, Flags, Option)
+from numba.core.compiler import (sanitize_compile_result_entries, CompilerBase,
+                                 DefaultPassBuilder, Flags, Option,
+                                 CompileResult)
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.compiler_machinery import (LoweringPass, AnalysisPass,
                                            PassManager, register_pass)
@@ -29,6 +30,33 @@ class CUDAFlags(Flags):
     )
 
 
+# The CUDACompileResult (CCR) has a specially-defined entry point equal to its
+# id.  This is because the entry point is used as a key into a dict of
+# overloads by the base dispatcher. The id of the CCR is the only small and
+# unique property of a CompileResult in the CUDA target (cf. the CPU target,
+# which uses its entry_point, which is a pointer value).
+#
+# This does feel a little hackish, and there are two ways in which this could
+# be improved:
+#
+# 1. We could change the core of Numba so that each CompileResult has its own
+#    unique ID that can be used as a key - e.g. a count, similar to the way in
+#    which types have unique counts.
+# 2. At some future time when kernel launch uses a compiled function, the entry
+#    point will no longer need to be a synthetic value, but will instead be a
+#    pointer to the compiled function as in the CPU target.
+
+class CUDACompileResult(CompileResult):
+    @property
+    def entry_point(self):
+        return id(self)
+
+
+def cuda_compile_result(**entries):
+    entries = sanitize_compile_result_entries(entries)
+    return CUDACompileResult(**entries)
+
+
 @register_pass(mutates_CFG=True, analysis_only=False)
 class CUDABackend(LoweringPass):
 
@@ -44,7 +72,7 @@ class CUDABackend(LoweringPass):
         lowered = state['cr']
         signature = typing.signature(state.return_type, *state.args)
 
-        state.cr = compile_result(
+        state.cr = cuda_compile_result(
             typing_context=state.typingctx,
             target_context=state.targetctx,
             typing_error=state.status.fail_reason,

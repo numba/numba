@@ -1,5 +1,3 @@
-import collections
-import inspect
 import numpy as np
 import os
 import sys
@@ -8,15 +6,13 @@ import functools
 
 from numba.core import config, serialize, sigutils, types, typing, utils
 from numba.core.compiler_lock import global_compiler_lock
-from numba.core.dispatcher import CompilingCounter, OmittedArg
+from numba.core.dispatcher import Dispatcher
 from numba.core.errors import NumbaPerformanceWarning
-from numba.core.typeconv.rules import default_type_manager
-from numba.core.typing.templates import AbstractTemplate
 from numba.core.typing.typeof import Purpose, typeof
 
 from numba.cuda.api import get_current_device
 from numba.cuda.args import wrap_arg
-from numba.cuda.compiler import compile_cuda
+from numba.cuda.compiler import compile_cuda, CUDACompiler
 from numba.cuda.cudadrv import driver
 from numba.cuda.cudadrv.devices import get_context
 from numba.cuda.cudadrv.libs import get_cudalib
@@ -46,6 +42,21 @@ class _Kernel(serialize.ReduceMixin):
             raise RuntimeError('Cannot compile a device function as a kernel')
 
         super().__init__()
+
+        # _DispatcherBase.nopython_signatures() expects this attribute to be
+        # present, because it assumes an overload is a CompileResult. In the
+        # CUDA target, _Kernel instances are stored instead, so we provide this
+        # attribute here to avoid duplicating nopython_signatures() in the CUDA
+        # target with slight modifications.
+        self.objectmode = False
+
+        # The finalizer constructed by _DispatcherBase._make_finalizer also
+        # expects overloads to be a CompileResult. It uses the entry_point to
+        # remove a CompileResult from a target context. However, since we never
+        # insert kernels into a target context (there is no need because they
+        # cannot be called by other functions, only through the dispatcher) it
+        # suffices to pretend we have an entry point of None.
+        self.entry_point = None
 
         self.py_func = py_func
         self.argtypes = argtypes
@@ -386,11 +397,11 @@ class _Kernel(serialize.ReduceMixin):
 
 
 class ForAll(object):
-    def __init__(self, kernel, ntasks, tpb, stream, sharedmem):
+    def __init__(self, dispatcher, ntasks, tpb, stream, sharedmem):
         if ntasks < 0:
             raise ValueError("Can't create ForAll with negative task count: %s"
                              % ntasks)
-        self.kernel = kernel
+        self.dispatcher = dispatcher
         self.ntasks = ntasks
         self.thread_per_block = tpb
         self.stream = stream
@@ -400,16 +411,17 @@ class ForAll(object):
         if self.ntasks == 0:
             return
 
-        if self.kernel.specialized:
-            kernel = self.kernel
+        if self.dispatcher.specialized:
+            specialized = self.dispatcher
         else:
-            kernel = self.kernel.specialize(*args)
-        blockdim = self._compute_thread_per_block(kernel)
+            specialized = self.dispatcher.specialize(*args)
+        blockdim = self._compute_thread_per_block(specialized)
         griddim = (self.ntasks + blockdim - 1) // blockdim
 
-        return kernel[griddim, blockdim, self.stream, self.sharedmem](*args)
+        return specialized[griddim, blockdim, self.stream,
+                           self.sharedmem](*args)
 
-    def _compute_thread_per_block(self, kernel):
+    def _compute_thread_per_block(self, dispatcher):
         tpb = self.thread_per_block
         # Prefer user-specified config
         if tpb != 0:
@@ -417,11 +429,11 @@ class ForAll(object):
         # Else, ask the driver to give a good config
         else:
             ctx = get_context()
-            # Kernel is specialized, so there's only one definition - get it so
-            # we can get the cufunc from the code library
-            defn = next(iter(kernel.overloads.values()))
+            # Dispatcher is specialized, so there's only one definition - get
+            # it so we can get the cufunc from the code library
+            kernel = next(iter(dispatcher.overloads.values()))
             kwargs = dict(
-                func=defn._codelibrary.get_cufunc(),
+                func=kernel._codelibrary.get_cufunc(),
                 b2d_func=0,     # dynamic-shared memory is constant to blksz
                 memsize=self.sharedmem,
                 blocksizelimit=1024,
@@ -454,7 +466,7 @@ class _LaunchConfiguration:
                                     self.stream, self.sharedmem)
 
 
-class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
+class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
     '''
     CUDA Dispatcher object. When configured and called, the dispatcher will
     specialize itself for the given arguments (if no suitable specialized
@@ -472,110 +484,26 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
 
     targetdescr = cuda_target
 
-    def __init__(self, py_func, sigs, targetoptions):
-        self.py_func = py_func
-        self.sigs = []
-        self.link = targetoptions.pop('link', (),)
-        self._can_compile = True
+    def __init__(self, py_func, targetoptions, pipeline_class=CUDACompiler):
+        super().__init__(py_func, targetoptions=targetoptions,
+                         pipeline_class=pipeline_class)
         self._type = self._numba_type_
 
-        # The compiling counter is only used when compiling device functions as
-        # it is used to detect recursion - recursion is not possible when
-        # compiling a kernel.
-        self._compiling_counter = CompilingCounter()
+        # The following properties are for specialization of CUDADispatchers. A
+        # specialized CUDADispatcher is one that is compiled for exactly one
+        # set of argument types, and bypasses some argument type checking for
+        # faster kernel launches.
 
-        # Specializations for given sets of argument types
+        # Is this a specialized dispatcher?
+        self._specialized = False
+
+        # If we produced specialized dispatchers, we cache them for each set of
+        # argument types
         self.specializations = {}
-
-        # A mapping of signatures to compile results
-        self.overloads = collections.OrderedDict()
-
-        self.targetoptions = targetoptions
-
-        # defensive copy
-        self.targetoptions['extensions'] = \
-            list(self.targetoptions.get('extensions', []))
-
-        self.typingctx = self.targetdescr.typing_context
-
-        self._tm = default_type_manager
-
-        pysig = utils.pysignature(py_func)
-        arg_count = len(pysig.parameters)
-        argnames = tuple(pysig.parameters)
-        default_values = self.py_func.__defaults__ or ()
-        defargs = tuple(OmittedArg(val) for val in default_values)
-        can_fallback = False # CUDA cannot fallback to object mode
-
-        try:
-            lastarg = list(pysig.parameters.values())[-1]
-        except IndexError:
-            has_stararg = False
-        else:
-            has_stararg = lastarg.kind == lastarg.VAR_POSITIONAL
-
-        exact_match_required = False
-
-        _dispatcher.Dispatcher.__init__(self, self._tm.get_pointer(),
-                                        arg_count, self._fold_args, argnames,
-                                        defargs, can_fallback, has_stararg,
-                                        exact_match_required)
-
-        if sigs:
-            if len(sigs) > 1:
-                raise TypeError("Only one signature supported at present")
-            if targetoptions.get('device'):
-                argtypes, restype = sigutils.normalize_signature(sigs[0])
-                self.compile_device(argtypes)
-            else:
-                self.compile(sigs[0])
-
-            self._can_compile = False
-
-        if targetoptions.get('device'):
-            self._register_device_function()
-
-    def _register_device_function(self):
-        dispatcher = self
-        pyfunc = self.py_func
-
-        class device_function_template(AbstractTemplate):
-            key = dispatcher
-
-            def generic(self, args, kws):
-                assert not kws
-                return dispatcher.compile(args).signature
-
-            def get_template_info(cls):
-                basepath = os.path.dirname(
-                    os.path.dirname(os.path.dirname(cuda.__file__)))
-                code, firstlineno = inspect.getsourcelines(pyfunc)
-                path = inspect.getsourcefile(pyfunc)
-                sig = str(utils.pysignature(pyfunc))
-                info = {
-                    'kind': "overload",
-                    'name': getattr(cls.key, '__name__', "unknown"),
-                    'sig': sig,
-                    'filename': utils.safe_relpath(path, start=basepath),
-                    'lines': (firstlineno, firstlineno + len(code) - 1),
-                    'docstring': pyfunc.__doc__
-                }
-                return info
-
-        from .descriptor import cuda_target
-        typingctx = cuda_target.typing_context
-        typingctx.insert_user_function(dispatcher, device_function_template)
 
     @property
     def _numba_type_(self):
         return cuda_types.CUDADispatcher(self)
-
-    @property
-    def is_compiling(self):
-        """
-        Whether a specialization is currently being compiled.
-        """
-        return self._compiling_counter
 
     def configure(self, griddim, blockdim, stream=0, sharedmem=0):
         griddim, blockdim = normalize_kernel_dimensions(griddim, blockdim)
@@ -587,7 +515,7 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         return self.configure(*args)
 
     def forall(self, ntasks, tpb=0, stream=0, sharedmem=0):
-        """Returns a 1D-configured kernel for a given number of tasks.
+        """Returns a 1D-configured dispatcher for a given number of tasks.
 
         This assumes that:
 
@@ -599,11 +527,12 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         :param ntasks: The number of tasks.
         :param tpb: The size of a block. An appropriate value is chosen if this
                     parameter is not supplied.
-        :param stream: The stream on which the configured kernel will be
+        :param stream: The stream on which the configured dispatcher will be
                        launched.
         :param sharedmem: The number of bytes of dynamic shared memory required
                           by the kernel.
-        :return: A configured kernel, ready to launch on a set of arguments."""
+        :return: A configured dispatcher, ready to launch on a set of
+                 arguments."""
 
         return ForAll(self, ntasks, tpb=tpb, stream=stream, sharedmem=sharedmem)
 
@@ -649,17 +578,6 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         argtypes = [self.typeof_pyval(a) for a in args]
         return self.compile(tuple(argtypes))
 
-    def _search_new_conversions(self, *args, **kws):
-        # Based on _DispatcherBase._search_new_conversions
-        assert not kws
-        args = [self.typeof_pyval(a) for a in args]
-        found = False
-        for sig in self.nopython_signatures:
-            conv = self.typingctx.install_possible_conversions(args, sig.args)
-            if conv:
-                found = True
-        return found
-
     def typeof_pyval(self, val):
         # Based on _DispatcherBase.typeof_pyval, but differs from it to support
         # the CUDA Array Interface.
@@ -673,11 +591,6 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
                               Purpose.argument)
             else:
                 raise
-
-    @property
-    def nopython_signatures(self):
-        # Based on _DispatcherBase.nopython_signatures
-        return [kernel.signature for kernel in self.overloads.values()]
 
     def specialize(self, *args):
         '''
@@ -695,21 +608,20 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
             return specialization
 
         targetoptions = self.targetoptions
-        targetoptions['link'] = self.link
-        specialization = Dispatcher(self.py_func, [types.void(*argtypes)],
-                                    targetoptions)
+        specialization = CUDADispatcher(self.py_func,
+                                        targetoptions=targetoptions)
+        specialization.compile(argtypes)
+        specialization.disable_compile()
+        specialization._specialized = True
         self.specializations[cc, argtypes] = specialization
         return specialization
-
-    def disable_compile(self, val=True):
-        self._can_compile = not val
 
     @property
     def specialized(self):
         """
         True if the Dispatcher has been specialized.
         """
-        return len(self.sigs) == 1 and not self._can_compile
+        return self._specialized
 
     def get_regs_per_thread(self, signature=None):
         '''
@@ -731,7 +643,10 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
                     for sig, overload in self.overloads.items()}
 
     def get_call_template(self, args, kws):
-        # Copied and simplified from _DispatcherBase.get_call_template.
+        # Originally copied from _DispatcherBase.get_call_template. This
+        # version deviates slightly from the _DispatcherBase version in order
+        # to force casts when calling device functions. See e.g.
+        # TestDeviceFunc.test_device_casting, added in PR #7496.
         """
         Get a typing.ConcreteTemplate for this dispatcher and the given
         *args* and *kws* types.  This allows resolution of the return type.
@@ -755,14 +670,6 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
 
             return call_template, pysig, args, kws
 
-    def get_overload(self, sig):
-        # We give the id of the overload (a CompileResult) because this is used
-        # as a key into a dict of overloads, and this is the only small and
-        # unique property of a CompileResult on CUDA (c.f. the CPU target,
-        # which uses its entry_point, which is a pointer value).
-        args, return_type = sigutils.normalize_signature(sig)
-        return id(self.overloads[args])
-
     def compile_device(self, args):
         """Compile the device function for the given argument types.
 
@@ -785,9 +692,8 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
                                 inline=inline, nvvm_options=nvvm_options)
             self.overloads[args] = cres
 
-            # The inserted function uses the id of the CompileResult as a key,
-            # consistent with get_overload() above.
-            cres.target_context.insert_user_function(id(cres), cres.fndesc,
+            cres.target_context.insert_user_function(cres.entry_point,
+                                                     cres.fndesc,
                                                      [cres.library])
         else:
             cres = self.overloads[args]
@@ -808,7 +714,7 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         if kernel is None:
             if not self._can_compile:
                 raise RuntimeError("Compilation disabled")
-            kernel = _Kernel(self.py_func, argtypes, link=self.link,
+            kernel = _Kernel(self.py_func, argtypes,
                              **self.targetoptions)
             # Inspired by _DispatcherBase.add_overload, but differs slightly
             # because we're inserting a _Kernel object instead of a compiled
@@ -818,7 +724,6 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
             self.overloads[argtypes] = kernel
 
             kernel.bind()
-            self.sigs.append(sig)
         return kernel
 
     def inspect_llvm(self, signature=None):
@@ -911,11 +816,11 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
             defn.bind()
 
     @classmethod
-    def _rebuild(cls, py_func, sigs, targetoptions):
+    def _rebuild(cls, py_func, targetoptions):
         """
         Rebuild an instance.
         """
-        instance = cls(py_func, sigs, targetoptions)
+        instance = cls(py_func, targetoptions)
         return instance
 
     def _reduce_states(self):
@@ -923,5 +828,5 @@ class Dispatcher(_dispatcher.Dispatcher, serialize.ReduceMixin):
         Reduce the instance for serialization.
         Compiled definitions are discarded.
         """
-        return dict(py_func=self.py_func, sigs=self.sigs,
+        return dict(py_func=self.py_func,
                     targetoptions=self.targetoptions)
