@@ -48,7 +48,7 @@ cooperative launch of a kernel with a given block size and dynamic shared
 memory requirement, use the ``max_cooperative_grid_blocks()`` method of kernel
 overloads:
 
-.. automethod:: numba.cuda.compiler._Kernel.max_cooperative_grid_blocks
+.. automethod:: numba.cuda.dispatcher._Kernel.max_cooperative_grid_blocks
 
 This can be used to ensure that the kernel is launched with no more than the
 maximum number of blocks. Exceeding the maximum number of blocks for the

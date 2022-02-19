@@ -2,6 +2,7 @@ import platform
 import sys
 import os
 import re
+import shutil
 import warnings
 
 # YAML needed to use file based Numba config
@@ -465,7 +466,11 @@ class _EnvReloader(object):
                                              int, 0)
 
         # gdb binary location
-        GDB_BINARY = _readenv("NUMBA_GDB_BINARY", str, '/usr/bin/gdb')
+        def which_gdb(path_or_bin):
+            gdb = shutil.which(path_or_bin)
+            return gdb if gdb is not None else path_or_bin
+
+        GDB_BINARY = _readenv("NUMBA_GDB_BINARY", which_gdb, 'gdb')
 
         # CUDA Memory management
         CUDA_MEMORY_MANAGER = _readenv("NUMBA_CUDA_MEMORY_MANAGER", str,

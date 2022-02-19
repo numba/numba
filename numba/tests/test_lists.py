@@ -312,6 +312,10 @@ def list_mul(n, v):
     a = list(range(n))
     return a * v
 
+def list_mul2(n, v):
+    a = list(range(n))
+    return v * a
+
 def list_mul_inplace(n, v):
     a = list(range(n))
     a *= v
@@ -655,6 +659,9 @@ class TestLists(MemoryLeakMixin, TestCase):
 
     def test_mul(self):
         self.check_mul(list_mul)
+
+    def test_mul2(self):
+        self.check_mul(list_mul2)
 
     def test_mul_inplace(self):
         self.check_mul(list_mul_inplace)
