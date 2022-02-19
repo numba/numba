@@ -522,11 +522,7 @@ class TestCudaIntrinsic(CUDATestCase):
         # Look for two .reg .pred __$temp3 lines preceded by a '{'
         # which disambiguates (via nesting) the variable names.
 
-        predicate_count = 0
-        for line in ptx.split('\n'):
-            if '{ .reg .pred __$temp3;' in line:
-                predicate_count += 1
-
+        predicate_count = ptx.count('{ .reg .pred __$temp3;')
         expected = 2
         self.assertEqual(expected, predicate_count,
                          (f'Got {predicate_count} predicate instructions, '

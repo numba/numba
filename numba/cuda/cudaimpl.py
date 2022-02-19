@@ -492,12 +492,19 @@ lower_fp16_binary(stubs.fp16.hsub, 'sub')
 lower_fp16_binary(stubs.fp16.hmul, 'mul')
 
 
+def inline_asm_helper(builder, func_ret_ty, func_arg_types,
+                      asm_str, constraints_str, asm_args):
+    fnty = ir.FunctionType(func_ret_ty, func_arg_types)
+    asm = ir.InlineAsm(fnty, asm_str, constraints_str)
+    return builder.call(asm, asm_args)
+
+
 @lower(stubs.fp16.hdiv, types.float16, types.float16)
 def lower_fp16_divide(context, builder, sig, args):
-    x = args[0]
-    y = args[1]
+    x, y = args
+
     # Floating point 16 division algorithm implemented
-    # using Newton Rapson algorithm.
+    # using Newton Raphson algorithm.
 
     # x = arg1, y = arg2
     # Implement x/y
@@ -505,27 +512,24 @@ def lower_fp16_divide(context, builder, sig, args):
     # Convert fp16 args to fp32 so we can implement
     # division by reciprocal multiplication on fp32
     # values
-    cvt2float_fnty = ir.FunctionType(ir.FloatType(), [ir.IntType(16)])
-    cvt2float_asm = ir.InlineAsm(cvt2float_fnty,
-                                 "cvt.f32.f16 $0, $1;",
-                                 "=f,h")
-    x_fp32 = builder.call(cvt2float_asm, [x])
-    y_fp32 = builder.call(cvt2float_asm, [y])
 
-    rcp_fnty = ir.FunctionType(ir.FloatType(), [ir.FloatType()])
+    asm = "cvt.f32.f16 $0, $1;"
+    constr = "=f,h"
+    x_fp32 = inline_asm_helper(builder, ir.FloatType(), [ir.IntType(16)],
+                               asm, constr, [x])
+    y_fp32 = inline_asm_helper(builder, ir.FloatType(), [ir.IntType(16)],
+                               asm, constr, [y])
 
     # Obtain a gross estimate of the reciprocal of argument 2 (y)
     # which will be refined. This is the first step in the Newton
-    # Rapson method.
+    # Raphson method.
 
     # y0 = 1/y * (1-err), here y0 is not a precise 1/y
     # it is an approximation and the term 'err' stands for the
     # relative error of the approximation.
 
-    rcp_asm = ir.InlineAsm(rcp_fnty,
-                           "rcp.approx.ftz.f32 $0, $1;",
-                           "=f,f")
-    yn = builder.call(rcp_asm, [y_fp32])
+    yn = inline_asm_helper(builder, ir.FloatType(), [ir.FloatType()],
+                           "rcp.approx.ftz.f32 $0, $1;", "=f,f", [y_fp32])
 
     # Implement fp32 division via multiplication by
     # reciprocal of arg2
@@ -533,20 +537,12 @@ def lower_fp16_divide(context, builder, sig, args):
     # Our objective is to get a quotient x/y, correctly rounded to nearest
     # even in fp16 format, so we can do q0 = x * yn.
 
-    # We need to perform one more Newton iteration to eliminate the error
-    # from the multiplication.
-
-    # Mathematically we have: q0 = x * 1/y * (1 - err)
-    # So err (correction_term) = x - y*q0 = fma(-y, q0, x)
-    # And q1 = err*yn + q0 = fma(err, yn, q0)
     q0 = builder.fmul(x_fp32, yn)
 
     # Convert fp32 division result to fp16
-    cvt2fp16_fnty = ir.FunctionType(ir.IntType(16), [ir.FloatType()])
-    cvt2fp16_asm = ir.InlineAsm(cvt2fp16_fnty,
-                                "cvt.rn.f16.f32 $0, $1;",
-                                "=h,f")
-    fp16_div = builder.call(cvt2fp16_asm, [q0])
+
+    fp16_div = inline_asm_helper(builder, ir.IntType(16), [ir.FloatType()],
+                                 "cvt.rn.f16.f32 $0, $1;", "=h,f", [q0])
 
     # Before performing a second Newton Rapson iteration
     # filter out small denormal values and zero.
@@ -557,26 +553,18 @@ def lower_fp16_divide(context, builder, sig, args):
 
     # Check for small denormals
     temp_reg = '__$$temp3'
-    reg_pred_fnty = ir.FunctionType(ir.VoidType(),[])
-    reg_pred_asm = ir.InlineAsm(reg_pred_fnty,
-                                f"{{ .reg .pred {temp_reg};",
-                                "")
-    builder.call(reg_pred_asm, [])
+    inline_asm_helper(builder, ir.VoidType(), [],
+                      f"{{ .reg .pred {temp_reg};", "", [])
 
-    setp_fnty = ir.FunctionType(ir.VoidType(),
-                                [ir.IntType(16), ir.IntType(16)])
     setp_cnst = context.get_constant(types.int16, 143)
-    setp_asm = ir.InlineAsm(setp_fnty,
-                            f"setp.lt.f16 {temp_reg}, $0, $1;",
-                            'h,h')
-    builder.call(setp_asm, [and_op, setp_cnst])
+    inline_asm_helper(builder, ir.VoidType(), [ir.IntType(16),
+                                               ir.IntType(16)],
+                      f"setp.lt.f16 {temp_reg}, $0, $1;", "h,h",
+                      [and_op, setp_cnst])
 
-    selp_fnty = ir.FunctionType(ir.IntType(16),[])
-
-    selp_asm = ir.InlineAsm(selp_fnty,
-                            f"selp.u16 $0, 1, 0, {temp_reg};}}",
-                            '=h')
-    selp = builder.call(selp_asm, [])
+    selp = inline_asm_helper(builder, ir.IntType(16), [],
+                             f"selp.u16 $0, 1, 0, {temp_reg};}}", "=h",
+                             [])
 
     zero = context.get_constant(types.int16, 0)
     cmp1 = builder.icmp_unsigned("==",
@@ -599,9 +587,6 @@ def lower_fp16_divide(context, builder, sig, args):
     # Fall through branch (Second Newton Rapson iteration)
     builder.position_at_start(fall_thru_bb)
 
-    float_zero = context.get_constant(types.float32, 0.0)
-    neg_y = builder.fsub(float_zero, y_fp32)
-
     fname = 'llvm.nvvm.fma.rn.f'
     lmod = builder.module
     fnty = ir.FunctionType(ir.FloatType(),
@@ -610,20 +595,28 @@ def lower_fp16_divide(context, builder, sig, args):
                             ir.FloatType()))
     fma_func = cgutils.get_or_insert_function(lmod, fnty, fname)
 
+    # We need to perform one more Newton iteration to eliminate the error
+    # from the multiplication.
+    #
     # Mathematically we have: q0 = x * 1/y * (1 - err)
     # So err (correction_term) = x - y*q0 = fma(-y, q0, x)
     # And q1 = err*yn + q0 = fma(err, yn, q0)
 
+    float_zero = context.get_constant(types.float32, 0.0)
+    neg_y = builder.fsub(float_zero, y_fp32)
     err = builder.call(fma_func, [neg_y, q0, x_fp32])
     q1 = builder.call(fma_func, [yn, err, q0])
-    fp32_to_f16 = builder.call(cvt2fp16_asm, [q1])
+
+    fp32_to_fp16 = inline_asm_helper(builder, ir.IntType(16),
+                                     [ir.FloatType()],
+                                     "cvt.rn.f16.f32 $0, $1;", "=h,f", [q1])
     builder.branch(true_bb)
 
     #True branch
     builder.position_at_start(true_bb)
     phi_node = builder.phi(ir.IntType(16))
     phi_node.add_incoming(fp16_div, entry_bb)
-    phi_node.add_incoming(fp32_to_f16, fall_thru_bb)
+    phi_node.add_incoming(fp32_to_fp16, fall_thru_bb)
     return phi_node
 
 
