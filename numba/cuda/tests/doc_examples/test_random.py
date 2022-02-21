@@ -7,6 +7,7 @@ from numba.cuda.testing import CUDATestCase, skip_on_cudasim
 
 @skip_on_cudasim("cudasim doesn't support cuda import at non-top-level")
 class TestRandom(CUDATestCase):
+
     def test_ex_3d_grid(self):
         # magictoken.ex_3d_grid.begin
         from numba import cuda

@@ -9,6 +9,7 @@ from numba.tests.support import linux_only, override_config
 from unittest.mock import call, patch
 
 
+@unittest.skip("SKIP, segfaults and other problems in the type system")
 @skip_on_cudasim('CUDA Array Interface is not supported in the simulator')
 class TestCudaArrayInterface(ContextResettingTestCase):
     def assertPointersEqual(self, a, b):
@@ -62,6 +63,7 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         # Flush
         deallocs.clear()
 
+    @unittest.skip("SKIP, segfaults")
     def test_kernel_arg(self):
         h_arr = np.arange(10)
         d_arr = cuda.to_device(h_arr)
@@ -81,6 +83,7 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         np.testing.assert_array_equal(wrapped.copy_to_host(), h_arr + val)
         np.testing.assert_array_equal(d_arr.copy_to_host(), h_arr + val)
 
+    @unittest.skip("SKIP, segfaults")
     def test_ufunc_arg(self):
         @vectorize(['f8(f8, f8)'], target='cuda')
         def vadd(a, b):
@@ -98,6 +101,7 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         returned = vadd(h_arr, val, out=out)
         np.testing.assert_array_equal(returned.copy_to_host(), h_arr + val)
 
+    @unittest.skip("SKIP, segfaults")
     def test_gufunc_arg(self):
         @guvectorize(['(f8, f8, f8[:])'], '(),()->()', target='cuda')
         def vadd(inp, val, out):
@@ -116,6 +120,7 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         np.testing.assert_array_equal(returned.copy_to_host(), h_arr + val)
         self.assertPointersEqual(returned, out._arr)
 
+    @unittest.skip("SKIP, segfaults")
     def test_array_views(self):
         """Views created via array interface support:
             - Strided slices

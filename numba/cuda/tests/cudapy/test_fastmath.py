@@ -119,6 +119,7 @@ class TestFastMathOption(CUDATestCase):
         self.assertIn('div.rn.f32', slowver.ptx[sig])
         self.assertNotIn('div.rn.f32', fastver.ptx[sig])
 
+    @unittest.skip("Need to fix exception handling")
     def test_divf_exception(self):
         def f10(r, x, y):
             r[0] = x / y

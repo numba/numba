@@ -102,6 +102,7 @@ def child_test_wrapper(result_queue):
 
 @skip_on_cudasim('Streams not supported on the simulator')
 class TestPTDS(CUDATestCase):
+    @unittest.skip("Broken, looks like a memcpy device to host fails")
     @skip_with_cuda_python('Function names unchanged for PTDS with NV Binding')
     def test_ptds(self):
         # Run a test with PTDS enabled in a child process

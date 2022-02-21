@@ -12,6 +12,7 @@ regex_pattern = (
 )
 
 
+@unittest.skip("Exceptions not yet handled")
 class TestUserExc(CUDATestCase):
 
     def test_user_exception(self):

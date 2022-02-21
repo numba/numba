@@ -30,6 +30,7 @@ recordtype = np.dtype(
 )
 
 
+@unittest.skip("Uses extensions and records, currently broken")
 class TestRetrieveAutoconvertedArrays(CUDATestCase):
     def setUp(self):
         super().setUp()

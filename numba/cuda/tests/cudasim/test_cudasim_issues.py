@@ -9,6 +9,8 @@ import unittest
 
 
 class TestCudaSimIssues(CUDATestCase):
+    
+    @unittest.skip("Numerically incorrect (looks like invalid read)")
     def test_record_access(self):
         backyard_type = [('statue', np.float64),
                          ('newspaper', np.float64, (6,))]

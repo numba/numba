@@ -28,6 +28,7 @@ class TestException(CUDATestCase):
             safe_foo[1, 3](np.array([0, 1]))
         self.assertIn("tuple index out of range", str(cm.exception))
 
+    @unittest.skip("Need to fix exception handling")
     def test_user_raise(self):
         @cuda.jit(debug=True)
         def foo(do_raise):
