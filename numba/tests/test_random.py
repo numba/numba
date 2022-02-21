@@ -1424,7 +1424,7 @@ class TestRandomNoncentralChiSquare(BaseTest):
         Test noncentral_chisquare(df, nonc, size)
         """
         cfunc = jit(nopython=True)(numpy_noncentral_chisquare)
-        sizes = (None, (10,), (10, 10))
+        sizes = (None, 10, (10,), (10, 10))
         inputs = (
             (0.5, 1),
             (1, 5),
