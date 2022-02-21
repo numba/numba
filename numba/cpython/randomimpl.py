@@ -1594,15 +1594,17 @@ def dirichlet(alpha, size=None):
 def noncentral_chisquare(df, nonc, size=None):
 
     @register_jitable
-    def noncentral_chisquare_single(df, nonc):
-        # identical to numpy implementation from distributions.c
-        # https://github.com/numpy/numpy/blob/c65bc212ec1987caefba0ea7efe6a55803318de9/numpy/random/src/distributions/distributions.c#L797
-        
+    def validate_input(df, nonc):
         if df <= 0:
             raise ValueError("df <= 0")
         if nonc < 0:
             raise ValueError("nonc < 0")
 
+    @register_jitable
+    def noncentral_chisquare_single(df, nonc):
+        # identical to numpy implementation from distributions.c
+        # https://github.com/numpy/numpy/blob/c65bc212ec1987caefba0ea7efe6a55803318de9/numpy/random/src/distributions/distributions.c#L797
+        
         if np.isnan(nonc):
             return np.nan
 
@@ -1617,23 +1619,18 @@ def noncentral_chisquare(df, nonc, size=None):
 
     if size in (None, types.none):
         def noncentral_chisquare_impl(df, nonc, size=None):
+            validate_input(df, nonc)
             return noncentral_chisquare_single(df, nonc)
 
-    elif isinstance(size, types.Integer):
+    elif isinstance(size, types.Integer) or (
+        (isinstance(size, (types.UniTuple)) and isinstance(size.dtype, types.Integer))
+        ):
 
         def noncentral_chisquare_impl(df, nonc, size=None):
+            validate_input(df, nonc)
             out = np.empty(size)
             out_flat = out.flat
-            for idx, _ in enumerate(out_flat):
-                out_flat[idx] = noncentral_chisquare_single(df, nonc)
-            return out
-
-    elif isinstance(size, (types.UniTuple)) and isinstance(size.dtype, types.Integer):
-
-        def noncentral_chisquare_impl(df, nonc, size=None):
-            out = np.empty(size)
-            out_flat = out.flat
-            for idx, _ in enumerate(out_flat):
+            for idx in range(out.size):
                 out_flat[idx] = noncentral_chisquare_single(df, nonc)
             return out
 
@@ -1644,3 +1641,4 @@ def noncentral_chisquare(df, nonc, size=None):
         )
 
     return noncentral_chisquare_impl
+
