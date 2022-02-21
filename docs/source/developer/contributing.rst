@@ -99,8 +99,7 @@ Then create an environment with the right dependencies::
 .. note::
    This installs an environment based on Python 3.8, but you can of course
    choose another version supported by Numba.  To test additional features,
-   you may also need to install ``tbb`` and/or ``llvm-openmp`` and
-   ``intel-openmp``.
+   you may also need to install ``tbb`` and/or ``llvm-openmp``.
 
 To activate the environment for the current shell session::
 

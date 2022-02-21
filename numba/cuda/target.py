@@ -2,8 +2,8 @@ import re
 import llvmlite.binding as ll
 from llvmlite import ir
 
-from numba.core import (typing, types, dispatcher, debuginfo, itanium_mangler,
-                        cgutils)
+from numba.core import typing, types, debuginfo, itanium_mangler, cgutils
+from numba.core.dispatcher import Dispatcher
 from numba.core.utils import cached_property
 from numba.core.base import BaseContext
 from numba.core.callconv import MinimalCallConv
@@ -20,15 +20,19 @@ from numba.cuda import codegen, nvvmutils
 class CUDATypingContext(typing.BaseContext):
     def load_additional_registries(self):
         from . import cudadecl, cudamath, libdevicedecl
+        from numba.core.typing import enumdecl
 
         self.install_registry(cudadecl.registry)
         self.install_registry(cudamath.registry)
         self.install_registry(cmathdecl.registry)
         self.install_registry(libdevicedecl.registry)
+        self.install_registry(enumdecl.registry)
 
     def resolve_value_type(self, val):
-        # treat dispatcher object as another device function
-        if isinstance(val, dispatcher.Dispatcher):
+        # treat other dispatcher object as another device function
+        from numba.cuda.dispatcher import CUDADispatcher
+        if (isinstance(val, Dispatcher) and not
+                isinstance(val, CUDADispatcher)):
             try:
                 # use cached device function
                 val = val.__dispatcher
@@ -40,9 +44,7 @@ class CUDATypingContext(typing.BaseContext):
                 targetoptions['device'] = True
                 targetoptions['debug'] = targetoptions.get('debug', False)
                 targetoptions['opt'] = targetoptions.get('opt', True)
-                sigs = None
-                from .compiler import Dispatcher
-                disp = Dispatcher(val, sigs, targetoptions)
+                disp = CUDADispatcher(val.py_func, targetoptions)
                 # cache the device function for future use and to avoid
                 # duplicated copy of the same function.
                 val.__dispatcher = disp
@@ -89,7 +91,7 @@ class CUDATargetContext(BaseContext):
         # side effect of import needed for numba.cpython.*, the builtins
         # registry is updated at import time.
         from numba.cpython import numbers, tupleobj, slicing # noqa: F401
-        from numba.cpython import rangeobj, iterators # noqa: F401
+        from numba.cpython import rangeobj, iterators, enumimpl # noqa: F401
         from numba.cpython import unicode, charseq # noqa: F401
         from numba.cpython import cmathimpl
         from numba.np import arrayobj # noqa: F401
