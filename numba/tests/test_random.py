@@ -1384,19 +1384,19 @@ class TestRandomNoncentralChiSquare(BaseTest):
 
     def _check_sample(self, size, sample):
 
-        """Check output structure"""
+        # Check output structure
         if size is not None:
             self.assertIsInstance(sample, np.ndarray)
             self.assertEqual(sample.dtype, np.float64)
             
-            if type(size) is int:
+            if isinstance(size, int):
                 self.assertEqual(sample.shape, (size,))
             else:
                 self.assertEqual(sample.shape, size)
         else:
              self.assertIsInstance(sample, float)
 
-        """Check statistical properties"""
+        # Check statistical properties
         for val in np.nditer(sample):
             self.assertGreaterEqual(val, 0)
 
@@ -1412,12 +1412,10 @@ class TestRandomNoncentralChiSquare(BaseTest):
             (100000, 1),
             (1, 10000),
         )
-        for input in inputs:
-            df, nonc = input
+        for df, nonc in inputs:
             res = cfunc(df, nonc)
             self._check_sample(None, res)
-            nonc = np.nan
-            res = cfunc(df, nonc) # test branch when nonc is nan
+            res = cfunc(df, np.nan) # test branch when nonc is nan
             self.assertTrue(np.isnan(res))
 
 
@@ -1435,12 +1433,10 @@ class TestRandomNoncentralChiSquare(BaseTest):
             (1, 10000),
         )
 
-        for input, size in itertools.product(inputs, sizes):
-            df, nonc = input
+        for (df, nonc), size in itertools.product(inputs, sizes):
             res = cfunc(df, nonc, size)
             self._check_sample(size, res)
-            nonc = np.nan
-            res = cfunc(df, nonc, size)
+            res = cfunc(df, np.nan, size) # test branch when nonc is nan
             self.assertTrue(np.isnan(res).all())
 
     def test_noncentral_chisquare_exceptions(self):
