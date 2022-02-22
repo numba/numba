@@ -818,8 +818,8 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
     def ptx(self):
         warnings.warn(
             "Attribute `ptx` is deprecated and will be removed in the future. "
-            "To retrieve compiled machine code of the cuda function, use "
-            "`inpect_asm`."
+            "To retrieve compiled machine code of the cuda function of certain"
+            "signature `sig`, use `inspect_asm(sig)`."
             , FutureWarning
         )
         return {sig: overload.ptx for sig, overload in self.overloads.items()}
