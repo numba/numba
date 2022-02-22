@@ -433,7 +433,7 @@ class SetInstance(object):
             self.upsize(used)
         self.set_dirty(True)
 
-    def _add_key(self, payload, item, h, do_resize=True):
+    def _add_key(self, payload, item, h, do_resize=True, do_incref=True):
         context = self._context
         builder = self._builder
 
@@ -445,7 +445,8 @@ class SetInstance(object):
             entry = payload.get_entry(i)
             old_hash = entry.hash
             entry.hash = h
-            self.incref_value(item)
+            if do_incref:
+                self.incref_value(item)
             entry.key = item
             # used++
             used = payload.used
@@ -947,13 +948,12 @@ class SetInstance(object):
                                               (errmsg,))
 
         # Re-insert old entries
-        # Decref to balance incref from `_add_key`
+        # No incref since they already were the first time they were inserted
         payload = self.payload
         with old_payload._iterate() as loop:
             entry = loop.entry
             self._add_key(payload, entry.key, entry.hash,
-                          do_resize=False)
-            self.decref_value(entry.key)
+                          do_resize=False, do_incref=False)
 
         self._free_payload(old_payload.ptr)
 
@@ -1084,7 +1084,8 @@ class SetInstance(object):
         with builder.if_then(builder.load(ok), likely=True):
             # create destructor for new meminfo
             dtor = self._imp_dtor(context, builder.module)
-            meminfo = context.nrt.meminfo_new_varsize_dtor(builder, allocsize, builder.bitcast(dtor, cgutils.voidptr_t))
+            meminfo = context.nrt.meminfo_new_varsize_dtor(
+                builder, allocsize, builder.bitcast(dtor, cgutils.voidptr_t))
             alloc_ok = cgutils.is_null(builder, meminfo)
 
             with builder.if_else(alloc_ok, likely=False) as (if_error, if_ok):
@@ -1139,7 +1140,7 @@ class SetInstance(object):
             payload = _SetPayload(context, builder, self._ty, fn.args[0])
             with payload._iterate() as loop:
                 entry = loop.entry
-                self.decref_value(entry.key)
+                context.nrt.decref(builder, self._ty.dtype, entry.key)
             builder.ret_void()
     
         return fn
@@ -1245,8 +1246,7 @@ def set_constructor(context, builder, sig, args):
 
     # If the argument has a len(), preallocate the set so as to
     # avoid resizes.
-    # both `add` and `for_iter` incref each item in the set, so manually decref
-    # the items to avoid a leak from the double incref
+    # `for_iter` increfs each item in the set, so don't incref in add
     n = call_len(context, builder, items_type, items)
     inst = SetInstance.allocate(context, builder, set_type, n)
     with for_iter(context, builder, items_type, items) as loop:
