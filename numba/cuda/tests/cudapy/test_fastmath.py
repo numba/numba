@@ -1,3 +1,4 @@
+from typing import List
 from dataclasses import dataclass, field
 from numba import cuda, float32
 from numba.cuda.compiler import compile_ptx_for_current_device
@@ -10,10 +11,10 @@ import unittest
 
 @dataclass
 class FastMathCriterion:
-    fast_expected: list[str] = field(default_factory=list)
-    fast_unexpected: list[str] = field(default_factory=list)
-    slow_expected: list[str] = field(default_factory=list)
-    slow_unexpected: list[str] = field(default_factory=list)
+    fast_expected: List[str] = field(default_factory=list)
+    fast_unexpected: List[str] = field(default_factory=list)
+    slow_expected: List[str] = field(default_factory=list)
+    slow_unexpected: List[str] = field(default_factory=list)
 
     def check(self, test: CUDATestCase, fast: str, slow: str):
         test.assertTrue(all(i in fast for i in self.fast_expected))
