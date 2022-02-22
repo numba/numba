@@ -54,6 +54,9 @@ class FindDefFirstLine(ast.NodeVisitor):
 
 def get_func_body_first_lineno(pyfunc):
     """
+    Look up the first line of function body using the file in
+    ``pyfunc.__code__.co_filename``.
+
     Returns
     -------
     lineno : int; or None
