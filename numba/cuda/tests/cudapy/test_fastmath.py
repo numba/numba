@@ -9,6 +9,7 @@ from numba.cuda.testing import CUDATestCase, skip_on_cudasim
 import unittest
 
 
+@skip_on_cudasim('Fastmath and PTX inspection not available on cudasim')
 @dataclass
 class FastMathCriterion:
     fast_expected: List[str] = field(default_factory=list)
