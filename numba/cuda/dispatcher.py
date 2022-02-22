@@ -3,6 +3,7 @@ import os
 import sys
 import ctypes
 import functools
+import warnings
 
 from numba.core import config, serialize, sigutils, types, typing, utils
 from numba.core.compiler_lock import global_compiler_lock
@@ -154,6 +155,12 @@ class _Kernel(serialize.ReduceMixin):
         '''
         PTX code for this kernel.
         '''
+        warnings.warn(
+            "Attribute `ptx` is deprecated and will be removed in the future. "
+            "To retrieve compiled machine code of the cuda function, use "
+            "`inpect_asm`."
+            , FutureWarning
+        )
         return self._codelibrary.get_asm_str()
 
     @property
@@ -809,6 +816,12 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
     @property
     def ptx(self):
+        warnings.warn(
+            "Attribute `ptx` is deprecated and will be removed in the future. "
+            "To retrieve compiled machine code of the cuda function, use "
+            "`inpect_asm`."
+            , FutureWarning
+        )
         return {sig: overload.ptx for sig, overload in self.overloads.items()}
 
     def bind(self):
