@@ -28,13 +28,11 @@ class TestFastMathOption(CUDATestCase):
     def _test_fast_math_common(self, pyfunc, sig, device, criterion):
 
         # Test jit code path
-        # For device function, the advised way to retrieve ptx is through
-        # compile_ptx_*. See:
-        # https://numba.readthedocs.io/en/stable/reference/deprecation.html#deprecation-of-the-inspect-ptx-method # noqa E501
-        if not device:
-            fastver = cuda.jit(sig, device=device, fastmath=True)(pyfunc)
-            slowver = cuda.jit(sig, device=device)(pyfunc)
-            criterion.check(self, fastver.ptx[sig], slowver.ptx[sig])
+        fastver = cuda.jit(sig, device=device, fastmath=True)(pyfunc)
+        slowver = cuda.jit(sig, device=device)(pyfunc)
+        criterion.check(
+            self, fastver.inspect_asm(sig), slowver.inspect_asm(sig)
+        )
 
         # Test compile_ptx code path
         fastptx, _ = compile_ptx_for_current_device(
