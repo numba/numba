@@ -138,6 +138,7 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
     # so it can be traversed in any order.
     for blk in func_ir.blocks.values():
         new_body = []
+        errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
         for i, stmt in enumerate(blk.body):
             if (
                 isinstance(stmt, ir.Assign)
@@ -166,7 +167,6 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                             not_found = False
                         else:
                             varkwarg_loc -= 1
-                    start_search = varkwarg_loc
                     if (
                         kws
                         or not_found
@@ -178,15 +178,104 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                         # If we couldn't find where the kwargs are created
                         # then it should be a normal **kwargs call
                         # so we produce an unsupported message.
-                        errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
                         raise UnsupportedError(errmsg)
-                    # Extract the kws from the build_map
-                    kws = keyword_def.value.items.copy()
-                    # kws are required to have constants for all of the strings.
-                    # We update these with the value_indexes
-                    for key, index in keyword_def.value.value_indexes.items():
-                        kws[index] = (key, kws[index][1])
-
+                    # Determine the kws
+                    if keyword_def.value.items:
+                        # n_kws <= 15 case.
+                        # Extract the kws directly from the build_map
+                        kws = keyword_def.value.items.copy()
+                        # kws are required to have constant keys.
+                        # We update these with the value_indexes
+                        value_indexes = keyword_def.value.value_indexes
+                        for key, index in value_indexes.items():
+                            kws[index] = (key, kws[index][1])
+                    else:
+                        # n_kws > 15 case.
+                        # The map is initially created without any initial
+                        # values and there should be a series of setitem to
+                        # populate the map between varkwarg_loc and
+                        # start_search.
+                        # Each section here should be of the form:
+                        #
+                        #   $constvar = const(str, ...) # create the const key
+                        #   CREATE THE ARGUMENT, This may take multiple lines.
+                        #   $var = getattr(
+                        #             value=$build_map_var,
+                        #             attr=__setitem__,
+                        #          )
+                        #   $unused_var = call $var($constvar, $created_arg)
+                        #
+                        # We check for this structure and append to kws.
+                        # We also remove the getattr and call from
+                        # the IR.
+                        kws = []
+                        append_search_idx = varkwarg_loc + 1
+                        while append_search_idx <= start_search:
+                            # The first value must be a constant.
+                            const_stmt = blk.body[append_search_idx]
+                            if not (
+                                isinstance(const_stmt, ir.Assign)
+                                and isinstance(const_stmt.value, ir.Const)
+                            ):
+                                # We cannot handle this format so raise the
+                                # original error message.
+                                raise UnsupportedError(errmsg)
+                            key_var_name = const_stmt.target.name
+                            key_val = const_stmt.value.value
+                            append_search_idx += 1
+                            # Now we need to search for a getattr with setitem
+                            not_found_getattr = True
+                            while (
+                                append_search_idx <= start_search
+                                and not_found_getattr
+                            ):
+                                getattr_stmt = blk.body[append_search_idx]
+                                if (
+                                    isinstance(getattr_stmt, ir.Assign)
+                                    and isinstance(getattr_stmt.value, ir.Expr)
+                                    and getattr_stmt.value.op == "getattr"
+                                    and (
+                                        getattr_stmt.value.value.name
+                                        == varkwarg.name
+                                    )
+                                    and getattr_stmt.value.attr == "__setitem__"
+                                ):
+                                    not_found_getattr = False
+                                else:
+                                    append_search_idx += 1
+                            if (
+                                not_found_getattr
+                                or append_search_idx == start_search
+                            ):
+                                # We cannot handle this format so raise the
+                                # original error message.
+                                raise UnsupportedError(errmsg)
+                            setitem_stmt = blk.body[append_search_idx + 1]
+                            if not (
+                                isinstance(setitem_stmt, ir.Assign)
+                                and isinstance(setitem_stmt.value, ir.Expr)
+                                and setitem_stmt.value.op == "call"
+                                and (
+                                    setitem_stmt.value.func.name
+                                    == getattr_stmt.target.name
+                                )
+                                and len(setitem_stmt.value.args) == 2
+                                and (
+                                    setitem_stmt.value.args[0].name
+                                    == key_var_name
+                                )
+                            ):
+                                # We cannot handle this format so raise the
+                                # original error message.
+                                raise UnsupportedError(errmsg)
+                            arg_var = setitem_stmt.value.args[1]
+                            # Append the (key, value) pair.
+                            kws.append((key_val, arg_var))
+                            # Remove the __setitem__ getattr and call
+                            new_body[append_search_idx] = None
+                            new_body[append_search_idx + 1] = None
+                            append_search_idx += 2
+                    start_search = varkwarg_loc
                     # Remove the build_map from the body.
                     new_body[varkwarg_loc] = None
                 if vararg is not None:
