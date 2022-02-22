@@ -5,7 +5,7 @@ import operator
 import logging
 
 from numba.core import errors, dataflow, controlflow, ir, config
-from numba.core.errors import NotDefinedError, error_extras
+from numba.core.errors import NotDefinedError, UnsupportedError, error_extras
 from numba.core.utils import (PYVERSION, BINOPS_TO_OPERATORS,
                               INPLACE_BINOPS_TO_OPERATORS,)
 from numba.core.byteflow import Flow, AdaptDFA, AdaptCFA
@@ -77,6 +77,153 @@ class Assigner(object):
             return self.dest_to_src[destname]
         self.unused_dests.discard(destname)
         return None
+
+
+def peep_hole_call_function_ex_to_call_function_kw(func_ir):
+    """
+    This peephole rewrites a bytecode sequence unique to Python 3.10
+    where CALL_FUNCTION_EX is used instead of CALL_FUNCTION_KW because of
+    stack limitations set by CPython. This limitation is imposed whenever
+    a function call has too many arguments or keyword arguments.
+
+    https://github.com/python/cpython/blob/a58ebcc701dd6c43630df941481475ff0f615a81/Python/compile.c#L55
+    https://github.com/python/cpython/blob/a58ebcc701dd6c43630df941481475ff0f615a81/Python/compile.c#L4442
+
+    In particular, change is imposed whenever (n_args / 2) + n_kws > 15.
+
+    Different bytecode is generated for args depending on if n_args > 30.
+    With n_args <= 30, the bytecode looks like:
+
+        # Start for each argument
+        LOAD_FAST  # Load each argument.
+        # End for each argument
+        ...
+        BUILD_TUPLE # Create a tuple of the arguments
+
+    whereas with n_args > 30 the bytecode looks like:
+
+        BUILD_TUPLE # Create a list to append to
+        # Start for each argument
+        LOAD_FAST  # Load each argument.
+        LIST_APPEND # Add the argument to the list
+        # End for each argument
+        ...
+        LIST_TO_TUPLE # Convert the args to a tuple.
+
+    Similar the bytecode is different for n_kws > 15.
+    With n_kws <= 15, the bytecode looks like:
+
+        # Start for each argument
+        LOAD_FAST  # Load each argument.
+        # End for each argument
+        ...
+        BUILD_CONST_KEY_MAP # Build a map
+
+    whereas with n_kws > 15, the bytecode looks like:
+
+        BUILD_MAP # Construct the map
+        # Start for each argument
+        LOAD_CONST # Load a constant for the name of the argument
+        LOAD_FAST  # Load each argument.
+        MAP_ADD # Append the (key, value) pair to the map
+        # End for each argument
+
+    Finally at the end the bytecode will contain a CALL_FUNCTION_EX instruction.
+
+    This optimizations unwraps the *args and **kwargs in the function call
+    and places these values directly into the args and kwargs.
+
+    """
+    # All changes are local to the a single block
+    # so it can be traversed in any order.
+    for blk in func_ir.blocks.values():
+        new_body = []
+        for i, stmt in enumerate(blk.body):
+            if (
+                isinstance(stmt, ir.Assign)
+                and isinstance(stmt.value, ir.Expr)
+                and stmt.value.op == "call"
+            ):
+                call = stmt.value
+                args = call.args
+                kws = call.kws
+                # We search for replace if a call has either vararg
+                # or varkwarg.
+                vararg = call.vararg
+                varkwarg = call.varkwarg
+                start_search = i - 1
+                if varkwarg is not None:
+                    # varkwarg should be defined second so we start there.
+                    varkwarg_loc = start_search
+                    keyword_def = None
+                    not_found = True
+                    while varkwarg_loc >= 0 and not_found:
+                        keyword_def = blk.body[varkwarg_loc]
+                        if (
+                            isinstance(keyword_def, ir.Assign)
+                            and keyword_def.target.name == varkwarg.name
+                        ):
+                            not_found = False
+                        else:
+                            varkwarg_loc -= 1
+                    start_search = varkwarg_loc
+                    if (
+                        kws
+                        or not_found
+                        or not (
+                            isinstance(keyword_def.value, ir.Expr)
+                            and keyword_def.value.op == "build_map"
+                        )
+                    ):
+                        # If we couldn't find where the kwargs are created
+                        # then it should be a normal **kwargs call
+                        # so we produce an unsupported message.
+                        errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
+                        raise UnsupportedError(errmsg)
+                    # Extract the kws from the build_map
+                    kws = keyword_def.value.items.copy()
+                    # kws are required to have constants for all of the strings.
+                    # We update these with the value_indexes
+                    for key, index in keyword_def.value.value_indexes.items():
+                        kws[index] = (key, kws[index][1])
+
+                    # Remove the build_map from the body.
+                    new_body[varkwarg_loc] = None
+                if vararg is not None:
+                    # Vararg isn't required to be provided.
+                    vararg_loc = start_search
+                    args_def = None
+                    not_found = True
+                    while vararg_loc >= 0 and not_found:
+                        args_def = blk.body[vararg_loc]
+                        if (
+                            isinstance(args_def, ir.Assign)
+                            and args_def.target.name == vararg.name
+                        ):
+                            not_found = False
+                        else:
+                            vararg_loc -= 1
+                    # If we found args update them
+                    if not not_found:
+                        if (
+                            isinstance(args_def.value, ir.Expr)
+                            and args_def.value.op == "build_tuple"
+                        ):
+                            args = args + args_def.value.items
+                            # Remove the build_tuple from the body.
+                            new_body[vararg_loc] = None
+                if vararg or varkwarg:
+                    # Create a new call updating the args and kws
+                    new_call = ir.Expr.call(
+                        call.func, args, kws, call.loc, target=call.target
+                    )
+                    # Update the statement
+                    stmt = ir.Assign(new_call, stmt.target, stmt.loc)
+
+            new_body.append(stmt)
+        # Update the block body
+        blk.body = [x for x in new_body if x is not None]
+    return func_ir
 
 
 def peep_hole_list_to_tuple(func_ir):
@@ -383,6 +530,8 @@ class Interpreter(object):
         peepholes = []
         if PYVERSION in [(3, 9), (3, 10)]:
             peepholes.append(peep_hole_list_to_tuple)
+        if PYVERSION == (3, 10):
+            peepholes.append(peep_hole_call_function_ex_to_call_function_kw)
         peepholes.append(peep_hole_delete_with_exit)
 
         post_processed_ir = self.post_process(peepholes, func_ir)
@@ -1217,10 +1366,13 @@ class Interpreter(object):
             expr = ir.Expr.call(func, posvals, keyvalues, loc=self.loc)
             self.store(expr, res)
 
-        def op_CALL_FUNCTION_EX(self, inst, func, vararg, res):
+        def op_CALL_FUNCTION_EX(self, inst, func, vararg, varkwarg, res):
             func = self.get(func)
             vararg = self.get(vararg)
-            expr = ir.Expr.call(func, [], [], loc=self.loc, vararg=vararg)
+            varkwarg = self.get(varkwarg)
+            expr = ir.Expr.call(
+                func, [], [], loc=self.loc, vararg=vararg, varkwarg=varkwarg
+            )
             self.store(expr, res)
 
     def _build_tuple_unpack(self, inst, tuples, temps, is_assign):
