@@ -418,7 +418,7 @@ class SetInstance(object):
 
         old_hash = entry.hash
         entry.hash = h
-        context.nrt.incref(builder, self._ty.dtype, item)
+        self.incref_value(item)
         entry.key = item
         # used++
         used = payload.used
@@ -445,7 +445,7 @@ class SetInstance(object):
             entry = payload.get_entry(i)
             old_hash = entry.hash
             entry.hash = h
-            context.nrt.incref(builder, self._ty.dtype, item)
+            self.incref_value(item)
             entry.key = item
             # used++
             used = payload.used
@@ -463,7 +463,7 @@ class SetInstance(object):
     def _remove_entry(self, payload, entry, do_resize=True):
         # Mark entry deleted
         entry.hash = ir.Constant(entry.hash.type, DELETED)
-        self._context.nrt.decref(self._builder, self._ty.dtype, entry.key)
+        self.decref_value(entry.key)
         # used--
         used = payload.used
         one = ir.Constant(used.type, 1)
@@ -551,7 +551,7 @@ class SetInstance(object):
         with payload._next_entry() as entry:
             builder.store(entry.key, key)
             # incref since the value is returned but _remove_entry() decrefs
-            context.nrt.incref(builder, self._ty.dtype, entry.key)
+            self.incref_value(entry.key)
             self._remove_entry(payload, entry)
 
         return builder.load(key)
@@ -953,7 +953,7 @@ class SetInstance(object):
             entry = loop.entry
             self._add_key(payload, entry.key, entry.hash,
                           do_resize=False)
-            context.nrt.decref(builder, self._ty.dtype, entry.key)
+            self.decref_value(entry.key)
 
         self._free_payload(old_payload.ptr)
 
@@ -970,7 +970,7 @@ class SetInstance(object):
         # decref all of the previous entries
         with self.payload._iterate() as loop:
             entry = loop.entry
-            context.nrt.decref(builder, self._ty.dtype, entry.key)
+            self.decref_value(entry.key)
 
         # Free old payload
         self._free_payload(self.payload.ptr)
@@ -1017,7 +1017,7 @@ class SetInstance(object):
                 alloc_ok = cgutils.is_null(builder, ptr)
             else:
                 # create destructor to be called upon set destruction
-                dtor = _imp_dtor(context, builder.module, self._ty)
+                dtor = self._imp_dtor(context, builder.module)
                 meminfo = context.nrt.meminfo_new_varsize_dtor(
                     builder, allocsize, builder.bitcast(dtor, cgutils.voidptr_t))
                 alloc_ok = cgutils.is_null(builder, meminfo)
@@ -1083,7 +1083,7 @@ class SetInstance(object):
 
         with builder.if_then(builder.load(ok), likely=True):
             # create destructor for new meminfo
-            dtor = _imp_dtor(context, builder.module, self._ty)
+            dtor = self._imp_dtor(context, builder.module)
             meminfo = context.nrt.meminfo_new_varsize_dtor(builder, allocsize, builder.bitcast(dtor, cgutils.voidptr_t))
             alloc_ok = cgutils.is_null(builder, meminfo)
 
@@ -1107,7 +1107,7 @@ class SetInstance(object):
                     # increment the refcounts to simulate `_add_key` for each
                     # element
                     with src_payload._iterate() as loop:
-                        context.nrt.incref(builder, self._ty.dtype, loop.entry.key)
+                        self.incref_value(loop.entry.key)
 
                     if DEBUG_ALLOCS:
                         context.printf(builder,
@@ -1116,34 +1116,44 @@ class SetInstance(object):
 
         return builder.load(ok)
 
-def _imp_dtor(context, module, set_type):
-    """Define the dtor for set
-    """
-    llvoidptr = context.get_value_type(types.voidptr)
-    llsize = context.get_value_type(types.uintp)
-    # create a dtor function that takes (void* set, size_t size, void* dtor_info)
-    fnty = ir.FunctionType(
-        ir.VoidType(),
-        [llvoidptr, llsize, llvoidptr],
-    )
-    # create type-specific name
-    fname = f"_numba_set_dtor_{set_type}"
+    def _imp_dtor(self, context, module):
+        """Define the dtor for set
+        """
+        llvoidptr = cgutils.voidptr_t
+        llsize_t= context.get_value_type(types.size_t)
+        # create a dtor function that takes (void* set, size_t size, void* dtor_info)
+        fnty = ir.FunctionType(
+            ir.VoidType(),
+            [llvoidptr, llsize_t, llvoidptr],
+        )
+        # create type-specific name
+        fname = f".dtor.set.{self._ty.dtype}"
+    
+        fn = cgutils.get_or_insert_function(module, fnty, name=fname)
+    
+        if fn.is_declaration:
+            # Set linkage
+            fn.linkage = 'linkonce_odr'
+            # Define
+            builder = ir.IRBuilder(fn.append_basic_block())
+            payload = _SetPayload(context, builder, self._ty, fn.args[0])
+            with payload._iterate() as loop:
+                entry = loop.entry
+                self.decref_value(entry.key)
+            builder.ret_void()
+    
+        return fn
 
-    fn = cgutils.get_or_insert_function(module, fnty, name=fname)
+    def incref_value(self, val):
+        """Incref an element value
+        """
+        self._context.nrt.incref(self._builder, self._ty.dtype, val)
 
-    if fn.is_declaration:
-        # Set linkage
-        fn.linkage = 'linkonce_odr'
-        # Define
-        builder = ir.IRBuilder(fn.append_basic_block())
-        set_ptr = builder.bitcast(fn.args[0], cgutils.voidptr_t.as_pointer())
-        payload = _SetPayload(context, builder, set_type, set_ptr)
-        with payload._iterate() as loop:
-            entry = loop.entry
-            context.nrt.decref(builder, set_type.dtype, entry.key)
-        builder.ret_void()
+    def decref_value(self, val):
+        """Decref an element value
+        """
+        self._context.nrt.decref(self._builder, self._ty.dtype, val)
 
-    return fn
 
 class SetIterInstance(object):
 

@@ -411,10 +411,10 @@ class TestSets(BaseTest):
         cfunc = jit(nopython=True)(pyfunc)
 
         # ensure that there will be a key error
-        items = tuple(set(self.sparse_array(50)))
+        items = tuple(set(self.sparse_array(3)))
         a = items[1:]
         b = (items[0],)
-        with self.assertRaises(KeyError) as raises:
+        with self.assertRaises(KeyError):
             cfunc(a, b)
 
     def test_discard(self):
@@ -460,13 +460,10 @@ class TestSets(BaseTest):
     def _test_xxx_update(self, pyfunc):
         check = self.unordered_checker(pyfunc)
 
-        sizes = (0, 50, 500)
+        sizes = (1, 50, 500)
         for na, nb in itertools.product(sizes, sizes):
             a = self.sparse_array(na)
             b = self.sparse_array(nb)
-            # empty lists cannot be passed to njit functions due to typing restrictions
-            if self._is_empty_list(a) or self._is_empty_list(b):
-                continue
             check(a, b)
 
     def test_difference_update(self):
@@ -522,6 +519,13 @@ class TestSets(BaseTest):
         a = self.sparse_array(50)
         check(a, a[len(a) // 2])
 
+    def test_bool(self):
+        pyfunc = bool_usecase
+        check = self.unordered_checker(pyfunc)
+
+        check(self.sparse_array(1))
+        check(self.sparse_array(2))
+
     def _is_empty_list(self, a):
         return isinstance(a, list) and len(a) == 0
 
@@ -531,13 +535,10 @@ class TestSets(BaseTest):
         a, b = (1, 2, 4, 11), (2, 3, 5, 11, 42)
         check(a, b)
 
-        sizes = (0, 50, 500)
+        sizes = (1, 50, 500)
         for na, nb in itertools.product(sizes, sizes):
             a = self.sparse_array(na)
             b = self.sparse_array(nb)
-            # empty lists cannot be passed to njit functions due to typing restrictions
-            if self._is_empty_list(a) or self._is_empty_list(b):
-                continue
             check(a, b)
 
     def test_difference(self):
@@ -594,20 +595,6 @@ class TestSets(BaseTest):
     def test_ixor(self):
         self._test_set_operator(make_inplace_operator_usecase('^='))
 
-class TestTypeSpecific(BaseTest):
-    """
-    Test type-specific set operations.
-    """
-
-    def test_bool(self):
-        pyfunc = bool_usecase
-        check = self.unordered_checker(pyfunc)
-
-        check([1])
-        check([1, 2])
-        check([False, False])
-        check([True, False])
-
 
 class TestFloatSets(TestSets):
     """
@@ -634,7 +621,7 @@ class TestTupleSets(TestSets):
 
 class TestUnicodeSets(TestSets):
     """
-    Test sets with unicode keys.
+    Test sets with unicode keys. For the purpose of testing refcounted sets.
     """
     def _range(self, stop):
         return ['A{}'.format(i) for i in range(int(stop))]
