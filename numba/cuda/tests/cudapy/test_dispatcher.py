@@ -1,7 +1,9 @@
 import numpy as np
 import threading
+import warnings
 
 from numba import cuda, float32, float64, int32, int64, void
+from numba.core.errors import NumbaDeprecationWarning
 from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 import math
 
@@ -287,6 +289,32 @@ class TestDispatcher(CUDATestCase):
         self.assertEqual("Add two integers, kernel version", add_kernel.__doc__)
         self.assertEqual("Add two integers, device version", add_device.__doc__)
 
+
+@skip_on_cudasim('Dispatcher objects not used in the simulator')
+class TestDispatcherDeprecation(CUDATestCase):
+    def check_warning(self, warnings, expected_str, category):
+        self.assertEqual(len(warnings), 3)
+        for w in warnings:
+            self.assertEqual(w.category, category)
+            self.assertIn(expected_str, str(w.message))
+
+    def test_ptx_deprecation(self):
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always", category=NumbaDeprecationWarning)
+            def f():
+                x = 42
+            # Kernel code path
+            dispatcher = cuda.jit(f)
+            dispatcher.ptx
+            kernel = dispatcher.compile(())
+            kernel.ptx
+            # Device function code path
+            device_f_dispatcher = cuda.jit(f, device=True)
+            device_f_dispatcher.ptx
+
+            msg = "Attribute `ptx` is deprecated and will be removed in the "
+            "future. "
+            self.check_warning(w, msg, NumbaDeprecationWarning)
 
 if __name__ == '__main__':
     unittest.main()
