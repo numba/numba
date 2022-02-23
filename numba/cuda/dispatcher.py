@@ -157,8 +157,8 @@ class _Kernel(serialize.ReduceMixin):
         '''
         warnings.warn(
             "Attribute `ptx` is deprecated and will be removed in the future. "
-            "To retrieve compiled machine code of the cuda function, use "
-            "`inpect_asm`."
+            "To retrieve the compiled machine code of the CUDA function, use "
+            "the `inpect_asm` method."
             , FutureWarning
         )
         return self._codelibrary.get_asm_str()
@@ -818,8 +818,8 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
     def ptx(self):
         warnings.warn(
             "Attribute `ptx` is deprecated and will be removed in the future. "
-            "To retrieve compiled machine code of the cuda function of certain"
-            "signature `sig`, use `inspect_asm(sig)`."
+            "To retrieve the compiled machine code of the CUDA function for a"
+            "given signature `sig`, use the method `inspect_asm(sig)`."
             , FutureWarning
         )
         return {sig: overload.ptx for sig, overload in self.overloads.items()}
