@@ -137,6 +137,7 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
     # All changes are local to the a single block
     # so it can be traversed in any order.
     for blk in func_ir.blocks.values():
+        blk_changed = False
         new_body = []
         errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
         for i, stmt in enumerate(blk.body):
@@ -144,7 +145,9 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                 isinstance(stmt, ir.Assign)
                 and isinstance(stmt.value, ir.Expr)
                 and stmt.value.op == "call"
+                and stmt.value.varkwarg is not None
             ):
+                blk_changed = True
                 call = stmt.value
                 args = call.args
                 kws = call.kws
@@ -298,20 +301,145 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                             isinstance(args_def.value, ir.Expr)
                             and args_def.value.op == "build_tuple"
                         ):
+                            # n_args <= 30 case.
+                            # Extract the args directly from the build_tuple
                             args = args + args_def.value.items
                             # Remove the build_tuple from the body.
                             new_body[vararg_loc] = None
-                if vararg or varkwarg:
-                    # Create a new call updating the args and kws
-                    new_call = ir.Expr.call(
-                        call.func, args, kws, call.loc, target=call.target
-                    )
-                    # Update the statement
-                    stmt = ir.Assign(new_call, stmt.target, stmt.loc)
+                        else:
+                            # n_args > 30 case.
+                            # Args don't have an explicit build tuple. Instead
+                            # there are a series of concatenations
+                            # building the tuple. The found variable will be
+                            # at the end and the result of concatenating tuples,
+                            # so we need to traverse backwards until we find
+                            # the original empty build_tuple.
+                            # For example:
+                            #
+                            #  $orig_tuple = build_tuple(items=[])
+                            #  $first_var = build_tuple(
+                            #    items=[Var(arg0, test.py:6)]
+                            #  )
+                            #  $next_tuple = $orig_tuple + $first_var
+                            #  ...
+                            #  $final_var = build_tuple(
+                            #    items=[Var(argn, test.py:6)]
+                            #  )
+                            #  $final_tuple = $prev_tuple + $final_var
+                            #  $varargs_var = $final_tuple
+                            #
+                            # Its unclear if the assignment at the end
+                            # is always present. Throughout this process
+                            # we add the arguments in reverse order
+                            # and delete the tuple being constructed.
+                            if vararg_loc == 0:
+                                # We cannot handle this format so raise the
+                                # original error message.
+                                raise UnsupportedError(errmsg)
+                            total_args = []
+                            if (
+                                isinstance(args_def, ir.Assign)
+                                and isinstance(args_def.value, ir.Var)
+                            ):
+                                target_name = args_def.value.name
+                                # If there is an initial assignment, delete it
+                                new_body[vararg_loc] = None
+                                vararg_loc -= 1
+                            else:
+                                target_name = args_def.target.name
+                            start_not_found = True
+                            # Traverse backwards to find all concatentations
+                            # until eventually reaching the
+                            while vararg_loc >= 0 and start_not_found:
+                                concat_stmt = blk.body[vararg_loc]
+                                if (
+                                    isinstance(concat_stmt, ir.Assign)
+                                    and concat_stmt.target.name == target_name
+                                    and isinstance(concat_stmt.value, ir.Expr)
+                                    and concat_stmt.value.op == "build_tuple"
+                                    and not concat_stmt.value.items
+                                ):
+                                    # If we have reached the build_tuple
+                                    # we exit.
+                                    start_not_found = False
+                                    new_body[vararg_loc] = None
+                                else:
+                                    # We expect to find another arg to append.
+                                    # The first stmt must be an add
+                                    if not (
+                                        isinstance(concat_stmt, ir.Assign)
+                                        and (
+                                            concat_stmt.target.name
+                                            == target_name
+                                        )
+                                        and isinstance(
+                                            concat_stmt.value, ir.Expr
+                                        )
+                                        and concat_stmt.value.op == "binop"
+                                        and concat_stmt.value.fn == operator.add
+                                    ):
+                                        # We cannot handle this format.
+                                        break
+                                    lhs_name = concat_stmt.value.lhs.name
+                                    rhs_name = concat_stmt.value.rhs.name
+                                    # The previous statment should be a
+                                    # build_tuple containing the arg.
+                                    arg_tuple_stmt = blk.body[vararg_loc - 1]
+                                    if not (
+                                        isinstance(arg_tuple_stmt, ir.Assign)
+                                        and isinstance(
+                                            arg_tuple_stmt.value, ir.Expr
+                                        )
+                                        and (
+                                            arg_tuple_stmt.value.op
+                                            == "build_tuple"
+                                        )
+                                        and len(arg_tuple_stmt.value.items) == 1
+                                    ):
+                                        break
+                                    if arg_tuple_stmt.target.name == lhs_name:
+                                        target_name = rhs_name
+                                    elif arg_tuple_stmt.target.name == rhs_name:
+                                        target_name = lhs_name
+                                    else:
+                                        break
+                                    total_args.append(
+                                        arg_tuple_stmt.value.items[0]
+                                    )
+                                    new_body[vararg_loc] = None
+                                    new_body[vararg_loc - 1] = None
+                                    vararg_loc -= 2
+                                    # Avoid any space between appends
+                                    keep_looking = True
+                                    while vararg_loc >= 0 and keep_looking:
+                                        next_stmt = blk.body[vararg_loc]
+                                        if (
+                                            isinstance(next_stmt, ir.Assign)
+                                            and (
+                                                next_stmt.target.name
+                                                == target_name
+                                            )
+                                        ):
+                                            keep_looking = False
+                                        else:
+                                            vararg_loc -= 1
+                            if start_not_found:
+                                # We cannot handle this format so raise the
+                                # original error message.
+                                raise UnsupportedError(errmsg)
+                            args = args + total_args[::-1]
+
+                # Create a new call updating the args and kws
+                new_call = ir.Expr.call(
+                    call.func, args, kws, call.loc, target=call.target
+                )
+                # Update the statement
+                stmt = ir.Assign(new_call, stmt.target, stmt.loc)
 
             new_body.append(stmt)
-        # Update the block body
-        blk.body = [x for x in new_body if x is not None]
+        # Update the block body if we updated the IR
+        if blk_changed:
+            blk.body = [x for x in new_body if x is not None]
     return func_ir
 
 
