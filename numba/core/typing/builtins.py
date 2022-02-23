@@ -1105,8 +1105,6 @@ class MinValInfer(AbstractTemplate):
         assert len(args) == 1
         if isinstance(args[0], (types.DType, types.NumberClass)):
             return signature(args[0].dtype, *args)
-        elif isinstance(args[0], (types.NPDatetime, types.NPTimedelta)):
-            return signature(args[0], *args)
         assert False
 
 
