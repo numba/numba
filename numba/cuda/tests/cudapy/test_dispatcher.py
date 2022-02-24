@@ -301,8 +301,9 @@ class TestDispatcherDeprecation(CUDATestCase):
     def test_ptx_deprecation(self):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always", category=NumbaDeprecationWarning)
-            def f():
-                x = 42
+
+            def f(x):
+                x[0] = 42
             # Kernel code path
             dispatcher = cuda.jit(f)
             dispatcher.ptx
@@ -315,6 +316,7 @@ class TestDispatcherDeprecation(CUDATestCase):
             msg = "Attribute `ptx` is deprecated and will be removed in the "
             "future. "
             self.check_warning(w, msg, NumbaDeprecationWarning)
+
 
 if __name__ == '__main__':
     unittest.main()
