@@ -494,7 +494,7 @@ class TestCudaIntrinsic(CUDATestCase):
         # This test is designed to test divison of fp16 constants that
         # result in small denormal numbers that should not be further
         # iterated using the Newton Raphson algorithm used in the hdiv
-        # intrinisc. Below we use a curated set of values to specifically
+        # intrinsic. Below we use a curated set of values to specifically
         # validate small denormal numbers
         arry1 = np.array([0x5b, 0xaf, 0xcb, 0x13b, 0x157, 0x173, 0x18f,
                           0x1ab, 0x26f, 0x28b, 0x2a7, 0x2c3,

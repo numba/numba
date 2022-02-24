@@ -503,12 +503,7 @@ def inline_asm_helper(builder, func_ret_ty, func_arg_types,
 @lower(stubs.fp16.hdiv, types.float16, types.float16)
 def lower_fp16_divide(context, builder, sig, args):
     x, y = args
-
-    # Floating point 16 division algorithm implemented
-    # using Newton Raphson algorithm.
-
-    # x = arg1, y = arg2
-    # Implement x/y
+    """Implements division between two fp16 using Newton Raphson Algorithm."""
 
     # Convert fp16 args to fp32 so we can implement
     # division by reciprocal multiplication on fp32
@@ -521,19 +516,15 @@ def lower_fp16_divide(context, builder, sig, args):
     y_fp32 = inline_asm_helper(builder, ir.FloatType(), [ir.IntType(16)],
                                asm, constr, [y])
 
-    # Obtain a gross estimate of the reciprocal of argument 2 (y)
-    # which will be refined. This is the first step in the Newton
-    # Raphson method.
-
-    # y0 = 1/y * (1-err), here y0 is not a precise 1/y
-    # it is an approximation and the term 'err' stands for the
-    # relative error of the approximation.
+    # Use fast approximation reciprocal to obtain an estimate of
+    # `y`s reciprocal `yn`.
+    # yn = 1/y * (1 - err), where `err` is the relative error term.
 
     yn = inline_asm_helper(builder, ir.FloatType(), [ir.FloatType()],
                            "rcp.approx.ftz.f32 $0, $1;", "=f,f", [y_fp32])
 
     # Implement fp32 division via multiplication by
-    # reciprocal of arg2
+    # reciprocal of y
 
     # Our objective is to get a quotient x/y, correctly rounded to nearest
     # even in fp16 format, so we can do q0 = x * yn.
@@ -600,13 +591,13 @@ def lower_fp16_divide(context, builder, sig, args):
     # from the multiplication.
     #
     # Mathematically we have: q0 = x * 1/y * (1 - err)
-    # So err (correction_term) = x - y*q0 = fma(-y, q0, x)
-    # And q1 = err*yn + q0 = fma(err, yn, q0)
+    # So correction_term = x - y*q0 = fma(-y, q0, x)
+    # And q1 = correction_term *yn + q0 = fma(correction_term, yn, q0)
 
     float_zero = context.get_constant(types.float32, 0.0)
     neg_y = builder.fsub(float_zero, y_fp32)
-    err = builder.call(fma_func, [neg_y, q0, x_fp32])
-    q1 = builder.call(fma_func, [yn, err, q0])
+    correction_term = builder.call(fma_func, [neg_y, q0, x_fp32])
+    q1 = builder.call(fma_func, [yn, correction_term, q0])
 
     fp32_to_fp16 = inline_asm_helper(builder, ir.IntType(16),
                                      [ir.FloatType()],
