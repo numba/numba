@@ -548,7 +548,7 @@ def _emit_binop_reduce_call(binop, lowerer, thread_count, reduce_info):
 
 
 def _is_inplace_binop_and_rhs_is_init(inst, redvar_name):
-    """Is ``inst`` a inplace-binop and the RHS is the reduction init?
+    """Is ``inst`` an inplace-binop and the RHS is the reduction init?
     """
     if not isinstance(inst, ir.Assign):
         return False
