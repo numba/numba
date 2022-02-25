@@ -529,6 +529,8 @@ class Parfor(ir.Expr, ir.Stmt):
             equiv_set,
             pattern,
             flags,
+            *,  #only specify the options below by keyword
+            unanalyzable_body=False,
             no_sequential_lowering=False,
             races=set()):
         super(Parfor, self).__init__(
@@ -556,6 +558,7 @@ class Parfor(ir.Expr, ir.Stmt):
         # sequential lowering option
         self.no_sequential_lowering = no_sequential_lowering
         self.races = races
+        self.unanalyzable_body = unanalyzable_body
         if config.DEBUG_ARRAY_OPT_STATS:
             fmt = 'Parallel for-loop #{} is produced from pattern \'{}\' at {}'
             print(fmt.format(
@@ -2555,6 +2558,20 @@ class ConvertLoopPass:
                         first_body_label = min(loop_body.keys())
                         loop_body[first_body_label].body = header_body + loop_body[first_body_label].body
 
+                    # See if there are any calls that take arrays that might generate dependencies.
+                    # Those dependencies might be safe for one parfor but not safe for fusion.
+                    def call_with_array(typemap, loop_body):
+                        for block in loop_body.values():
+                            for inst in block.body:
+                                if (isinstance(inst, ir.Assign)
+                                    and isinstance(inst.value, ir.Expr)
+                                    and inst.value.op == "call"
+                                    and any([isinstance(typemap[x.name], types.npytypes.Array) for x in inst.value.args])):
+                                    if config.DEBUG_ARRAY_OPT >= 3:
+                                        print("Found array passed to unanalyzable call in prange/pndindex.")
+                                    return True
+                        return False
+
                     index_var_map = {v: index_var for v in loop_index_vars}
                     replace_vars(loop_body, index_var_map)
                     if unsigned_index:
@@ -2562,11 +2579,13 @@ class ConvertLoopPass:
                         # optimizations (see #2846)
                         self._replace_loop_access_indices(
                             loop_body, loop_index_vars, index_var)
+                    ubody = call_with_array(pass_states.typemap, loop_body)
                     parfor = Parfor(loops, init_block, loop_body, loc,
                                     orig_index_var if mask_indices else index_var,
                                     equiv_set,
                                     ("prange", loop_kind, loop_replacing),
-                                    pass_states.flags, races=races)
+                                    pass_states.flags, races=races,
+                                    unanalyzable_body=ubody)
 
                     blocks[loop.header].body = [parfor]
                     # We have to insert the header_body after the parfor because in
@@ -3969,7 +3988,10 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata):
 
     # TODO: make sure parfor1's reduction output is not used in parfor2
     # only data parallel loops
-    if has_cross_iter_dep(parfor1) or has_cross_iter_dep(parfor2):
+    if (has_cross_iter_dep(parfor1) or
+        has_cross_iter_dep(parfor2) or
+        parfor1.unanalyzable_body or
+        parfor2.unanalyzable_body):
         dprint("try_fuse: parfor cross iteration dependency found")
         msg = ("- fusion failed: cross iteration dependency found "
                 "between loops #%s and #%s")
