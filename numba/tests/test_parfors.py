@@ -1976,6 +1976,7 @@ class TestParfors(TestParforsBase):
             self.check(test_impl)
         self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
 
+    @skip_parfors_unsupported
     def test_untraced_value_parfor(self):
         # This is a test for issue #6478.
         def test_impl(arr):
