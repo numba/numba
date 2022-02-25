@@ -1973,8 +1973,23 @@ class TestParfors(TestParforsBase):
                 issue7854_proc(u, i, 1, size)
             return u
 
-        self.check(test_impl, 4)
         self.assertEqual(countParfors(test_impl, (types.int64,)), 3)
+        self.check(test_impl, 4)
+
+    def test_prange_unknown_call2(self):
+        def test_impl(size):
+            u = np.zeros((size,size))
+            for i in numba.prange(1, size-1):
+                for j in range((i + 1)%2 +1, size-1, 2):
+                    u[i, j] = u[i, j+1] + u[i, j-1] + u[i+1,j ] + u[i-1, j] + 1
+            for i in numba.prange(1, size-1):
+                for j in range(i%2 +1, size-1, 2):
+                    u[i, j] = u[i, j+1] + u[i, j-1] + u[i+1,j ] + u[i-1, j] + 1
+            return u
+
+        self.assertEqual(countParfors(test_impl, (types.int64,)), 3)
+        self.check(test_impl, 4)
+
 
 
 @skip_parfors_unsupported
