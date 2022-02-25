@@ -45,6 +45,7 @@ from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       skip_parfors_unsupported, _32bit, needs_blas,
                       needs_lapack, disabled_test, skip_unless_scipy,
                       needs_subprocess)
+from numba.core.extending import register_jitable
 import cmath
 import unittest
 
@@ -1263,6 +1264,11 @@ class TestParforsUnsupported(TestCase):
                "hardware")
         self.assertIn(msg, str(raised.exception))
 
+@register_jitable
+def issue7854_proc(u, i, even, size):
+    for j in range((even + i + 1)%2 +1, size-1, 2):
+        u[i, j] = u[i, j+1] + u[i, j-1] + u[i+1,j ] + u[i-1, j] + 1
+
 
 @skip_parfors_unsupported
 class TestParfors(TestParforsBase):
@@ -1956,6 +1962,19 @@ class TestParfors(TestParforsBase):
                 x[i] = 1
             return x
         self.check(test_impl, np.zeros((10, 10)), 3)
+
+    def test_prange_unknown_call1(self):
+        # issue7854
+        def test_impl(size):
+            u = np.zeros((size,size))
+            for i in numba.prange(1, size-1):
+                issue7854_proc(u, i, 0, size)
+            for i in numba.prange(1, size-1):
+                issue7854_proc(u, i, 1, size)
+            return u
+
+        self.check(test_impl, 4)
+        self.assertEqual(countParfors(test_impl, (types.int64,)), 3)
 
 
 @skip_parfors_unsupported
