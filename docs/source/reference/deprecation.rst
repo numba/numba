@@ -310,13 +310,13 @@ Schedule
   the provision of signatures for device functions will only enforce casting.
 
 
-Deprecation of ``numba.core.base.BaseContext.add_user_function()``
-==================================================================
+Deprecation and removal of ``numba.core.base.BaseContext.add_user_function()``
+==============================================================================
 
-``add_user_function()``  offers the same functionality as
+``add_user_function()``  offered the same functionality as
 ``insert_user_function()``, only with a check that the function has already
-been inserted at least once.  It is now deprecated as it is no longer used
-internally and it is expected that it is not used externally.
+been inserted at least once.  It is now removed as it was no longer used
+internally and it was expected that it was not used externally.
 
 Recommendations
 ---------------
@@ -326,8 +326,8 @@ Replace any uses of ``add_user_function()`` with ``insert_user_function()``.
 Schedule
 --------
 
-- In Numba 0.55: ``add_user_function()`` will be deprecated.
-- In Numba 0.56: ``add_user_function()`` will be removed.
+- In Numba 0.55: ``add_user_function()`` was deprecated.
+- In Numba 0.56: ``add_user_function()`` was removed.
 
 
 Deprecation of CUDA Toolkits < 10.2 and devices with CC < 5.3
