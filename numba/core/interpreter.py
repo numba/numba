@@ -79,6 +79,299 @@ class Assigner(object):
         return None
 
 
+def _call_function_ex_replace_kws_small(keyword_expr, new_body, buildmap_idx):
+    """
+    Extracts the kws args passed as varkwarg
+    for CALL_FUNCTION_EX. This pass is taken when
+    n_kws <= 15 and the bytecode looks like:
+
+        # Start for each argument
+        LOAD_FAST  # Load each argument.
+        # End for each argument
+        ...
+        BUILD_CONST_KEY_MAP # Build a map
+
+    In the IR generated, the varkwarg refer
+    to a single build_map that contains all of the
+    kws. In addition to returning the kws, this
+    function updates new_body to remove all usage
+    of the map.
+    """
+    kws = keyword_expr.items.copy()
+    # kws are required to have constant keys.
+    # We update these with the value_indexes
+    value_indexes = keyword_expr.value_indexes
+    for key, index in value_indexes.items():
+        kws[index] = (key, kws[index][1])
+    # Remove the build_map by setting the list
+    # index to None. Nones will be removed later.
+    new_body[buildmap_idx] = None
+    return kws
+
+
+def _call_function_ex_replace_kws_large(
+    body, buildmap_name, buildmap_idx, search_end, new_body
+):
+    """
+    Extracts the kws args passed as varkwarg
+    for CALL_FUNCTION_EX. This pass is taken when
+    n_kws <= 15 and the bytecode looks like:
+
+        BUILD_MAP # Construct the map
+        # Start for each argument
+        LOAD_CONST # Load a constant for the name of the argument
+        LOAD_FAST  # Load each argument.
+        MAP_ADD # Append the (key, value) pair to the map
+        # End for each argument
+
+    In the IR generated, the inital build map is empty and a series
+    of setitems are applied afterwards. THE IR looks like:
+
+    Finally at the end the bytecode will contain a CALL_FUNCTION_EX instruction.
+
+        $constvar = const(str, ...) # create the const key
+        # CREATE THE ARGUMENT, This may take multiple lines.
+        $var = getattr(
+            value=$build_map_var,
+            attr=__setitem__,
+        )
+        $unused_var = call $var($constvar, $created_arg)
+
+    We iterate through the IR, deleting all usages of the buildmap
+    from the new_body, and adds the kws to a new kws list.
+    """
+    errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
+    # Remove the build_map from the body.
+    new_body[buildmap_idx] = None
+    kws = []
+    search_start = buildmap_idx + 1
+    while search_start <= search_end:
+        # The first value must be a constant.
+        const_stmt = body[search_start]
+        if not (
+            isinstance(const_stmt, ir.Assign)
+            and isinstance(const_stmt.value, ir.Const)
+        ):
+            # We cannot handle this format so raise the
+            # original error message.
+            raise UnsupportedError(errmsg)
+        key_var_name = const_stmt.target.name
+        key_val = const_stmt.value.value
+        search_start += 1
+        # Now we need to search for a getattr with setitem
+        not_found_getattr = True
+        while (
+            search_start <= search_end
+            and not_found_getattr
+        ):
+            getattr_stmt = body[search_start]
+            if (
+                isinstance(getattr_stmt, ir.Assign)
+                and isinstance(getattr_stmt.value, ir.Expr)
+                and getattr_stmt.value.op == "getattr"
+                and (
+                    getattr_stmt.value.value.name
+                    == buildmap_name
+                )
+                and getattr_stmt.value.attr == "__setitem__"
+            ):
+                not_found_getattr = False
+            else:
+                search_start += 1
+        if (
+            not_found_getattr
+            or search_start == search_end
+        ):
+            # We cannot handle this format so raise the
+            # original error message.
+            raise UnsupportedError(errmsg)
+        setitem_stmt = body[search_start + 1]
+        if not (
+            isinstance(setitem_stmt, ir.Assign)
+            and isinstance(setitem_stmt.value, ir.Expr)
+            and setitem_stmt.value.op == "call"
+            and (
+                setitem_stmt.value.func.name
+                == getattr_stmt.target.name
+            )
+            and len(setitem_stmt.value.args) == 2
+            and (
+                setitem_stmt.value.args[0].name
+                == key_var_name
+            )
+        ):
+            # We cannot handle this format so raise the
+            # original error message.
+            raise UnsupportedError(errmsg)
+        arg_var = setitem_stmt.value.args[1]
+        # Append the (key, value) pair.
+        kws.append((key_val, arg_var))
+        # Remove the __setitem__ getattr and call
+        new_body[search_start] = None
+        new_body[search_start + 1] = None
+        search_start += 2
+    return kws
+
+
+def _call_function_ex_replace_args_small(tuple_expr, new_body, buildtuple_idx):
+    """
+    Extracts the args passed as vararg
+    for CALL_FUNCTION_EX. This pass is taken when
+    n_args <= 30 and the bytecode looks like:
+
+        # Start for each argument
+        LOAD_FAST  # Load each argument.
+        # End for each argument
+        ...
+        BUILD_TUPLE # Create a tuple of the arguments
+
+    In the IR generated, the vararg refer
+    to a single build_tuple that contains all of the
+    args. In addition to returning the args, this
+    function updates new_body to remove all usage
+    of the tuple.
+    """
+    # Delete the build tuple
+    new_body[buildtuple_idx] = None
+    # Return the args.
+    return tuple_expr.items
+
+
+def _call_function_ex_replace_args_large(
+    vararg_stmt, body, new_body, search_end
+):
+    """
+    Extracts the args passed as vararg
+    for CALL_FUNCTION_EX. This pass is taken when
+    n_args > 30 and the bytecode looks like:
+
+        BUILD_TUPLE # Create a list to append to
+        # Start for each argument
+        LOAD_FAST  # Load each argument.
+        LIST_APPEND # Add the argument to the list
+        # End for each argument
+        ...
+        LIST_TO_TUPLE # Convert the args to a tuple.
+
+    In the IR generated, the tuple is created by concatenating
+    together several 1 elem tuples to an initial empty tuple.
+    We traverse backwards in the IR, collecting args, until we
+    find the original empty tuple. For example, the IR might
+    look like:
+
+        $orig_tuple = build_tuple(items=[])
+        $first_var = build_tuple(items=[Var(arg0, test.py:6)])
+        $next_tuple = $orig_tuple + $first_var
+        ...
+        $final_var = build_tuple(items=[Var(argn, test.py:6)])
+        $final_tuple = $prev_tuple + $final_var
+        $varargs_var = $final_tuple
+
+    It unclear if the extra assignment at the end is always present.
+    In addition to collecting and returning the original args, we also
+    delete any IR statments that uses any of the tuples from new_body.
+    """
+    errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
+    # We traverse to the front of the block to look for the original
+    # tuple.
+    search_start = 0
+    total_args = []
+    if (
+        isinstance(vararg_stmt, ir.Assign)
+        and isinstance(vararg_stmt.value, ir.Var)
+    ):
+        target_name = vararg_stmt.value.name
+        # If there is an initial assignment, delete it
+        new_body[search_end] = None
+        search_end -= 1
+    else:
+        target_name = vararg_stmt.target.name
+    start_not_found = True
+    # Traverse backwards to find all concatentations
+    # until eventually reaching the original empty tuple.
+    while search_end >= search_start and start_not_found:
+        concat_stmt = body[search_end]
+        if (
+            isinstance(concat_stmt, ir.Assign)
+            and concat_stmt.target.name == target_name
+            and isinstance(concat_stmt.value, ir.Expr)
+            and concat_stmt.value.op == "build_tuple"
+            and not concat_stmt.value.items
+        ):
+            # If we have reached the build_tuple
+            # we exit.
+            start_not_found = False
+            new_body[search_end] = None
+        else:
+            # We expect to find another arg to append.
+            # The first stmt must be an add
+            if (search_end == search_start) or not (
+                isinstance(concat_stmt, ir.Assign)
+                and (
+                    concat_stmt.target.name
+                    == target_name
+                )
+                and isinstance(
+                    concat_stmt.value, ir.Expr
+                )
+                and concat_stmt.value.op == "binop"
+                and concat_stmt.value.fn == operator.add
+            ):
+                # We cannot handle this format.
+                raise UnsupportedError(errmsg)
+            lhs_name = concat_stmt.value.lhs.name
+            rhs_name = concat_stmt.value.rhs.name
+            # The previous statment should be a
+            # build_tuple containing the arg.
+            arg_tuple_stmt = body[search_end - 1]
+            if not (
+                isinstance(arg_tuple_stmt, ir.Assign)
+                and isinstance(
+                    arg_tuple_stmt.value, ir.Expr
+                )
+                and (
+                    arg_tuple_stmt.value.op
+                    == "build_tuple"
+                )
+                and len(arg_tuple_stmt.value.items) == 1
+            ):
+                # We cannot handle this format.
+                raise UnsupportedError(errmsg)
+            if arg_tuple_stmt.target.name == lhs_name:
+                target_name = rhs_name
+            elif arg_tuple_stmt.target.name == rhs_name:
+                target_name = lhs_name
+            else:
+                # We cannot handle this format.
+                raise UnsupportedError(errmsg)
+            total_args.append(
+                arg_tuple_stmt.value.items[0]
+            )
+            new_body[search_end] = None
+            new_body[search_end - 1] = None
+            search_end -= 2
+            # Avoid any space between appends
+            keep_looking = True
+            while search_end >= search_start and keep_looking:
+                next_stmt = body[search_end]
+                if (
+                    isinstance(next_stmt, ir.Assign)
+                    and (
+                        next_stmt.target.name
+                        == target_name
+                    )
+                ):
+                    keep_looking = False
+                else:
+                    search_end -= 1
+    if start_not_found:
+        # We cannot handle this format so raise the
+        # original error message.
+        raise UnsupportedError(errmsg)
+    # Reverse the arguments so we get the correct order.
+    return total_args[::-1]
+
+
 def peep_hole_call_function_ex_to_call_function_kw(func_ir):
     """
     This peephole rewrites a bytecode sequence unique to Python 3.10
@@ -91,55 +384,18 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
 
     In particular, change is imposed whenever (n_args / 2) + n_kws > 15.
 
-    Different bytecode is generated for args depending on if n_args > 30.
-    With n_args <= 30, the bytecode looks like:
+    Different bytecode is generated for args depending on if n_args > 30
+    or n_args <= 30 and similarly if n_kws > 15 or n_kws <= 15.
 
-        # Start for each argument
-        LOAD_FAST  # Load each argument.
-        # End for each argument
-        ...
-        BUILD_TUPLE # Create a tuple of the arguments
-
-    whereas with n_args > 30 the bytecode looks like:
-
-        BUILD_TUPLE # Create a list to append to
-        # Start for each argument
-        LOAD_FAST  # Load each argument.
-        LIST_APPEND # Add the argument to the list
-        # End for each argument
-        ...
-        LIST_TO_TUPLE # Convert the args to a tuple.
-
-    Similar the bytecode is different for n_kws > 15.
-    With n_kws <= 15, the bytecode looks like:
-
-        # Start for each argument
-        LOAD_FAST  # Load each argument.
-        # End for each argument
-        ...
-        BUILD_CONST_KEY_MAP # Build a map
-
-    whereas with n_kws > 15, the bytecode looks like:
-
-        BUILD_MAP # Construct the map
-        # Start for each argument
-        LOAD_CONST # Load a constant for the name of the argument
-        LOAD_FAST  # Load each argument.
-        MAP_ADD # Append the (key, value) pair to the map
-        # End for each argument
-
-    Finally at the end the bytecode will contain a CALL_FUNCTION_EX instruction.
-
-    This optimizations unwraps the *args and **kwargs in the function call
-    and places these values directly into the args and kwargs.
-
+    This function unwraps the *args and **kwargs in the function call
+    and places these values directly into the args and kwargs of the call.
     """
     # All changes are local to the a single block
     # so it can be traversed in any order.
+    errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
     for blk in func_ir.blocks.values():
         blk_changed = False
         new_body = []
-        errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
         for i, stmt in enumerate(blk.body):
             if (
                 isinstance(stmt, ir.Assign)
@@ -156,133 +412,55 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                 vararg = call.vararg
                 varkwarg = call.varkwarg
                 start_search = i - 1
-                if varkwarg is not None:
-                    # varkwarg should be defined second so we start there.
-                    varkwarg_loc = start_search
-                    keyword_def = None
-                    not_found = True
-                    while varkwarg_loc >= 0 and not_found:
-                        keyword_def = blk.body[varkwarg_loc]
-                        if (
-                            isinstance(keyword_def, ir.Assign)
-                            and keyword_def.target.name == varkwarg.name
-                        ):
-                            not_found = False
-                        else:
-                            varkwarg_loc -= 1
+                # varkwarg should be defined second so we start there.
+                varkwarg_loc = start_search
+                keyword_def = None
+                not_found = True
+                while varkwarg_loc >= 0 and not_found:
+                    keyword_def = blk.body[varkwarg_loc]
                     if (
-                        kws
-                        or not_found
-                        or not (
-                            isinstance(keyword_def.value, ir.Expr)
-                            and keyword_def.value.op == "build_map"
-                        )
+                        isinstance(keyword_def, ir.Assign)
+                        and keyword_def.target.name == varkwarg.name
                     ):
-                        # If we couldn't find where the kwargs are created
-                        # then it should be a normal **kwargs call
-                        # so we produce an unsupported message.
-                        raise UnsupportedError(errmsg)
-                    # Determine the kws
-                    if keyword_def.value.items:
-                        # n_kws <= 15 case.
-                        # Extract the kws directly from the build_map
-                        kws = keyword_def.value.items.copy()
-                        # kws are required to have constant keys.
-                        # We update these with the value_indexes
-                        value_indexes = keyword_def.value.value_indexes
-                        for key, index in value_indexes.items():
-                            kws[index] = (key, kws[index][1])
+                        not_found = False
                     else:
-                        # n_kws > 15 case.
-                        # The map is initially created without any initial
-                        # values and there should be a series of setitem to
-                        # populate the map between varkwarg_loc and
-                        # start_search.
-                        # Each section here should be of the form:
-                        #
-                        #   $constvar = const(str, ...) # create the const key
-                        #   CREATE THE ARGUMENT, This may take multiple lines.
-                        #   $var = getattr(
-                        #             value=$build_map_var,
-                        #             attr=__setitem__,
-                        #          )
-                        #   $unused_var = call $var($constvar, $created_arg)
-                        #
-                        # We check for this structure and append to kws.
-                        # We also remove the getattr and call from
-                        # the IR.
-                        kws = []
-                        append_search_idx = varkwarg_loc + 1
-                        while append_search_idx <= start_search:
-                            # The first value must be a constant.
-                            const_stmt = blk.body[append_search_idx]
-                            if not (
-                                isinstance(const_stmt, ir.Assign)
-                                and isinstance(const_stmt.value, ir.Const)
-                            ):
-                                # We cannot handle this format so raise the
-                                # original error message.
-                                raise UnsupportedError(errmsg)
-                            key_var_name = const_stmt.target.name
-                            key_val = const_stmt.value.value
-                            append_search_idx += 1
-                            # Now we need to search for a getattr with setitem
-                            not_found_getattr = True
-                            while (
-                                append_search_idx <= start_search
-                                and not_found_getattr
-                            ):
-                                getattr_stmt = blk.body[append_search_idx]
-                                if (
-                                    isinstance(getattr_stmt, ir.Assign)
-                                    and isinstance(getattr_stmt.value, ir.Expr)
-                                    and getattr_stmt.value.op == "getattr"
-                                    and (
-                                        getattr_stmt.value.value.name
-                                        == varkwarg.name
-                                    )
-                                    and getattr_stmt.value.attr == "__setitem__"
-                                ):
-                                    not_found_getattr = False
-                                else:
-                                    append_search_idx += 1
-                            if (
-                                not_found_getattr
-                                or append_search_idx == start_search
-                            ):
-                                # We cannot handle this format so raise the
-                                # original error message.
-                                raise UnsupportedError(errmsg)
-                            setitem_stmt = blk.body[append_search_idx + 1]
-                            if not (
-                                isinstance(setitem_stmt, ir.Assign)
-                                and isinstance(setitem_stmt.value, ir.Expr)
-                                and setitem_stmt.value.op == "call"
-                                and (
-                                    setitem_stmt.value.func.name
-                                    == getattr_stmt.target.name
-                                )
-                                and len(setitem_stmt.value.args) == 2
-                                and (
-                                    setitem_stmt.value.args[0].name
-                                    == key_var_name
-                                )
-                            ):
-                                # We cannot handle this format so raise the
-                                # original error message.
-                                raise UnsupportedError(errmsg)
-                            arg_var = setitem_stmt.value.args[1]
-                            # Append the (key, value) pair.
-                            kws.append((key_val, arg_var))
-                            # Remove the __setitem__ getattr and call
-                            new_body[append_search_idx] = None
-                            new_body[append_search_idx + 1] = None
-                            append_search_idx += 2
-                    start_search = varkwarg_loc
-                    # Remove the build_map from the body.
-                    new_body[varkwarg_loc] = None
+                        varkwarg_loc -= 1
+                if (
+                    kws
+                    or not_found
+                    or not (
+                        isinstance(keyword_def.value, ir.Expr)
+                        and keyword_def.value.op == "build_map"
+                    )
+                ):
+                    # If we couldn't find where the kwargs are created
+                    # then it should be a normal **kwargs call
+                    # so we produce an unsupported message.
+                    raise UnsupportedError(errmsg)
+                # Determine the kws
+                if keyword_def.value.items:
+                    # n_kws <= 15 case.
+                    kws = _call_function_ex_replace_kws_small(
+                        keyword_def.value,
+                        new_body,
+                        varkwarg_loc,
+                    )
+                else:
+                    # n_kws > 15 case.
+                    kws = _call_function_ex_replace_kws_large(
+                        blk.body,
+                        varkwarg.name,
+                        varkwarg_loc,
+                        i - 1,
+                        new_body,
+                    )
+                start_search = varkwarg_loc
+                # Vararg isn't required to be provided.
                 if vararg is not None:
-                    # Vararg isn't required to be provided.
+                    if args:
+                        # If we have vararg then args is expected to
+                        # be an empty list.
+                        raise UnsupportedError(errmsg)
                     vararg_loc = start_search
                     args_def = None
                     not_found = True
@@ -295,140 +473,24 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                             not_found = False
                         else:
                             vararg_loc -= 1
-                    # If we found args update them
-                    if not not_found:
-                        if (
-                            isinstance(args_def.value, ir.Expr)
-                            and args_def.value.op == "build_tuple"
-                        ):
-                            # n_args <= 30 case.
-                            # Extract the args directly from the build_tuple
-                            args = args + args_def.value.items
-                            # Remove the build_tuple from the body.
-                            new_body[vararg_loc] = None
-                        else:
-                            # n_args > 30 case.
-                            # Args don't have an explicit build tuple. Instead
-                            # there are a series of concatenations
-                            # building the tuple. The found variable will be
-                            # at the end and the result of concatenating tuples,
-                            # so we need to traverse backwards until we find
-                            # the original empty build_tuple.
-                            # For example:
-                            #
-                            #  $orig_tuple = build_tuple(items=[])
-                            #  $first_var = build_tuple(
-                            #    items=[Var(arg0, test.py:6)]
-                            #  )
-                            #  $next_tuple = $orig_tuple + $first_var
-                            #  ...
-                            #  $final_var = build_tuple(
-                            #    items=[Var(argn, test.py:6)]
-                            #  )
-                            #  $final_tuple = $prev_tuple + $final_var
-                            #  $varargs_var = $final_tuple
-                            #
-                            # Its unclear if the assignment at the end
-                            # is always present. Throughout this process
-                            # we add the arguments in reverse order
-                            # and delete the tuple being constructed.
-                            if vararg_loc == 0:
-                                # We cannot handle this format so raise the
-                                # original error message.
-                                raise UnsupportedError(errmsg)
-                            total_args = []
-                            if (
-                                isinstance(args_def, ir.Assign)
-                                and isinstance(args_def.value, ir.Var)
-                            ):
-                                target_name = args_def.value.name
-                                # If there is an initial assignment, delete it
-                                new_body[vararg_loc] = None
-                                vararg_loc -= 1
-                            else:
-                                target_name = args_def.target.name
-                            start_not_found = True
-                            # Traverse backwards to find all concatentations
-                            # until eventually reaching the
-                            while vararg_loc >= 0 and start_not_found:
-                                concat_stmt = blk.body[vararg_loc]
-                                if (
-                                    isinstance(concat_stmt, ir.Assign)
-                                    and concat_stmt.target.name == target_name
-                                    and isinstance(concat_stmt.value, ir.Expr)
-                                    and concat_stmt.value.op == "build_tuple"
-                                    and not concat_stmt.value.items
-                                ):
-                                    # If we have reached the build_tuple
-                                    # we exit.
-                                    start_not_found = False
-                                    new_body[vararg_loc] = None
-                                else:
-                                    # We expect to find another arg to append.
-                                    # The first stmt must be an add
-                                    if not (
-                                        isinstance(concat_stmt, ir.Assign)
-                                        and (
-                                            concat_stmt.target.name
-                                            == target_name
-                                        )
-                                        and isinstance(
-                                            concat_stmt.value, ir.Expr
-                                        )
-                                        and concat_stmt.value.op == "binop"
-                                        and concat_stmt.value.fn == operator.add
-                                    ):
-                                        # We cannot handle this format.
-                                        break
-                                    lhs_name = concat_stmt.value.lhs.name
-                                    rhs_name = concat_stmt.value.rhs.name
-                                    # The previous statment should be a
-                                    # build_tuple containing the arg.
-                                    arg_tuple_stmt = blk.body[vararg_loc - 1]
-                                    if not (
-                                        isinstance(arg_tuple_stmt, ir.Assign)
-                                        and isinstance(
-                                            arg_tuple_stmt.value, ir.Expr
-                                        )
-                                        and (
-                                            arg_tuple_stmt.value.op
-                                            == "build_tuple"
-                                        )
-                                        and len(arg_tuple_stmt.value.items) == 1
-                                    ):
-                                        break
-                                    if arg_tuple_stmt.target.name == lhs_name:
-                                        target_name = rhs_name
-                                    elif arg_tuple_stmt.target.name == rhs_name:
-                                        target_name = lhs_name
-                                    else:
-                                        break
-                                    total_args.append(
-                                        arg_tuple_stmt.value.items[0]
-                                    )
-                                    new_body[vararg_loc] = None
-                                    new_body[vararg_loc - 1] = None
-                                    vararg_loc -= 2
-                                    # Avoid any space between appends
-                                    keep_looking = True
-                                    while vararg_loc >= 0 and keep_looking:
-                                        next_stmt = blk.body[vararg_loc]
-                                        if (
-                                            isinstance(next_stmt, ir.Assign)
-                                            and (
-                                                next_stmt.target.name
-                                                == target_name
-                                            )
-                                        ):
-                                            keep_looking = False
-                                        else:
-                                            vararg_loc -= 1
-                            if start_not_found:
-                                # We cannot handle this format so raise the
-                                # original error message.
-                                raise UnsupportedError(errmsg)
-                            args = args + total_args[::-1]
-
+                    if not_found:
+                        # If we couldn't find where the args are created
+                        # then we can't handle this format.
+                        raise UnsupportedError(errmsg)
+                    if (
+                        isinstance(args_def.value, ir.Expr)
+                        and args_def.value.op == "build_tuple"
+                    ):
+                        # n_args <= 30 case.
+                        args = _call_function_ex_replace_args_small(
+                            args_def.value,
+                            new_body,
+                            vararg_loc
+                        )
+                    else:
+                        args = _call_function_ex_replace_args_large(
+                            args_def, blk.body, new_body, vararg_loc
+                        )
                 # Create a new call updating the args and kws
                 new_call = ir.Expr.call(
                     call.func, args, kws, call.loc, target=call.target
