@@ -461,10 +461,11 @@ class SetInstance(object):
                 self.upsize(used)
             self.set_dirty(True)
 
-    def _remove_entry(self, payload, entry, do_resize=True):
+    def _remove_entry(self, payload, entry, do_resize=True, do_decref=True):
         # Mark entry deleted
         entry.hash = ir.Constant(entry.hash.type, DELETED)
-        self.decref_value(entry.key)
+        if do_decref:
+            self.decref_value(entry.key)
         # used--
         used = payload.used
         one = ir.Constant(used.type, 1)
@@ -551,9 +552,8 @@ class SetInstance(object):
         payload = self.payload
         with payload._next_entry() as entry:
             builder.store(entry.key, key)
-            # incref since the value is returned but _remove_entry() decrefs
-            self.incref_value(entry.key)
-            self._remove_entry(payload, entry)
+            # since the value is returned don't decref in _remove_entry()
+            self._remove_entry(payload, entry, do_decref=False)
 
         return builder.load(key)
 
