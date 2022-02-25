@@ -2860,13 +2860,13 @@ class ParforPass(ParforPassStates):
             maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap,
                                                             up_direction=False)
             dprint_func_ir(self.func_ir, "after maximize fusion down")
-            self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
+            self.fuse_parfors(self.array_analysis, self.func_ir.blocks, self.func_ir)
             dprint_func_ir(self.func_ir, "after first fuse")
             # push non-parfors up
             maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap)
             dprint_func_ir(self.func_ir, "after maximize fusion up")
             # try fuse again after maximize
-            self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
+            self.fuse_parfors(self.array_analysis, self.func_ir.blocks, self.func_ir)
             dprint_func_ir(self.func_ir, "after fusion")
             # remove dead code after fusion to remove extra arrays and variables
             simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
@@ -2958,7 +2958,7 @@ class ParforPass(ParforPassStates):
         """
         return _mk_parfor_loops(self.typemap, size_vars, scope, loc)
 
-    def fuse_parfors(self, array_analysis, blocks):
+    def fuse_parfors(self, array_analysis, blocks, func_ir):
         for label, block in blocks.items():
             equiv_set = array_analysis.get_equiv_set(label)
             fusion_happened = True
@@ -2976,32 +2976,32 @@ class ParforPass(ParforPassStates):
                         stmt.equiv_set = equiv_set
                         next_stmt.equiv_set = equiv_set
                         fused_node, fuse_report = try_fuse(equiv_set, stmt, next_stmt,
-                            self.metadata["parfors"])
+                            self.metadata["parfors"], func_ir)
                         # accumulate fusion reports
                         self.diagnostics.fusion_reports.append(fuse_report)
                         if fused_node is not None:
                             fusion_happened = True
                             self.diagnostics.fusion_info[stmt.id].extend([next_stmt.id])
                             new_body.append(fused_node)
-                            self.fuse_recursive_parfor(fused_node, equiv_set)
+                            self.fuse_recursive_parfor(fused_node, equiv_set, func_ir)
                             i += 2
                             continue
                     new_body.append(stmt)
                     if isinstance(stmt, Parfor):
-                        self.fuse_recursive_parfor(stmt, equiv_set)
+                        self.fuse_recursive_parfor(stmt, equiv_set, func_ir)
                     i += 1
                 new_body.append(block.body[-1])
                 block.body = new_body
         return
 
-    def fuse_recursive_parfor(self, parfor, equiv_set):
+    def fuse_recursive_parfor(self, parfor, equiv_set, func_ir):
         blocks = wrap_parfor_blocks(parfor)
         maximize_fusion(self.func_ir, blocks, self.typemap)
         dprint_func_ir(self.func_ir, "after recursive maximize fusion down", blocks)
         arr_analysis = array_analysis.ArrayAnalysis(self.typingctx, self.func_ir,
                                                 self.typemap, self.calltypes)
         arr_analysis.run(blocks, equiv_set)
-        self.fuse_parfors(arr_analysis, blocks)
+        self.fuse_parfors(arr_analysis, blocks, func_ir)
         unwrap_parfor_blocks(parfor)
 
 
@@ -3919,7 +3919,7 @@ def get_parfor_writes(parfor):
 
 FusionReport = namedtuple('FusionReport', ['first', 'second', 'message'])
 
-def try_fuse(equiv_set, parfor1, parfor2, metadata):
+def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir):
     """try to fuse parfors and return a fused parfor, otherwise return None
     """
     dprint("try_fuse: trying to fuse \n", parfor1, "\n", parfor2)
@@ -3970,7 +3970,7 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata):
 
     # TODO: make sure parfor1's reduction output is not used in parfor2
     # only data parallel loops
-    if has_cross_iter_dep(parfor1) or has_cross_iter_dep(parfor2):
+    if has_cross_iter_dep(parfor1, func_ir) or has_cross_iter_dep(parfor2, func_ir):
         dprint("try_fuse: parfor cross iteration dependency found")
         msg = ("- fusion failed: cross iteration dependency found "
                 "between loops #%s and #%s")
@@ -4065,7 +4065,7 @@ def remove_duplicate_definitions(blocks, nameset):
     return
 
 
-def has_cross_iter_dep(parfor):
+def has_cross_iter_dep(parfor, func_ir):
     # we conservatively assume there is cross iteration dependency when
     # the parfor index is used in any expression since the expression could
     # be used for indexing arrays
@@ -4073,20 +4073,31 @@ def has_cross_iter_dep(parfor):
     indices = {l.index_variable.name for l in parfor.loop_nests}
     for b in parfor.loop_body.values():
         for stmt in b.body:
+            stmt_vars = [x.name for x in stmt.list_vars()]
+            if indices.isdisjoint(stmt_vars):
+                continue # Cannot be a cross iter dep if doesn't use index
             # GetItem/SetItem nodes are fine since can't have expression inside
             # and only simple indices are possible
             if isinstance(stmt, (ir.SetItem, ir.StaticSetItem)):
                 continue
             # tuples are immutable so no expression on parfor possible
-            if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
-                op = stmt.value.op
-                if op in ['build_tuple', 'getitem', 'static_getitem']:
-                    continue
-            stmt_vars = [x.name for x in stmt.list_vars()]
+            if isinstance(stmt, ir.Assign):
+                if isinstance(stmt.value, ir.Var):
+                    if stmt.value.name in indices:
+                        indices.add(stmt.target.name)
+                        continue
+                elif isinstance(stmt.value, ir.Expr):
+                    op = stmt.value.op
+                    if op in ['build_tuple', 'getitem', 'static_getitem']:
+                        continue
+                    if op == 'call':
+                        call = guard(find_callname, func_ir, stmt.value)
+                        if call is not None and call in [('IndexValue', 'numba.core.typing.builtins')]:
+                            continue
+
             # other statements can have potential violations
-            if not indices.isdisjoint(stmt_vars):
-                dprint("has_cross_iter_dep found", indices, stmt)
-                return True
+            dprint("has_cross_iter_dep found", indices, stmt)
+            return True
     return False
 
 
