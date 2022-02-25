@@ -1648,7 +1648,8 @@ class Interpreter(object):
         def op_CALL_FUNCTION_EX(self, inst, func, vararg, varkwarg, res):
             func = self.get(func)
             vararg = self.get(vararg)
-            varkwarg = self.get(varkwarg)
+            if varkwarg is not None:
+                varkwarg = self.get(varkwarg)
             expr = ir.Expr.call(
                 func, [], [], loc=self.loc, vararg=vararg, varkwarg=varkwarg
             )
