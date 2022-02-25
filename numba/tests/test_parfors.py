@@ -1976,7 +1976,6 @@ class TestParfors(TestParforsBase):
             self.check(test_impl)
         self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
 
-    @skip_parfors_unsupported
     def test_untraced_value_parfor(self):
         # This is a test for issue #6478.
         def test_impl(arr):
@@ -1995,8 +1994,8 @@ class TestParfors(TestParforsBase):
                 total += arr3[k]
             return total + a[0]
 
-        arr = np.arange(100)
-        self.assertEqual(countParfors(test_impl, (arr,)), 1)
+        arg = (types.Array(types.int64, 1, 'C'), )
+        self.assertEqual(countParfors(test_impl, arg), 1)
 
 
 @skip_parfors_unsupported
