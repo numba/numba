@@ -1246,7 +1246,10 @@ def set_constructor(context, builder, sig, args):
 
     # If the argument has a len(), preallocate the set so as to
     # avoid resizes.
-    # `for_iter` increfs each item in the set, so don't incref in add
+    # `for_iter` increfs each item in the set, so a `decref` is required each
+    # iteration to balance. Because the `incref` from `.add` is dependant on
+    # the item not already existing in the set, just removing its incref is not
+    # enough to guarantee all memory is freed
     n = call_len(context, builder, items_type, items)
     inst = SetInstance.allocate(context, builder, set_type, n)
     with for_iter(context, builder, items_type, items) as loop:
@@ -1383,8 +1386,10 @@ def set_update(context, builder, sig, args):
         # set instance
         casted = context.cast(builder, loop.value, items_type.dtype, inst.dtype)
         inst.add(casted)
-        # decref each item to counter balance the double incref from `add` +
-        # `for_iter`
+        # decref each item to counter balance the incref from `for_iter`
+        # `.add` will conditionally incref when the item does not already exist
+        # in the set, therefore removing its incref is not enough to guarantee
+        # all memory is freed
         context.nrt.decref(builder, items_type.dtype, loop.value)
 
     if n is not None:
