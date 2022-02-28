@@ -526,9 +526,6 @@ class TestSets(BaseTest):
         check(self.sparse_array(1))
         check(self.sparse_array(2))
 
-    def _is_empty_list(self, a):
-        return isinstance(a, list) and len(a) == 0
-
     def _test_set_operator(self, pyfunc):
         check = self.unordered_checker(pyfunc)
 
