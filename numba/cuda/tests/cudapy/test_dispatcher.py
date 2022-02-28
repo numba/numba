@@ -5,6 +5,7 @@ import warnings
 from numba import cuda, float32, float64, int32, int64, void
 from numba.core.errors import NumbaDeprecationWarning
 from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
+from numba.tests.support import ignore_internal_warnings
 import math
 
 
@@ -293,29 +294,38 @@ class TestDispatcher(CUDATestCase):
 @skip_on_cudasim('Dispatcher objects not used in the simulator')
 class TestDispatcherDeprecation(CUDATestCase):
     def check_warning(self, warnings, expected_str, category):
-        self.assertEqual(len(warnings), 3)
+        self.assertEqual(len(warnings), 1)
         for w in warnings:
             self.assertEqual(w.category, category)
             self.assertIn(expected_str, str(w.message))
 
     def test_ptx_deprecation(self):
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always", category=NumbaDeprecationWarning)
+        def f(x):
+            x[0] = 42
 
-            def f(x):
-                x[0] = 42
-            # Kernel code path
-            dispatcher = cuda.jit(f)
-            dispatcher.ptx
-            kernel = dispatcher.compile(())
-            kernel.ptx
-            # Device function code path
-            device_f_dispatcher = cuda.jit(f, device=True)
-            device_f_dispatcher.ptx
+        with warnings.catch_warnings(record=True) as w:
+            ignore_internal_warnings()
+            warnings.simplefilter("always", category=NumbaDeprecationWarning)
 
             msg = "Attribute `ptx` is deprecated and will be removed in the "
             "future. "
-            self.check_warning(w, msg, NumbaDeprecationWarning)
+
+            # Kernel code path
+            with self.subTest(name="DispatcherOnCudaKernel"):
+                dispatcher = cuda.jit(f)
+                dispatcher.ptx
+                self.check_warning(w, msg, NumbaDeprecationWarning)
+                w.clear()
+            with self.subTest(name="KernelObjectOnCudaKernel"):
+                kernel = dispatcher.compile((float32[::1],))
+                kernel.ptx
+                self.check_warning(w, msg, NumbaDeprecationWarning)
+                w.clear()
+            # Device function code path
+            with self.subTest(name="DispatcherOnDeviceFunction"):
+                device_f_dispatcher = cuda.jit(f, device=True)
+                device_f_dispatcher.ptx
+                self.check_warning(w, msg, NumbaDeprecationWarning)
 
 
 if __name__ == '__main__':
