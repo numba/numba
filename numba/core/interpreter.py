@@ -124,7 +124,7 @@ def _call_function_ex_replace_kws_large(
         MAP_ADD # Append the (key, value) pair to the map
         # End for each argument
 
-    In the IR generated, the inital build map is empty and a series
+    In the IR generated, the initial build map is empty and a series
     of setitems are applied afterwards. THE IR looks like:
 
     Finally at the end the bytecode will contain a CALL_FUNCTION_EX instruction.
@@ -440,6 +440,17 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                 # Determine the kws
                 if keyword_def.value.items:
                     # n_kws <= 15 case.
+                    # Here the IR looks like a series of
+                    # constants, then the arguments and finally
+                    # a build_map that contains all of the pairs.
+                    # For Example:
+                    #
+                    #   $const_n = const("arg_name")
+                    #   $arg_n = ...
+                    #   $kwargs_var = build_map(items=[
+                    #              ($const_0, $arg_0),
+                    #              ...,
+                    #              ($const_n, $arg_n),])
                     kws = _call_function_ex_replace_kws_small(
                         keyword_def.value,
                         new_body,
@@ -447,6 +458,17 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                     )
                 else:
                     # n_kws > 15 case.
+                    # Here the IR is an initial empty build_map
+                    # followed by a series of setitems with a constant
+                    # key and then the argument.
+                    # For example:
+                    #
+                    #   $kwargs_var = build_map(items=[])
+                    #   $const_0 = const("arg_name")
+                    #   $arg_0 = ...
+                    #   $my_attr = getattr(const_0, attr=__setitem__)
+                    #   $unused_var = call $my_attr($const_0, $arg_0)
+                    #   ...
                     kws = _call_function_ex_replace_kws_large(
                         blk.body,
                         varkwarg.name,
@@ -482,12 +504,46 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                         and args_def.value.op == "build_tuple"
                     ):
                         # n_args <= 30 case.
+                        # Here the IR is a simple build_tuple containing
+                        # all of the args.
+                        # For example:
+                        #
+                        #  $arg_n = ...
+                        #  $varargs = build_tuple(
+                        #   items=[$arg_0, ..., $arg_n]
+                        #  )
                         args = _call_function_ex_replace_args_small(
                             args_def.value,
                             new_body,
                             vararg_loc
                         )
                     else:
+                        # Here the IR is an initial empty build_tuple.
+                        # Then for each arg, a new tuple with a single
+                        # element is created and one by one these are
+                        # added to a growing tuple.
+                        # For example:
+                        #
+                        #  $combo_tup_0 = build_tuple(items=[])
+                        #  $arg0 = ...
+                        #  $arg0_tup = build_tuple(items=[$arg0])
+                        #  $combo_tup_1 = $combo_tup_0 + $arg0_tup
+                        #  $arg1 = ...
+                        #  $arg1_tup = build_tuple(items=[$arg1])
+                        #  $combo_tup_2 = $combo_tup_1 + $arg1_tup
+                        #  ...
+                        #  $combo_tup_n = $combo_tup_{n-1} + $argn_tup
+                        #
+                        # In addition, the IR seems to contain a final
+                        # assignment for the varargs that looks like:
+                        #
+                        #  $varargs_var = $combo_tup_n
+                        #
+                        # Here args_def is expected to be a simple assignment.
+                        # However, it is unclear if this extra assignment is
+                        # always generated, so as a result the code is written
+                        # to support args_def being either $varargs_var
+                        # or $combo_tup_n from the above example.
                         args = _call_function_ex_replace_args_large(
                             args_def, blk.body, new_body, vararg_loc
                         )
