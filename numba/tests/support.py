@@ -76,7 +76,7 @@ skip_unless_py10_or_later = unittest.skipUnless(
 )
 
 skip_unless_py10 = unittest.skipUnless(
-    utils.PYVERSION >= (3, 10),
+    utils.PYVERSION == (3, 10),
     "needs Python 3.10"
 )
 
