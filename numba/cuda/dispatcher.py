@@ -516,7 +516,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
     def _numba_type_(self):
         return cuda_types.CUDADispatcher(self)
 
-    @functools.lru_cache
+    @functools.lru_cache(maxsize=128)
     def configure(self, griddim, blockdim, stream=0, sharedmem=0):
         griddim, blockdim = normalize_kernel_dimensions(griddim, blockdim)
         return _LaunchConfiguration(self, griddim, blockdim, stream, sharedmem)
