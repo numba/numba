@@ -1990,6 +1990,22 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countParfors(test_impl, (types.int64,)), 3)
         self.check(test_impl, 4)
 
+    def test_prange_reverse_order1(self):
+        def test_impl():
+            size = 10
+            a = np.zeros((size,size))
+            b = np.zeros((size,size))
+            for i in numba.prange(size):
+                for j in range(size):
+                    a[i,j] = b[i,j] + 1
+            for i in numba.prange(size):
+                for j in range(size):
+                    b[j,i] = 3
+            return a
+
+        self.assertEqual(countParfors(test_impl, ()), 3)
+        self.check(test_impl)
+
 
 
 @skip_parfors_unsupported
