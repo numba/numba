@@ -203,9 +203,13 @@ class BinOpMul(BinOp):
 
 
 @infer_global(operator.mod)
-class BinOpMod(ConcreteTemplate):
+class BinOpModInt(ConcreteTemplate):
     cases = list(integer_binop_cases)
-    cases += [signature(op, op, op) for op in sorted(types.real_domain)]
+
+
+@infer_global(operator.mod)
+class BinOpModReal(ConcreteTemplate):
+    cases = [signature(op, op, op) for op in sorted(types.real_domain)]
 
 
 @infer_global(operator.imod)
