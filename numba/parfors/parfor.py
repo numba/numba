@@ -3971,10 +3971,9 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
     # TODO: make sure parfor1's reduction output is not used in parfor2
     # only data parallel loops
     func_ir._definitions = build_definitions(func_ir.blocks)
-    p1_cross_dep, p1_ip, p1_ia, p1_non_ia = has_cross_iter_dep(p1, func_ir, typemap)
-    dprint("p1_cross_dep:", p1_cross_dep)
+    p1_cross_dep, p1_ip, p1_ia, p1_non_ia = has_cross_iter_dep(parfor1, func_ir, typemap)
     if not p1_cross_dep:
-        p2_cross_dep = has_cross_iter_dep(p2, func_ir, typemap, p1_ip, p1_ia, p1_non_ia)[0]
+        p2_cross_dep = has_cross_iter_dep(parfor2, func_ir, typemap, p1_ip, p1_ia, p1_non_ia)[0]
     else:
         p2_cross_dep = True
 
