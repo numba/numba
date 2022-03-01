@@ -2,6 +2,7 @@ import numpy as np
 import os
 import sys
 import ctypes
+import inspect
 import functools
 
 from numba.core import config, serialize, sigutils, types, typing, utils
@@ -461,8 +462,8 @@ class _LaunchConfiguration:
                 msg = msg.format(grid=grid_size, sm=2 * smcount)
                 warn(NumbaPerformanceWarning(msg))
 
-    def __call__(self, *args):
-        return self.dispatcher.call(args, self.griddim, self.blockdim,
+    def __call__(self, *args, **kwargs):
+        return self.dispatcher.call(args, kwargs, self.griddim, self.blockdim,
                                     self.stream, self.sharedmem)
 
 
@@ -501,10 +502,21 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         # argument types
         self.specializations = {}
 
+        # cache py_func call signature for kernel invocation with positional
+        # arguments
+        # Credit `klaus se`: https://stackoverflow.com/a/49836730/12394463
+        self.py_func_signature = inspect.signature(self.py_func)
+        if any(
+            v.kind == inspect.Parameter.VAR_KEYWORD
+            for v in self.py_func_signature.parameters.values()
+        ):
+            raise TypeError('Keyword-only arguments are not supported')
+
     @property
     def _numba_type_(self):
         return cuda_types.CUDADispatcher(self)
 
+    @functools.lru_cache
     def configure(self, griddim, blockdim, stream=0, sharedmem=0):
         griddim, blockdim = normalize_kernel_dimensions(griddim, blockdim)
         return _LaunchConfiguration(self, griddim, blockdim, stream, sharedmem)
@@ -561,10 +573,16 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         # An attempt to launch an unconfigured kernel
         raise ValueError(missing_launch_config_msg)
 
-    def call(self, args, griddim, blockdim, stream, sharedmem):
+    def call(self, args, kwargs, griddim, blockdim, stream, sharedmem):
         '''
-        Compile if necessary and invoke this kernel with *args*.
+        Compile if necessary and invoke this kernel with *args, kwargs*.
+
+        *kwargs* are first converted to args using *self.py_func_signature*
         '''
+        bound_args = self.py_func_signature.bind(*args, **kwargs)
+        bound_args.apply_defaults()
+        args = bound_args.args
+
         if self.specialized:
             kernel = next(iter(self.overloads.values()))
         else:
