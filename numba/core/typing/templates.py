@@ -501,6 +501,14 @@ class ConcreteTemplate(FunctionTemplate):
         }
         return info
 
+    @classmethod
+    def combine(cls, other):
+        assert issubclass(other, ConcreteTemplate)
+        assert cls.key == other.key
+        cases = cls.cases + other.cases
+        return type(f"Combined_{cls.__name__}_{other.__name__}",
+                    (ConcreteTemplate,), dict(key=cls.key, cases=cases))
+
 
 class _EmptyImplementationEntry(InternalError):
     def __init__(self, reason):
@@ -1260,8 +1268,10 @@ class Registry(object):
             def decorate(cls, typing_key):
                 class Template(cls):
                     key = typing_key
+                template_cls = type(f"RegisterGlobal_{cls.__name__}",
+                                    (cls,), dict(key=typing_key))
                 if callable(val):
-                    typ = types.Function(Template)
+                    typ = types.Function(template_cls)
                 else:
                     raise TypeError("cannot infer type for global value %r")
                 self.globals.append((val, typ))

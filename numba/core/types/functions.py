@@ -293,6 +293,21 @@ class BaseFunction(Callable):
 
         self._depth += 1
 
+        from numba.core.typing.templates import ConcreteTemplate
+        concretes = []
+        abstracts = []
+        for temp_cls in order:
+            if issubclass(temp_cls, ConcreteTemplate):
+                concretes.append(temp_cls)
+            else:
+                abstracts.append(temp_cls)
+
+        if concretes:
+            head = concretes[0]
+            for each in concretes[1:]:
+                head = head.combine(each)
+            order = [head, *abstracts]
+
         for temp_cls in order:
             temp = temp_cls(context)
             # The template can override the default and prefer literal args
