@@ -209,6 +209,7 @@ class _SetPayload(object):
                 raise NumbaValueError(msg.format(arg))
         eqfn = context.get_function(fnty, sig)
 
+        zero = ir.Constant(intp_t, 0)
         one = ir.Constant(intp_t, 1)
         five = ir.Constant(intp_t, 5)
 
@@ -254,8 +255,15 @@ class _SetPayload(object):
 
         # First linear probing.  When the number of collisions is small,
         # the lineary probing loop achieves better cache locality and
-        # is also slightly cheaper computationally.
-        with cgutils.for_range(builder, ir.Constant(intp_t, LINEAR_PROBES)):
+        # is also slightly cheaper computationally.  A check must first be
+        # performed to ensure that the linear probing won't loop back on
+        # itself causing an infinite loop 
+        ll_lp = ir.Constant(intp_t, LINEAR_PROBES)
+        pred = builder.icmp_unsigned("<=",
+                                     builder.add(ll_lp, builder.load(index)),
+                                     mask)
+        probes = builder.select(pred, ll_lp, zero)
+        with cgutils.for_range(builder, probes):
             i = builder.load(index)
             check_entry(i)
             i = builder.add(i, one)
