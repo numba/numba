@@ -56,7 +56,7 @@ def _get_libdevice_paths():
     pat = r'libdevice(\.\d+)*\.bc$'
     candidates = find_file(re.compile(pat), libdir)
     # Keep only the max (most recent version) of the bitcode files.
-    out = max(candidates)
+    out = max(candidates, default=None)
     return _env_path_tuple(by, out)
 
 
