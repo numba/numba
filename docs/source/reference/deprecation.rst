@@ -338,7 +338,7 @@ Support for:
 - Devices with Compute Capability < 5.3, and
 - CUDA toolkits less than 10.2
 
-is deprecated and will be removed in future.
+was deprecated and removed.
 
 Recommendations
 ---------------
@@ -350,5 +350,5 @@ Recommendations
 Schedule
 --------
 
-- In Numba 0.55.1: support for CC < 5.3 and CUDA toolkits < 10.2 are deprecated.
-- In Numba 0.56: support for CC < 5.3 and CUDA toolkits < 10.2 will be removed.
+- In Numba 0.55.1: support for CC < 5.3 and CUDA toolkits < 10.2 was deprecated.
+- In Numba 0.56: support for CC < 5.3 and CUDA toolkits < 10.2 was removed.

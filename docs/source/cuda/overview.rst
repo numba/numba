@@ -37,11 +37,8 @@ Requirements
 Supported GPUs
 --------------
 
-Numba supports CUDA-enabled GPUs with Compute Capability 3.0 or greater.
-Support for devices with Compute Capability less than 5.3 is deprecated, and
-will be removed in the next Numba release (0.56).
-
-Devices with Compute Capability 5.3 or greater include (but are not limited to):
+Numba supports CUDA-enabled GPUs with Compute Capability 5.3 or greater. These
+include (but are not limited to):
 
 - Embedded platforms: NVIDIA Jetson Nano, TX1, TX2, Xavier NX, AGX Xavier.
 - Desktop / Server GPUs: All GPUs with Pascal microarchitecture or later. E.g.
@@ -56,9 +53,7 @@ Numba aims to support CUDA Toolkit versions released within the last 3 years.
 An NVIDIA driver sufficient for the toolkit version is also required.
 Presently:
 
-* 9.2 is the minimum required toolkit version.
-* Support for versions less than 10.2 is deprecated, and will be removed in the
-  next Numba release (0.56).
+* 10.2 is the minimum required toolkit version.
 * 11.2 or later is recommended, as it uses an NVVM version based on LLVM 7 (as
   opposed to 3.4 in earlier releases).
 
