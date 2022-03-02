@@ -348,35 +348,27 @@ def get_supported_ccs():
 
     try:
         from numba.cuda.cudadrv.runtime import runtime
-        cudart_version_major, cudart_version_minor = runtime.get_version()
+        cudart_version = runtime.get_version()
     except: # noqa: E722
         # The CUDA Runtime may not be present
-        cudart_version_major = 0
-        cudart_version_minor = 0
+        cudart_version = (0, 0)
 
-    ctk_ver = f"{cudart_version_major}.{cudart_version_minor}"
+    ctk_ver = f"{cudart_version[0]}.{cudart_version[1]}"
     unsupported_ver = f"CUDA Toolkit {ctk_ver} is unsupported by Numba - " \
-                      + "9.2 is the minimum required version."
+                      + "10.2 is the minimum required version."
 
     # List of supported compute capability in sorted order
-    if cudart_version_major == 0:
+    if cudart_version == (0, 0):
         _supported_cc = ()
-    elif cudart_version_major < 9:
+    elif cudart_version == (10, 2):
+        _supported_cc = (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5) # noqa: E501
+    elif cudart_version == (11, 0):
+        _supported_cc = (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5), (8, 0) # noqa: E501
+    elif cudart_version > (11, 0):
+        _supported_cc = (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5), (8, 0), (8, 6)# noqa: E501
+    else:
         _supported_cc = ()
         warnings.warn(unsupported_ver)
-    elif cudart_version_major == 9:
-        if cudart_version_minor != 2:
-            _supported_cc = ()
-            warnings.warn(unsupported_ver)
-        else:
-            # CUDA 9.2
-            _supported_cc = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0) # noqa: E501
-    elif cudart_version_major == 10:
-        # CUDA 10.x
-        _supported_cc = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5) # noqa: E501
-    else:
-        # CUDA 11.0 and later
-        _supported_cc = (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5), (8, 0) # noqa: E501
 
     return _supported_cc
 
@@ -425,8 +417,8 @@ def get_arch_option(major, minor):
     return 'compute_%d%d' % arch
 
 
-MISSING_LIBDEVICE_FILE_MSG = '''Missing libdevice file for {arch}.
-Please ensure you have package cudatoolkit >= 9.
+MISSING_LIBDEVICE_FILE_MSG = '''Missing libdevice file.
+Please ensure you have package cudatoolkit >= 10.2
 Install package by:
 
     conda install cudatoolkit
@@ -434,33 +426,15 @@ Install package by:
 
 
 class LibDevice(object):
-    _cache_ = {}
-    _known_arch = [
-        "compute_20",
-        "compute_30",
-        "compute_35",
-        "compute_50",
-    ]
+    _cache_ = None
 
-    def __init__(self, arch):
-        """
-        arch --- must be result from get_arch_option()
-        """
-        if arch not in self._cache_:
-            arch = self._get_closest_arch(arch)
-            if get_libdevice(arch) is None:
-                raise RuntimeError(MISSING_LIBDEVICE_FILE_MSG.format(arch=arch))
-            self._cache_[arch] = open_libdevice(arch)
+    def __init__(self):
+        if self._cache_ is None:
+            if get_libdevice() is None:
+                raise RuntimeError(MISSING_LIBDEVICE_FILE_MSG)
+            self._cache_ = open_libdevice()
 
-        self.arch = arch
-        self.bc = self._cache_[arch]
-
-    def _get_closest_arch(self, arch):
-        res = self._known_arch[0]
-        for potential in self._known_arch:
-            if arch >= potential:
-                res = potential
-        return res
+        self.bc = self._cache_
 
     def get(self):
         return self.bc
@@ -701,7 +675,7 @@ def llvm_to_ptx(llvmir, **opts):
         })
 
     cu = CompilationUnit()
-    libdevice = LibDevice(arch=opts.get('arch', 'compute_20'))
+    libdevice = LibDevice()
 
     for mod in llvmir:
         mod = llvm_replace(mod)

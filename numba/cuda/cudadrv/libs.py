@@ -27,14 +27,14 @@ else:
     _staticnamepattern = 'lib%s.a'
 
 
-def get_libdevice(arch):
+def get_libdevice():
     d = get_cuda_paths()
     paths = d['libdevice'].info
-    return paths.get(arch, paths.get(None))
+    return paths
 
 
-def open_libdevice(arch):
-    with open(get_libdevice(arch), 'rb') as bcfile:
+def open_libdevice():
+    with open(get_libdevice(), 'rb') as bcfile:
         return bcfile.read()
 
 

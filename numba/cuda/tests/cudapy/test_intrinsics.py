@@ -4,8 +4,7 @@ import re
 from numba import cuda, int64
 from numba.cuda import compile_ptx
 from numba.core.types import f2
-from numba.cuda.testing import (unittest, CUDATestCase, skip_on_cudasim,
-                                skip_unless_cc_53)
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 
 
 def simple_threadidx(ary):
@@ -343,7 +342,6 @@ class TestCudaIntrinsic(CUDATestCase):
         compiled[1, 1](ary, 2., 3., 4.)
         np.testing.assert_allclose(ary[0], 2 * 3 + 4)
 
-    @skip_unless_cc_53
     def test_hadd(self):
         compiled = cuda.jit("void(f2[:], f2[:], f2[:])")(simple_hadd)
         ary = np.zeros(1, dtype=np.float16)
@@ -352,7 +350,6 @@ class TestCudaIntrinsic(CUDATestCase):
         compiled[1, 1](ary, arg1, arg2)
         np.testing.assert_allclose(ary[0], arg1 + arg2)
 
-    @skip_unless_cc_53
     def test_hadd_scalar(self):
         compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hadd_scalar)
         ary = np.zeros(1, dtype=np.float16)
@@ -368,7 +365,6 @@ class TestCudaIntrinsic(CUDATestCase):
         ptx, _ = compile_ptx(simple_hadd_scalar, args, cc=(5, 3))
         self.assertIn('add.f16', ptx)
 
-    @skip_unless_cc_53
     def test_hfma(self):
         compiled = cuda.jit("void(f2[:], f2[:], f2[:], f2[:])")(simple_hfma)
         ary = np.zeros(1, dtype=np.float16)
@@ -378,7 +374,6 @@ class TestCudaIntrinsic(CUDATestCase):
         compiled[1, 1](ary, arg1, arg2, arg3)
         np.testing.assert_allclose(ary[0], arg1 * arg2 + arg3)
 
-    @skip_unless_cc_53
     def test_hfma_scalar(self):
         compiled = cuda.jit("void(f2[:], f2, f2, f2)")(simple_hfma_scalar)
         ary = np.zeros(1, dtype=np.float16)
@@ -395,7 +390,6 @@ class TestCudaIntrinsic(CUDATestCase):
         ptx, _ = compile_ptx(simple_hfma_scalar, args, cc=(5, 3))
         self.assertIn('fma.rn.f16', ptx)
 
-    @skip_unless_cc_53
     def test_hsub(self):
         compiled = cuda.jit("void(f2[:], f2[:], f2[:])")(simple_hsub)
         ary = np.zeros(1, dtype=np.float16)
@@ -404,7 +398,6 @@ class TestCudaIntrinsic(CUDATestCase):
         compiled[1, 1](ary, arg1, arg2)
         np.testing.assert_allclose(ary[0], arg1 - arg2)
 
-    @skip_unless_cc_53
     def test_hsub_scalar(self):
         compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hsub_scalar)
         ary = np.zeros(1, dtype=np.float16)
@@ -420,7 +413,6 @@ class TestCudaIntrinsic(CUDATestCase):
         ptx, _ = compile_ptx(simple_hsub_scalar, args, cc=(5, 3))
         self.assertIn('sub.f16', ptx)
 
-    @skip_unless_cc_53
     def test_hmul(self):
         compiled = cuda.jit()(simple_hmul)
         ary = np.zeros(1, dtype=np.float16)
@@ -429,7 +421,6 @@ class TestCudaIntrinsic(CUDATestCase):
         compiled[1, 1](ary, arg1, arg2)
         np.testing.assert_allclose(ary[0], arg1 * arg2)
 
-    @skip_unless_cc_53
     def test_hmul_scalar(self):
         compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hmul_scalar)
         ary = np.zeros(1, dtype=np.float16)
@@ -445,7 +436,6 @@ class TestCudaIntrinsic(CUDATestCase):
         ptx, _ = compile_ptx(simple_hmul_scalar, args, cc=(5, 3))
         self.assertIn('mul.f16', ptx)
 
-    @skip_unless_cc_53
     def test_hneg(self):
         compiled = cuda.jit("void(f2[:], f2[:])")(simple_hneg)
         ary = np.zeros(1, dtype=np.float16)
@@ -453,7 +443,6 @@ class TestCudaIntrinsic(CUDATestCase):
         compiled[1, 1](ary, arg1)
         np.testing.assert_allclose(ary[0], -arg1)
 
-    @skip_unless_cc_53
     def test_hneg_scalar(self):
         compiled = cuda.jit("void(f2[:], f2)")(simple_hneg_scalar)
         ary = np.zeros(1, dtype=np.float16)
@@ -468,7 +457,6 @@ class TestCudaIntrinsic(CUDATestCase):
         ptx, _ = compile_ptx(simple_hneg_scalar, args, cc=(5, 3))
         self.assertIn('neg.f16', ptx)
 
-    @skip_unless_cc_53
     def test_habs(self):
         compiled = cuda.jit()(simple_habs)
         ary = np.zeros(1, dtype=np.float16)
@@ -476,7 +464,6 @@ class TestCudaIntrinsic(CUDATestCase):
         compiled[1, 1](ary, arg1)
         np.testing.assert_allclose(ary[0], abs(arg1))
 
-    @skip_unless_cc_53
     def test_habs_scalar(self):
         compiled = cuda.jit("void(f2[:], f2)")(simple_habs_scalar)
         ary = np.zeros(1, dtype=np.float16)

@@ -46,7 +46,7 @@ if USE_NV_BINDING:
     # use a magic number 0 in places where we want the default stream.
     CU_STREAM_DEFAULT = 0
 
-MIN_REQUIRED_CC = (3, 0)
+MIN_REQUIRED_CC = (5, 3)
 
 
 _py_decref = ctypes.pythonapi.Py_DecRef
@@ -2282,8 +2282,7 @@ class Stream(object):
         Return an awaitable that resolves once all preceding stream operations
         are complete. The result of the awaitable is the current stream.
         """
-        loop = asyncio.get_running_loop() if utils.PYVERSION >= (3, 7) \
-            else asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         future = loop.create_future()
 
         def resolver(future, status):
