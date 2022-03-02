@@ -359,11 +359,11 @@ def get_supported_ccs():
     if cudart_version == (0, 0):
         _supported_cc = ()
     elif cudart_version == (10, 2):
-        _supported_cc = (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5) # noqa: E501
+        _supported_cc = (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5)
     elif cudart_version == (11, 0):
-        _supported_cc = (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5), (8, 0) # noqa: E501
+        _supported_cc = (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5), (8, 0) # noqa: E501
     elif cudart_version > (11, 0):
-        _supported_cc = (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5), (8, 0), (8, 6)# noqa: E501
+        _supported_cc = (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5), (8, 0), (8, 6) # noqa: E501
     else:
         _supported_cc = ()
         warnings.warn(unsupported_ver)
