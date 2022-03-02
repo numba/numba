@@ -255,7 +255,12 @@ class _SetPayload(object):
         # First linear probing.  When the number of collisions is small,
         # the lineary probing loop achieves better cache locality and
         # is also slightly cheaper computationally.
-        with cgutils.for_range(builder, ir.Constant(intp_t, LINEAR_PROBES)):
+        ll_lp = ir.Constant(intp_t, LINEAR_PROBES)
+        pred = builder.icmp_unsigned("<=",
+                                     builder.add(ll_lp, builder.load(index)),
+                                     mask)
+        probes = builder.select(pred, ll_lp, ir.Constant(intp_t, 0))
+        with cgutils.for_range(builder, probes):
             i = builder.load(index)
             check_entry(i)
             i = builder.add(i, one)
