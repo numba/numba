@@ -177,6 +177,22 @@ def _call_function_ex_replace_kws_large(
             ):
                 not_found_getattr = False
             else:
+                # If the argument is "created" in JIT, then there
+                # will be intermediate operations in between setitems.
+                # For example we have arg5=pow(arg5, 2),
+                # then the IR would look like:
+                #
+                #   # Creation of the constant key.
+                #   $const44.26 = const(str, arg5)
+                #
+                #   # Argument creation. This is the section we are skipping
+                #   $46load_global.27 = global(pow: <built-in function pow>)
+                #   $const50.29 = const(int, 2)
+                #   $call.30 = call $46load_global.27(arg5, $const50.29)
+                #
+                #   # Setitem with arg5
+                #   $54map_add.31 = getattr(value=$map.2, attr=__setitem__)
+                #   $54map_add.32 = call $54map_add.31($const44.26, $call.30)
                 search_start += 1
         if (
             not_found_getattr
@@ -363,6 +379,24 @@ def _call_function_ex_replace_args_large(
                 ):
                     keep_looking = False
                 else:
+                    # If the argument is "created" in JIT, then there
+                    # will be intermediate operations in between appends.
+                    # For example if the next arg after arg4 is pow(arg5, 2),
+                    # then the IR would look like:
+                    #
+                    #   # Appending arg4
+                    #   $arg4_tup = build_tuple(items=[arg4])
+                    #   $append_var.5 = $append_var.4 + $arg4_tup
+                    #
+                    #   # Creation of arg5.
+                    #   # This is the section that we are skipping.
+                    #   $32load_global.20 = global(pow: <built-in function pow>)
+                    #   $const36.22 = const(int, 2)
+                    #   $call.23 = call $32load_global.20(arg5, $const36.22)
+                    #
+                    #   # Appending arg5
+                    #   $arg5_tup = build_tuple(items=[$call.23])
+                    #   $append_var.6 = $append_var.5 + $arg5_tup
                     search_end -= 1
     if start_not_found:
         # We cannot handle this format so raise the
