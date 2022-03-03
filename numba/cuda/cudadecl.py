@@ -338,62 +338,96 @@ class Cuda_selp(AbstractTemplate):
         return signature(a, test, a, a)
 
 
+#def _genfp16_unary(l_key):
+#    @register
+#    class Cuda_fp16_unary(ConcreteTemplate):
+#        key = l_key
+#        cases = [signature(types.float16, types.float16)]
+#
+#    return Cuda_fp16_unary
+
 def _genfp16_unary(l_key):
     @register
-    class Cuda_fp16_unary(ConcreteTemplate):
+    class Cuda_fp16_unary(AbstractTemplate):
         key = l_key
-        cases = [signature(types.float16, types.float16)]
+        def generic(self, args, kws):
+            assert not kws
+            if len(args) == 1 and args[0] == types.float16:
+                return signature(types.float16, types.float16)
 
     return Cuda_fp16_unary
 
+#def _genfp16_binary(l_key):
+#    @register
+#    class Cuda_fp16_binary(ConcreteTemplate):
+#        key = l_key
+#        cases = [signature(types.float16, types.float16, types.float16)]
+#
+#    return Cuda_fp16_binary
 
 def _genfp16_binary(l_key):
     @register
-    class Cuda_fp16_binary(ConcreteTemplate):
+    class Cuda_fp16_binary(AbstractTemplate):
         key = l_key
-        cases = [signature(types.float16, types.float16, types.float16)]
+        def generic(self, args, kws):
+            assert not kws
+            if len(args) == 2 and args[0] == types.float16 and args[1] == types.float16:
+                return signature(types.float16, types.float16, types.float16)
 
     return Cuda_fp16_binary
 
 
 Cuda_hadd = _genfp16_binary(cuda.fp16.hadd)
+Cuda_add = _genfp16_binary(operator.add)
+Cuda_iadd = _genfp16_binary(operator.iadd)
+
 Cuda_hsub = _genfp16_binary(cuda.fp16.hsub)
+Cuda_sub = _genfp16_binary(operator.sub)
+Cuda_isub = _genfp16_binary(operator.isub)
+
+
 Cuda_hmul = _genfp16_binary(cuda.fp16.hmul)
+Cuda_mul = _genfp16_binary(operator.mul)
+Cuda_imul = _genfp16_binary(operator.imul)
+
+
 Cuda_hneg = _genfp16_unary(cuda.fp16.hneg)
+Cuda_neg = _genfp16_unary(operator.neg)
 Cuda_habs = _genfp16_unary(cuda.fp16.habs)
+Cuda_abs = _genfp16_unary(operator.abs)
 
 
 class FP16BinOp(ConcreteTemplate):
     cases = [signature(types.float16, types.float16, types.float16)]
 
-@register_global(operator.iadd)
-@register_global(operator.add)
-class BinOpFP16Add(FP16BinOp):
-    pass
+#@register_global(operator.iadd)
+#@register_global(operator.add)
+#class BinOpFP16Add(FP16BinOp):
+#    pass
 
-@register_global(operator.isub)
-@register_global(operator.sub)
-class BinOpFP16Sub(FP16BinOp):
-    pass
+#@register_global(operator.isub)
+#@register_global(operator.sub)
+#class BinOpFP16Sub(FP16BinOp):
+#    pass
 
-@register_global(operator.imul)
-@register_global(operator.mul)
-class BinOpFP16Mul(FP16BinOp):
-    pass
+#@register_global(operator.imul)
+#@register_global(operator.mul)
+#class BinOpFP16Mul(FP16BinOp):
+#    pass
 
 
 class FP16UnaryOp(ConcreteTemplate):
     cases = [signature(types.float16, types.float16)]
 
 
-@register_global(operator.neg)
-class UnaryOpFP16Neg(FP16UnaryOp):
-    pass
+#@register_global(operator.neg)
+#class UnaryOpFP16Neg(FP16UnaryOp):
+#    pass
 
 
-@register_global(operator.abs)
-class UnaryOpFP16Abs(FP16UnaryOp):
-    pass
+#@register_global(operator.abs)
+#class UnaryOpFP16Abs(FP16UnaryOp):
+#    pass
 
 
 # generate atomic operations
