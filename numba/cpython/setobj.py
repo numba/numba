@@ -218,10 +218,10 @@ class _SetPayload(object):
         # The index of the entry being considered: start with (hash & mask)
         index = cgutils.alloca_once_value(builder,
                                           builder.and_(h, mask))
-        if for_insert:
-            # The index of the first deleted entry in the lookup chain
-            free_index_sentinel = mask.type(-1)  # highest unsigned index
-            free_index = cgutils.alloca_once_value(builder, free_index_sentinel)
+
+        # The index of the first deleted entry in the lookup chain
+        free_index_sentinel = mask.type(-1) # highest unsigned index
+        free_index = cgutils.alloca_once_value(builder, free_index_sentinel)
 
         bb_body = builder.append_basic_block("lookup.body")
         bb_found = builder.append_basic_block("lookup.found")
@@ -245,13 +245,17 @@ class _SetPayload(object):
             with builder.if_then(is_hash_empty(context, builder, entry_hash)):
                 builder.branch(bb_not_found)
 
-            if for_insert:
-                # Memorize the index of the first deleted entry
-                with builder.if_then(is_hash_deleted(context, builder, entry_hash)):
-                    j = builder.load(free_index)
-                    j = builder.select(builder.icmp_unsigned('==', j, free_index_sentinel),
-                                       i, j)
-                    builder.store(j, free_index)
+            # We circled around once, and arrived at the first deleted slot
+            # again. All unused slots were DELETED so we need to exit here.
+            with builder.if_then(builder.icmp_unsigned('==', i, builder.load(free_index))):
+                builder.branch(bb_not_found)
+
+            # Memorize the index of the first deleted entry
+            with builder.if_then(is_hash_deleted(context, builder, entry_hash)):
+                j = builder.load(free_index)
+                j = builder.select(builder.icmp_unsigned('==', j, free_index_sentinel),
+                                    i, j)
+                builder.store(j, free_index)
 
         # First linear probing.  When the number of collisions is small,
         # the lineary probing loop achieves better cache locality and
