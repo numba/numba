@@ -904,6 +904,7 @@ def _native_set_to_python_list(typ, payload, c):
         with payload._iterate() as loop:
             i = c.builder.load(index)
             item = loop.entry.key
+            c.context.nrt.incref(c.builder, typ.dtype, item)
             itemobj = c.box(typ.dtype, item)
             c.pyapi.list_setitem(listobj, i, itemobj)
             i = c.builder.add(i, ir.Constant(i.type, 1))
