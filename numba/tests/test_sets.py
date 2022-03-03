@@ -654,7 +654,6 @@ class TestSets(BaseTest):
 
         @jit(nopython=True)
         def bar():
-
             openSet = set()
 
             openSet.add((2, 0))
