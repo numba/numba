@@ -1683,11 +1683,12 @@ class SimplifyCFG(FunctionPass):
 
 @register_pass(mutates_CFG=True, analysis_only=False)
 class DeadLoopElimination(FunctionPass):
+    """Remove loops that iterate over empty containers
+    """
     _name = "dead_loop_elimination"
 
     def __init__(self):
         FunctionPass.__init__(self)
-        self.dead_vars = []
 
     def is_arg_constsized(self, state, arg):
         # True if len(type(arg)) == 0
@@ -1695,16 +1696,21 @@ class DeadLoopElimination(FunctionPass):
         return isinstance(t, types.ConstSized) and len(t) == 0
 
     def match_iter(self, state, getiter):
-        # call_fn  := Var(...)
-        # call_ret := call_expr(func=call_fn, args=[...])
-        #        _ := getiter(value=call_ret)
-        func_ir = state.func_ir
-        call_expr = get_definition(func_ir, getiter.value)
-        if not (isinstance(call_expr, ir.Expr) and call_expr.op == 'call'):
-            return False
-        call_fn = get_definition(func_ir, call_expr.func)
+        """
+        Return True if getiter operates on 'zip' or 'iter'
 
-        if call_fn.value not in (iter, zip):
+        call_fn  := global(zip: <class 'zip'>)
+        call_ret := call_expr(func=call_fn, args=[...])
+               _ := getiter(value=call_ret)
+        """
+        func_ir = state.func_ir
+        call_expr = guard(get_definition, func_ir, getiter.value)
+        if call_expr and not (isinstance(call_expr, ir.Expr) and
+                              call_expr.op == 'call'):
+            return False
+
+        call_fn = guard(get_definition, func_ir, call_expr.func)
+        if call_fn and call_fn.value not in (iter, zip):
             return False
 
         for arg in call_expr.args:
@@ -1716,6 +1722,10 @@ class DeadLoopElimination(FunctionPass):
         return False
 
     def find_dead_loops(self, state):
+        """
+        Find and return all dead loops. A loop is considered dead if it is
+        iterating over an empty container (i.e. empty tuple)
+        """
         dead_loops = list()
         cfg = compute_cfg_from_blocks(state.func_ir.blocks)
         for loop in cfg.loops().values():
@@ -1731,6 +1741,11 @@ class DeadLoopElimination(FunctionPass):
         return dead_loops
 
     def remove_dead_loops(self, state, dead_loops):
+        """
+        For each dead loop, change the branch to a direct jump to the exit
+        block. This function also removes the `pair_first` instruction, if
+        exists, since DCE won't remove it.
+        """
         for loop in dead_loops:
             # change branch into a direct jump to exit
             header = state.func_ir.blocks[loop.header]
@@ -1744,6 +1759,8 @@ class DeadLoopElimination(FunctionPass):
                 expr = inst.value
                 if isinstance(expr, ir.Expr) and expr.op == 'pair_first':
                     header.remove(inst)
+                    if guard(get_definition, state.func_ir, inst.target.name):
+                        state.func_ir.remove_definition(inst.target.name)
 
         dead_branch_prune(state.func_ir, state.args)
 
@@ -1754,6 +1771,8 @@ class DeadLoopElimination(FunctionPass):
                 assign = block.find_variable_assignment(var.name)
                 if assign:
                     block.remove(assign)
+                    if guard(get_definition, state.func_ir, assign.target.name):
+                        state.func_ir.remove_definition(assign.target.name)
 
     def run_pass(self, state):
         # run as subpipeline
@@ -1768,11 +1787,20 @@ class DeadLoopElimination(FunctionPass):
         pm.finalize()
         pm.run(state)
 
+        self.dead_vars = []
         dead_loops = self.find_dead_loops(state)
         if dead_loops:
             self.remove_dead_loops(state, dead_loops)
             state.func_ir.blocks = simplify_CFG(state.func_ir.blocks)
             dead_code_elimination(state.func_ir)
+
+            # reset type inference now we are done with the partial results
+            state.typemap = None
+            state.calltypes = None
+
+            # Rebuild definitions
+            state.func_ir._definitions = build_definitions(state.func_ir.blocks)
+
             return True
 
         return False

@@ -624,12 +624,12 @@ class DefaultPassBuilder(object):
 
         pm.add_pass(FindLiterallyCalls, "find literally calls")
         pm.add_pass(LiteralUnroll, "handles literal_unroll")
+        pm.add_pass(DeadLoopElimination, "remove dead loops")
 
         if state.flags.enable_ssa:
             pm.add_pass(ReconstructSSA, "ssa")
 
         pm.add_pass(LiteralPropagationSubPipelinePass, "Literal propagation")
-        pm.add_pass(DeadLoopElimination, "remove dead loops")
 
         pm.finalize()
         return pm

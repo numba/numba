@@ -270,7 +270,7 @@ class TestEmptyContainers(TestCase):
                 else:
                     pass
 
-        empty_things()
+        self.assertPreciseEqual(empty_things(), empty_things.py_func())
 
     def test_simple_empty_list(self):
         @njit

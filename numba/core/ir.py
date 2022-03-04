@@ -1478,6 +1478,12 @@ class FunctionIR(object):
             name = name.name
         return self._consts.infer_constant(name)
 
+    def remove_definition(self, name):
+        """
+        Remove the definition of a given variable name.
+        """
+        self._definitions.pop(name)
+
     def get_definition(self, value, lhs_only=False):
         """
         Get the definition site for the given variable name or instance.
