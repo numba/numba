@@ -502,8 +502,8 @@ def inline_asm_helper(builder, func_ret_ty, func_arg_types,
 
 @lower(stubs.fp16.hdiv, types.float16, types.float16)
 def lower_fp16_divide(context, builder, sig, args):
+    """Implements fp16 division using Newton Raphson Algorithm."""
     x, y = args
-    """Implements division between two fp16 using Newton Raphson Algorithm."""
 
     # Convert fp16 args to fp32 so we can implement
     # division by reciprocal multiplication on fp32
