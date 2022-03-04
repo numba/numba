@@ -334,6 +334,29 @@ class BaseLower(object):
         if config.DEBUG_JIT:
             self.context.debug_print(self.builder, "DEBUGJIT: {0}".format(msg))
 
+    def print_variable(self, msg, varname):
+        """Helper to emit ``print(msg, varname)`` for debugging.
+
+        Parameters
+        ----------
+        msg : str
+            Literal string to be printed.
+        varname : str
+            A variable name whose value will be printed.
+        """
+        argtys = (
+            types.literal(msg),
+            self.fndesc.typemap[varname]
+        )
+        args = (
+            self.context.get_dummy_value(),
+            self.loadvar(varname),
+        )
+        sig = typing.signature(types.none, *argtys)
+
+        impl = self.context.get_function(print, sig)
+        impl(self.builder, args)
+
 
 class Lower(BaseLower):
     GeneratorLower = generators.GeneratorLower

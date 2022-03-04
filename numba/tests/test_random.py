@@ -69,6 +69,12 @@ def numpy_dirichlet(alpha, size):
 def numpy_dirichlet_default(alpha):
     return np.random.dirichlet(alpha)
 
+def numpy_noncentral_chisquare(df, nonc, size):
+    return np.random.noncentral_chisquare(df, nonc, size=size)
+
+def numpy_noncentral_chisquare_default(df, nonc):
+    return np.random.noncentral_chisquare(df, nonc)
+
 def numpy_check_rand(seed, a, b):
     np.random.seed(seed)
     expected = np.random.random((a, b))
@@ -1370,6 +1376,88 @@ class TestRandomDirichlet(BaseTest):
                 cfunc(alpha, size)
             self.assertIn(
                 "np.random.dirichlet(): size should be int or "
+                "tuple of ints or None, got",
+                str(raises.exception),
+            )
+
+class TestRandomNoncentralChiSquare(BaseTest):
+
+    def _check_sample(self, size, sample):
+
+        # Check output structure
+        if size is not None:
+            self.assertIsInstance(sample, np.ndarray)
+            self.assertEqual(sample.dtype, np.float64)
+            
+            if isinstance(size, int):
+                self.assertEqual(sample.shape, (size,))
+            else:
+                self.assertEqual(sample.shape, size)
+        else:
+             self.assertIsInstance(sample, float)
+
+        # Check statistical properties
+        for val in np.nditer(sample):
+            self.assertGreaterEqual(val, 0)
+
+    def test_noncentral_chisquare_default(self):
+        """
+        Test noncentral_chisquare(df, nonc, size=None)
+        """
+        cfunc = jit(nopython=True)(numpy_noncentral_chisquare_default)
+        inputs = (
+            (0.5, 1), # test branch when df < 1
+            (1, 5),
+            (5, 1),
+            (100000, 1),
+            (1, 10000),
+        )
+        for df, nonc in inputs:
+            res = cfunc(df, nonc)
+            self._check_sample(None, res)
+            res = cfunc(df, np.nan) # test branch when nonc is nan
+            self.assertTrue(np.isnan(res))
+
+
+    def test_noncentral_chisquare(self):
+        """
+        Test noncentral_chisquare(df, nonc, size)
+        """
+        cfunc = jit(nopython=True)(numpy_noncentral_chisquare)
+        sizes = (None, 10, (10,), (10, 10))
+        inputs = (
+            (0.5, 1),
+            (1, 5),
+            (5, 1),
+            (100000, 1),
+            (1, 10000),
+        )
+
+        for (df, nonc), size in itertools.product(inputs, sizes):
+            res = cfunc(df, nonc, size)
+            self._check_sample(size, res)
+            res = cfunc(df, np.nan, size) # test branch when nonc is nan
+            self.assertTrue(np.isnan(res).all())
+
+    def test_noncentral_chisquare_exceptions(self):
+        cfunc = jit(nopython=True)(numpy_noncentral_chisquare)
+        df, nonc = 0, 1
+        with self.assertRaises(ValueError) as raises:
+            cfunc(df, nonc, 1)
+        self.assertIn("df <= 0", str(raises.exception))
+        
+        df, nonc = 1, -1
+        with self.assertRaises(ValueError) as raises:
+            cfunc(df, nonc, 1)
+        self.assertIn("nonc < 0", str(raises.exception))        
+
+        df, nonc = 1, 1
+        sizes = (True, 3j, 1.5, (1.5, 1), (3j, 1), (3j, 3j), (np.int8(3), np.int64(7)))
+        for size in sizes:
+            with self.assertRaises(TypingError) as raises:
+                cfunc(df, nonc, size)
+            self.assertIn(
+                "np.random.noncentral_chisquare(): size should be int or "
                 "tuple of ints or None, got",
                 str(raises.exception),
             )

@@ -41,7 +41,7 @@ https://numba.readthedocs.io/en/stable/index.html
 Installation
 ============
 
-Please follow the instuctions:
+Please follow the instructions:
 
 https://numba.readthedocs.io/en/stable/user/installing.html
 
