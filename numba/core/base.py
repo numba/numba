@@ -397,15 +397,6 @@ class BaseContext(object):
         impl = user_function(fndesc, libs)
         self._defns[func].append(impl, impl.signature)
 
-    def add_user_function(self, func, fndesc, libs=()):
-        warnings.warn("Use insert_user_function instead",
-                      errors.NumbaDeprecationWarning)
-        if func not in self._defns:
-            msg = "{func} is not a registered user function"
-            raise KeyError(msg.format(func=func))
-        impl = user_function(fndesc, libs)
-        self._defns[func].append(impl, impl.signature)
-
     def insert_generator(self, genty, gendesc, libs=()):
         assert isinstance(genty, types.Generator)
         impl = user_generator(gendesc, libs)
