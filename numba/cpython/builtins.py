@@ -18,10 +18,10 @@ from numba.core import typing, types, utils, cgutils
 from numba.core.extending import overload, intrinsic
 from numba.core.typeconv import Conversion
 from numba.core.errors import (TypingError, LoweringError,
-                               NumbaExperimentalFeatureWarning)
+                               NumbaExperimentalFeatureWarning,
+                               NumbaTypeError, RequireLiteralValue)
 from numba.misc.special import literal_unroll
 from numba.core.typing.asnumbatype import as_numba_type
-from numba.core.errors import NumbaTypeError
 
 
 @overload(operator.truth)
@@ -777,3 +777,93 @@ def ol_isinstance(var, typs):
                     return true_impl
 
     return false_impl
+
+
+# -- getattr implementation
+
+def _getattr_raise_attr_exc(obj, name):
+    # Dummy function for the purpose of creating an overloadable stub from
+    # which to raise an AttributeError as needed
+    pass
+
+
+@overload(_getattr_raise_attr_exc)
+def ol__getattr_raise_attr_exc(obj, name):
+    if not isinstance(name, types.StringLiteral):
+        raise RequireLiteralValue("argument 'name' must be a literal string")
+    lname = name.literal_value
+    message = f"'{obj}' has no attribute '{lname}'"
+
+    def impl(obj, name):
+        raise AttributeError(message)
+    return impl
+
+
+@intrinsic
+def resolve_getattr(tyctx, obj, name):
+    if not isinstance(name, types.StringLiteral):
+        raise RequireLiteralValue("argument 'name' must be a literal string")
+    lname = name.literal_value
+    fn = tyctx.resolve_getattr(obj, lname)
+    # Cannot handle things like `getattr(np, 'cos')` as the return type is
+    # types.Function.
+    if isinstance(fn, types.Function):
+        msg = ("Returning function objects is not implemented. "
+               f"getattr() was requested to return {fn} from attribute "
+               f"'{lname}' of {obj}.")
+        raise TypingError(msg)
+
+    if fn is None:  # No attribute, wire in raising an AttributeError
+        fnty = tyctx.resolve_value_type(_getattr_raise_attr_exc)
+        raise_sig = fnty.get_call_type(tyctx, (obj, name), {})
+        sig = types.none(obj, name)
+
+        def impl(cgctx, builder, sig, llargs):
+            native_impl = cgctx.get_function(fnty, raise_sig)
+            return native_impl(builder, llargs)
+
+    else:  # Attribute present, wire in handing it back to the overload(getattr)
+        sig = fn(obj, name)
+        if isinstance(fn, types.BoundFunction):
+            # It's a method on an object
+            def impl(cgctx, builder, sig, ll_args):
+                cast_type = fn.this
+                casted = cgctx.cast(builder, ll_args[0], obj, cast_type)
+                res = cgctx.get_bound_function(builder, casted, cast_type)
+                cgctx.nrt.incref(builder, fn, res)
+                return res
+        else:
+            # Else it's some other type of attribute.
+            # Ensure typing calls occur at typing time, not at lowering
+            attrty = tyctx.resolve_getattr(obj, lname)
+            def impl(cgctx, builder, sig, ll_args):
+                attr_impl = cgctx.get_getattr(obj, lname)
+                res = attr_impl(cgctx, builder, obj, ll_args[0], lname)
+                casted = cgctx.cast(builder, res, attrty, fn)
+                cgctx.nrt.incref(builder, fn, casted)
+                return casted
+    return sig, impl
+
+
+# getattr with no default arg, obj is an open type and name is forced as a
+# literal string.
+@overload(getattr)
+def ol_getattr(obj, name):
+    def impl(obj, name):
+        return resolve_getattr(obj, name)
+    return impl
+
+
+# getattr with default arg present, obj is an open type, name is forced as a
+# literal string, the "default" is again an open type. Note that the CPython
+# definition is: `getattr(object, name[, default]) -> value`, the `default`
+# is not a kwarg.
+@overload(getattr)
+def ol_getattr(obj, name, default):
+    def impl(obj, name, default):
+        try:
+            return resolve_getattr(obj, name)
+        except Exception:
+            return default
+    return impl
+

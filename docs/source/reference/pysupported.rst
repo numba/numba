@@ -930,6 +930,7 @@ The following built-in functions are supported:
 * :func:`enumerate`
 * :func:`filter`
 * :class:`float`
+* :func:`getattr`
 * :func:`hash` (see :ref:`pysupported-hashing` below)
 * :class:`int`: only the one-argument form
 * :func:`iter`: only the one-argument form
