@@ -1579,8 +1579,34 @@ def _lstsq_solution_impl(b, bcpy, n):
         return twoD_impl
 
 
+def _lstsq_resolve_rcond(rcond, dtype, m, n):
+    pass
+
+
+@overload(_lstsq_resolve_rcond, prefer_literal=True)
+def ol_lstsq_resolve_rcond(rcond, dtype, m, n):
+    if isinstance(rcond, types.StringLiteral):
+        if rcond.literal_value == "warn": # it's the default
+            def impl(rcond, dtype, m, n):
+                return np.float64(-1.0)
+            return impl
+        else:
+            # This is an error, user has set the rcond as a string
+            raise TypingError("Unsupported literal string found in rcond")
+    elif np_support.is_nonelike(rcond):
+        def impl(rcond, dtype, m, n):
+            return np.float64(np.finfo(dtype).eps * max(m, n))
+        return impl
+    elif isinstance(rcond, (types.Float, types.Integer)):
+        def impl(rcond, dtype, m, n):
+            return np.float64(rcond)
+        return impl
+    else:
+        raise TypingError("Unsupported type in rcond")
+
+
 @overload(np.linalg.lstsq)
-def lstsq_impl(a, b, rcond=-1.0):
+def lstsq_impl(a, b, rcond="warn"):
     ensure_lapack()
 
     _check_linalg_matrix(a, "lstsq")
@@ -1608,9 +1634,20 @@ def lstsq_impl(a, b, rcond=-1.0):
     # some optimisations available depending on real or complex
     # space.
 
-    def lstsq_impl(a, b, rcond=-1.0):
+    def lstsq_impl(a, b, rcond="warn"):
+
+        # Since NumPy 1.14 the default rcond changed to machine precision times
+        # max of (m, n). This was implemented via declaring the new default as
+        # "None" in the docs and then setting rcond as "warn" in the source.
+        # This is so it's possible to issue a warning if the new default is
+        # omitted. The implementation of this logic is delegated to the overload
+        # function _lstsq_resolve_rcond.
+
         n = a.shape[-1]
         m = a.shape[-2]
+
+        _rcond = _lstsq_resolve_rcond(rcond, r_type, m ,n)
+
         nrhs = _system_compute_nrhs(b)
 
         # check the systems have no inf or NaN
@@ -1648,7 +1685,7 @@ def lstsq_impl(a, b, rcond=-1.0):
             bcpy.ctypes,  # a
             maxmn,  # ldb
             s.ctypes,  # s
-            rcond,  # rcond
+            _rcond,  # rcond
             rank_ptr.ctypes  # rank
         )
         _handle_err_maybe_convergence_problem(r)

@@ -1588,7 +1588,7 @@ class TestLinalgLstsq(TestLinalgSystems):
         ok = np.array([[1., 2.], [3., 4.]], dtype=np.float64)
 
         # check ok input is ok
-        cfunc, (ok, ok)
+        cfunc(ok, ok)
 
         # check bad inputs
         rn = "lstsq"
@@ -1626,6 +1626,26 @@ class TestLinalgLstsq(TestLinalgSystems):
         self.assert_dimensionally_invalid(cfunc, (ok, bad1D))
         self.assert_dimensionally_invalid(cfunc, (ok, bad2D))
 
+        # invalid literal string for rcond
+        @jit(nopython=True)
+        def _invalid_literal_str_rcond():
+            np.linalg.lstsq(np.ones((1, 1)), np.ones(1,), rcond='invalid')
+
+        with self.assertTypingError() as raises:
+            _invalid_literal_str_rcond()
+        self.assertIn("Unsupported literal string found in rcond",
+                      str(raises.exception))
+
+        # invalid type for rcond (non-literal string)
+        @jit(nopython=True)
+        def _invalid_str_rcond(invalid):
+            np.linalg.lstsq(np.ones((1, 1)), np.ones(1,), rcond=invalid)
+
+        with self.assertTypingError() as raises:
+            _invalid_str_rcond('invalid')
+        self.assertIn("Unsupported type in rcond",
+                      str(raises.exception))
+
     @needs_lapack
     def test_issue3368(self):
         X = np.array([[1., 7.54, 6.52],
@@ -1647,6 +1667,39 @@ class TestLinalgLstsq(TestLinalgSystems):
 
         f2(X, y, False)
         np.testing.assert_allclose(X, X_orig)
+
+    @needs_lapack
+    def test_rcond_default_none(self):
+        # Check NumPy 1.14 rcond new default of "None" and old default of -1
+        # work as expected. These test matrices are specifically designed to
+        # give different answers under these conditions.
+        eps = np.finfo(np.float64).eps
+        A = np.diag([1, 1.5 * eps])
+        B = np.array([1, 1.5 * eps])
+
+        cfunc = jit(nopython=True)(lstsq_system)
+
+        # max(m, n) is 2, so rcond of None gives threshold of 2 * eps such that
+        # the smaller singular value will be treated as 0.
+        expected_new = cfunc.py_func(A, B, rcond=None)
+        got_new = cfunc(A, B, rcond=None)
+        for got, expected in zip(got_new, expected_new):
+            np.testing.assert_allclose(got, expected)
+
+        # same case as above but with rcond=-1, this gives threshold of eps such
+        # that the smaller singular value will be treated with its value of
+        # 1.5 * eps.
+        expected_old = cfunc.py_func(A, B, rcond=-1)
+        got_old = cfunc(A, B, rcond=-1)
+        for got, expected in zip(got_old, expected_old):
+            np.testing.assert_allclose(got, expected)
+
+        # The rank of the system with rcond=-1 should be 2 as it includes the
+        # SV at 1.5 eps, whereas the rank of the system with rcond=None should
+        # be 1 as it does not include the SV at 1.5 eps. The rank is stored at
+        # tuple index number 2.
+        self.assertEqual(got_old[2], 2)
+        self.assertEqual(got_new[2], 1)
 
 
 class TestLinalgSolve(TestLinalgSystems):
