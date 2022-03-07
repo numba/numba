@@ -3,6 +3,7 @@ from numba import cuda, float32, int32, void
 from numba.core.errors import TypingError
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import skip_on_cudasim
+from .extensions_usecases import test_struct_model_type
 
 GLOBAL_CONSTANT = 5
 GLOBAL_CONSTANT_2 = 6
@@ -139,12 +140,12 @@ class TestSharedMemoryCreation(CUDATestCase):
                       "dtype=class(float32))",
                       str(raises.exception))
 
-    def check_dtype(self, f):
+    def check_dtype(self, f, dtype):
         # Find the typing of the dtype argument to cuda.shared.array
         annotation = next(iter(f.overloads.values()))._type_annotation
         l_dtype = annotation.typemap['s'].dtype
         # Ensure that the typing is correct
-        self.assertEqual(l_dtype, int32)
+        self.assertEqual(l_dtype, dtype)
 
     @skip_on_cudasim("Can't check typing in simulator")
     def test_numba_dtype(self):
@@ -155,7 +156,7 @@ class TestSharedMemoryCreation(CUDATestCase):
             s[0] = x[0]
             x[0] = s[0]
 
-        self.check_dtype(f)
+        self.check_dtype(f, int32)
 
     @skip_on_cudasim("Can't check typing in simulator")
     def test_numpy_dtype(self):
@@ -166,7 +167,7 @@ class TestSharedMemoryCreation(CUDATestCase):
             s[0] = x[0]
             x[0] = s[0]
 
-        self.check_dtype(f)
+        self.check_dtype(f, int32)
 
     @skip_on_cudasim("Can't check typing in simulator")
     def test_string_dtype(self):
@@ -177,7 +178,7 @@ class TestSharedMemoryCreation(CUDATestCase):
             s[0] = x[0]
             x[0] = s[0]
 
-        self.check_dtype(f)
+        self.check_dtype(f, int32)
 
     @skip_on_cudasim("Can't check typing in simulator")
     def test_invalid_string_dtype(self):
@@ -189,6 +190,15 @@ class TestSharedMemoryCreation(CUDATestCase):
                 s = cuda.shared.array(10, dtype='int33')
                 s[0] = x[0]
                 x[0] = s[0]
+
+    @skip_on_cudasim("Can't check typing in simulator")
+    def test_type_with_struct_data_model(self):
+        @cuda.jit(void(test_struct_model_type[::1]))
+        def f(x):
+            s = cuda.shared.array(10, dtype=test_struct_model_type)
+            s[0] = x[0]
+            x[0] = s[0]
+        self.check_dtype(f, test_struct_model_type)
 
 
 if __name__ == '__main__':

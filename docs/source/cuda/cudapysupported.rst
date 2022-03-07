@@ -65,6 +65,7 @@ The following built-in types support are inherited from CPU nopython mode.
 * bool
 * None
 * tuple
+* Enum, IntEnum
 
 See :ref:`nopython built-in types <pysupported-builtin-types>`.
 

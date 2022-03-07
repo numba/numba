@@ -156,11 +156,13 @@ These variables influence what is printed out during compilation of
 
 .. envvar:: NUMBA_GDB_BINARY
 
-   Set the ``gdb`` binary for use in Numba's ``gdb`` support, this takes the
-   form  of a path and full name of the binary, for example:
-   ``/path/from/root/to/binary/name_of_gdb_binary`` This is to permit
-   the use of a ``gdb`` from a non-default location with a non-default name. If
-   not set ``gdb`` is assumed to reside at ``/usr/bin/gdb``.
+   Set the ``gdb`` binary for use in Numba's ``gdb`` support. This takes one of
+   two forms: 1) a path and full name of the binary to explicitly express
+   which binary to use 2) just the name of the binary and the current path will
+   be searched using the standard path resolution rules. For example:
+   ``/path/from/root/to/binary/name_of_gdb_binary`` or
+   ``custom_gdb_binary_name``. This is to permit the use of a ``gdb`` from a
+   non-default location with a non-default name. The default value is ``gdb``.
 
 .. envvar:: NUMBA_DEBUG_TYPEINFER
 
