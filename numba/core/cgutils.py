@@ -537,7 +537,7 @@ def for_range_slice(builder, start, stop, step, intp=None, inc=True):
     Parameters
     -------------
     builder : object
-        Builder object
+        IRBuilder object
     start : int
         The beginning value of the slice
     stop : int

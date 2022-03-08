@@ -9,8 +9,7 @@ from contextlib import contextmanager
 import numpy as np
 
 from llvmlite import ir as llvmir
-import llvmlite.llvmpy.core as lc
-from llvmlite.llvmpy.core import Type, Constant, LLVMException
+from llvmlite.ir import Constant
 import llvmlite.binding as ll
 
 from numba.core import types, utils, typing, datamodel, debuginfo, funcdesc, config, cgutils, imputils
@@ -23,7 +22,7 @@ from numba.core.imputils import (user_function, user_generator,
                        RegistryLoader)
 from numba.cpython import builtins
 
-GENERIC_POINTER = Type.pointer(Type.int(8))
+GENERIC_POINTER = llvmir.PointerType(llvmir.IntType(8))
 PYOBJECT = GENERIC_POINTER
 void_ptr = GENERIC_POINTER
 
@@ -414,7 +413,7 @@ class BaseContext(object):
                     for aty in fndesc.argtypes]
         # don't wrap in pointer
         restype = self.get_argument_type(fndesc.restype)
-        fnty = Type.function(restype, argtypes)
+        fnty = llvmir.FunctionType(restype, argtypes)
         return fnty
 
     def declare_function(self, module, fndesc):
@@ -525,11 +524,11 @@ class BaseContext(object):
 
     def get_constant_undef(self, ty):
         lty = self.get_value_type(ty)
-        return Constant.undef(lty)
+        return Constant(lty, llvmir.Undefined)
 
     def get_constant_null(self, ty):
         lty = self.get_value_type(ty)
-        return Constant.null(lty)
+        return Constant(lty, None)
 
     def get_function(self, fn, sig, _firstcall=True):
         """
@@ -779,7 +778,7 @@ class BaseContext(object):
     def print_string(self, builder, text):
         mod = builder.module
         cstring = GENERIC_POINTER
-        fnty = Type.function(Type.int(), [cstring])
+        fnty = llvmir.FunctionType(llvmir.IntType(32), [cstring])
         puts = cgutils.get_or_insert_function(mod, fnty, "puts")
         return builder.call(puts, [text])
 
@@ -803,10 +802,10 @@ class BaseContext(object):
         Get the LLVM struct type for the given Structure class *struct*.
         """
         fields = [self.get_value_type(v) for _, v in struct._fields]
-        return Type.struct(fields)
+        return llvmir.LiteralStructType(fields)
 
     def get_dummy_value(self):
-        return Constant.null(self.get_dummy_type())
+        return Constant(self.get_dummy_type(), None)
 
     def get_dummy_type(self):
         return GENERIC_POINTER
@@ -1051,7 +1050,7 @@ class BaseContext(object):
             flat = ary.flatten(order=typ.layout)
             # Note: we use `bytearray(flat.data)` instead of `bytearray(flat)` to
             #       workaround issue #1850 which is due to numpy issue #3147
-            consts = Constant.array(Type.int(8), bytearray(flat.data))
+            consts = create_constant_array(llvmir.IntType(8), bytearray(flat.data))
             data = cgutils.global_constant(builder, ".const.array.data", consts)
             # Ensure correct data alignment (issue #1933)
             data.align = self.get_abi_alignment(datatype)
@@ -1061,11 +1060,11 @@ class BaseContext(object):
         # Handle shape
         llintp = self.get_value_type(types.intp)
         shapevals = [self.get_constant(types.intp, s) for s in ary.shape]
-        cshape = Constant.array(llintp, shapevals)
+        cshape = create_constant_array(llintp, shapevals)
 
         # Handle strides
         stridevals = [self.get_constant(types.intp, s) for s in ary.strides]
-        cstrides = Constant.array(llintp, stridevals)
+        cstrides = create_constant_array(llintp, stridevals)
 
         # Create array structure
         cary = self.make_array(typ)(self, builder)
@@ -1242,6 +1241,10 @@ class _wrap_missing_loc(object):
 
     def __repr__(self):
         return "<wrapped %s>" % self.func
+
+
+def create_constant_array(ty, val):
+    return llvmir.Constant(llvmir.ArrayType(ty, len(val)), val)
 
 
 @utils.runonce

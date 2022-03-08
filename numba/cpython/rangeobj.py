@@ -4,8 +4,6 @@ Implementation of the range object for fixed-size integers.
 
 import operator
 
-import llvmlite.llvmpy.core as lc
-
 from numba import prange
 from numba.core import types, cgutils, errors
 from numba.cpython.listobj import ListIterInstance
@@ -124,10 +122,10 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
             diff = builder.sub(stop, start)
             zero = context.get_constant(int_type, 0)
             one = context.get_constant(int_type, 1)
-            pos_diff = builder.icmp(lc.ICMP_SGT, diff, zero)
-            pos_step = builder.icmp(lc.ICMP_SGT, step, zero)
+            pos_diff = builder.icmp_signed('>', diff, zero)
+            pos_step = builder.icmp_signed('>', step, zero)
             sign_differs = builder.xor(pos_diff, pos_step)
-            zero_step = builder.icmp(lc.ICMP_EQ, step, zero)
+            zero_step = builder.icmp_unsigned('==', step, zero)
 
             with cgutils.if_unlikely(builder, zero_step):
                 # step shouldn't be zero
@@ -141,7 +139,7 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
                 with orelse:
                     rem = builder.srem(diff, step)
                     rem = builder.select(pos_diff, rem, builder.neg(rem))
-                    uneven = builder.icmp(lc.ICMP_SGT, rem, zero)
+                    uneven = builder.icmp_signed('>', rem, zero)
                     newcount = builder.add(builder.sdiv(diff, step),
                                            builder.select(uneven, one, zero))
                     builder.store(newcount, self.count)
@@ -152,7 +150,7 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
             zero = context.get_constant(int_type, 0)
             countptr = self.count
             count = builder.load(countptr)
-            is_valid = builder.icmp(lc.ICMP_SGT, count, zero)
+            is_valid = builder.icmp_signed('>', count, zero)
             result.set_valid(is_valid)
 
             with builder.if_then(is_valid):

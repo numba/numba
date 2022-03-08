@@ -6,8 +6,8 @@ import operator
 import warnings
 from dataclasses import make_dataclass
 
+import llvmlite.ir
 import numpy as np
-import llvmlite.llvmpy.core as lc
 
 import numba
 from numba.parfors import parfor
@@ -1585,13 +1585,13 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                            start, stop, step)
 
     # Commonly used LLVM types and constants
-    byte_t = lc.Type.int(8)
-    byte_ptr_t = lc.Type.pointer(byte_t)
-    byte_ptr_ptr_t = lc.Type.pointer(byte_ptr_t)
+    byte_t = llvmlite.ir.IntType(8)
+    byte_ptr_t = llvmlite.ir.PointerType(byte_t)
+    byte_ptr_ptr_t = llvmlite.ir.PointerType(byte_ptr_t)
     intp_t = context.get_value_type(types.intp)
     uintp_t = context.get_value_type(types.uintp)
-    intp_ptr_t = lc.Type.pointer(intp_t)
-    uintp_ptr_t = lc.Type.pointer(uintp_t)
+    intp_ptr_t = llvmlite.ir.PointerType(intp_t)
+    uintp_ptr_t = llvmlite.ir.PointerType(uintp_t)
     zero = context.get_constant(types.uintp, 0)
     one = context.get_constant(types.uintp, 1)
     one_type = one.type
@@ -1641,7 +1641,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         builder, sched_type, size=context.get_constant(
             types.uintp, sched_size), name="sched")
     debug_flag = 1 if config.DEBUG_ARRAY_OPT else 0
-    scheduling_fnty = lc.Type.function(
+    scheduling_fnty = llvmlite.ir.FunctionType(
         intp_ptr_t, [uintp_t, sched_ptr_type, sched_ptr_type, uintp_t, sched_ptr_type, intp_t])
     if index_var_typ.signed:
         do_scheduling = cgutils.get_or_insert_function(builder.module,
@@ -1653,7 +1653,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                                                        "do_scheduling_unsigned")
 
     get_num_threads = cgutils.get_or_insert_function(
-        builder.module, lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
+        builder.module, llvmlite.ir.FunctionType(llvmlite.ir.IntType(types.intp.bitwidth), []),
         "get_num_threads")
 
     num_threads = builder.call(get_num_threads, [])
@@ -1744,7 +1744,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         elif isinstance(aty, types.ArrayCompatible):
             if var in races:
                 typ = context.get_data_type(
-                    aty.dtype) if aty.dtype != types.boolean else lc.Type.int(1)
+                    aty.dtype) if aty.dtype != types.boolean else llvmlite.ir.IntType(1)
 
                 rv_arg = cgutils.alloca_once(builder, typ)
                 builder.store(arg, rv_arg)
@@ -1762,13 +1762,13 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
             if i < num_inps:
                 # Scalar input, need to store the value in an array of size 1
                 typ = context.get_data_type(
-                    aty) if not isinstance(aty, types.Boolean) else lc.Type.int(1)
+                    aty) if not isinstance(aty, types.Boolean) else llvmlite.ir.IntType(1)
                 ptr = cgutils.alloca_once(builder, typ)
                 builder.store(arg, ptr)
             else:
                 # Scalar output, must allocate
                 typ = context.get_data_type(
-                    aty) if not isinstance(aty, types.Boolean) else lc.Type.int(1)
+                    aty) if not isinstance(aty, types.Boolean) else llvmlite.ir.IntType(1)
                 ptr = cgutils.alloca_once(builder, typ)
             builder.store(builder.bitcast(ptr, byte_ptr_t), dst)
 
@@ -1870,8 +1870,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     # prepare data
     data = cgutils.get_null_value(byte_ptr_t)
 
-    fnty = lc.Type.function(lc.Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
-                                             intp_ptr_t, byte_ptr_t])
+    fnty = llvmlite.ir.FunctionType(llvmlite.ir.VoidType(),
+                                    [byte_ptr_ptr_t, intp_ptr_t,
+                                     intp_ptr_t, byte_ptr_t])
 
     fn = cgutils.get_or_insert_function(builder.module, fnty, wrapper_name)
     context.active_code_library.add_linking_library(info.library)

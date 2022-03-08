@@ -6,13 +6,12 @@ import ctypes
 import html
 import textwrap
 
-import llvmlite.llvmpy.core as lc
-import llvmlite.llvmpy.passes as lp
 import llvmlite.binding as ll
 import llvmlite.ir as llvmir
 
 from abc import abstractmethod, ABCMeta
 from numba.core import utils, config, cgutils
+from numba.core.passes import create_pass_manager_builder
 from numba.core.runtime.nrtopt import remove_redundant_nrt_refct
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import require_global_compiler_lock
@@ -1250,10 +1249,10 @@ class CPUCodegen(Codegen):
         loop_vectorize = kwargs.pop('loop_vectorize', config.LOOP_VECTORIZE)
         slp_vectorize = kwargs.pop('slp_vectorize', config.SLP_VECTORIZE)
 
-        pmb = lp.create_pass_manager_builder(opt=opt_level,
-                                             loop_vectorize=loop_vectorize,
-                                             slp_vectorize=slp_vectorize,
-                                             **kwargs)
+        pmb = create_pass_manager_builder(opt=opt_level,
+                                          loop_vectorize=loop_vectorize,
+                                          slp_vectorize=slp_vectorize,
+                                          **kwargs)
 
         return pmb
 
