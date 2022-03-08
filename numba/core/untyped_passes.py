@@ -1690,6 +1690,9 @@ class DeadLoopElimination(FunctionPass):
     def __init__(self):
         FunctionPass.__init__(self)
 
+    def get_analysis_usage(self, AU):
+        AU.add_required(ReconstructSSA)
+
     def is_arg_constsized(self, state, arg):
         # True if len(type(arg)) == 0
         t = state.typemap.get(arg.name)
@@ -1764,11 +1767,12 @@ class DeadLoopElimination(FunctionPass):
 
         dead_branch_prune(state.func_ir, state.args)
 
-        for var in self.dead_vars:
-            if var is None:
+        for lhs in self.dead_vars:
+            if lhs is None:
                 continue
             for block in state.func_ir.blocks.values():
-                assign = block.find_variable_assignment(var.name)
+                # find the assignment associated with lhs
+                assign = block.find_variable_assignment(lhs.name)
                 if assign:
                     block.remove(assign)
                     if guard(get_definition, state.func_ir, assign.target.name):
