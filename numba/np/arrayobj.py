@@ -1405,15 +1405,29 @@ def numpy_broadcast_arrays(*args):
             raise errors.TypingError(f'Argument "{idx}" must '
                                      'be array-like')
 
+    unified_dtype = None
+    dt = None
+    for arg in args:
+        if isinstance(arg, (types.Array, types.BaseTuple)):
+            dt = arg.dtype
+        else:
+            dt = arg
+
+        if unified_dtype is None:
+            unified_dtype = dt
+        elif unified_dtype != dt:
+            raise errors.TypingError('Mismatch of argument types. Numba cannot '
+                                     'broadcast arrays with different types. '
+                                     f'Got {args}')
+
     # number of dimensions
     m = 0
     for idx, arg in enumerate(args):
         if isinstance(arg, types.ArrayCompatible):
             m = max(m, arg.ndim)
-        elif isinstance(arg, types.Number):
+        elif isinstance(arg, (types.Number, types.Boolean)):
             m = max(m, 1)
 
-    # m = max([arr.ndim for arr in args])
     tup_init = (0,) * m
 
     def impl(*args):

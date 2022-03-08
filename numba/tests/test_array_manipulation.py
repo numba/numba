@@ -1070,6 +1070,20 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             # Reverse the input shapes since broadcasting should be symmetric.
             self.broadcast_arrays_assert_correct_shape(input_shapes[::-1], expected_shape)
 
+    def test_broadcast_arrays_scalar_input(self):
+        pyfunc = numpy_broadcast_arrays
+        cfunc = jit(nopython=True)(pyfunc)
+        data = [
+            [[True, False], (1,)],
+            [[1, 2], (1,)],
+            [[(1, 2), 2], (2,)],
+        ]
+        for inarrays, expected_shape in data:
+            outarrays = cfunc(*inarrays)
+            got = [a.shape for a in outarrays]
+            expected = [expected_shape] * len(inarrays)
+            self.assertPreciseEqual(expected, got)
+
     def test_broadcast_arrays_non_array_input(self):
         pyfunc = numpy_broadcast_arrays
         cfunc = jit(nopython=True)(pyfunc)
@@ -1078,6 +1092,17 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         got = [a.shape for a in outarrays]
         self.assertPreciseEqual(expected, got)
 
+    def test_broadcast_arrays_invalid_mixed_input_types(self):
+        pyfunc = numpy_broadcast_arrays
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            arr = np.arange(6).reshape((2, 3))
+            b = True
+            cfunc(arr, b)
+        self.assertIn('Mismatch of argument types', str(raises.exception))
 
     def test_broadcast_arrays_invalid_input(self):
         pyfunc = numpy_broadcast_arrays
