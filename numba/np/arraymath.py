@@ -795,7 +795,7 @@ def build_argmax_or_argmin_with_axis_impl(arr, axis, flatten_impl):
     array, return the implementation function.
     """
     check_is_integer(axis, "axis")
-    retty = arr.dtype
+    retty = types.intp
 
     tuple_buffer = tuple(range(arr.ndim))
 

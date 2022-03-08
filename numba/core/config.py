@@ -2,8 +2,8 @@ import platform
 import sys
 import os
 import re
+import shutil
 import warnings
-import multiprocessing
 
 # YAML needed to use file based Numba config
 try:
@@ -136,7 +136,11 @@ class _EnvReloader(object):
                 CUDA_USE_NVIDIA_BINDING = False
 
             if CUDA_PER_THREAD_DEFAULT_STREAM:  # noqa: F821
-                warnings.warn("PTDS is not supported with CUDA Python")
+                warnings.warn("PTDS support is handled by CUDA Python when "
+                              "using the NVIDIA binding. Please set the "
+                              "environment variable "
+                              "CUDA_PYTHON_CUDA_PER_THREAD_DEFAULT_STREAM to 1 "
+                              "instead.")
 
     def process_environ(self, environ):
         def _readenv(name, ctor, default):
@@ -423,12 +427,21 @@ class _EnvReloader(object):
         # Threading settings
 
         # The default number of threads to use.
-        NUMBA_DEFAULT_NUM_THREADS = max(
-            1,
-            len(os.sched_getaffinity(0))
-            if hasattr(os, "sched_getaffinity")
-            else multiprocessing.cpu_count(),
-        )
+        def num_threads_default():
+            try:
+                sched_getaffinity = os.sched_getaffinity
+            except AttributeError:
+                pass
+            else:
+                return max(1, len(sched_getaffinity(0)))
+
+            cpu_count = os.cpu_count()
+            if cpu_count is not None:
+                return max(1, cpu_count)
+
+            return 1
+
+        NUMBA_DEFAULT_NUM_THREADS = num_threads_default()
 
         # Numba thread pool size (defaults to number of CPUs on the system).
         _NUMBA_NUM_THREADS = _readenv("NUMBA_NUM_THREADS", int,
@@ -467,7 +480,11 @@ class _EnvReloader(object):
                                              int, 0)
 
         # gdb binary location
-        GDB_BINARY = _readenv("NUMBA_GDB_BINARY", str, '/usr/bin/gdb')
+        def which_gdb(path_or_bin):
+            gdb = shutil.which(path_or_bin)
+            return gdb if gdb is not None else path_or_bin
+
+        GDB_BINARY = _readenv("NUMBA_GDB_BINARY", which_gdb, 'gdb')
 
         # CUDA Memory management
         CUDA_MEMORY_MANAGER = _readenv("NUMBA_CUDA_MEMORY_MANAGER", str,

@@ -320,6 +320,12 @@ class LowerYield(object):
             state_slot = cgutils.gep_inbounds(self.builder, self.gen_state_ptr,
                                               0, state_index)
             ty = self.gentype.state_types[state_index]
+            # The yield might be in a loop, in which case the state might
+            # contain a predicate var that branches back to the loop head, in
+            # this case the var is live but in sequential lowering won't have
+            # been alloca'd yet, so do this here.
+            fetype = self.lower.typeof(name)
+            self.lower._alloca_var(name, fetype)
             val = self.lower.loadvar(name)
             # IncRef newly stored value
             if self.context.enable_nrt:

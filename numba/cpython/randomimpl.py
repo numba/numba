@@ -60,7 +60,7 @@ def get_state_ptr(context, builder, name):
     If the state isn't initialized, it is lazily initialized with
     system entropy.
     """
-    assert name in ('py', 'np')
+    assert name in ('py', 'np', 'internal')
     func_name = "numba_get_%s_random_state" % name
     fnty = ir.FunctionType(rnd_state_ptr_t, ())
     fn = cgutils.get_or_insert_function(builder.module, fnty, func_name)
@@ -82,6 +82,11 @@ def get_np_state_ptr(context, builder):
     """
     return get_state_ptr(context, builder, 'np')
 
+def get_internal_state_ptr(context, builder):
+    """
+    Get a pointer to the thread-local internal random state.
+    """
+    return get_state_ptr(context, builder, 'internal')
 
 # Accessors
 def get_index_ptr(builder, state_ptr):
@@ -1581,3 +1586,59 @@ def dirichlet(alpha, size=None):
         )
 
     return dirichlet_impl
+
+# ------------------------------------------------------------------------
+# np.random.noncentral_chisquare
+
+@overload(np.random.noncentral_chisquare)
+def noncentral_chisquare(df, nonc, size=None):
+
+    @register_jitable
+    def validate_input(df, nonc):
+        if df <= 0:
+            raise ValueError("df <= 0")
+        if nonc < 0:
+            raise ValueError("nonc < 0")
+
+    @register_jitable
+    def noncentral_chisquare_single(df, nonc):
+        # identical to numpy implementation from distributions.c
+        # https://github.com/numpy/numpy/blob/c65bc212ec1987caefba0ea7efe6a55803318de9/numpy/random/src/distributions/distributions.c#L797
+        
+        if np.isnan(nonc):
+            return np.nan
+
+        if 1 < df:
+            chi2 = np.random.chisquare(df-1)
+            n = np.random.standard_normal() + np.sqrt(nonc)
+            return chi2 + n * n
+
+        else:
+            i = np.random.poisson(nonc/2.0)
+            return np.random.chisquare(df + 2 * i)
+
+    if size in (None, types.none):
+        def noncentral_chisquare_impl(df, nonc, size=None):
+            validate_input(df, nonc)
+            return noncentral_chisquare_single(df, nonc)
+
+    elif isinstance(size, types.Integer) or (
+        (isinstance(size, (types.UniTuple)) and isinstance(size.dtype, types.Integer))
+        ):
+
+        def noncentral_chisquare_impl(df, nonc, size=None):
+            validate_input(df, nonc)
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = noncentral_chisquare_single(df, nonc)
+            return out
+
+    else:
+        raise NumbaTypeError(
+            "np.random.noncentral_chisquare(): size should be int or "
+            "tuple of ints or None, got %s" % size
+        )
+
+    return noncentral_chisquare_impl
+

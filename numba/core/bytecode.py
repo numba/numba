@@ -88,6 +88,7 @@ class ByteCodeInst(object):
         # See also:
         # https://bugs.python.org/issue26647
         # https://bugs.python.org/issue27129
+        # https://github.com/python/cpython/pull/25069
         assert self.is_jump
         if PYVERSION >= (3, 10):
             if self.opcode in JREL_OPS:
@@ -345,6 +346,7 @@ class FunctionIdentity(serialize.ReduceMixin):
         # variables, so we make sure to disambiguate using an unique id.
         uid = next(cls._unique_ids)
         self.unique_name = '{}${}'.format(self.func_qualname, uid)
+        self.unique_id = uid
 
         return self
 

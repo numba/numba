@@ -353,7 +353,10 @@ class Driver(object):
         return safe_call
 
     def _find_api(self, fname):
-        if config.CUDA_PER_THREAD_DEFAULT_STREAM:
+        # We use alternatively-named functions for PTDS with the Numba ctypes
+        # binding. For the NVidia binding, it handles linking to the correct
+        # variant.
+        if config.CUDA_PER_THREAD_DEFAULT_STREAM and not USE_NV_BINDING:
             variants = ('_v2_ptds', '_v2_ptsz', '_ptds', '_ptsz', '_v2', '')
         else:
             variants = ('_v2', '')

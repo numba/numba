@@ -13,7 +13,7 @@ from numba.core import (typing, utils, types, ir, debuginfo, funcdesc,
                         targetconfig)
 from numba.core.errors import (LoweringError, new_error_context, TypingError,
                                LiteralTypingError, UnsupportedError,
-                               NumbaWarning)
+                               NumbaDebugInfoWarning)
 from numba.core.funcdesc import default_mangler
 from numba.core.environment import Environment
 from numba.core.analysis import compute_use_defs
@@ -100,19 +100,32 @@ class BaseLower(object):
                 raw_source_str, _ = inspect.getsourcelines(fn)
             except OSError:
                 msg = ("Could not find source for function: "
-                       f"{self.func_ir.func_id.func}")
-                warnings.warn(NumbaWarning(msg))
+                       f"{self.func_ir.func_id.func}. Debug line information "
+                       "may be inaccurate.")
+                warnings.warn(NumbaDebugInfoWarning(msg))
             else:
                 # Parse the source and find the line with `def <func>` in it, it
                 # is assumed that if the compilation has made it this far that
                 # the source is at least legal and has valid syntax.
 
-                # join the source as a block and dedent it
+                # Join the source as a block and dedent it.
                 source_str = textwrap.dedent(''.join(raw_source_str))
-                src_ast = ast.parse(source_str)
+                # Deal with unparsable source (see #7730), this can be caused
+                # by continuation lines/comments at indent levels that are
+                # invalid when the just function source is parsed in isolation.
+                src_ast = None
+                try:
+                    src_ast = ast.parse(source_str)
+                except IndentationError:
+                    msg = ("Could not parse the source for function: "
+                           f"{self.func_ir.func_id.func}. Debug line "
+                           "information may be inaccurate. This is often "
+                           "caused by comments/docstrings/line continuation "
+                           "that is at a lesser indent level than the source.")
+                    warnings.warn(NumbaDebugInfoWarning(msg))
                 # pull the definition out of the AST, only if it seems valid
                 # i.e. one thing in the body
-                if len(src_ast.body) == 1:
+                if src_ast is not None and len(src_ast.body) == 1:
                     pydef = src_ast.body.pop()
                     # -1 as lines start at 1 and this is an offset.
                     pydef_offset = pydef.lineno - 1
@@ -305,6 +318,11 @@ class BaseLower(object):
     def setup_function(self, fndesc):
         # Setup function
         self.function = self.context.declare_function(self.module, fndesc)
+        if self.flags.dbg_optnone:
+            attrset = self.function.attributes
+            if "alwaysinline" not in attrset:
+                attrset.add("optnone")
+                attrset.add("noinline")
         self.entry_block = self.function.append_basic_block('entry')
         self.builder = Builder(self.entry_block)
         self.call_helper = self.call_conv.init_call_helper(self.builder)
@@ -315,6 +333,29 @@ class BaseLower(object):
     def debug_print(self, msg):
         if config.DEBUG_JIT:
             self.context.debug_print(self.builder, "DEBUGJIT: {0}".format(msg))
+
+    def print_variable(self, msg, varname):
+        """Helper to emit ``print(msg, varname)`` for debugging.
+
+        Parameters
+        ----------
+        msg : str
+            Literal string to be printed.
+        varname : str
+            A variable name whose value will be printed.
+        """
+        argtys = (
+            types.literal(msg),
+            self.fndesc.typemap[varname]
+        )
+        args = (
+            self.context.get_dummy_value(),
+            self.loadvar(varname),
+        )
+        sig = typing.signature(types.none, *argtys)
+
+        impl = self.context.get_function(print, sig)
+        impl(self.builder, args)
 
 
 class Lower(BaseLower):
@@ -1018,10 +1059,11 @@ class Lower(BaseLower):
         argvals = self.fold_call_args(
             fnty, signature, expr.args, expr.vararg, expr.kws,
         )
-        qualprefix = fnty.overloads[signature.args]
+        rec_ov = fnty.get_overloads(signature.args)
         mangler = self.context.mangler or default_mangler
         abi_tags = self.fndesc.abi_tags
-        mangled_name = mangler(qualprefix, signature.args, abi_tags=abi_tags)
+        mangled_name = mangler(rec_ov.qualname, signature.args,
+                               abi_tags=abi_tags, uid=rec_ov.uid)
         # special case self recursion
         if self.builder.function.name.startswith(mangled_name):
             res = self.context.call_internal(

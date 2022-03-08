@@ -156,11 +156,13 @@ These variables influence what is printed out during compilation of
 
 .. envvar:: NUMBA_GDB_BINARY
 
-   Set the ``gdb`` binary for use in Numba's ``gdb`` support, this takes the
-   form  of a path and full name of the binary, for example:
-   ``/path/from/root/to/binary/name_of_gdb_binary`` This is to permit
-   the use of a ``gdb`` from a non-default location with a non-default name. If
-   not set ``gdb`` is assumed to reside at ``/usr/bin/gdb``.
+   Set the ``gdb`` binary for use in Numba's ``gdb`` support. This takes one of
+   two forms: 1) a path and full name of the binary to explicitly express
+   which binary to use 2) just the name of the binary and the current path will
+   be searched using the standard path resolution rules. For example:
+   ``/path/from/root/to/binary/name_of_gdb_binary`` or
+   ``custom_gdb_binary_name``. This is to permit the use of a ``gdb`` from a
+   non-default location with a non-default name. The default value is ``gdb``.
 
 .. envvar:: NUMBA_DEBUG_TYPEINFER
 
@@ -485,10 +487,19 @@ GPU support
 
    When set to 1, the default stream is the per-thread default stream. When set
    to 0, the default stream is the legacy default stream. This defaults to 0,
-   for the legacy default stream. It may default to 1 in a future release of
-   Numba. See `Stream Synchronization Behavior
+   for the legacy default stream. See `Stream Synchronization Behavior
    <https://docs.nvidia.com/cuda/cuda-runtime-api/stream-sync-behavior.html>`_
    for an explanation of the legacy and per-thread default streams.
+
+   This variable only takes effect when using Numba's internal CUDA bindings;
+   when using the NVIDIA bindings, use the environment variable
+   ``CUDA_PYTHON_CUDA_PER_THREAD_DEFAULT_STREAM`` instead.
+
+   .. seealso::
+
+      The `Default Stream section
+      <https://nvidia.github.io/cuda-python/release/11.6.0-notes.html#default-stream>`_
+      in the NVIDIA Bindings documentation.
 
 .. envvar:: NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS
 

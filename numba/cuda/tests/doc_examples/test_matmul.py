@@ -8,6 +8,7 @@ Contents in this file are referenced from the sphinx-generated docs.
 """
 import unittest
 from numba.cuda.testing import CUDATestCase, skip_on_cudasim
+from numba.tests.support import captured_stdout
 
 
 @skip_on_cudasim("cudasim doesn't support cuda import at non-top-level")
@@ -16,6 +17,17 @@ class TestMatMul(CUDATestCase):
     Text matrix multiplication using simple, shared memory/square, and shared
     memory/nonsquare cases.
     """
+
+    def setUp(self):
+        # Prevent output from this test showing up when running the test suite
+        self._captured_stdout = captured_stdout()
+        self._captured_stdout.__enter__()
+        super().setUp()
+
+    def tearDown(self):
+        # No exception type, value, or traceback
+        self._captured_stdout.__exit__(None, None, None)
+        super().tearDown()
 
     def test_ex_matmul(self):
         """Test of matrix multiplication on various cases."""
@@ -36,6 +48,26 @@ class TestMatMul(CUDATestCase):
                     tmp += A[i, k] * B[k, j]
                 C[i, j] = tmp
         # magictoken.ex_matmul.end
+
+        # magictoken.ex_run_matmul.begin
+        x_h = np.arange(16).reshape([4, 4])
+        y_h = np.ones([4, 4])
+        z_h = np.zeros([4, 4])
+
+        x_d = cuda.to_device(x_h)
+        y_d = cuda.to_device(y_h)
+        z_d = cuda.to_device(z_h)
+
+        threadsperblock = (16, 16)
+        blockspergrid_x = math.ceil(z_h.shape[0] / threadsperblock[0])
+        blockspergrid_y = math.ceil(z_h.shape[1] / threadsperblock[1])
+        blockspergrid = (blockspergrid_x, blockspergrid_y)
+
+        matmul[blockspergrid, threadsperblock](x_d, y_d, z_d)
+        z_h = z_d.copy_to_host()
+        print(z_h)
+        print(x_h @ y_h)
+        # magictoken.ex_run_matmul.end
 
         # magictoken.ex_fast_matmul.begin
         # Controls threads per block and shared memory usage.
