@@ -1027,7 +1027,8 @@ def memcpy(builder, dst, src, count, itemsize=1):
     - memcpy(builder, dst, src, count, itemsize)
     """
     if dst.type != src.type:
-        msg = f'memcpy requires the same types; got {dst.type} and {src.type}'
+        msg = ('memcpy requires the same types; got destination type '
+               f'{dst.type} and source type {src.type}')
         raise TypingError(msg)
 
     _raw_mem_intrinsic(builder, 'llvm.memcpy', dst, src, count, itemsize)
