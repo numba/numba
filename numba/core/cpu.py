@@ -275,6 +275,8 @@ _options_mixin = include_default_options(
     "forceinline",
     # Add "target_backend" as a accepted option for the CPU in @jit(...)
     "target_backend",
+    "_dbg_extend_lifetimes",
+    "_dbg_optnone",
 )
 
 class CPUTargetOptions(_options_mixin, TargetOptions):
@@ -290,6 +292,15 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
         if not flags.is_set("debuginfo"):
             flags.debuginfo = config.DEBUGINFO_DEFAULT
 
+        if not flags.is_set("dbg_extend_lifetimes"):
+            if flags.debuginfo:
+                # auto turn on extend-lifetimes if debuginfo is on and
+                # dbg_extend_lifetimes is not set
+                flags.dbg_extend_lifetimes = True
+            else:
+                # set flag using env-var config
+                flags.dbg_extend_lifetimes = config.EXTEND_VARIABLE_LIFETIMES
+
         if not flags.is_set("boundscheck"):
             flags.boundscheck = flags.debuginfo
 
@@ -303,6 +314,10 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
         flags.inherit_if_not_set("target_backend")
 
         flags.inherit_if_not_set("forceinline")
+
+        if flags.forceinline:
+            # forceinline turns off optnone, just like clang.
+            flags.optnone = False
 
 # ----------------------------------------------------------------------------
 # Internal

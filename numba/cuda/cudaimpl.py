@@ -7,6 +7,7 @@ import llvmlite.binding as ll
 
 from numba.core.imputils import Registry, lower_cast
 from numba.core.typing.npydecl import parse_dtype, signature
+from numba.core.datamodel import models
 from numba.core import types, cgutils
 from .cudadrv import nvvm
 from numba import cuda
@@ -987,7 +988,11 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
         raise ValueError("array length <= 0")
 
     # Check that we support the requested dtype
-    other_supported_type = isinstance(dtype, (types.Record, types.Boolean))
+    data_model = context.data_model_manager[dtype]
+    other_supported_type = (
+        isinstance(dtype, (types.Record, types.Boolean))
+        or isinstance(data_model, models.StructModel)
+    )
     if dtype not in types.number_domain and not other_supported_type:
         raise TypeError("unsupported type: %s" % dtype)
 

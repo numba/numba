@@ -596,11 +596,22 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_np_copy(self):
         self.check_layout_dependent_func(np_copy)
 
+    def check_ascontiguousarray_scalar(self, pyfunc):
+        def check_scalar(x):
+            cres = compile_isolated(pyfunc, (typeof(x), ))
+            expected = pyfunc(x)
+            got = cres.entry_point(x)
+            self.assertPreciseEqual(expected, got)
+        for x in [42, 42.0, 42j, np.float32(42), np.float64(42), True]:
+            check_scalar(x)
+
     def test_np_asfortranarray(self):
         self.check_layout_dependent_func(np_asfortranarray)
+        self.check_ascontiguousarray_scalar(np_asfortranarray)
 
     def test_np_ascontiguousarray(self):
         self.check_layout_dependent_func(np_ascontiguousarray)
+        self.check_ascontiguousarray_scalar(np_ascontiguousarray)
 
     def check_np_frombuffer_allocated(self, pyfunc):
         def run(shape):
