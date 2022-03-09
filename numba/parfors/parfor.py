@@ -2860,13 +2860,13 @@ class ParforPass(ParforPassStates):
             maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap,
                                                             up_direction=False)
             dprint_func_ir(self.func_ir, "after maximize fusion down")
-            self.fuse_parfors(self.array_analysis, self.func_ir.blocks, self.func_ir, self.typemap)
+            self.fuse_parfors(self.array_analysis, self.func_ir, self.typemap)
             dprint_func_ir(self.func_ir, "after first fuse")
             # push non-parfors up
             maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap)
             dprint_func_ir(self.func_ir, "after maximize fusion up")
             # try fuse again after maximize
-            self.fuse_parfors(self.array_analysis, self.func_ir.blocks, self.func_ir, self.typemap)
+            self.fuse_parfors(self.array_analysis, self.func_ir, self.typemap)
             dprint_func_ir(self.func_ir, "after fusion")
             # remove dead code after fusion to remove extra arrays and variables
             simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
@@ -2958,7 +2958,8 @@ class ParforPass(ParforPassStates):
         """
         return _mk_parfor_loops(self.typemap, size_vars, scope, loc)
 
-    def fuse_parfors(self, array_analysis, blocks, func_ir, typemap):
+    def fuse_parfors(self, array_analysis, func_ir, typemap):
+        blocks = func_ir.blocks
         for label, block in blocks.items():
             equiv_set = array_analysis.get_equiv_set(label)
             fusion_happened = True
@@ -2983,6 +2984,7 @@ class ParforPass(ParforPassStates):
                             fusion_happened = True
                             self.diagnostics.fusion_info[stmt.id].extend([next_stmt.id])
                             new_body.append(fused_node)
+                            func_ir._definitions = build_definitions(blocks)
                             self.fuse_recursive_parfor(fused_node, equiv_set, func_ir, typemap)
                             i += 2
                             continue
@@ -3970,7 +3972,6 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
 
     # TODO: make sure parfor1's reduction output is not used in parfor2
     # only data parallel loops
-    func_ir._definitions = build_definitions(func_ir.blocks)
     p1_cross_dep, p1_ip, p1_ia, p1_non_ia = has_cross_iter_dep(parfor1, func_ir, typemap)
     if not p1_cross_dep:
         p2_cross_dep = has_cross_iter_dep(parfor2, func_ir, typemap, p1_ip, p1_ia, p1_non_ia)[0]
@@ -4072,13 +4073,48 @@ def remove_duplicate_definitions(blocks, nameset):
     return
 
 
-def has_cross_iter_dep(parfor, func_ir, typemap, index_positions=None, indexed_arrays=None, non_indexed_arrays=None):
-    # we conservatively assume there is cross iteration dependency when
-    # the parfor index is used in any expression since the expression could
-    # be used for indexing arrays
+def has_cross_iter_dep(
+        parfor,
+        func_ir,
+        typemap,
+        index_positions=None,
+        indexed_arrays=None,
+        non_indexed_arrays=None):
+    # We should assume there is cross iteration dependency unless we can
+    # prove otherwise.  Return True if there is a cross-iter dependency
+    # that should prevent fusion, False if fusion is okay.
+
     # TODO: make it more accurate using ud-chains
+
+    # Get the index variable used by this parfor.
+    # This will hold other variables with equivalent value, e.g., a = index_var
     indices = {l.index_variable.name for l in parfor.loop_nests}
+    # This set will store variables that are (potentially recursively)
+    # defined in relation to an index variable, e.g., a = index_var + 1.
+    # A getitem that uses an index variable from this set will be considered
+    # as potentially having a cross-iter dependency and so won't fuse.
     derived_from_indices = set()
+    # For the first parfor considered for fusion, the later 3 args will be None
+    # and initialized to empty.  For the second parfor, the strutures from the
+    # previous parfor is passed in so that cross-parfor violations of the
+    # below comments can prevent fusion.
+    #
+    # index_positions keeps track of which index positions have had an index
+    # variable used for them and which ones haven't for each possible array
+    # dimensionality.  After the first array access is seen, if subsequent
+    # ones use a parfor index for a different dimension then we conservatively
+    # say that we can't fuse.  For example, if a 2D array is accessed with
+    # a[parfor_index, 0] then index_positions[2] will be (True, False) and
+    # if a[0, parfor_index] happens later which is (False, True) then this
+    # conflicts with the previous value and will prevent fusion.
+    #
+    # indexed_arrays records arrays that are accessed with at least one
+    # parfor index.  If such an array is later accessed with indices that
+    # don't include a parfor index then conservatively assume we can't fuse.
+    #
+    # non_indexed_arrays holds arrays that are indexed without a parfor index.
+    # If an array first accessed without a parfor index is later indexed
+    # with one then conservatively assume we can't fuse.
     if index_positions is None:
         index_positions = {}
     if indexed_arrays is None:
@@ -4087,51 +4123,83 @@ def has_cross_iter_dep(parfor, func_ir, typemap, index_positions=None, indexed_a
         non_indexed_arrays = set()
 
     def add_check_position(new_position, array_accessed):
-        """Returns True if there is a reason to prevent fusion."""
+        """Returns True if there is a reason to prevent fusion based
+           on the rules described above.
+           new_position will be a list or tuples of boolean that
+           says whether the index in that spot is a parfor index
+           or not.  array_accessed is the array on which the access
+           is occurring."""
+
+        # Convert list indices to tuple for generality.
         if isinstance(new_position, list):
             new_position = tuple(new_position)
+
+        # If none of the indices are based on a parfor index.
         if True not in new_position:
+            # See if this array has been accessed before with a
+            # a parfor index and if so say that we can't fuse.
             if array_accessed in indexed_arrays:
                 return True
             else:
+                # Either array is already in non_indexed arrays or we
+                # will add it.  Either way, this index usage can fuse.
                 non_indexed_arrays.add(array_accessed)
                 return False
+
+        # Fallthrough for cases where one of the indices is a parfor index.
+        # If this array previous accessed without a parfor index then
+        # conservatively say we can't fuse.
         if array_accessed in non_indexed_arrays:
             return True
 
         npsize = len(new_position)
+        # See if we have not seen a npsize dimensioned array accessed before.
         if npsize not in index_positions:
+            # If not then add current set of parfor/non-parfor indices and
+            # indicate it is safe as it is the first usage.
             index_positions[npsize] = new_position
             return False
 
+        # Here we have a subsequent access to a npsize-dimensioned array.
+        # Make sure we see the same combination of parfor/non-parfor index
+        # indices that we've seen before.  If not then return True saying
+        # that we can't fuse.
         return index_positions[npsize] != new_position
 
     def check_index(stmt_index, array_accessed):
-        """Returns True if there is a reason to prevent fusion."""
+        """Looks at the indices of a getitem or setitem to see if there
+           is a reason that they would prevent fusion.
+           Returns True if fusion should be prohibited, False otherwise.
+        """
         if isinstance(stmt_index, ir.Var):
             # If the array is 2+ dimensions then the index should be a tuple.
             if isinstance(typemap[stmt_index.name], types.BaseTuple):
+                # Get how the index tuple is constructed.
                 fbs_res = guard(find_build_sequence, func_ir, stmt_index)
                 if fbs_res is not None:
                     ind_seq, ind_op = fbs_res
-                    # If all the parts of the tuple are parfor indices
-                    # or not derived from indices it is okay.
+                    # If any indices are derived from an index is used then
+                    # return True to say we can't fuse.
                     if (all([x.name in indices or
                         x.name not in derived_from_indices for x in ind_seq])):
+                        # Get position in index tuple where parfor indices used.
                         new_index_positions = [x.name in indices for x in ind_seq]
                         # Make sure that we aren't accessing a given array with
                         # different indices in a different order.
                         if add_check_position(new_index_positions, array_accessed):
                             return True
                     else:
+                        # index derived from a parfor index used so no fusion
                         return True
                 else:
                     # Don't know how the index tuple is built so
                     # have to assume fusion can't happen.
                     return True
             else:
-                # Should be for 1D array getitems.
+                # Should be for 1D arrays.
                 if stmt_index.name in indices:
+                    # Array indexed by a parfor index variable.
+                    # Make sure this 1D access consistent with prior ones.
                     if add_check_position((True,), array_accessed):
                         return True
                 elif stmt_index.name in derived_from_indices:
@@ -4139,39 +4207,59 @@ def has_cross_iter_dep(parfor, func_ir, typemap, index_positions=None, indexed_a
                     # from an index then no fusion.
                     return True
                 else:
+                    # Some kind of index that isn't a parfor index or
+                    # one derived from one, e.g., a constant.  Make sure
+                    # this is consistent with prior accessed of this array.
                     if add_check_position((False,), array_accessed):
                         return True
         else:
+            # We don't know how to handle non-Var indices so no fusion.
             return True
+
+        # No reason to reject so indicate safe for fusion.
         return False
 
+    # Iterate through all the statements in the parfor.
     for b in parfor.loop_body.values():
         for stmt in b.body:
-            # GetItem/SetItem nodes are fine since can't have expression inside
-            # and only simple indices are possible
+            # Make sure SetItem accesses are fusion safe.
             if isinstance(stmt, (ir.SetItem, ir.StaticSetItem)):
+                # Check index safety with prior array accesses.
                 if check_index(stmt.index, stmt.target.name):
                     return True, index_positions, indexed_arrays, non_indexed_arrays
+                # Fusion safe so go to next statement.
                 continue
-            # tuples are immutable so no expression on parfor possible
             if isinstance(stmt, ir.Assign):
+                # If stmt of form a = parfor_index then add "a" to set of
+                # parfor indices.
                 if isinstance(stmt.value, ir.Var):
                     if stmt.value.name in indices:
                         indices.add(stmt.target.name)
                         continue
                 elif isinstance(stmt.value, ir.Expr):
                     op = stmt.value.op
+                    # Make sure getitem accesses are fusion safe.
                     if op in ['getitem', 'static_getitem']:
-                        if not check_index(stmt.value.index, stmt.value.value.name):
-                            continue
-
-                        return True, index_positions, indexed_arrays, non_indexed_arrays
+                        # Check index safety with prior array accesses.
+                        if check_index(stmt.value.index, stmt.value.value.name):
+                            return True, index_positions, indexed_arrays, non_indexed_arrays
+                        # Fusion safe so go to next statement.
+                        continue
                     if op == 'call':
+                        # If there is a call in the parfor body that takes some
+                        # array parameter then we have no way to analyze what
+                        # that call is doing so presume it is unsafe for fusion.
                         if (any([isinstance(typemap[x.name], types.npytypes.Array)
                             for x in stmt.value.list_vars()])):
                             return True, index_positions, indexed_arrays, non_indexed_arrays
 
+                    # Get the vars used by this non-setitem/getitem statement.
                     rhs_vars = [x.name for x in stmt.value.list_vars()]
+                    # If a parfor index is used as part of this statement or
+                    # something previous determined to be derived from a parfor
+                    # index then add the target variable to the set of variable
+                    # variables that are derived from parfors and so should
+                    # prevent fusion if used as an index.
                     if (not indices.isdisjoint(rhs_vars) or
                         not derived_from_indices.isdisjoint(rhs_vars)):
                         derived_from_indices.add(stmt.target.name)
