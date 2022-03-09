@@ -1044,14 +1044,11 @@ def _raw_mem_intrinsic(builder, func_name, dst, src, count, itemsize):
     if isinstance(itemsize, int):
         itemsize = ir.Constant(intp_t, itemsize)
 
-    if isinstance(itemsize, ir.Constant) and itemsize.constant == 1:
-        length = count
-    else:
-        length = builder.mul(count, itemsize)
-
     memcpy = builder.module.declare_intrinsic(func_name,
                                               [voidptr_t, voidptr_t, intp_t])
+    length = builder.mul(count, itemsize)
     is_volatile = false_bit
+
     builder.call(memcpy, (builder.bitcast(dst, voidptr_t),
                           builder.bitcast(src, voidptr_t),
                           length,
