@@ -2989,7 +2989,6 @@ class ParforPass(ParforPassStates):
                             fusion_happened = True
                             self.diagnostics.fusion_info[stmt.id].extend([next_stmt.id])
                             new_body.append(fused_node)
-                            func_ir._definitions = build_definitions(blocks)
                             self.fuse_recursive_parfor(fused_node, equiv_set, func_ir, typemap)
                             i += 2
                             continue
@@ -3975,6 +3974,7 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
             report = FusionReport(parfor1.id, parfor2.id, msg % i)
             return None, report
 
+    func_ir._definitions = build_definitions(func_ir.blocks)
     # TODO: make sure parfor1's reduction output is not used in parfor2
     # only data parallel loops
     p1_cross_dep, p1_ip, p1_ia, p1_non_ia = has_cross_iter_dep(parfor1, func_ir, typemap)
