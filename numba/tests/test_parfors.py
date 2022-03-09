@@ -1264,12 +1264,6 @@ class TestParforsUnsupported(TestCase):
                "hardware")
         self.assertIn(msg, str(raised.exception))
 
-@register_jitable
-def issue7854_proc(u, i, even, size):
-    for j in range((even + i + 1)%2 +1, size-1, 2):
-        u[i, j] = u[i, j+1] + u[i, j-1] + u[i+1,j ] + u[i-1, j] + 1
-
-
 @skip_parfors_unsupported
 class TestParfors(TestParforsBase):
     """ Tests cpython, reduction and various parfors features"""
@@ -1964,7 +1958,13 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, np.zeros((10, 10)), 3)
 
     def test_prange_unknown_call1(self):
+        @register_jitable
+        def issue7854_proc(u, i, even, size):
+            for j in range((even + i + 1)%2 +1, size-1, 2):
+                u[i, j] = u[i+1,j ] + 1
+
         # issue7854
+        # Forbid fusion in unanalyzable call inside prange.
         def test_impl(size):
             u = np.zeros((size,size))
             for i in numba.prange(1, size-1):
@@ -1976,21 +1976,25 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countParfors(test_impl, (types.int64,)), 3)
         self.check(test_impl, 4)
 
-    def test_prange_unknown_call2(self):
+    def test_prange_index_calc1(self):
+        # Should forbid fusion due to cross-iteration dependency as
+        # detected by loop index calcuation (i+1) as array index.
         def test_impl(size):
             u = np.zeros((size,size))
             for i in numba.prange(1, size-1):
                 for j in range((i + 1)%2 +1, size-1, 2):
-                    u[i, j] = u[i, j+1] + u[i, j-1] + u[i+1,j ] + u[i-1, j] + 1
+                    u[i, j] = u[i+1,j ] + 1
             for i in numba.prange(1, size-1):
                 for j in range(i%2 +1, size-1, 2):
-                    u[i, j] = u[i, j+1] + u[i, j-1] + u[i+1,j ] + u[i-1, j] + 1
+                    u[i, j] = u[i+1,j ] + 1
             return u
 
         self.assertEqual(countParfors(test_impl, (types.int64,)), 3)
         self.check(test_impl, 4)
 
     def test_prange_reverse_order1(self):
+        # Testing if reversed loop index usage as array index
+        # prevents fusion.
         def test_impl():
             size = 10
             a = np.zeros((size,size))
