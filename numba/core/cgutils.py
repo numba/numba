@@ -10,7 +10,6 @@ import functools
 from llvmlite import ir
 
 from numba.core import utils, types, config, debuginfo
-from numba.core.errors import TypingError
 import numba.core.datamodel
 
 
@@ -1016,30 +1015,19 @@ def cbranch_or_continue(builder, cond, bbtrue):
 
 def memcpy(builder, dst, src, count, itemsize=1):
     """
-    Emit a memcpy to the builder.
-
-    Source and destination types can be any type, but the types must be the
-    same.
+    Emit a memcpy to the builder. Source and destination types can be any type.
 
     Call either as:
 
     - memcpy(builder, dst, src, len), or
     - memcpy(builder, dst, src, count, itemsize)
     """
-    if dst.type != src.type:
-        msg = ('memcpy requires the same types; got destination type '
-               f'{dst.type} and source type {src.type}')
-        raise TypingError(msg)
-
     _raw_mem_intrinsic(builder, 'llvm.memcpy', dst, src, count, itemsize)
 
 
 def memmove(builder, dst, src, count, itemsize=1):
     """
-    Emit a memmove to the builder.
-
-    Source and destination types can be any type, but the types must be the
-    same.
+    Emit a memmove to the builder. Source and destination types can be any type.
 
     Call either as:
 
