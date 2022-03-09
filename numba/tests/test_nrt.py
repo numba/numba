@@ -226,7 +226,10 @@ class TestTracemalloc(unittest.TestCase):
     """
 
     def measure_memory_diff(self, func):
-        import tracemalloc
+        try:
+            import tracemalloc
+        except ImportError:
+            self.skipTest("tracemalloc not available")
         tracemalloc.start()
         try:
             before = tracemalloc.take_snapshot()
