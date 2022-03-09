@@ -1044,15 +1044,15 @@ def _raw_mem_intrinsic(builder, func_name, dst, src, count, itemsize):
     if isinstance(itemsize, int):
         itemsize = ir.Constant(intp_t, itemsize)
 
-    memcpy = builder.module.declare_intrinsic(func_name,
-                                              [voidptr_t, voidptr_t, intp_t])
+    argtys = [voidptr_t, voidptr_t, intp_t]
+    func = builder.module.declare_intrinsic(func_name, argtys)
     length = builder.mul(count, itemsize)
     is_volatile = false_bit
 
-    builder.call(memcpy, (builder.bitcast(dst, voidptr_t),
-                          builder.bitcast(src, voidptr_t),
-                          length,
-                          is_volatile))
+    builder.call(func, (builder.bitcast(dst, voidptr_t),
+                        builder.bitcast(src, voidptr_t),
+                        length,
+                        is_volatile))
 
 
 def muladd_with_overflow(builder, a, b, c):
