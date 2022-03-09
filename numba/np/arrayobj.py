@@ -2605,7 +2605,8 @@ def record_setattr(context, builder, sig, args, attr):
         dest = cgutils.get_record_member(builder, target, offset,
                                          src.type.pointee)
         cgutils.memcpy(builder, dest, src,
-                       context.get_constant(types.intp, elemty.nitems))
+                       context.get_constant(types.intp, elemty.nitems),
+                       context.get_constant(types.intp, elemty.size))
     else:
         # Set the given scalar record member
         dptr = cgutils.get_record_member(builder, target, offset,
