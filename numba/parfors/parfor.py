@@ -2860,13 +2860,19 @@ class ParforPass(ParforPassStates):
             maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap,
                                                             up_direction=False)
             dprint_func_ir(self.func_ir, "after maximize fusion down")
-            self.fuse_parfors(self.array_analysis, self.func_ir, self.typemap)
+            self.fuse_parfors(self.array_analysis,
+                              self.func_ir.blocks,
+                              self.func_ir,
+                              self.typemap)
             dprint_func_ir(self.func_ir, "after first fuse")
             # push non-parfors up
             maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap)
             dprint_func_ir(self.func_ir, "after maximize fusion up")
             # try fuse again after maximize
-            self.fuse_parfors(self.array_analysis, self.func_ir, self.typemap)
+            self.fuse_parfors(self.array_analysis,
+                              self.func_ir.blocks,
+                              self.func_ir,
+                              self.typemap)
             dprint_func_ir(self.func_ir, "after fusion")
             # remove dead code after fusion to remove extra arrays and variables
             simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
@@ -2958,8 +2964,7 @@ class ParforPass(ParforPassStates):
         """
         return _mk_parfor_loops(self.typemap, size_vars, scope, loc)
 
-    def fuse_parfors(self, array_analysis, func_ir, typemap):
-        blocks = func_ir.blocks
+    def fuse_parfors(self, array_analysis, blocks, func_ir, typemap):
         for label, block in blocks.items():
             equiv_set = array_analysis.get_equiv_set(label)
             fusion_happened = True
