@@ -418,7 +418,7 @@ conda or pip; i.e. ``conda install sphinx numpydoc``.
 
 To build the documentation, you need the rtd theme::
 
-   $ conda install sphinx-rtd-theme
+   $ conda install sphinx_rtd_theme
 
 You can edit the source files under ``docs/source/``, after which you can
 build and check the documentation under ``docs/``::
