@@ -9,10 +9,12 @@ import gc
 import math
 import platform
 import os
+import signal
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import io
 import ctypes
@@ -1005,6 +1007,98 @@ def run_in_subprocess(code, flags=None, env=None, timeout=30):
         msg = "process failed with code %s: stderr follows\n%s\n"
         raise AssertionError(msg % (popen.returncode, err.decode()))
     return out, err
+
+
+def strace(work, syscalls, timeout=10):
+    """ Runs strace whilst executing the function work() in the current process,
+    captures the listed syscalls (list of strings). Takes an optional timeout in
+    seconds, default is 10, if this is exceeded the process will be sent a
+    SIGKILL. Returns a list of lines that are output by strace.
+    """
+
+    # Open a tmpfile for strace to write into.
+    with tempfile.NamedTemporaryFile('w+t') as ntf:
+
+        parent_pid = os.getpid()
+        strace_binary = shutil.which('strace')
+        if strace_binary is None:
+            raise ValueError("No valid 'strace' binary could be found")
+        cmd = ['strace', # strace
+            '-q', # quietly (no attach/detach print out)
+            '-p', str(parent_pid), # this PID
+            '-e', ','.join(syscalls), # these syscalls
+            '-o', ntf.name] # put output into this file
+
+        # redirect stdout, stderr is handled by the `-o` flag to strace.
+        popen = subprocess.Popen(cmd, stdout=subprocess.PIPE,)
+        strace_pid = popen.pid
+        thread_timeout = threading.Timer(timeout, popen.kill)
+        thread_timeout.start()
+
+        def check_return(problem=''):
+            ret = popen.returncode
+            if ret != 0:
+                msg = ("strace exited non-zero, process return code was:"
+                       f"{ret}. {problem}")
+                raise RuntimeError(msg)
+        try:
+            # push the communication onto a thread so it doesn't block.
+            # start comms thread
+            thread_comms = threading.Thread(target=popen.communicate)
+            thread_comms.start()
+
+            # do work
+            work()
+            # Flush the output buffer file
+            ntf.flush()
+            # interrupt the strace process to stop it if it's still running
+            if popen.poll() is None:
+                os.kill(strace_pid, signal.SIGINT)
+            else:
+                # it's not running, probably an issue, raise
+                problem="If this is SIGKILL, increase the timeout?"
+                check_return(problem)
+            # Make sure the return code is 0, SIGINT to detach is considered
+            # a successful exit.
+            popen.wait()
+            check_return()
+            # collect the data
+            strace_data = ntf.readlines()
+            # stop the process
+            popen.terminate()
+            if popen.poll() is None:
+                # Something has gone wrong, force stop the process
+                popen.kill()
+                raise RuntimeError("strace did not terminate.")
+        finally:
+            # join communication, should be stopped now as process has
+            # exited
+            thread_comms.join()
+            # should be stopped already
+            thread_timeout.cancel()
+
+    return strace_data
+
+
+def _strace_supported():
+    """Checks if strace is supported and working"""
+    def force_clone(): # subprocess triggers a clone
+        subprocess.run([sys.executable, '-c', 'exit()'])
+
+    try:
+        syscall = 'clone'
+        trace = strace(force_clone, [syscall,])
+        assert syscall in ''.join(trace)
+    except Exception:
+        return False
+    else:
+        return True
+
+
+_HAVE_STRACE = _strace_supported()
+
+
+needs_strace = unittest.skipUnless(_HAVE_STRACE, "needs working strace")
 
 
 class IRPreservingTestPipeline(CompilerBase):
