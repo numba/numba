@@ -126,19 +126,19 @@ traditional dynamic memory management.
    device function). *shape* is either an integer or a tuple of integers
    representing the array's dimensions and must be a simple constant
    expression. A "simple constant expression" includes, but is not limited to:
-   1. A literal (e.g. ``10``)
-   2. A local variable whose right-hand side is a literal or a simple constant
-   expression (e.g. ``shape``, where ``shape`` is defined earlier in the function as 
-   `shape = 10``)
-   3. A global variable that is defined in the jitted function's globals by the time of 
-   compilation (e.g. ``shape``, where ``shape`` is defined using any expression at
-   global scope).
+   
+      #. A literal (e.g. ``10``)
+      #. A local variable whose right-hand side is a literal or a simple constant
+         expression (e.g. ``shape``, where ``shape`` is defined earlier in the function 
+         as ``shape = 10``)
+      #. A global variable that is defined in the jitted function's globals by the time
+         of compilation (e.g. ``shape``, where ``shape`` is defined using any expression
+         at global scope).
+
    The definition must result in a Python ``int`` (i.e. not a NumPy scalar or other
    scalar / integer-like type). *type* is a :ref:`Numba type <numba-types>` of the
-   elements needing to be stored in the array.
-
-   The returned array-like object can be read and written to like any normal
-   device array (e.g. through indexing).
+   elements needing to be stored in the array. The returned array-like object can be
+   read and written to like any normal device array (e.g. through indexing).
 
    A common pattern is to have each thread populate one element in the
    shared array and then wait for all threads to finish using :func:`.syncthreads`.
@@ -173,13 +173,15 @@ unlike traditional dynamic memory management.
    *shape* is either an integer or a tuple of integers representing the array's
    dimensions and must be a simple constant expression. A "simple constant expression" 
    includes, but is not limited to:
-   1. A literal (e.g. ``10``)
-   2. A local variable whose right-hand side is a literal or a simple constant
-   expression (e.g. ``shape``, where ``shape`` is defined earlier in the function as 
-   `shape = 10``)
-   3. A global variable that is defined in the jitted function's globals by the time of 
-   compilation (e.g. ``shape``, where ``shape`` is defined using any expression at 
-   global scope).
+
+      #. A literal (e.g. ``10``)
+      #. A local variable whose right-hand side is a literal or a simple constant
+         expression (e.g. ``shape``, where ``shape`` is defined earlier in the function
+         as ``shape = 10``)
+      #. A global variable that is defined in the jitted function's globals by the time 
+         of compilation (e.g. ``shape``, where ``shape`` is defined using any expression
+         at global scope).
+
    The definition must result in a Python ``int`` (i.e. not a NumPy scalar or other
    scalar / integer-like type). *type* is a :ref:`Numba type <numba-types>`
    of the elements needing to be stored in the array. The array is private to
