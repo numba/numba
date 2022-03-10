@@ -1049,6 +1049,9 @@ def _raw_mem_intrinsic(builder, func_name, dst, src, count, itemsize):
     length = builder.mul(count, itemsize)
     is_volatile = false_bit
 
+    func.args[0].attributes.align = 1
+    func.args[1].attributes.align = 1
+
     builder.call(func, (builder.bitcast(dst, voidptr_t),
                         builder.bitcast(src, voidptr_t),
                         length,
