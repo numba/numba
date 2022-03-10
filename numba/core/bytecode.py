@@ -346,6 +346,7 @@ class FunctionIdentity(serialize.ReduceMixin):
         # variables, so we make sure to disambiguate using an unique id.
         uid = next(cls._unique_ids)
         self.unique_name = '{}${}'.format(self.func_qualname, uid)
+        self.unique_id = uid
 
         return self
 

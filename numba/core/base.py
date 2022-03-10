@@ -289,11 +289,11 @@ class BaseContext(object):
         Load target-specific registries.  Can be overridden by subclasses.
         """
 
-    def mangler(self, name, types, *, abi_tags=()):
+    def mangler(self, name, types, *, abi_tags=(), uid=None):
         """
         Perform name mangling.
         """
-        return funcdesc.default_mangler(name, types, abi_tags=abi_tags)
+        return funcdesc.default_mangler(name, types, abi_tags=abi_tags, uid=uid)
 
     def get_env_name(self, fndesc):
         """Get the environment name given a FunctionDescriptor.
@@ -397,15 +397,6 @@ class BaseContext(object):
         impl = user_function(fndesc, libs)
         self._defns[func].append(impl, impl.signature)
 
-    def add_user_function(self, func, fndesc, libs=()):
-        warnings.warn("Use insert_user_function instead",
-                      errors.NumbaDeprecationWarning)
-        if func not in self._defns:
-            msg = "{func} is not a registered user function"
-            raise KeyError(msg.format(func=func))
-        impl = user_function(fndesc, libs)
-        self._defns[func].append(impl, impl.signature)
-
     def insert_generator(self, genty, gendesc, libs=()):
         assert isinstance(genty, types.Generator)
         impl = user_generator(gendesc, libs)
@@ -432,6 +423,9 @@ class BaseContext(object):
         self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes, noalias=fndesc.noalias)
         if fndesc.inline:
             fn.attributes.add('alwaysinline')
+            # alwaysinline overrides optnone
+            fn.attributes.discard('noinline')
+            fn.attributes.discard('optnone')
         return fn
 
     def declare_external_function(self, module, fndesc):
