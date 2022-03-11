@@ -3,6 +3,74 @@
 Examples
 ========
 
+.. _cuda-vecadd:
+
+Vector Addition
+=====================
+This example shows a very basic vector addition using Numba to create both the
+device based data arrays and the vector addition kernel.
+
+
+.. code-block:: python
+   from numba import cuda
+   import numpy as np
+
+This function represents the kernel. Note the function is defined in terms of 
+python variables with unknown types. Later, when launched, numba will examine the
+types of the arguments that are actually passed at runtime and use them to 
+generate a CUDA kernel for the correct primitive types. The `size` parameter 
+is used as an out of bounds thread guard. 
+
+Also note that just like CUDA kernels that are declared as `void`, and must 
+return their values through an array that is passed, Numba kernels also do 
+not return values. Here, let `c` represent our results.
+
+.. code-block:: python
+   @cuda.jit
+   def f(a, b, c, size):
+      # just like threadIdx.x + (blockIdx.x * blockDim.x)
+      tid = cuda.grid(1) 
+      
+      if tid < size:
+         c[tid] = a[tid] + b[tid]
+
+`numba.cuda.to_device` can be used create device side copies of numpy arrays.
+Create two data vectors and an empty vector to hold our results:
+
+.. code-block:: python
+   a = cuda.to_device(np.array([1,2,3]))
+   b = cuda.to_device(np.array([1,2,3]))
+   c = cuda.to_device(np.array([0,0,0]))
+
+
+The following call to `forall` autoconfigures a 1D kernel for the data size
+and is often the simplest way of launching a kernel.
+
+..code-block:: python
+   f.forall(
+      len(a)
+   )(
+      a, b, c, len(a)
+   )
+   print(c.copy_to_host())
+
+This prints
+
+..code-block:: none
+   [2 4 6]
+
+One can also configure the grid manually using the following syntax to launch
+a grid containing one block with three threads:
+
+..code-block:: python
+   f[1, 3](a, b, c, len(a))
+   print(c.copy_to_host())
+
+This also prints
+..code-block:: none
+   [2 4 6]
+
+
 .. _cuda-matmul:
 
 Matrix multiplication
