@@ -4088,6 +4088,11 @@ def has_cross_iter_dep(
     # We should assume there is cross iteration dependency unless we can
     # prove otherwise.  Return True if there is a cross-iter dependency
     # that should prevent fusion, False if fusion is okay.
+    # Also returns index_positions, indexed_arrays, and non_indexed_arrays
+    # who purpose is described below so that subsequent additional
+    # has_cross_iter_dep calls for other parfors can build on the same
+    # data structures to make sure that the array accesses generate no
+    # cross-iter dependencies both within a parfor but also across parfors.
 
     # TODO: make it more accurate using ud-chains
 
@@ -4099,9 +4104,9 @@ def has_cross_iter_dep(
     # A getitem that uses an index variable from this set will be considered
     # as potentially having a cross-iter dependency and so won't fuse.
     derived_from_indices = set()
-    # For the first parfor considered for fusion, the later 3 args will be None
-    # and initialized to empty.  For the second parfor, the strutures from the
-    # previous parfor is passed in so that cross-parfor violations of the
+    # For the first parfor considered for fusion, the latter 3 args will be None
+    # and initialized to empty.  For the second parfor, the structures from the
+    # previous parfor are passed in so that cross-parfor violations of the
     # below comments can prevent fusion.
     #
     # index_positions keeps track of which index positions have had an index
@@ -4127,10 +4132,14 @@ def has_cross_iter_dep(
     if non_indexed_arrays is None:
         non_indexed_arrays = set()
 
-    def add_check_position(new_position, array_accessed):
+    def add_check_position(new_position,
+                           array_accessed,
+                           index_positions,
+                           indexed_arrays,
+                           non_indexed_arrays):
         """Returns True if there is a reason to prevent fusion based
            on the rules described above.
-           new_position will be a list or tuples of boolean that
+           new_position will be a list or tuple of booleans that
            says whether the index in that spot is a parfor index
            or not.  array_accessed is the array on which the access
            is occurring."""
@@ -4152,7 +4161,7 @@ def has_cross_iter_dep(
                 return False
 
         # Fallthrough for cases where one of the indices is a parfor index.
-        # If this array previous accessed without a parfor index then
+        # If this array was previously accessed without a parfor index then
         # conservatively say we can't fuse.
         if array_accessed in non_indexed_arrays:
             return True
@@ -4171,7 +4180,12 @@ def has_cross_iter_dep(
         # that we can't fuse.
         return index_positions[npsize] != new_position
 
-    def check_index(stmt_index, array_accessed):
+    def check_index(stmt_index,
+                    array_accessed,
+                    index_positions,
+                    indexed_arrays,
+                    non_indexed_arrays,
+                    derived_from_indices):
         """Looks at the indices of a getitem or setitem to see if there
            is a reason that they would prevent fusion.
            Returns True if fusion should be prohibited, False otherwise.
@@ -4182,7 +4196,7 @@ def has_cross_iter_dep(
                 # Get how the index tuple is constructed.
                 fbs_res = guard(find_build_sequence, func_ir, stmt_index)
                 if fbs_res is not None:
-                    ind_seq, ind_op = fbs_res
+                    ind_seq, _ = fbs_res
                     # If any indices are derived from an index is used then
                     # return True to say we can't fuse.
                     if (all([x.name in indices or
@@ -4191,8 +4205,11 @@ def has_cross_iter_dep(
                         new_index_positions = [x.name in indices for x in ind_seq]
                         # Make sure that we aren't accessing a given array with
                         # different indices in a different order.
-                        if add_check_position(new_index_positions, array_accessed):
-                            return True
+                        return add_check_position(new_index_positions,
+                                                  array_accessed,
+                                                  index_positions,
+                                                  indexed_arrays,
+                                                  non_indexed_arrays)
                     else:
                         # index derived from a parfor index used so no fusion
                         return True
@@ -4204,9 +4221,12 @@ def has_cross_iter_dep(
                 # Should be for 1D arrays.
                 if stmt_index.name in indices:
                     # Array indexed by a parfor index variable.
-                    # Make sure this 1D access consistent with prior ones.
-                    if add_check_position((True,), array_accessed):
-                        return True
+                    # Make sure this 1D access is consistent with prior ones.
+                    return add_check_position((True,),
+                                              array_accessed,
+                                              index_positions,
+                                              indexed_arrays,
+                                              non_indexed_arrays)
                 elif stmt_index.name in derived_from_indices:
                     # If we ever index an array with something calculated
                     # from an index then no fusion.
@@ -4215,14 +4235,18 @@ def has_cross_iter_dep(
                     # Some kind of index that isn't a parfor index or
                     # one derived from one, e.g., a constant.  Make sure
                     # this is consistent with prior accessed of this array.
-                    if add_check_position((False,), array_accessed):
-                        return True
+                    return add_check_position((False,),
+                                              array_accessed,
+                                              index_positions,
+                                              indexed_arrays,
+                                              non_indexed_arrays)
         else:
             # We don't know how to handle non-Var indices so no fusion.
             return True
 
-        # No reason to reject so indicate safe for fusion.
-        return False
+        # All branches above should cover all the cases and each should
+        # return so we should never get here.
+        assert 0
 
     # Iterate through all the statements in the parfor.
     for b in parfor.loop_body.values():
@@ -4230,7 +4254,12 @@ def has_cross_iter_dep(
             # Make sure SetItem accesses are fusion safe.
             if isinstance(stmt, (ir.SetItem, ir.StaticSetItem)):
                 # Check index safety with prior array accesses.
-                if check_index(stmt.index, stmt.target.name):
+                if check_index(stmt.index,
+                               stmt.target.name,
+                               index_positions,
+                               indexed_arrays,
+                               non_indexed_arrays,
+                               derived_from_indices):
                     return True, index_positions, indexed_arrays, non_indexed_arrays
                 # Fusion safe so go to next statement.
                 continue
@@ -4246,7 +4275,12 @@ def has_cross_iter_dep(
                     # Make sure getitem accesses are fusion safe.
                     if op in ['getitem', 'static_getitem']:
                         # Check index safety with prior array accesses.
-                        if check_index(stmt.value.index, stmt.value.value.name):
+                        if check_index(stmt.value.index,
+                                       stmt.value.value.name,
+                                       index_positions,
+                                       indexed_arrays,
+                                       non_indexed_arrays,
+                                       derived_from_indices):
                             return True, index_positions, indexed_arrays, non_indexed_arrays
                         # Fusion safe so go to next statement.
                         continue
@@ -4262,7 +4296,7 @@ def has_cross_iter_dep(
                     rhs_vars = [x.name for x in stmt.value.list_vars()]
                     # If a parfor index is used as part of this statement or
                     # something previous determined to be derived from a parfor
-                    # index then add the target variable to the set of variable
+                    # index then add the target variable to the set of
                     # variables that are derived from parfors and so should
                     # prevent fusion if used as an index.
                     if (not indices.isdisjoint(rhs_vars) or
