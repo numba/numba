@@ -289,6 +289,22 @@ class TestRandom(BaseTest):
         self._check_random_sized(numpy_seed, jit_unary("np.random.sample"))
         self._check_random_sized(numpy_seed, jit_unary("np.random.rand"))
 
+    def _check_random_none(self, seedfunc, randomfunc):
+        # Our seed() mimicks Numpy's.
+        r = np.random.RandomState()
+        for i in [0, 1, 125, 2**32 - 1]:
+            # Need to cast to a C-sized int (for Numpy <= 1.7)
+            r.seed(np.uint32(i))
+            seedfunc(i)
+            for n in range(10):
+                self.assertPreciseEqual(randomfunc(None), r.uniform(0.0, 1.0, None))
+
+    def test_numpy_random_none(self):
+        self._check_random_sized(numpy_seed, jit_unary("np.random.random_sample"))
+        self._check_random_sized(numpy_seed, jit_unary("np.random.ranf"))
+        self._check_random_sized(numpy_seed, jit_unary("np.random.sample"))
+        self._check_random_sized(numpy_seed, jit_unary("np.random.rand"))
+
     def test_independent_generators(self):
         # PRNGs for Numpy and Python are independent.
         N = 10
