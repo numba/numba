@@ -1,18 +1,14 @@
-from collections import namedtuple, defaultdict
+from collections import defaultdict
 import copy
-import os
 import sys
-import warnings
 from itertools import permutations, takewhile
 from contextlib import contextmanager
-
-import numpy as np
 
 from llvmlite import ir as llvmir
 from llvmlite.ir import Constant
 import llvmlite.binding as ll
 
-from numba.core import types, utils, typing, datamodel, debuginfo, funcdesc, config, cgutils, imputils
+from numba.core import types, utils, datamodel, debuginfo, funcdesc, config, cgutils, imputils
 from numba.core import event, errors, targetconfig
 from numba import _dynfunc, _helperlib
 from numba.core.compiler_lock import global_compiler_lock
@@ -1050,7 +1046,7 @@ class BaseContext(object):
             flat = ary.flatten(order=typ.layout)
             # Note: we use `bytearray(flat.data)` instead of `bytearray(flat)` to
             #       workaround issue #1850 which is due to numpy issue #3147
-            consts = create_constant_array(llvmir.IntType(8), bytearray(flat.data))
+            consts = cgutils.create_constant_array(llvmir.IntType(8), bytearray(flat.data))
             data = cgutils.global_constant(builder, ".const.array.data", consts)
             # Ensure correct data alignment (issue #1933)
             data.align = self.get_abi_alignment(datatype)
@@ -1060,11 +1056,11 @@ class BaseContext(object):
         # Handle shape
         llintp = self.get_value_type(types.intp)
         shapevals = [self.get_constant(types.intp, s) for s in ary.shape]
-        cshape = create_constant_array(llintp, shapevals)
+        cshape = cgutils.create_constant_array(llintp, shapevals)
 
         # Handle strides
         stridevals = [self.get_constant(types.intp, s) for s in ary.strides]
-        cstrides = create_constant_array(llintp, stridevals)
+        cstrides = cgutils.create_constant_array(llintp, stridevals)
 
         # Create array structure
         cary = self.make_array(typ)(self, builder)
@@ -1241,10 +1237,6 @@ class _wrap_missing_loc(object):
 
     def __repr__(self):
         return "<wrapped %s>" % self.func
-
-
-def create_constant_array(ty, val):
-    return llvmir.Constant(llvmir.ArrayType(ty, len(val)), val)
 
 
 @utils.runonce

@@ -11,7 +11,7 @@ import llvmlite.ir as llvmir
 
 from abc import abstractmethod, ABCMeta
 from numba.core import utils, config, cgutils
-from numba.core.passes import create_pass_manager_builder
+from numba.core.llvm_bindings import create_pass_manager_builder
 from numba.core.runtime.nrtopt import remove_redundant_nrt_refct
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import require_global_compiler_lock

@@ -9,7 +9,7 @@ import llvmlite.ir
 from llvmlite.ir import Constant
 
 from numba.core import types, cgutils
-from numba.core.base import create_constant_array
+from numba.core.cgutils import create_constant_array
 from numba.core.imputils import (lower_builtin, lower_constant,
                                  impl_ret_untracked, lower_cast)
 from numba.np import npdatetime_helpers, numpy_support, npyfuncs

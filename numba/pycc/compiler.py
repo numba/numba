@@ -8,7 +8,7 @@ from llvmlite import ir
 from llvmlite.binding import Linkage
 
 from numba.pycc import llvm_types as lt
-from numba.core.base import create_constant_array
+from numba.core.cgutils import create_constant_array
 from numba.core.compiler import compile_extra, Flags
 from numba.core.compiler_lock import global_compiler_lock
 
@@ -339,10 +339,12 @@ class ModuleCompiler(_ModuleCompiler):
     #:   PyObject* m_copy;
     #: } PyModuleDef_Base;
     module_def_base_ty = ir.LiteralStructType(
-        (lt._pyobject_head,
-         m_init_ty,
-         lt._llvm_py_ssize_t,
-         lt._pyobject_head_p))
+        (
+            lt._pyobject_head,
+            m_init_ty,
+            lt._llvm_py_ssize_t,
+            lt._pyobject_head_p
+        ))
 
     #: This struct holds all information that is needed to create a module object.
     #: typedef struct PyModuleDef{
@@ -357,15 +359,17 @@ class ModuleCompiler(_ModuleCompiler):
     #:   freefunc m_free;
     #: }PyModuleDef;
     module_def_ty = ir.LiteralStructType(
-        (module_def_base_ty,
-         _char_star,
-         _char_star,
-         lt._llvm_py_ssize_t,
-         _ModuleCompiler.method_def_ptr,
-         inquiry_ty,
-         traverseproc_ty,
-         inquiry_ty,
-         freefunc_ty))
+        (
+            module_def_base_ty,
+            _char_star,
+            _char_star,
+            lt._llvm_py_ssize_t,
+            _ModuleCompiler.method_def_ptr,
+            inquiry_ty,
+            traverseproc_ty,
+            inquiry_ty,
+            freefunc_ty
+        ))
 
     @property
     def module_create_definition(self):

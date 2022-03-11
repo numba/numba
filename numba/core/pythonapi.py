@@ -1088,7 +1088,7 @@ class PythonAPI(object):
 
         p_length = cgutils.alloca_once(self.builder, self.py_ssize_t)
         fnty = ir.FunctionType(self.cstring, [self.pyobj,
-                                            self.py_ssize_t.as_pointer()])
+                                              self.py_ssize_t.as_pointer()])
         fname = "PyUnicode_AsUTF8AndSize"
         fn = self._get_function(fnty, name=fname)
 

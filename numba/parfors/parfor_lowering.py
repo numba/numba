@@ -1653,7 +1653,8 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                                                        "do_scheduling_unsigned")
 
     get_num_threads = cgutils.get_or_insert_function(
-        builder.module, llvmlite.ir.FunctionType(llvmlite.ir.IntType(types.intp.bitwidth), []),
+        builder.module,
+        llvmlite.ir.FunctionType(llvmlite.ir.IntType(types.intp.bitwidth), []),
         "get_num_threads")
 
     num_threads = builder.call(get_num_threads, [])
@@ -1743,8 +1744,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
             builder.store(builder.bitcast(ary.data, byte_ptr_t), dst)
         elif isinstance(aty, types.ArrayCompatible):
             if var in races:
-                typ = context.get_data_type(
-                    aty.dtype) if aty.dtype != types.boolean else llvmlite.ir.IntType(1)
+                typ = (context.get_data_type(aty.dtype)
+                       if aty.dtype != types.boolean
+                       else llvmlite.ir.IntType(1))
 
                 rv_arg = cgutils.alloca_once(builder, typ)
                 builder.store(arg, rv_arg)
@@ -1761,14 +1763,16 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         else:
             if i < num_inps:
                 # Scalar input, need to store the value in an array of size 1
-                typ = context.get_data_type(
-                    aty) if not isinstance(aty, types.Boolean) else llvmlite.ir.IntType(1)
+                typ = (context.get_data_type(aty)
+                       if not isinstance(aty, types.Boolean)
+                       else llvmlite.ir.IntType(1))
                 ptr = cgutils.alloca_once(builder, typ)
                 builder.store(arg, ptr)
             else:
                 # Scalar output, must allocate
-                typ = context.get_data_type(
-                    aty) if not isinstance(aty, types.Boolean) else llvmlite.ir.IntType(1)
+                typ = (context.get_data_type(aty)
+                       if not isinstance(aty, types.Boolean)
+                       else llvmlite.ir.IntType(1))
                 ptr = cgutils.alloca_once(builder, typ)
             builder.store(builder.bitcast(ptr, byte_ptr_t), dst)
 

@@ -14,7 +14,11 @@ from llvmlite import binding as llvm
 
 
 def _inlining_threshold(optlevel, sizelevel=0):
-    # Refer http://llvm.org/docs/doxygen/html/InlineSimple_8cpp_source.html
+    """
+    Compute the inlining threshold for the desired optimisation level
+
+    Refer to http://llvm.org/docs/doxygen/html/InlineSimple_8cpp_source.html
+    """
     if optlevel > 2:
         return 275
 
@@ -31,6 +35,9 @@ def _inlining_threshold(optlevel, sizelevel=0):
 
 def create_pass_manager_builder(opt=2, loop_vectorize=False,
                                 slp_vectorize=False):
+    """
+    Create an LLVM pass manager with the desired optimisation level and options.
+    """
     pmb = llvm.create_pass_manager_builder()
     pmb.opt_level = opt
     pmb.loop_vectorize = loop_vectorize
