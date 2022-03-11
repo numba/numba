@@ -237,26 +237,20 @@ def random_impl(context, builder, sig, args):
     res = get_next_double(context, builder, state_ptr)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@overload(np.random.ranf)
-@overload(np.random.sample)
-@overload(np.random.random)
 @overload(np.random.random_sample)
 def random_sample(size=None):
+    # this overload explicitly handles size=None
     if size in (None, types.none):
         def impl(size=None):
             return np.random.random_sample()
+        return impl
 
-    elif isinstance(size, types.Integer) or (
-        (isinstance(size, (types.UniTuple)) and isinstance(size.dtype, types.Integer))
-        ):
-
-        def impl(size=None):
-            return np.random.random_sample(size=size)
-
-    else:
-        raise NumbaTypeError(
-            "size should be int or tuple of ints or None, got %s" % size
-        )
+@overload(np.random.ranf)
+@overload(np.random.sample)
+@overload(np.random.random)
+def random_sample(size=None):
+    def impl(size=None):
+        return np.random.random_sample(size=size)
     return impl
 
 
