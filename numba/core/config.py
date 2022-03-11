@@ -15,8 +15,11 @@ except ImportError:
 
 import llvmlite.binding as ll
 
+uname = platform.uname()
+
 IS_WIN32 = sys.platform.startswith('win32')
 IS_OSX = sys.platform.startswith('darwin')
+IS_OSX_ARM64 = uname.system == 'Darwin' and uname.machine == 'arm64'
 MACHINE_BITS = tuple.__itemsize__ * 8
 IS_32BITS = MACHINE_BITS == 32
 # Python version in (major, minor) tuple

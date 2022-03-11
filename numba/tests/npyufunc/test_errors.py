@@ -5,7 +5,7 @@ import numpy as np
 
 from numba import vectorize, guvectorize
 
-from numba.tests.support import TestCase, CheckWarningsMixin
+from numba.tests.support import TestCase, CheckWarningsMixin, skip_m1
 import unittest
 
 
@@ -115,6 +115,7 @@ class TestFloatingPointExceptions(TestCase, CheckWarningsMixin):
                                 ["divide by zero encountered",
                                  "invalid value encountered"])
 
+    @skip_m1
     def test_remainder_float(self):
         self.check_divmod_float(remainder,
                                 [0.0, float('nan'), float('nan'), 1.0],

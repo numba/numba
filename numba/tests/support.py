@@ -107,6 +107,8 @@ skip_ppc64le_issue6465 = unittest.skipIf(platform.machine() == 'ppc64le',
                                           "parameter area' in "
                                           "LowerCall_64SVR4"))
 
+skip_m1 = unittest.skipIf(config.IS_OSX_ARM64, "Unreliable on OSX arm64")
+
 try:
     import scipy.linalg.cython_lapack
     has_lapack = True
