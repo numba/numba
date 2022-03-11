@@ -231,14 +231,33 @@ def random_impl(context, builder, sig, args):
     res = get_next_double(context, builder, state_ptr)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@glue_lowering("np.random.random")
 @glue_lowering("np.random.random_sample")
-@glue_lowering("np.random.sample")
-@glue_lowering("np.random.ranf")
 def random_impl(context, builder, sig, args):
     state_ptr = get_state_ptr(context, builder, "np")
     res = get_next_double(context, builder, state_ptr)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
+@overload(np.random.ranf)
+@overload(np.random.sample)
+@overload(np.random.random)
+@overload(np.random.random_sample)
+def random_sample(size=None):
+    if size in (None, types.none):
+        def impl(size=None):
+            return np.random.random_sample()
+
+    elif isinstance(size, types.Integer) or (
+        (isinstance(size, (types.UniTuple)) and isinstance(size.dtype, types.Integer))
+        ):
+
+        def impl(size=None):
+            return np.random.random_sample(size=size)
+
+    else:
+        raise NumbaTypeError(
+            "size should be int or tuple of ints or None, got %s" % size
+        )
+    return impl
 
 
 @glue_lowering("random.gauss", types.Float, types.Float)
