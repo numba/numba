@@ -300,10 +300,10 @@ class TestRandom(BaseTest):
                 self.assertPreciseEqual(randomfunc(None), r.uniform(0.0, 1.0, None))
 
     def test_numpy_random_none(self):
-        self._check_random_sized(numpy_seed, jit_unary("np.random.random_sample"))
-        self._check_random_sized(numpy_seed, jit_unary("np.random.ranf"))
-        self._check_random_sized(numpy_seed, jit_unary("np.random.sample"))
-        self._check_random_sized(numpy_seed, jit_unary("np.random.rand"))
+        self._check_random_none(numpy_seed, jit_unary("np.random.random_sample"))
+        self._check_random_none(numpy_seed, jit_unary("np.random.ranf"))
+        self._check_random_none(numpy_seed, jit_unary("np.random.sample"))
+        self._check_random_none(numpy_seed, jit_unary("np.random.rand"))
 
     def test_independent_generators(self):
         # PRNGs for Numpy and Python are independent.
