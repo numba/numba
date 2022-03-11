@@ -1,3 +1,4 @@
+import sys
 import copy
 import operator
 
@@ -493,6 +494,28 @@ def _emit_getitem_call(idx, lowerer, reduce_info):
     return elem
 
 
+from numba.core.extending import intrinsic
+
+@intrinsic
+def debug_show_i64(typingctx, data):
+    def impl(context, builder, signature, args):
+        [val] = args
+        context.printf(builder, "debug show %zd\n", val)
+
+    sig = types.void(types.int64)
+    return sig, impl
+
+@intrinsic
+def debug_show_f64(typingctx, data):
+    def impl(context, builder, signature, args):
+        [val] = args
+        context.printf(builder, "debug show %g\n", val)
+
+    sig = types.void(types.float64)
+    return sig, impl
+
+
+
 def _emit_binop_reduce_call(binop, lowerer, thread_count, reduce_info):
     """Emit call to the ``binop`` for the reduction variable.
     """
@@ -509,11 +532,20 @@ def _emit_binop_reduce_call(binop, lowerer, thread_count, reduce_info):
             c *= redarr[i]
         return c
 
+    from math import floor
+    max_i64 = np.iinfo(np.int64).max
+    def reduction_ifloordiv(thread_count, redarr, init):
+        c = 1.0
+        for i in range(thread_count):
+            c *= redarr[i] / max_i64
+        debug_show_f64(c)
+        return floor(init * c)
+
     kernel = {
         operator.iadd: reduction_add,
         operator.isub: reduction_add,
         operator.imul: reduction_mul,
-        operator.ifloordiv: reduction_mul,
+        operator.ifloordiv: reduction_ifloordiv,
         operator.itruediv: reduction_mul,
     }[binop]
 

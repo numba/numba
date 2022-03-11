@@ -3611,9 +3611,10 @@ def get_reduction_init(nodes):
     if acc_expr.fn == operator.iadd or acc_expr.fn == operator.isub:
         return 0, acc_expr.fn
     if (  acc_expr.fn == operator.imul
-       or acc_expr.fn == operator.itruediv
-       or acc_expr.fn == operator.ifloordiv ):
+       or acc_expr.fn == operator.itruediv ):
         return 1, acc_expr.fn
+    if acc_expr.fn == operator.ifloordiv:
+        return np.iinfo(np.int64).max, acc_expr.fn
     return None, None
 
 def supported_reduction(x, func_ir):
