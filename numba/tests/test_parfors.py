@@ -1960,16 +1960,16 @@ class TestParfors(TestParforsBase):
     def test_prange_unknown_call1(self):
         @register_jitable
         def issue7854_proc(u, i, even, size):
-            for j in range((even + i + 1)%2 +1, size-1, 2):
-                u[i, j] = u[i+1,j ] + 1
+            for j in range((even + i + 1) % 2 + 1, size - 1, 2):
+                u[i, j] = u[i + 1, j] + 1
 
         # issue7854
         # Forbid fusion in unanalyzable call inside prange.
         def test_impl(size):
-            u = np.zeros((size,size))
-            for i in numba.prange(1, size-1):
+            u = np.zeros((size, size))
+            for i in numba.prange(1, size - 1):
                 issue7854_proc(u, i, 0, size)
-            for i in numba.prange(1, size-1):
+            for i in numba.prange(1, size - 1):
                 issue7854_proc(u, i, 1, size)
             return u
 
@@ -1980,13 +1980,13 @@ class TestParfors(TestParforsBase):
         # Should forbid fusion due to cross-iteration dependency as
         # detected by loop index calcuation (i+1) as array index.
         def test_impl(size):
-            u = np.zeros((size,size))
-            for i in numba.prange(1, size-1):
-                for j in range((i + 1)%2 +1, size-1, 2):
-                    u[i, j] = u[i+1,j ] + 1
-            for i in numba.prange(1, size-1):
-                for j in range(i%2 +1, size-1, 2):
-                    u[i, j] = u[i+1,j ] + 1
+            u = np.zeros((size, size))
+            for i in numba.prange(1, size - 1):
+                for j in range((i + 1) % 2 + 1, size - 1, 2):
+                    u[i, j] = u[i + 1, j] + 1
+            for i in numba.prange(1, size - 1):
+                for j in range(i % 2 + 1, size - 1, 2):
+                    u[i, j] = u[i + 1, j] + 1
             return u
 
         self.assertEqual(countParfors(test_impl, (types.int64,)), 3)
@@ -1997,11 +1997,11 @@ class TestParfors(TestParforsBase):
         # prevents fusion.
         def test_impl():
             size = 10
-            a = np.zeros((size,size))
-            b = np.zeros((size,size))
+            a = np.zeros((size, size))
+            b = np.zeros((size, size))
             for i in numba.prange(size):
                 for j in range(size):
-                    a[i,j] = b[i,j] + 1
+                    a[i,j] = b[i, j] + 1
             for i in numba.prange(size):
                 for j in range(size):
                     b[j,i] = 3
@@ -2010,6 +2010,39 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countParfors(test_impl, ()), 3)
         self.check(test_impl)
 
+    def test_prange_parfor_index_then_not(self):
+        # Testing if accessing an array first with a parfor index then
+        # without will prevent fusion.
+        def test_impl():
+            size = 10
+            a = np.zeros(size)
+            for i in numba.prange(size):
+                a[i] = i
+            b = 0
+            for i in numba.prange(size):
+                b += a[5]
+            return b
+
+        self.assertEqual(countParfors(test_impl, ()), 2)
+        self.check(test_impl)
+
+    def test_prange_non_parfor_index_then_opposite(self):
+        # Testing if accessing an array first without a parfor index then
+        # with will prevent fusion.
+        def test_impl():
+            size = 10
+            # The following two should fuse.
+            a = np.zeros(size)
+            b = np.zeros(size)
+            # The previous parfor can't fuse with the following one.
+            for i in numba.prange(size):
+                b[i] = a[5]
+            for i in numba.prange(size):
+                a[i] = i
+            return a + b
+
+        self.assertEqual(countParfors(test_impl, ()), 3)
+        self.check(test_impl)
 
 
 @skip_parfors_unsupported
