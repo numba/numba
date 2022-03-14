@@ -4246,7 +4246,9 @@ def has_cross_iter_dep(
 
         # All branches above should cover all the cases and each should
         # return so we should never get here.
-        assert 0
+        raise errors.InternalError("Some code path in the parfor fusion "
+                                   "cross-iteration dependency checker "
+                                   "check_index didn't return a result.")
 
     # Iterate through all the statements in the parfor.
     for b in parfor.loop_body.values():

@@ -2013,36 +2013,38 @@ class TestParfors(TestParforsBase):
     def test_prange_parfor_index_then_not(self):
         # Testing if accessing an array first with a parfor index then
         # without will prevent fusion.
-        def test_impl():
-            size = 10
-            a = np.zeros(size)
+        def test_impl(a, size):
+            b = 0
             for i in numba.prange(size):
                 a[i] = i
-            b = 0
             for i in numba.prange(size):
                 b += a[5]
             return b
 
-        self.assertEqual(countParfors(test_impl, ()), 2)
-        self.check(test_impl)
+        size = 10
+        a = np.zeros(size)
+        cptypes = (numba.float64[:], types.int64))
+        self.assertEqual(countParfors(test_impl, cptypes), 2)
+        self.check(test_impl, a, size)
 
     def test_prange_non_parfor_index_then_opposite(self):
         # Testing if accessing an array first without a parfor index then
         # with will prevent fusion.
-        def test_impl():
-            size = 10
-            # The following two should fuse.
-            a = np.zeros(size)
-            b = np.zeros(size)
-            # The previous parfor can't fuse with the following one.
+        def test_impl(a, b, size):
             for i in numba.prange(size):
                 b[i] = a[5]
             for i in numba.prange(size):
                 a[i] = i
-            return a + b
+            # Need this to stop previous prange from being optimized away.
+            b[0] += a[0]
+            return b
 
-        self.assertEqual(countParfors(test_impl, ()), 3)
-        self.check(test_impl)
+        size = 10
+        a = np.zeros(size)
+        b = np.zeros(size)
+        cptypes = (numba.float64[:], numba.float64[:], types.int64))
+        self.assertEqual(countParfors(test_impl, cptypes), 2)
+        self.check(test_impl, a, b, size)
 
 
 @skip_parfors_unsupported
