@@ -2023,7 +2023,7 @@ class TestParfors(TestParforsBase):
 
         size = 10
         a = np.zeros(size)
-        cptypes = (numba.float64[:], types.int64))
+        cptypes = (numba.float64[:], types.int64)
         self.assertEqual(countParfors(test_impl, cptypes), 2)
         self.check(test_impl, a, size)
 
@@ -2042,7 +2042,7 @@ class TestParfors(TestParforsBase):
         size = 10
         a = np.zeros(size)
         b = np.zeros(size)
-        cptypes = (numba.float64[:], numba.float64[:], types.int64))
+        cptypes = (numba.float64[:], numba.float64[:], types.int64)
         self.assertEqual(countParfors(test_impl, cptypes), 2)
         self.check(test_impl, a, b, size)
 
