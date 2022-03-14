@@ -303,7 +303,6 @@ class TestRandom(BaseTest):
         self._check_random_none(numpy_seed, jit_unary("np.random.random_sample"))
         self._check_random_none(numpy_seed, jit_unary("np.random.ranf"))
         self._check_random_none(numpy_seed, jit_unary("np.random.sample"))
-        self._check_random_none(numpy_seed, jit_unary("np.random.random"))
 
     def test_independent_generators(self):
         # PRNGs for Numpy and Python are independent.
