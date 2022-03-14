@@ -106,21 +106,6 @@ class Random_random(ConcreteRandomTemplate):
             return self.array_typer(size)()
         return typer
 
-if numpy_version >= (1, 17):
-    glue_typing(
-        np.random.random_sample,
-        typing_key="np.random.random_sample",
-    )(Random_random)
-    glue_typing(
-        np.random.sample,
-        typing_key="np.random.sample",
-    )(Random_random)
-    glue_typing(
-        np.random.ranf,
-        typing_key="np.random.ranf",
-    )(Random_random)
-
-
 @glue_typing(random.randint, typing_key="random.randint")
 class Random_randint(ConcreteTemplate):
     cases = [signature(tp, tp, tp) for tp in _int_types]

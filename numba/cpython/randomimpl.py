@@ -231,26 +231,26 @@ def random_impl(context, builder, sig, args):
     res = get_next_double(context, builder, state_ptr)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@glue_lowering("np.random.random_sample")
+@glue_lowering("np.random.random")
 def random_impl(context, builder, sig, args):
     state_ptr = get_state_ptr(context, builder, "np")
     res = get_next_double(context, builder, state_ptr)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@overload(np.random.random_sample)
+@overload(np.random.random)
 def random_sample(size=None):
     # this overload explicitly handles size=None
     if size in (None, types.none):
         def impl(size=None):
-            return np.random.random_sample()
+            return np.random.random()
         return impl
 
 @overload(np.random.ranf)
 @overload(np.random.sample)
-@overload(np.random.random)
+@overload(np.random.random_sample)
 def random_sample(size=None):
     def impl(size=None):
-        return np.random.random_sample(size=size)
+        return np.random.random(size=size)
     return impl
 
 
@@ -1287,7 +1287,7 @@ for typing_key, arity in [
     ("np.random.pareto", 2),
     ("np.random.poisson", 2),
     ("np.random.power", 2),
-    ("np.random.random_sample", 1),
+    ("np.random.random", 1),
     ("np.random.randint", 3),
     ("np.random.rayleigh", 2),
     ("np.random.standard_cauchy", 1),
