@@ -245,12 +245,17 @@ def random_sample(size=None):
             return np.random.random()
         return impl
 
+
 @overload(np.random.ranf)
 @overload(np.random.sample)
 @overload(np.random.random_sample)
 def random_sample(size=None):
-    def impl(size=None):
-        return np.random.random(size=size)
+    if size in (None, types.none):
+        def impl(size=None):
+            return np.random.random()
+    else:
+        def impl(size=None):
+            return np.random.random(size=size)
     return impl
 
 
