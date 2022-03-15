@@ -2005,7 +2005,7 @@ class TestParfors(TestParforsBase):
                     a[i,j] = b[i, j] + 1
             for i in numba.prange(size):
                 for j in range(size):
-                    b[j,i] = 3
+                    b[j, i] = 3
             return a[0,0] + b[0,0]
 
         size = 10
