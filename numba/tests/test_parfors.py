@@ -1965,22 +1965,23 @@ class TestParfors(TestParforsBase):
 
         # issue7854
         # Forbid fusion in unanalyzable call inside prange.
-        def test_impl(size):
-            u = np.zeros((size, size))
+        def test_impl(u, size):
             for i in numba.prange(1, size - 1):
                 issue7854_proc(u, i, 0, size)
             for i in numba.prange(1, size - 1):
                 issue7854_proc(u, i, 1, size)
             return u
 
-        self.assertEqual(countParfors(test_impl, (types.int64,)), 3)
-        self.check(test_impl, 4)
+        size = 4
+        u = np.zeros((size, size))
+        cptypes = (numba.float64[:,:], types.int64)
+        self.assertEqual(countParfors(test_impl, cptypes), 2)
+        self.check(test_impl, u, size)
 
     def test_prange_index_calc1(self):
         # Should forbid fusion due to cross-iteration dependency as
         # detected by loop index calcuation (i+1) as array index.
-        def test_impl(size):
-            u = np.zeros((size, size))
+        def test_impl(u, size):
             for i in numba.prange(1, size - 1):
                 for j in range((i + 1) % 2 + 1, size - 1, 2):
                     u[i, j] = u[i + 1, j] + 1
@@ -1989,26 +1990,30 @@ class TestParfors(TestParforsBase):
                     u[i, j] = u[i + 1, j] + 1
             return u
 
-        self.assertEqual(countParfors(test_impl, (types.int64,)), 3)
-        self.check(test_impl, 4)
+        size = 4
+        u = np.zeros((size, size))
+        cptypes = (numba.float64[:,:], types.int64)
+        self.assertEqual(countParfors(test_impl, cptypes), 2)
+        self.check(test_impl, u, size)
 
     def test_prange_reverse_order1(self):
         # Testing if reversed loop index usage as array index
         # prevents fusion.
-        def test_impl():
-            size = 10
-            a = np.zeros((size, size))
-            b = np.zeros((size, size))
+        def test_impl(a, b, size):
             for i in numba.prange(size):
                 for j in range(size):
                     a[i,j] = b[i, j] + 1
             for i in numba.prange(size):
                 for j in range(size):
                     b[j,i] = 3
-            return a
+            return a + b[0,0]
 
-        self.assertEqual(countParfors(test_impl, ()), 3)
-        self.check(test_impl)
+        size = 10
+        a = np.zeros((size, size))
+        b = np.zeros((size, size))
+        cptypes = (numba.float64[:,:], numba.float64[:,:], types.int64)
+        self.assertEqual(countParfors(test_impl, cptypes), 2)
+        self.check(test_impl, a, b, size)
 
     def test_prange_parfor_index_then_not(self):
         # Testing if accessing an array first with a parfor index then
