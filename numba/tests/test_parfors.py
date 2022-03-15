@@ -2006,7 +2006,7 @@ class TestParfors(TestParforsBase):
             for i in numba.prange(size):
                 for j in range(size):
                     b[j,i] = 3
-            return a + b[0,0]
+            return a[0,0] + b[0,0]
 
         size = 10
         a = np.zeros((size, size))
