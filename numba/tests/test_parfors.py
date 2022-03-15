@@ -2002,7 +2002,7 @@ class TestParfors(TestParforsBase):
         def test_impl(a, b, size):
             for i in numba.prange(size):
                 for j in range(size):
-                    a[i,j] = b[i, j] + 1
+                    a[i, j] = b[i, j] + 1
             for i in numba.prange(size):
                 for j in range(size):
                     b[j, i] = 3
