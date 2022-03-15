@@ -323,7 +323,6 @@ def _lower_parfor_parallel(lowerer, parfor):
         parfor.races,
         exp_name_to_tuple_var)
 
-
     _parfor_lowering_finalize_reduction(
         parfor, redarrs, lowerer, parfor_reddict,
     )
