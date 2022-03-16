@@ -1,3 +1,4 @@
+from collections import namedtuple
 import math
 from functools import reduce
 
@@ -800,7 +801,7 @@ def ol__getattr_raise_attr_exc(obj, name):
 
 
 @intrinsic
-def resolve_getattr(tyctx, obj, name):
+def resolve_getattr(tyctx, obj, name, default):
     if not isinstance(name, types.StringLiteral):
         raise RequireLiteralValue("argument 'name' must be a literal string")
     lname = name.literal_value
@@ -813,17 +814,28 @@ def resolve_getattr(tyctx, obj, name):
                f"'{lname}' of {obj}.")
         raise TypingError(msg)
 
-    if fn is None:  # No attribute, wire in raising an AttributeError
-        fnty = tyctx.resolve_value_type(_getattr_raise_attr_exc)
-        raise_sig = fnty.get_call_type(tyctx, (obj, name), {})
-        sig = types.none(obj, name)
+    if fn is None:  # No attribute
 
-        def impl(cgctx, builder, sig, llargs):
-            native_impl = cgctx.get_function(fnty, raise_sig)
-            return native_impl(builder, llargs)
+        # if default is not _getattr_default then return the default
+        if not (isinstance(default, types.NamedTuple) and
+                default.instance_class == _getattr_default_type):
+            # it's not the marker default value, so return it
+            sig = default(obj, name, default)
+            def impl(cgctx, builder, sig, llargs):
+                tmp = llargs[-1]
+                cgctx.nrt.incref(builder, default, tmp)
+                return tmp
+        else:
+            # else wire in raising an AttributeError
+            fnty = tyctx.resolve_value_type(_getattr_raise_attr_exc)
+            raise_sig = fnty.get_call_type(tyctx, (obj, name), {})
+            sig = types.none(obj, name, default)
+            def impl(cgctx, builder, sig, llargs):
+                native_impl = cgctx.get_function(fnty, raise_sig)
+                return native_impl(builder, llargs[:-1])
 
     else:  # Attribute present, wire in handing it back to the overload(getattr)
-        sig = fn(obj, name)
+        sig = fn(obj, name, default)
         if isinstance(fn, types.BoundFunction):
             # It's a method on an object
             def impl(cgctx, builder, sig, ll_args):
@@ -845,12 +857,18 @@ def resolve_getattr(tyctx, obj, name):
     return sig, impl
 
 
+# These are marker objects to indicate "no default has been provided" in a call
+_getattr_default_type = namedtuple('_getattr_default_type', '')
+_getattr_default = _getattr_default_type()
+
+
 # getattr with no default arg, obj is an open type and name is forced as a
-# literal string.
+# literal string. The _getattr_default marker is used to indicate "no default
+# was provided".
 @overload(getattr)
 def ol_getattr(obj, name):
     def impl(obj, name):
-        return resolve_getattr(obj, name)
+        return resolve_getattr(obj, name, _getattr_default)
     return impl
 
 
@@ -861,9 +879,6 @@ def ol_getattr(obj, name):
 @overload(getattr)
 def ol_getattr(obj, name, default):
     def impl(obj, name, default):
-        try:
-            return resolve_getattr(obj, name)
-        except Exception:
-            return default
+        return resolve_getattr(obj, name, default)
     return impl
 

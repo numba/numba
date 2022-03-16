@@ -1478,6 +1478,19 @@ class TestGetattrBuiltin(MemoryLeakMixin, TestCase):
         msg = "argument 'name' must be a literal string"
         self.assertIn(msg, str(raises.exception))
 
+    def test_getattr_no_optional_type_generated(self):
+
+        @njit
+        def default_hash():
+            return 12345
+
+        @njit
+        def foo():
+            hash_func = getattr(np.ones(1), "__not_a_valid_attr__",
+                                default_hash)
+            return hash_func() # Optionals have no call support
+
+        self.assertPreciseEqual(foo(), foo.py_func())
 
 
 if __name__ == '__main__':
