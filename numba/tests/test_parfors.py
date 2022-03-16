@@ -64,8 +64,9 @@ class TestParforsRunner(TestCase):
 
     _numba_parallel_test_ = False
 
-    # Each test class can run for 30 minutes before time out.
-    _TIMEOUT = 1800
+    # Each test class can run for 30 minutes before time out. Extend this to an
+    # hour on aarch64 (some public CI systems were timing out).
+    _TIMEOUT = 1800 if platform.machine() != 'aarch64' else 3600
 
     """This is the test runner for all the parfors tests, it runs them in
     subprocesses as described above. The convention for the test method naming
@@ -2587,16 +2588,16 @@ class TestParforsMisc(TestParforsBase):
     def test_oversized_tuple_as_arg_to_kernel(self):
 
         @njit(parallel=True)
-        def oversize_tuple():
+        def oversize_tuple(idx):
             big_tup = (1,2,3,4)
             z = 0
             for x in prange(10):
-                z += big_tup[0]
+                z += big_tup[idx]
             return z
 
         with override_env_config('NUMBA_PARFOR_MAX_TUPLE_SIZE', '3'):
             with self.assertRaises(errors.UnsupportedParforsError) as raises:
-                oversize_tuple()
+                oversize_tuple(0)
 
         errstr = str(raises.exception)
         self.assertIn("Use of a tuple", errstr)
@@ -3526,7 +3527,7 @@ class TestPrangeBasic(TestPrangeBase):
                            scheduler_type='unsigned',
                            check_fastmath=True)
 
-    def test_prange_28(self):
+    def test_prange28(self):
         # issue7105: label conflict in nested parfor
         def test_impl(x, y):
             out = np.zeros(len(y))
@@ -3555,6 +3556,21 @@ class TestPrangeBasic(TestPrangeBase):
 
         self.prange_tester(test_impl, X, Y, scheduler_type='unsigned',
                            check_fastmath=True, check_fastmath_result=True)
+
+    def test_prange29(self):
+        # issue7630: SSA renaming in prange header
+        def test_impl(flag):
+            result = 0
+            if flag:
+                for i in range(1):
+                    result += 1
+            else:
+                for i in range(1):
+                    result -= 3
+            return result
+
+        self.prange_tester(test_impl, True)
+        self.prange_tester(test_impl, False)
 
 
 @skip_parfors_unsupported

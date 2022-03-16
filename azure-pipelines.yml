@@ -3,14 +3,14 @@ trigger:
 
 variables:
   # Change the following along with adding new TEST_START_INDEX.
-  TEST_COUNT: 19
+  TEST_COUNT: 20
 
 jobs:
 # Mac and Linux use the same template with different matrixes
 - template: buildscripts/azure/azure-linux-macos.yml
   parameters:
     name: macOS
-    vmImage: macOS-10.14
+    vmImage: macOS-10.15
     matrix:
       py37_np118:
         PYTHON: '3.7'
@@ -21,6 +21,7 @@ jobs:
         PYTHON: '3.9'
         NUMPY: '1.21'
         CONDA_ENV: 'azure_ci'
+        TEST_THREADING: 'tbb'
         TEST_START_INDEX: 1
 
 - template: buildscripts/azure/azure-linux-macos.yml
@@ -116,8 +117,13 @@ jobs:
         NUMPY: '1.21'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 16
+      py310_np121:
+        PYTHON: '3.10'
+        NUMPY: '1.21'
+        CONDA_ENV: azure_ci
+        TEST_START_INDEX: 17
 
 - template: buildscripts/azure/azure-windows.yml
   parameters:
     name: Windows
-    vmImage: vs2017-win2016
+    vmImage: windows-2019

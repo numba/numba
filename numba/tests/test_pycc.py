@@ -210,7 +210,7 @@ class TestCC(BasePYCCTest):
         self.assertTrue(os.path.basename(f).startswith('pycc_test_simple.'), f)
         if sys.platform.startswith('linux'):
             self.assertTrue(f.endswith('.so'), f)
-            self.assertIn('.cpython', f)
+            self.assertIn(find_pyext_ending(), f)
 
     def test_compile(self):
         with self.check_cc_compiled(self._test_module.cc) as lib:

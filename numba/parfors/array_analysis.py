@@ -27,7 +27,6 @@ from numba.core.analysis import compute_cfg_from_blocks
 from numba.core.typing import npydecl, signature
 import copy
 from numba.core.extending import intrinsic, register_jitable
-import llvmlite.llvmpy.core as lc
 import llvmlite
 from numba.np.unsafe.ndarray import to_fixed_tuple
 
@@ -189,7 +188,7 @@ def assert_equiv(typingctx, *val):
             bshapes = unpack_shapes(b, bty)
             assert len(ashapes) == len(bshapes)
             for (m, n) in zip(ashapes, bshapes):
-                m_eq_n = builder.icmp(lc.ICMP_EQ, m, n)
+                m_eq_n = builder.icmp_unsigned('==', m, n)
                 with builder.if_else(m_eq_n) as (then, orelse):
                     with then:
                         pass

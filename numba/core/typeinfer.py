@@ -1155,7 +1155,7 @@ precise type that can be inferred from the other variables. Whilst sometimes
 the type of empty lists can be inferred, this is not always the case, see this
 documentation for help:
 
-https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-untyped-list-problem
+https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-untyped-list-problem
 """
             if offender is not None:
                 # This block deals with imprecise lists
@@ -1532,13 +1532,13 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
                 sig = self.context.resolve_function_type(fnty.dispatcher_type,
                                                          pos_args, kw_args)
                 fndesc = disp.overloads[args].fndesc
-                fnty.overloads[args] = qualifying_prefix(fndesc.modname,
-                                                         fndesc.unique_name)
+                qual = qualifying_prefix(fndesc.modname, fndesc.qualname)
+                fnty.add_overloads(args, qual, fndesc.uid)
                 return sig
 
             fnid = frame.func_id
-            fnty.overloads[args] = qualifying_prefix(fnid.modname,
-                                                     fnid.unique_name)
+            qual = qualifying_prefix(fnid.modname, fnid.func_qualname)
+            fnty.add_overloads(args, qual, fnid.unique_id)
             # Resume propagation in parent frame
             return_type = frame.typeinfer.return_types_from_partial()
             # No known return type
@@ -1618,12 +1618,15 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
             # typed as readonly, mutating an array in a global container
             # is not supported (should be compile time constant etc).
             def mark_array_ro(tup):
+                newtup = []
                 for item in tup.types:
                     if isinstance(item, types.Array):
-                        item.mutable = False
+                        item = item.copy(readonly=True)
                     elif isinstance(item, types.BaseAnonymousTuple):
-                        mark_array_ro(item)
-            mark_array_ro(typ)
+                        item = mark_array_ro(item)
+                    newtup.append(item)
+                return types.BaseTuple.from_types(newtup)
+            typ = mark_array_ro(typ)
 
         self.sentry_modified_builtin(inst, gvar)
         # Setting literal_value for globals because they are handled

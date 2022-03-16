@@ -537,7 +537,7 @@ def for_range_slice(builder, start, stop, step, intp=None, inc=True):
     Parameters
     -------------
     builder : object
-        Builder object
+        IRBuilder object
     start : int
         The beginning value of the slice
     stop : int
@@ -1183,3 +1183,12 @@ def is_nonelike(ty):
         isinstance(ty, types.NoneType) or
         isinstance(ty, types.Omitted)
     )
+
+
+def create_constant_array(ty, val):
+    """
+    Create an LLVM-constant of a fixed-length array from Python values.
+
+    The type provided is the type of the elements.
+    """
+    return ir.Constant(ir.ArrayType(ty, len(val)), val)

@@ -20,11 +20,11 @@ except ImportError:
 
 
 min_python_version = "3.7"
-max_python_version = "3.10"  # exclusive
+max_python_version = "3.11"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.18"
-min_llvmlite_version = "0.38.0dev0"
-max_llvmlite_version = "0.39"
+min_llvmlite_version = "0.39.0dev0"
+max_llvmlite_version = "0.40"
 
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
@@ -361,6 +361,7 @@ install_requires = [
     'llvmlite >={},<{}'.format(min_llvmlite_version, max_llvmlite_version),
     'numpy >={}'.format(min_numpy_run_version),
     'setuptools',
+    'importlib_metadata; python_version < "3.9"',
 ]
 
 metadata = dict(
@@ -377,6 +378,7 @@ metadata = dict(
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
         "Topic :: Software Development :: Compilers",
     ],
     package_data={

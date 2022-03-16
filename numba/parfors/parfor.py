@@ -23,6 +23,7 @@ from functools import reduce
 from collections import defaultdict, OrderedDict, namedtuple
 from contextlib import contextmanager
 import operator
+from dataclasses import make_dataclass
 
 import numba.core.ir
 from numba.core import types, typing, utils, errors, ir, analysis, postproc, rewrites, typeinfer, config, ir_utils
@@ -2570,7 +2571,13 @@ class ConvertLoopPass:
                                     ("prange", loop_kind, loop_replacing),
                                     pass_states.flags, races=races)
 
-                    blocks[loop.header].body = [parfor, ir.Jump(list(loop.exits)[0], loc)]
+                    blocks[loop.header].body = [parfor]
+                    # We have to insert the header_body after the parfor because in
+                    # a Numba loop this will be executed one more times before the
+                    # branch and may contain instructions such as variable renamings
+                    # that are relied upon later.
+                    blocks[loop.header].body.extend(header_body)
+                    blocks[loop.header].body.append(ir.Jump(list(loop.exits)[0], loc))
                     self.rewritten.append(dict(
                         old_loop=loop,
                         new=parfor,
@@ -3484,6 +3491,14 @@ def get_parfor_outputs(parfor, parfor_params):
     outputs = list(set(outputs) & set(parfor_params))
     return sorted(outputs)
 
+
+_RedVarInfo = make_dataclass(
+    "_RedVarInfo",
+    ["init_val", "reduce_nodes", "redop"],
+    frozen=True,
+)
+
+
 def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=None,
         reduce_varnames=None, param_uses=None, param_nodes=None,
         var_to_param=None):
@@ -3558,7 +3573,11 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
                 else:
                     init_val = None
                     redop = None
-                reductions[param_name] = (init_val, reduce_nodes, redop)
+                reductions[param_name] = _RedVarInfo(
+                    init_val=init_val,
+                    reduce_nodes=reduce_nodes,
+                    redop=redop,
+                )
 
     return reduce_varnames, reductions
 

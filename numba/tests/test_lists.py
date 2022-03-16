@@ -312,6 +312,10 @@ def list_mul(n, v):
     a = list(range(n))
     return a * v
 
+def list_mul2(n, v):
+    a = list(range(n))
+    return v * a
+
 def list_mul_inplace(n, v):
     a = list(range(n))
     a *= v
@@ -656,6 +660,9 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_mul(self):
         self.check_mul(list_mul)
 
+    def test_mul2(self):
+        self.check_mul(list_mul2)
+
     def test_mul_inplace(self):
         self.check_mul(list_mul_inplace)
 
@@ -917,6 +924,15 @@ class TestListManagedElements(ManagedListTestCase):
     def test_reflect_popped(self):
         def pyfunc(con):
             con.pop()
+
+        self._check_element_equal(pyfunc)
+
+    def test_reflect_insert(self):
+        """make sure list.insert() doesn't crash for refcounted objects (see #7553)
+        """
+
+        def pyfunc(con):
+            con.insert(1, np.arange(4).astype(np.intp))
 
         self._check_element_equal(pyfunc)
 
@@ -1766,7 +1782,7 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
                 l = ['a', 1, 2j]
             else:
                 l = ['b', 2]
-            return l[0]
+            return l[0], l[1], l[0], l[1] # defeat py310 inliner
 
         with self.assertRaises(errors.TypingError) as raises:
             foo(100)

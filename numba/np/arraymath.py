@@ -9,9 +9,8 @@ from enum import IntEnum
 from functools import partial
 import operator
 
+import llvmlite.ir
 import numpy as np
-
-import llvmlite.llvmpy.core as lc
 
 from numba import generated_jit
 from numba.core import types, cgutils
@@ -795,7 +794,7 @@ def build_argmax_or_argmin_with_axis_impl(arr, axis, flatten_impl):
     array, return the implementation function.
     """
     check_is_integer(axis, "axis")
-    retty = arr.dtype
+    retty = types.intp
 
     tuple_buffer = tuple(range(arr.ndim))
 
@@ -3159,7 +3158,7 @@ def _np_round_intrinsic(tp):
 def _np_round_float(context, builder, tp, val):
     llty = context.get_value_type(tp)
     module = builder.module
-    fnty = lc.Type.function(llty, [llty])
+    fnty = llvmlite.ir.FunctionType(llty, [llty])
     fn = cgutils.get_or_insert_function(module, fnty, _np_round_intrinsic(tp))
     return builder.call(fn, (val,))
 

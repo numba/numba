@@ -148,6 +148,10 @@ class FakeCUDAKernel(object):
     def overloads(self):
         return FakeOverloadDict()
 
+    @property
+    def py_func(self):
+        return self.fn
+
 
 # Thread emulation
 

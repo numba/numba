@@ -157,8 +157,9 @@ and requirements are as follows:
 |                      | Windows   | MS OpenMP libraries (very likely this will|
 |                      |           | already exist)                            |
 |                      |           |                                           |
-|                      | OSX       | The ``intel-openmp`` package (``$ conda   |
-|                      |           | install intel-openmp``)                   |
+|                      | OSX       | Either the ``intel-openmp`` package or the|
+|                      |           | ``llvm-openmp`` package                   |
+|                      |           | (``conda install`` the package as named). |
 +----------------------+-----------+-------------------------------------------+
 | ``workqueue``        | All       | None                                      |
 +----------------------+-----------+-------------------------------------------+

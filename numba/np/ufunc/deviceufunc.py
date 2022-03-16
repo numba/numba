@@ -350,6 +350,8 @@ class UFuncMechanism(object):
 
 
 def to_dtype(ty):
+    if isinstance(ty, types.EnumMember):
+        ty = ty.dtype
     return np.dtype(str(ty))
 
 
