@@ -4,7 +4,7 @@ import dis
 import operator
 import logging
 
-from numba.core import errors, dataflow, controlflow, ir, config
+from numba.core import errors, ir, config
 from numba.core.errors import NotDefinedError, error_extras
 from numba.core.utils import (PYVERSION, BINOPS_TO_OPERATORS,
                               INPLACE_BINOPS_TO_OPERATORS,)
@@ -343,23 +343,12 @@ class Interpreter(object):
         global_scope = ir.Scope(parent=None, loc=self.loc)
         self.scopes.append(global_scope)
 
-        if PYVERSION < (3, 7):
-            # Control flow analysis
-            self.cfa = controlflow.ControlFlowAnalysis(bytecode)
-            self.cfa.run()
-            if config.DUMP_CFG:
-                self.cfa.dump()
-
-            # Data flow analysis
-            self.dfa = dataflow.DataFlowAnalysis(self.cfa)
-            self.dfa.run()
-        else:
-            flow = Flow(bytecode)
-            flow.run()
-            self.dfa = AdaptDFA(flow)
-            self.cfa = AdaptCFA(flow)
-            if config.DUMP_CFG:
-                self.cfa.dump()
+        flow = Flow(bytecode)
+        flow.run()
+        self.dfa = AdaptDFA(flow)
+        self.cfa = AdaptCFA(flow)
+        if config.DUMP_CFG:
+            self.cfa.dump()
 
         # Temp states during interpretation
         self.current_block = None
