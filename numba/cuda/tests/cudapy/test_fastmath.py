@@ -170,6 +170,35 @@ class TestFastMathOption(CUDATestCase):
         except ZeroDivisionError:
             self.fail("Divide in fastmath should not throw ZeroDivisionError")
 
+    @unittest.expectedFailure
+    def test_device_fastmath_propagation(self):
+        # The fastmath option doesn't presently propagate to device functions
+        # from their callees - arguably it should do, so this test is presently
+        # an xfail.
+        @cuda.jit("float32(float32, float32)", device=True)
+        def foo(a, b):
+            return a / b
+
+        def bar(arr, val):
+            i = cuda.grid(1)
+            if i < arr.size:
+                arr[i] = foo(i, val)
+
+        sig = (float32[::1], float32)
+        fastver = cuda.jit(sig, fastmath=True)(bar)
+        precver = cuda.jit(sig)(bar)
+
+        # Variants of the div instruction are further documented at:
+        # https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-div
+
+        # The fast version should use the "fast, approximate divide" variant
+        self.assertIn('div.approx.f32', fastver.ptx[sig])
+        # The precise version should use the "IEEE 754 compliant rounding"
+        # variant, and neither of the "approximate divide" variants.
+        self.assertIn('div.rn.f32', precver.ptx[sig])
+        self.assertNotIn('div.approx.f32', precver.ptx[sig])
+        self.assertNotIn('div.full.f32', precver.ptx[sig])
+
 
 if __name__ == '__main__':
     unittest.main()
