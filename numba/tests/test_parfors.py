@@ -1997,6 +1997,9 @@ class TestParfors(TestParforsBase):
         arg = (types.Array(types.int64, 1, 'C'), )
         self.assertEqual(countParfors(test_impl, arg), 1)
 
+        arr = np.arange(10, dtype=np.int64)
+        self.check(test_impl, arr)
+
 
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
