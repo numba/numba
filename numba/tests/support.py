@@ -1010,7 +1010,7 @@ def run_in_subprocess(code, flags=None, env=None, timeout=30):
 
 
 def strace(work, syscalls, timeout=10):
-    """ Runs strace whilst executing the function work() in the current process,
+    """Runs strace whilst executing the function work() in the current process,
     captures the listed syscalls (list of strings). Takes an optional timeout in
     seconds, default is 10, if this is exceeded the process will be sent a
     SIGKILL. Returns a list of lines that are output by strace.
@@ -1064,12 +1064,6 @@ def strace(work, syscalls, timeout=10):
             check_return()
             # collect the data
             strace_data = ntf.readlines()
-            # stop the process
-            popen.terminate()
-            if popen.poll() is None:
-                # Something has gone wrong, force stop the process
-                popen.kill()
-                raise RuntimeError("strace did not terminate.")
         finally:
             # join communication, should be stopped now as process has
             # exited
@@ -1085,14 +1079,12 @@ def _strace_supported():
     def force_clone(): # subprocess triggers a clone
         subprocess.run([sys.executable, '-c', 'exit()'])
 
+    syscall = 'clone'
     try:
-        syscall = 'clone'
         trace = strace(force_clone, [syscall,])
-        assert syscall in ''.join(trace)
     except Exception:
         return False
-    else:
-        return True
+    return syscall in ''.join(trace)
 
 
 _HAVE_STRACE = _strace_supported()
