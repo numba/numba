@@ -220,7 +220,7 @@ def _lookup_module_and_qualname(obj, name=None):
         # types.ModuleType. The other possibility is that module was removed
         # from sys.modules after obj was created/imported. But this case is not
         # supported, as the standard pickle does not support it either.
-        del obj.__module__
+        obj.__module__ = None
         return None
 
     try:
