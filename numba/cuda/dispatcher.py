@@ -158,7 +158,7 @@ class _Kernel(serialize.ReduceMixin):
         warnings.warn(
             "Attribute `ptx` is deprecated and will be removed in the future. "
             "To retrieve the compiled machine code of the CUDA function for a "
-            "given cuda compute compatibility `cc`, use the `inspect_asm(cc)` "
+            "given CUDA compute compatibility `cc`, use the `inspect_asm(cc)` "
             "method."
             , NumbaDeprecationWarning
         )
