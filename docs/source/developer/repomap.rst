@@ -120,8 +120,6 @@ Compiler Pipeline
   Numba IR
 - :ghfile:`numba/core/analysis.py` - Utility functions to analyze Numba IR
   (variable lifetime, prune branches, etc)
-- :ghfile:`numba/core/dataflow.py` - Dataflow analysis for Python bytecode (used
-  in analysis.py)
 - :ghfile:`numba/core/controlflow.py` - Control flow analysis of Numba IR and
   Python bytecode
 - :ghfile:`numba/core/typeinfer.py` - Type inference algorithm
