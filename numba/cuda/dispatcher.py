@@ -819,7 +819,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
     def ptx(self):
         warnings.warn(
             "Attribute `ptx` is deprecated and will be removed in the future. "
-            "To retrieve the compiled machine code of the CUDA function for a"
+            "To retrieve the compiled machine code of the CUDA function for a "
             "given signature `sig`, use the method `inspect_asm(sig)`."
             , NumbaDeprecationWarning
         )
