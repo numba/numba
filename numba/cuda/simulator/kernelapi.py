@@ -218,7 +218,7 @@ class FakeCUDAAtomic(object):
                 array[index] = val
             return loaded
 
-    def cas_element(self, array, idx, old, val):
+    def cas(self, array, idx, old, val):
         with caseltlock:
             index = (idx,) * array.ndim
             loaded = array[index]

@@ -456,10 +456,10 @@ def atomic_compare_and_swap(res, old, ary, fill_val):
         old[gid] = out
 
 
-def atomic_cas_element(res, old, ary, fill_val):
+def atomic_cas(res, old, ary, fill_val):
     gid = cuda.grid(1)
     if gid < res.size:
-        out = cuda.atomic.cas_element(res, gid, fill_val, ary[gid])
+        out = cuda.atomic.cas(res, gid, fill_val, ary[gid])
         old[gid] = out
 
 
@@ -1308,25 +1308,25 @@ class TestCudaAtomics(CUDATestCase):
         check_cas(n=100, fill=rfill, unfill=runfill, dtype=np.uint64,
                   cas_func=atomic_compare_and_swap)
 
-    def test_atomic_cas_element(self):
+    def test_atomic_cas(self):
         check_cas(n=100, fill=-99, unfill=-1, dtype=np.int32,
-                  cas_func=atomic_cas_element)
+                  cas_func=atomic_cas)
 
-    def test_atomic_cas_element2(self):
+    def test_atomic_cas2(self):
         check_cas(n=100, fill=-45, unfill=-1, dtype=np.int64,
-                  cas_func=atomic_cas_element)
+                  cas_func=atomic_cas)
 
-    def test_atomic_cas_element3(self):
+    def test_atomic_cas3(self):
         rfill = np.random.randint(50, 500, dtype=np.uint32)
         runfill = np.random.randint(1, 25, dtype=np.uint32)
         check_cas(n=100, fill=rfill, unfill=runfill, dtype=np.uint32,
-                  cas_func=atomic_cas_element)
+                  cas_func=atomic_cas)
 
-    def test_atomic_cas_element4(self):
+    def test_atomic_cas4(self):
         rfill = np.random.randint(50, 500, dtype=np.uint64)
         runfill = np.random.randint(1, 25, dtype=np.uint64)
         check_cas(n=100, fill=rfill, unfill=runfill, dtype=np.uint64,
-                  cas_func=atomic_cas_element)
+                  cas_func=atomic_cas)
 
     # Tests that the atomic add, min, and max operations return the old value -
     # in the simulator, they did not (see Issue #5458). The max and min have
