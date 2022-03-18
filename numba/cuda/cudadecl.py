@@ -429,6 +429,8 @@ class Cuda_atomic_cas_element(AbstractTemplate):
 
         if dty in integer_numba_types and ary.ndim == 1:
             return signature(dty, ary, types.intp, dty, dty)
+        elif ary.ndim > 1:
+            return signature(dty, ary, idx, dty, dty)
 
 
 @register

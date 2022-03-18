@@ -963,6 +963,8 @@ def ptx_atomic_cas_tuple(context, builder, sig, args):
 
 
 @lower(stubs.atomic.cas_element, types.Array, types.intp, types.Any, types.Any)
+@lower(stubs.atomic.cas_element, types.Array, types.Tuple, types.Any, types.Any)
+@lower(stubs.atomic.cas_element, types.Array, types.UniTuple, types.Any, types.Any)  # noqa E501
 def ptx_atomic_cas_element_tuple(context, builder, sig, args):
 
     aryty, indty, oldty, valty = sig.args
