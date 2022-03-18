@@ -3623,7 +3623,14 @@ def supported_reduction(x, func_ir):
                               "reduction can in some cases be parallelized as "
                               "a multiply reduction followed by a floordiv of "
                               "the resulting product."))
-        supps = [operator.iadd, operator.isub, operator.imul, operator.itruediv]
+        supps = [operator.iadd,
+                 operator.isub,
+                 operator.imul,
+                 operator.itruediv,
+                 operator.add,
+                 operator.sub,
+                 operator.mul,
+                 operator.truediv]
         return x.fn in supps
     if x.op == 'call':
         callname = guard(find_callname, func_ir, x)
