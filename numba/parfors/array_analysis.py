@@ -446,13 +446,20 @@ class ShapeEquivSet(EquivSet):
             else:
                 return (obj.value,)
         elif isinstance(obj, tuple):
-            return tuple(self._get_names(x)[0] for x in obj)
+
+            def get_names(x):
+                names = self._get_names(x)
+                if len(names) != 0:
+                    return names[0]
+                return names
+
+            return tuple(get_names(x) for x in obj)
         elif isinstance(obj, int):
             return (obj,)
-        else:
-            raise NotImplementedError(
-                "ShapeEquivSet does not support {}".format(obj)
-            )
+        if config.DEBUG_ARRAY_OPT >= 1:
+            print(
+                f"Ignoring untracked object type {type(obj)} in ShapeEquivSet")
+        return ()
 
     def is_equiv(self, *objs):
         """Overload EquivSet.is_equiv to handle Numba IR variables and
@@ -480,7 +487,7 @@ class ShapeEquivSet(EquivSet):
         return the scalar value, or None otherwise.
         """
         names = self._get_names(obj)
-        if len(names) > 1:
+        if len(names) != 1:
             return None
         return super(ShapeEquivSet, self).get_equiv_const(names[0])
 
@@ -499,7 +506,7 @@ class ShapeEquivSet(EquivSet):
         """Return the set of equivalent objects.
         """
         names = self._get_names(obj)
-        if len(names) > 1:
+        if len(names) != 1:
             return None
         return super(ShapeEquivSet, self).get_equiv_set(names[0])
 
