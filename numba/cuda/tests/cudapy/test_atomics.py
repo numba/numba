@@ -465,6 +465,7 @@ def atomic_cas_element(res, old, ary, fill_val):
 
 def check_cas(n, fill, unfill, dtype, cas_func):
     res = [fill] * (n // 2) + [unfill] * (n // 2)
+    np.random.seed(1)
     np.random.shuffle(res)
     res = np.asarray(res, dtype=dtype)
     out = np.zeros_like(res)
