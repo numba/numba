@@ -2001,6 +2001,19 @@ class TestParfors(TestParforsBase):
         arr = np.arange(10, dtype=np.int64)
         self.check(test_impl, arr)
 
+    def test_setitem_2d_one_replaced(self):
+        # issue7843
+        def test_impl(x):
+            count = 0
+            for n in range(x.shape[0]):
+                # Useless "if" necessary to trigger bug.
+                if n:
+                    n
+                x[count, :] = 1
+                count += 1
+            return x
+
+        self.check(test_impl, np.zeros((3, 1)))
 
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
