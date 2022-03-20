@@ -609,16 +609,22 @@ def _count_non_parfor_array_accesses_inner(f_ir, blocks, typemap, parfor_indices
                     f_ir, parfor_blocks, typemap, parfor_indices)
 
             # getitem
-            if (is_getitem(stmt) and isinstance(typemap[stmt.value.value.name],
+            elif (is_getitem(stmt) and isinstance(typemap[stmt.value.value.name],
                         types.ArrayCompatible) and not _uses_indices(
                         f_ir, index_var_of_get_setitem(stmt), parfor_indices)):
                 ret_count += 1
 
             # setitem
-            if (is_setitem(stmt) and isinstance(typemap[stmt.target.name],
+            elif (is_setitem(stmt) and isinstance(typemap[stmt.target.name],
                     types.ArrayCompatible) and not _uses_indices(
                     f_ir, index_var_of_get_setitem(stmt), parfor_indices)):
                 ret_count += 1
+
+            # find parfor_index aliases
+            elif (isinstance(stmt, ir.Assign) and
+                  isinstance(stmt.value, ir.Var) and
+                  stmt.value.name in parfor_indices):
+                parfor_indices.add(stmt.target.name)
 
     return ret_count
 
