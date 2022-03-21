@@ -494,6 +494,68 @@ class TestCudaIntrinsic(CUDATestCase):
         else:
             self.assertIn('abs.f16', ptx)
 
+    def test_hsin(self):
+        from numba import cuda
+        import numpy as np
+        import os
+
+        # Declaration of the foreign function
+        sin_fp16 = cuda.declare_device('hsin_wrapper', 'float16(float16)')
+
+        # Path to the source containing the foreign function
+        # (here assumed to be in a subfolder called "ffi"
+        basedir = os.path.dirname(os.path.abspath(__file__))
+        functions_cu = os.path.join(basedir, 'ffi', 'functions.cu')
+
+        # Kernel that links in functions.cu and calls mul
+        @cuda.jit(link=[functions_cu])
+        def hsin_vectors(r, x):
+            i = cuda.grid(1)
+
+            if i < len(r):
+                r[i] = sin_fp16(x[i])
+        
+        # Generate random data
+        N = 32
+        np.random.seed(1)
+        x = np.random.rand(N).astype(np.float16)
+        r = np.zeros_like(x)
+
+        # Run the kernel
+        hsin_vectors[1, 32](r, x)
+        np.testing.assert_allclose(r, np.sin(x, dtype=np.float16))
+    
+    def test_hcos(self):
+        from numba import cuda
+        import numpy as np
+        import os
+
+        # Declaration of the foreign function
+        cos_fp16 = cuda.declare_device('hcos_wrapper', 'float16(float16)')
+
+        # Path to the source containing the foreign function
+        # (here assumed to be in a subfolder called "ffi"
+        basedir = os.path.dirname(os.path.abspath(__file__))
+        functions_cu = os.path.join(basedir, 'ffi', 'functions.cu')
+
+        # Kernel that links in functions.cu and calls mul
+        @cuda.jit(link=[functions_cu])
+        def hcos_vectors(r, x):
+            i = cuda.grid(1)
+
+            if i < len(r):
+                r[i] = cos_fp16(x[i])
+        
+        # Generate random data
+        N = 32
+        np.random.seed(1)
+        x = np.random.rand(N).astype(np.float16)
+        r = np.zeros_like(x)
+
+        # Run the kernel
+        hcos_vectors[1, 32](r, x)
+        np.testing.assert_allclose(r, np.sin(x, dtype=np.float16))
+
     def test_cbrt_f32(self):
         compiled = cuda.jit("void(float32[:], float32)")(simple_cbrt)
         ary = np.zeros(1, dtype=np.float32)
