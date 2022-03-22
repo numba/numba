@@ -3622,7 +3622,7 @@ def supported_reduction(x, func_ir):
                               "If all divisors are integers then a floordiv "
                               "reduction can in some cases be parallelized as "
                               "a multiply reduction followed by a floordiv of "
-                              "the resulting product."))
+                              "the resulting product."), x.loc)
         supps = [operator.iadd,
                  operator.isub,
                  operator.imul,
