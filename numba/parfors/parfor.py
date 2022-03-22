@@ -4268,17 +4268,18 @@ def has_cross_iter_dep(
         for stmt in b.body:
             # Make sure SetItem accesses are fusion safe.
             if isinstance(stmt, (ir.SetItem, ir.StaticSetItem)):
-                # Check index safety with prior array accesses.
-                if check_index(stmt.index,
-                               stmt.target.name,
-                               index_positions,
-                               indexed_arrays,
-                               non_indexed_arrays,
-                               derived_from_indices):
-                    return True, index_positions, indexed_arrays, non_indexed_arrays
+                if isinstance(typemap[stmt.target.name], types.npytypes.Array):
+                    # Check index safety with prior array accesses.
+                    if check_index(stmt.index,
+                                   stmt.target.name,
+                                   index_positions,
+                                   indexed_arrays,
+                                   non_indexed_arrays,
+                                   derived_from_indices):
+                        return True, index_positions, indexed_arrays, non_indexed_arrays
                 # Fusion safe so go to next statement.
                 continue
-            if isinstance(stmt, ir.Assign):
+            elif isinstance(stmt, ir.Assign):
                 # If stmt of form a = parfor_index then add "a" to set of
                 # parfor indices.
                 if isinstance(stmt.value, ir.Var):
@@ -4289,17 +4290,18 @@ def has_cross_iter_dep(
                     op = stmt.value.op
                     # Make sure getitem accesses are fusion safe.
                     if op in ['getitem', 'static_getitem']:
-                        # Check index safety with prior array accesses.
-                        if check_index(stmt.value.index,
-                                       stmt.value.value.name,
-                                       index_positions,
-                                       indexed_arrays,
-                                       non_indexed_arrays,
-                                       derived_from_indices):
-                            return True, index_positions, indexed_arrays, non_indexed_arrays
+                        if isinstance(typemap[stmt.value.value.name], types.npytypes.Array):
+                            # Check index safety with prior array accesses.
+                            if check_index(stmt.value.index,
+                                           stmt.value.value.name,
+                                           index_positions,
+                                           indexed_arrays,
+                                           non_indexed_arrays,
+                                           derived_from_indices):
+                                return True, index_positions, indexed_arrays, non_indexed_arrays
                         # Fusion safe so go to next statement.
                         continue
-                    if op == 'call':
+                    elif op == 'call':
                         # If there is a call in the parfor body that takes some
                         # array parameter then we have no way to analyze what
                         # that call is doing so presume it is unsafe for fusion.
