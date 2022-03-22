@@ -3618,7 +3618,7 @@ def get_reduction_init(nodes):
 def supported_reduction(x, func_ir):
     if x.op == 'inplace_binop' or x.op == 'binop':
         if x.fn == operator.ifloordiv or x.fn == operator.floordiv:
-            raise ValueError(("Parallel floordiv reductions are not supported. "
+            raise errors.NumbaValueError(("Parallel floordiv reductions are not supported. "
                               "If all divisors are integers then a floordiv "
                               "reduction can in some cases be parallelized as "
                               "a multiply reduction followed by a floordiv of "
