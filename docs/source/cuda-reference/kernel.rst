@@ -56,7 +56,7 @@ This is similar to launch configuration in CUDA C/C++:
 Dispatcher objects also provide several utility methods for inspection and
 creating a specialized instance:
 
-.. autoclass:: numba.cuda.dispatcher.Dispatcher
+.. autoclass:: numba.cuda.dispatcher.CUDADispatcher
    :members: inspect_asm, inspect_llvm, inspect_sass, inspect_types,
              get_regs_per_thread, specialize, specialized, extensions, forall
 

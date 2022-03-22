@@ -11,6 +11,8 @@ labels: task
 
 * [ ] Merge to main.
     - [ ] "remaining Pull-Requests from milestone".
+* [ ] Check Numba's version support table documentation. Update via PR if
+      needed.
 * [ ] Review deprecation schedule and notices. Make PRs if need be.
 * [ ] Merge change log changes.
     - [ ] "PR with changelog entries".

@@ -672,6 +672,7 @@ The following functions support all arguments.
 * :func:`numpy.random.logseries`
 * :func:`numpy.random.multinomial`
 * :func:`numpy.random.negative_binomial`
+* :func:`numpy.random.noncentral_chisquare`
 * :func:`numpy.random.normal`
 * :func:`numpy.random.pareto`
 * :func:`numpy.random.poisson`

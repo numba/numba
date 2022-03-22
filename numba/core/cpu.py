@@ -2,7 +2,6 @@ import sys
 import platform
 
 import llvmlite.binding as ll
-import llvmlite.llvmpy.core as lc
 from llvmlite import ir
 
 from numba import _dynfunc
@@ -338,7 +337,7 @@ def remove_null_refct_call(bb):
     pass
     ## Skipped for now
     # for inst in bb.instructions:
-    #     if isinstance(inst, lc.CallOrInvokeInstruction):
+    #     if isinstance(inst, ir.CallInstr):
     #         fname = inst.called_function.name
     #         if fname == "Py_IncRef" or fname == "Py_DecRef":
     #             arg = inst.args[0]
@@ -362,7 +361,7 @@ def remove_refct_pairs(bb):
 
         # Mark
         for inst in bb.instructions:
-            if isinstance(inst, lc.CallOrInvokeInstruction):
+            if isinstance(inst, ir.CallInstr):
                 fname = inst.called_function.name
                 if fname == "Py_IncRef":
                     arg = inst.operands[0]
