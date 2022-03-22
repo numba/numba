@@ -13,14 +13,14 @@ import unittest
 class FastMathCriterion:
     fast_expected: List[str] = field(default_factory=list)
     fast_unexpected: List[str] = field(default_factory=list)
-    slow_expected: List[str] = field(default_factory=list)
-    slow_unexpected: List[str] = field(default_factory=list)
+    prec_expected: List[str] = field(default_factory=list)
+    prec_unexpected: List[str] = field(default_factory=list)
 
-    def check(self, test: CUDATestCase, fast: str, slow: str):
+    def check(self, test: CUDATestCase, fast: str, prec: str):
         test.assertTrue(all(i in fast for i in self.fast_expected))
         test.assertTrue(all(i not in fast for i in self.fast_unexpected))
-        test.assertTrue(all(i in slow for i in self.slow_expected))
-        test.assertTrue(all(i not in slow for i in self.slow_unexpected))
+        test.assertTrue(all(i in prec for i in self.prec_expected))
+        test.assertTrue(all(i not in prec for i in self.prec_unexpected))
 
 
 @skip_on_cudasim('Fastmath and PTX inspection not available on cudasim')
@@ -29,32 +29,32 @@ class TestFastMathOption(CUDATestCase):
 
         # Test jit code path
         fastver = cuda.jit(sig, device=device, fastmath=True)(pyfunc)
-        slowver = cuda.jit(sig, device=device)(pyfunc)
+        precver = cuda.jit(sig, device=device)(pyfunc)
         criterion.check(
-            self, fastver.inspect_asm(sig), slowver.inspect_asm(sig)
+            self, fastver.inspect_asm(sig), precver.inspect_asm(sig)
         )
 
         # Test compile_ptx code path
         fastptx, _ = compile_ptx_for_current_device(
             pyfunc, sig, device=device, fastmath=True
         )
-        slowptx, _ = compile_ptx_for_current_device(
+        precptx, _ = compile_ptx_for_current_device(
             pyfunc, sig, device=device
         )
-        criterion.check(self, fastptx, slowptx)
+        criterion.check(self, fastptx, precptx)
 
     def _test_fast_math_unary(self, op, criterion: FastMathCriterion):
         def kernel(r, x):
             r[0] = op(x)
 
-        def device(x):
+        def device_function(x):
             return op(x)
 
         self._test_fast_math_common(
             kernel, (float32[::1], float32), device=False, criterion=criterion
         )
         self._test_fast_math_common(
-            device, (float32,), device=True, criterion=criterion
+            device_function, (float32,), device=True, criterion=criterion
         )
 
     def _test_fast_math_binary(self, op, criterion: FastMathCriterion):
@@ -77,7 +77,7 @@ class TestFastMathOption(CUDATestCase):
             cos,
             FastMathCriterion(
                 fast_expected=['cos.approx.ftz.f32 '],
-                slow_unexpected=['cos.approx.ftz.f32 ']
+                prec_unexpected=['cos.approx.ftz.f32 ']
             )
         )
 
@@ -86,7 +86,7 @@ class TestFastMathOption(CUDATestCase):
             sin,
             FastMathCriterion(
                 fast_expected=['sin.approx.ftz.f32 '],
-                slow_unexpected=['sin.approx.ftz.f32 ']
+                prec_unexpected=['sin.approx.ftz.f32 ']
             )
         )
 
@@ -97,7 +97,7 @@ class TestFastMathOption(CUDATestCase):
                 'sin.approx.ftz.f32 ',
                 'cos.approx.ftz.f32 ',
                 'div.approx.ftz.f32 '
-            ], slow_unexpected=['sin.approx.ftz.f32 '])
+            ], prec_unexpected=['sin.approx.ftz.f32 '])
         )
 
     def test_expf(self):
@@ -105,7 +105,7 @@ class TestFastMathOption(CUDATestCase):
             exp,
             FastMathCriterion(
                 fast_unexpected=['fma.rn.f32 '],
-                slow_expected=['fma.rn.f32 ']
+                prec_expected=['fma.rn.f32 ']
             )
         )
 
@@ -114,7 +114,7 @@ class TestFastMathOption(CUDATestCase):
         self._test_fast_math_unary(
             log, FastMathCriterion(
                 fast_expected=['lg2.approx.ftz.f32 ', '0f3F317218'],
-                slow_unexpected=['lg2.approx.ftz.f32 '],
+                prec_unexpected=['lg2.approx.ftz.f32 '],
             )
         )
 
@@ -123,7 +123,7 @@ class TestFastMathOption(CUDATestCase):
         self._test_fast_math_unary(
             log10, FastMathCriterion(
                 fast_expected=['lg2.approx.ftz.f32 ', '0f3E9A209B'],
-                slow_unexpected=['lg2.approx.ftz.f32 ']
+                prec_unexpected=['lg2.approx.ftz.f32 ']
             )
         )
 
@@ -131,7 +131,7 @@ class TestFastMathOption(CUDATestCase):
         self._test_fast_math_unary(
             log2, FastMathCriterion(
                 fast_expected=['lg2.approx.ftz.f32 '],
-                slow_unexpected=['lg2.approx.ftz.f32 ']
+                prec_unexpected=['lg2.approx.ftz.f32 ']
             )
         )
 
@@ -139,7 +139,7 @@ class TestFastMathOption(CUDATestCase):
         self._test_fast_math_binary(
             pow, FastMathCriterion(
                 fast_expected=['lg2.approx.ftz.f32 '],
-                slow_unexpected=['lg2.approx.ftz.f32 '],
+                prec_unexpected=['lg2.approx.ftz.f32 '],
             )
         )
 
@@ -148,8 +148,8 @@ class TestFastMathOption(CUDATestCase):
             truediv, FastMathCriterion(
                 fast_expected=['div.approx.ftz.f32 '],
                 fast_unexpected=['div.rn.f32'],
-                slow_expected=['div.rn.f32'],
-                slow_unexpected=['div.approx.ftz.f32 '],
+                prec_expected=['div.rn.f32'],
+                prec_unexpected=['div.approx.ftz.f32 '],
             )
         )
 
@@ -159,11 +159,11 @@ class TestFastMathOption(CUDATestCase):
 
         sig = (float32[::1], float32, float32)
         fastver = cuda.jit(sig, fastmath=True, debug=True)(f10)
-        slowver = cuda.jit(sig, debug=True)(f10)
+        precver = cuda.jit(sig, debug=True)(f10)
         nelem = 10
         ary = np.empty(nelem, dtype=np.float32)
         with self.assertRaises(ZeroDivisionError):
-            slowver[1, nelem](ary, 10.0, 0.0)
+            precver[1, nelem](ary, 10.0, 0.0)
 
         try:
             fastver[1, nelem](ary, 10.0, 0.0)
