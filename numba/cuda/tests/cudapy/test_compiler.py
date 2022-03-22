@@ -60,7 +60,6 @@ class TestCompileToPTX(unittest.TestCase):
 
         # With fastmath, ftz and approximate div / sqrt are enabled
         self.assertIn('fma.rn.ftz.f32', ptx)
-        # "full" refers to a full-range approximate divide
         self.assertIn('div.approx.ftz.f32', ptx)
         self.assertIn('sqrt.approx.ftz.f32', ptx)
 
