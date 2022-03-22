@@ -6,8 +6,6 @@ import operator
 import warnings
 
 from llvmlite import ir
-from llvmlite.llvmpy.core import Type, Constant
-import llvmlite.llvmpy.core as lc
 
 from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_getattr_generic, lower_cast,
@@ -244,7 +242,7 @@ def round_impl_unary(context, builder, sig, args):
     fltty = sig.args[0]
     llty = context.get_value_type(fltty)
     module = builder.module
-    fnty = Type.function(llty, [llty])
+    fnty = ir.FunctionType(llty, [llty])
     fn = cgutils.get_or_insert_function(module, fnty, _round_intrinsic(fltty))
     res = builder.call(fn, args)
     # unary round() returns an int
