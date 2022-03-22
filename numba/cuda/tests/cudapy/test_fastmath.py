@@ -192,12 +192,12 @@ class TestFastMathOption(CUDATestCase):
         # https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-div
 
         # The fast version should use the "fast, approximate divide" variant
-        self.assertIn('div.approx.f32', fastver.ptx[sig])
+        self.assertIn('div.approx.f32', fastver.inspect_asm(sig))
         # The precise version should use the "IEEE 754 compliant rounding"
         # variant, and neither of the "approximate divide" variants.
-        self.assertIn('div.rn.f32', precver.ptx[sig])
-        self.assertNotIn('div.approx.f32', precver.ptx[sig])
-        self.assertNotIn('div.full.f32', precver.ptx[sig])
+        self.assertIn('div.rn.f32', precver.inspect_asm(sig))
+        self.assertNotIn('div.approx.f32', precver.inspect_asm(sig))
+        self.assertNotIn('div.full.f32', precver.inspect_asm(sig))
 
 
 if __name__ == '__main__':
