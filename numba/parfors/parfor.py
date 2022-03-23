@@ -1779,7 +1779,7 @@ class ConvertSetItemPass:
                                 sliced_dims = 0
 
                             # Only create a parfor for this setitem if we know the
-                            # shape of the output and numbers of dimensions set is
+                            # shape of the output and number of dimensions set is
                             # equal to the number of dimensions on the right side.
                             if (shape is not None and
                                 (not isinstance(value_typ, types.npytypes.Array) or
