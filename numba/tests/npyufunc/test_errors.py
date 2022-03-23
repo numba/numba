@@ -115,7 +115,7 @@ class TestFloatingPointExceptions(TestCase, CheckWarningsMixin):
                                 ["divide by zero encountered",
                                  "invalid value encountered"])
 
-    @skip_m1
+    @skip_m1_fenv_errors
     def test_remainder_float(self):
         self.check_divmod_float(remainder,
                                 [0.0, float('nan'), float('nan'), 1.0],
