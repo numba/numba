@@ -1764,7 +1764,27 @@ class ConvertSetItemPass:
                         else:
                             # Handle A[:] = x
                             shape = equiv_set.get_shape(instr)
-                            if shape is not None:
+                            # Don't converted broadcasted setitems into parfors.
+                            if isinstance(index_typ, types.BaseTuple):
+                                # The sliced dims are those in the index that
+                                # are made of slices.  Count the numbers of slices
+                                # in the index tuple.
+                                sliced_dims = len(list(filter(
+                                    lambda x: isinstance(x, types.misc.SliceType),
+                                    index_typ.types)))
+                            elif isinstance(index_typ, types.misc.SliceType):
+                                # For singular indices there can be a bare slice
+                                # and if so there is one dimension being set.
+                                sliced_dims = 1
+                            else:
+                                sliced_dims = 0
+
+                            # Only create a parfor for this setitem if we know the
+                            # shape of the output and number of dimensions set is
+                            # equal to the number of dimensions on the right side.
+                            if (shape is not None and
+                                (not isinstance(value_typ, types.npytypes.Array) or
+                                 sliced_dims == value_typ.ndim)):
                                 new_instr = self._setitem_to_parfor(equiv_set,
                                         loc, target, index, value, shape=shape)
                                 self.rewritten.append(
