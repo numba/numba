@@ -1408,7 +1408,7 @@ class TestParfors(TestParforsBase):
                "reduction can in some cases be parallelized as "
                "a multiply reduction followed by a floordiv of "
                "the resulting product.")
-        with self.assertRaises(ValueError) as e:
+        with self.assertRaises(errors.NumbaValueError) as e:
             pcfunc = self.compile_parallel(test_impl, ())
         self.assertIn(msg, str(e.exception))
 
