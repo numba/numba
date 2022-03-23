@@ -2056,6 +2056,7 @@ class ArrayAnalysis(object):
         var_shape = equiv_set._get_shape(var)
         if isinstance(ind_typ, types.SliceType):
             seq_typs = (ind_typ,)
+            seq = (ind_var,)
         else:
             require(isinstance(ind_typ, types.BaseTuple))
             seq, op = find_build_sequence(self.func_ir, ind_var)
@@ -2077,7 +2078,10 @@ class ArrayAnalysis(object):
         shape_list = []
         index_var_list = []
         replace_index = False
-        for (typ, size, dsize) in zip(seq_typs, ind_shape, var_shape):
+        for (typ, size, dsize, orig_ind) in zip(seq_typs,
+                                                ind_shape,
+                                                var_shape,
+                                                seq):
             # Convert the given dimension of the get/setitem index expr.
             shape_part, index_var_part = to_shape(typ, size, dsize)
             shape_list.append(shape_part)
@@ -2090,7 +2094,7 @@ class ArrayAnalysis(object):
                 replace_index = True
                 index_var_list.append(index_var_part)
             else:
-                index_var_list.append(size)
+                index_var_list.append(orig_ind)
 
         # If at least one of the dimensions required a new slice variable
         # then we'll need to replace the build_tuple for this get/setitem.

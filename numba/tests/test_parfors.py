@@ -609,16 +609,22 @@ def _count_non_parfor_array_accesses_inner(f_ir, blocks, typemap, parfor_indices
                     f_ir, parfor_blocks, typemap, parfor_indices)
 
             # getitem
-            if (is_getitem(stmt) and isinstance(typemap[stmt.value.value.name],
+            elif (is_getitem(stmt) and isinstance(typemap[stmt.value.value.name],
                         types.ArrayCompatible) and not _uses_indices(
                         f_ir, index_var_of_get_setitem(stmt), parfor_indices)):
                 ret_count += 1
 
             # setitem
-            if (is_setitem(stmt) and isinstance(typemap[stmt.target.name],
+            elif (is_setitem(stmt) and isinstance(typemap[stmt.target.name],
                     types.ArrayCompatible) and not _uses_indices(
                     f_ir, index_var_of_get_setitem(stmt), parfor_indices)):
                 ret_count += 1
+
+            # find parfor_index aliases
+            elif (isinstance(stmt, ir.Assign) and
+                  isinstance(stmt.value, ir.Var) and
+                  stmt.value.name in parfor_indices):
+                parfor_indices.add(stmt.target.name)
 
     return ret_count
 
@@ -2001,6 +2007,19 @@ class TestParfors(TestParforsBase):
         arr = np.arange(10, dtype=np.int64)
         self.check(test_impl, arr)
 
+    def test_setitem_2d_one_replaced(self):
+        # issue7843
+        def test_impl(x):
+            count = 0
+            for n in range(x.shape[0]):
+                # Useless "if" necessary to trigger bug.
+                if n:
+                    n
+                x[count, :] = 1
+                count += 1
+            return x
+
+        self.check(test_impl, np.zeros((3, 1)))
 
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
