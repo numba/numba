@@ -54,7 +54,7 @@ requirements:
     # avoid confusion from openblas bugs
     - libopenblas !=0.3.6      # [x86_64]
     # 0.3.17 buggy on M1 silicon
-    # https://github.com/xianyi/OpenBLAS/blob/develop/Changelog.txt#L118
+    # https://github.com/xianyi/OpenBLAS/blob/v0.3.20/Changelog.txt#L118
     # https://github.com/numba/numba/issues/7822#issuecomment-1063229855
     - libopenblas >=0.3.18     # [arm64]
     # CUDA 9.2 or later is required for CUDA support
