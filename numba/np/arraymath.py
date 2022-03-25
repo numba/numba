@@ -3630,7 +3630,8 @@ if numpy_version >= (1, 19):
     def np_array_equal(a, b, equal_nan=False):
 
         if not (type_can_asarray(a) and type_can_asarray(b)):
-            raise TypingError('Both arguments to "array_equals" must be array-like')
+            raise TypingError('Both arguments to "array_equals" '
+                              'must be array-like')
 
         if not isinstance(equal_nan, types.Boolean):
             raise TypingError('"equal_nan" must be a boolean')
@@ -3669,7 +3670,8 @@ else:
     def np_array_equal(a, b):
 
         if not (type_can_asarray(a) and type_can_asarray(b)):
-            raise TypingError('Both arguments to "array_equals" must be array-like')
+            raise TypingError('Both arguments to "array_equals" '
+                              'must be array-like')
 
         accepted = (types.Boolean, types.Number)
         if isinstance(a, accepted) and isinstance(b, accepted):
@@ -3688,6 +3690,7 @@ else:
                 return True
 
         return impl
+
 
 @overload(np.intersect1d)
 def jit_np_intersect1d(ar1, ar2):

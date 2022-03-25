@@ -656,7 +656,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 self.assertPreciseEqual(expected, got)
 
     def test_array_equal_exception(self):
-        pyfunc = array_equal if numpy_version >= (1, 19) else array_equal_prev_np119
+        pyfunc = array_equal if numpy_version >= (1, 19) \
+            else array_equal_prev_np119
         cfunc = jit(nopython=True)(pyfunc)
 
         with self.assertRaises(TypingError) as raises:
