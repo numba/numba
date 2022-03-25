@@ -37,7 +37,12 @@ def angle2(x, deg):
     return np.angle(x, deg)
 
 
+def array_equal_prev_np119(a, b):
+    return np.array_equal(a, b)
+
+
 def array_equal(a, b, equal_nan=False):
+    # versionadded:: 1.19.0
     return np.array_equal(a, b, equal_nan=equal_nan)
 
 
@@ -632,13 +637,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.array([1, np.nan, 2]), np.array([1, np.nan, 2])
             yield np.array([1, np.nan, 2]), np.array([1, np.nan, 3])
 
-        pyfunc = array_equal
-        cfunc = jit(nopython=True)(pyfunc)
+        if numpy_version >= (1, 19):
+            pyfunc = array_equal
+            cfunc = jit(nopython=True)(pyfunc)
 
-        for arr, obj in arrays():
-            for equal_nan in [True, False]:
-                expected = pyfunc(arr, obj, equal_nan)
-                got = cfunc(arr, obj, equal_nan)
+            for arr, obj in arrays():
+                for equal_nan in [True, False]:
+                    expected = pyfunc(arr, obj, equal_nan)
+                    got = cfunc(arr, obj, equal_nan)
+                    self.assertPreciseEqual(expected, got)
+        else:
+            pyfunc = array_equal_prev_np119
+            cfunc = jit(nopython=True)(pyfunc)
+
+            for arr, obj in arrays():
+                expected = pyfunc(arr, obj)
+                got = cfunc(arr, obj)
                 self.assertPreciseEqual(expected, got)
 
     def test_array_equal_exception(self):
