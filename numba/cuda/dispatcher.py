@@ -690,14 +690,19 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
             debug = self.targetoptions.get('debug')
             inline = self.targetoptions.get('inline')
+            fastmath = self.targetoptions.get('fastmath')
 
             nvvm_options = {
                 'debug': debug,
-                'opt': 3 if self.targetoptions.get('opt') else 0
+                'opt': 3 if self.targetoptions.get('opt') else 0,
+                'fastmath': fastmath
             }
 
-            cres = compile_cuda(self.py_func, None, args, debug=debug,
-                                inline=inline, nvvm_options=nvvm_options)
+            cres = compile_cuda(self.py_func, None, args,
+                                debug=debug,
+                                inline=inline,
+                                fastmath=fastmath,
+                                nvvm_options=nvvm_options)
             self.overloads[args] = cres
 
             cres.target_context.insert_user_function(cres.entry_point,
