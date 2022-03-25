@@ -3631,14 +3631,27 @@ def get_reduction_init(nodes):
     if acc_expr.fn == operator.iadd or acc_expr.fn == operator.isub:
         return 0, acc_expr.fn
     if (  acc_expr.fn == operator.imul
-       or acc_expr.fn == operator.itruediv
-       or acc_expr.fn == operator.ifloordiv ):
+       or acc_expr.fn == operator.itruediv ):
         return 1, acc_expr.fn
     return None, None
 
 def supported_reduction(x, func_ir):
     if x.op == 'inplace_binop' or x.op == 'binop':
-        return True
+        if x.fn == operator.ifloordiv or x.fn == operator.floordiv:
+            raise errors.NumbaValueError(("Parallel floordiv reductions are not supported. "
+                              "If all divisors are integers then a floordiv "
+                              "reduction can in some cases be parallelized as "
+                              "a multiply reduction followed by a floordiv of "
+                              "the resulting product."), x.loc)
+        supps = [operator.iadd,
+                 operator.isub,
+                 operator.imul,
+                 operator.itruediv,
+                 operator.add,
+                 operator.sub,
+                 operator.mul,
+                 operator.truediv]
+        return x.fn in supps
     if x.op == 'call':
         callname = guard(find_callname, func_ir, x)
         if callname == ('max', 'builtins') or callname == ('min', 'builtins'):
