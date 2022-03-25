@@ -37,8 +37,8 @@ def angle2(x, deg):
     return np.angle(x, deg)
 
 
-def array_equal(a, b):
-    return np.array_equal(a, b)
+def array_equal(a, b, equal_nan=False):
+    return np.array_equal(a, b, equal_nan=equal_nan)
 
 
 def intersect1d(a, b):
@@ -624,14 +624,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield True, 2
             yield True, 1
             yield False, 0
+            # nan arrays
+            yield np.nan, 1
+            yield np.nan, np.nan
+            yield np.array([np.nan]), np.array([np.nan])
+            yield np.array([np.nan]), np.array([1])
+            yield np.array([1, np.nan, 2]), np.array([1, np.nan, 2])
+            yield np.array([1, np.nan, 2]), np.array([1, np.nan, 3])
 
         pyfunc = array_equal
         cfunc = jit(nopython=True)(pyfunc)
 
         for arr, obj in arrays():
-            expected = pyfunc(arr, obj)
-            got = cfunc(arr, obj)
-            self.assertPreciseEqual(expected, got)
+            for equal_nan in [True, False]:
+                expected = pyfunc(arr, obj, equal_nan)
+                got = cfunc(arr, obj, equal_nan)
+                self.assertPreciseEqual(expected, got)
 
     def test_array_equal_exception(self):
         pyfunc = array_equal
@@ -641,6 +649,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(np.arange(3 * 4).reshape(3, 4), None)
         self.assertIn(
             'Both arguments to "array_equals" must be array-like',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.nan, np.nan, np.nan)
+        self.assertIn(
+            '"equal_nan" must be a boolean',
             str(raises.exception)
         )
 
