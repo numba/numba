@@ -3625,45 +3625,69 @@ def np_diff_impl(a, n=1):
     return diff_impl
 
 
-@overload(np.array_equal)
-def np_array_equal(a, b, equal_nan=False):
+if numpy_version >= (1, 19):
+    @overload(np.array_equal)
+    def np_array_equal(a, b, equal_nan=False):
 
-    if not (type_can_asarray(a) and type_can_asarray(b)):
-        raise TypingError('Both arguments to "array_equals" must be array-like')
+        if not (type_can_asarray(a) and type_can_asarray(b)):
+            raise TypingError('Both arguments to "array_equals" must be array-like')
 
-    if not isinstance(equal_nan, types.Boolean):
-        raise TypingError('"equal_nan" must be a boolean')
+        if not isinstance(equal_nan, types.Boolean):
+            raise TypingError('"equal_nan" must be a boolean')
 
-    accepted = (types.Boolean, types.Number)
-    if isinstance(a, accepted) and isinstance(b, accepted):
-        # special case
-        def impl(a, b, equal_nan=False):
-            if equal_nan:
-                if a != a and b != b:
-                    return True
-            return a == b
-    else:
-        def impl(a, b, equal_nan=False):
-            a = np.asarray(a)
-            b = np.asarray(b)
-            if a.shape != b.shape:
-                return False
-            if equal_nan:
-                for _a, _b in zip(a.flat, b.flat):
-                    if _a != _b:
-                        # NaN != NaN
-                        if _a != _a and _b != _b:
-                            continue
-                        else:
+        accepted = (types.Boolean, types.Number)
+        if isinstance(a, accepted) and isinstance(b, accepted):
+            # special case
+            def impl(a, b, equal_nan=False):
+                if equal_nan:
+                    if a != a and b != b:
+                        return True
+                return a == b
+        else:
+            def impl(a, b, equal_nan=False):
+                a = np.asarray(a)
+                b = np.asarray(b)
+                if a.shape != b.shape:
+                    return False
+                if equal_nan:
+                    for _a, _b in zip(a.flat, b.flat):
+                        if _a != _b:
+                            # NaN != NaN
+                            if _a != _a and _b != _b:
+                                continue
+                            else:
+                                return False
+                else:
+                    for _a, _b in zip(a.flat, b.flat):
+                        if _a != _b:
                             return False
-            else:
+                return True
+
+        return impl
+else:
+    @overload(np.array_equal)
+    def np_array_equal(a, b):
+
+        if not (type_can_asarray(a) and type_can_asarray(b)):
+            raise TypingError('Both arguments to "array_equals" must be array-like')
+
+        accepted = (types.Boolean, types.Number)
+        if isinstance(a, accepted) and isinstance(b, accepted):
+            # special case
+            def impl(a, b):
+                return a == b
+        else:
+            def impl(a, b):
+                a = np.asarray(a)
+                b = np.asarray(b)
+                if a.shape != b.shape:
+                    return False
                 for _a, _b in zip(a.flat, b.flat):
                     if _a != _b:
                         return False
-            return True
+                return True
 
-    return impl
-
+        return impl
 
 @overload(np.intersect1d)
 def jit_np_intersect1d(ar1, ar2):
