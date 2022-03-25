@@ -666,12 +666,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             str(raises.exception)
         )
 
-        with self.assertRaises(TypingError) as raises:
-            cfunc(np.nan, np.nan, np.nan)
-        self.assertIn(
-            '"equal_nan" must be a boolean',
-            str(raises.exception)
-        )
+        if numpy_version >= (1, 19):
+            with self.assertRaises(TypingError) as raises:
+                cfunc(np.nan, np.nan, np.nan)
+            self.assertIn(
+                '"equal_nan" must be a boolean',
+                str(raises.exception)
+            )
 
     def test_intersect1d(self):
 
