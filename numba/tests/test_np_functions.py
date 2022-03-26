@@ -329,6 +329,10 @@ def np_trapz_x_dx(y, x, dx):
     return np.trapz(y, x, dx)
 
 
+def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+    return np.allclose(a, b, rtol, atol, equal_nan)
+
+
 def np_average(a, axis=None, weights=None):
     return np.average(a, axis=axis, weights=weights)
 
@@ -3171,6 +3175,33 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         #test with axis argument
         test_1D_weights_axis(data, axis=1, weights=w)
+
+
+    def test_allclose(self):
+
+        pyfunc = np_allclose
+        cfunc = jit(nopython=True)(pyfunc)
+
+        a = np.asarray([1e10, 1e-7])
+        b = np.asarray([1.00001e10, 1e-8])
+        assert not cfunc(a, b)
+
+        a = np.asarray([1e10, 1e-8])
+        b = np.asarray([1.00001e10, 1e-9])
+        assert cfunc(a, b)
+
+        a = np.asarray([1e10, 1e-8])
+        b = np.asarray([1.0001e10, 1e-9])
+        assert not cfunc(a, b)
+
+        a = np.asarray([1.0, np.nan])
+        b = np.asarray([1.0, np.nan])
+        assert not cfunc(a, b)
+        assert cfunc(a, b, equal_nan=True)
+
+        b = np.asarray([np.nan, 1.0])
+        assert not cfunc(a, b)
+
 
     def test_interp_basic(self):
         pyfunc = interp
