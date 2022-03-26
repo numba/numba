@@ -864,6 +864,56 @@ def np_all(a):
     return flat_all
 
 
+@overload(np.allclose)
+@overload_method(types.Array, "allclose")
+def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+
+    if not type_can_asarray(a):
+        raise TypeError('The first argument "a" must be array-like')
+
+    if not type_can_asarray(b):
+        raise TypeError('The first argument "b" must be array-like')
+
+    if not isinstance(rtol, types.Float):
+        raise TypeError('The fourth argument "rtol" must be a '
+                        'floating point')
+
+    if not isinstance(atol, types.Float):
+        raise TypingError('The fifth argument "atol" must be a '
+                          'floating point')
+
+    if not isinstance(equal_nan, types.Boolean):
+        raise TypeError('The sixth argument "equal_nan" must be a '
+                        'boolean')
+
+    def np_allclose_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+        for av, bv in zip(np.nditer(a), np.nditer(b)):
+            a_v = av.item()
+            b_v = bv.item()
+
+            a_v_isnan = np.isnan(a_v)
+            b_v_isnan = np.isnan(b_v)
+
+            # only one of the values is NaN and the
+            # other is not.
+            if ( (not a_v_isnan and b_v_isnan) or
+                    (a_v_isnan and not b_v_isnan) ):
+                return False
+
+            # either both of the values are NaN
+            # or both are numbers
+            if a_v_isnan and b_v_isnan:
+                if not equal_nan:
+                    return False
+            else:
+                if np.abs(a_v - b_v) > atol + rtol * np.abs(b_v):
+                    return False
+
+        return True
+
+    return np_allclose_impl
+
+
 @overload(np.any)
 @overload_method(types.Array, "any")
 def np_any(a):
