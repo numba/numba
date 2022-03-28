@@ -1427,6 +1427,10 @@ def numpy_broadcast_arrays(*args):
             m = max(m, arg.ndim)
         elif isinstance(arg, (types.Number, types.Boolean)):
             m = max(m, 1)
+        elif isinstance(arg, types.BaseTuple):
+            m = max(m, arg.count)
+        else:
+            raise errors.TypingError(f'Unhandled type {arg}')
 
     tup_init = (0,) * m
 

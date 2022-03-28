@@ -1084,6 +1084,15 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             expected = [expected_shape] * len(inarrays)
             self.assertPreciseEqual(expected, got)
 
+    def test_broadcast_arrays_tuple_input(self):
+        pyfunc = numpy_broadcast_arrays
+        cfunc = jit(nopython=True)(pyfunc)
+        inp = (123, 456)
+        outarrays = cfunc(inp)
+        expected = [(1, 2)]
+        got = [a.shape for a in outarrays]
+        self.assertPreciseEqual(expected, got)
+
     def test_broadcast_arrays_non_array_input(self):
         pyfunc = numpy_broadcast_arrays
         cfunc = jit(nopython=True)(pyfunc)
