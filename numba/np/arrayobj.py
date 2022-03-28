@@ -1425,10 +1425,8 @@ def numpy_broadcast_arrays(*args):
     for idx, arg in enumerate(args):
         if isinstance(arg, types.ArrayCompatible):
             m = max(m, arg.ndim)
-        elif isinstance(arg, (types.Number, types.Boolean)):
+        elif isinstance(arg, (types.Number, types.Boolean, types.BaseTuple)):
             m = max(m, 1)
-        elif isinstance(arg, types.BaseTuple):
-            m = max(m, arg.count)
         else:
             raise errors.TypingError(f'Unhandled type {arg}')
 

@@ -1088,7 +1088,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         pyfunc = numpy_broadcast_arrays
         cfunc = jit(nopython=True)(pyfunc)
         outarrays = cfunc((123, 456), (789,))
-        expected = [(1, 2), (1, 2)]
+        expected = [(2,), (2,)]
         got = [a.shape for a in outarrays]
         self.assertPreciseEqual(expected, got)
 
