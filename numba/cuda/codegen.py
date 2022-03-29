@@ -298,12 +298,26 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         data = (self._ptx_cache, self._cubin_cache)
         return (self.name, 'object', data)
 
+    @classmethod
+    def _unserialize(cls, codegen, state):
+        # Inspired by CPUCodeLibrary's version
+        name, kind, data = state
+        if kind != 'object':
+            raise ValueError('Only support unserialize with obj state')
+        self = codegen.create_library(name)
+        assert isinstance(self, cls)
+
+        self._ptx_cache, self._cubin_cache = data
+        # Is any more required?
+
     def _reduce_states(self):
         """
         Reduce the instance for serialization. We retain the PTX and cubins,
         but loaded functions are discarded. They are recreated when needed
         after deserialization.
         """
+
+        breakpoint()
         if self._linking_files:
             msg = ('cannot pickle CUDACodeLibrary function with additional '
                    'libraries to link against')

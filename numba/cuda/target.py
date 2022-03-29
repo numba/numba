@@ -106,6 +106,12 @@ class CUDATargetContext(BaseContext):
     def codegen(self):
         return self._internal_codegen
 
+    def get_executable(self, library, fndesc, env):
+        # Hack for caching, but there is no executable in the compile result
+        # anyway for CUDA
+        raise RuntimeError("tmp")
+        return None
+
     @property
     def target_data(self):
         return self._target_data
