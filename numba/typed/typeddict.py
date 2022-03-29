@@ -2,17 +2,17 @@
 Python wrapper that connects CPython interpreter to the numba dictobject.
 """
 from collections.abc import MutableMapping
-from numba.core.types import DictType, TypeRef
+from numba.core.types import DictType
 from numba.core.imputils import numba_typeref_ctor
 from numba import njit, typeof
 from numba.core import types, errors, config, cgutils
 from numba.core.extending import (
-    overload_method,
     overload,
     box,
     unbox,
     NativeValue,
     type_callable,
+    overload_classmethod,
 )
 from numba.typed import dictobject
 from numba.core.typing import signature
@@ -208,8 +208,7 @@ class Dict(MutableMapping):
         return _copy(self)
 
 
-# XXX: should we have a better way to classmethod
-@overload_method(TypeRef, 'empty')
+@overload_classmethod(types.DictType, 'empty')
 def typeddict_empty(cls, key_type, value_type):
     if cls.instance_type is not DictType:
         return

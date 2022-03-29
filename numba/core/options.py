@@ -88,6 +88,12 @@ class DefaultOptions:
     fastmath = _mapping("fastmath")
     error_model = _mapping("error_model")
     inline = _mapping("inline")
+    forceinline = _mapping("forceinline")
+
+    target_backend = _mapping("target_backend")
+
+    _dbg_extend_lifetimes = _mapping("dbg_extend_lifetimes")
+    _dbg_optnone = _mapping("dbg_optnone")
 
 
 def include_default_options(*args):

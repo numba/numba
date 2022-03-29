@@ -381,7 +381,7 @@ class Interpreter(object):
         # post process the IR to rewrite opcodes/byte sequences that are too
         # involved to risk handling as part of direct interpretation
         peepholes = []
-        if PYVERSION == (3, 9):
+        if PYVERSION in [(3, 9), (3, 10)]:
             peepholes.append(peep_hole_list_to_tuple)
         peepholes.append(peep_hole_delete_with_exit)
 
@@ -1572,6 +1572,9 @@ class Interpreter(object):
     def op_POP_BLOCK(self, inst, kind=None):
         if kind is None:
             self.syntax_blocks.pop()
+        elif kind == 'with':
+            d = ir.PopBlock(loc=self.loc)
+            self.current_block.append(d)
         elif kind == 'try':
             self._insert_try_block_end()
 
@@ -1715,9 +1718,8 @@ class Interpreter(object):
 
     def op_MAKE_FUNCTION(self, inst, name, code, closure, annotations,
                          kwdefaults, defaults, res):
-        if annotations is not None:
-            msg = "op_MAKE_FUNCTION with annotations is not implemented"
-            raise NotImplementedError(msg)
+        # annotations are ignored by numba but useful for static analysis
+        # re. https://github.com/numba/numba/issues/7269
         if kwdefaults is not None:
             msg = "op_MAKE_FUNCTION with kwdefaults is not implemented"
             raise NotImplementedError(msg)
@@ -1786,10 +1788,10 @@ class Interpreter(object):
         # control flow in a tuple unpack like:
         # `(*(1, (2,) if predicate else (3,)))`
         # this cannot be handled as present so raise
+        msg = ("An unsupported bytecode sequence has been encountered: "
+               "op_LIST_EXTEND at the start of a block.\n\nThis could be "
+               "due to the use of a branch in a tuple unpacking statement.")
         if not self.current_block.body:
-            msg = ("An unsupported bytecode sequence has been encountered: "
-                   "op_LIST_EXTEND at the start of a block.\n\nThis could be "
-                   "due to the use of a branch in a tuple unpacking statement.")
             raise errors.UnsupportedError(msg)
 
         # is last emitted statement a build_tuple?
@@ -1819,6 +1821,8 @@ class Interpreter(object):
                 else:
                     ok = False
                     break
+        if ok and build_empty_list is None:
+            raise errors.UnsupportedError(msg)
         if ok:
             stmts = self.current_block.body
             build_tuple_asgn = self.current_block.body[-1]

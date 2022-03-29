@@ -6,6 +6,7 @@ from llvmlite import ir
 
 from numba.core import types, cgutils
 from numba.core.pythonapi import box, unbox, reflect, NativeValue
+from numba.core.errors import NumbaNotImplementedError
 
 from numba.cpython import setobj, listobj
 from numba.np import numpy_support
@@ -458,7 +459,7 @@ def unbox_array(typ, obj, c):
     #       need to do better
     try:
         expected_itemsize = numpy_support.as_dtype(typ.dtype).itemsize
-    except NotImplementedError:
+    except NumbaNotImplementedError:
         # Don't check types that can't be `as_dtype()`-ed
         itemsize_mismatch = cgutils.false_bit
     else:
@@ -903,6 +904,7 @@ def _native_set_to_python_list(typ, payload, c):
         with payload._iterate() as loop:
             i = c.builder.load(index)
             item = loop.entry.key
+            c.context.nrt.incref(c.builder, typ.dtype, item)
             itemobj = c.box(typ.dtype, item)
             c.pyapi.list_setitem(listobj, i, itemobj)
             i = c.builder.add(i, ir.Constant(i.type, 1))

@@ -152,6 +152,7 @@ build_c_helpers_dict(void)
 } while (0)
 
 #define declmethod(func) _declpointer(#func, &NRT_##func)
+#define declmethod_internal(func) _declpointer(#func, &func)
 
 declmethod(adapt_ndarray_from_python);
 declmethod(adapt_ndarray_to_python_acqref);
@@ -163,6 +164,8 @@ declmethod(MemInfo_alloc);
 declmethod(MemInfo_alloc_safe);
 declmethod(MemInfo_alloc_aligned);
 declmethod(MemInfo_alloc_safe_aligned);
+declmethod(MemInfo_alloc_safe_aligned_external);
+declmethod_internal(_nrt_get_sample_external_allocator);
 declmethod(MemInfo_alloc_dtor_safe);
 declmethod(MemInfo_call_dtor);
 declmethod(MemInfo_new_varsize);
@@ -178,6 +181,7 @@ declmethod(get_api);
 
 
 #undef declmethod
+#undef declmethod_internal
     return dct;
 error:
     Py_XDECREF(dct);

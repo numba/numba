@@ -9,7 +9,7 @@ import functools
 
 from llvmlite import ir
 
-from numba.core import utils, types, config
+from numba.core import utils, types, config, debuginfo
 import numba.core.datamodel
 
 
@@ -370,14 +370,18 @@ def alloca_once(builder, ty, size=None, name='', zfill=False):
     """
     if isinstance(size, int):
         size = ir.Constant(intp_t, size)
-    with builder.goto_entry_block():
-        ptr = builder.alloca(ty, size=size, name=name)
-        # Always zero-fill at init-site.  This is safe.
-        builder.store(ptr.type.pointee(None), ptr)
-    # Also zero-fill at the use-site
-    if zfill:
-        builder.store(ptr.type.pointee(None), ptr)
-    return ptr
+    # suspend debug metadata emission else it links up python source lines with
+    # alloca in the entry block as well as their actual location and it makes
+    # the debug info "jump about".
+    with debuginfo.suspend_emission(builder):
+        with builder.goto_entry_block():
+            ptr = builder.alloca(ty, size=size, name=name)
+            # Always zero-fill at init-site.  This is safe.
+            builder.store(ptr.type.pointee(None), ptr)
+        # Also zero-fill at the use-site
+        if zfill:
+            builder.store(ptr.type.pointee(None), ptr)
+        return ptr
 
 
 def sizeof(builder, ptr_type):
@@ -533,7 +537,7 @@ def for_range_slice(builder, start, stop, step, intp=None, inc=True):
     Parameters
     -------------
     builder : object
-        Builder object
+        IRBuilder object
     start : int
         The beginning value of the slice
     stop : int
@@ -1179,3 +1183,12 @@ def is_nonelike(ty):
         isinstance(ty, types.NoneType) or
         isinstance(ty, types.Omitted)
     )
+
+
+def create_constant_array(ty, val):
+    """
+    Create an LLVM-constant of a fixed-length array from Python values.
+
+    The type provided is the type of the elements.
+    """
+    return ir.Constant(ir.ArrayType(ty, len(val)), val)

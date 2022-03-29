@@ -1,25 +1,14 @@
+from warnings import warn
 from numba.core import types, config, sigutils
-from numba.core.errors import DeprecationError
-from .compiler import (compile_device, declare_device_function, Dispatcher,
-                       compile_device_dispatcher)
-from .simulator.kernel import FakeCUDAKernel
+from numba.core.errors import DeprecationError, NumbaInvalidConfigWarning
+from numba.cuda.compiler import declare_device_function
+from numba.cuda.dispatcher import CUDADispatcher
+from numba.cuda.simulator.kernel import FakeCUDAKernel
 
 
 _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "Signatures should be passed as the first "
                                  "positional argument.")
-
-
-def jitdevice(func, link=[], debug=None, inline=False, opt=True,
-              no_cpython_wrapper=None):
-    """Wrapper for device-jit.
-    """
-    # We ignore  the no_cpython_wrapper kwarg - it is passed by the callee when
-    # using overloads, but there is never a CPython wrapper for CUDA anyway.
-    debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
-    if link:
-        raise ValueError("link keyword invalid for device function")
-    return compile_device_dispatcher(func, debug=debug, inline=inline, opt=opt)
 
 
 def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
@@ -43,8 +32,9 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
     :type link: list
     :param debug: If True, check for exceptions thrown when executing the
        kernel. Since this degrades performance, this should only be used for
-       debugging purposes.  Defaults to False.  (The default value can be
-       overridden by setting environment variable ``NUMBA_CUDA_DEBUGINFO=1``.)
+       debugging purposes. If set to True, then ``opt`` should be set to False.
+       Defaults to False.  (The default value can be overridden by setting
+       environment variable ``NUMBA_CUDA_DEBUGINFO=1``.)
     :param fastmath: When True, enables fastmath optimizations as outlined in
        the :ref:`CUDA Fast Math documentation <cuda-fast-math>`.
     :param max_registers: Request that the kernel is limited to using at most
@@ -55,6 +45,10 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                 enabled. When ``True``, ``-opt=3`` is passed to NVVM. When
                 ``False``, ``-opt=0`` is passed to NVVM. Defaults to ``True``.
     :type opt: bool
+    :param lineinfo: If True, generate a line mapping between source code and
+       assembly code. This enables inspection of the source code in NVIDIA
+       profiling tools and correlation with program counter sampling.
+    :type lineinfo: bool
     """
 
     if link and config.ENABLE_CUDASIM:
@@ -75,6 +69,16 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
 
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
     fastmath = kws.get('fastmath', False)
+    extensions = kws.get('extensions', [])
+
+    if debug and opt:
+        msg = ("debug=True with opt=True (the default) "
+               "is not supported by CUDA. This may result in a crash"
+               " - set debug=False or opt=False.")
+        warn(NumbaInvalidConfigWarning(msg))
+
+    if device and kws.get('link'):
+        raise ValueError("link keyword invalid for device function")
 
     if sigutils.is_signature(func_or_sig):
         if config.ENABLE_CUDASIM:
@@ -87,22 +91,28 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
         if restype and not device and restype != types.void:
             raise TypeError("CUDA kernel must have void return type.")
 
-        def kernel_jit(func):
+        def _jit(func):
             targetoptions = kws.copy()
             targetoptions['debug'] = debug
             targetoptions['link'] = link
             targetoptions['opt'] = opt
             targetoptions['fastmath'] = fastmath
-            return Dispatcher(func, [func_or_sig], targetoptions=targetoptions)
+            targetoptions['device'] = device
+            targetoptions['extensions'] = extensions
 
-        def device_jit(func):
-            return compile_device(func, restype, argtypes, inline=inline,
-                                  debug=debug)
+            disp = CUDADispatcher(func, targetoptions=targetoptions)
 
-        if device:
-            return device_jit
-        else:
-            return kernel_jit
+            if device:
+                disp.compile_device(argtypes)
+            else:
+                disp.compile(argtypes)
+
+            disp._specialized = True
+            disp.disable_compile()
+
+            return disp
+
+        return _jit
     else:
         if func_or_sig is None:
             if config.ENABLE_CUDASIM:
@@ -111,7 +121,8 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                                           fastmath=fastmath)
             else:
                 def autojitwrapper(func):
-                    return jit(func, device=device, debug=debug, opt=opt, **kws)
+                    return jit(func, device=device, debug=debug, opt=opt,
+                               link=link, **kws)
 
             return autojitwrapper
         # func_or_sig is a function
@@ -119,19 +130,21 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             if config.ENABLE_CUDASIM:
                 return FakeCUDAKernel(func_or_sig, device=device,
                                       fastmath=fastmath)
-            elif device:
-                return jitdevice(func_or_sig, debug=debug, opt=opt, **kws)
             else:
                 targetoptions = kws.copy()
                 targetoptions['debug'] = debug
                 targetoptions['opt'] = opt
                 targetoptions['link'] = link
                 targetoptions['fastmath'] = fastmath
-                sigs = None
-                return Dispatcher(func_or_sig, sigs,
-                                  targetoptions=targetoptions)
+                targetoptions['device'] = device
+                targetoptions['extensions'] = extensions
+                return CUDADispatcher(func_or_sig, targetoptions=targetoptions)
 
 
 def declare_device(name, sig):
     argtypes, restype = sigutils.normalize_signature(sig)
+    if restype is None:
+        msg = 'Return type must be provided for device declarations'
+        raise TypeError(msg)
+
     return declare_device_function(name, restype, argtypes)

@@ -55,6 +55,8 @@ int MemInfo_init(MemInfoObject *self, PyObject *args, PyObject *kwds) {
         return -1;
     }
     raw_ptr = PyLong_AsVoidPtr(raw_ptr_obj);
+    NRT_Debug(nrt_debug_print("MemInfo_init self=%p raw_ptr=%p\n", self, raw_ptr));
+
     if(PyErr_Occurred()) return -1;
     self->meminfo = (NRT_MemInfo *)raw_ptr;
     assert (NRT_MemInfo_refcount(self->meminfo) > 0 && "0 refcount");
@@ -109,6 +111,26 @@ MemInfo_get_refcount(MemInfoObject *self, void *closure) {
     return PyLong_FromSize_t(refct);
 }
 
+static
+PyObject*
+MemInfo_get_external_allocator(MemInfoObject *self, void *closure) {
+    void *p = NRT_MemInfo_external_allocator(self->meminfo);
+    return PyLong_FromVoidPtr(p);
+}
+
+static
+PyObject*
+MemInfo_get_parent(MemInfoObject *self, void *closure) {
+    void *p = NRT_MemInfo_parent(self->meminfo);
+    if (p) {
+        Py_INCREF(p);
+        return (PyObject*)p;
+    } else {
+        Py_INCREF(Py_None);
+        return Py_None;
+    }
+}
+
 static void
 MemInfo_dealloc(MemInfoObject *self)
 {
@@ -135,6 +157,13 @@ static PyGetSetDef MemInfo_getsets[] = {
     {"refcount",
      (getter)MemInfo_get_refcount, NULL,
      "Get the refcount",
+     NULL},
+    {"external_allocator",
+     (getter)MemInfo_get_external_allocator, NULL,
+     "Get the external allocator",
+     NULL},
+    {"parent",
+     (getter)MemInfo_get_parent, NULL,
      NULL},
     {NULL}  /* Sentinel */
 };
@@ -286,13 +315,22 @@ RETURN_ARRAY_COPY:
 }
 
 /**
+ * This function is used during the boxing of ndarray type.
+ * `arystruct` is a structure containing essential information from the
+ *             unboxed array.
+ * `retty` is the subtype of the NumPy PyArray_Type this function should return.
+ *         This is related to `numba.core.types.Array.box_type`.
+ * `ndim` is the number of dimension of the array.
+ * `writeable` corresponds to the "writable" flag in NumPy ndarray.
+ * `descr` is the NumPy data type description.
+ *
  * This function was renamed in 0.52.0 to specify that it acquires references.
  * It used to steal the reference of the arystruct.
  * Refer to https://github.com/numba/numba/pull/6446
  */
 NUMBA_EXPORT_FUNC(PyObject *)
-NRT_adapt_ndarray_to_python_acqref(arystruct_t* arystruct, int ndim,
-                            int writeable, PyArray_Descr *descr)
+NRT_adapt_ndarray_to_python_acqref(arystruct_t* arystruct, PyTypeObject *retty,
+                            int ndim, int writeable, PyArray_Descr *descr)
 {
     PyArrayObject *array;
     MemInfoObject *miobj = NULL;
@@ -326,11 +364,14 @@ NRT_adapt_ndarray_to_python_acqref(arystruct_t* arystruct, int ndim,
         args = PyTuple_New(1);
         /* SETITEM steals reference */
         PyTuple_SET_ITEM(args, 0, PyLong_FromVoidPtr(arystruct->meminfo));
+        NRT_Debug(nrt_debug_print("NRT_adapt_ndarray_to_python arystruct->meminfo=%p\n", arystruct->meminfo));
         /*  Note: MemInfo_init() does not incref.  This function steals the
          *        NRT reference, which we need to acquire.
          */
+        NRT_Debug(nrt_debug_print("NRT_adapt_ndarray_to_python_acqref created MemInfo=%p\n", miobj));
         NRT_MemInfo_acquire(arystruct->meminfo);
         if (MemInfo_init(miobj, args, NULL)) {
+            NRT_Debug(nrt_debug_print("MemInfo_init failed.\n"));
             return NULL;
         }
         Py_DECREF(args);
@@ -339,7 +380,7 @@ NRT_adapt_ndarray_to_python_acqref(arystruct_t* arystruct, int ndim,
     shape = arystruct->shape_and_strides;
     strides = shape + ndim;
     Py_INCREF((PyObject *) descr);
-    array = (PyArrayObject *) PyArray_NewFromDescr(&PyArray_Type, descr, ndim,
+    array = (PyArrayObject *) PyArray_NewFromDescr(retty, descr, ndim,
                                                    shape, strides, arystruct->data,
                                                    flags, (PyObject *) miobj);
 

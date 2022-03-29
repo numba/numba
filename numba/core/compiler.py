@@ -21,6 +21,7 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
                                        CanonicalizeLoopExit,
                                        CanonicalizeLoopEntry, LiteralUnroll,
                                        ReconstructSSA,
+                                       LiteralPropagationSubPipelinePass,
                                        )
 
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
@@ -28,11 +29,13 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                      ParforPass, DumpParforDiagnostics,
                                      IRLegalization, NoPythonBackend,
                                      InlineOverloads, PreLowerStripPhis,
-                                     NativeLowering)
+                                     NativeLowering,
+                                     NoPythonSupportedFeatureValidation,
+                                     )
 
 from numba.core.object_mode_passes import (ObjectModeFrontEnd,
                                            ObjectModeBackEnd)
-from numba.core.targetconfig import TargetConfig, Option
+from numba.core.targetconfig import TargetConfig, Option, ConfigStack
 
 
 class Flags(TargetConfig):
@@ -84,7 +87,7 @@ class Flags(TargetConfig):
     forceinline = Option(
         type=bool,
         default=False,
-        doc="TODO",
+        doc="Force inlining of the function. Overrides _dbg_optnone.",
     )
     no_cpython_wrapper = Option(
         type=bool,
@@ -132,6 +135,27 @@ detail""",
         type=cpu.InlineOptions,
         default=cpu.InlineOptions("never"),
         doc="TODO",
+    )
+    # Defines a new target option for tracking the "target backend".
+    # This will be the XYZ in @jit(_target=XYZ).
+    target_backend = Option(
+        type=str,
+        default="cpu", # if not set, default to CPU
+        doc="backend"
+    )
+
+    dbg_extend_lifetimes = Option(
+        type=bool,
+        default=False,
+        doc=("Extend variable lifetime for debugging. "
+             "This automatically turns on with debug=True."),
+    )
+
+    dbg_optnone = Option(
+        type=bool,
+        default=False,
+        doc=("Disable optimization for debug. "
+             "Equivalent to adding optnone attribute in the LLVM Function.")
     )
 
 
@@ -245,20 +269,25 @@ _LowerResult = namedtuple("_LowerResult", [
 ])
 
 
-def compile_result(**kws):
-    keys = set(kws.keys())
+def sanitize_compile_result_entries(entries):
+    keys = set(entries.keys())
     fieldset = set(CR_FIELDS)
     badnames = keys - fieldset
     if badnames:
         raise NameError(*badnames)
     missing = fieldset - keys
     for k in missing:
-        kws[k] = None
+        entries[k] = None
     # Avoid keeping alive traceback variables
-    err = kws['typing_error']
+    err = entries['typing_error']
     if err is not None:
-        kws['typing_error'] = err.with_traceback(None)
-    return CompileResult(**kws)
+        entries['typing_error'] = err.with_traceback(None)
+    return entries
+
+
+def compile_result(**entries):
+    entries = sanitize_compile_result_entries(entries)
+    return CompileResult(**entries)
 
 
 def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
@@ -437,7 +466,7 @@ class CompilerBase(object):
         """
         Populate and run compiler pipeline
         """
-        with utils.ConfigStack().enter(self.state.flags.copy()):
+        with ConfigStack().enter(self.state.flags.copy()):
             pms = self.define_pipelines()
             for pm in pms:
                 pipeline_name = pm.pipeline_name
@@ -457,6 +486,10 @@ class CompilerBase(object):
                     res = e.result
                     break
                 except Exception as e:
+                    if (utils.use_new_style_errors() and not
+                            isinstance(e, errors.NumbaError)):
+                        raise e
+
                     self.state.status.fail_reason = e
                     if is_final_pipeline:
                         raise e
@@ -540,9 +573,12 @@ class DefaultPassBuilder(object):
     def define_nopython_lowering_pipeline(state, name='nopython_lowering'):
         pm = PassManager(name)
         # legalise
+        pm.add_pass(NoPythonSupportedFeatureValidation,
+                    "ensure features that are in use are in a valid form")
         pm.add_pass(IRLegalization,
                     "ensure IR is legal prior to lowering")
-
+        # Annotate only once legalized
+        pm.add_pass(AnnotateTypes, "annotate types")
         # lower
         pm.add_pass(NativeLowering, "native lowering")
         pm.add_pass(NoPythonBackend, "nopython mode backend")
@@ -556,7 +592,6 @@ class DefaultPassBuilder(object):
         pm = PassManager(name)
         # typing
         pm.add_pass(NopythonTypeInference, "nopython frontend")
-        pm.add_pass(AnnotateTypes, "annotate types")
 
         # strip phis
         pm.add_pass(PreLowerStripPhis, "remove phis nodes")
@@ -611,6 +646,8 @@ class DefaultPassBuilder(object):
         if state.flags.enable_ssa:
             pm.add_pass(ReconstructSSA, "ssa")
 
+        pm.add_pass(LiteralPropagationSubPipelinePass, "Literal propagation")
+
         pm.finalize()
         return pm
 
@@ -639,8 +676,8 @@ class DefaultPassBuilder(object):
         # convert any remaining closures into functions
         pm.add_pass(MakeFunctionToJitFunction,
                     "convert make_function into JIT functions")
-        pm.add_pass(AnnotateTypes, "annotate types")
         pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
+        pm.add_pass(AnnotateTypes, "annotate types")
         pm.add_pass(ObjectModeBackEnd, "object mode backend")
         pm.finalize()
         return pm

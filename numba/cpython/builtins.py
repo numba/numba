@@ -3,16 +3,23 @@ from functools import reduce
 
 import numpy as np
 import operator
+import warnings
 
 from llvmlite import ir
-from llvmlite.llvmpy.core import Type, Constant
-import llvmlite.llvmpy.core as lc
 
-from numba.core.imputils import lower_builtin, lower_getattr, lower_getattr_generic, lower_cast, lower_constant, iternext_impl, call_getiter, call_iternext, impl_ret_borrowed, impl_ret_untracked, numba_typeref_ctor
+from numba.core.imputils import (lower_builtin, lower_getattr,
+                                 lower_getattr_generic, lower_cast,
+                                 lower_constant, iternext_impl,
+                                 call_getiter, call_iternext, impl_ret_borrowed,
+                                 impl_ret_untracked, numba_typeref_ctor)
 from numba.core import typing, types, utils, cgutils
 from numba.core.extending import overload, intrinsic
 from numba.core.typeconv import Conversion
-from numba.core.errors import TypingError
+from numba.core.errors import (TypingError, LoweringError,
+                               NumbaExperimentalFeatureWarning)
+from numba.misc.special import literal_unroll
+from numba.core.typing.asnumbatype import as_numba_type
+from numba.core.errors import NumbaTypeError
 
 
 @overload(operator.truth)
@@ -42,7 +49,8 @@ def generic_is(context, builder, sig, args):
     if lhs_type == rhs_type:
             # mutable types
             if lhs_type.mutable:
-                raise NotImplementedError('no default `is` implementation')
+                msg = 'no default `is` implementation'
+                raise LoweringError(msg)
             # immutable types
             else:
                 # fallbacks to `==`
@@ -234,7 +242,7 @@ def round_impl_unary(context, builder, sig, args):
     fltty = sig.args[0]
     llty = context.get_value_type(fltty)
     module = builder.module
-    fnty = Type.function(llty, [llty])
+    fnty = ir.FunctionType(llty, [llty])
     fn = cgutils.get_or_insert_function(module, fnty, _round_intrinsic(fltty))
     res = builder.call(fn, args)
     # unary round() returns an int
@@ -605,6 +613,43 @@ def redirect_type_ctor(context, builder, sig, args):
 
     return context.compile_internal(builder, call_ctor, sig, args)
 
+
+@overload(sum)
+def ol_sum(iterable, start=0):
+    # Cpython explicitly rejects strings, bytes and bytearrays
+    # https://github.com/python/cpython/blob/3.9/Python/bltinmodule.c#L2310-L2329 # noqa: E501
+    error = None
+    if isinstance(start, types.UnicodeType):
+        error = ('strings', '')
+    elif isinstance(start, types.Bytes):
+        error = ('bytes', 'b')
+    elif isinstance(start, types.ByteArray):
+        error = ('bytearray', 'b')
+
+    if error is not None:
+        msg = "sum() can't sum {} [use {}''.join(seq) instead]".format(*error)
+        raise TypingError(msg)
+
+    # if the container is homogeneous then it's relatively easy to handle.
+    if isinstance(iterable, (types.containers._HomogeneousTuple, types.List,
+                             types.ListType, types.Array, types.RangeType)):
+        iterator = iter
+    elif isinstance(iterable, (types.containers._HeterogeneousTuple)):
+        # if container is heterogeneous then literal unroll and hope for the
+        # best.
+        iterator = literal_unroll
+    else:
+        return None
+
+    def impl(iterable, start=0):
+        acc = start
+        for x in iterator(iterable):
+            # This most likely widens the type, this is expected Numba behaviour
+            acc = acc + x
+        return acc
+    return impl
+
+
 # ------------------------------------------------------------------------------
 # map, filter, reduce
 
@@ -630,3 +675,103 @@ def ol_filter(func, iterable):
                 if func(x):
                     yield x
     return impl
+
+
+@overload(isinstance)
+def ol_isinstance(var, typs):
+
+    def true_impl(var, typs):
+        return True
+
+    def false_impl(var, typs):
+        return False
+
+    var_ty = as_numba_type(var)
+
+    if isinstance(var_ty, types.Optional):
+        msg = f'isinstance cannot handle optional types. Found: "{var_ty}"'
+        raise NumbaTypeError(msg)
+
+    # NOTE: The current implementation of `isinstance` restricts the type of the
+    # instance variable to types that are well known and in common use. The
+    # danger of unrestricted tyoe comparison is that a "default" of `False` is
+    # required and this means that if there is a bug in the logic of the
+    # comparison tree `isinstance` returns False! It's therefore safer to just
+    # reject the compilation as untypable!
+    supported_var_ty = (types.Number, types.Bytes, types.RangeType,
+                        types.DictType, types.LiteralStrKeyDict, types.List,
+                        types.ListType, types.Tuple, types.UniTuple, types.Set,
+                        types.Function, types.ClassType, types.UnicodeType,
+                        types.ClassInstanceType, types.NoneType, types.Array)
+    if not isinstance(var_ty, supported_var_ty):
+        msg = f'isinstance() does not support variables of type "{var_ty}".'
+        raise NumbaTypeError(msg)
+
+    # Warn about the experimental nature of this feature.
+    msg = "Use of isinstance() detected. This is an experimental feature."
+    warnings.warn(msg, category=NumbaExperimentalFeatureWarning)
+
+    t_typs = typs
+
+    # Check the types that the var can be an instance of, it'll be a scalar,
+    # a unituple or a tuple.
+    if isinstance(t_typs, types.UniTuple):
+        # corner case - all types in isinstance are the same
+        t_typs = (t_typs.key[0])
+
+    if not isinstance(t_typs, types.Tuple):
+        t_typs = (t_typs, )
+
+    for typ in t_typs:
+
+        if isinstance(typ, types.Function):
+            key = typ.key[0]  # functions like int(..), float(..), str(..)
+        elif isinstance(typ, types.ClassType):
+            key = typ  # jitclasses
+        else:
+            key = typ.key
+
+        # corner cases for bytes, range, ...
+        # avoid registering those types on `as_numba_type`
+        types_not_registered = {
+            bytes: types.Bytes,
+            range: types.RangeType,
+            dict: (types.DictType, types.LiteralStrKeyDict),
+            list: types.List,
+            tuple: types.BaseTuple,
+            set: types.Set,
+        }
+        if key in types_not_registered:
+            if isinstance(var_ty, types_not_registered[key]):
+                return true_impl
+            continue
+
+        if isinstance(typ, types.TypeRef):
+            # Use of Numba type classes is in general not supported as they do
+            # not work when the jit is disabled.
+            if key not in (types.ListType, types.DictType):
+                msg = ("Numba type classes (except numba.typed.* container "
+                       "types) are not supported.")
+                raise NumbaTypeError(msg)
+            # Case for TypeRef (i.e. isinstance(var, typed.List))
+            #      var_ty == ListType[int64] (instance)
+            #         typ == types.ListType  (class)
+            return true_impl if type(var_ty) is key else false_impl
+        else:
+            numba_typ = as_numba_type(key)
+            if var_ty == numba_typ:
+                return true_impl
+            elif isinstance(numba_typ, types.ClassType) and \
+                    isinstance(var_ty, types.ClassInstanceType) and \
+                    var_ty.key == numba_typ.instance_type.key:
+                # check for jitclasses
+                return true_impl
+            elif isinstance(numba_typ, types.Container) and \
+                    numba_typ.key[0] == types.undefined:
+                # check for containers (list, tuple, set, ...)
+                if isinstance(var_ty, numba_typ.__class__) or \
+                    (isinstance(var_ty, types.BaseTuple) and \
+                        isinstance(numba_typ, types.BaseTuple)):
+                    return true_impl
+
+    return false_impl

@@ -7,16 +7,17 @@ Test np.datetime64 and np.timedelta64 support.
 
 import contextlib
 import itertools
+import re
+import unittest
 import warnings
 
 import numpy as np
 
-import unittest
 from numba import jit, vectorize, njit
 from numba.np.numpy_support import numpy_version
 from numba.core import types, config
 from numba.core.errors import TypingError
-from numba.tests.support import TestCase, tag
+from numba.tests.support import TestCase, tag, skip_parfors_unsupported
 from numba.np import npdatetime_helpers, numpy_support
 
 TIMEDELTA_M = np.dtype('timedelta64[M]')
@@ -75,6 +76,8 @@ def neg_usecase(x):
 def abs_usecase(x):
     return abs(x)
 
+def hash_usecase(x):
+    return hash(x)
 
 def make_add_constant(const):
     def add_constant(x):
@@ -521,6 +524,26 @@ class TestTimedeltaArithmetic(TestCase):
         check(TD('NaT'))
         check(TD('NaT', 'ms'))
 
+    def test_hash(self):
+        f = self.jit(hash_usecase)
+        def check(a):
+            self.assertPreciseEqual(f(a), hash(a))
+
+        TD_CASES = ((3,), (-4,), (3, 'ms'), (-4, 'ms'), (27, 'D'),
+                    (2, 'D'), (2, 'W'), (2, 'Y'), (3, 'W'),
+                    (365, 'D'), (10000, 'D'), (-10000, 'D'),
+                    ('NaT',), ('NaT', 'ms'), ('NaT', 'D'), (-1,))
+        DT_CASES = (('2014',), ('2016',), ('2000',), ('2014-02',),
+                    ('2014-03',), ('2014-04',), ('2016-02',), ('2000-12-31',),
+                    ('2014-01-16',), ('2014-01-05',), ('2014-01-07',),
+                    ('2014-01-06',), ('2014-02-02',), ('2014-02-27',),
+                    ('2014-02-16',), ('2014-03-01',), ('2000-01-01T01:02:03.002Z',),
+                    ('2000-01-01T01:02:03Z',), ('NaT',))
+
+        for case, typ in zip(TD_CASES + DT_CASES,
+                             (TD,) * len(TD_CASES) + (DT,) * len(TD_CASES)):
+            check(typ(*case))
+
 
 class TestTimedeltaArithmeticNoPython(TestTimedeltaArithmetic):
 
@@ -799,6 +822,86 @@ class TestDatetimeDeltaOps(TestCase):
         ]
         for a, b in test_cases:
             self.assertTrue(np.array_equal(py_func(a, b), cfunc(a, b)))
+
+
+class TestDatetimeArrayOps(TestCase):
+
+    def _test_td_add_or_sub(self, operation, parallel):
+        """
+        Test the addition/subtraction of a datetime array with a timedelta type
+        """
+        def impl(a, b):
+            return operation(a, b)
+
+        arr_one = np.array([
+                        np.datetime64("2011-01-01"),
+                        np.datetime64("1971-02-02"),
+                        np.datetime64("2021-03-03"),
+                        np.datetime64("2004-12-07"),
+                    ], dtype="datetime64[ns]")
+        arr_two = np.array([
+                        np.datetime64("2011-01-01"),
+                        np.datetime64("1971-02-02"),
+                        np.datetime64("2021-03-03"),
+                        np.datetime64("2004-12-07"),
+                    ], dtype="datetime64[D]")
+        py_func = impl
+        cfunc = njit(parallel=parallel)(impl)
+        test_cases = [
+            (arr_one, np.timedelta64(1000)),
+            (arr_two, np.timedelta64(1000)),
+            (arr_one, np.timedelta64(-54557)),
+            (arr_two, np.timedelta64(-54557)),
+        ]
+        # np.add is commutative so test the reversed order
+        if operation is np.add:
+            test_cases.extend([
+                (np.timedelta64(1000), arr_one),
+                (np.timedelta64(1000), arr_two),
+                (np.timedelta64(-54557), arr_one),
+                (np.timedelta64(-54557), arr_two),
+            ])
+        for a, b in test_cases:
+            self.assertTrue(np.array_equal(py_func(a, b), cfunc(a, b)))
+
+    def test_add_td(self):
+        self._test_td_add_or_sub(np.add, False)
+
+    @skip_parfors_unsupported
+    def test_add_td_parallel(self):
+        self._test_td_add_or_sub(np.add, True)
+
+    def test_sub_td(self):
+        self._test_td_add_or_sub(np.subtract, False)
+
+    @skip_parfors_unsupported
+    def test_sub_td_parallel(self):
+        self._test_td_add_or_sub(np.subtract, True)
+
+    def _test_add_sub_td_no_match(self, operation):
+        """
+        Tests that attempting to add/sub a datetime64 and timedelta64
+        with types that cannot be cast raises a reasonable exception.
+        """
+        @njit
+        def impl(a, b):
+            return operation(a, b)
+
+        fname = operation.__name__
+        expected = re.escape((f"ufunc '{fname}' is not supported between "
+                              "datetime64[ns] and timedelta64[M]"))
+        with self.assertRaisesRegex((TypingError, TypeError), expected):
+            impl(
+                np.array([np.datetime64("2011-01-01"),],
+                         dtype="datetime64[ns]"),
+                np.timedelta64(1000,'M')
+            )
+
+    def test_add_td_no_match(self):
+        self._test_add_sub_td_no_match(np.add)
+
+    def test_sub_td_no_match(self):
+        self._test_add_sub_td_no_match(np.subtract)
 
 
 if __name__ == '__main__':

@@ -418,12 +418,12 @@ class Expr(Inst):
         return cls(op=op, loc=loc, fn=fn, value=value)
 
     @classmethod
-    def call(cls, func, args, kws, loc, vararg=None, hardware=None):
+    def call(cls, func, args, kws, loc, vararg=None, target=None):
         assert isinstance(func, Var)
         assert isinstance(loc, Loc)
         op = 'call'
         return cls(op=op, loc=loc, func=func, args=args, kws=kws,
-                   vararg=vararg, hardware=hardware)
+                   vararg=vararg, target=target)
 
     @classmethod
     def build_tuple(cls, items, loc):
@@ -921,6 +921,16 @@ class EnterWith(Stmt):
 
     def list_vars(self):
         return [self.contextmanager]
+
+
+class PopBlock(Stmt):
+    """Marker statement for a pop block op code"""
+    def __init__(self, loc):
+        assert isinstance(loc, Loc)
+        self.loc = loc
+
+    def __str__(self):
+        return 'pop_block'
 
 
 class Arg(EqualityCheckMixin, AbstractRHS):

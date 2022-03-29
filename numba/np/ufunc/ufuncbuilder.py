@@ -3,12 +3,12 @@
 import inspect
 from contextlib import contextmanager
 
-from numba.core import config
+from numba.core import config, targetconfig
 from numba.core.decorators import jit
 from numba.core.descriptors import TargetDescriptor
 from numba.core.options import TargetOptions, include_default_options
 from numba.core.registry import cpu_target
-from numba.core.extending_hardware import dispatcher_registry, hardware_registry
+from numba.core.target_extension import dispatcher_registry, target_registry
 from numba.core import utils, types, serialize, compiler, sigutils
 from numba.np.numpy_support import as_dtype
 from numba.np.ufunc import _internal
@@ -23,6 +23,7 @@ _options_mixin = include_default_options(
     "forceobj",
     "boundscheck",
     "fastmath",
+    "target_backend",
 )
 
 
@@ -140,26 +141,27 @@ class UFuncDispatcher(serialize.ReduceMixin):
 
         # Use cache and compiler in a critical section
         with global_compiler_lock:
-            with store_overloads_on_success():
-                # attempt look up of existing
-                cres = self.cache.load_overload(sig, targetctx)
-                if cres is not None:
+            with targetconfig.ConfigStack().enter(flags.copy()):
+                with store_overloads_on_success():
+                    # attempt look up of existing
+                    cres = self.cache.load_overload(sig, targetctx)
+                    if cres is not None:
+                        return cres
+
+                    # Compile
+                    args, return_type = sigutils.normalize_signature(sig)
+                    cres = compiler.compile_extra(typingctx, targetctx,
+                                                  self.py_func, args=args,
+                                                  return_type=return_type,
+                                                  flags=flags, locals=locals)
+
+                    # cache lookup failed before so safe to save
+                    self.cache.save_overload(sig, cres)
+
                     return cres
 
-                # Compile
-                args, return_type = sigutils.normalize_signature(sig)
-                cres = compiler.compile_extra(typingctx, targetctx,
-                                              self.py_func, args=args,
-                                              return_type=return_type,
-                                              flags=flags, locals=locals)
 
-                # cache lookup failed before so safe to save
-                self.cache.save_overload(sig, cres)
-
-                return cres
-
-
-dispatcher_registry[hardware_registry['npyufunc']] = UFuncDispatcher
+dispatcher_registry[target_registry['npyufunc']] = UFuncDispatcher
 
 
 # Utility functions

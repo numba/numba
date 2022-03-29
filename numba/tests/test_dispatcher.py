@@ -26,7 +26,7 @@ from numba.np.numpy_support import as_dtype
 from numba.core.caching import _UserWideCacheLocator
 from numba.core.dispatcher import Dispatcher
 from numba.tests.support import (skip_parfors_unsupported, needs_lapack,
-                                 SerialMixin)
+                                 SerialMixin, skip_if_typeguard)
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
 import llvmlite.binding as ll
 import unittest
@@ -45,6 +45,11 @@ try:
     import pygments
 except ImportError:
     pygments = None
+
+try:
+    import ipykernel
+except ImportError:
+    ipykernel = None
 
 _is_armv7l = platform.machine() == 'armv7l'
 
@@ -1468,6 +1473,63 @@ class TestCache(BaseCacheUsecasesTest):
         err = execute_with_input()
         self.assertIn("cache hits = 1", err.strip())
 
+    @unittest.skipIf((ipykernel is None) or (ipykernel.version_info[0] < 6),
+                     "requires ipykernel >= 6")
+    def test_ipykernel(self):
+        # Test caching in an IPython session using ipykernel
+
+        base_cmd = [sys.executable, '-m', 'IPython']
+        base_cmd += ['--quiet', '--quick', '--no-banner', '--colors=NoColor']
+        try:
+            ver = subprocess.check_output(base_cmd + ['--version'])
+        except subprocess.CalledProcessError as e:
+            self.skipTest("ipython not available: return code %d"
+                          % e.returncode)
+        ver = ver.strip().decode()
+        # Create test input
+        from ipykernel import compiler
+        inputfn = compiler.get_tmp_directory()
+        with open(inputfn, "w") as f:
+            f.write(r"""
+                import os
+                import sys
+
+                from numba import jit
+
+                # IPython 5 does not support multiline input if stdin isn't
+                # a tty (https://github.com/ipython/ipython/issues/9752)
+                f = jit(cache=True)(lambda: 42)
+
+                res = f()
+                # IPython writes on stdout, so use stderr instead
+                sys.stderr.write(u"cache hits = %d\n" % f.stats.cache_hits[()])
+
+                # IPython hijacks sys.exit(), bypass it
+                sys.stdout.flush()
+                sys.stderr.flush()
+                os._exit(res)
+                """)
+
+        def execute_with_input():
+            # Feed the test input as stdin, to execute it in REPL context
+            with open(inputfn, "rb") as stdin:
+                p = subprocess.Popen(base_cmd, stdin=stdin,
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE,
+                                     universal_newlines=True)
+                out, err = p.communicate()
+                if p.returncode != 42:
+                    self.fail("unexpected return code %d\n"
+                              "-- stdout:\n%s\n"
+                              "-- stderr:\n%s\n"
+                              % (p.returncode, out, err))
+                return err
+
+        execute_with_input()
+        # Run a second time and check caching
+        err = execute_with_input()
+        self.assertIn("cache hits = 1", err.strip())
+
 
 @skip_parfors_unsupported
 class TestSequentialParForsCache(BaseCacheUsecasesTest):
@@ -1598,6 +1660,7 @@ class TestMultiprocessCache(BaseCacheTest):
         self.assertEqual(res, n * (n - 1) // 2)
 
 
+@skip_if_typeguard
 class TestCacheFileCollision(unittest.TestCase):
     _numba_parallel_test_ = False
 

@@ -4,11 +4,13 @@
 Tests the parallel backend
 """
 import faulthandler
+import itertools
 import multiprocessing
 import os
 import random
 import subprocess
 import sys
+import textwrap
 import threading
 import unittest
 
@@ -16,7 +18,8 @@ import numpy as np
 
 from numba import jit, vectorize, guvectorize, set_num_threads
 from numba.tests.support import (temp_directory, override_config, TestCase, tag,
-                                 skip_parfors_unsupported, linux_only)
+                                 skip_parfors_unsupported, linux_only,
+                                 needs_external_compilers)
 
 import queue as t_queue
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
@@ -262,7 +265,7 @@ class TestParallelBackendBase(TestCase):
         'concurrent_jit': [
             jit_runner(nopython=True, parallel=(not _parfors_unsupported)),
         ],
-        'concurrect_vectorize': [
+        'concurrent_vectorize': [
             vectorize_runner(nopython=True, target='parallel'),
         ],
         'concurrent_guvectorize': [
@@ -522,6 +525,77 @@ TestThreadingLayerSelection.generate()
 
 
 @skip_parfors_unsupported
+class TestThreadingLayerPriority(ThreadLayerTestHelper):
+
+    def each_env_var(self, env_var: str):
+        """Test setting priority via env var NUMBA_THREADING_LAYER_PRIORITY.
+        """
+        env = os.environ.copy()
+        env['NUMBA_THREADING_LAYER'] = 'default'
+        env['NUMBA_THREADING_LAYER_PRIORITY'] = env_var
+
+        code = f"""
+                import numba
+
+                # trigger threading layer decision
+                # hence catching invalid THREADING_LAYER_PRIORITY
+                @numba.jit(
+                    'float64[::1](float64[::1], float64[::1])',
+                    nopython=True,
+                    parallel=True,
+                )
+                def plus(x, y):
+                    return x + y
+
+                captured_envvar = list("{env_var}".split())
+                assert numba.config.THREADING_LAYER_PRIORITY == \
+                    captured_envvar, "priority mismatch"
+                assert numba.threading_layer() == captured_envvar[0],\
+                    "selected backend mismatch"
+                """
+        cmd = [
+            sys.executable,
+            '-c',
+            textwrap.dedent(code),
+        ]
+        self.run_cmd(cmd, env=env)
+
+    @skip_no_omp
+    @skip_no_tbb
+    def test_valid_env_var(self):
+        default = ['tbb', 'omp', 'workqueue']
+        for p in itertools.permutations(default):
+            env_var = ' '.join(p)
+            self.each_env_var(env_var)
+
+    @skip_no_omp
+    @skip_no_tbb
+    def test_invalid_env_var(self):
+        env_var = 'tbb omp workqueue notvalidhere'
+        with self.assertRaises(AssertionError) as raises:
+            self.each_env_var(env_var)
+        for msg in (
+            "THREADING_LAYER_PRIORITY invalid:",
+            "It must be a permutation of"
+        ):
+            self.assertIn(f"{msg}", str(raises.exception))
+
+    @skip_no_omp
+    def test_omp(self):
+        for env_var in ("omp tbb workqueue", "omp workqueue tbb"):
+            self.each_env_var(env_var)
+
+    @skip_no_tbb
+    def test_tbb(self):
+        for env_var in ("tbb omp workqueue", "tbb workqueue omp"):
+            self.each_env_var(env_var)
+
+    def test_workqueue(self):
+        for env_var in ("workqueue tbb omp", "workqueue omp tbb"):
+            self.each_env_var(env_var)
+
+
+@skip_parfors_unsupported
 class TestMiscBackendIssues(ThreadLayerTestHelper):
     """
     Checks fixes for the issues with threading backends implementation
@@ -543,16 +617,13 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
 
             x = np.ones(2**20, np.float32)
             foo(*([x]*8))
-            print("@%s@" % threading_layer())
+            assert threading_layer() == "omp", "omp not found"
         """
         cmdline = [sys.executable, '-c', runme]
         env = os.environ.copy()
         env['NUMBA_THREADING_LAYER'] = "omp"
         env['OMP_STACKSIZE'] = "100K"
-        out, err = self.run_cmd(cmdline, env=env)
-        if self._DEBUG:
-            print(out, err)
-        self.assertIn("@omp@", out)
+        self.run_cmd(cmdline, env=env)
 
     @skip_no_tbb
     def test_single_thread_tbb(self):
@@ -571,16 +642,13 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
                 return acc
 
             foo(100)
-            print("@%s@" % threading_layer())
+            assert threading_layer() == "tbb", "tbb not found"
         """
         cmdline = [sys.executable, '-c', runme]
         env = os.environ.copy()
         env['NUMBA_THREADING_LAYER'] = "tbb"
         env['NUMBA_NUM_THREADS'] = "1"
-        out, err = self.run_cmd(cmdline, env=env)
-        if self._DEBUG:
-            print(out, err)
-        self.assertIn("@tbb@", out)
+        self.run_cmd(cmdline, env=env)
 
     def test_workqueue_aborts_on_nested_parallelism(self):
         """
@@ -895,16 +963,19 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
             import numba
             numba.config.THREADING_LAYER='tbb'
             from numba import njit, prange, objmode
+            from numba.core.serialize import PickleCallableByPath
             import os
 
             e_running = threading.Event()
             e_proceed = threading.Event()
 
-            def indirect():
+            def indirect_core():
                 e_running.set()
                 # wait for forker() to have forked
                 while not e_proceed.isSet():
                     pass
+
+            indirect = PickleCallableByPath(indirect_core)
 
             @njit
             def obj_mode_func():
@@ -946,6 +1017,102 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
         # assert error message printed on stderr
         msg_head = "Attempted to fork from a non-main thread, the TBB library"
         self.assertIn(msg_head, err)
+
+        if self._DEBUG:
+            print("OUT:", out)
+            print("ERR:", err)
+
+    @needs_external_compilers
+    @linux_only # fork required.
+    def test_lifetime_of_task_scheduler_handle(self):
+        # See PR #7280 for context.
+        BROKEN_COMPILERS = 'SKIP: COMPILATION FAILED'
+        runme = """if 1:
+            import ctypes
+            import sys
+            import multiprocessing as mp
+            from tempfile import TemporaryDirectory, NamedTemporaryFile
+            from numba.pycc.platform import Toolchain, _external_compiler_ok
+            from numba import njit, prange, threading_layer
+            import faulthandler
+            faulthandler.enable()
+            if not _external_compiler_ok:
+                raise AssertionError('External compilers are not found.')
+            with TemporaryDirectory() as tmpdir:
+                with NamedTemporaryFile(dir=tmpdir) as tmpfile:
+                    try:
+                        src = \"\"\"
+                        #define TBB_PREVIEW_WAITING_FOR_WORKERS 1
+                        #include <tbb/tbb.h>
+                        static tbb::task_scheduler_handle tsh;
+                        extern "C"
+                        {
+                        void launch(void)
+                        {
+                            tsh = tbb::task_scheduler_handle::get();
+                        }
+                        }
+                        \"\"\"
+                        cxxfile = f"{tmpfile.name}.cxx"
+                        with open(cxxfile, 'wt') as f:
+                            f.write(src)
+                        tc = Toolchain()
+                        object_files = tc.compile_objects([cxxfile,],
+                                                           output_dir=tmpdir)
+                        dso_name = f"{tmpfile.name}.so"
+                        tc.link_shared(dso_name, object_files,
+                                       libraries=['tbb',],
+                                       export_symbols=['launch'])
+                        # Load into the process, it doesn't matter whether the
+                        # DSO exists on disk once it's loaded in.
+                        DLL = ctypes.CDLL(dso_name)
+                    except Exception as e:
+                        # Something is broken in compilation, could be one of
+                        # many things including, but not limited to: missing tbb
+                        # headers, incorrect permissions, compilers that don't
+                        # work for the above
+                        print(e)
+                        print('BROKEN_COMPILERS')
+                        sys.exit(0)
+
+                    # Do the test, launch this library and also execute a
+                    # function with the TBB threading layer.
+
+                    DLL.launch()
+
+                    @njit(parallel=True)
+                    def foo(n):
+                        acc = 0
+                        for i in prange(n):
+                            acc += i
+                        return acc
+
+                    foo(1)
+
+            # Check the threading layer used was TBB
+            assert threading_layer() == 'tbb'
+
+            # Use mp context for a controlled version of fork, this triggers the
+            # reported bug.
+
+            ctx = mp.get_context('fork')
+            def nowork():
+                pass
+            p = ctx.Process(target=nowork)
+            p.start()
+            p.join(10)
+            print("SUCCESS")
+            """.replace('BROKEN_COMPILERS', BROKEN_COMPILERS)
+
+        cmdline = [sys.executable, '-c', runme]
+        env = os.environ.copy()
+        env['NUMBA_THREADING_LAYER'] = 'tbb'
+        out, err = self.run_cmd(cmdline, env=env)
+
+        if BROKEN_COMPILERS in out:
+            self.skipTest("Compilation of DSO failed. Check output for details")
+        else:
+            self.assertIn("SUCCESS", out)
 
         if self._DEBUG:
             print("OUT:", out)

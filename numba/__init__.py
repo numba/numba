@@ -17,7 +17,6 @@ del generate_version_info
 
 
 from numba.core import config
-from numba.testing import _runtests as runtests
 from numba.core import types, errors
 
 # Re-export typeof
@@ -53,15 +52,18 @@ from numba import experimental
 import numba.core.withcontexts
 from numba.core.withcontexts import objmode_context as objmode
 
-# Initialize hardware
-import numba.core.extending_hardware
+# Initialize target extensions
+import numba.core.target_extension
 
 # Initialize typed containers
 import numba.typed
 
 # Keep this for backward compatibility.
-test = runtests.main
-
+def test(argv, **kwds):
+    # To speed up the import time, avoid importing `unittest` and other test
+    # dependencies unless the user is actually trying to run tests.
+    from numba.testing import _runtests as runtests
+    return runtests.main(argv, **kwds)
 
 __all__ = """
     cfunc
@@ -85,8 +87,8 @@ __all__ = """
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 33, 0)
-_min_llvm_version = (9, 0, 0)
+_min_llvmlite_version = (0, 39, 0)
+_min_llvm_version = (11, 0, 0)
 
 def _ensure_llvm():
     """
@@ -132,8 +134,8 @@ def _ensure_critical_deps():
     if PYVERSION < (3, 7):
         raise ImportError("Numba needs Python 3.7 or greater")
 
-    if numpy_version < (1, 15):
-        raise ImportError("Numba needs NumPy 1.15 or greater")
+    if numpy_version < (1, 18):
+        raise ImportError("Numba needs NumPy 1.18 or greater")
 
     try:
         import scipy

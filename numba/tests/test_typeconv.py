@@ -19,6 +19,7 @@ class CompatibilityTestMixin(unittest.TestCase):
         u16 = types.uint16
         u32 = types.uint32
         u64 = types.uint64
+        f16 = types.float16
         f32 = types.float32
         f64 = types.float64
         c64 = types.complex64
@@ -36,6 +37,7 @@ class CompatibilityTestMixin(unittest.TestCase):
         self.assertEqual(check_compatible(u32, i32), Conversion.unsafe)
         self.assertEqual(check_compatible(u32, i64), Conversion.safe)
 
+        self.assertEqual(check_compatible(i16, f16), Conversion.unsafe)
         self.assertEqual(check_compatible(i32, f32), Conversion.unsafe)
         self.assertEqual(check_compatible(u32, f32), Conversion.unsafe)
         self.assertEqual(check_compatible(i32, f64), Conversion.safe)
@@ -164,24 +166,49 @@ class TestTypeConv(CompatibilityTestMixin, unittest.TestCase):
         self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=True,
                                             exact_match_required=False), 1)
 
+    def test_overload4(self):
+        tm = rules.default_type_manager
+
+        i16 = types.int16
+        i32 = types.int32
+        i64 = types.int64
+        f16 = types.float16
+        f32 = types.float32
+
+        sig = (i16, f16, f16)
+        ovs = [
+            # One unsafe, one promote, one exact
+            (f16, f32, f16),
+            # Two unsafe, one exact types
+            (f32, i32, f16),
+        ]
+
+        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=True,
+                                            exact_match_required=False), 0)
+
     def test_type_casting_rules(self):
         tm = TypeManager()
         tcr = TypeCastingRules(tm)
 
+        i16 = types.int16
         i32 = types.int32
         i64 = types.int64
         f64 = types.float64
         f32 = types.float32
+        f16 = types.float16
         made_up = types.Dummy("made_up")
 
         tcr.promote_unsafe(i32, i64)
         tcr.safe_unsafe(i32, f64)
         tcr.promote_unsafe(f32, f64)
+        tcr.promote_unsafe(f16, f32)
+        tcr.unsafe_unsafe(i16, f16)
 
         def base_test():
             # As declared
             self.assertEqual(tm.check_compatible(i32, i64), Conversion.promote)
             self.assertEqual(tm.check_compatible(i32, f64), Conversion.safe)
+            self.assertEqual(tm.check_compatible(f16, f32), Conversion.promote)
             self.assertEqual(tm.check_compatible(f32, f64), Conversion.promote)
             self.assertEqual(tm.check_compatible(i64, i32), Conversion.unsafe)
             self.assertEqual(tm.check_compatible(f64, i32), Conversion.unsafe)
@@ -193,6 +220,8 @@ class TestTypeConv(CompatibilityTestMixin, unittest.TestCase):
             self.assertEqual(tm.check_compatible(i64, f32), Conversion.unsafe)
             self.assertEqual(tm.check_compatible(i32, f32), Conversion.unsafe)
             self.assertEqual(tm.check_compatible(f32, i32), Conversion.unsafe)
+            self.assertEqual(tm.check_compatible(i16, f16), Conversion.unsafe)
+            self.assertEqual(tm.check_compatible(f16, i16), Conversion.unsafe)
 
         # Test base graph
         base_test()

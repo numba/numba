@@ -7,22 +7,17 @@ import numpy
 
 import types as pytypes
 import collections
-import operator
 import warnings
-
-from llvmlite import ir as lir
 
 import numba
 from numba.core.extending import _Intrinsic
-from numba.core import types, utils, typing, ir, analysis, postproc, rewrites, config, cgutils
-from numba.core.typing.templates import (signature, infer_global,
-                                         AbstractTemplate)
-from numba.core.imputils import impl_ret_untracked
+from numba.core import types, typing, ir, analysis, postproc, rewrites, config
+from numba.core.typing.templates import signature
 from numba.core.analysis import (compute_live_map, compute_use_defs,
                             compute_cfg_from_blocks)
 from numba.core.errors import (TypingError, UnsupportedError,
-                               NumbaPendingDeprecationWarning, NumbaWarning,
-                               feedback_details, CompilerError)
+                               NumbaPendingDeprecationWarning,
+                               CompilerError)
 
 import copy
 
@@ -36,7 +31,20 @@ def mk_unique_var(prefix):
     return var
 
 
-_max_label = 0
+class _MaxLabel:
+    def __init__(self, value=0):
+        self._value = value
+
+    def next(self):
+        self._value += 1
+        return self._value
+
+    def update(self, newval):
+        self._value = max(newval, self._value)
+
+
+_the_max_label = _MaxLabel()
+del _MaxLabel
 
 
 def get_unused_var_name(prefix, var_table):
@@ -52,14 +60,14 @@ def get_unused_var_name(prefix, var_table):
 
 
 def next_label():
-    global _max_label
-    _max_label += 1
-    return _max_label
+    return _the_max_label.next()
 
 
-def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc, lhs_typ):
+def mk_alloc(typingctx, typemap, calltypes, lhs, size_var, dtype, scope, loc,
+             lhs_typ):
     """generate an array allocation with np.empty() and return list of nodes.
     size_var can be an int variable or tuple of int variables.
+    lhs_typ is the type of the array being allocated.
     """
     out = []
     ndims = 1
@@ -95,25 +103,37 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc, lhs_typ):
     if typemap:
         typemap[attr_var.name] = get_np_ufunc_typ(numpy.empty)
     attr_assign = ir.Assign(empty_attr_call, attr_var, loc)
+     # Assume str(dtype) returns a valid type
+    dtype_str = str(dtype)
     # alloc call: lhs = empty_attr(size_var, typ_var)
     typ_var = ir.Var(scope, mk_unique_var("$np_typ_var"), loc)
     if typemap:
         typemap[typ_var.name] = types.functions.NumberClass(dtype)
-    # assuming str(dtype) returns valid np dtype string
-    dtype_str = str(dtype)
-    if dtype_str=='bool':
-        # empty doesn't like 'bool' sometimes (e.g. kmeans example)
-        dtype_str = 'bool_'
-    np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
-    typ_var_assign = ir.Assign(np_typ_getattr, typ_var, loc)
+    # If dtype is a datetime/timedelta with a unit,
+    # then it won't return a valid type and instead can be created
+    # with a string. i.e. "datetime64[ns]")
+    if (isinstance(dtype, (types.NPDatetime, types.NPTimedelta)) and
+        dtype.unit != ''):
+            typename_const = ir.Const(dtype_str, loc)
+            typ_var_assign = ir.Assign(typename_const, typ_var, loc)
+    else:
+        if dtype_str=='bool':
+            # empty doesn't like 'bool' sometimes (e.g. kmeans example)
+            dtype_str = 'bool_'
+        np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
+        typ_var_assign = ir.Assign(np_typ_getattr, typ_var, loc)
     alloc_call = ir.Expr.call(attr_var, [size_var, typ_var], (), loc)
-    if calltypes:
-        calltypes[alloc_call] = typemap[attr_var.name].get_call_type(
-            typing.Context(), [size_typ, types.functions.NumberClass(dtype)], {})
-    # signature(
-    #    types.npytypes.Array(dtype, ndims, 'C'), size_typ,
-    #    types.functions.NumberClass(dtype))
 
+    if calltypes:
+        cac = typemap[attr_var.name].get_call_type(
+            typingctx, [size_typ, types.functions.NumberClass(dtype)], {})
+        # By default, all calls to "empty" are typed as returning a standard
+        # NumPy ndarray.  If we are allocating a ndarray subclass here then
+        # just change the return type to be that of the subclass.
+        cac._return_type = (lhs_typ.copy(layout='C')
+                            if lhs_typ.layout == 'F'
+                            else lhs_typ)
+        calltypes[alloc_call] = cac
     if lhs_typ.layout == 'F':
         empty_c_typ = lhs_typ.copy(layout='C')
         empty_c_var = ir.Var(scope, mk_unique_var("$empty_c_var"), loc)
@@ -131,7 +151,7 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc, lhs_typ):
         asfortranarray_call = ir.Expr.call(afa_attr_var, [empty_c_var], (), loc)
         if calltypes:
             calltypes[asfortranarray_call] = typemap[afa_attr_var.name].get_call_type(
-                typing.Context(), [empty_c_typ], {})
+                typingctx, [empty_c_typ], {})
 
         asfortranarray_assign = ir.Assign(asfortranarray_call, lhs, loc)
 
@@ -808,6 +828,8 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                 if (isinstance(expr, ir.Expr) and (expr.op == 'cast' or
                     expr.op in ['getitem', 'static_getitem'])):
                     _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
+                if isinstance(expr, ir.Expr) and expr.op == 'inplace_binop':
+                    _add_alias(lhs, expr.lhs.name, alias_map, arg_aliases)
                 # array attributes like A.T
                 if (isinstance(expr, ir.Expr) and expr.op == 'getattr'
                         and expr.attr in ['T', 'ctypes', 'flat']):
@@ -1303,7 +1325,7 @@ def simplify_CFG(blocks):
 
 
 arr_math = ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
-            'cumsum', 'cumprod', 'argmin', 'argmax', 'argsort',
+            'cumsum', 'cumprod', 'argmax', 'argmin', 'argsort',
             'nonzero', 'ravel']
 
 
@@ -1662,10 +1684,9 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, targetctx=None,
     remove_dels(f_ir.blocks)
 
     # relabel by adding an offset
-    global _max_label
-    f_ir.blocks = add_offset_to_labels(f_ir.blocks, _max_label + 1)
+    f_ir.blocks = add_offset_to_labels(f_ir.blocks, _the_max_label.next())
     max_label = max(f_ir.blocks.keys())
-    _max_label = max_label
+    _the_max_label.update(max_label)
 
     # rename all variables to avoid conflict
     var_table = get_name_var_table(f_ir.blocks)
@@ -1696,12 +1717,15 @@ def _create_function_from_code_obj(fcode, func_env, func_arg, func_clo, glbls):
     * func_clo - string for the closure args
     * glbls - the function globals
     """
-    func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (
-        func_env, func_arg, func_clo)
+    sanitized_co_name = fcode.co_name.replace('<', '_').replace('>', '_')
+    func_text = (f"def closure():\n{func_env}\n"
+                 f"\tdef {sanitized_co_name}({func_arg}):\n"
+                 f"\t\treturn ({func_clo})\n"
+                 f"\treturn {sanitized_co_name}")
     loc = {}
     exec(func_text, glbls, loc)
 
-    f = loc['g']()
+    f = loc['closure']()
     # replace the code body
     f.__code__ = fcode
     f.__name__ = fcode.co_name
@@ -1712,7 +1736,7 @@ def get_ir_of_code(glbls, fcode):
     Compile a code object to get its IR, ir.Del nodes are emitted
     """
     nfree = len(fcode.co_freevars)
-    func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
+    func_env = "\n".join(["\tc_%d = None" % i for i in range(nfree)])
     func_clo = ",".join(["c_%d" % i for i in range(nfree)])
     func_arg = ",".join(["x_%d" % i for i in range(fcode.co_argcount)])
 
@@ -1738,6 +1762,7 @@ def get_ir_of_code(glbls, fcode):
     rewrites.rewrite_registry.apply('before-inference', state)
     # call inline pass to handle cases like stencils and comprehensions
     swapped = {} # TODO: get this from diagnostics store
+    import numba.core.inline_closurecall
     inline_pass = numba.core.inline_closurecall.InlineClosureCallPass(
         ir, numba.core.cpu.ParallelOptions(False), swapped)
     inline_pass.run()
@@ -2094,9 +2119,9 @@ def raise_on_unsupported_feature(func_ir, typemap):
                "in a function is unsupported (strange things happen!), use "
                "numba.gdb_breakpoint() to create additional breakpoints "
                "instead.\n\nRelevant documentation is available here:\n"
-               "https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html"
-               "/troubleshoot.html#using-numba-s-direct-gdb-bindings-in-"
-               "nopython-mode\n\nConflicting calls found at:\n %s")
+               "https://numba.readthedocs.io/en/stable/user/troubleshoot.html"
+               "#using-numba-s-direct-gdb-bindings-in-nopython-mode\n\n"
+               "Conflicting calls found at:\n %s")
         buf = '\n'.join([x.strformat() for x in gdb_calls])
         raise UnsupportedError(msg % buf)
 
@@ -2112,7 +2137,7 @@ def warn_deprecated(func_ir, typemap):
                 arg = name.split('.')[1]
                 fname = func_ir.func_id.func_qualname
                 tyname = 'list' if isinstance(ty, types.List) else 'set'
-                url = ("https://numba.pydata.org/numba-doc/latest/reference/"
+                url = ("https://numba.readthedocs.io/en/stable/reference/"
                        "deprecation.html#deprecation-of-reflection-for-list-and"
                        "-set-types")
                 msg = ("\nEncountered the use of a type that is scheduled for "
@@ -2179,7 +2204,13 @@ def enforce_no_phis(func_ir):
             raise CompilerError(msg, loc=phis[0].loc)
 
 
-def check_and_legalize_ir(func_ir):
+def legalize_single_scope(blocks):
+    """Check the given mapping of ir.Block for containing a single scope.
+    """
+    return len({blk.scope for blk in blocks.values()}) == 1
+
+
+def check_and_legalize_ir(func_ir, flags: "numba.core.compiler.Flags"):
     """
     This checks that the IR presented is legal
     """
@@ -2187,8 +2218,7 @@ def check_and_legalize_ir(func_ir):
     enforce_no_dels(func_ir)
     # postprocess and emit ir.Dels
     post_proc = postproc.PostProcessor(func_ir)
-    post_proc.run(True)
-
+    post_proc.run(True, extend_lifetimes=flags.dbg_extend_lifetimes)
 
 def convert_code_obj_to_function(code_obj, caller_ir):
     """
@@ -2218,7 +2248,7 @@ def convert_code_obj_to_function(code_obj, caller_ir):
                    "variable '%s' in a function that will escape." % x)
             raise TypingError(msg, loc=code_obj.loc)
 
-    func_env = "\n".join(["  c_%d = %s" % (i, x) for i, x in enumerate(freevars)])
+    func_env = "\n".join(["\tc_%d = %s" % (i, x) for i, x in enumerate(freevars)])
     func_clo = ",".join(["c_%d" % i for i in range(nfree)])
     co_varnames = list(fcode.co_varnames)
 
@@ -2256,3 +2286,65 @@ def convert_code_obj_to_function(code_obj, caller_ir):
     # create the function and return it
     return _create_function_from_code_obj(fcode, func_env, func_arg, func_clo,
                                           glbls)
+
+
+def fixup_var_define_in_scope(blocks):
+    """Fixes the mapping of ir.Block to ensure all referenced ir.Var are
+    defined in every scope used by the function. Such that looking up a variable
+    from any scope in this function will not fail.
+
+    Note: This is a workaround. Ideally, all the blocks should refer to the
+    same ir.Scope, but that property is not maintained by all the passes.
+    """
+    # Scan for all used variables
+    used_var = {}
+    for blk in blocks.values():
+        scope = blk.scope
+        for inst in blk.body:
+            for var in inst.list_vars():
+                used_var[var] = inst
+    # Note: not all blocks share a single scope even though they should.
+    # Ensure the scope of each block defines all used variables.
+    for blk in blocks.values():
+        scope = blk.scope
+        for var, inst in used_var.items():
+            # add this variable if it's not in scope
+            if var.name not in scope.localvars:
+                # Note: using a internal method to reuse the same
+                scope.localvars.define(var.name, var)
+
+
+def transfer_scope(block, scope):
+    """Transfer the ir.Block to use the given ir.Scope.
+    """
+    old_scope = block.scope
+    if old_scope is scope:
+        # bypass if the block is already using the given scope
+        return block
+    # Ensure variables are defined in the new scope
+    for var in old_scope.localvars._con.values():
+        if var.name not in scope.localvars:
+            scope.localvars.define(var.name, var)
+    # replace scope
+    block.scope = scope
+    return block
+
+
+def is_setup_with(stmt):
+    return isinstance(stmt, ir.EnterWith)
+
+
+def is_terminator(stmt):
+    return isinstance(stmt, ir.Terminator)
+
+
+def is_raise(stmt):
+    return isinstance(stmt, ir.Raise)
+
+
+def is_return(stmt):
+    return isinstance(stmt, ir.Return)
+
+
+def is_pop_block(stmt):
+    return isinstance(stmt, ir.PopBlock)

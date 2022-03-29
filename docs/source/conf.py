@@ -224,22 +224,22 @@ htmlhelp_basename = 'Numbadoc'
 # -- Options for LaTeX output ---------------------------------------------
 
 latex_elements = {
-# The paper size ('letterpaper' or 'a4paper').
-#'papersize': 'letterpaper',
+    # The paper size ('letterpaper' or 'a4paper').
+    #'papersize': 'letterpaper',
 
-# The font size ('10pt', '11pt' or '12pt').
-#'pointsize': '10pt',
+    # The font size ('10pt', '11pt' or '12pt').
+    #'pointsize': '10pt',
 
-# Additional stuff for the LaTeX preamble.
-#'preamble': '',
+    # Additional stuff for the LaTeX preamble.
+    #'preamble': '',
 }
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-  ('index', 'numba.tex', u'Numba Documentation',
-   u'Anaconda', 'manual'),
+    ('index', 'numba.tex', u'Numba Documentation',
+     u'Anaconda', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -282,9 +282,9 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('index', 'Numba', 'Numba Documentation',
-   'Anaconda', 'Numba', 'One line description of project.',
-   'Miscellaneous'),
+    ('index', 'Numba', 'Numba Documentation',
+     'Anaconda', 'Numba', 'One line description of project.',
+     'Miscellaneous'),
 ]
 
 # Documents to append as an appendix to all manuals.
@@ -304,9 +304,9 @@ texinfo_documents = [
 # and the Numpy documentation.
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
-    'numpy': ('http://docs.scipy.org/doc/numpy', None),
-    'llvmlite': ('http://llvmlite.pydata.org/en/latest/', None),
-    }
+    'numpy': ('https://numpy.org/doc/stable/', None),
+    'llvmlite': ('https://llvmlite.readthedocs.io/en/latest/', None),
+}
 
 
 # numpydoc options
@@ -315,6 +315,7 @@ intersphinx_mapping = {
 numpydoc_show_class_members = False
 
 # -- Custom autogeneration ------------------------------------------------
+
 
 def _autogenerate():
     from numba.scripts.generate_lower_listing import gen_lower_listing
@@ -337,5 +338,6 @@ def _autogenerate():
 
 _autogenerate()
 
+
 def setup(app):
-    app.add_stylesheet('rtd-overrides.css')
+    app.add_css_file('rtd-overrides.css')

@@ -145,15 +145,15 @@ class BaseTypeInference(FunctionPass):
                     cast = caststmts.get(var)
                     if cast is None or cast.value.name not in argvars:
                         if self._raise_errors:
-                            raise TypeError("Only accept returning of array "
-                                            "passed into the function as "
-                                            "argument")
+                            msg = ("Only accept returning of array passed into "
+                                   "the function as argument")
+                            raise errors.NumbaTypeError(msg)
 
             elif (isinstance(return_type, types.Function) or
                     isinstance(return_type, types.Phantom)):
                 if self._raise_errors:
                     msg = "Can't return function object ({}) in nopython mode"
-                    raise TypeError(msg.format(return_type))
+                    raise errors.NumbaTypeError(msg.format(return_type))
 
         with fallback_context(state, 'Function "%s" has invalid return type'
                               % (state.func_id.func_name,)):
@@ -173,23 +173,23 @@ class PartialTypeInference(BaseTypeInference):
     _raise_errors = False
 
 
-@register_pass(mutates_CFG=True, analysis_only=False)
+@register_pass(mutates_CFG=False, analysis_only=False)
 class AnnotateTypes(AnalysisPass):
     _name = "annotate_types"
 
     def __init__(self):
         AnalysisPass.__init__(self)
 
+    def get_analysis_usage(self, AU):
+        AU.add_required(IRLegalization)
+
     def run_pass(self, state):
         """
         Create type annotation after type inference
         """
-        # add back in dels.
-        post_proc = postproc.PostProcessor(state.func_ir)
-        post_proc.run(emit_dels=True)
-
+        func_ir = state.func_ir.copy()
         state.type_annotation = type_annotations.TypeAnnotation(
-            func_ir=state.func_ir.copy(),
+            func_ir=func_ir,
             typemap=state.typemap,
             calltypes=state.calltypes,
             lifted=state.lifted,
@@ -206,8 +206,6 @@ class AnnotateTypes(AnalysisPass):
             with open(config.HTML, 'w') as fout:
                 state.type_annotation.html_annotate(fout)
 
-        # now remove dels
-        post_proc.remove_dels()
         return False
 
 
@@ -260,8 +258,8 @@ class PreParforPass(FunctionPass):
         assert state.func_ir
         preparfor_pass = _parfor_PreParforPass(
             state.func_ir,
-            state.type_annotation.typemap,
-            state.type_annotation.calltypes,
+            state.typemap,
+            state.calltypes,
             state.typingctx,
             state.targetctx,
             state.flags.auto_parallel,
@@ -296,8 +294,8 @@ class ParforPass(FunctionPass):
         # Ensure we have an IR and type information.
         assert state.func_ir
         parfor_pass = _parfor_ParforPass(state.func_ir,
-                                         state.type_annotation.typemap,
-                                         state.type_annotation.calltypes,
+                                         state.typemap,
+                                         state.calltypes,
                                          state.return_type,
                                          state.typingctx,
                                          state.targetctx,
@@ -322,7 +320,7 @@ class ParforPass(FunctionPass):
             # parfor calls the compiler chain again with a string
             if not (config.DISABLE_PERFORMANCE_WARNINGS or
                     state.func_ir.loc.filename == '<string>'):
-                url = ("https://numba.pydata.org/numba-doc/latest/user/"
+                url = ("https://numba.readthedocs.io/en/stable/user/"
                        "parallel.html#diagnostics")
                 msg = ("\nThe keyword argument 'parallel=True' was specified "
                        "but no transformation for parallel execution was "
@@ -388,7 +386,7 @@ class NativeLowering(LoweringPass):
                 funcdesc.PythonFunctionDescriptor.from_specialized_function(
                     interp, typemap, restype, calltypes,
                     mangler=targetctx.mangler, inline=flags.forceinline,
-                    noalias=flags.noalias)
+                    noalias=flags.noalias, abi_tags=[flags.get_mangle_string()])
 
             with targetctx.push_code_library(library):
                 lower = lowering.Lower(targetctx, library, fndesc, interp,
@@ -437,6 +435,22 @@ class NativeLowering(LoweringPass):
 
 
 @register_pass(mutates_CFG=False, analysis_only=True)
+class NoPythonSupportedFeatureValidation(AnalysisPass):
+    """NoPython Mode check: Validates the IR to ensure that features in use are
+    in a form that is supported"""
+
+    _name = "nopython_supported_feature_validation"
+
+    def __init__(self):
+        AnalysisPass.__init__(self)
+
+    def run_pass(self, state):
+        raise_on_unsupported_feature(state.func_ir, state.typemap)
+        warn_deprecated(state.func_ir, state.typemap)
+        return False
+
+
+@register_pass(mutates_CFG=False, analysis_only=True)
 class IRLegalization(AnalysisPass):
 
     _name = "ir_legalization"
@@ -445,10 +459,8 @@ class IRLegalization(AnalysisPass):
         AnalysisPass.__init__(self)
 
     def run_pass(self, state):
-        raise_on_unsupported_feature(state.func_ir, state.typemap)
-        warn_deprecated(state.func_ir, state.typemap)
         # NOTE: this function call must go last, it checks and fixes invalid IR!
-        check_and_legalize_ir(state.func_ir)
+        check_and_legalize_ir(state.func_ir, flags=state.flags)
         return True
 
 
@@ -555,7 +567,7 @@ class InlineOverloads(FunctionPass):
                 del state.func_ir.blocks[dead]
             # clean up blocks
             dead_code_elimination(state.func_ir,
-                                  typemap=state.type_annotation.typemap)
+                                  typemap=state.typemap)
             # clean up unconditional branches that appear due to inlined
             # functions introducing blocks
             state.func_ir.blocks = simplify_CFG(state.func_ir.blocks)
@@ -568,7 +580,7 @@ class InlineOverloads(FunctionPass):
         return True
 
     def _get_attr_info(self, state, expr):
-        recv_type = state.type_annotation.typemap[expr.value.name]
+        recv_type = state.typemap[expr.value.name]
         recv_type = types.unliteral(recv_type)
         matched = state.typingctx.find_matching_getattr_template(
             recv_type, expr.attr,
@@ -596,7 +608,7 @@ class InlineOverloads(FunctionPass):
             if expr.op == 'call':
                 # check this is a known and typed function
                 try:
-                    func_ty = state.type_annotation.typemap[expr.func.name]
+                    func_ty = state.typemap[expr.func.name]
                 except KeyError:
                     # e.g. Calls to CUDA Intrinsic have no mapped type
                     # so KeyError
@@ -629,7 +641,7 @@ class InlineOverloads(FunctionPass):
         if func_ty is None:
             return None
 
-        sig = state.type_annotation.calltypes[expr]
+        sig = state.calltypes[expr]
         if not sig:
             return None
 
@@ -703,8 +715,8 @@ class InlineOverloads(FunctionPass):
         if not inline_type.is_always_inline:
             from numba.core.typing.templates import _inline_info
             caller_inline_info = _inline_info(state.func_ir,
-                                              state.type_annotation.typemap,
-                                              state.type_annotation.calltypes,
+                                              state.typemap,
+                                              state.calltypes,
                                               sig)
 
             # must be a cost-model function, run the function
@@ -829,13 +841,14 @@ class PreLowerStripPhis(FunctionPass):
             for target, rhs in exporters[label]:
                 # If RHS is undefined
                 if rhs is ir.UNDEFINED:
-                    # Put in a NULL initializer
-                    rhs = ir.Expr.null(loc=target.loc)
+                    # Put in a NULL initializer, set the location to be in what
+                    # will eventually materialize as the prologue.
+                    rhs = ir.Expr.null(loc=func_ir.loc)
 
                 assign = ir.Assign(
                     target=target,
                     value=rhs,
-                    loc=target.loc
+                    loc=rhs.loc
                 )
                 # Insert at the earliest possible location; i.e. after the
                 # last assignment to rhs

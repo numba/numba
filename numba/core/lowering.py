@@ -1,15 +1,23 @@
-from collections import namedtuple
+from collections import namedtuple, defaultdict
+import ast
+import inspect
+import textwrap
 import operator
+import warnings
 from functools import partial
 
-from llvmlite.llvmpy.core import Constant, Type, Builder
+import llvmlite.ir
+from llvmlite.ir import Constant, IRBuilder
 
 from numba.core import (typing, utils, types, ir, debuginfo, funcdesc,
-                        generators, config, ir_utils, cgutils, removerefctpass)
+                        generators, config, ir_utils, cgutils, removerefctpass,
+                        targetconfig)
 from numba.core.errors import (LoweringError, new_error_context, TypingError,
-                               LiteralTypingError, UnsupportedError)
+                               LiteralTypingError, UnsupportedError,
+                               NumbaDebugInfoWarning)
 from numba.core.funcdesc import default_mangler
 from numba.core.environment import Environment
+from numba.core.analysis import compute_use_defs
 
 
 _VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
@@ -58,6 +66,7 @@ class BaseLower(object):
         self.call_conv = context.call_conv
         self.generator_info = func_ir.generator_info
         self.metadata = metadata
+        self.flags = targetconfig.ConfigStack.top_or_none()
 
         # Initialize LLVM
         self.module = self.library.create_ir_module(self.fndesc.unique_name)
@@ -84,8 +93,12 @@ class BaseLower(object):
                         if self.context.enable_debuginfo
                         else debuginfo.DummyDIBuilder)
 
+        # debuginfo def location
+        self.defn_loc = self._compute_def_location()
+
         self.debuginfo = dibuildercls(module=self.module,
-                                      filepath=func_ir.loc.filename)
+                                      filepath=func_ir.loc.filename,
+                                      cgctx=context)
 
         # Subclass initialization
         self.init()
@@ -107,6 +120,52 @@ class BaseLower(object):
         self.env_body = self.env_manager.env_body
         self.envarg = self.env_manager.env_ptr
 
+    def _compute_def_location(self):
+        # Debuginfo requires source to be accurate. Find it and warn if not
+        # found. If it's not found, use the func_ir line + 1, this assumes that
+        # the function definition is decorated with a 1 line jit decorator.
+        defn_loc = self.func_ir.loc.with_lineno(self.func_ir.loc.line + 1)
+        if self.context.enable_debuginfo:
+            fn = self.func_ir.func_id.func
+            try:
+                raw_source_str, _ = inspect.getsourcelines(fn)
+            except OSError:
+                msg = ("Could not find source for function: "
+                       f"{self.func_ir.func_id.func}. Debug line information "
+                       "may be inaccurate.")
+                warnings.warn(NumbaDebugInfoWarning(msg))
+            else:
+                # Parse the source and find the line with `def <func>` in it, it
+                # is assumed that if the compilation has made it this far that
+                # the source is at least legal and has valid syntax.
+
+                # Join the source as a block and dedent it.
+                source_str = textwrap.dedent(''.join(raw_source_str))
+                # Deal with unparsable source (see #7730), this can be caused
+                # by continuation lines/comments at indent levels that are
+                # invalid when the just function source is parsed in isolation.
+                src_ast = None
+                try:
+                    src_ast = ast.parse(source_str)
+                except IndentationError:
+                    msg = ("Could not parse the source for function: "
+                           f"{self.func_ir.func_id.func}. Debug line "
+                           "information may be inaccurate. This is often "
+                           "caused by comments/docstrings/line continuation "
+                           "that is at a lesser indent level than the source.")
+                    warnings.warn(NumbaDebugInfoWarning(msg))
+                # pull the definition out of the AST, only if it seems valid
+                # i.e. one thing in the body
+                if src_ast is not None and len(src_ast.body) == 1:
+                    pydef = src_ast.body.pop()
+                    # -1 as lines start at 1 and this is an offset.
+                    pydef_offset = pydef.lineno - 1
+
+                    func_ir_loc = self.func_ir.loc
+                    defn_line = func_ir_loc.line + pydef_offset
+                    defn_loc = func_ir_loc.with_lineno(defn_line)
+        return defn_loc
+
     def pre_lower(self):
         """
         Called before lowering all blocks.
@@ -116,8 +175,10 @@ class BaseLower(object):
         # EnvironmentManager.
         self.pyapi = None
         self.debuginfo.mark_subprogram(function=self.builder.function,
-                                       name=self.fndesc.qualname,
-                                       loc=self.func_ir.loc)
+                                       qualname=self.fndesc.qualname,
+                                       argnames=self.fndesc.args,
+                                       argtypes=self.fndesc.argtypes,
+                                       line=self.defn_loc.line)
 
     def post_lower(self):
         """
@@ -219,9 +280,12 @@ class BaseLower(object):
         self.extract_function_arguments()
         entry_block_tail = self.lower_function_body()
 
-        # Close tail of entry block
-        self.builder.position_at_end(entry_block_tail)
-        self.builder.branch(self.blkmap[self.firstblk])
+        # Close tail of entry block, do not emit debug metadata else the
+        # unconditional jump gets associated with the metadata from the function
+        # body end.
+        with debuginfo.suspend_emission(self.builder):
+            self.builder.position_at_end(entry_block_tail)
+            self.builder.branch(self.blkmap[self.firstblk])
 
     def lower_function_body(self):
         """
@@ -285,8 +349,13 @@ class BaseLower(object):
     def setup_function(self, fndesc):
         # Setup function
         self.function = self.context.declare_function(self.module, fndesc)
+        if self.flags.dbg_optnone:
+            attrset = self.function.attributes
+            if "alwaysinline" not in attrset:
+                attrset.add("optnone")
+                attrset.add("noinline")
         self.entry_block = self.function.append_basic_block('entry')
-        self.builder = Builder(self.entry_block)
+        self.builder = IRBuilder(self.entry_block)
         self.call_helper = self.call_conv.init_call_helper(self.builder)
 
     def typeof(self, varname):
@@ -296,14 +365,89 @@ class BaseLower(object):
         if config.DEBUG_JIT:
             self.context.debug_print(self.builder, "DEBUGJIT: {0}".format(msg))
 
+    def print_variable(self, msg, varname):
+        """Helper to emit ``print(msg, varname)`` for debugging.
+
+        Parameters
+        ----------
+        msg : str
+            Literal string to be printed.
+        varname : str
+            A variable name whose value will be printed.
+        """
+        argtys = (
+            types.literal(msg),
+            self.fndesc.typemap[varname]
+        )
+        args = (
+            self.context.get_dummy_value(),
+            self.loadvar(varname),
+        )
+        sig = typing.signature(types.none, *argtys)
+
+        impl = self.context.get_function(print, sig)
+        impl(self.builder, args)
+
 
 class Lower(BaseLower):
     GeneratorLower = generators.GeneratorLower
+
+    def init(self):
+        super().init()
+        # find all singly assigned variables
+        self._find_singly_assigned_variable()
+
+    @property
+    def _disable_sroa_like_opt(self):
+        """Flags that the SROA like optimisation that Numba performs (which
+        prevent alloca and subsequent load/store for locals) should be disabled.
+        Currently, this is conditional solely on the presence of a request for
+        the emission of debug information."""
+        return False if self.flags is None else self.flags.debuginfo
+
+    def _find_singly_assigned_variable(self):
+        func_ir = self.func_ir
+        blocks = func_ir.blocks
+
+        sav = set()
+
+        if not self.func_ir.func_id.is_generator:
+            use_defs = compute_use_defs(blocks)
+
+            # Compute where variables are defined
+            var_assign_map = defaultdict(set)
+            for blk, vl in use_defs.defmap.items():
+                for var in vl:
+                    var_assign_map[var].add(blk)
+
+            # Compute where variables are used
+            var_use_map = defaultdict(set)
+            for blk, vl in use_defs.usemap.items():
+                for var in vl:
+                    var_use_map[var].add(blk)
+
+            # Keep only variables that are defined locally and used locally
+            for var in var_assign_map:
+                if len(var_assign_map[var]) == 1:
+                    # Usemap does not keep locally defined variables.
+                    if len(var_use_map[var]) == 0:
+                        # Ensure that the variable is not defined multiple times
+                        # the the block
+                        [defblk] = var_assign_map[var]
+                        assign_stmts = self.blocks[defblk].find_insts(ir.Assign)
+                        assigns = [stmt for stmt in assign_stmts
+                                   if stmt.target.name == var]
+                        if len(assigns) == 1:
+                            sav.add(var)
+
+        self._singly_assigned_vars = sav
+        self._blk_local_varmap = {}
 
     def pre_block(self, block):
         from numba.core.unsafe import eh
 
         super(Lower, self).pre_block(block)
+        self._cur_ir_block = block
 
         if block == self.firstblk:
             # create slots for all the vars, irrespective of whether they are
@@ -346,12 +490,19 @@ class Lower(BaseLower):
 
     def lower_inst(self, inst):
         # Set debug location for all subsequent LL instructions
-        self.debuginfo.mark_location(self.builder, self.loc)
+        self.debuginfo.mark_location(self.builder, self.loc.line)
         self.debug_print(str(inst))
         if isinstance(inst, ir.Assign):
             ty = self.typeof(inst.target.name)
             val = self.lower_assign(ty, inst)
-            self.storevar(val, inst.target.name)
+            argidx = None
+            # If this is a store from an arg, like x = arg.x then tell debuginfo
+            # that this is the arg
+            if isinstance(inst.value, ir.Arg):
+                # NOTE: debug location is the `def <func>` line
+                self.debuginfo.mark_location(self.builder, self.defn_loc.line)
+                argidx = inst.value.index + 1 # args start at 1
+            self.storevar(val, inst.target.name, argidx=argidx)
 
         elif isinstance(inst, ir.Branch):
             cond = self.loadvar(inst.cond.name)
@@ -360,7 +511,8 @@ class Lower(BaseLower):
 
             condty = self.typeof(inst.cond.name)
             pred = self.context.cast(self.builder, cond, condty, types.boolean)
-            assert pred.type == Type.int(1), ("cond is not i1: %s" % pred.type)
+            assert pred.type == llvmlite.ir.IntType(1),\
+                ("cond is not i1: %s" % pred.type)
             self.builder.cbranch(pred, tr, fl)
 
         elif isinstance(inst, ir.Jump):
@@ -383,6 +535,9 @@ class Lower(BaseLower):
                 "type '{}' does not match return type '{}'".format(oty, ty))
             retval = self.context.get_return_value(self.builder, ty, val)
             self.call_conv.return_value(self.builder, retval)
+
+        elif isinstance(inst, ir.PopBlock):
+            pass # this is just a marker
 
         elif isinstance(inst, ir.StaticSetItem):
             signature = self.fndesc.calltypes[inst]
@@ -536,24 +691,28 @@ class Lower(BaseLower):
             return res
 
         elif isinstance(value, ir.Arg):
-            # Cast from the argument type to the local variable type
-            # (note the "arg.FOO" convention as used in typeinfer)
-            argty = self.typeof("arg." + value.name)
-            if isinstance(argty, types.Omitted):
-                pyval = argty.value
-                tyctx = self.context.typing_context
-                valty = tyctx.resolve_value_type_prefer_literal(pyval)
-                # use the type of the constant value
-                const = self.context.get_constant_generic(
-                    self.builder, valty, pyval,
-                )
-                # cast it to the variable type
-                res = self.context.cast(self.builder, const, valty, ty)
-            else:
-                val = self.fnargs[value.index]
-                res = self.context.cast(self.builder, val, argty, ty)
-            self.incref(ty, res)
-            return res
+            # Suspend debug info else all the arg repacking ends up being
+            # associated with some line or other and it's actually just a detail
+            # of Numba's CC.
+            with debuginfo.suspend_emission(self.builder):
+                # Cast from the argument type to the local variable type
+                # (note the "arg.FOO" convention as used in typeinfer)
+                argty = self.typeof("arg." + value.name)
+                if isinstance(argty, types.Omitted):
+                    pyval = argty.value
+                    tyctx = self.context.typing_context
+                    valty = tyctx.resolve_value_type_prefer_literal(pyval)
+                    # use the type of the constant value
+                    const = self.context.get_constant_generic(
+                        self.builder, valty, pyval,
+                    )
+                    # cast it to the variable type
+                    res = self.context.cast(self.builder, const, valty, ty)
+                else:
+                    val = self.fnargs[value.index]
+                    res = self.context.cast(self.builder, val, argty, ty)
+                self.incref(ty, res)
+                return res
 
         elif isinstance(value, ir.Yield):
             res = self.lower_yield(ty, value)
@@ -570,13 +729,15 @@ class Lower(BaseLower):
         # Yield to caller
         val = self.loadvar(inst.value.name)
         typ = self.typeof(inst.value.name)
+        actual_rettyp = self.gentype.yield_type
 
         # cast the local val to the type yielded
-        yret = self.context.cast(self.builder, val, typ,
-                                 self.gentype.yield_type)
+        yret = self.context.cast(self.builder, val, typ, actual_rettyp)
 
         # get the return repr of yielded value
-        retval = self.context.get_return_value(self.builder, typ, yret)
+        retval = self.context.get_return_value(
+            self.builder, actual_rettyp, yret,
+        )
 
         # return
         self.call_conv.return_value(self.builder, retval)
@@ -915,9 +1076,11 @@ class Lower(BaseLower):
         argvals = self.fold_call_args(
             fnty, signature, expr.args, expr.vararg, expr.kws,
         )
-        qualprefix = fnty.overloads[signature.args]
+        rec_ov = fnty.get_overloads(signature.args)
         mangler = self.context.mangler or default_mangler
-        mangled_name = mangler(qualprefix, signature.args)
+        abi_tags = self.fndesc.abi_tags
+        mangled_name = mangler(rec_ov.qualname, signature.args,
+                               abi_tags=abi_tags, uid=rec_ov.uid)
         # special case self recursion
         if self.builder.function.name.startswith(mangled_name):
             res = self.context.call_internal(
@@ -995,10 +1158,9 @@ class Lower(BaseLower):
             argvals = self.fold_call_args(
                 fnty, signature, expr.args, expr.vararg, expr.kws,
             )
-        tname = expr.hardware
+        tname = expr.target
         if tname is not None:
-            from numba.core.extending_hardware import \
-                resolve_dispatcher_from_str
+            from numba.core.target_extension import resolve_dispatcher_from_str
             disp = resolve_dispatcher_from_str(tname)
             hw_ctx = disp.targetdescr.target_context
             impl = hw_ctx.get_function(fnty, signature)
@@ -1253,12 +1415,17 @@ class Lower(BaseLower):
 
     def _alloca_var(self, name, fetype):
         """
-        Ensure the given variable has an allocated stack slot.
+        Ensure the given variable has an allocated stack slot (if needed).
         """
-        if name not in self.varmap:
+        if name in self.varmap:
+            # quit early
+            return
+
+        # If the name is used in multiple blocks or lowering with debuginfo...
+        if ((name not in self._singly_assigned_vars) or
+                self._disable_sroa_like_opt):
             # If not already defined, allocate it
-            llty = self.context.get_value_type(fetype)
-            ptr = self.alloca_lltype(name, llty)
+            ptr = self.alloca(name, fetype)
             # Remember the pointer
             self.varmap[name] = ptr
 
@@ -1266,16 +1433,30 @@ class Lower(BaseLower):
         """
         Get a pointer to the given variable's slot.
         """
+        if not self._disable_sroa_like_opt:
+            assert name not in self._blk_local_varmap
+            assert name not in self._singly_assigned_vars
         return self.varmap[name]
 
     def loadvar(self, name):
         """
         Load the given variable's value.
         """
+        if name in self._blk_local_varmap and not self._disable_sroa_like_opt:
+            return self._blk_local_varmap[name]
         ptr = self.getvar(name)
-        return self.builder.load(ptr)
 
-    def storevar(self, value, name):
+        # Don't associate debuginfo with the load for a function arg else it
+        # creates instructions ahead of the first source line of the
+        # function which then causes problems with breaking on the function
+        # symbol (it hits the symbol, not the first line).
+        if name in self.func_ir.arg_names:
+            with debuginfo.suspend_emission(self.builder):
+                return self.builder.load(ptr)
+        else:
+            return self.builder.load(ptr)
+
+    def storevar(self, value, name, argidx=None):
         """
         Store the value into the given variable.
         """
@@ -1283,21 +1464,43 @@ class Lower(BaseLower):
         # Define if not already
         self._alloca_var(name, fetype)
 
-        # Clean up existing value stored in the variable
-        old = self.loadvar(name)
-        self.decref(fetype, old)
-
         # Store variable
-        ptr = self.getvar(name)
-        if value.type != ptr.type.pointee:
-            msg = ("Storing {value.type} to ptr of {ptr.type.pointee} "
-                   "('{name}'). FE type {fetype}").format(value=value,
-                                                          ptr=ptr,
-                                                          fetype=fetype,
-                                                          name=name)
-            raise AssertionError(msg)
+        if (name in self._singly_assigned_vars and
+                not self._disable_sroa_like_opt):
+            self._blk_local_varmap[name] = value
+        else:
+            if argidx is None:
+                # Clean up existing value stored in the variable, not needed
+                # if it's an arg
+                old = self.loadvar(name)
+                self.decref(fetype, old)
 
-        self.builder.store(value, ptr)
+            # stack stored variable
+            ptr = self.getvar(name)
+            if value.type != ptr.type.pointee:
+                msg = ("Storing {value.type} to ptr of {ptr.type.pointee} "
+                       "('{name}'). FE type {fetype}").format(value=value,
+                                                              ptr=ptr,
+                                                              fetype=fetype,
+                                                              name=name)
+                raise AssertionError(msg)
+
+            # If this store is associated with an argument to the function (i.e.
+            # store following reassemble from CC splatting structs as many args
+            # to the function) then mark this variable as such.
+            if argidx is not None:
+                with debuginfo.suspend_emission(self.builder):
+                    self.builder.store(value, ptr)
+                loc = self.defn_loc # the line with `def <func>`
+                lltype = self.context.get_value_type(fetype)
+                sizeof = self.context.get_abi_sizeof(lltype)
+                datamodel = self.context.data_model_manager[fetype]
+                self.debuginfo.mark_variable(self.builder, ptr, name=name,
+                                             lltype=lltype, size=sizeof,
+                                             line=loc.line, datamodel=datamodel,
+                                             argidx=argidx)
+            else:
+                self.builder.store(value, ptr)
 
     def delvar(self, name):
         """
@@ -1305,31 +1508,48 @@ class Lower(BaseLower):
         """
         fetype = self.typeof(name)
 
+        # Out-of-order
+        if (name not in self._blk_local_varmap and
+                not self._disable_sroa_like_opt):
+            if name in self._singly_assigned_vars:
+                self._singly_assigned_vars.discard(name)
+
         # Define if not already (may happen if the variable is deleted
         # at the beginning of a loop, but only set later in the loop)
         self._alloca_var(name, fetype)
 
-        ptr = self.getvar(name)
-        self.decref(fetype, self.builder.load(ptr))
-        # Zero-fill variable to avoid double frees on subsequent dels
-        self.builder.store(Constant.null(ptr.type.pointee), ptr)
+        if name in self._blk_local_varmap and not self._disable_sroa_like_opt:
+            llval = self._blk_local_varmap[name]
+            self.decref(fetype, llval)
+        else:
+            ptr = self.getvar(name)
+            self.decref(fetype, self.builder.load(ptr))
+            # Zero-fill variable to avoid double frees on subsequent dels
+            self.builder.store(Constant(ptr.type.pointee, None), ptr)
 
     def alloca(self, name, type):
         lltype = self.context.get_value_type(type)
-        return self.alloca_lltype(name, lltype)
+        datamodel = self.context.data_model_manager[type]
+        return self.alloca_lltype(name, lltype, datamodel=datamodel)
 
-    def alloca_lltype(self, name, lltype):
+    def alloca_lltype(self, name, lltype, datamodel=None):
         # Is user variable?
         is_uservar = not name.startswith('$')
         # Allocate space for variable
         aptr = cgutils.alloca_once(self.builder, lltype,
                                    name=name, zfill=False)
+
+        # Emit debug info for user variable
         if is_uservar:
-            # Emit debug info for user variable
-            sizeof = self.context.get_abi_sizeof(lltype)
-            self.debuginfo.mark_variable(self.builder, aptr, name=name,
-                                         lltype=lltype, size=sizeof,
-                                         loc=self.loc)
+            # Don't associate debuginfo with the alloca for a function arg, this
+            # is handled by the first store to the alloca so that repacking the
+            # splatted args from the CC is dealt with.
+            if name not in self.func_ir.arg_names:
+                sizeof = self.context.get_abi_sizeof(lltype)
+                self.debuginfo.mark_variable(self.builder, aptr, name=name,
+                                             lltype=lltype, size=sizeof,
+                                             line=self.loc.line,
+                                             datamodel=datamodel,)
         return aptr
 
     def incref(self, typ, val):
@@ -1342,7 +1562,11 @@ class Lower(BaseLower):
         if not self.context.enable_nrt:
             return
 
-        self.context.nrt.decref(self.builder, typ, val)
+        # do not associate decref with "use", it creates "jumpy" line info as
+        # the decrefs are usually where the ir.Del nodes are, which is at the
+        # end of the block.
+        with debuginfo.suspend_emission(self.builder):
+            self.context.nrt.decref(self.builder, typ, val)
 
 
 def _lit_or_omitted(value):

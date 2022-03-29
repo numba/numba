@@ -8,7 +8,7 @@ import sys
 import itertools
 from collections import namedtuple
 
-from llvmlite.llvmpy import core as lc
+import llvmlite.ir as ir
 
 import numpy as np
 import operator
@@ -71,9 +71,9 @@ class _ScalarHelper(object):
         self.val = val
         self.base_type = ty
         intpty = ctxt.get_value_type(types.intp)
-        self.shape = [lc.Constant.int(intpty, 1)]
+        self.shape = [ir.Constant(intpty, 1)]
 
-        lty = ctxt.get_data_type(ty) if ty != types.boolean else lc.Type.int(1)
+        lty = ctxt.get_data_type(ty) if ty != types.boolean else ir.IntType(1)
         self._ptr = cgutils.alloca_once(bld, lty)
 
     def create_iter_indices(self):
@@ -95,14 +95,14 @@ class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper',
     def update_indices(self, loop_indices, name):
         bld = self.array.builder
         intpty = self.array.context.get_value_type(types.intp)
-        ONE = lc.Constant.int(lc.Type.int(intpty.width), 1)
+        ONE = ir.Constant(ir.IntType(intpty.width), 1)
 
         # we are only interested in as many inner dimensions as dimensions
         # the indexed array has (the outer dimensions are broadcast, so
         # ignoring the outer indices produces the desired result.
         indices = loop_indices[len(loop_indices) - len(self.indices):]
         for src, dst, dim in zip(indices, self.indices, self.array.shape):
-            cond = bld.icmp(lc.ICMP_UGT, dim, ONE)
+            cond = bld.icmp_unsigned('>', dim, ONE)
             with bld.if_then(cond):
                 bld.store(src, dst)
 
@@ -127,11 +127,11 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder',
     """
     def create_iter_indices(self):
         intpty = self.context.get_value_type(types.intp)
-        ZERO = lc.Constant.int(lc.Type.int(intpty.width), 0)
+        ZERO = ir.Constant(ir.IntType(intpty.width), 0)
 
         indices = []
         for i in range(self.ndim):
-            x = cgutils.alloca_once(self.builder, lc.Type.int(intpty.width))
+            x = cgutils.alloca_once(self.builder, ir.IntType(intpty.width))
             self.builder.store(ZERO, x)
             indices.append(x)
         return _ArrayIndexingHelper(self, indices)
@@ -232,6 +232,10 @@ def _build_array(context, builder, array_ty, input_types, inputs):
     given the target context, builder, output array type, and a list of
     _ArrayHelper instances.
     """
+    # First, strip optional types, ufunc loops are typed on concrete types
+    input_types = [x.type if isinstance(x, types.Optional) else x
+                   for x in input_types]
+
     intp_ty = context.get_value_type(types.intp)
     def make_intp_const(val):
         return context.get_constant(types.intp, val)
@@ -265,7 +269,7 @@ def _build_array(context, builder, array_ty, input_types, inputs):
             builder, _broadcast_onto, _broadcast_onto_sig,
             [arg_ndim, src_shape, dest_ndim, dest_shape])
         with cgutils.if_unlikely(builder,
-                                 builder.icmp(lc.ICMP_SLT, arg_result, ONE)):
+                                 builder.icmp_signed('<', arg_result, ONE)):
             msg = "unable to broadcast argument %d to output array" % (
                 arg_number,)
 
@@ -357,7 +361,7 @@ def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
             else:
                 output = _prepare_argument(
                     context, builder,
-                    lc.Constant.null(context.get_value_type(ret_ty)), ret_ty)
+                    ir.Constant(context.get_value_type(ret_ty), None), ret_ty)
             arguments.append(output)
         elif context.enable_nrt:
             # Incref the output
@@ -606,4 +610,4 @@ def numpy_dtype(desc):
             return _make_dtype_object(desc)
         return imp
     else:
-        raise TypeError('unknown dtype descriptor: {}'.format(desc))
+        raise errors.NumbaTypeError('unknown dtype descriptor: {}'.format(desc))

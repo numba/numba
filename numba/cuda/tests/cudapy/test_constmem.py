@@ -1,8 +1,7 @@
 import numpy as np
-import sys
 
-from numba import cuda
-from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
+from numba import cuda, complex64, int32, float64
+from numba.cuda.testing import unittest, CUDATestCase
 from numba.core.config import ENABLE_CUDASIM
 
 CONST_EMPTY = np.array([])
@@ -92,7 +91,8 @@ def cuconstAlign(z):
 
 class TestCudaConstantMemory(CUDATestCase):
     def test_const_array(self):
-        jcuconst = cuda.jit('void(float64[:])')(cuconst)
+        sig = (float64[:],)
+        jcuconst = cuda.jit(sig)(cuconst)
         A = np.zeros_like(CONST1D)
         jcuconst[2, 5](A)
         self.assertTrue(np.all(A == CONST1D + 1))
@@ -100,7 +100,7 @@ class TestCudaConstantMemory(CUDATestCase):
         if not ENABLE_CUDASIM:
             self.assertIn(
                 'ld.const.f64',
-                jcuconst.ptx,
+                jcuconst.inspect_asm(sig),
                 "as we're adding to it, load as a double")
 
     def test_const_empty(self):
@@ -116,7 +116,8 @@ class TestCudaConstantMemory(CUDATestCase):
         self.assertTrue(np.all(A == (CONST3BYTES + CONST1D[:3])))
 
     def test_const_array_2d(self):
-        jcuconst2d = cuda.jit('void(int32[:,:])')(cuconst2d)
+        sig = (int32[:,:],)
+        jcuconst2d = cuda.jit(sig)(cuconst2d)
         A = np.zeros_like(CONST2D, order='C')
         jcuconst2d[(2, 2), (5, 5)](A)
         self.assertTrue(np.all(A == CONST2D))
@@ -124,11 +125,12 @@ class TestCudaConstantMemory(CUDATestCase):
         if not ENABLE_CUDASIM:
             self.assertIn(
                 'ld.const.u32',
-                jcuconst2d.ptx,
+                jcuconst2d.inspect_asm(sig),
                 "load the ints as ints")
 
     def test_const_array_3d(self):
-        jcuconst3d = cuda.jit('void(complex64[:,:,:])')(cuconst3d)
+        sig = (complex64[:,:,:],)
+        jcuconst3d = cuda.jit(sig)(cuconst3d)
         A = np.zeros_like(CONST3D, order='F')
         jcuconst3d[1, (5, 5, 5)](A)
         self.assertTrue(np.all(A == CONST3D))
@@ -144,7 +146,9 @@ class TestCudaConstantMemory(CUDATestCase):
                 complex_load = 'ld.const.f32'
                 description = 'load each half of the complex as f32'
 
-            self.assertIn(complex_load, jcuconst3d.ptx, description)
+            self.assertIn(
+                complex_load, jcuconst3d.inspect_asm(sig), description
+            )
 
     def test_const_record_empty(self):
         jcuconstRecEmpty = cuda.jit('void(int64[:])')(cuconstRecEmpty)
@@ -161,44 +165,6 @@ class TestCudaConstantMemory(CUDATestCase):
         np.testing.assert_allclose(A, CONST_RECORD['x'])
         np.testing.assert_allclose(B, CONST_RECORD['y'])
 
-    @skip_on_cudasim('PTX inspection not supported on the simulator')
-    def test_const_record_optimization(self):
-        A = np.zeros(2, dtype=float)
-        B = np.zeros(2, dtype=int)
-        jcuconst = cuda.jit(cuconstRec).specialize(A, B)
-
-        nvvm70_runtime = cuda.runtime.get_version() >= (11, 2)
-        windows = sys.platform.startswith('win')
-
-        if nvvm70_runtime:
-            if windows:
-                # Two ld.const.u32 as above, but using a bit-field insert to
-                # combine them
-                self.assertIn('ld.const.u32', jcuconst.ptx,
-                              'load record fields as u32')
-            else:
-                # Load of the x and y fields fused into a single instruction
-                self.assertIn('ld.const.v2.u64', jcuconst.ptx,
-                              'load record fields as vector of 2x u64')
-        else:
-            # In newer toolkits, constant values are all loaded 8 bits at a
-            # time. Check that there are enough 8-bit loads for everything to
-            # have been loaded. This is possibly less than optimal, but is the
-            # observed behaviour with current toolkit versions when IR is not
-            # optimized before sending to NVVM.
-            u8_load_count = len([s for s in jcuconst.ptx.split()
-                                 if 'ld.const.u8' in s])
-
-            if windows:
-                # NumPy ints are 32-bit on Windows by default, so only 4 bytes
-                # for loading the int (and 8 for the float)
-                expected_load_count = 12
-            else:
-                # int is 64-bit elsewhere
-                expected_load_count = 16
-            self.assertGreaterEqual(u8_load_count, expected_load_count,
-                                    'load record values as individual bytes')
-
     def test_const_record_align(self):
         A = np.zeros(2, dtype=np.float64)
         B = np.zeros(2, dtype=np.float64)
@@ -213,50 +179,6 @@ class TestCudaConstantMemory(CUDATestCase):
         np.testing.assert_allclose(C, CONST_RECORD_ALIGN['x'])
         np.testing.assert_allclose(D, CONST_RECORD_ALIGN['y'])
         np.testing.assert_allclose(E, CONST_RECORD_ALIGN['z'])
-
-    @skip_on_cudasim('PTX inspection not supported on the simulator')
-    def test_const_record_align_optimization(self):
-        rtver = cuda.runtime.get_version()
-
-        A = np.zeros(2, dtype=np.float64)
-        B = np.zeros(2, dtype=np.float64)
-        C = np.zeros(2, dtype=np.float64)
-        D = np.zeros(2, dtype=np.float64)
-        E = np.zeros(2, dtype=np.float64)
-        jcuconst = cuda.jit(cuconstRecAlign).specialize(A, B, C, D, E)
-
-        if rtver >= (10, 2) and rtver <= (11, 1):
-            # Code generation differs slightly in 10.2 - 11.1 - the first
-            # bytes are loaded as individual bytes, so we'll check that
-            # ld.const.u8 occurs at least four times (the first three bytes,
-            # then the last byte by itself)
-            msg = 'load first three bytes and last byte individually'
-            u8_load_count = len([s for s in jcuconst.ptx.split()
-                                 if 'ld.const.u8' in s])
-            self.assertGreaterEqual(u8_load_count, 4, msg)
-        else:
-            # On earlier versions, a vector of 4 bytes is used to load the
-            # first three bytes.
-            first_bytes = 'ld.const.v4.u8'
-            first_bytes_msg = 'load the first three bytes as a vector'
-
-            self.assertIn(
-                first_bytes,
-                jcuconst.ptx,
-                first_bytes_msg)
-
-        self.assertIn(
-            'ld.const.u32',
-            jcuconst.ptx,
-            'load the uint32 natively')
-
-        # On 10.2 and above, we already checked for loading the last byte by
-        # itself - no need to repeat the check.
-        if rtver < (10, 2):
-            self.assertIn(
-                'ld.const.u8',
-                jcuconst.ptx,
-                'load the last byte by itself')
 
 
 if __name__ == '__main__':

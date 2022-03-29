@@ -191,9 +191,10 @@ class ListInstance(_ListPayloadMixin):
         # it's necessary for the dtor which just decref every slot on it.
         self.zfill(idx, self._builder.add(idx, idx.type(1)))
 
-    def setitem(self, idx, val, incref):
+    def setitem(self, idx, val, incref, decref_old_value=True):
         # Decref old data
-        self.decref_value(self.getitem(idx))
+        if decref_old_value:
+            self.decref_value(self.getitem(idx))
 
         ptr = self._gep(idx)
         data_item = self._datamodel.as_data(self._builder, val)
@@ -713,11 +714,16 @@ def list_add_inplace(context, builder, sig, args):
 
 
 @lower_builtin(operator.mul, types.List, types.Integer)
+@lower_builtin(operator.mul, types.Integer, types.List)
 def list_mul(context, builder, sig, args):
-    src = ListInstance(context, builder, sig.args[0], args[0])
+    if isinstance(sig.args[0], types.List):
+        list_idx, int_idx = 0, 1
+    else:
+        list_idx, int_idx = 1, 0
+    src = ListInstance(context, builder, sig.args[list_idx], args[list_idx])
     src_size = src.size
 
-    mult = args[1]
+    mult = args[int_idx]
     zero = ir.Constant(mult.type, 0)
     mult = builder.select(cgutils.is_neg_int(builder, mult), zero, mult)
     nitems = builder.mul(mult, src_size)
@@ -979,7 +985,7 @@ def list_insert(context, builder, sig, args):
     new_size = builder.add(n, one)
     inst.resize(new_size)
     inst.move(builder.add(index, one), index, builder.sub(n, index))
-    inst.setitem(index, value, incref=True)
+    inst.setitem(index, value, incref=True, decref_old_value=False)
 
     return context.get_dummy_value()
 

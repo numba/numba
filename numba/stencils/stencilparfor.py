@@ -19,6 +19,7 @@ from numba.core import  utils, typing
 from numba.core.ir_utils import (get_call_table, mk_unique_var,
                             compile_to_numba_ir, replace_arg_nodes, guard,
                             find_callname, require, find_const, GuardException)
+from numba.core.errors import NumbaValueError
 from numba.core.utils import OPERATORS_TO_BUILTINS
 
 
@@ -278,7 +279,7 @@ class StencilPass(object):
                 cval_ty = typing.typeof.typeof(cval)
                 if not self.typingctx.can_convert(cval_ty, return_type.dtype):
                     msg = "cval type does not match stencil return type."
-                    raise ValueError(msg)
+                    raise NumbaValueError(msg)
 
                 # get slice ref
                 slice_var = ir.Var(scope, mk_unique_var("$py_g_var"), loc)
@@ -666,7 +667,8 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
         raise ValueError("Cannot use the reserved word 'out' in stencil kernels.")
 
     # get typed IR with a dummy pipeline (similar to test_parfors.py)
-    targetctx = CPUContext(typingctx)
+    from numba.core.registry import cpu_target
+    targetctx = cpu_target.target_context
     with cpu_target.nested_context(typingctx, targetctx):
         tp = DummyPipeline(typingctx, targetctx, args, stencil_func_ir)
 
@@ -691,7 +693,7 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
                                                         ir_utils.next_label())
     min_label = min(stencil_blocks.keys())
     max_label = max(stencil_blocks.keys())
-    ir_utils._max_label = max_label
+    ir_utils._the_max_label.update(max_label)
 
     if config.DEBUG_ARRAY_OPT >= 1:
         print("Initial stencil_blocks")

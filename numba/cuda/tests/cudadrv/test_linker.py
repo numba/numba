@@ -63,17 +63,21 @@ class TestLinker(CUDATestCase):
     def test_linker_basic(self):
         '''Simply go through the constructor and destructor
         '''
-        linker = Linker()
+        linker = Linker.new()
         del linker
 
-    @require_context
-    def test_linking(self):
+    def _test_linking(self, eager):
         global bar  # must be a global; other it is recognized as a freevar
         bar = cuda.declare_device('bar', 'int32(int32)')
 
         link = os.path.join(os.path.dirname(__file__), 'data', 'jitlink.ptx')
 
-        @cuda.jit('void(int32[:], int32[:])', link=[link])
+        if eager:
+            args = ['void(int32[:], int32[:])']
+        else:
+            args = []
+
+        @cuda.jit(*args, link=[link])
         def foo(x, y):
             i = cuda.grid(1)
             x[i] += bar(y[i])
@@ -85,7 +89,12 @@ class TestLinker(CUDATestCase):
 
         self.assertTrue(A[0] == 123 + 2 * 321)
 
-    @require_context
+    def test_linking_lazy_compile(self):
+        self._test_linking(eager=False)
+
+    def test_linking_eager_compile(self):
+        self._test_linking(eager=True)
+
     def test_try_to_link_nonexistent(self):
         with self.assertRaises(LinkerError) as e:
             @cuda.jit('void(int32[::1])', link=['nonexistent.a'])
@@ -93,7 +102,6 @@ class TestLinker(CUDATestCase):
                 x[0] = 0
         self.assertIn('nonexistent.a not found', e.exception.args)
 
-    @require_context
     def test_set_registers_no_max(self):
         """Ensure that the jitted kernel used in the test_set_registers_* tests
         uses more than 57 registers - this ensures that test_set_registers_*
@@ -103,19 +111,16 @@ class TestLinker(CUDATestCase):
         compiled = compiled.specialize(np.empty(32), *range(6))
         self.assertGreater(compiled.get_regs_per_thread(), 57)
 
-    @require_context
     def test_set_registers_57(self):
         compiled = cuda.jit(max_registers=57)(func_with_lots_of_registers)
         compiled = compiled.specialize(np.empty(32), *range(6))
         self.assertLessEqual(compiled.get_regs_per_thread(), 57)
 
-    @require_context
     def test_set_registers_38(self):
         compiled = cuda.jit(max_registers=38)(func_with_lots_of_registers)
         compiled = compiled.specialize(np.empty(32), *range(6))
         self.assertLessEqual(compiled.get_regs_per_thread(), 38)
 
-    @require_context
     def test_set_registers_eager(self):
         sig = void(float64[::1], int64, int64, int64, int64, int64, int64)
         compiled = cuda.jit(sig, max_registers=38)(func_with_lots_of_registers)

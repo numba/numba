@@ -4,7 +4,6 @@ from numba.cuda.cudadrv import devicearray
 from numba import cuda
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import skip_on_cudasim
-from numba.tests.support import override_config
 
 
 class TestCudaNDArray(CUDATestCase):
@@ -322,46 +321,30 @@ class TestCudaNDArray(CUDATestCase):
     def test_devicearray_relaxed_strides(self):
         # From the reproducer in Issue #6824.
 
-        with override_config('NPY_RELAXED_STRIDES_CHECKING', 1):
-            # Construct a device array that is contiguous even though
-            # the strides for the first axis (800) are not equal to
-            # the strides * size (10 * 8 = 80) for the previous axis,
-            # because the first axis size is 1.
-            arr = devicearray.DeviceNDArray((1, 10), (800, 8), np.float64)
+        # Construct a device array that is contiguous even though
+        # the strides for the first axis (800) are not equal to
+        # the strides * size (10 * 8 = 80) for the previous axis,
+        # because the first axis size is 1.
+        arr = devicearray.DeviceNDArray((1, 10), (800, 8), np.float64)
 
-            # Ensure we still believe the array to be contiguous because
-            # strides checking is relaxed.
-            self.assertTrue(arr.flags['C_CONTIGUOUS'])
-            self.assertTrue(arr.flags['F_CONTIGUOUS'])
-
-    @skip_on_cudasim('DeviceNDArray class not present in simulator')
-    def test_devicearray_strict_strides(self):
-        # From the reproducer in Issue #6824.
-
-        with override_config('NPY_RELAXED_STRIDES_CHECKING', 0):
-            # Construct a device array that is not contiguous because
-            # the strides for the first axis (800) are not equal to
-            # the strides * size (10 * 8 = 80) for the previous axis.
-            arr = devicearray.DeviceNDArray((1, 10), (800, 8), np.float64)
-
-            # Ensure we don't believe the array to be contiguous becase strides
-            # checking is strict.
-            self.assertFalse(arr.flags['C_CONTIGUOUS'])
-            self.assertFalse(arr.flags['F_CONTIGUOUS'])
+        # Ensure we still believe the array to be contiguous because
+        # strides checking is relaxed.
+        self.assertTrue(arr.flags['C_CONTIGUOUS'])
+        self.assertTrue(arr.flags['F_CONTIGUOUS'])
 
     def test_c_f_contiguity_matches_numpy(self):
         # From the reproducer in Issue #4943.
 
         shapes = ((1, 4), (4, 1))
         orders = ('C', 'F')
-        with override_config('NPY_RELAXED_STRIDES_CHECKING', 1):
-            for shape, order in itertools.product(shapes, orders):
-                arr = np.ndarray(shape, order=order)
-                d_arr = cuda.to_device(arr)
-                self.assertEqual(arr.flags['C_CONTIGUOUS'],
-                                 d_arr.flags['C_CONTIGUOUS'])
-                self.assertEqual(arr.flags['F_CONTIGUOUS'],
-                                 d_arr.flags['F_CONTIGUOUS'])
+
+        for shape, order in itertools.product(shapes, orders):
+            arr = np.ndarray(shape, order=order)
+            d_arr = cuda.to_device(arr)
+            self.assertEqual(arr.flags['C_CONTIGUOUS'],
+                             d_arr.flags['C_CONTIGUOUS'])
+            self.assertEqual(arr.flags['F_CONTIGUOUS'],
+                             d_arr.flags['F_CONTIGUOUS'])
 
     @skip_on_cudasim('Typing not done in the simulator')
     def test_devicearray_typing_order_simple_c(self):

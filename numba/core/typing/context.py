@@ -10,6 +10,7 @@ import numba
 from numba.core import types, errors
 from numba.core.typeconv import Conversion, rules
 from numba.core.typing import templates
+from numba.core.utils import order_by_target_specificity
 from .typeof import typeof, Purpose
 
 from numba.core import utils
@@ -63,7 +64,7 @@ class CallStack(Sequence):
         # guard compiling the same function with the same signature
         if self.match(func_id.func, args):
             msg = "compiler re-entrant to the same function signature"
-            raise RuntimeError(msg)
+            raise errors.NumbaRuntimeError(msg)
         self._lock.acquire()
         self._stack.append(CallFrame(target, typeinfer, func_id, args))
         try:
@@ -284,7 +285,15 @@ class BaseContext(object):
                 return attrty
 
     def find_matching_getattr_template(self, typ, attr):
-        for template in self._get_attribute_templates(typ):
+
+        templates = list(self._get_attribute_templates(typ))
+
+        # get the order in which to try templates
+        from numba.core.target_extension import get_local_target # circular
+        target_hw = get_local_target(self)
+        order = order_by_target_specificity(target_hw, templates, fnkey=attr)
+
+        for template in order:
             return_type = template.resolve(typ, attr)
             if return_type is not None:
                 return {

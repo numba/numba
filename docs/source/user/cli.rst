@@ -44,24 +44,24 @@ To see all available options, use ``numba --help``::
 
     $ numba --help
     usage: numba [-h] [--annotate] [--dump-llvm] [--dump-optimized]
-                 [--dump-assembly] [--dump-cfg] [--dump-ast]
-                 [--annotate-html ANNOTATE_HTML] [-s]
+                 [--dump-assembly] [--annotate-html ANNOTATE_HTML] [-s]
+                 [--sys-json SYS_JSON]
                  [filename]
 
     positional arguments:
-      filename              Python source filename
+    filename              Python source filename
 
     optional arguments:
-      -h, --help            show this help message and exit
-      --annotate            Annotate source
-      --dump-llvm           Print generated llvm assembly
-      --dump-optimized      Dump the optimized llvm assembly
-      --dump-assembly       Dump the LLVM generated assembly
-      --dump-cfg            [Deprecated] Dump the control flow graph
-      --dump-ast            [Deprecated] Dump the AST
-      --annotate-html ANNOTATE_HTML
+    -h, --help            show this help message and exit
+    --annotate            Annotate source
+    --dump-llvm           Print generated llvm assembly
+    --dump-optimized      Dump the optimized llvm assembly
+    --dump-assembly       Dump the LLVM generated assembly
+    --annotate-html ANNOTATE_HTML
                             Output source annotation as html
-      -s, --sysinfo         Output system information for bug reporting
+    -s, --sysinfo         Output system information for bug reporting
+    --sys-json SYS_JSON   Saves the system info dict as a json file
+
 
 .. _cli_sysinfo:
 
@@ -111,15 +111,6 @@ Example output::
     __CUDA Information__
     CUDA driver library cannot be found or no CUDA enabled devices are present.
     Error class: <class 'numba.cuda.cudadrv.error.CudaSupportError'>
-
-    __ROC Information__
-    ROC available                                 : False
-    Error initialising ROC due to                 : No ROC toolchains found.
-    No HSA Agents found, encountered exception when searching:
-    Error at driver init: 
-
-    HSA is not currently supported on this platform (darwin).
-    :
 
     __SVML Information__
     SVML state, config.USING_SVML                 : False

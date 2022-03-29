@@ -218,6 +218,26 @@ class FakeCUDAAtomic(object):
             return loaded
 
 
+class FakeCUDAFp16(object):
+    def hadd(self, a, b):
+        return a + b
+
+    def hsub(self, a, b):
+        return a - b
+
+    def hmul(self, a, b):
+        return a * b
+
+    def hfma(self, a, b, c):
+        return a * b + c
+
+    def hneg(self, a):
+        return -a
+
+    def habs(self, a):
+        return abs(a)
+
+
 class FakeCUDAModule(object):
     '''
     An instance of this class will be injected into the __globals__ for an
@@ -237,6 +257,7 @@ class FakeCUDAModule(object):
         self._shared = FakeCUDAShared(dynshared_size)
         self._const = FakeCUDAConst()
         self._atomic = FakeCUDAAtomic()
+        self._fp16 = FakeCUDAFp16()
 
     @property
     def cg(self):
@@ -257,6 +278,10 @@ class FakeCUDAModule(object):
     @property
     def atomic(self):
         return self._atomic
+
+    @property
+    def fp16(self):
+        return self._fp16
 
     @property
     def threadIdx(self):

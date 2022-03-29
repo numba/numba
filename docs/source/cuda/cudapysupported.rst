@@ -46,7 +46,13 @@ asynchronous operation - in order to ensure that all output is printed after a
 kernel launch, it is necessary to call :func:`numba.cuda.synchronize`. Eliding
 the call to ``synchronize`` is acceptable, but output from a kernel may appear
 during other later driver operations (e.g. subsequent kernel launches, memory
-transfers, etc.), or fail to appear before the program execution completes.
+transfers, etc.), or fail to appear before the program execution completes. Up
+to 32 arguments may be passed to the ``print`` function - if more are passed
+then a format string will be emitted instead and a warning will be produced.
+This is due to a general limitation in CUDA printing, as outlined in the
+`section on limitations in printing
+<https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#limitations>`_
+in the CUDA C++ Programming Guide.
 
 Built-in types
 ===============
@@ -59,9 +65,13 @@ The following built-in types support are inherited from CPU nopython mode.
 * bool
 * None
 * tuple
+* Enum, IntEnum
 
 See :ref:`nopython built-in types <pysupported-builtin-types>`.
 
+There is also some very limited support for character sequences (bytes and
+unicode strings) used in NumPy arrays. Note that this support can only be used
+with CUDA 11.2 onwards.
 
 Built-in functions
 ==================

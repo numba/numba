@@ -337,6 +337,13 @@ class _ObjModeContextType(WithContext):
             raise errors.TypingError(msg.format(extra_annotated))
 
         # Verify that all outputs are annotated
+
+        # Note on "$cp" variable:
+        # ``transforms.consolidate_multi_exit_withs()`` introduces the variable
+        # for the control-point to determine the correct exit block. This
+        # variable crosses the with-region boundary. Thus, it will be consider
+        # an output variable leaving the lifted with-region.
+        typeanns["$cp"] = types.int32
         not_annotated = set(stripped_outs) - set(typeanns)
         if not_annotated:
             msg = (
@@ -441,6 +448,8 @@ def _mutate_with_block_callee(blocks, blk_start, blk_end, inputs, outputs):
     outputs: sequence[str]
         Output variable names
     """
+    if not blocks:
+        raise errors.NumbaValueError("No blocks in with-context block")
     head_blk = min(blocks)
     temp_blk = blocks[head_blk]
     scope = temp_blk.scope

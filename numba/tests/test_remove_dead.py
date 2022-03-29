@@ -76,16 +76,7 @@ class TestRemoveDead(unittest.TestCase):
             typingctx.refresh()
             targetctx.refresh()
             args = (types.int64, types.int64, types.int64)
-            typemap, return_type, calltypes, _ = type_inference_stage(typingctx, targetctx, test_ir, args, None)
-            type_annotation = type_annotations.TypeAnnotation(
-                func_ir=test_ir,
-                typemap=typemap,
-                calltypes=calltypes,
-                lifted=(),
-                lifted_from=None,
-                args=args,
-                return_type=return_type,
-                html_output=config.HTML)
+            typemap, _, calltypes, _ = type_inference_stage(typingctx, targetctx, test_ir, args, None)
             remove_dels(test_ir.blocks)
             in_cps, out_cps = copy_propagate(test_ir.blocks, typemap)
             apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(test_ir.blocks), typemap, calltypes)
@@ -255,8 +246,8 @@ class TestRemoveDead(unittest.TestCase):
             def run_pass(self, state):
                 parfor_pass = numba.parfors.parfor.ParforPass(
                     state.func_ir,
-                    state.type_annotation.typemap,
-                    state.type_annotation.calltypes,
+                    state.typemap,
+                    state.calltypes,
                     state.return_type,
                     state.typingctx,
                     state.flags.auto_parallel,
@@ -270,7 +261,7 @@ class TestRemoveDead(unittest.TestCase):
                 remove_dead(state.func_ir.blocks,
                             state.func_ir.arg_names,
                             state.func_ir,
-                            state.type_annotation.typemap)
+                            state.typemap)
                 numba.parfors.parfor.get_parfor_params(state.func_ir.blocks,
                                                 parfor_pass.options.fusion,
                                                 parfor_pass.nested_fusion_info)
@@ -297,7 +288,6 @@ class TestRemoveDead(unittest.TestCase):
                             "inline calls to locally defined closures")
                 # typing
                 pm.add_pass(NopythonTypeInference, "nopython frontend")
-                pm.add_pass(AnnotateTypes, "annotate types")
 
                 # lower
                 pm.add_pass(NativeLowering, "native lowering")

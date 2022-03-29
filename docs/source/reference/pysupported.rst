@@ -392,7 +392,7 @@ than to act as a token to permit the use of this feature. Example use:
     from numba import njit, literal_unroll
 
     @njit
-    def foo()
+    def foo():
         heterogeneous_tuple = (1, 2j, 3.0, "a")
         for i in literal_unroll(heterogeneous_tuple):
             print(i)
@@ -918,6 +918,10 @@ Built-in functions
 
 The following built-in functions are supported:
 
+.. warning::
+  Support for ``isinstance`` is an experimental feature. This feature is
+  automatically enabled by simply using ``isinstance`` in JIT compiled code.
+
 * :func:`abs`
 * :class:`bool`
 * :func:`chr`
@@ -929,6 +933,7 @@ The following built-in functions are supported:
 * :func:`hash` (see :ref:`pysupported-hashing` below)
 * :class:`int`: only the one-argument form
 * :func:`iter`: only the one-argument form
+* :func:`isinstance` (experimental support only)
 * :func:`len`
 * :func:`min`
 * :func:`map`
@@ -941,6 +946,7 @@ The following built-in functions are supported:
   a jitted function).
 * :func:`round`
 * :func:`sorted`: the ``key`` argument is not supported
+* :func:`sum`
 * :func:`type`: only the one-argument form, and only on some types
   (e.g. numbers and named tuples)
 * :func:`zip`
@@ -1156,9 +1162,39 @@ startup with entropy drawn from the operating system.
 * :func:`random.vonmisesvariate`
 * :func:`random.weibullvariate`
 
-.. note::
+.. warning::
    Calling :func:`random.seed` from non-Numba code (or from :term:`object mode`
    code) will seed the Python random generator, not the Numba random generator.
+   To seed the Numba random generator, see the example below.
+
+.. code-block:: python
+
+  from numba import njit
+  import random
+
+  @njit
+  def seed(a):
+      random.seed(a)
+
+  @njit
+  def rand():
+      return random.random()
+
+
+  # Incorrect seeding
+  random.seed(1234)
+  print(rand())
+
+  random.seed(1234)
+  print(rand())
+
+  # Correct seeding
+  seed(1234)
+  print(rand())
+
+  seed(1234)
+  print(rand())
+
 
 .. note::
    Since version 0.28.0, the generator is thread-safe and fork-safe.  Each

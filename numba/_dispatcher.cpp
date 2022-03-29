@@ -11,11 +11,187 @@
 #include "_devicearray.h"
 
 /*
- * The following call_trace and call_trace_protected functions
- * as well as the C_TRACE macro are taken from ceval.c
+ * Notes on the C_TRACE macro:
+ *
+ * The original C_TRACE macro (from ceval.c) would call
+ * PyTrace_C_CALL et al., for which the frame argument wouldn't
+ * be usable. Since we explicitly synthesize a frame using the
+ * original Python code object, we call PyTrace_CALL instead so
+ * the profiler can report the correct source location.
+ *
+ * Likewise, while ceval.c would call PyTrace_C_EXCEPTION in case
+ * of error, the profiler would simply expect a RETURN in case of
+ * a Python function, so we generate that here (making sure the
+ * exception state is preserved correctly).
  *
  */
 
+/*
+ * NOTE: There is a version split for tracing code. Python 3.10 introduced a
+ * trace_info structure to help make tracing more robust. See:
+ * https://github.com/python/cpython/pull/24726
+ */
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 10)
+
+/*
+ * Code originally from:
+ * https://github.com/python/cpython/blob/c5bfb88eb6f82111bb1603ae9d78d0476b552d66/Python/ceval.c#L36-L40
+ */
+typedef struct {
+    PyCodeObject *code; // The code object for the bounds. May be NULL.
+    PyCodeAddressRange bounds; // Only valid if code != NULL.
+    CFrame cframe;
+} PyTraceInfo;
+
+
+/*
+ * Code originally from:
+ * https://github.com/python/cpython/blob/c5bfb88eb6f82111bb1603ae9d78d0476b552d66/Objects/codeobject.c#L1257-L1266
+ * NOTE: The function is renamed.
+ */
+static void
+_nb_PyLineTable_InitAddressRange(const char *linetable, Py_ssize_t length, int firstlineno, PyCodeAddressRange *range)
+{
+    range->opaque.lo_next = linetable;
+    range->opaque.limit = range->opaque.lo_next + length;
+    range->ar_start = -1;
+    range->ar_end = 0;
+    range->opaque.computed_line = firstlineno;
+    range->ar_line = -1;
+}
+
+/*
+ * Code originally from:
+ * https://github.com/python/cpython/blob/c5bfb88eb6f82111bb1603ae9d78d0476b552d66/Objects/codeobject.c#L1269-L1275
+ * NOTE: The function is renamed.
+ */
+static int
+_nb_PyCode_InitAddressRange(PyCodeObject* co, PyCodeAddressRange *bounds)
+{
+    const char *linetable = PyBytes_AS_STRING(co->co_linetable);
+    Py_ssize_t length = PyBytes_GET_SIZE(co->co_linetable);
+    _nb_PyLineTable_InitAddressRange(linetable, length, co->co_firstlineno, bounds);
+    return bounds->ar_line;
+}
+
+/*
+ * Code originally from:
+ * https://github.com/python/cpython/blob/c5bfb88eb6f82111bb1603ae9d78d0476b552d66/Python/ceval.c#L5468-L5475
+ * NOTE: The call to _PyCode_InitAddressRange is renamed.
+ */
+static void
+initialize_trace_info(PyTraceInfo *trace_info, PyFrameObject *frame)
+{
+    if (trace_info->code != frame->f_code) {
+        trace_info->code = frame->f_code;
+        _nb_PyCode_InitAddressRange(frame->f_code, &trace_info->bounds);
+    }
+}
+
+/*
+ * Code originally from:
+ * https://github.com/python/cpython/blob/c5bfb88eb6f82111bb1603ae9d78d0476b552d66/Python/ceval.c#L5477-L5501
+ */
+static int
+call_trace(Py_tracefunc func, PyObject *obj,
+           PyThreadState *tstate, PyFrameObject *frame,
+           PyTraceInfo *trace_info,
+           int what, PyObject *arg)
+{
+    int result;
+    if (tstate->tracing)
+        return 0;
+    tstate->tracing++;
+    tstate->cframe->use_tracing = 0;
+    if (frame->f_lasti < 0) {
+        frame->f_lineno = frame->f_code->co_firstlineno;
+    }
+    else {
+        initialize_trace_info(trace_info, frame);
+        frame->f_lineno = _PyCode_CheckLineNumber(frame->f_lasti*sizeof(_Py_CODEUNIT), &trace_info->bounds);
+    }
+    result = func(obj, frame, what, arg);
+    frame->f_lineno = 0;
+    tstate->cframe->use_tracing = ((tstate->c_tracefunc != NULL)
+                           || (tstate->c_profilefunc != NULL));
+    tstate->tracing--;
+    return result;
+}
+
+/*
+ * Code originally from:
+ * https://github.com/python/cpython/blob/c5bfb88eb6f82111bb1603ae9d78d0476b552d66/Python/ceval.c#L5445-L5466
+ */
+static int
+call_trace_protected(Py_tracefunc func, PyObject *obj,
+                     PyThreadState *tstate, PyFrameObject *frame,
+                     PyTraceInfo *trace_info,
+                     int what, PyObject *arg)
+{
+    PyObject *type, *value, *traceback;
+    int err;
+    PyErr_Fetch(&type, &value, &traceback);
+    err = call_trace(func, obj, tstate, frame, trace_info, what, arg);
+    if (err == 0)
+    {
+        PyErr_Restore(type, value, traceback);
+        return 0;
+    }
+    else
+    {
+        Py_XDECREF(type);
+        Py_XDECREF(value);
+        Py_XDECREF(traceback);
+        return -1;
+    }
+}
+
+/*
+ * Code originally from:
+ * https://github.com/python/cpython/blob/c5bfb88eb6f82111bb1603ae9d78d0476b552d66/Python/ceval.c#L5810-L5839
+ * NOTE: The state test https://github.com/python/cpython/blob/c5bfb88eb6f82111bb1603ae9d78d0476b552d66/Python/ceval.c#L5811
+ * has been removed, it's dealt with in call_cfunc.
+ */
+#define C_TRACE(x, call)                                        \
+if (call_trace(tstate->c_profilefunc, tstate->c_profileobj,     \
+               tstate, tstate->frame, &trace_info, PyTrace_CALL,\
+               cfunc))	                                        \
+    x = NULL;                                                   \
+else                                                            \
+{                                                               \
+    x = call;                                                   \
+    if (tstate->c_profilefunc != NULL)                          \
+    {                                                           \
+        if (x == NULL)                                          \
+        {                                                       \
+            call_trace_protected(tstate->c_profilefunc,         \
+                                 tstate->c_profileobj,          \
+                                 tstate, tstate->frame,         \
+                                 &trace_info,                   \
+                                 PyTrace_RETURN, cfunc);	\
+            /* XXX should pass (type, value, tb) */             \
+        }                                                       \
+        else                                                    \
+        {                                                       \
+            if (call_trace(tstate->c_profilefunc,               \
+                           tstate->c_profileobj,                \
+                           tstate, tstate->frame,               \
+                           &trace_info,                         \
+                           PyTrace_RETURN, cfunc))		\
+            {                                                   \
+                Py_DECREF(x);                                   \
+                x = NULL;                                       \
+            }                                                   \
+        }                                                       \
+    }                                                           \
+}
+
+#else
+
+/*
+ * Code originally from:
+ * https://github.com/python/cpython/blob/d5650a1738fe34f6e1db4af5f4c4edb7cae90a36/Python/ceval.c#L4242-L4257
+ */
 static int
 call_trace(Py_tracefunc func, PyObject *obj,
            PyThreadState *tstate, PyFrameObject *frame,
@@ -33,6 +209,10 @@ call_trace(Py_tracefunc func, PyObject *obj,
     return result;
 }
 
+/*
+ * Code originally from:
+ * https://github.com/python/cpython/blob/d5650a1738fe34f6e1db4af5f4c4edb7cae90a36/Python/ceval.c#L4220-L4240
+ */
 static int
 call_trace_protected(Py_tracefunc func, PyObject *obj,
                      PyThreadState *tstate, PyFrameObject *frame,
@@ -57,20 +237,14 @@ call_trace_protected(Py_tracefunc func, PyObject *obj,
 }
 
 /*
- * The original C_TRACE macro (from ceval.c) would call
- * PyTrace_C_CALL et al., for which the frame argument wouldn't
- * be usable. Since we explicitly synthesize a frame using the
- * original Python code object, we call PyTrace_CALL instead so
- * the profiler can report the correct source location.
- *
- * Likewise, while ceval.c would call PyTrace_C_EXCEPTION in case
- * of error, the profiler would simply expect a RETURN in case of
- * a Python function, so we generate that here (making sure the
- * exception state is preserved correctly).
+ * Code originally from:
+ * https://github.com/python/cpython/blob/d5650a1738fe34f6e1db4af5f4c4edb7cae90a36/Python/ceval.c#L4520-L4549
+ * NOTE: The state test https://github.com/python/cpython/blob/d5650a1738fe34f6e1db4af5f4c4edb7cae90a36/Python/ceval.c#L4521
+ * has been removed, it's dealt with in call_cfunc.
  */
 #define C_TRACE(x, call)                                        \
 if (call_trace(tstate->c_profilefunc, tstate->c_profileobj,     \
-               tstate, tstate->frame, PyTrace_CALL, cfunc))	\
+               tstate, tstate->frame, PyTrace_CALL, cfunc))     \
     x = NULL;                                                   \
 else                                                            \
 {                                                               \
@@ -82,7 +256,7 @@ else                                                            \
             call_trace_protected(tstate->c_profilefunc,         \
                                  tstate->c_profileobj,          \
                                  tstate, tstate->frame,         \
-                                 PyTrace_RETURN, cfunc);	\
+                                 PyTrace_RETURN, cfunc);        \
             /* XXX should pass (type, value, tb) */             \
         }                                                       \
         else                                                    \
@@ -90,7 +264,7 @@ else                                                            \
             if (call_trace(tstate->c_profilefunc,               \
                            tstate->c_profileobj,                \
                            tstate, tstate->frame,               \
-                           PyTrace_RETURN, cfunc))		\
+                           PyTrace_RETURN, cfunc))              \
             {                                                   \
                 Py_DECREF(x);                                   \
                 x = NULL;                                       \
@@ -98,6 +272,9 @@ else                                                            \
         }                                                       \
     }                                                           \
 }
+
+
+#endif
 
 typedef std::vector<Type> TypeTable;
 typedef std::vector<PyObject*> Functions;
@@ -372,6 +549,7 @@ int search_new_conversions(PyObject *dispatcher, PyObject *args, PyObject *kws)
     return res;
 }
 
+
 /* A custom, fast, inlinable version of PyCFunction_Call() */
 static PyObject *
 call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObject *locals)
@@ -380,11 +558,33 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     PyThreadState *tstate;
 
     assert(PyCFunction_Check(cfunc));
-    assert(PyCFunction_GET_FLAGS(cfunc) == METH_VARARGS | METH_KEYWORDS);
+    assert(PyCFunction_GET_FLAGS(cfunc) == (METH_VARARGS | METH_KEYWORDS));
     fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
     tstate = PyThreadState_GET();
 
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 10)
+    /*
+     * On Python 3.10+ trace_info comes from somewhere up in PyFrameEval et al,
+     * Numba doesn't have access to that so creates an equivalent struct and
+     * wires it up against the cframes. This is passed into the tracing
+     * functions.
+     *
+     * Code originally from:
+     * https://github.com/python/cpython/blob/c5bfb88eb6f82111bb1603ae9d78d0476b552d66/Python/ceval.c#L1611-L1622
+     */
+    PyTraceInfo trace_info;
+    trace_info.code = NULL; // not initialized
+    CFrame *prev_cframe = tstate->cframe;
+    trace_info.cframe.use_tracing = prev_cframe->use_tracing;
+    trace_info.cframe.previous = prev_cframe;
+
+    if (trace_info.cframe.use_tracing && tstate->c_profilefunc)
+#else
+    /*
+     * On Python prior to 3.10, tracing state is a member of the threadstate
+     */
     if (tstate->use_tracing && tstate->c_profilefunc)
+#endif
     {
         /*
          * The following code requires some explaining:
@@ -434,7 +634,9 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
         return result;
     }
     else
+    {
         return fn(PyCFunction_GET_SELF(cfunc), args, kws);
+    }
 }
 
 static
@@ -601,6 +803,35 @@ find_named_args(Dispatcher *self, PyObject **pargs, PyObject **pkws)
     return 0;
 }
 
+
+/*
+ * Management of thread-local
+ */
+
+#ifdef _MSC_VER
+#define THREAD_LOCAL(ty) __declspec(thread) ty
+#else
+/* Non-standard C99 extension that's understood by gcc and clang */
+#define THREAD_LOCAL(ty) __thread ty
+#endif
+
+static THREAD_LOCAL(bool) use_tls_target_stack;
+
+
+struct raii_use_tls_target_stack {
+    bool old_setting;
+
+    raii_use_tls_target_stack(bool new_setting)
+        : old_setting(use_tls_target_stack)
+    {
+        use_tls_target_stack = new_setting;
+    }
+
+    ~raii_use_tls_target_stack() {
+        use_tls_target_stack = old_setting;
+    }
+};
+
 static PyObject*
 Dispatcher_call(Dispatcher *self, PyObject *args, PyObject *kws)
 {
@@ -614,11 +845,28 @@ Dispatcher_call(Dispatcher *self, PyObject *args, PyObject *kws)
     PyThreadState *ts = PyThreadState_Get();
     PyObject *locals = NULL;
 
+    // Check TLS target stack
+    if (use_tls_target_stack) {
+        raii_use_tls_target_stack turn_off(false);
+        PyObject * meth_call_tls_target;
+        meth_call_tls_target = PyObject_GetAttrString((PyObject*)self,
+                                                      "_call_tls_target");
+        if (!meth_call_tls_target) return NULL;
+        // Transfer control to self._call_tls_target
+        retval = PyObject_Call(meth_call_tls_target, args, kws);
+        Py_DECREF(meth_call_tls_target);
+        return retval;
+    }
+
     /* If compilation is enabled, ensure that an exact match is found and if
      * not compile one */
     int exact_match_required = self->can_compile ? 1 : self->exact_match_required;
 
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 10)
+    if (ts->tracing && ts->c_profilefunc) {
+#else
     if (ts->use_tracing && ts->c_profilefunc) {
+#endif
         locals = PyEval_GetLocals();
         if (locals == NULL) {
             goto CLEANUP;
@@ -732,7 +980,11 @@ Dispatcher_cuda_call(Dispatcher *self, PyObject *args, PyObject *kws)
      * not compile one */
     int exact_match_required = self->can_compile ? 1 : self->exact_match_required;
 
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 10)
+    if (ts->tracing && ts->c_profilefunc) {
+#else
     if (ts->use_tracing && ts->c_profilefunc) {
+#endif
         locals = PyEval_GetLocals();
         if (locals == NULL) {
             goto CLEANUP;
@@ -923,10 +1175,26 @@ static PyObject *compute_fingerprint(PyObject *self, PyObject *args)
     return typeof_compute_fingerprint(val);
 }
 
+static PyObject *set_use_tls_target_stack(PyObject *self, PyObject *args)
+{
+    int val;
+    if (!PyArg_ParseTuple(args, "p", &val))
+        return NULL;
+    bool old = use_tls_target_stack;
+    use_tls_target_stack = val;
+    // return the old value
+    if (old) {
+        Py_RETURN_TRUE;
+    } else {
+        Py_RETURN_FALSE;
+    }
+}
+
 static PyMethodDef ext_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
     declmethod(typeof_init),
     declmethod(compute_fingerprint),
+    declmethod(set_use_tls_target_stack),
     { NULL },
 #undef declmethod
 };

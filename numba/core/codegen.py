@@ -6,13 +6,12 @@ import ctypes
 import html
 import textwrap
 
-import llvmlite.llvmpy.core as lc
-import llvmlite.llvmpy.passes as lp
 import llvmlite.binding as ll
 import llvmlite.ir as llvmir
 
 from abc import abstractmethod, ABCMeta
 from numba.core import utils, config, cgutils
+from numba.core.llvm_bindings import create_pass_manager_builder
 from numba.core.runtime.nrtopt import remove_redundant_nrt_refct
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import require_global_compiler_lock
@@ -838,16 +837,18 @@ class CPUCodeLibrary(CodeLibrary):
         self._sentry_cache_disable_inspection()
         return _CFG(self, name, py_func, **kwargs)
 
-    def get_disasm_cfg(self):
+    def get_disasm_cfg(self, mangled_name):
         """
-        Get the CFG of the disassembly of the ELF object
+        Get the CFG of the disassembly of the ELF object at symbol mangled_name.
 
         Requires python package: r2pipe
         Requires radare2 binary on $PATH.
         Notebook rendering requires python package: graphviz
+        Optionally requires a compiler toolchain (via pycc) to link the ELF to
+        get better disassembly results.
         """
         elf = self._get_compiled_object()
-        return disassemble_elf_to_cfg(elf)
+        return disassemble_elf_to_cfg(elf, mangled_name)
 
     @classmethod
     def _dump_elf(cls, buf):
@@ -1053,7 +1054,6 @@ class RuntimeLinker(object):
             # Delete resolved
             del self._unresolved[name]
 
-
 def _proxy(old):
     @functools.wraps(old)
     def wrapper(self, *args, **kwargs):
@@ -1209,16 +1209,20 @@ class CPUCodegen(Codegen):
         cost = kwargs.pop("cost", None)
         with self._pass_manager_builder(**kwargs) as pmb:
             pmb.populate(pm)
-        if cost is not None and cost == "cheap":
+        # If config.OPT==0 do not include these extra passes to help with
+        # vectorization.
+        if cost is not None and cost == "cheap" and config.OPT != 0:
             # This knocks loops into rotated form early to reduce the likelihood
             # of vectorization failing due to unknown PHI nodes.
             pm.add_loop_rotate_pass()
-            # This helps the refprune pass which can only deal with arguments to
-            # NRT function pairs that are literally the same i.e. it doesn't
-            # attempt to resolve arguments by tracing through the IR etc.
-            # Instcombine resolves a lot of this, it only runs as part of the
-            # cheap pass as the full opt pass will likely include it anyway.
-            pm.add_instruction_combining_pass()
+            # LLVM 11 added LFTR to the IV Simplification pass, this interacted
+            # badly with the existing use of the InstructionCombiner here and
+            # ended up with PHI nodes that prevented vectorization from
+            # working. The desired vectorization effects can be achieved
+            # with this in LLVM 11 (and also < 11) but at a potentially
+            # slightly higher cost:
+            pm.add_licm_pass()
+            pm.add_cfg_simplification_pass()
         if config.LLVM_REFPRUNE_PASS:
             pm.add_refprune_pass(_parse_refprune_flags())
         return pm
@@ -1245,10 +1249,10 @@ class CPUCodegen(Codegen):
         loop_vectorize = kwargs.pop('loop_vectorize', config.LOOP_VECTORIZE)
         slp_vectorize = kwargs.pop('slp_vectorize', config.SLP_VECTORIZE)
 
-        pmb = lp.create_pass_manager_builder(opt=opt_level,
-                                             loop_vectorize=loop_vectorize,
-                                             slp_vectorize=slp_vectorize,
-                                             **kwargs)
+        pmb = create_pass_manager_builder(opt=opt_level,
+                                          loop_vectorize=loop_vectorize,
+                                          slp_vectorize=slp_vectorize,
+                                          **kwargs)
 
         return pmb
 
@@ -1277,7 +1281,7 @@ class CPUCodegen(Codegen):
             raise RuntimeError(
                 "LLVM will produce incorrect floating-point code "
                 "in the current locale %s.\nPlease read "
-                "https://numba.pydata.org/numba-doc/latest/user/faq.html#llvm-locale-bug "
+                "https://numba.readthedocs.io/en/stable/user/faq.html#llvm-locale-bug "
                 "for more information."
                 % (loc,))
         raise AssertionError("Unexpected IR:\n%s\n" % (ir_out,))

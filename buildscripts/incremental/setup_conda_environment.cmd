@@ -22,11 +22,13 @@ call deactivate
 @rem Display root environment (for debugging)
 conda list
 @rem Scipy, CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
-conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip scipy jinja2 ipython gitpython
+conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip scipy jinja2 ipython gitpython pyyaml
 
 call activate %CONDA_ENV%
 @rem Install latest llvmlite build
 %CONDA_INSTALL% -c numba/label/dev llvmlite
+@rem Install required backports for older Pythons
+if %PYTHON% LSS 3.9 (%CONDA_INSTALL% importlib_metadata)
 @rem Install dependencies for building the documentation
 if "%BUILD_DOC%" == "yes" (%CONDA_INSTALL% sphinx sphinx_rtd_theme pygments)
 @rem Install dependencies for code coverage (codecov.io)

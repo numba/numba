@@ -1,4 +1,4 @@
-from numba.core import types
+from numba.core import types, errors
 from numba.core.typing.npydecl import (parse_dtype, parse_shape,
                                        register_number_classes)
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
@@ -19,6 +19,8 @@ register_number_classes(register_global)
 class GridFunction(CallableTemplate):
     def generic(self):
         def typer(ndim):
+            if not isinstance(ndim, types.IntegerLiteral):
+                raise errors.RequireLiteralValue(ndim)
             val = ndim.literal_value
             if val == 1:
                 restype = types.int32
@@ -250,6 +252,14 @@ class Cuda_fma(ConcreteTemplate):
 
 
 @register
+class Cuda_hfma(ConcreteTemplate):
+    key = cuda.fp16.hfma
+    cases = [
+        signature(types.float16, types.float16, types.float16, types.float16)
+    ]
+
+
+@register
 class Cuda_cbrt(ConcreteTemplate):
 
     key = cuda.cbrt
@@ -325,6 +335,31 @@ class Cuda_selp(AbstractTemplate):
             return
 
         return signature(a, test, a, a)
+
+
+def _genfp16_unary(l_key):
+    @register
+    class Cuda_fp16_unary(ConcreteTemplate):
+        key = l_key
+        cases = [signature(types.float16, types.float16)]
+
+    return Cuda_fp16_unary
+
+
+def _genfp16_binary(l_key):
+    @register
+    class Cuda_fp16_binary(ConcreteTemplate):
+        key = l_key
+        cases = [signature(types.float16, types.float16, types.float16)]
+
+    return Cuda_fp16_binary
+
+
+Cuda_hadd = _genfp16_binary(cuda.fp16.hadd)
+Cuda_hsub = _genfp16_binary(cuda.fp16.hsub)
+Cuda_hmul = _genfp16_binary(cuda.fp16.hmul)
+Cuda_hneg = _genfp16_unary(cuda.fp16.hneg)
+Cuda_habs = _genfp16_unary(cuda.fp16.habs)
 
 
 # generate atomic operations
@@ -473,6 +508,29 @@ class CudaAtomicTemplate(AttributeTemplate):
 
 
 @register_attr
+class CudaFp16Template(AttributeTemplate):
+    key = types.Module(cuda.fp16)
+
+    def resolve_hadd(self, mod):
+        return types.Function(Cuda_hadd)
+
+    def resolve_hsub(self, mod):
+        return types.Function(Cuda_hsub)
+
+    def resolve_hmul(self, mod):
+        return types.Function(Cuda_hmul)
+
+    def resolve_hneg(self, mod):
+        return types.Function(Cuda_hneg)
+
+    def resolve_habs(self, mod):
+        return types.Function(Cuda_habs)
+
+    def resolve_hfma(self, mod):
+        return types.Function(Cuda_hfma)
+
+
+@register_attr
 class CudaModuleTemplate(AttributeTemplate):
     key = types.Module(cuda)
 
@@ -574,6 +632,9 @@ class CudaModuleTemplate(AttributeTemplate):
 
     def resolve_atomic(self, mod):
         return types.Module(cuda.atomic)
+
+    def resolve_fp16(self, mod):
+        return types.Module(cuda.fp16)
 
     def resolve_const(self, mod):
         return types.Module(cuda.const)

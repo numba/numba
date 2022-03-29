@@ -27,7 +27,6 @@ from numba.core.analysis import compute_cfg_from_blocks
 from numba.core.typing import npydecl, signature
 import copy
 from numba.core.extending import intrinsic, register_jitable
-import llvmlite.llvmpy.core as lc
 import llvmlite
 from numba.np.unsafe.ndarray import to_fixed_tuple
 
@@ -89,22 +88,34 @@ def wrap_index(typingctx, idx, size):
     (idx < 0 ? idx + size : idx) because we may have situations
     where idx > size due to the way indices are calculated
     during slice/range analysis.
+
+    Both idx and size have to be Integer types.
+    size should be from the array size vars that array_analysis
+    adds and the bitwidth should match the platform maximum.
     """
-    unified_ty = typingctx.unify_types(idx, size)
-    # Mixing signed and unsigned ints will unify to double which is
-    # no good for indexing.  If the unified type is not an integer
-    # then just use int64 as the common index type.  This does have
-    # some overflow potential if the unsigned value is greater than
-    # 2**63.
-    if not isinstance(unified_ty, types.Integer):
-        unified_ty = types.int64
+    require(isinstance(idx, types.scalars.Integer))
+    require(isinstance(size, types.scalars.Integer))
+
+    # We need both idx and size to be platform size so that we can compare.
+    unified_ty = types.intp if size.signed else types.uintp
+    idx_unified = types.intp if idx.signed else types.uintp
 
     def codegen(context, builder, sig, args):
+        ll_idx_unified_ty = context.get_data_type(idx_unified)
         ll_unified_ty = context.get_data_type(unified_ty)
-        idx = builder.sext(args[0], ll_unified_ty)
-        size = builder.sext(args[1], ll_unified_ty)
+        if idx_unified.signed:
+            idx = builder.sext(args[0], ll_idx_unified_ty)
+        else:
+            idx = builder.zext(args[0], ll_idx_unified_ty)
+        if unified_ty.signed:
+            size = builder.sext(args[1], ll_unified_ty)
+        else:
+            size = builder.zext(args[1], ll_unified_ty)
         neg_size = builder.neg(size)
         zero = llvmlite.ir.Constant(ll_unified_ty, 0)
+        # If idx is unsigned then these signed comparisons will fail in those
+        # cases where the idx has the highest bit set, namely more than 2**63
+        # on 64-bit platforms.
         idx_negative = builder.icmp_signed("<", idx, zero)
         pos_oversize = builder.icmp_signed(">=", idx, size)
         neg_oversize = builder.icmp_signed("<=", idx, neg_size)
@@ -177,7 +188,7 @@ def assert_equiv(typingctx, *val):
             bshapes = unpack_shapes(b, bty)
             assert len(ashapes) == len(bshapes)
             for (m, n) in zip(ashapes, bshapes):
-                m_eq_n = builder.icmp(lc.ICMP_EQ, m, n)
+                m_eq_n = builder.icmp_unsigned('==', m, n)
                 with builder.if_else(m_eq_n) as (then, orelse):
                     with then:
                         pass
@@ -435,13 +446,20 @@ class ShapeEquivSet(EquivSet):
             else:
                 return (obj.value,)
         elif isinstance(obj, tuple):
-            return tuple(self._get_names(x)[0] for x in obj)
+
+            def get_names(x):
+                names = self._get_names(x)
+                if len(names) != 0:
+                    return names[0]
+                return names
+
+            return tuple(get_names(x) for x in obj)
         elif isinstance(obj, int):
             return (obj,)
-        else:
-            raise NotImplementedError(
-                "ShapeEquivSet does not support {}".format(obj)
-            )
+        if config.DEBUG_ARRAY_OPT >= 1:
+            print(
+                f"Ignoring untracked object type {type(obj)} in ShapeEquivSet")
+        return ()
 
     def is_equiv(self, *objs):
         """Overload EquivSet.is_equiv to handle Numba IR variables and
@@ -469,7 +487,7 @@ class ShapeEquivSet(EquivSet):
         return the scalar value, or None otherwise.
         """
         names = self._get_names(obj)
-        if len(names) > 1:
+        if len(names) != 1:
             return None
         return super(ShapeEquivSet, self).get_equiv_const(names[0])
 
@@ -488,7 +506,7 @@ class ShapeEquivSet(EquivSet):
         """Return the set of equivalent objects.
         """
         names = self._get_names(obj)
-        if len(names) > 1:
+        if len(names) != 1:
             return None
         return super(ShapeEquivSet, self).get_equiv_set(names[0])
 
@@ -1313,6 +1331,20 @@ class ArrayAnalysis(object):
                     shape = gvalue
                 elif isinstance(gvalue, int):
                     shape = (gvalue,)
+            elif isinstance(inst.value, ir.Arg):
+                if (
+                    isinstance(typ, types.containers.UniTuple)
+                    and isinstance(typ.dtype, types.Integer)
+                ):
+                    shape = inst.value
+                elif (
+                    isinstance(typ, types.containers.Tuple)
+                    and all([isinstance(x,
+                            (types.Integer, types.IntegerLiteral))
+                        for x in typ.types]
+                    )
+                ):
+                    shape = inst.value
 
             if isinstance(shape, ir.Const):
                 if isinstance(shape.value, tuple):
@@ -1367,6 +1399,16 @@ class ArrayAnalysis(object):
                     shape = self._gen_shape_call(
                         equiv_set, lhs, len(typ), shape, post
                     )
+            elif (
+                isinstance(typ, types.containers.Tuple)
+                and all([isinstance(x,
+                        (types.Integer, types.IntegerLiteral))
+                    for x in typ.types]
+                )
+            ):
+                shape = self._gen_shape_call(
+                    equiv_set, lhs, len(typ), shape, post
+                )
 
             """ See the comment on the define() function.
 
@@ -2014,6 +2056,7 @@ class ArrayAnalysis(object):
         var_shape = equiv_set._get_shape(var)
         if isinstance(ind_typ, types.SliceType):
             seq_typs = (ind_typ,)
+            seq = (ind_var,)
         else:
             require(isinstance(ind_typ, types.BaseTuple))
             seq, op = find_build_sequence(self.func_ir, ind_var)
@@ -2035,7 +2078,10 @@ class ArrayAnalysis(object):
         shape_list = []
         index_var_list = []
         replace_index = False
-        for (typ, size, dsize) in zip(seq_typs, ind_shape, var_shape):
+        for (typ, size, dsize, orig_ind) in zip(seq_typs,
+                                                ind_shape,
+                                                var_shape,
+                                                seq):
             # Convert the given dimension of the get/setitem index expr.
             shape_part, index_var_part = to_shape(typ, size, dsize)
             shape_list.append(shape_part)
@@ -2048,7 +2094,7 @@ class ArrayAnalysis(object):
                 replace_index = True
                 index_var_list.append(index_var_part)
             else:
-                index_var_list.append(size)
+                index_var_list.append(orig_ind)
 
         # If at least one of the dimensions required a new slice variable
         # then we'll need to replace the build_tuple for this get/setitem.
@@ -3116,9 +3162,14 @@ class ArrayAnalysis(object):
         # attr call: A_sh_attr = getattr(A, shape)
         if isinstance(shape, ir.Var):
             shape = equiv_set.get_shape(shape)
+
         # already a tuple variable that contains size
         if isinstance(shape, ir.Var):
             attr_var = shape
+            shape_attr_call = None
+            shape = None
+        elif isinstance(shape, ir.Arg):
+            attr_var = var
             shape_attr_call = None
             shape = None
         else:

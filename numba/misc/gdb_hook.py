@@ -3,7 +3,7 @@ import sys
 
 from llvmlite import ir
 
-from numba.core import types, utils, config, cgutils
+from numba.core import types, utils, config, cgutils, errors
 from numba import gdb, gdb_init, gdb_breakpoint
 from numba.core.extending import overload, intrinsic
 
@@ -15,14 +15,22 @@ _unix_like = (_platform.startswith('linux') or
               ('bsd' in _platform))
 
 
-def _confirm_gdb():
+def _confirm_gdb(need_ptrace_attach=True):
+    """
+    Set need_ptrace_attach to True/False to indicate whether the ptrace attach
+    permission is needed for this gdb use case. Mode 0 (classic) or 1
+    (restricted ptrace) is required if need_ptrace_attach is True. See:
+    https://www.kernel.org/doc/Documentation/admin-guide/LSM/Yama.rst
+    for details on the modes.
+    """
     if not _unix_like:
-        raise RuntimeError('gdb support is only available on unix-like systems')
+        msg = 'gdb support is only available on unix-like systems'
+        raise errors.NumbaRuntimeError(msg)
     gdbloc = config.GDB_BINARY
     if not (os.path.exists(gdbloc) and os.path.isfile(gdbloc)):
         msg = ('Is gdb present? Location specified (%s) does not exist. The gdb'
                ' binary location can be set using Numba configuration, see: '
-               'https://numba.pydata.org/numba-doc/latest/reference/envvars.html'  # noqa: E501
+               'https://numba.readthedocs.io/en/stable/reference/envvars.html'  # noqa: E501
                )
         raise RuntimeError(msg % config.GDB_BINARY)
     # Is Yama being used as a kernel security module and if so is ptrace_scope
@@ -34,7 +42,7 @@ def _confirm_gdb():
     if has_ptrace_scope:
         with open(ptrace_scope_file, 'rt') as f:
             value = f.readline().strip()
-        if value != "0":
+        if need_ptrace_attach and value not in ("0", "1"):
             msg = ("gdb can launch but cannot attach to the executing program"
                    " because ptrace permissions have been restricted at the "
                    "system level by the Linux security module 'Yama'.\n\n"
@@ -98,6 +106,8 @@ def init_gdb_codegen(cgctx, builder, signature, args,
     # issue command to continue execution from sleep function
     new_args.extend(['-ex', 'c'])
     # then run the user defined args if any
+    if any([not isinstance(x, types.StringLiteral) for x in const_args]):
+        raise errors.RequireLiteralValue(const_args)
     new_args.extend([x.literal_value for x in const_args])
     cmdlang = [cgctx.insert_const_string(mod, x) for x in new_args]
 
