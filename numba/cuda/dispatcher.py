@@ -65,6 +65,9 @@ class _Kernel(serialize.ReduceMixin):
         self.lineinfo = lineinfo
         self.extensions = extensions or []
 
+        # Kernels don't have any lifted code
+        self.lifted = []
+
         nvvm_options = {
             'debug': self.debug,
             'lineinfo': self.lineinfo,
@@ -87,6 +90,11 @@ class _Kernel(serialize.ReduceMixin):
                                                   filename, linenum,
                                                   max_registers)
 
+        # Needed for caching to get codegen
+        self.target_context = tgt_ctx
+        self.fndesc = cres.fndesc
+        self.environment = cres.environment
+
         if not link:
             link = []
 
@@ -106,9 +114,45 @@ class _Kernel(serialize.ReduceMixin):
         self._codelibrary = lib
         self.call_helper = cres.call_helper
 
+        # Pretend there are no referenced environments. TODO: Are there any for
+        # kernels?
+        self._referenced_environments = []
+        # What is reload_init for? is it only parfors?
+        self.reload_init = []
+
+    @property
+    def library(self):
+        # Is this here because we have a discrepancy between the naming in
+        # kernel and compile result? It should probably be renamed.
+        return self._codelibrary
+
+    @property
+    def type_annotation(self):
+        # Another hack, should probably just change the name
+        return self._type_annotation
+
+    def _find_referenced_environments(self):
+        # Another hack
+        return self._referenced_environments
+
     @property
     def argument_types(self):
         return tuple(self.signature.args)
+
+    def _reduce(self):
+        # Inspired by CompileResult._reduce.
+
+        libdata = self.library.serialize_using_object_code()
+        # Make it (un)picklable efficiently
+        typeann = str(self.type_annotation)
+        fndesc = self.fndesc
+        # Those don't need to be pickled and may fail
+        fndesc.typemap = fndesc.calltypes = None
+        # Include all referenced environments
+        referenced_envs = self._find_referenced_environments()
+        return (libdata, self.fndesc, self.environment, self.signature,
+                self.objectmode, self.lifted, typeann, self.reload_init,
+                tuple(referenced_envs))
 
     @classmethod
     def _rebuild(cls, cooperative, name, argtypes, codelibrary, link, debug,
@@ -720,23 +764,47 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         '''
         argtypes, return_type = sigutils.normalize_signature(sig)
         assert return_type is None or return_type == types.none
+
+        # Do we already have an in-memory compiled kernel?
         if self.specialized:
             return next(iter(self.overloads.values()))
         else:
             kernel = self.overloads.get(argtypes)
-        if kernel is None:
-            if not self._can_compile:
-                raise RuntimeError("Compilation disabled")
-            kernel = _Kernel(self.py_func, argtypes,
-                             **self.targetoptions)
-            # Inspired by _DispatcherBase.add_overload, but differs slightly
-            # because we're inserting a _Kernel object instead of a compiled
-            # function.
+            if kernel is not None:
+                return kernel
+
+        # Can we load from the disk cache?
+        kernel = self._cache.load_overload(sig, self.targetctx)
+        if kernel is not None:
+            self._cache_hits[sig] += 1
+
+            # This should be refactored into an add_overload function, it
+            # duplicates the code for the "have to compile" path below
             c_sig = [a._code for a in argtypes]
             self._insert(c_sig, kernel, cuda=True)
             self.overloads[argtypes] = kernel
 
-            kernel.bind()
+            return kernel
+
+        self._cache_misses[sig] += 1
+
+        # We need to compile a new kernel
+        if not self._can_compile:
+            raise RuntimeError("Compilation disabled")
+
+        kernel = _Kernel(self.py_func, argtypes, **self.targetoptions)
+
+        # Inspired by _DispatcherBase.add_overload, but differs slightly
+        # because we're inserting a _Kernel object instead of a compiled
+        # function.
+        c_sig = [a._code for a in argtypes]
+        self._insert(c_sig, kernel, cuda=True)
+        self.overloads[argtypes] = kernel
+
+        kernel.bind()
+
+        self._cache.save_overload(sig, kernel)
+
         return kernel
 
     def inspect_llvm(self, signature=None):

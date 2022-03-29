@@ -30,11 +30,13 @@ def _get_codegen(obj):
     """
     Returns the Codegen associated with the given object.
     """
+    from numba.cuda.dispatcher import _Kernel
+
     if isinstance(obj, BaseContext):
         return obj.codegen()
     elif isinstance(obj, CodeLibrary):
         return obj.codegen
-    elif isinstance(obj, CompileResult):
+    elif isinstance(obj, (CompileResult, _Kernel)):
         return obj.target_context.codegen()
     else:
         raise TypeError(type(obj))
@@ -414,7 +416,8 @@ class CompileResultCacheImpl(_CacheImpl):
         cannot_cache = None
         if any(not x.can_cache for x in cres.lifted):
             cannot_cache = "as it uses lifted code"
-        elif cres.library.has_dynamic_globals:
+        # Hack, probably need a KernelCacheImpl
+        elif hasattr(cres, 'library') and cres.library.has_dynamic_globals:
             cannot_cache = ("as it uses dynamic globals "
                             "(such as ctypes pointers and large global arrays)")
         if cannot_cache:

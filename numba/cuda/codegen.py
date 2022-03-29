@@ -5,7 +5,7 @@ from warnings import warn
 from numba.core import config, serialize
 from numba.core.codegen import Codegen, CodeLibrary
 from numba.core.errors import NumbaInvalidConfigWarning
-from .cudadrv import devices, driver, nvvm
+from .cudadrv import devices, driver, nvvm, runtime
 
 import ctypes
 import numpy as np
@@ -292,6 +292,12 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
 
         self._finalized = True
 
+    def serialize_using_object_code(self):
+        # Inspired by CPUCodeLibrary's version
+        self._ensure_finalized()
+        data = (self._ptx_cache, self._cubin_cache)
+        return (self.name, 'object', data)
+
     def _reduce_states(self):
         """
         Reduce the instance for serialization. We retain the PTX and cubins,
@@ -361,3 +367,9 @@ class JITCUDACodegen(Codegen):
 
     def _add_module(self, module):
         pass
+
+    def magic_tuple(self):
+        """
+        Return a tuple unambiguously describing the codegen behaviour.
+        """
+        return (runtime.runtime.get_version(),)
