@@ -396,7 +396,7 @@ def dead_branch_prune(func_ir, called_args):
         # literal type, return the type itself so comparisons like `x == None`
         # still work as e.g. x = types.int64 will never be None/NoneType so
         # the branch can still be pruned
-        return getattr(input_arg_ty, 'literal_type', Unknown())
+        return getattr(input_arg_ty, 'literal_type', input_arg_ty)
 
     if DEBUG > 1:
         print("before".center(80, '-'))
