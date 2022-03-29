@@ -396,10 +396,10 @@ class CompileResultCacheImpl(CacheImpl):
         from numba.cuda.target import CUDATargetContext
         if isinstance(target_context, CUDATargetContext):
             from numba.cuda.dispatcher import _Kernel
-            cls = _Kernel
+            # Mega weird because of dict from reduced kernel
+            return _Kernel._rebuild(**payload)
         else:
-            cls = compiler._CompileResult
-        return cls._rebuild(target_context, *payload)
+            return compiler._CompileResult._rebuild(target_context, *payload)
 
     def check_cachable(self, cres):
         """

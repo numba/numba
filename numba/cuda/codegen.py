@@ -316,16 +316,15 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         after deserialization.
         """
 
-        breakpoint()
         if self._linking_files:
             msg = ('cannot pickle CUDACodeLibrary function with additional '
                    'libraries to link against')
             raise RuntimeError(msg)
         return dict(
-            codegen=self._codegen,
+            codegen=None,
             name=self.name,
             entry_name=self._entry_name,
-            module=self._module,
+            module=None,
             linking_libraries=self._linking_libraries,
             ptx_cache=self._ptx_cache,
             cubin_cache=self._cubin_cache,
@@ -356,6 +355,8 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
 
         instance._max_registers = max_registers
         instance._nvvm_options = nvvm_options
+
+        return instance
 
 
 class JITCUDACodegen(Codegen):
