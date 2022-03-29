@@ -140,6 +140,7 @@ class _Kernel(serialize.ReduceMixin):
         return tuple(self.signature.args)
 
     def _reduce(self):
+        # TODO: WHY IS THIS CALLED AND NOT _reduce_states?
         return self._reduce_states()
 
         # First attempt:
@@ -159,11 +160,10 @@ class _Kernel(serialize.ReduceMixin):
 
     @classmethod
     def _rebuild(cls, cooperative, name, signature, codelibrary,
-                 debug, lineinfo, call_helper, extensions, last_arg):
+                 debug, lineinfo, call_helper, extensions):
         """
         Rebuild an instance.
         """
-        breakpoint()
         instance = cls.__new__(cls)
         # invoke parent constructor
         super(cls, instance).__init__()
@@ -911,13 +911,17 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         """
         Rebuild an instance.
         """
+        # This needs fixing to match the modified reduce from
+        # https://gist.github.com/c200chromebook/1ee304161a39b247e8a029ff9d2b3cd7
+        # so sticking a breakpoint here for now
+        breakpoint()
         instance = cls(py_func, targetoptions)
         return instance
 
     def _reduce_states(self):
         """
         Reduce the instance for serialization.
-        Compiled definitions are discarded.
+        Compiled definitions are preserved.
         """
-        return dict(py_func=self.py_func,
-                    targetoptions=self.targetoptions)
+        return dict(py_func=self.py_func, sigs=self.sigs,
+                    targetoptions=self.targetoptions, overloads=self.overloads)
