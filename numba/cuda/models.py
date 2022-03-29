@@ -3,7 +3,7 @@ from llvmlite import ir
 from numba.core.datamodel.registry import register_default
 from numba.core.extending import register_model, models
 from numba.core import types
-from numba.cuda.types import Dim3, GridGroup, CUDADispatcher
+from numba.cuda.types import Dim3, GridGroup, CUDADispatcher, vector_type_list
 
 
 @register_model(Dim3)
@@ -39,3 +39,27 @@ class FloatModel(models.PrimitiveModel):
 
 
 register_model(CUDADispatcher)(models.OpaqueModel)
+
+
+def register_vector_type_model(vector_type):
+    """Register vector type data model.
+
+    Parameters
+    ----------
+    vector_type: VectorType
+        The vector type to register.
+    """
+
+    class VectorTypeModel(models.StructModel):
+        def __init__(self, dmm, fe_type):
+            members = [(
+                attr_name,
+                vector_type.base_type
+            ) for attr_name in vector_type.attr_names]
+            super().__init__(dmm, fe_type, members)
+
+    register_model(type(vector_type))(VectorTypeModel)
+
+
+for vector_type in vector_type_list:
+    register_vector_type_model(vector_type)

@@ -12,7 +12,7 @@ from numba.core import types, cgutils
 from .cudadrv import nvvm
 from numba import cuda
 from numba.cuda import nvvmutils, stubs, errors
-from numba.cuda.types import dim3, grid_group, CUDADispatcher
+from numba.cuda.types import dim3, grid_group, CUDADispatcher, vector_type_list
 
 
 registry = Registry()
@@ -1080,3 +1080,37 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
 @lower_constant(CUDADispatcher)
 def cuda_dispatcher_const(context, builder, ty, pyval):
     return context.get_dummy_value()
+
+# -----------------------------------------------------------------------------
+
+
+def lower_vector_type_factory(stub, vector_type):
+    """Lower the vector type factory method.
+
+    Parameters
+    ----------
+    stub: Callable
+        The stub method to lower.
+    """
+
+    def lowering(context, builder, sig, actual_args):
+        if len(actual_args) != vector_type.num_elements:
+            raise ValueError(
+                f"Unmatched number of source elements ({len(actual_args)}) "
+                "and target elements ({vector_type.num_elements})."
+            )
+
+        out = cgutils.create_struct_proxy(vector_type)(context, builder)
+
+        for attr_name, source in zip(vector_type.attr_names, actual_args):
+            setattr(out, attr_name, source)
+        return out._getvalue()
+
+    arglist = [vector_type.base_type] * vector_type.num_elements
+    lower(stub, *arglist)(lowering)
+
+
+for vector_factory, vector_type in zip(
+    stubs._vector_type_factory_method_stubs, vector_type_list
+):
+    lower_vector_type_factory(vector_factory, vector_type)
