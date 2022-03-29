@@ -80,26 +80,28 @@ platform.  In this case, please prepend ``[WIP]`` to your pull request's title.
 Build environment
 '''''''''''''''''
 
-Numba has a number of dependencies (mostly `NumPy <http://www.numpy.org/>`_
-and `llvmlite <https://github.com/numba/llvmlite>`_) with non-trivial build
+Numba has a number of dependencies (mostly `NumPy <http://www.numpy.org/>`_ and
+`llvmlite <https://github.com/numba/llvmlite>`_) with non-trivial build
 instructions.  Unless you want to build those dependencies yourself, we
-recommend you use `conda <http://conda.pydata.org/miniconda.html>`_ to
-create a dedicated development environment and install precompiled versions
-of those dependencies there.
+recommend you use `conda <http://conda.pydata.org/miniconda.html>`_ to create a
+dedicated development environment and install precompiled versions of those
+dependencies there. Read more about the Numba dependencies here:
+`numba-source-install-check`.
 
-First add the Anaconda Cloud ``numba`` channel so as to get development builds
-of the llvmlite library::
+When working with a source checkout of Numba you will also need a development
+build of llvmlite. These are available from the ``numba/label/dev`` channel on
+`anaconda.org <https://anaconda.org/numba/llvmlite>`_.
 
-   $ conda config --add channels numba
 
-Then create an environment with the right dependencies::
+Then, to create an environment with a few of the most common dependencies::
 
-   $ conda create -n numbaenv python=3.8 llvmlite numpy scipy jinja2 cffi
+   $ conda create -n numbaenv python=3.10 numba/label/dev::llvmlite numpy scipy jinja2 cffi
 
 .. note::
-   This installs an environment based on Python 3.8, but you can of course
+   This installs an environment based on Python 3.10, but you can of course
    choose another version supported by Numba.  To test additional features,
-   you may also need to install ``tbb`` and/or ``llvm-openmp``.
+   you may also need to install ``tbb`` and/or ``llvm-openmp``. Check the
+   dependency list above for details.
 
 To activate the environment for the current shell session::
 
@@ -113,13 +115,12 @@ Once the environment is activated, you have a dedicated Python with the
 required dependencies::
 
     $ python
-    Python 3.8.5 (default, Sep  4 2020, 07:30:14) 
-    [GCC 7.3.0] :: Anaconda, Inc. on linux
+    Python 3.10.3 (main, Mar 28 2022, 04:26:28) [Clang 12.0.0 ] on darwin
     Type "help", "copyright", "credits" or "license" for more information.
 
     >>> import llvmlite
     >>> llvmlite.__version__
-    '0.35.0'
+    0.39.0dev0+61.gf27ac6f
 
 
 Building Numba
