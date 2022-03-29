@@ -1144,7 +1144,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                     inarrays = [np.zeros(s) for s in shape]
                     cfunc(*inarrays)
                 self.assertIn("shape mismatch: objects cannot be broadcast to a single shape",
-                            str(raises.exception))
+                              str(raises.exception))
 
 
 
