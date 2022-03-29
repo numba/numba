@@ -140,6 +140,9 @@ class _Kernel(serialize.ReduceMixin):
         return tuple(self.signature.args)
 
     def _reduce(self):
+        return self._reduce_states()
+
+        # First attempt:
         # Inspired by CompileResult._reduce.
 
         libdata = self.library.serialize_using_object_code()
@@ -155,18 +158,19 @@ class _Kernel(serialize.ReduceMixin):
                 tuple(referenced_envs))
 
     @classmethod
-    def _rebuild(cls, cooperative, name, argtypes, codelibrary, link, debug,
-                 lineinfo, call_helper, extensions):
+    def _rebuild(cls, cooperative, name, signature, codelibrary,
+                 debug, lineinfo, call_helper, extensions, last_arg):
         """
         Rebuild an instance.
         """
+        breakpoint()
         instance = cls.__new__(cls)
         # invoke parent constructor
         super(cls, instance).__init__()
         # populate members
         instance.cooperative = cooperative
         instance.entry_name = name
-        instance.argument_types = tuple(argtypes)
+        instance.signature = signature
         instance._type_annotation = None
         instance._codelibrary = codelibrary
         instance.debug = debug
@@ -184,7 +188,7 @@ class _Kernel(serialize.ReduceMixin):
         Stream information is discarded.
         """
         return dict(cooperative=self.cooperative, name=self.entry_name,
-                    argtypes=self.argtypes, codelibrary=self.codelibrary,
+                    signature=self.signature, codelibrary=self._codelibrary,
                     debug=self.debug, lineinfo=self.lineinfo,
                     call_helper=self.call_helper, extensions=self.extensions)
 
