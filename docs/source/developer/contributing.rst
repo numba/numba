@@ -129,7 +129,7 @@ Building Numba
 For a convenient development workflow, we recommend you build Numba inside
 its source checkout::
 
-   $ git clone git://github.com/numba/numba.git
+   $ git clone git clone git@github.com:numba/numba.git
    $ cd numba
    $ python setup.py build_ext --inplace
 
