@@ -1,8 +1,8 @@
 Numba Mission Statement
 =======================
 
-Introduction:
--------------
+Introduction
+------------
 
 This document is the mission statement for the Numba project. It exists to
 provide a clear description of the purposes and goals of the project. This
@@ -18,8 +18,8 @@ The last updated date is:   March 2022
 The next review date is:    TBC
 =========================== ============
 
-Background:
------------
+Background
+----------
 
 The Numba project provides tools to improve the performance of scientific
 software. It comprises numerous facilities including just-in-time (JIT)
@@ -43,8 +43,8 @@ disciplines, examples include:
   cases/needing a custom compiler.
 * Hardware vendors wanting to extend Numba support to their custom silicon.
 
-Project Goals:
---------------
+Project Goals
+-------------
 
 The primary aims of the Numba project are:
 
@@ -57,14 +57,16 @@ The primary aims of the Numba project are:
   and/or customize the software themselves.
 * To support both the Python core language/standard libraries and NumPy.
 * To consistently produce high quality software:
-* Feature stability across versions.
-* Well established and tested public APIs.
-* Clearly documented deprecation cycles.
-* Internally stable code base.
-* Externally tested release candidates.
-* Regular releases with a predictable and published release cycle.
-* Maintain suitable infrastructure for both testing and releasing. With as much
-  in public as feasible.
+
+  * Feature stability across versions.
+  * Well established and tested public APIs.
+  * Clearly documented deprecation cycles.
+  * Internally stable code base.
+  * Externally tested release candidates.
+  * Regular releases with a predictable and published release cycle.
+  * Maintain suitable infrastructure for both testing and releasing. With as much
+    in public as feasible.
+
 * To make it as easy as possible for people to contribute.
 * To have a maintained public roadmap which will also include areas under
   active development.
