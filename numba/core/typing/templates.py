@@ -33,15 +33,16 @@ class Signature(object):
 
     # XXX Perhaps the signature should be a BoundArguments, instead
     # of separate args and pysig...
-    __slots__ = '_return_type', '_args', '_recvr', '_pysig'
+    __slots__ = '_return_type', '_args', '_recvr', '_pysig', "_impl_for"
 
-    def __init__(self, return_type, args, recvr, pysig=None):
+    def __init__(self, return_type, args, recvr, pysig=None, *, impl_for=None):
         if isinstance(args, list):
             args = tuple(args)
         self._return_type = return_type
         self._args = args
         self._recvr = recvr
         self._pysig = pysig
+        self._impl_for = impl_for
 
     @property
     def return_type(self):
@@ -59,6 +60,10 @@ class Signature(object):
     def pysig(self):
         return self._pysig
 
+    @property
+    def impl_for(self):
+        return self._impl_for
+
     def replace(self, **kwargs):
         """Copy and replace the given attributes provided as keyword arguments.
         Returns an updated copy.
@@ -74,13 +79,15 @@ class Signature(object):
         """
         Needed because of __slots__.
         """
-        return self._return_type, self._args, self._recvr, self._pysig
+        return (self._return_type, self._args, self._recvr, self._pysig,
+                self._impl_for)
 
     def __setstate__(self, state):
         """
         Needed because of __slots__.
         """
-        self._return_type, self._args, self._recvr, self._pysig = state
+        (self._return_type, self._args, self._recvr, self._pysig,
+         self._impl_for) = state
 
     def __hash__(self):
         return hash((self.args, self.return_type))
@@ -96,7 +103,10 @@ class Signature(object):
         return not (self == other)
 
     def __repr__(self):
-        return "%s -> %s" % (self.args, self.return_type)
+        out = f"{self.args} -> {self.return_type}"
+        if self.impl_for is not None:
+            out = f"{out} @ {self.impl_for.__qualname__}"
+        return out
 
     @property
     def is_method(self):
@@ -263,6 +273,9 @@ class FunctionTemplate(ABC):
     # non-literals.
     # subclass overide-able
     prefer_literal = False
+    # Set to true to enable overloading logic that picks the most specific
+    # typeclass.
+    use_impl_for = False
     # metadata
     metadata = {}
 
@@ -477,6 +490,12 @@ class ConcreteTemplate(FunctionTemplate):
     Defines attributes "cases" as a list of signature to match against the
     given input types.
     """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        import inspect
+        frame = inspect.stack()[1].frame
+        self._ctor_caller_file = inspect.getmodule(frame).__file__
+        self._ctor_caller_lineno = frame.f_lineno
 
     def apply(self, args, kws):
         cases = getattr(self, 'cases')
@@ -495,8 +514,8 @@ class ConcreteTemplate(FunctionTemplate):
             'kind': kind,
             'name': name,
             'sig': "unknown",
-            'filename': "unknown",
-            'lines': ("unknown", "unknown"),
+            'filename': f"(unknown-{self._ctor_caller_file})",
+            'lines': (str(self._ctor_caller_lineno), "unknown"),
             'docstring': "unknown"
         }
         return info
@@ -693,6 +712,9 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             if sig is None: # can't resolve for this target
                 return None
             self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
+
+        if hasattr(disp, "impl_for"):
+            sig._impl_for = disp.impl_for
         return sig
 
     def _get_impl(self, args, kws):
@@ -807,6 +829,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             # Regular case
             pyfunc = ovf_result
 
+        impl_for = getattr(pyfunc, "impl_for", None)
+
         # Check type of pyfunc
         if not isinstance(pyfunc, FunctionType):
             msg = ("Implementator function returned by `@overload` "
@@ -819,6 +843,9 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         # Make dispatcher
         jitdecor = jitter(**self._jit_options)
         disp = jitdecor(pyfunc)
+        if impl_for is not None:
+            disp.impl_for = impl_for
+
         # Make sure that the implementation can be fully compiled
         disp_type = types.Dispatcher(disp)
         disp_type.get_call_type(self.context, args, kws)
@@ -885,7 +912,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
 
 def make_overload_template(func, overload_func, jit_options, strict,
-                           inline, prefer_literal=False, **kwargs):
+                           inline, prefer_literal=False, use_impl_for=False,
+                           **kwargs):
     """
     Make a template class for function *func* overloaded by *overload_func*.
     Compiler options are passed as a dictionary to *jit_options*.
@@ -897,6 +925,7 @@ def make_overload_template(func, overload_func, jit_options, strict,
                _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options,
                _strict=strict, _inline=staticmethod(InlineOptions(inline)),
                _inline_overloads={}, prefer_literal=prefer_literal,
+               use_impl_for=use_impl_for,
                metadata=kwargs)
     return type(base)(name, (base,), dct)
 

@@ -589,6 +589,7 @@ class Contains(AbstractTemplate):
         if isinstance(seq, (types.Sequence)):
             return signature(types.boolean, seq, val)
 
+
 @infer_global(operator.truth)
 class TupleBool(AbstractTemplate):
     def generic(self, args, kws):

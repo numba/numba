@@ -22,6 +22,9 @@ class _OverloadWrapper(object):
         self._BIND_TYPES = dict()
         self._selector = None
         self._TYPER = None
+
+        # To remember if _build() has run
+        self._built = False
         # run to register overload, the intrinsic sorts out the binding to the
         # registered impls at the point the overload is evaluated, i.e. this
         # is all lazy.
@@ -127,6 +130,10 @@ class _OverloadWrapper(object):
 
     def _build(self):
         from numba.core.extending import overload, intrinsic
+
+        if self._built:
+            return
+        self._built = True
 
         @overload(self._function, strict=False,
                   jit_options={'forceinline': True})

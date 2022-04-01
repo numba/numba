@@ -58,7 +58,7 @@ _overload_default_jit_options = {'no_cpython_wrapper': True}
 
 
 def overload(func, jit_options={}, strict=True, inline='never',
-             prefer_literal=False, **kwargs):
+             prefer_literal=False, use_impl_for=False, **kwargs):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode.
@@ -126,13 +126,27 @@ def overload(func, jit_options={}, strict=True, inline='never',
 
     def decorate(overload_func):
         template = make_overload_template(func, overload_func, opts, strict,
-                                          inline, prefer_literal, **kwargs)
+                                          inline, prefer_literal, use_impl_for,
+                                          **kwargs)
         infer(template)
         if callable(func):
             infer_global(func, types.Function(template))
         return overload_func
 
     return decorate
+
+
+def impl_for(ty):
+    """A decorator to mark an overload implmentation function as implementing
+    for a particular type class.
+    """
+    if not issubclass(ty, types.Type):
+        raise TypeError("expecting a type class")
+
+    def wrapped(fn):
+        fn.impl_for = ty
+        return fn
+    return wrapped
 
 
 def register_jitable(*args, **kwargs):
@@ -197,12 +211,26 @@ def overload_attribute(typ, attr, **kwargs):
     return decorate
 
 
+def _make_unique_func(func):
+    """TODO Move to to misc"""
+    from types import FunctionType
+    cloned = FunctionType(
+        code=func.__code__,
+        globals=func.__globals__,
+        name=func.__name__,
+        argdefs=func.__defaults__,
+        closure=func.__closure__)
+    cloned.__kwdefaults__ = func.__kwdefaults__
+    return cloned
+
+
 def _overload_method_common(typ, attr, **kwargs):
     """Common code for overload_method and overload_classmethod
     """
     from numba.core.typing.templates import make_overload_method_template
 
     def decorate(overload_func):
+        overload_func = _make_unique_func(overload_func)
         copied_kwargs = kwargs.copy() # avoid mutating parent dict
         template = make_overload_method_template(
             typ, attr, overload_func,
