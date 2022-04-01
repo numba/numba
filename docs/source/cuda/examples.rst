@@ -6,75 +6,87 @@ Examples
 .. _cuda-vecadd:
 
 Vector Addition
-=====================
-This example shows a very basic vector addition using Numba to create both the
-device based data arrays and the vector addition kernel. It serves as a good warmup
-for learning the bare bones of what is needed to write GPU kernels using numba.
+===============
+This example uses Numba to create on-device arrays and a vector addition kernel;
+it is a warmup for learning how to write GPU kernels using Numba.
 
 
-.. code-block:: python
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_ex_vecadd`` in ``numba/cuda/tests/doc_examples/test_examples.py``
+   :start-after: ex_vecadd.import.begin
+   :end-before: ex_vecadd.import.end
+   :dedent: 8
+   :linenos:
 
-   from numba import cuda
-   import numpy as np
+The following function is the kernel. Note that it is defined in terms of Python
+variables with unspecified types. When the kernel is launched, Numba will
+examine the types of the arguments that are passed at runtime and generate a
+CUDA kernel specialized for them.
 
-This function represents the kernel. Note the function is defined in terms of 
-python variables with unknown types. Later, when launched, numba will examine the
-types of the arguments that are actually passed at runtime and use them to 
-generate a CUDA kernel for the correct primitive types. The ``size`` parameter 
-is used as an out of bounds thread guard. 
+Also note that Numba kernels do not return values and must write any output into
+arrays passed in as parameters (this is similar to the requirement that CUDA
+C/C++ kernels have ``void`` return type). Here we pass in ``c`` for the results
+to be written into.
 
-Also note that just like CUDA kernels in ``c`` are declared as ``void``, and must 
-return their values through an array that is passed, Numba kernels also do 
-not return values. Here, let ``c`` represent our results.
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_ex_vecadd`` in ``numba/cuda/tests/doc_examples/test_examples.py``
+   :start-after: ex_vecadd.kernel.begin
+   :end-before: ex_vecadd.kernel.end
+   :dedent: 8
+   :linenos:
 
-.. code-block:: python
+:func:`cuda.to_device() <numba.cuda.to_device>` can be used create device-side
+copies of arrays.  :func:`cuda.device_array_like()
+<numba.cuda.device_array_like>` creates an uninitialized array of the same shape
+and type as an existing array.  Here we transfer two vectors and create an empty
+vector to hold our results:
 
-   @cuda.jit
-   def f(a, b, c, size):
-      # just like threadIdx.x + (blockIdx.x * blockDim.x)
-      tid = cuda.grid(1) 
-      
-      if tid < size:
-         c[tid] = a[tid] + b[tid]
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_ex_vecadd`` in ``numba/cuda/tests/doc_examples/test_examples.py``
+   :start-after: ex_vecadd.allocate.begin
+   :end-before: ex_vecadd.allocate.end
+   :dedent: 8
+   :linenos:
 
-``numba.cuda.to_device`` can be used create device side copies of numpy arrays.
-Create two data vectors and an empty vector to hold our results:
+A call to :meth:`forall() <numba.cuda.dispatcher.Dispatcher.forall>` generates
+an appropriate launch configuration with a 1D grid (see
+:ref:`cuda-kernel-invocation`) for a given data size and is often the simplest
+way of launching a kernel:
 
-.. code-block:: python
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_ex_vecadd`` in ``numba/cuda/tests/doc_examples/test_examples.py``
+   :start-after: ex_vecadd.forall.begin
+   :end-before: ex_vecadd.forall.end
+   :dedent: 8
+   :linenos:
 
-   a = cuda.to_device(np.array([1,2,3]))
-   b = cuda.to_device(np.array([1,2,3]))
-   c = cuda.to_device(np.array([0,0,0]))
-
-
-The following call to ``forall`` autoconfigures a 1D kernel for the data size
-and is often the simplest way of launching a kernel.
-
-.. code-block:: python
-
-   f.forall(len(a))(a, b, c, len(a))
-   print(c.copy_to_host())
-
-This prints
-
-.. code-block:: none
-
-   [2 4 6]
-
-
-One can also configure the grid manually using the following syntax to launch
-a grid containing one block with three threads:
-
-.. code-block:: python
-
-   f[1, 3](a, b, c, len(a))
-   print(c.copy_to_host())
-
-This also prints
+This prints:
 
 .. code-block:: none
 
-   [2 4 6]
+   [0.73548323 1.32061059 0.12582968 ... 1.25925809 1.49335059 1.59315414]
+
+One can also configure the grid manually using the subscripting syntax. The
+following example launches a grid with sufficient threads to operate on every
+vector element:
+
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_ex_vecadd`` in ``numba/cuda/tests/doc_examples/test_examples.py``
+   :start-after: ex_vecadd.launch.begin
+   :end-before: ex_vecadd.launch.end
+   :dedent: 8
+   :linenos:
+
+This also prints:
+
+.. code-block:: none
+
+   [0.73548323 1.32061059 0.12582968 ... 1.25925809 1.49335059 1.59315414]
 
 .. _cuda-laplace:
 
@@ -100,65 +112,61 @@ we have a one dimensional object which we'll represent with an array of values. 
 of the element in the array is like the position of a small piece of the object, and the value 
 of the element is like the temperature. 
 
-.. code-block:: python
-
-   from numba import cuda
-   import numpy as np
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_laplace.py
+   :language: python
+   :caption: from ``test_ex_laplace`` in ``numba/cuda/tests/doc_examples/test_laplace.py``
+   :start-after: ex_laplace.import.begin
+   :end-before: ex_laplace.import.end
+   :dedent: 8
+   :linenos:
 
 
 Some initial setup here. Let's make one point in the center of the object very hot.
 
-.. code-block:: python
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_laplace.py
+   :language: python
+   :caption: from ``test_ex_laplace`` in ``numba/cuda/tests/doc_examples/test_laplace.py``
+   :start-after: ex_laplace.allocate.begin
+   :end-before: ex_laplace.allocate.end
+   :dedent: 8
+   :linenos:
 
-   size = 100
-   data = np.zeros(size)
-
-   # make one piece in the very middle very hot
-   data[int(size/2)] = 10000
-   data_gpu = cuda.to_device(data)
 
 
 In our kernel each thread will be responsible for managing the temperature update for a single element
 in a loop over the desired number of timesteps. The kernel is below:
 
-.. code-block:: python
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_laplace.py
+   :language: python
+   :caption: from ``test_ex_laplace`` in ``numba/cuda/tests/doc_examples/test_laplace.py``
+   :start-after: ex_laplace.kernel.begin
+   :end-before: ex_laplace.kernel.end
+   :dedent: 8
+   :linenos:
 
-   @cuda.jit
-   def solve_heat_equation(data, size, timesteps, k):
-      i = cuda.grid(1)
-
-      for step in range(timesteps):
-         # get the current temperature associated with this segment
-         curr_temp = data[i]
-         
-         # apply formula from finite difference equation
-         if i == 0:
-               # Left wall is held at T = 0
-               next_temp = curr_temp + k * (data[i + 1] - (2 * curr_temp))
-         elif i == size - 1:
-               # Right wall is held at T = 0
-               next_temp = curr_temp + k * (data[i - 1] - (2 * curr_temp))
-         else:
-               next_temp = curr_temp + k * (data[i - 1] - (2 * curr_temp) + data[i + 1])
-         data[i] = next_temp
-         
-         # wait for every thread to write before moving on
-         cuda.syncthreads()
 
 Calling the kernel:
 
-.. code-block:: python
-
-   solve_heat_equation.forall(len(data))(data_gpu, len(data_gpu), 10000, 0.25)
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_laplace.py
+   :language: python
+   :caption: from ``test_ex_laplace`` in ``numba/cuda/tests/doc_examples/test_laplace.py``
+   :start-after: ex_laplace.launch.begin
+   :end-before: ex_laplace.launch.end
+   :dedent: 8
+   :linenos:
 
 Since the kernel reused the original data vector to work on the problem, copying it back
 to the host yields the results:
 
-.. code-block:: python
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_laplace.py
+   :language: python
+   :caption: from ``test_ex_laplace`` in ``numba/cuda/tests/doc_examples/test_laplace.py``
+   :start-after: ex_laplace.print.begin
+   :end-before: ex_laplace.print.end
+   :dedent: 8
+   :linenos:
 
-   print(data_gpu.copy_to_host())
-
-This prints
+This prints:
 
 .. code-block:: none
 
@@ -199,54 +207,34 @@ about shared memory in the CUDA documentation. As a way of demonstrating shared 
 a famous CUDA solution for summing a vector which works by "folding" the data up using a sucessively
 smaller number of threads.
 
-.. code-block:: python
-
-   from numba import cuda
-   import numpy as np
-   from numba.types import int32
-
-   # generate data
-   a = cuda.to_device(np.arange(1024))
-   nelem = len(a)
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_reduction.py
+   :language: python
+   :caption: from ``test_ex_reduction`` in ``numba/cuda/tests/doc_examples/test_reduction.py``
+   :start-after: ex_reduction.import.begin
+   :end-before: ex_reduction.import.end
+   :dedent: 8
+   :linenos:
 
 Here is a version of the kernel implemented using Numba:
 
-.. code-block:: python
-
-   @cuda.jit
-   def array_sum(data, size):
-      tid = cuda.threadIdx.x
-      if tid < size:
-         i = cuda.grid(1)
-         
-         # declare an array in shared memory
-         shr = cuda.shared.array(nelem, int32)
-         shr[tid] = data[i]
-         
-         # make sure every thread has written its value to shared memory
-         # before we start reducing
-         cuda.syncthreads()
-         
-         s = 1
-         while s < cuda.blockDim.x:
-            if tid % (2 * s) == 0:
-                  # stride by `s` and add
-                  shr[tid] += shr[tid + s]
-            s *= 2
-            cuda.syncthreads()
-            
-         # after the loop, the zeroth element contains the sum
-         if tid == 0:
-            data[tid] = shr[tid]
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_reduction.py
+   :language: python
+   :caption: from ``test_ex_reduction`` in ``numba/cuda/tests/doc_examples/test_reduction.py``
+   :start-after: ex_reduction.kernel.begin
+   :end-before: ex_reduction.kernel.end
+   :dedent: 8
+   :linenos:
 
 This kernel can be run as follows and the same result is obtained through
 summing the host data by traditional means.
 
-.. code-block:: python
-
-   kernel.forall(len(a))(a, len(a))
-   print(a[0]) # array(523776)
-   sum(np.arange(1024)) # 523776
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_reduction.py
+   :language: python
+   :caption: from ``test_ex_reduction`` in ``numba/cuda/tests/doc_examples/test_reduction.py``
+   :start-after: ex_reduction.launch.begin
+   :end-before: ex_reduction.launch.end
+   :dedent: 8
+   :linenos:
 
 This algorithm can be greatly improved upon by redesigning the inner loop
 to use sequential memory accesses, or even furthermore using strategies that
@@ -275,83 +263,35 @@ Our goal will be to create a new column called session_id which contains a label
 session. We'll define the boundary between sessions as when there has been at least one hour between clicks.
 
 
-.. code-block:: python
-
-   from numba import cuda
-   import numpy as np
-
-   # set the timeout to one hour
-   session_timeout = np.int64(np.timedelta64('3600', 's'))
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_sessionize.py
+   :language: python
+   :caption: from ``test_ex_sessionize`` in ``numba/cuda/tests/doc_examples/test_sessionize.py``
+   :start-after: ex_sessionize.import.begin
+   :end-before: ex_sessionize.import.end
+   :dedent: 8
+   :linenos:
    
 Here is a solution using Numba:
 
-.. code-block:: python
-
-   @cuda.jit
-   def sessionize(
-      user_id, timestamp, results, size
-   ):
-      gid = cuda.grid(1)
-      
-      
-      ### DETERMINE SESSION BOUNDARIES
-      is_sess_boundary = 0
-      if 0 < gid < size:
-         if (
-               user_id[gid] != user_id[gid - 1]
-               or timestamp[gid] - timestamp[gid - 1] > session_timeout
-         ):
-               is_sess_boundary = 1
-         else:
-               is_sess_boundary = 0
-      else:
-         is_sess_boundary = 1
-         
-         
-      ### DETERMINE SESSION LABELS
-      # this thread marks the start of a session
-      if gid < size:
-         if is_sess_boundary:
-               results[gid] = gid
-               look_ahead = 1
-
-               # check elements 'forward' of this one 
-               # until a new session boundary is found
-               while results[gid + look_ahead] == 0:
-                  results[gid + look_ahead] = gid
-                  look_ahead += 1
-
-                  # don't segfault if I'm the last thread
-                  if gid + look_ahead == size - 1:
-                     results[gid + look_ahead] = gid
-                     break
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_sessionize.py
+   :language: python
+   :caption: from ``test_ex_sessionize`` in ``numba/cuda/tests/doc_examples/test_sessionize.py``
+   :start-after: ex_sessionize.kernel.begin
+   :end-before: ex_sessionize.kernel.end
+   :dedent: 8
+   :linenos:
 
 Let's generate some data and try out the kernel.
 
 .. code-block:: python
 
-   # generate data
-   ids = cuda.to_device(
-      np.array([1,1,1,1,1,1,2,2,2,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4])
-   )
-
-   sec = cuda.to_device(
-      np.array(
-         [1,2,3,5000,5001,5002,1,2,3,1,2,5000,5001,10000,10001,10002,10003,15000,150001,1,5000,50001,15000,20000,25000,25001,25002, 25003],
-         dtype='datetime64[ns]').astype('int64') # cast to int64 for compatibility
-   )
-
-   # create a vector to hold the results
-   results = cuda.to_device(np.zeros(len(ids)))
-
-   # kernel call
-   sessionize.forall(len(ids))(ids, sec, results, len(ids))
-   
-   print(results.copy_to_host())
-   # array([ 0.,  0.,  0.,  3.,  3.,  3.,  6.,  6.,  6.,  9.,  9., 11., 11.,
-   #    13., 13., 13., 13., 17., 18., 19., 20., 21., 21., 23., 24., 24.,
-   #    24., 24.])
-
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_sessionize.py
+   :language: python
+   :caption: from ``test_ex_sessionize`` in ``numba/cuda/tests/doc_examples/test_sessionize.py``
+   :start-after: ex_sessionize.allocate.begin
+   :end-before: ex_sessionize.allocate.end
+   :dedent: 8
+   :linenos:
 
 As can be seen above, the kernel successfully divided the first three datapoints from the second three for the first user ID,
 and a similar pattern is seen througout. This example has wide applicability in a business setting and can be used to study
@@ -368,49 +308,54 @@ they can directly reuse potential business logic with fewer code changes.
 
 Take the following example function:
 
-.. code-block:: python
-
-   from math import pi
-
-   @numba.jit
-   def business_logic(x, y, z):
-      return 4 * z * (2 * x - (4 * y) / 2 * pi)
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_cpu_gpu_compat.py
+   :language: python
+   :caption: from ``test_ex_cpu_gpu_compat`` in ``numba/cuda/tests/doc_examples/test_cpu_gpu_compat.py``
+   :start-after: ex_cpu_gpu_compat.define.begin
+   :end-before: ex_cpu_gpu_compat.define.end
+   :dedent: 8
+   :linenos:
 
 The function ``business_logic`` can be run standalone in compiled form on the CPU:
 
-..code-block:: python
-
-   print(business_logic(1,2,3)) # -126.79644737231007
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_cpu_gpu_compat.py
+   :language: python
+   :caption: from ``test_ex_cpu_gpu_compat`` in ``numba/cuda/tests/doc_examples/test_cpu_gpu_compat.py``
+   :start-after: ex_cpu_gpu_compat.cpurun.begin
+   :end-before: ex_cpu_gpu_compat.cpurun.end
+   :dedent: 8
+   :linenos:
 
 It can also be directly reused threadwise inside a GPU kernel. For example one may 
 generate some vectors to represent ``x``, ``y``, and ``z``:
 
-.. code-block:: python
-
-   X = cp.array([1, 10, 234])
-   Y = cp.array([2,2,4014])
-   Z = cp.array([3,14,2211])
-
-   results = cp.array([0.,0.,0.])
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_cpu_gpu_compat.py
+   :language: python
+   :caption: from ``test_ex_cpu_gpu_compat`` in ``numba/cuda/tests/doc_examples/test_cpu_gpu_compat.py``
+   :start-after: ex_cpu_gpu_compat.allocate.begin
+   :end-before: ex_cpu_gpu_compat.allocate.end
+   :dedent: 8
+   :linenos:
 
 And a numba kernel referencing the decorated function:
 
-.. code-block:: python
-
-   @cuda.jit
-   def f(res, xarr, yarr, zarr, size):
-      tid = cuda.grid(1)
-      
-      if tid < size:
-         # the function decorated with numba.jit can just be directly reused
-         res[tid] = business_logic(xarr[tid], yarr[tid], zarr[tid])
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_cpu_gpu_compat.py
+   :language: python
+   :caption: from ``test_ex_cpu_gpu_compat`` in ``numba/cuda/tests/doc_examples/test_cpu_gpu_compat.py``
+   :start-after: ex_cpu_gpu_compat.kernel.begin
+   :end-before: ex_cpu_gpu_compat.kernel.end
+   :dedent: 8
+   :linenos:
 
 This kernel can be invoked in the normal way:
 
-.. code-block:: python
-
-   f.forall(len(X))(results, X, Y, Z, len(X))
-   print(results) # [-126.79644737231007, 416.28324559588634, -218912930.2987788]
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_cpu_gpu_compat.py
+   :language: python
+   :caption: from ``test_ex_cpu_gpu_compat`` in ``numba/cuda/tests/doc_examples/test_cpu_gpu_compat.py``
+   :start-after: ex_cpu_gpu_compat.launch.begin
+   :end-before: ex_cpu_gpu_compat.launch.end
+   :dedent: 8
+   :linenos:
 
 .. _cuda_montecarlo:
 
