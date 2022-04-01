@@ -3626,6 +3626,13 @@ def np_diff_impl(a, n=1):
 
 
 @register_jitable
+def _assert_can_asarray(a, b):
+    if not (type_can_asarray(a) and type_can_asarray(b)):
+        raise TypingError('Both arguments to "array_equals" '
+                          'must be array-like')
+
+
+@register_jitable
 def _loop_array_equal(a, b, equal_nan=False):
     if equal_nan:
         for _a, _b in zip(a.flat, b.flat):
@@ -3640,13 +3647,6 @@ def _loop_array_equal(a, b, equal_nan=False):
             if _a != _b:
                 return False
     return True
-
-
-@register_jitable
-def _assert_can_asarray(a, b):
-    if not (type_can_asarray(a) and type_can_asarray(b)):
-        raise TypingError('Both arguments to "array_equals" '
-                          'must be array-like')
 
 
 if numpy_version >= (1, 19):
