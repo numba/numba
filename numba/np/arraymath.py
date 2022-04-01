@@ -3625,6 +3625,23 @@ def np_diff_impl(a, n=1):
     return diff_impl
 
 
+@register_jitable
+def _loop_array_equal(a, b, equal_nan=False):
+    if equal_nan:
+        for _a, _b in zip(a.flat, b.flat):
+            if _a != _b:
+                # NaN != NaN
+                if _a != _a and _b != _b:
+                    continue
+                else:
+                    return False
+    else:
+        for _a, _b in zip(a.flat, b.flat):
+            if _a != _b:
+                return False
+    return True
+
+
 if numpy_version >= (1, 19):
     @overload(np.array_equal)
     def np_array_equal(a, b, equal_nan=False):
@@ -3650,19 +3667,7 @@ if numpy_version >= (1, 19):
                 b = np.asarray(b)
                 if a.shape != b.shape:
                     return False
-                if equal_nan:
-                    for _a, _b in zip(a.flat, b.flat):
-                        if _a != _b:
-                            # NaN != NaN
-                            if _a != _a and _b != _b:
-                                continue
-                            else:
-                                return False
-                else:
-                    for _a, _b in zip(a.flat, b.flat):
-                        if _a != _b:
-                            return False
-                return True
+                return _loop_array_equal(a, b, equal_nan=equal_nan)
 
         return impl
 else:
@@ -3684,10 +3689,7 @@ else:
                 b = np.asarray(b)
                 if a.shape != b.shape:
                     return False
-                for _a, _b in zip(a.flat, b.flat):
-                    if _a != _b:
-                        return False
-                return True
+                return _loop_array_equal(a, b, equal_nan=False)
 
         return impl
 
