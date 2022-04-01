@@ -3642,13 +3642,18 @@ def _loop_array_equal(a, b, equal_nan=False):
     return True
 
 
+@register_jitable
+def _assert_can_asarray(a, b):
+    if not (type_can_asarray(a) and type_can_asarray(b)):
+        raise TypingError('Both arguments to "array_equals" '
+                          'must be array-like')
+
+
 if numpy_version >= (1, 19):
     @overload(np.array_equal)
     def np_array_equal(a, b, equal_nan=False):
 
-        if not (type_can_asarray(a) and type_can_asarray(b)):
-            raise TypingError('Both arguments to "array_equals" '
-                              'must be array-like')
+        _assert_can_asarray(a, b)
 
         if not isinstance(equal_nan, types.Boolean):
             raise TypingError('"equal_nan" must be a boolean')
@@ -3674,9 +3679,7 @@ else:
     @overload(np.array_equal)
     def np_array_equal(a, b):
 
-        if not (type_can_asarray(a) and type_can_asarray(b)):
-            raise TypingError('Both arguments to "array_equals" '
-                              'must be array-like')
+        _assert_can_asarray(a, b)
 
         accepted = (types.Boolean, types.Number)
         if isinstance(a, accepted) and isinstance(b, accepted):
