@@ -864,6 +864,37 @@ def np_all(a):
     return flat_all
 
 
+@register_jitable
+def _can_broadcast_returns_bool(array, dest_shape):
+    src_shape = array.shape
+    src_ndim = len(src_shape)
+    dest_ndim = len(dest_shape)
+    if src_ndim > dest_ndim:
+        return False
+    for size in dest_shape:
+        if size < 0:
+            return False
+
+    # based on _broadcast_onto function in numba/np/npyimpl.py
+    src_index = 0
+    dest_index = dest_ndim - src_ndim
+    while src_index < src_ndim:
+        src_dim = src_shape[src_index]
+        dest_dim = dest_shape[dest_index]
+        # possible cases for (src_dim, dest_dim):
+        #  * (1, 1)   -> Ok
+        #  * (>1, 1)  -> Error!
+        #  * (>1, >1) -> src_dim == dest_dim else error!
+        #  * (1, >1)  -> Ok
+        if src_dim == dest_dim or src_dim == 1:
+            src_index += 1
+            dest_index += 1
+        else:
+            return False
+
+    return True
+
+
 @overload(np.allclose)
 @overload_method(types.Array, "allclose")
 def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
@@ -887,6 +918,17 @@ def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
                         'boolean')
 
     def np_allclose_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+        a = np.asarray(a)
+        b = np.asarray(b)
+        if a.shape != b.shape:
+            if _can_broadcast_returns_bool(a, b.shape):
+                a = np.broadcast_to(a, b.shape)
+            elif _can_broadcast_returns_bool(b, a.shape):
+                b = np.broadcast_to(b, a.shape)
+            else:
+                raise ValueError('operands could not be broadcast together '
+                                 'with remapped shapes')
+
         for av, bv in zip(np.nditer(a), np.nditer(b)):
             a_v = av.item()
             b_v = bv.item()

@@ -3176,7 +3176,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         #test with axis argument
         test_1D_weights_axis(data, axis=1, weights=w)
 
-
     def test_allclose(self):
 
         pyfunc = np_allclose
@@ -3194,6 +3193,15 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         b = np.asarray([1.0001e10, 1e-9])
         assert not cfunc(a, b)
 
+        a = np.asarray([1e10])
+        b = np.asarray([1.0001e10, 1e-9])
+        assert not cfunc(a, b)
+
+        a = np.asarray([1e10, 1e-9, np.nan])
+        b = np.asarray([1.0001e10, 1e-9])
+        with self.assertRaises(ValueError):
+            cfunc(a, b)
+
         a = np.asarray([1.0, np.nan])
         b = np.asarray([1.0, np.nan])
         assert not cfunc(a, b)
@@ -3202,6 +3210,31 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         b = np.asarray([np.nan, 1.0])
         assert not cfunc(a, b)
 
+        noise_levels = [1.0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 0.0]
+        zero_array = np.zeros((25,))
+        a = np.random.ranf((25, 4))
+        for noise in noise_levels:
+            for rtol in noise_levels:
+                for atol in noise_levels:
+                    py_result = pyfunc(zero_array, np.asarray([noise]),
+                                       atol=atol, rtol=rtol)
+                    c_result = cfunc(zero_array, np.asarray([noise]),
+                                     atol=atol, rtol=rtol)
+                    assert py_result == c_result
+
+                    py_result = pyfunc(np.asarray([noise]), zero_array,
+                                       atol=atol, rtol=rtol)
+                    c_result = cfunc(np.asarray([noise]), zero_array,
+                                     atol=atol, rtol=rtol)
+                    assert py_result == c_result
+
+                    py_result = pyfunc(a, a + noise, atol=atol, rtol=rtol)
+                    c_result = cfunc(a, a + noise, atol=atol, rtol=rtol)
+                    assert py_result == c_result
+
+                    py_result = pyfunc(a + noise, a, atol=atol, rtol=rtol)
+                    c_result = cfunc(a + noise, a, atol=atol, rtol=rtol)
+                    assert py_result == c_result
 
     def test_interp_basic(self):
         pyfunc = interp
