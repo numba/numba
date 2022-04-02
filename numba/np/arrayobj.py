@@ -1382,6 +1382,79 @@ def numpy_broadcast_to(array, shape):
     return impl
 
 
+@register_jitable
+def numpy_broadcast_shapes_list(r, m, shape):
+    for i in range(len(shape)):
+        k = m - len(shape) + i
+        tmp = shape[i]
+        if tmp == 1:
+            continue
+        if r[k] == 1:
+            r[k] = tmp
+        elif r[k] != tmp:
+            raise ValueError("shape mismatch: objects"
+                             " cannot be broadcast"
+                             " to a single shape")
+
+
+@overload(np.broadcast_arrays)
+def numpy_broadcast_arrays(*args):
+
+    for idx, arg in enumerate(args):
+        if not type_can_asarray(arg):
+            raise errors.TypingError(f'Argument "{idx}" must '
+                                     'be array-like')
+
+    unified_dtype = None
+    dt = None
+    for arg in args:
+        if isinstance(arg, (types.Array, types.BaseTuple)):
+            dt = arg.dtype
+        else:
+            dt = arg
+
+        if unified_dtype is None:
+            unified_dtype = dt
+        elif unified_dtype != dt:
+            raise errors.TypingError('Mismatch of argument types. Numba cannot '
+                                     'broadcast arrays with different types. '
+                                     f'Got {args}')
+
+    # number of dimensions
+    m = 0
+    for idx, arg in enumerate(args):
+        if isinstance(arg, types.ArrayCompatible):
+            m = max(m, arg.ndim)
+        elif isinstance(arg, (types.Number, types.Boolean, types.BaseTuple)):
+            m = max(m, 1)
+        else:
+            raise errors.TypingError(f'Unhandled type {arg}')
+
+    tup_init = (0,) * m
+
+    def impl(*args):
+        # find out the output shape
+        # we can't call np.broadcast_shapes here since args may have arrays
+        # with different shapes and it is not possible to create a list
+        # with those shapes dynamically
+        shape = [1] * m
+        for array in literal_unroll(args):
+            numpy_broadcast_shapes_list(shape, m, np.asarray(array).shape)
+
+        tup = tup_init
+
+        for i in range(m):
+            tup = tuple_setitem(tup, i, shape[i])
+
+        # numpy checks if the input arrays have the same shape as `shape`
+        outs = []
+        for array in literal_unroll(args):
+            outs.append(np.broadcast_to(np.asarray(array), tup))
+        return outs
+
+    return impl
+
+
 def fancy_setslice(context, builder, sig, args, index_types, indices):
     """
     Implement slice assignment for arrays.  This implementation works for
