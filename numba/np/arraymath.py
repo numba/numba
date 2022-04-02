@@ -895,6 +895,29 @@ def _can_broadcast_returns_bool(array, dest_shape):
     return True
 
 
+@register_jitable
+def allclose_scalars(a_v, b_v, rtol=1e-05, atol=1e-08, equal_nan=False):
+    a_v_isnan = np.isnan(a_v)
+    b_v_isnan = np.isnan(b_v)
+
+    # only one of the values is NaN and the
+    # other is not.
+    if ( (not a_v_isnan and b_v_isnan) or
+            (a_v_isnan and not b_v_isnan) ):
+        return False
+
+    # either both of the values are NaN
+    # or both are numbers
+    if a_v_isnan and b_v_isnan:
+        if not equal_nan:
+            return False
+    else:
+        if np.abs(a_v - b_v) > atol + rtol * np.abs(b_v):
+            return False
+
+    return True
+
+
 @overload(np.allclose)
 @overload_method(types.Array, "allclose")
 def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
@@ -917,43 +940,49 @@ def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
         raise TypeError('The sixth argument "equal_nan" must be a '
                         'boolean')
 
-    def np_allclose_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-        a = np.asarray(a)
-        b = np.asarray(b)
-        if a.shape != b.shape:
-            if _can_broadcast_returns_bool(a, b.shape):
-                a = np.broadcast_to(a, b.shape)
-            elif _can_broadcast_returns_bool(b, a.shape):
-                b = np.broadcast_to(b, a.shape)
-            else:
-                raise ValueError('operands could not be broadcast together '
-                                 'with remapped shapes')
+    is_a_scalar = isinstance(a, types.Number)
+    is_b_scalar = isinstance(b, types.Number)
 
-        for av, bv in zip(np.nditer(a), np.nditer(b)):
-            a_v = av.item()
-            b_v = bv.item()
-
-            a_v_isnan = np.isnan(a_v)
-            b_v_isnan = np.isnan(b_v)
-
-            # only one of the values is NaN and the
-            # other is not.
-            if ( (not a_v_isnan and b_v_isnan) or
-                    (a_v_isnan and not b_v_isnan) ):
-                return False
-
-            # either both of the values are NaN
-            # or both are numbers
-            if a_v_isnan and b_v_isnan:
-                if not equal_nan:
+    if is_a_scalar and is_b_scalar:
+        def np_allclose_impl_scalar_scalar(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+            return allclose_scalars(a, b, rtol=rtol, atol=atol, equal_nan=equal_nan)
+        return np_allclose_impl_scalar_scalar
+    elif is_a_scalar and not is_b_scalar:
+        def np_allclose_impl_scalar_array(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+            b = np.asarray(b)
+            for bv in np.nditer(b):
+                if not allclose_scalars(a, bv.item(), rtol=rtol, atol=atol, equal_nan=equal_nan):
                     return False
-            else:
-                if np.abs(a_v - b_v) > atol + rtol * np.abs(b_v):
+            return True
+        return np_allclose_impl_scalar_array
+    elif not is_a_scalar and is_b_scalar:
+        def np_allclose_impl_array_scalar(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+            a = np.asarray(a)
+            for av in np.nditer(a):
+                if not allclose_scalars(av.item(), b, rtol=rtol, atol=atol, equal_nan=equal_nan):
+                    return False
+            return True
+        return np_allclose_impl_array_scalar
+    elif not is_a_scalar and not is_b_scalar:
+        def np_allclose_impl_array_array(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+            a = np.asarray(a)
+            b = np.asarray(b)
+            if a.shape != b.shape:
+                if _can_broadcast_returns_bool(a, b.shape):
+                    a = np.broadcast_to(a, b.shape)
+                elif _can_broadcast_returns_bool(b, a.shape):
+                    b = np.broadcast_to(b, a.shape)
+                else:
+                    raise ValueError('operands could not be broadcast together '
+                                     'with remapped shapes')
+
+            for av, bv in zip(np.nditer(a), np.nditer(b)):
+                if not allclose_scalars(av.item(), bv.item(), rtol=rtol, atol=atol, equal_nan=equal_nan):
                     return False
 
-        return True
+            return True
 
-    return np_allclose_impl
+        return np_allclose_impl_array_array
 
 
 @overload(np.any)

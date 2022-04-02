@@ -3181,34 +3181,26 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         pyfunc = np_allclose
         cfunc = jit(nopython=True)(pyfunc)
 
-        a = np.asarray([1e10, 1e-7])
-        b = np.asarray([1.00001e10, 1e-8])
-        assert not cfunc(a, b)
+        simple_data = [
+            (np.asarray([1e10, 1e-7]), np.asarray([1.00001e10, 1e-8])),
+            (np.asarray([1e10, 1e-8]), np.asarray([1.00001e10, 1e-9])),
+            (np.asarray([1e10, 1e-8]), np.asarray([1.0001e10, 1e-9])),
+            (np.asarray([1e10]), np.asarray([1.0001e10, 1e-9])),
+            (1.0, 1.0)
+        ]
 
-        a = np.asarray([1e10, 1e-8])
-        b = np.asarray([1.00001e10, 1e-9])
-        assert cfunc(a, b)
-
-        a = np.asarray([1e10, 1e-8])
-        b = np.asarray([1.0001e10, 1e-9])
-        assert not cfunc(a, b)
-
-        a = np.asarray([1e10])
-        b = np.asarray([1.0001e10, 1e-9])
-        assert not cfunc(a, b)
-
-        a = np.asarray([1e10, 1e-9, np.nan])
-        b = np.asarray([1.0001e10, 1e-9])
-        with self.assertRaises(ValueError):
-            cfunc(a, b)
+        for a, b in simple_data:
+            py_result = pyfunc(a, b)
+            c_result = cfunc(a, b)
+            self.assertEqual(py_result, c_result)
 
         a = np.asarray([1.0, np.nan])
         b = np.asarray([1.0, np.nan])
-        assert not cfunc(a, b)
-        assert cfunc(a, b, equal_nan=True)
+        self.assertFalse(cfunc(a, b))
+        self.assertTrue(cfunc(a, b, equal_nan=True))
 
         b = np.asarray([np.nan, 1.0])
-        assert not cfunc(a, b)
+        self.assertFalse(cfunc(a, b))
 
         noise_levels = [1.0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 0.0]
         zero_array = np.zeros((25,))
@@ -3216,25 +3208,46 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for noise in noise_levels:
             for rtol in noise_levels:
                 for atol in noise_levels:
-                    py_result = pyfunc(zero_array, np.asarray([noise]),
+                    py_result = pyfunc(zero_array, noise,
                                        atol=atol, rtol=rtol)
-                    c_result = cfunc(zero_array, np.asarray([noise]),
+                    c_result = cfunc(zero_array, noise,
                                      atol=atol, rtol=rtol)
-                    assert py_result == c_result
+                    self.assertEqual(py_result, c_result)
+
+                    py_result = pyfunc(noise, zero_array,
+                                       atol=atol, rtol=rtol)
+                    c_result = cfunc(noise, zero_array,
+                                     atol=atol, rtol=rtol)
+                    self.assertEqual(py_result, c_result)
 
                     py_result = pyfunc(np.asarray([noise]), zero_array,
                                        atol=atol, rtol=rtol)
                     c_result = cfunc(np.asarray([noise]), zero_array,
                                      atol=atol, rtol=rtol)
-                    assert py_result == c_result
+                    self.assertEqual(py_result, c_result)
 
                     py_result = pyfunc(a, a + noise, atol=atol, rtol=rtol)
                     c_result = cfunc(a, a + noise, atol=atol, rtol=rtol)
-                    assert py_result == c_result
+                    self.assertEqual(py_result, c_result)
 
                     py_result = pyfunc(a + noise, a, atol=atol, rtol=rtol)
                     c_result = cfunc(a + noise, a, atol=atol, rtol=rtol)
-                    assert py_result == c_result
+                    self.assertEqual(py_result, c_result)
+
+    def test_allcase_exception(self):
+        self.disable_leak_check()
+
+        pyfunc = np_allclose
+        cfunc = jit(nopython=True)(pyfunc)
+
+        a = np.asarray([1e10, 1e-9, np.nan])
+        b = np.asarray([1.0001e10, 1e-9])
+
+        with self.assertRaises(ValueError) as e:
+            cfunc(a, b)
+
+        self.assertIn(("operands could not be broadcast together "
+                       "with remapped shapes"), str(e.exception))
 
     def test_interp_basic(self):
         pyfunc = interp
