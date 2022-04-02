@@ -922,8 +922,8 @@ def allclose_scalars(a_v, b_v, rtol=1e-05, atol=1e-08, equal_nan=False):
 
 
 @register_jitable
-def np_allclose_impl_array_array_no_broadcast(a, b, rtol=1e-05, atol=1e-08,
-                                              equal_nan=False):
+def np_allclose_impl_no_broadcast(a, b, rtol=1e-05, atol=1e-08,
+                                  equal_nan=False):
     for av, bv in np.nditer((a, b)):
         if not allclose_scalars(av.item(), bv.item(), rtol=rtol,
                                 atol=atol, equal_nan=equal_nan):
@@ -990,14 +990,22 @@ def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
             b = np.asarray(b)
             if a.shape != b.shape:
                 if _can_broadcast_returns_bool(a, b.shape):
-                    return np_allclose_impl_array_array_no_broadcast(np.broadcast_to(a, b.shape), b, rtol=rtol, atol=atol, equal_nan=equal_nan)
+                    a_b = np.broadcast_to(a, b.shape)
+                    return np_allclose_impl_no_broadcast(a_b, b,
+                                                         rtol=rtol, atol=atol,
+                                                         equal_nan=equal_nan)
                 elif _can_broadcast_returns_bool(b, a.shape):
-                    return np_allclose_impl_array_array_no_broadcast(a, np.broadcast_to(b, a.shape), rtol=rtol, atol=atol, equal_nan=equal_nan)
+                    b_b = np.broadcast_to(b, a.shape)
+                    return np_allclose_impl_no_broadcast(a, b_b,
+                                                         rtol=rtol, atol=atol,
+                                                         equal_nan=equal_nan)
                 else:
                     raise ValueError('operands could not be broadcast together '
                                      'with remapped shapes')
 
-            return np_allclose_impl_array_array_no_broadcast(a, b, rtol=rtol, atol=atol, equal_nan=equal_nan)
+            return np_allclose_impl_no_broadcast(a, b, rtol=rtol,
+                                                 atol=atol,
+                                                 equal_nan=equal_nan)
 
         return np_allclose_impl_array_array
 
