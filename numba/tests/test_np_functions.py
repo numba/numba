@@ -3208,14 +3208,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertFalse(cfunc(a, b))
 
         # NumPy test data
-        arr = np.array([100, 1000])
-        aran = np.arange(125).reshape((5, 5, 5))
+        arr = np.array([100.0, 1000.0])
+        aran = np.arange(125).astype(dtype=np.float64).reshape((5, 5, 5))
         atol = 1e-8
         rtol = 1e-5
         numpy_data = [
             (np.asarray([1, 0]), np.asarray([1, 0])),
-            (np.asarray([atol]), np.asarray([0])),
-            (np.asarray([1]), np.asarray([1 + rtol + atol])),
+            (np.asarray([atol]), np.asarray([0.0])),
+            (np.asarray([1.0]), np.asarray([1 + rtol + atol])),
             (arr, arr + arr * rtol),
             (arr, arr + arr * rtol + atol * 2),
             (aran, aran + aran * rtol),
@@ -3227,16 +3227,16 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertTrue(cfunc(x, y))
 
         numpy_data = [
-            (np.asarray([np.inf, 0]), np.asarray([1, np.inf])),
-            (np.asarray([np.inf, 0]), np.asarray([1, 0])),
-            (np.asarray([np.inf, np.inf]), np.asarray([1, np.inf])),
-            (np.asarray([np.inf, np.inf]), np.asarray([1, 0])),
-            (np.asarray([-np.inf, 0]), np.asarray([np.inf, 0])),
-            (np.asarray([np.nan, 0]), np.asarray([np.nan, 0])),
-            (np.asarray([atol * 2]), np.asarray([0])),
-            (np.asarray([1]), np.asarray([1 + rtol + atol * 2])),
+            (np.asarray([np.inf, 0]), np.asarray([1.0, np.inf])),
+            (np.asarray([np.inf, 0]), np.asarray([1.0, 0])),
+            (np.asarray([np.inf, np.inf]), np.asarray([1.0, np.inf])),
+            (np.asarray([np.inf, np.inf]), np.asarray([1.0, 0.0])),
+            (np.asarray([-np.inf, 0.0]), np.asarray([np.inf, 0.0])),
+            (np.asarray([np.nan, 0.0]), np.asarray([np.nan, 0.0])),
+            (np.asarray([atol * 2]), np.asarray([0.0])),
+            (np.asarray([1.0]), np.asarray([1 + rtol + atol * 2])),
             (aran, aran + aran * atol + atol * 2),
-            (np.array([np.inf, 1]), np.array([0, np.inf]))
+            (np.array([np.inf, 1.0]), np.array([0.0, np.inf]))
         ]
 
         for (x, y) in numpy_data:
@@ -3293,8 +3293,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as e:
             cfunc(a, b)
 
-        self.assertIn(("operands could not be broadcast together "
-                       "with remapped shapes"), str(e.exception))
+        self.assertIn(("shape mismatch: objects cannot be broadcast to "
+                       "a single shape"), str(e.exception))
 
     def test_interp_basic(self):
         pyfunc = interp
