@@ -947,27 +947,34 @@ def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     is_b_scalar = isinstance(b, types.Number)
 
     if is_a_scalar and is_b_scalar:
-        def np_allclose_impl_scalar_scalar(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-            return allclose_scalars(a, b, rtol=rtol, atol=atol, equal_nan=equal_nan)
+        def np_allclose_impl_scalar_scalar(a, b, rtol=1e-05, atol=1e-08,
+                                           equal_nan=False):
+            return allclose_scalars(a, b, rtol=rtol, atol=atol,
+                                    equal_nan=equal_nan)
         return np_allclose_impl_scalar_scalar
     elif is_a_scalar and not is_b_scalar:
-        def np_allclose_impl_scalar_array(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+        def np_allclose_impl_scalar_array(a, b, rtol=1e-05, atol=1e-08,
+                                          equal_nan=False):
             b = np.asarray(b)
             for bv in np.nditer(b):
-                if not allclose_scalars(a, bv.item(), rtol=rtol, atol=atol, equal_nan=equal_nan):
+                if not allclose_scalars(a, bv.item(), rtol=rtol, atol=atol,
+                                        equal_nan=equal_nan):
                     return False
             return True
         return np_allclose_impl_scalar_array
     elif not is_a_scalar and is_b_scalar:
-        def np_allclose_impl_array_scalar(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+        def np_allclose_impl_array_scalar(a, b, rtol=1e-05, atol=1e-08,
+                                          equal_nan=False):
             a = np.asarray(a)
             for av in np.nditer(a):
-                if not allclose_scalars(av.item(), b, rtol=rtol, atol=atol, equal_nan=equal_nan):
+                if not allclose_scalars(av.item(), b, rtol=rtol, atol=atol,
+                                        equal_nan=equal_nan):
                     return False
             return True
         return np_allclose_impl_array_scalar
     elif not is_a_scalar and not is_b_scalar:
-        def np_allclose_impl_array_array(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+        def np_allclose_impl_array_array(a, b, rtol=1e-05, atol=1e-08,
+                                         equal_nan=False):
             a = np.asarray(a)
             b = np.asarray(b)
             if a.shape != b.shape:
@@ -980,7 +987,8 @@ def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
                                      'with remapped shapes')
 
             for av, bv in zip(np.nditer(a), np.nditer(b)):
-                if not allclose_scalars(av.item(), bv.item(), rtol=rtol, atol=atol, equal_nan=equal_nan):
+                if not allclose_scalars(av.item(), bv.item(), rtol=rtol,
+                                        atol=atol, equal_nan=equal_nan):
                     return False
 
             return True

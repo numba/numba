@@ -3212,28 +3212,32 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         aran = np.arange(125).reshape((5, 5, 5))
         atol = 1e-8
         rtol = 1e-5
-        numpy_data = [(np.asarray([1, 0]), np.asarray([1, 0])),
-                (np.asarray([atol]), np.asarray([0])),
-                (np.asarray([1]), np.asarray([1+rtol+atol])),
-                (arr, arr + arr*rtol),
-                (arr, arr + arr*rtol + atol*2),
-                (aran, aran + aran*rtol),
-                (np.inf, np.inf),
-                (np.inf, np.asarray([np.inf]))]
+        numpy_data = [
+            (np.asarray([1, 0]), np.asarray([1, 0])),
+            (np.asarray([atol]), np.asarray([0])),
+            (np.asarray([1]), np.asarray([1 + rtol + atol])),
+            (arr, arr + arr * rtol),
+            (arr, arr + arr * rtol + atol * 2),
+            (aran, aran + aran * rtol),
+            (np.inf, np.inf),
+            (np.inf, np.asarray([np.inf]))
+        ]
 
         for (x, y) in numpy_data:
             self.assertTrue(cfunc(x, y))
 
-        numpy_data = [(np.asarray([np.inf, 0]), np.asarray([1, np.inf])),
-                (np.asarray([np.inf, 0]), np.asarray([1, 0])),
-                (np.asarray([np.inf, np.inf]), np.asarray([1, np.inf])),
-                (np.asarray([np.inf, np.inf]), np.asarray([1, 0])),
-                (np.asarray([-np.inf, 0]), np.asarray([np.inf, 0])),
-                (np.asarray([np.nan, 0]), np.asarray([np.nan, 0])),
-                (np.asarray([atol*2]), np.asarray([0])),
-                (np.asarray([1]), np.asarray([1+rtol+atol*2])),
-                (aran, aran + aran*atol + atol*2),
-                (np.array([np.inf, 1]), np.array([0, np.inf]))]
+        numpy_data = [
+            (np.asarray([np.inf, 0]), np.asarray([1, np.inf])),
+            (np.asarray([np.inf, 0]), np.asarray([1, 0])),
+            (np.asarray([np.inf, np.inf]), np.asarray([1, np.inf])),
+            (np.asarray([np.inf, np.inf]), np.asarray([1, 0])),
+            (np.asarray([-np.inf, 0]), np.asarray([np.inf, 0])),
+            (np.asarray([np.nan, 0]), np.asarray([np.nan, 0])),
+            (np.asarray([atol * 2]), np.asarray([0])),
+            (np.asarray([1]), np.asarray([1 + rtol + atol * 2])),
+            (aran, aran + aran * atol + atol * 2),
+            (np.array([np.inf, 1]), np.array([0, np.inf]))
+        ]
 
         for (x, y) in numpy_data:
             self.assertFalse(cfunc(x, y))
