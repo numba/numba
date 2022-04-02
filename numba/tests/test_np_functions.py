@@ -3181,12 +3181,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         pyfunc = np_allclose
         cfunc = jit(nopython=True)(pyfunc)
 
+        min_int = np.iinfo(np.int_).min
+        a = np.array([min_int], dtype=np.int_)
+
         simple_data = [
             (np.asarray([1e10, 1e-7]), np.asarray([1.00001e10, 1e-8])),
             (np.asarray([1e10, 1e-8]), np.asarray([1.00001e10, 1e-9])),
             (np.asarray([1e10, 1e-8]), np.asarray([1.0001e10, 1e-9])),
             (np.asarray([1e10]), np.asarray([1.0001e10, 1e-9])),
-            (1.0, 1.0)
+            (1.0, 1.0),
+            (np.array([np.inf, 1]), np.array([0, np.inf])),
+            (a, a)
         ]
 
         for a, b in simple_data:
@@ -3201,6 +3206,44 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         b = np.asarray([np.nan, 1.0])
         self.assertFalse(cfunc(a, b))
+
+        # NumPy test data
+        arr = np.array([100, 1000])
+        aran = np.arange(125).reshape((5, 5, 5))
+        atol = 1e-8
+        rtol = 1e-5
+        numpy_data = [(np.asarray([1, 0]), np.asarray([1, 0])),
+                (np.asarray([atol]), np.asarray([0])),
+                (np.asarray([1]), np.asarray([1+rtol+atol])),
+                (arr, arr + arr*rtol),
+                (arr, arr + arr*rtol + atol*2),
+                (aran, aran + aran*rtol),
+                (np.inf, np.inf),
+                (np.inf, np.asarray([np.inf]))]
+
+        for (x, y) in numpy_data:
+            self.assertTrue(cfunc(x, y))
+
+        numpy_data = [(np.asarray([np.inf, 0]), np.asarray([1, np.inf])),
+                (np.asarray([np.inf, 0]), np.asarray([1, 0])),
+                (np.asarray([np.inf, np.inf]), np.asarray([1, np.inf])),
+                (np.asarray([np.inf, np.inf]), np.asarray([1, 0])),
+                (np.asarray([-np.inf, 0]), np.asarray([np.inf, 0])),
+                (np.asarray([np.nan, 0]), np.asarray([np.nan, 0])),
+                (np.asarray([atol*2]), np.asarray([0])),
+                (np.asarray([1]), np.asarray([1+rtol+atol*2])),
+                (aran, aran + aran*atol + atol*2),
+                (np.array([np.inf, 1]), np.array([0, np.inf]))]
+
+        for (x, y) in numpy_data:
+            self.assertFalse(cfunc(x, y))
+
+        class Foo(np.ndarray):
+            def __new__(cls, *args, **kwargs):
+                return np.array(*args, **kwargs).view(cls)
+
+        a = Foo([1])
+        self.assertTrue(type(np.allclose(a, a)) is bool)
 
         noise_levels = [1.0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 0.0]
         zero_array = np.zeros((25,))

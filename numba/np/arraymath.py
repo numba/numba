@@ -912,7 +912,10 @@ def allclose_scalars(a_v, b_v, rtol=1e-05, atol=1e-08, equal_nan=False):
         if not equal_nan:
             return False
     else:
-        if np.abs(a_v - b_v) > atol + rtol * np.abs(b_v):
+        if np.isinf(a_v) or np.isinf(b_v):
+            return a_v == b_v
+
+        if np.abs(a_v - b_v) > atol + rtol * np.abs(b_v * 1.0):
             return False
 
     return True
