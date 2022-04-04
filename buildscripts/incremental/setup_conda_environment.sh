@@ -40,11 +40,7 @@ conda list
 # NOTE: pyyaml is used to ensure that the Azure CI config is valid
 # NOTE: 32 bit linux... do not install NumPy, there's no conda package for >1.15
 # so it has to come from pip later
-# If it's Python 3.10, we get everything except for the interpreter and
-# compilers via pip from PyPi
-if [[ "$PYTHON" == "3.10" ]] ; then
-    conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON
-elif [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
+if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]]; then
     conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON pip gitpython pyyaml
 else
     conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
@@ -56,15 +52,13 @@ source activate $CONDA_ENV
 set -v
 
 # Install optional packages into activated env
-
 echo "PYTHON=$PYTHON"
 echo "VANILLA_INSTALL=$VANILLA_INSTALL"
-if [[ "$PYTHON" != "3.10" && "$VANILLA_INSTALL" != "yes" ]]; then
-    # Scipy, CFFI, jinja2, IPython, and pygments are optional dependencies,
-    # but exercised in the test suite.
+if [ "${VANILLA_INSTALL}" != "yes" ]; then
+    # Scipy, CFFI, jinja2, IPython, ipython_genutils and pygments are optional dependencies, but exercised in the test suite
     # pexpect is used to run the gdb tests.
     # ipykernel is used for testing ipython behaviours.
-    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel pygments pexpect
+    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipython ipykernel pygments pexpect
     # Only install scipy on 64bit, else it'll pull in NumPy, 32bit linux needs
     # to get scipy from pip
     if [[ "$CONDA_SUBDIR" != "linux-32" && "$BITS32" != "yes" ]] ; then
@@ -86,13 +80,8 @@ elif  [[ $(uname) == Darwin ]]; then
     $CONDA_INSTALL llvm-openmp
 fi
 
-# `pip install` all the dependencies on Python 3.10
-if [[ "$PYTHON" == "3.10" ]] ; then
-    $PIP_INSTALL -U pip
-    pip --version
-    $PIP_INSTALL gitpython pyyaml cffi jinja2 ipython ipykernel pygments pexpect scipy numpy==1.21.5
 # If on 32bit linux, now pip install NumPy (no conda package), SciPy is broken?!
-elif [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
+if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
     $PIP_INSTALL numpy==$NUMPY
 fi
 
