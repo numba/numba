@@ -1,3 +1,4 @@
+#include <stdatomic.h>
 #include <stdarg.h>
 #include <string.h> /* for memset */
 #include "nrt.h"
@@ -8,13 +9,9 @@
 #endif
 
 
-typedef int (*atomic_meminfo_cas_func)(void **ptr, void *cmp,
-                                       void *repl, void **oldptr);
-
-
 /* NOTE: if changing the layout, please update numba.core.runtime.atomicops */
 struct MemInfo {
-    size_t            refct;
+    atomic_size_t     refct;
     NRT_dtor_function dtor;
     void              *dtor_info;
     void              *data;
@@ -43,14 +40,10 @@ static void nrt_fatal_error(const char *msg)
  */
 
 struct MemSys {
-    /* Atomic increment and decrement function */
-    NRT_atomic_inc_dec_func atomic_inc, atomic_dec;
-    /* Atomic CAS */
-    atomic_meminfo_cas_func atomic_cas;
     /* Shutdown flag */
     int shutting;
     /* Stats */
-    size_t stats_alloc, stats_free, stats_mi_alloc, stats_mi_free;
+    atomic_size_t stats_alloc, stats_free, stats_mi_alloc, stats_mi_free;
     /* System allocation functions */
     struct {
         NRT_malloc_func malloc;
@@ -73,12 +66,6 @@ void NRT_MemSys_init(void) {
 
 void NRT_MemSys_shutdown(void) {
     TheMSys.shutting = 1;
-    /* Revert to use our non-atomic stub for all atomic operations
-       because the JIT-ed version will be removed.
-       Since we are at interpreter shutdown,
-       it cannot be running multiple threads anymore. */
-    NRT_MemSys_set_atomic_inc_dec_stub();
-    NRT_MemSys_set_atomic_cas_stub();
 }
 
 void NRT_MemSys_set_allocator(NRT_malloc_func malloc_func,
@@ -97,17 +84,6 @@ void NRT_MemSys_set_allocator(NRT_malloc_func malloc_func,
     TheMSys.allocator.free = free_func;
 }
 
-void NRT_MemSys_set_atomic_inc_dec(NRT_atomic_inc_dec_func inc,
-                                   NRT_atomic_inc_dec_func dec)
-{
-    TheMSys.atomic_inc = inc;
-    TheMSys.atomic_dec = dec;
-}
-
-void NRT_MemSys_set_atomic_cas(NRT_atomic_cas_func cas) {
-    TheMSys.atomic_cas = (atomic_meminfo_cas_func) cas;
-}
-
 size_t NRT_MemSys_get_stats_alloc() {
     return TheMSys.stats_alloc;
 }
@@ -123,48 +99,6 @@ size_t NRT_MemSys_get_stats_mi_alloc() {
 size_t NRT_MemSys_get_stats_mi_free() {
     return TheMSys.stats_mi_free;
 }
-
-static
-size_t nrt_testing_atomic_inc(size_t *ptr){
-    /* non atomic */
-    size_t out = *ptr;
-    out += 1;
-    *ptr = out;
-    return out;
-}
-
-static
-size_t nrt_testing_atomic_dec(size_t *ptr){
-    /* non atomic */
-    size_t out = *ptr;
-    out -= 1;
-    *ptr = out;
-    return out;
-}
-
-static
-int nrt_testing_atomic_cas(void* volatile *ptr, void *cmp, void *val,
-                           void * *oldptr){
-    /* non atomic */
-    void *old = *ptr;
-    *oldptr = old;
-    if (old == cmp) {
-        *ptr = val;
-         return 1;
-    }
-    return 0;
-
-}
-
-void NRT_MemSys_set_atomic_inc_dec_stub(void){
-    NRT_MemSys_set_atomic_inc_dec(nrt_testing_atomic_inc,
-                                  nrt_testing_atomic_dec);
-}
-
-void NRT_MemSys_set_atomic_cas_stub(void) {
-    NRT_MemSys_set_atomic_cas(nrt_testing_atomic_cas);
-}
-
 
 /*
  * The MemInfo structure.
@@ -182,7 +116,7 @@ void NRT_MemInfo_init(NRT_MemInfo *mi,void *data, size_t size,
     mi->external_allocator = external_allocator;
     NRT_Debug(nrt_debug_print("NRT_MemInfo_init mi=%p external_allocator=%p\n", mi, external_allocator));
     /* Update stats */
-    TheMSys.atomic_inc(&TheMSys.stats_mi_alloc);
+    TheMSys.stats_mi_alloc++;
 }
 
 NRT_MemInfo *NRT_MemInfo_new(void *data, size_t size,
@@ -321,7 +255,7 @@ void NRT_dealloc(NRT_MemInfo *mi) {
     NRT_Debug(nrt_debug_print("NRT_dealloc meminfo: %p external_allocator: %p\n", mi, mi->external_allocator));
     if (mi->external_allocator) {
         mi->external_allocator->free(mi, mi->external_allocator->opaque_data);
-        TheMSys.atomic_inc(&TheMSys.stats_free);
+        TheMSys.stats_free++;;
     } else {
         NRT_Free(mi);
     }
@@ -329,14 +263,14 @@ void NRT_dealloc(NRT_MemInfo *mi) {
 
 void NRT_MemInfo_destroy(NRT_MemInfo *mi) {
     NRT_dealloc(mi);
-    TheMSys.atomic_inc(&TheMSys.stats_mi_free);
+    TheMSys.stats_mi_free++;
 }
 
 void NRT_MemInfo_acquire(NRT_MemInfo *mi) {
     NRT_Debug(nrt_debug_print("NRT_MemInfo_acquire %p refct=%zu\n", mi,
                                                             mi->refct));
     assert(mi->refct > 0 && "RefCt cannot be zero");
-    TheMSys.atomic_inc(&mi->refct);
+    mi->refct++;
 }
 
 void NRT_MemInfo_call_dtor(NRT_MemInfo *mi) {
@@ -353,7 +287,7 @@ void NRT_MemInfo_release(NRT_MemInfo *mi) {
                                                             mi->refct));
     assert (mi->refct > 0 && "RefCt cannot be 0");
     /* RefCt drop to zero */
-    if (TheMSys.atomic_dec(&mi->refct) == 0) {
+    if ((--mi->refct) == 0) {
         NRT_MemInfo_call_dtor(mi);
     }
 }
@@ -472,7 +406,7 @@ void* NRT_Allocate_External(size_t size, NRT_ExternalAllocator *allocator) {
         ptr = TheMSys.allocator.malloc(size);
         NRT_Debug(nrt_debug_print("NRT_Allocate_External bytes=%zu ptr=%p\n", size, ptr));
     }
-    TheMSys.atomic_inc(&TheMSys.stats_alloc);
+    TheMSys.stats_alloc++;
     return ptr;
 }
 
@@ -486,7 +420,7 @@ void *NRT_Reallocate(void *ptr, size_t size) {
 void NRT_Free(void *ptr) {
     NRT_Debug(nrt_debug_print("NRT_Free %p\n", ptr));
     TheMSys.allocator.free(ptr);
-    TheMSys.atomic_inc(&TheMSys.stats_free);
+    TheMSys.stats_free++;;
 }
 
 /*

@@ -23,9 +23,6 @@ All functions described here are threadsafe.
 /* TypeDefs */
 typedef void (*NRT_dtor_function)(void *ptr, size_t size, void *info);
 typedef void (*NRT_dealloc_func)(void *ptr, void *dealloc_info);
-typedef size_t (*NRT_atomic_inc_dec_func)(size_t *ptr);
-typedef int (*NRT_atomic_cas_func)(void * volatile *ptr, void *cmp, void *repl,
-                                   void **oldptr);
 
 typedef struct MemSys NRT_MemSys;
 
@@ -48,32 +45,6 @@ void NRT_MemSys_shutdown(void);
  */
 VISIBILITY_HIDDEN
 void NRT_MemSys_set_allocator(NRT_malloc_func, NRT_realloc_func, NRT_free_func);
-
-/*
- * Register the atomic increment and decrement functions
- */
-VISIBILITY_HIDDEN
-void NRT_MemSys_set_atomic_inc_dec(NRT_atomic_inc_dec_func inc,
-                                   NRT_atomic_inc_dec_func dec);
-
-
-/*
- * Register the atomic compare and swap function
- */
-VISIBILITY_HIDDEN
-void NRT_MemSys_set_atomic_cas(NRT_atomic_cas_func cas);
-
-/*
- * Register a non-atomic STUB for increment and decrement
- */
-VISIBILITY_HIDDEN
-void NRT_MemSys_set_atomic_inc_dec_stub(void);
-
-/*
- * Register a non-atomic STUB for compare and swap
- */
-VISIBILITY_HIDDEN
-void NRT_MemSys_set_atomic_cas_stub(void);
 
 /*
  * The following functions get internal statistics of the memory subsystem.
