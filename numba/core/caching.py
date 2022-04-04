@@ -560,7 +560,7 @@ class IndexDataCacheFile(object):
         return os.path.join(self._cache_path, name)
 
     def _dump(self, obj):
-        return pickle.dumps(obj, protocol=-1)
+        return dumps(obj)
 
     @contextlib.contextmanager
     def _open_for_write(self, filepath):
