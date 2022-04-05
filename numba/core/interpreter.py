@@ -314,6 +314,134 @@ def peep_hole_delete_with_exit(func_ir):
     return func_ir
 
 
+def peep_hole_fuse_dict_add_updates(func_ir):
+    """
+    This rewrite removes d1.update(d2) calls that
+    are between two dictionaries, d1 and d2 in the
+    same basic block, resulting from a Python 3.10
+    upgrade. If both are constant dictionaries
+    defined in that block and neither is used between
+    the update call, then we replace d1 with a new definition
+    that combines the two dicitonaries.
+
+    Python 3.10 may also rewrite a dictionary as an empty
+    build_map + many map_add, so we also need to replace those
+    expressions with a constant build map.
+    """
+    def build_new_buildmap(name, blk, old_lineno, new_items):
+        """
+            Create a new buildmap with a new set of items
+            but all the other info the same.
+        """
+        old_assign = blk.body[old_lineno]
+        old_target = old_assign.target
+        old_bm = old_assign.value
+        # TODO: Update literals.
+        new_bm = ir.Expr.build_map(items=new_items,
+                                   size=len(new_items),
+                                   literal_value=old_bm.literal_value,
+                                   value_indexes=old_bm.value_indexes,
+                                   loc=old_bm.loc)
+        return ir.Assign(
+            new_bm,
+            ir.Var(old_target.scope, name, old_target.loc),
+            new_bm.loc
+        )
+
+    for blk in func_ir.blocks.values():
+        new_body = []
+        # dict literal map name -> list of tuples to add to the build
+        lit_maps = dict()
+        # dict literal map name -> list of items to add to the buildmap
+        map_updates = dict()
+
+        for i, stmt in enumerate(blk.body):
+            # Should we add the current inst to the output
+            append_inst = True
+            if (
+                isinstance(stmt, ir.Assign)
+                and isinstance(stmt.value, ir.Expr)
+                and stmt.value.op == "build_map"
+
+            ):
+                # If we encounter a build map add it to the
+                # constant set.
+                lit_maps[stmt.target.name] = i
+                map_updates[stmt.target.name] = stmt.value.items.copy()
+                append_inst = False
+            elif (
+                isinstance(stmt, ir.Assign)
+                and isinstance(stmt.value, ir.Expr)
+                and stmt.value.op == "call"
+                and i > 0
+            ):
+                # If we encounter a call we may need to replace
+                # the body
+                func_name = stmt.value.func.name
+                # If we have an update or a setitem
+                # it will be the previous expression.
+                getattr_stmt = blk.body[i - 1]
+                args = stmt.value.args
+                if (
+                    isinstance(getattr_stmt, ir.Assign)
+                    and getattr_stmt.target.name == func_name
+                    and isinstance(getattr_stmt.value, ir.Expr)
+                    and getattr_stmt.value.op == "getattr"
+                    and getattr_stmt.value.value.name in lit_maps
+                ):
+                    update_map_name = getattr_stmt.value.value.name
+                    attr = getattr_stmt.value.attr
+                    if attr == "__setitem__":
+                        append_inst = False
+                        # If we have a setitem, update the lists
+                        map_updates[update_map_name].append(args)
+                        # Remove the setitem
+                        new_body.pop()
+
+                    elif attr == "update" and args[0].name in lit_maps:
+                        append_inst = False
+                        # If we have an update and the arg is also
+                        # a literal dictionary, fuse the lists.
+                        map_updates[update_map_name].extend(
+                            map_updates[args[0].name]
+                        )
+                        # Remove the update
+                        new_body.pop()
+
+            if append_inst:
+                # Check if we need to pop any dictionaries from the const map.
+                # Skip the setitem and update that will be used later.
+                if not (
+                    isinstance(stmt, ir.Assign)
+                    and isinstance(stmt.value, ir.Expr)
+                    and stmt.value.op == "getattr"
+                    and stmt.value.value.name in lit_maps
+                    and stmt.value.attr in ("__setitem__", "update")
+                ):
+                    for var in stmt.list_vars():
+                        # If is used pop it from the const map
+                        if var.name in lit_maps:
+                            lineno = lit_maps[var.name]
+                            items = map_updates[var.name]
+                            new_body.append(
+                                build_new_buildmap(var.name, blk, lineno, items)
+                            )
+                            # Delete from the const maps
+                            del lit_maps[var.name]
+                            del map_updates[var.name]
+                new_body.append(stmt)
+        # Update we any dictionaries that weren't used in the block yet.
+        # We pop off the last statement because this needs to remain last
+        # as it might be a jump, branch, or return
+        end = new_body.pop()
+        for var_name, lineno in lit_maps.items():
+            items = map_updates[var_name]
+            new_body.append(build_new_buildmap(var_name, blk, lineno, items))
+        new_body.append(end)
+        blk.body = new_body
+    return func_ir
+
+
 class Interpreter(object):
     """A bytecode interpreter that builds up the IR.
     """
@@ -381,6 +509,8 @@ class Interpreter(object):
         # post process the IR to rewrite opcodes/byte sequences that are too
         # involved to risk handling as part of direct interpretation
         peepholes = []
+        if PYVERSION == (3, 10):
+            peepholes.append(peep_hole_fuse_dict_add_updates)
         if PYVERSION in [(3, 9), (3, 10)]:
             peepholes.append(peep_hole_list_to_tuple)
         peepholes.append(peep_hole_delete_with_exit)
