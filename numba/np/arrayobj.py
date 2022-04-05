@@ -221,10 +221,12 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
         nitems = builder.mul(nitems, axlen, flags=['nsw'])
     attrs['nitems'] = nitems
 
-    # Make sure that we have all the fields
+    # Make sure that we have all the fields needed to wire up a minimal viable
+    # array structure.
     got_fields = set(attrs.keys())
-    if got_fields != required_fields:
-        raise ValueError("missing {0}".format(required_fields - got_fields))
+    for got in got_fields:
+        if got not in required_fields:
+            raise ValueError("missing {0}".format(required_fields - got_fields))
 
     # Set field value
     for k, v in attrs.items():
