@@ -178,6 +178,9 @@ about shared memory in the CUDA documentation. As a way of demonstrating shared 
 a famous CUDA solution for summing a vector which works by "folding" the data up using a sucessively
 smaller number of threads.
 
+Note that this is a fairly naive implementation and more efficient ways of summing an array exist
+within numba. See :ref:`_cuda_montecarlo` for an example.
+
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_reduction.py
    :language: python
    :caption: from ``test_ex_reduction`` in ``numba/cuda/tests/doc_examples/test_reduction.py``
@@ -335,6 +338,8 @@ This example shows how to use numba to approximate the value of a definite integ
 random numbers on the GPU. A detailed description of the mathematical mechanics of monte carlo integeration 
 is out of the scope of the example, but it can briefly be described as an averaging process where the area 
 under the curve is approximated by taking the average of many rectangles formed by its function values.
+
+In addition this example shows how to perform reductions in numba using the :func:`numba.cuda.reduce` API.
 
 .. code-block:: python
 
