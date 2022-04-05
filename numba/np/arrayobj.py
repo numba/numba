@@ -1982,6 +1982,7 @@ def _np_clip_impl(a, a_min, a_max, out):
 
     return ret
 
+
 @register_jitable
 def _np_clip_impl_none1(a, a_min, a_max, out):
     ret = np.empty_like(a) if out is None else out
@@ -1995,6 +1996,7 @@ def _np_clip_impl_none1(a, a_min, a_max, out):
             ret[index] = val_a
 
     return ret
+
 
 @register_jitable
 def _np_clip_impl_none2(a, a_min, a_max, out):
@@ -2017,12 +2019,14 @@ def np_clip(a, a_min, a_max, out=None):
         raise errors.TypingError('The argument "a" must be array-like')
 
     if (not isinstance(a_min, types.NoneType) and
-        not type_can_asarray(a_min)):
-        raise errors.TypingError('The argument "a_min" must be a number or an array-like')
+            not type_can_asarray(a_min)):
+        raise errors.TypingError(('The argument "a_min" must be a number '
+                                 'or an array-like'))
 
     if (not isinstance(a_max, types.NoneType) and
-        not type_can_asarray(a_max)):
-        raise errors.TypingError('The argument "a_max" must be a number or an array-like')
+            not type_can_asarray(a_max)):
+        raise errors.TypingError('The argument "a_max" must be a number '
+                                 'or an array-like')
 
     if not (isinstance(out, types.Array) or is_nonelike(out)):
         msg = 'The argument "out" must be an array if it is provided'
