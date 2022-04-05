@@ -36,6 +36,19 @@ def check_dict_cache():
     assert exp == got
 
 
+def generator_cache():
+    for v in (1, 2, 3):
+        yield v
+
+
+def check_generator_cache():
+    pyfunc = generator_cache
+    cfunc = njit(cache=True)(pyfunc)
+    exp = list(pyfunc())
+    got = list(cfunc())
+    assert exp == got
+
+
 class TestCaching(SerialMixin, TestCase):
     def run_test(self, func):
         func()
@@ -47,6 +60,9 @@ class TestCaching(SerialMixin, TestCase):
 
     def test_dict_cache(self):
         self.run_test(check_dict_cache)
+
+    def test_generator_cache(self):
+        self.run_test(check_generator_cache)
 
     def test_omitted(self):
 
