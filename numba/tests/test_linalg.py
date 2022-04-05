@@ -11,7 +11,7 @@ import numpy as np
 from numba import jit, njit, typeof
 from numba.core import errors
 from numba.tests.support import (TestCase, tag, needs_lapack, needs_blas,
-                                 _is_armv7l)
+                                 _is_armv7l, ignore_internal_warnings)
 from .matmul_usecase import matmul_usecase
 import unittest
 
@@ -1700,6 +1700,38 @@ class TestLinalgLstsq(TestLinalgSystems):
         # tuple index number 2.
         self.assertEqual(got_old[2], 2)
         self.assertEqual(got_new[2], 1)
+
+    @needs_lapack
+    def test_numpy_warns_on_default(self):
+        # check NumPy's default rcond="warn" (which is how NumPy implements
+        # raising a FutureWarning and setting the default to -1) is implemented
+        # correctly in Numba.
+        @jit(nopython=True)
+        def _default_str_rcond():
+            # See test_rcond_default_none for explanation of the chosen values
+            eps = np.finfo(np.float64).eps
+            A = np.diag(np.array([1, 1.5 * eps]))
+            B = np.array([1, 1.5 * eps])
+            return np.linalg.lstsq(A, B)[2]
+
+        # Check NumPy and Numba raise a warning, capture results
+        res = []
+        for fn, wclazz in ((_default_str_rcond.py_func, FutureWarning),
+                           (_default_str_rcond, errors.NumbaNumPyWarning)):
+            with warnings.catch_warnings(record=True) as wlist:
+                warnings.simplefilter("always", wclazz)
+                ignore_internal_warnings()
+                res.append(fn()) # store result
+            self.assertEqual(len(wlist), 1)
+            numpy_msg = "`rcond` parameter will change to the default"
+            self.assertIn(numpy_msg, str(wlist[0].message))
+
+        # Check there are 2 results
+        self.assertPreciseEqual(len(res), 2)
+        # rcond default is "warn" which ends up as -1, i.e. old style, so the
+        # rank is 2.
+        self.assertPreciseEqual(res[0], 2)
+        self.assertPreciseEqual(res[1], 2)
 
 
 class TestLinalgSolve(TestLinalgSystems):

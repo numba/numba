@@ -9,13 +9,14 @@ from llvmlite import ir
 
 import numpy as np
 import operator
+import warnings
 
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.core.typing import signature
 from numba.core.extending import overload, register_jitable
 from numba.core import types, cgutils
-from numba.core.errors import TypingError, NumbaTypeError
+from numba.core.errors import TypingError, NumbaTypeError, NumbaNumPyWarning
 from .arrayobj import make_array, _empty_nd_impl, array_copy
 from numba.np import numpy_support as np_support
 from numba.core.overload_glue import glue_lowering
@@ -1587,6 +1588,15 @@ def _lstsq_resolve_rcond(rcond, dtype, m, n):
 def ol_lstsq_resolve_rcond(rcond, dtype, m, n):
     if isinstance(rcond, types.StringLiteral):
         if rcond.literal_value == "warn": # it's the default
+            # Replicate the warning behaviour found in NumPy, code/message from:
+            # https://github.com/numpy/numpy/blob/3a17c9698451906018856972e9aa08c9b626aa9c/numpy/linalg/linalg.py#L2277-L2286
+            msg = ("`rcond` parameter will change to the default of "
+                   "machine precision times ``max(M, N)`` where M and N "
+                   "are the input matrix dimensions.\n"
+                   "To use the future default and silence this warning "
+                   "we advise to pass `rcond=None`, to keep using the old, "
+                   "explicitly pass `rcond=-1`.")
+            warnings.warn(NumbaNumPyWarning(msg))
             def impl(rcond, dtype, m, n):
                 return np.float64(-1.0)
             return impl
