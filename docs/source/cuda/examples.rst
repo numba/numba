@@ -133,7 +133,7 @@ Some initial setup here. Let's make one point in the center of the object very h
 
 The initial state of the problem can be visualized with ``matplotlib``:
 
-.. image:: ../../static/laplace_initial.svg
+.. image:: laplace_initial.svg
 
 In our kernel each thread will be responsible for managing the temperature update for a single element
 in a loop over the desired number of timesteps. The kernel is below. Note the use of cooperative group
@@ -165,7 +165,7 @@ the object was hot initially and gradually sloping down to zero towards the
 edges where the temperature is fixed at zero. In the limit of infinite time,
 the arc will flatten out completely.
 
-.. image:: ../../static/laplace_final.svg
+.. image:: laplace_final.svg
 
 .. _cuda_reduction_shared:
 
