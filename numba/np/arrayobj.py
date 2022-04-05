@@ -1971,44 +1971,42 @@ def array_flatten(context, builder, sig, args):
 
 
 @register_jitable
-def np_clip_impl(a, a_min, a_max, out,
-                 a_min_is_none, a_max_is_none):
-    if a_min_is_none and a_max_is_none:
-        raise ValueError("array_clip: must set either max or min")
-
+def _np_clip_impl(a, a_min, a_max, out):
     ret = np.empty_like(a) if out is None else out
+    a_b, a_min_b, a_max_b = np.broadcast_arrays(a, a_min, a_max)
+    for index in np.ndindex(a_b.shape):
+        val_a = a_b[index]
+        val_a_min = a_min_b[index]
+        val_a_max = a_max_b[index]
+        ret[index] = min(max(val_a, val_a_min), val_a_max)
 
-    if a_min_is_none:
-        a_b, a_max_b = np.broadcast_arrays(a, a_max)
-        index = 0
-        for a_v, a_max_v in np.nditer((a_b, a_max_b)):
-            val_a = a_v.item()
-            val_a_max = a_max_v.item()
-            if val_a > val_a_max:
-                ret[index] = val_a_max
-            else:
-                ret[index] = val_a
-            index = index + 1
-    elif a_max_is_none:
-        a_b, a_min_b = np.broadcast_arrays(a, a_min)
-        index = 0
-        for a_v, a_min_v in np.nditer((a_b, a_min_b)):
-            val_a = a_v.item()
-            val_a_min = a_min_v.item()
-            if val_a > val_a_min:
-                ret[index] = val_a_min
-            else:
-                ret[index] = val_a
-            index = index + 1
-    else:
-        a_b, a_min_b, a_max_b = np.broadcast_arrays(a, a_min, a_max)
-        index = 0
-        for a_v, a_min_v, a_max_v in np.nditer((a_b, a_min_b, a_max_b)):
-            val_a = a_v.item()
-            val_a_min = a_min_v.item()
-            val_a_max = a_max_v.item()
-            ret[index] = min(max(val_a, val_a_min), val_a_max)
-            index = index + 1
+    return ret
+
+@register_jitable
+def _np_clip_impl_none1(a, a_min, a_max, out):
+    ret = np.empty_like(a) if out is None else out
+    a_b, a_max_b = np.broadcast_arrays(a, a_max)
+    for index in np.ndindex(a_b.shape):
+        val_a = a_b[index]
+        val_a_max = a_max_b[index]
+        if val_a > val_a_max:
+            ret[index] = val_a_max
+        else:
+            ret[index] = val_a
+
+    return ret
+
+@register_jitable
+def _np_clip_impl_none2(a, a_min, a_max, out):
+    ret = np.empty_like(a) if out is None else out
+    a_b, a_min_b = np.broadcast_arrays(a, a_min)
+    for index in np.ndindex(a_b.shape):
+        val_a = a_b[index]
+        val_a_min = a_min_b[index]
+        if val_a < val_a_min:
+            ret[index] = val_a_min
+        else:
+            ret[index] = val_a
 
     return ret
 
@@ -2033,6 +2031,13 @@ def np_clip(a, a_min, a_max, out=None):
     # TODO: support scalar a (issue #3469)
     a_min_is_none = a_min is None or isinstance(a_min, types.NoneType)
     a_max_is_none = a_max is None or isinstance(a_max, types.NoneType)
+
+    if a_min_is_none and a_max_is_none:
+        def np_clip_nn(a, a_min, a_max, out=None):
+            raise ValueError("array_clip: must set either max or min")
+
+        return np_clip_nn
+
     a_min_is_scalar = isinstance(a_min, types.Number)
     a_max_is_scalar = isinstance(a_max, types.Number)
 
@@ -2040,30 +2045,51 @@ def np_clip(a, a_min, a_max, out=None):
         def np_clip_ss(a, a_min, a_max, out=None):
             a_min_full = np.full_like(a, a_min)
             a_max_full = np.full_like(a, a_max)
-            return np_clip_impl(a, a_min_full, a_max_full, out,
-                                a_min_is_none, a_max_is_none)
+            return _np_clip_impl(a, a_min_full, a_max_full, out)
 
         return np_clip_ss
     elif a_min_is_scalar and not a_max_is_scalar:
-        def np_clip_sa(a, a_min, a_max, out=None):
-            a_min_full = np.full_like(a, a_min)
-            return np_clip_impl(a, a_min_full, a_max, out,
-                                a_min_is_none, a_max_is_none)
+        if a_max_is_none:
+            def np_clip_sn(a, a_min, a_max, out=None):
+                a_min_full = np.full_like(a, a_min)
+                return _np_clip_impl_none2(a, a_min_full, a_max, out)
 
-        return np_clip_sa
+            return np_clip_sn
+        else:
+            def np_clip_sa(a, a_min, a_max, out=None):
+                a_min_full = np.full_like(a, a_min)
+                return _np_clip_impl(a, a_min_full, a_max, out)
+
+            return np_clip_sa
     elif not a_min_is_scalar and a_max_is_scalar:
-        def np_clip_as(a, a_min, a_max, out=None):
-            a_max_full = np.full_like(a, a_max)
-            return np_clip_impl(a, a_min, a_max_full, out,
-                                a_min_is_none, a_max_is_none)
+        if a_min_is_none:
+            def np_clip_ns(a, a_min, a_max, out=None):
+                a_max_full = np.full_like(a, a_max)
+                return _np_clip_impl_none1(a, a_min, a_max_full, out)
 
-        return np_clip_as
+            return np_clip_ns
+        else:
+            def np_clip_as(a, a_min, a_max, out=None):
+                a_max_full = np.full_like(a, a_max)
+                return _np_clip_impl(a, a_min, a_max_full, out)
+
+            return np_clip_as
     else:
-        def np_clip_aa(a, a_min, a_max, out=None):
-            return np_clip_impl(a, a_min, a_max, out,
-                                a_min_is_none, a_max_is_none)
+        if a_min_is_none:
+            def np_clip_na(a, a_min, a_max, out=None):
+                return _np_clip_impl_none1(a, a_min, a_max, out)
 
-        return np_clip_aa
+            return np_clip_na
+        elif a_max_is_none:
+            def np_clip_an(a, a_min, a_max, out=None):
+                return _np_clip_impl_none2(a, a_min, a_max, out)
+
+            return np_clip_an
+        else:
+            def np_clip_aa(a, a_min, a_max, out=None):
+                return _np_clip_impl(a, a_min, a_max, out)
+
+            return np_clip_aa
 
 
 @overload_method(types.Array, 'clip')
