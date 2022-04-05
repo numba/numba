@@ -1392,6 +1392,15 @@ class Interpreter(object):
                                   loc=self.loc)
         self.store(value=updateinst, name=res)
 
+    def op_DICT_UPDATE(self, inst, target, value, updatevar, res):
+        target = self.get(target)
+        value = self.get(value)
+        updateattr = ir.Expr.getattr(target, 'update', loc=self.loc)
+        self.store(value=updateattr, name=updatevar)
+        updateinst = ir.Expr.call(self.get(updatevar), (value,), (),
+                                  loc=self.loc)
+        self.store(value=updateinst, name=res)
+
     def op_BUILD_MAP(self, inst, items, size, res):
         got_items = [(self.get(k), self.get(v)) for k, v in items]
 

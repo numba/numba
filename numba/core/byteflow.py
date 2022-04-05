@@ -1004,6 +1004,15 @@ class TraceRunner(object):
         state.append(inst, target=target, value=value, updatevar=updatevar,
                      res=res)
 
+    def op_DICT_UPDATE(self, state, inst):
+        value = state.pop()
+        index = inst.arg
+        target = state.peek(index)
+        updatevar = state.make_temp()
+        res = state.make_temp()
+        state.append(inst, target=target, value=value, updatevar=updatevar,
+                     res=res)
+
     def op_GET_ITER(self, state, inst):
         value = state.pop()
         res = state.make_temp()

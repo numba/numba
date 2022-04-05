@@ -912,6 +912,19 @@ def impl_values(d):
     return impl
 
 
+@overload_method(types.DictType, 'update')
+def ol_dict_update(d, other):
+    if not isinstance(d, types.DictType):
+        return
+    if not isinstance(other, types.DictType):
+        return
+
+    def impl(d, other):
+        for k, v in other.items():
+            d[k] = v
+    return impl
+
+
 @overload(operator.eq)
 def impl_equal(da, db):
     if not isinstance(da, types.DictType):
