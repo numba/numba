@@ -34,15 +34,16 @@ class TestCpuGpuCompat(CUDATestCase):
         results = cuda.to_device([0.,0.,0.])
         # ex_cpu_gpu_compat.allocate.end
 
-        # ex_cpu_gpu_compat.cpurun.begin
-        print(business_logic(1,2,3)) # -126.79644737231007
-        # ex_cpu_gpu_compat.cpurun.end
-
         # ex_cpu_gpu_compat.define.begin
         @numba.jit
         def business_logic(x, y, z):
             return 4 * z * (2 * x - (4 * y) / 2 * pi)
         # ex_cpu_gpu_compat.define.end
+
+        # ex_cpu_gpu_compat.cpurun.begin
+        print(business_logic(1,2,3)) # -126.79644737231007
+        # ex_cpu_gpu_compat.cpurun.end
+
 
         # ex_cpu_gpu_compat.usecpu.begin
         print(business_logic(1,2,3)) # -126.79644737231007
@@ -50,16 +51,16 @@ class TestCpuGpuCompat(CUDATestCase):
 
         # ex_cpu_gpu_compat.usegpu.begin
         @cuda.jit
-        def f(res, xarr, yarr, zarr, size):
+        def f(res, xarr, yarr, zarr):
             tid = cuda.grid(1)            
-            if tid < size:
+            if tid < len(xarr):
                 # the function decorated with numba.jit can just be directly reused
                 res[tid] = business_logic(xarr[tid], yarr[tid], zarr[tid])    
         # ex_cpu_gpu_compat.usegpu.end
 
 
         # ex_cpu_gpu_compat.launch.begin
-        f.forall(len(X))(results, X, Y, Z, len(X))
+        f.forall(len(X))(results, X, Y, Z)
         print(results) # [-126.79644737231007, 416.28324559588634, -218912930.2987788]
         # ex_cpu_gpu_compat.launch.end
 

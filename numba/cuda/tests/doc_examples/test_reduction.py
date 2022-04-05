@@ -35,8 +35,9 @@ class TestReduction(CUDATestCase):
 
         # ex_reduction.kernel.begin
         @cuda.jit
-        def array_sum(data, size):
+        def array_sum(data):
             tid = cuda.threadIdx.x
+            size = len(data)
             if tid < size:
                 i = cuda.grid(1)
                 
@@ -62,7 +63,7 @@ class TestReduction(CUDATestCase):
         # ex_reduction.kernel.end
 
         # ex_reduction.launch.begin
-        array_sum.forall(len(a))(a, len(a))
+        array_sum.forall(len(a))(a)
         print(a[0]) # array(523776)
         sum(np.arange(1024)) # 523776
         # ex_reduction.launch.end

@@ -29,17 +29,18 @@ class TestMonteCarlo(CUDATestCase):
         # ex_montecarlo.import.end
         
         # ex_montecarlo.define.begin
-        nsamps = 1000000 # numer of samples, higher will lead to a more accurate answer
+        nsamps = 1000000 # number of samples, higher will lead to a more accurate answer
         # ex_montecarlo.define.end
 
         # ex_montecarlo.kernel.begin
         @cuda.jit
-        def mc_integrator_kernel(out, rng_states, lower_lim, upper_lim, size):
+        def mc_integrator_kernel(out, rng_states, lower_lim, upper_lim):
             """
             kernel to draw random samples and evaluate the function to
             be integrated at those sample values
             """
-            
+            size = len(out)
+
             gid = cuda.grid(1)
             if (gid < size):
                 # draw a sample between 0 and 1 on this thread
@@ -69,7 +70,7 @@ class TestMonteCarlo(CUDATestCase):
             
             # jit the function for use in CUDA kernels
             
-            mc_integrator_kernel.forall(nsamps)(out, rng_states, lower_lim, upper_lim, nsamps)
+            mc_integrator_kernel.forall(nsamps)(out, rng_states, lower_lim, upper_lim)
             # normalization factor to convert to the average: (b - a)/(N - 1)
             factor = (upper_lim - lower_lim) / (nsamps - 1)
             

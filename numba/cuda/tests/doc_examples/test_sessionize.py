@@ -45,31 +45,34 @@ class TestSessionization(CUDATestCase):
         # ex_sessionize.kernel.begin
         @cuda.jit
         def sessionize(
-            user_id, timestamp, results, size
+            user_id, timestamp, results
         ):
             gid = cuda.grid(1)
-            
-            
-            ### DETERMINE SESSION BOUNDARIES
-            is_sess_boundary = 0
-            if 0 < gid < size:
-                if (
-                    user_id[gid] != user_id[gid - 1]
-                    or timestamp[gid] - timestamp[gid - 1] > session_timeout
-                ):
-                    is_sess_boundary = 1
-                else:
-                    is_sess_boundary = 0
-            else:
-                is_sess_boundary = 1
+            size = len(user_id)
 
-            grid = cuda.cg.this_grid()                
+            if (gid >= size):
+                return
+
+            ### DETERMINE SESSION BOUNDARIES
+            is_first_datapoint = (gid == 0)
+            if not is_first_datapoint:
+                new_user = (user_id[gid] != user_id[gid - 1])
+                timed_out = (timestamp[gid] - timestamp[gid - 1] > session_timeout)           
+                is_sess_boundary = new_user or timed_out
+            else:
+                is_sess_boundary = True
  
             ### DETERMINE SESSION LABELS
             # this thread marks the start of a session
             if gid < size:
                 if is_sess_boundary:
                     results[gid] = gid
+                    
+                    # make sure all session boundaries are written
+                    # before populating the session id
+                    grid = cuda.cg.this_grid()                
+                    grid.sync()
+
                     look_ahead = 1
                     # check elements 'forward' of this one 
                     # until a new session boundary is found
@@ -83,7 +86,7 @@ class TestSessionization(CUDATestCase):
         # ex_sessionize.kernel.end
 
         # ex_sessionize.launch.begin
-        sessionize.forall(len(ids))(ids, sec, results, len(ids))
+        sessionize.forall(len(ids))(ids, sec, results)
         
         print(results.copy_to_host())
         # array([ 0.,  0.,  0.,  3.,  3.,  3.,  6.,  6.,  6.,  9.,  9., 11., 11.,
