@@ -55,7 +55,7 @@ set -v
 echo "PYTHON=$PYTHON"
 echo "VANILLA_INSTALL=$VANILLA_INSTALL"
 if [ "${VANILLA_INSTALL}" != "yes" ]; then
-    # Scipy, CFFI, jinja2, IPython, ipython_genutils and pygments are optional
+    # Scipy, CFFI, jinja2, IPython and pygments are optional
     # dependencies, but exercised in the test suite
     # pexpect is used to run the gdb tests.
     # ipykernel is used for testing ipython behaviours.
