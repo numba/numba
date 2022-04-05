@@ -58,7 +58,7 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # Scipy, CFFI, jinja2, IPython, ipython_genutils and pygments are optional dependencies, but exercised in the test suite
     # pexpect is used to run the gdb tests.
     # ipykernel is used for testing ipython behaviours.
-    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipython ipykernel pygments pexpect
+    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel pygments pexpect
     # Only install scipy on 64bit, else it'll pull in NumPy, 32bit linux needs
     # to get scipy from pip
     if [[ "$CONDA_SUBDIR" != "linux-32" && "$BITS32" != "yes" ]] ; then
