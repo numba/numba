@@ -11,9 +11,9 @@ This example uses Numba to create on-device arrays and a vector addition kernel;
 it is a warmup for learning how to write GPU kernels using Numba.
 
 
-.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_examples.py
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_vecadd.py
    :language: python
-   :caption: from ``test_ex_vecadd`` in ``numba/cuda/tests/doc_examples/test_examples.py``
+   :caption: from ``test_ex_vecadd`` in ``numba/cuda/tests/doc_examples/test_vecadd.py``
    :start-after: ex_vecadd.import.begin
    :end-before: ex_vecadd.import.end
    :dedent: 8
@@ -29,9 +29,9 @@ arrays passed in as parameters (this is similar to the requirement that CUDA
 C/C++ kernels have ``void`` return type). Here we pass in ``c`` for the results
 to be written into.
 
-.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_examples.py
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_vecadd.py
    :language: python
-   :caption: from ``test_ex_vecadd`` in ``numba/cuda/tests/doc_examples/test_examples.py``
+   :caption: from ``test_ex_vecadd`` in ``numba/cuda/tests/doc_examples/test_vecadd.py``
    :start-after: ex_vecadd.kernel.begin
    :end-before: ex_vecadd.kernel.end
    :dedent: 8
@@ -43,9 +43,9 @@ copies of arrays.  :func:`cuda.device_array_like()
 and type as an existing array.  Here we transfer two vectors and create an empty
 vector to hold our results:
 
-.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_examples.py
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_vecadd.py
    :language: python
-   :caption: from ``test_ex_vecadd`` in ``numba/cuda/tests/doc_examples/test_examples.py``
+   :caption: from ``test_ex_vecadd`` in ``numba/cuda/tests/doc_examples/test_vecadd.py``
    :start-after: ex_vecadd.allocate.begin
    :end-before: ex_vecadd.allocate.end
    :dedent: 8
@@ -56,9 +56,9 @@ an appropriate launch configuration with a 1D grid (see
 :ref:`cuda-kernel-invocation`) for a given data size and is often the simplest
 way of launching a kernel:
 
-.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_examples.py
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_vecadd.py
    :language: python
-   :caption: from ``test_ex_vecadd`` in ``numba/cuda/tests/doc_examples/test_examples.py``
+   :caption: from ``test_ex_vecadd`` in ``numba/cuda/tests/doc_examples/test_vecadd.py``
    :start-after: ex_vecadd.forall.begin
    :end-before: ex_vecadd.forall.end
    :dedent: 8
@@ -74,9 +74,9 @@ One can also configure the grid manually using the subscripting syntax. The
 following example launches a grid with sufficient threads to operate on every
 vector element:
 
-.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_examples.py
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_vecadd.py
    :language: python
-   :caption: from ``test_ex_vecadd`` in ``numba/cuda/tests/doc_examples/test_examples.py``
+   :caption: from ``test_ex_vecadd`` in ``numba/cuda/tests/doc_examples/test_vecadd.py``
    :start-after: ex_vecadd.launch.begin
    :end-before: ex_vecadd.launch.end
    :dedent: 8
@@ -131,10 +131,14 @@ Some initial setup here. Let's make one point in the center of the object very h
    :dedent: 8
    :linenos:
 
+The initial state of the problem can be visualized with ``matplotlib``:
 
+.. image:: ../../static/laplace_initial.svg
 
 In our kernel each thread will be responsible for managing the temperature update for a single element
-in a loop over the desired number of timesteps. The kernel is below:
+in a loop over the desired number of timesteps. The kernel is below. Note the use of cooperative group
+synchronization and the temporary array used to avoid race conditions. See 
+:func:`numba.cuda.cg.this_grid() <numba.cuda.cg.this_grid>` for details.
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_laplace.py
    :language: python
@@ -155,46 +159,13 @@ Calling the kernel:
    :dedent: 8
    :linenos:
 
-Since the kernel reused the original data vector to work on the problem, copying it back
-to the host yields the results:
 
-.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_laplace.py
-   :language: python
-   :caption: from ``test_ex_laplace`` in ``numba/cuda/tests/doc_examples/test_laplace.py``
-   :start-after: ex_laplace.print.begin
-   :end-before: ex_laplace.print.end
-   :dedent: 8
-   :linenos:
-
-This prints:
-
-.. code-block:: none
-
-   array([ 0.54632855,  1.09212753,  1.6368679 ,  2.18002166,  2.72106236,
-         3.25946564,  3.79470973,  4.32627596,  4.85364931,  5.37631887,
-         5.89377839,  6.40552673,  6.91106841,  7.409914  ,  7.90158064,
-         8.38559243,  8.86148082,  9.32878491,  9.78705184, 10.23583701,
-         10.67470447, 11.10322728, 11.52098821, 11.92758065, 12.32260997,
-         12.7056948 , 13.07646632, 13.43456455, 13.7796327 , 14.11129136,
-         14.42908512, 14.73343975, 15.0248911 , 15.30232574, 15.56474082,
-         15.81201588, 16.04395606, 16.26034615, 16.46097692, 16.64565132,
-         16.81418871, 16.9664262 , 17.10221779, 17.22143367, 17.32395972,
-         17.40969746, 17.47856409, 17.53049271, 17.56543251, 17.58334895,
-         17.58422393, 17.56805586, 17.53485974, 17.48466713, 17.41752618,
-         17.33350153, 17.23267429, 17.1151419 , 16.98101808, 16.83043268,
-         16.66353154, 16.48047636, 16.2814445 , 16.06662887, 15.83623766,
-         15.5904942 , 15.32963669, 15.053918  , 14.76360541, 14.45898035,
-         14.14033813, 13.80798763, 13.46225106, 13.10346357, 12.73197298,
-         12.34813942, 11.95233499, 11.5449434 , 11.12635958, 10.69698932,
-         10.25724886,  9.80756451,  9.3483722 ,  8.8801171 ,  8.40325314,
-         7.91824262,  7.42555573,  6.9256701 ,  6.41907034,  5.90624758,
-         5.38769897,  4.86392722,  4.33544009,  3.80274994,  3.26637319,
-         2.72682981,  2.18464289,  1.64033805,  1.09444297,  0.54748687])
-
-Plotting this data with a graphing library shows an arc shape highest where
+Plotting the final data with a graphing library shows an arc shape highest where
 the object was hot initially and gradually sloping down to zero towards the
 edges where the temperature is fixed at zero. In the limit of infinite time,
 the arc will flatten out completely.
+
+.. image:: ../../static/laplace_final.svg
 
 .. _cuda_reduction_shared:
 
@@ -283,8 +254,6 @@ Here is a solution using Numba:
 
 Let's generate some data and try out the kernel.
 
-.. code-block:: python
-
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_sessionize.py
    :language: python
    :caption: from ``test_ex_sessionize`` in ``numba/cuda/tests/doc_examples/test_sessionize.py``
@@ -342,8 +311,8 @@ And a numba kernel referencing the decorated function:
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_cpu_gpu_compat.py
    :language: python
    :caption: from ``test_ex_cpu_gpu_compat`` in ``numba/cuda/tests/doc_examples/test_cpu_gpu_compat.py``
-   :start-after: ex_cpu_gpu_compat.kernel.begin
-   :end-before: ex_cpu_gpu_compat.kernel.end
+   :start-after: ex_cpu_gpu_compat.usegpu.begin
+   :end-before: ex_cpu_gpu_compat.usegpu.end
    :dedent: 8
    :linenos:
 

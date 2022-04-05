@@ -62,8 +62,9 @@ class TestSessionization(CUDATestCase):
                     is_sess_boundary = 0
             else:
                 is_sess_boundary = 1
-                
-                
+
+            grid = cuda.cg.this_grid()                
+ 
             ### DETERMINE SESSION LABELS
             # this thread marks the start of a session
             if gid < size:

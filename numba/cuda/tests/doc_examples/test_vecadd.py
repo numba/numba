@@ -59,7 +59,6 @@ class TestVecAdd(CUDATestCase):
         nblocks = (len(a) // nthreads) + 1
         f[nblocks, nthreads](a, b, c)
         print(c.copy_to_host())
-
         # ex_vecadd.launch.end
 
 
