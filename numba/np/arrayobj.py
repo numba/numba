@@ -1970,16 +1970,61 @@ def array_flatten(context, builder, sig, args):
     return res
 
 
+@register_jitable
+def np_clip_impl(a, a_min, a_max, out,
+                 a_min_is_none, a_max_is_none):
+    if a_min_is_none and a_max_is_none:
+        raise ValueError("array_clip: must set either max or min")
+
+    ret = np.empty_like(a) if out is None else out
+
+    if a_min_is_none:
+        a_b, a_max_b = np.broadcast_arrays(a, a_max)
+        index = 0
+        for a_v, a_max_v in np.nditer((a_b, a_max_b)):
+            val_a = a_v.item()
+            val_a_max = a_max_v.item()
+            if val_a > val_a_max:
+                ret[index] = val_a_max
+            else:
+                ret[index] = val_a
+            index = index + 1
+    elif a_max_is_none:
+        a_b, a_min_b = np.broadcast_arrays(a, a_min)
+        index = 0
+        for a_v, a_min_v in np.nditer((a_b, a_min_b)):
+            val_a = a_v.item()
+            val_a_min = a_min_v.item()
+            if val_a > val_a_min:
+                ret[index] = val_a_min
+            else:
+                ret[index] = val_a
+            index = index + 1
+    else:
+        a_b, a_min_b, a_max_b = np.broadcast_arrays(a, a_min, a_max)
+        index = 0
+        for a_v, a_min_v, a_max_v in np.nditer((a_b, a_min_b, a_max_b)):
+            val_a = a_v.item()
+            val_a_min = a_min_v.item()
+            val_a_max = a_max_v.item()
+            ret[index] = min(max(val_a, val_a_min), val_a_max)
+            index = index + 1
+
+    return ret
+
+
 @overload(np.clip)
 def np_clip(a, a_min, a_max, out=None):
     if not type_can_asarray(a):
         raise errors.TypingError('The argument "a" must be array-like')
 
-    if not isinstance(a_min, (types.NoneType, types.Number)):
-        raise errors.TypingError('The argument "a_min" must be a number')
+    if (not isinstance(a_min, types.NoneType) and
+        not type_can_asarray(a_min)):
+        raise errors.TypingError('The argument "a_min" must be a number or an array-like')
 
-    if not isinstance(a_max, (types.NoneType, types.Number)):
-        raise errors.TypingError('The argument "a_max" must be a number')
+    if (not isinstance(a_max, types.NoneType) and
+        not type_can_asarray(a_max)):
+        raise errors.TypingError('The argument "a_max" must be a number or an array-like')
 
     if not (isinstance(out, types.Array) or is_nonelike(out)):
         msg = 'The argument "out" must be an array if it is provided'
@@ -1988,29 +2033,37 @@ def np_clip(a, a_min, a_max, out=None):
     # TODO: support scalar a (issue #3469)
     a_min_is_none = a_min is None or isinstance(a_min, types.NoneType)
     a_max_is_none = a_max is None or isinstance(a_max, types.NoneType)
+    a_min_is_scalar = isinstance(a_min, types.Number)
+    a_max_is_scalar = isinstance(a_max, types.Number)
 
-    def np_clip_impl(a, a_min, a_max, out=None):
-        if a_min_is_none and a_max_is_none:
-            raise ValueError("array_clip: must set either max or min")
+    if a_min_is_scalar and a_max_is_scalar:
+        def np_clip_ss(a, a_min, a_max, out=None):
+            a_min_full = np.full_like(a, a_min)
+            a_max_full = np.full_like(a, a_max)
+            return np_clip_impl(a, a_min_full, a_max_full, out,
+                                a_min_is_none, a_max_is_none)
 
-        ret = np.empty_like(a) if out is None else out
+        return np_clip_ss
+    elif a_min_is_scalar and not a_max_is_scalar:
+        def np_clip_sa(a, a_min, a_max, out=None):
+            a_min_full = np.full_like(a, a_min)
+            return np_clip_impl(a, a_min_full, a_max, out,
+                                a_min_is_none, a_max_is_none)
 
-        for index, val in np.ndenumerate(a):
-            if a_min_is_none:
-                if val > a_max:
-                    ret[index] = a_max
-                else:
-                    ret[index] = val
-            elif a_max_is_none:
-                if val < a_min:
-                    ret[index] = a_min
-                else:
-                    ret[index] = val
-            else:
-                ret[index] = min(max(val, a_min), a_max)
-        return ret
+        return np_clip_sa
+    elif not a_min_is_scalar and a_max_is_scalar:
+        def np_clip_as(a, a_min, a_max, out=None):
+            a_max_full = np.full_like(a, a_max)
+            return np_clip_impl(a, a_min, a_max_full, out,
+                                a_min_is_none, a_max_is_none)
 
-    return np_clip_impl
+        return np_clip_as
+    else:
+        def np_clip_aa(a, a_min, a_max, out=None):
+            return np_clip_impl(a, a_min, a_max, out,
+                                a_min_is_none, a_max_is_none)
+
+        return np_clip_aa
 
 
 @overload_method(types.Array, 'clip')
