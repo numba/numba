@@ -1972,6 +1972,7 @@ def array_flatten(context, builder, sig, args):
 
 @register_jitable
 def _np_clip_impl(a, a_min, a_max, out):
+    # Both a_min and a_max are numpy arrays
     ret = np.empty_like(a) if out is None else out
     a_b, a_min_b, a_max_b = np.broadcast_arrays(a, a_min, a_max)
     for index in np.ndindex(a_b.shape):
@@ -1985,6 +1986,7 @@ def _np_clip_impl(a, a_min, a_max, out):
 
 @register_jitable
 def _np_clip_impl_none1(a, a_min, a_max, out):
+    # a_min is None but a_max is a numpy array
     ret = np.empty_like(a) if out is None else out
     a_b, a_max_b = np.broadcast_arrays(a, a_max)
     for index in np.ndindex(a_b.shape):
@@ -2000,6 +2002,7 @@ def _np_clip_impl_none1(a, a_min, a_max, out):
 
 @register_jitable
 def _np_clip_impl_none2(a, a_min, a_max, out):
+    # a_min is a numpy array but a_max is None
     ret = np.empty_like(a) if out is None else out
     a_b, a_min_b = np.broadcast_arrays(a, a_min)
     for index in np.ndindex(a_b.shape):
@@ -2037,6 +2040,7 @@ def np_clip(a, a_min, a_max, out=None):
     a_max_is_none = a_max is None or isinstance(a_max, types.NoneType)
 
     if a_min_is_none and a_max_is_none:
+        # Raises value error when both a_min and a_max are None
         def np_clip_nn(a, a_min, a_max, out=None):
             raise ValueError("array_clip: must set either max or min")
 
@@ -2047,6 +2051,10 @@ def np_clip(a, a_min, a_max, out=None):
 
     if a_min_is_scalar and a_max_is_scalar:
         def np_clip_ss(a, a_min, a_max, out=None):
+            # a_min and a_max are scalars
+            # since their shape will be empty
+            # broadcast scalars to shape of a
+            # by using np.full_like
             a_min_full = np.full_like(a, a_min)
             a_max_full = np.full_like(a, a_max)
             return _np_clip_impl(a, a_min_full, a_max_full, out)
@@ -2055,12 +2063,22 @@ def np_clip(a, a_min, a_max, out=None):
     elif a_min_is_scalar and not a_max_is_scalar:
         if a_max_is_none:
             def np_clip_sn(a, a_min, a_max, out=None):
+                # a_min is a scalar
+                # since its shape will be empty
+                # broadcast it to shape of a
+                # by using np.full_like
                 a_min_full = np.full_like(a, a_min)
+                # call implementation which supports None type for
+                # a_max
                 return _np_clip_impl_none2(a, a_min_full, a_max, out)
 
             return np_clip_sn
         else:
             def np_clip_sa(a, a_min, a_max, out=None):
+                # a_min is a scalar
+                # since its shape will be empty
+                # broadcast it to shape of a
+                # by using np.full_like
                 a_min_full = np.full_like(a, a_min)
                 return _np_clip_impl(a, a_min_full, a_max, out)
 
@@ -2068,17 +2086,28 @@ def np_clip(a, a_min, a_max, out=None):
     elif not a_min_is_scalar and a_max_is_scalar:
         if a_min_is_none:
             def np_clip_ns(a, a_min, a_max, out=None):
+                # a_max is a scalar
+                # since its shape will be empty
+                # broadcast it to shape of a
+                # by using np.full_like
                 a_max_full = np.full_like(a, a_max)
+                # call implementation which supports None type for
+                # a_min
                 return _np_clip_impl_none1(a, a_min, a_max_full, out)
 
             return np_clip_ns
         else:
             def np_clip_as(a, a_min, a_max, out=None):
+                # a_max is a scalar
+                # since its shape will be empty
+                # broadcast it to shape of a
+                # by using np.full_like
                 a_max_full = np.full_like(a, a_max)
                 return _np_clip_impl(a, a_min, a_max_full, out)
 
             return np_clip_as
     else:
+        # Case where exactly one of a_min or a_max is None
         if a_min_is_none:
             def np_clip_na(a, a_min, a_max, out=None):
                 return _np_clip_impl_none1(a, a_min, a_max, out)
@@ -2091,6 +2120,9 @@ def np_clip(a, a_min, a_max, out=None):
             return np_clip_an
         else:
             def np_clip_aa(a, a_min, a_max, out=None):
+                # Both a_min and a_max are clearly arrays
+                # because none of the above branches
+                # returned
                 return _np_clip_impl(a, a_min, a_max, out)
 
             return np_clip_aa
