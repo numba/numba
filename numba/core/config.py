@@ -420,8 +420,8 @@ class _EnvReloader(object):
             else:
                 default_cuda_include_path = "cuda_include_not_found"
         else:
-            default_cuda_include_path = os.path.join(['usr', 'local', 'cuda',
-                                                     'include'])
+            default_cuda_include_path = os.path.join(os.sep, 'usr', 'local',
+                                                     'cuda', 'include')
         CUDA_INCLUDE_PATH = _readenv("NUMBA_CUDA_INCLUDE_PATH", str,
                                      default_cuda_include_path)
 
