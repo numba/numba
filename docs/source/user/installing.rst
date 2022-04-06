@@ -140,6 +140,7 @@ Source archives of the latest release can also be found on
   * Linux ``ARM``: no conda packages, use the system compiler
   * Mac OSX: ``clang_osx-64`` and ``clangxx_osx-64`` or the system compiler at
     ``/usr/bin/clang`` (Mojave onwards)
+  * Mac OSX (M1): ``clang_osx-arm64`` and ``clangxx_osx-arm64``
   * Windows: a version of Visual Studio appropriate for the Python version in
     use
 

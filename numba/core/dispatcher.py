@@ -778,7 +778,7 @@ class _MemoMixin:
         """
         u = self.__uuid
         if u is None:
-            u = str(uuid.uuid1())
+            u = str(uuid.uuid4())
             self._set_uuid(u)
         return u
 
