@@ -650,7 +650,7 @@ as the chunk size in the dynamic scheduling approach described above.
 The current value of this thread local variable is used by all subsequent parallel regions
 invoked by this thread.
 :func:`numba.set_parallel_chunksize` returns the previous value of the chunksize.
-The current value of the parallel chunk size can be obtained from
+The current value of the parallel chunk size can be obtained by calling
 :func:`numba.get_parallel_chunksize`.
 Both of these functions can be used from standard Python and from Numba jitted functions
 as shown below.  Both invocations of ``func1`` would be executed with a chunk size of 4 whereas
