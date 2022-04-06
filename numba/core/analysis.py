@@ -691,7 +691,7 @@ def find_literally_calls(func_ir, argtypes):
             raise errors.ForceLiteralArg(marked_args, loc=loc)
 
 
-ir_extension_use_alloca = {}
+_ir_extension_use_alloca = {}
 
 
 def must_use_alloca(blocks):
