@@ -669,7 +669,7 @@ Since this idiom of saving and restoring is so common, Numba provides the
 As shown below, this with clause can be invoked from both standard Python and
 within Numba JIT compiled functions.  As with other Numba context-managers, be
 aware that the raising of exceptions is not supported from within a context managed
-block that is part of a Numba jitted function.
+block that is part of a Numba JIT compiled function.
 
 .. literalinclude:: ../../../numba/tests/doc_examples/test_parallel_chunksize.py
    :language: python
