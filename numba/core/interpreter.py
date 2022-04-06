@@ -328,6 +328,7 @@ def peep_hole_fuse_dict_add_updates(func_ir):
     build_map + many map_add, so we also need to replace those
     expressions with a constant build map.
     """
+
     def build_new_buildmap(name, blk, old_lineno, new_items):
         """
             Create a new buildmap with a new set of items
@@ -336,12 +337,41 @@ def peep_hole_fuse_dict_add_updates(func_ir):
         old_assign = blk.body[old_lineno]
         old_target = old_assign.target
         old_bm = old_assign.value
-        # TODO: Update literals.
+        # Build the literals
+        literal_keys = []
+        # Track the values
+        values = []
+        for pair in new_items:
+            k, v = pair
+            key_def = func_ir.get_definition(k)
+            if isinstance(key_def, ir.Const):
+                literal_keys.append(key_def.value)
+            value_def = func_ir.get_definition(v)
+            if isinstance(value_def, ir.Const):
+                values.append(value_def.value)
+            else:
+                # Append unknown value if not a literal.
+                values.append(_UNKNOWN_VALUE(value_def))
+
+        value_indexes = {}
+        if len(literal_keys) == len(new_items):
+            # All keys must be literals to have any literal values.
+            literal_value = {
+                x: y for x, y in zip(literal_keys, values)
+            }
+            for i, k in enumerate(literal_keys):
+                value_indexes[k] = i
+        else:
+            literal_value = None
+
+        # Construct a new build map.
         new_bm = ir.Expr.build_map(items=new_items,
                                    size=len(new_items),
-                                   literal_value=old_bm.literal_value,
-                                   value_indexes=old_bm.value_indexes,
+                                   literal_value=literal_value,
+                                   value_indexes=value_indexes,
                                    loc=old_bm.loc)
+
+        # Return a new assign.
         return ir.Assign(
             new_bm,
             ir.Var(old_target.scope, name, old_target.loc),
