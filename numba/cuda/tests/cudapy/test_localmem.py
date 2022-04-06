@@ -35,7 +35,7 @@ class TestCudaLocalMem(CUDATestCase):
     def test_local_array(self):
         sig = (int32[:], int32[:])
         jculocal = cuda.jit(sig)(culocal)
-        self.assertTrue('.local' in jculocal.ptx[sig])
+        self.assertTrue('.local' in jculocal.inspect_asm(sig))
         A = np.arange(1000, dtype='int32')
         B = np.zeros_like(A)
         jculocal[1, 1](A, B)

@@ -18,7 +18,6 @@ from ctypes import CFUNCTYPE, c_int, CDLL
 
 import numpy as np
 
-import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 from llvmlite import ir
 
@@ -97,17 +96,17 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
     """
     assert isinstance(info, tuple)  # guard against old usage
     # Declare types and function
-    byte_t = lc.Type.int(8)
-    byte_ptr_t = lc.Type.pointer(byte_t)
-    byte_ptr_ptr_t = lc.Type.pointer(byte_ptr_t)
+    byte_t = ir.IntType(8)
+    byte_ptr_t = ir.PointerType(byte_t)
+    byte_ptr_ptr_t = ir.PointerType(byte_ptr_t)
 
     intp_t = ctx.get_value_type(types.intp)
-    intp_ptr_t = lc.Type.pointer(intp_t)
+    intp_ptr_t = ir.PointerType(intp_t)
 
-    fnty = lc.Type.function(lc.Type.void(), [lc.Type.pointer(byte_ptr_t),
-                                             lc.Type.pointer(intp_t),
-                                             lc.Type.pointer(intp_t),
-                                             byte_ptr_t])
+    fnty = ir.FunctionType(ir.VoidType(), [ir.PointerType(byte_ptr_t),
+                                           ir.PointerType(intp_t),
+                                           ir.PointerType(intp_t),
+                                           byte_ptr_t])
     wrapperlib = ctx.codegen().create_library('parallelgufuncwrapper')
     mod = wrapperlib.create_ir_module('parallel.gufunc.wrapper')
     kernel_name = ".kernel.{}_{}".format(id(info.env), info.name)
@@ -116,7 +115,7 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
     bb_entry = lfunc.append_basic_block('')
 
     # Function body starts
-    builder = lc.Builder(bb_entry)
+    builder = ir.IRBuilder(bb_entry)
 
     args, dimensions, steps, data = lfunc.args
 
@@ -133,14 +132,14 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
     # Array count is input signature plus 1 (due to output array)
     array_count = len(sig.args) + 1
 
-    parallel_for_ty = lc.Type.function(lc.Type.void(),
-                                       [byte_ptr_t] * 5 + [intp_t, ] * 3)
+    parallel_for_ty = ir.FunctionType(ir.VoidType(),
+                                      [byte_ptr_t] * 5 + [intp_t, ] * 3)
     parallel_for = cgutils.get_or_insert_function(mod, parallel_for_ty,
                                                   'numba_parallel_for')
 
     # Reference inner-function and link
-    innerfunc_fnty = lc.Type.function(
-        lc.Type.void(),
+    innerfunc_fnty = ir.FunctionType(
+        ir.VoidType(),
         [byte_ptr_ptr_t, intp_ptr_t, intp_ptr_t, byte_ptr_t],
     )
     tmp_voidptr = cgutils.get_or_insert_function(mod, innerfunc_fnty,
@@ -149,7 +148,7 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
 
     get_num_threads = cgutils.get_or_insert_function(
         builder.module,
-        lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
+        ir.FunctionType(ir.IntType(types.intp.bitwidth), []),
         "get_num_threads")
 
     num_threads = builder.call(get_num_threads, [])
