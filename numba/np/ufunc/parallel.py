@@ -679,10 +679,11 @@ def get_thread_id():
     """
     Returns a unique ID for each thread in the range 0 to N.
     If we get to this point then we are not in a Numba compiled function.
+    Return the result from get_thread_id() from the threading layer.
     If we are in a Numba compiled function then the overload below will
     be exercised.
     """
-    return 0
+    return _get_thread_id()
 
 
 @overload(get_thread_id)
@@ -699,7 +700,7 @@ def _iget_thread_id(typingctx):
     def codegen(context, builder, signature, args):
         mod = builder.module
         fnty = ir.FunctionType(cgutils.intp_t, [])
-        fn = cgutils.get_or_insert_function(mod, fnty, "_get_thread_id")
+        fn = cgutils.get_or_insert_function(mod, fnty, "get_thread_id")
         return builder.call(fn, [])
     return signature(types.intp), codegen
 
