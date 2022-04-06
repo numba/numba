@@ -714,7 +714,7 @@ if _DYLD_WORKAROUND_SET and _DYLD_WORKAROUND_VAL:
 def set_parallel_chunksize(n):
     _launch_threads()
     if not isinstance(n, (int, np.integer)):
-        raise TypeError("The parallel chunkize must be an integer")
+        raise TypeError("The parallel chunksize must be an integer")
     global _set_parallel_chunksize
     if n < 0:
         raise ValueError("chunksize must be greather than or equal to zero")
