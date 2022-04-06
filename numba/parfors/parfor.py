@@ -4703,7 +4703,7 @@ def parfor_typeinfer(parfor, typeinferer):
     loc = blocks[first_block].loc
     # XXX
     index_assigns = [ir.Assign(ir.Const(1, loc=loc, use_literal_type=False), v, loc) for v in index_vars]
-    save_first_block_body = blocks[first_block].body
+    save_first_block_body = blocks[first_block].body.copy()
     blocks[first_block].replace_body([*index_assigns, *blocks[first_block].body])
     typeinferer.blocks = blocks
     typeinferer.build_constraint()

@@ -1210,6 +1210,8 @@ class BlockBodyView(MutableSequence):
     def __len__(self):
         return len(self.__lst)
 
+    def copy(self):
+        return self.__lst.copy()
 
 class Block(EqualityCheckMixin):
     """A code block
