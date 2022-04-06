@@ -644,7 +644,7 @@ def get_num_threads():
         raise RuntimeError("Invalid number of threads. "
                            "This likely indicates a bug in Numba. "
                            "(thread_id=%s, num_threads=%s)" %
-                           (_get_thread_id(), num_threads))
+                           (get_thread_id(), num_threads))
     return num_threads
 
 
@@ -655,7 +655,7 @@ def ol_get_num_threads():
     def impl():
         num_threads = _iget_num_threads()
         if num_threads <= 0:
-            print("Broken thread_id: ", _get_thread_id())
+            print("Broken thread_id: ", get_thread_id())
             print("num_threads: ", num_threads)
             raise RuntimeError("Invalid number of threads. "
                                "This likely indicates a bug in Numba.")
@@ -678,9 +678,11 @@ def _iget_num_threads(typingctx):
 def get_thread_id():
     """
     Returns a unique ID for each thread in the range 0 to N.
+    If we get to this point then we are not in a Numba compiled function.
+    If we are in a Numba compiled function then the overload below will
+    be exercised.
     """
-    raise RuntimeError("get_thread_id only callable from "
-                       "within a Numba function.")
+    return 0
 
 
 @overload(get_thread_id)
@@ -697,7 +699,7 @@ def _iget_thread_id(typingctx):
     def codegen(context, builder, signature, args):
         mod = builder.module
         fnty = ir.FunctionType(cgutils.intp_t, [])
-        fn = cgutils.get_or_insert_function(mod, fnty, "get_thread_id")
+        fn = cgutils.get_or_insert_function(mod, fnty, "_get_thread_id")
         return builder.call(fn, [])
     return signature(types.intp), codegen
 
