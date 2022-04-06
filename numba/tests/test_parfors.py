@@ -4063,7 +4063,7 @@ class TestParforChunksizing(TestCase):
 
     @skip_parfors_unsupported
     def test_python_parallel_chunksize_negative(self):
-        # Test negative set_parallel_chunksize outside njit.
+        # Test negative set_parallel_chunksize inside njit.
         with self.assertRaises(ValueError) as raised:
             @njit
             def neg_test():
