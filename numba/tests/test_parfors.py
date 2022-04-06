@@ -4075,7 +4075,7 @@ class TestParforChunksizing(TestCase):
 
             neg_test()
 
-        msg = "chunksize must be greather than or equal to zero"
+        msg = "chunksize must be greater than or equal to zero"
         self.assertIn(msg, str(raised.exception))
 
     @skip_parfors_unsupported
