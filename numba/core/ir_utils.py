@@ -480,10 +480,10 @@ def add_offset_to_labels(blocks, offset):
                     if isinstance(inst, T):
                         f_max = f(inst, offset)
         if isinstance(term, ir.Jump):
-            b.body[-1] = ir.Jump(term.target + offset, term.loc)
+            b.replace_at(-1, ir.Jump(term.target + offset, term.loc))
         if isinstance(term, ir.Branch):
-            b.body[-1] = ir.Branch(term.cond, term.truebr + offset,
-                                   term.falsebr + offset, term.loc)
+            b.replace_at(-1, ir.Branch(term.cond, term.truebr + offset,
+                                            term.falsebr + offset, term.loc))
         new_blocks[l + offset] = b
     return new_blocks
 
@@ -529,10 +529,10 @@ def flatten_labels(blocks):
         if b.body:
             term = b.body[-1]
         if isinstance(term, ir.Jump):
-            b.body[-1] = ir.Jump(l_map[term.target], term.loc)
+            b.replace_at(-1, ir.Jump(l_map[term.target], term.loc))
         if isinstance(term, ir.Branch):
-            b.body[-1] = ir.Branch(term.cond, l_map[term.truebr],
-                                   l_map[term.falsebr], term.loc)
+            b.replace_at(-1, ir.Branch(term.cond, l_map[term.truebr],
+                                        l_map[term.falsebr], term.loc))
         new_blocks[l_map[t_node]] = b
     return new_blocks
 
@@ -1316,7 +1316,7 @@ def simplify_CFG(blocks):
         for (p, q) in predecessors:
             block = blocks[p]
             if isinstance(block.body[-1], ir.Jump):
-                block.body[-1] = copy.copy(inst)
+                block.replace_at(-1, copy.copy(inst))
             else:
                 delete_block = False
         if delete_block:

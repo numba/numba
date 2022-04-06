@@ -323,7 +323,7 @@ def dead_branch_prune(func_ir, called_args):
         keep = branch.truebr if take_truebr else branch.falsebr
         # replace the branch with a direct jump
         jmp = ir.Jump(keep, loc=branch.loc)
-        blk.body[-1] = jmp
+        blk.replace_at(-1, jmp)
         return 1 if keep == branch.truebr else 0
 
     def prune_by_type(branch, condition, blk, *conds):

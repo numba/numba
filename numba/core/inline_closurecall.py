@@ -836,7 +836,7 @@ def _replace_returns(blocks, target, return_label):
             stmt = block.body[i]
             if isinstance(stmt, ir.Return):
                 assert(i + 1 == len(block.body))
-                block.body[i] = ir.Assign(stmt.value, target, stmt.loc)
+                block.replace_at(i, ir.Assign(stmt.value, target, stmt.loc))
                 block.append(ir.Jump(return_label, stmt.loc))
                 # remove cast of the returned value
                 for cast in casts:
@@ -1176,8 +1176,14 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
     for i in range(len(append_block.body)):
         if append_block.body[i] is append_stmt:
             debug_print("Replace append with SetItem")
-            append_block.body[i] = ir.SetItem(target=array_var, index=index_var,
-                                              value=append_stmt.value.args[0], loc=append_stmt.loc)
+            append_block.replace_at(
+                i,
+                ir.SetItem(
+                    target=array_var, index=index_var,
+                    value=append_stmt.value.args[0],
+                    loc=append_stmt.loc,
+                )
+            )
 
     # replace array call, by changing "a = array(b)" to "a = b"
     stmt = func_ir.blocks[exit_block].body[array_call_index]
