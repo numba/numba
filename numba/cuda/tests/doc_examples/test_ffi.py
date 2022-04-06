@@ -19,7 +19,7 @@ class TestFFI(CUDATestCase):
         mul = cuda.declare_device('mul_f32_f32', 'float32(float32, float32)')
 
         # Path to the source containing the foreign function
-        # (here assumed to be in a subfolder called "ffi"
+        # (here assumed to be in a subdirectory called "ffi")
         basedir = os.path.dirname(os.path.abspath(__file__))
         functions_cu = os.path.join(basedir, 'ffi', 'functions.cu')
 
