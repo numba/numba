@@ -2779,13 +2779,14 @@ class NvrtcProgram:
 
         # If the compile failed, provide the log in an exception
         if compile_error:
-            msg = (f'NVRTC Compilation failure compiling {name}:\n\n'
+            msg = (f'NVRTC Compilation failure whilst compiling {name}:\n\n'
                    f'{log.decode()}')
             raise NvrtcError(msg)
 
         # Otherwise, if there's any content in the log, present it as a warning
         if log_size > 1:
-            msg = f"NVRTC log messages compiling {name}:\n\n{log.decode()}"
+            msg = (f"NVRTC log messages whilst compiling {name}:\n\n"
+                   f"{log.decode()}")
             warnings.warn(msg)
 
         # Get and cache the PTX
