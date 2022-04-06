@@ -1,5 +1,5 @@
 from collections import defaultdict
-from collections.abc import Sequence, MutableSequence
+from collections.abc import Sequence
 import copy
 import itertools
 import os
@@ -1191,15 +1191,12 @@ class Scope(EqualityCheckMixin):
                                                           self.loc)
 
 
-class BlockBodyView(MutableSequence):
+class BlockBodyView(Sequence):
     def __init__(self, lst):
         self.__lst = lst
 
     def __getitem__(self, idx):
         return self.__lst[idx]
-
-    def insert(self, idx, value):
-        self.__lst.insert(idx, value)
 
     def __len__(self):
         return len(self.__lst)
@@ -1207,9 +1204,6 @@ class BlockBodyView(MutableSequence):
     def copy(self):
         return self.__lst.copy()
 
-    __setitem__ = NotImplemented
-    append = NotImplemented
-    __delitem__ = NotImplemented
 
 class Block(EqualityCheckMixin):
     """A code block
@@ -1274,6 +1268,9 @@ class Block(EqualityCheckMixin):
 
     def extend(self, body):
         self.__body.extend(body)
+
+    def insert(self, idx, inst):
+        self.__body.insert(idx, inst)
 
     def replace_at(self, idx, inst):
         self.__body[idx] = inst

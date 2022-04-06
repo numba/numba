@@ -1536,10 +1536,10 @@ class PreParforPass(object):
                             # The original A.dtype rhs is replaced with result of this call.
                             instr.value = dtype_var
                             # Add statements to body of the code.
-                            block.body.insert(0, dtype_assign)
-                            block.body.insert(0, dtype_attr_assign)
-                            block.body.insert(0, typ_var_assign)
-                            block.body.insert(0, g_np_assign)
+                            block.prepend(dtype_assign)
+                            block.prepend(dtype_attr_assign)
+                            block.prepend(typ_var_assign)
+                            block.prepend(g_np_assign)
                             self.stats['replaced_dtype'] += 1
                             break
 

@@ -1374,7 +1374,7 @@ class IterLoopCanonicalization(FunctionPass):
 
         loop_entry = tuple(loop.entries)[0]
         entry_block = func_ir.blocks[loop_entry]
-        entry_block.body.insert(0, assgn)
+        entry_block.prepend(assgn)
 
         iterarg = guard(get_definition, func_ir,  iternext.value)
         if iterarg is not None:
@@ -1396,7 +1396,7 @@ class IterLoopCanonicalization(FunctionPass):
                                     tokenise('call_get_range'), LOC)
         make_call = ir.Expr.call(get_range_var, (stmt.value.value,), (), LOC)
         assgn_call = ir.Assign(make_call, call_get_range_var, LOC)
-        entry_block.body.insert(idx, assgn_call)
+        entry_block.insert(idx, assgn_call)
         entry_block.body[idx + 1].value.value = call_get_range_var
 
         glbls = copy(func_ir.func_id.func.__globals__)
