@@ -219,8 +219,10 @@ def mk_range_block(typemap, start, stop, step, calltypes, scope, loc):
     # jump to header
     jump_header = ir.Jump(-1, loc)
     range_block = ir.Block(scope, loc)
-    range_block.body = arg_nodes + [g_range_assign, range_call_assign,
-                                    iter_call_assign, phi_assign, jump_header]
+    range_block.replace_body(
+        [*arg_nodes, g_range_assign, range_call_assign,
+         iter_call_assign, phi_assign, jump_header]
+    )
     return range_block
 
 
@@ -303,8 +305,10 @@ def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
     # branch pair_second_var body_block out_block
     branch = ir.Branch(pair_second_var, -1, -1, loc)
     header_block = ir.Block(scope, loc)
-    header_block.body = [iternext_assign, pair_first_assign,
-                         pair_second_assign, phi_b_assign, branch]
+    header_block.replace_body(
+        [iternext_assign, pair_first_assign, pair_second_assign, phi_b_assign,
+         branch]
+    )
     return header_block
 
 
@@ -540,7 +544,7 @@ def remove_dels(blocks):
         for stmt in block.body:
             if not isinstance(stmt, ir.Del):
                 new_body.append(stmt)
-        block.body = new_body
+        block.replace_body(new_body)
     return
 
 
@@ -552,7 +556,7 @@ def remove_args(blocks):
             if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Arg):
                 continue
             new_body.append(stmt)
-        block.body = new_body
+        block.replace_body(new_body)
     return
 
 
@@ -697,7 +701,7 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
 
         new_body.append(stmt)
     new_body.reverse()
-    block.body = new_body
+    block.replace_body(new_body)
     return removed
 
 # list of functions
@@ -1378,7 +1382,7 @@ def canonicalize_array_math(func_ir, typemap, calltypes, typingctx):
                     rhs.args = [arr] + rhs.args
 
             new_body.append(stmt)
-        block.body = new_body
+        block.replace_body(new_body)
     return
 
 
@@ -1451,7 +1455,7 @@ def merge_adjacent_blocks(blocks):
             #     break
             # merge
             block.body.pop()  # remove Jump
-            block.body += next_block.body
+            block.extend(next_block.body)
             del blocks[next_label]
             removed.add(next_label)
             label = next_label

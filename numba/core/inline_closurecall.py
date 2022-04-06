@@ -366,10 +366,10 @@ class InlineWorker(object):
             kernel_copy.blocks = {}
             for block_label, block in the_ir.blocks.items():
                 new_block = copy.deepcopy(the_ir.blocks[block_label])
-                new_block.body = []
+                new_block.replace_body([])
                 for stmt in the_ir.blocks[block_label].body:
                     scopy = copy.deepcopy(stmt)
-                    new_block.body.append(scopy)
+                    new_block.append(scopy)
                 kernel_copy.blocks[block_label] = new_block
             return kernel_copy
 
@@ -438,11 +438,11 @@ class InlineWorker(object):
         # 5. split caller blocks into two
         new_blocks = []
         new_block = ir.Block(scope, block.loc)
-        new_block.body = block.body[i + 1:]
+        new_block.replace_body(block.body[i + 1:])
         new_label = next_label()
         caller_ir.blocks[new_label] = new_block
         new_blocks.append((new_label, new_block))
-        block.body = block.body[:i]
+        block.replace_body(block.body[:i])
         block.body.append(ir.Jump(min_label, instr.loc))
 
         # 6. replace Return with assignment to LHS
@@ -673,11 +673,11 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     # 5. split caller blocks into two
     new_blocks = []
     new_block = ir.Block(scope, block.loc)
-    new_block.body = block.body[i + 1:]
+    new_block.replace_body(block.body[i + 1:])
     new_label = next_label()
     func_ir.blocks[new_label] = new_block
     new_blocks.append((new_label, new_block))
-    block.body = block.body[:i]
+    block.replace_body(block.body[:i])
     block.body.append(ir.Jump(min_label, instr.loc))
 
     # 6. replace Return with assignment to LHS
@@ -1138,7 +1138,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
     # Add back terminator
     stmts.append(terminator)
     # Modify loop_entry
-    loop_entry.body = stmts
+    loop_entry.replace_body(stmts)
 
     if range_def:
         if range_def[0] != 0:
@@ -1170,7 +1170,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
         # index_var = next_index_var
         stmts.append(_new_definition(func_ir, index_var, next_index_var, loc))
         stmts.append(terminator)
-        loop_header.body = stmts
+        loop_header.replace_body(stmts)
 
     # In append_block, change list_append into array assign
     for i in range(len(append_block.body)):
@@ -1260,7 +1260,7 @@ def _fix_nested_array(func_ir):
                                     new_body.extend(body[:i])
                                     new_body.append(new_vardef)
                                     new_body.extend(body[i:])
-                                    block.body = new_body
+                                    block.replace_body(new_body)
                                     new_varlist.append(new_var)
                                 else:
                                     raise GuardException
@@ -1343,7 +1343,7 @@ class RewriteArrayOfConsts(rewrites.Rewrite):
         return self.new_body is not None
 
     def apply(self):
-        self.crnt_block.body = self.new_body
+        self.crnt_block.replace_body(self.new_body)
         return self.crnt_block
 
 

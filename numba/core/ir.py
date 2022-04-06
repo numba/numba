@@ -1227,6 +1227,10 @@ class Block(EqualityCheckMixin):
 
     @body.setter
     def body(self, new_body):
+        raise AttributeError
+        self.replace_body(new_body)
+
+    def replace_body(self, new_body):
         self.__body[:] = new_body
 
     def copy(self):
@@ -1270,6 +1274,9 @@ class Block(EqualityCheckMixin):
     def append(self, inst):
         assert isinstance(inst, Stmt)
         self.__body.append(inst)
+
+    def extend(self, body):
+        self.__body.extend(body)
 
     def remove(self, inst):
         assert isinstance(inst, Stmt)

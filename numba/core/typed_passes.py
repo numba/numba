@@ -835,7 +835,9 @@ class PreLowerStripPhis(FunctionPass):
             newblocks[label] = newblk
 
             # strip phis
-            newblk.body = [stmt for stmt in block.body if stmt not in phis]
+            newblk.replace_body(
+                [stmt for stmt in block.body if stmt not in phis]
+            )
 
             # insert exporters
             for target, rhs in exporters[label]:

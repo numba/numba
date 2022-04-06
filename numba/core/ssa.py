@@ -94,7 +94,7 @@ def _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus, cache_list_vars):
     for label, philist in phimap.items():
         curblk = newblocks[label]
         # Prepend PHI nodes to the block
-        curblk.body = [*philist, *curblk.body]
+        curblk.replace_body([*philist, *curblk.body])
     return newblocks
 
 
@@ -176,7 +176,7 @@ def _run_block_rewrite(blocks, states, handler):
         for stmt in _run_ssa_block_pass(states, blk, handler):
             assert stmt is not None
             newbody.append(stmt)
-        newblk.body = newbody
+        newblk.replace_body(newbody)
         newblocks[label] = newblk
     return newblocks
 

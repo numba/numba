@@ -90,7 +90,7 @@ class StencilPass(object):
                     gen_nodes = self._mk_stencil_parfor(label, in_args, out_arr,
                             stencil_ir, index_offsets, stmt.target, rt, sf,
                             arg_to_arr_dict)
-                    block.body = block.body[:i] + gen_nodes + block.body[i+1:]
+                    block.replace_body(block.body[:i] + gen_nodes + block.body[i+1:])
                 # Found a call to a stencil via numba.stencil().
                 elif (isinstance(stmt, ir.Assign)
                         and isinstance(stmt.value, ir.Expr)
@@ -123,7 +123,7 @@ class StencilPass(object):
                     new_body.append(ir.Jump(parfor_body_exit_label, loc))
                 else:
                     new_body.append(stmt)
-            block.body = new_body
+            block.replace_body(new_body)
 
     def _mk_stencil_parfor(self, label, in_args, out_arr, stencil_ir,
                            index_offsets, target, return_type, stencil_func,
@@ -546,7 +546,7 @@ class StencilPass(object):
                     stmt.value = getitem_call
 
                 new_body.append(stmt)
-            block.body = new_body
+            block.replace_body(new_body)
         if need_to_calc_kernel and not found_relative_index:
             raise ValueError("Stencil kernel with no accesses to " \
                 "relatively indexed arrays.")

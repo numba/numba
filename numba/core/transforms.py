@@ -853,7 +853,7 @@ def _fix_multi_exit_blocks(func_ir, exit_nodes, *, split_condition=None):
         remainings.append(after)
 
         # Add control-point variable to mark which exit block this is.
-        blk.body = before
+        blk.replace_body(before)
         loc = blk.loc
         blk.body.append(
             ir.Assign(value=ir.Const(i, loc=loc),

@@ -594,7 +594,7 @@ class Interpreter(object):
 
             new_body.append(inst)
 
-        self.current_block.body = new_body
+        self.current_block.replace_body(new_body)
 
     def _var_used_in_binop(self, varname, expr):
         """return True if 'expr' is a binary expression and 'varname' is used

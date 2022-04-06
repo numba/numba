@@ -528,10 +528,10 @@ class CanonicalizeLoopEntry(FunctionPass):
 
         splitpt = entry_block.body.index(startpt)
         new_block = entry_block.copy()
-        new_block.body = new_block.body[splitpt:]
+        new_block.replace_body(new_block.body[splitpt:])
         new_block.loc = new_block.body[0].loc
         new_label = find_max_label(fir.blocks) + 1
-        entry_block.body = entry_block.body[:splitpt]
+        entry_block.replace_body(entry_block.body[:splitpt])
         entry_block.append(ir.Jump(new_label, loc=new_block.loc))
 
         fir.blocks[new_label] = new_block
@@ -890,7 +890,7 @@ class MixedContainerUnroller(FunctionPass):
                             new_body.append(stmt)
                     else:
                         new_body.append(stmt)
-                blk.body = new_body
+                blk.replace_body(new_body)
 
             # rename
             var_table = get_name_var_table(loop_blocks)

@@ -127,7 +127,7 @@ class StencilFunc(object):
                         new_body.append(si)
                 else:
                     new_body.append(stmt)
-            block.body = new_body
+            block.replace_body(new_body)
         return ret_blocks
 
     def add_indices_to_kernel(self, kernel, index_names, ndim,
@@ -297,7 +297,7 @@ class StencilFunc(object):
                                   stmt.target,loc))
                 else:
                     new_body.append(stmt)
-            block.body = new_body
+            block.replace_body(new_body)
 
         if need_to_calc_kernel:
             # Find the size of the kernel by finding the maximum absolute value
@@ -430,7 +430,7 @@ class StencilFunc(object):
         # For each block...
         for (block_label, block) in ir.blocks.items():
             new_block = copy.deepcopy(ir.blocks[block_label])
-            new_block.body = []
+            new_block.replace_body([])
             # For each statement in each block...
             for stmt in ir.blocks[block_label].body:
                 # Copy the statement to the new copy of the kernel
@@ -710,9 +710,9 @@ class StencilFunc(object):
                     # sentinel but the new block maintains the current block
                     # label.
                     prev_block = ir.Block(scope, loc)
-                    prev_block.body = block.body[:i]
+                    prev_block.replace_body(block.body[:i])
                     # The current block is used for statements after sentinel.
-                    block.body = block.body[i + 1:]
+                    block.body.replace_body(block.body[i + 1:])
                     # But the current block gets a new label.
                     body_first_label = min(kernel_copy.blocks.keys())
 
