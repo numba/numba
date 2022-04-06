@@ -7,6 +7,7 @@ from numba.cuda.testing import (skip_on_cudasim, skip_unless_cuda_python,
 from numba.cuda.testing import CUDATestCase
 from numba.cuda.cudadrv.driver import Linker, LinkerError, NvrtcError
 from numba.cuda import require_context
+from numba.tests.support import ignore_internal_warnings
 from numba import cuda, void, float64, int64
 
 
@@ -126,6 +127,8 @@ class TestLinker(CUDATestCase):
         link = os.path.join(os.path.dirname(__file__), 'data', 'warn.cu')
 
         with warnings.catch_warnings(record=True) as w:
+            ignore_internal_warnings()
+
             @cuda.jit('void(int32)', link=[link])
             def kernel(x):
                 bar(x)
