@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 from unittest import skip
 from ctypes import *
 
@@ -161,6 +162,29 @@ class TestLegacyAPI(BasePYCCTest):
 @needs_external_compilers
 class TestCC(BasePYCCTest):
 
+    def make_test_array(self, n_members):
+        return np.arange(n_members, dtype=np.int64)
+
+    def run_in_threads(self, func, n_threads):
+        # Run the function in parallel over an array and collect results.
+        threads = []
+        # Warm up compilation, since we don't want that to interfere with
+        # the test proper.
+        func(self.make_test_array(1), np.arange(1, dtype=np.intp))
+        arr = self.make_test_array(50)
+        for i in range(n_threads):
+            # Ensure different threads write into the array in different
+            # orders.
+            indices = np.arange(arr.size, dtype=np.intp)
+            np.random.shuffle(indices)
+            t = threading.Thread(target=func, args=(arr, indices))
+            threads.append(t)
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        return arr
+
     def setUp(self):
         super(TestCC, self).setUp()
         from numba.tests import compile_with_pycc
@@ -232,6 +256,35 @@ class TestCC(BasePYCCTest):
             res = lib.multi(123, 321)
             self.assertPreciseEqual(res, 123 * 321)
             self.assertEqual(lib.multi.__module__, 'pycc_test_simple')
+
+    def check_gil_released(self, func):
+        for n_threads in (4, 12, 32):
+            # Try harder each time. On an empty machine 4 threads seems
+            # sufficient, but in some contexts (e.g. Travis CI) we need more.
+            arr = self.run_in_threads(func, n_threads)
+            distinct = set(arr)
+            try:
+                self.assertGreater(len(distinct), 1, distinct)
+            except AssertionError as e:
+                failure = e
+            else:
+                return
+        raise failure
+
+    def check_gil_held(self, func):
+        arr = self.run_in_threads(func, n_threads=4)
+        distinct = set(arr)
+        self.assertEqual(len(distinct), 1, distinct)
+
+    def test_cc_export_nogil(self):
+        with self.check_cc_compiled(self._test_module.cc) as lib:
+            self.assertEqual(lib.f_nogil.__module__, 'pycc_test_simple')
+            self.check_gil_released(lib.f_nogil)
+
+    def test_cc_export_gil(self):
+        with self.check_cc_compiled(self._test_module.cc) as lib:
+            self.assertEqual(lib.f_gil.__module__, 'pycc_test_simple')
+            self.check_gil_held(lib.f_gil)
 
     def test_compile_for_cpu(self):
         # Compiling for the host CPU should always succeed
