@@ -3779,7 +3779,7 @@ def parfor_defs(parfor, use_set=None, def_set=None):
     return analysis._use_defs_result(usemap=use_set, defmap=def_set)
 
 
-analysis._ir_extension_usedefs[Parfor] = parfor_defs
+analysis.ir_extension_usedefs[Parfor] = parfor_defs
 
 
 def _parfor_use_alloca(parfor, alloca_set):
@@ -3795,7 +3795,7 @@ def _parfor_use_alloca(parfor, alloca_set):
     unwrap_parfor_blocks(parfor)
 
 
-analysis._ir_extension_use_alloca[Parfor] = _parfor_use_alloca
+analysis.ir_extension_use_alloca[Parfor] = _parfor_use_alloca
 
 
 def parfor_insert_dels(parfor, curr_dead_set):

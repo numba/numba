@@ -17,7 +17,7 @@ _use_defs_result = namedtuple('use_defs_result', 'usemap,defmap')
 
 # other packages that define new nodes add calls for finding defs
 # format: {type:function}
-_ir_extension_usedefs = {}
+ir_extension_usedefs = {}
 
 
 def compute_use_defs(blocks):
@@ -31,8 +31,8 @@ def compute_use_defs(blocks):
         var_use_map[offset] = use_set = set()
         var_def_map[offset] = def_set = set()
         for stmt in ir_block.body:
-            if type(stmt) in _ir_extension_usedefs:
-                func = _ir_extension_usedefs[type(stmt)]
+            if type(stmt) in ir_extension_usedefs:
+                func = ir_extension_usedefs[type(stmt)]
                 func(stmt, use_set, def_set)
                 continue
             if isinstance(stmt, ir.Assign):
@@ -691,7 +691,7 @@ def find_literally_calls(func_ir, argtypes):
             raise errors.ForceLiteralArg(marked_args, loc=loc)
 
 
-_ir_extension_use_alloca = {}
+ir_extension_use_alloca = {}
 
 
 def must_use_alloca(blocks):
@@ -700,7 +700,7 @@ def must_use_alloca(blocks):
     stack allocated with alloca.  For each statement in the blocks,
     determine if that statement requires certain variables to be
     stack allocated.  This function uses the extension point
-    _ir_extension_use_alloca to allow other IR node types like parfors
+    ir_extension_use_alloca to allow other IR node types like parfors
     to register to be processed by this analysis function.  At the
     moment, parfors are the only IR node types that may require
     something to be stack allocated.
@@ -709,8 +709,8 @@ def must_use_alloca(blocks):
 
     for ir_block in blocks.values():
         for stmt in ir_block.body:
-            if type(stmt) in _ir_extension_use_alloca:
-                func = _ir_extension_use_alloca[type(stmt)]
+            if type(stmt) in ir_extension_use_alloca:
+                func = ir_extension_use_alloca[type(stmt)]
                 func(stmt, use_alloca_vars)
                 continue
 
