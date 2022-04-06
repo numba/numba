@@ -3985,7 +3985,7 @@ class TestPrangeSpecific(TestPrangeBase):
 
 class TestParforChunksizing(TestCase):
     """
-    Tests miscellaneous parts of ParallelAccelerator use.
+    Tests chunksize handling in ParallelAccelerator.
     """
     _numba_parallel_test_ = False
 
