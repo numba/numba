@@ -4084,7 +4084,7 @@ class TestParforChunksizing(TestCase):
         with self.assertRaises(ValueError) as raised:
             set_parallel_chunksize(-1)
 
-        msg = "chunksize must be greather than or equal to zero"
+        msg = "chunksize must be greater than or equal to zero"
         self.assertIn(msg, str(raised.exception))
 
 
