@@ -331,8 +331,8 @@ def peep_hole_fuse_dict_add_updates(func_ir):
 
     def build_new_buildmap(name, blk, old_lineno, new_items):
         """
-            Create a new buildmap with a new set of items
-            but all the other info the same.
+        Create a new buildmap with a new set of items
+        but all the other info the same.
         """
         old_assign = blk.body[old_lineno]
         old_target = old_assign.target
@@ -341,8 +341,7 @@ def peep_hole_fuse_dict_add_updates(func_ir):
         literal_keys = []
         # Track the values
         values = []
-        for pair in new_items:
-            k, v = pair
+        for k, v in new_items:
             key_def = func_ir.get_definition(k)
             if isinstance(key_def, ir.Const):
                 literal_keys.append(key_def.value)
