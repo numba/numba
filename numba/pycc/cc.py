@@ -69,6 +69,7 @@ class CC(object):
         self._output_file = self._toolchain.get_ext_filename(extension_name)
         self._use_nrt = True
         self._target_cpu = ''
+        self._release_gil = False
 
     @property
     def name(self):
@@ -129,10 +130,11 @@ class CC(object):
     def verbose(self, value):
         self._verbose = value
 
-    def export(self, exported_name, sig):
+    def export(self, exported_name, sig, **options):
         """
         Mark a function for exporting in the extension module.
         """
+        self._release_gil = options.pop("nogil", False)
         fn_args, fn_retty = sigutils.normalize_signature(sig)
         sig = typing.signature(fn_retty, *fn_args)
         if exported_name in self._exported_functions:
@@ -193,7 +195,8 @@ class CC(object):
     @global_compiler_lock
     def _compile_object_files(self, build_dir):
         compiler = ModuleCompiler(self._export_entries, self._basename,
-                                self._use_nrt, cpu_name=self._target_cpu)
+                                self._use_nrt, cpu_name=self._target_cpu,
+                                release_gil=self._release_gil)
         compiler.external_init_function = self._init_function
         temp_obj = os.path.join(build_dir,
                                 os.path.splitext(self._output_file)[0] + '.o')

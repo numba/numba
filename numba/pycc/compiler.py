@@ -112,6 +112,7 @@ class _ModuleCompiler(object):
         # Used by the CC API but not the legacy API
         self.external_init_function = None
         self.use_nrt = use_nrt
+        self.release_gil = aot_options.pop("release_gil", False)
 
         self.typing_context = cpu_target.typing_context
         self.context = cpu_target.target_context.with_aot_codegen(
@@ -140,6 +141,7 @@ class _ModuleCompiler(object):
         # Generate IR for all exported functions
         flags = Flags()
         flags.no_compile = True
+        flags.release_gil = self.release_gil
         if not self.export_python_wrap:
             flags.no_cpython_wrapper = True
             flags.no_cfunc_wrapper = True
