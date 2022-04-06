@@ -187,7 +187,19 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
     context = array._context
     builder = array._builder
     datamodel = array._datamodel
-    required_fields = set(datamodel._fields)
+    # doesn't matter what this array type instance is, it's just to get the
+    # fields for the datamodel of the standard array type in this context
+    standard_array = types.Array(types.float64, 1, 'C')
+    standard_array_type_datamodel = context.data_model_manager[standard_array]
+    required_fields = set(standard_array_type_datamodel._fields)
+    datamodel_fields = set(datamodel._fields)
+    # Make sure that the presented array object has a data model that is close
+    # enough to an array for this function to proceed.
+    if (required_fields & datamodel_fields) != required_fields:
+        missing = required_fields - datamodel_fields
+        msg = (f"The datamodel for type {array._fe_type} is missing "
+               f"field{'s' if len(missing) > 1 else ''} {missing}.")
+        raise ValueError(msg)
 
     if meminfo is None:
         meminfo = Constant(context.get_value_type(
@@ -221,12 +233,10 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
         nitems = builder.mul(nitems, axlen, flags=['nsw'])
     attrs['nitems'] = nitems
 
-    # Make sure that we have all the fields needed to wire up a minimal viable
-    # array structure.
+    # Make sure that we have all the fields
     got_fields = set(attrs.keys())
-    for got in got_fields:
-        if got not in required_fields:
-            raise ValueError("missing {0}".format(required_fields - got_fields))
+    if got_fields != required_fields:
+        raise ValueError("missing {0}".format(required_fields - got_fields))
 
     # Set field value
     for k, v in attrs.items():
