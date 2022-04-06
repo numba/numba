@@ -2502,7 +2502,7 @@ class ConvertLoopPass:
                             pass_states.typemap, scope, index_vars, body_block,
                             force_tuple=True
                         )
-                        body = body_block.body + first_body_block.body
+                        body = [*body_block.body, *first_body_block.body]
                         first_body_block.body = body
                         if mask_indices:
                             orig_index_var = orig_index[0]
@@ -2574,7 +2574,7 @@ class ConvertLoopPass:
                         # So we just add the header to the first loop body block (minus the
                         # branch) and let dead code elimination remove the unnecessary parts.
                         first_body_label = min(loop_body.keys())
-                        loop_body[first_body_label].body = header_body + loop_body[first_body_label].body
+                        loop_body[first_body_label].body = [*header_body, *loop_body[first_body_label].body]
 
                     index_var_map = {v: index_var for v in loop_index_vars}
                     replace_vars(loop_body, index_var_map)
@@ -4478,7 +4478,7 @@ def apply_copies_parfor(parfor, var_dict, name_var_table,
     for lhs_name, rhs in var_dict.items():
         assign_list.append(ir.Assign(rhs, name_var_table[lhs_name],
                                      ir.Loc("dummy", -1)))
-    blocks[0].body = assign_list + blocks[0].body
+    blocks[0].body = [*assign_list, *blocks[0].body]
     in_copies_parfor, out_copies_parfor = copy_propagate(blocks, typemap)
     apply_copy_propagate(blocks, in_copies_parfor, name_var_table, typemap,
                          calltypes, save_copies)
@@ -4691,7 +4691,7 @@ def parfor_typeinfer(parfor, typeinferer):
     # XXX
     index_assigns = [ir.Assign(ir.Const(1, loc=loc, use_literal_type=False), v, loc) for v in index_vars]
     save_first_block_body = blocks[first_block].body
-    blocks[first_block].body = index_assigns + blocks[first_block].body
+    blocks[first_block].body = [*index_assigns, *blocks[first_block].body]
     typeinferer.blocks = blocks
     typeinferer.build_constraint()
     typeinferer.blocks = save_blocks

@@ -94,7 +94,7 @@ def _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus, cache_list_vars):
     for label, philist in phimap.items():
         curblk = newblocks[label]
         # Prepend PHI nodes to the block
-        curblk.body = philist + curblk.body
+        curblk.body = [*philist, *curblk.body]
     return newblocks
 
 
