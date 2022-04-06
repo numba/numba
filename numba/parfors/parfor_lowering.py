@@ -295,7 +295,7 @@ def _lower_parfor_parallel(lowerer, parfor):
                                              mk_unique_var("loop_index"), loc)
             # Give that variable the right type.
             typemap[numba_ir_loop_index_var.name] = num_thread_type
-            # Associate this Numba variable to the LLVm variable in the
+            # Associate this Numba variable to the LLVM variable in the
             # lowerer's varmap.
             lowerer.varmap[numba_ir_loop_index_var.name] = alloc_loop_var
             # Insert a loop into the outputed LLVM that goes from 0 to
