@@ -668,7 +668,7 @@ Since this idiom of saving and restoring is so common, Numba provides the
 :func:`parallel_chunksize` with clause context-manager to simplify the idiom.
 As shown below, this with clause can be invoked from both standard Python and
 within Numba JIT compiled functions.  As with other Numba context-managers, be
-aware that returns and raises are not supported from within a context managed
+aware that the raising of exceptions is not supported from within a context managed
 block that is part of a Numba jitted function.
 
 .. literalinclude:: ../../../numba/tests/doc_examples/test_parallel_chunksize.py
