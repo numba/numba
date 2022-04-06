@@ -3779,10 +3779,14 @@ def parfor_defs(parfor, use_set=None, def_set=None):
     return analysis._use_defs_result(usemap=use_set, defmap=def_set)
 
 
-analysis.ir_extension_usedefs[Parfor] = parfor_defs
+analysis._ir_extension_usedefs[Parfor] = parfor_defs
 
 
-def parfor_use_alloca(parfor, alloca_set):
+def _parfor_use_alloca(parfor, alloca_set):
+    """
+    Reduction variables for parfors and the reduction variables within
+    nested parfors must be stack allocated.
+    """
     alloca_set |= set(parfor.redvars)
 
     blocks = wrap_parfor_blocks(parfor)
@@ -3791,7 +3795,7 @@ def parfor_use_alloca(parfor, alloca_set):
     unwrap_parfor_blocks(parfor)
 
 
-analysis.ir_extension_use_alloca[Parfor] = parfor_use_alloca
+analysis._ir_extension_use_alloca[Parfor] = _parfor_use_alloca
 
 
 def parfor_insert_dels(parfor, curr_dead_set):

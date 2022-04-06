@@ -4047,8 +4047,7 @@ class TestParforChunksizing(TestCase):
             worker thread sees has been reset to 0. """
 
         @njit(parallel=True)
-        def test_impl(cs):
-            n = 1000
+        def test_impl(cs, n):
             res = np.zeros(n)
             inner_cs = np.full(n, -13)
             with numba.parallel_chunksize(cs):
@@ -4057,9 +4056,14 @@ class TestParforChunksizing(TestCase):
                     res[i] = 13
             return res, inner_cs
 
-        res, inner_cs = test_impl(8)
-        self.assertTrue(np.all(res == 13))
-        self.assertTrue(np.all(inner_cs == 0))
+        # Test a variety of array and chunk sizes.
+        # 1000 is a round number, 997 is prime, 943 is product of two
+        # primes, 961 is square of a prime.
+        for j in [1000, 997, 943, 961]:
+            for i in range(15):
+                res, inner_cs = test_impl(i+1, j)
+                self.assertTrue(np.all(res == 13))
+                self.assertTrue(np.all(inner_cs == 0))
 
     @skip_parfors_unsupported
     def test_python_parallel_chunksize_negative(self):

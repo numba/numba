@@ -62,7 +62,7 @@ class ChunksizeExamplesTest(unittest.TestCase):
                 with parallel_chunksize(8):
                     for i in prange(n):
                         acc += i
-                return acc # Note: this cannot go inside the with
+                return acc
 
             with parallel_chunksize(4):
                 func1(12)

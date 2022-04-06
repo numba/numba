@@ -1,6 +1,7 @@
 from numba.core import types, errors, ir, sigutils, ir_utils
 from numba.core.typing.typeof import typeof_impl
 from numba.core.transforms import find_region_inout_vars
+from numba.core.ir_utils import build_definitions
 import numba
 
 
@@ -490,15 +491,15 @@ class _ParallelChunksize(WithContext):
         restore_state = []
 
         # global for Numba itself
-        gvar = ir.Var(scope, ir_utils.mk_unique_var("$ngvar"), loc)
+        gvar = scope.define(ir_utils.mk_unique_var("$ngvar"), loc)
         set_state.append(ir.Assign(ir.Global('numba', numba, loc), gvar, loc))
         # getattr for set chunksize function in Numba
         spcattr = ir.Expr.getattr(gvar, 'set_parallel_chunksize', loc)
-        spcvar = ir.Var(scope, ir_utils.mk_unique_var("$spc"), loc)
+        spcvar = scope.define(ir_utils.mk_unique_var("$spc"), loc)
         set_state.append(ir.Assign(spcattr, spcvar, loc))
         # call set_parallel_chunksize
-        orig_pc_var = ir.Var(scope, ir_utils.mk_unique_var("$save_pc"), loc)
-        cs_var = ir.Var(scope, ir_utils.mk_unique_var("$cs_var"), loc)
+        orig_pc_var = scope.define(ir_utils.mk_unique_var("$save_pc"), loc)
+        cs_var = scope.define(ir_utils.mk_unique_var("$cs_var"), loc)
         set_state.append(ir.Assign(arg, cs_var, loc))
         spc_call = ir.Expr.call(spcvar, [cs_var], (), loc)
         set_state.append(ir.Assign(spc_call, orig_pc_var, loc))
@@ -510,11 +511,17 @@ class _ParallelChunksize(WithContext):
                                   set_state + 
                                   [blocks[blk_start].body[-1]])
         blocks[blk_end].body = restore_state + blocks[blk_end].body
+        func_ir._definitions = build_definitions(blocks)
         ir_utils.dprint_func_ir(func_ir, "After with changes", blocks=blocks)
 
     def __call__(self, *args, **kwargs):
-        assert len(args) == 1
-        assert not kwargs
+        """Act like a function and enforce the contract that
+        setting the chunksize takes only one integer input.
+        """
+        if len(args) != 1 or kwargs or not isinstance(args[0], int):
+            raise ValueError("parallel_chunksize takes only a "
+                             "single integer argument.")
+
         self.chunksize = args[0]
         return self
 

@@ -92,10 +92,10 @@ public:
     void print() const {
         unsigned i;
         for(i = 0; i < start.size(); ++i) {
-            printf(intp_pf " ", start[i]);
+            printf("%t ", start[i]);
         }
         for(i = 0; i < end.size(); ++i) {
-            printf(intp_pf " ", end[i]);
+            printf("%t ", end[i]);
         }
     }
 };

@@ -19,22 +19,18 @@
     #if defined(_WIN64)
         #define intp int64_t
         #define uintp uint64_t
-        #define intp_pf "%ld"
     #elif defined(_WIN32)
         #define intp int
         #define uintp unsigned
-        #define intp_pf "%d"
     #else
         #error "cannot determine size of intp"
     #endif
 #elif __SIZEOF_POINTER__ == 8
     #define intp int64_t
     #define uintp uint64_t
-    #define intp_pf "%ld"
 #else
     #define intp int
     #define uintp unsigned
-    #define intp_pf "%d"
 #endif
 
 #ifdef __cplusplus

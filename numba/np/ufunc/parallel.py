@@ -675,22 +675,20 @@ def _iget_num_threads(typingctx):
     return signature(types.intp), codegen
 
 
-def _get_thread_id():
+def get_thread_id():
     """
-    Returns a unique ID for each thread
-
-    This function is private and should only be used for testing purposes.
+    Returns a unique ID for each thread in the range 0 to N.
     """
-    _launch_threads()
-    return _get_thread_id()
+    raise RuntimeError("get_thread_id only callable from "
+                       "within a Numba function.")
 
 
-@overload(_get_thread_id)
+@overload(get_thread_id)
 def ol_get_thread_id():
     _launch_threads()
 
     def impl():
-        return _get_thread_id()
+        return _iget_thread_id()
     return impl
 
 

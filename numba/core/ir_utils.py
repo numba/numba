@@ -1984,7 +1984,7 @@ def fill_callee_epilogue(block, outputs):
     return block
 
 
-def find_global_value(func_ir, var):
+def find_outer_value(func_ir, var):
     """Check if a variable is a global value, and return the value,
     or raise GuardException otherwise.
     """
@@ -1993,7 +1993,7 @@ def find_global_value(func_ir, var):
         return dfn.value
 
     if isinstance(dfn, ir.Expr) and dfn.op == 'getattr':
-        prev_val = find_global_value(func_ir, dfn.value)
+        prev_val = find_outer_value(func_ir, dfn.value)
         try:
             val = getattr(prev_val, dfn.attr)
             return val
