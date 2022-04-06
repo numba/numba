@@ -350,7 +350,7 @@ class StencilPass(object):
             ir.Return(ret_const_var, dummy_loc),
         )
         stencil_blocks = ir_utils.simplify_CFG(stencil_blocks)
-        stencil_blocks[max(stencil_blocks.keys())].body.pop()
+        stencil_blocks[max(stencil_blocks.keys())].pop()
 
         if config.DEBUG_ARRAY_OPT >= 1:
             print("stencil_blocks after adding SetItem")

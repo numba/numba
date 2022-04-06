@@ -767,7 +767,7 @@ class MixedContainerUnroller(FunctionPass):
                 term = b.body[-1]
             if isinstance(term, ir.Jump):
                 if term.target not in ignore:
-                    b.body[-1] = ir.Jump(term.target + offset, term.loc)
+                    b.replace_at(-1, ir.Jump(term.target + offset, term.loc))
             if isinstance(term, ir.Branch):
                 if term.truebr not in ignore:
                     new_true = term.truebr + offset
@@ -778,7 +778,10 @@ class MixedContainerUnroller(FunctionPass):
                     new_false = term.falsebr + offset
                 else:
                     new_false = term.falsebr
-                b.body[-1] = ir.Branch(term.cond, new_true, new_false, term.loc)
+                b.replace_at(
+                    -1,
+                    ir.Branch(term.cond, new_true, new_false, term.loc),
+                )
             new_blocks[l + offset] = b
         return new_blocks
 
@@ -1400,7 +1403,7 @@ class IterLoopCanonicalization(FunctionPass):
         from numba.core.inline_closurecall import inline_closure_call
         inline_closure_call(func_ir, glbls, entry_block, idx, get_range,)
         kill = entry_block.body.index(assgn)
-        entry_block.body.pop(kill)
+        entry_block.pop(kill)
 
         # find the induction variable + references in the loop header
         # fixed point iter to do this, it's a bit clunky

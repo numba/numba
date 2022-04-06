@@ -1454,7 +1454,7 @@ def merge_adjacent_blocks(blocks):
             # if block.scope != next_block.scope:
             #     break
             # merge
-            block.body.pop()  # remove Jump
+            block.pop()  # remove Jump
             block.extend(next_block.body)
             del blocks[next_label]
             removed.add(next_label)
@@ -1813,8 +1813,8 @@ def replace_returns(blocks, target, return_label):
             continue
         stmt = block.terminator
         if isinstance(stmt, ir.Return):
-            block.body.pop()  # remove return
-            cast_stmt = block.body.pop()
+            block.pop()  # remove return
+            cast_stmt = block.pop()
             assert (isinstance(cast_stmt, ir.Assign)
                 and isinstance(cast_stmt.value, ir.Expr)
                 and cast_stmt.value.op == 'cast'), "invalid return cast"

@@ -3913,8 +3913,8 @@ def maximize_fusion_inner(func_ir, block, call_table, alias_map,
                         if up_direction else _can_reorder_stmts(next_stmt, stmt,
                         func_ir, call_table, alias_map, arg_aliases))
         if can_reorder:
-            block.body[i] = next_stmt
-            block.body[i+1] = stmt
+            block.replace_at(i, next_stmt)
+            block.replace_at(i + 1, stmt)
             order_changed = True
         i += 1
     return order_changed
@@ -4246,7 +4246,7 @@ def remove_dead_parfor(parfor, lives, lives_n_aliases, arg_aliases, alias_map, f
         block.replace_body(new_body)
 
     typemap.pop(tuple_var.name)  # remove dummy tuple type
-    blocks[last_label].body.pop()  # remove jump
+    blocks[last_label].pop()  # remove jump
 
     """
       Process parfor body recursively.
@@ -4341,8 +4341,8 @@ def remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map,
     # args var including aliases is ok
     remove_dead(blocks, arg_aliases, func_ir, typemap, alias_map, arg_aliases)
     typemap.pop(tuple_var.name)  # remove dummy tuple type
-    blocks[0].body.pop()  # remove dummy jump
-    blocks[last_label].body.pop()  # remove branch
+    blocks[0].pop()  # remove dummy jump
+    blocks[last_label].pop()  # remove branch
     return
 
 def _add_liveness_return_block(blocks, lives, typemap):
@@ -4392,7 +4392,7 @@ def simplify_parfor_body_CFG(blocks):
                 last_block.append(ir.Return(const, loc))
                 parfor.loop_body = simplify_CFG(parfor.loop_body)
                 last_block = parfor.loop_body[max(parfor.loop_body.keys())]
-                last_block.body.pop()
+                last_block.pop()
                 # call on body recursively
                 simplify_parfor_body_CFG(parfor.loop_body)
     return n_parfors
@@ -4431,14 +4431,14 @@ def unwrap_parfor_blocks(parfor, blocks=None):
     assert isinstance(parfor.init_block.body[-1], ir.Jump)
 
     # remove dummy jump to loop body
-    parfor.init_block.body.pop()
+    parfor.init_block.pop()
 
     # make sure dummy jump back to loop body isn't altered
     for block in parfor.loop_body.values():
         if (isinstance(block.body[-1], ir.Jump) and
             block.body[-1].target == first_body_label):
             # remove dummy jump back to loop
-            block.body.pop()
+            block.pop()
     return
 
 
@@ -4739,7 +4739,7 @@ def dummy_return_in_loop_body(loop_body):
         ir.Return(const, ir.Loc("parfors_dummy", -1)))
     yield
     # remove dummy return
-    loop_body[last_label].body.pop()
+    loop_body[last_label].pop()
 
 @infer_global(reduce)
 class ReduceInfer(AbstractTemplate):

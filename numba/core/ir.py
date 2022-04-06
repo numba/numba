@@ -1198,12 +1198,6 @@ class BlockBodyView(MutableSequence):
     def __getitem__(self, idx):
         return self.__lst[idx]
 
-    def __setitem__(self, idx, val):
-        self.__lst[idx] = val
-
-    def __delitem__(self, idx):
-        del self.__lst[idx]
-
     def insert(self, idx, value):
         self.__lst.insert(idx, value)
 
@@ -1213,8 +1207,9 @@ class BlockBodyView(MutableSequence):
     def copy(self):
         return self.__lst.copy()
 
+    __setitem__ = NotImplemented
     append = NotImplemented
-
+    __delitem__ = NotImplemented
 
 class Block(EqualityCheckMixin):
     """A code block
@@ -1280,9 +1275,15 @@ class Block(EqualityCheckMixin):
     def extend(self, body):
         self.__body.extend(body)
 
+    def replace_at(self, idx, inst):
+        self.__body[idx] = inst
+
     def remove(self, inst):
         assert isinstance(inst, Stmt)
         del self.__body[self.__body.index(inst)]
+
+    def pop(self, idx=-1):
+        return self.__body.pop(idx)
 
     def clear(self):
         del self.__body[:]

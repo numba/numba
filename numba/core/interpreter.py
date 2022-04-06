@@ -1825,7 +1825,7 @@ class Interpreter(object):
             curblk = self.current_block
             build_tuple_asgn = curblk.body[-1]
             # move build list to last issued statement
-            curblk.append(curblk.body.pop(curblk.body.index(build_empty_list)))
+            curblk.append(curblk.pop(curblk.body.index(build_empty_list)))
             # fix the build list
             build_tuple = build_tuple_asgn.value
             build_list = build_empty_list.value

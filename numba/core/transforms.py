@@ -334,8 +334,8 @@ def canonicalize_cfg_single_backedge(blocks):
             if header in blk.terminator.get_targets():
                 newblk = blk.copy()
                 # rewrite backedge into jumps to new tail block
-                newblk.body[-1] = replace_target(blk.terminator, header,
-                                                 tailkey)
+                newblk.replace_at(-1, replace_target(blk.terminator, header,
+                                                     tailkey))
                 newblocks[blkkey] = newblk
         # create new tail block
         entryblk = newblocks[header]
