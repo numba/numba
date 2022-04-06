@@ -36,7 +36,7 @@ class ChunksizeExamplesTest(unittest.TestCase):
                 return acc
 
             # This version saves the previous chunksize as returned
-            # by set_parallel_chnksize.
+            # by set_parallel_chunksize.
             old_chunksize = set_parallel_chunksize(4)
             func1(12)
             func2(12)
