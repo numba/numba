@@ -164,6 +164,34 @@ class TestGILRelease(TestCase):
             compiled_f(a, i)
         self.check_gil_held(caller)
 
+    def test_cc_export_nogil(self):
+        from numba.pycc import CC
+        cc = CC('pycc_test_nogil')
+        @cc.export("f_cc_export", f_sig, nogil=True)
+        def f_nogil(a, indices):
+            # same as f but for cc.export
+            for idx in indices:
+                # Let another thread run
+                sleep(10 * sleep_factor)
+                a[idx] = PyThread_get_thread_ident()
+        cc.compile()
+        from pycc_test_nogil import f_cc_export
+        self.check_gil_released(f_cc_export)
+
+    def test_cc_export_gil(self):
+        from numba.pycc import CC
+        cc = CC('pycc_test_gil')
+        @cc.export("f_cc_export", f_sig)
+        def f_gil(a, indices):
+            # same as f but for cc.export
+            for idx in indices:
+                # Let another thread run
+                sleep(10 * sleep_factor)
+                a[idx] = PyThread_get_thread_ident()
+        cc.compile()
+        from pycc_test_gil import f_cc_export
+        self.check_gil_held(f_cc_export)
+
     def test_object_mode(self):
         """
         When the function is compiled in object mode, a warning is
