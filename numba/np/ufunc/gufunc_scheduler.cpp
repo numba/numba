@@ -92,10 +92,10 @@ public:
     void print() const {
         unsigned i;
         for(i = 0; i < start.size(); ++i) {
-            printf("%t ", start[i]);
+            printf("%td ", start[i]);
         }
         for(i = 0; i < end.size(); ++i) {
-            printf("%t ", end[i]);
+            printf("%td ", end[i]);
         }
     }
 };
