@@ -1818,8 +1818,8 @@ def replace_returns(blocks, target, return_label):
             assert (isinstance(cast_stmt, ir.Assign)
                 and isinstance(cast_stmt.value, ir.Expr)
                 and cast_stmt.value.op == 'cast'), "invalid return cast"
-            block.body.append(ir.Assign(cast_stmt.value.value, target, stmt.loc))
-            block.body.append(ir.Jump(return_label, stmt.loc))
+            block.append(ir.Assign(cast_stmt.value.value, target, stmt.loc))
+            block.append(ir.Jump(return_label, stmt.loc))
 
 
 def gen_np_call(func_as_str, func, lhs, args, typingctx, typemap, calltypes):

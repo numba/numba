@@ -228,7 +228,7 @@ class StencilPass(object):
             shape_getattr = ir.Expr.getattr(in_arr, "shape", loc)
             self.typemap[shape_name] = types.containers.UniTuple(types.intp,
                                                                in_arr_typ.ndim)
-            init_block.body.extend([ir.Assign(shape_getattr, shape_var, loc)])
+            init_block.extend([ir.Assign(shape_getattr, shape_var, loc)])
 
             zero_name = ir_utils.mk_unique_var("zero_val")
             zero_var = ir.Var(scope, zero_name, loc)
@@ -243,7 +243,7 @@ class StencilPass(object):
                 temp2 = return_type.dtype(0)
             full_const = ir.Const(temp2, loc)
             self.typemap[zero_name] = return_type.dtype
-            init_block.body.extend([ir.Assign(full_const, zero_var, loc)])
+            init_block.extend([ir.Assign(full_const, zero_var, loc)])
 
             so_name = ir_utils.mk_unique_var("stencil_output")
             out_arr = ir.Var(scope, so_name, loc)
@@ -255,13 +255,13 @@ class StencilPass(object):
             self.typemap[dtype_g_np_var.name] = types.misc.Module(np)
             dtype_g_np = ir.Global('np', np, loc)
             dtype_g_np_assign = ir.Assign(dtype_g_np, dtype_g_np_var, loc)
-            init_block.body.append(dtype_g_np_assign)
+            init_block.append(dtype_g_np_assign)
 
             dtype_np_attr_call = ir.Expr.getattr(dtype_g_np_var, return_type.dtype.name, loc)
             dtype_attr_var = ir.Var(scope, mk_unique_var("$np_attr_attr"), loc)
             self.typemap[dtype_attr_var.name] = types.functions.NumberClass(return_type.dtype)
             dtype_attr_assign = ir.Assign(dtype_np_attr_call, dtype_attr_var, loc)
-            init_block.body.append(dtype_attr_assign)
+            init_block.append(dtype_attr_assign)
 
             stmts = ir_utils.gen_np_call("full",
                                        np.full,
@@ -271,7 +271,7 @@ class StencilPass(object):
                                        self.typemap,
                                        self.calltypes)
             equiv_set.insert_equiv(out_arr, in_arr_dim_sizes)
-            init_block.body.extend(stmts)
+            init_block.extend(stmts)
         else: # out is present
             if "cval" in stencil_func.options: # do out[:] = cval
                 cval = stencil_func.options["cval"]
@@ -287,7 +287,7 @@ class StencilPass(object):
                 self.typemap[slice_var.name] = slice_fn_ty
                 slice_g = ir.Global('slice', slice, loc)
                 slice_assigned = ir.Assign(slice_g, slice_var, loc)
-                init_block.body.append(slice_assigned)
+                init_block.append(slice_assigned)
 
                 sig = self.typingctx.resolve_function_type(slice_fn_ty,
                                                            (types.none,) * 2,
@@ -301,7 +301,7 @@ class StencilPass(object):
                                         loc)
                 self.typemap[slice_inst_var.name] = types.slice2_type
                 slice_assign = ir.Assign(callexpr, slice_inst_var, loc)
-                init_block.body.append(slice_assign)
+                init_block.append(slice_assign)
 
                 # get const val for cval
                 cval_const_val = ir.Const(return_type.dtype(cval), loc)
@@ -310,13 +310,13 @@ class StencilPass(object):
                 self.typemap[cval_const_var.name] = return_type.dtype
                 cval_const_assign = ir.Assign(cval_const_val,
                                               cval_const_var, loc)
-                init_block.body.append(cval_const_assign)
+                init_block.append(cval_const_assign)
 
                 # do setitem on `out` array
                 setitemexpr = ir.StaticSetItem(out_arr, slice(None, None),
                                                slice_inst_var, cval_const_var,
                                                loc)
-                init_block.body.append(setitemexpr)
+                init_block.append(setitemexpr)
                 sig = signature(types.none, self.typemap[out_arr.name],
                                 self.typemap[slice_inst_var.name],
                                 self.typemap[out_arr.name].dtype)
@@ -336,17 +336,17 @@ class StencilPass(object):
                                         self.typemap[parfor_ind_var.name],
                                         self.typemap[out_arr.name].dtype
                                         )
-        stencil_blocks[parfor_body_exit_label].body.extend(for_replacing_ret)
-        stencil_blocks[parfor_body_exit_label].body.append(setitem_call)
+        stencil_blocks[parfor_body_exit_label].extend(for_replacing_ret)
+        stencil_blocks[parfor_body_exit_label].append(setitem_call)
 
         # simplify CFG of parfor body (exit block could be simplified often)
         # add dummy return to enable CFG
         dummy_loc = ir.Loc("stencilparfor_dummy", -1)
         ret_const_var = ir.Var(scope, mk_unique_var("$cval_const"), dummy_loc)
         cval_const_assign = ir.Assign(ir.Const(0, loc=dummy_loc), ret_const_var, dummy_loc)
-        stencil_blocks[parfor_body_exit_label].body.append(cval_const_assign)
+        stencil_blocks[parfor_body_exit_label].append(cval_const_assign)
 
-        stencil_blocks[parfor_body_exit_label].body.append(
+        stencil_blocks[parfor_body_exit_label].append(
             ir.Return(ret_const_var, dummy_loc),
         )
         stencil_blocks = ir_utils.simplify_CFG(stencil_blocks)

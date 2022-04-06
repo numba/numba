@@ -443,7 +443,7 @@ class InlineWorker(object):
         caller_ir.blocks[new_label] = new_block
         new_blocks.append((new_label, new_block))
         block.replace_body(block.body[:i])
-        block.body.append(ir.Jump(min_label, instr.loc))
+        block.append(ir.Jump(min_label, instr.loc))
 
         # 6. replace Return with assignment to LHS
         topo_order = find_topo_order(callee_blocks)
@@ -678,7 +678,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     func_ir.blocks[new_label] = new_block
     new_blocks.append((new_label, new_block))
     block.replace_body(block.body[:i])
-    block.body.append(ir.Jump(min_label, instr.loc))
+    block.append(ir.Jump(min_label, instr.loc))
 
     # 6. replace Return with assignment to LHS
     topo_order = find_topo_order(callee_blocks)
@@ -837,7 +837,7 @@ def _replace_returns(blocks, target, return_label):
             if isinstance(stmt, ir.Return):
                 assert(i + 1 == len(block.body))
                 block.body[i] = ir.Assign(stmt.value, target, stmt.loc)
-                block.body.append(ir.Jump(return_label, stmt.loc))
+                block.append(ir.Jump(return_label, stmt.loc))
                 # remove cast of the returned value
                 for cast in casts:
                     if cast.target.name == stmt.value.name:

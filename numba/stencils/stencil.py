@@ -438,7 +438,7 @@ class StencilFunc(object):
                 # calltypes then add the type associated with this
                 # statement to the calltypes copy.
                 scopy = copy.deepcopy(stmt)
-                new_block.body.append(scopy)
+                new_block.append(scopy)
                 if stmt in calltypes:
                     copy_calltypes[scopy] = calltypes[stmt]
             kernel_copy.blocks[block_label] = new_block

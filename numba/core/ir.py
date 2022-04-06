@@ -1213,6 +1213,9 @@ class BlockBodyView(MutableSequence):
     def copy(self):
         return self.__lst.copy()
 
+    append = NotImplemented
+
+
 class Block(EqualityCheckMixin):
     """A code block
     """
@@ -1227,12 +1230,9 @@ class Block(EqualityCheckMixin):
     def body(self) -> BlockBodyView:
         return BlockBodyView(self.__body)
 
-    @body.setter
-    def body(self, new_body):
-        raise AttributeError
-        self.replace_body(new_body)
-
     def replace_body(self, new_body):
+        """Replace the body of the Block.
+        """
         self.__body[:] = new_body
 
     def copy(self):

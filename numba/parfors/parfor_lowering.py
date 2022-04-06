@@ -678,7 +678,7 @@ def wrap_loop_body(loop_body):
     first_label = min(blocks.keys())
     last_label = max(blocks.keys())
     loc = blocks[last_label].loc
-    blocks[last_label].body.append(ir.Jump(first_label, loc))
+    blocks[last_label].append(ir.Jump(first_label, loc))
     return blocks
 
 def unwrap_loop_body(loop_body):
