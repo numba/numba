@@ -469,10 +469,10 @@ def _mutate_with_block_callee(blocks, blk_start, blk_end, inputs, outputs):
 class _ParallelChunksize(WithContext):
     is_callable = True
 
-    """A context-manager that remembers and saves away the current
-    chunksize for executing parfors and then changes that chunksize
-    to the programmer specified value.  At the end of the region,
-    the original chunksize is restored.
+    """A context-manager that on entry stores the current chunksize
+    for the executing parfors and then changes the current chunksize
+    to the programmer specified value. On exit the original
+    chunksize is restored.
     """
     def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
                          body_blocks, dispatcher_factory, extra):
