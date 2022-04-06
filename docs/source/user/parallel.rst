@@ -667,7 +667,7 @@ as shown below.  Both invocations of ``func1`` would be executed with a chunk si
 Since this idiom of saving and restoring is so common, Numba provides the
 :func:`parallel_chunksize` with clause context-manager to simplify the idiom.
 As shown below, this with clause can be invoked from both standard Python and
-within Numba jitted functions.  As with other Numba context-managers, be
+within Numba JIT compiled functions.  As with other Numba context-managers, be
 aware that returns and raises are not supported from within a context managed
 block that is part of a Numba jitted function.
 
