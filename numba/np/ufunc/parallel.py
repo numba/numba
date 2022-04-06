@@ -717,7 +717,7 @@ def set_parallel_chunksize(n):
         raise TypeError("The parallel chunksize must be an integer")
     global _set_parallel_chunksize
     if n < 0:
-        raise ValueError("chunksize must be greather than or equal to zero")
+        raise ValueError("chunksize must be greater than or equal to zero")
     return _set_parallel_chunksize(n)
 
 
