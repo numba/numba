@@ -3207,7 +3207,47 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         b = np.asarray([np.nan, 1.0])
         self.assertFalse(cfunc(a, b))
 
-        # NumPy test data
+        noise_levels = [1.0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 0.0]
+        zero_array = np.zeros((25, 4))
+        a = np.random.ranf((25, 4))
+        for noise in noise_levels:
+            for rtol in noise_levels:
+                for atol in noise_levels:
+                    py_result = pyfunc(zero_array, noise,
+                                       atol=atol, rtol=rtol)
+                    c_result = cfunc(zero_array, noise,
+                                     atol=atol, rtol=rtol)
+                    self.assertEqual(py_result, c_result)
+
+                    py_result = pyfunc(noise, zero_array,
+                                       atol=atol, rtol=rtol)
+                    c_result = cfunc(noise, zero_array,
+                                     atol=atol, rtol=rtol)
+                    self.assertEqual(py_result, c_result)
+
+                    py_result = pyfunc(np.asarray([noise]), zero_array,
+                                       atol=atol, rtol=rtol)
+                    c_result = cfunc(np.asarray([noise]), zero_array,
+                                     atol=atol, rtol=rtol)
+                    self.assertEqual(py_result, c_result)
+
+                    py_result = pyfunc(a, a + noise, atol=atol, rtol=rtol)
+                    c_result = cfunc(a, a + noise, atol=atol, rtol=rtol)
+                    self.assertEqual(py_result, c_result)
+
+                    py_result = pyfunc(a + noise, a, atol=atol, rtol=rtol)
+                    c_result = cfunc(a + noise, a, atol=atol, rtol=rtol)
+                    self.assertEqual(py_result, c_result)
+
+    def test_allclose_numpy_data(self):
+
+        pyfunc = np_allclose
+        cfunc = jit(nopython=True)(pyfunc)
+
+        min_int = np.iinfo(np.int_).min
+        a = np.array([min_int], dtype=np.int_)
+
+        # https://github.com/numpy/numpy/blob/4adc87dff15a247e417d50f10cc4def8e1c17a03/numpy/core/tests/test_numeric.py#L2386-L2468    # noqa: E501
         arr = np.array([100.0, 1000.0])
         aran = np.arange(125).astype(dtype=np.float64).reshape((5, 5, 5))
         atol = 1e-8
@@ -3249,39 +3289,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         a = Foo([1])
         self.assertTrue(type(np.allclose(a, a)) is bool)
 
-        noise_levels = [1.0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 0.0]
-        zero_array = np.zeros((25, 4))
-        a = np.random.ranf((25, 4))
-        for noise in noise_levels:
-            for rtol in noise_levels:
-                for atol in noise_levels:
-                    py_result = pyfunc(zero_array, noise,
-                                       atol=atol, rtol=rtol)
-                    c_result = cfunc(zero_array, noise,
-                                     atol=atol, rtol=rtol)
-                    self.assertEqual(py_result, c_result)
-
-                    py_result = pyfunc(noise, zero_array,
-                                       atol=atol, rtol=rtol)
-                    c_result = cfunc(noise, zero_array,
-                                     atol=atol, rtol=rtol)
-                    self.assertEqual(py_result, c_result)
-
-                    py_result = pyfunc(np.asarray([noise]), zero_array,
-                                       atol=atol, rtol=rtol)
-                    c_result = cfunc(np.asarray([noise]), zero_array,
-                                     atol=atol, rtol=rtol)
-                    self.assertEqual(py_result, c_result)
-
-                    py_result = pyfunc(a, a + noise, atol=atol, rtol=rtol)
-                    c_result = cfunc(a, a + noise, atol=atol, rtol=rtol)
-                    self.assertEqual(py_result, c_result)
-
-                    py_result = pyfunc(a + noise, a, atol=atol, rtol=rtol)
-                    c_result = cfunc(a + noise, a, atol=atol, rtol=rtol)
-                    self.assertEqual(py_result, c_result)
-
-    def test_allcase_exception(self):
+    def test_allclose_exception(self):
         self.disable_leak_check()
 
         pyfunc = np_allclose
