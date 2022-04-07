@@ -262,6 +262,7 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
     }
 
     cres = compile_cuda(pyfunc, None, args, debug=debug, lineinfo=lineinfo,
+                        fastmath=fastmath,
                         nvvm_options=nvvm_options)
     resty = cres.signature.return_type
     if device:
