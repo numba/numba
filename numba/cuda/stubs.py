@@ -720,7 +720,7 @@ class fp16(Stub):
     class hmax(Stub):
         """hmax(a, b)
 
-        Perform fp16 maximum operation, (a > b) ? a : b. Supported
+        Perform fp16 maximum operation, max(a,b) Supported
         on fp16 operands only.
 
         Returns a if a is greater than b, returns b otherwise.
@@ -730,7 +730,7 @@ class fp16(Stub):
     class hmin(Stub):
         """hmin(a, b)
 
-        Perform fp16 minimum operation, (a < b) ? a : b. Supported
+        Perform fp16 minimum operation, min(a,b). Supported
         on fp16 operands only.
 
         Returns a if a is less than b, returns b otherwise.

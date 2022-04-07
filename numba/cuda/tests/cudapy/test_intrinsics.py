@@ -144,17 +144,42 @@ def simple_hlt_scalar(ary, a, b):
 
 
 @cuda.jit(device=True)
-def test1(x, y):
+def hlt_func_1(x, y):
     return cuda.fp16.hlt(x, y)
 
 
 @cuda.jit(device=True)
-def test2(x, y):
+def hlt_func_2(x, y):
     return cuda.fp16.hlt(x, y)
 
 
 def test_predicate_reg(r, a, b, c):
-    r[0] = test1(a, b) and test2(b, c)
+    r[0] = hlt_func_1(a, b) and hlt_func_2(b, c)
+
+
+def test_multiple_hcmp_1(r, a, b, c):
+    # float16 predicates used in two separate functions
+    r[0] = hlt_func_1(a, b) and hlt_func_2(b, c)
+
+
+def test_multiple_hcmp_2(r, a, b, c):
+    # The same float16 predicate used in the caller and callee
+    r[0] = hlt_func_1(a, b) and cuda.fp16.hlt(b, c)
+
+
+def test_multiple_hcmp_3(r, a, b, c):
+    # Different float16 predicates used in the caller and callee
+    r[0] = hlt_func_1(a, b) and cuda.fp16.hge(c, b)
+
+
+def test_multiple_hcmp_4(r, a, b, c):
+    # The same float16 predicates used twice in a function
+    r[0] = cuda.fp16.hlt(a, b) and cuda.fp16.hlt(b, c)
+
+
+def test_multiple_hcmp_5(r, a, b, c):
+    # Different float16 predicates used in a function
+    r[0] = cuda.fp16.hlt(a, b) and cuda.fp16.hge(c, b)
 
 
 def simple_hmax_scalar(ary, a, b):
@@ -574,14 +599,21 @@ class TestCudaIntrinsic(CUDATestCase):
                 self.assertEqual(expected, got[0])
 
     @skip_unless_cc_53
-    def test_register_predicate_unique(self):
-        compiled = cuda.jit("void(b1[:], f2, f2, f2)")(test_predicate_reg)
-        ary = np.zeros(1, dtype=np.bool8)
-        arg1 = np.float16(2.)
-        arg2 = np.float16(3.)
-        arg3 = np.float16(4.)
-        compiled[1, 1](ary, arg1, arg2, arg3)
-        self.assertTrue(ary[0])
+    def test_multiple_float16_comparisons(self):
+        functions = (test_multiple_hcmp_1,
+                     test_multiple_hcmp_2,
+                     test_multiple_hcmp_3,
+                     test_multiple_hcmp_4,
+                     test_multiple_hcmp_5)
+        for fn in functions:
+            with self.subTest(fn=fn):
+                compiled = cuda.jit("void(b1[:], f2, f2, f2)")(fn)
+                ary = np.zeros(1, dtype=np.bool8)
+                arg1 = np.float16(2.)
+                arg2 = np.float16(3.)
+                arg3 = np.float16(4.)
+                compiled[1, 1](ary, arg1, arg2, arg3)
+                self.assertTrue(ary[0])
 
     @skip_unless_cc_53
     def test_hmax(self):
