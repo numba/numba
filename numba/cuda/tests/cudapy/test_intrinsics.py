@@ -71,6 +71,7 @@ def simple_fma(ary, a, b, c):
 
 
 def simple_hadd(ary, a, b):
+    x = cuda.shared.array(shape=(1,), dtype=np.float16)
     ary[0] = cuda.fp16.hadd(a[0], b[0])
 
 
@@ -351,6 +352,15 @@ class TestCudaIntrinsic(CUDATestCase):
         arg2 = np.array([4.], dtype=np.float16)
         compiled[1, 1](ary, arg1, arg2)
         np.testing.assert_allclose(ary[0], arg1 + arg2)
+    
+    @skip_unless_cc_53
+    def test_hadd_shared(self):
+        compiled = cuda.jit("void(f2[:], f2[:], f2[:])")(simple_hadd)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.array([3.], dtype=np.float16)
+        arg2 = np.array([4.], dtype=np.float16)
+        compiled[1, 1](ary, arg1, arg2)
+        np.testing.assert_allclose(ary[0], arg1 + arg2)
 
     @skip_unless_cc_53
     def test_hadd_scalar(self):
@@ -495,30 +505,17 @@ class TestCudaIntrinsic(CUDATestCase):
             self.assertIn('abs.f16', ptx)
 
     def test_hsin(self):
-        from numba import cuda
-        import numpy as np
-        import os
-
-        # Declaration of the foreign function
-        sin_fp16 = cuda.declare_device('hsin_wrapper', 'float16(float16)')
-
-        # Path to the source containing the foreign function
-        # (here assumed to be in a subfolder called "ffi"
-        basedir = os.path.dirname(os.path.abspath(__file__))
-        functions_cu = os.path.join(basedir, 'ffi', 'functions.cu')
-
-        # Kernel that links in functions.cu and calls mul
-        @cuda.jit(link=[functions_cu])
+        @cuda.jit()
         def hsin_vectors(r, x):
             i = cuda.grid(1)
 
             if i < len(r):
-                r[i] = sin_fp16(x[i])
+                r[i] = cuda.hsin(x[i])
         
         # Generate random data
         N = 32
         np.random.seed(1)
-        x = np.random.rand(N).astype(np.float16)
+        x = np.random.randint(1, 65505, size=N).astype(np.float16)
         r = np.zeros_like(x)
 
         # Run the kernel
@@ -526,25 +523,120 @@ class TestCudaIntrinsic(CUDATestCase):
         np.testing.assert_allclose(r, np.sin(x, dtype=np.float16))
     
     def test_hcos(self):
-        from numba import cuda
-        import numpy as np
-        import os
-
-        # Declaration of the foreign function
-        cos_fp16 = cuda.declare_device('hcos_wrapper', 'float16(float16)')
-
-        # Path to the source containing the foreign function
-        # (here assumed to be in a subfolder called "ffi"
-        basedir = os.path.dirname(os.path.abspath(__file__))
-        functions_cu = os.path.join(basedir, 'ffi', 'functions.cu')
-
-        # Kernel that links in functions.cu and calls mul
-        @cuda.jit(link=[functions_cu])
+        @cuda.jit()
         def hcos_vectors(r, x):
             i = cuda.grid(1)
 
             if i < len(r):
-                r[i] = cos_fp16(x[i])
+                r[i] = cuda.hcos(x[i])
+        
+        # Generate random data
+        N = 32
+        np.random.seed(1)
+        x = np.random.randint(1, 65505, size=N).astype(np.float16)
+        r = np.zeros_like(x)
+
+        # Run the kernel
+        hcos_vectors[1, 32](r, x)
+        np.testing.assert_allclose(r, np.cos(x, dtype=np.float16))
+
+    def test_hlog(self):
+        @cuda.jit()
+        def hlog_vectors(r, x):
+            i = cuda.grid(1)
+
+            if i < len(r):
+                r[i] = cuda.hlog(x[i])
+        
+        # Generate random data
+        N = 32
+        np.random.seed(1)
+        x = np.random.randint(1, 65505, size=N).astype(np.float16)
+        r = np.zeros_like(x)
+
+        # Run the kernel
+        hlog_vectors[1, 32](r, x)
+        np.testing.assert_allclose(r, np.log(x, dtype=np.float16))
+    
+    def test_hlog2(self):
+        @cuda.jit()
+        def hlog_vectors(r, x):
+            i = cuda.grid(1)
+
+            if i < len(r):
+                r[i] = cuda.hlog2(x[i])
+        
+        # Generate random data
+        N = 32
+        np.random.seed(1)
+        x = np.random.randint(1, 65505, size=N).astype(np.float16)
+        r = np.zeros_like(x)
+
+        # Run the kernel
+        hlog_vectors[1, 32](r, x)
+        np.testing.assert_allclose(r, np.log2(x, dtype=np.float16))
+
+    def test_hlog10(self):
+        @cuda.jit()
+        def hlog10_vectors(r, x):
+            i = cuda.grid(1)
+
+            if i < len(r):
+                r[i] = cuda.hlog10(x[i])
+        
+        # Generate random data
+        N = 32
+        np.random.seed(1)
+        x = np.random.randint(1, 65505, size=N).astype(np.float16)
+        r = np.zeros_like(x)
+
+        # Run the kernel
+        hlog10_vectors[1, 32](r, x)
+        np.testing.assert_allclose(r, np.log10(x, dtype=np.float16))
+    
+    def test_hexp(self):
+        @cuda.jit()
+        def hexp_vectors(r, x):
+            i = cuda.grid(1)
+
+            if i < len(r):
+                r[i] = cuda.hexp(x[i])
+        
+        # Generate random data
+        N = 32
+        np.random.seed(1)
+        x = np.random.randint(1, 10, size=N).astype(np.float16)
+        r = np.zeros_like(x)
+
+        # Run the kernel
+        hexp_vectors[1, 32](r, x)
+        np.testing.assert_allclose(r, np.exp(x, dtype=np.float16))
+
+    def test_hexp2(self):
+        @cuda.jit()
+        def hexp2_vectors(r, x):
+            i = cuda.grid(1)
+
+            if i < len(r):
+                r[i] = cuda.hexp2(x[i])
+        
+        # Generate random data
+        N = 32
+        np.random.seed(1)
+        x = np.random.randint(1, 10, size=N).astype(np.float16)
+        r = np.zeros_like(x)
+
+        # Run the kernel
+        hexp2_vectors[1, 32](r, x)
+        np.testing.assert_allclose(r, np.exp2(x, dtype=np.float16))
+    
+    def test_hexp10(self):
+        @cuda.jit()
+        def hexp10_vectors(r, x):
+            i = cuda.grid(1)
+
+            if i < len(r):
+                r[i] = cuda.hexp10(x[i])
         
         # Generate random data
         N = 32
@@ -553,9 +645,135 @@ class TestCudaIntrinsic(CUDATestCase):
         r = np.zeros_like(x)
 
         # Run the kernel
-        hcos_vectors[1, 32](r, x)
-        np.testing.assert_allclose(r, np.sin(x, dtype=np.float16))
+        hexp10_vectors[1, 32](r, x)
+        np.testing.assert_allclose(r, 10 ** x)
+    
+    def test_hsqrt(self):
+        @cuda.jit()
+        def hsqrt_vectors(r, x):
+            i = cuda.grid(1)
 
+            if i < len(r):
+                r[i] = cuda.hsqrt(x[i])
+        
+        # Generate random data
+        N = 32
+        np.random.seed(1)
+        x = np.random.randint(1, 65505, size=N).astype(np.float16)
+        r = np.zeros_like(x)
+
+        # Run the kernel
+        hsqrt_vectors[1, 32](r, x)
+        np.testing.assert_allclose(r, np.sqrt(x, dtype=np.float16))
+    
+    def test_hceil(self):
+        @cuda.jit()
+        def hceil_vectors(r, x):
+            i = cuda.grid(1)
+
+            if i < len(r):
+                r[i] = cuda.hceil(x[i])
+        
+        # Generate random data
+        N = 32
+        np.random.seed(1)
+        x = np.random.randint(1, 65505, size=N).astype(np.float16)
+        r = np.zeros_like(x)
+
+        # Run the kernel
+        hceil_vectors[1, 32](r, x)
+        np.testing.assert_allclose(r, np.ceil(x, dtype=np.float16))
+    
+    def test_hfloor(self):
+        @cuda.jit()
+        def hfloor_vectors(r, x):
+            i = cuda.grid(1)
+
+            if i < len(r):
+                r[i] = cuda.hfloor(x[i])
+        
+        # Generate random data
+        N = 32
+        np.random.seed(1)
+        x = np.random.randint(1, 65505, size=N).astype(np.float16)
+        r = np.zeros_like(x)
+
+        # Run the kernel
+        hfloor_vectors[1, 32](r, x)
+        np.testing.assert_allclose(r, np.floor(x, dtype=np.float16))
+
+    def test_hrcp(self):
+        @cuda.jit()
+        def hrcp_vectors(r, x):
+            i = cuda.grid(1)
+
+            if i < len(r):
+                r[i] = cuda.hrcp(x[i])
+        
+        # Generate random data
+        N = 32
+        np.random.seed(1)
+        x = np.random.randint(1, 65505, size=N).astype(np.float16)
+        r = np.zeros_like(x)
+
+        # Run the kernel
+        hrcp_vectors[1, 32](r, x)
+        np.testing.assert_allclose(r, np.reciprocal(x, dtype=np.float16))
+    
+    def test_hrsqrt(self):
+        @cuda.jit()
+        def hrsqrt_vectors(r, x):
+            i = cuda.grid(1)
+
+            if i < len(r):
+                r[i] = cuda.hrsqrt(x[i])
+        
+        # Generate random data
+        N = 32
+        np.random.seed(1)
+        x = np.random.randint(1, 65505, size=N).astype(np.float16)
+        r = np.zeros_like(x)
+
+        # Run the kernel
+        hrsqrt_vectors[1, 32](r, x)
+        np.testing.assert_allclose(r, x ** -0.5)
+    
+    def test_htrunc(self):
+        @cuda.jit()
+        def htrunc_vectors(r, x):
+            i = cuda.grid(1)
+
+            if i < len(r):
+                r[i] = cuda.htrunc(x[i])
+        
+        # Generate random data
+        N = 32
+        np.random.seed(1)
+        x = np.random.randint(1, 65505, size=N).astype(np.float16)
+        r = np.zeros_like(x)
+
+        # Run the kernel
+        htrunc_vectors[1, 32](r, x)
+        np.testing.assert_allclose(r, np.trunc(x, dtype=np.float16))
+    
+    def test_hrint(self):
+        @cuda.jit()
+        def hrint_vectors(r, x):
+            i = cuda.grid(1)
+
+            if i < len(r):
+                r[i] = cuda.hrint(x[i])
+        
+        # Generate random data
+        N = 32
+        np.random.seed(1)
+        x = np.random.randint(1, 65505, size=N).astype(np.float16)
+        r = np.zeros_like(x)
+
+        # Run the kernel
+        hrint_vectors[1, 32](r, x)
+        np.testing.assert_allclose(r, np.rint(x, dtype=np.float16))
+    
     def test_cbrt_f32(self):
         compiled = cuda.jit("void(float32[:], float32)")(simple_cbrt)
         ary = np.zeros(1, dtype=np.float32)

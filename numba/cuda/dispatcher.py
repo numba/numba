@@ -93,7 +93,27 @@ class _Kernel(serialize.ReduceMixin):
         self.cooperative = 'cudaCGGetIntrinsicHandle' in lib.get_asm_str()
         # We need to link against cudadevrt if grid sync is being used.
         if self.cooperative:
-            link.append(get_cudalib('cudadevrt', static=True))
+            link.append(get_cudalib('cudadevrt_wrapper', static=True))
+
+        cuda_fp16_math_funcs = ['hsin_wrapper', 'hcos_wrapper',
+                                'hlog_wrapper', 'hlog10_wrapper',
+                                'hlog2_wrapper',
+                                'hexp_wrapper', 'hexp10_wrapper',
+                                'hexp2_wrapper',
+                                'hsqrt_wrapper', 'hrsqrt_wrapper',
+                                'hfloor_wrapper', 'hceil_wrapper',
+                                'hrcp_wrapper', 'hrint_wrapper',
+                                'htrunc_wrapper']
+        
+        res = [ele for ele in cuda_fp16_math_funcs
+               if(ele in lib.get_asm_str())]
+
+        if res:
+            # Path to the source containing the foreign function
+
+            basedir = os.path.dirname(os.path.abspath(__file__))
+            functions_cu_path = os.path.join(basedir, 'functions.cu')
+            link.append(functions_cu_path)
 
         for filepath in link:
             lib.add_linking_file(filepath)
