@@ -1382,6 +1382,16 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         z = x + 1j*y
         np.testing.assert_equal(pyfunc(z), cfunc(z))
 
+    def _lower_clip_result_test_util(self, func, a, a_min, a_max):
+        # verifies that type-inference is working on the return value
+        # this used to trigger issue #3489
+        def lower_clip_result(a):
+            return np.expm1(func(a, a_min, a_max))
+
+        np.testing.assert_almost_equal(
+            lower_clip_result(a),
+            jit(nopython=True)(lower_clip_result)(a))
+
     def test_clip(self):
         has_out = (np_clip, np_clip_kwargs, array_clip, array_clip_kwargs)
         has_no_out = (np_clip_no_out, array_clip_no_out)
@@ -1407,13 +1417,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                                             cfunc(a, -5, 5, cout))
                     np.testing.assert_equal(pyout, cout)
 
-                # verifies that type-inference is working on the return value
-                # this used to trigger issue #3489
-                def lower_clip_result(a):
-                    return np.expm1(cfunc(a, -5, 5))
-                np.testing.assert_almost_equal(
-                    lower_clip_result(a),
-                    jit(nopython=True)(lower_clip_result)(a))
+                self._lower_clip_result_test_util(cfunc, a, -5, 5)
 
     def test_clip_array_min_max(self):
         has_out = (np_clip, np_clip_kwargs, array_clip, array_clip_kwargs)
@@ -1445,13 +1449,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                                                 cfunc(a, a_min, a_max, cout))
                         np.testing.assert_equal(pyout, cout)
 
-                    # verifies that type-inference is working on the return value
-                    # this used to trigger issue #3489
-                    def lower_clip_result(a):
-                        return np.expm1(cfunc(a, a_min, a_max))
-                    np.testing.assert_almost_equal(
-                        lower_clip_result(a),
-                        jit(nopython=True)(lower_clip_result)(a))
+                    self._lower_clip_result_test_util(cfunc, a, a_min, a_max)
 
     def test_clip_bad_array(self):
         cfunc = jit(nopython=True)(np_clip)
