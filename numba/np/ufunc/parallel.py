@@ -653,7 +653,7 @@ def ol_get_num_threads():
     _launch_threads()
 
     def impl():
-        num_threads = _iget_num_threads()
+        num_threads = _get_num_threads()
         if num_threads <= 0:
             print("Broken thread_id: ", get_thread_id())
             print("num_threads: ", num_threads)
