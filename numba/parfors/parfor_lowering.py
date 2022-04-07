@@ -362,9 +362,10 @@ def _lower_parfor_parallel(lowerer, parfor):
         parfor.races,
         exp_name_to_tuple_var)
 
-    _parfor_lowering_finalize_reduction(
-        parfor, redarrs, lowerer, parfor_reddict,
-    )
+    if nredvars > 0:
+        _parfor_lowering_finalize_reduction(
+            parfor, redarrs, lowerer, parfor_reddict, num_threads_var,
+        )
 
     # Cleanup reduction variable
     for v in redarrs.values():
@@ -396,13 +397,11 @@ def _parfor_lowering_finalize_reduction(
         redarrs,
         lowerer,
         parfor_reddict,
+        thread_count_var,
     ):
     """Emit code to finalize the reduction from the intermediate values of
     each thread.
     """
-    from numba.np.ufunc.parallel import get_thread_count
-    thread_count = get_thread_count()
-
     # For each reduction variable
     for redvar_name, redarr_var in redarrs.items():
         # Pseudo-code for this loop body:
@@ -426,7 +425,7 @@ def _parfor_lowering_finalize_reduction(
         handler = (_lower_trivial_inplace_binops
                    if reduce_info.redvar_info.redop is not None
                    else _lower_non_trivial_reduce)
-        handler(parfor, lowerer, thread_count, reduce_info)
+        handler(parfor, lowerer, thread_count_var, reduce_info)
 
 
 class ParforsUnexpectedReduceNodeError(InternalError):
@@ -434,7 +433,7 @@ class ParforsUnexpectedReduceNodeError(InternalError):
         super().__init__(f"Unknown reduce instruction node: {inst}")
 
 
-def _lower_trivial_inplace_binops(parfor, lowerer, thread_count, reduce_info):
+def _lower_trivial_inplace_binops(parfor, lowerer, thread_count_var, reduce_info):
     """Lower trivial inplace-binop reduction.
     """
     for inst in reduce_info.redvar_info.reduce_nodes:
@@ -445,7 +444,7 @@ def _lower_trivial_inplace_binops(parfor, lowerer, thread_count, reduce_info):
         elif _is_inplace_binop_and_rhs_is_init(inst, reduce_info.redvar_name):
             fn = inst.value.fn
             redvar_result = _emit_binop_reduce_call(
-                fn, lowerer, thread_count, reduce_info,
+                fn, lowerer, thread_count_var, reduce_info,
             )
             lowerer.storevar(redvar_result, name=inst.target.name)
         # Otherwise?
@@ -464,16 +463,17 @@ def _lower_trivial_inplace_binops(parfor, lowerer, thread_count, reduce_info):
         )
 
 
-def _lower_non_trivial_reduce(parfor, lowerer, thread_count, reduce_info):
+def _lower_non_trivial_reduce(parfor, lowerer, thread_count_var, reduce_info):
     """Lower non-trivial reduction such as call to `functools.reduce()`.
     """
-    ctx = lowerer.context
     init_name = f"{reduce_info.redvar_name}#init"
     # The init_name variable is not defined at this point.
     lowerer.fndesc.typemap.setdefault(init_name, reduce_info.redvar_typ)
     # Emit a sequence of the reduction operation for each intermediate result
     # of each thread.
-    for tid in range(thread_count):
+    num_thread_llval = lowerer.loadvar(thread_count_var.name)
+    with cgutils.for_range(lowerer.builder, num_thread_llval) as loop:
+        tid = loop.index
         for inst in reduce_info.redvar_info.reduce_nodes:
             # Var assigns to Var?
             if _lower_var_to_var_assign(lowerer, inst):
@@ -481,9 +481,7 @@ def _lower_non_trivial_reduce(parfor, lowerer, thread_count, reduce_info):
             # The reduction operation?
             elif (isinstance(inst, ir.Assign)
                     and any(var.name == init_name for var in inst.list_vars())):
-                elem = _emit_getitem_call(
-                    ctx.get_constant(types.intp, tid), lowerer, reduce_info,
-                )
+                elem = _emit_getitem_call(tid, lowerer, reduce_info)
                 lowerer.storevar(elem, init_name)
                 lowerer.lower_inst(inst)
 
@@ -530,7 +528,7 @@ def _emit_getitem_call(idx, lowerer, reduce_info):
     return elem
 
 
-def _emit_binop_reduce_call(binop, lowerer, thread_count, reduce_info):
+def _emit_binop_reduce_call(binop, lowerer, thread_count_var, reduce_info):
     """Emit call to the ``binop`` for the reduction variable.
     """
 
@@ -572,9 +570,7 @@ def _emit_binop_reduce_call(binop, lowerer, thread_count, reduce_info):
         )
         lowerer.lower_inst(res_print)
 
-    arg_thread_count = ctx.get_constant_generic(
-        builder, types.uintp, thread_count,
-    )
+    arg_thread_count = lowerer.loadvar(thread_count_var.name)
     args = (arg_thread_count, arg_arr, reduce_info.init_val)
     sig = signature(
         reduce_info.redvar_typ, types.uintp, redarr_typ, reduce_info.redvar_typ,

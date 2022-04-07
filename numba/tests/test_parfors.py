@@ -4293,5 +4293,70 @@ class TestParforsVectorizer(TestPrangeBase):
                         self.assertEqual(b[op[-2]:op[-1]], 'u')
 
 
+@skip_parfors_unsupported
+class TestParforReductionSetNumThreads(TestCase):
+    """Test exceution correctness on reductions with set_num_threads.
+    """
+    def test_add(self):
+        N = config.NUMBA_NUM_THREADS
+        M = 2 * N
+        mask = N - 1
+
+        @njit(parallel=True)
+        def udt(nthreads):
+            acc = 0
+            set_num_threads(nthreads)
+            for i in prange(M):
+                local_mask = 1 + i % mask
+                set_num_threads(local_mask)
+                gnt = get_num_threads()
+                acc += gnt
+            return acc
+
+        expect = udt.py_func(mask)
+        got = udt(mask)
+        self.assertPreciseEqual(expect, got)
+
+    def test_mul(self):
+        N = config.NUMBA_NUM_THREADS
+        M = 2 * N
+        mask = N - 1
+
+        @njit(parallel=True)
+        def udt(nthreads):
+            acc = 1
+            set_num_threads(nthreads)
+            for i in prange(M):
+                local_mask = 1 + i % mask
+                set_num_threads(local_mask)
+                gnt = get_num_threads()
+                acc *= gnt
+            return acc
+
+        expect = udt.py_func(mask)
+        got = udt(mask)
+        self.assertPreciseEqual(expect, got)
+
+    def test_max(self):
+        N = config.NUMBA_NUM_THREADS
+        M = 2 * N
+        mask = N - 1
+
+        @njit(parallel=True)
+        def udt(nthreads):
+            acc = 1
+            set_num_threads(nthreads)
+            for i in prange(M):
+                local_mask = 1 + i % mask
+                set_num_threads(local_mask)
+                gnt = get_num_threads()
+                acc = max(acc, gnt)
+            return acc
+
+        expect = udt.py_func(mask)
+        got = udt(mask)
+        self.assertPreciseEqual(expect, got)
+
+
 if __name__ == "__main__":
     unittest.main()
