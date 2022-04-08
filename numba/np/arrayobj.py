@@ -1996,22 +1996,6 @@ def _np_clip_impl_none(a, b, use_min, out):
     return out
 
 
-@register_jitable
-def _np_clip_impl_amin_none(a, a_min, a_max, out):
-    # a_min is None but a_max is a numpy array
-    ret = np.empty_like(a) if out is None else out
-    a_b, a_max_b = np.broadcast_arrays(a, a_max)
-    return _np_clip_impl_none(a_b, a_max_b, True, ret)
-
-
-@register_jitable
-def _np_clip_impl_amax_none(a, a_min, a_max, out):
-    # a_min is a numpy array but a_max is None
-    ret = np.empty_like(a) if out is None else out
-    a_b, a_min_b = np.broadcast_arrays(a, a_min)
-    return _np_clip_impl_none(a_b, a_min_b, False, ret)
-
-
 @overload(np.clip)
 def np_clip(a, a_min, a_max, out=None):
     if not type_can_asarray(a):
@@ -2110,12 +2094,18 @@ def np_clip(a, a_min, a_max, out=None):
         # Case where exactly one of a_min or a_max is None
         if a_min_is_none:
             def np_clip_na(a, a_min, a_max, out=None):
-                return _np_clip_impl_amin_none(a, a_min, a_max, out)
+                # a_max is a numpy array but a_min is None
+                ret = np.empty_like(a) if out is None else out
+                a_b, a_max_b = np.broadcast_arrays(a, a_max)
+                return _np_clip_impl_none(a_b, a_max_b, True, ret)
 
             return np_clip_na
         elif a_max_is_none:
             def np_clip_an(a, a_min, a_max, out=None):
-                return _np_clip_impl_amax_none(a, a_min, a_max, out)
+                # a_min is a numpy array but a_max is None
+                ret = np.empty_like(a) if out is None else out
+                a_b, a_min_b = np.broadcast_arrays(a, a_min)
+                return _np_clip_impl_none(a_b, a_min_b, False, ret)
 
             return np_clip_an
         else:
