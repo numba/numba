@@ -328,7 +328,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
             codegen=None,
             name=self.name,
             entry_name=self._entry_name,
-            module=None,
+            module=self._module,
             linking_libraries=self._linking_libraries,
             ptx_cache=self._ptx_cache,
             cubin_cache=self._cubin_cache,
