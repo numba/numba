@@ -112,8 +112,6 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         if ptxes:
             return ptxes
 
-        print("Compiling a PTX")
-
         arch = nvvm.get_arch_option(*cc)
         options = self._nvvm_options.copy()
         options['arch'] = arch
@@ -168,8 +166,6 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         cubin = self._cubin_cache.get(cc, None)
         if cubin:
             return cubin
-
-        print("Linking a cubin")
 
         linker = driver.Linker.new(max_registers=self._max_registers, cc=cc)
 
