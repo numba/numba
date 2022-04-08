@@ -399,7 +399,7 @@ class CompileResultCacheImpl(CacheImpl):
             # Mega weird because of dict from reduced kernel
             return _Kernel._rebuild(**payload)
         else:
-            return compiler._CompileResult._rebuild(target_context, *payload)
+            return compiler.CompileResult._rebuild(target_context, *payload)
 
     def check_cachable(self, cres):
         """
