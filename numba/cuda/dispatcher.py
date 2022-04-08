@@ -905,23 +905,3 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
     def bind(self):
         for defn in self.overloads.values():
             defn.bind()
-
-    @classmethod
-    def _rebuild(cls, py_func, targetoptions):
-        """
-        Rebuild an instance.
-        """
-        # This needs fixing to match the modified reduce from
-        # https://gist.github.com/c200chromebook/1ee304161a39b247e8a029ff9d2b3cd7
-        # so sticking a breakpoint here for now
-        breakpoint()
-        instance = cls(py_func, targetoptions)
-        return instance
-
-    def _reduce_states(self):
-        """
-        Reduce the instance for serialization.
-        Compiled definitions are preserved.
-        """
-        return dict(py_func=self.py_func, sigs=self.sigs,
-                    targetoptions=self.targetoptions, overloads=self.overloads)
