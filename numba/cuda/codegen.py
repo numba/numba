@@ -391,4 +391,6 @@ class JITCUDACodegen(Codegen):
         """
         Return a tuple unambiguously describing the codegen behaviour.
         """
-        return (runtime.runtime.get_version(),)
+        ctx = devices.get_context()
+        cc = ctx.device.compute_capability
+        return (runtime.runtime.get_version(), cc)
