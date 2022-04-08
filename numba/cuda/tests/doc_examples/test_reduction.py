@@ -1,4 +1,5 @@
 import unittest
+
 from numba.cuda.testing import CUDATestCase, skip_on_cudasim
 from numba.tests.support import captured_stdout
 
@@ -22,11 +23,12 @@ class TestReduction(CUDATestCase):
 
     def test_ex_reduction(self):
         # ex_reduction.import.begin
-        from numba import cuda
         import numpy as np
+        from numba import cuda
         from numba.types import int32
+
         # ex_reduction.import.end
-        
+
         # ex_reduction.allocate.begin
         # generate data
         a = cuda.to_device(np.arange(1024))
@@ -40,15 +42,16 @@ class TestReduction(CUDATestCase):
             size = len(data)
             if tid < size:
                 i = cuda.grid(1)
-                
+
                 # declare an array in shared memory
                 shr = cuda.shared.array(nelem, int32)
                 shr[tid] = data[i]
-                
-                # make sure every thread has written its value to shared memory
+
+                # make sure every thread has written
+                # its value to shared memory
                 # before we start reducing
                 cuda.syncthreads()
-                
+
                 s = 1
                 while s < cuda.blockDim.x:
                     if tid % (2 * s) == 0:
@@ -56,19 +59,20 @@ class TestReduction(CUDATestCase):
                         shr[tid] += shr[tid + s]
                     s *= 2
                     cuda.syncthreads()
-                    
-                # after the loop, the zeroth element contains the sum
+
+                # after the loop, the zeroth
+                # element contains the sum
                 if tid == 0:
                     data[tid] = shr[tid]
+
         # ex_reduction.kernel.end
 
         # ex_reduction.launch.begin
         array_sum.forall(len(a))(a)
-        print(a[0]) # array(523776)
-        sum(np.arange(1024)) # 523776
+        print(a[0])  # array(523776)
+        sum(np.arange(1024))  # 523776
         # ex_reduction.launch.end
 
-        
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

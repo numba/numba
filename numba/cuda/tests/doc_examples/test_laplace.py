@@ -1,4 +1,5 @@
 import unittest
+
 from numba.cuda.testing import CUDATestCase, skip_on_cudasim
 from numba.tests.support import captured_stdout
 
@@ -22,10 +23,10 @@ class TestLaplace(CUDATestCase):
 
     def test_ex_laplace(self):
         # ex_laplace.import.begin
-        from numba import cuda
         import numpy as np
-        # ex_laplace.import.end
+        from numba import cuda
 
+        # ex_laplace.import.end
         # ex_laplace.allocate.begin
         # use an odd problem size
         # this is so there can be an element truly
@@ -64,19 +65,24 @@ class TestLaplace(CUDATestCase):
                     # Right wall is held at T = 0
                     next_temp = curr_temp + k * (data[i - 1] - (2 * curr_temp))
                 else:
-                    next_temp = curr_temp + k * (data[i - 1] - (2 * curr_temp) + data[i + 1])
+                    next_temp = curr_temp + k * (
+                        data[i - 1] - (2 * curr_temp) + data[i + 1]
+                    )
                 tmp[i] = next_temp
                 # wait for every thread to write before moving on
                 grid.sync()
 
                 # swap data vectors for the next iteration
                 data[i] = tmp[i]
+
         # ex_laplace.kernel.end
 
         # ex_laplace.launch.begin
-        solve_heat_equation.forall(len(data))(data_gpu, tmp_gpu, len(data_gpu), niter, 0.25)
+        solve_heat_equation.forall(len(data))(
+            data_gpu, tmp_gpu, len(data_gpu), niter, 0.25
+        )
         # ex_laplace.launch.end
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

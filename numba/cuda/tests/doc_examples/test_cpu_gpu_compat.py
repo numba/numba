@@ -1,4 +1,5 @@
 import unittest
+
 from numba.cuda.testing import CUDATestCase, skip_on_cudasim
 from numba.tests.support import captured_stdout
 
@@ -23,47 +24,51 @@ class TestCpuGpuCompat(CUDATestCase):
     def test_ex_cpu_gpu_compat(self):
         # ex_cpu_gpu_compat.import.begin
         from math import pi
-        from numba import cuda
+
         import numba
+        from numba import cuda
+
         # ex_cpu_gpu_compat.import.end
-        
+
         # ex_cpu_gpu_compat.allocate.begin
         X = cuda.to_device([1, 10, 234])
-        Y = cuda.to_device([2,2,4014])
-        Z = cuda.to_device([3,14,2211])
-        results = cuda.to_device([0.,0.,0.])
+        Y = cuda.to_device([2, 2, 4014])
+        Z = cuda.to_device([3, 14, 2211])
+        results = cuda.to_device([0.0, 0.0, 0.0])
         # ex_cpu_gpu_compat.allocate.end
 
         # ex_cpu_gpu_compat.define.begin
         @numba.jit
         def business_logic(x, y, z):
             return 4 * z * (2 * x - (4 * y) / 2 * pi)
+
         # ex_cpu_gpu_compat.define.end
 
         # ex_cpu_gpu_compat.cpurun.begin
-        print(business_logic(1,2,3)) # -126.79644737231007
+        print(business_logic(1, 2, 3))  # -126.79644737231007
         # ex_cpu_gpu_compat.cpurun.end
 
-
         # ex_cpu_gpu_compat.usecpu.begin
-        print(business_logic(1,2,3)) # -126.79644737231007
+        print(business_logic(1, 2, 3))  # -126.79644737231007
         # ex_cpu_gpu_compat.usecpu.end
 
         # ex_cpu_gpu_compat.usegpu.begin
         @cuda.jit
         def f(res, xarr, yarr, zarr):
-            tid = cuda.grid(1)            
+            tid = cuda.grid(1)
             if tid < len(xarr):
-                # the function decorated with numba.jit can just be directly reused
-                res[tid] = business_logic(xarr[tid], yarr[tid], zarr[tid])    
-        # ex_cpu_gpu_compat.usegpu.end
+                # the function decorated with numba.jit
+                # may be directly reused
+                res[tid] = business_logic(xarr[tid], yarr[tid], zarr[tid])
 
+        # ex_cpu_gpu_compat.usegpu.end
 
         # ex_cpu_gpu_compat.launch.begin
         f.forall(len(X))(results, X, Y, Z)
-        print(results) # [-126.79644737231007, 416.28324559588634, -218912930.2987788]
+        print(results)
+        # [-126.79644737231007, 416.28324559588634, -218912930.2987788]
         # ex_cpu_gpu_compat.launch.end
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -1,4 +1,5 @@
 import unittest
+
 from numba.cuda.testing import CUDATestCase, skip_on_cudasim
 from numba.tests.support import captured_stdout
 
@@ -10,7 +11,8 @@ class TestVecAdd(CUDATestCase):
     """
 
     def setUp(self):
-        # Prevent output from this test showing up when running the test suite
+        # Prevent output from this test showing
+        # up when running the test suite
         self._captured_stdout = captured_stdout()
         self._captured_stdout.__enter__()
         super().setUp()
@@ -22,19 +24,20 @@ class TestVecAdd(CUDATestCase):
 
     def test_ex_vecadd(self):
         # ex_vecadd.import.begin
-        from numba import cuda
         import numpy as np
-        # ex_vecadd.import.end
+        from numba import cuda
 
+        # ex_vecadd.import.end
         # ex_vecadd.kernel.begin
         @cuda.jit
         def f(a, b, c):
-            # just like threadIdx.x + (blockIdx.x * blockDim.x)
+            # like threadIdx.x + (blockIdx.x * blockDim.x)
             tid = cuda.grid(1)
             size = len(c)
 
             if tid < size:
                 c[tid] = a[tid] + b[tid]
+
         # ex_vecadd.kernel.end
 
         # Seed RNG for test repeatability
@@ -62,5 +65,5 @@ class TestVecAdd(CUDATestCase):
         # ex_vecadd.launch.end
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
