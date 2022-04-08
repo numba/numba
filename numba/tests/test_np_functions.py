@@ -3202,10 +3202,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         a = np.asarray([1.0, np.nan])
         b = np.asarray([1.0, np.nan])
         self.assertFalse(cfunc(a, b))
-        self.assertTrue(cfunc(a, b, equal_nan=True))
+        self.assertEquals(pyfunc(a, b, equal_nan=True),
+                          cfunc(a, b, equal_nan=True))
 
         b = np.asarray([np.nan, 1.0])
-        self.assertFalse(cfunc(a, b))
+        self.assertEquals(pyfunc(a, b), cfunc(a, b))
 
         noise_levels = [1.0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 0.0]
         zero_array = np.zeros((25, 4))
@@ -3239,19 +3240,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     c_result = cfunc(a + noise, a, atol=atol, rtol=rtol)
                     self.assertEqual(py_result, c_result)
 
-    def test_allclose_numpy_data(self):
-
+    def test_ip_allclose_numpy(self):
+        # https://github.com/numpy/numpy/blob/4adc87dff15a247e417d50f10cc4def8e1c17a03/numpy/core/tests/test_numeric.py#L2402-L2420    # noqa: E501
         pyfunc = np_allclose
         cfunc = jit(nopython=True)(pyfunc)
 
-        min_int = np.iinfo(np.int_).min
-        a = np.array([min_int], dtype=np.int_)
-
-        # https://github.com/numpy/numpy/blob/4adc87dff15a247e417d50f10cc4def8e1c17a03/numpy/core/tests/test_numeric.py#L2386-L2468    # noqa: E501
         arr = np.array([100.0, 1000.0])
         aran = np.arange(125).astype(dtype=np.float64).reshape((5, 5, 5))
+
         atol = 1e-8
         rtol = 1e-5
+
         numpy_data = [
             (np.asarray([1, 0]), np.asarray([1, 0])),
             (np.asarray([atol]), np.asarray([0.0])),
@@ -3264,7 +3263,18 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         ]
 
         for (x, y) in numpy_data:
-            self.assertTrue(cfunc(x, y))
+            self.assertEquals(pyfunc(x, y), cfunc(x, y))
+
+    def test_ip_not_allclose_numpy(self):
+        # https://github.com/numpy/numpy/blob/4adc87dff15a247e417d50f10cc4def8e1c17a03/numpy/core/tests/test_numeric.py#L2422-L2441    # noqa: E501
+
+        pyfunc = np_allclose
+        cfunc = jit(nopython=True)(pyfunc)
+
+        aran = np.arange(125).astype(dtype=np.float64).reshape((5, 5, 5))
+
+        atol = 1e-8
+        rtol = 1e-5
 
         numpy_data = [
             (np.asarray([np.inf, 0]), np.asarray([1.0, np.inf])),
@@ -3280,14 +3290,54 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         ]
 
         for (x, y) in numpy_data:
-            self.assertFalse(cfunc(x, y))
+            self.assertEquals(pyfunc(x, y), cfunc(x, y))
+
+    def test_return_class_is_ndarray_numpy(self):
+        # https://github.com/numpy/numpy/blob/4adc87dff15a247e417d50f10cc4def8e1c17a03/numpy/core/tests/test_numeric.py#L2460-L2468    # noqa: E501
+
+        pyfunc = np_allclose
+        cfunc = jit(nopython=True)(pyfunc)
 
         class Foo(np.ndarray):
             def __new__(cls, *args, **kwargs):
                 return np.array(*args, **kwargs).view(cls)
 
         a = Foo([1])
-        self.assertTrue(type(np.allclose(a, a)) is bool)
+        self.assertTrue(type(cfunc(a, a)) is bool)
+
+    def test_equalnan_numpy(self):
+        # https://github.com/numpy/numpy/blob/4adc87dff15a247e417d50f10cc4def8e1c17a03/numpy/core/tests/test_numeric.py#L2456-L2458    # noqa: E501
+        pyfunc = np_allclose
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.array([1.0, np.nan])
+
+        self.assertEquals(pyfunc(x, x, equal_nan=True),
+                          cfunc(x, x, equal_nan=True))
+
+    def test_no_parameter_modification_numpy(self):
+        # https://github.com/numpy/numpy/blob/4adc87dff15a247e417d50f10cc4def8e1c17a03/numpy/core/tests/test_numeric.py#L2443-L2448    # noqa: E501
+
+        pyfunc = np_allclose
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.array([np.inf, 1])
+        y = np.array([0, np.inf])
+
+        cfunc(x, y)
+        np.testing.assert_array_equal(x, np.array([np.inf, 1]))
+        np.testing.assert_array_equal(y, np.array([0, np.inf]))
+
+    def test_min_int_numpy(self):
+        # https://github.com/numpy/numpy/blob/4adc87dff15a247e417d50f10cc4def8e1c17a03/numpy/core/tests/test_numeric.py#L2450-L2454    # noqa: E501
+
+        pyfunc = np_allclose
+        cfunc = jit(nopython=True)(pyfunc)
+
+        min_int = np.iinfo(np.int_).min
+        a = np.array([min_int], dtype=np.int_)
+
+        self.assertEquals(pyfunc(a, a), cfunc(a, a))
 
     def test_allclose_exception(self):
         self.disable_leak_check()
