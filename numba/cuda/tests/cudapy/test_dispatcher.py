@@ -18,6 +18,10 @@ def add_kernel(r, x, y):
     r[0] = x + y
 
 
+def add_kernel_with_default(r, x, y=789.):
+    r[0] = x + y
+
+
 @skip_on_cudasim('Dispatcher objects not used in the simulator')
 class TestDispatcher(CUDATestCase):
     def _test_no_double_specialize(self, dispatcher, ty):
@@ -290,6 +294,57 @@ class TestDispatcher(CUDATestCase):
 
         self.assertEqual("Add two integers, kernel version", add_kernel.__doc__)
         self.assertEqual("Add two integers, device version", add_device.__doc__)
+
+    def test_kernel_with_defaults(self):
+        c_add = cuda.jit(add_kernel)
+        c_add_w_default = cuda.jit(add_kernel_with_default)
+
+        # Using a complex128 allows us to represent any result produced by the
+        # test
+        r = np.zeros(1, dtype=np.complex128)
+
+        for x,y in zip([123, 12.3, 12.3, 12300000000], [456, 45.6, 45.6j, 456]):
+            c_add[1, 1](r, x, y)
+            self.assertEqual(r[0], add(x, y))
+
+            # invocation with keyword
+            c_add_w_default[1, 1](r, x, y=y)
+            self.assertEqual(r[0], add(x, y))
+
+            # invocation as position
+            c_add_w_default[1, 1](r, x, y)
+            self.assertEqual(r[0], add(x, y))
+
+            # invocation using default, y=789
+            c_add_w_default[1, 1](r, x)
+            self.assertEqual(r[0], add(x, 789))
+
+        # Now force compilation of only a single specialization
+        # c_add = cuda.jit('(i4[::1], i4, i4)')(add_kernel)
+        tmp = cuda.jit('(i4[::1], i4, i4)')
+        c_add_w_default = tmp(add_kernel_with_default)
+        r = np.zeros(1, dtype=np.int32)
+
+        for x,y in zip([123], [456]):
+            c_add[1, 1](r, x, y)
+            self.assertEqual(r[0], add(x, y))
+
+            # invocation with keyword
+            c_add_w_default[1, 1](r, x, y=y)
+            self.assertEqual(r[0], add(x, y))
+
+            # invocation as position
+            c_add_w_default[1, 1](r, x, y)
+            self.assertEqual(r[0], add(x, y))
+
+            # invocation using default, y=789 (float)
+            # NOTE: This will fail due to the same issue that leads to the
+            # failure with `test_coerce_input_types_unsafe`
+            try:
+                c_add_w_default[1, 1](r, x)
+                self.assertEqual(r[0], add(x, 789))
+            except TypeError:
+                pass
 
 
 @contextmanager
