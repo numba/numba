@@ -179,7 +179,7 @@ a famous CUDA solution for summing a vector which works by "folding" the data up
 smaller number of threads.
 
 Note that this is a fairly naive implementation and more efficient ways of summing an array exist
-within numba. See :ref:`_cuda_montecarlo` for an example.
+within numba. See :ref:`cuda_montecarlo` for an example.
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_reduction.py
    :language: python
