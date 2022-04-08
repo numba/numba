@@ -4,11 +4,12 @@ import sys
 import ctypes
 import inspect
 import functools
+import warnings
 
 from numba.core import config, serialize, sigutils, types, typing, utils
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.dispatcher import Dispatcher
-from numba.core.errors import NumbaPerformanceWarning
+from numba.core.errors import NumbaPerformanceWarning, NumbaDeprecationWarning
 from numba.core.typing.typeof import Purpose, typeof
 
 from numba.cuda.api import get_current_device
@@ -155,6 +156,13 @@ class _Kernel(serialize.ReduceMixin):
         '''
         PTX code for this kernel.
         '''
+        warnings.warn(
+            "Attribute `ptx` is deprecated and will be removed in the future. "
+            "To retrieve the compiled machine code of the CUDA function for a "
+            "given CUDA compute compatibility `cc`, use the `inspect_asm(cc)` "
+            "method."
+            , NumbaDeprecationWarning
+        )
         return self._codelibrary.get_asm_str()
 
     @property
@@ -700,14 +708,19 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
             debug = self.targetoptions.get('debug')
             inline = self.targetoptions.get('inline')
+            fastmath = self.targetoptions.get('fastmath')
 
             nvvm_options = {
                 'debug': debug,
-                'opt': 3 if self.targetoptions.get('opt') else 0
+                'opt': 3 if self.targetoptions.get('opt') else 0,
+                'fastmath': fastmath
             }
 
-            cres = compile_cuda(self.py_func, None, args, debug=debug,
-                                inline=inline, nvvm_options=nvvm_options)
+            cres = compile_cuda(self.py_func, None, args,
+                                debug=debug,
+                                inline=inline,
+                                fastmath=fastmath,
+                                nvvm_options=nvvm_options)
             self.overloads[args] = cres
 
             cres.target_context.insert_user_function(cres.entry_point,
@@ -827,6 +840,12 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
     @property
     def ptx(self):
+        warnings.warn(
+            "Attribute `ptx` is deprecated and will be removed in the future. "
+            "To retrieve the compiled machine code of the CUDA function for a "
+            "given signature `sig`, use the method `inspect_asm(sig)`."
+            , NumbaDeprecationWarning
+        )
         return {sig: overload.ptx for sig, overload in self.overloads.items()}
 
     def bind(self):

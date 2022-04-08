@@ -79,11 +79,19 @@ support for explicit parallel loops. One can use Numba's ``prange`` instead of
 make sure that the loop does not have cross iteration dependencies except for
 supported reductions.
 
-A reduction is inferred automatically if a variable is updated by a binary
-function/operator using its previous value in the loop body. The initial value
-of the reduction is inferred automatically for the ``+=``, ``-=``,  ``*=``,
-and ``/=`` operators.
-For other functions/operators, the reduction variable should hold the identity
+A reduction is inferred automatically if a variable is updated by a supported binary
+function/operator using its previous value in the loop body.  The following
+functions/operators are supported: ``+=``, ``+``, ``-=``, ``-``, ``*=``,
+``*``, ``/=``, ``/``, ``max()``, ``min()``.
+The initial value of the reduction is inferred automatically for the
+supported operators (i.e., not the ``max`` and ``min`` functions).
+Note that the ``//=`` operator is not supported because
+in the general case the result depends on the order in which the divisors are
+applied.  However, if all divisors are integers then the programmer may be
+able to rewrite the ``//=`` reduction as a ``*=`` reduction followed by
+a single floor division after the parallel region where the divisor is the
+accumulated product.
+For the ``max`` and ``min`` functions, the reduction variable should hold the identity
 value right before entering the ``prange`` loop.  Reductions in this manner
 are supported for scalars and for arrays of arbitrary dimensions.
 
@@ -128,12 +136,12 @@ The following example demonstrates a product reduction on a two-dimensional arra
           operation producing a floating point result type.
 
 
-Care should be taken, however, when reducing into slices or elements of an array 
-if the elements specified by the slice or index are written to simultaneously by 
+Care should be taken, however, when reducing into slices or elements of an array
+if the elements specified by the slice or index are written to simultaneously by
 multiple parallel threads. The compiler may not detect such cases and then a race condition
 would occur.
 
-The following example demonstrates such a case where a race condition in the execution of the 
+The following example demonstrates such a case where a race condition in the execution of the
 parallel for-loop results in an incorrect return value::
 
     from numba import njit, prange

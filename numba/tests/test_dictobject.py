@@ -1112,6 +1112,15 @@ class TestTypedDict(MemoryLeakMixin, TestCase):
         val = consumer(d)
         self.assertEqual(val, 1.23)
 
+    def test_gh7908(self):
+        d = Dict.empty(
+            key_type=types.Tuple([types.uint32,
+                                  types.uint32]),
+            value_type=int64)
+
+        d[(1, 1)] = 12345
+        self.assertEqual(d[(1, 1)], d.get((1, 1)))
+
     def check_stringify(self, strfn, prefix=False):
         nbd = Dict.empty(int32, int32)
         d = {}

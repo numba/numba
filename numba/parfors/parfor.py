@@ -1764,7 +1764,27 @@ class ConvertSetItemPass:
                         else:
                             # Handle A[:] = x
                             shape = equiv_set.get_shape(instr)
-                            if shape is not None:
+                            # Don't converted broadcasted setitems into parfors.
+                            if isinstance(index_typ, types.BaseTuple):
+                                # The sliced dims are those in the index that
+                                # are made of slices.  Count the numbers of slices
+                                # in the index tuple.
+                                sliced_dims = len(list(filter(
+                                    lambda x: isinstance(x, types.misc.SliceType),
+                                    index_typ.types)))
+                            elif isinstance(index_typ, types.misc.SliceType):
+                                # For singular indices there can be a bare slice
+                                # and if so there is one dimension being set.
+                                sliced_dims = 1
+                            else:
+                                sliced_dims = 0
+
+                            # Only create a parfor for this setitem if we know the
+                            # shape of the output and number of dimensions set is
+                            # equal to the number of dimensions on the right side.
+                            if (shape is not None and
+                                (not isinstance(value_typ, types.npytypes.Array) or
+                                 sliced_dims == value_typ.ndim)):
                                 new_instr = self._setitem_to_parfor(equiv_set,
                                         loc, target, index, value, shape=shape)
                                 self.rewritten.append(
@@ -3611,14 +3631,27 @@ def get_reduction_init(nodes):
     if acc_expr.fn == operator.iadd or acc_expr.fn == operator.isub:
         return 0, acc_expr.fn
     if (  acc_expr.fn == operator.imul
-       or acc_expr.fn == operator.itruediv
-       or acc_expr.fn == operator.ifloordiv ):
+       or acc_expr.fn == operator.itruediv ):
         return 1, acc_expr.fn
     return None, None
 
 def supported_reduction(x, func_ir):
     if x.op == 'inplace_binop' or x.op == 'binop':
-        return True
+        if x.fn == operator.ifloordiv or x.fn == operator.floordiv:
+            raise errors.NumbaValueError(("Parallel floordiv reductions are not supported. "
+                              "If all divisors are integers then a floordiv "
+                              "reduction can in some cases be parallelized as "
+                              "a multiply reduction followed by a floordiv of "
+                              "the resulting product."), x.loc)
+        supps = [operator.iadd,
+                 operator.isub,
+                 operator.imul,
+                 operator.itruediv,
+                 operator.add,
+                 operator.sub,
+                 operator.mul,
+                 operator.truediv]
+        return x.fn in supps
     if x.op == 'call':
         callname = guard(find_callname, func_ir, x)
         if callname == ('max', 'builtins') or callname == ('min', 'builtins'):
