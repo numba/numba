@@ -901,15 +901,15 @@ def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
         raise TypeError('The first argument "b" must be array-like')
 
     if not isinstance(rtol, types.Float):
-        raise TypeError('The fourth argument "rtol" must be a '
+        raise TypeError('The third argument "rtol" must be a '
                         'floating point')
 
     if not isinstance(atol, types.Float):
-        raise TypingError('The fifth argument "atol" must be a '
+        raise TypingError('The fourth argument "atol" must be a '
                           'floating point')
 
     if not isinstance(equal_nan, types.Boolean):
-        raise TypeError('The sixth argument "equal_nan" must be a '
+        raise TypeError('The fifth argument "equal_nan" must be a '
                         'boolean')
 
     is_a_scalar = isinstance(a, types.Number)
