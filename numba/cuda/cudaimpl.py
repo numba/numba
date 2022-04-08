@@ -992,6 +992,7 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
     other_supported_type = (
         isinstance(dtype, (types.Record, types.Boolean))
         or isinstance(data_model, models.StructModel)
+        or dtype == types.float16
     )
     if dtype not in types.number_domain and not other_supported_type:
         raise TypeError("unsupported type: %s" % dtype)

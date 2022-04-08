@@ -7,7 +7,7 @@ from contextlib import contextmanager
 import sys
 import threading
 import traceback
-
+from numba.core import types
 import numpy as np
 
 from numba.np import numpy_support
@@ -95,7 +95,8 @@ class FakeCUDAShared(object):
         self._dynshared = np.zeros(dynshared_size, dtype=np.byte)
 
     def array(self, shape, dtype):
-        dtype = numpy_support.as_dtype(dtype)
+        if isinstance(dtype, types.Type):
+            dtype = numpy_support.as_dtype(dtype)
         # Dynamic shared memory is requested with size 0 - this all shares the
         # same underlying memory
         if shape == 0:

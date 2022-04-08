@@ -42,7 +42,21 @@ class TestSharedMemoryIssue(CUDATestCase):
         self._check_shared_array_size((2, 3), 6)
 
     def test_issue_1051_shared_size_broken_3d(self):
+
         self._check_shared_array_size((2, 3, 4), 24)
+
+    def _check_shared_array_size_fp16(self, shape, expected):
+        @cuda.jit
+        def s(a):
+            arr = cuda.shared.array(shape, dtype=np.float16)
+            a[0] = arr.size
+
+        result = np.zeros(1, dtype=np.float16)
+        s[1, 1](result)
+        self.assertEqual(result[0], expected)
+
+    def test_issue_fp16_support(self):
+        self._check_shared_array_size_fp16(2, 2)
 
     def test_issue_2393(self):
         """
