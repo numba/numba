@@ -2087,6 +2087,13 @@ def np_shape(a):
 
 @overload(np.unique)
 def np_unique(a, axis=None):
+    if not isinstance(axis, (types.Integer, types.NoneType)):
+        raise errors.TypingError("'axis' must be 0, 1, or None")
+
+    if not isinstance(axis, types.NoneType) and not (1 <= a.ndim <= 2):
+        raise errors.TypingError("Only supports 1D or 2D NumPy ndarrays when axis" + \
+                                 "is specified.")
+
     def np_unique_impl(a, axis=None):
         if axis == None:
             b = np.sort(a.ravel())
@@ -2118,8 +2125,6 @@ def np_unique(a, axis=None):
             counts = np.append(idx[1:], b.shape[0])
             counts -= idx
             return b[idx]
-        else:
-            raise ValueError("supported axis are 0 or 1. got %s" % axis)
     return np_unique_impl
 
 
