@@ -712,7 +712,7 @@ class StencilFunc(object):
                     prev_block = ir.Block(scope, loc)
                     prev_block.replace_body(block.body[:i])
                     # The current block is used for statements after sentinel.
-                    block.body.replace_body(block.body[i + 1:])
+                    block.replace_body(block.body[i + 1:])
                     # But the current block gets a new label.
                     body_first_label = min(kernel_copy.blocks.keys())
 
