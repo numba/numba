@@ -2086,12 +2086,40 @@ def np_shape(a):
 
 
 @overload(np.unique)
-def np_unique(a):
-    def np_unique_impl(a):
-        b = np.sort(a.ravel())
-        head = list(b[:1])
-        tail = [x for i, x in enumerate(b[1:]) if b[i] != x]
-        return np.array(head + tail)
+def np_unique(a, axis=None):
+    def np_unique_impl(a, axis=None):
+        if axis == None:
+            b = np.sort(a.ravel())
+            head = list(b[:1])
+            tail = [x for i, x in enumerate(b[1:]) if b[i] != x]
+            return np.array(head + tail)
+        elif axis in (0, 1):
+            # make a copy not to sort original data
+            if axis == 1:
+                b = a.T.copy()
+            else:
+                b = a.copy()
+            # remember original indexes of each row
+            orig_idx = np.array([i for i in range(b.shape[0])])
+            # sort data and original indexes
+            for j in range(b.shape[1] - 1, -1, -1):
+                sorter = b[:, j].argsort(kind="quicksort")
+                b = b[sorter]
+                orig_idx = orig_idx[sorter]
+            # get original indexes
+            idx = [0]
+            if b.shape[1] > 1:
+                bool_idx = ~np.all((b[:-1] == b[1:]), axis=1)
+                additional_uniques = np.nonzero(bool_idx)[0] + 1
+            else:
+                additional_uniques = np.nonzero(~(b[:-1] == b[1:]))[0] + 1
+            idx = np.append(idx, additional_uniques)
+            # get counts for each unique row
+            counts = np.append(idx[1:], b.shape[0])
+            counts -= idx
+            return b[idx]
+        else:
+            raise ValueError("supported axis are 0 or 1. got %s" % axis)
     return np_unique_impl
 
 
