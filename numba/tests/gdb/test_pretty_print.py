@@ -1,13 +1,14 @@
 # NOTE: This test is sensitive to line numbers as it checks breakpoints
 from numba import njit
 import numpy as np
-from numba.tests.gdb_support import GdbMIDriver
+from numba.tests.gdb_support import GdbMIDriver, needs_gdb_py3
 from numba.tests.support import TestCase, needs_subprocess
-import os
+from numba.misc.numba_gdbinfo import collect_gdbinfo
 import unittest
 import re
 
 
+@needs_gdb_py3
 @needs_subprocess
 class Test(TestCase):
 
@@ -29,9 +30,9 @@ class Test(TestCase):
 
         foo()
 
-        extension = os.path.join('numba', 'misc', 'gdb_print_extension.py')
+        extension = collect_gdbinfo().extension_loc
         driver = GdbMIDriver(__file__, init_cmds=['-x', extension], debug=False)
-        driver.set_breakpoint(line=28)
+        driver.set_breakpoint(line=29)
         driver.run()
         driver.check_hit_breakpoint(1)
 

@@ -167,9 +167,9 @@ otherwise build by default along with information on configuration options.
   * For Linux and Windows it is necessary to provide OpenMP C headers and
     runtime  libraries compatible with the compiler tool chain mentioned above,
     and for these to be accessible to the compiler via standard flags.
-  * For OSX the conda packages ``llvm-openmp`` and ``intel-openmp`` provide
-    suitable C headers and libraries. If the compilation requirements are not
-    met the OpenMP threading backend will not be compiled
+  * For OSX the conda package ``llvm-openmp`` provides suitable C headers and
+    libraries. If the compilation requirements are not met the OpenMP threading
+    backend will not be compiled.
 
 .. envvar:: NUMBA_DISABLE_TBB (default: not set)
 
@@ -211,10 +211,9 @@ vary with target operating system and hardware. The following lists them all
 
   * ``llvm-openmp`` (OSX) - provides headers for compiling OpenMP support into
     Numba's threading backend
-  * ``intel-openmp`` (OSX) - provides OpenMP library support for Numba's
-    threading backend.
   * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support
     into Numba's threading backend (version >= 2021 required).
+  * ``importlib_metadata`` (for Python versions < 3.9)
 
 * Optional runtime are:
 
@@ -225,8 +224,10 @@ vary with target operating system and hardware. The following lists them all
   * ``jinja2`` - for "pretty" type annotation output (HTML) via the ``numba``
     CLI
   * ``cffi`` - permits use of CFFI bindings in Numba compiled functions
-  * ``intel-openmp`` - (OSX) provides OpenMP library support for Numba's OpenMP
-    threading backend
+  * ``llvm-openmp`` - (OSX) provides OpenMP library support for Numba's OpenMP
+    threading backend.
+  * ``intel-openmp`` - (OSX) provides an alternative OpenMP library for use with
+    Numba's OpenMP threading backend.
   * ``ipython`` - if in use, caching will use IPython's cache
     directories/caching still works
   * ``pyyaml`` - permits the use of a ``.numba_config.yaml``
@@ -258,6 +259,44 @@ vary with target operating system and hardware. The following lists them all
   * ``sphinx_rtd_theme``
   * ``numpydoc``
   * ``make`` as an executable on the ``$PATH``
+
+.. _numba_support_info:
+
+Version support information
+---------------------------
+
+This is the canonical reference for information concerning which versions of
+Numba's dependencies were tested and known to work against a given version of
+Numba. Other versions of the dependencies (especially NumPy) may work reasonably
+well but were not tested. The use of ``x`` in a version number indicates all
+patch levels supported. The use of ``?`` as a version is due to missing
+information.
+
++--------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| Numba  | Release date | Python                    | NumPy                      | llvmlite                     | LLVM              | TBB                         |
++========+==============+===========================+============================+==============================+===================+=============================+
+| 0.55.x | 2022-01-13   | 3.7.x <= version < 3.11   | 1.18 <= version < 1.22     | 0.38.x                       | 11.x              | 2021.x                      |
++--------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.54.x | 2021-08-19   | 3.6.x <= version < 3.10   | 1.17 <= version < 1.21     | 0.37.x                       | 11.x              | 2021.x                      |
++--------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.53.x | 2021-03-11   | 3.6.x <= version < 3.10   | 1.15 <= version < 1.21     | 0.36.x                       | 11.x              | 2019.5 <= version < 2021.4  |
++--------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.52.x | 2020-11-30   | 3.6.x <= version < 3.9    | 1.15 <= version < 1.20     | 0.35.x                       | 10.x              | 2019.5 <= version < 2020.3  |
+|        |              |                           |                            |                              | (9.x for aarch64) |                             |
++--------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.51.x | 2020-08-12   | 3.6.x <= version < 3.9    | 1.15 <= version < 1.19     | 0.34.x                       | 10.x              | 2019.5 <= version < 2020.0  |
+|        |              |                           |                            |                              | (9.x for aarch64) |                             |
++--------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.50.x | 2020-06-10   | 3.6.x <= version < 3.9    | 1.15 <= version < 1.19     | 0.33.x                       | 9.x               | 2019.5 <= version < 2020.0  |
++--------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.49.x | 2020-04-16   | 3.6.x <= version < 3.9    | 1.15 <= version < 1.18     | 0.31.x <= version < 0.33.x   | 9.x               | 2019.5 <= version < 2020.0  |
++--------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.48.x | 2020-01-27   | 3.6.x <= version < 3.9    | 1.15 <= version < 1.18     | 0.31.x                       | 8.x               | 2018.0.5 <= version < ?     |
+|        |              |                           |                            |                              | (7.x for ppc64le) |                             |
++--------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.47.x | 2020-01-02   | 3.5.x <= version < 3.9;   | 1.15 <= version < 1.18     | 0.30.x                       | 8.x               | 2018.0.5 <= version < ?     |
+|        |              | version == 2.7.x          |                            |                              | (7.x for ppc64le) |                             |
++--------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
 
 Checking your installation
 --------------------------

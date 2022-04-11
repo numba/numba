@@ -1200,7 +1200,9 @@ class TestOperatorMixedTypes(TestCase):
             for x, y in itertools.product(things, things):
                 expected = func.py_func(x, y)
                 got = func(x, y)
-                self.assertEqual(expected, got)
+                message = ("%s %s %s does not match between Python and Numba"
+                           % (x, opstr, y))
+                self.assertEqual(expected, got, message)
 
 
 class TestIsinstanceBuiltin(TestCase):
