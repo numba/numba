@@ -854,14 +854,64 @@ def array_argmax(arr, axis=None):
 
 @overload(np.all)
 @overload_method(types.Array, "all")
-def np_all(a):
-    def flat_all(a):
+def np_all(a, axis=None):
+
+    @register_jitable
+    def _np_all_flat(a):
         for v in np.nditer(a):
             if not v.item():
                 return False
         return True
 
-    return flat_all
+    @register_jitable
+    def _np_all_axis0(a):
+        out = np.logical_and(a[0], a[1])
+        for v in iter(a[2:]):
+            for idx, v_2 in enumerate(v):
+                out[idx] = np.logical_and(v_2, out[idx])
+        return out
+
+    @register_jitable
+    def _np_all_axis1(a):
+        out = np.logical_and(a[:, 0], a[:, 1])
+        for idx, v in enumerate(a[:, 2:]):
+            for v_2 in iter(v):
+                out[idx] = np.logical_and(v_2, out[idx])
+        return out
+
+    if not isinstance(axis, (types.Integer, types.NoneType)):
+        raise TypingError("'axis' must be 0, 1, or None")
+
+    if not (1 <= a.ndim <= 2):
+        raise TypingError("Only supports 1D or 2D NumPy ndarrays")
+
+    if isinstance(axis, types.NoneType):
+        def _np_all_impl(a, axis=None):
+            return _np_all_flat(a)
+
+        return _np_all_impl
+
+    elif a.ndim == 1:
+        def _np_all_impl(a, axis=None):
+            return _np_all_flat(a)
+
+        return _np_all_impl
+
+    elif a.ndim == 2:
+        def _np_all_impl(a, axis=None):
+            if axis == 0:
+                return _np_all_axis0(a)
+            else:
+                return _np_all_axis1(a)
+
+        return _np_all_impl
+
+    else:
+        def _np_all_impl(a, axis=None):
+            return _np_all_flat(a)
+
+        return _np_all_impl
+
 
 
 @overload(np.any)
