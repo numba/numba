@@ -1454,13 +1454,24 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         pyfunc = np_unique
         cfunc = jit(nopython=True)(pyfunc)
 
-        def check(a):
-            np.testing.assert_equal(pyfunc(a), cfunc(a))
+        def check(a, axis):
+            np.testing.assert_equal(pyfunc(a, axis=axis), cfunc(a, axis=axis))
 
-        check(np.array([[1, 1, 3], [3, 4, 5]]))
-        check(np.array(np.zeros(5)))
-        check(np.array([[3.1, 3.1], [1.7, 2.29], [3.3, 1.7]]))
-        check(np.array([]))
+        check(np.array([[1, 1, 3], [3, 4, 5]]), None)
+        check(np.array(np.zeros(5)), None)
+        check(np.array([[3.1, 3.1], [1.7, 2.29], [3.3, 1.7]]), None)
+        check(np.array([]), None)
+
+        check(np.array([[0, 1, 1], [0, 1, 1], [0, 0, 0]]), 0)
+        check(np.array(np.zeros(5, 4)), 0)
+        check(np.array([[3.1, 2.7], [3.4, 9.8], [3.1, 2.7]]))
+        check(np.array([]), 0)
+
+        check(np.array([[2, 3, 2], [8, 4, 8]]), 1)
+        check(np.array(np.zeros(4, 5)), 1)
+        check(np.array([[2.5, 5.4, 2.5], [-1.3, 9.8, -1.3]]), 1)
+        check(np.array([]), 1)
+
 
     @needs_blas
     def test_array_dot(self):
