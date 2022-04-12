@@ -1082,4 +1082,3 @@ def cuda_dispatcher_const(context, builder, ty, pyval):
     return context.get_dummy_value()
 
 # -----------------------------------------------------------------------------
-

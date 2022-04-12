@@ -22,6 +22,7 @@ register_attr = typing_registry.register_attr
 register_global = typing_registry.register_global
 lower = impl_registry.lower
 
+
 def once(func):
     def wrapper(*args, **kwargs):
         if not hasattr(func, "_has_run"):
@@ -249,12 +250,12 @@ def lower_vector_type_binops(
 def vector_type_ctor_overloads(vty: VectorType) -> List[Tuple[types.Type]]:
     return [(vty.base_type,) * vty.num_elements]
 
+
 vector_types : List[VectorType] = []
+
 
 @once
 def initialize_once():
-    global vector_types
-
     for stub in stubs._vector_type_stubs:
         type_name = stub.__name__
         base_type = _vector_type_to_base_types[type_name[:-1]]
