@@ -1,7 +1,7 @@
 # CUDA built-in Vector Types
 # https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#built-in-vector-types
 
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 from numba import types
 from numba.core import cgutils
@@ -170,7 +170,26 @@ def enable_vector_type_ctor(
         lower(ctor, *arglist)(lowering)
 
 
-vector_types : List[VectorType] = []
+vector_types : Dict[str, VectorType] = {}
+
+
+def type_lookup(base_type, vty_name, num_elements):
+    if num_elements == 1:
+        return base_type
+    return vector_types[f"{vty_name[:-1]}{num_elements}"]
+
+
+def build_constructor_overloads(base_type, vty_name, num_elements, arglists, l):
+    # TODO: speed up with memolization
+    if num_elements == 0:
+        arglists.append(l[:])
+
+    for i in range(1, num_elements + 1):
+        l.append(type_lookup(base_type, vty_name, i))
+        build_constructor_overloads(
+            base_type, vty_name, num_elements - i, arglists, l
+        )
+        l.pop(-1)
 
 
 @once
@@ -181,8 +200,11 @@ def initialize_once():
         num_elements = int(type_name[-1])
         attributes = stubs._vector_type_attribute_names[:num_elements]
         vector_type = make_vector_type(type_name, base_type, attributes, stub)
-        vector_types.append(vector_type)
+        vector_types[type_name] = (vector_type)
 
-    for vty in vector_types:
-        arglists = [(vty.base_type,) * vty.num_elements]
+    for vty in vector_types.values():
+        arglists, l = [], []
+        build_constructor_overloads(
+            vty.base_type, vty.name, vty.num_elements, arglists, l
+        )
         enable_vector_type_ctor(vty, arglists)
