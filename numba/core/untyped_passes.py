@@ -211,10 +211,6 @@ class InlineClosureLikes(FunctionPass):
 
         fixup_var_define_in_scope(state.func_ir.blocks)
 
-        if config.DEBUG or config.DUMP_IR:
-            name = state.func_ir.func_id.func_qualname
-            print(("IR DUMP: %s" % name).center(80, "-"))
-            state.func_ir.dump()
         return True
 
 

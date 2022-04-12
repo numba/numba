@@ -435,6 +435,7 @@ The following top-level functions are supported:
 * :func:`numpy.bincount`
 * :func:`numpy.blackman`
 * :func:`numpy.broadcast_to` (only the 2 first arguments)
+* :func:`numpy.broadcast_arrays` (only the first argument)
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate`
 * :func:`numpy.convolve` (only the 2 first arguments)
@@ -672,6 +673,7 @@ The following functions support all arguments.
 * :func:`numpy.random.logseries`
 * :func:`numpy.random.multinomial`
 * :func:`numpy.random.negative_binomial`
+* :func:`numpy.random.noncentral_chisquare`
 * :func:`numpy.random.normal`
 * :func:`numpy.random.pareto`
 * :func:`numpy.random.poisson`

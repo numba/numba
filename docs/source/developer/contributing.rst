@@ -80,27 +80,28 @@ platform.  In this case, please prepend ``[WIP]`` to your pull request's title.
 Build environment
 '''''''''''''''''
 
-Numba has a number of dependencies (mostly `NumPy <http://www.numpy.org/>`_
-and `llvmlite <https://github.com/numba/llvmlite>`_) with non-trivial build
+Numba has a number of dependencies (mostly `NumPy <http://www.numpy.org/>`_ and
+`llvmlite <https://github.com/numba/llvmlite>`_) with non-trivial build
 instructions.  Unless you want to build those dependencies yourself, we
-recommend you use `conda <http://conda.pydata.org/miniconda.html>`_ to
-create a dedicated development environment and install precompiled versions
-of those dependencies there.
+recommend you use `conda <http://conda.pydata.org/miniconda.html>`_ to create a
+dedicated development environment and install precompiled versions of those
+dependencies there. Read more about the Numba dependencies here:
+`numba-source-install-check`.
 
-First add the Anaconda Cloud ``numba`` channel so as to get development builds
-of the llvmlite library::
+When working with a source checkout of Numba you will also need a development
+build of llvmlite. These are available from the ``numba/label/dev`` channel on
+`anaconda.org <https://anaconda.org/numba/llvmlite>`_.
 
-   $ conda config --add channels numba
 
-Then create an environment with the right dependencies::
+Then, to create an environment with a few of the most common dependencies::
 
-   $ conda create -n numbaenv python=3.8 llvmlite numpy scipy jinja2 cffi
+   $ conda create -n numbaenv python=3.10 numba/label/dev::llvmlite numpy scipy jinja2 cffi
 
 .. note::
-   This installs an environment based on Python 3.8, but you can of course
+   This installs an environment based on Python 3.10, but you can of course
    choose another version supported by Numba.  To test additional features,
-   you may also need to install ``tbb`` and/or ``llvm-openmp`` and
-   ``intel-openmp``.
+   you may also need to install ``tbb`` and/or ``llvm-openmp``. Check the
+   dependency list above for details.
 
 To activate the environment for the current shell session::
 
@@ -114,13 +115,12 @@ Once the environment is activated, you have a dedicated Python with the
 required dependencies::
 
     $ python
-    Python 3.8.5 (default, Sep  4 2020, 07:30:14) 
-    [GCC 7.3.0] :: Anaconda, Inc. on linux
+    Python 3.10.3 (main, Mar 28 2022, 04:26:28) [Clang 12.0.0 ] on darwin
     Type "help", "copyright", "credits" or "license" for more information.
 
     >>> import llvmlite
     >>> llvmlite.__version__
-    '0.35.0'
+    0.39.0dev0+61.gf27ac6f
 
 
 Building Numba
@@ -129,7 +129,7 @@ Building Numba
 For a convenient development workflow, we recommend you build Numba inside
 its source checkout::
 
-   $ git clone git://github.com/numba/numba.git
+   $ git clone git@github.com:numba/numba.git
    $ cd numba
    $ python setup.py build_ext --inplace
 
@@ -277,7 +277,7 @@ imported with an ``pt`` prefix. For example, ``typing.Dict`` is imported as ``fr
 Stability
 '''''''''
 
-The repository's ``master`` branch is expected to be stable at all times.
+The repository's ``main`` branch is expected to be stable at all times.
 This translates into the fact that the test suite passes without errors
 on all supported platforms (see below).  This also means that a pull request
 also needs to pass the test suite before it is merged in.
@@ -287,7 +287,7 @@ also needs to pass the test suite before it is merged in.
 Platform support
 ''''''''''''''''
 
-Every commit to the master branch is automatically tested on all of the
+Every commit to the main branch is automatically tested on all of the
 platforms Numba supports. This includes ARMv8, POWER8, and NVIDIA GPUs.
 The build system however is internal to Anaconda, so we also use
 `Azure <https://dev.azure.com/numba/numba/_build>`_ to provide public continuous
@@ -465,4 +465,4 @@ Finally, use ``git push`` to update the website.
 
 
 .. _typeguard: https://typeguard.readthedocs.io/en/latest/
-.. _runtests.py: https://github.com/numba/numba/blob/master/runtests.py
+.. _runtests.py: https://github.com/numba/numba/blob/main/runtests.py
