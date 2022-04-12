@@ -1743,6 +1743,25 @@ def numpy_logspace(start, stop, num=50):
     return impl
 
 
+@overload(np.geomspace)
+def numpy_geomspace(start, stop, num=50):
+    if not isinstance(start, types.Number):
+        raise errors.TypingError('The first argument "start" must be a number')
+    if not isinstance(stop, types.Number):
+        raise errors.TypingError('The second argument "stop" must be a number')
+    if not isinstance(num, (int, types.Integer)):
+        raise errors.TypingError('The third argument "num" must be an integer')
+
+    def impl(start, stop, num=50):
+        if np.isreal(stop) and np.isreal(start):
+            if np.real(start) * np.real(stop) <= 0:
+                raise ValueError('Geometric sequence cannot include zero.')
+
+        return np.logspace(np.log10(start), np.log10(stop), num)
+
+    return impl
+
+
 @overload(np.rot90)
 def numpy_rot90(arr, k=1):
     # supporting axes argument it needs to be included in np.flip

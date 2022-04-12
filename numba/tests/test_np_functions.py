@@ -165,6 +165,14 @@ def logspace3(start, stop, num=50):
     return np.logspace(start, stop, num=num)
 
 
+def geomspace(start, stop):
+    return np.geomspace(start, stop)
+
+
+def geomspace_num(start, stop, num=50):
+    return np.geomspace(start, stop, num=num)
+
+
 def rot90(a):
     return np.rot90(a)
 
@@ -2575,6 +2583,80 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc(0, 5, "abc")
         self.assertIn('The third argument "num" must be an integer',
+                      str(raises.exception))
+
+    def test_geomspace(self):
+
+        def inputs():
+            #start, stop
+            yield 1, 60
+            yield 60, 1
+            yield 1.0, 60.0
+            yield 60.0, 1.0
+            yield 1.0, np.e
+            yield 1.0, np.pi
+            yield np.complex64(1), np.complex64(2)
+            yield np.complex64(2j), np.complex64(4j)
+            yield np.complex64(2), np.complex64(4j)
+            yield np.complex64(1 + 2j), np.complex64(3 + 4j)
+            yield np.complex64(1 - 2j), np.complex64(3 - 4j)
+
+        pyfunc = geomspace
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for start, stop in inputs():
+            np.testing.assert_allclose(pyfunc(start, stop),
+                                       cfunc(start, stop),
+                                       rtol=1e-6)
+
+    def test_geomspace_num(self):
+
+        def inputs():
+            #start, stop, num
+            yield 1, 60, 20
+            yield 60, 1, 60
+            yield 1.0, 60.0, 70
+            yield 60.0, 1.0, 90
+            yield 1.0, np.e, 20
+            yield 1.0, np.pi, 30
+            yield np.complex64(1), np.complex64(2), 40
+            yield np.complex64(2j), np.complex64(4j), 50
+            yield np.complex64(2), np.complex64(4j), 60
+            yield np.complex64(1 + 2j), np.complex64(3 + 4j), 70
+            yield np.complex64(1 - 2j), np.complex64(3 - 4j), 80
+
+        pyfunc = geomspace_num
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for start, stop, num in inputs():
+            np.testing.assert_allclose(pyfunc(start, stop, num),
+                                       cfunc(start, stop, num),
+                                       rtol=1e-6)
+
+    def test_geomspace_exception(self):
+        pyfunc = geomspace_num
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc", 5)
+        self.assertIn('The first argument "start" must be a number',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(5, "abc")
+        self.assertIn('The second argument "stop" must be a number',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(1, 5, "abc")
+        self.assertIn('The third argument "num" must be an integer',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(0, 4, 10)
+        self.assertIn('Geometric sequence cannot include zero',
                       str(raises.exception))
 
     def test_rot90_basic(self):

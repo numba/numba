@@ -470,6 +470,7 @@ The following top-level functions are supported:
 * :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full` (only the 3 first arguments)
 * :func:`numpy.full_like` (only the 3 first arguments)
+* :func:`numpy.geomspace` (only the 3 first arguments)
 * :func:`numpy.hamming`
 * :func:`numpy.hanning`
 * :func:`numpy.histogram` (only the 3 first arguments)
