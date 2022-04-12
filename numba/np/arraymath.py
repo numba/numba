@@ -22,7 +22,9 @@ from numba.np.numpy_support import is_nonelike, check_is_integer
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                  impl_ret_new_ref, impl_ret_untracked)
 from numba.core.typing import signature
-from numba.np.arrayobj import make_array, load_item, store_item, _empty_nd_impl
+from numba.np.arrayobj import (make_array, load_item,
+                               numpy_broadcast_shapes_list,
+                               store_item, _empty_nd_impl)
 from numba.np.linalg import ensure_blas
 
 from numba.core.extending import intrinsic
@@ -1166,45 +1168,70 @@ complex_nanmax = register_jitable(
 
 
 @register_jitable
-def _within_tol(a, b, rtol, atol):
-    return np.less_equal(np.abs(a - b), atol + rtol * np.abs(b))
+def _isclose_item(x, y, rtol, atol, equal_nan):
+    if np.isnan(x) and np.isnan(y):
+        return equal_nan
+    elif np.isinf(x) and np.isinf(y):
+        return (x > 0) == (y > 0)
+    elif np.isinf(x) or np.isinf(y):
+        return False
+    else:
+        return abs(x - y) <= atol + rtol * abs(y)
 
 
 @overload(np.isclose)
-def np_isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-    # Based on NumPy impl.
-    # https://github.com/numpy/numpy/blob/d9b1e32cb8ef90d6b4a47853241db2a28146a57d/numpy/core/numeric.py#L2180-L2292
-
+def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     if not(type_can_asarray(a) and type_can_asarray(b)):
         raise TypingError("Inputs for `np.isclose` must be array-like.")
 
-    def impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-        xfin = np.asarray(np.isfinite(a))
-        yfin = np.asarray(np.isfinite(b))
-        x, y = np.asarray(a), np.asarray(b)
-        if np.all(xfin) and np.all(yfin):
-            return _within_tol(x, y, rtol, atol)
-        else:
-            finite = xfin & yfin
-            r = np.zeros_like(finite)
-            x = x * np.ones_like(r)
-            y = y * np.ones_like(r)
+    if isinstance(a, types.Array) and isinstance(b, types.Number):
+        def isclose_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+            x = a.reshape(-1)
+            y = b
+            out = np.zeros(len(x), np.bool_)
+            for i in range(len(out)):
+                out[i] = _isclose_item(x[i], y, rtol, atol, equal_nan)
+            return out.reshape(a.shape)
 
-            r = _within_tol(x, y, rtol, atol)
-            # Negate every element that is not finite
-            r &= (xfin & yfin)
+    elif isinstance(a, types.Number) and isinstance(b, types.Array):
+        def isclose_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+            x = a
+            y = b.reshape(-1)
+            out = np.zeros(len(y), np.bool_)
+            for i in range(len(out)):
+                out[i] = _isclose_item(x, y[i], rtol, atol, equal_nan)
+            return out.reshape(b.shape)
 
-            # Check for equality of infinite values
-            r |= (x == np.asarray(np.inf)) & (y == np.asarray(np.inf))
-            r |= (x == np.asarray(-np.inf)) & (y == np.asarray(-np.inf))
+    elif isinstance(a, types.Array) and isinstance(b, types.Array):
+        m = max(a.ndim, b.ndim)
+        tup_init = (0,) * m
 
-            if equal_nan:
-                xnan = np.asarray(np.isnan(a))
-                ynan = np.asarray(np.isnan(b))
-                return r | (xnan & ynan)
-            else:
-                return r
-    return impl
+        def isclose_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+            # Broadcast arrays of different types - cannot use
+            # np.broadcast_to for that
+            shape = [1] * m
+            numpy_broadcast_shapes_list(shape, m, a.shape)
+            numpy_broadcast_shapes_list(shape, m, b.shape)
+
+            tup = tup_init  # tup is the final shape
+
+            for i in range(m):
+                tup = tuple_setitem(tup, i, shape[i])
+
+            a_ = np.broadcast_to(a, tup)
+            b_ = np.broadcast_to(b, tup)
+
+            out = np.zeros(len(a_), dtype=np.bool_)
+            for i, (av, bv) in enumerate(np.nditer((a_, b_))):
+                out[i] = _isclose_item(av.item(), bv.item(), rtol, atol,
+                                       equal_nan)
+            return np.broadcast_to(out, tup)
+
+    else:
+        def isclose_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+            return _isclose_item(a, b, rtol, atol, equal_nan)
+
+    return isclose_impl
 
 
 @overload(np.nanmin)

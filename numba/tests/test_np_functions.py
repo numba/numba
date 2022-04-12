@@ -1020,6 +1020,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             else:
                 self.assertTrue(np.array_equal(expected, got))
 
+    def isclose_exception(self):
+        pyfunc = isclose
+        cfunc = jit(nopython=True)(pyfunc)
         inputs = [('hello', 'world'), (2.0, None), ('a', 3.0)]
         for (a, b) in inputs:
             with self.assertRaises(TypingError) as raises:
