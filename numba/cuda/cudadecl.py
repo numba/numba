@@ -4,8 +4,7 @@ from numba.core.typing.npydecl import (parse_dtype, parse_shape,
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          AbstractTemplate, CallableTemplate,
                                          signature, Registry)
-from numba.cuda.types import dim3, grid_group, vector_type_list
-from numba.cuda import stubs
+from numba.cuda.types import dim3, grid_group
 from numba import cuda
 
 
@@ -643,38 +642,5 @@ class CudaModuleTemplate(AttributeTemplate):
     def resolve_local(self, mod):
         return types.Module(cuda.local)
 
-
-def declare_vector_type_attribute(vector_type):
-    class VectorTypeTemplate(AttributeTemplate):
-        key = vector_type
-
-    for attr in vector_type.attr_names:
-        setattr(
-            VectorTypeTemplate,
-            f"resolve_{attr}",
-            lambda self, mod: vector_type.base_type
-        )
-
-    register_attr(VectorTypeTemplate)
-
-
-def declare_vector_type_factory(stub, vector_type):
-    class FactoryTemplate(ConcreteTemplate):
-        key = stub
-        cases = [signature(
-            vector_type,
-            *([vector_type.base_type] * vector_type.num_elements)
-        )]
-        print("FactoryTemplate", key.__name__, cases)
-
-    register(FactoryTemplate)
-    register_global(stub, types.Function(FactoryTemplate))
-
-
-for vector_type, stub in zip(
-    vector_type_list, stubs._vector_type_factory_method_stubs
-):
-    declare_vector_type_attribute(vector_type)
-    declare_vector_type_factory(stub, vector_type)
 
 register_global(cuda, types.Module(cuda))

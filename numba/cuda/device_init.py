@@ -8,7 +8,7 @@ from .stubs import (threadIdx, blockIdx, blockDim, gridDim, laneid,
                     threadfence_block, threadfence_system,
                     threadfence, selp, popc, brev, clz, ffs, fma, cbrt,
                     cg, activemask, lanemask_lt, nanosleep, fp16,
-                    _vector_type_stubs, _vector_type_factory_method_stubs)
+                    _vector_type_stubs)
 from .cudadrv.error import CudaSupportError
 from numba.cuda.cudadrv.driver import (BaseCUDAMemoryManager,
                                        HostOnlyCUDAMemoryManager,
@@ -33,16 +33,9 @@ from .kernels import reduction
 
 reduce = Reduce = reduction.Reduce
 
-# Expose vector types and factory methods as module level attributes.
-for vector_type_stub, vector_type_factory_stub in zip(
-    _vector_type_stubs, _vector_type_factory_method_stubs
-):
+# Expose vector types constructors as module level attributes.
+for vector_type_stub in _vector_type_stubs:
     setattr(sys.modules[__name__], vector_type_stub.__name__, vector_type_stub)
-    setattr(
-        sys.modules[__name__],
-        vector_type_factory_stub.__name__,
-        vector_type_factory_stub
-    )
 
 
 def is_available():

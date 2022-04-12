@@ -4,12 +4,6 @@ This scripts specifies all PTX special objects.
 import functools
 import itertools
 
-from ._vector_type_meta import (
-    _vector_type_prefix,
-    _vector_type_element_counts,
-    _vector_type_attribute_names
-)
-
 
 class Stub(object):
     '''
@@ -666,28 +660,37 @@ class fp16(Stub):
 
 
 #-------------------------------------------------------------------------------
-# Vector Type
+# vector types
+
+_vector_type_prefix = (
+    "char",
+    "short",
+    "int",
+    "long",
+    "longlong",
+    "uchar",
+    "ushort",
+    "uint",
+    "ulong",
+    "ulonglong",
+    "float",
+    "double"
+)
+_vector_type_element_counts = (1, 2, 3, 4)
+_vector_type_attribute_names = ("x", "y", "z", "w")
 
 _vector_type_stubs = []
-
 for name, nelem in itertools.product(
     _vector_type_prefix, _vector_type_element_counts
 ):
     type_name = f"{name}{nelem}"
-    attr_names = _vector_type_attribute_names[:nelem + 1]
+    attr_names = _vector_type_attribute_names[:nelem]
 
     vector_type_stub = type(
         type_name, (Stub,),
-        {attr: lambda self: None for attr in attr_names}
+        {
+            **{attr: lambda self: None for attr in attr_names},
+            **{"_description_": f"<{type_name}>"}
+        }
     )
     _vector_type_stubs.append(vector_type_stub)
-
-#-------------------------------------------------------------------------------
-# Vector Type Factory Method
-
-_vector_type_factory_method_stubs = []
-
-for vector_type_stub in _vector_type_stubs:
-    fn = stub_function(lambda: None)
-    fn.__name__ = f"make_{vector_type_stub.__name__}"
-    _vector_type_factory_method_stubs.append(fn)
