@@ -1080,5 +1080,3 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
 @lower_constant(CUDADispatcher)
 def cuda_dispatcher_const(context, builder, ty, pyval):
     return context.get_dummy_value()
-
-# -----------------------------------------------------------------------------

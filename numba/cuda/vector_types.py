@@ -180,7 +180,7 @@ def type_lookup(base_type, vty_name, num_elements):
 
 
 def build_constructor_overloads(base_type, vty_name, num_elements, arglists, l):
-    # TODO: speed up with memolization
+    # TODO: speed up with memoization
     if num_elements == 0:
         arglists.append(l[:])
 
