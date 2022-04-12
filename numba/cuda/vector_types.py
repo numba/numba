@@ -5,7 +5,6 @@ from typing import List, Tuple
 
 from numba import types
 from numba.core import cgutils
-from numba.core.errors import TypingError
 from numba.core.extending import make_attribute_wrapper, models, register_model
 from numba.core.imputils import Registry as ImplRegistry
 from numba.core.typing.templates import ConcreteTemplate
@@ -32,7 +31,7 @@ def once(func):
 
 
 # TODO: double check the type mapping is correct for all platforms.
-# TODO: see numba.core.types.__init__.py, create aliases such as int32x4=int4?
+# QST: need aliases such as int32x4=int4?
 _vector_type_to_base_types = {
     "char": types.char,
     "short": types.int16,
@@ -116,8 +115,8 @@ def enable_vector_type_ctor(
     vector_type: VectorType
         The type whose constructor to type and lower.
     overloads: List of argument types tuples
-        A list containing different overloads of the factory function. Each
-        base type in the tuple should either be primitive type or VectorType.
+        A list containing different overloads of the constructor. Each base type
+        in the tuple should either be primitive type or VectorType.
     """
     ctor = vector_type.user_facing_object
 
@@ -130,13 +129,13 @@ def enable_vector_type_ctor(
 
     # Lowering
 
-    def make_lower_factory(fml_arg_list):
-        """Meta function to create a lowering for the factory function. Flattens
+    def make_lowering(fml_arg_list):
+        """Meta function to create a lowering for the constructor. Flattens
         the arguments by converting vector_type into load instructions for each
         of its attributes. Such as float2 -> float2.x, float2.y.
         """
 
-        def lower_factory(context, builder, sig, actual_args):
+        def lowering(context, builder, sig, actual_args):
             # A list of elements to assign from
             source_list = []
             # Convert the list of argument types to a list of load IRs.
@@ -164,91 +163,11 @@ def enable_vector_type_ctor(
                 setattr(out, attr_name, source)
             return out._getvalue()
 
-        return lower_factory
+        return lowering
 
     for arglist in overloads:
-        lower_factory = make_lower_factory(arglist)
-        lower(ctor, *arglist)(lower_factory)
-
-
-def lower_vector_type_binops(
-    binop, vector_type: VectorType, overloads: List[Tuple[types.Type]]
-):
-    """Lower binops for ``vector_type``
-
-    Parameters
-    ----------
-    binop: operation
-        The binop to lower
-    vector_type: VectorType
-        The type to lower op for.
-    overloads: List of argument types tuples
-        A list containing different overloads of the binop. Should be one of:
-            - vector_type x vector_type
-            - primitive_type x vector_type
-            - vector_type x primitive_type.
-        If one of the oprand is primitive_type, the operation is broadcasted.
-    """
-    # Should we assume the above are the only possible cases?
-    class Vector_op_template(ConcreteTemplate):
-        key = binop
-        cases = [signature(vector_type, *arglist) for arglist in overloads]
-
-    def make_lower_op(fml_arg_list):
-        def op_impl(context, builder, sig, actual_args):
-            def _make_load_IR(typ, actual_arg):
-                if isinstance(typ, VectorType):
-                    pxy = cgutils.create_struct_proxy(typ)(
-                        context, builder, actual_arg
-                    )
-                    oprands = [getattr(pxy, attr) for attr in typ.attr_names]
-                else:
-                    # Assumed primitive type, broadcast
-                    oprands = [
-                        actual_arg for _ in range(vector_type.num_elements)
-                    ]
-                return oprands
-
-            def element_wise_op(lhs, rhs, res, attr):
-                setattr(
-                    res,
-                    attr,
-                    context.compile_internal(
-                        builder,
-                        lambda x, y: binop(x, y),
-                        signature(types.float32, types.float32, types.float32),
-                        (lhs, rhs),
-                    ),
-                )
-
-            lhs_typ, rhs_typ = fml_arg_list
-            # Construct a list of load IRs
-            lhs = _make_load_IR(lhs_typ, actual_args[0])
-            rhs = _make_load_IR(rhs_typ, actual_args[1])
-
-            if not len(lhs) == len(rhs) == vector_type.num_elements:
-                raise TypingError(
-                    f"Unmatched number of lhs elements ({len(lhs)}), rhs "
-                    f"elements ({len(rhs)}) and target elements "
-                    f"({vector_type.num_elements})."
-                )
-
-            out = cgutils.create_struct_proxy(vector_type)(context, builder)
-            for attr, l, r in zip(vector_type.attr_names, lhs, rhs):
-                element_wise_op(l, r, out, attr)
-
-            return out._getvalue()
-
-        return op_impl
-
-    register_global(binop, types.Function(Vector_op_template))
-    for arglist in overloads:
-        impl = make_lower_op(arglist)
-        lower(binop, *arglist)(impl)
-
-
-def vector_type_ctor_overloads(vty: VectorType) -> List[Tuple[types.Type]]:
-    return [(vty.base_type,) * vty.num_elements]
+        lowering = make_lowering(arglist)
+        lower(ctor, *arglist)(lowering)
 
 
 vector_types : List[VectorType] = []
@@ -265,4 +184,5 @@ def initialize_once():
         vector_types.append(vector_type)
 
     for vty in vector_types:
-        enable_vector_type_ctor(vty, vector_type_ctor_overloads(vty))
+        arglists = [(vty.base_type,) * vty.num_elements]
+        enable_vector_type_ctor(vty, arglists)
