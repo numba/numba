@@ -1208,7 +1208,9 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
         def isclose_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
             # Broadcast arrays of different types - cannot use
-            # np.broadcast_to for that
+            # np.broadcast_arrays for that
+            # this can be replaced by np.broadcast_shapes once #7437
+            # is merged
             shape = [1] * m
             numpy_broadcast_shapes_list(shape, m, a.shape)
             numpy_broadcast_shapes_list(shape, m, b.shape)
