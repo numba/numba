@@ -2590,9 +2590,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def inputs():
             #start, stop
             yield 1, 60
+            yield -1, -60
             yield 60, 1
+            yield -60, -1
             yield 1.0, 60.0
+            yield -1.0, -60.0
             yield 60.0, 1.0
+            yield -60.0, -1.0
             yield 1.0, np.e
             yield 1.0, np.pi
             yield np.complex64(1), np.complex64(2)
@@ -2606,17 +2610,20 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         for start, stop in inputs():
             np.testing.assert_allclose(pyfunc(start, stop),
-                                       cfunc(start, stop),
-                                       rtol=1e-6)
+                                       cfunc(start, stop))
 
     def test_geomspace_num(self):
 
         def inputs():
             #start, stop, num
             yield 1, 60, 20
-            yield 60, 1, 60
+            yield -1, -60, 30
+            yield 60, 1, 40
+            yield -60, -1, 50
             yield 1.0, 60.0, 70
+            yield -1.0, -60.0, 80
             yield 60.0, 1.0, 90
+            yield -60.0, -1.0, 60
             yield 1.0, np.e, 20
             yield 1.0, np.pi, 30
             yield np.complex64(1), np.complex64(2), 40
@@ -2630,8 +2637,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         for start, stop, num in inputs():
             np.testing.assert_allclose(pyfunc(start, stop, num),
-                                       cfunc(start, stop, num),
-                                       rtol=1e-6)
+                                       cfunc(start, stop, num))
 
     def test_geomspace_exception(self):
         pyfunc = geomspace_num

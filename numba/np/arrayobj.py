@@ -1753,11 +1753,43 @@ def numpy_geomspace(start, stop, num=50):
         raise errors.TypingError('The third argument "num" must be an integer')
 
     def impl(start, stop, num=50):
-        if np.isreal(stop) and np.isreal(start):
+        # Promote both arguments to the same dtype in case, for instance, one is
+        # complex and another is negative and log would produce NaN otherwise.
+        dt = type(start + stop + np.float64(1))
+        start = dt(start)
+        stop = dt(stop)
+
+        if np.isrealobj(stop) and np.isrealobj(start):
             if np.real(start) * np.real(stop) <= 0:
                 raise ValueError('Geometric sequence cannot include zero.')
 
-        return np.logspace(np.log10(start), np.log10(stop), num)
+        # Avoid negligible real or imaginary parts in output by rotating to
+        # positive real, calculating, then undoing rotation
+        out_sign = 1
+        if np.iscomplexobj(start) and np.iscomplexobj(stop):
+            if np.real(start) == 0 and np.real(stop) == 0:
+                start = np.imag(start)
+                stop = np.imag(stop)
+                out_sign = 1j
+
+        if np.isrealobj(stop) and np.isrealobj(start):
+            if np.real(start) < 0 and np.real(stop) < 0:
+                start = -1 * start
+                stop = -1 * stop
+                out_sign = -1
+
+        result = np.logspace(np.log10(start), np.log10(stop), num)
+
+        # Make sure the endpoints match the start and stop arguments. This is
+        # necessary because np.exp(np.log(x)) is not necessarily equal to x.
+        if num > 0:
+            result[0] = start
+        if num > 1:
+            result[-1] = stop
+
+        result = out_sign * result
+
+        return result
 
     return impl
 
