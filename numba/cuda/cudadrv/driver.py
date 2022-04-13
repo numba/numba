@@ -2885,7 +2885,7 @@ class CudaPythonLinker(Linker):
         program = NvrtcProgram(cu, name)
 
         # Link the program's PTX using the normal linker mechanism
-        ptx_name = name[:-2] + ".ptx"
+        ptx_name = name[:-3] + ".ptx"
         self.add_ptx(program.ptx, ptx_name)
 
     def add_file(self, path, kind):
