@@ -13,6 +13,7 @@ import os
 import pickle
 import sys
 import tempfile
+import uuid
 import warnings
 
 from numba.misc.appdirs import AppDirs
@@ -565,10 +566,10 @@ class IndexDataCacheFile(object):
     @contextlib.contextmanager
     def _open_for_write(self, filepath):
         """
-        Open *filepath* for writing in a race condition-free way
-        (hopefully).
+        Open *filepath* for writing in a race condition-free way (hopefully).
+        uuid4 is used to try and avoid name collisions on a shared filesystem.
         """
-        tmpname = '%s.tmp.%d' % (filepath, os.getpid())
+        tmpname = '%s.tmp.%d' % (filepath, uuid.uuid4())
         try:
             with open(tmpname, "wb") as f:
                 yield f
