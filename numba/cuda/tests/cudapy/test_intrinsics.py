@@ -153,10 +153,6 @@ def hlt_func_2(x, y):
     return cuda.fp16.hlt(x, y)
 
 
-def test_predicate_reg(r, a, b, c):
-    r[0] = hlt_func_1(a, b) and hlt_func_2(b, c)
-
-
 def test_multiple_hcmp_1(r, a, b, c):
     # float16 predicates used in two separate functions
     r[0] = hlt_func_1(a, b) and hlt_func_2(b, c)
