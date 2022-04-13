@@ -955,22 +955,41 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                     return cres.entry_point
 
                 self._cache_misses[sig] += 1
-                ev_details = dict(
-                    dispatcher=self,
-                    args=args,
-                    return_type=return_type,
-                )
-                with ev.trigger_event("numba:compile", data=ev_details):
-                    try:
-                        cres = self._compiler.compile(args, return_type)
-                    except errors.ForceLiteralArg as e:
-                        def folded(args, kws):
-                            return self._compiler.fold_argument_types(args,
-                                                                      kws)[1]
-                        raise e.bind_fold_arguments(folded)
-                    self.add_overload(cres)
+                cres = self.compile_signature(args, return_type)
+
+                # Compile additional signature in case of optional args
+                # For int8(optional(int8), optional(int8)) we should compile
+                # int8(opitonal(int8), omitted) and int8( omitted, omitted)
+                for i, arg in enumerate(reversed(args), 1):
+                    if not isinstance(arg, types.Optional):
+                        break
+                    self.compile_signature(args[:-i] + (types.Omitted(None),)*i, return_type)
+
                 self._cache.save_overload(sig, cres)
                 return cres.entry_point
+
+
+    def compile_signature(self, args, return_type):
+        existing = self.overloads.get(tuple(args))
+        if existing:
+            return existing.entry_point
+        ev_details = dict(
+            dispatcher=self,
+            args=args,
+            return_type=return_type,
+        )
+        with ev.trigger_event("numba:compile", data=ev_details):
+            try:
+                cres = self._compiler.compile(args, return_type)
+            except errors.ForceLiteralArg as e:
+                def folded(args, kws):
+                    return self._compiler.fold_argument_types(args,
+                                                              kws)[1]
+
+                raise e.bind_fold_arguments(folded)
+            self.add_overload(cres)
+            return cres
+
 
     def get_compile_result(self, sig):
         """Compile (if needed) and return the compilation result with the
