@@ -2612,7 +2612,7 @@ class Linker(metaclass=ABCMeta):
     @abstractmethod
     def add_cu(self, cu, name):
         """Add CUDA source in a string to the link. The name of the source
-        file should be specified in `name` and must end in '.cu'."""
+        file should be specified in `name`."""
 
     @abstractmethod
     def add_file(self, path, kind):
@@ -2885,7 +2885,7 @@ class CudaPythonLinker(Linker):
         program = NvrtcProgram(cu, name)
 
         # Link the program's PTX using the normal linker mechanism
-        ptx_name = name[:-3] + ".ptx"
+        ptx_name = os.path.splitext(name)[0] + ".ptx"
         self.add_ptx(program.ptx, ptx_name)
 
     def add_file(self, path, kind):
