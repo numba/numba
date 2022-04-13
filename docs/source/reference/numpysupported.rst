@@ -470,7 +470,7 @@ The following top-level functions are supported:
 * :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full` (only the 3 first arguments)
 * :func:`numpy.full_like` (only the 3 first arguments)
-* :func:`numpy.geomspace` (only the 3 first arguments)
+* :func:`numpy.geomspace` (only the 3 first arguments; first two arguments must be scalars)
 * :func:`numpy.hamming`
 * :func:`numpy.hanning`
 * :func:`numpy.histogram` (only the 3 first arguments)
@@ -486,8 +486,8 @@ The following top-level functions are supported:
 * :func:`numpy.isscalar`
 * :func:`numpy.interp` (only the 3 first arguments)
 * :func:`numpy.intersect1d` (only first 2 arguments, ar1 and ar2)
-* :func:`numpy.linspace` (only the 3-argument form)
-* :func:`numpy.logspace` (only the 3 first arguments)
+* :func:`numpy.linspace` (only the 3 first arguments; first two arguments must be scalars)
+* :func:`numpy.logspace` (only the 3 first arguments; first two arguments must be scalars)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
 * :class:`numpy.nditer` (only the first argument)
