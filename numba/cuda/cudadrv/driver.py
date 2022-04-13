@@ -2611,7 +2611,8 @@ class Linker(metaclass=ABCMeta):
 
     @abstractmethod
     def add_cu(self, cu, name):
-        """Add CUDA source in a string to the link"""
+        """Add CUDA source in a string to the link. The name of the source
+        file should be specified in `name` and must end in '.cu'."""
 
     @abstractmethod
     def add_file(self, path, kind):
