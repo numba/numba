@@ -980,7 +980,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                     if self.overloads.get(tuple(args_variant)) is not None:
                         continue
                     try:
-                        cres_variant = self._compiler.compile(args_variant, 
+                        cres_variant = self._compiler.compile(args_variant,
                                                               return_type)
                     except Exception:
                         pass
