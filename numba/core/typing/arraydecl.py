@@ -27,6 +27,9 @@ def get_array_index_type(ary, idx):
     if not isinstance(ary, types.Buffer):
         return
 
+    if isinstance(idx, types.Optional):
+        return
+
     ndim = ary.ndim
 
     left_indices = []
