@@ -2884,6 +2884,11 @@ class CudaPythonLinker(Linker):
     def add_cu(self, cu, name):
         program = NvrtcProgram(cu, name)
 
+        if config.DUMP_ASSEMBLY:
+            print(("ASSEMBLY %s" % name).center(80, '-'))
+            print(program.ptx.decode())
+            print('=' * 80)
+
         # Link the program's PTX using the normal linker mechanism
         ptx_name = os.path.splitext(name)[0] + ".ptx"
         self.add_ptx(program.ptx, ptx_name)
