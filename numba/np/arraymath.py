@@ -913,7 +913,6 @@ def np_all(a, axis=None):
         return _np_all_impl
 
 
-
 @overload(np.any)
 @overload_method(types.Array, "any")
 def np_any(a):

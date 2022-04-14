@@ -2091,7 +2091,7 @@ def np_unique(a, axis=None):
         raise errors.TypingError("'axis' must be 0, 1, or None.")
 
     if not isinstance(axis, types.NoneType) and not (a.ndim == 2):
-        raise errors.TypingError("Only supports 2D NumPy ndarrays when axis" + \
+        raise errors.TypingError("Only supports 2D NumPy ndarrays when axis" +
                                  "is specified.")
 
     def _get_unique_impl(a, axis=None):
