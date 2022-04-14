@@ -1957,6 +1957,20 @@ class TestMisc(TestCase):
             is_jitted(guvectorize("void(float64[:])", "(m)")(foo))
         )
 
+    def test_overload_glue_arg_binding(self):
+        # See issue #7982, checks that calling a function with named args works
+        # correctly irrespective of the order in which the names are supplied.
+        @njit
+        def standard_order():
+            return np.full(shape=123, fill_value=456).shape
+
+        @njit
+        def reversed_order():
+            return np.full(fill_value=456, shape=123).shape
+
+        self.assertPreciseEqual(standard_order(), standard_order.py_func())
+        self.assertPreciseEqual(reversed_order(), reversed_order.py_func())
+
 
 class TestOverloadPreferLiteral(TestCase):
     def test_overload(self):
