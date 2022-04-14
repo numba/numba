@@ -2129,7 +2129,7 @@ def np_unique(a, axis=None):
                 # get counts for each unique row
                 counts = np.append(idx[1:], b.shape[0])
                 counts -= idx
-                return b[idx]
+                return b[idx] if axis == 0 else b[idx].T
             return _unique_axis_int
         else:
             raise errors.TypingError("'axis' must be 0 or 1.")
