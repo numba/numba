@@ -537,3 +537,35 @@ Timer Intrinsics
 
     Suspends the thread for a sleep duration approximately close to the delay
     ``ns``, specified in nanoseconds.
+
+
+Vector Types
+~~~~~~~~~~~~
+
+`CUDA Vector Types <https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#built-in-vector-types>`_
+are available in the kernel. Unlike native CUDA, vector types are constructed
+directly with their constructor. For example, to construct a ``float3``:
+
+.. code-block:: python3
+
+    from numba.cuda import float3
+
+    # In kernel
+    f3 = float3(float32(0.0), float32(-1.0), float32(1.0))
+
+Besides, vector type can be constructed from a combination of vector types and
+primitive types, as long as the total number of components matches with the result
+vector type. For example, all of the following constructions are valid:
+
+.. code-block:: python3
+
+    zero = uint32(0)
+    u2 = uint2(1, 2)
+    # Construct a 3-component vector with primitive type and a 2-component vector
+    u3 = uint3(zero, u2)
+    # Construct a 4-component vector with 2 2-component vectors
+    u4 = uint4(u2, u2)
+
+The 1st, 2nd, 3rd and 4th component of the vector type can be accessed through fields 
+``x``, ``y``, ``z``, ``w``, respectively. The components are currently immutable
+after construction.
