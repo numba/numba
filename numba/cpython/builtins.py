@@ -600,11 +600,17 @@ def redirect_type_ctor(context, builder, sig, args):
     def call_ctor(cls, *args):
         return numba_typeref_ctor(cls, *args)
 
+    print("COMPILE STACK", context._codelib_stack)
+    print(sig)
+    print(args)
     # Pack arguments into a tuple for `*args`
     ctor_args = types.Tuple.from_types(sig.args)
     # Make signature T(TypeRef[T], *args) where T is cls
     sig = typing.signature(cls, types.TypeRef(cls), ctor_args)
-    if len(ctor_args) > 0:
+    if len(ctor_args) != len(args) and len(args):
+        [av] = args
+        args = (context.get_dummy_value(), av)
+    elif len(ctor_args) > 0:
         args = (context.get_dummy_value(),   # Type object has no runtime repr.
                 context.make_tuple(builder, ctor_args, args))
     else:

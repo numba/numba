@@ -279,7 +279,6 @@ class BaseFunction(Callable):
         return self._impl_keys[sig.args]
 
     def get_call_type(self, context, args, kws):
-
         prefer_lit = [True, False]    # old behavior preferring literal
         prefer_not = [False, True]    # new behavior preferring non-literal
         failures = _ResolutionFailures(context, self, args, kws,

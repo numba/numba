@@ -43,10 +43,20 @@ class LowerFolder:
         lowerer = self._lowerer
         signature = self._signature
         stararg_ty = signature.args[index]
-        assert isinstance(stararg_ty, types.BaseTuple), stararg_ty
+
+        if not isinstance(stararg_ty, types.containers._StarArgTupleMixin):
+            assert isinstance(vars, tuple)
+            stararg_ty = types.StarArgTuple.from_types(
+                signature.args[index: index + len(vars)]
+            )
+
+        print("stararg_ty", stararg_ty)
         values = [lowerer._cast_var(var, sigty)
                   for var, sigty in zip(vars, stararg_ty)]
-        return cgutils.make_anonymous_struct(lowerer.builder, values)
+        if isinstance(stararg_ty, types.StarArgUniTuple):
+            return cgutils.pack_array(lowerer.builder, values)
+        else:
+            return cgutils.make_anonymous_struct(lowerer.builder, values)
 
     def omitted_stararg_handler(self, index, param):
         lowerer = self._lowerer

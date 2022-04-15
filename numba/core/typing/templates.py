@@ -33,7 +33,7 @@ class Signature(object):
 
     # XXX Perhaps the signature should be a BoundArguments, instead
     # of separate args and pysig...
-    __slots__ = '_return_type', '_args', '_recvr', '_pysig'
+    # __slots__ = '_return_type', '_args', '_recvr', '_pysig'
 
     def __init__(self, return_type, args, recvr, pysig=None):
         if isinstance(args, list):
