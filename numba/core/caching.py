@@ -308,7 +308,7 @@ class _IPythonCacheLocator(_CacheLocator):
         return self
 
 
-class _CacheImpl(metaclass=ABCMeta):
+class CacheImpl(metaclass=ABCMeta):
     """
     Provides the core machinery for caching.
     - implement how to serialize and deserialize the data in the cache.
@@ -377,7 +377,7 @@ class _CacheImpl(metaclass=ABCMeta):
         pass
 
 
-class CompileResultCacheImpl(_CacheImpl):
+class CompileResultCacheImpl(CacheImpl):
     """
     Implements the logic to cache CompileResult objects.
     """
@@ -413,7 +413,7 @@ class CompileResultCacheImpl(_CacheImpl):
         return True
 
 
-class CodeLibraryCacheImpl(_CacheImpl):
+class CodeLibraryCacheImpl(CacheImpl):
     """
     Implements the logic to cache CodeLibrary objects.
     """
@@ -588,7 +588,7 @@ class Cache(_Cache):
 
     Note:
     This contains the driver logic only.  The core logic is provided
-    by a subclass of ``_CacheImpl`` specified as *_impl_class* in the subclass.
+    by a subclass of ``CacheImpl`` specified as *_impl_class* in the subclass.
     """
 
     # The following class variables must be overridden by subclass.
