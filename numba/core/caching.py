@@ -27,18 +27,6 @@ from numba.core import config, compiler
 from numba.core.serialize import dumps
 
 
-def _get_codegen(obj):
-    """
-    Returns the Codegen associated with the given object.
-    """
-    if isinstance(obj, CodeLibrary):
-        return obj.codegen
-    elif isinstance(obj, CompileResult):
-        return obj.target_context.codegen()
-    else:
-        raise TypeError(type(obj))
-
-
 def _cache_log(msg, *args):
     if config.DEBUG_CACHE:
         msg = msg % args
@@ -668,7 +656,7 @@ class Cache(_Cache):
         if not self._impl.check_cachable(data):
             return
         self._impl.locator.ensure_cache_path()
-        key = self._index_key(sig, _get_codegen(data))
+        key = self._index_key(sig, data.codegen)
         data = self._impl.reduce(data)
         self._cache_file.save(key, data)
 
