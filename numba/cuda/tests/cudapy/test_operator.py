@@ -8,6 +8,18 @@ def simple_fp16add(ary, a, b):
     ary[0] = a + b
 
 
+def simple_fp16_iadd(ary, a):
+    ary[0] += a
+
+
+def simple_fp16_isub(ary, a):
+    ary[0] -= a
+
+
+def simple_fp16_imul(ary, a):
+    ary[0] *= a
+
+
 def simple_fp16sub(ary, a, b):
     ary[0] = a - b
 
@@ -73,6 +85,23 @@ class TestOperatorModule(CUDATestCase):
                 kernel[1, 1](got, arg1[0], arg2[0])
                 expected = op(arg1, arg2)
                 np.testing.assert_allclose(got[0], expected)
+
+    @skip_unless_cc_53
+    def test_fp16_inplace_binary(self):
+        functions = (simple_fp16_iadd, simple_fp16_isub, simple_fp16_imul)
+        ops = (operator.iadd, operator.isub, operator.imul)
+
+        for fn, op in zip(functions, ops):
+            with self.subTest(op=op):
+                kernel = cuda.jit("void(f2[:], f2)")(fn)
+
+                expected = np.zeros(1, dtype=np.float16)
+                got_in_out = np.random.random(1).astype(np.float16)
+                arg1 = np.random.random(1).astype(np.float16)
+
+                kernel[1, 1](got_in_out, arg1[0])
+                expected = op(got_in_out, arg1)
+                np.testing.assert_allclose(got_in_out[0], expected)
 
     @skip_unless_cc_53
     def test_fp16_unary(self):

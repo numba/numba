@@ -348,7 +348,7 @@ def _genfp16_unary(l_key):
 
 
 def _genfp16_unary_operator(l_key):
-    @register
+    @register_global(l_key)
     class Cuda_fp16_unary(AbstractTemplate):
         key = l_key
 
@@ -370,8 +370,8 @@ def _genfp16_binary(l_key):
 
 
 def _genfp16_binary_operator(l_key):
-    @register
-    class Cuda_fp16_binary(AbstractTemplate):
+    @register_global(l_key)
+    class Cuda_fp16_binary2(AbstractTemplate):
         key = l_key
 
         def generic(self, args, kws):
@@ -380,7 +380,7 @@ def _genfp16_binary_operator(l_key):
                     (args[0] == types.float16 or args[1] == types.float16):
                 return signature(types.float16, types.float16, types.float16)
 
-    return Cuda_fp16_binary
+    return Cuda_fp16_binary2
 
 
 Cuda_hadd = _genfp16_binary(cuda.fp16.hadd)
@@ -392,10 +392,10 @@ Cuda_isub = _genfp16_binary_operator(operator.isub)
 Cuda_hmul = _genfp16_binary(cuda.fp16.hmul)
 Cuda_mul = _genfp16_binary_operator(operator.mul)
 Cuda_imul = _genfp16_binary_operator(operator.imul)
-Cuda_hneg = _genfp16_unary_operator(cuda.fp16.hneg)
-Cuda_neg = _genfp16_unary(operator.neg)
-Cuda_habs = _genfp16_unary_operator(cuda.fp16.habs)
-Cuda_abs = _genfp16_unary(operator.abs)
+Cuda_hneg = _genfp16_unary(cuda.fp16.hneg)
+Cuda_neg = _genfp16_unary_operator(operator.neg)
+Cuda_habs = _genfp16_unary(cuda.fp16.habs)
+Cuda_abs = _genfp16_unary_operator(operator.abs)
 
 
 # generate atomic operations
