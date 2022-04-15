@@ -6,7 +6,8 @@ import operator
 import warnings
 from functools import partial
 
-from llvmlite.llvmpy.core import Constant, Type, Builder
+import llvmlite.ir
+from llvmlite.ir import Constant, IRBuilder
 
 from numba.core import (typing, utils, types, ir, debuginfo, funcdesc,
                         generators, config, ir_utils, cgutils, removerefctpass,
@@ -324,7 +325,7 @@ class BaseLower(object):
                 attrset.add("optnone")
                 attrset.add("noinline")
         self.entry_block = self.function.append_basic_block('entry')
-        self.builder = Builder(self.entry_block)
+        self.builder = IRBuilder(self.entry_block)
         self.call_helper = self.call_conv.init_call_helper(self.builder)
 
     def typeof(self, varname):
@@ -480,7 +481,8 @@ class Lower(BaseLower):
 
             condty = self.typeof(inst.cond.name)
             pred = self.context.cast(self.builder, cond, condty, types.boolean)
-            assert pred.type == Type.int(1), ("cond is not i1: %s" % pred.type)
+            assert pred.type == llvmlite.ir.IntType(1),\
+                ("cond is not i1: %s" % pred.type)
             self.builder.cbranch(pred, tr, fl)
 
         elif isinstance(inst, ir.Jump):
@@ -1508,7 +1510,7 @@ class Lower(BaseLower):
             ptr = self.getvar(name)
             self.decref(fetype, self.builder.load(ptr))
             # Zero-fill variable to avoid double frees on subsequent dels
-            self.builder.store(Constant.null(ptr.type.pointee), ptr)
+            self.builder.store(Constant(ptr.type.pointee, None), ptr)
 
     def alloca(self, name, type):
         lltype = self.context.get_value_type(type)

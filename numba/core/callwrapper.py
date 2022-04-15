@@ -1,6 +1,5 @@
-from llvmlite.llvmpy.core import Type, Builder, Constant
-import llvmlite.llvmpy.core as lc
-from llvmlite import ir
+from llvmlite.ir import Constant, IRBuilder
+import llvmlite.ir
 
 from numba.core import types, config, cgutils
 
@@ -105,10 +104,10 @@ class PyCallWrapper(object):
         # This is the signature of PyCFunctionWithKeywords
         # (see CPython's methodobject.h)
         pyobj = self.context.get_argument_type(types.pyobject)
-        wrapty = Type.function(pyobj, [pyobj, pyobj, pyobj])
-        wrapper = ir.Function(self.module, wrapty, name=wrapname)
+        wrapty = llvmlite.ir.FunctionType(pyobj, [pyobj, pyobj, pyobj])
+        wrapper = llvmlite.ir.Function(self.module, wrapty, name=wrapname)
 
-        builder = Builder(wrapper.append_basic_block('entry'))
+        builder = IRBuilder(wrapper.append_basic_block('entry'))
 
         # - `closure` will receive the `self` pointer stored in the
         #   PyCFunction object (see _dynfunc.c)
@@ -131,7 +130,10 @@ class PyCallWrapper(object):
         parseok = api.unpack_tuple(args, self.fndesc.qualname,
                                    nargs, nargs, *objs)
 
-        pred = builder.icmp(lc.ICMP_EQ, parseok, Constant.null(parseok.type))
+        pred = builder.icmp_unsigned(
+            '==',
+            parseok,
+            Constant(parseok.type, None))
         with cgutils.if_unlikely(builder, pred):
             builder.ret(api.get_null_object())
 
