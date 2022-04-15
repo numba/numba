@@ -879,25 +879,16 @@ def np_all(a, axis=None):
                 out[idx] = np.logical_and(v_2, out[idx])
         return out
 
-    if not isinstance(axis, (types.Integer, types.NoneType)):
-        raise TypingError("'axis' must be 0, 1, or None")
-
-    if not (1 <= a.ndim <= 2):
-        raise TypingError("Only supports 1D or 2D NumPy ndarrays")
-
-    if isinstance(axis, types.NoneType):
+    if axis in (None, types.none):
         def _np_all_impl(a, axis=None):
             return _np_all_flat(a)
 
         return _np_all_impl
 
-    elif a.ndim == 1:
-        def _np_all_impl(a, axis=None):
-            return _np_all_flat(a)
+    elif isinstance(axis, (types.Integer, int)):
+        if not (1 <= a.ndim <= 2):
+            raise TypingError("Only supports 1D or 2D NumPy ndarrays.")
 
-        return _np_all_impl
-
-    elif a.ndim == 2:
         def _np_all_impl(a, axis=None):
             if axis == 0:
                 return _np_all_axis0(a)
@@ -907,11 +898,7 @@ def np_all(a, axis=None):
         return _np_all_impl
 
     else:
-        def _np_all_impl(a, axis=None):
-            return _np_all_flat(a)
-
-        return _np_all_impl
-
+        raise TypingError("'axis' must be 0, 1, or None")
 
 
 @overload(np.any)
