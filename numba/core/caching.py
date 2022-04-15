@@ -31,9 +31,7 @@ def _get_codegen(obj):
     """
     Returns the Codegen associated with the given object.
     """
-    if isinstance(obj, BaseContext):
-        return obj.codegen()
-    elif isinstance(obj, CodeLibrary):
+    if isinstance(obj, CodeLibrary):
         return obj.codegen
     elif isinstance(obj, CompileResult):
         return obj.target_context.codegen()
@@ -651,7 +649,7 @@ class Cache(_Cache):
     def _load_overload(self, sig, target_context):
         if not self._enabled:
             return
-        key = self._index_key(sig, _get_codegen(target_context))
+        key = self._index_key(sig, target_context.codegen())
         data = self._cache_file.load(key)
         if data is not None:
             data = self._impl.rebuild(target_context, data)
