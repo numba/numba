@@ -900,6 +900,7 @@ def np_all(a, axis=None):
     else:
         raise TypingError("'axis' must be 0, 1, or None")
 
+
 @overload(np.any)
 @overload_method(types.Array, "any")
 def np_any(a):
