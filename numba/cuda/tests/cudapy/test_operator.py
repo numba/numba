@@ -1,6 +1,9 @@
 import numpy as np
-from numba.cuda.testing import unittest, CUDATestCase, skip_unless_cc_53
+from numba.cuda.testing import (unittest, CUDATestCase, skip_unless_cc_53,
+                                skip_on_cudasim)
 from numba import cuda
+from numba.core.types import f2
+from numba.cuda import compile_ptx
 import operator
 
 
@@ -86,6 +89,30 @@ class TestOperatorModule(CUDATestCase):
                 expected = op(arg1, arg2)
                 np.testing.assert_allclose(got[0], expected)
 
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_fp16_binary_ptx(self):
+        functions = (simple_fp16add, simple_fp16sub, simple_fp16mul)
+        ops = (operator.add, operator.sub, operator.mul)
+        opstring = ('add.f16', 'sub.f16', 'mul.f16')
+        args = (f2[:], f2, f2)
+
+        for fn, op, s in zip(functions, ops, opstring):
+            with self.subTest(op=op):
+                ptx, _ = compile_ptx(fn, args, cc=(5, 3))
+                self.assertIn(s, ptx)
+
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_fp16_inplace_binary_ptx(self):
+        functions = (simple_fp16_iadd, simple_fp16_isub, simple_fp16_imul)
+        ops = (operator.iadd, operator.isub, operator.imul)
+        opstring = ('add.f16', 'sub.f16', 'mul.f16')
+        args = (f2[:], f2)
+
+        for fn, op, s in zip(functions, ops, opstring):
+            with self.subTest(op=op):
+                ptx, _ = compile_ptx(fn, args, cc=(5, 3))
+                self.assertIn(s, ptx)
+
     @skip_unless_cc_53
     def test_fp16_inplace_binary(self):
         functions = (simple_fp16_iadd, simple_fp16_isub, simple_fp16_imul)
@@ -119,6 +146,21 @@ class TestOperatorModule(CUDATestCase):
                 kernel[1, 1](got, arg1[0])
                 expected = op(arg1)
                 np.testing.assert_allclose(got[0], expected)
+
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_fp16_neg_ptx(self):
+        args = (f2[:], f2)
+        ptx, _ = compile_ptx(simple_fp16neg, args, cc=(5, 3))
+        self.assertIn('neg.f16', ptx)
+
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_fp16_abs_ptx(self):
+        args = (f2[:], f2)
+        ptx, _ = compile_ptx(simple_fp16abs, args, cc=(5, 3))
+        if cuda.runtime.get_version() < (10, 2):
+            self.assertRegex(ptx, r'and\.b16.*0x7FFF;')
+        else:
+            self.assertIn('abs.f16', ptx)
 
 
 if __name__ == '__main__':

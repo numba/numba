@@ -395,7 +395,7 @@ Cuda_imul = _genfp16_binary_operator(operator.imul)
 Cuda_hneg = _genfp16_unary(cuda.fp16.hneg)
 Cuda_neg = _genfp16_unary_operator(operator.neg)
 Cuda_habs = _genfp16_unary(cuda.fp16.habs)
-Cuda_abs = _genfp16_unary_operator(operator.abs)
+Cuda_abs = _genfp16_unary_operator(abs)
 
 
 # generate atomic operations
