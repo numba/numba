@@ -271,7 +271,8 @@ class TestCallFunctionExPeepHole(TestCase, MemoryLeakMixin):
         def objmode_func():
             """
             Wrapper to call py_func from objmode. This tests
-            large kws with objmode.
+            large kws with objmode. If the definition for the
+            call is not properly updated this test will fail.
             """
             with objmode(
                 a='int64',
@@ -331,3 +332,17 @@ class TestCallFunctionExPeepHole(TestCase, MemoryLeakMixin):
         a = sum(list(py_func()))
         b = objmode_func()
         self.assertEqual(a, b)
+
+    @skip_unless_py10
+    def test_large_kws_inline_controlflow(self):
+        """
+        Tests generating large kws when one of the inputs
+        has inlined controlflow.
+        """
+
+    @skip_unless_py10
+    def test_large_args_inline_controlflow(self):
+        """
+        Tests generating large args when one of the inputs
+        has inlined controlflow.
+        """
