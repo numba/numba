@@ -79,7 +79,38 @@ class Assigner(object):
         return None
 
 
-def _call_function_ex_replace_kws_small(keyword_expr, new_body, buildmap_idx):
+def _remove_assignment_definition(old_body, idx, func_ir):
+    """
+    Deletes the definition defined for old_body at index idx
+    from func_ir. We assume this stmt will be deleted from
+    new_body.
+    """
+    lhs = old_body[idx].target.name
+    rhs = old_body[idx].value
+    if rhs in func_ir._definitions[lhs]:
+        func_ir._definitions[lhs].remove(rhs)
+    elif len(func_ir._definitions[lhs]) == 1:
+        # There appears to be an issue where the RHS of the
+        # definitions doesn't match after the list -> tuple
+        # conversion.
+        # For example the statement is:
+        #
+        #   172list_to_tuple.116 = $170list_append.115
+        #
+        # but the definition is:
+        #
+        #   list_to_tuple(info=('$4build_list.1',))
+        #
+        func_ir._definitions[lhs].clear()
+    else:
+        raise UnsupportedError(
+            "Inconsistency found the in definitions trying to remove varkwargs"
+        )
+
+
+def _call_function_ex_replace_kws_small(
+    old_body, keyword_expr, new_body, buildmap_idx, func_ir
+):
     """
     Extracts the kws args passed as varkwarg
     for CALL_FUNCTION_EX. This pass is taken when
@@ -106,11 +137,13 @@ def _call_function_ex_replace_kws_small(keyword_expr, new_body, buildmap_idx):
     # Remove the build_map by setting the list
     # index to None. Nones will be removed later.
     new_body[buildmap_idx] = None
+    # Remove the definition.
+    _remove_assignment_definition(old_body, buildmap_idx, func_ir)
     return kws
 
 
 def _call_function_ex_replace_kws_large(
-    body, buildmap_name, buildmap_idx, search_end, new_body
+    old_body, buildmap_name, buildmap_idx, search_end, new_body, func_ir,
 ):
     """
     Extracts the kws args passed as varkwarg
@@ -143,11 +176,13 @@ def _call_function_ex_replace_kws_large(
     errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
     # Remove the build_map from the body.
     new_body[buildmap_idx] = None
+    # Remove the definition.
+    _remove_assignment_definition(old_body, buildmap_idx, func_ir)
     kws = []
     search_start = buildmap_idx + 1
     while search_start <= search_end:
         # The first value must be a constant.
-        const_stmt = body[search_start]
+        const_stmt = old_body[search_start]
         if not (
             isinstance(const_stmt, ir.Assign)
             and isinstance(const_stmt.value, ir.Const)
@@ -164,7 +199,7 @@ def _call_function_ex_replace_kws_large(
             search_start <= search_end
             and not_found_getattr
         ):
-            getattr_stmt = body[search_start]
+            getattr_stmt = old_body[search_start]
             if (
                 isinstance(getattr_stmt, ir.Assign)
                 and isinstance(getattr_stmt.value, ir.Expr)
@@ -201,7 +236,7 @@ def _call_function_ex_replace_kws_large(
             # We cannot handle this format so raise the
             # original error message.
             raise UnsupportedError(errmsg)
-        setitem_stmt = body[search_start + 1]
+        setitem_stmt = old_body[search_start + 1]
         if not (
             isinstance(setitem_stmt, ir.Assign)
             and isinstance(setitem_stmt.value, ir.Expr)
@@ -225,11 +260,16 @@ def _call_function_ex_replace_kws_large(
         # Remove the __setitem__ getattr and call
         new_body[search_start] = None
         new_body[search_start + 1] = None
+        # Remove the definitions.
+        _remove_assignment_definition(old_body, search_start, func_ir)
+        _remove_assignment_definition(old_body, search_start + 1, func_ir)
         search_start += 2
     return kws
 
 
-def _call_function_ex_replace_args_small(tuple_expr, new_body, buildtuple_idx):
+def _call_function_ex_replace_args_small(
+    old_body, tuple_expr, new_body, buildtuple_idx, func_ir
+):
     """
     Extracts the args passed as vararg
     for CALL_FUNCTION_EX. This pass is taken when
@@ -249,12 +289,14 @@ def _call_function_ex_replace_args_small(tuple_expr, new_body, buildtuple_idx):
     """
     # Delete the build tuple
     new_body[buildtuple_idx] = None
+    # Remove the definition.
+    _remove_assignment_definition(old_body, buildtuple_idx, func_ir)
     # Return the args.
     return tuple_expr.items
 
 
 def _call_function_ex_replace_args_large(
-    vararg_stmt, body, new_body, search_end
+    old_body, vararg_stmt, new_body, search_end, func_ir
 ):
     """
     Extracts the args passed as vararg
@@ -299,6 +341,8 @@ def _call_function_ex_replace_args_large(
         target_name = vararg_stmt.value.name
         # If there is an initial assignment, delete it
         new_body[search_end] = None
+        # Remove the definition.
+        _remove_assignment_definition(old_body, search_end, func_ir)
         search_end -= 1
     else:
         target_name = vararg_stmt.target.name
@@ -306,7 +350,7 @@ def _call_function_ex_replace_args_large(
     # Traverse backwards to find all concatentations
     # until eventually reaching the original empty tuple.
     while search_end >= search_start and start_not_found:
-        concat_stmt = body[search_end]
+        concat_stmt = old_body[search_end]
         if (
             isinstance(concat_stmt, ir.Assign)
             and concat_stmt.target.name == target_name
@@ -318,6 +362,8 @@ def _call_function_ex_replace_args_large(
             # we exit.
             start_not_found = False
             new_body[search_end] = None
+            # Remove the definition.
+            _remove_assignment_definition(old_body, search_end, func_ir)
         else:
             # We expect to find another arg to append.
             # The first stmt must be an add
@@ -339,7 +385,7 @@ def _call_function_ex_replace_args_large(
             rhs_name = concat_stmt.value.rhs.name
             # The previous statment should be a
             # build_tuple containing the arg.
-            arg_tuple_stmt = body[search_end - 1]
+            arg_tuple_stmt = old_body[search_end - 1]
             if not (
                 isinstance(arg_tuple_stmt, ir.Assign)
                 and isinstance(
@@ -365,11 +411,14 @@ def _call_function_ex_replace_args_large(
             )
             new_body[search_end] = None
             new_body[search_end - 1] = None
+            # Remove the definitions.
+            _remove_assignment_definition(old_body, search_end, func_ir)
+            _remove_assignment_definition(old_body, search_end - 1, func_ir)
             search_end -= 2
             # Avoid any space between appends
             keep_looking = True
             while search_end >= search_start and keep_looking:
-                next_stmt = body[search_end]
+                next_stmt = old_body[search_end]
                 if (
                     isinstance(next_stmt, ir.Assign)
                     and (
@@ -486,9 +535,11 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                     #              ...,
                     #              ($const_n, $arg_n),])
                     kws = _call_function_ex_replace_kws_small(
+                        blk.body,
                         keyword_def.value,
                         new_body,
                         varkwarg_loc,
+                        func_ir,
                     )
                 else:
                     # n_kws > 15 case.
@@ -509,6 +560,7 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                         varkwarg_loc,
                         i - 1,
                         new_body,
+                        func_ir,
                     )
                 start_search = varkwarg_loc
                 # Vararg isn't required to be provided.
@@ -547,9 +599,11 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                         #   items=[$arg_0, ..., $arg_n]
                         #  )
                         args = _call_function_ex_replace_args_small(
+                            blk.body,
                             args_def.value,
                             new_body,
-                            vararg_loc
+                            vararg_loc,
+                            func_ir,
                         )
                     else:
                         # Here the IR is an initial empty build_tuple.
@@ -579,14 +633,18 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                         # to support args_def being either $varargs_var
                         # or $combo_tup_n from the above example.
                         args = _call_function_ex_replace_args_large(
-                            args_def, blk.body, new_body, vararg_loc
+                            blk.body, args_def, new_body, vararg_loc, func_ir
                         )
                 # Create a new call updating the args and kws
                 new_call = ir.Expr.call(
                     call.func, args, kws, call.loc, target=call.target
                 )
+                # Drop the existing definition for this stmt.
+                _remove_assignment_definition(blk.body, i, func_ir)
                 # Update the statement
                 stmt = ir.Assign(new_call, stmt.target, stmt.loc)
+                # Update the definition
+                func_ir._definitions[stmt.target.name].append(new_call)
 
             new_body.append(stmt)
         # Update the block body if we updated the IR
@@ -899,9 +957,9 @@ class Interpreter(object):
         peepholes = []
         if PYVERSION in [(3, 9), (3, 10)]:
             peepholes.append(peep_hole_list_to_tuple)
+        peepholes.append(peep_hole_delete_with_exit)
         if PYVERSION == (3, 10):
             peepholes.append(peep_hole_call_function_ex_to_call_function_kw)
-        peepholes.append(peep_hole_delete_with_exit)
 
         post_processed_ir = self.post_process(peepholes, func_ir)
         return post_processed_ir

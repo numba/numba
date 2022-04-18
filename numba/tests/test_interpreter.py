@@ -1,8 +1,7 @@
 """
 Test bytecode fixes provided in interpreter.py
 """
-from numba.extending import objmode
-from numba import njit
+from numba import njit, objmode
 from numba.tests.support import TestCase, MemoryLeakMixin, skip_unless_py10
 
 
