@@ -143,7 +143,7 @@ def _call_function_ex_replace_kws_small(
 
 
 def _call_function_ex_replace_kws_large(
-    old_body, buildmap_name, buildmap_idx, search_end, new_body, func_ir,
+    old_body, buildmap_name, buildmap_idx, search_end, new_body, func_ir, errmsg
 ):
     """
     Extracts the kws args passed as varkwarg
@@ -173,7 +173,6 @@ def _call_function_ex_replace_kws_large(
     We iterate through the IR, deleting all usages of the buildmap
     from the new_body, and adds the kws to a new kws list.
     """
-    errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
     # Remove the build_map from the body.
     new_body[buildmap_idx] = None
     # Remove the definition.
@@ -296,7 +295,7 @@ def _call_function_ex_replace_args_small(
 
 
 def _call_function_ex_replace_args_large(
-    old_body, vararg_stmt, new_body, search_end, func_ir
+    old_body, vararg_stmt, new_body, search_end, func_ir, errmsg
 ):
     """
     Extracts the args passed as vararg
@@ -329,7 +328,6 @@ def _call_function_ex_replace_args_large(
     In addition to collecting and returning the original args, we also
     delete any IR statments that uses any of the tuples from new_body.
     """
-    errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
     # We traverse to the front of the block to look for the original
     # tuple.
     search_start = 0
@@ -479,7 +477,20 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
     """
     # All changes are local to the a single block
     # so it can be traversed in any order.
-    errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
+    errmsg = """
+CALL_FUNCTION_EX with **kwargs not supported.
+If you are not using **kwargs this may indicate that
+you have a large number of kwargs and are using inlined control
+flow. You can resolve this issue by moving the control flow out of
+the function call. For example, if you have
+
+    f(a=1 if flag else 0, ...)
+
+Replace that with
+
+    a_val = 1 if flag else 0
+    f(a=a_val, ...)
+    """
     for blk in func_ir.blocks.values():
         blk_changed = False
         new_body = []
@@ -565,6 +576,7 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                         i - 1,
                         new_body,
                         func_ir,
+                        errmsg,
                     )
                 start_search = varkwarg_loc
                 # Vararg isn't required to be provided.
@@ -637,7 +649,12 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                         # to support args_def being either $varargs_var
                         # or $combo_tup_n from the above example.
                         args = _call_function_ex_replace_args_large(
-                            blk.body, args_def, new_body, vararg_loc, func_ir
+                            blk.body,
+                            args_def,
+                            new_body,
+                            vararg_loc,
+                            func_ir,
+                            errmsg,
                         )
                 # Create a new call updating the args and kws
                 new_call = ir.Expr.call(
