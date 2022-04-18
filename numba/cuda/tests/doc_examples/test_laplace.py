@@ -22,6 +22,11 @@ class TestLaplace(CUDATestCase):
         super().tearDown()
 
     def test_ex_laplace(self):
+
+        # set True to regenerate the figures that
+        # accompany this example
+        plot = False
+
         # ex_laplace.import.begin
         import numpy as np
         from numba import cuda
@@ -44,6 +49,27 @@ class TestLaplace(CUDATestCase):
 
         niter = 10000
         # ex_laplace.allocate.end
+
+        if plot:
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots(figsize=(16*0.66, 9*0.66))
+            plt.plot(
+                np.arange(len(data_gpu)), 
+                data_gpu.copy_to_host(), 
+                lw=3, 
+                marker="*", 
+                color='black'
+            )
+
+            plt.title('Initial State', fontsize=24)
+            plt.xlabel('Position', fontsize=24)
+            plt.ylabel('Temperature', fontsize=24)
+
+            ax.set_xticks(ax.get_xticks(), fontsize=16)
+            ax.set_yticks(ax.get_yticks(), fontsize=16)
+            plt.xlim(0, len(data))
+            plt.ylim(0, 10001)
+            plt.savefig('laplace_initial.svg')
 
         # ex_laplace.kernel.begin
         @cuda.jit
@@ -83,6 +109,21 @@ class TestLaplace(CUDATestCase):
         )
         # ex_laplace.launch.end
 
+        if plot:
+            results = tmp_gpu.copy_to_host()
+
+            fig, ax = plt.subplots(figsize=(16*0.66, 9*0.66))
+            plt.plot(np.arange(len(results)), results, lw=3, marker="*", color='black')
+            plt.title(f"T = {niter}", fontsize=24)
+            plt.xlabel('Position', fontsize=24)
+            plt.ylabel('Temperature', fontsize=24)
+
+            ax.set_xticks(ax.get_xticks(), fontsize=16)
+            ax.set_yticks(ax.get_yticks(), fontsize=16)
+
+            plt.ylim(0, max(results))
+            plt.xlim(0, len(results))
+            plt.savefig('laplace_final.svg')
 
 if __name__ == "__main__":
     unittest.main()
