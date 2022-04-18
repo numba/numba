@@ -600,22 +600,25 @@ def redirect_type_ctor(context, builder, sig, args):
     def call_ctor(cls, *args):
         return numba_typeref_ctor(cls, *args)
 
-    print("COMPILE STACK", context._codelib_stack)
-    print(sig)
-    print(args)
     # Pack arguments into a tuple for `*args`
-    ctor_args = types.Tuple.from_types(sig.args)
-    # Make signature T(TypeRef[T], *args) where T is cls
-    sig = typing.signature(cls, types.TypeRef(cls), ctor_args)
-    if len(ctor_args) != len(args) and len(args):
-        [av] = args
-        args = (context.get_dummy_value(), av)
-    elif len(ctor_args) > 0:
-        args = (context.get_dummy_value(),   # Type object has no runtime repr.
-                context.make_tuple(builder, ctor_args, args))
+
+    if len(sig.args) == 1 and isinstance(sig.args[0], (types.StarArgTuple, types.StarArgUniTuple)):
+        sig = typing.signature(cls, types.TypeRef(cls), *sig.args)
+        args = (context.get_dummy_value(), *args)
     else:
-        args = (context.get_dummy_value(),   # Type object has no runtime repr.
-                context.make_tuple(builder, ctor_args, ()))
+        ctor_args = types.Tuple.from_types(sig.args)
+
+        # Make signature T(TypeRef[T], *args) where T is cls
+        sig = typing.signature(cls, types.TypeRef(cls), ctor_args)
+        if len(ctor_args) != len(args) and len(args):
+            [av] = args
+            args = (context.get_dummy_value(), av)
+        elif len(ctor_args) > 0:
+            args = (context.get_dummy_value(),   # Type object has no runtime repr.
+                    context.make_tuple(builder, ctor_args, args))
+        else:
+            args = (context.get_dummy_value(),   # Type object has no runtime repr.
+                    context.make_tuple(builder, ctor_args, ()))
 
     return context.compile_internal(builder, call_ctor, sig, args)
 

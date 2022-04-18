@@ -881,7 +881,13 @@ class Lower(BaseLower):
             argvals = [self._cast_var(var, sigty)
                        for var, sigty in zip(pos_args, signature.args)]
         else:
-            folder = LowerFolder(self, signature)
+            from numba.core.dispatcher import TypeFolder
+            folded_args = typing.FoldArguments(
+                pysig, TypeFolder()
+            ).fold(signature.args, {})
+            folder = LowerFolder(
+                self, typing.signature(signature.return_type, *folded_args),
+            )
             argvals = typing.FoldArguments(pysig, folder).fold(pos_args,
                                                                dict(kw_args))
 
@@ -1165,9 +1171,24 @@ class Lower(BaseLower):
         if isinstance(fnty, types.ObjModeDispatcher):
             argvals = expr.func.args
         else:
+            from numba.core.dispatcher import TypeFolder
+
             argvals = self.fold_call_args(
                 fnty, signature, expr.args, expr.vararg, expr.kws,
             )
+            if signature.pysig is not None:
+                pysig = signature.pysig
+                folded_args = typing.FoldArguments(
+                    signature.pysig, TypeFolder()
+                ).fold(signature.args, {})
+                old_signature = signature
+                signature = typing.signature(
+                    signature.return_type, *folded_args,
+                )
+                signature = signature.replace(
+                    pysig=pysig, recvr=old_signature.recvr,
+                )
+
         tname = expr.target
         if tname is not None:
             from numba.core.target_extension import resolve_dispatcher_from_str
