@@ -396,7 +396,7 @@ class TestCallFunctionExPeepHole(TestCase, MemoryLeakMixin):
         # self.assertEqual(a, b)
 
     @skip_unless_py10
-    def test_large_kws_uninlined_controlflow(self):
+    def test_large_args_uninlined_controlflow(self):
         """
         Tests generating large args when one of the inputs
         has the change suggested in the error message
@@ -442,6 +442,121 @@ class TestCallFunctionExPeepHole(TestCase, MemoryLeakMixin):
                 1,
                 1,
                 arg41=1,
+            )
+
+        py_func = inline_func
+        cfunc = njit()(inline_func)
+        a = py_func(False)
+        b = cfunc(False)
+        self.assertEqual(a, b)
+
+    @skip_unless_py10
+    def test_all_args_inline_controlflow(self):
+        """
+        Tests generating only large args when one of the inputs
+        has inlined controlflow. This requires a special check
+        inside peep_hole_call_function_ex_to_call_function_kw
+        because it usually only handles varkwargs.
+        """
+        def inline_func(flag):
+            return sum_jit_func(
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1 if flag else 2,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+            )
+
+        with pytest.raises(
+            UnsupportedError,
+            match="You can resolve this issue by moving the control flow out"
+        ):
+            njit()(inline_func)(False)
+        # Uncomment sections when inlined control flow is
+        # actually supported.
+        # py_func = inline_func
+        # cfunc = njit()(inline_func)
+        # a = py_func(False)
+        # b = cfunc(False)
+        # self.assertEqual(a, b)
+
+    @skip_unless_py10
+    def test_all_args_uninlined_controlflow(self):
+        """
+        Tests generating large args when one of the inputs
+        has the change suggested in the error message
+        for inlined control flow.
+        """
+        def inline_func(flag):
+            a_val = 1 if flag else 2
+            return sum_jit_func(
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                a_val,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
             )
 
         py_func = inline_func

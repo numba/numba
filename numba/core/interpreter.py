@@ -668,6 +668,44 @@ Replace that with
                 stmt = ir.Assign(new_call, stmt.target, stmt.loc)
                 # Update the definition
                 func_ir._definitions[stmt.target.name].append(new_call)
+            elif (
+                isinstance(stmt, ir.Assign)
+                and isinstance(stmt.value, ir.Expr)
+                and stmt.value.op == "call"
+                and stmt.value.vararg is not None
+            ):
+                # If there is a call with vararg we need to check
+                # if the list -> tuple conversion failed and if so
+                # throw an error.
+                call = stmt.value
+                args = call.args
+                vararg = call.vararg
+                if args:
+                    # If we have vararg then args is expected to
+                    # be an empty list.
+                    raise UnsupportedError(errmsg)
+                vararg_loc = i - 1
+                args_def = None
+                not_found = True
+                while vararg_loc >= 0 and not_found:
+                    args_def = blk.body[vararg_loc]
+                    if (
+                        isinstance(args_def, ir.Assign)
+                        and args_def.target.name == vararg.name
+                    ):
+                        not_found = False
+                    else:
+                        vararg_loc -= 1
+                if not_found:
+                    # If we couldn't find where the args are created
+                    # then we can't handle this format.
+                    raise UnsupportedError(errmsg)
+                else:
+                    # If this value is still a list to tuple raise the
+                    # exception.
+                    expr = blk.body[vararg_loc].value
+                    if isinstance(expr, ir.Expr) and expr.op == "list_to_tuple":
+                        raise UnsupportedError(errmsg)
 
             new_body.append(stmt)
         # Update the block body if we updated the IR
