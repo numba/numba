@@ -345,8 +345,10 @@ def _call_function_ex_replace_args_large(
     else:
         # There must always be an initial assignement
         # https://github.com/numba/numba/blob/59fa2e335be68148b3bd72a29de3ff011430038d/numba/core/interpreter.py#L259-L260
-        # If this changes we may need to support this branch.
-        raise AssertionError("unreachable")
+        # If this changes we may need to support this branch. We can
+        # reach this section if there is an unsupported conversion due
+        # to a failure in the list_to_tuple conversion.
+        raise UnsupportedError(errmsg)
     start_not_found = True
     # Traverse backwards to find all concatentations
     # until eventually reaching the original empty tuple.

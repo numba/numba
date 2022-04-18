@@ -1,7 +1,9 @@
 """
 Test bytecode fixes provided in interpreter.py
 """
+import pytest
 from numba import njit, objmode
+from numba.core.errors import UnsupportedError
 from numba.tests.support import TestCase, MemoryLeakMixin, skip_unless_py10
 
 
@@ -377,13 +379,21 @@ class TestCallFunctionExPeepHole(TestCase, MemoryLeakMixin):
                 1,
                 1,
                 1,
+                arg41=1,
             )
 
-        py_func = inline_func
-        cfunc = njit()(inline_func)
-        a = py_func(False)
-        b = cfunc(False)
-        self.assertEqual(a, b)
+        with pytest.raises(
+            UnsupportedError,
+            match="You can resolve this issue by moving the control flow out"
+        ):
+            njit()(inline_func)(False)
+        # Uncomment sections when inlined control flow is
+        # actually supported.
+        # py_func = inline_func
+        # cfunc = njit()(inline_func)
+        # a = py_func(False)
+        # b = cfunc(False)
+        # self.assertEqual(a, b)
 
     @skip_unless_py10
     def test_large_kws_uninlined_controlflow(self):
@@ -431,6 +441,7 @@ class TestCallFunctionExPeepHole(TestCase, MemoryLeakMixin):
                 1,
                 1,
                 1,
+                arg41=1,
             )
 
         py_func = inline_func
@@ -465,11 +476,18 @@ class TestCallFunctionExPeepHole(TestCase, MemoryLeakMixin):
                 arg15=1 if flag else 2,
             )
 
-        py_func = inline_func
-        cfunc = njit()(inline_func)
-        a = py_func(False)
-        b = cfunc(False)
-        self.assertEqual(a, b)
+        with pytest.raises(
+            UnsupportedError,
+            match="You can resolve this issue by moving the control flow out"
+        ):
+            njit()(inline_func)(False)
+        # Uncomment sections when inlined control flow is
+        # actually supported.
+        # py_func = inline_func
+        # cfunc = njit()(inline_func)
+        # a = py_func(False)
+        # b = cfunc(False)
+        # self.assertEqual(a, b)
 
     @skip_unless_py10
     def test_large_kws_uninline_controlflow(self):
