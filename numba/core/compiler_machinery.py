@@ -3,7 +3,7 @@ from abc import abstractmethod, ABCMeta
 from collections import namedtuple, OrderedDict
 import inspect
 from numba.core.compiler_lock import global_compiler_lock
-from numba.core import errors, config, transforms, utils
+from numba.core import errors, config, transforms
 from numba.core.tracing import event
 from numba.core.postproc import PostProcessor
 from numba.core.ir_utils import enforce_no_dels, legalize_single_scope
@@ -253,14 +253,6 @@ class PassManager(object):
     def finalized(self):
         return self._finalized
 
-    def _patch_error(self, desc, exc):
-        """
-        Patches the error to show the stage that it arose in.
-        """
-        newmsg = "{desc}\n{exc}".format(desc=desc, exc=exc)
-        exc.args = (newmsg,)
-        return exc
-
     @global_compiler_lock  # this need a lock, likely calls LLVM
     def _runPass(self, index, pss, internal_state):
         mutated = False
@@ -343,14 +335,6 @@ class PassManager(object):
                     raise BaseException("Legacy pass in use")
             except _EarlyPipelineCompletion as e:
                 raise e
-            except Exception as e:
-                if (utils.use_new_style_errors() and not
-                        isinstance(e, errors.NumbaError)):
-                    raise e
-                msg = "Failed in %s mode pipeline (step: %s)" % \
-                    (self.pipeline_name, pass_desc)
-                patched_exception = self._patch_error(msg, e)
-                raise patched_exception
 
     def dependency_analysis(self):
         """
