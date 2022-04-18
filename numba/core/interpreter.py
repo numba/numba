@@ -345,10 +345,8 @@ def _call_function_ex_replace_args_large(
     else:
         # There must always be an initial assignement
         # https://github.com/numba/numba/blob/59fa2e335be68148b3bd72a29de3ff011430038d/numba/core/interpreter.py#L259-L260
-        # If this changes we may need to support this branch. We can
-        # reach this section if there is an unsupported conversion due
-        # to a failure in the list_to_tuple conversion.
-        raise UnsupportedError(errmsg)
+        # If this changes we may need to support this branch.
+        raise AssertionError("unreachable")
     start_not_found = True
     # Traverse backwards to find all concatentations
     # until eventually reaching the original empty tuple.
@@ -623,6 +621,14 @@ Replace that with
                             vararg_loc,
                             func_ir,
                         )
+                    elif (
+                        isinstance(args_def.value, ir.Expr)
+                        and args_def.value.op == "list_to_tuple"
+                    ):
+                        # If there is a call with vararg we need to check
+                        # if the list -> tuple conversion failed and if so
+                        # throw an error.
+                        raise UnsupportedError(errmsg)
                     else:
                         # Here the IR is an initial empty build_tuple.
                         # Then for each arg, a new tuple with a single
