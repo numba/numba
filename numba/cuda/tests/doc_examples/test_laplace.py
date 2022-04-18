@@ -73,7 +73,7 @@ class TestLaplace(CUDATestCase):
 
         # ex_laplace.kernel.begin
         @cuda.jit
-        def solve_heat_equation(data, tmp, size, timesteps, k):
+        def solve_heat_equation(data, tmp, timesteps, k):
             i = cuda.grid(1)
 
             # prepare to do a grid-wide synchronization later
@@ -87,7 +87,7 @@ class TestLaplace(CUDATestCase):
                 if i == 0:
                     # Left wall is held at T = 0
                     next_temp = curr_temp + k * (data[i + 1] - (2 * curr_temp))
-                elif i == size - 1:
+                elif i == len(data) - 1:
                     # Right wall is held at T = 0
                     next_temp = curr_temp + k * (data[i - 1] - (2 * curr_temp))
                 else:
@@ -105,7 +105,7 @@ class TestLaplace(CUDATestCase):
 
         # ex_laplace.launch.begin
         solve_heat_equation.forall(len(data))(
-            data_gpu, tmp_gpu, len(data_gpu), niter, 0.25
+            data_gpu, tmp_gpu, niter, 0.25
         )
         # ex_laplace.launch.end
 

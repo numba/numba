@@ -101,16 +101,16 @@ propagates through an object over time. It works by discretizing the problem in 
 1. The domain is partitioned into a mesh of points that each have an individual temperature.
 2. Time is partitioned into discrete intervals that are advanced forward sequentially.
 
-Then, the following assumption is applied: The temperature of a piece after some interval 
-has passed is some weighted average of the temperature of the pieces that are directly 
-touching it. Intuitively, this means if all the small pieces of the object are very hot 
-and a single piece in the middle is very cold, as time goes on, the hot pieces will cause 
-the cold one to heat up and the cold piece will cause the surrounding hot pieces to cool 
+Then, the following assumption is applied: The temperature of a point after some interval 
+has passed is some weighted average of the temperature of the points that are directly
+touching it. Intuitively, this means if all the points in the domain are very hot
+and a single point in the middle is very cold, as time goes on, the hot points will cause
+the cold one to heat up and the cold point will cause the surrounding hot pieces to cool
 slightly. Simply put, the heat spreads out around the object.
 
 We can implement this simulation using a Numba kernel. Let's start simple by assuming
 we have a one dimensional object which we'll represent with an array of values. The position 
-of the element in the array is like the position of a small piece of the object, and the value 
+of the element in the array is like the position of a point within the object, and the value
 of the element represents the temperature. 
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_laplace.py
