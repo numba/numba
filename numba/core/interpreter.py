@@ -345,7 +345,10 @@ def _call_function_ex_replace_args_large(
         _remove_assignment_definition(old_body, search_end, func_ir)
         search_end -= 1
     else:
-        target_name = vararg_stmt.target.name
+        # There must always be an initial assignement
+        # https://github.com/numba/numba/blob/59fa2e335be68148b3bd72a29de3ff011430038d/numba/core/interpreter.py#L259-L260
+        # If this changes we may need to support this branch.
+        raise AssertionError("unreachable")
     start_not_found = True
     # Traverse backwards to find all concatentations
     # until eventually reaching the original empty tuple.
@@ -400,7 +403,8 @@ def _call_function_ex_replace_args_large(
                 # We cannot handle this format.
                 raise UnsupportedError(errmsg)
             if arg_tuple_stmt.target.name == lhs_name:
-                target_name = rhs_name
+                # The tuple should always be generated on the RHS.
+                raise AssertionError("unreachable")
             elif arg_tuple_stmt.target.name == rhs_name:
                 target_name = lhs_name
             else:
