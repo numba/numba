@@ -7,7 +7,7 @@ from numba.tests.support import captured_stdout
 @skip_on_cudasim("cudasim doesn't support cuda import at non-top-level")
 class TestCpuGpuCompat(CUDATestCase):
     """
-    Test compatability of CPU and GPU functions
+    Test compatibility of CPU and GPU functions
     """
 
     def setUp(self):

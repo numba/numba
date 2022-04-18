@@ -8,7 +8,8 @@ Examples
 Vector Addition
 ===============
 This example uses Numba to create on-device arrays and a vector addition kernel;
-it is a warmup for learning how to write GPU kernels using Numba.
+it is a warmup for learning how to write GPU kernels using Numba. We'll begin
+with some required imports:
 
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_vecadd.py
@@ -24,7 +25,7 @@ variables with unspecified types. When the kernel is launched, Numba will
 examine the types of the arguments that are passed at runtime and generate a
 CUDA kernel specialized for them.
 
-Also note that Numba kernels do not return values and must write any output into
+Note that Numba kernels do not return values and must write any output into
 arrays passed in as parameters (this is similar to the requirement that CUDA
 C/C++ kernels have ``void`` return type). Here we pass in ``c`` for the results
 to be written into.
@@ -97,8 +98,8 @@ conditions and boundary conditions. A full discussion of Laplace's equation is o
 scope for this documentation, but it will suffice to say that it describes how heat
 propagates through an object over time. It works by discretizing the problem in two ways:
 
-1. The object is separated into small "pieces" that each have an individual temperature
-2. Time is separated into small "intervals" and the universe advances through them one by one
+1. The domain is partitioned into a mesh of points that each have an individual temperature.
+2. Time is partitioned into discrete intervals that are advanced forward sequentially.
 
 Then, the following assumption is applied: The temperature of a piece after some interval 
 has passed is some weighted average of the temperature of the pieces that are directly 
@@ -107,10 +108,10 @@ and a single piece in the middle is very cold, as time goes on, the hot pieces w
 the cold one to heat up and the cold piece will cause the surrounding hot pieces to cool 
 slightly. Simply put, the heat spreads out around the object.
 
-We can simulate this situation using a Kernel generated from Numba. Let's start simple by assuming
+We can implement this simulation using a Numba kernel. Let's start simple by assuming
 we have a one dimensional object which we'll represent with an array of values. The position 
 of the element in the array is like the position of a small piece of the object, and the value 
-of the element is like the temperature. 
+of the element represents the temperature. 
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_laplace.py
    :language: python
@@ -160,7 +161,7 @@ Calling the kernel:
    :linenos:
 
 
-Plotting the final data with a graphing library shows an arc shape highest where
+Plotting the final data shows an arc that is highest where
 the object was hot initially and gradually sloping down to zero towards the
 edges where the temperature is fixed at zero. In the limit of infinite time,
 the arc will flatten out completely.
@@ -171,15 +172,14 @@ the arc will flatten out completely.
 
 Shared Memory Reduction
 =======================
-Numba exposes many CUDA features including shared memory. Shared memory is high speed on chip memory
-that represents a shared address space that all the threads in a block can see. It is local to each
-block and is limited in size, but extremely quick to access, similar to a cache. More can be read 
-about shared memory in the CUDA documentation. As a way of demonstrating shared memory, let's reimplement 
-a famous CUDA solution for summing a vector which works by "folding" the data up using a sucessively
-smaller number of threads.
+Numba exposes many CUDA features including :ref:`shared memory
+<cuda-shared-memory>`. To demonstrate shared memory, let's reimplement a
+famous CUDA solution for summing a vector which works by "folding" the data up
+using a sucessively smaller number of threads.
 
-Note that this is a fairly naive implementation and more efficient ways of summing an array exist
-within numba. See :ref:`cuda_montecarlo` for an example.
+
+Note that this is a fairly naive implementation, and there are more efficient ways of implementing reductions
+using Numba - see :ref:`cuda_montecarlo` for an example.
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_reduction.py
    :language: python
@@ -211,8 +211,8 @@ summing the host data by traditional means.
    :linenos:
 
 This algorithm can be greatly improved upon by redesigning the inner loop
-to use sequential memory accesses, or even furthermore using strategies that
-keep more threads active and working since in this example most threads quickly
+to use sequential memory accesses, and even further by using strategies that
+keep more threads active and working, since in this example most threads quickly
 become idle.
 
 .. _cuda_sessionization:
@@ -223,17 +223,17 @@ Dividing Click Data into Sessions
 
 A common problem in business analytics is that of grouping the activity of users of an online platform into
 sessions, called "sessionization". The idea is that users generally traverse through a website and perform
-various actions (clicking something, filling out a form, etc) in discrete groups. Perhaps a customer spends
+various actions (clicking something, filling out a form, etc.) in discrete groups. Perhaps a customer spends
 some time shopping for an item in the morning and then again at night - often the business is interested in
 treating these periods as separate interactions with their service, and this creates the problem of 
-programmatically splitting up activity in some agreed upon way.
+programmatically splitting up activity in some agreed-upon way.
 
-Here we'll illustrate how to write a group of numba kernels to solve this problem. We'll start with data 
-containing two fields: let user_id represent a unique ID corresponding to an individual customer, and let 
-action_time be a time that some unknown action was taken on the service. Right now, we'll assume there's 
+Here we'll illustrate how to write a Numba kernel to solve this problem. We'll start with data 
+containing two fields: let ``user_id`` represent a unique ID corresponding to an individual customer, and let 
+``action_time`` be a time that some unknown action was taken on the service. Right now, we'll assume there's 
 only one type of action, so all there is to know is when it happened.
 
-Our goal will be to create a new column called session_id which contains a label corresponding to a unique 
+Our goal will be to create a new column called ``session_id``, which contains a label corresponding to a unique 
 session. We'll define the boundary between sessions as when there has been at least one hour between clicks.
 
 
@@ -255,7 +255,7 @@ Here is a solution using Numba:
    :dedent: 8
    :linenos:
 
-Let's generate some data and try out the kernel.
+Let's generate some data and try out the kernel:
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_sessionize.py
    :language: python
@@ -334,16 +334,16 @@ This kernel can be invoked in the normal way:
 Monte Carlo Integration
 =======================
 
-This example shows how to use numba to approximate the value of a definite integral by rapidly generating 
-random numbers on the GPU. A detailed description of the mathematical mechanics of monte carlo integeration 
+This example shows how to use Numba to approximate the value of a definite integral by rapidly generating 
+random numbers on the GPU. A detailed description of the mathematical mechanics of Monte Carlo integeration 
 is out of the scope of the example, but it can briefly be described as an averaging process where the area 
 under the curve is approximated by taking the average of many rectangles formed by its function values.
 
-In addition this example shows how to perform reductions in numba using the :func:`numba.cuda.reduce` API.
+In addition, this example shows how to perform reductions in numba using the :func:`numba.cuda.reduce` API.
 
 .. code-block:: python
 
-   nsamps = 1000000 # numer of samples, higher will lead to a more accurate answer
+   nsamps = 1000000 # number of samples, higher will lead to a more accurate answer
 
 Here's a kernel and a convenience function that calls it:
 
