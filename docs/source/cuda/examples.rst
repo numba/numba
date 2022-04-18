@@ -266,8 +266,7 @@ Let's generate some data and try out the kernel:
    :linenos:
 
 As can be seen above, the kernel successfully divided the first three datapoints from the second three for the first user ID,
-and a similar pattern is seen througout. This example has wide applicability in a business setting and can be used to study
-many problems around consumer behavior and product interaction.
+and a similar pattern is seen througout.
 
 .. _cuda_reuse_function:
 
