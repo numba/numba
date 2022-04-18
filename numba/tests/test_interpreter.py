@@ -1,7 +1,6 @@
 """
 Test bytecode fixes provided in interpreter.py
 """
-import pytest
 from numba import njit, objmode
 from numba.core.errors import UnsupportedError
 from numba.tests.support import TestCase, MemoryLeakMixin, skip_unless_py10
@@ -382,11 +381,12 @@ class TestCallFunctionExPeepHole(TestCase, MemoryLeakMixin):
                 arg41=1,
             )
 
-        with pytest.raises(
-            UnsupportedError,
-            match="You can resolve this issue by moving the control flow out"
-        ):
+        with self.assertRaises(UnsupportedError) as raises:
             njit()(inline_func)(False)
+        self.assertIn(
+            'You can resolve this issue by moving the control flow out',
+            str(raises.exception)
+        )
         # Uncomment sections when inlined control flow is
         # actually supported.
         # py_func = inline_func
@@ -498,11 +498,12 @@ class TestCallFunctionExPeepHole(TestCase, MemoryLeakMixin):
                 1,
             )
 
-        with pytest.raises(
-            UnsupportedError,
-            match="You can resolve this issue by moving the control flow out"
-        ):
+        with self.assertRaises(UnsupportedError) as raises:
             njit()(inline_func)(False)
+        self.assertIn(
+            'You can resolve this issue by moving the control flow out',
+            str(raises.exception)
+        )
         # Uncomment sections when inlined control flow is
         # actually supported.
         # py_func = inline_func
@@ -591,11 +592,12 @@ class TestCallFunctionExPeepHole(TestCase, MemoryLeakMixin):
                 arg15=1 if flag else 2,
             )
 
-        with pytest.raises(
-            UnsupportedError,
-            match="You can resolve this issue by moving the control flow out"
-        ):
+        with self.assertRaises(UnsupportedError) as raises:
             njit()(inline_func)(False)
+        self.assertIn(
+            'You can resolve this issue by moving the control flow out',
+            str(raises.exception)
+        )
         # Uncomment sections when inlined control flow is
         # actually supported.
         # py_func = inline_func
