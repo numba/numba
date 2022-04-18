@@ -99,6 +99,9 @@ class TestMonteCarlo(CUDATestCase):
         mc_integrate(2, 3, nsamps)  # array(0.4054021, dtype=float32)
         # ex_montecarlo.launch.end
 
+        # values computed independently using maple
+        assert np.isclose(mc_integrate(1, 2, nsamps), 0.69315, atol=0.001)
+        assert np.isclose(mc_integrate(2, 3, nsamps), 0.4055, atol=0.001)
 
 if __name__ == "__main__":
     unittest.main()
