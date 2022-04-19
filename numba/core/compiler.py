@@ -255,6 +255,10 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
 
         return cr
 
+    @property
+    def codegen(self):
+        return self.target_context.codegen()
+
     def dump(self, tab=''):
         print(f'{tab}DUMP {type(self).__name__} {self.entry_point}')
         self.signature.dump(tab=tab + '  ')
