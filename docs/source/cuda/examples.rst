@@ -189,6 +189,18 @@ using Numba - see :ref:`cuda_montecarlo` for an example.
    :dedent: 8
    :linenos:
 
+Let's create some one dimensional data that we'll use to demonstrate the
+kernel itself:
+
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_reduction.py
+   :language: python
+   :caption: from ``test_ex_reduction`` in ``numba/cuda/tests/doc_examples/test_reduction.py``
+   :start-after: ex_reduction.allocate.begin
+   :end-before: ex_reduction.allocate.end
+   :dedent: 8
+   :linenos:
+
+
 Here is a version of the kernel implemented using Numba:
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_reduction.py

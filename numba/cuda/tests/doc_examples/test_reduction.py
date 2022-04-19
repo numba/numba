@@ -64,7 +64,7 @@ class TestReduction(CUDATestCase):
 
         # ex_reduction.launch.begin
         array_sum.forall(len(a))(a)
-        print(a[0])  # array(523776)
+        print(a[0])  # 523776
         sum(np.arange(1024))  # 523776
         # ex_reduction.launch.end
 
