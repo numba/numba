@@ -1,3 +1,4 @@
+import inspect
 from numba import jit, typeof
 from numba.core import cgutils, types, serialize, sigutils
 from numba.core.typing import npydecl
@@ -74,19 +75,24 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
     """
     # NOTE: __base_kwargs must be kept in synch with the kwlist in
     # _internal.c:dufunc_init()
-    __base_kwargs = set(('identity', '_keepalive', 'nin', 'nout'))
+    __base_kwargs = set(('argnames', 'defargs', 'identity', '_keepalive',
+                         'nin', 'nout'))
 
     def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
         if isinstance(py_func, Dispatcher):
             py_func = py_func.py_func
+        pysig = inspect.signature(py_func)
+        argnames = tuple(pysig.parameters)
+        defargs = py_func.__defaults__ or ()
         dispatcher = jit(_target='npyufunc',
                          cache=cache,
                          **targetoptions)(py_func)
-        self._initialize(dispatcher, identity)
+        self._initialize(dispatcher, argnames, defargs, identity)
 
-    def _initialize(self, dispatcher, identity):
+    def _initialize(self, dispatcher, argnames, defargs, identity):
         identity = ufuncbuilder.parse_identity(identity)
-        super(DUFunc, self).__init__(dispatcher, identity=identity)
+        super(DUFunc, self).__init__(dispatcher, argnames, defargs,
+                                     identity=identity)
         # Loop over a copy of the keys instead of the keys themselves,
         # since we're changing the dictionary while looping.
         self._install_type()
@@ -170,6 +176,20 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
         args, return_type = sigutils.normalize_signature(sig)
         return self._compile_for_argtys(args, return_type)
 
+    def fold_argument_types(self, pysig, args, kws):
+        """
+        Copied from numba/core/typing/templates.py::fold_argument_types
+        with some changes
+        """
+        def normal_handler(index, param, value):
+            return value
+        from numba.core.typing.templates import fold_arguments
+        args = fold_arguments(pysig, args, kws,
+                              normal_handler,
+                              normal_handler,
+                              None)
+        return args
+
     def _compile_for_args(self, *args, **kws):
         nin = self.ufunc.nin
         if kws:
@@ -180,6 +200,8 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 raise TypeError("unexpected keyword arguments to ufunc: %s"
                                 % ", ".join(repr(k) for k in sorted(kws)))
 
+        pysig = inspect.signature(self._dispatcher.py_func)
+        args = self.fold_argument_types(pysig, args, kws)
         args_len = len(args)
         assert (args_len == nin) or (args_len == nin + self.ufunc.nout)
         assert not kws

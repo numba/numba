@@ -104,6 +104,8 @@ typedef struct {
     PyObject      * dispatcher;
     PyUFuncObject * ufunc;
     PyObject      * keepalive;
+    PyObject      * argnames;
+    PyObject      * defargs;
     int             frozen;
 } PyDUFuncObject;
 
@@ -124,6 +126,107 @@ dufunc_repr(PyDUFuncObject *dufunc)
     return PyString_FromFormat("<numba._DUFunc '%s'>", dufunc->ufunc->name);
 }
 
+static int
+find_named_args(PyDUFuncObject *self, PyObject **pargs, PyObject **pkws)
+{
+    PyObject *oldargs = *pargs, *newargs;
+    PyObject *kws = *pkws;
+    Py_ssize_t pos_args = PyTuple_GET_SIZE(oldargs);
+    Py_ssize_t named_args, total_args, i;
+    Py_ssize_t func_args = PyTuple_GET_SIZE(self->argnames);
+    Py_ssize_t defaults = PyTuple_GET_SIZE(self->defargs);
+    /* Last parameter with a default value */
+    Py_ssize_t last_def = func_args - 1;
+    /* First parameter with a default value */
+    Py_ssize_t first_def = last_def - defaults + 1;
+    /* Minimum number of required arguments */
+    Py_ssize_t minargs = first_def;
+
+    if (kws != NULL)
+        named_args = PyDict_Size(kws);
+    else
+        named_args = 0;
+    total_args = pos_args + named_args;
+    if (total_args > func_args)
+    {
+        PyErr_Format(PyExc_TypeError,
+                     "too many arguments: expected %d, got %d",
+                     (int)func_args, (int)total_args);
+        return -1;
+    }
+    else if (total_args < minargs)
+    {
+        if (minargs == func_args)
+            PyErr_Format(PyExc_TypeError,
+                         "not enough arguments: expected %d, got %d",
+                         (int)minargs, (int)total_args);
+        else
+            PyErr_Format(PyExc_TypeError,
+                         "not enough arguments: expected at least %d, got %d",
+                         (int)minargs, (int)total_args);
+        return -1;
+    }
+    newargs = PyTuple_New(func_args);
+    if (!newargs)
+        return -1;
+    for (i = 0; i < pos_args; i++)
+    {
+        PyObject *value = PyTuple_GET_ITEM(oldargs, i);
+        // if (self->has_stararg && i >= func_args - 1)
+        // {
+        //     /* Skip stararg */
+        //     break;
+        // }
+        Py_INCREF(value);
+        PyTuple_SET_ITEM(newargs, i, value);
+    }
+
+    /* Iterate over missing positional arguments, try to find them in
+       named arguments or default values. */
+    for (i = pos_args; i < func_args; i++)
+    {
+        PyObject *name = PyTuple_GET_ITEM(self->argnames, i);
+        if (kws != NULL)
+        {
+            /* Named argument? */
+            PyObject *value = PyDict_GetItem(kws, name);
+            if (value != NULL)
+            {
+                Py_INCREF(value);
+                PyTuple_SET_ITEM(newargs, i, value);
+                named_args--;
+                continue;
+            }
+        }
+        if (i >= first_def && i <= last_def)
+        {
+            /* Argument has a default value? */
+            PyObject *value = PyTuple_GET_ITEM(self->defargs, i - first_def);
+            Py_INCREF(value);
+            PyTuple_SET_ITEM(newargs, i, value);
+            continue;
+        }
+        else if (i < func_args - 1)
+        {
+            PyErr_Format(PyExc_TypeError,
+                         "missing argument '%s'",
+                         PyString_AsString(name));
+            Py_DECREF(newargs);
+            return -1;
+        }
+    }
+    if (named_args)
+    {
+        PyErr_Format(PyExc_TypeError,
+                     "some keyword arguments unexpected");
+        Py_DECREF(newargs);
+        return -1;
+    }
+    *pargs = newargs;
+    *pkws = NULL;
+    return 0;
+}
+
 static PyObject *
 dufunc_call(PyDUFuncObject *self, PyObject *args, PyObject *kws)
 {
@@ -141,6 +244,9 @@ dufunc_call(PyDUFuncObject *self, PyObject *args, PyObject *kws)
 
         if (method) {
             result = PyObject_Call(method, args, kws);
+
+            find_named_args(self, &args, &kws);
+
             if (result) {
                 Py_DECREF(result);
                 result = PyUFunc_Type.tp_call((PyObject *)self->ufunc, args,
@@ -179,17 +285,20 @@ _get_nin(PyObject * py_func_obj)
 static int
 dufunc_init(PyDUFuncObject *self, PyObject *args, PyObject *kws)
 {
-    PyObject *dispatcher=NULL, *keepalive=NULL, *py_func_obj=NULL, *tmp;
+    PyObject *dispatcher=NULL, *argnames=NULL, *defargs=NULL, *keepalive=NULL, *py_func_obj=NULL, *tmp;
     PyUFuncObject *ufunc=NULL;
     int identity=PyUFunc_None;
     int nin=-1, nout=1;
     const char *name=NULL, *doc=NULL;
 
-    static char * kwlist[] = {"dispatcher", "identity", "_keepalive", "nin",
+    static char * kwlist[] = {"dispatcher", "argnames", "defargs", "identity", "_keepalive", "nin",
                               "nout", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kws, "O|iO!nn", kwlist,
-                                     &dispatcher, &identity,
+    if (!PyArg_ParseTupleAndKeywords(args, kws, "OO!O!|iO!nn", kwlist,
+                                     &dispatcher,
+                                     &PyTuple_Type, &argnames,
+                                     &PyTuple_Type, &defargs,
+                                     &identity,
                                      &PyList_Type, &keepalive, &nin, &nout)) {
         return -1;
     }
@@ -249,6 +358,14 @@ dufunc_init(PyDUFuncObject *self, PyObject *args, PyObject *kws)
 
     tmp = (PyObject*)self->ufunc;
     self->ufunc = ufunc;
+    Py_XDECREF(tmp);
+
+    tmp = (PyObject*)self->argnames;
+    self->argnames = argnames;
+    Py_XDECREF(tmp);
+
+    tmp = (PyObject*)self->defargs;
+    self->defargs = defargs;
     Py_XDECREF(tmp);
 
     tmp = self->keepalive;
