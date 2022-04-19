@@ -30,7 +30,6 @@ class TestMonteCarlo(CUDATestCase):
             create_xoroshiro128p_states,
             xoroshiro128p_uniform_float32,
         )
-
         # ex_montecarlo.import.end
 
         # ex_montecarlo.define.begin
@@ -60,7 +59,6 @@ class TestMonteCarlo(CUDATestCase):
                 # value of the sample
                 y = func(samp)
                 out[gid] = y
-
         # ex_montecarlo.kernel.end
 
         # ex_montecarlo.callfunc.begin
@@ -86,7 +84,6 @@ class TestMonteCarlo(CUDATestCase):
             factor = (upper_lim - lower_lim) / (nsamps - 1)
 
             return sum_reduce(out) * factor
-
         # ex_montecarlo.callfunc.end
 
         # ex_montecarlo.launch.begin

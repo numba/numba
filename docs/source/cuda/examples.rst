@@ -353,59 +353,59 @@ under the curve is approximated by taking the average of many rectangles formed 
 In addition, this example shows how to perform reductions in numba using the 
 :func:`cuda.reduce() <numba.cuda.Reduce>` API.
 
-.. code-block:: python
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_montecarlo.py
+   :language: python
+   :caption: from ``test_ex_montecarlo`` in ``numba/cuda/tests/doc_examples/test_montecarlo.py``
+   :start-after: ex_montecarlo.import.begin
+   :end-before: ex_montecarlo.import.end
+   :dedent: 8
+   :linenos:
 
-   nsamps = 1000000 # number of samples, higher will lead to a more accurate answer
+Let's create a variable to control the number of samples drawn:
 
-Here's a kernel and a convenience function that calls it:
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_montecarlo.py
+   :language: python
+   :caption: from ``test_ex_montecarlo`` in ``numba/cuda/tests/doc_examples/test_montecarlo.py``
+   :start-after: ex_montecarlo.define.begin
+   :end-before: ex_montecarlo.define.end
+   :dedent: 8
+   :linenos:
 
-.. code-block:: python
 
-   @cuda.jit
-   def mc_integrator_kernel(out, rng_states, lower_lim, upper_lim, size):
-      """
-      kernel to draw random samples and evaluate the function to
-      be integrated at those sample values
-      """
-      
-      gid = cuda.grid(1)
-      if (gid < size):
-         # draw a sample between 0 and 1 on this thread
-         samp = xoroshiro128p_uniform_float32(rng_states, gid)
-         
-         # normalize this sample to the limit range
-         samp = samp * (upper_lim - lower_lim) + lower_lim
-         
-         # evaluate the function to be integrated at the normalized
-         # value of the sample
-         y = func(samp)
-         out[gid] = y
+The following kernel implements the main integration routine:
 
-      
-   def mc_integrate(lower_lim, upper_lim, nsamps):
-      """
-      approximate the definite integral of `func` from
-      `lower_lim` to `upper_lim`
-      """
-      out = cp.zeros(nsamps, dtype='float32')
-      rng_states = create_xoroshiro128p_states(nsamps, seed=42)
-      
-      # jit the function for use in CUDA kernels
-      
-      mc_integrator_kernel.forall(nsamps)(out, rng_states, lower_lim, upper_lim, nsamps)
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_montecarlo.py
+   :language: python
+   :caption: from ``test_ex_montecarlo`` in ``numba/cuda/tests/doc_examples/test_montecarlo.py``
+   :start-after: ex_montecarlo.kernel.begin
+   :end-before: ex_montecarlo.kernel.end
+   :dedent: 8
+   :linenos:
 
-      # normalization factor to convert to the average: (b - a)/(N - 1)
-      factor = (upper_lim - lower_lim) / (nsamps - 1)
-      
-      return out.sum() * factor
+This convenience function calls the kernel performs some
+preprocessing and post processing steps. Note the use of Numba's reduction API to
+take sum of the array and compute the final result:
+
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_montecarlo.py
+   :language: python
+   :caption: from ``test_ex_montecarlo`` in ``numba/cuda/tests/doc_examples/test_montecarlo.py``
+   :start-after: ex_montecarlo.callfunc.begin
+   :end-before: ex_montecarlo.callfunc.end
+   :dedent: 8
+   :linenos:
+
 
 We can now use ``mc_integrate`` to compute the definite integral of this function between
 two limits:
 
-.. code-block:: python
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_montecarlo.py
+   :language: python
+   :caption: from ``test_ex_montecarlo`` in ``numba/cuda/tests/doc_examples/test_montecarlo.py``
+   :start-after: ex_montecarlo.launch.begin
+   :end-before: ex_montecarlo.launch.end
+   :dedent: 8
+   :linenos:
 
-   mc_integrate(1, 2, 1000000) # array(0.6929643, dtype=float32)
-   mc_integrate(2, 3, 1000000) # array(0.4054021, dtype=float32)
 
 .. _cuda-matmul:
 
