@@ -26,12 +26,12 @@ class TestSessionization(CUDATestCase):
         import numpy as np
         from numba import cuda
 
-        # set the timeout to one hour
+        # Set the timeout to one hour
         session_timeout = np.int64(np.timedelta64("3600", "s"))
         # ex_sessionize.import.end
 
         # ex_sessionize.allocate.begin
-        # generate data
+        # Generate data
         ids = cuda.to_device(
             np.array(
                 [
@@ -54,9 +54,9 @@ class TestSessionization(CUDATestCase):
                 dtype="datetime64[ns]",
             ).astype(
                 "int64"
-            )  # cast to int64 for compatibility
+            )  # Cast to int64 for compatibility
         )
-        # create a vector to hold the results
+        # Create a vector to hold the results
         results = cuda.to_device(np.zeros(len(ids)))
         # ex_sessionize.allocate.end
 

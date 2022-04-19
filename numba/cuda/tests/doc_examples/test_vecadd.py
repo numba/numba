@@ -26,8 +26,8 @@ class TestVecAdd(CUDATestCase):
         # ex_vecadd.import.begin
         import numpy as np
         from numba import cuda
-
         # ex_vecadd.import.end
+
         # ex_vecadd.kernel.begin
         @cuda.jit
         def f(a, b, c):
@@ -37,7 +37,6 @@ class TestVecAdd(CUDATestCase):
 
             if tid < size:
                 c[tid] = a[tid] + b[tid]
-
         # ex_vecadd.kernel.end
 
         # Seed RNG for test repeatability

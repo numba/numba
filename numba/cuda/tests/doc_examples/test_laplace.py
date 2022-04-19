@@ -30,21 +30,19 @@ class TestLaplace(CUDATestCase):
         # ex_laplace.import.begin
         import numpy as np
         from numba import cuda
-
         # ex_laplace.import.end
+
         # ex_laplace.allocate.begin
-        # use an odd problem size
-        # this is so there can be an element truly
-        # in the "middle" for symmetry
+        # Use an odd problem size.
+        # This is so there can be an element truly in the "middle" for symmetry.
         size = 1001
         data = np.zeros(size)
 
-        # middle element is made very hot
+        # Middle element is made very hot
         data[500] = 10000
         data_gpu = cuda.to_device(data)
 
-        # this extra array is used in the algorithm for
-        # synchronization purposes
+        # This extra array is used for synchronization purposes
         tmp_gpu = cuda.to_device(np.zeros(len(data)))
 
         niter = 10000
@@ -76,14 +74,14 @@ class TestLaplace(CUDATestCase):
         def solve_heat_equation(data, tmp, timesteps, k):
             i = cuda.grid(1)
 
-            # prepare to do a grid-wide synchronization later
+            # Prepare to do a grid-wide synchronization later
             grid = cuda.cg.this_grid()
 
             for step in range(timesteps):
-                # get the current temperature associated with this segment
+                # Get the current temperature associated with this point
                 curr_temp = data[i]
 
-                # apply formula from finite difference equation
+                # Apply formula from finite difference equation
                 if i == 0:
                     # Left wall is held at T = 0
                     next_temp = curr_temp + k * (data[i + 1] - (2 * curr_temp))
@@ -95,12 +93,12 @@ class TestLaplace(CUDATestCase):
                         data[i - 1] - (2 * curr_temp) + data[i + 1]
                     )
                 tmp[i] = next_temp
-                # wait for every thread to write before moving on
+
+                # Wait for every thread to write before moving on
                 grid.sync()
 
-                # swap data vectors for the next iteration
+                # Swap data for the next iteration
                 data[i] = tmp[i]
-
         # ex_laplace.kernel.end
 
         # ex_laplace.launch.begin

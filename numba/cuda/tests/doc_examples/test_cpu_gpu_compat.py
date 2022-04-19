@@ -27,7 +27,6 @@ class TestCpuGpuCompat(CUDATestCase):
 
         import numba
         from numba import cuda
-
         # ex_cpu_gpu_compat.import.end
 
         # ex_cpu_gpu_compat.allocate.begin
@@ -57,10 +56,8 @@ class TestCpuGpuCompat(CUDATestCase):
         def f(res, xarr, yarr, zarr):
             tid = cuda.grid(1)
             if tid < len(xarr):
-                # the function decorated with numba.jit
-                # may be directly reused
+                # The function decorated with numba.jit may be directly reused
                 res[tid] = business_logic(xarr[tid], yarr[tid], zarr[tid])
-
         # ex_cpu_gpu_compat.usegpu.end
 
         # ex_cpu_gpu_compat.launch.begin

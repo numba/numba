@@ -26,7 +26,6 @@ class TestReduction(CUDATestCase):
         import numpy as np
         from numba import cuda
         from numba.types import int32
-
         # ex_reduction.import.end
 
         # ex_reduction.allocate.begin
@@ -43,28 +42,24 @@ class TestReduction(CUDATestCase):
             if tid < size:
                 i = cuda.grid(1)
 
-                # declare an array in shared memory
+                # Declare an array in shared memory
                 shr = cuda.shared.array(nelem, int32)
                 shr[tid] = data[i]
 
-                # make sure every thread has written
-                # its value to shared memory
-                # before we start reducing
+                # Ensure writes to shared memory are visible to all threads before reducing
                 cuda.syncthreads()
 
                 s = 1
                 while s < cuda.blockDim.x:
                     if tid % (2 * s) == 0:
-                        # stride by `s` and add
+                        # Stride by `s` and add
                         shr[tid] += shr[tid + s]
                     s *= 2
                     cuda.syncthreads()
 
-                # after the loop, the zeroth
-                # element contains the sum
+                # After the loop, the zeroth  element contains the sum
                 if tid == 0:
                     data[tid] = shr[tid]
-
         # ex_reduction.kernel.end
 
         # ex_reduction.launch.begin
