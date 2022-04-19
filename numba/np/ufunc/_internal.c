@@ -129,6 +129,7 @@ dufunc_repr(PyDUFuncObject *dufunc)
 static int
 find_named_args(PyDUFuncObject *self, PyObject **pargs, PyObject **pkws)
 {
+    // copy of dispatcher.cpp::find_named_args but without *args support
     PyObject *oldargs = *pargs, *newargs;
     PyObject *kws = *pkws;
     Py_ssize_t pos_args = PyTuple_GET_SIZE(oldargs);
@@ -143,7 +144,12 @@ find_named_args(PyDUFuncObject *self, PyObject **pargs, PyObject **pkws)
     Py_ssize_t minargs = first_def;
 
     if (kws != NULL)
+    {
         named_args = PyDict_Size(kws);
+        if (PyDict_GetItemString(kws, "out") != NULL) {
+            named_args -= 1;
+        }
+    }
     else
         named_args = 0;
     total_args = pos_args + named_args;
@@ -172,11 +178,6 @@ find_named_args(PyDUFuncObject *self, PyObject **pargs, PyObject **pkws)
     for (i = 0; i < pos_args; i++)
     {
         PyObject *value = PyTuple_GET_ITEM(oldargs, i);
-        // if (self->has_stararg && i >= func_args - 1)
-        // {
-        //     /* Skip stararg */
-        //     break;
-        // }
         Py_INCREF(value);
         PyTuple_SET_ITEM(newargs, i, value);
     }
@@ -186,6 +187,7 @@ find_named_args(PyDUFuncObject *self, PyObject **pargs, PyObject **pkws)
     for (i = pos_args; i < func_args; i++)
     {
         PyObject *name = PyTuple_GET_ITEM(self->argnames, i);
+        // PyObject_Print(name, stdout, Py_PRINT_RAW);
         if (kws != NULL)
         {
             /* Named argument? */
@@ -223,7 +225,16 @@ find_named_args(PyDUFuncObject *self, PyObject **pargs, PyObject **pkws)
         return -1;
     }
     *pargs = newargs;
-    *pkws = NULL;
+    PyObject* out = PyDict_GetItemString(kws, "out");
+    if (out != NULL)
+    {
+        *pkws = PyDict_New();
+        Py_INCREF(out);
+        PyDict_SetItemString(*pkws, "out", out);
+        //     // PyDict_SetItemString(*pkws, "out", PyDict_GetItemString(kws, "out"));
+    }
+    else
+        *pkws = NULL;
     return 0;
 }
 
@@ -245,7 +256,10 @@ dufunc_call(PyDUFuncObject *self, PyObject *args, PyObject *kws)
         if (method) {
             result = PyObject_Call(method, args, kws);
 
-            find_named_args(self, &args, &kws);
+            if (find_named_args(self, &args, &kws))
+                return NULL;
+            else
+                Py_INCREF(args);
 
             if (result) {
                 Py_DECREF(result);

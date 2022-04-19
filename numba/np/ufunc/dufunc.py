@@ -91,7 +91,9 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
 
     def _initialize(self, dispatcher, argnames, defargs, identity):
         identity = ufuncbuilder.parse_identity(identity)
-        super(DUFunc, self).__init__(dispatcher, argnames, defargs,
+        super(DUFunc, self).__init__(dispatcher,
+                                     argnames=argnames,
+                                     defargs=defargs,
                                      identity=identity)
         # Loop over a copy of the keys instead of the keys themselves,
         # since we're changing the dictionary while looping.
@@ -195,7 +197,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
         if kws:
             if 'out' in kws:
                 out = kws.pop('out')
-                args += (out,)
+                # args += (out,)
             if kws:
                 raise TypeError("unexpected keyword arguments to ufunc: %s"
                                 % ", ".join(repr(k) for k in sorted(kws)))
