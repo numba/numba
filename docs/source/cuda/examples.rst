@@ -103,14 +103,14 @@ propagates through an object over time. It works by discretizing the problem in 
 
 Then, the following assumption is applied: The temperature of a point after some interval 
 has passed is some weighted average of the temperature of the points that are directly
-touching it. Intuitively, this means if all the points in the domain are very hot
-and a single point in the middle is very cold, as time goes on, the hot points will cause
+adjacent to it. Intuitively, if all the points in the domain are very hot
+and a single point in the middle is very cold, as time passes, the hot points will cause
 the cold one to heat up and the cold point will cause the surrounding hot pieces to cool
-slightly. Simply put, the heat spreads out around the object.
+slightly. Simply put, the heat spreads throughout the object.
 
 We can implement this simulation using a Numba kernel. Let's start simple by assuming
 we have a one dimensional object which we'll represent with an array of values. The position 
-of the element in the array is like the position of a point within the object, and the value
+of the element in the array is the position of a point within the object, and the value
 of the element represents the temperature. 
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_laplace.py
@@ -132,7 +132,7 @@ Some initial setup here. Let's make one point in the center of the object very h
    :dedent: 8
    :linenos:
 
-The initial state of the problem can be visualized with ``matplotlib``:
+The initial state of the problem can be visualized as:
 
 .. image:: laplace_initial.svg
 
@@ -172,10 +172,10 @@ the arc will flatten out completely.
 
 Shared Memory Reduction
 =======================
-Numba exposes many CUDA features including :ref:`shared memory
+Numba exposes many CUDA features, including :ref:`shared memory
 <cuda-shared-memory>`. To demonstrate shared memory, let's reimplement a
 famous CUDA solution for summing a vector which works by "folding" the data up
-using a sucessively smaller number of threads.
+using a successively smaller number of threads.
 
 
 Note that this is a fairly naive implementation, and there are more efficient ways of implementing reductions
@@ -199,8 +199,8 @@ Here is a version of the kernel implemented using Numba:
    :dedent: 8
    :linenos:
 
-This kernel can be run as follows and the same result is obtained through
-summing the host data by traditional means.
+We can run kernel and verify that the same result is obtained through
+summing data on the host as follows:
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_reduction.py
    :language: python
@@ -266,7 +266,7 @@ Let's generate some data and try out the kernel:
    :linenos:
 
 As can be seen above, the kernel successfully divided the first three datapoints from the second three for the first user ID,
-and a similar pattern is seen througout.
+and a similar pattern is seen throughout.
 
 .. _cuda_reuse_function:
 
@@ -338,7 +338,8 @@ random numbers on the GPU. A detailed description of the mathematical mechanics 
 is out of the scope of the example, but it can briefly be described as an averaging process where the area 
 under the curve is approximated by taking the average of many rectangles formed by its function values.
 
-In addition, this example shows how to perform reductions in numba using the :func:`numba.cuda.reduce` API.
+In addition, this example shows how to perform reductions in numba using the 
+:func:`cuda.reduce() <numba.cuda.Reduce>` API.
 
 .. code-block:: python
 
