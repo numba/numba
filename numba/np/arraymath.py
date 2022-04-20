@@ -898,7 +898,7 @@ def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
         raise TypeError('The first argument "a" must be array-like')
 
     if not type_can_asarray(b):
-        raise TypeError('The first argument "b" must be array-like')
+        raise TypeError('The second argument "b" must be array-like')
 
     if not isinstance(rtol, types.Float):
         raise TypeError('The third argument "rtol" must be a '
