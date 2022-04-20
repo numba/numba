@@ -224,7 +224,8 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
                     defaults = tuple(types.Omitted(x) for x in defaults)
                     for i, arg in enumerate(reversed(args), 1):
                         # kwargs support will require additional logic here
-                        if not isinstance(arg, types.Optional):
+                        if (not isinstance(arg, types.Optional)
+                            or i > len(defaults)):
                             break
                         args_variant = args[:-i] + defaults[-i:]
                         disp.compile(args_variant)

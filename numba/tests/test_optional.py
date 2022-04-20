@@ -259,6 +259,20 @@ class TestOptional(TestCase):
         # incref being made on the returned None.
         work()
 
+    def test_optional_omitted(self):
+        """
+        Function with signature should compile/run with omitted args
+        """
+        @njit("int16(int16, optional(int16), optional(int16))")
+        def foo(x, y=2, z=None):
+            if z is None:
+                z = 3
+            return x + y + z
+
+        self.assertEqual(foo(1), 6)
+        self.assertEqual(foo(1,2), 6)
+        self.assertEqual(foo(1,2,3), 6)
+
 
 if __name__ == '__main__':
     unittest.main()
