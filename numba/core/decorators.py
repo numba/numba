@@ -10,7 +10,7 @@ import logging
 
 from numba.core.errors import DeprecationError, NumbaDeprecationWarning
 from numba.stencils.stencil import stencil
-from numba.core import config, extending, sigutils, registry
+from numba.core import config, extending, sigutils, registry, types
 
 _logger = logging.getLogger(__name__)
 
@@ -217,6 +217,18 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
             with typeinfer.register_dispatcher(disp):
                 for sig in sigs:
                     disp.compile(sig)
+                    # Each Optional argument may be omitted,
+                    # so we need to compile additional signatures
+                    args, _ = sigutils.normalize_signature(sig)
+                    defaults = inspect.getfullargspec(func).defaults or tuple()
+                    defaults = tuple(types.Omitted(x) for x in defaults)
+                    for i, arg in enumerate(reversed(args), 1):
+                        # kwargs support will require additional logic here
+                        if not isinstance(arg, types.Optional):
+                            break
+                        args_variant = args[:-i] + defaults[-i:]
+                        disp.compile(args_variant)
+
                 disp.disable_compile()
         return disp
 
