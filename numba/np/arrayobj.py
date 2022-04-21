@@ -26,7 +26,7 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
                                  RefType)
 from numba.core.typing import signature
 from numba.core.extending import (register_jitable, overload, overload_method,
-                                  intrinsic)
+                                  intrinsic, overload_attribute)
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
@@ -2571,27 +2571,130 @@ def array_flags_f_contiguous(context, builder, typ, value):
 # ------------------------------------------------------------------------------
 # .real / .imag
 
-@lower_getattr(types.Array, "real")
-def array_real_part(context, builder, typ, value):
+@overload_attribute(types.Array, 'real')
+def ol_array_real(arr):
+    typ = arr
     if typ.dtype in types.complex_domain:
-        return array_complex_attr(context, builder, typ, value, attr='real')
+        def impl(arr):
+            return _array_real_attr(arr)
+        return impl
     elif typ.dtype in types.number_domain:
-        # as an identity function
-        return impl_ret_borrowed(context, builder, typ, value)
+        def impl(arr):
+            return arr
+        return impl
     else:
-        raise NotImplementedError('unsupported .real for {}'.format(type.dtype))
+        msg = f"cannot access .real of array of {arr.dtype}"
+        raise errors.TypingError(msg)
 
 
-@lower_getattr(types.Array, "imag")
-def array_imag_part(context, builder, typ, value):
+@intrinsic
+def _force_readonly(tyctx, arr):
+    """Takes an array, and returns it with the readonly bit set in both typing
+    and lowering."""
+    sig = arr.copy(readonly=True)(arr)
+
+    def impl(cgctx, builder, sig, llargs):
+        arrayty = make_array(arr)
+        array = arrayty(cgctx, builder, llargs[0])
+        # make readonly hack
+        parent = array._datamodel.get_type('parent')
+        setattr(array, 'parent', Constant(cgctx.get_value_type(parent), None))
+        return impl_ret_borrowed(cgctx, builder, sig.return_type,
+                                 array._getvalue())
+    return sig, impl
+
+
+@overload_attribute(types.Array, 'imag')
+def ol_array_imag(arr):
+    typ = arr
     if typ.dtype in types.complex_domain:
-        return array_complex_attr(context, builder, typ, value, attr='imag')
+        def impl(arr):
+            return _array_imag_attr(arr)
+        return impl
     elif typ.dtype in types.number_domain:
-        # return a readonly zero array
-        sig = signature(typ.copy(readonly=True), typ)
-        return numpy_zeros_like_nd(context, builder, sig, [value])
+        def impl(arr):
+            # .imag on a real domain dtype is a readonly zeros array
+            tmp = np.zeros_like(arr)
+            rotmp = _force_readonly(tmp)
+            return rotmp
+        return impl
     else:
-        raise NotImplementedError('unsupported .imag for {}'.format(type.dtype))
+        msg = f"cannot access .imag of array of {arr.dtype}"
+        raise errors.TypingError(msg)
+
+
+def _generate_real_imag_attr(attr):
+    """
+    Generates intrinsics for obtaining the real/imaginary part of complex array
+    """
+
+    @intrinsic
+    def intrin_typing(tyctx, arr):
+        sig = arr.copy(dtype=arr.dtype.underlying_float, layout='A')(arr)
+
+        def codegen(cgctx, builder, sig, llargs):
+            value = llargs[0]
+            typ = sig.args[0]
+            """
+            Given a complex array, it's memory layout is:
+
+                R C R C R C
+                ^   ^   ^
+
+            (`R` indicates a float for the real part;
+            `C` indicates a float for the imaginary part;
+            the `^` indicates the start of each element)
+
+            To get the real part, we can simply change the dtype and itemsize to
+            that of the underlying float type.  The new layout is:
+
+                R x R x R x
+                ^   ^   ^
+
+            (`x` indicates unused)
+
+            A load operation will use the dtype to determine the number of bytes
+            to load.
+
+            To get the imaginary part, we shift the pointer by 1 float offset
+            and change the dtype and itemsize.  The new layout is:
+
+                x C x C x C
+                ^   ^   ^
+            """
+            if (attr not in ['real', 'imag'] or
+                    typ.dtype not in types.complex_domain):
+                raise NotImplementedError(f"cannot get attribute `{attr}`")
+
+            arrayty = make_array(typ)
+            array = arrayty(cgctx, builder, value)
+
+            # sizeof underlying float type
+            flty = typ.dtype.underlying_float
+            sizeof_flty = cgctx.get_abi_sizeof(cgctx.get_data_type(flty))
+            itemsize = array.itemsize.type(sizeof_flty)
+
+            # cast data pointer to float type
+            llfltptrty = cgctx.get_value_type(flty).as_pointer()
+            dataptr = builder.bitcast(array.data, llfltptrty)
+
+            # add offset
+            if attr == 'imag':
+                dataptr = builder.gep(dataptr, [ir.IntType(32)(1)])
+
+            # make result
+            resultty = typ.copy(dtype=flty, layout='A')
+            result = make_array(resultty)(cgctx, builder)
+            repl = dict(data=dataptr, itemsize=itemsize)
+            cgutils.copy_struct(result, array, repl)
+            return impl_ret_borrowed(cgctx, builder, resultty,
+                                     result._getvalue())
+        return sig, codegen
+    return intrin_typing
+
+
+_array_real_attr = _generate_real_imag_attr("real")
+_array_imag_attr = _generate_real_imag_attr("imag")
 
 
 @overload_method(types.Array, 'conj')
@@ -2601,64 +2704,9 @@ def array_conj(arr):
         return np.conj(arr)
     return impl
 
-
-def array_complex_attr(context, builder, typ, value, attr):
-    """
-    Given a complex array, it's memory layout is:
-
-        R C R C R C
-        ^   ^   ^
-
-    (`R` indicates a float for the real part;
-     `C` indicates a float for the imaginary part;
-     the `^` indicates the start of each element)
-
-    To get the real part, we can simply change the dtype and itemsize to that
-    of the underlying float type.  The new layout is:
-
-        R x R x R x
-        ^   ^   ^
-
-    (`x` indicates unused)
-
-    A load operation will use the dtype to determine the number of bytes to
-    load.
-
-    To get the imaginary part, we shift the pointer by 1 float offset and
-    change the dtype and itemsize.  The new layout is:
-
-        x C x C x C
-          ^   ^   ^
-    """
-    if attr not in ['real', 'imag'] or typ.dtype not in types.complex_domain:
-        raise NotImplementedError("cannot get attribute `{}`".format(attr))
-
-    arrayty = make_array(typ)
-    array = arrayty(context, builder, value)
-
-    # sizeof underlying float type
-    flty = typ.dtype.underlying_float
-    sizeof_flty = context.get_abi_sizeof(context.get_data_type(flty))
-    itemsize = array.itemsize.type(sizeof_flty)
-
-    # cast data pointer to float type
-    llfltptrty = context.get_value_type(flty).as_pointer()
-    dataptr = builder.bitcast(array.data, llfltptrty)
-
-    # add offset
-    if attr == 'imag':
-        dataptr = builder.gep(dataptr, [ir.IntType(32)(1)])
-
-    # make result
-    resultty = typ.copy(dtype=flty, layout='A')
-    result = make_array(resultty)(context, builder)
-    repl = dict(data=dataptr, itemsize=itemsize)
-    cgutils.copy_struct(result, array, repl)
-    return impl_ret_borrowed(context, builder, resultty, result._getvalue())
-
-
 # ------------------------------------------------------------------------------
 # DType attribute
+
 
 def dtype_type(context, builder, dtypety, dtypeval):
     # Just return a dummy opaque value
@@ -3952,6 +4000,7 @@ def _check_const_str_dtype(fname, dtype):
 def numpy_empty_nd(tyctx, ty_shape, ty_dtype, ty_retty_ref):
     ty_retty = ty_retty_ref.instance_type
     sig = ty_retty(ty_shape, ty_dtype, ty_retty_ref)
+
     def codegen(cgctx, builder, sig, llargs):
         arrtype, shapes = _parse_empty_args(cgctx, builder, sig, llargs)
         ary = _empty_nd_impl(cgctx, builder, arrtype, shapes)
@@ -3962,7 +4011,9 @@ def numpy_empty_nd(tyctx, ty_shape, ty_dtype, ty_retty_ref):
 @overload(np.empty)
 def ol_np_empty(shape, dtype=float):
     _check_const_str_dtype("empty", dtype)
-    if dtype is float or (isinstance(dtype, types.Function) and dtype.typing_key is float): #default
+    if (dtype is float or
+        (isinstance(dtype, types.Function) and dtype.typing_key is float) or
+            is_nonelike(dtype)): #default
         nb_dtype = types.double
     else:
         nb_dtype = ty_parse_dtype(dtype)
@@ -3970,6 +4021,7 @@ def ol_np_empty(shape, dtype=float):
     ndim = ty_parse_shape(shape)
     if nb_dtype is not None and ndim is not None:
         retty = types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
+
         def impl(shape, dtype=float):
             return numpy_empty_nd(shape, dtype, retty)
         return impl
@@ -3982,6 +4034,7 @@ def ol_np_empty(shape, dtype=float):
 def numpy_empty_like_nd(tyctx, ty_prototype, ty_dtype, ty_retty_ref):
     ty_retty = ty_retty_ref.instance_type
     sig = ty_retty(ty_prototype, ty_dtype, ty_retty_ref)
+
     def codegen(cgctx, builder, sig, llargs):
         arrtype, shapes = _parse_empty_like_args(cgctx, builder, sig, llargs)
         ary = _empty_nd_impl(cgctx, builder, arrtype, shapes)
@@ -4017,6 +4070,7 @@ def ol_np_empty_like(arr, dtype=None):
 @intrinsic
 def _zero_fill_array_method(tyctx, self):
     sig = types.none(self)
+
     def codegen(cgctx, builder, sig, llargs):
         ary = make_array(sig.args[0])(cgctx, builder, llargs[0])
         cgutils.memset(builder, ary.data, builder.mul(ary.itemsize, ary.nitems),
@@ -4035,6 +4089,7 @@ def ol_array_zero_fill(self):
 @overload(np.zeros)
 def ol_np_zeros(shape, dtype=float):
     _check_const_str_dtype("zeros", dtype)
+
     def impl(shape, dtype=float):
         arr = np.empty(shape, dtype=dtype)
         arr._zero_fill()
@@ -4045,6 +4100,7 @@ def ol_np_zeros(shape, dtype=float):
 @overload(np.zeros_like)
 def ol_np_zeros_like(a, dtype=None):
     _check_const_str_dtype("zeros_like", dtype)
+
     # NumPy uses 'a' as the arg name for the array-like
     def impl(a, dtype=None):
         arr = np.empty_like(a, dtype=dtype)
@@ -4056,6 +4112,7 @@ def ol_np_zeros_like(a, dtype=None):
 @overload(np.ones_like)
 def ol_np_ones_like(a, dtype=None):
     _check_const_str_dtype("ones_like", dtype)
+
     # NumPy uses 'a' as the arg name for the array-like
     def impl(a, dtype=None):
         arr = np.empty_like(a, dtype=dtype)
@@ -4129,12 +4186,9 @@ def ol_np_ones(shape, dtype=None):
     # for some reason the NumPy default for dtype is None in the source but
     # ends up as np.float64 by definition.
     _check_const_str_dtype("ones", dtype)
+
     def impl(shape, dtype=None):
-        if dtype is None:
-            dt = np.float64
-        else:
-            dt = dtype
-        arr = np.empty(shape, dtype=dt)
+        arr = np.empty(shape, dtype=dtype)
         arr_flat = arr.flat
         for idx in range(len(arr_flat)):
             arr_flat[idx] = 1
