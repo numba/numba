@@ -158,6 +158,20 @@ class TestLinker(CUDATestCase):
         # Check the filename is reported correctly
         self.assertIn('in the compilation of "error.cu"', msg)
 
+    def test_linking_unknown_filetype_error(self):
+        expected_err = "Don't know how to link file with extension .cuh"
+        with self.assertRaisesRegex(RuntimeError, expected_err):
+            @cuda.jit('void()', link=['header.cuh'])
+            def kernel():
+                pass
+
+    def test_linking_file_with_no_extension_error(self):
+        expected_err = "Don't know how to link file with no extension"
+        with self.assertRaisesRegex(RuntimeError, expected_err):
+            @cuda.jit('void()', link=['data'])
+            def kernel():
+                pass
+
     @skip_if_cuda_includes_missing
     @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_linking_cu_cuda_include(self):

@@ -2625,11 +2625,16 @@ class Linker(metaclass=ABCMeta):
 
     def add_file_guess_ext(self, path):
         """Add a file to the link, guessing its type from its extension."""
-        ext = path.rsplit('.', 1)[1]
-        if ext == 'cu':
+        ext = os.path.splitext(path)[1][1:]
+        if ext == '':
+            raise RuntimeError("Don't know how to link file with no extension")
+        elif ext == 'cu':
             self.add_cu_file(path)
         else:
-            kind = FILE_EXTENSION_MAP[ext]
+            kind = FILE_EXTENSION_MAP.get(ext, None)
+            if kind is None:
+                raise RuntimeError("Don't know how to link file with extension "
+                                   f".{ext}")
             self.add_file(path, kind)
 
     @abstractmethod
