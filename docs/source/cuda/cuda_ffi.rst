@@ -40,8 +40,9 @@ Components of the prototype are as follows:
   Python exception occurred. Since Python exceptions don't occur in foreign
   functions, this should always be set to 0 by the callee.
 - The first argument is a pointer to the return value of type ``T``, which is
-  passed in by the caller. If the function returns a value, the pointee should
-  be set by the callee to store the return value.
+  allocated in the local address space [#f1]_ and passed in by the caller. If
+  the function returns a value, the pointee should be set by the callee to
+  store the return value.
 - Subsequent arguments should match the types and order of arguments passed to
   the function from the Python kernel.
 
@@ -61,6 +62,12 @@ prototype:
      float y
    )
 
+.. rubric:: Notes
+
+.. [#f1] Care must be taken to ensure that any operations on the return value
+         are applicable to data in the local address space.  Some operations,
+         such as atomics, cannot be performed on data in the local address
+         space.
 
 Declaration in Python
 ---------------------
