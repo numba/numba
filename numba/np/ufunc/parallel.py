@@ -679,11 +679,11 @@ def get_thread_id():
     """
     Returns a unique ID for each thread in the range 0 to N.
     If we get to this point then we are not in a Numba compiled function.
-    Return the result from get_thread_id() from the threading layer.
+    If not in Numba function, get_thread_id() is always 0.
     If we are in a Numba compiled function then the overload below will
     be exercised.
     """
-    return _get_thread_id()
+    return 0
 
 
 @overload(get_thread_id)
