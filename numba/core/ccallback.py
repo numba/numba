@@ -36,6 +36,7 @@ class CFunc(object):
     _targetdescr = registry.cpu_target
 
     def __init__(self, pyfunc, sig, locals, options,
+                 flag_class=compiler.Flags(),
                  pipeline_class=compiler.Compiler):
         args, return_type = sig
         if return_type is None:
@@ -48,6 +49,7 @@ class CFunc(object):
         self._sig = signature(return_type, *args)
         self._compiler = _CFuncCompiler(pyfunc, self._targetdescr,
                                         options, locals,
+                                        flag_class=flag_class,
                                         pipeline_class=pipeline_class)
 
         self._wrapper_name = None

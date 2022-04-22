@@ -262,7 +262,8 @@ def njit(*args, **kws):
     return jit(*args, **kws)
 
 
-def cfunc(sig, locals={}, cache=False, pipeline_class=None, **options):
+def cfunc(sig, locals={}, cache=False,
+          flag_class=None, pipeline_class=None, **options):
     """
     This decorator is used to compile a Python function into a C callback
     usable with foreign C libraries.
@@ -278,6 +279,8 @@ def cfunc(sig, locals={}, cache=False, pipeline_class=None, **options):
     def wrapper(func):
         from numba.core.ccallback import CFunc
         additional_args = {}
+        if flag_class is not None:
+            additional_args['flag_class'] = flag_class
         if pipeline_class is not None:
             additional_args['pipeline_class'] = pipeline_class
         res = CFunc(func, sig, locals=locals, options=options, **additional_args)
