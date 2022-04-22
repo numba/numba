@@ -94,7 +94,7 @@ class _Kernel(serialize.ReduceMixin):
         self.cooperative = 'cudaCGGetIntrinsicHandle' in lib.get_asm_str()
         # We need to link against cudadevrt if grid sync is being used.
         if self.cooperative:
-            link.append(get_cudalib('cudadevrt_wrapper', static=True))
+            link.append(get_cudalib('cudadevrt', static=True))
 
         cuda_fp16_math_funcs = ['hsin_wrapper', 'hcos_wrapper',
                                 'hlog_wrapper', 'hlog10_wrapper',
