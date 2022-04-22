@@ -6,7 +6,7 @@ from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          signature, Registry)
 from numba.cuda.types import dim3, grid_group
 from numba import cuda
-
+from numba.cuda.compiler import declare_device_function
 
 registry = Registry()
 register = registry.register
@@ -361,6 +361,37 @@ Cuda_hmul = _genfp16_binary(cuda.fp16.hmul)
 Cuda_hneg = _genfp16_unary(cuda.fp16.hneg)
 Cuda_habs = _genfp16_unary(cuda.fp16.habs)
 
+hsin_device = declare_device_function('hsin_wrapper', types.float16,
+                                      (types.float16,), True)
+hcos_device = declare_device_function('hcos_wrapper', types.float16,
+                                      (types.float16,), True)
+hlog_device = declare_device_function('hlog_wrapper', types.float16,
+                                      (types.float16,), True)
+hlog10_device = declare_device_function('hlog10_wrapper', types.float16,
+                                        (types.float16,), True)
+hlog2_device = declare_device_function('hlog2_wrapper', types.float16,
+                                       (types.float16,), True)
+hexp_device = declare_device_function('hexp_wrapper', types.float16,
+                                      (types.float16,), True)
+hexp10_device = declare_device_function('hexp10_wrapper', types.float16,
+                                        (types.float16,), True)
+hexp2_device = declare_device_function('hexp2_wrapper', types.float16,
+                                       (types.float16,), True)
+hsqrt_device = declare_device_function('hsqrt_wrapper', types.float16,
+                                       (types.float16,), True)
+hrsqrt_device = declare_device_function('hrsqrt_wrapper', types.float16,
+                                        (types.float16,), True)
+hfloor_device = declare_device_function('hfloor_wrapper', types.float16,
+                                        (types.float16,), True)
+hceil_device = declare_device_function('hceil_wrapper', types.float16,
+                                       (types.float16,), True)
+hrcp_device = declare_device_function('hrcp_wrapper', types.float16,
+                                      (types.float16,), True)
+hrint_device = declare_device_function('hrint_wrapper', types.float16,
+                                       (types.float16,), True)
+htrunc_device = declare_device_function('htrunc_wrapper', types.float16,
+                                        (types.float16,), True)
+
 
 # generate atomic operations
 def _gen(l_key, supported_types):
@@ -528,6 +559,51 @@ class CudaFp16Template(AttributeTemplate):
 
     def resolve_hfma(self, mod):
         return types.Function(Cuda_hfma)
+
+    def resolve_hsin(self, mod):
+        return hsin_device
+
+    def resolve_hcos(self, mod):
+        return hcos_device
+
+    def resolve_hlog(self, mod):
+        return hlog_device
+
+    def resolve_hlog10(self, mod):
+        return hlog10_device
+
+    def resolve_hlog2(self, mod):
+        return hlog2_device
+
+    def resolve_hexp(self, mod):
+        return hexp_device
+
+    def resolve_hexp10(self, mod):
+        return hexp10_device
+
+    def resolve_hexp2(self, mod):
+        return hexp2_device
+
+    def resolve_hfloor(self, mod):
+        return hfloor_device
+
+    def resolve_hceil(self, mod):
+        return hceil_device
+
+    def resolve_hsqrt(self, mod):
+        return hsqrt_device
+
+    def resolve_hrsqrt(self, mod):
+        return hrsqrt_device
+
+    def resolve_hrcp(self, mod):
+        return hrcp_device
+
+    def resolve_hrint(self, mod):
+        return hrint_device
+
+    def resolve_htrunc(self, mod):
+        return htrunc_device
 
 
 @register_attr

@@ -14,7 +14,6 @@ from numba import cuda
 from numba.cuda import nvvmutils, stubs, errors
 from numba.cuda.types import dim3, grid_group, CUDADispatcher
 
-
 registry = Registry()
 lower = registry.lower
 lower_attr = registry.lower_getattr
