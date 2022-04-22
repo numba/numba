@@ -86,12 +86,13 @@ class OmittedArg(object):
 
 class _FunctionCompiler(object):
     def __init__(self, py_func, targetdescr, targetoptions, locals,
-                 pipeline_class):
+                 flag_class, pipeline_class):
         self.py_func = py_func
         self.targetdescr = targetdescr
         self.targetoptions = targetoptions
         self.locals = locals
         self.pysig = utils.pysignature(self.py_func)
+        self.flag_pass = flag_class
         self.pipeline_class = pipeline_class
         # Remember key=(args, return_type) combinations that will fail
         # compilation to avoid compilation attempt on them.  The values are
@@ -144,7 +145,7 @@ class _FunctionCompiler(object):
             return True, retval
 
     def _compile_core(self, args, return_type):
-        flags = compiler.Flags()
+        flags = self.flag_pass
         self.targetdescr.options.parse_as_flags(flags, self.targetoptions)
         flags = self._customize_flags(flags)
 
@@ -805,7 +806,8 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
     __numba__ = 'py_func'
 
     def __init__(self, py_func, locals={}, targetoptions={},
-                 impl_kind='direct', pipeline_class=compiler.Compiler):
+                 impl_kind='direct',
+                 flag_class=compiler.Flags, pipeline_class=compiler.Compiler):
         """
         Parameters
         ----------
@@ -838,7 +840,8 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         compiler_class = self._impl_kinds[impl_kind]
         self._impl_kind = impl_kind
         self._compiler = compiler_class(py_func, self.targetdescr,
-                                        targetoptions, locals, pipeline_class)
+                                        targetoptions, locals,
+                                        flag_class, pipeline_class)
         self._cache_hits = collections.Counter()
         self._cache_misses = collections.Counter()
 

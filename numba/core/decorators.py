@@ -24,7 +24,7 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
 
 
 def jit(signature_or_function=None, locals={}, cache=False,
-        pipeline_class=None, boundscheck=None, **options):
+        flag_class=None, pipeline_class=None, boundscheck=None, **options):
     """
     This decorator is used to compile a Python function into native code.
 
@@ -171,6 +171,8 @@ def jit(signature_or_function=None, locals={}, cache=False,
         sigs = None
 
     dispatcher_args = {}
+    if flag_class is not None:
+        dispatcher_args['flag_class'] = flag_class
     if pipeline_class is not None:
         dispatcher_args['pipeline_class'] = pipeline_class
     wrapper = _jit(sigs, locals=locals, target=target, cache=cache,
