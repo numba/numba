@@ -864,6 +864,100 @@ def np_all(a):
     return flat_all
 
 
+@register_jitable
+def _allclose_scalars(a_v, b_v, rtol=1e-05, atol=1e-08, equal_nan=False):
+    a_v_isnan = np.isnan(a_v)
+    b_v_isnan = np.isnan(b_v)
+
+    # only one of the values is NaN and the
+    # other is not.
+    if ( (not a_v_isnan and b_v_isnan) or
+            (a_v_isnan and not b_v_isnan) ):
+        return False
+
+    # either both of the values are NaN
+    # or both are numbers
+    if a_v_isnan and b_v_isnan:
+        if not equal_nan:
+            return False
+    else:
+        if np.isinf(a_v) or np.isinf(b_v):
+            return a_v == b_v
+
+        if np.abs(a_v - b_v) > atol + rtol * np.abs(b_v * 1.0):
+            return False
+
+    return True
+
+
+@overload(np.allclose)
+@overload_method(types.Array, "allclose")
+def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+
+    if not type_can_asarray(a):
+        raise TypeError('The first argument "a" must be array-like')
+
+    if not type_can_asarray(b):
+        raise TypeError('The second argument "b" must be array-like')
+
+    if not isinstance(rtol, types.Float):
+        raise TypeError('The third argument "rtol" must be a '
+                        'floating point')
+
+    if not isinstance(atol, types.Float):
+        raise TypingError('The fourth argument "atol" must be a '
+                          'floating point')
+
+    if not isinstance(equal_nan, types.Boolean):
+        raise TypeError('The fifth argument "equal_nan" must be a '
+                        'boolean')
+
+    is_a_scalar = isinstance(a, types.Number)
+    is_b_scalar = isinstance(b, types.Number)
+
+    if is_a_scalar and is_b_scalar:
+        def np_allclose_impl_scalar_scalar(a, b, rtol=1e-05, atol=1e-08,
+                                           equal_nan=False):
+            return _allclose_scalars(a, b, rtol=rtol, atol=atol,
+                                     equal_nan=equal_nan)
+        return np_allclose_impl_scalar_scalar
+    elif is_a_scalar and not is_b_scalar:
+        def np_allclose_impl_scalar_array(a, b, rtol=1e-05, atol=1e-08,
+                                          equal_nan=False):
+            b = np.asarray(b)
+            for bv in np.nditer(b):
+                if not _allclose_scalars(a, bv.item(), rtol=rtol, atol=atol,
+                                         equal_nan=equal_nan):
+                    return False
+            return True
+        return np_allclose_impl_scalar_array
+    elif not is_a_scalar and is_b_scalar:
+        def np_allclose_impl_array_scalar(a, b, rtol=1e-05, atol=1e-08,
+                                          equal_nan=False):
+            a = np.asarray(a)
+            for av in np.nditer(a):
+                if not _allclose_scalars(av.item(), b, rtol=rtol, atol=atol,
+                                         equal_nan=equal_nan):
+                    return False
+            return True
+        return np_allclose_impl_array_scalar
+    elif not is_a_scalar and not is_b_scalar:
+        def np_allclose_impl_array_array(a, b, rtol=1e-05, atol=1e-08,
+                                         equal_nan=False):
+            a = np.asarray(a)
+            b = np.asarray(b)
+            a_a, b_b = np.broadcast_arrays(a, b)
+
+            for av, bv in np.nditer((a_a, b_b)):
+                if not _allclose_scalars(av.item(), bv.item(), rtol=rtol,
+                                         atol=atol, equal_nan=equal_nan):
+                    return False
+
+            return True
+
+        return np_allclose_impl_array_array
+
+
 @overload(np.any)
 @overload_method(types.Array, "any")
 def np_any(a):
