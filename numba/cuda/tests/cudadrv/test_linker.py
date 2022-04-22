@@ -7,6 +7,7 @@ from numba.cuda.testing import (skip_on_cudasim, skip_unless_cuda_python,
 from numba.cuda.testing import CUDATestCase
 from numba.cuda.cudadrv.driver import Linker, LinkerError, NvrtcError
 from numba.cuda import require_context
+from numba.tests.support import ignore_internal_warnings
 from numba import cuda, void, float64, int64
 
 
@@ -126,6 +127,8 @@ class TestLinker(CUDATestCase):
         link = os.path.join(os.path.dirname(__file__), 'data', 'warn.cu')
 
         with warnings.catch_warnings(record=True) as w:
+            ignore_internal_warnings()
+
             @cuda.jit('void(int32)', link=[link])
             def kernel(x):
                 bar(x)
@@ -154,6 +157,20 @@ class TestLinker(CUDATestCase):
         self.assertIn('identifier "SYNTAX" is undefined', msg)
         # Check the filename is reported correctly
         self.assertIn('in the compilation of "error.cu"', msg)
+
+    def test_linking_unknown_filetype_error(self):
+        expected_err = "Don't know how to link file with extension .cuh"
+        with self.assertRaisesRegex(RuntimeError, expected_err):
+            @cuda.jit('void()', link=['header.cuh'])
+            def kernel():
+                pass
+
+    def test_linking_file_with_no_extension_error(self):
+        expected_err = "Don't know how to link file with no extension"
+        with self.assertRaisesRegex(RuntimeError, expected_err):
+            @cuda.jit('void()', link=['data'])
+            def kernel():
+                pass
 
     @skip_if_cuda_includes_missing
     @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')

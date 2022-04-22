@@ -15,6 +15,7 @@ except ImportError:
 
 import llvmlite.binding as ll
 
+
 IS_WIN32 = sys.platform.startswith('win32')
 IS_OSX = sys.platform.startswith('darwin')
 MACHINE_BITS = tuple.__itemsize__ * 8
@@ -420,7 +421,8 @@ class _EnvReloader(object):
             else:
                 default_cuda_include_path = "cuda_include_not_found"
         else:
-            default_cuda_include_path = "/usr/local/cuda/include"
+            default_cuda_include_path = os.path.join(os.sep, 'usr', 'local',
+                                                     'cuda', 'include')
         CUDA_INCLUDE_PATH = _readenv("NUMBA_CUDA_INCLUDE_PATH", str,
                                      default_cuda_include_path)
 

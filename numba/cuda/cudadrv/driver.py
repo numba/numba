@@ -2611,7 +2611,8 @@ class Linker(metaclass=ABCMeta):
 
     @abstractmethod
     def add_cu(self, cu, name):
-        """Add CUDA source in a string to the link"""
+        """Add CUDA source in a string to the link. The name of the source
+        file should be specified in `name`."""
 
     @abstractmethod
     def add_file(self, path, kind):
@@ -2624,11 +2625,16 @@ class Linker(metaclass=ABCMeta):
 
     def add_file_guess_ext(self, path):
         """Add a file to the link, guessing its type from its extension."""
-        ext = path.rsplit('.', 1)[1]
-        if ext == 'cu':
+        ext = os.path.splitext(path)[1][1:]
+        if ext == '':
+            raise RuntimeError("Don't know how to link file with no extension")
+        elif ext == 'cu':
             self.add_cu_file(path)
         else:
-            kind = FILE_EXTENSION_MAP[ext]
+            kind = FILE_EXTENSION_MAP.get(ext, None)
+            if kind is None:
+                raise RuntimeError("Don't know how to link file with extension "
+                                   f".{ext}")
             self.add_file(path, kind)
 
     @abstractmethod
@@ -2779,13 +2785,14 @@ class NvrtcProgram:
 
         # If the compile failed, provide the log in an exception
         if compile_error:
-            msg = (f'NVRTC Compilation failure compiling {name}:\n\n'
+            msg = (f'NVRTC Compilation failure whilst compiling {name}:\n\n'
                    f'{log.decode()}')
             raise NvrtcError(msg)
 
         # Otherwise, if there's any content in the log, present it as a warning
         if log_size > 1:
-            msg = f"NVRTC log messages compiling {name}:\n\n{log.decode()}"
+            msg = (f"NVRTC log messages whilst compiling {name}:\n\n"
+                   f"{log.decode()}")
             warnings.warn(msg)
 
         # Get and cache the PTX
@@ -2882,8 +2889,13 @@ class CudaPythonLinker(Linker):
     def add_cu(self, cu, name):
         program = NvrtcProgram(cu, name)
 
+        if config.DUMP_ASSEMBLY:
+            print(("ASSEMBLY %s" % name).center(80, '-'))
+            print(program.ptx.decode())
+            print('=' * 80)
+
         # Link the program's PTX using the normal linker mechanism
-        ptx_name = name[:-2] + ".ptx"
+        ptx_name = os.path.splitext(name)[0] + ".ptx"
         self.add_ptx(program.ptx, ptx_name)
 
     def add_file(self, path, kind):

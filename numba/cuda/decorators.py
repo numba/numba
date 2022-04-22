@@ -149,7 +149,6 @@ def declare_device(name, sig):
     :param name: The name of the foreign function.
     :type name: str
     :param sig: The Numba signature of the function.
-    :type sig: str
     """
     argtypes, restype = sigutils.normalize_signature(sig)
     if restype is None:

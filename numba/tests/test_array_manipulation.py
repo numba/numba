@@ -52,6 +52,10 @@ def numpy_broadcast_to(arr, shape):
     return np.broadcast_to(arr, shape)
 
 
+def numpy_broadcast_arrays(*args):
+    return np.broadcast_arrays(*args)
+
+
 def numpy_broadcast_to_indexing(arr, shape, idx):
     return np.broadcast_to(arr, shape)[idx]
 
@@ -964,6 +968,184 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             expected = pyfunc(a)
             got = cfunc(a)
             self.assertPreciseEqual(expected, got)
+
+    def broadcast_arrays_assert_correct_shape(self, input_shapes, expected_shape):
+        # Broadcast a list of arrays with the given input shapes and check the
+        # common output shape.
+        pyfunc = numpy_broadcast_arrays
+        cfunc = jit(nopython=True)(pyfunc)
+
+        inarrays = [np.zeros(s) for s in input_shapes]
+        outarrays = cfunc(*inarrays)
+        expected = [expected_shape] * len(inarrays)
+        got = [a.shape for a in outarrays]
+        self.assertPreciseEqual(expected, got)
+
+    def test_broadcast_arrays_same_input_shapes(self):
+        # Tests taken from
+        # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/tests/test_stride_tricks.py#L83-L107  # noqa: E501
+        # Check that the final shape is just the input shape.
+        pyfunc = numpy_broadcast_arrays
+        cfunc = jit(nopython=True)(pyfunc)
+
+        data = [
+            # (),
+            (1,),
+            (3,),
+            (0, 1),
+            (0, 3),
+            (1, 0),
+            (3, 0),
+            (1, 3),
+            (3, 1),
+            (3, 3),
+        ]
+        for shape in data:
+            input_shapes = [shape]
+            # Single input.
+            self.broadcast_arrays_assert_correct_shape(input_shapes, shape)
+            # Double input.
+            input_shapes2 = [shape, shape]
+            self.broadcast_arrays_assert_correct_shape(input_shapes2, shape)
+            # Triple input.
+            input_shapes3 = [shape, shape, shape]
+            self.broadcast_arrays_assert_correct_shape(input_shapes3, shape)
+
+    def test_broadcast_arrays_two_compatible_by_ones_input_shapes(self):
+        # Tests taken from
+        # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/tests/test_stride_tricks.py#L110-L132
+        # Check that two different input shapes of the same length, but some have
+        # ones, broadcast to the correct shape.
+
+        data = [
+            [[(1,), (3,)], (3,)],
+            [[(1, 3), (3, 3)], (3, 3)],
+            [[(3, 1), (3, 3)], (3, 3)],
+            [[(1, 3), (3, 1)], (3, 3)],
+            [[(1, 1), (3, 3)], (3, 3)],
+            [[(1, 1), (1, 3)], (1, 3)],
+            [[(1, 1), (3, 1)], (3, 1)],
+            [[(1, 0), (0, 0)], (0, 0)],
+            [[(0, 1), (0, 0)], (0, 0)],
+            [[(1, 0), (0, 1)], (0, 0)],
+            [[(1, 1), (0, 0)], (0, 0)],
+            [[(1, 1), (1, 0)], (1, 0)],
+            [[(1, 1), (0, 1)], (0, 1)],
+        ]
+        for input_shapes, expected_shape in data:
+            self.broadcast_arrays_assert_correct_shape(input_shapes, expected_shape)
+            # Reverse the input shapes since broadcasting should be symmetric.
+            self.broadcast_arrays_assert_correct_shape(input_shapes[::-1], expected_shape)
+
+    def test_broadcast_arrays_two_compatible_by_prepending_ones_input_shapes(self):
+        # Tests taken from
+        # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/tests/test_stride_tricks.py#L135-L164
+        # Check that two different input shapes (of different lengths) broadcast
+        # to the correct shape.
+
+        data = [
+            [[(), (3,)], (3,)],
+            [[(3,), (3, 3)], (3, 3)],
+            [[(3,), (3, 1)], (3, 3)],
+            [[(1,), (3, 3)], (3, 3)],
+            [[(), (3, 3)], (3, 3)],
+            [[(1, 1), (3,)], (1, 3)],
+            [[(1,), (3, 1)], (3, 1)],
+            [[(1,), (1, 3)], (1, 3)],
+            [[(), (1, 3)], (1, 3)],
+            [[(), (3, 1)], (3, 1)],
+            [[(), (0,)], (0,)],
+            [[(0,), (0, 0)], (0, 0)],
+            [[(0,), (0, 1)], (0, 0)],
+            [[(1,), (0, 0)], (0, 0)],
+            [[(), (0, 0)], (0, 0)],
+            [[(1, 1), (0,)], (1, 0)],
+            [[(1,), (0, 1)], (0, 1)],
+            [[(1,), (1, 0)], (1, 0)],
+            [[(), (1, 0)], (1, 0)],
+            [[(), (0, 1)], (0, 1)],
+        ]
+        for input_shapes, expected_shape in data:
+            self.broadcast_arrays_assert_correct_shape(input_shapes, expected_shape)
+            # Reverse the input shapes since broadcasting should be symmetric.
+            self.broadcast_arrays_assert_correct_shape(input_shapes[::-1], expected_shape)
+
+    def test_broadcast_arrays_scalar_input(self):
+        pyfunc = numpy_broadcast_arrays
+        cfunc = jit(nopython=True)(pyfunc)
+        data = [
+            [[True, False], (1,)],
+            [[1, 2], (1,)],
+            [[(1, 2), 2], (2,)],
+        ]
+        for inarrays, expected_shape in data:
+            outarrays = cfunc(*inarrays)
+            got = [a.shape for a in outarrays]
+            expected = [expected_shape] * len(inarrays)
+            self.assertPreciseEqual(expected, got)
+
+    def test_broadcast_arrays_tuple_input(self):
+        pyfunc = numpy_broadcast_arrays
+        cfunc = jit(nopython=True)(pyfunc)
+        outarrays = cfunc((123, 456), (789,))
+        expected = [(2,), (2,)]
+        got = [a.shape for a in outarrays]
+        self.assertPreciseEqual(expected, got)
+
+    def test_broadcast_arrays_non_array_input(self):
+        pyfunc = numpy_broadcast_arrays
+        cfunc = jit(nopython=True)(pyfunc)
+        outarrays = cfunc(np.intp(2), np.zeros((1, 3), dtype=np.intp))
+        expected = [(1, 3), (1, 3)]
+        got = [a.shape for a in outarrays]
+        self.assertPreciseEqual(expected, got)
+
+    def test_broadcast_arrays_invalid_mixed_input_types(self):
+        pyfunc = numpy_broadcast_arrays
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            arr = np.arange(6).reshape((2, 3))
+            b = True
+            cfunc(arr, b)
+        self.assertIn('Mismatch of argument types', str(raises.exception))
+
+    def test_broadcast_arrays_invalid_input(self):
+        pyfunc = numpy_broadcast_arrays
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            arr = np.zeros(3, dtype=np.int64)
+            s = 'hello world'
+            cfunc(arr, s)
+        self.assertIn('Argument "1" must be array-like', str(raises.exception))
+
+    def test_broadcast_arrays_incompatible_shapes_raise_valueerror(self):
+        # Check that a ValueError is raised for incompatible shapes.
+        pyfunc = numpy_broadcast_arrays
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self.disable_leak_check()
+
+        data = [
+            [(3,), (4,)],
+            [(2, 3), (2,)],
+            [(3,), (3,), (4,)],
+            [(1, 3, 4), (2, 3, 3)],
+        ]
+        for input_shapes in data:
+            for shape in [input_shapes, input_shapes[::-1]]:
+                # Reverse the input shapes since broadcasting should be symmetric.
+                with self.assertRaises(ValueError) as raises:
+                    inarrays = [np.zeros(s) for s in shape]
+                    cfunc(*inarrays)
+                self.assertIn("shape mismatch: objects cannot be broadcast to a single shape",
+                              str(raises.exception))
+
 
 
 if __name__ == '__main__':

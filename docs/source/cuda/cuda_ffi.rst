@@ -40,8 +40,9 @@ Components of the prototype are as follows:
   Python exception occurred. Since Python exceptions don't occur in foreign
   functions, this should always be set to 0 by the callee.
 - The first argument is a pointer to the return value of type ``T``, which is
-  passed in by the caller. If the function returns a value, the pointee should
-  be set by the callee to store the return value.
+  allocated in the local address space [#f1]_ and passed in by the caller. If
+  the function returns a value, the pointee should be set by the callee to
+  store the return value.
 - Subsequent arguments should match the types and order of arguments passed to
   the function from the Python kernel.
 
@@ -61,6 +62,12 @@ prototype:
      float y
    )
 
+.. rubric:: Notes
+
+.. [#f1] Care must be taken to ensure that any operations on the return value
+         are applicable to data in the local address space.  Some operations,
+         such as atomics, cannot be performed on data in the local address
+         space.
 
 Declaration in Python
 ---------------------
@@ -85,8 +92,9 @@ Linking and Calling functions
 -----------------------------
 
 The ``link`` keyword argument of the :func:`@cuda.jit <numba.cuda.jit>`
-decorator accepts a list of files; files whose name ends in ``.cu`` will be
-compiled with the `NVIDIA Runtime Compiler (NVRTC)
+decorator accepts a list of file names specified by absolute path or a path
+relative to the current working directory. Files whose name ends in ``.cu``
+will be compiled with the `NVIDIA Runtime Compiler (NVRTC)
 <https://docs.nvidia.com/cuda/nvrtc/index.html>`_ and linked into the kernel as
 PTX; other files will be passed directly to the CUDA Linker.
 
@@ -111,11 +119,13 @@ of NVRTC subject to the following considerations:
 
 - It is only available when using the NVIDIA Bindings. See
   :envvar:`NUMBA_CUDA_USE_NVIDIA_BINDING`.
+- A suitable version of the NVRTC library for the installed version of the
+  NVIDIA CUDA Bindings must be available.
 - The CUDA include path is assumed by default to be ``/usr/local/cuda/include``
   on Linux and ``$env:CUDA_PATH\include`` on Windows. It can be modified using
   the environment variable :envvar:`NUMBA_CUDA_INCLUDE_PATH`.
-- The CUDA include folder will be made available to NVRTC on the include path;
-  additional includes are not supported.
+- The CUDA include directory will be made available to NVRTC on the include
+  path; additional includes are not supported.
 
 
 Complete Example
