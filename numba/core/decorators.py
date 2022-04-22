@@ -226,7 +226,7 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
 
 
 def generated_jit(function=None, cache=False,
-                  pipeline_class=None, **options):
+                  flag_class=None, pipeline_class=None, **options):
     """
     This decorator allows flexible type-based compilation
     of a jitted function.  It works as `@jit`, except that the decorated
@@ -234,6 +234,8 @@ def generated_jit(function=None, cache=False,
     and should return an implementation function for those types.
     """
     dispatcher_args = {}
+    if flag_class is not None:
+        dispatcher_args['flag_class'] = flag_class
     if pipeline_class is not None:
         dispatcher_args['pipeline_class'] = pipeline_class
     wrapper = _jit(sigs=None, locals={}, target='cpu', cache=cache,

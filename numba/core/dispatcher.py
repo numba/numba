@@ -174,9 +174,10 @@ class _FunctionCompiler(object):
 class _GeneratedFunctionCompiler(_FunctionCompiler):
 
     def __init__(self, py_func, targetdescr, targetoptions, locals,
-                 pipeline_class):
+                 flag_class, pipeline_class):
         super(_GeneratedFunctionCompiler, self).__init__(
-            py_func, targetdescr, targetoptions, locals, pipeline_class)
+            py_func, targetdescr, targetoptions, locals,
+            flag_class, pipeline_class)
         self.impls = set()
 
     def get_globals_for_reduction(self):
@@ -807,7 +808,8 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
 
     def __init__(self, py_func, locals={}, targetoptions={},
                  impl_kind='direct',
-                 flag_class=compiler.Flags, pipeline_class=compiler.Compiler):
+                 flag_class=compiler.Flags(),
+                 pipeline_class=compiler.Compiler):
         """
         Parameters
         ----------

@@ -17,8 +17,9 @@ class MyFlags(Flags):
 class MyTestCase(unittest.TestCase):
 
     def test_define_flag_class(self):
-        # @jit(flag_class=MyFlags)
-        @jit()
+        my_flags = MyFlags()
+
+        @jit(flag_class=my_flags)
         def foo():
             return 1
 
