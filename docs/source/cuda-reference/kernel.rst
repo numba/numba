@@ -513,6 +513,92 @@ These functions return a 16-bit floating point result.
 
    Returns the 16-bit floating point result of the absolute value operation.
 
+.. function:: numba.cuda.fp16.hsin (a)
+
+   Calculates the trig sine function on the 16-bit floating point argument.
+
+   Returns the 16-bit floating point result of the sin operation.
+
+.. function:: numba.cuda.fp16.hcos (a)
+
+   Calculates the trig cosine function on the 16-bit floating point argument.
+
+   Returns the 16-bit floating point result of the cosine operation.
+
+.. function:: numba.cuda.fp16.hlog (a)
+
+   Calculates the natural log on the 16-bit floating point argument.
+
+   Returns the 16-bit floating point result of the natural log operation.
+
+.. function:: numba.cuda.fp16.hlog10 (a)
+
+   Calculates the log base 10 operation on the 16-bit floating point argument.
+
+   Returns the 16-bit floating point result of the log base 10 operation.
+
+.. function:: numba.cuda.fp16.hlog2 (a)
+
+   Calculates the log base 2 operation on the 16-bit floating point argument.
+
+   Returns the 16-bit floating point result of the log base 2 operation.
+
+.. function:: numba.cuda.fp16.hexp (a)
+
+   Calculates the natural exponential operation on the 16-bit floating point argument.
+
+   Returns the 16-bit floating point result of the exponential operation.
+
+.. function:: numba.cuda.fp16.hexp10 (a)
+
+   Calculates the exponential base 10 operation on the 16-bit floating point argument.
+
+   Returns the 16-bit floating point result of the exponential operation.
+
+.. function:: numba.cuda.fp16.hexp2 (a)
+
+   Calculates the exponential base 2 operation on the 16-bit floating point argument.
+
+   Returns the 16-bit floating point result of the exponential operation.
+
+.. function:: numba.cuda.fp16.hfloor (a)
+
+   Calculates the floor operation, the largest integer less than or equal to ``a``,
+   on the 16-bit floating point argument.
+
+   Returns the 16-bit floating point result of the floor operation.
+
+.. function:: numba.cuda.fp16.hceil (a)
+
+   Calculates the floor operation, the smallest integer greater than or equal to ``a``,
+   on the 16-bit floating point argument.
+
+   Returns the 16-bit floating point result of the ceil operation.
+
+.. function:: numba.cuda.fp16.hsqrt (a)
+
+   Calculates the square root operation on the 16-bit floating point argument.
+
+   Returns the 16-bit floating point result of the square root operation.
+
+.. function:: numba.cuda.fp16.hrsqrt (a)
+
+   Calculates the reciprocal square root operation on the 16-bit floating point argument.
+
+   Returns the 16-bit floating point result of the reciprocal square root operation.
+
+.. function:: numba.cuda.fp16.hrcp (a)
+
+   Calculates the reciprocal on the 16-bit floating point argument.
+
+   Returns the 16-bit floating point result of the reciprocal.
+
+.. function:: numba.cuda.fp16.hrint (a)
+
+   Round the input 16-bit floating point argument to nearest integer value.
+
+   Returns the 16-bit floating point result of the rounding.
+
 Control Flow Instructions
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
