@@ -969,24 +969,6 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                                                                       kws)[1]
                         raise e.bind_fold_arguments(folded)
                     self.add_overload(cres)
-
-                # Add additional overload for optional args
-                # For int8(optional(int8), optional(int8)) we should compile
-                # int8(opitonal(int8), omitted) and int8( omitted, omitted)
-                for i, arg in enumerate(reversed(args), 1):
-                    if not isinstance(arg, types.Optional):
-                        break
-                    args_variant = args[:-i] + (types.Omitted(None), ) * i
-                    if self.overloads.get(tuple(args_variant)) is not None:
-                        continue
-                    try:
-                        cres_variant = self._compiler.compile(args_variant,
-                                                              return_type)
-                    except Exception:
-                        pass
-                    else:
-                        self.add_overload(cres_variant)
-
                 self._cache.save_overload(sig, cres)
                 return cres.entry_point
 
