@@ -26,7 +26,6 @@ from .args import In, Out, InOut
 from .intrinsic_wrapper import (all_sync, any_sync, eq_sync, ballot_sync,
                                 shfl_sync, shfl_up_sync, shfl_down_sync,
                                 shfl_xor_sync)
-from .cuda_fp16_math import *
 from .kernels import reduction
 
 reduce = Reduce = reduction.Reduce
