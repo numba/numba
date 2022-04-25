@@ -69,7 +69,7 @@ class TestSessionization(CUDATestCase):
             if gid >= size:
                 return
 
-            ### DETERMINE SESSION BOUNDARIES
+            # Determine session boundaries
             is_first_datapoint = gid == 0
             if not is_first_datapoint:
                 new_user = user_id[gid] != user_id[gid - 1]
@@ -80,24 +80,24 @@ class TestSessionization(CUDATestCase):
             else:
                 is_sess_boundary = True
 
-            ### DETERMINE SESSION LABELS
-            # this thread marks the start of a session
+            # Determine session labels
             if gid < size:
                 if is_sess_boundary:
+                # This thread marks the start of a session
                     results[gid] = gid
 
-                    # make sure all session boundaries are written
+                    # Make sure all session boundaries are written
                     # before populating the session id
                     grid = cuda.cg.this_grid()
                     grid.sync()
 
                     look_ahead = 1
-                    # check elements 'forward' of this one
+                    # Check elements 'forward' of this one
                     # until a new session boundary is found
                     while results[gid + look_ahead] == 0:
                         results[gid + look_ahead] = gid
                         look_ahead += 1
-                        # don't segfault if I'm the last thread
+                        # Avoid out-of-bounds accesses by the last thread
                         if gid + look_ahead == size - 1:
                             results[gid + look_ahead] = gid
                             break
