@@ -83,7 +83,7 @@ class TestSessionization(CUDATestCase):
             # Determine session labels
             if gid < size:
                 if is_sess_boundary:
-                # This thread marks the start of a session
+                    # This thread marks the start of a session
                     results[gid] = gid
 
                     # Make sure all session boundaries are written
