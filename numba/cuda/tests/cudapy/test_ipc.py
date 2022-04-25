@@ -10,6 +10,7 @@ from numba.cuda.cudadrv import driver
 from numba.cuda.testing import (skip_on_arm, skip_on_cudasim,
                                 skip_under_cuda_memcheck,
                                 ContextResettingTestCase, ForeignArray)
+from numba.tests.support import linux_only
 import unittest
 
 
@@ -78,6 +79,7 @@ def ipc_array_test(ipcarr, result_queue):
     result_queue.put((succ, out))
 
 
+@linux_only
 @skip_under_cuda_memcheck('Hangs cuda-memcheck')
 @skip_on_cudasim('Ipc not available in CUDASIM')
 @skip_on_arm('CUDA IPC not supported on ARM in Numba')
@@ -236,6 +238,7 @@ def staged_ipc_array_test(ipcarr, device_num, result_queue):
     result_queue.put((succ, out))
 
 
+@linux_only
 @skip_under_cuda_memcheck('Hangs cuda-memcheck')
 @skip_on_cudasim('Ipc not available in CUDASIM')
 @skip_on_arm('CUDA IPC not supported on ARM in Numba')
