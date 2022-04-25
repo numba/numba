@@ -2,7 +2,7 @@ import unittest
 
 from numba.cuda.testing import CUDATestCase, skip_on_cudasim
 from numba.tests.support import captured_stdout
-
+import numpy as np
 
 @skip_on_cudasim("cudasim doesn't support cuda import at non-top-level")
 class TestCpuGpuCompat(CUDATestCase):
@@ -47,9 +47,6 @@ class TestCpuGpuCompat(CUDATestCase):
         print(business_logic(1, 2, 3))  # -126.79644737231007
         # ex_cpu_gpu_compat.cpurun.end
 
-        # ex_cpu_gpu_compat.usecpu.begin
-        print(business_logic(1, 2, 3))  # -126.79644737231007
-        # ex_cpu_gpu_compat.usecpu.end
 
         # ex_cpu_gpu_compat.usegpu.begin
         @cuda.jit
@@ -66,6 +63,14 @@ class TestCpuGpuCompat(CUDATestCase):
         # [-126.79644737231007, 416.28324559588634, -218912930.2987788]
         # ex_cpu_gpu_compat.launch.end
 
+        expect = [
+            business_logic(x, y, z) for x, y, z in zip(X, Y, Z)
+        ]
+
+        np.testing.assert_equal(
+            expect,
+            results.copy_to_host()
+        )
 
 if __name__ == "__main__":
     unittest.main()

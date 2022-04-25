@@ -50,12 +50,12 @@ class TestLaplace(CUDATestCase):
 
         if plot:
             import matplotlib.pyplot as plt
-            fig, ax = plt.subplots(figsize=(16*0.66, 9*0.66))
+            fig, ax = plt.subplots(figsize=(16 * 0.66, 9 * 0.66))
             plt.plot(
-                np.arange(len(data_gpu)), 
-                data_gpu.copy_to_host(), 
-                lw=3, 
-                marker="*", 
+                np.arange(len(data_gpu)),
+                data_gpu.copy_to_host(),
+                lw=3,
+                marker="*",
                 color='black'
             )
 
@@ -110,8 +110,13 @@ class TestLaplace(CUDATestCase):
         if plot:
             results = tmp_gpu.copy_to_host()
 
-            fig, ax = plt.subplots(figsize=(16*0.66, 9*0.66))
-            plt.plot(np.arange(len(results)), results, lw=3, marker="*", color='black')
+            fig, ax = plt.subplots(figsize=(16 * 0.66, 9 * 0.66))
+            plt.plot(
+                np.arange(len(results)),
+                results, lw=3,
+                marker="*",
+                color='black'
+            )
             plt.title(f"T = {niter}", fontsize=24)
             plt.xlabel('Position', fontsize=24)
             plt.ylabel('Temperature', fontsize=24)
@@ -122,6 +127,7 @@ class TestLaplace(CUDATestCase):
             plt.ylim(0, max(results))
             plt.xlim(0, len(results))
             plt.savefig('laplace_final.svg')
+
 
 if __name__ == "__main__":
     unittest.main()

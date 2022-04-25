@@ -114,6 +114,13 @@ class TestSessionization(CUDATestCase):
         #         24., 24., 24., 24.])
         # ex_sessionize.launch.end
 
+        expect = [
+            0, 0, 0, 3, 3, 3, 6, 6, 6, 9, 9,
+            11, 11, 13, 13, 13, 13, 17, 18, 19, 20, 21,
+            21, 23, 24, 24, 24, 24
+        ]
+        np.testing.assert_equal(expect, results.copy_to_host())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,7 +2,7 @@ import unittest
 
 from numba.cuda.testing import CUDATestCase, skip_on_cudasim
 from numba.tests.support import captured_stdout
-
+import numpy as np
 
 @skip_on_cudasim("cudasim doesn't support cuda import at non-top-level")
 class TestVecAdd(CUDATestCase):
@@ -62,6 +62,11 @@ class TestVecAdd(CUDATestCase):
         f[nblocks, nthreads](a, b, c)
         print(c.copy_to_host())
         # ex_vecadd.launch.end
+
+        np.testing.assert_equal(
+            c.copy_to_host(),
+            a.copy_to_host() + b.copy_to_host()
+        )
 
 
 if __name__ == "__main__":

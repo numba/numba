@@ -46,7 +46,8 @@ class TestReduction(CUDATestCase):
                 shr = cuda.shared.array(nelem, int32)
                 shr[tid] = data[i]
 
-                # Ensure writes to shared memory are visible to all threads before reducing
+                # Ensure writes to shared memory are visible
+                # to all threads before reducing
                 cuda.syncthreads()
 
                 s = 1
@@ -67,6 +68,8 @@ class TestReduction(CUDATestCase):
         print(a[0])  # 523776
         sum(np.arange(1024))  # 523776
         # ex_reduction.launch.end
+
+        assert a[0] == sum(np.arange(1024))
 
 
 if __name__ == "__main__":
