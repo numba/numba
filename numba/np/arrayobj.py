@@ -2087,24 +2087,12 @@ def np_shape(a):
 
 @overload(np.unique)
 def np_unique(a, axis=None):
-    if not isinstance(axis, (types.Integer, types.NoneType)):
-        raise errors.TypingError("'axis' must be 0, 1, or None.")
-
     if not isinstance(axis, types.NoneType) and not (a.ndim == 2):
         raise errors.TypingError("Only supports 2D NumPy ndarrays when axis" +
                                  "is specified.")
 
     def _get_unique_impl(a, axis=None):
-        if axis in (None, types.none):
-            def _unique_axis_none(a, axis=None):
-                b = np.sort(a.ravel())
-                head = list(b[:1])
-                tail = [x for i, x in enumerate(b[1:]) if b[i] != x]
-                return np.array(head + tail)
-
-            return _unique_axis_none
-
-        elif isinstance(axis, (types.Integer, int)):
+        if isinstance(axis, (types.Integer, int)):
             def _unique_axis_int(a, axis=None):
                 # make a copy not to sort original data
                 if axis == 1:
@@ -2132,7 +2120,13 @@ def np_unique(a, axis=None):
                 return b[idx] if axis == 0 else b[idx].T
             return _unique_axis_int
         else:
-            raise errors.TypingError("'axis' must be 0 or 1.")
+            def _unique_axis_none(a, axis=None):
+                b = np.sort(a.ravel())
+                head = list(b[:1])
+                tail = [x for i, x in enumerate(b[1:]) if b[i] != x]
+                return np.array(head + tail)
+
+            return _unique_axis_none
 
     return _get_unique_impl(a, axis)
 
