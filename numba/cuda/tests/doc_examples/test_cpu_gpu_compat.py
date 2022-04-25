@@ -40,7 +40,6 @@ class TestCpuGpuCompat(CUDATestCase):
         @numba.jit
         def business_logic(x, y, z):
             return 4 * z * (2 * x - (4 * y) / 2 * pi)
-
         # ex_cpu_gpu_compat.define.end
 
         # ex_cpu_gpu_compat.cpurun.begin
