@@ -145,7 +145,9 @@ class _FunctionCompiler(object):
             return True, retval
 
     def _compile_core(self, args, return_type):
-        flags = self.flag_pass
+        flags = self.flags
+        if flags is None:
+            flags = compiler.Flags()
         self.targetdescr.options.parse_as_flags(flags, self.targetoptions)
         flags = self._customize_flags(flags)
 
