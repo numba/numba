@@ -5580,7 +5580,8 @@ def get_sort_func(kind, is_float, is_argsort=False):
         if kind == 'quicksort':
             sort = quicksort.make_jit_quicksort(
                 lt=lt_floats if is_float else None,
-                is_argsort=is_argsort)
+                is_argsort=is_argsort,
+                is_np_array=True)
             func = sort.run_quicksort
         elif kind == 'mergesort':
             sort = mergesort.make_jit_mergesort(
