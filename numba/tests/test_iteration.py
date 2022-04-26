@@ -375,6 +375,20 @@ class TestIterationEmptyContainer(TestCase):
         for ca, cb in inps:
             self.assertPreciseEqual(func(ca, cb), func.py_func(ca, cb))
 
+    def test_iteration_phi_node(self):
+        @njit
+        def func(pred):
+            if pred:
+                z = (1, 2)
+            else:
+                z = ()
+            for x in z:
+                print("here")
+
+        msg = "Cannot unify Tuple() and Tuple(Literal[int](1), Literal[int](2))"
+        for inp in (True,):
+            with self.assertRaises(errors.TypingError, msg=msg):
+                func(inp)
 
 if __name__ == '__main__':
     unittest.main()

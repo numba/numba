@@ -1682,10 +1682,10 @@ class SimplifyCFG(FunctionPass):
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
-class DeadLoopElimination(FunctionPass):
+class PruneEmptyLoops(FunctionPass):
     """Remove loops that iterate over empty containers
     """
-    _name = "dead_loop_elimination"
+    _name = "prune_empty_loops"
 
     def __init__(self):
         FunctionPass.__init__(self)
@@ -1709,6 +1709,22 @@ class DeadLoopElimination(FunctionPass):
                     [self.is_arg_constsized_zero(state, arg) for arg in args])
             if inst.vararg:
                 return self.is_arg_constsized_zero(state, inst.vararg)
+
+        # There's a bug on type infer that wrongly determine the type of
+        # a PHI variable.
+        #     from numba import njit
+        #     @njit
+        #     def foo(pred):
+        #         if pred:
+        #             z = (1, 2)
+        #         else:
+        #             z = ()
+        #         for x in z:
+        #             print("here")
+        #     foo(True)
+        #     foo(False)
+        if isinstance(inst, ir.Expr) and inst.op == 'phi':
+            return False
 
         # True when len(type(arg)) == 0
         t = state.typemap.get(arg.name)
