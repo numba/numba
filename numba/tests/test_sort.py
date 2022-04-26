@@ -3,6 +3,7 @@ import itertools
 import math
 import random
 import sys
+from typing import KeysView
 
 import numpy as np
 
@@ -715,6 +716,79 @@ class TestQuicksortArrays(BaseQuicksortTest, TestCase):
     def array_factory(self, lst):
         return np.array(lst, dtype=np.float64)
 
+class TestQuicksortMultidimensionalArrays(BaseSortingTest, TestCase):
+
+    quicksort = make_jit_quicksort(is_np_array=True)
+    make_quicksort = staticmethod(make_jit_quicksort)
+
+    def assertSorted(self, orig, result, last_index=None):
+        # sorted() returns a list, so make sure we compare to another list
+        if last_index is not None:
+            self.assertTrue((orig == result[0][:last_index]).all())
+        else:
+            self.assertEqual(orig.shape, result.shape)
+            self.assertTrue((orig == result).all())
+
+    def array_factory(self, lst):
+        array = np.array(lst, dtype=np.float64)
+        return array.reshape(-1, array.shape[0])
+
+    def test_run_quicksort(self):
+        f = self.quicksort.run_quicksort
+
+        for size_factor in (1, 5):
+            # Make lists to be sorted from two chunks of different kinds.
+            sizes = (15, 20)
+
+            all_lists = [self.make_sample_lists(n * size_factor) for n in sizes]
+            for chunks in itertools.product(*all_lists):
+                orig_keys = sum(chunks, [])
+                keys = self.array_factory(orig_keys)
+                keys_copy = self.array_factory(orig_keys)
+                f(keys)
+                keys_copy.sort()
+                # The list is now sorted
+                self.assertSorted(keys_copy, keys)
+
+    def test_run_quicksort_lt(self):
+        def lt(a, b):
+            return a > b
+
+        f = self.make_quicksort(lt=lt, is_np_array=True).run_quicksort
+
+        for size_factor in (1, 5):
+            # Make lists to be sorted from two chunks of different kinds.
+            sizes = (15, 20)
+
+            all_lists = [self.make_sample_lists(n * size_factor) for n in sizes]
+            for chunks in itertools.product(*all_lists):
+                orig_keys = sum(chunks, [])
+                keys = self.array_factory(orig_keys)
+                keys_copy = -self.array_factory(orig_keys)
+                f(keys)
+                # The list is now rev-sorted
+                keys_copy.sort()
+                keys_copy = -keys_copy
+                self.assertSorted(keys_copy, keys)
+
+        # An imperfect comparison function, as LT(a, b) does not imply not LT(b, a).
+        # The sort should handle it gracefully.
+        def lt_floats(a, b):
+            return math.isnan(b) or a < b
+
+        f = self.make_quicksort(lt=lt_floats, is_np_array=True).run_quicksort
+
+        np.random.seed(42)
+        for size in (5, 20, 50, 500):
+            orig = np.random.random(size=size) * 100
+            orig[np.random.random(size=size) < 0.1] = float('nan')
+            orig_keys = list(orig)
+            keys = self.array_factory(orig_keys)
+            f(keys)
+            non_nans = orig[~np.isnan(orig)]
+            non_nans.sort()
+            # Non-NaNs are sorted at the front
+            self.assertSorted(non_nans, keys, len(non_nans))
 
 class TestNumpySort(TestCase):
 
