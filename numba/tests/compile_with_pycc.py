@@ -42,47 +42,6 @@ _two = 2
 def square(u):
     return u ** _two
 
-f_sig = "void(int64[:], intp[:])"
-
-# This CPython API function is a portable way to get the current thread id.
-PyThread_get_thread_ident = ctypes.pythonapi.PyThread_get_thread_ident
-PyThread_get_thread_ident.restype = ctypes.c_long
-PyThread_get_thread_ident.argtypes = []
-
-# A way of sleeping from nopython code
-if os.name == 'nt':
-    sleep = ctypes.windll.kernel32.Sleep
-    sleep.argtypes = [ctypes.c_uint]
-    sleep.restype = None
-    sleep_factor = 1  # milliseconds
-else:
-    sleep = ctypes.CDLL(ctypes.util.find_library("c")).usleep
-    sleep.argtypes = [ctypes.c_uint]
-    sleep.restype = ctypes.c_int
-    sleep_factor = 1000  # microseconds
-
-@cc.export("f_nogil", f_sig, nogil=True)
-def f_nogil(a, indices):
-    # If run from one thread at a time, the function will always fill the
-    # array with identical values.
-    # If run from several threads at a time, the function will probably
-    # fill the array with differing values.
-    for idx in indices:
-        # Let another thread run
-        sleep(10 * sleep_factor)
-        a[idx] = PyThread_get_thread_ident()
-
-@cc.export("f_gil", f_sig)
-def f_gil(a, indices):
-    # If run from one thread at a time, the function will always fill the
-    # array with identical values.
-    # If run from several threads at a time, the function will probably
-    # fill the array with differing values.
-    for idx in indices:
-        # Let another thread run
-        sleep(10 * sleep_factor)
-        a[idx] = PyThread_get_thread_ident()
-
 # These ones need helperlib
 cc_helperlib = CC('pycc_test_helperlib')
 cc_helperlib.use_nrt = False
