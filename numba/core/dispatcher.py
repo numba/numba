@@ -86,13 +86,13 @@ class OmittedArg(object):
 
 class _FunctionCompiler(object):
     def __init__(self, py_func, targetdescr, targetoptions, locals,
-                 flag_class, pipeline_class):
+                 pipeline_class, flags=None):
         self.py_func = py_func
         self.targetdescr = targetdescr
         self.targetoptions = targetoptions
         self.locals = locals
         self.pysig = utils.pysignature(self.py_func)
-        self.flag_pass = flag_class
+        self.flags = flags
         self.pipeline_class = pipeline_class
         # Remember key=(args, return_type) combinations that will fail
         # compilation to avoid compilation attempt on them.  The values are
@@ -174,10 +174,10 @@ class _FunctionCompiler(object):
 class _GeneratedFunctionCompiler(_FunctionCompiler):
 
     def __init__(self, py_func, targetdescr, targetoptions, locals,
-                 flag_class, pipeline_class):
+                 pipeline_class, flags=None):
         super(_GeneratedFunctionCompiler, self).__init__(
             py_func, targetdescr, targetoptions, locals,
-            flag_class, pipeline_class)
+            pipeline_class, flags)
         self.impls = set()
 
     def get_globals_for_reduction(self):
@@ -808,8 +808,8 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
 
     def __init__(self, py_func, locals={}, targetoptions={},
                  impl_kind='direct',
-                 flag_class=compiler.Flags(),
-                 pipeline_class=compiler.Compiler):
+                 pipeline_class=compiler.Compiler,
+                 flags=compiler.Flags()):
         """
         Parameters
         ----------
@@ -843,7 +843,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         self._impl_kind = impl_kind
         self._compiler = compiler_class(py_func, self.targetdescr,
                                         targetoptions, locals,
-                                        flag_class, pipeline_class)
+                                        pipeline_class, flags)
         self._cache_hits = collections.Counter()
         self._cache_misses = collections.Counter()
 

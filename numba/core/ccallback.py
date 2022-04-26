@@ -36,8 +36,8 @@ class CFunc(object):
     _targetdescr = registry.cpu_target
 
     def __init__(self, pyfunc, sig, locals, options,
-                 flag_class=compiler.Flags(),
-                 pipeline_class=compiler.Compiler):
+                 pipeline_class=compiler.Compiler,
+                 flags=compiler.Flags()):
         args, return_type = sig
         if return_type is None:
             raise TypeError("C callback needs an explicit return type")
@@ -49,8 +49,8 @@ class CFunc(object):
         self._sig = signature(return_type, *args)
         self._compiler = _CFuncCompiler(pyfunc, self._targetdescr,
                                         options, locals,
-                                        flag_class=flag_class,
-                                        pipeline_class=pipeline_class)
+                                        pipeline_class=pipeline_class,
+                                        flags=flags)
 
         self._wrapper_name = None
         self._wrapper_address = None

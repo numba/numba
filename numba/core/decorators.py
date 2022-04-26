@@ -24,7 +24,7 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
 
 
 def jit(signature_or_function=None, locals={}, cache=False,
-        flag_class=None, pipeline_class=None, boundscheck=None, **options):
+        pipeline_class=None, boundscheck=None, flags=None, **options):
     """
     This decorator is used to compile a Python function into native code.
 
@@ -171,10 +171,10 @@ def jit(signature_or_function=None, locals={}, cache=False,
         sigs = None
 
     dispatcher_args = {}
-    if flag_class is not None:
-        dispatcher_args['flag_class'] = flag_class
     if pipeline_class is not None:
         dispatcher_args['pipeline_class'] = pipeline_class
+    if flags is not None:
+        dispatcher_args['flags'] = flags
     wrapper = _jit(sigs, locals=locals, target=target, cache=cache,
                    targetoptions=options, **dispatcher_args)
     if pyfunc is not None:
@@ -226,7 +226,7 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
 
 
 def generated_jit(function=None, cache=False,
-                  flag_class=None, pipeline_class=None, **options):
+                  pipeline_class=None, flags=None, **options):
     """
     This decorator allows flexible type-based compilation
     of a jitted function.  It works as `@jit`, except that the decorated
@@ -234,10 +234,10 @@ def generated_jit(function=None, cache=False,
     and should return an implementation function for those types.
     """
     dispatcher_args = {}
-    if flag_class is not None:
-        dispatcher_args['flag_class'] = flag_class
     if pipeline_class is not None:
         dispatcher_args['pipeline_class'] = pipeline_class
+    if flags is not None:
+        dispatcher_args['flags'] = flags
     wrapper = _jit(sigs=None, locals={}, target='cpu', cache=cache,
                    targetoptions=options, impl_kind='generated',
                    **dispatcher_args)
@@ -263,7 +263,7 @@ def njit(*args, **kws):
 
 
 def cfunc(sig, locals={}, cache=False,
-          flag_class=None, pipeline_class=None, **options):
+          pipeline_class=None, flags=None, **options):
     """
     This decorator is used to compile a Python function into a C callback
     usable with foreign C libraries.
@@ -279,10 +279,10 @@ def cfunc(sig, locals={}, cache=False,
     def wrapper(func):
         from numba.core.ccallback import CFunc
         additional_args = {}
-        if flag_class is not None:
-            additional_args['flag_class'] = flag_class
         if pipeline_class is not None:
             additional_args['pipeline_class'] = pipeline_class
+        if flags is not None:
+            additional_args['flags'] = flags
         res = CFunc(func, sig, locals=locals, options=options, **additional_args)
         if cache:
             res.enable_caching()
