@@ -366,6 +366,16 @@ def unbox_optional(typ, obj, c):
                        cleanup=cleanup)
 
 
+@box(types.SliceType)
+def box_slice(typ, val, c):
+    sli = c.context.make_helper(c.builder, typ, val)
+    start = c.box(types.int64, sli.start)
+    stop = c.box(types.int64, sli.stop)
+    step = c.box(types.int64, sli.step)
+    slice_val = c.pyapi.slice_new(start, stop, step)
+    return slice_val
+
+
 @unbox(types.SliceType)
 def unbox_slice(typ, obj, c):
     """

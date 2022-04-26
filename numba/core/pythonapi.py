@@ -663,6 +663,11 @@ class PythonAPI(object):
     # Concrete slice API
     #
 
+    def slice_new(self, start, stop, step):
+        fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="PySlice_New")
+        return self.builder.call(fn, [start, stop, step])
+
     def slice_as_ints(self, obj):
         """
         Read the members of a slice of integers.
