@@ -5,7 +5,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import threading
 from unittest import skip
 from ctypes import *
 

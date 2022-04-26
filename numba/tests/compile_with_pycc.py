@@ -1,7 +1,4 @@
 import cmath
-import ctypes
-import ctypes.util
-import os
 
 import numpy as np
 
