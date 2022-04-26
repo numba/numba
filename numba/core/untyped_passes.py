@@ -1726,7 +1726,6 @@ class DeadLoopElimination(FunctionPass):
         if not self.is_call_to(state, call_expr):
             return False
 
-        breakpoint()
         for arg in call_expr.args:
             if self.is_arg_constsized_zero(state, arg):
                 # store the call expr to be removed later
