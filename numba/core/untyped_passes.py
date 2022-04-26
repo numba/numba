@@ -1693,14 +1693,25 @@ class DeadLoopElimination(FunctionPass):
     def get_analysis_usage(self, AU):
         AU.add_required(ReconstructSSA)
 
-    def is_arg_constsized(self, state, arg):
+    def is_call_to(self, state, call):
+        if isinstance(call, ir.Expr) and call.op == 'call':
+            func_inst = state.func_ir.get_definition(call.func)
+            return func_inst.value in (zip, iter, enumerate)
+        return False
+
+    def is_arg_constsized_zero(self, state, arg):
+        # deals with zip(iter(arg)) calls
+        inst = state.func_ir.get_definition(arg)
+        if self.is_call_to(state, inst):
+            return self.is_arg_constsized_zero(state, inst.args[0])
+
         # True if len(type(arg)) == 0
         t = state.typemap.get(arg.name)
         return isinstance(t, types.ConstSized) and len(t) == 0
 
     def match_iter(self, state, getiter):
         """
-        Return True if getiter operates on 'zip' or 'iter'
+        Return True if getiter operates on either [zip, enumerate, iter]
 
         call_fn  := global(zip: <class 'zip'>)
         call_ret := call_expr(func=call_fn, args=[...])
@@ -1712,13 +1723,12 @@ class DeadLoopElimination(FunctionPass):
                               call_expr.op == 'call'):
             return False
 
-        call_fn = guard(get_definition, func_ir, call_expr.func)
-        if call_fn and call_fn.value not in (iter, zip):
+        if not self.is_call_to(state, call_expr):
             return False
 
+        breakpoint()
         for arg in call_expr.args:
-            # only one arg?
-            if self.is_arg_constsized(state, arg):
+            if self.is_arg_constsized_zero(state, arg):
                 # store the call expr to be removed later
                 self.dead_vars.append(func_ir.get_assignee(call_expr))
                 return True
@@ -1738,7 +1748,7 @@ class DeadLoopElimination(FunctionPass):
                 if expr:
                     if isinstance(expr, ir.Expr) and expr.op == 'getiter':
                         # expr := getiter(value=Var)
-                        if self.is_arg_constsized(state, expr.value) or \
+                        if self.is_arg_constsized_zero(state, expr.value) or \
                            self.match_iter(state, expr):
                             dead_loops.append(loop)
         return dead_loops

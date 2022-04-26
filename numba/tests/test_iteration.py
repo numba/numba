@@ -250,7 +250,7 @@ class TestIterationRefct(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(sequence), foo.py_func(sequence))
 
 
-class TestEmptyContainers(TestCase):
+class TestIterationEmptyContainer(TestCase):
     def testcase(self):
         @njit
         def empty_things():
@@ -320,6 +320,53 @@ class TestEmptyContainers(TestCase):
                 s += x + y
             return s
 
+        inps = [
+            ((), ()),
+            ((), (0, 2, 3)),
+            ((0, 2, 3), ()),
+        ]
+        for ca, cb in inps:
+            self.assertPreciseEqual(func(ca, cb), func.py_func(ca, cb))
+
+    def test_enumerate_empty(self):
+        @njit
+        def func(ca):
+            s = -1
+            for i, x in enumerate(ca):
+                s += x
+            return s
+
+        inps = [
+            (()),
+            ((0, 2, 3)),
+        ]
+        for ca in inps:
+            self.assertPreciseEqual(func(ca), func.py_func(ca))
+
+
+    def test_nested_iter(self):
+        @njit
+        def func(ca):
+            s = -1
+            for x in iter(iter(ca)):
+                s += x
+            return s
+        
+        inps = [
+            (()),
+            ((0, 2, 3)),
+        ]
+        for ca in inps:
+            self.assertPreciseEqual(func(ca), func.py_func(ca))
+            
+    def test_zip_iter_enumerate(self):
+        @njit
+        def func(ca, cb):
+            s = 0
+            for idx, (x, y) in enumerate(zip(iter(ca), iter(iter(cb)))):
+                s += x + y + idx
+            return s
+        
         inps = [
             ((), ()),
             ((), (0, 2, 3)),
