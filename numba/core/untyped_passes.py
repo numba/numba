@@ -1693,17 +1693,20 @@ class DeadLoopElimination(FunctionPass):
     def get_analysis_usage(self, AU):
         AU.add_required(ReconstructSSA)
 
-    def is_call_to(self, state, call):
+    def is_call_to(self, state, call, *, fns=()):
         if isinstance(call, ir.Expr) and call.op == 'call':
             func_inst = state.func_ir.get_definition(call.func)
-            return func_inst.value in (zip, iter, enumerate)
+            return func_inst.value in fns
         return False
 
     def is_arg_constsized_zero(self, state, arg):
-        # deals with zip(iter(arg)) calls
+        # deals with nested calls to enumerate(zip(iter ...)) calls
         inst = state.func_ir.get_definition(arg)
-        if self.is_call_to(state, inst):
+        if self.is_call_to(state, inst, fns=(iter, enumerate)):
             return self.is_arg_constsized_zero(state, inst.args[0])
+        elif self.is_call_to(state, inst, fns=(zip,)):
+            return self.is_arg_constsized_zero(state, inst.args[0]) or \
+                self.is_arg_constsized_zero(state, inst.args[1])
 
         # True if len(type(arg)) == 0
         t = state.typemap.get(arg.name)
@@ -1725,6 +1728,9 @@ class DeadLoopElimination(FunctionPass):
 
         if not self.is_call_to(state, call_expr):
             return False
+
+        from rich import print
+        print(state.typemap)
 
         for arg in call_expr.args:
             if self.is_arg_constsized_zero(state, arg):
