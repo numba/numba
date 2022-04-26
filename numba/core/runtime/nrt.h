@@ -14,7 +14,7 @@ All functions described here are threadsafe.
 
 /* Debugging facilities - enabled at compile-time */
 /* #undef NDEBUG */
-#if 1
+#if 0
 #   define NRT_Debug(X) {X; fflush(stdout); }
 #else
 #   define NRT_Debug(X) if (0) { X; }
