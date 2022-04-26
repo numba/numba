@@ -1734,7 +1734,6 @@ class DeadLoopElimination(FunctionPass):
         for arg in call_expr.args:
             if self.is_arg_constsized_zero(state, arg):
                 # store the call expr to be removed later
-                self.dead_vars.append(func_ir.get_assignee(call_expr))
                 return True
         return False
 
@@ -1781,17 +1780,6 @@ class DeadLoopElimination(FunctionPass):
 
         dead_branch_prune(state.func_ir, state.args)
 
-        for lhs in self.dead_vars:
-            if lhs is None:
-                continue
-            for block in state.func_ir.blocks.values():
-                # find the assignment associated with lhs
-                assign = block.find_variable_assignment(lhs.name)
-                if assign:
-                    block.remove(assign)
-                    if guard(get_definition, state.func_ir, assign.target.name):
-                        state.func_ir.remove_definition(assign.target.name)
-
     def run_pass(self, state):
         # run as subpipeline
         from numba.core.compiler_machinery import PassManager
@@ -1805,7 +1793,6 @@ class DeadLoopElimination(FunctionPass):
         pm.finalize()
         pm.run(state)
 
-        self.dead_vars = []
         dead_loops = self.find_dead_loops(state)
         if dead_loops:
             self.remove_dead_loops(state, dead_loops)
