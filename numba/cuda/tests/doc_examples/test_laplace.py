@@ -40,10 +40,10 @@ class TestLaplace(CUDATestCase):
 
         # Middle element is made very hot
         data[500] = 10000
-        data_gpu = cuda.to_device(data)
+        buf_0 = cuda.to_device(data)
 
         # This extra array is used for synchronization purposes
-        tmp_gpu = cuda.to_device(np.zeros(len(data)))
+        buf_1 = cuda.device_array_like(buf_0)
 
         niter = 10000
         # ex_laplace.allocate.end
@@ -52,8 +52,8 @@ class TestLaplace(CUDATestCase):
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots(figsize=(16 * 0.66, 9 * 0.66))
             plt.plot(
-                np.arange(len(data_gpu)),
-                data_gpu.copy_to_host(),
+                np.arange(len(buf_0)),
+                buf_0.copy_to_host(),
                 lw=3,
                 marker="*",
                 color='black'
@@ -71,13 +71,25 @@ class TestLaplace(CUDATestCase):
 
         # ex_laplace.kernel.begin
         @cuda.jit
-        def solve_heat_equation(data, tmp, timesteps, k):
+        def solve_heat_equation(buf_0, buf_1, timesteps, k):
             i = cuda.grid(1)
+
+            # Don't continue if our index is outside the domain
+            if i >= len(buf_0):
+                return
 
             # Prepare to do a grid-wide synchronization later
             grid = cuda.cg.this_grid()
 
             for step in range(timesteps):
+                # Select the buffer from the previous timestep
+                if (step % 2) == 0:
+                    data = buf_0
+                    next_data = buf_1
+                else:
+                    data = buf_1
+                    next_data = buf_0
+
                 # Get the current temperature associated with this point
                 curr_temp = data[i]
 
@@ -89,26 +101,26 @@ class TestLaplace(CUDATestCase):
                     # Right wall is held at T = 0
                     next_temp = curr_temp + k * (data[i - 1] - (2 * curr_temp))
                 else:
+                    # Interior points are a weighted average of their neighbors
                     next_temp = curr_temp + k * (
                         data[i - 1] - (2 * curr_temp) + data[i + 1]
                     )
-                tmp[i] = next_temp
+
+                # Write new value to the next buffer
+                next_data[i] = next_temp
 
                 # Wait for every thread to write before moving on
                 grid.sync()
-
-                # Swap data for the next iteration
-                data[i] = tmp[i]
         # ex_laplace.kernel.end
 
         # ex_laplace.launch.begin
         solve_heat_equation.forall(len(data))(
-            data_gpu, tmp_gpu, niter, 0.25
+            buf_0, buf_1, niter, 0.25
         )
         # ex_laplace.launch.end
 
         if plot:
-            results = tmp_gpu.copy_to_host()
+            results = buf_1.copy_to_host()
 
             fig, ax = plt.subplots(figsize=(16 * 0.66, 9 * 0.66))
             plt.plot(
@@ -127,6 +139,12 @@ class TestLaplace(CUDATestCase):
             plt.ylim(0, max(results))
             plt.xlim(0, len(results))
             plt.savefig('laplace_final.svg')
+
+        # Integral over the domain should be equal to its initial value.
+        # Note that this should match the initial value of data[500] above, but
+        # we don't assign it to a variable because that would make the example
+        # code look a bit oddly verbose.
+        np.testing.assert_allclose(results.sum(), 10000)
 
 
 if __name__ == "__main__":
