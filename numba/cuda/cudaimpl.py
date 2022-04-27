@@ -545,11 +545,17 @@ def _gen_fp16_cmp(op):
 
 
 lower(stubs.fp16.heq, types.float16, types.float16)(_gen_fp16_cmp('eq'))
+lower(operator.eq, types.float16, types.float16)(_gen_fp16_cmp('eq'))
 lower(stubs.fp16.hne, types.float16, types.float16)(_gen_fp16_cmp('ne'))
+lower(operator.ne, types.float16, types.float16)(_gen_fp16_cmp('ne'))
 lower(stubs.fp16.hge, types.float16, types.float16)(_gen_fp16_cmp('ge'))
+lower(operator.ge, types.float16, types.float16)(_gen_fp16_cmp('ge'))
 lower(stubs.fp16.hgt, types.float16, types.float16)(_gen_fp16_cmp('gt'))
+lower(operator.gt, types.float16, types.float16)(_gen_fp16_cmp('gt'))
 lower(stubs.fp16.hle, types.float16, types.float16)(_gen_fp16_cmp('le'))
+lower(operator.le, types.float16, types.float16)(_gen_fp16_cmp('le'))
 lower(stubs.fp16.hlt, types.float16, types.float16)(_gen_fp16_cmp('lt'))
+lower(operator.lt, types.float16, types.float16)(_gen_fp16_cmp('lt'))
 
 
 def lower_fp16_minmax(fn, fname, op):
