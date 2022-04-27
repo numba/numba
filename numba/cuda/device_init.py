@@ -36,6 +36,7 @@ reduce = Reduce = reduction.Reduce
 # Expose vector types constructors as module level attributes.
 for vector_type_stub in _vector_type_stubs:
     setattr(sys.modules[__name__], vector_type_stub.__name__, vector_type_stub)
+del vector_type_stub, _vector_type_stubs
 
 
 def is_available():
