@@ -56,8 +56,7 @@ class InlineTestPass(FunctionPass):
             if guard(find_callname,state.func_ir, stmt.value) is not None:
                 inline_closure_call(state.func_ir, {}, block, i, lambda: None,
                                     state.typingctx, state.targetctx, (),
-                                    state.type_annotation.typemap,
-                                    state.type_annotation.calltypes)
+                                    state.typemap, state.calltypes)
                 break
         # also fix up the IR
         post_proc = postproc.PostProcessor(state.func_ir)
@@ -82,7 +81,6 @@ def gen_pipeline(state, test_pass):
                     "inline calls to locally defined closures")
         # typing
         pm.add_pass(NopythonTypeInference, "nopython frontend")
-        pm.add_pass(AnnotateTypes, "annotate types")
 
         if state.flags.auto_parallel.enabled:
             pm.add_pass(PreParforPass, "Preprocessing for parfors")
@@ -95,7 +93,7 @@ def gen_pipeline(state, test_pass):
 
         # legalise
         pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
-
+        pm.add_pass(AnnotateTypes, "annotate types")
         pm.add_pass(PreserveIR, "preserve IR")
 
         # lower
@@ -261,8 +259,8 @@ class TestInlining(TestCase):
                             is not None):
                         inline_closure_call(state.func_ir, {}, block, i,
                             foo.py_func, state.typingctx, state.targetctx,
-                            (state.type_annotation.typemap[stmt.value.args[0].name],),
-                            state.type_annotation.typemap, state.calltypes)
+                            (state.typemap[stmt.value.args[0].name],),
+                             state.typemap, state.calltypes)
                         break
                 return True
 

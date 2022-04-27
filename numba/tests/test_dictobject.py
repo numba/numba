@@ -357,6 +357,26 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             keys,
         )
 
+    def test_dict_keys_len(self):
+        """
+        Exercise len(dict.keys())
+        """
+        @njit
+        def foo(keys, vals):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            return len(d.keys())
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+
+        self.assertEqual(
+            foo(keys, vals),
+            len(keys),
+        )
+
     def test_dict_values(self):
         """
         Exercise dict.values
@@ -378,6 +398,45 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         self.assertEqual(
             foo(keys, vals),
             vals,
+        )
+
+    def test_dict_values_len(self):
+        """
+        Exercise len(dict.values())
+        """
+        @njit
+        def foo(keys, vals):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            return len(d.values())
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+
+        self.assertEqual(
+            foo(keys, vals),
+            len(vals),
+        )
+
+    def test_dict_items_len(self):
+        """
+        Exercise len(dict.items())
+        """
+        @njit
+        def foo(keys, vals):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            return len(d.items())
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+        self.assertPreciseEqual(
+            foo(keys, vals),
+            len(vals),
         )
 
     def test_dict_iter(self):
@@ -1052,6 +1111,15 @@ class TestTypedDict(MemoryLeakMixin, TestCase):
         d = producer()
         val = consumer(d)
         self.assertEqual(val, 1.23)
+
+    def test_gh7908(self):
+        d = Dict.empty(
+            key_type=types.Tuple([types.uint32,
+                                  types.uint32]),
+            value_type=int64)
+
+        d[(1, 1)] = 12345
+        self.assertEqual(d[(1, 1)], d.get((1, 1)))
 
     def check_stringify(self, strfn, prefix=False):
         nbd = Dict.empty(int32, int32)

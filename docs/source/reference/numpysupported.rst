@@ -334,7 +334,7 @@ The following methods of Numpy arrays are supported:
 
 * :meth:`~numpy.ndarray.transpose`
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
-* :meth:`~numpy.ndarray.__contains__` 
+* :meth:`~numpy.ndarray.__contains__`
 
 Where applicable, the corresponding top-level NumPy functions (such as
 :func:`numpy.argmax`) are similarly supported.
@@ -416,6 +416,7 @@ Other functions
 
 The following top-level functions are supported:
 
+* :func:`numpy.allclose`
 * :func:`numpy.append`
 * :func:`numpy.arange`
 * :func:`numpy.argsort` (``kind`` key word argument supported for values
@@ -435,6 +436,7 @@ The following top-level functions are supported:
 * :func:`numpy.bincount`
 * :func:`numpy.blackman`
 * :func:`numpy.broadcast_to` (only the 2 first arguments)
+* :func:`numpy.broadcast_arrays` (only the first argument)
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate`
 * :func:`numpy.convolve` (only the 2 first arguments)
@@ -654,7 +656,7 @@ Permutations
 Distributions
 '''''''''''''
 
-.. warning:: The `size` argument is not supported in the following functions.
+The following functions support all arguments.
 
 * :func:`numpy.random.beta`
 * :func:`numpy.random.binomial`
@@ -672,6 +674,7 @@ Distributions
 * :func:`numpy.random.logseries`
 * :func:`numpy.random.multinomial`
 * :func:`numpy.random.negative_binomial`
+* :func:`numpy.random.noncentral_chisquare`
 * :func:`numpy.random.normal`
 * :func:`numpy.random.pareto`
 * :func:`numpy.random.poisson`

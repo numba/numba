@@ -100,7 +100,7 @@ class TestCudaConstantMemory(CUDATestCase):
         if not ENABLE_CUDASIM:
             self.assertIn(
                 'ld.const.f64',
-                jcuconst.ptx[sig],
+                jcuconst.inspect_asm(sig),
                 "as we're adding to it, load as a double")
 
     def test_const_empty(self):
@@ -125,7 +125,7 @@ class TestCudaConstantMemory(CUDATestCase):
         if not ENABLE_CUDASIM:
             self.assertIn(
                 'ld.const.u32',
-                jcuconst2d.ptx[sig],
+                jcuconst2d.inspect_asm(sig),
                 "load the ints as ints")
 
     def test_const_array_3d(self):
@@ -146,7 +146,9 @@ class TestCudaConstantMemory(CUDATestCase):
                 complex_load = 'ld.const.f32'
                 description = 'load each half of the complex as f32'
 
-            self.assertIn(complex_load, jcuconst3d.ptx[sig], description)
+            self.assertIn(
+                complex_load, jcuconst3d.inspect_asm(sig), description
+            )
 
     def test_const_record_empty(self):
         jcuconstRecEmpty = cuda.jit('void(int64[:])')(cuconstRecEmpty)
