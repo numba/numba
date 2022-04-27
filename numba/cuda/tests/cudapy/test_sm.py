@@ -1,6 +1,6 @@
 from numba import cuda, int32, float64, void
 from numba.core.errors import TypingError
-
+from numba.core import types
 from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 
 import numpy as np
@@ -48,7 +48,7 @@ class TestSharedMemoryIssue(CUDATestCase):
     def _check_shared_array_size_fp16(self, shape, expected):
         @cuda.jit
         def s(a):
-            arr = cuda.shared.array(shape, dtype=np.float16)
+            arr = cuda.shared.array(shape, dtype=types.float16)
             a[0] = arr.size
 
         result = np.zeros(1, dtype=np.float16)
