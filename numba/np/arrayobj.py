@@ -1394,57 +1394,13 @@ def numpy_broadcast_to(array, shape):
     return impl
 
 
-if numpy_version >= (1, 20):
-    @overload(np.broadcast_shapes)
-    def numpy_broadcast_shapes(*args):
-        # Based on https://github.com/numpy/numpy/blob/f702b26fff3271ba6a6ba29a021fc19051d1f007/numpy/core/src/multiarray/iterators.c#L1129-L1212  # noqa
-        def impl(*args):
-            # discover the number of dimensions
-            m = 0
-            for val in literal_unroll(args):
-                if isinstance(val, int):
-                    m = max(m, 1)
-                else:
-                    m = max(m, len(val))
-
-            # propagate args
-            r = [1] * m
-            for arg in literal_unroll(args):
-                if isinstance(arg, tuple) and len(arg) == 0:
-                    pass
-                elif isinstance(arg, int):
-                    k = m - 1
-                    tmp = arg
-                    if tmp == 1:
-                        continue
-                    if r[k] == 1:
-                        r[k] = tmp
-                    elif r[k] != tmp:
-                        raise ValueError("shape mismatch: objects"
-                                         " cannot be broadcast"
-                                         " to a single shape")
-                else:
-                    for i in range(len(arg)):
-                        # don't use the same name because it violates SSA
-                        k_ = m - len(arg) + i
-                        tmp_ = arg[i]
-                        if tmp_ == 1:
-                            continue
-                        if r[k_] == 1:
-                            r[k_] = tmp_
-                        elif r[k_] != tmp_:
-                            raise ValueError("shape mismatch: objects"
-                                             " cannot be broadcast"
-                                             " to a single shape")
-            return r
-        return impl
-
-
 @register_jitable
 def numpy_broadcast_shapes_list(r, m, shape):
     for i in range(len(shape)):
         k = m - len(shape) + i
         tmp = shape[i]
+        if tmp < 0:
+            raise ValueError("negative dimensions are not allowed")
         if tmp == 1:
             continue
         if r[k] == 1:
@@ -1453,6 +1409,34 @@ def numpy_broadcast_shapes_list(r, m, shape):
             raise ValueError("shape mismatch: objects"
                              " cannot be broadcast"
                              " to a single shape")
+
+
+def ol_numpy_broadcast_shapes(*args):
+    # Based on https://github.com/numpy/numpy/blob/f702b26fff3271ba6a6ba29a021fc19051d1f007/numpy/core/src/multiarray/iterators.c#L1129-L1212  # noqa
+    def impl(*args):
+        # discover the number of dimensions
+        m = 0
+        for val in literal_unroll(args):
+            if isinstance(val, int):
+                m = max(m, 1)
+            else:
+                m = max(m, len(val))
+
+        # propagate args
+        r = [1] * m
+        for arg in literal_unroll(args):
+            if isinstance(arg, tuple) and len(arg) == 0:
+                pass
+            elif isinstance(arg, int):
+                numpy_broadcast_shapes_list(r, m, (arg,))
+            else:
+                numpy_broadcast_shapes_list(r, m, arg)
+        return r
+    return impl
+
+
+if numpy_version >= (1, 20):
+    overload(np.broadcast_shapes)(ol_numpy_broadcast_shapes)
 
 
 @overload(np.broadcast_arrays)

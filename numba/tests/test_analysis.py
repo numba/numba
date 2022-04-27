@@ -8,8 +8,8 @@ from numba import jit, njit
 from numba.core import types, errors, ir, rewrites, ir_utils, utils, cpu
 from numba.core import postproc
 from numba.core.inline_closurecall import InlineClosureCallPass
-from numba.tests.support import TestCase, MemoryLeakMixin, SerialMixin
-
+from numba.tests.support import (TestCase, MemoryLeakMixin, SerialMixin,
+                                 IRPreservingTestPipeline)
 from numba.core.analysis import dead_branch_prune, rewrite_semantic_constants
 from numba.core.untyped_passes import (ReconstructSSA, TranslateByteCode,
                                        IRProcessing, DeadBranchPrune,
@@ -1026,3 +1026,21 @@ class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
         args = (np.zeros((5, 4, 3, 2)), np.zeros((1, 1)))
 
         self.assertPreciseEqual(impl(*args), impl.py_func(*args))
+
+    def test_empty_tuple_prune(self):
+        @njit(pipeline_class=IRPreservingTestPipeline)
+        def impl(t):
+            if isinstance(t, tuple) and len(t) == 0:
+                return 123
+            else:
+                return 'string'
+
+        self.assertPreciseEqual(impl(()), 123)
+        self.assertPreciseEqual(impl(('hello')), 'string')
+
+        for idx in (0, 1):
+            ol = impl.overloads[impl.signatures[idx]]
+            func_ir = ol.metadata['preserved_ir']
+            # check the func_ir, make sure there's no phi nodes
+            for blk in func_ir.blocks.values():
+                self.assertFalse([*blk.find_exprs('phi')])
