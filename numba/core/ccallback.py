@@ -37,7 +37,7 @@ class CFunc(object):
 
     def __init__(self, pyfunc, sig, locals, options,
                  pipeline_class=compiler.Compiler,
-                 flags=compiler.Flags()):
+                 flags=None):
         args, return_type = sig
         if return_type is None:
             raise TypeError("C callback needs an explicit return type")

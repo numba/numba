@@ -811,7 +811,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
     def __init__(self, py_func, locals={}, targetoptions={},
                  impl_kind='direct',
                  pipeline_class=compiler.Compiler,
-                 flags=compiler.Flags()):
+                 flags=None):
         """
         Parameters
         ----------
@@ -843,6 +843,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         self._cache = NullCache()
         compiler_class = self._impl_kinds[impl_kind]
         self._impl_kind = impl_kind
+        flags = compiler.Flags() if flags is None else flags
         self._compiler = compiler_class(py_func, self.targetdescr,
                                         targetoptions, locals,
                                         pipeline_class, flags)
