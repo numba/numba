@@ -1413,6 +1413,16 @@ def numpy_broadcast_shapes_list(r, m, shape):
 
 def ol_numpy_broadcast_shapes(*args):
     # Based on https://github.com/numpy/numpy/blob/f702b26fff3271ba6a6ba29a021fc19051d1f007/numpy/core/src/multiarray/iterators.c#L1129-L1212  # noqa
+    for idx, arg in enumerate(args):
+        is_int = isinstance(arg, types.Integer)
+        is_int_tuple = isinstance(arg, types.UniTuple) and \
+            isinstance(arg.dtype, types.Integer)
+        is_empty_tuple = isinstance(arg, types.Tuple)
+        if not (is_int or is_int_tuple or is_empty_tuple):
+            msg = (f'Argument {idx} must be either an int or tuple[int]. '
+                   f'Got {type(arg)}')
+            raise errors.TypingError(msg)
+
     def impl(*args):
         # discover the number of dimensions
         m = 0
@@ -1425,12 +1435,10 @@ def ol_numpy_broadcast_shapes(*args):
         # propagate args
         r = [1] * m
         for arg in literal_unroll(args):
-            if isinstance(arg, tuple) and len(arg) == 0:
-                pass
+            if isinstance(arg, tuple) and len(arg) > 0:
+                numpy_broadcast_shapes_list(r, m, arg)
             elif isinstance(arg, int):
                 numpy_broadcast_shapes_list(r, m, (arg,))
-            else:
-                numpy_broadcast_shapes_list(r, m, arg)
         return r
     return impl
 

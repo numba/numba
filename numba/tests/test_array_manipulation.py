@@ -946,6 +946,25 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         self.assertIn("negative dimensions are not allowed", str(raises.exception))
 
+    @unittest.skipIf(numpy_version < (1, 20), "requires NumPy 1.20 or newer")
+    def test_broadcast_shapes_invalid_type(self):
+        pyfunc = numpy_broadcast_shapes
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self.disable_leak_check()
+
+        inps = [
+            ((1, 2), ('hello',)),
+            (3.4,),
+            ('string',),
+        ]
+
+        for inp in inps:
+            with self.assertRaises(TypingError) as raises:
+                cfunc(*inp)
+
+            self.assertIn("must be either an int or tuple[int]", str(raises.exception))
+
     def test_shape(self):
         pyfunc = numpy_shape
         cfunc = jit(nopython=True)(pyfunc)
