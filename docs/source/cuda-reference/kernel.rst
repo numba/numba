@@ -543,8 +543,9 @@ Vector Types
 ~~~~~~~~~~~~
 
 `CUDA Vector Types <https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#built-in-vector-types>`_
-are available in the kernel. Unlike native CUDA, vector types are constructed
-directly with their constructor. For example, to construct a ``float3``:
+are available in the kernel. Unlike native CUDA where factory functions are 
+used, vector types are constructed directly with their constructor. For example,
+to construct a ``float3``:
 
 .. code-block:: python3
 
@@ -553,8 +554,8 @@ directly with their constructor. For example, to construct a ``float3``:
     # In kernel
     f3 = float3(float32(0.0), float32(-1.0), float32(1.0))
 
-Besides, vector type can be constructed from a combination of vector types and
-primitive types, as long as the total number of components matches with the result
+Additionally, vector types can be constructed from a combination of vector and
+primitive types, as long as the total number of components matches the result
 vector type. For example, all of the following constructions are valid:
 
 .. code-block:: python3
@@ -567,5 +568,6 @@ vector type. For example, all of the following constructions are valid:
     u4 = uint4(u2, u2)
 
 The 1st, 2nd, 3rd and 4th component of the vector type can be accessed through fields 
-``x``, ``y``, ``z``, ``w``, respectively. The components are currently immutable
-after construction.
+``x``, ``y``, ``z``, and ``w`` respectively. The components are immutable after
+construction in the present version of Numba; it is expected that support for
+mutating vector components will be added in a future release.
