@@ -3,6 +3,7 @@ This scripts specifies all PTX special objects.
 """
 import functools
 import itertools
+from inspect import Signature, Parameter
 
 
 class Stub(object):
@@ -691,7 +692,16 @@ def make_vector_type_stubs():
             type_name, (Stub,),
             {
                 **{attr: lambda self: None for attr in attr_names},
-                **{"_description_": f"<{type_name}>"}
+                **{
+                    "_description_": f"<{type_name}>",
+                    "__signature__": Signature(parameters=[
+                        Parameter(
+                            name=name, kind=Parameter.POSITIONAL_ONLY
+                        ) for name in attr_names[:nelem]
+                    ]),
+                    "__doc__": f"A stub for {type_name} to be used in "
+                    "CUDA kernel."
+                }
             }
         )
         vector_type_stubs.append(vector_type_stub)
