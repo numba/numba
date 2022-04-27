@@ -184,10 +184,8 @@ class _OverloadWrapper(object):
             if sig.pysig: # CallableTemplate, has pysig
                 pysig_params = sig.pysig.parameters
 
-                # Define the generator for the var names
-                def gen_var_names():
-                    for x in pysig_params.keys():
-                        yield x
+                # Define the var names
+                gen_var_names = [x for x in pysig_params.keys()]
                 # CallableTemplate, pysig is present so generate the exact thing
                 # this is to permit calling with positional args specified by
                 # name.
@@ -200,17 +198,15 @@ class _OverloadWrapper(object):
                 call_str_specific = ', '.join(buf)
                 call_str = ', '.join(pysig_params.keys())
             else: # AbstractTemplate, need to bind 1:1 vars to the arg count
-                # Define the generator for the var names
-                def gen_var_names():
-                    for x in range(len(ol_args)):
-                        yield f'tmp{x}'
+                # Define the var names
+                gen_var_names = [f'tmp{x}' for x in range(len(ol_args))]
                 # Everything is just passed by position, there should be no
                 # kwargs.
                 assert not ol_kwargs
-                call_str_specific = ', '.join(gen_var_names())
+                call_str_specific = ', '.join(gen_var_names)
                 call_str = call_str_specific
 
-            stub = self._stub_generator(body, gen_var_names())
+            stub = self._stub_generator(body, gen_var_names)
             intrin = intrinsic(stub)
 
             # NOTE: The jit_wrapper functions cannot take `*args`
