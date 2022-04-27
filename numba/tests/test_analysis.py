@@ -4,7 +4,7 @@ import types as pytypes
 
 import numpy as np
 from numba.core.compiler import compile_isolated, run_frontend, Flags, StateDict
-from numba import jit, njit
+from numba import jit, njit, literal_unroll
 from numba.core import types, errors, ir, rewrites, ir_utils, utils, cpu
 from numba.core import postproc
 from numba.core.inline_closurecall import InlineClosureCallPass
@@ -1029,18 +1029,21 @@ class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
 
     def test_empty_tuple_prune(self):
         @njit(pipeline_class=IRPreservingTestPipeline)
-        def impl(t):
-            if isinstance(t, tuple) and len(t) == 0:
-                return 123
-            else:
-                return 'string'
+        def impl(*args):
+            s = 0
+            for arg in literal_unroll(args):
+                if isinstance(arg, tuple) and len(arg) == 0:
+                    s += 100
+                else:
+                    for e in arg:
+                        s += e
+            return s
 
-        self.assertPreciseEqual(impl(()), 123)
-        self.assertPreciseEqual(impl(('hello')), 'string')
+        inp = ((), (1, 2, 3), ())
+        self.assertPreciseEqual(impl(*inp), 206)
 
-        for idx in (0, 1):
-            ol = impl.overloads[impl.signatures[idx]]
-            func_ir = ol.metadata['preserved_ir']
-            # check the func_ir, make sure there's no phi nodes
-            for blk in func_ir.blocks.values():
-                self.assertFalse([*blk.find_exprs('phi')])
+        ol = impl.overloads[impl.signatures[0]]
+        func_ir = ol.metadata['preserved_ir']
+        # check the func_ir, make sure there's no phi nodes
+        for blk in func_ir.blocks.values():
+            self.assertFalse([*blk.find_exprs('phi')])
