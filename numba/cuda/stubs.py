@@ -662,35 +662,40 @@ class fp16(Stub):
 #-------------------------------------------------------------------------------
 # vector types
 
-_vector_type_prefix = (
-    "char",
-    "short",
-    "int",
-    "long",
-    "longlong",
-    "uchar",
-    "ushort",
-    "uint",
-    "ulong",
-    "ulonglong",
-    "float",
-    "double"
-)
-_vector_type_element_counts = (1, 2, 3, 4)
-_vector_type_attribute_names = ("x", "y", "z", "w")
-
-_vector_type_stubs = []
-for name, nelem in itertools.product(
-    _vector_type_prefix, _vector_type_element_counts
-):
-    type_name = f"{name}{nelem}"
-    attr_names = _vector_type_attribute_names[:nelem]
-
-    vector_type_stub = type(
-        type_name, (Stub,),
-        {
-            **{attr: lambda self: None for attr in attr_names},
-            **{"_description_": f"<{type_name}>"}
-        }
+def make_vector_type_stubs():
+    vector_type_stubs = []
+    vector_type_prefix = (
+        "char",
+        "short",
+        "int",
+        "long",
+        "longlong",
+        "uchar",
+        "ushort",
+        "uint",
+        "ulong",
+        "ulonglong",
+        "float",
+        "double"
     )
-    _vector_type_stubs.append(vector_type_stub)
+    vector_type_element_counts = (1, 2, 3, 4)
+    vector_type_attribute_names = ("x", "y", "z", "w")
+
+    for name, nelem in itertools.product(
+        vector_type_prefix, vector_type_element_counts
+    ):
+        type_name = f"{name}{nelem}"
+        attr_names = vector_type_attribute_names[:nelem]
+
+        vector_type_stub = type(
+            type_name, (Stub,),
+            {
+                **{attr: lambda self: None for attr in attr_names},
+                **{"_description_": f"<{type_name}>"}
+            }
+        )
+        vector_type_stubs.append(vector_type_stub)
+    return vector_type_stubs
+
+
+_vector_type_stubs = make_vector_type_stubs()
