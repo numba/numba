@@ -69,7 +69,7 @@ class TestReduction(CUDATestCase):
         sum(np.arange(1024))  # 523776
         # ex_reduction.launch.end
 
-        assert a[0] == sum(np.arange(1024))
+        np.testing.assert_equal(a[0], sum(np.arange(1024)))
 
 
 if __name__ == "__main__":
