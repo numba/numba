@@ -138,7 +138,7 @@ The initial state of the problem can be visualized as:
 
 In our kernel each thread will be responsible for managing the temperature update for a single element
 in a loop over the desired number of timesteps. The kernel is below. Note the use of cooperative group
-synchronization and the temporary array used to avoid race conditions. See 
+synchronization and the use of two buffers swapped at each iteration to avoid race conditions. See 
 :func:`numba.cuda.cg.this_grid() <numba.cuda.cg.this_grid>` for details.
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_laplace.py
