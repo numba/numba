@@ -97,8 +97,12 @@ class TestMonteCarlo(CUDATestCase):
         # ex_montecarlo.launch.end
 
         # values computed independently using maple
-        np.testing.assert_allclose(mc_integrate(1, 2, nsamps), 0.69315, atol=0.001)
-        np.testing.assert_allclose(mc_integrate(2, 3, nsamps), 0.4055, atol=0.001)
+        np.testing.assert_allclose(
+            mc_integrate(1, 2, nsamps), 0.69315, atol=0.001
+        )
+        np.testing.assert_allclose(
+            mc_integrate(2, 3, nsamps), 0.4055, atol=0.001
+        )
 
 
 if __name__ == "__main__":
