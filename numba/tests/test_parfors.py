@@ -1246,6 +1246,15 @@ class TestParforNumPy(TestParforsBase):
             return np.sum(n) + np.prod(n) + np.min(n) + np.max(n) + np.var(n)
         self.check(test_impl, np.array(7), check_scheduling=False)
 
+    def test_real_imag_attr(self):
+        # See issue 8012
+        def test_impl(z):
+            return np.sum(z.real ** 2 + z.imag ** 2)
+
+        z = np.arange(5) * (1 + 1j)
+        self.check(test_impl, z)
+        self.assertEqual(countParfors(test_impl, (types.complex128[::1],)), 1)
+
 
 class TestParforsUnsupported(TestCase):
     """Tests for unsupported use of parfors"""
