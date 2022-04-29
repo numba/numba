@@ -2923,6 +2923,31 @@ lower_getattr(types.DType, 'kind')(dtype_type)
 
 
 # ------------------------------------------------------------------------------
+# static_getitem on Numba numerical types to create "array" types
+
+
+@lower_builtin('static_getitem', types.Boolean, types.Any)
+@lower_builtin('static_getitem', types.NumberClass, types.Any)
+def static_getitem_number_clazz(context, builder, sig, args):
+    """This handles the "static_getitem" that occurs when a Numba type a
+    __getitem__ made on it in input source e.g:
+    var = typed.List.empty_list(float64[::1, :])
+    """
+    retty = sig.return_type
+    if isinstance(retty, types.Array):
+        # This isn't used or practically accessible, but has to exist, so just
+        # put in a NULL of the right type.
+        res = context.get_value_type(retty)(None)
+        return impl_ret_untracked(context, builder, retty, res)
+    else:
+        # This should be unreachable unless the implementation on the Type
+        # metaclass is changed.
+        msg = ("Unreachable; the definition of __getitem__ on the "
+               "numba.types.abstract.Type metaclass should prevent access.")
+        raise errors.LoweringError(msg)
+
+
+# ------------------------------------------------------------------------------
 # Structured / record lookup
 
 @lower_getattr_generic(types.Array)
