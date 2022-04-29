@@ -1,9 +1,11 @@
 import unittest
 
-from numba.cuda.testing import CUDATestCase, skip_on_cudasim
+from numba.cuda.testing import (CUDATestCase, skip_if_cudadevrt_missing,
+                                skip_on_cudasim)
 from numba.tests.support import captured_stdout
 
 
+@skip_if_cudadevrt_missing
 @skip_on_cudasim("cudasim doesn't support cuda import at non-top-level")
 class TestLaplace(CUDATestCase):
     """
