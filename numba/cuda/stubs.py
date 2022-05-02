@@ -710,19 +710,21 @@ def make_vector_type_stubs():
 
 
 def map_vector_type_stubs_to_alias(vector_type_stubs):
+    # C-compatible type mapping, see:
+    # https://numpy.org/devdocs/reference/arrays.scalars.html#integer-types
     base_type_to_alias = {
-        "char": "int8",
-        "short": "int16",
+        "char": f"int{np.dtype(np.byte).itemsize * 8}",
+        "short": f"int{np.dtype(np.short).itemsize * 8}",
         "int": f"int{np.dtype(np.intc).itemsize * 8}",
         "long": f"int{np.dtype(np.int_).itemsize * 8}",
-        "longlong": "int64",
-        "uchar": "uint8",
-        "ushort": "uint16",
+        "longlong": f"int{np.dtype(np.longlong).itemsize * 8}",
+        "uchar": f"uint{np.dtype(np.ubyte).itemsize * 8}",
+        "ushort": f"uint{np.dtype(np.ushort).itemsize * 8}",
         "uint": f"uint{np.dtype(np.uintc).itemsize * 8}",
         "ulong": f"uint{np.dtype(np.uint).itemsize * 8}",
-        "ulonglong": "uint64",
-        "float": "float32",
-        "double": "float64"
+        "ulonglong": f"uint{np.dtype(np.ulonglong).itemsize * 8}",
+        "float": f"float{np.dtype(np.single).itemsize * 8}",
+        "double": f"float{np.dtype(np.double).itemsize * 8}"
     }
 
     base_type_to_vector_type = defaultdict(list)
