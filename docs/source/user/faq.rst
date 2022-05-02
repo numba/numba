@@ -188,6 +188,12 @@ add the following lines:
 This tells LLVM to print debug information from the **loop-vectorize**
 pass to stderr.  Each function entry looks like:
 
+
+.. note::
+   Using ``--debug-only`` requires LLVM to be build with assertions enabled to
+   work. Use the build of llvmlite in the `Numba channel <https://anaconda.org/numba/llvmlite>`_
+   which is linked against LLVM with assertions enabled.
+
 .. code-block:: text
 
     LV: Checking a loop in "<low-level symbol name>" from <function name>
