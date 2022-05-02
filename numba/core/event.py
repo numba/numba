@@ -462,10 +462,10 @@ def _setup_chrome_trace_exit_handler():
     filename = config.CHROME_TRACE
 
     @atexit.register
-    def _():
+    def _write_chrome_trace():
         # The following output file is not multi-process safe.
+        evs = _prepare_chrome_trace_data(listener)
         with open(filename, "w") as out:
-            evs = _prepare_chrome_trace_data(listener)
             json.dump(evs, out)
 
 
