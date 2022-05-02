@@ -957,6 +957,8 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             ((1, 2), ('hello',)),
             (3.4,),
             ('string',),
+            ((1.2, 'a')),
+            (1, ((1.2, 'a'))),
         ]
 
         for inp in inps:

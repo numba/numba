@@ -1027,23 +1027,23 @@ class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
 
         self.assertPreciseEqual(impl(*args), impl.py_func(*args))
 
-    def test_empty_tuple_prune(self):
+    def test_tuple_const_propagation(self):
         @njit(pipeline_class=IRPreservingTestPipeline)
         def impl(*args):
             s = 0
             for arg in literal_unroll(args):
-                if isinstance(arg, tuple) and len(arg) == 0:
-                    s += 100
-                else:
-                    for e in arg:
-                        s += e
+                s += len(arg)
             return s
 
         inp = ((), (1, 2, 3), ())
-        self.assertPreciseEqual(impl(*inp), 206)
+        self.assertPreciseEqual(impl(*inp), impl.py_func(*inp))
 
         ol = impl.overloads[impl.signatures[0]]
         func_ir = ol.metadata['preserved_ir']
         # check the func_ir, make sure there's no phi nodes
         for blk in func_ir.blocks.values():
-            self.assertFalse([*blk.find_exprs('phi')])
+            for expr in blk.find_exprs('inplace_binop'):
+                insts = [blk.find_variable_assignment(arg.name)
+                         for arg in (expr.lhs, expr.rhs)]
+                self.assertTrue(any([isinstance(i.value, ir.Const)
+                                     for i in insts if i]))

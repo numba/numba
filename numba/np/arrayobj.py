@@ -1417,10 +1417,10 @@ def ol_numpy_broadcast_shapes(*args):
         is_int = isinstance(arg, types.Integer)
         is_int_tuple = isinstance(arg, types.UniTuple) and \
             isinstance(arg.dtype, types.Integer)
-        is_empty_tuple = isinstance(arg, types.Tuple)
+        is_empty_tuple = isinstance(arg, types.Tuple) and len(arg.types) == 0
         if not (is_int or is_int_tuple or is_empty_tuple):
             msg = (f'Argument {idx} must be either an int or tuple[int]. '
-                   f'Got {type(arg)}')
+                   f'Got {arg}')
             raise errors.TypingError(msg)
 
     def impl(*args):
