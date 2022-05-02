@@ -666,26 +666,24 @@ class fp16(Stub):
 def make_vector_type_stubs():
     vector_type_stubs = []
     vector_type_prefix = (
-        "char",
-        "short",
-        "int",
-        "long",
-        "longlong",
-        "uchar",
-        "ushort",
-        "uint",
-        "ulong",
-        "ulonglong",
-        "float",
-        "double"
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
+        "float32",
+        "float64"
     )
     vector_type_element_counts = (1, 2, 3, 4)
     vector_type_attribute_names = ("x", "y", "z", "w")
 
-    for name, nelem in itertools.product(
+    for prefix, nelem in itertools.product(
         vector_type_prefix, vector_type_element_counts
     ):
-        type_name = f"{name}{nelem}"
+        type_name = f"{prefix}x{nelem}"
         attr_names = vector_type_attribute_names[:nelem]
 
         vector_type_stub = type(
@@ -696,8 +694,8 @@ def make_vector_type_stubs():
                     "_description_": f"<{type_name}>",
                     "__signature__": Signature(parameters=[
                         Parameter(
-                            name=name, kind=Parameter.POSITIONAL_ONLY
-                        ) for name in attr_names[:nelem]
+                            name=attr_name, kind=Parameter.POSITIONAL_ONLY
+                        ) for attr_name in attr_names[:nelem]
                     ]),
                     "__doc__": f"A stub for {type_name} to be used in "
                     "CUDA kernel."

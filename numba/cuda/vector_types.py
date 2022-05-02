@@ -30,24 +30,6 @@ def once(func):
     return wrapper
 
 
-# TODO: double check the type mapping is correct for all platforms.
-# QST: need aliases such as int32x4=int4?
-_vector_type_to_base_types = {
-    "char": types.char,
-    "short": types.int16,
-    "int": types.int32,
-    "long": types.int32,
-    "longlong": types.int64,
-    "uchar": types.uchar,
-    "ushort": types.uint16,
-    "uint": types.uint32,
-    "ulong": types.uint32,
-    "ulonglong": types.uint64,
-    "float": types.float32,
-    "double": types.float64
-}
-
-
 class VectorType(types.Type):
     def __init__(self, name, base_type, attr_names, user_facing_object):
         self._base_type = base_type
@@ -194,13 +176,14 @@ def build_constructor_overloads(base_type, vty_name, num_elements, arglists, l):
 
 @once
 def initialize_once():
+    vector_type_attribute_names = ("x", "y", "z", "w")
     for stub in stubs._vector_type_stubs:
         type_name = stub.__name__
-        base_type = _vector_type_to_base_types[type_name[:-1]]
+        base_type = getattr(types, type_name[:-2])
         num_elements = int(type_name[-1])
-        attributes = stubs._vector_type_attribute_names[:num_elements]
+        attributes = vector_type_attribute_names[:num_elements]
         vector_type = make_vector_type(type_name, base_type, attributes, stub)
-        vector_types[type_name] = (vector_type)
+        vector_types[type_name] = vector_type
 
     for vty in vector_types.values():
         arglists, l = [], []
