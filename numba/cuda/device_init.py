@@ -33,9 +33,11 @@ from .kernels import reduction
 
 reduce = Reduce = reduction.Reduce
 
-# Expose vector type constructors as module level attributes.
+# Expose vector type constructors and aliases as module level attributes.
 for vector_type_stub in _vector_type_stubs:
     setattr(sys.modules[__name__], vector_type_stub.__name__, vector_type_stub)
+    for alias in vector_type_stub.aliases:
+        setattr(sys.modules[__name__], alias, vector_type_stub)
 del vector_type_stub, _vector_type_stubs
 
 

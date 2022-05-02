@@ -1,6 +1,8 @@
 """
 This scripts specifies all PTX special objects.
 """
+import numpy as np
+from collections import defaultdict
 import functools
 import itertools
 from inspect import Signature, Parameter
@@ -699,11 +701,40 @@ def make_vector_type_stubs():
                     ]),
                     "__doc__": f"A stub for {type_name} to be used in "
                     "CUDA kernel."
-                }
+                },
+                **{"aliases": []}
             }
         )
         vector_type_stubs.append(vector_type_stub)
     return vector_type_stubs
 
 
+def map_vector_type_stubs_to_alias(vector_type_stubs):
+    base_type_to_alias = {
+        "char": "int8",
+        "short": "int16",
+        "int": f"int{np.dtype(np.intc).itemsize * 8}",
+        "long": f"int{np.dtype(np.int_).itemsize * 8}",
+        "longlong": "int64",
+        "uchar": "uint8",
+        "ushort": "uint16",
+        "uint": f"uint{np.dtype(np.uintc).itemsize * 8}",
+        "ulong": f"uint{np.dtype(np.uint).itemsize * 8}",
+        "ulonglong": "uint64",
+        "float": "float32",
+        "double": "float64"
+    }
+
+    base_type_to_vector_type = defaultdict(list)
+    for stub in vector_type_stubs:
+        base_type_to_vector_type[stub.__name__[:-2]].append(stub)
+
+    for alias, base_type in base_type_to_alias.items():
+        vector_type_stubs = base_type_to_vector_type[base_type]
+        for stub in vector_type_stubs:
+            nelem = stub.__name__[-1]
+            stub.aliases.append(f"{alias}{nelem}")
+
+
 _vector_type_stubs = make_vector_type_stubs()
+map_vector_type_stubs_to_alias(_vector_type_stubs)
