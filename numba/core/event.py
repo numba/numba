@@ -24,14 +24,17 @@ Applications can register callbacks that are listening for specific events using
 of ``Listener`` that defines custom actions on occurrence of the specific event.
 """
 
+import os
 import json
 import atexit
 import abc
 import enum
 import time
+import threading
 from timeit import default_timer as timer
 from contextlib import contextmanager, ExitStack
 from collections import defaultdict
+
 from numba.core import config
 
 
@@ -428,24 +431,19 @@ def trigger_event(kind, data=None):
         yield
 
 
-def _write_chrome_trace(rec):
-    """ If chrome tracing is enabled,
-        write event information (process/thread id, event name,
-        and duration time to json file.
+def _prepare_chrome_trace_data(listener: RecordingListener):
+    """Prepare events in `listener` for serializing as chrome trace data.
     """
-    import os
-    import threading
-
+    # The spec for the trace event format can be found at:
+    # https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/edit   # noqa
+    # This code only uses the JSON Array Format for simplicity.
     pid = os.getpid()
-    tid = threading.get_ident()
+    tid = threading.get_native_id()
     evs = []
-    for ts, rec in rec.buffer:
+    for ts, rec in listener.buffer:
         data = rec.data
         cat = str(rec.kind)
         ph = 'B' if rec.is_start else 'E'
-        pid = pid
-        tid = tid
-        ts = ts
         name = data['name']
         args = data
         ev = dict(
@@ -455,13 +453,21 @@ def _write_chrome_trace(rec):
     return evs
 
 
-if config.CHROME_TRACE:
+def _setup_chrome_trace_exit_handler():
+    """Setup a RecordingListener and a exit handler to write the captured events
+    to file.
+    """
     listener = RecordingListener()
     register("nb:run_pass", listener)
     filename = config.CHROME_TRACE
 
     @atexit.register
     def _():
+        # The following output file is not multi-process safe.
         with open(filename, "w") as out:
-            evs = _write_chrome_trace(listener)
+            evs = _prepare_chrome_trace_data(listener)
             json.dump(evs, out)
+
+
+if config.CHROME_TRACE:
+    _setup_chrome_trace_exit_handler()

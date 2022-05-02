@@ -2,11 +2,15 @@ import timeit
 from abc import abstractmethod, ABCMeta
 from collections import namedtuple, OrderedDict
 import inspect
+from pprint import pformat
+
+
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core import errors, config, transforms, utils
 from numba.core.tracing import event
 from numba.core.postproc import PostProcessor
 from numba.core.ir_utils import enforce_no_dels, legalize_single_scope
+import numba.core.event as ev
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -282,9 +286,6 @@ class PassManager(object):
 
         # wire in the analysis info so it's accessible
         pss.analysis = self._analysis
-
-        import numba.core.event as ev
-        from pprint import pformat
 
         qualname = internal_state.func_id.func_qualname
 

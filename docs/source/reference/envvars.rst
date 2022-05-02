@@ -178,9 +178,11 @@ These variables influence what is printed out during compilation of
 
 .. envvar:: NUMBA_CHROME_TRACE
 
-   Specify the location of the chrome tracing json file output. 
+   If defined, chrome tracing is enabled and this variable specify the filepath
+   of the chrome tracing json file output. The emitted file can be opened by
+   Chromium-based browser using the profile viewer at `chrome://tracing/`.
 
-   If not defined, chrome tracing is disabled.
+   .. warning:: This feature is not supported on multi-process application. 
 
 .. envvar:: NUMBA_DUMP_BYTECODE
 
