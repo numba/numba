@@ -28,7 +28,7 @@ from numba.np.linalg import ensure_blas
 from numba.core.extending import intrinsic
 from numba.core.errors import (RequireLiteralValue, TypingError,
                                NumbaValueError, NumbaNotImplementedError,
-                               NumbaTypeError)
+                               NumbaTypeError, NumbaDeprecationWarning)
 from numba.core.overload_glue import glue_lowering
 from numba.cpython.unsafe.tuple import tuple_setitem
 
@@ -4044,15 +4044,22 @@ iinfo = namedtuple('iinfo', _iinfo_supported)
 # Suppress deprecation warnings while keeping support MachAr
 with warnings.catch_warnings(record=True):
     warnings.simplefilter("ignore", DeprecationWarning)
+    np_MachAr = np.MachAr
 
-    @overload(np.MachAr)
-    def MachAr_impl():
-        f = np.MachAr()
-        _mach_ar_data = tuple([getattr(f, x) for x in _mach_ar_supported])
+@overload(np_MachAr)
+def MachAr_impl():
+    f = np.MachAr()
 
-        def impl():
-            return MachAr(*_mach_ar_data)
-        return impl
+    _mach_ar_data = tuple([getattr(f, x) for x in _mach_ar_supported])
+
+    np_122 = np.version.version >= '1.22'
+
+    def impl():
+        if np_122:
+            raise NumbaDeprecationWarning(
+                "`np.MachAr` is deprecated (NumPy 1.22)")
+        return MachAr(*_mach_ar_data)
+    return impl
 
 
 def generate_xinfo(np_func, container, attr):
