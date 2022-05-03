@@ -1254,7 +1254,7 @@ class NumbaCArray(CallableTemplate):
     def generic(self):
         func_name = self.key.__name__
 
-        def typer(ptr, shape, dtype=types.none):
+        def typer(ptr, shape, dtype=None):
             if ptr is types.voidptr:
                 ptr_dtype = None
             elif isinstance(ptr, types.CPointer):
@@ -1263,7 +1263,7 @@ class NumbaCArray(CallableTemplate):
                 raise NumbaTypeError("%s(): pointer argument expected, got '%s'"
                                      % (func_name, ptr))
 
-            if dtype is types.none:
+            if dtype is None:
                 if ptr_dtype is None:
                     raise NumbaTypeError("%s(): explicit dtype required for void* argument"
                                          % (func_name,))
