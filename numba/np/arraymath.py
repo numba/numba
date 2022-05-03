@@ -11,6 +11,7 @@ import operator
 
 import llvmlite.ir
 import numpy as np
+import warnings
 
 from numba import generated_jit
 from numba.core import types, cgutils
@@ -4040,15 +4041,18 @@ _iinfo_supported = ('min', 'max', 'bits',)
 
 iinfo = namedtuple('iinfo', _iinfo_supported)
 
+# Suppress deprecation warnings while keeping support MachAr
+with warnings.catch_warnings(record=True):
+    warnings.simplefilter("ignore", DeprecationWarning)
 
-@overload(np.MachAr)
-def MachAr_impl():
-    f = np.MachAr()
-    _mach_ar_data = tuple([getattr(f, x) for x in _mach_ar_supported])
+    @overload(np.MachAr)
+    def MachAr_impl():
+        f = np.MachAr()
+        _mach_ar_data = tuple([getattr(f, x) for x in _mach_ar_supported])
 
-    def impl():
-        return MachAr(*_mach_ar_data)
-    return impl
+        def impl():
+            return MachAr(*_mach_ar_data)
+        return impl
 
 
 def generate_xinfo(np_func, container, attr):
