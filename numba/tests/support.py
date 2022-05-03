@@ -992,7 +992,9 @@ def run_in_subprocess(code, flags=None, env=None, timeout=30):
     popen = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE, env=env)
     out, err = popen.communicate(timeout=timeout)
-    if popen.returncode != 0:
+    # Wait for the subprocess to terminate.
+    retcode = popen.wait(timeout=timeout)
+    if retcode != 0:
         msg = "process failed with code %s: stderr follows\n%s\n"
         raise AssertionError(msg % (popen.returncode, err.decode()))
     return out, err
