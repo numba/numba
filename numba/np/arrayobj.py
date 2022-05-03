@@ -1914,6 +1914,94 @@ def np_reshape(a, shape):
     return np_reshape_impl
 
 
+def check_input_shape(shape):
+    num_neg_value = 0
+    known_size = 1
+    for _, s in enumerate(shape):
+        if s < 0:
+            num_neg_value += 1
+        else:
+            known_size *= s
+    if num_neg_value > 0:
+        raise ValueError("negative dimensions not allowed")
+
+
+@lower_builtin('array.resize', types.Array, types.BaseTuple)
+def array_resize(context, builder, sig, args):
+    aryty = sig.args[0]
+    retty = sig.return_type
+
+    shapety = sig.args[1]
+    shape = args[1]
+
+    ll_intp = context.get_value_type(types.intp)
+    ll_shape = ir.ArrayType(ll_intp, shapety.count)
+
+    ary = make_array(aryty)(context, builder, args[0])
+
+    newshape = cgutils.alloca_once(builder, ll_shape)
+    builder.store(shape, newshape)
+
+    # Create a shape array pointing to the value of newshape.
+    # (roughly, `shape_ary = np.array(ary.shape)`)
+    shape_ary_ty = types.Array(dtype=shapety.dtype, ndim=1, layout='C')
+    shape_ary = make_array(shape_ary_ty)(context, builder)
+    shape_itemsize = context.get_constant(types.intp,
+                                          context.get_abi_sizeof(ll_intp))
+    populate_array(shape_ary,
+                   data=builder.bitcast(newshape, ll_intp.as_pointer()),
+                   shape=[context.get_constant(types.intp, shapety.count)],
+                   strides=[shape_itemsize],
+                   itemsize=shape_itemsize,
+                   meminfo=None)
+
+    context.compile_internal(builder, check_input_shape,
+                             typing.signature(types.void,
+                                              shape_ary_ty),
+                             [shape_ary._getvalue()])
+
+    newstrides = cgutils.alloca_once(builder, ll_shape)
+
+    # Fill strides according to the order of the original array
+    shapes = _parse_shape(context, builder, shapety, shape)
+    if aryty.ndim == 0:
+        strides = ()
+    elif aryty.layout == 'C':
+        strides = [ary.itemsize]
+        for dimension_size in reversed(shapes[1:]):
+            strides.append(builder.mul(strides[-1], dimension_size))
+        strides = tuple(reversed(strides))
+    elif aryty.layout == 'F':
+        strides = [ary.itemsize]
+        for dimension_size in shapes[:-1]:
+            strides.append(builder.mul(strides[-1], dimension_size))
+        strides = tuple(strides)
+    else:
+        raise NotImplementedError(
+            "Don't know how to allocate array with layout '{0}'.".format(
+                aryty.layout))
+    intp_t = context.get_value_type(types.intp)
+    strides_array = cgutils.pack_array(builder, strides, ty=intp_t)
+    builder.store(strides_array, newstrides)
+
+    ret = make_array(retty)(context, builder)
+    populate_array(ret,
+                   data=ary.data,
+                   shape=builder.load(newshape),
+                   strides=builder.load(newstrides),
+                   itemsize=ary.itemsize,
+                   meminfo=ary.meminfo,
+                   parent=ary.parent)
+    res = ret._getvalue()
+    return impl_ret_borrowed(context, builder, sig.return_type, res)
+
+
+@lower_builtin('array.resize', types.Array, types.VarArg(types.Any))
+def array_resize_vararg(context, builder, sig, args):
+    new_sig, new_args = vararg_to_tuple(context, builder, sig, args)
+    return array_resize(context, builder, new_sig, new_args)
+
+
 @overload(np.append)
 def np_append(arr, values, axis=None):
 

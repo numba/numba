@@ -414,6 +414,49 @@ class ArrayAttribute(AttributeTemplate):
             retty = ary.copy(ndim=len(args))
             return signature(retty, *args)
 
+    @bound_function("array.resize")
+    def resolve_resize(self, ary, args, kws):
+        def sentry_shape_scalar(ty):
+            if ty in types.number_domain:
+                # Guard against non integer type
+                if not isinstance(ty, types.Integer):
+                    raise TypeError("resize() arg cannot be {0}".format(ty))
+                return True
+            else:
+                return False
+
+        assert not kws
+        if ary.layout not in 'CF':
+            # only work for contiguous array
+            raise TypeError("resize() supports contiguous array only")
+
+        if len(args) == 1:
+            # single arg
+            shape, = args
+
+            if sentry_shape_scalar(shape):
+                ndim = 1
+            else:
+                shape = normalize_shape(shape)
+                if shape is None:
+                    return
+                ndim = shape.count
+            retty = ary.copy(ndim=ndim)
+            return signature(retty, shape)
+
+        elif len(args) == 0:
+            # no arg
+            raise TypeError("resize() take at least one arg")
+
+        else:
+            # vararg case
+            if any(not sentry_shape_scalar(a) for a in args):
+                raise TypeError("resize({0}) is not supported".format(
+                    ', '.join(map(str, args))))
+
+            retty = ary.copy(ndim=len(args))
+            return signature(retty, *args)
+
     @bound_function("array.sort")
     def resolve_sort(self, ary, args, kws):
         assert not args
