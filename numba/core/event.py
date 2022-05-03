@@ -431,6 +431,14 @@ def trigger_event(kind, data=None):
         yield
 
 
+def _get_native_ident():
+    try:
+        return threading.get_native_ident()
+    except AttributeError:
+        # Fallback for python <3.8
+        return threading.get_ident()
+
+
 def _prepare_chrome_trace_data(listener: RecordingListener):
     """Prepare events in `listener` for serializing as chrome trace data.
     """
@@ -438,7 +446,7 @@ def _prepare_chrome_trace_data(listener: RecordingListener):
     # https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/edit   # noqa
     # This code only uses the JSON Array Format for simplicity.
     pid = os.getpid()
-    tid = threading.get_native_id()
+    tid = _get_native_ident()
     evs = []
     for ts, rec in listener.buffer:
         data = rec.data
