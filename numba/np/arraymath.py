@@ -4048,7 +4048,7 @@ with warnings.catch_warnings(record=True):
 
 @overload(np_MachAr)
 def MachAr_impl():
-    f = np.MachAr()
+    f = np_MachAr()
 
     _mach_ar_data = tuple([getattr(f, x) for x in _mach_ar_supported])
 
