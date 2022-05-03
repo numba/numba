@@ -4046,6 +4046,7 @@ with warnings.catch_warnings(record=True):
     warnings.simplefilter("ignore", DeprecationWarning)
     np_MachAr = np.MachAr
 
+
 @overload(np_MachAr)
 def MachAr_impl():
     f = np_MachAr()
