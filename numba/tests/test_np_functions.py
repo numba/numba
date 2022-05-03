@@ -401,6 +401,10 @@ def swapaxes(a, a1, a2):
     return np.swapaxes(a, a1, a2)
 
 
+def resize(a, shape):
+    return a.resize(shape)
+
+
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
@@ -4720,6 +4724,38 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as raises:
             gen(0)(arr2d, np.ones((2, 3), dtype=np.uint64))
         self.assertIn("dimensions don't match", str(raises.exception))
+
+    def test_resize(self):
+        np.random.seed(0)
+        pyfunc = resize
+        cfunc = jit(nopython=True)(pyfunc)
+
+        ndims = (1, 2, 3, 4)
+
+        for ndim in ndims:
+            random_shape = tuple(np.random.randint(1, 10, size=ndim).tolist())
+            random_array = np.random.randint(-1000, 1000, size=random_shape)
+            random_array_copy = random_array.copy()
+
+            min_dim = 1
+            curr_dim = ndim
+            new_shapes = itertools.permutations(random_shape)
+            while curr_dim > min_dim:
+                for new_shape in new_shapes:
+                    py_res = random_array_copy.copy()
+                    py_res.resize(new_shape[0:curr_dim])
+                    c_res = cfunc(random_array.copy(), new_shape[0:curr_dim])
+                    np.testing.assert_equal(py_res, c_res)
+                    self.assertEqual(py_res.shape, c_res.shape)
+
+                    py_res = random_array_copy.copy()
+                    new_shape_1 = (new_shape[0:curr_dim] +
+                                   (1,) * (ndim - curr_dim))
+                    py_res.resize(new_shape_1)
+                    c_res = cfunc(random_array.copy(), new_shape_1)
+                    np.testing.assert_equal(py_res, c_res)
+                    self.assertEqual(py_res.shape, c_res.shape)
+                curr_dim -= 1
 
 
 class TestNPMachineParameters(TestCase):
