@@ -721,12 +721,9 @@ class TestQuicksortMultidimensionalArrays(BaseSortingTest, TestCase):
     quicksort = make_jit_quicksort(is_np_array=True)
     make_quicksort = staticmethod(make_jit_quicksort)
 
-    def assertSorted(self, orig, result, contains_nans=False):
-        if contains_nans is True:
-            self.assertPreciseEqual(orig, result)
-        else:
-            self.assertEqual(orig.shape, result.shape)
-            self.assertTrue((orig == result).all())
+    def assertSorted(self, orig, result):
+        self.assertEqual(orig.shape, result.shape)
+        self.assertPreciseEqual(orig, result)
 
     def array_factory(self, lst, shape=None):
         array = np.array(lst, dtype=np.float64)
@@ -815,7 +812,7 @@ class TestQuicksortMultidimensionalArrays(BaseSortingTest, TestCase):
                 f(keys)
                 keys_copy.sort()
                 # Non-NaNs are sorted at the front
-                self.assertSorted(keys_copy, keys, True)
+                self.assertSorted(keys_copy, keys)
 
 class TestNumpySort(TestCase):
 
