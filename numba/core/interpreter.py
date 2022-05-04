@@ -328,10 +328,6 @@ def _call_function_ex_replace_args_large(
         $final_var = build_tuple(items=[Var(argn, test.py:6)])
         $final_tuple = $prev_tuple + $final_var
         $varargs_var = $final_tuple
-
-    It is unclear if the extra assignment at the end is always present.
-    In addition to collecting and returning the original args, we also
-    delete any IR statements that use any of the tuples from new_body.
     """
     # We traverse to the front of the block to look for the original
     # tuple.
@@ -508,8 +504,13 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                 call = stmt.value
                 args = call.args
                 kws = call.kws
-                # We search for replace if a call has either vararg
-                # or varkwarg.
+                # We need to to check the call expression contents if
+                # it contains either vararg or varkwarg. If it contains
+                # varkwarg we need to update the actual bytecode. If it
+                # just contains vararg we don't need to update the bytecode,
+                # but we need to check if peep_hole_list_to_tuple failed
+                # to replace the vararg list with a tuple. If so, we
+                # output an error message with suggested code changes.
                 vararg = call.vararg
                 varkwarg = call.varkwarg
                 start_search = i - 1
@@ -649,16 +650,12 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                         #  ...
                         #  $combo_tup_n = $combo_tup_{n-1} + $argn_tup
                         #
-                        # In addition, the IR seems to contain a final
+                        # In addition, the IR contains a final
                         # assignment for the varargs that looks like:
                         #
                         #  $varargs_var = $combo_tup_n
                         #
                         # Here args_def is expected to be a simple assignment.
-                        # However, it is unclear if this extra assignment is
-                        # always generated, so as a result the code is written
-                        # to support args_def being either $varargs_var
-                        # or $combo_tup_n from the above example.
                         args = _call_function_ex_replace_args_large(
                             blk.body,
                             args_def,
