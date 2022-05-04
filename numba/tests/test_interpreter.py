@@ -387,16 +387,9 @@ class TestCallFunctionExPeepHole(TestCase, MemoryLeakMixin):
             'You can resolve this issue by moving the control flow out',
             str(raises.exception)
         )
-        # Uncomment sections when inlined control flow is
-        # actually supported.
-        # py_func = inline_func
-        # cfunc = njit()(inline_func)
-        # a = py_func(False)
-        # b = cfunc(False)
-        # self.assertEqual(a, b)
 
     @skip_unless_py10
-    def test_large_args_uninlined_controlflow(self):
+    def test_large_args_noninlined_controlflow(self):
         """
         Tests generating large args when one of the inputs
         has the change suggested in the error message
@@ -504,16 +497,9 @@ class TestCallFunctionExPeepHole(TestCase, MemoryLeakMixin):
             'You can resolve this issue by moving the control flow out',
             str(raises.exception)
         )
-        # Uncomment sections when inlined control flow is
-        # actually supported.
-        # py_func = inline_func
-        # cfunc = njit()(inline_func)
-        # a = py_func(False)
-        # b = cfunc(False)
-        # self.assertEqual(a, b)
 
     @skip_unless_py10
-    def test_all_args_uninlined_controlflow(self):
+    def test_all_args_noninlined_controlflow(self):
         """
         Tests generating large args when one of the inputs
         has the change suggested in the error message
@@ -598,16 +584,9 @@ class TestCallFunctionExPeepHole(TestCase, MemoryLeakMixin):
             'You can resolve this issue by moving the control flow out',
             str(raises.exception)
         )
-        # Uncomment sections when inlined control flow is
-        # actually supported.
-        # py_func = inline_func
-        # cfunc = njit()(inline_func)
-        # a = py_func(False)
-        # b = cfunc(False)
-        # self.assertEqual(a, b)
 
     @skip_unless_py10
-    def test_large_kws_uninline_controlflow(self):
+    def test_large_kws_noninlined_controlflow(self):
         """
         Tests generating large kws when one of the inputs
         has the change suggested in the error message
