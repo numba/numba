@@ -678,12 +678,13 @@ def _iget_num_threads(typingctx):
 def get_thread_id():
     """
     Returns a unique ID for each thread in the range 0 to N.
-    If we get to this point then we are not in a Numba compiled function.
-    If not in Numba function, get_thread_id() is always 0.
-    If we are in a Numba compiled function then the overload below will
-    be exercised.
     """
-    return 0
+    # Called from the interpreter directly, this should return 0
+    # Called from a sequential JIT region, this should return 0
+    # Called from a parallel JIT region, this should return 0..N
+    # Called from objmode in a parallel JIT region, this should return 0..N
+    _launch_threads()
+    return _get_thread_id()
 
 
 @overload(get_thread_id)
