@@ -3989,6 +3989,14 @@ class TestParforChunksizing(TestCase):
     """
     _numba_parallel_test_ = False
 
+    def setUp(self):
+        set_parallel_chunksize(0)
+
+
+    def tearDown(self):
+        set_parallel_chunksize(0)
+
+
     @skip_parfors_unsupported
     def test_python_parallel_chunksize_basic(self):
         # Test basic chunksize operations outside njit.
@@ -4066,7 +4074,7 @@ class TestParforChunksizing(TestCase):
                 self.assertTrue(np.all(inner_cs == 0))
 
     @skip_parfors_unsupported
-    def test_python_parallel_chunksize_negative(self):
+    def test_njit_parallel_chunksize_negative(self):
         # Test negative set_parallel_chunksize inside njit.
         with self.assertRaises(ValueError) as raised:
             @njit
@@ -4079,12 +4087,32 @@ class TestParforChunksizing(TestCase):
         self.assertIn(msg, str(raised.exception))
 
     @skip_parfors_unsupported
-    def test_njit_parallel_chunksize_negative(self):
+    def test_python_parallel_chunksize_negative(self):
         # Test negative set_parallel_chunksize outside njit.
         with self.assertRaises(ValueError) as raised:
             set_parallel_chunksize(-1)
 
         msg = "chunksize must be greater than or equal to zero"
+        self.assertIn(msg, str(raised.exception))
+
+    @skip_parfors_unsupported
+    def test_njit_parallel_chunksize_invalid_type(self):
+        with self.assertRaises(errors.TypingError) as raised:
+            @njit
+            def impl():
+                set_parallel_chunksize('invalid_type')
+
+            impl()
+
+        msg = "The parallel chunksize must be an integer"
+        self.assertIn(msg, str(raised.exception))
+
+    @skip_parfors_unsupported
+    def test_python_parallel_chunksize_invalid_type(self):
+        with self.assertRaises(TypeError) as raised:
+            set_parallel_chunksize('invalid_type')
+
+        msg = "The parallel chunksize must be an integer"
         self.assertIn(msg, str(raised.exception))
 
 
