@@ -105,7 +105,7 @@ def _remove_assignment_definition(old_body, idx, func_ir):
         func_ir._definitions[lhs].clear()
     else:
         raise UnsupportedError(
-            "Inconsistency found in the definitions while electuting"
+            "Inconsistency found in the definitions while executing"
             " peep_hole_call_function_ex_to_call_function_kw. This suggests"
             " an internal error or inconsistency elsewhere in the compiler."
         )
