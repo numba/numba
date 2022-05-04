@@ -796,7 +796,7 @@ class NumberClassAttribute(AttributeTemplate):
 
     def resolve___call__(self, classty):
         """
-        Resolve a number class's constructor (e.g. calling int(...))
+        Resolve a NumPy number class's constructor (e.g. calling numpy.int32(...))
         """
         ty = classty.instance_type
 
@@ -841,7 +841,7 @@ class TypeRefAttribute(AttributeTemplate):
 
     def resolve___call__(self, classty):
         """
-        Resolve a number class's constructor (e.g. calling int(...))
+        Resolve a core number's constructor (e.g. calling int(...))
 
         Note:
 
@@ -960,6 +960,13 @@ class Int(AbstractTemplate):
             return signature(arg, arg)
         if isinstance(arg, (types.Float, types.Boolean)):
             return signature(types.intp, arg)
+        if isinstance(arg, types.NPDatetime):
+            if arg.unit == 'ns':
+                return signature(types.int64, arg)
+            else:
+                raise errors.NumbaTypeError(f"Only datetime64[ns] can be converted, but got {arg.unit}")
+        if isinstance(arg, types.NPTimedelta):
+            return signature(types.int64, arg)
 
 
 @infer_global(float)

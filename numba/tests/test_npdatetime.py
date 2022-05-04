@@ -85,6 +85,9 @@ def min_usecase(x, y):
 def max_usecase(x, y):
     return max(x, y)
 
+def int_cast_usecase(x):
+    return int(x)
+
 def make_add_constant(const):
     def add_constant(x):
         return x + const
