@@ -3,6 +3,7 @@ import collections
 import dis
 import operator
 import logging
+import textwrap
 
 from numba.core import errors, dataflow, controlflow, ir, config
 from numba.core.errors import NotDefinedError, UnsupportedError, error_extras
@@ -124,7 +125,7 @@ def _call_function_ex_replace_kws_small(
         ...
         BUILD_CONST_KEY_MAP # Build a map
 
-    In the IR generated, the varkwarg refer
+    In the generated IR, the varkwarg refers
     to a single build_map that contains all of the
     kws. In addition to returning the kws, this
     function updates new_body to remove all usage
@@ -150,7 +151,7 @@ def _call_function_ex_replace_kws_large(
     """
     Extracts the kws args passed as varkwarg
     for CALL_FUNCTION_EX. This pass is taken when
-    n_kws <= 15 and the bytecode looks like:
+    n_kws > 15 and the bytecode looks like:
 
         BUILD_MAP # Construct the map
         # Start for each argument
@@ -162,10 +163,10 @@ def _call_function_ex_replace_kws_large(
     In the IR generated, the initial build map is empty and a series
     of setitems are applied afterwards. THE IR looks like:
 
-    Finally at the end the bytecode will contain a CALL_FUNCTION_EX instruction.
-
+        $build_map_var = build_map(items=[])
         $constvar = const(str, ...) # create the const key
         # CREATE THE ARGUMENT, This may take multiple lines.
+        $created_arg = ...
         $var = getattr(
             value=$build_map_var,
             attr=__setitem__,
@@ -195,10 +196,10 @@ def _call_function_ex_replace_kws_large(
         key_val = const_stmt.value.value
         search_start += 1
         # Now we need to search for a getattr with setitem
-        not_found_getattr = True
+        found_getattr = False
         while (
             search_start <= search_end
-            and not_found_getattr
+            and not found_getattr
         ):
             getattr_stmt = old_body[search_start]
             if (
@@ -211,7 +212,7 @@ def _call_function_ex_replace_kws_large(
                 )
                 and getattr_stmt.value.attr == "__setitem__"
             ):
-                not_found_getattr = False
+                found_getattr = True
             else:
                 # If the argument is "created" in JIT, then there
                 # will be intermediate operations in between setitems.
@@ -231,7 +232,7 @@ def _call_function_ex_replace_kws_large(
                 #   $54map_add.32 = call $54map_add.31($const44.26, $call.30)
                 search_start += 1
         if (
-            not_found_getattr
+            not found_getattr
             or search_start == search_end
         ):
             # We cannot handle this format so raise the
@@ -252,8 +253,10 @@ def _call_function_ex_replace_kws_large(
                 == key_var_name
             )
         ):
-            # We cannot handle this format so raise the
-            # original error message.
+            # A call statement should always immediately follow the
+            # getattr. If for some reason this doesn't match the code
+            # format, we raise the original error message. This check
+            # is meant as a precaution.
             raise UnsupportedError(errmsg)
         arg_var = setitem_stmt.value.args[1]
         # Append the (key, value) pair.
@@ -313,7 +316,7 @@ def _call_function_ex_replace_args_large(
         LIST_TO_TUPLE # Convert the args to a tuple.
 
     In the IR generated, the tuple is created by concatenating
-    together several 1 elem tuples to an initial empty tuple.
+    together several 1 element tuples to an initial empty tuple.
     We traverse backwards in the IR, collecting args, until we
     find the original empty tuple. For example, the IR might
     look like:
@@ -326,9 +329,9 @@ def _call_function_ex_replace_args_large(
         $final_tuple = $prev_tuple + $final_var
         $varargs_var = $final_tuple
 
-    It unclear if the extra assignment at the end is always present.
+    It is unclear if the extra assignment at the end is always present.
     In addition to collecting and returning the original args, we also
-    delete any IR statments that uses any of the tuples from new_body.
+    delete any IR statements that use any of the tuples from new_body.
     """
     # We traverse to the front of the block to look for the original
     # tuple.
@@ -349,10 +352,9 @@ def _call_function_ex_replace_args_large(
         # https://github.com/numba/numba/blob/59fa2e335be68148b3bd72a29de3ff011430038d/numba/core/interpreter.py#L259-L260
         # If this changes we may need to support this branch.
         raise AssertionError("unreachable")
-    start_not_found = True
     # Traverse backwards to find all concatentations
     # until eventually reaching the original empty tuple.
-    while search_end >= search_start and start_not_found:
+    while search_end >= search_start:
         concat_stmt = old_body[search_end]
         if (
             isinstance(concat_stmt, ir.Assign)
@@ -361,15 +363,14 @@ def _call_function_ex_replace_args_large(
             and concat_stmt.value.op == "build_tuple"
             and not concat_stmt.value.items
         ):
-            # If we have reached the build_tuple
-            # we exit.
-            start_not_found = False
             new_body[search_end] = None
             # Remove the definition.
             _remove_assignment_definition(old_body, search_end, func_ir)
+            # If we have reached the build_tuple we exit.
+            break
         else:
             # We expect to find another arg to append.
-            # The first stmt must be an add
+            # The first stmt must be a binop "add"
             if (search_end == search_start) or not (
                 isinstance(concat_stmt, ir.Assign)
                 and (
@@ -451,7 +452,8 @@ def _call_function_ex_replace_args_large(
                     #   $arg5_tup = build_tuple(items=[$call.23])
                     #   $append_var.6 = $append_var.5 + $arg5_tup
                     search_end -= 1
-    if start_not_found:
+    if search_end == search_start:
+        # If we reached the start we never found the build_tuple.
         # We cannot handle this format so raise the
         # original error message.
         raise UnsupportedError(errmsg)
@@ -469,7 +471,7 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
     https://github.com/python/cpython/blob/a58ebcc701dd6c43630df941481475ff0f615a81/Python/compile.c#L55
     https://github.com/python/cpython/blob/a58ebcc701dd6c43630df941481475ff0f615a81/Python/compile.c#L4442
 
-    In particular, change is imposed whenever (n_args / 2) + n_kws > 15.
+    In particular, this change is imposed whenever (n_args / 2) + n_kws > 15.
 
     Different bytecode is generated for args depending on if n_args > 30
     or n_args <= 30 and similarly if n_kws > 15 or n_kws <= 15.
@@ -479,20 +481,19 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
     """
     # All changes are local to the a single block
     # so it can be traversed in any order.
-    errmsg = """
-CALL_FUNCTION_EX with **kwargs not supported.
-If you are not using **kwargs this may indicate that
-you have a large number of kwargs and are using inlined control
-flow. You can resolve this issue by moving the control flow out of
-the function call. For example, if you have
+    errmsg = textwrap.dedent("""
+        CALL_FUNCTION_EX with **kwargs not supported.
+        If you are not using **kwargs this may indicate that
+        you have a large number of kwargs and are using inlined control
+        flow. You can resolve this issue by moving the control flow out of
+        the function call. For example, if you have
 
-    f(a=1 if flag else 0, ...)
+            f(a=1 if flag else 0, ...)
 
-Replace that with
+        Replace that with:
 
-    a_val = 1 if flag else 0
-    f(a=a_val, ...)
-    """
+            a_val = 1 if flag else 0
+            f(a=a_val, ...)""")
     for blk in func_ir.blocks.values():
         blk_changed = False
         new_body = []
@@ -515,19 +516,19 @@ Replace that with
                 # varkwarg should be defined second so we start there.
                 varkwarg_loc = start_search
                 keyword_def = None
-                not_found = True
-                while varkwarg_loc >= 0 and not_found:
+                found = False
+                while varkwarg_loc >= 0 and not found:
                     keyword_def = blk.body[varkwarg_loc]
                     if (
                         isinstance(keyword_def, ir.Assign)
                         and keyword_def.target.name == varkwarg.name
                     ):
-                        not_found = False
+                        found = True
                     else:
                         varkwarg_loc -= 1
                 if (
                     kws
-                    or not_found
+                    or not found
                     or not (
                         isinstance(keyword_def.value, ir.Expr)
                         and keyword_def.value.op == "build_map"
@@ -589,17 +590,17 @@ Replace that with
                         raise UnsupportedError(errmsg)
                     vararg_loc = start_search
                     args_def = None
-                    not_found = True
-                    while vararg_loc >= 0 and not_found:
+                    found = False
+                    while vararg_loc >= 0 and not found:
                         args_def = blk.body[vararg_loc]
                         if (
                             isinstance(args_def, ir.Assign)
                             and args_def.target.name == vararg.name
                         ):
-                            not_found = False
+                            found = True
                         else:
                             vararg_loc -= 1
-                    if not_found:
+                    if not found:
                         # If we couldn't find where the args are created
                         # then we can't handle this format.
                         raise UnsupportedError(errmsg)
@@ -694,17 +695,17 @@ Replace that with
                     raise UnsupportedError(errmsg)
                 vararg_loc = i - 1
                 args_def = None
-                not_found = True
-                while vararg_loc >= 0 and not_found:
+                found = False
+                while vararg_loc >= 0 and not found:
                     args_def = blk.body[vararg_loc]
                     if (
                         isinstance(args_def, ir.Assign)
                         and args_def.target.name == vararg.name
                     ):
-                        not_found = False
+                        found = True
                     else:
                         vararg_loc -= 1
-                if not_found:
+                if not found:
                     # If we couldn't find where the args are created
                     # then we can't handle this format.
                     raise UnsupportedError(errmsg)
@@ -716,7 +717,7 @@ Replace that with
                         raise UnsupportedError(errmsg)
 
             new_body.append(stmt)
-        # Update the block body if we updated the IR
+        # Replace the block body if we changed the IR
         if blk_changed:
             blk.body = [x for x in new_body if x is not None]
     return func_ir
@@ -1028,6 +1029,10 @@ class Interpreter(object):
             peepholes.append(peep_hole_list_to_tuple)
         peepholes.append(peep_hole_delete_with_exit)
         if PYVERSION == (3, 10):
+            # peep_hole_call_function_ex_to_call_function_kw
+            # depends on peep_hole_list_to_tuple converting
+            # any large number of arguments from a list to a
+            # tuple.
             peepholes.append(peep_hole_call_function_ex_to_call_function_kw)
 
         post_processed_ir = self.post_process(peepholes, func_ir)
