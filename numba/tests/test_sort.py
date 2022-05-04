@@ -738,10 +738,10 @@ class TestQuicksortMultidimensionalArrays(BaseSortingTest, TestCase):
             return shapes
 
         for i in range(2, int(math.sqrt(n)) + 1):
-            if n%i == 0:
-                shapes.append((n//i, i))
-                shapes.append((i, n//i))
-                _shapes = self.get_shapes(n//i)
+            if n % i == 0:
+                shapes.append((n // i, i))
+                shapes.append((i, n // i))
+                _shapes = self.get_shapes(n // i)
                 for _shape in _shapes:
                     shapes.append((i,) + _shape)
                     shapes.append(_shape + (i,))
