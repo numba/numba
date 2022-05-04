@@ -721,17 +721,35 @@ class TestQuicksortMultidimensionalArrays(BaseSortingTest, TestCase):
     quicksort = make_jit_quicksort(is_np_array=True)
     make_quicksort = staticmethod(make_jit_quicksort)
 
-    def assertSorted(self, orig, result, last_index=None):
-        # sorted() returns a list, so make sure we compare to another list
-        if last_index is not None:
-            self.assertTrue((orig == result[0][:last_index]).all())
+    def assertSorted(self, orig, result, contains_nans=False):
+        if contains_nans is True:
+            self.assertPreciseEqual(orig, result)
         else:
             self.assertEqual(orig.shape, result.shape)
             self.assertTrue((orig == result).all())
 
-    def array_factory(self, lst):
+    def array_factory(self, lst, shape=None):
         array = np.array(lst, dtype=np.float64)
-        return array.reshape(-1, array.shape[0])
+        if shape is None:
+            return array.reshape(-1, array.shape[0])
+        else:
+            return array.reshape(shape)
+
+    def get_shapes(self, n):
+        shapes = []
+        if n == 1:
+            return shapes
+
+        for i in range(2, int(math.sqrt(n)) + 1):
+            if n%i == 0:
+                shapes.append((n//i, i))
+                shapes.append((i, n//i))
+                _shapes = self.get_shapes(n//i)
+                for _shape in _shapes:
+                    shapes.append((i,) + _shape)
+                    shapes.append(_shape + (i,))
+
+        return shapes
 
     def test_run_quicksort(self):
         f = self.quicksort.run_quicksort
@@ -743,12 +761,15 @@ class TestQuicksortMultidimensionalArrays(BaseSortingTest, TestCase):
             all_lists = [self.make_sample_lists(n * size_factor) for n in sizes]
             for chunks in itertools.product(*all_lists):
                 orig_keys = sum(chunks, [])
-                keys = self.array_factory(orig_keys)
-                keys_copy = self.array_factory(orig_keys)
-                f(keys)
-                keys_copy.sort()
-                # The list is now sorted
-                self.assertSorted(keys_copy, keys)
+                shape_list = self.get_shapes(len(orig_keys))
+                shape_list.append(None)
+                for shape in shape_list:
+                    keys = self.array_factory(orig_keys, shape=shape)
+                    keys_copy = self.array_factory(orig_keys, shape=shape)
+                    f(keys)
+                    keys_copy.sort()
+                    # The list is now sorted
+                    self.assertSorted(keys_copy, keys)
 
     def test_run_quicksort_lt(self):
         def lt(a, b):
@@ -763,13 +784,16 @@ class TestQuicksortMultidimensionalArrays(BaseSortingTest, TestCase):
             all_lists = [self.make_sample_lists(n * size_factor) for n in sizes]
             for chunks in itertools.product(*all_lists):
                 orig_keys = sum(chunks, [])
-                keys = self.array_factory(orig_keys)
-                keys_copy = -self.array_factory(orig_keys)
-                f(keys)
-                # The list is now rev-sorted
-                keys_copy.sort()
-                keys_copy = -keys_copy
-                self.assertSorted(keys_copy, keys)
+                shape_list = self.get_shapes(len(orig_keys))
+                shape_list.append(None)
+                for shape in shape_list:
+                    keys = self.array_factory(orig_keys, shape=shape)
+                    keys_copy = -self.array_factory(orig_keys, shape=shape)
+                    f(keys)
+                    # The list is now rev-sorted
+                    keys_copy.sort()
+                    keys_copy = -keys_copy
+                    self.assertSorted(keys_copy, keys)
 
         # An imperfect comparison function, as LT(a, b) does not imply not LT(b, a).
         # The sort should handle it gracefully.
@@ -783,12 +807,15 @@ class TestQuicksortMultidimensionalArrays(BaseSortingTest, TestCase):
             orig = np.random.random(size=size) * 100
             orig[np.random.random(size=size) < 0.1] = float('nan')
             orig_keys = list(orig)
-            keys = self.array_factory(orig_keys)
-            f(keys)
-            non_nans = orig[~np.isnan(orig)]
-            non_nans.sort()
-            # Non-NaNs are sorted at the front
-            self.assertSorted(non_nans, keys, len(non_nans))
+            shape_list = self.get_shapes(len(orig_keys))
+            shape_list.append(None)
+            for shape in shape_list:
+                keys = self.array_factory(orig_keys, shape=shape)
+                keys_copy = self.array_factory(orig_keys, shape=shape)
+                f(keys)
+                keys_copy.sort()
+                # Non-NaNs are sorted at the front
+                self.assertSorted(keys_copy, keys, True)
 
 class TestNumpySort(TestCase):
 
