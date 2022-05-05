@@ -1984,8 +1984,9 @@ def array_resize(context, builder, sig, args):
     strides_array = cgutils.pack_array(builder, strides, ty=intp_t)
     builder.store(strides_array, newstrides)
 
-    new_size = builder.alloca(ir.IntType(64))
-    prod = ir.Constant(ir.IntType(64), 1)
+    shape_int_type = context.get_value_type(shapety.dtype)
+    new_size = builder.alloca(shape_int_type)
+    prod = ir.Constant(shape_int_type, 1)
     for dimension_size in shapes:
         prod = builder.mul(prod, dimension_size)
     builder.store(prod, new_size)

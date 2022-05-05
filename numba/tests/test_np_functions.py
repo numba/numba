@@ -4731,10 +4731,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         ndims = (1, 2, 3, 4)
+        orders = ('F', 'C')
 
-        for ndim in ndims:
+        for ndim, order in itertools.product(ndims, orders):
             random_shape = tuple(np.random.randint(1, 10, size=ndim).tolist())
-            random_array = np.random.randint(-1000, 1000, size=random_shape)
+            random_list = np.random.randint(-1000, 1000, size=random_shape).tolist()
+            random_array = np.asarray(random_list, order=order)
             random_array_copy = random_array.copy()
 
             min_dim = 1
