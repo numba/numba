@@ -1984,9 +1984,22 @@ def array_resize(context, builder, sig, args):
     strides_array = cgutils.pack_array(builder, strides, ty=intp_t)
     builder.store(strides_array, newstrides)
 
+    new_size = builder.alloca(ir.IntType(64))
+    prod = ir.Constant(ir.IntType(64), 1)
+    for dimension_size in shapes:
+        prod = builder.mul(prod, dimension_size)
+    builder.store(prod, new_size)
+    array_data = builder.alloca(context.get_value_type(retty.dtype).as_pointer())
+    builder.store(ary.data, array_data)
+    with builder.if_then(builder.icmp_signed('>', builder.load(new_size), ary.nitems)):
+        new_ary = _empty_nd_impl(context, builder, retty, shapes)
+        _zero_fill_array(context, builder, new_ary)
+        cgutils.memcpy(builder, new_ary.data, ary.data, ary.nitems)
+        builder.store(new_ary.data, array_data)
+
     ret = make_array(retty)(context, builder)
     populate_array(ret,
-                   data=ary.data,
+                   data=builder.load(array_data),
                    shape=builder.load(newshape),
                    strides=builder.load(newstrides),
                    itemsize=ary.itemsize,
