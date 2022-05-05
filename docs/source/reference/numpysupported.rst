@@ -509,7 +509,8 @@ The following top-level functions are supported:
   can only contain arrays (unlike Numpy that also accepts tuples).
 * :func:`numpy.shape`
 * :func:`numpy.sinc`
-* :func:`numpy.sort` (no optional arguments)
+* :func:`numpy.sort` (no optional arguments, quicksort accepts
+  multi-dimensional array and sorts its last axis).
 * :func:`numpy.split`
 * :func:`numpy.stack`
 * :func:`numpy.swapaxes`

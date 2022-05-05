@@ -693,7 +693,7 @@ class NdSort(CallableTemplate):
 
     def generic(self):
         def typer(a):
-            if isinstance(a, types.Array) and a.ndim == 1:
+            if isinstance(a, types.Array):
                 return a
 
         return typer
