@@ -4735,7 +4735,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         for ndim, order in itertools.product(ndims, orders):
             random_shape = tuple(np.random.randint(1, 10, size=ndim).tolist())
-            random_list = np.random.randint(-1000, 1000, size=random_shape).tolist()
+            random_list = np.random.randint(-10, 10, size=random_shape).tolist()
             random_array = np.asarray(random_list, order=order)
             random_array_copy = random_array.copy()
 
