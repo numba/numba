@@ -4761,7 +4761,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         curr_dim = ndim
         while curr_dim <= max_dim:
             for _new_shape in new_shapes:
-                new_shape = _new_shape + tuple(np.random.randint(1, 5) for _ in range(max_dim - curr_dim))
+                new_shape = _new_shape + tuple(np.random.randint(1, 5)
+                                               for _ in range(
+                                               max_dim - curr_dim))
                 py_res = random_array_copy.copy()
                 py_res.resize(new_shape)
                 c_res = cfunc(random_array.copy(), new_shape)

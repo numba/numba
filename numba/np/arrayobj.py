@@ -1989,9 +1989,11 @@ def array_resize(context, builder, sig, args):
     for dimension_size in shapes:
         prod = builder.mul(prod, dimension_size)
     builder.store(prod, new_size)
-    array_data = builder.alloca(context.get_value_type(retty.dtype).as_pointer())
+    array_dtype = context.get_value_type(retty.dtype)
+    array_data = builder.alloca(array_dtype.as_pointer())
     builder.store(ary.data, array_data)
-    with builder.if_then(builder.icmp_signed('>', builder.load(new_size), ary.nitems)):
+    with builder.if_then(builder.icmp_signed('>',
+                         builder.load(new_size), ary.nitems)):
         new_ary = _empty_nd_impl(context, builder, retty, shapes)
         _zero_fill_array(context, builder, new_ary)
         cgutils.memcpy(builder, new_ary.data, ary.data, ary.nitems)
