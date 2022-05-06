@@ -1281,8 +1281,6 @@ class Interpreter(object):
         # post process the IR to rewrite opcodes/byte sequences that are too
         # involved to risk handling as part of direct interpretation
         peepholes = []
-        if PYVERSION == (3, 10):
-            peepholes.append(peep_hole_fuse_dict_add_updates)
         if PYVERSION in [(3, 9), (3, 10)]:
             peepholes.append(peep_hole_list_to_tuple)
         peepholes.append(peep_hole_delete_with_exit)
@@ -1292,6 +1290,7 @@ class Interpreter(object):
             # any large number of arguments from a list to a
             # tuple.
             peepholes.append(peep_hole_call_function_ex_to_call_function_kw)
+            peepholes.append(peep_hole_fuse_dict_add_updates)
 
         post_processed_ir = self.post_process(peepholes, func_ir)
         return post_processed_ir
