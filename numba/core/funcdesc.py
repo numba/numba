@@ -96,9 +96,7 @@ class FunctionDescriptor(object):
                 # ensure module exist
                 return importlib.import_module(self.modname)
             except ImportError:
-                raise ModuleNotFoundError(
-                    f"can't compile {self.qualname}: "
-                    f"import of module {self.modname} failed") from None
+                return _dynamic_module
 
     def lookup_function(self):
         """
