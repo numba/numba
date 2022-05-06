@@ -960,15 +960,17 @@ def peep_hole_fuse_dict_add_updates(func_ir):
     """
     This rewrite removes d1.update(d2) calls that
     are between two dictionaries, d1 and d2 in the
-    same basic block, resulting from a Python 3.10
-    upgrade. If both are constant dictionaries
-    defined in that block and neither is used between
-    the update call, then we replace d1 with a new definition
-    that combines the two dicitonaries.
+    same basic block. This pattern can appear as a
+    result of a Python 3.10 bytecode changes, which
+    prevents large constant literal dictionaries with
+    > 15 elements from being constant. If both dictionaries
+    are constant dictionaries defined in that block and
+    neither is used between the update call, then we replace d1
+    with a new definition that combines the two dicitonaries.
 
-    Python 3.10 may also rewrite a dictionary as an empty
-    build_map + many map_add, so we also need to replace those
-    expressions with a constant build map.
+    Python 3.10 may also rewrite an individual dictionary as an empty
+    build_map + many map_add, so those expressions are also replaced
+    with a constant build map.
     """
 
     # This algorithm fuses build_map expressions into the largest
@@ -1005,9 +1007,10 @@ def peep_hole_fuse_dict_add_updates(func_ir):
     #   $retvar = cast($othervar)
     #   return $retvar
     #
-    # Notice how we don't push $d1 to the bottom of the block. This is because
+    # Note that we don't push $d1 to the bottom of the block. This is because
     # some values may be found below this block (e.g pop_block) that are pattern
-    # matched in other locations, such as objmode handling.
+    # matched in other locations, such as objmode handling. It should be safe to
+    # move a map to the last location at which there was update or setitem.
 
     for blk in func_ir.blocks.values():
         new_body = []
@@ -1015,7 +1018,9 @@ def peep_hole_fuse_dict_add_updates(func_ir):
         # -> index of build_map assign in the original block body
         lit_old_idx = {}
         # literal map var name
-        # -> index of build_map assign in the new block body
+        # -> index of build_map assign in the new block body.
+        # This dictionary will be used to insert maps into their
+        # final location in the block.
         lit_new_idx = {}
         # literal map var name -> list of key/value items for build map
         map_updates = {}
@@ -1024,15 +1029,16 @@ def peep_hole_fuse_dict_add_updates(func_ir):
         for i, stmt in enumerate(blk.body):
             # Should we add the current inst to the output
             append_inst = True
-            # Name that shoud be skipped when looking at used
-            # vars.
+            # Name that shoud be skipped when tracking used
+            # vars in statement. This is always the lhs with
+            # a build_map.
             stmt_build_map_out = None
             if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
                 if stmt.value.op == "build_map":
-                    # Skip the output build_map when looks for uses.
+                    # Skip the output build_map when looking for used vars.
                     stmt_build_map_out = stmt.target.name
                     # If we encounter a build map add it to the
-                    # tracked build_maps.
+                    # tracked maps.
                     lit_old_idx[stmt.target.name] = i
                     lit_new_idx[stmt.target.name] = i
                     map_updates[stmt.target.name] = stmt.value.items.copy()
@@ -1071,18 +1077,16 @@ def peep_hole_fuse_dict_add_updates(func_ir):
                             # Remove the update
                             new_body[-1] = None
                         if not append_inst:
-                            # The output of __setitem__ and update is now always
-                            # unused so we delete the IR stmtx.
-                            # Update the new insert location
+                            # Update the new insert location for
+                            # the original build_map.
                             lit_new_idx[update_map_name] = i
-                            getattr_lhs = getattr_stmt.target.name
                             # Drop the existing definition for this stmt.
-                            func_ir._definitions[getattr_lhs].remove(
-                                getattr_stmt.value
+                            _remove_assignment_definition(
+                                blk.body, i - 1, func_ir
                             )
 
-            # Check if we need to pop any dictionaries from being tracked.
-            # Skip the setitem/update gettar that will be removed when
+            # Check if we need to drop any maps from being tracked.
+            # Skip the setitem/update getattr that will be removed when
             # handling their call in the next iteration.
             if not (
                 isinstance(stmt, ir.Assign)
@@ -1092,8 +1096,9 @@ def peep_hole_fuse_dict_add_updates(func_ir):
                 and stmt.value.attr in ("__setitem__", "update")
             ):
                 for var in stmt.list_vars():
-                    # If a dictionary is used it cannot be pushed farther into
-                    # the block. Skip the assign target.
+                    # If a map is used it cannot be pushed farther into
+                    # the block. This skips the assign target if
+                    # it is the original build_map.
                     if (
                         var.name in lit_old_idx
                         and var.name != stmt_build_map_out
@@ -1111,7 +1116,9 @@ def peep_hole_fuse_dict_add_updates(func_ir):
                 new_body.append(stmt)
             else:
                 # Drop the existing definition for this stmt.
-                func_ir._definitions[stmt.target.name].remove(stmt.value)
+                _remove_assignment_definition(
+                    blk.body, i, func_ir
+                )
                 blk_changed = True
                 # Append None so the number of instructions remains the same.
                 new_body.append(None)
@@ -1130,6 +1137,7 @@ def peep_hole_fuse_dict_add_updates(func_ir):
                 map_updates,
             )
         if blk_changed:
+            # If the block is changed replace the block body.
             blk.body = [x for x in new_body if x is not None]
 
     return func_ir
