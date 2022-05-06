@@ -504,13 +504,13 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                 call = stmt.value
                 args = call.args
                 kws = call.kws
-                # We need to to check the call expression contents if
+                # We need to check the call expression contents if
                 # it contains either vararg or varkwarg. If it contains
-                # varkwarg we need to update the actual bytecode. If it
-                # just contains vararg we don't need to update the bytecode,
-                # but we need to check if peep_hole_list_to_tuple failed
-                # to replace the vararg list with a tuple. If so, we
-                # output an error message with suggested code changes.
+                # varkwarg we need to update the IR. If it just contains
+                # vararg we don't need to update the IR, but we need to
+                # check if peep_hole_list_to_tuple failed to replace the
+                # vararg list with a tuple. If so, we output an error
+                # message with suggested code changes.
                 vararg = call.vararg
                 varkwarg = call.varkwarg
                 start_search = i - 1
