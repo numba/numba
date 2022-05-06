@@ -971,6 +971,11 @@ def peep_hole_fuse_dict_add_updates(func_ir):
     Python 3.10 may also rewrite an individual dictionary as an empty
     build_map + many map_add, so those expressions are also replaced
     with a constant build map.
+
+    When running this algorithm we do not remove any maps, even if they
+    were fused into an update to protect against strange choices in user
+    code. Here we depend on dead code elimination to run later
+    and remove any unnecessary maps.
     """
 
     # This algorithm fuses build_map expressions into the largest
