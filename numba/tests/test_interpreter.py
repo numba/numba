@@ -618,3 +618,202 @@ class TestCallFunctionExPeepHole(TestCase, MemoryLeakMixin):
         a = py_func(False)
         b = cfunc(False)
         self.assertEqual(a, b)
+
+
+class TestLargeConstDict(TestCase, MemoryLeakMixin):
+    """
+    gh #7894
+
+    Tests that check a peephole optimization for constant
+    dictionaries in Python 3.10. The bytecode changes when
+    number elements > 15, which splits the constant dictionary
+    into multiple dictionaries that are joined by a update()
+    call.
+
+    This optimization modifies the IR to rejoin dictionaries
+    and remove the update() calls. This then allows code that
+    depends on literal dictionaries or literal keys to succeed.
+    """
+
+    @skip_unless_py10
+    def test_large_heterogeneous_const_dict(self):
+        """
+        Tests that a function with a large heterogenous constant
+        dictionary remains a constant.
+        """
+        def const_func():
+            # D is a heterogenous dictionary
+            # so this code can only compile if
+            # d is constant.
+            d = {
+                "A": 1,
+                "B": 1,
+                "C": 1,
+                "D": 1,
+                "E": 1,
+                "F": 1,
+                "G": 1,
+                "H": 1,
+                "I": 1,
+                "J": 1,
+                "K": 1,
+                "L": 1,
+                "M": 1,
+                "N": 1,
+                "O": 1,
+                "P": 1,
+                "Q": 1,
+                "R": 1,
+                "S": 'a',
+            }
+            return d["S"]
+
+        py_func = const_func
+        cfunc = njit()(const_func)
+        a = py_func()
+        b = cfunc()
+        self.assertEqual(a, b)
+
+    @skip_unless_py10
+    def test_large_heterogeneous_const_keys_dict(self):
+        """
+        Tests that a function with a large heterogenous constant
+        dictionary remains a constant.
+        """
+        def const_keys_func(a):
+            # D is a heterogenous dictionary
+            # so this code can only compile if
+            # d has constant keys.
+            d = {
+                "A": 1,
+                "B": 1,
+                "C": 1,
+                "D": 1,
+                "E": 1,
+                "F": 1,
+                "G": 1,
+                "H": 1,
+                "I": 1,
+                "J": 1,
+                "K": 1,
+                "L": 1,
+                "M": 1,
+                "N": 1,
+                "O": 1,
+                "P": 1,
+                "Q": 1,
+                "R": 1,
+                "S": a,
+            }
+            return d["S"]
+
+        py_func = const_keys_func
+        cfunc = njit()(const_keys_func)
+        value = "efwf"
+        a = py_func(value)
+        b = cfunc(value)
+        self.assertEqual(a, b)
+
+    @skip_unless_py10
+    def test_usercode_update_heterogenous_keys(self):
+        """
+        Tests an example using update that mirrors
+        the pattern created by the Python 3.10 bytecode
+        changes. This verifies that additional code can
+        now be supported when applying this optimization.
+        """
+        def const_keys_func(a):
+            """
+            Dictionary update between two constant
+            dictionaries. When applying the optimization
+            it becomes possible to do the update at compile time.
+            """
+            d1 = {
+                "a": 1,
+                "b": 2,
+                "c": 3,
+            }
+            d2 = {
+                "d": 4,
+                "e": a
+            }
+            d1.update(d2)
+            return d1["e"]
+
+        py_func = const_keys_func
+        cfunc = njit()(const_keys_func)
+        value = "efwf"
+        a = py_func(value)
+        b = cfunc(value)
+        self.assertEqual(a, b)
+
+    @skip_unless_py10
+    def test_usercode_update_use_d2(self):
+        """
+        Tests an example using update that mirrors
+        the pattern created by the Python 3.10 bytecode
+        changes. This verifies that the optimization code
+        supports a use of d2 occuring a in separate basic
+        block.
+        """
+        def const_dict_func():
+            """
+            Dictionary update between two constant
+            dictionaries. This verifies d2 doesn't
+            get incorrectly removed.
+            """
+            d1 = {
+                "a": 1,
+                "b": 2,
+                "c": 3,
+            }
+            d2 = {
+                "d": 4,
+                "e": 4
+            }
+            d1.update(d2)
+            # Create a use of d2 in a new block.
+            if len(d1) > 4:
+                return d2
+            return d1
+
+        py_func = const_dict_func
+        cfunc = njit()(const_dict_func)
+        a = py_func()
+        b = cfunc()
+        self.assertEqual(a, b)
+
+    @skip_unless_py10
+    def test_usercode_update_key_conflict(self):
+        """
+        Tests an example using update that mirrors
+        the pattern created by the Python 3.10 bytecode
+        changes. This verifies that replacing update
+        handles a conflicting key properly.
+        """
+        def const_keys_func(a):
+            """
+            Dictionary update between two constant
+            dictionaries with conflicting keys. This
+            should be done correctly so d1["c"] returns
+            a.
+            """
+            d1 = {
+                "a": 1,
+                "b": 2,
+                "c": 3,
+            }
+            d2 = {
+                "d": 4,
+                "c": a
+            }
+            d1.update(d2)
+            # This should return a and not 3.
+            return d1["c"]
+
+        py_func = const_keys_func
+        cfunc = njit()(const_keys_func)
+        value = "efwf"
+        a = py_func(value)
+        b = cfunc(value)
+        self.assertEqual(a, b)
