@@ -123,7 +123,21 @@ def typeof_ta_ndarray(val, c):
     return MyArrayType(dtype, val.ndim, layout, readonly=readonly)
 
 
-register_model(MyArrayType)(numba.core.datamodel.models.ArrayModel)
+@register_model(MyArrayType)
+class MyArrayTypeModel(numba.core.datamodel.models.StructModel):
+    def __init__(self, dmm, fe_type):
+        ndim = fe_type.ndim
+        members = [
+            ('meminfo', types.MemInfoPointer(fe_type.dtype)),
+            ('parent', types.pyobject),
+            ('nitems', types.intp),
+            ('itemsize', types.intp),
+            ('data', types.CPointer(fe_type.dtype)),
+            ('shape', types.UniTuple(types.intp, ndim)),
+            ('strides', types.UniTuple(types.intp, ndim)),
+            ('extra_field', types.intp),
+        ]
+        super(MyArrayTypeModel, self).__init__(dmm, fe_type, members)
 
 
 @type_callable(MyArray)

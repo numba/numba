@@ -32,12 +32,11 @@ def disassemble_cubin(cubin):
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE)
         except FileNotFoundError as e:
-            if e.filename == 'nvdisasm':
-                msg = ("nvdisasm is required for SASS inspection, and has not "
-                       "been found.\n\nYou may need to install the CUDA "
-                       "toolkit and ensure that it is available on your "
-                       "PATH.\n")
-                raise RuntimeError(msg)
+            msg = ("nvdisasm is required for SASS inspection, and has not "
+                   "been found.\n\nYou may need to install the CUDA "
+                   "toolkit and ensure that it is available on your "
+                   "PATH.\n")
+            raise RuntimeError(msg) from e
         return cp.stdout.decode('utf-8')
     finally:
         if fd is not None:
