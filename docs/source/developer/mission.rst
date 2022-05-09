@@ -36,9 +36,10 @@ disciplines, examples include:
 * Users providing JIT accelerated libraries for use as part of the numerical
   Python ecosystem.
 * Those writing more advanced JIT accelerated libraries containing their own
-  domain specific data types etc.  * Compiler extenders wanting to write and
-  explore new compiler use cases/needing a custom compiler.  * Hardware vendors
-  wanting to extend Numba support to their custom silicon.
+  domain specific data types etc.
+* Compiler extenders wanting to write and explore new compiler use
+  cases/needing a custom compiler.
+* Hardware vendors wanting to extend Numba support to their custom silicon.
 
 Project Goals
 -------------
