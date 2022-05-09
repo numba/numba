@@ -20,11 +20,10 @@ The next review date is:    TBC
 Background
 ----------
 
-The Numba project provides tools to improve the performance of scientific
-software. It comprises numerous facilities including just-in-time (JIT)
-compilation, extension points for scientific library writers, and a compiler
-toolkit on which new computational acceleration technologies can be explored
-and built.
+The Numba project provides tools to improve the performance of Python software.
+It comprises numerous facilities including just-in-time (JIT) compilation,
+extension points for library authors, and a compiler toolkit on which new
+computational acceleration technologies can be explored and built.
 
 The user base of Numba includes anyone needing to perform intensive
 computational work, including users from a wide range of
@@ -32,15 +31,14 @@ disciplines, examples include:
 
 * The most common use case, a user wanting to JIT compile some
   numerical functions.
-* Users providing JIT accelerated libraries for domain specific use
+* Users providing JIT accelerated libraries for domain specific use cases
   e.g. scientific researchers.
-* Users providing JIT accelerated libraries for use in scientific computing as
-  part of the numerical Python ecosystem.
+* Users providing JIT accelerated libraries for use as part of the numerical
+  Python ecosystem.
 * Those writing more advanced JIT accelerated libraries containing their own
-  domain specific data types etc.
-* Compiler extenders wanting to write and explore new compiler use
-  cases/needing a custom compiler.
-* Hardware vendors wanting to extend Numba support to their custom silicon.
+  domain specific data types etc.  * Compiler extenders wanting to write and
+  explore new compiler use cases/needing a custom compiler.  * Hardware vendors
+  wanting to extend Numba support to their custom silicon.
 
 Project Goals
 -------------
