@@ -4,7 +4,7 @@ import itertools
 import numpy as np
 
 from numba.core.compiler import compile_isolated
-from numba import njit, jit, typeof, literally
+from numba import njit, jit, typeof, literally, types, typed
 from numba.core import types, errors, utils
 from numba.tests.support import TestCase, MemoryLeakMixin, tag
 import unittest
@@ -17,6 +17,9 @@ Point = collections.namedtuple('Point', ('x', 'y', 'z'))
 Point2 = collections.namedtuple('Point2', ('x', 'y', 'z'))
 
 Empty = collections.namedtuple('Empty', ())
+
+Node = collections.namedtuple("Node", ["ID", "Name"])
+
 
 def tuple_return_usecase(a, b):
     return a, b
@@ -561,6 +564,24 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
         self.assertEqual(in3, out3)
         self.assertEqual(len(foo.nopython_signatures), 3)
         self.assertEqual(foo.nopython_signatures[2].args[0], typeof(in3))
+
+    def test_same_types_in_ctor(self):
+        # Test for issue #8026
+        @njit
+        def foo(d):
+            return d
+
+        node1 = Node("1", "abc")
+        dct = typed.Dict.empty(
+            key_type=types.unicode_type,
+            value_type=types.NamedTuple(
+                (types.unicode_type, types.unicode_type),
+                Node)
+        )
+        dct["1"] = node1
+        pv = foo.py_func(dct)
+        jv = foo(dct)
+        self.assertEqual(pv, jv)
 
 
 class TestTupleNRT(TestCase, MemoryLeakMixin):

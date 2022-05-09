@@ -375,12 +375,12 @@ class BaseNamedTuple(BaseTuple):
 
 
 class NamedUniTuple(_HomogeneousTuple, BaseNamedTuple):
-    def __init__(self, dtype, count, cls):
+    def __init__(self, dtype, count, clss):
         self.dtype = dtype
         self.count = count
-        self.fields = tuple(cls._fields)
-        self.instance_class = cls
-        name = "%s(%s x %d)" % (cls.__name__, dtype, count)
+        self.fields = tuple(clss._fields)
+        self.instance_class = clss
+        name = "%s(%s x %d)" % (clss.__name__, dtype, count)
         super(NamedUniTuple, self).__init__(name)
 
     @property
@@ -393,14 +393,27 @@ class NamedUniTuple(_HomogeneousTuple, BaseNamedTuple):
 
 
 class NamedTuple(_HeterogeneousTuple, BaseNamedTuple):
-    def __init__(self, types, cls):
+    def __new__(cls, types, clss):
+
+        t = utils.unified_function_type(types, require_precise=True)
+        if t is not None:
+            return NamedUniTuple(dtype=t, count=len(types), clss=clss)
+
         _HeterogeneousTuple.is_types_iterable(types)
 
+        if types and all(t == types[0] for t in types[1:]):
+            return NamedUniTuple(dtype=types[0], count=len(types), clss=clss)
+        else:
+            return object.__new__(NamedTuple)
+
+    def __init__(self, types, clss):
+        _HeterogeneousTuple.is_types_iterable(types)
         self.types = tuple(types)
         self.count = len(self.types)
-        self.fields = tuple(cls._fields)
-        self.instance_class = cls
-        name = "%s(%s)" % (cls.__name__, ", ".join(str(i) for i in self.types))
+        self.fields = tuple(clss._fields)
+        self.instance_class = clss
+
+        name = "%s(%s)" % (clss.__name__, ", ".join(str(i) for i in self.types))
         super(NamedTuple, self).__init__(name)
 
     @property
