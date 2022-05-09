@@ -959,17 +959,17 @@ def peep_hole_delete_with_exit(func_ir):
 def peep_hole_fuse_dict_add_updates(func_ir):
     """
     This rewrite removes d1.update(d2) calls that
-    are between two dictionaries, d1 and d2 in the
+    are between two dictionaries, d1 and d2, in the
     same basic block. This pattern can appear as a
-    result of a Python 3.10 bytecode changes, which
-    prevents large constant literal dictionaries with
-    > 15 elements from being constant. If both dictionaries
-    are constant dictionaries defined in that block and
+    result of Python 3.10 bytecode emission changes, which
+    prevent large constant literal dictionaries
+    (> 15 elements) from being constant. If both dictionaries
+    are constant dictionaries defined in the same block and
     neither is used between the update call, then we replace d1
-    with a new definition that combines the two dicitonaries.
+    with a new definition that combines the two dictionaries.
 
     Python 3.10 may also rewrite an individual dictionary as an empty
-    build_map + many map_add, so those expressions are also replaced
+    build_map + many map_add, those expressions are also replaced
     with a constant build map.
 
     When running this algorithm we do not remove any maps, even if they
@@ -979,7 +979,7 @@ def peep_hole_fuse_dict_add_updates(func_ir):
     """
 
     # This algorithm fuses build_map expressions into the largest
-    # possible build map before usage. For example, if we have an
+    # possible build map before use. For example, if we have an
     # IR that looks like this:
     #
     #   $d1 = build_map([])
@@ -996,9 +996,9 @@ def peep_hole_fuse_dict_add_updates(func_ir):
     #   $retvar = cast($othervar)
     #   return $retvar
     #
-    # Then the IR is rewritten so any __setitem__ and update operations are
-    # fused into the original buildmap. The new buildmap is then add to the
-    # last location  where it had previously had encountered a __setitem__,
+    # Then the IR is rewritten such that any __setitem__ and update operations are
+    # fused into the original buildmap. The new buildmap is then added to the
+    # last location where it had previously had encountered a __setitem__,
     # update, or build_map before any other uses.
     # The new IR would look like:
     #
@@ -1152,7 +1152,7 @@ def _insert_build_map(
     func_ir, name, old_body, new_body, lit_old_idx, lit_new_idx, map_updates
 ):
     """
-    Inserts a an assign with the given name into the new body using the
+    Inserts an ir.Assign with the given name into the new body using the
     information from dictionaries:
         lit_old_idx: name -> index in which the original build_map is found
         lit_new_idx: name -> index in which to insert

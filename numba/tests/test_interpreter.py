@@ -638,11 +638,11 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
     @skip_unless_py10
     def test_large_heterogeneous_const_dict(self):
         """
-        Tests that a function with a large heterogenous constant
+        Tests that a function with a large heterogeneous constant
         dictionary remains a constant.
         """
         def const_func():
-            # D is a heterogenous dictionary
+            # D is a heterogeneous dictionary
             # so this code can only compile if
             # d is constant.
             d = {
@@ -677,11 +677,11 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
     @skip_unless_py10
     def test_large_heterogeneous_const_keys_dict(self):
         """
-        Tests that a function with a large heterogenous constant
+        Tests that a function with a large heterogeneous constant
         dictionary remains a constant.
         """
         def const_keys_func(a):
-            # D is a heterogenous dictionary
+            # D is a heterogeneous dictionary
             # so this code can only compile if
             # d has constant keys.
             d = {
@@ -715,7 +715,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         self.assertEqual(a, b)
 
     @skip_unless_py10
-    def test_usercode_update_heterogenous_keys(self):
+    def test_usercode_update_heterogeneous_keys(self):
         """
         Tests an example using update that mirrors
         the pattern created by the Python 3.10 bytecode
