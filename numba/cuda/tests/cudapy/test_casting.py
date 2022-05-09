@@ -4,7 +4,8 @@ from numba.cuda import compile_ptx
 from numba.core.types import f2, i1, i2, i4, i8, u1, u2, u4, u8
 from numba import cuda
 from numba.core import types
-from numba.cuda.testing import CUDATestCase, skip_on_cudasim
+from numba.cuda.testing import (CUDATestCase, skip_on_cudasim,
+                                skip_unless_cc_53)
 import itertools
 import unittest
 
@@ -160,6 +161,7 @@ class TestCasting(CUDATestCase):
                 cfunc = self._create_wrapped(pyfunc, np.int64, toty)
                 self.assertEqual(cfunc(321), pyfunc(321))
 
+    @skip_unless_cc_53
     def test_literal_to_float16(self):
         cudafuncs = (cuda_int_literal_to_float16,
                      cuda_float_literal_to_float16)

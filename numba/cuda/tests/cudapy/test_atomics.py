@@ -2,7 +2,8 @@ import numpy as np
 from textwrap import dedent
 
 from numba import cuda, uint32, uint64, float32, float64
-from numba.cuda.testing import unittest, CUDATestCase, cc_X_or_above
+from numba.cuda.testing import (unittest, CUDATestCase, skip_unless_cc_50,
+                                cc_X_or_above)
 from numba.core import config
 
 
@@ -557,6 +558,7 @@ class TestCudaAtomics(CUDATestCase):
             else:
                 self.assertIn('atom.cas.b64', asm)
 
+    @skip_unless_cc_50
     def test_atomic_add_double(self):
         idx = np.random.randint(0, 32, size=32, dtype=np.int64)
         ary = np.zeros(32, np.float64)
@@ -602,6 +604,7 @@ class TestCudaAtomics(CUDATestCase):
         np.testing.assert_equal(ary, orig + 1)
         self.assertCorrectFloat64Atomics(cuda_func)
 
+    @skip_unless_cc_50
     def test_atomic_add_double_global(self):
         idx = np.random.randint(0, 32, size=32, dtype=np.int64)
         ary = np.zeros(32, np.float64)

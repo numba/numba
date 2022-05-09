@@ -46,7 +46,7 @@ if USE_NV_BINDING:
     # use a magic number 0 in places where we want the default stream.
     CU_STREAM_DEFAULT = 0
 
-MIN_REQUIRED_CC = (5, 3)
+MIN_REQUIRED_CC = (3, 5)
 SUPPORTS_IPC = sys.platform.startswith('linux')
 
 

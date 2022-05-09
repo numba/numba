@@ -15,6 +15,8 @@ Our supported platforms are:
 * OS X 10.9 and later (64-bit and unofficial support on M1/Arm64)
 * \*BSD (unofficial support only)
 * NVIDIA GPUs of compute capability 5.3 and later
+
+  * Compute capabilities 3.5 - 5.2 are supported, but deprecated.
 * ARMv7 (32-bit little-endian, such as Raspberry Pi 2 and 3)
 * ARMv8 (64-bit little-endian, such as the NVIDIA Jetson)
 
