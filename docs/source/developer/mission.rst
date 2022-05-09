@@ -4,11 +4,10 @@ Numba Mission Statement
 Introduction
 ------------
 
-This document is the mission statement for the Numba project. It exists to
-provide a clear description of the purposes and goals of the project. This
-document begins by providing some background on use-cases for Numba and
-categories of users. With this context established it continues with a
-description of the overall goals of the Numba project and its future direction.
+The mission statement describes the goals and purposes of the Numba project. It
+exists to provide a clear description of the purposes and goals of the project.
+As such, this document provides background on Numba use-cases and types of
+users, and outlines Numba's overall goals and its future direction.
 
 This is a living document:
 
