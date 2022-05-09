@@ -335,7 +335,7 @@ Deprecation and removal of CUDA Toolkits < 10.2 and devices with CC < 5.3
 
 - Support for CUDA toolkits less than 10.2 was deprecated and removed.
 - Support for devices with Compute Capability < 5.3 is deprecated and will be
-  removed in future.
+  removed in the future.
 
 
 Recommendations
