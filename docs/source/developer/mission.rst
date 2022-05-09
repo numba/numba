@@ -28,7 +28,7 @@ toolkit on which new computational acceleration technologies can be explored
 and built.
 
 The user base of Numba includes anyone needing to perform intensive
-computational work, including scientists and practitioners from a wide range of
+computational work, including users from a wide range of
 disciplines, examples include:
 
 * The most common use case, a user wanting to JIT compile some
