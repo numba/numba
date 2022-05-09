@@ -3,7 +3,8 @@ import numpy as np
 import warnings
 from numba.cuda.testing import unittest
 from numba.cuda.testing import (skip_on_cudasim, skip_unless_cuda_python,
-                                skip_if_cuda_includes_missing)
+                                skip_if_cuda_includes_missing,
+                                skip_with_cuda_python)
 from numba.cuda.testing import CUDATestCase
 from numba.cuda.cudadrv.driver import Linker, LinkerError, NvrtcError
 from numba.cuda import require_context
@@ -157,6 +158,14 @@ class TestLinker(CUDATestCase):
         self.assertIn('identifier "SYNTAX" is undefined', msg)
         # Check the filename is reported correctly
         self.assertIn('in the compilation of "error.cu"', msg)
+
+    @skip_with_cuda_python
+    def test_linking_cu_ctypes_unsupported(self):
+        msg = 'not supported with the ctypes binding'
+        with self.assertRaisesRegex(NotImplementedError, msg):
+            @cuda.jit('void()', link=['jitlink.cu'])
+            def f():
+                pass
 
     def test_linking_unknown_filetype_error(self):
         expected_err = "Don't know how to link file with extension .cuh"
