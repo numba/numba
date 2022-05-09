@@ -17,10 +17,14 @@ class TestUnpickleDeletedModule(unittest.TestCase):
         """
 
         # Source code for temporary module we will make
-        source = "\n".join(["from numba import vectorize",
-                            "@vectorize(['float64(float64)'])",
-                            "def inc1(x):",
-                            "    return x + 1"])
+        source = "\n".join(
+            [
+                "from numba import vectorize",
+                "@vectorize(['float64(float64)'])",
+                "def inc1(x):",
+                "    return x + 1",
+            ]
+        )
 
         # Create a temporary directory and add it to path.
         modname = "tmp_module"
