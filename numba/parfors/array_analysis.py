@@ -1579,6 +1579,10 @@ class ArrayAnalysis(object):
         elif expr.attr == "shape":
             shape = equiv_set.get_shape(expr.value)
             return ArrayAnalysis.AnalyzeResult(shape=shape)
+        elif expr.attr in ("real", "imag") and self._isarray(expr.value.name):
+            # Shape of real or imag attr is the same as the shape of the array
+            # itself.
+            return ArrayAnalysis.AnalyzeResult(shape=expr.value)
         elif self._isarray(lhs.name):
             canonical_value = get_canonical_alias(
                 expr.value.name, self.alias_map

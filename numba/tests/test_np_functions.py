@@ -329,6 +329,10 @@ def np_trapz_x_dx(y, x, dx):
     return np.trapz(y, x, dx)
 
 
+def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+    return np.allclose(a, b, rtol, atol, equal_nan)
+
+
 def np_average(a, axis=None, weights=None):
     return np.average(a, axis=axis, weights=weights)
 
@@ -3171,6 +3175,184 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         #test with axis argument
         test_1D_weights_axis(data, axis=1, weights=w)
+
+    def test_allclose(self):
+
+        pyfunc = np_allclose
+        cfunc = jit(nopython=True)(pyfunc)
+
+        min_int = np.iinfo(np.int_).min
+        a = np.array([min_int], dtype=np.int_)
+
+        simple_data = [
+            (np.asarray([1e10, 1e-7]), np.asarray([1.00001e10, 1e-8])),
+            (np.asarray([1e10, 1e-8]), np.asarray([1.00001e10, 1e-9])),
+            (np.asarray([1e10, 1e-8]), np.asarray([1.0001e10, 1e-9])),
+            (np.asarray([1e10]), np.asarray([1.0001e10, 1e-9])),
+            (1.0, 1.0),
+            (np.array([np.inf, 1]), np.array([0, np.inf])),
+            (a, a)
+        ]
+
+        for a, b in simple_data:
+            py_result = pyfunc(a, b)
+            c_result = cfunc(a, b)
+            self.assertEqual(py_result, c_result)
+
+        a = np.asarray([1.0, np.nan])
+        b = np.asarray([1.0, np.nan])
+        self.assertFalse(cfunc(a, b))
+        self.assertEquals(pyfunc(a, b, equal_nan=True),
+                          cfunc(a, b, equal_nan=True))
+
+        b = np.asarray([np.nan, 1.0])
+        self.assertEquals(pyfunc(a, b), cfunc(a, b))
+
+        noise_levels = [1.0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 0.0]
+        zero_array = np.zeros((25, 4))
+        a = np.random.ranf((25, 4))
+        for noise in noise_levels:
+            for rtol in noise_levels:
+                for atol in noise_levels:
+                    py_result = pyfunc(zero_array, noise,
+                                       atol=atol, rtol=rtol)
+                    c_result = cfunc(zero_array, noise,
+                                     atol=atol, rtol=rtol)
+                    self.assertEqual(py_result, c_result)
+
+                    py_result = pyfunc(noise, zero_array,
+                                       atol=atol, rtol=rtol)
+                    c_result = cfunc(noise, zero_array,
+                                     atol=atol, rtol=rtol)
+                    self.assertEqual(py_result, c_result)
+
+                    py_result = pyfunc(np.asarray([noise]), zero_array,
+                                       atol=atol, rtol=rtol)
+                    c_result = cfunc(np.asarray([noise]), zero_array,
+                                     atol=atol, rtol=rtol)
+                    self.assertEqual(py_result, c_result)
+
+                    py_result = pyfunc(a, a + noise, atol=atol, rtol=rtol)
+                    c_result = cfunc(a, a + noise, atol=atol, rtol=rtol)
+                    self.assertEqual(py_result, c_result)
+
+                    py_result = pyfunc(a + noise, a, atol=atol, rtol=rtol)
+                    c_result = cfunc(a + noise, a, atol=atol, rtol=rtol)
+                    self.assertEqual(py_result, c_result)
+
+    def test_ip_allclose_numpy(self):
+        # https://github.com/numpy/numpy/blob/4adc87dff15a247e417d50f10cc4def8e1c17a03/numpy/core/tests/test_numeric.py#L2402-L2420    # noqa: E501
+        pyfunc = np_allclose
+        cfunc = jit(nopython=True)(pyfunc)
+
+        arr = np.array([100.0, 1000.0])
+        aran = np.arange(125).astype(dtype=np.float64).reshape((5, 5, 5))
+
+        atol = 1e-8
+        rtol = 1e-5
+
+        numpy_data = [
+            (np.asarray([1, 0]), np.asarray([1, 0])),
+            (np.asarray([atol]), np.asarray([0.0])),
+            (np.asarray([1.0]), np.asarray([1 + rtol + atol])),
+            (arr, arr + arr * rtol),
+            (arr, arr + arr * rtol + atol * 2),
+            (aran, aran + aran * rtol),
+            (np.inf, np.inf),
+            (np.inf, np.asarray([np.inf]))
+        ]
+
+        for (x, y) in numpy_data:
+            self.assertEquals(pyfunc(x, y), cfunc(x, y))
+
+    def test_ip_not_allclose_numpy(self):
+        # https://github.com/numpy/numpy/blob/4adc87dff15a247e417d50f10cc4def8e1c17a03/numpy/core/tests/test_numeric.py#L2422-L2441    # noqa: E501
+
+        pyfunc = np_allclose
+        cfunc = jit(nopython=True)(pyfunc)
+
+        aran = np.arange(125).astype(dtype=np.float64).reshape((5, 5, 5))
+
+        atol = 1e-8
+        rtol = 1e-5
+
+        numpy_data = [
+            (np.asarray([np.inf, 0]), np.asarray([1.0, np.inf])),
+            (np.asarray([np.inf, 0]), np.asarray([1.0, 0])),
+            (np.asarray([np.inf, np.inf]), np.asarray([1.0, np.inf])),
+            (np.asarray([np.inf, np.inf]), np.asarray([1.0, 0.0])),
+            (np.asarray([-np.inf, 0.0]), np.asarray([np.inf, 0.0])),
+            (np.asarray([np.nan, 0.0]), np.asarray([np.nan, 0.0])),
+            (np.asarray([atol * 2]), np.asarray([0.0])),
+            (np.asarray([1.0]), np.asarray([1 + rtol + atol * 2])),
+            (aran, aran + aran * atol + atol * 2),
+            (np.array([np.inf, 1.0]), np.array([0.0, np.inf]))
+        ]
+
+        for (x, y) in numpy_data:
+            self.assertEquals(pyfunc(x, y), cfunc(x, y))
+
+    def test_return_class_is_ndarray_numpy(self):
+        # https://github.com/numpy/numpy/blob/4adc87dff15a247e417d50f10cc4def8e1c17a03/numpy/core/tests/test_numeric.py#L2460-L2468    # noqa: E501
+
+        pyfunc = np_allclose
+        cfunc = jit(nopython=True)(pyfunc)
+
+        class Foo(np.ndarray):
+            def __new__(cls, *args, **kwargs):
+                return np.array(*args, **kwargs).view(cls)
+
+        a = Foo([1])
+        self.assertTrue(type(cfunc(a, a)) is bool)
+
+    def test_equalnan_numpy(self):
+        # https://github.com/numpy/numpy/blob/4adc87dff15a247e417d50f10cc4def8e1c17a03/numpy/core/tests/test_numeric.py#L2456-L2458    # noqa: E501
+        pyfunc = np_allclose
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.array([1.0, np.nan])
+
+        self.assertEquals(pyfunc(x, x, equal_nan=True),
+                          cfunc(x, x, equal_nan=True))
+
+    def test_no_parameter_modification_numpy(self):
+        # https://github.com/numpy/numpy/blob/4adc87dff15a247e417d50f10cc4def8e1c17a03/numpy/core/tests/test_numeric.py#L2443-L2448    # noqa: E501
+
+        pyfunc = np_allclose
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.array([np.inf, 1])
+        y = np.array([0, np.inf])
+
+        cfunc(x, y)
+        np.testing.assert_array_equal(x, np.array([np.inf, 1]))
+        np.testing.assert_array_equal(y, np.array([0, np.inf]))
+
+    def test_min_int_numpy(self):
+        # https://github.com/numpy/numpy/blob/4adc87dff15a247e417d50f10cc4def8e1c17a03/numpy/core/tests/test_numeric.py#L2450-L2454    # noqa: E501
+
+        pyfunc = np_allclose
+        cfunc = jit(nopython=True)(pyfunc)
+
+        min_int = np.iinfo(np.int_).min
+        a = np.array([min_int], dtype=np.int_)
+
+        self.assertEquals(pyfunc(a, a), cfunc(a, a))
+
+    def test_allclose_exception(self):
+        self.disable_leak_check()
+
+        pyfunc = np_allclose
+        cfunc = jit(nopython=True)(pyfunc)
+
+        a = np.asarray([1e10, 1e-9, np.nan])
+        b = np.asarray([1.0001e10, 1e-9])
+
+        with self.assertRaises(ValueError) as e:
+            cfunc(a, b)
+
+        self.assertIn(("shape mismatch: objects cannot be broadcast to "
+                       "a single shape"), str(e.exception))
 
     def test_interp_basic(self):
         pyfunc = interp
