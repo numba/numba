@@ -13,7 +13,7 @@ This is a living document:
 
 =========================== ============
 The first revision date is: May 2022
-The last updated date is: May 2022
+The last updated date is:   May 2022
 The next review date is:    TBC
 =========================== ============
 
