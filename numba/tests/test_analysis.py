@@ -1040,10 +1040,11 @@ class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
 
         ol = impl.overloads[impl.signatures[0]]
         func_ir = ol.metadata['preserved_ir']
-        # check the func_ir, make sure there's no phi nodes
+        # make sure one of the inplace binop args is a Const
+        binop_consts = set()
         for blk in func_ir.blocks.values():
             for expr in blk.find_exprs('inplace_binop'):
-                insts = [blk.find_variable_assignment(arg.name)
-                         for arg in (expr.lhs, expr.rhs)]
-                self.assertTrue(any([isinstance(i.value, ir.Const)
-                                     for i in insts if i]))
+                inst = blk.find_variable_assignment(expr.rhs.name)
+                self.assertIsInstance(inst.value, ir.Const)
+                binop_consts.add(inst.value.value)
+        self.assertEqual(binop_consts, {len(x) for x in inp})
