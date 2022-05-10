@@ -1,13 +1,13 @@
 import numpy as np
 import numba
+import pytest
 
 from numpy.random import MT19937, Generator
 
 
 class TestRandomGenerators:
     def check_numpy_parity(self, distribution_func,
-                           bitgen_instance=None, seed=1, size=(1000,)):
-
+                           bitgen_instance=None, seed=1):
         distribution_func = numba.njit(distribution_func)
         if bitgen_instance is None:
             numba_rng_instance = np.random.default_rng(seed=seed)
@@ -16,13 +16,26 @@ class TestRandomGenerators:
             numba_rng_instance = Generator(bitgen_instance(seed))
             numpy_rng_instance = Generator(bitgen_instance(seed))
 
-        numba_res = distribution_func(numba_rng_instance, size)
-        numpy_res = distribution_func.py_func(numpy_rng_instance, size)
+        for size in [None, (), (100,), (10,20,30)]:
+            numba_res = distribution_func(numba_rng_instance, size)
+            numpy_res = distribution_func.py_func(numpy_rng_instance, size)
 
-        assert np.allclose(numba_res, numpy_res)
+            assert np.allclose(numba_res, numpy_res)
 
-    def test_random(self):
-        dist_func = lambda x, size:x.random(size=size)
+    @pytest.mark.parametrize("dtype", [
+        np.int64,
+        np.int32,
+        np.int16,
+        np.int8,
+        np.bool_
+    ])
+    def test_integers(self, dtype):
+        dist_func = lambda x, size:x.integers(1, size=size, dtype=dtype)
+        self.check_numpy_parity(dist_func)
+        self.check_numpy_parity(dist_func, bitgen_instance=MT19937)
+
+    def test_choice(self):
+        dist_func = lambda x, size:x.choice(100, size=size)
         self.check_numpy_parity(dist_func)
         self.check_numpy_parity(dist_func, bitgen_instance=MT19937)
 
