@@ -22,16 +22,14 @@ def make_fib2():
 fib2 = make_fib2()
 
 
-#def make_type_change_self(jit=lambda x: x):
-#    @jit
-#    def type_change_self(x, y):
-#        if x > 1 and y > 0:
-#            return x + type_change_self(x - y, y)
-#        else:
-#            return y
-#    return type_change_self
-#
-#
+@cuda.jit
+def type_change_self(x, y):
+    if x > 1 and y > 0:
+        return x + type_change_self(x - y, y)
+    else:
+        return y
+
+
 # Implicit signature
 @cuda.jit
 def fib3(n):
