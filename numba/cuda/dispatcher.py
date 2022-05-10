@@ -495,7 +495,6 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
     def __init__(self, py_func, targetoptions, pipeline_class=CUDACompiler):
         super().__init__(py_func, targetoptions=targetoptions,
                          pipeline_class=pipeline_class)
-        self._type = self._numba_type_
 
         # The following properties are for specialization of CUDADispatchers. A
         # specialized CUDADispatcher is one that is compiled for exactly one
