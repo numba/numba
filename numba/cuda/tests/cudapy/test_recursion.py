@@ -33,7 +33,6 @@ class TestSelfRecursion(CUDATestCase):
     def test_global_explicit_sig(self):
         self.check_fib(self.mod.fib1)
 
-    @unittest.skip
     def test_inner_explicit_sig(self):
         self.check_fib(self.mod.fib2)
 
