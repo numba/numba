@@ -393,7 +393,12 @@ class NamedUniTuple(_HomogeneousTuple, BaseNamedTuple):
 
 
 class NamedTuple(_HeterogeneousTuple, BaseNamedTuple):
-    def __new__(cls, types, clss):
+    def __new__(cls, types, clss, convert=True):
+        """
+        arg convert: whether allow NamedTuple convert to Uni, default True.
+        """
+        if not convert:
+            return object.__new__(NamedTuple)
 
         t = utils.unified_function_type(types, require_precise=True)
         if t is not None:
@@ -406,8 +411,7 @@ class NamedTuple(_HeterogeneousTuple, BaseNamedTuple):
         else:
             return object.__new__(NamedTuple)
 
-    def __init__(self, types, clss):
-        _HeterogeneousTuple.is_types_iterable(types)
+    def __init__(self, types, clss, convert=True):
         self.types = tuple(types)
         self.count = len(self.types)
         self.fields = tuple(clss._fields)
