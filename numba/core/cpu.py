@@ -73,6 +73,7 @@ class CPUContext(BaseContext):
         from numba.core import optional
         from numba.misc import gdb_hook, literal
         from numba.np import linalg, polynomial, arraymath, arrayobj
+        from numba.np.random import generator_core, generator_methods
         from numba.typed import typeddict, dictimpl
         from numba.typed import typedlist, listobject
         from numba.experimental import jitclass, function_type
