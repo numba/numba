@@ -661,22 +661,21 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
         A (template, pysig, args, kws) tuple is returned.
         """
-        with self._compiling_counter:
-            # Ensure an exactly-matching overload is available if we can
-            # compile. We proceed with the typing even if we can't compile
-            # because we may be able to force a cast on the caller side.
-            if self._can_compile:
-                self.compile_device(tuple(args))
+        # Ensure an exactly-matching overload is available if we can
+        # compile. We proceed with the typing even if we can't compile
+        # because we may be able to force a cast on the caller side.
+        if self._can_compile:
+            self.compile_device(tuple(args))
 
-            # Create function type for typing
-            func_name = self.py_func.__name__
-            name = "CallTemplate({0})".format(func_name)
+        # Create function type for typing
+        func_name = self.py_func.__name__
+        name = "CallTemplate({0})".format(func_name)
 
-            call_template = typing.make_concrete_template(
-                name, key=func_name, signatures=self.nopython_signatures)
-            pysig = utils.pysignature(self.py_func)
+        call_template = typing.make_concrete_template(
+            name, key=func_name, signatures=self.nopython_signatures)
+        pysig = utils.pysignature(self.py_func)
 
-            return call_template, pysig, args, kws
+        return call_template, pysig, args, kws
 
     def compile_device(self, args):
         """Compile the device function for the given argument types.
@@ -687,27 +686,28 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         Returns the `CompileResult`.
         """
         if args not in self.overloads:
+            with self._compiling_counter:
 
-            debug = self.targetoptions.get('debug')
-            inline = self.targetoptions.get('inline')
-            fastmath = self.targetoptions.get('fastmath')
+                debug = self.targetoptions.get('debug')
+                inline = self.targetoptions.get('inline')
+                fastmath = self.targetoptions.get('fastmath')
 
-            nvvm_options = {
-                'debug': debug,
-                'opt': 3 if self.targetoptions.get('opt') else 0,
-                'fastmath': fastmath
-            }
+                nvvm_options = {
+                    'debug': debug,
+                    'opt': 3 if self.targetoptions.get('opt') else 0,
+                    'fastmath': fastmath
+                }
 
-            cres = compile_cuda(self.py_func, None, args,
-                                debug=debug,
-                                inline=inline,
-                                fastmath=fastmath,
-                                nvvm_options=nvvm_options)
-            self.overloads[args] = cres
+                cres = compile_cuda(self.py_func, None, args,
+                                    debug=debug,
+                                    inline=inline,
+                                    fastmath=fastmath,
+                                    nvvm_options=nvvm_options)
+                self.overloads[args] = cres
 
-            cres.target_context.insert_user_function(cres.entry_point,
-                                                     cres.fndesc,
-                                                     [cres.library])
+                cres.target_context.insert_user_function(cres.entry_point,
+                                                         cres.fndesc,
+                                                         [cres.library])
         else:
             cres = self.overloads[args]
 

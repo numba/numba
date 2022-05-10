@@ -30,9 +30,7 @@ class TestSelfRecursion(CUDATestCase):
         expected = 55
         self.assertPreciseEqual(actual, expected)
 
-    @unittest.skip
     def test_global_explicit_sig(self):
-        breakpoint()
         self.check_fib(self.mod.fib1)
 
     @unittest.skip

@@ -103,12 +103,14 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             disp = CUDADispatcher(func, targetoptions=targetoptions)
 
             if device:
-                disp.compile_device(argtypes)
+                from numba.core import typeinfer
+                with typeinfer.register_dispatcher(disp):
+                    disp.compile_device(argtypes)
+                    disp.disable_compile()
             else:
                 disp.compile(argtypes)
-
-            disp._specialized = True
-            disp.disable_compile()
+                disp._specialized = True
+                disp.disable_compile()
 
             return disp
 
