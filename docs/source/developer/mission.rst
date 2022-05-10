@@ -12,8 +12,8 @@ also outlines the project's overall goals and its future direction.
 This is a living document:
 
 =========================== ============
-The first revision date is: March 2022
-The last updated date is:   March 2022
+The first revision date is: May 2022
+The last updated date is: May 2022
 The next review date is:    TBC
 =========================== ============
 
