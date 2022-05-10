@@ -182,7 +182,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
                 char * base = args[j];
                 size_t step = steps[j];
                 ptrdiff_t offset = step * r;
-                array_arg_space[j] = base + offset;
+                array_arg_space[j] = base ? base + offset : base;
 
                 if(0&&_DEBUG)
                 {
