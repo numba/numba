@@ -475,8 +475,8 @@ def detect():
         if os.name == "nt":
             attrs += [('Compute Mode', 'TCC' if tcc else 'WDDM')]
         attrs += [('FP32/FP64 Performance Ratio', fp32_to_fp64_ratio)]
-        if cc < (3, 0):
-            support = '[NOT SUPPORTED: CC < 3.0]'
+        if cc < (3, 5):
+            support = '[NOT SUPPORTED: CC < 3.5]'
         elif cc < (5, 3):
             support = '[SUPPORTED (DEPRECATED)]'
             supported_count += 1

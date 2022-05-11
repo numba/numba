@@ -27,14 +27,14 @@ else:
     _staticnamepattern = 'lib%s.a'
 
 
-def get_libdevice(arch):
+def get_libdevice():
     d = get_cuda_paths()
     paths = d['libdevice'].info
-    return paths.get(arch, paths.get(None))
+    return paths
 
 
-def open_libdevice(arch):
-    with open(get_libdevice(arch), 'rb') as bcfile:
+def open_libdevice():
+    with open(get_libdevice(), 'rb') as bcfile:
         return bcfile.read()
 
 
@@ -115,15 +115,13 @@ def test(_platform=None, print_paths=True):
         failed = True
 
     # Check for libdevice
-    archs = 'compute_20', 'compute_30', 'compute_35', 'compute_50'
     where = _get_source_variable('libdevice')
-    print('Finding libdevice from', where)
-    for arch in archs:
-        print('\tsearching for', arch, end='...')
-        path = get_libdevice(arch)
-        if path:
-            print('\tok')
-        else:
-            print('\tERROR: can\'t open libdevice for %s' % arch)
-            failed = True
+    print(f'Finding libdevice from {where}')
+    print('\ttrying to open library', end='...')
+    path = get_libdevice()
+    if path:
+        print('\tok')
+    else:
+        print('\tERROR: can\'t open libdevice')
+        failed = True
     return not failed

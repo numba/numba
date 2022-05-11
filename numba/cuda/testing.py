@@ -123,10 +123,6 @@ def cc_X_or_above(major, minor):
         return True
 
 
-def skip_unless_cc_32(fn):
-    return unittest.skipUnless(cc_X_or_above(3, 2), "requires cc >= 3.2")(fn)
-
-
 def skip_unless_cc_50(fn):
     return unittest.skipUnless(cc_X_or_above(5, 0), "requires cc >= 5.0")(fn)
 
