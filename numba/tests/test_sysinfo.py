@@ -49,9 +49,6 @@ class TestSysInfo(TestCase):
             list: (
                 nsi._errors,
                 nsi._warnings,
-                nsi._numpy_supported_simd_features,
-                nsi._numpy_supported_simd_dispatch,
-                nsi._numpy_supported_simd_baseline,
             ),
             dict: (
                 nsi._numba_env_vars,
