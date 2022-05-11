@@ -33,12 +33,14 @@ The following Python constructs are not supported:
 * Comprehensions (either list, dict, set or generator comprehensions)
 * Generator (any ``yield`` statements)
 
-The ``raise`` statement is supported.
+The ``raise`` and ``assert`` statements are supported, with the following
+constraints:
 
-The ``assert`` statement is supported, but only has an effect when
-``debug=True`` is passed to the :func:`numba.cuda.jit` decorator. This is
-similar to the behavior of the ``assert`` keyword in CUDA C/C++, which is
-ignored unless compiling with device debug turned on.
+- They can only be used in kernels, not in device functions.
+- They only have an effect when ``debug=True`` is passed to the
+  :func:`@cuda.jit <numba.cuda.jit>` decorator. This is similar to the behavior
+  of the ``assert`` keyword in CUDA C/C++, which is ignored unless compiling
+  with device debug turned on.
 
 
 Printing of strings, integers, and floats is supported, but printing is an
