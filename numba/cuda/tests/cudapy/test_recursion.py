@@ -50,7 +50,7 @@ class TestSelfRecursion(CUDATestCase):
         self.assertIn("cannot type infer runaway recursion",
                       str(raises.exception))
 
-    @unittest.skip('Needs insert_unresolved_ref capability')
+    @unittest.skip('Needs insert_unresolved_ref support in target')
     def test_type_change(self):
         pfunc = self.mod.type_change_self.py_func
         cfunc = self.mod.type_change_self
@@ -81,18 +81,39 @@ class TestSelfRecursion(CUDATestCase):
 
         self.assertEqual(str(raises.exception), "raise_self")
 
-    @unittest.skip
+    @unittest.skip('Needs insert_unresolved_ref support in target')
     def test_optional_return(self):
         pfunc = self.mod.make_optional_return_case()
-        cfunc = self.mod.make_optional_return_case(jit(nopython=True))
-        for arg in (0, 5, 10, 15):
-            self.assertEqual(pfunc(arg), cfunc(arg))
+        cfunc = self.mod.make_optional_return_case(cuda.jit)
 
-    @unittest.skip
+        @cuda.jit
+        def kernel(r, x):
+            res = cfunc(x[0])
+            if res is None:
+                res = 999
+            r[0] = res
+
+        for arg in (0, 5, 10, 15):
+
+            expected = pfunc(arg)
+            if expected is None:
+                expected = 999
+
+            x = np.asarray([arg], dtype=np.int64)
+            r = np.zeros_like(x)
+            kernel[1, 1](r, x)
+            actual = r[0]
+
+            self.assertEqual(expected, actual)
+
     def test_growing_return_tuple(self):
-        cfunc = self.mod.make_growing_tuple_case(jit(nopython=True))
+        cfunc = self.mod.make_growing_tuple_case(cuda.jit)
+
         with self.assertRaises(TypingError) as raises:
-            cfunc(100)
+            @cuda.jit('void()')
+            def kernel():
+                cfunc(100)
+
         self.assertIn(
             "Return type of recursive function does not converge",
             str(raises.exception),
