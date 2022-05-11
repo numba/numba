@@ -38,6 +38,10 @@ class LinkerError(RuntimeError):
     pass
 
 
+class NvrtcError(RuntimeError):
+    pass
+
+
 class CudaAPIError(RuntimeError):
     pass
 
