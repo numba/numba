@@ -56,6 +56,44 @@ This is due to a general limitation in CUDA printing, as outlined in the
 <https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#limitations>`_
 in the CUDA C++ Programming Guide.
 
+
+Recursion
+---------
+
+Self-recursive device functions are supported, with the constraint that
+recursive calls must all have similar argument types. For example, the following
+form of recursion is supported:
+
+.. code:: python
+
+   @cuda.jit("int64(int64)", device=True)
+   def fib(n):
+       if n < 2:
+           return n
+       return fib(n - 1) + fib(n - 2)
+
+(the ``fib`` function always has an ``int64`` argument), wherease the following
+is unsupported:
+
+.. code:: python
+
+   # Called with x := int64, y := float64
+   @cuda.jit
+   def type_change_self(x, y):
+       if x > 1 and y > 0:
+           return x + type_change_self(x - y, y)
+       else:
+           return y
+
+The outer call to ``type_change_self`` provides ``(int64, float64)`` arguments,
+but the inner call uses ``(float64, float64)`` arguments (because ``x - y`` /
+``int64 - float64`` results in a ``float64`` type). Therefore, this function is
+unsupported.
+
+Mutual recursion between functions (e.g. where a function ``func1()`` calls
+``func2()`` which again calls ``func1()``) is unsupported.
+
+
 Built-in types
 ===============
 
