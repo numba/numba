@@ -674,6 +674,25 @@ class Cache(_Cache):
             # No such conditions under non-Windows OSes
             yield
 
+    def _get_dependencies(self, cvar):
+        deps = [cvar]
+        if hasattr(cvar, 'py_func'):
+            # TODO: does the cache key need to depend on any other
+            # attributes of the Dispatcher?
+            closure = cvar.py_func.__closure__
+            deps = [cvar.py_func.__code__.co_code]
+        elif hasattr(cvar, '__closure__'):
+            closure = cvar.__closure__
+            # if cvar is a function and closes over a Dispatcher, the
+            # cache will be busted because of the uuid that is regenerated
+            deps = [cvar.__code__.co_code]
+        else:
+            closure = None
+        if closure is not None:
+            for x in closure:
+                deps.extend(self._get_dependencies(x.cell_contents))
+        return deps
+
     def _index_key(self, sig, codegen):
         """
         Compute index key for the given signature and codegen.
@@ -682,8 +701,8 @@ class Cache(_Cache):
         a hash of the cell_contents.
         """
         codebytes = self._py_func.__code__.co_code
-        if self._py_func.__closure__ is not None:
-            cvars = tuple([x.cell_contents for x in self._py_func.__closure__])
+        cvars = self._get_dependencies(self._py_func)
+        if len(cvars) > 0:
             cvarbytes = dumps(cvars)
         else:
             cvarbytes = b''

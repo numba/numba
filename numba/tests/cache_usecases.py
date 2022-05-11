@@ -99,17 +99,17 @@ def ambiguous_function(x):
 renamed_function2 = ambiguous_function
 
 
-def make_closure(x):
+def make_closure(x, f):
     @jit(cache=True, nopython=True)
     def closure(y):
-        return x + y
+        return x + f(y)
 
     return closure
 
-closure1 = make_closure(3)
-closure2 = make_closure(5)
-closure3 = make_closure(7)
-closure4 = make_closure(9)
+closure1 = make_closure(3, simple_usecase)
+closure2 = make_closure(5, simple_usecase)
+closure3 = make_closure(7, simple_usecase)
+closure4 = make_closure(9, simple_usecase)
 
 
 biggie = np.arange(10**6)
