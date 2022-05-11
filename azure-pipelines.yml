@@ -13,7 +13,7 @@ jobs:
     vmImage: macOS-10.15
     matrix:
       py37_np118:
-        PYTHON: '3.7'
+        PYTHON: '3.8'
         NUMPY: '1.22'
         CONDA_ENV: 'azure_ci'
         TEST_START_INDEX: 0
@@ -31,13 +31,13 @@ jobs:
     matrix:
       py37_np118_32bit:
         # 32 bit linux only has np 1.15
-        PYTHON: '3.7'
+        PYTHON: '3.8'
         NUMPY: '1.22'
         CONDA_ENV: azure_ci
         BITS32: yes
         TEST_START_INDEX: 2
       py37_np118_cov:
-        PYTHON: '3.7'
+        PYTHON: '3.8'
         NUMPY: '1.22'
         CONDA_ENV: azure_ci
         RUN_COVERAGE: yes
@@ -45,49 +45,49 @@ jobs:
         RUN_MYPY: yes
         TEST_START_INDEX: 3
       py37_np118_vanilla:
-        PYTHON: '3.7'
+        PYTHON: '3.8'
         NUMPY: '1.22'
         CONDA_ENV: azure_ci
         VANILLA_INSTALL: yes
         TEST_START_INDEX: 4
       py37_np118_tbb:
-        PYTHON: '3.7'
+        PYTHON: '3.8'
         NUMPY: '1.22'
         CONDA_ENV: azure_ci
         TEST_THREADING: 'tbb'
         TEST_START_INDEX: 5
       py37_np118_omp:
-        PYTHON: '3.7'
+        PYTHON: '3.8'
         NUMPY: '1.22'
         CONDA_ENV: azure_ci
         TEST_THREADING: omp
         TEST_START_INDEX: 6
       py37_np118_workqueue:
-        PYTHON: '3.7'
+        PYTHON: '3.8'
         NUMPY: '1.22'
         CONDA_ENV: azure_ci
         TEST_THREADING: workqueue
         TEST_START_INDEX: 7
       py37_np119_doc:
-        PYTHON: '3.7'
+        PYTHON: '3.8'
         NUMPY: '1.22'
         CONDA_ENV: azure_ci
         BUILD_DOC: yes
         TEST_START_INDEX: 8
       py37_np119_pickle5:
-        PYTHON: '3.7'
+        PYTHON: '3.8'
         NUMPY: '1.22'
         CONDA_ENV: azure_ci
         TEST_PICKLE5: yes
         TEST_START_INDEX: 9
       py37_np120_svml:
-        PYTHON: '3.7'
+        PYTHON: '3.8'
         NUMPY: '1.22'
         CONDA_ENV: azure_ci
         TEST_SVML: yes
         TEST_START_INDEX: 10
       py37_np121:
-        PYTHON: '3.7'
+        PYTHON: '3.8'
         NUMPY: '1.22'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 11
