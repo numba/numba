@@ -315,7 +315,10 @@ class _MinimalCallHelper(object):
             return self.exceptions[exc_id]
         except KeyError:
             msg = "unknown error %d in native function" % exc_id
-            return SystemError, (msg,)
+            exc = SystemError
+            exc_args = (msg,)
+            locinfo = None
+            return exc, exc_args, locinfo
 
 # The structure type constructed by PythonAPI.serialize_uncached()
 # i.e a {i8* pickle_buf, i32 pickle_bufsz, i8* hash_buf}
