@@ -43,3 +43,18 @@ def fib3(n):
 @cuda.jit(device=True)
 def runaway_self(x):
     return runaway_self(x)
+
+
+@cuda.jit(device=True)
+def raise_self(x):
+    if x == 1:
+        raise ValueError("raise_self")
+    elif x > 0:
+        return raise_self(x - 1)
+    else:
+        return 1
+
+
+@cuda.jit(debug=True, opt=False)
+def raise_self_kernel(x):
+    raise_self(x)
