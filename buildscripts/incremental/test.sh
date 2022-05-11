@@ -26,8 +26,16 @@ export PYTHONFAULTHANDLER=1
 # enable new style error handling
 export NUMBA_CAPTURED_ERRORS="new_style"
 
-# Disable NumPy dispatching to AVX512_SKX feature extensions
-export NPY_DISABLE_CPU_FEATURES="AVX512_SKX"
+# Disable NumPy dispatching to AVX512_SKX feature extensions if the chip is
+# reported to support the feature.
+_NPY_CMD='from numpy.core._multiarray_umath import __cpu_features__ as feat; exit(feat.get("AVX512_SKX", False))'
+$(python -c "$_NPY_CMD")
+NUMPY_DETECTS_AVX512_SKX="$?"
+echo "NumPy detects AVX512_SKX: $NUMPY_DETECTS_AVX512_SKX"
+
+if [[ "$NUMPY_DETECTS_AVX512_SKX" == "1" ]]; then
+    export NPY_DISABLE_CPU_FEATURES="AVX512_SKX"
+fi
 
 # deal with threading layers
 if [ -z ${TEST_THREADING+x} ]; then
