@@ -1,10 +1,12 @@
 import numpy as np
 import numba
+from numba.tests.support import TestCase
 
 from numpy.random import MT19937, Generator
 
 
-class TestRandomGenerators:
+class TestRandomGenerators(TestCase):
+
     def check_numpy_parity(self, distribution_func,
                            bitgen_instance=None, seed=1):
         distribution_func = numba.njit(distribution_func)
@@ -35,3 +37,4 @@ class TestRandomGenerators:
         dist_func = lambda x, size:x.random(size=size)
         self.check_numpy_parity(dist_func)
         self.check_numpy_parity(dist_func, bitgen_instance=MT19937)
+        raise
