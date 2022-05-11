@@ -26,6 +26,9 @@ export PYTHONFAULTHANDLER=1
 # enable new style error handling
 export NUMBA_CAPTURED_ERRORS="new_style"
 
+# Disable NumPy dispatching to AVX512_SKX feature extensions
+export NPY_DISABLE_CPU_FEATURES="AVX512_SKX"
+
 # deal with threading layers
 if [ -z ${TEST_THREADING+x} ]; then
     echo "INFO: Threading layer not explicitly set."
