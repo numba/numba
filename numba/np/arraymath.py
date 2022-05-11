@@ -4042,7 +4042,7 @@ _iinfo_supported = ('min', 'max', 'bits',)
 iinfo = namedtuple('iinfo', _iinfo_supported)
 
 # Suppress deprecation warnings while keeping support MachAr
-with warnings.catch_warnings(record=True):
+with warnings.catch_warnings():
     warnings.simplefilter("ignore", DeprecationWarning)
     np_MachAr = np.MachAr
 
