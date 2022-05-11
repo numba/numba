@@ -37,3 +37,9 @@ def fib3(n):
         return n
 
     return fib3(n - 1) + fib3(n - 2)
+
+
+# Run-away self recursion
+@cuda.jit(device=True)
+def runaway_self(x):
+    return runaway_self(x)

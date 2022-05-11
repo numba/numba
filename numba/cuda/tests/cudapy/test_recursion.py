@@ -39,10 +39,14 @@ class TestSelfRecursion(CUDATestCase):
     def test_global_implicit_sig(self):
         self.check_fib(self.mod.fib3)
 
-    @unittest.skip
     def test_runaway(self):
         with self.assertRaises(TypingError) as raises:
-            self.mod.runaway_self(123)
+            cfunc = self.mod.runaway_self
+
+            @cuda.jit('void()')
+            def kernel():
+                cfunc(1)
+
         self.assertIn("cannot type infer runaway recursion",
                       str(raises.exception))
 
