@@ -25,8 +25,8 @@ It comprises numerous facilities including just-in-time (JIT) compilation,
 extension points for library authors, and a compiler toolkit on which new
 computational acceleration technologies can be explored and built.
 
-The range of use-cases and application that can be targetted by Numba included
-(but is not limited to):
+The range of use-cases and application that can be targeted by Numba include
+(but are not limited to):
 
 * Scientific Computing
 * Computationally intensive tasks
