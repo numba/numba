@@ -28,7 +28,7 @@ from numba.np.linalg import ensure_blas
 from numba.core.extending import intrinsic
 from numba.core.errors import (RequireLiteralValue, TypingError,
                                NumbaValueError, NumbaNotImplementedError,
-                               NumbaTypeError, NumbaDeprecationWarning)
+                               NumbaTypeError)
 from numba.core.overload_glue import glue_lowering
 from numba.cpython.unsafe.tuple import tuple_setitem
 
@@ -4057,7 +4057,7 @@ def MachAr_impl():
 
     def impl():
         if np_122:
-            raise NumbaDeprecationWarning(
+            warnings.warn(
                 "`np.MachAr` is deprecated (NumPy 1.22)")
         return MachAr(*_mach_ar_data)
     return impl
