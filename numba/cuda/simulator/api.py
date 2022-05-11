@@ -77,7 +77,7 @@ event = Event
 
 def jit(func_or_sig=None, device=False, debug=False, argtypes=None,
         inline=False, restype=None, fastmath=False, link=None,
-        boundscheck=None,
+        boundscheck=None, opt=None
         ):
     # Here for API compatibility
     if boundscheck:
