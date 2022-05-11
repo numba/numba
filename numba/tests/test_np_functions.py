@@ -4,6 +4,7 @@ import itertools
 import math
 import platform
 from functools import partial
+import warnings
 
 import numpy as np
 
@@ -12,7 +13,7 @@ from numba import jit, njit, typeof
 from numba.core import types
 from numba.typed import List, Dict
 from numba.np.numpy_support import numpy_version
-from numba.core.errors import TypingError
+from numba.core.errors import TypingError, NumbaDeprecationWarning
 from numba.core.config import IS_WIN32, IS_32BITS
 from numba.core.utils import pysignature
 from numba.np.extensions import cross2d
@@ -4793,6 +4794,20 @@ def foo():
         with self.assertTypingError():
             cfunc = jit(nopython=True)(iinfo)
             cfunc(np.float64(7))
+
+    @unittest.skipUnless(numpy_version >= (1, 22), "Needs NumPy >= 1.22")
+    def test_np_MachAr_deprecation_np122(self):
+        # Tests that Numba is replaying the NumPy 1.22 deprecation warning
+        # raised on the getattr of 'MachAr' on the NumPy module.
+        msg = r'`np.MachAr` is deprecated \(NumPy 1.22\)'
+        with warnings.catch_warnings(record=True) as w:
+            warnings.filterwarnings("always", message=msg,
+                                    category=NumbaDeprecationWarning,)
+            f = njit(lambda : np.MachAr().eps)
+            f()
+
+        self.assertEqual(len(w), 1)
+        self.assertIn('`np.MachAr` is deprecated', str(w[0]))
 
 
 if __name__ == '__main__':
