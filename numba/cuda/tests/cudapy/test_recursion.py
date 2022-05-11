@@ -1,6 +1,6 @@
 from numba import cuda
 from numba.core.errors import TypingError
-from numba.cuda.testing import CUDATestCase
+from numba.cuda.testing import CUDATestCase, skip_on_cudasim
 import numpy as np
 import unittest
 
@@ -36,6 +36,7 @@ class TestSelfRecursion(CUDATestCase):
     def test_global_implicit_sig(self):
         self.check_fib(self.mod.fib3)
 
+    @skip_on_cudasim('Simulator does not compile')
     def test_runaway(self):
         with self.assertRaises(TypingError) as raises:
             cfunc = self.mod.runaway_self
@@ -103,6 +104,7 @@ class TestSelfRecursion(CUDATestCase):
 
             self.assertEqual(expected, actual)
 
+    @skip_on_cudasim('Recursion handled because simulator does not compile')
     def test_growing_return_tuple(self):
         cfunc = self.mod.make_growing_tuple_case(cuda.jit)
 
