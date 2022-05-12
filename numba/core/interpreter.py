@@ -702,11 +702,7 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                         found = True
                     else:
                         vararg_loc -= 1
-                if not found:
-                    # If we couldn't find where the args are created
-                    # then we can't handle this format.
-                    raise UnsupportedError(errmsg)
-                else:
+                if found:
                     # If this value is still a list to tuple raise the
                     # exception.
                     expr = blk.body[vararg_loc].value
