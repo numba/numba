@@ -685,6 +685,8 @@ class Cache(_Cache):
         codebytes = self._py_func.__code__.co_code
         if self._py_func.__closure__ is not None:
             cvars = tuple([x.cell_contents for x in self._py_func.__closure__])
+            # Note: cloudpickle serializes a function differently depending
+            #       on how the process is launched; e.g. multiprocessing.Process
             cvarbytes = dumps(cvars)
         else:
             cvarbytes = b''
