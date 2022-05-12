@@ -31,6 +31,41 @@ def simple_fp16_ne(ary, a, b):
     ary[0] = a != b
 
 
+@cuda.jit('b1(f2, f2)', device=True)
+def hlt_func_1(x, y):
+    return x < y
+
+
+@cuda.jit('b1(f2, f2)', device=True)
+def hlt_func_2(x, y):
+    return x < y
+
+
+def test_multiple_hcmp_1(r, a, b, c):
+    # float16 predicates used in two separate functions
+    r[0] = hlt_func_1(a, b) and hlt_func_2(b, c)
+
+
+def test_multiple_hcmp_2(r, a, b, c):
+    # The same float16 predicate used in the caller and callee
+    r[0] = hlt_func_1(a, b) and b < c
+
+
+def test_multiple_hcmp_3(r, a, b, c):
+    # Different float16 predicates used in the caller and callee
+    r[0] = hlt_func_1(a, b) and c >= b
+
+
+def test_multiple_hcmp_4(r, a, b, c):
+    # The same float16 predicates used twice in a function
+    r[0] = a < b and b < c
+
+
+def test_multiple_hcmp_5(r, a, b, c):
+    # Different float16 predicates used in a function
+    r[0] = a < b and c >= b
+
+
 class TestOperatorModule(CUDATestCase):
     """
     Test if operator module is supported by the CUDA target.
@@ -83,6 +118,45 @@ class TestOperatorModule(CUDATestCase):
                 kernel[1, 1](got, arg1[0], arg2[0])
                 expected = op(arg1, arg2)
                 self.assertEqual(got[0], expected)
+
+    @skip_unless_cc_53
+    def test_mixed_fp16_comparison(self):
+        functions = (simple_fp16_gt, simple_fp16_ge,
+                     simple_fp16_lt, simple_fp16_le,
+                     simple_fp16_eq, simple_fp16_ne)
+        ops = (operator.gt, operator.ge, operator.lt, operator.le,
+               operator.eq, operator.ne)
+        types = (np.int8, np.int16, np.int32, np.int64,
+                 np.float32, np.float64)
+        for fn, op, ty in zip(functions, ops, types):
+            with self.subTest(op=op):
+                kernel = cuda.jit(fn)
+
+                expected = np.zeros(1, dtype=np.bool8)
+                got = np.zeros(1, dtype=np.bool8)
+                arg1 = np.random.random(1).astype(np.float16)
+                arg2 = (np.random.random(1) * 100).astype(ty)
+
+                kernel[1, 1](got, arg1[0], arg2[0])
+                expected = op(arg1, arg2)
+                self.assertEqual(got[0], expected)
+
+    @skip_unless_cc_53
+    def test_multiple_float16_comparisons(self):
+        functions = (test_multiple_hcmp_1,
+                     test_multiple_hcmp_2,
+                     test_multiple_hcmp_3,
+                     test_multiple_hcmp_4,
+                     test_multiple_hcmp_5)
+        for fn in functions:
+            with self.subTest(fn=fn):
+                compiled = cuda.jit("void(b1[:], f2, f2, f2)")(fn)
+                ary = np.zeros(1, dtype=np.bool8)
+                arg1 = np.float16(2.)
+                arg2 = np.float16(3.)
+                arg3 = np.float16(4.)
+                compiled[1, 1](ary, arg1, arg2, arg3)
+                self.assertTrue(ary[0])
 
     @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_fp16_comparison_ptx(self):

@@ -5,6 +5,7 @@ from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          AbstractTemplate, CallableTemplate,
                                          signature, Registry)
 from numba.cuda.types import dim3, grid_group
+from numba.core.typeconv import Conversion
 from numba import cuda
 import operator
 
@@ -373,11 +374,17 @@ def _genfp16_comparison_operator(l_key):
 
         def generic(self, args, kws):
             assert not kws
+
             if len(args) == 2 and \
                     (args[0] == types.float16 or args[1] == types.float16):
-                return signature(types.b1, types.float16, types.float16)
+                if (args[0] == types.float16):
+                    convertible = self.context.can_convert(args[1], args[0])
+                else:
+                    convertible = self.context.can_convert(args[0], args[1])
 
-    return Cuda_fp16_cmp2
+                if (convertible == Conversion.exact) or \
+                        (convertible == Conversion.promote):
+                    return signature(types.b1, types.float16, types.float16)
 
 
 Cuda_hadd = _genfp16_binary(cuda.fp16.hadd)
@@ -388,17 +395,17 @@ Cuda_hmin = _genfp16_binary(cuda.fp16.hmin)
 Cuda_hneg = _genfp16_unary(cuda.fp16.hneg)
 Cuda_habs = _genfp16_unary(cuda.fp16.habs)
 Cuda_heq = _genfp16_binary_comparison(cuda.fp16.heq)
-Cuda_eq = _genfp16_comparison_operator(operator.eq)
+_genfp16_comparison_operator(operator.eq)
 Cuda_hne = _genfp16_binary_comparison(cuda.fp16.hne)
-Cuda_ne = _genfp16_comparison_operator(operator.ne)
+_genfp16_comparison_operator(operator.ne)
 Cuda_hge = _genfp16_binary_comparison(cuda.fp16.hge)
-Cuda_ge = _genfp16_comparison_operator(operator.ge)
+_genfp16_comparison_operator(operator.ge)
 Cuda_hgt = _genfp16_binary_comparison(cuda.fp16.hgt)
-Cuda_gt = _genfp16_comparison_operator(operator.gt)
+_genfp16_comparison_operator(operator.gt)
 Cuda_hle = _genfp16_binary_comparison(cuda.fp16.hle)
-Cuda_le = _genfp16_comparison_operator(operator.le)
+_genfp16_comparison_operator(operator.le)
 Cuda_hlt = _genfp16_binary_comparison(cuda.fp16.hlt)
-Cuda_lt = _genfp16_comparison_operator(operator.lt)
+_genfp16_comparison_operator(operator.lt)
 
 
 # generate atomic operations
