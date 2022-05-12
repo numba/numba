@@ -867,7 +867,7 @@ def peep_hole_list_to_tuple(func_ir):
                 # Finally write the result back into the original build list as
                 # everything refers to it.
                 append_and_fix(ir.Assign(acc, t2l_agn.target,
-                                          the_build_list.loc))
+                                         the_build_list.loc))
                 if _DEBUG:
                     print("\nNEW HOLE:")
                     for x in new_hole:
