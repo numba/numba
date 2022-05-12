@@ -97,7 +97,7 @@ JIT functions
 
    .. _jit-decorator-boundscheck:
 
-   If True, ``boundscheck`` enables bounds checking for array indices. Out of
+   If true, *boundscheck* enables bounds checking for array indices. Out of
    bounds accesses will raise IndexError. The default is to not do bounds
    checking. If bounds checking is disabled, out of bounds accesses can
    produce garbage results or segfaults. However, enabling bounds checking

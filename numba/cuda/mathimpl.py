@@ -1,7 +1,7 @@
 import math
 import operator
 from llvmlite import ir
-from numba.core import types, typing, utils, cgutils
+from numba.core import types, typing, cgutils
 from numba.core.imputils import Registry
 from numba.types import float32, float64, int64, uint64
 from numba.cuda import libdevice
@@ -58,8 +58,7 @@ binarys += [('atan2', 'atan2f', math.atan2)]
 binarys += [('pow', 'powf', math.pow)]
 binarys += [('fmod', 'fmodf', math.fmod)]
 binarys += [('hypot', 'hypotf', math.hypot)]
-if utils.PYVERSION >= (3, 7):
-    binarys += [('remainder', 'remainderf', math.remainder)]
+binarys += [('remainder', 'remainderf', math.remainder)]
 
 binarys_fastmath = {}
 binarys_fastmath['powf'] = 'fast_powf'

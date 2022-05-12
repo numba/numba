@@ -948,7 +948,7 @@ class BaseContext(object):
         res = imputils.fix_returning_optional(self, builder, sig, status, res)
         return res
 
-    def get_executable(self, func, fndesc):
+    def get_executable(self, func, fndesc, env):
         raise NotImplementedError
 
     def get_python_api(self, builder):

@@ -1,4 +1,3 @@
-import ctypes
 import json
 import locale
 import multiprocessing
@@ -354,11 +353,8 @@ def get_sysinfo():
             sys_info[_cu_detect_out] = output.getvalue()
             output.close()
 
-            sys_info[_cu_drv_ver] = cudriver.get_version()
-
-            rtver = ctypes.c_int(0)
-            curuntime.cudaRuntimeGetVersion(ctypes.byref(rtver))
-            sys_info[_cu_rt_ver] = rtver.value
+            sys_info[_cu_drv_ver] = '%s.%s' % cudriver.get_version()
+            sys_info[_cu_rt_ver] = '%s.%s' % curuntime.get_version()
 
             output = StringIO()
             with redirect_stdout(output):
