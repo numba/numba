@@ -7,7 +7,7 @@ from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          signature, Registry)
 from numba.cuda.types import dim3, grid_group
 from numba import cuda
-
+from numba.core.typeconv import Conversion
 
 registry = Registry()
 register = registry.register
@@ -376,9 +376,18 @@ def _genfp16_binary_operator(l_key):
 
         def generic(self, args, kws):
             assert not kws
+
             if len(args) == 2 and \
                     (args[0] == types.float16 or args[1] == types.float16):
-                return signature(types.float16, types.float16, types.float16)
+                if (args[0] == types.float16):
+                    convertible = self.context.can_convert(args[1], args[0])
+                else:
+                    convertible = self.context.can_convert(args[0], args[1])
+
+                if (convertible == Conversion.exact) or \
+                        (convertible == Conversion.promote):
+                    return signature(types.float16, types.float16,
+                                     types.float16)
 
     return Cuda_fp16_binary2
 
