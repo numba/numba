@@ -5,7 +5,7 @@ from numba import cuda, int64
 from numba.cuda import compile_ptx
 from numba.core.types import f2
 from numba.cuda.testing import (unittest, CUDATestCase, skip_on_cudasim,
-                                skip_unless_cc_53)
+                                skip_unless_cc_53, skip_unless_cuda_python)
 
 
 def simple_threadidx(ary):
@@ -503,6 +503,7 @@ class TestCudaIntrinsic(CUDATestCase):
         else:
             self.assertIn('abs.f16', ptx)
 
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_hsin(self):
         @cuda.jit()
         def hsin_vectors(r, x):
@@ -521,6 +522,7 @@ class TestCudaIntrinsic(CUDATestCase):
         hsin_vectors[1, 32](r, x)
         np.testing.assert_allclose(r, np.sin(x, dtype=np.float16))
 
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_hcos(self):
         @cuda.jit()
         def hcos_vectors(r, x):
@@ -539,6 +541,7 @@ class TestCudaIntrinsic(CUDATestCase):
         hcos_vectors[1, 32](r, x)
         np.testing.assert_allclose(r, np.cos(x, dtype=np.float16))
 
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_hlog(self):
         @cuda.jit()
         def hlog_vectors(r, x):
@@ -557,6 +560,7 @@ class TestCudaIntrinsic(CUDATestCase):
         hlog_vectors[1, 32](r, x)
         np.testing.assert_allclose(r, np.log(x, dtype=np.float16))
 
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_hlog2(self):
         @cuda.jit()
         def hlog_vectors(r, x):
@@ -575,6 +579,7 @@ class TestCudaIntrinsic(CUDATestCase):
         hlog_vectors[1, 32](r, x)
         np.testing.assert_allclose(r, np.log2(x, dtype=np.float16))
 
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_hlog10(self):
         @cuda.jit()
         def hlog10_vectors(r, x):
@@ -593,6 +598,7 @@ class TestCudaIntrinsic(CUDATestCase):
         hlog10_vectors[1, 32](r, x)
         np.testing.assert_allclose(r, np.log10(x, dtype=np.float16))
 
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_hexp(self):
         @cuda.jit()
         def hexp_vectors(r, x):
@@ -611,6 +617,7 @@ class TestCudaIntrinsic(CUDATestCase):
         hexp_vectors[1, 32](r, x)
         np.testing.assert_allclose(r, np.exp(x, dtype=np.float16))
 
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_hexp2(self):
         @cuda.jit()
         def hexp2_vectors(r, x):
@@ -629,6 +636,7 @@ class TestCudaIntrinsic(CUDATestCase):
         hexp2_vectors[1, 32](r, x)
         np.testing.assert_allclose(r, np.exp2(x, dtype=np.float16))
 
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_hexp10(self):
         @cuda.jit()
         def hexp10_vectors(r, x):
@@ -647,6 +655,7 @@ class TestCudaIntrinsic(CUDATestCase):
         hexp10_vectors[1, 32](r, x)
         np.testing.assert_allclose(r, 10 ** x)
 
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_hsqrt(self):
         @cuda.jit()
         def hsqrt_vectors(r, x):
@@ -665,6 +674,7 @@ class TestCudaIntrinsic(CUDATestCase):
         hsqrt_vectors[1, 32](r, x)
         np.testing.assert_allclose(r, np.sqrt(x, dtype=np.float16))
 
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_hceil(self):
         @cuda.jit()
         def hceil_vectors(r, x):
@@ -683,6 +693,7 @@ class TestCudaIntrinsic(CUDATestCase):
         hceil_vectors[1, 32](r, x)
         np.testing.assert_allclose(r, np.ceil(x, dtype=np.float16))
 
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_hfloor(self):
         @cuda.jit()
         def hfloor_vectors(r, x):
@@ -701,6 +712,7 @@ class TestCudaIntrinsic(CUDATestCase):
         hfloor_vectors[1, 32](r, x)
         np.testing.assert_allclose(r, np.floor(x, dtype=np.float16))
 
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_hrcp(self):
         @cuda.jit()
         def hrcp_vectors(r, x):
@@ -719,6 +731,7 @@ class TestCudaIntrinsic(CUDATestCase):
         hrcp_vectors[1, 32](r, x)
         np.testing.assert_allclose(r, np.reciprocal(x, dtype=np.float16))
 
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_hrsqrt(self):
         @cuda.jit()
         def hrsqrt_vectors(r, x):
@@ -737,6 +750,7 @@ class TestCudaIntrinsic(CUDATestCase):
         hrsqrt_vectors[1, 32](r, x)
         np.testing.assert_allclose(r, x ** -0.5)
 
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_htrunc(self):
         @cuda.jit()
         def htrunc_vectors(r, x):
@@ -755,6 +769,7 @@ class TestCudaIntrinsic(CUDATestCase):
         htrunc_vectors[1, 32](r, x)
         np.testing.assert_allclose(r, np.trunc(x, dtype=np.float16))
 
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_hrint(self):
         @cuda.jit()
         def hrint_vectors(r, x):

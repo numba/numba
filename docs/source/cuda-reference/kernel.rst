@@ -599,6 +599,12 @@ These functions return a 16-bit floating point result.
 
    Returns the 16-bit floating point result of the rounding.
 
+.. function:: numba.cuda.fp16.htrunc (a)
+
+   Truncate the input 16-bit floating point argument to nearest integer value.
+
+   Returns the 16-bit floating point result of the truncation.
+
 Control Flow Instructions
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
