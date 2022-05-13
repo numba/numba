@@ -85,7 +85,7 @@ class CUDATargetContext(BaseContext):
 
     def init(self):
         self._internal_codegen = codegen.JITCUDACodegen("numba.cuda.jit")
-        self._target_data = ll.create_target_data(nvvm.default_data_layout)
+        self._target_data = ll.create_target_data(nvvm.data_layout)
 
     def load_additional_registries(self):
         # side effect of import needed for numba.cpython.*, the builtins
