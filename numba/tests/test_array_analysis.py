@@ -742,6 +742,17 @@ class TestArrayAnalysis(TestCase):
                                        self.with_equiv('e', ('m', 'k', 'n')),
                                        self.with_equiv('et', ('m', 'k', 'n'))])
 
+        def test_real_imag_attr(m, n):
+            a = np.ones((m, n))
+            b = a.real
+            c = a.imag
+
+        self._compile_and_test(test_real_imag_attr, (types.intp, types.intp),
+                               equivs=[self.with_equiv('a', ('m', 'n')),
+                                       self.with_equiv('b', ('m', 'n')),
+                                       self.with_equiv('c', ('m', 'n')),
+                                       ])
+
         def test_random(n):
             a0 = np.random.rand(n)
             a1 = np.random.rand(n, n)

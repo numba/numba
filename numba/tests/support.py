@@ -77,11 +77,19 @@ skip_unless_py10_or_later = unittest.skipUnless(
     "needs Python 3.10 or later"
 )
 
+skip_unless_py10 = unittest.skipUnless(
+    utils.PYVERSION == (3, 10),
+    "needs Python 3.10"
+)
+
 _msg = "SciPy needed for test"
 skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
 
 _lnx_reason = 'linux only test'
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
+
+_win_reason = 'Windows-only test'
+windows_only = unittest.skipIf(not sys.platform.startswith('win'), _win_reason)
 
 _is_armv7l = platform.machine() == 'armv7l'
 

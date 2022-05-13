@@ -738,7 +738,7 @@ def impl_get(dct, key, default=None):
 
     def impl(dct, key, default=None):
         castedkey = _cast(key, keyty)
-        ix, val = _dict_lookup(dct, key, hash(castedkey))
+        ix, val = _dict_lookup(dct, castedkey, hash(castedkey))
         if ix > DKIX.EMPTY:
             return val
         return default

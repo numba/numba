@@ -7,6 +7,10 @@ Sharing CUDA Memory
 Sharing between process
 =======================
 
+Sharing between processes is implemented using the Legacy CUDA IPC API
+(functions whose names begin with ``cuIpc``), and is supported only on Linux.
+
+
 Export device array to another process
 --------------------------------------
 
