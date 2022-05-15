@@ -590,3 +590,14 @@ class NestedArray(Array):
     @property
     def key(self):
         return self.dtype, self.shape
+
+class NumPyRandomBitGeneratorType(Type):
+    def __init__(self, *args, **kwargs):
+        super(NumPyRandomBitGeneratorType, self).__init__(*args, **kwargs)
+        self.name = 'NumPyRandomBitGeneratorType'
+
+
+class NumPyRandomGeneratorType(Type):
+    def __init__(self, *args, **kwargs):
+        super(NumPyRandomGeneratorType, self).__init__(*args, **kwargs)
+        self.name = 'NumPyRandomGeneratorType'

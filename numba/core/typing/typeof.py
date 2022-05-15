@@ -11,6 +11,12 @@ from numba.np import numpy_support
 # terminal color markup
 _termcolor = errors.termcolor()
 
+# https://github.com/numba/numba/pull/7900#issuecomment-1065026619
+try:
+    from numpy.random._bit_generator import BitGenerator
+except ImportError:
+    from numpy.random.bit_generator import BitGenerator
+
 
 class Purpose(enum.Enum):
     # Value being typed is used as an argument
@@ -265,3 +271,13 @@ def _typeof_nb_type(val, c):
         return types.NumberClass(val)
     else:
         return types.TypeRef(val)
+
+
+@typeof_impl.register(BitGenerator)
+def typeof_numpy_random_bitgen(val, c):
+    return types.NumPyRandomBitGeneratorType(val)
+
+
+@typeof_impl.register(np.random.Generator)
+def typeof_random_generator(val, c):
+    return types.NumPyRandomGeneratorType(val)
