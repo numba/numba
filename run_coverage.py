@@ -16,22 +16,28 @@ except ImportError:
 
 
 if __name__ == "__main__":
+    # We disallow single-process mode, since some hacks are needed for
+    # multiprocess'ed coverage to work.
+    for arg in sys.argv:
+        if arg.startswith('-m') or arg.startswith('--multiprocess'):
+            print("Coverage can only be run single-threaded; multiprocess "
+                  "requested. Aborting.")
+            sys.exit(1)
+
     # We must start coverage before importing the package under test,
     # otherwise some lines will be missed.
     config_file = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)),
-        '.coveragerc')
+        os.path.dirname(__file__),
+        'coverage.conf')
     os.environ['COVERAGE_PROCESS_START'] = config_file
     cov = coverage.coverage(config_file=config_file)
     cov.start()
 
-    from numba import runtests
+    from numba.testing import _runtests
 
     html_dir = 'htmlcov'
     try:
-        # NOTE: we force single-process mode, since some hacks are needed
-        # for multiprocess'ed coverage to work.
-        runtests.main(*sys.argv[1:])
+        _runtests.main(*sys.argv)
     except SystemExit:
         pass
     finally:
