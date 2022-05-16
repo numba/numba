@@ -584,7 +584,7 @@ Modules
 ----------
 
 Generator Objects
-''''''''''''
+'''''''''''''''''
 Numba supports `numpy.random.Generator()` objects and their respective
 methods. Numpy's `Generator` objects rely on `BitGenerator` to manage state
 and generate the random bits, which are then transformed into random
@@ -595,6 +595,8 @@ and their functions be used within Numba-Jit code. Note that since only referenc
 to `BitGenerator` objects are maintained, any change to the state of a particular
 `Generator` object outside Numba code would affect the state of `Generator`
 inside the Numba code.
+
+.. code-block:: python
 
   import numpy as np
   import numba
@@ -622,7 +624,8 @@ The following `Generator` methods are supported:
 * :func:`numpy.random.Generator().random()`
 
 RandomState and legacy Random number generation
-''''''''''''
+'''''''''''''''''''''''''''''''''''''''''''''''
+
 Numba supports top-level functions from the
 `numpy.random <http://docs.scipy.org/doc/numpy/reference/routines.random.html>`_
 module, but does not allow you to create individual RandomState instances.
