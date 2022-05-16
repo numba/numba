@@ -195,8 +195,6 @@ def omitted_child_test_wrapper(result_queue, cache_dir, second_call):
 
 
 class BaseCacheTest(TestCase):
-    # This class is also used in test_cfunc.py.
-
     # The source file that will be copied
     usecases_file = None
     # Make sure this doesn't conflict with another module
@@ -250,7 +248,7 @@ class BaseCacheTest(TestCase):
         pass
 
 
-class BaseCacheUsecasesTest(BaseCacheTest):
+class DispatcherCacheUsecasesTest(BaseCacheTest):
     here = os.path.dirname(__file__)
     usecases_file = os.path.join(here, "cache_usecases.py")
     modname = "dispatcher_caching_test_fodder"
@@ -286,7 +284,7 @@ class BaseCacheUsecasesTest(BaseCacheTest):
                              st.cache_misses)
 
 
-class TestCache(BaseCacheUsecasesTest):
+class TestCache(DispatcherCacheUsecasesTest):
 
     def test_caching(self):
         self.check_pycache(0)
@@ -707,7 +705,7 @@ class TestCache(BaseCacheUsecasesTest):
 
 
 @skip_parfors_unsupported
-class TestSequentialParForsCache(BaseCacheUsecasesTest):
+class TestSequentialParForsCache(DispatcherCacheUsecasesTest):
     def setUp(self):
         super(TestSequentialParForsCache, self).setUp()
         # Turn on sequential parfor lowering
@@ -730,7 +728,7 @@ class TestSequentialParForsCache(BaseCacheUsecasesTest):
         self.check_pycache(2)  # 1 index, 1 data
 
 
-class TestCacheWithCpuSetting(BaseCacheUsecasesTest):
+class TestCacheWithCpuSetting(DispatcherCacheUsecasesTest):
     # Disable parallel testing due to envvars modification
     _numba_parallel_test_ = False
 
