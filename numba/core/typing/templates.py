@@ -809,7 +809,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
         # Check type of pyfunc
         if not isinstance(pyfunc, FunctionType):
-            msg = ("Implementator function returned by `@overload` "
+            msg = ("Implementation function returned by `@overload` "
                    "has an unexpected type.  Got {}")
             raise AssertionError(msg.format(pyfunc))
 
