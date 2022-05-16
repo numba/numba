@@ -369,7 +369,7 @@ def _genfp16_binary_comparison(l_key):
 
 def _genfp16_comparison_operator(l_key):
     @register_global(l_key)
-    class Cuda_fp16_cmp2(AbstractTemplate):
+    class Cuda_fp16_operator_cmp(AbstractTemplate):
         key = l_key
 
         def generic(self, args, kws):
