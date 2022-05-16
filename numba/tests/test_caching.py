@@ -278,22 +278,6 @@ class BaseCacheUsecasesTest(BaseCacheTest):
                 % (popen.returncode, out.decode(), err.decode()),
             )
 
-    def check_module(self, mod):
-        self.check_pycache(0)
-        f = mod.add_usecase
-        self.assertPreciseEqual(f(2, 3), 6)
-        self.check_pycache(2)  # 1 index, 1 data
-        self.assertPreciseEqual(f(2.5, 3), 6.5)
-        self.check_pycache(3)  # 1 index, 2 data
-
-        f = mod.add_objmode_usecase
-        self.assertPreciseEqual(f(2, 3), 6)
-        self.check_pycache(5)  # 2 index, 3 data
-        self.assertPreciseEqual(f(2.5, 3), 6.5)
-        self.check_pycache(6)  # 2 index, 4 data
-
-        mod.self_test()
-
     def check_hits(self, func, hits, misses=None):
         st = func.stats
         self.assertEqual(sum(st.cache_hits.values()), hits, st.cache_hits)
