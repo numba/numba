@@ -22,7 +22,6 @@ class CUDATypingContext(typing.BaseContext):
         from . import cudadecl, cudamath, libdevicedecl, vector_types
         from numba.core.typing import enumdecl
 
-        vector_types.initialize_once()
         self.install_registry(cudadecl.registry)
         self.install_registry(cudamath.registry)
         self.install_registry(cmathdecl.registry)
@@ -102,7 +101,6 @@ class CUDATargetContext(BaseContext):
             cudaimpl, printimpl, libdeviceimpl, mathimpl, vector_types
         )
 
-        vector_types.initialize_once()
         self.install_registry(cudaimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(libdeviceimpl.registry)

@@ -112,14 +112,6 @@ def make_fancy_creation_kernel(vtype):
 
 class TestCudaVectorType(CUDATestCase):
 
-    def setUp(self):
-        """Compile a empty kernel to initialize vector types."""
-        super().setUp()
-
-        @cuda.jit("()")
-        def k():
-            pass
-
     def test_creation_readout(self):
         for vty in vector_types.values():
             with self.subTest(vty=vty):

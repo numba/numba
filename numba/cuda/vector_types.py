@@ -22,14 +22,6 @@ register_global = typing_registry.register_global
 lower = impl_registry.lower
 
 
-def once(func):
-    def wrapper(*args, **kwargs):
-        if not hasattr(func, "_has_run"):
-            func._has_run = True
-            return func(*args, **kwargs)
-    return wrapper
-
-
 class VectorType(types.Type):
     def __init__(self, name, base_type, attr_names, user_facing_object):
         self._base_type = base_type
@@ -174,8 +166,7 @@ def build_constructor_overloads(base_type, vty_name, num_elements, arglists, l):
         l.pop(-1)
 
 
-@once
-def initialize_once():
+def _initialize():
     vector_type_attribute_names = ("x", "y", "z", "w")
     for stub in stubs._vector_type_stubs:
         type_name = stub.__name__
@@ -191,3 +182,6 @@ def initialize_once():
             vty.base_type, vty.name, vty.num_elements, arglists, l
         )
         enable_vector_type_ctor(vty, arglists)
+
+
+_initialize()
