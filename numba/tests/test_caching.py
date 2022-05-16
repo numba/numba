@@ -1018,5 +1018,62 @@ def function2(x):
         self.assertEqual(popen.returncode, 0, msg)
 
 
+class TestCFuncCache(BaseCacheTest):
+
+    here = os.path.dirname(__file__)
+    usecases_file = os.path.join(here, "cfunc_cache_usecases.py")
+    modname = "cfunc_caching_test_fodder"
+
+    def run_in_separate_process(self):
+        # Cached functions can be run from a distinct process.
+        code = """if 1:
+            import sys
+
+            sys.path.insert(0, %(tempdir)r)
+            mod = __import__(%(modname)r)
+            mod.self_test()
+
+            f = mod.add_usecase
+            assert f.cache_hits == 1
+            f = mod.outer
+            assert f.cache_hits == 1
+            f = mod.div_usecase
+            assert f.cache_hits == 1
+            """ % dict(tempdir=self.tempdir, modname=self.modname)
+
+        popen = subprocess.Popen([sys.executable, "-c", code],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = popen.communicate()
+        if popen.returncode != 0:
+            raise AssertionError(f"process failed with code {popen.returncode}:"
+                                 f"stderr follows\n{err.decode()}\n")
+
+    def check_module(self, mod):
+        mod.self_test()
+
+    def test_caching(self):
+        self.check_pycache(0)
+        mod = self.import_module()
+        self.check_pycache(6)  # 3 index, 3 data
+
+        self.assertEqual(mod.add_usecase.cache_hits, 0)
+        self.assertEqual(mod.outer.cache_hits, 0)
+        self.assertEqual(mod.add_nocache_usecase.cache_hits, 0)
+        self.assertEqual(mod.div_usecase.cache_hits, 0)
+        self.check_module(mod)
+
+        # Reload module to hit the cache
+        mod = self.import_module()
+        self.check_pycache(6)  # 3 index, 3 data
+
+        self.assertEqual(mod.add_usecase.cache_hits, 1)
+        self.assertEqual(mod.outer.cache_hits, 1)
+        self.assertEqual(mod.add_nocache_usecase.cache_hits, 0)
+        self.assertEqual(mod.div_usecase.cache_hits, 1)
+        self.check_module(mod)
+
+        self.run_in_separate_process()
+
+
 if __name__ == '__main__':
     unittest.main()

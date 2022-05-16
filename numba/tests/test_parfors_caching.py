@@ -3,7 +3,7 @@ import os.path
 import numpy as np
 
 from numba.tests.support import skip_parfors_unsupported
-from .test_dispatcher import BaseCacheUsecasesTest
+from .test_caching import BaseCacheUsecasesTest
 
 
 @skip_parfors_unsupported
