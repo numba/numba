@@ -76,7 +76,16 @@ get_num_threads(void)
 static int
 get_thread_id(void)
 {
-    return tbb::this_task_arena::current_thread_index();
+    int tid = tbb::this_task_arena::current_thread_index();
+    // This function may be called from pure python or from a sequential JIT
+    // region, in either case, the task_arena may not be initialised. This
+    // condition is intercepted and a thread ID of 0 is returned.
+    if (tid == tbb::task_arena::not_initialized)
+    {
+        return 0;
+    } else {
+        return tid;
+    }
 }
 
 // watch the arena, if it decides to create more threads/add threads into the
