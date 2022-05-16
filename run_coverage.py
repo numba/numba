@@ -16,6 +16,14 @@ except ImportError:
 
 
 if __name__ == "__main__":
+    # To be invoked in the same way as the numba.runtests module
+    if len(sys.argv) < 2:
+        print("Usage: run_coverage.py <arguments to numba.runtests module...>")
+        print("Note: running with no arguments is not supported.")
+        print("")
+        print("Example: ./run_coverage.py numba.tests")
+        sys.exit(1)
+
     # We disallow single-process mode, since some hacks are needed for
     # multiprocess'ed coverage to work.
     for arg in sys.argv:
