@@ -7,6 +7,7 @@ Numba for CUDA GPUs
 .. toctree::
 
    overview.rst
+   types.rst
    kernels.rst
    memory.rst
    device-functions.rst
