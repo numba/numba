@@ -87,11 +87,7 @@ if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
 fi
 
 # Install latest llvmlite build
-if  [[ $(uname) == Darwin ]]; then # temporary workaround for broken OSX builds
-    $CONDA_INSTALL -c numba/label/dev "llvmlite=0.39.0dev0*=*63"
-else
-    $CONDA_INSTALL -c numba/label/dev llvmlite
-fi
+$CONDA_INSTALL -c numba/label/dev llvmlite
 
 # Install importlib-metadata for Python < 3.9
 if [ $PYTHON \< "3.9" ]; then $CONDA_INSTALL importlib_metadata; fi
