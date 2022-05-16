@@ -7,6 +7,11 @@ from numba.cuda.vector_types import vector_types
 
 
 def make_kernel(vtype):
+    """
+    Returns a jit compiled kernel that constructs a vector types of
+    the given type, using the exact number of primitive types to
+    construct the vector type.
+    """
     vobj = vtype.user_facing_object
     base_type = vtype.base_type
 
@@ -47,6 +52,12 @@ def make_kernel(vtype):
 
 
 def make_fancy_creation_kernel(vtype):
+    """
+    Returns a jit compiled kernel that constructs a vector type using the
+    "fancy" construction, that is, with arbitrary combinations of primitive
+    types and vector types, as long as the total element of the construction
+    is the same as the number of elements of the vector type.
+    """
     base_type = vtype.base_type
     v2 = getattr(cuda, f"{vtype.name[:-1]}2")
     v3 = getattr(cuda, f"{vtype.name[:-1]}3")
@@ -58,10 +69,16 @@ def make_fancy_creation_kernel(vtype):
         three = base_type(3.0)
         four = base_type(4.0)
 
+        # Construct a 2-component vector type, possible combination includes:
+        # v2(p, p), v2(v2), (p is a primitive type)
+
         # 2 3
         f2 = v2(two, three)
         # 2 3
         f2_2 = v2(f2)
+
+        # Construct a 3-component vector type, possible combination includes:
+        # v3(p, p, p), v3(p, v2), v3(v2, p), v3(v3), (p is a primitive type)
 
         # 2 3 1
         f3 = v3(f2, one)
@@ -71,6 +88,10 @@ def make_fancy_creation_kernel(vtype):
         f3_3 = v3(one, two, three)
         # 2 3 1
         f3_4 = v3(f3)
+
+        # Construct a 4-component vector type, possible combination includes:
+        # v4(p, p, p, p), v4(p, p, v2), v4(p, v2, p), v4(v2, p, p), v4(v2, v2),
+        # v4(p, v3), v4(v3, p), v4(v4), (p is a primitive type)
 
         # 1 2 3 4
         f4 = v4(one, two, three, four)
@@ -88,6 +109,8 @@ def make_fancy_creation_kernel(vtype):
         f4_7 = v4(four, f3)
         # 1 2 3 4
         f4_8 = v4(f4)
+
+        # Write all constructed elements out to the result array
 
         res[0] = f2.x
         res[1] = f2.y
