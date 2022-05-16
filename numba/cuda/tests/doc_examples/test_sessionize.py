@@ -1,11 +1,12 @@
 import unittest
 
 from numba.cuda.testing import (CUDATestCase, skip_if_cudadevrt_missing,
-                                skip_on_cudasim)
+                                skip_on_cudasim, skip_unless_cc_60)
 from numba.tests.support import captured_stdout
 
 
 @skip_if_cudadevrt_missing
+@skip_unless_cc_60
 @skip_on_cudasim("cudasim doesn't support cuda import at non-top-level")
 class TestSessionization(CUDATestCase):
     """
