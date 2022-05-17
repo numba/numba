@@ -1120,7 +1120,6 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
 
     struct_ptr = cgutils.create_struct_proxy(typ)(c.context, c.builder)
     struct_ptr.parent = obj
-    # c.pyapi.incref(obj)  # ? need to hold ref to the underlying python obj
 
     # Get the .ctypes attr
     ctypes_binding = c.pyapi.object_getattr_string(obj, 'ctypes')
@@ -1177,7 +1176,7 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
     wire_in_fnptrs('next_uint64')
     wire_in_fnptrs('next_uint32')
 
-    # This is the same as the `state` member but its the bit_generator address,
+    # This is the same as the `state` member but it's the bit_generator address,
     # it's probably never needed.
     interface_bit_generator = c.pyapi.object_getattr_string(
         ctypes_binding, 'bit_generator')

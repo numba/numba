@@ -7,15 +7,15 @@ import numpy as np
 
 from numba.core import types, utils, errors
 from numba.np import numpy_support
-
+from numba.np.numpy_support import numpy_version
 # terminal color markup
 _termcolor = errors.termcolor()
 
 # Note that the BitGenerator class exists in _bit_generator.pxd in
 # NumPy 1.18 (has underscore) and then bit_generator.pxd in NumPy 1.19
-try:
+if numpy_version < (1, 19):
     from numpy.random._bit_generator import BitGenerator
-except ImportError:
+else:
     from numpy.random.bit_generator import BitGenerator
 
 

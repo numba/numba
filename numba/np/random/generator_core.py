@@ -1,12 +1,12 @@
+"""
+Core Implementations for Generator/BitGenerator Models.
+"""
 
 from llvmlite import ir
 from numba.core import cgutils, types
 from numba.core.extending import (intrinsic, make_attribute_wrapper, models,
                                   overload, register_jitable,
                                   register_model)
-from numba.core.imputils import Registry
-
-registry = Registry('generator_core')
 
 
 @register_model(types.NumPyRandomBitGeneratorType)
@@ -49,7 +49,7 @@ make_attribute_wrapper(
 
 
 # Generate the overloads for "next_(some type)" functions
-def generate_next_binding(overloadable_function, return_type):
+def _generate_next_binding(overloadable_function, return_type):
     @intrinsic
     def intrin_NumPyRandomBitGeneratorType_next_ty(tyctx, inst):
         sig = return_type(inst)
@@ -76,9 +76,9 @@ def generate_next_binding(overloadable_function, return_type):
             next_fn = cgutils.get_or_insert_function(
                 builder.module, fnty, name)
             # Bit cast the function pointer to the function type
-            hack = builder.bitcast(next_fn_fnptr, next_fn.type)
+            fnptr_as_fntype = builder.bitcast(next_fn_fnptr, next_fn.type)
             # call it with the "state" address as the arg
-            ret = builder.call(hack, (state,))
+            ret = builder.call(fnptr_as_fntype, (state,))
             return ret
         return sig, codegen
 
@@ -103,9 +103,9 @@ def next_uint64(bitgen):
     return bitgen.ctypes.next_uint64(bitgen.ctypes.state)
 
 
-generate_next_binding(next_double, types.double)
-generate_next_binding(next_uint32, types.uint32)
-generate_next_binding(next_uint64, types.uint64)
+_generate_next_binding(next_double, types.double)
+_generate_next_binding(next_uint32, types.uint32)
+_generate_next_binding(next_uint64, types.uint64)
 
 
 @register_jitable
