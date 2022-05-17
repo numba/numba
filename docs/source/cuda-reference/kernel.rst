@@ -499,6 +499,13 @@ These functions return a 16-bit floating point result.
 
    Returns the 16-bit floating point result of the multiplication.
 
+.. function:: numba.cuda.fp16.hdiv (a, b)
+
+   Perform the divide operation ``a / b`` on 16-bit floating point arguments in
+   round to nearest mode.
+
+   Returns the 16-bit floating point result of the division.
+
 .. function:: numba.cuda.fp16.hneg (a)
 
    Perform the negation operation ``-a`` on the 16-bit floating point argument.

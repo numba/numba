@@ -1,6 +1,20 @@
 #include "cuda_fp16.h"
 
 extern "C" __device__ int
+hdiv_wrapper(
+  short* return_value,
+  short x,
+  short y
+)
+{
+  __half retval = __hdiv(__short_as_half (x), __short_as_half (y));
+  
+  *return_value = __half_as_short (retval);
+  // Signal that no Python exception occurred
+  return 0;
+}
+
+extern "C" __device__ int
 hsin_wrapper(
   short* return_value,
   short x

@@ -391,6 +391,8 @@ hrint_device = declare_device_function('hrint_wrapper', types.float16,
                                        (types.float16,), True)
 htrunc_device = declare_device_function('htrunc_wrapper', types.float16,
                                         (types.float16,), True)
+hdiv_device = declare_device_function('hdiv_wrapper', types.float16,
+                                      (types.float16,types.float16,), True)
 
 
 # generate atomic operations
@@ -550,6 +552,9 @@ class CudaFp16Template(AttributeTemplate):
 
     def resolve_hmul(self, mod):
         return types.Function(Cuda_hmul)
+
+    def resolve_hdiv(self, mod):
+        return hdiv_device
 
     def resolve_hneg(self, mod):
         return types.Function(Cuda_hneg)

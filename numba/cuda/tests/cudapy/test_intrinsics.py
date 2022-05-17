@@ -102,6 +102,18 @@ def simple_hmul_scalar(ary, a, b):
     ary[0] = cuda.fp16.hmul(a, b)
 
 
+def simple_hdiv_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hdiv(a, b)
+
+
+def simple_hdiv_kernel(ary, array_a, array_b):
+    i = cuda.grid(1)
+    if i < ary.size:
+        a = array_a[i]
+        b = array_b[i]
+        ary[i] = cuda.fp16.hdiv(a, b)
+
+
 def simple_hneg(ary, a):
     ary[0] = cuda.fp16.hneg(a[0])
 
@@ -453,6 +465,57 @@ class TestCudaIntrinsic(CUDATestCase):
         args = (f2[:], f2, f2)
         ptx, _ = compile_ptx(simple_hmul_scalar, args, cc=(5, 3))
         self.assertIn('mul.f16', ptx)
+
+    @skip_unless_cc_53
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
+    def test_hdiv_scalar(self):
+        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hdiv_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(3.1415926)
+        arg2 = np.float16(1.57)
+        compiled[1, 1](ary, arg1, arg2)
+        ref = arg1 / arg2
+        np.testing.assert_allclose(ary[0], ref)
+
+    @skip_unless_cc_53
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
+    def test_hdiv(self):
+        compiled = cuda.jit("void(f2[:], f2[:], f2[:])")(simple_hdiv_kernel)
+        arry1 = np.random.randint(-65504, 65505, size=500).astype(np.float16)
+        arry2 = np.random.randint(-65504, 65505, size=500).astype(np.float16)
+        ary = np.zeros_like(arry1, dtype=np.float16)
+
+        compiled.forall(ary.size)(ary, arry1, arry2)
+        ref = arry1 / arry2
+        np.testing.assert_allclose(ary, ref)
+
+    @skip_unless_cc_53
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
+    def test_hdiv_denormal(self):
+        compiled = cuda.jit("void(f2[:], f2[:], f2[:])")(simple_hdiv_kernel)
+
+        # This test is designed to test divison of fp16 constants that
+        # result in small denormal numbers that should not be further
+        # iterated using the Newton Raphson algorithm used in the hdiv
+        # intrinsic. Below we use a curated set of values to specifically
+        # validate small denormal numbers
+        arry1 = np.array([0x5b, 0xaf, 0xcb, 0x13b, 0x157, 0x173, 0x18f,
+                          0x1ab, 0x26f, 0x28b, 0x2a7, 0x2c3,
+                          0x2df, 0x2fb, 0x317, 0x333, 0x34f, 0x36b, 0x4b,
+                          0xa9, 0xb6, 0xc3, 0x13b, 0x15e, 0x177, 0x179,
+                          0x196, 0x1b3, 0x22b, 0x267, 0x276]).astype(np.float16)
+
+        arry2 = np.array([0x4b00, 0x4b00, 0x4b00, 0x4b00, 0x4b00, 0x4b00,
+                          0x4b00, 0x4b00, 0x4b00, 0x4b00, 0x4b00, 0x4b00,
+                          0x4b00, 0x4b00, 0x4b00, 0x4b00, 0x4b00, 0x4b00,
+                          0x4f80, 0x4e80, 0x4f00, 0x4f80, 0x4f80, 0x4f00,
+                          0x4f80, 0x4e80, 0x4f00, 0x4f80, 0x4f80, 0x4f80,
+                          0x4f00]).astype(np.float16)
+
+        ary = np.zeros_like(arry1, dtype=np.float16)
+        compiled.forall(ary.size)(ary, arry1, arry2)
+        ref = arry1 / arry2
+        np.testing.assert_allclose(ary, ref)
 
     @skip_unless_cc_53
     def test_hneg(self):

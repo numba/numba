@@ -104,7 +104,7 @@ class _Kernel(serialize.ReduceMixin):
                                 'hsqrt_wrapper', 'hrsqrt_wrapper',
                                 'hfloor_wrapper', 'hceil_wrapper',
                                 'hrcp_wrapper', 'hrint_wrapper',
-                                'htrunc_wrapper']
+                                'htrunc_wrapper', 'hdiv_wrapper']
 
         res = [ele for ele in cuda_fp16_math_funcs
                if(ele in lib.get_asm_str())]
