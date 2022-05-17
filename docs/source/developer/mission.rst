@@ -14,7 +14,7 @@ This is a living document:
 =========================== ============
 The first revision date is: May 2022
 The last updated date is:   May 2022
-The next review date is:    TBC
+The next review date is:    November 2022
 =========================== ============
 
 Background
