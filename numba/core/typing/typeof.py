@@ -11,7 +11,8 @@ from numba.np import numpy_support
 # terminal color markup
 _termcolor = errors.termcolor()
 
-# https://github.com/numba/numba/pull/7900#issuecomment-1065026619
+# Note that the BitGenerator class exists in _bit_generator.pxd in
+# NumPy 1.18 (has underscore) and then bit_generator.pxd in NumPy 1.19
 try:
     from numpy.random._bit_generator import BitGenerator
 except ImportError:

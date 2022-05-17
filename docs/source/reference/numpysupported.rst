@@ -585,15 +585,15 @@ Modules
 
 Generator Objects
 '''''''''''''''''
-Numba supports `numpy.random.Generator()` objects and their respective
-methods. Numpy's `Generator` objects rely on `BitGenerator` to manage state
+Numba supports ``numpy.random.Generator()`` objects and their respective
+methods. Numpy's ``Generator`` objects rely on ``BitGenerator`` to manage state
 and generate the random bits, which are then transformed into random
-values from useful distributions. Numba `unbox`es the `Generator` objects
-and maintians a reference to the underlying `BitGenerator` objects using Numpy's
-`ctypes` interface bindings. Hence `Generator` objects can cross the JIT boundary
+values from useful distributions. Numba ``unbox``es the ``Generator`` objects
+and maintians a reference to the underlying ``BitGenerator`` objects using Numpy's
+``ctypes`` interface bindings. Hence ``Generator`` objects can cross the JIT boundary
 and their functions be used within Numba-Jit code. Note that since only references
-to `BitGenerator` objects are maintained, any change to the state of a particular
-`Generator` object outside Numba code would affect the state of `Generator`
+to ``BitGenerator`` objects are maintained, any change to the state of a particular
+``Generator`` object outside Numba code would affect the state of ``Generator``
 inside the Numba code.
 
 .. code-block:: python
@@ -619,7 +619,7 @@ inside the Numba code.
   print(y.random(size=int(size/2)))
   # [0.42332645 0.82770259 0.40919914 0.54959369 0.02755911]
 
-The following `Generator` methods are supported:
+The following ``Generator`` methods are supported:
 
 * :func:`numpy.random.Generator().random()`
 
