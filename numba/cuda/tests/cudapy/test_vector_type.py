@@ -1,6 +1,6 @@
 import numpy as np
 
-from numba.cuda.testing import CUDATestCase
+from numba.cuda.testing import CUDATestCase, skip_on_cudasim
 
 from numba import cuda
 from numba.cuda.vector_types import vector_types
@@ -178,6 +178,7 @@ def make_fancy_creation_kernel(vtype):
 
 class TestCudaVectorType(CUDATestCase):
 
+    @skip_on_cudasim("Vector type isn't defined in simulator.")
     def test_creation_readout(self):
         for vty in vector_types.values():
             with self.subTest(vty=vty):
@@ -188,6 +189,7 @@ class TestCudaVectorType(CUDATestCase):
                     arr, np.array(range(vty.num_elements))
                 )
 
+    @skip_on_cudasim("Vector type isn't defined in simulator.")
     def test_fancy_creation_readout(self):
         for vty in vector_types.values():
             kernel = make_fancy_creation_kernel(vty)
