@@ -55,7 +55,7 @@ Project Goals
 
 The primary aims of the Numba project are:
 
-* To make it easier for Python developers to write high performance code.
+* To make it easier for Python users to write high performance code.
 * To have a core package with a well defined and limited feature scope that
   meets the needs of the user base without being overly complex.
 * To provide a compiler toolkit for Python that is extensible and
