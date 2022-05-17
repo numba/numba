@@ -47,7 +47,7 @@ class VectorType(types.Type):
 
 
 def make_vector_type(
-    name: str, base_type: types.Type, attr_names: List[str], user_facing_object
+    name: str, base_type: types.Type, attr_names: Tuple[str], user_facing_object
 ) -> types.Type:
     """Create a vector type.
 
@@ -57,8 +57,10 @@ def make_vector_type(
         The name of the type.
     base_type: numba.types.Type
         The primitive type for each element in the vector.
-    attr_names: list of str
+    attr_names: tuple of str
         Name for each attribute.
+    user_facing_object: object
+        The handle to be used in cuda kernel.
     """
 
     class _VectorType(VectorType):
@@ -147,20 +149,18 @@ def enable_vector_type_ctor(
 vector_types : Dict[str, VectorType] = {}
 
 
-def type_lookup(base_type, vty_name, num_elements):
-    if num_elements == 1:
-        return base_type
-    return vector_types[f"{vty_name[:-1]}{num_elements}"]
-
-
 def build_constructor_overloads(base_type, vty_name, num_elements, arglists, l):
+    """
+    For a given vector type, build a list of overloads for its constructor.
+    """
+
     # TODO: speed up with memoization
     if num_elements == 0:
         arglists.append(l[:])
 
     for i in range(1, num_elements + 1):
         if i == 1:
-            # For 1-element component, it can construct with either
+            # For 1-element component, it can construct with either a
             # primitive type or other 1-element component.
             l.append(base_type)
             build_constructor_overloads(
