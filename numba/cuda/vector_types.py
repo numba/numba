@@ -159,11 +159,26 @@ def build_constructor_overloads(base_type, vty_name, num_elements, arglists, l):
         arglists.append(l[:])
 
     for i in range(1, num_elements + 1):
-        l.append(type_lookup(base_type, vty_name, i))
-        build_constructor_overloads(
-            base_type, vty_name, num_elements - i, arglists, l
-        )
-        l.pop(-1)
+        if i == 1:
+            # For 1-element component, it can construct with either
+            # primitive type or other 1-element component.
+            l.append(base_type)
+            build_constructor_overloads(
+                base_type, vty_name, num_elements - i, arglists, l
+            )
+            l.pop(-1)
+
+            l.append(vector_types[f"{vty_name[:-1]}1"])
+            build_constructor_overloads(
+                base_type, vty_name, num_elements - i, arglists, l
+            )
+            l.pop(-1)
+        else:
+            l.append(vector_types[f"{vty_name[:-1]}{i}"])
+            build_constructor_overloads(
+                base_type, vty_name, num_elements - i, arglists, l
+            )
+            l.pop(-1)
 
 
 def _initialize():
