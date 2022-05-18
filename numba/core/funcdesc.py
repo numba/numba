@@ -87,7 +87,7 @@ class FunctionDescriptor(object):
         """
         Return the module in which this function is supposed to exist.
         This may be a dummy module if the function was dynamically
-        generated. Raise exception if the module can't be found.
+        generated or the module can't be found.
         """
         if self.modname == _dynamic_modname:
             return _dynamic_module
