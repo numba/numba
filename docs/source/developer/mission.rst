@@ -5,17 +5,17 @@ Introduction
 ------------
 
 This document is the mission statement for the Numba project. It exists to
-provide a clear description of the purposes and goals of the project.  As
-such, this document provides background on Numba's users and use-cases, and
-outlines the project's overall goals.
+provide a clear description of the purposes and goals of the project.  As such,
+this document provides background on Numba's users and use-cases, and outlines
+the project's overall goals.
 
 This is a living document:
 
-=========================== ============
+=========================== =============
 The first revision date is: May 2022
 The last updated date is:   May 2022
 The next review date is:    November 2022
-=========================== ============
+=========================== =============
 
 Background
 ----------
@@ -34,13 +34,13 @@ but is not limited to:
 * Data science utilities and programs
 
 The user base of Numba includes anyone needing to perform intensive
-computational work, including users from a wide range of
-disciplines, examples include:
+computational work, including users from a wide range of disciplines, examples
+include:
 
-* The most common use case, a user wanting to JIT compile some
-  numerical functions.
-* Users providing JIT accelerated libraries for domain specific use cases
-  e.g. scientific researchers.
+* The most common use case, a user wanting to JIT compile some numerical
+  functions.
+* Users providing JIT accelerated libraries for domain specific use cases e.g.
+  scientific researchers.
 * Users providing JIT accelerated libraries for use as part of the numerical
   Python ecosystem.
 * Those writing more advanced JIT accelerated libraries containing their own
@@ -56,12 +56,12 @@ Project Goals
 The primary aims of the Numba project are:
 
 * To make it easier for Python users to write high performance code.
-* To have a core package with a well defined and pragmatically selected feature scope that
-  meets the needs of the user base without being overly complex.
-* To provide a compiler toolkit for Python that is extensible and
-  can be customized to meet the needs of the user base. This comes with the
-  expectation that users potentially need to invest time and effort to extend
-  and/or customize the software themselves.
+* To have a core package with a well defined and pragmatically selected feature
+  scope that meets the needs of the user base without being overly complex.
+* To provide a compiler toolkit for Python that is extensible and can be
+  customized to meet the needs of the user base. This comes with the expectation
+  that users potentially need to invest time and effort to extend and/or
+  customize the software themselves.
 * To support both the Python core language/standard libraries and NumPy.
 * To consistently produce high quality software:
 
@@ -71,13 +71,12 @@ The primary aims of the Numba project are:
   * Internally stable code base.
   * Externally tested release candidates.
   * Regular releases with a predictable and published release cycle.
-  * Maintain suitable infrastructure for both testing and releasing. With as much
-    in public as feasible.
+  * Maintain suitable infrastructure for both testing and releasing. With as
+    much in public as feasible.
 
 * To make it as easy as possible for people to contribute.
-* To have a maintained public roadmap which will also include areas under
-  active development.
+* To have a maintained public roadmap which will also include areas under active
+  development.
 * To have a governance document in place and it working in practice.
-* To ensure that Numba receives timely updates for its core dependencies:
-  LLVM, NumPy and Python.
-
+* To ensure that Numba receives timely updates for its core dependencies: LLVM,
+  NumPy and Python.
