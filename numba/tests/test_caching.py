@@ -432,7 +432,7 @@ class TestCache(DispatcherCacheUsecasesTest):
             f = mod.closure2
             self.assertPreciseEqual(f(3), 8) # 3 + 5 = 8
             f = mod.closure3
-            self.assertPreciseEqual(f(3), 10) # 3 + 7 = 8
+            self.assertPreciseEqual(f(3), 10) # 3 + 7 = 10
             f = mod.closure4
             self.assertPreciseEqual(f(3), 12) # 3 + 9 = 12
             self.check_pycache(5) # 1 nbi, 4 nbc
@@ -602,7 +602,6 @@ class TestCache(DispatcherCacheUsecasesTest):
             self.skipTest("ipython not available: return code %d"
                           % e.returncode)
         ver = ver.strip().decode()
-        print("ipython version:", ver)
         # Create test input
         inputfn = os.path.join(self.tempdir, "ipython_cache_usecase.txt")
         with open(inputfn, "w") as f:
