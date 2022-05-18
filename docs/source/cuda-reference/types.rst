@@ -27,7 +27,7 @@ with their constructor. For example, to construct a ``float32x3``:
     from numba.cuda import float32x3
 
     # In kernel
-    f3 = float32x3(float32(0.0), float32(-1.0), float32(1.0))
+    f3 = float32x3(0.0, -1.0, 1.0)
 
 Additionally, vector types can be constructed from a combination of vector and
 primitive types, as long as the total number of components matches the result
@@ -46,3 +46,9 @@ The 1st, 2nd, 3rd and 4th component of the vector type can be accessed through f
 ``x``, ``y``, ``z``, and ``w`` respectively. The components are immutable after
 construction in the present version of Numba; it is expected that support for
 mutating vector components will be added in a future release.
+
+.. code-block:: python3
+
+    v1 = float32x2(1.0, 1.0)
+    v2 = float32x2(1.0, -1.0)
+    dotprod = v1.x * v2.x + v1.y * v2.y
