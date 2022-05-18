@@ -277,7 +277,9 @@ class DatetimeMinMax(AbstractTemplate):
         error_msg = "DatetimeMinMax requires both arguments to be NPDatetime type or both arguments to be NPTimedelta types"
         assert isinstance(args[0], (types.NPDatetime, types.NPTimedelta)), error_msg
         if isinstance(args[0], types.NPDatetime):
-            assert isinstance(args[1], types.NPDatetime), error_msg
+            if not isinstance(args[1], types.NPDatetime):
+                raise TypeError(error_msg)
         else:
-            assert isinstance(args[1], types.NPTimedelta), error_msg
+            if not isinstance(args[1], types.NPTimedelta):
+                raise TypeError(error_msg)
         return signature(args[0], *args)
