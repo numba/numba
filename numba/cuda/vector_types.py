@@ -47,7 +47,10 @@ class VectorType(types.Type):
 
 
 def make_vector_type(
-    name: str, base_type: types.Type, attr_names: Tuple[str], user_facing_object
+    name: str,
+    base_type: types.Type,
+    attr_names: Tuple[str, ...],
+    user_facing_object
 ) -> types.Type:
     """Create a vector type.
 
