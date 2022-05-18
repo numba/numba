@@ -1181,15 +1181,21 @@ class _wrap_impl(object):
     """
 
     def __init__(self, imp, context, sig):
+        self._name = f"{imp.__module__}.{imp.__qualname__}"
         self._callable = _wrap_missing_loc(imp)
         self._imp = self._callable()
         self._context = context
         self._sig = sig
 
     def __call__(self, builder, args, loc=None):
-        res = self._imp(self._context, builder, self._sig, args, loc=loc)
-        self._context.add_linking_libs(getattr(self, 'libs', ()))
-        return res
+        ev_details = dict(
+            name=f"lower_builtin {self._name}",
+            sig=str(self._sig),
+        )
+        with event.trigger_event("numba:compiler_trace", data=ev_details):
+            res = self._imp(self._context, builder, self._sig, args, loc=loc)
+            self._context.add_linking_libs(getattr(self, 'libs', ()))
+            return res
 
     def __getattr__(self, item):
         return getattr(self._imp, item)

@@ -959,6 +959,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                     dispatcher=self,
                     args=args,
                     return_type=return_type,
+                    name=f"dispatch {self}",
                 )
                 with ev.trigger_event("numba:compile", data=ev_details):
                     try:
@@ -1192,6 +1193,7 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                     dispatcher=self,
                     args=args,
                     return_type=return_type,
+                    name=f"dispatch {self}",
                 )
                 with ev.trigger_event("numba:compile", data=ev_details):
                     cres = compiler.compile_ir(typingctx=self.typingctx,

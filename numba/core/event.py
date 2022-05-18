@@ -43,6 +43,7 @@ import threading
 from timeit import default_timer as timer
 from contextlib import contextmanager, ExitStack
 from collections import defaultdict
+from pprint import pformat
 
 from numba.core import config
 
@@ -60,6 +61,7 @@ _builtin_kinds = frozenset([
     "numba:compile",
     "numba:llvm_lock",
     "numba:run_pass",
+    "numba:compiler_trace",
 ])
 
 
@@ -463,7 +465,7 @@ def _prepare_chrome_trace_data(listener: RecordingListener):
         cat = str(rec.kind)
         ph = 'B' if rec.is_start else 'E'
         name = data['name']
-        args = data
+        args = pformat(data)
         ev = dict(
             cat=cat, pid=pid, tid=tid, ts=ts, ph=ph, name=name, args=args,
         )
@@ -476,7 +478,9 @@ def _setup_chrome_trace_exit_handler():
     to file.
     """
     listener = RecordingListener()
+    register("numba:compile", listener)
     register("numba:run_pass", listener)
+    register("numba:compiler_trace", listener)
     filename = config.CHROME_TRACE
 
     @atexit.register

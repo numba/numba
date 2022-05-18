@@ -21,7 +21,7 @@ from pprint import pprint
 from collections import OrderedDict, defaultdict
 from functools import reduce
 
-from numba.core import types, utils, typing, ir, config
+from numba.core import types, utils, typing, ir, config, event
 from numba.core.typing.templates import Signature
 from numba.core.errors import (TypingError, UntypedAttributeError,
                                new_error_context, termcolor, UnsupportedError,
@@ -1518,6 +1518,15 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
         """
         Resolve a call to a given function type.  A signature is returned.
         """
+        ev_details = dict(
+            name=f"typing call {fnty}",
+            args=str(pos_args),
+            kwargs=str(kw_args),
+        )
+        with event.trigger_event("numba:compiler_trace", data=ev_details):
+            return self._resolve_call(fnty, pos_args, kw_args)
+
+    def _resolve_call(self, fnty, pos_args, kw_args):
         if isinstance(fnty, types.FunctionType):
             return fnty.get_call_type(self, pos_args, kw_args)
         if isinstance(fnty, types.RecursiveCall) and not self._skip_recursion:
