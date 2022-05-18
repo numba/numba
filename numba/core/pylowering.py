@@ -289,8 +289,10 @@ class PyLower(BaseLower):
             args = self.pyapi.tuple_pack(argvals)
             if expr.vararg:
                 # Expand *args
-                new_args = self.pyapi.number_add(args,
-                                                 self.loadvar(expr.vararg.name))
+                varargs = self.pyapi.sequence_tuple(
+                                self.loadvar(expr.vararg.name))
+                new_args = self.pyapi.sequence_concat(args, varargs)
+                self.decref(varargs)
                 self.decref(args)
                 args = new_args
             if not expr.kws:

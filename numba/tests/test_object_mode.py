@@ -107,6 +107,18 @@ class TestObjectMode(TestCase):
         with self.assertRaises(TypeError):
             cfunc(42)
 
+    def test_starargs_non_tuple(self):
+        def consumer(*x):
+            return x
+
+        @jit(forceobj=True)
+        def foo(x):
+            consumer(*x)
+
+        got = foo("ijo")
+        expect = foo.py_func("ijo")
+        self.assertEqual(got, expect)
+
 
 class TestObjectModeInvalidRewrite(TestCase):
     """
