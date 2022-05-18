@@ -46,4 +46,4 @@ class TestUnpickleDeletedModule(unittest.TestCase):
         # Pickle function and assert that it loads correctly
         pkl = pickle.dumps(inc1)
         f = pickle.loads(pkl)
-        assert f(2) == 3
+        self.assertEqual(f(2), 3)
