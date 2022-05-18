@@ -25,7 +25,7 @@ def f(x):
         exec(compiled, objs)
 
         compiled_f = njit(objs['f'])
-        assert compiled_f(3) == 3
+        self.assertEqual(compiled_f(3), 3)
 
 
 class TestFuncDescMangledName(unittest.TestCase):
