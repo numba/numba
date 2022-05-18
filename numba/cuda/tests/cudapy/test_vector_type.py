@@ -75,8 +75,8 @@ def make_fancy_creation_kernel(vtype):
         # Construct a 1-component vector type, possible combination includes:
         # 2C1 = 2 combinations.
 
-        f1_1 = v1(one)		# 1
-        f1_2 = v1(f1_1)		# 1
+        f1_1 = v1(one)  # 1
+        f1_2 = v1(f1_1) # 1
 
         res[0] = f1_1.x
         res[1] = f1_2.x
@@ -85,11 +85,11 @@ def make_fancy_creation_kernel(vtype):
         # Construct a 2-component vector type, possible combination includes:
         # 1 + 2C1 * 2 = 5 combinations
 
-        f2_1 = v2(two, three)		# 2 3
-        f2_2 = v2(f1_1, three)		# 1 3
-        f2_3 = v2(two, f1_1)		# 2 1
-        f2_4 = v2(f1_1, f1_1)		# 1 1
-        f2_5 = v2(f2_1)		        # 2 3
+        f2_1 = v2(two, three)       # 2 3
+        f2_2 = v2(f1_1, three)      # 1 3
+        f2_3 = v2(two, f1_1)        # 2 1
+        f2_4 = v2(f1_1, f1_1)       # 1 1
+        f2_5 = v2(f2_1)             # 2 3
 
         for v in (f2_1, f2_2, f2_3, f2_4, f2_5):
             res[j] = v.x
@@ -99,21 +99,21 @@ def make_fancy_creation_kernel(vtype):
         # Construct a 3-component vector type, possible combination includes:
         # 1 + 2C1 * 2 + 2^3 = 13 combinations
 
-        f3_1 = v3(f2_1, one)		    # 2 3 1
-        f3_2 = v3(f2_1, f1_1)		    # 2 3 1
-        f3_3 = v3(one, f2_1)		    # 1 2 3
-        f3_4 = v3(f1_1, f2_1)		    # 1 2 3
+        f3_1 = v3(f2_1, one)            # 2 3 1
+        f3_2 = v3(f2_1, f1_1)           # 2 3 1
+        f3_3 = v3(one, f2_1)            # 1 2 3
+        f3_4 = v3(f1_1, f2_1)           # 1 2 3
 
-        f3_5 = v3(one, two, three)		# 1 2 3
-        f3_6 = v3(f1_1, two, three)		# 1 2 3
-        f3_7 = v3(one, f1_1, three)		# 1 1 3
-        f3_8 = v3(one, two, f1_1)		# 1 2 1
-        f3_9 = v3(f1_1, f1_1, three)	# 1 1 3
-        f3_10 = v3(one, f1_1, f1_1)		# 1 1 1
-        f3_11 = v3(f1_1, two, f1_1)		# 1 2 1
-        f3_12 = v3(f1_1, f1_1, f1_1)	# 1 1 1
+        f3_5 = v3(one, two, three)      # 1 2 3
+        f3_6 = v3(f1_1, two, three)     # 1 2 3
+        f3_7 = v3(one, f1_1, three)     # 1 1 3
+        f3_8 = v3(one, two, f1_1)       # 1 2 1
+        f3_9 = v3(f1_1, f1_1, three)    # 1 1 3
+        f3_10 = v3(one, f1_1, f1_1)     # 1 1 1
+        f3_11 = v3(f1_1, two, f1_1)     # 1 2 1
+        f3_12 = v3(f1_1, f1_1, f1_1)    # 1 1 1
 
-        f3_13 = v3(f3_1)		        # 2 3 1
+        f3_13 = v3(f3_1)                # 2 3 1
 
         for v in (f3_1, f3_2, f3_3, f3_4, f3_5, f3_6, f3_7, f3_8, f3_9,
                   f3_10, f3_11, f3_12, f3_13):
@@ -125,43 +125,43 @@ def make_fancy_creation_kernel(vtype):
         # Construct a 4-component vector type, possible combination includes:
         # 1 + (2C1 * 2 + 1) + 3C1 * 2^2 + 2^4 = 34 combinations
 
-        f4_1 = v4(one, two, three, four)		# 1 2 3 4
-        f4_2 = v4(f1_1, two, three, four)		# 1 2 3 4
-        f4_3 = v4(one, f1_1, three, four)		# 1 1 3 4
-        f4_4 = v4(one, two, f1_1, four)		    # 1 2 1 4
-        f4_5 = v4(one, two, three, f1_1)		# 1 2 3 1
-        f4_6 = v4(f1_1, f1_1, three, four)		# 1 1 3 4
-        f4_7 = v4(f1_1, two, f1_1, four)		# 1 2 1 4
-        f4_8 = v4(f1_1, two, three, f1_1)		# 1 2 3 1
-        f4_9 = v4(one, f1_1, f1_1, four)		# 1 1 1 4
-        f4_10 = v4(one, f1_1, three, f1_1)		# 1 1 3 1
-        f4_11 = v4(one, two, f1_1, f1_1)		# 1 2 1 1
-        f4_12 = v4(f1_1, f1_1, f1_1, four)		# 1 1 1 4
-        f4_13 = v4(f1_1, f1_1, three, f1_1)		# 1 1 3 1
-        f4_14 = v4(f1_1, two, f1_1, f1_1)		# 1 2 1 1
-        f4_15 = v4(one, f1_1, f1_1, f1_1)		# 1 1 1 1
-        f4_16 = v4(f1_1, f1_1, f1_1, f1_1)		# 1 1 1 1
+        f4_1 = v4(one, two, three, four)    # 1 2 3 4
+        f4_2 = v4(f1_1, two, three, four)   # 1 2 3 4
+        f4_3 = v4(one, f1_1, three, four)   # 1 1 3 4
+        f4_4 = v4(one, two, f1_1, four)     # 1 2 1 4
+        f4_5 = v4(one, two, three, f1_1)    # 1 2 3 1
+        f4_6 = v4(f1_1, f1_1, three, four)  # 1 1 3 4
+        f4_7 = v4(f1_1, two, f1_1, four)    # 1 2 1 4
+        f4_8 = v4(f1_1, two, three, f1_1)   # 1 2 3 1
+        f4_9 = v4(one, f1_1, f1_1, four)    # 1 1 1 4
+        f4_10 = v4(one, f1_1, three, f1_1)  # 1 1 3 1
+        f4_11 = v4(one, two, f1_1, f1_1)    # 1 2 1 1
+        f4_12 = v4(f1_1, f1_1, f1_1, four)  # 1 1 1 4
+        f4_13 = v4(f1_1, f1_1, three, f1_1) # 1 1 3 1
+        f4_14 = v4(f1_1, two, f1_1, f1_1)   # 1 2 1 1
+        f4_15 = v4(one, f1_1, f1_1, f1_1)   # 1 1 1 1
+        f4_16 = v4(f1_1, f1_1, f1_1, f1_1)  # 1 1 1 1
 
-        f4_17 = v4(f2_1, two, three)		    # 2 3 2 3
-        f4_18 = v4(f2_1, f1_1, three)		    # 2 3 1 3
-        f4_19 = v4(f2_1, two, f1_1)		        # 2 3 2 1
-        f4_20 = v4(f2_1, f1_1, f1_1)		    # 2 3 1 1
-        f4_21 = v4(one, f2_1, three)	    	# 1 2 3 3
-        f4_22 = v4(f1_1, f2_1, three)	    	# 1 2 3 3
-        f4_23 = v4(one, f2_1, f1_1)		        # 1 2 3 1
-        f4_24 = v4(f1_1, f2_1, f1_1)	    	# 1 2 3 1
-        f4_25 = v4(one, four, f2_1)	         	# 1 4 2 3
-        f4_26 = v4(f1_1, four, f2_1)    		# 1 4 2 3
-        f4_27 = v4(one, f1_1, f2_1)	        	# 1 1 2 3
-        f4_28 = v4(f1_1, f1_1, f2_1)	    	# 1 1 2 3
+        f4_17 = v4(f2_1, two, three)        # 2 3 2 3
+        f4_18 = v4(f2_1, f1_1, three)       # 2 3 1 3
+        f4_19 = v4(f2_1, two, f1_1)         # 2 3 2 1
+        f4_20 = v4(f2_1, f1_1, f1_1)        # 2 3 1 1
+        f4_21 = v4(one, f2_1, three)        # 1 2 3 3
+        f4_22 = v4(f1_1, f2_1, three)       # 1 2 3 3
+        f4_23 = v4(one, f2_1, f1_1)         # 1 2 3 1
+        f4_24 = v4(f1_1, f2_1, f1_1)        # 1 2 3 1
+        f4_25 = v4(one, four, f2_1)         # 1 4 2 3
+        f4_26 = v4(f1_1, four, f2_1)        # 1 4 2 3
+        f4_27 = v4(one, f1_1, f2_1)         # 1 1 2 3
+        f4_28 = v4(f1_1, f1_1, f2_1)        # 1 1 2 3
 
-        f4_29 = v4(f2_1, f2_1)	            	# 2 3 2 3
-        f4_30 = v4(f3_1, four)	            	# 2 3 1 4
-        f4_31 = v4(f3_1, f1_1)	              	# 2 3 1 1
-        f4_32 = v4(four, f3_1)	              	# 4 2 3 1
-        f4_33 = v4(f1_1, f3_1)	            	# 1 2 3 1
+        f4_29 = v4(f2_1, f2_1)              # 2 3 2 3
+        f4_30 = v4(f3_1, four)              # 2 3 1 4
+        f4_31 = v4(f3_1, f1_1)              # 2 3 1 1
+        f4_32 = v4(four, f3_1)              # 4 2 3 1
+        f4_33 = v4(f1_1, f3_1)              # 1 2 3 1
 
-        f4_34 = v4(f4_1)	                	# 1 2 3 4
+        f4_34 = v4(f4_1)                    # 1 2 3 4
 
         for v in (f4_1, f4_2, f4_3, f4_4, f4_5, f4_6, f4_7, f4_8, f4_9, f4_10,
                   f4_11, f4_12, f4_13, f4_14, f4_15, f4_16, f4_17, f4_18, f4_19,
@@ -195,13 +195,16 @@ class TestCudaVectorType(CUDATestCase):
             kernel = make_fancy_creation_kernel(vty)
 
             expected = np.array([
+                # 1-component vectors
                 1,
                 1,
+                # 2-component vectors
                 2, 3,
                 1, 3,
                 2, 1,
                 1, 1,
                 2, 3,
+                # 3-component vectors
                 2, 3, 1,
                 2, 3, 1,
                 1, 2, 3,
@@ -215,6 +218,7 @@ class TestCudaVectorType(CUDATestCase):
                 1, 2, 1,
                 1, 1, 1,
                 2, 3, 1,
+                # 4-component vectors
                 1, 2, 3, 4,
                 1, 2, 3, 4,
                 1, 1, 3, 4,
