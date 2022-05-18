@@ -1,4 +1,4 @@
-Types on CUDA target
+CUDA-Specific Types
 ====================
 
 Note: This page is about types specific to CUDA targets. Most types on CPU targets are also
@@ -8,19 +8,18 @@ Vector Types
 ~~~~~~~~~~~~
 
 `CUDA Vector Types <https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#built-in-vector-types>`_
-are available in the kernel. There are 2 important distinctions from vector types in numba CUDA:
+are usable in kernels. There are two important distinctions from vector types in CUDA C/C++:
 
-First, the recommended names for vector types in Numba CUDA is formatted as ``base_typexN``,
-where `base_type` is the base type of the vector, and `N` is the number of elements in the vector.
-Examples include ``int64x3``, ``uint16x4``, ``float32x4``, etc. This is consistent in type names with
-the pydata community where bit widths are explicit. For new Numba CUDA kernels, this is the recommended
-way to write vector types.
+First, the recommended names for vector types in Numba CUDA is formatted as ``<base_type>x<N>``,
+where ``base_type`` is the base type of the vector, and ``N`` is the number of elements in the vector.
+Examples include ``int64x3``, ``uint16x4``, ``float32x4``, etc. For new Numba CUDA kernels,
+this is the recommended way to instantiate vector types.
 
-For convenience, users who prefer to adapt existing kernels from native CUDA to Numba CUDA may use
-aliases consistent with its native namings. For example, ``float3`` aliases ``float32x3``,
-``long3`` aliases ``int32x3`` or ``int64x3``, depending on platform specification, etc. 
+For convenience, users adapting existing kernels from CUDA C/C++ to Python may use
+aliases consistent with the C/C++ namings. For example, ``float3`` aliases ``float32x3``,
+``long3`` aliases ``int32x3`` or ``int64x3`` (depending on the platform), etc. 
 
-Second, unlike native CUDA where factory functions are used, vector types are constructed directly
+Second, unlike CUDA C/C++ where factory functions are used, vector types are constructed directly
 with their constructor. For example, to construct a ``float32x3``:
 
 .. code-block:: python3
