@@ -85,7 +85,7 @@ def make_vector_type(
 
 
 def enable_vector_type_ctor(
-    vector_type: VectorType, overloads: List[Tuple[types.Type]]
+    vector_type: VectorType, overloads: List[List[types.Type]]
 ):
     """Create typing and lowering for vector type constructor.
 
@@ -93,9 +93,9 @@ def enable_vector_type_ctor(
     ----------
     vector_type: VectorType
         The type whose constructor to type and lower.
-    overloads: List of argument types tuples
+    overloads: List of argument types
         A list containing different overloads of the constructor. Each base type
-        in the tuple should either be primitive type or VectorType.
+        in the argument list should either be primitive type or VectorType.
     """
     ctor = vector_type.user_facing_object
 
