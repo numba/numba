@@ -879,6 +879,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/tests/test_stride_tricks.py#L296-L334
         data = [
             # [[], ()],
+            [(), ()],
             [()],
             [(7,)],
             [(1, 2),],

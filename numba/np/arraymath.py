@@ -22,9 +22,7 @@ from numba.np.numpy_support import is_nonelike, check_is_integer
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                  impl_ret_new_ref, impl_ret_untracked)
 from numba.core.typing import signature
-from numba.np.arrayobj import (make_array, load_item,
-                               numpy_broadcast_shapes_list,
-                               store_item, _empty_nd_impl)
+from numba.np.arrayobj import make_array, load_item, store_item, _empty_nd_impl
 from numba.np.linalg import ensure_blas
 
 from numba.core.extending import intrinsic
@@ -1203,22 +1201,11 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
             return out.reshape(b.shape)
 
     elif isinstance(a, types.Array) and isinstance(b, types.Array):
-        m = max(a.ndim, b.ndim)
-        tup_init = (0,) * m
 
         def isclose_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
             # Broadcast arrays of different types - cannot use
             # np.broadcast_arrays for that
-            # this can be replaced by np.broadcast_shapes once #7437
-            # is merged
-            shape = [1] * m
-            numpy_broadcast_shapes_list(shape, m, a.shape)
-            numpy_broadcast_shapes_list(shape, m, b.shape)
-
-            tup = tup_init  # tup is the final shape
-
-            for i in range(m):
-                tup = tuple_setitem(tup, i, shape[i])
+            tup = np.broadcast_shapes(a.shape, b.shape)
 
             a_ = np.broadcast_to(a, tup)
             b_ = np.broadcast_to(b, tup)
