@@ -10,6 +10,7 @@ from contextlib import redirect_stdout
 from datetime import datetime
 from io import StringIO
 from subprocess import check_output, PIPE, CalledProcessError
+import numpy as np
 import llvmlite.binding as llvmbind
 from llvmlite import __version__ as llvmlite_version
 from numba import cuda as cu, __version__ as version_number
@@ -61,6 +62,12 @@ _cu_rt_ver = 'CUDA Runtime Version'
 _cu_nvidia_bindings = 'NVIDIA CUDA Bindings'
 _cu_nvidia_bindings_used = 'NVIDIA CUDA Bindings In Use'
 _cu_detect_out, _cu_lib_test = 'CUDA Detect Output', 'CUDA Lib Test'
+# NumPy info
+_numpy_version = 'NumPy Version'
+_numpy_supported_simd_features = 'NumPy Supported SIMD features'
+_numpy_supported_simd_dispatch = 'NumPy Supported SIMD dispatch'
+_numpy_supported_simd_baseline = 'NumPy Supported SIMD baseline'
+_numpy_AVX512_SKX_detected = 'NumPy AVX512_SKX detected'
 # SVML info
 _svml_state, _svml_loaded = 'SVML State', 'SVML Lib Loaded'
 _llvm_svml_patched = 'LLVM SVML Patched'
@@ -381,6 +388,23 @@ def get_sysinfo():
                 "(device and driver present, runtime problem?)\n"
                 f"(cuda) {type(e)}: {e}")
 
+    # NumPy information
+    sys_info[_numpy_version] = np.version.full_version
+    try:
+        # NOTE: These consts were added in NumPy 1.20
+        from numpy.core._multiarray_umath import (__cpu_features__,
+                                                  __cpu_dispatch__,
+                                                  __cpu_baseline__,)
+    except ImportError:
+        sys_info[_numpy_AVX512_SKX_detected] = False
+    else:
+        feat_filtered = [k for k, v in __cpu_features__.items() if v]
+        sys_info[_numpy_supported_simd_features] = feat_filtered
+        sys_info[_numpy_supported_simd_dispatch] = __cpu_dispatch__
+        sys_info[_numpy_supported_simd_baseline] = __cpu_baseline__
+        sys_info[_numpy_AVX512_SKX_detected] = \
+            __cpu_features__.get("AVX512_SKX", False)
+
     # SVML information
     # Replicate some SVML detection logic from numba.__init__ here.
     # If SVML load fails in numba.__init__ the splitting of the logic
@@ -568,6 +592,20 @@ def display_sysinfo(info=None, sep_pos=45):
         (info.get(_cu_detect_out, "None"),),
         ("CUDA Libraries Test Output:",),
         (info.get(_cu_lib_test, "None"),),
+        ("",),
+        ("__NumPy Information__",),
+        ("NumPy Version", info.get(_numpy_version, '?')),
+        ("NumPy Supported SIMD features",
+         DisplaySeq(info.get(_numpy_supported_simd_features, [])
+                    or ('None found.',))),
+        ("NumPy Supported SIMD dispatch",
+         DisplaySeq(info.get(_numpy_supported_simd_dispatch, [])
+                    or ('None found.',))),
+        ("NumPy Supported SIMD baseline",
+         DisplaySeq(info.get(_numpy_supported_simd_baseline, [])
+                    or ('None found.',))),
+        ("NumPy AVX512_SKX support detected",
+         info.get(_numpy_AVX512_SKX_detected, '?')),
         ("",),
         ("__SVML Information__",),
         ("SVML State, config.USING_SVML", info.get(_svml_state, '?')),

@@ -26,6 +26,20 @@ export PYTHONFAULTHANDLER=1
 # enable new style error handling
 export NUMBA_CAPTURED_ERRORS="new_style"
 
+# Disable NumPy dispatching to AVX512_SKX feature extensions if the chip is
+# reported to support the feature and NumPy >= 1.22 as this results in the use
+# of low accuracy SVML libm replacements in ufunc loops.
+_NPY_CMD='from numba.misc import numba_sysinfo;\
+          sysinfo=numba_sysinfo.get_sysinfo();\
+          print(sysinfo["NumPy AVX512_SKX detected"] and
+                sysinfo["NumPy Version"]>="1.22")'
+NUMPY_DETECTS_AVX512_SKX_NP_GT_122=$(python -c "$_NPY_CMD")
+echo "NumPy >= 1.22 with AVX512_SKX detected: $NUMPY_DETECTS_AVX512_SKX_NP_GT_122"
+
+if [[ "$NUMPY_DETECTS_AVX512_SKX_NP_GT_122" == "True" ]]; then
+    export NPY_DISABLE_CPU_FEATURES="AVX512_SKX"
+fi
+
 # deal with threading layers
 if [ -z ${TEST_THREADING+x} ]; then
     echo "INFO: Threading layer not explicitly set."
