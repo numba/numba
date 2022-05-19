@@ -121,6 +121,10 @@ class _Kernel(serialize.ReduceMixin):
         self.reload_init = []
 
     @property
+    def codegen(self):
+        return self.target_context.codegen()
+
+    @property
     def library(self):
         # Is this here because we have a discrepancy between the naming in
         # kernel and compile result? It should probably be renamed.
