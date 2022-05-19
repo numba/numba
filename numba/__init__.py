@@ -137,7 +137,7 @@ def _ensure_critical_deps():
     if numpy_version < (1, 18):
         raise ImportError("Numba needs NumPy 1.18 or greater")
     elif numpy_version > (1, 22):
-        raise ImportError("Numba needs NumPy 1.21 or less")
+        raise ImportError("Numba needs NumPy 1.22 or less")
 
     try:
         import scipy
