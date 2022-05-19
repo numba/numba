@@ -1598,6 +1598,15 @@ class TestBooleanLiteralOperators(TestCase):
         cfunc = jit(nopython=True)(test_impl)
         self.assertEqual(test_impl(), cfunc())
 
+    def test_bool_to_str(self):
+
+        def test_impl():
+            a, b = False, True
+            return (str(a), str(b))
+
+        cfunc = jit(nopython=True)(test_impl)
+        self.assertEqual(test_impl(), cfunc())
+
 
 if __name__ == '__main__':
     unittest.main()
