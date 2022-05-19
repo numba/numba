@@ -129,8 +129,13 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
     def as_void_ptr(arg):
         return builder.bitcast(arg, byte_ptr_t)
 
-    # Array count is input signature plus 1 (due to output array)
-    array_count = len(sig.args) + 1
+    # Array count is input signature length, it should be of form:
+    # none(...args, ...outputs)
+    if not isinstance(sig.return_type, types.NoneType):
+        msg = ("Signature spec invalid for gufunc (return type should be "
+               f"none): {sig}")
+        raise errors.LoweringError(msg)
+    array_count = len(sig.args)
 
     parallel_for_ty = ir.FunctionType(ir.VoidType(),
                                       [byte_ptr_t] * 5 + [intp_t, ] * 3)
