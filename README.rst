@@ -88,6 +88,6 @@ Numba has a discourse forum for discussions:
 Continuous Integration
 ======================
 
-.. image:: https://dev.azure.com/numba/numba/_apis/build/status/numba.numba?branchName=master
-    :target: https://dev.azure.com/numba/numba/_build/latest?definitionId=1?branchName=master
+.. image:: https://dev.azure.com/numba/numba/_apis/build/status/numba.numba?branchName=main
+    :target: https://dev.azure.com/numba/numba/_build/latest?definitionId=1?branchName=main
     :alt: Azure Pipelines

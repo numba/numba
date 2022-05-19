@@ -1,3 +1,10 @@
+Version 0.55.2 (19 May, 2022)
+-----------------------------
+
+This is a maintenance release to support NumPy 1.22 and Apple M1.
+
+* PR `#8067 <https://github.com/numba/numba/pull/8067>`_: Backport #8027: Support for NumPy 1.22 (`stuartarchibald <https://github.com/stuartarchibald>`_)
+
 Version 0.55.1 (27 January, 2022)
 ---------------------------------
 

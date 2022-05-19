@@ -22,7 +22,7 @@ changes, see **contributing patches** below.
   still relevant, that the examples are present, good and working. Fix anything
   that needs updating in a pull request.
 * Make a file that is not `flake8` compliant meet the standard, a list of all
-  failing files is in the `exclude` section of the [`.flake8` config](https://github.com/numba/numba/blob/master/.flake8),
+  failing files is in the `exclude` section of the [`.flake8` config](https://github.com/numba/numba/blob/main/.flake8),
   then create a pull request with the change.
 
 ## More involved things:
