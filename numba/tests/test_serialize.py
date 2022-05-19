@@ -241,7 +241,7 @@ class TestCloudPickleIssues(TestCase):
         mp = get_context('spawn')
         proc = mp.Process(target=check_main_class_reset_on_unpickle)
         proc.start()
-        proc.join(timeout=10)
+        proc.join(timeout=60)
         self.assertEqual(proc.exitcode, 0)
 
     def test_dynamic_class_reset_on_unpickle_new_proc(self):
@@ -256,7 +256,7 @@ class TestCloudPickleIssues(TestCase):
         mp = get_context('spawn')
         proc = mp.Process(target=check_unpickle_dyn_class_new_proc, args=(saved,))
         proc.start()
-        proc.join(timeout=10)
+        proc.join(timeout=60)
         self.assertEqual(proc.exitcode, 0)
 
     def test_dynamic_class_issue_7356(self):
