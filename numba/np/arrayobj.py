@@ -1423,31 +1423,23 @@ def ol_numpy_broadcast_shapes(*args):
                    f'Got {arg}')
             raise errors.TypingError(msg)
 
-    m = 0
-    for arg in args:
-        if isinstance(arg, types.Integer):
-            m = max(m, 1)
-        elif isinstance(arg, types.BaseTuple):
-            m = max(m, len(arg))
+    def impl(*args):
+        # discover the number of dimensions
+        m = 0
+        for val in literal_unroll(args):
+            if isinstance(val, int):
+                m = max(m, 1)
+            else:
+                m = max(m, len(val))
 
-    if m == 0:
-        return lambda *args: ()
-    else:
-        tup_init = (1,) * m
-
-        def impl(*args):
-            # propagate args
-            r = [1] * m
-            tup = tup_init
-            for arg in literal_unroll(args):
-                if isinstance(arg, tuple) and len(arg) > 0:
-                    numpy_broadcast_shapes_list(r, m, arg)
-                elif isinstance(arg, int):
-                    numpy_broadcast_shapes_list(r, m, (arg,))
-            for idx, elem in enumerate(r):
-                tup = tuple_setitem(tup, idx, elem)
-            return tup
-
+        # propagate args
+        r = [1] * m
+        for arg in literal_unroll(args):
+            if isinstance(arg, tuple) and len(arg) > 0:
+                numpy_broadcast_shapes_list(r, m, arg)
+            elif isinstance(arg, int):
+                numpy_broadcast_shapes_list(r, m, (arg,))
+        return r
     return impl
 
 
