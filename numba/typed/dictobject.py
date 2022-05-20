@@ -1087,8 +1087,7 @@ def build_map(context, builder, dict_type, item_types, items):
         unliteral_tys = [x for x in
                          dict_type.literal_value.values()]
         nbty = types.NamedTuple(unliteral_tys,
-                                dict_type.tuple_ty,
-                                False)
+                                dict_type.tuple_ty)
         values = [x[1] for x in items]
         # replace with make_tuple call?
         tup = context.get_constant_undef(nbty)

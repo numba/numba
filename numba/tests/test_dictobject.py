@@ -2277,7 +2277,7 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
 
         @njit
         def foo():
-            a = {'a': {'b1': 10, 'b2': 'string'}}
+            a = {'a1': {'b1': 10, 'b2': 'string'}}
             bar(a)
 
         foo()
