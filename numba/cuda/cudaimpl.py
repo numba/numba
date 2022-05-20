@@ -972,10 +972,6 @@ def ptx_nanosleep(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 
 
-def _get_target_data(context):
-    return ll.create_target_data(nvvm.data_layout[context.address_size])
-
-
 def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
                    can_dynsized=False):
     elemcount = reduce(operator.mul, shape, 1)
@@ -1031,7 +1027,7 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
         addrspaceptr = gvmem.bitcast(ir.PointerType(ir.IntType(8), addrspace))
         dataptr = builder.call(conv, [addrspaceptr])
 
-    targetdata = _get_target_data(context)
+    targetdata = ll.create_target_data(nvvm.data_layout)
     lldtype = context.get_data_type(dtype)
     itemsize = lldtype.get_abi_size(targetdata)
 

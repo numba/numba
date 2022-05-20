@@ -479,7 +479,6 @@ CPU unit tests (GPU target unit tests listed in later sections
 
 - :ghfile:`runtests.py` - Convenience script that launches test runner and
   turns on full compiler tracebacks
-- :ghfile:`run_coverage.py` - Runs test suite with coverage tracking enabled
 - :ghfile:`.coveragerc` - Coverage.py configuration
 - :ghfile:`numba/runtests.py` - Entry point to unittest runner
 - :ghfile:`numba/testing/_runtests.py` - Implementation of custom test runner
