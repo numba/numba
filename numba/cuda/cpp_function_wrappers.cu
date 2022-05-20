@@ -1,7 +1,9 @@
 #include "cuda_fp16.h"
 
+#define FNDEF(fname) __numba_wrapper_ ## fname
+
 extern "C" __device__ int
-hdiv_wrapper(
+FNDEF(hdiv)(
   short* return_value,
   short x,
   short y
@@ -15,7 +17,7 @@ hdiv_wrapper(
 }
 
 extern "C" __device__ int
-hsin_wrapper(
+FNDEF(hsin)(
   short* return_value,
   short x
 )
@@ -28,7 +30,7 @@ hsin_wrapper(
 }
 
 extern "C" __device__ int
-hcos_wrapper(
+FNDEF(hcos)(
   short* return_value,
   short x
 )
@@ -41,7 +43,7 @@ hcos_wrapper(
 }
 
 extern "C" __device__ int
-hlog_wrapper(
+FNDEF(hlog)(
   short* return_value,
   short x
 )
@@ -54,7 +56,7 @@ hlog_wrapper(
 }
 
 extern "C" __device__ int
-hlog10_wrapper(
+FNDEF(hlog10)(
   short* return_value,
   short x
 )
@@ -67,7 +69,7 @@ hlog10_wrapper(
 }
 
 extern "C" __device__ int
-hlog2_wrapper(
+FNDEF(hlog2)(
   short* return_value,
   short x
 )
@@ -80,7 +82,7 @@ hlog2_wrapper(
 }
 
 extern "C" __device__ int
-hexp_wrapper(
+FNDEF(hexp)(
   short* return_value,
   short x
 )
@@ -93,7 +95,7 @@ hexp_wrapper(
 }
 
 extern "C" __device__ int
-hexp10_wrapper(
+FNDEF(hexp10)(
   short* return_value,
   short x
 )
@@ -106,7 +108,7 @@ hexp10_wrapper(
 }
 
 extern "C" __device__ int
-hexp2_wrapper(
+FNDEF(hexp2)(
   short* return_value,
   short x
 )
@@ -119,7 +121,7 @@ hexp2_wrapper(
 }
 
 extern "C" __device__ int
-hsqrt_wrapper(
+FNDEF(hsqrt)(
   short* return_value,
   short x
 )
@@ -132,7 +134,7 @@ hsqrt_wrapper(
 }
 
 extern "C" __device__ int
-hrsqrt_wrapper(
+FNDEF(hrsqrt)(
   short* return_value,
   short x
 )
@@ -145,7 +147,7 @@ hrsqrt_wrapper(
 }
 
 extern "C" __device__ int
-hfloor_wrapper(
+FNDEF(hfloor)(
   short* return_value,
   short x
 )
@@ -158,7 +160,7 @@ hfloor_wrapper(
 }
 
 extern "C" __device__ int
-hceil_wrapper(
+FNDEF(hceil)(
   short* return_value,
   short x
 )
@@ -171,7 +173,7 @@ hceil_wrapper(
 }
 
 extern "C" __device__ int
-hrcp_wrapper(
+FNDEF(hrcp)(
   short* return_value,
   short x
 )
@@ -184,7 +186,7 @@ hrcp_wrapper(
 }
 
 extern "C" __device__ int
-hrint_wrapper(
+FNDEF(hrint)(
   short* return_value,
   short x
 )
@@ -197,7 +199,7 @@ hrint_wrapper(
 }
 
 extern "C" __device__ int
-htrunc_wrapper(
+FNDEF(htrunc)(
   short* return_value,
   short x
 )

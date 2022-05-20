@@ -289,7 +289,11 @@ def compile_ptx_for_current_device(pyfunc, args, debug=False, lineinfo=False,
                        device=device, fastmath=fastmath, cc=cc, opt=True)
 
 
-def declare_device_function(name, restype, argtypes, ret_template=False):
+def declare_device_function(name, restype, argtypes):
+    return _declare_device_function(name, restype, argtypes)
+
+
+def _declare_device_function(name, restype, argtypes, ret_template=False):
     from .descriptor import cuda_target
     typingctx = cuda_target.typing_context
     targetctx = cuda_target.target_context

@@ -27,6 +27,16 @@ from numba import _dispatcher
 
 from warnings import warn
 
+cuda_fp16_math_funcs = ['hsin', 'hcos',
+                        'hlog', 'hlog10',
+                        'hlog2',
+                        'hexp', 'hexp10',
+                        'hexp2',
+                        'hsqrt', 'hrsqrt',
+                        'hfloor', 'hceil',
+                        'hrcp', 'hrint',
+                        'htrunc', 'hdiv']
+
 
 class _Kernel(serialize.ReduceMixin):
     '''
@@ -96,24 +106,15 @@ class _Kernel(serialize.ReduceMixin):
         if self.cooperative:
             link.append(get_cudalib('cudadevrt', static=True))
 
-        cuda_fp16_math_funcs = ['hsin_wrapper', 'hcos_wrapper',
-                                'hlog_wrapper', 'hlog10_wrapper',
-                                'hlog2_wrapper',
-                                'hexp_wrapper', 'hexp10_wrapper',
-                                'hexp2_wrapper',
-                                'hsqrt_wrapper', 'hrsqrt_wrapper',
-                                'hfloor_wrapper', 'hceil_wrapper',
-                                'hrcp_wrapper', 'hrint_wrapper',
-                                'htrunc_wrapper', 'hdiv_wrapper']
-
         res = [ele for ele in cuda_fp16_math_funcs
-               if(ele in lib.get_asm_str())]
+               if(f'__numba_wrapper_{ele}' in lib.get_asm_str())]
 
         if res:
             # Path to the source containing the foreign function
 
             basedir = os.path.dirname(os.path.abspath(__file__))
-            functions_cu_path = os.path.join(basedir, 'functions.cu')
+            functions_cu_path = os.path.join(basedir,
+                                             'cpp_function_wrappers.cu')
             link.append(functions_cu_path)
 
         for filepath in link:

@@ -396,6 +396,7 @@ metadata = dict(
         # numba gdb hook init command language file
         "numba.misc": ["cmdlang.gdb"],
         "numba.typed": ["py.typed"],
+        "numba.cuda" : ["cpp_function_wrappers.cu"]
     },
     scripts=["numba/pycc/pycc", "bin/numba"],
     url="https://numba.pydata.org",

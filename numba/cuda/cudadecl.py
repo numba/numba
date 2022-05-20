@@ -6,7 +6,7 @@ from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          signature, Registry)
 from numba.cuda.types import dim3, grid_group
 from numba import cuda
-from numba.cuda.compiler import declare_device_function
+from numba.cuda.compiler import _declare_device_function
 
 registry = Registry()
 register = registry.register
@@ -361,38 +361,37 @@ Cuda_hmul = _genfp16_binary(cuda.fp16.hmul)
 Cuda_hneg = _genfp16_unary(cuda.fp16.hneg)
 Cuda_habs = _genfp16_unary(cuda.fp16.habs)
 
-hsin_device = declare_device_function('hsin_wrapper', types.float16,
-                                      (types.float16,), True)
-hcos_device = declare_device_function('hcos_wrapper', types.float16,
-                                      (types.float16,), True)
-hlog_device = declare_device_function('hlog_wrapper', types.float16,
-                                      (types.float16,), True)
-hlog10_device = declare_device_function('hlog10_wrapper', types.float16,
-                                        (types.float16,), True)
-hlog2_device = declare_device_function('hlog2_wrapper', types.float16,
-                                       (types.float16,), True)
-hexp_device = declare_device_function('hexp_wrapper', types.float16,
-                                      (types.float16,), True)
-hexp10_device = declare_device_function('hexp10_wrapper', types.float16,
-                                        (types.float16,), True)
-hexp2_device = declare_device_function('hexp2_wrapper', types.float16,
-                                       (types.float16,), True)
-hsqrt_device = declare_device_function('hsqrt_wrapper', types.float16,
-                                       (types.float16,), True)
-hrsqrt_device = declare_device_function('hrsqrt_wrapper', types.float16,
-                                        (types.float16,), True)
-hfloor_device = declare_device_function('hfloor_wrapper', types.float16,
-                                        (types.float16,), True)
-hceil_device = declare_device_function('hceil_wrapper', types.float16,
-                                       (types.float16,), True)
-hrcp_device = declare_device_function('hrcp_wrapper', types.float16,
-                                      (types.float16,), True)
-hrint_device = declare_device_function('hrint_wrapper', types.float16,
-                                       (types.float16,), True)
-htrunc_device = declare_device_function('htrunc_wrapper', types.float16,
-                                        (types.float16,), True)
-hdiv_device = declare_device_function('hdiv_wrapper', types.float16,
-                                      (types.float16,types.float16,), True)
+
+def _resolve_wrapped_unary(fname):
+    decl = _declare_device_function(f'__numba_wrapper_{fname}',
+                                    types.float16,
+                                    (types.float16,), True)
+    return decl
+
+
+def _resolve_wrapped_binary(fname):
+    decl = _declare_device_function(f'__numba_wrapper_{fname}',
+                                    types.float16,
+                                    (types.float16, types.float16,), True)
+    return decl
+
+
+hsin_device = _resolve_wrapped_unary('hsin')
+hcos_device = _resolve_wrapped_unary('hcos')
+hlog_device = _resolve_wrapped_unary('hlog')
+hlog10_device = _resolve_wrapped_unary('hlog10')
+hlog2_device = _resolve_wrapped_unary('hlog2')
+hexp_device = _resolve_wrapped_unary('hexp')
+hexp10_device = _resolve_wrapped_unary('hexp10')
+hexp2_device = _resolve_wrapped_unary('hexp2')
+hsqrt_device = _resolve_wrapped_unary('hsqrt')
+hrsqrt_device = _resolve_wrapped_unary('hrsqrt')
+hfloor_device = _resolve_wrapped_unary('hfloor')
+hceil_device = _resolve_wrapped_unary('hceil')
+hrcp_device = _resolve_wrapped_unary('hrcp')
+hrint_device = _resolve_wrapped_unary('hrint')
+htrunc_device = _resolve_wrapped_unary('htrunc')
+hdiv_device = _resolve_wrapped_binary('hdiv')
 
 
 # generate atomic operations
