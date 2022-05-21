@@ -1,9 +1,17 @@
+import os
+
 import numpy as np
 
-from numba.cuda.testing import CUDATestCase, skip_on_cudasim
+from numba.cuda.testing import CUDATestCase
 
 from numba import cuda
-from numba.cuda.vector_types import vector_types
+
+if os.environ.get("NUMBA_ENABLE_CUDASIM", 0):
+    vector_types = cuda.vector_types._simulated_vector_types
+    for svty in vector_types.values():
+        setattr(cuda, svty.name, svty)
+else:
+    from numba.cuda.vector_types import vector_types
 
 
 def make_kernel(vtype):
@@ -78,6 +86,7 @@ def make_fancy_creation_kernel(vtype):
         f1_1 = v1(one)  # 1
         f1_2 = v1(f1_1) # 1
 
+        # breakpoint()
         res[0] = f1_1.x
         res[1] = f1_2.x
         j += 2
@@ -178,7 +187,6 @@ def make_fancy_creation_kernel(vtype):
 
 class TestCudaVectorType(CUDATestCase):
 
-    @skip_on_cudasim("Vector type isn't defined in simulator.")
     def test_creation_readout(self):
         for vty in vector_types.values():
             with self.subTest(vty=vty):
@@ -189,7 +197,6 @@ class TestCudaVectorType(CUDATestCase):
                     arr, np.array(range(vty.num_elements))
                 )
 
-    @skip_on_cudasim("Vector type isn't defined in simulator.")
     def test_fancy_creation_readout(self):
         for vty in vector_types.values():
             kernel = make_fancy_creation_kernel(vty)
