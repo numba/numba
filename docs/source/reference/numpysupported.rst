@@ -585,39 +585,32 @@ Modules
 
 Generator Objects
 '''''''''''''''''
-Numba supports ``numpy.random.Generator()`` objects and their respective
-methods. Numpy's ``Generator`` objects rely on ``BitGenerator`` to manage state
-and generate the random bits, which are then transformed into random
-values from useful distributions. Numba ``unbox``es the ``Generator`` objects
-and maintians a reference to the underlying ``BitGenerator`` objects using Numpy's
-``ctypes`` interface bindings. Hence ``Generator`` objects can cross the JIT boundary
-and their functions be used within Numba-Jit code. Note that since only references
-to ``BitGenerator`` objects are maintained, any change to the state of a particular
-``Generator`` object outside Numba code would affect the state of ``Generator``
-inside the Numba code.
+Numba supports ``numpy.random.Generator()`` objects. Users can now pass
+individual Numpy ``Generator`` objects into Numba functions and use their
+methods inside the functions. The same algorithms are used as Numpy for
+random number generation hence maintaining parity between the random
+number generated using Numpy and Numba under identical arguments 
+(also the same documentation notes as Numpy ``Generator`` methods apply).
+The current Numba support for ``Generator`` is not thread-safe, hence we
+do not recommend using ``Generator`` methods in methods with parallel
+execution logic.
 
-.. code-block:: python
+.. note::
+  Numpy's ``Generator`` objects rely on ``BitGenerator`` to manage state
+  and generate the random bits, which are then transformed into random
+  values from useful distributions. Numba ``unbox``es the ``Generator`` objects
+  and maintians a reference to the underlying ``BitGenerator`` objects using Numpy's
+  ``ctypes`` interface bindings. Hence ``Generator`` objects can cross the JIT boundary
+  and their functions be used within Numba-Jit code. Note that since only references
+  to ``BitGenerator`` objects are maintained, any change to the state of a particular
+  ``Generator`` object outside Numba code would affect the state of ``Generator``
+  inside the Numba code.
 
-  import numpy as np
-  import numba
-
-  x = np.random.default_rng(1)
-  y = np.random.default_rng(1)
-
-  size = 10
-
-  def do_stuff(gen):
-      return gen.random(size=int(size/2))
-
-  print(x.random(size=size))
-  # [0.51182162 0.9504637  0.14415961 0.94864945 0.31183145
-  #  0.42332645 0.82770259 0.40919914 0.54959369 0.02755911]
-
-  print(do_stuff(y))
-  # [0.51182162 0.9504637  0.14415961 0.94864945 0.31183145]
-
-  print(y.random(size=int(size/2)))
-  # [0.42332645 0.82770259 0.40919914 0.54959369 0.02755911]
+.. literalinclude:: ../../../numba/tests/doc_examples/test_numpy_generators.py
+   :language: python
+   :start-after: magictoken.npgen_usage.begin
+   :end-before: magictoken.npgen_usage.end
+   :dedent: 8
 
 The following ``Generator`` methods are supported:
 

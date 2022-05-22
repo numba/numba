@@ -1107,6 +1107,7 @@ def box_LiteralStrKeyDict(typ, val, c):
     return box_unsupported(typ, val, c)
 
 
+# Original implementation at: https://github.com/numba/numba/issues/4499#issuecomment-1063138477
 @unbox(types.NumPyRandomBitGeneratorType)
 def unbox_numpy_random_bitgenerator(typ, obj, c):
     # The bit_generator instance has a `.ctypes` attr which is a namedtuple
@@ -1200,3 +1201,8 @@ def unbox_numpy_random_generator(typ, obj, c):
     unboxed = c.unbox(_bit_gen_type, bit_gen_inst).value
     struct_ptr.bit_generator = unboxed
     return NativeValue(struct_ptr._getvalue())
+
+# @box(types.NumPyRandomGeneratorType)
+# def box_numpy_random_bitgenerator(typ, val, c):
+#     cls_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ.instance_class))
+#     return c.pyapi.nrt_meminfo_as_pyobject(val)

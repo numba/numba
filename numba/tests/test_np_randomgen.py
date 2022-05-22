@@ -4,29 +4,35 @@ import numpy as np
 from numba import types
 from numba.tests.support import TestCase
 from numba.np.random.generator_methods import _get_proper_func
+from numba.np.random.generator_core import next_uint32, next_uint64, next_double
 from numpy.random import MT19937, Generator
-from numpy.testing import assert_equal, assert_array_equal, assert_raises
+from numba.core.errors import TypingError
 
 
-def test_proper_func_provider():
-    def test_32bit_func():
-        return 32
+class TestHelperFuncs(TestCase):
+    def test_proper_func_provider(self):
+        def test_32bit_func():
+            return 32
 
-    def test_64bit_func():
-        return 64
+        def test_64bit_func():
+            return 64
 
-    assert_equal(_get_proper_func(test_32bit_func, test_64bit_func,
-                                  np.float64)[0](), 64)
-    assert_equal(_get_proper_func(test_32bit_func, test_64bit_func,
-                                  np.float32)[0](), 32)
-    assert_equal(_get_proper_func(test_32bit_func, test_64bit_func,
-                                  types.float64)[0](), 64)
-    assert_equal(_get_proper_func(test_32bit_func, test_64bit_func,
-                                  types.float32)[0](), 32)
+        self.assertEqual(_get_proper_func(test_32bit_func, test_64bit_func,
+                         np.float64)[0](), 64)
+        self.assertEqual(_get_proper_func(test_32bit_func, test_64bit_func,
+                         np.float32)[0](), 32)
+        self.assertEqual(_get_proper_func(test_32bit_func, test_64bit_func,
+                         types.float64)[0](), 64)
+        self.assertEqual(_get_proper_func(test_32bit_func, test_64bit_func,
+                         types.float32)[0](), 32)
 
-    # With any other datatype it should return a TypeError
-    with assert_raises(TypeError):
-        _get_proper_func(test_32bit_func, test_64bit_func, np.int32)
+        # With any other datatype it should return a TypeError
+        with self.assertRaises(TypingError) as raises:
+            _get_proper_func(test_32bit_func, test_64bit_func, np.int32)
+        self.assertIn(
+            'Unsupported dtype int32 for the given distribution',
+            str(raises.exception)
+        )
 
 
 class TestRandomGenerators(TestCase):
@@ -55,7 +61,7 @@ class TestRandomGenerators(TestCase):
                 numpy_res = distribution_func.py_func(numpy_rng_instance,
                                                       size, dtype)
 
-                assert_array_equal(numba_res, numpy_res)
+                self.assertPreciseEqual(numba_res, numpy_res)
 
         # Check if the end state of both BitGenerators is same
         # after drawing the distributions
@@ -63,8 +69,25 @@ class TestRandomGenerators(TestCase):
         numpy_gen_state = numpy_rng_instance.__getstate__()['state']
 
         for _state_key in numpy_gen_state:
-            assert_equal(numba_gen_state[_state_key],
-                         numpy_gen_state[_state_key])
+            self.assertPreciseEqual(numba_gen_state[_state_key],
+                                    numpy_gen_state[_state_key])
+
+    def _test_bitgen_func_parity(self, func_name, bitgen_func, seed=1):
+        numba_rng_instance = np.random.default_rng(seed=seed)
+        numpy_rng_instance = np.random.default_rng(seed=seed)
+
+        numpy_func = getattr(numpy_rng_instance.bit_generator.ctypes, func_name)
+        numpy_res = numpy_func(numpy_rng_instance.bit_generator.ctypes.state)
+
+        numba_func = numba.njit(lambda x: bitgen_func(x.bit_generator))
+        numba_res = numba_func(numba_rng_instance)
+
+        self.assertPreciseEqual(numba_res, numpy_res)
+
+    def test_bitgen_funcs(self):
+        self._test_bitgen_func_parity("next_uint32", next_uint32)
+        self._test_bitgen_func_parity("next_uint64", next_uint64)
+        self._test_bitgen_func_parity("next_double", next_double)
 
     def test_random(self):
         # Test with no arguments
