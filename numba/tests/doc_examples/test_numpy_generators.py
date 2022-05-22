@@ -22,15 +22,16 @@ class NumpyGeneratorUsageTest(unittest.TestCase):
         # [0.51182162 0.9504637  0.14415961 0.94864945 0.31183145
         #  0.42332645 0.82770259 0.40919914 0.54959369 0.02755911]
 
-        numba_res = do_stuff(y)
+        numba_func_res = do_stuff(y)
         # [0.51182162 0.9504637  0.14415961 0.94864945 0.31183145]
 
         after_numba = y.random(size=int(size / 2))
         # [0.42332645 0.82770259 0.40919914 0.54959369 0.02755911]
 
         # magictoken.npgen_usage.end
-        self.assertEqual(original,
-                         np.concatenate(numba_res, after_numba))
+        numba_res = np.concatenate((numba_func_res, after_numba))
+        for _np_res, _nb_res in zip(original, numba_res):
+            self.assertEqual(_np_res, _nb_res)
 
 
 if __name__ == '__main__':
