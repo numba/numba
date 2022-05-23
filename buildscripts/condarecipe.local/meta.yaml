@@ -27,9 +27,8 @@ requirements:
   build:
     - {{ compiler('c') }}      # [not (armv6l or armv7l or aarch64)]
     - {{ compiler('cxx') }}    # [not (armv6l or armv7l or aarch64)]
-    # both of these are needed on osx, llvm for the headers, Intel for the lib
+    # OpenMP headers from llvm needed for OSX.
     - llvm-openmp              # [osx]
-    - intel-openmp             # [osx]
   host:
     - python
     - numpy
@@ -73,7 +72,7 @@ test:
     - ipython                  # [not (armv6l or armv7l or aarch64)]
     - setuptools
     - tbb  2021.*              # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
-    - intel-openmp             # [osx]
+    - llvm-openmp              # [osx]
     # This is for driving gdb tests
     - pexpect                  # [linux64]
     # For testing ipython
