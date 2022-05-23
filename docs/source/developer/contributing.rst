@@ -276,7 +276,7 @@ imported with an ``pt`` prefix. For example, ``typing.Dict`` is imported as ``fr
 Stability
 '''''''''
 
-The repository's ``master`` branch is expected to be stable at all times.
+The repository's ``main`` branch is expected to be stable at all times.
 This translates into the fact that the test suite passes without errors
 on all supported platforms (see below).  This also means that a pull request
 also needs to pass the test suite before it is merged in.
@@ -286,7 +286,7 @@ also needs to pass the test suite before it is merged in.
 Platform support
 ''''''''''''''''
 
-Every commit to the master branch is automatically tested on all of the
+Every commit to the main branch is automatically tested on all of the
 platforms Numba supports. This includes ARMv8, POWER8, and NVIDIA GPUs.
 The build system however is internal to Anaconda, so we also use
 `Azure <https://dev.azure.com/numba/numba/_build>`_ to provide public continuous
@@ -464,4 +464,4 @@ Finally, use ``git push`` to update the website.
 
 
 .. _typeguard: https://typeguard.readthedocs.io/en/latest/
-.. _runtests.py: https://github.com/numba/numba/blob/master/runtests.py
+.. _runtests.py: https://github.com/numba/numba/blob/main/runtests.py
