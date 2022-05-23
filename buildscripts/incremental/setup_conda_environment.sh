@@ -95,8 +95,8 @@ elif [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
     $PIP_INSTALL numpy==$NUMPY
 fi
 
-# Install latest llvmlite build
-$CONDA_INSTALL -c numba/label/dev llvmlite
+# Install llvmlite build
+$CONDA_INSTALL -c numba/label/dev llvmlite=0.38
 
 
 # Install dependencies for building the documentation
