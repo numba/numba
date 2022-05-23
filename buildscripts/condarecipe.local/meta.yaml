@@ -43,7 +43,8 @@ requirements:
     - tbb-devel >=2021       # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
   run:
     - python >=3.7
-    - numpy >=1.18
+    # NumPy 1.22.0, 1.22.1, 1.22.2 are all broken for ufuncs, see #7756
+    - numpy >=1.18, !=1.22.0, !=1.22.1, !=1.22.2
     - setuptools
     - importlib_metadata       # [py<39]
     # On channel https://anaconda.org/numba/
@@ -63,8 +64,6 @@ requirements:
     - scipy >=1.0
     # CUDA Python 11.6 or later
     - cuda-python >=11.6
-    # NumPy 1.22.0, 1.22.1, 1.22.2 are all broken for ufuncs, see #7756
-    - numpy !=1.22.0, !=1.22.1, !=1.22.2
 
 test:
   requires:
