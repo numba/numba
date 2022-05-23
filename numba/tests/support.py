@@ -107,6 +107,13 @@ skip_ppc64le_issue6465 = unittest.skipIf(platform.machine() == 'ppc64le',
                                           "parameter area' in "
                                           "LowerCall_64SVR4"))
 
+# fenv.h on M1 may have various issues:
+# https://github.com/numba/numba/issues/7822#issuecomment-1065356758
+_uname = platform.uname()
+IS_OSX_ARM64 = _uname.system == 'Darwin' and _uname.machine == 'arm64'
+skip_m1_fenv_errors = unittest.skipIf(IS_OSX_ARM64,
+    "fenv.h-like functionality unreliable on OSX arm64")
+
 try:
     import scipy.linalg.cython_lapack
     has_lapack = True

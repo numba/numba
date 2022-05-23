@@ -14,6 +14,7 @@ except ImportError:
 
 import llvmlite.binding as ll
 
+
 IS_WIN32 = sys.platform.startswith('win32')
 IS_OSX = sys.platform.startswith('darwin')
 MACHINE_BITS = tuple.__itemsize__ * 8
