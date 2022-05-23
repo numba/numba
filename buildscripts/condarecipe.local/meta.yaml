@@ -42,7 +42,8 @@ requirements:
     - tbb-devel 2021.*       # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
   run:
     - python >=3.7
-    - numpy >=1.18,<1.23
+    # NumPy 1.22.0, 1.22.1, 1.22.2 are all broken for ufuncs, see #7756
+    - numpy >=1.18,<1.23, !=1.22.0, !=1.22.1, !=1.22.2
     - setuptools
     # On channel https://anaconda.org/numba/
     - llvmlite >=0.38.0rc1,<0.39
