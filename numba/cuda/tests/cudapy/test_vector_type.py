@@ -86,7 +86,6 @@ def make_fancy_creation_kernel(vtype):
         f1_1 = v1(one)  # 1
         f1_2 = v1(f1_1) # 1
 
-        # breakpoint()
         res[0] = f1_1.x
         res[1] = f1_2.x
         j += 2
