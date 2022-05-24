@@ -1,4 +1,4 @@
-#if defined(MS_WINDOWS)
+#ifdef _MSC_VER
 /* MSVC C99 doesn't have <stdatomic.h>, use MS equivalent */
 #include <inttypes.h>
 #include <atomic.h>
