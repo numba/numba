@@ -831,7 +831,26 @@ def peep_hole_list_to_tuple(func_ir):
                                             bt = ir.Expr.build_tuple([arg,],
                                                                      expr.loc)
                                         else:
-                                            bt = arg
+                                            # Extend as tuple
+                                            gv_tuple = ir.Global(
+                                                name="tuple", value=tuple,
+                                                loc=expr.loc,
+                                            )
+                                            tuple_var = arg.scope.redefine(
+                                                "_list_extend_gv_tuple",
+                                                loc=expr.loc,
+                                            )
+                                            new_hole.append(
+                                                ir.Assign(
+                                                    target=tuple_var,
+                                                    value=gv_tuple,
+                                                    loc=expr.loc,
+                                                ),
+                                            )
+                                            bt = ir.Expr.call(
+                                                tuple_var, (arg,), (),
+                                                loc=expr.loc,
+                                            )
                                         var = ir.Var(arg.scope, tmp_name,
                                                      expr.loc)
                                         asgn = ir.Assign(bt, var, expr.loc)
