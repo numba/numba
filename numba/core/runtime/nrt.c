@@ -1,7 +1,7 @@
 #ifdef _MSC_VER
 /* MSVC C99 doesn't have <stdatomic.h>, use MS equivalent */
 #include <inttypes.h>
-#include <atomic.h>
+#include <atomic>
 #else
 #include <stdatomic.h>
 #endif
