@@ -27,8 +27,8 @@ Implement parallel vectorize workqueue on top of Intel TBB.
  * from here:
  * https://github.com/intel/tbb/blob/2019_U5/include/tbb/tbb_stddef.h#L29
  */
-#if TBB_INTERFACE_VERSION < 12010
-#error "TBB version is too old, 2021 update 1, i.e. TBB_INTERFACE_VERSION >= 12010 required"
+#if (TBB_INTERFACE_VERSION >= 12060) || (TBB_INTERFACE_VERSION < 12010)
+#error "TBB version is incompatible, 2021.1 through to 2021.5 required, i.e. 12010 <= TBB_INTERFACE_VERSION < 12060"
 #endif
 
 #define _DEBUG 0
