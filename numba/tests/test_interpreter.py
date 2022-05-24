@@ -109,7 +109,7 @@ def sum_jit_func(
     )
 
 
-class TestCallFunctionExPeepHole(TestCase, MemoryLeakMixin):
+class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
     """
     gh #7812
 
