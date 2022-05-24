@@ -62,8 +62,6 @@ requirements:
     - scipy >=1.0
     # CUDA Python 11.6 or later
     - cuda-python >=11.6
-    # NumPy 1.22.0, 1.22.1, 1.22.2 are all broken for ufuncs, see #7756
-    - numpy !=1.22.0, !=1.22.1, !=1.22.2
 
 test:
   requires:
