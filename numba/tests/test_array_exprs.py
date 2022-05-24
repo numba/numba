@@ -738,5 +738,21 @@ class TestExternalTypes(MemoryLeakMixin, unittest.TestCase):
             np.testing.assert_array_equal(arr_expr_neg(4), np.array([-4]))
 
 
+class TestStringExpressions(MemoryLeakMixin, unittest.TestCase):
+
+    def test_eq(self):
+        @njit
+        def foo(a, s):
+            return a == s
+
+        a = np.array(["A", "B"])
+        s = "A"
+        pv = foo.py_func(a, s)
+        jv = foo(a, s)
+        print(foo.inspect_types())
+        self.assertIsInstance(jv, np.ndarray)
+        np.testing.assert_array_equal(pv, jv)
+
+
 if __name__ == "__main__":
     unittest.main()
