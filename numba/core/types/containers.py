@@ -400,9 +400,8 @@ class NamedTuple(_HeterogeneousTuple, BaseNamedTuple):
 
         _HeterogeneousTuple.is_types_iterable(types)
 
-        all_literals = all(isinstance(ty, Literal) for ty in types) \
-            if types else False
-        if types and not all_literals and all(t == types[0] for t in types[1:]):
+        if types and all(t == types[0] for t in types[1:])\
+                and not isinstance(clss, LiteralStrKeyDict.FakeNamedTuple):
             return NamedUniTuple(dtype=types[0], count=len(types), clss=clss)
         else:
             return object.__new__(NamedTuple)
