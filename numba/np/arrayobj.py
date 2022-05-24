@@ -1425,7 +1425,7 @@ def ol_numpy_broadcast_shapes(*args):
 
     # discover the number of dimensions
     m = 0
-    for arg in literal_unroll(args):
+    for arg in args:
         if isinstance(arg, types.Integer):
             m = max(m, 1)
         elif isinstance(arg, types.BaseTuple):
