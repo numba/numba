@@ -1,4 +1,11 @@
+#if defined(MS_WINDOWS)
+/* MSVC C99 doesn't have <stdatomic.h>, use MS equivalent */
+#include <inttypes.h>
+#include <atomic.h>
+#else
 #include <stdatomic.h>
+#endif
+
 #include <stdarg.h>
 #include <string.h> /* for memset */
 #include "nrt.h"
