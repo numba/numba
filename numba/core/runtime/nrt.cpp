@@ -473,13 +473,14 @@ static NRT_ExternalAllocator sample_external_allocator = {
     &sample_external_opaque_data
 };
 
-NRT_ExternalAllocator* _nrt_get_sample_external_allocator() {
+extern "C" NRT_ExternalAllocator* _nrt_get_sample_external_allocator() {
     return &sample_external_allocator;
 }
 
 /*
  * Debugging printf function used internally
  */
+static
 void nrt_debug_print(char *fmt, ...) {
    va_list args;
 
@@ -512,6 +513,6 @@ NRT_api_functions nrt_functions_table = {
 };
 
 
-const NRT_api_functions* NRT_get_api(void) {
+extern "C" const NRT_api_functions* NRT_get_api(void) {
     return &nrt_functions_table;
 }
