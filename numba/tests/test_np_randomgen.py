@@ -84,6 +84,12 @@ class TestRandomGenerators(TestCase):
 
         self.assertPreciseEqual(numba_res, numpy_res)
 
+    def test_npgen_boxing_unboxing(self):
+        rng_instance = np.random.default_rng()
+        numba_func = numba.njit(lambda x: x)
+        self.assertEqual(rng_instance, numba_func(rng_instance))
+        self.assertEqual(id(rng_instance), id(numba_func(rng_instance)))
+
     def test_bitgen_funcs(self):
         self._test_bitgen_func_parity("next_uint32", next_uint32)
         self._test_bitgen_func_parity("next_uint64", next_uint64)

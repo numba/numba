@@ -1200,9 +1200,16 @@ def unbox_numpy_random_generator(typ, obj, c):
     bit_gen_inst = c.pyapi.object_getattr_string(obj, 'bit_generator')
     unboxed = c.unbox(_bit_gen_type, bit_gen_inst).value
     struct_ptr.bit_generator = unboxed
+    struct_ptr.parent = obj
     return NativeValue(struct_ptr._getvalue())
 
-# @box(types.NumPyRandomGeneratorType)
-# def box_numpy_random_bitgenerator(typ, val, c):
-#     cls_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ.instance_class))
-#     return c.pyapi.nrt_meminfo_as_pyobject(val)
+
+@box(types.NumPyRandomGeneratorType)
+def box_numpy_random_bitgenerator(typ, val, c):
+    inst = c.context.make_helper(c.builder, typ, val)
+    obj = inst.parent
+    res = cgutils.alloca_once_value(c.builder, obj)
+    c.pyapi.incref(obj)
+    # Steal NRT ref
+    c.context.nrt.decref(c.builder, typ, val)
+    return c.builder.load(res)
