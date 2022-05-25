@@ -1875,9 +1875,26 @@ class Interpreter(object):
                                loc=self.loc,)
             self.store(exc, temps[0])
         else:
+            loc = self.loc
             for other, tmp in zip(map(self.get, tuples[1:]), temps):
-                out = ir.Expr.binop(fn=operator.add, lhs=first, rhs=other,
-                                    loc=self.loc)
+                # Emit as `first + tuple(other)`
+                gv_tuple = ir.Global(
+                    name="tuple", value=tuple,
+                    loc=loc,
+                )
+                tuple_var = self.store(
+                    gv_tuple, "_list_extend_gv_tuple", redefine=True,
+                )
+                tuplify_val = ir.Expr.call(
+                    tuple_var, (other,), (),
+                    loc=loc,
+                )
+                tuplify_var = self.store(tuplify_val, "_tuplify", redefine=True)
+
+                out = ir.Expr.binop(
+                    fn=operator.add, lhs=first, rhs=self.get(tuplify_var.name),
+                    loc=self.loc,
+                )
                 self.store(out, tmp)
                 first = self.get(tmp)
 
