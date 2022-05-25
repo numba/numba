@@ -13,11 +13,15 @@ class SimulatedVectorType:
             else:
                 args_flattened.append(arg)
         self._attrs = self.attributes[:len(args_flattened)]
-        assert len(self._attrs) == len(args_flattened), \
-            f"{len(self._attrs)} != {len(args_flattened)}"
+        assert self.num_elements == len(args_flattened), \
+            f"{self.num_elements} != {len(args_flattened)}"
 
         for arg, attr in zip(args_flattened, self._attrs):
             setattr(self, attr, arg)
+
+    @property
+    def num_elelments(self):
+        raise NotImplementedError()
 
     def as_list(self):
         return [getattr(self, attr) for attr in self._attrs]
