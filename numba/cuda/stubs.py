@@ -746,7 +746,7 @@ class fp16(Stub):
 # vector types
 
 def make_vector_type_stubs():
-    """Make user facing object for vector types"""
+    """Make user facing objects for vector types"""
     vector_type_stubs = []
     vector_type_prefix = (
         "int8",
@@ -791,7 +791,7 @@ def make_vector_type_stubs():
 
 
 def map_vector_type_stubs_to_alias(vector_type_stubs):
-    """For each of the stub, create its aliases.
+    """For each of the stubs, create its aliases.
 
     For example: float64x3 -> double3
     """
