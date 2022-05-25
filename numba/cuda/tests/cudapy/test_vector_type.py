@@ -192,6 +192,27 @@ def make_fancy_creation_kernel(vtype):
 
 class TestCudaVectorType(CUDATestCase):
 
+    def test_basic(self):
+        """Basic test that makes sure that vector type and aliases
+        are available within the cuda module from both device and
+        simulator mode. This is an important sanity check, since other
+        tests below tests the vector type objects programmatically.
+        """
+        @cuda.jit("void(float64[:])")
+        def kernel(arr):
+            v1 = cuda.float64x4(1.0, 3.0, 5.0, 7.0)
+            v2 = cuda.short2(10, 11)
+            arr[0] = v1.x
+            arr[1] = v1.y
+            arr[2] = v1.z
+            arr[3] = v1.w
+            arr[4] = v2.x
+            arr[5] = v2.y
+
+        res = np.zeros(6, dtype=np.float64)
+        kernel[1, 1](res)
+        self.assertTrue(np.allclose(res, [1.0, 3.0, 5.0, 7.0, 10, 11]))
+
     def test_creation_readout(self):
         for vty in vector_types.values():
             with self.subTest(vty=vty):
