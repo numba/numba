@@ -211,6 +211,29 @@ instead. For example::
     $ NUMBA_USE_TYPEGUARD=1 python runtests.py
 
 
+Running coverage
+''''''''''''''''
+
+Coverage reports can be produced using `coverage.py
+<https://coverage.readthedocs.io/en/stable/index.html>`_. To record coverage
+info for the test suite, run::
+
+    coverage run -m numba.runtests <runtests args>
+
+Next, combine coverage files (potentially for multiple runs) with::
+
+    coverage combine
+
+The combined output can be transformed into various report formats - see the
+`coverage CLI usage reference
+<https://coverage.readthedocs.io/en/stable/cmd.html#command-line-usage>`_.
+For example, to produce an HTML report, run::
+
+    coverage html
+
+Following this command, the report can be viewed by opening ``htmlcov/index.html``.
+
+
 Development rules
 -----------------
 

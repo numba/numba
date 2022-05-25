@@ -585,7 +585,7 @@ def iterable_max(iterable):
 @lower_builtin(types.TypeRef, types.VarArg(types.Any))
 def redirect_type_ctor(context, builder, sig, args):
     """Redirect constructor implementation to `numba_typeref_ctor(cls, *args)`,
-    which should be overloaded by type implementator.
+    which should be overloaded by the type's implementation.
 
     For example:
 
