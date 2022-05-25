@@ -58,8 +58,8 @@ def NumPyRandomGeneratorType_random(inst, size=None, dtype=np.float64):
         assert any([isinstance(size, UniTuple) and
                    isinstance(size.dtype, types.Integer),
                    isinstance(size, Tuple) and size.count == 0,
-                   isinstance(size, types.Integer)
-                   ]), "Size argument either of None,"\
+                   isinstance(size, types.Integer)]
+                   ), "Size argument either of None,"\
             + " an integer, an empty tuple or a tuple of integers"
 
         def impl(inst, size=None, dtype=np.float64):
