@@ -436,7 +436,7 @@ def lower_empty_tuple(context, builder, sig, args):
 @lower_builtin(tuple, types.BaseTuple)
 def lower_tuple(context, builder, sig, args):
     val, = args
-    return impl_ret_untracked(context, builder, sig.return_type, val)
+    return impl_ret_borrowed(context, builder, sig.return_type, val)
 
 @overload(bool)
 def bool_sequence(x):
