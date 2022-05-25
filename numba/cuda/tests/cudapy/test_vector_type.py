@@ -13,6 +13,14 @@ if os.environ.get("NUMBA_ENABLE_CUDASIM", 0):
 else:
     from numba.cuda.vector_types import vector_types
 
+"""
+CUDA vector type tests. Note that this test file imports
+`cuda.vector_type` module to programmatically test all the
+vector types. However, `vector_type` module is internal
+and should not be imported by user, user should only import the
+corresponding vector type from `cuda` module in kernel to use them.
+"""
+
 
 def make_kernel(vtype):
     """
@@ -197,8 +205,8 @@ class TestCudaVectorType(CUDATestCase):
                 )
 
     def test_fancy_creation_readout(self):
-        for vty in vector_types.values():
-            with self.subTest(vty=vty):
+        for name_or_alias, vty in vector_types.items():
+            with self.subTest(name_or_alias=name_or_alias):
                 kernel = make_fancy_creation_kernel(vty)
 
                 expected = np.array([

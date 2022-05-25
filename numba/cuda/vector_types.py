@@ -185,6 +185,10 @@ def build_constructor_overloads(base_type, vty_name, num_elements, arglists, l):
 
 
 def _initialize():
+    """
+    Construct the vector types, populate `vector_types` dictionary, and
+    enable the constructors.
+    """
     vector_type_attribute_names = ("x", "y", "z", "w")
     for stub in stubs._vector_type_stubs:
         type_name = stub.__name__
