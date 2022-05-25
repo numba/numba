@@ -330,25 +330,24 @@ Schedule
 - In Numba 0.56: ``add_user_function()`` was removed.
 
 
-Deprecation of CUDA Toolkits < 10.2 and devices with CC < 5.3
-=============================================================
+Deprecation and removal of CUDA Toolkits < 10.2 and devices with CC < 5.3
+=========================================================================
 
-Support for:
+- Support for CUDA toolkits less than 10.2 was deprecated and removed.
+- Support for devices with Compute Capability < 5.3 is deprecated and will be
+  removed in the future.
 
-- Devices with Compute Capability < 5.3, and
-- CUDA toolkits less than 10.2
-
-is deprecated and will be removed in future.
 
 Recommendations
 ---------------
 
-- For devices of Compute Capability 3.0 - 5.2, Numba 0.55.1 or earlier will be
-  required.
+- For devices of Compute Capability 3.0 and 3.2, Numba 0.55.1 or earlier will
+  be required.
 - CUDA toolkit 10.2 or later (ideally 11.2 or later) should be installed.
 
 Schedule
 --------
 
-- In Numba 0.55.1: support for CC < 5.3 and CUDA toolkits < 10.2 are deprecated.
-- In Numba 0.56: support for CC < 5.3 and CUDA toolkits < 10.2 will be removed.
+- In Numba 0.55.1: support for CC < 5.3 and CUDA toolkits < 10.2 was deprecated.
+- In Numba 0.56: support for CC < 3.5 and CUDA toolkits < 10.2 was removed.
+- In Numba 0.57: support for CC < 5.3 will be removed.
