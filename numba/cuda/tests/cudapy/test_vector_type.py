@@ -198,68 +198,69 @@ class TestCudaVectorType(CUDATestCase):
 
     def test_fancy_creation_readout(self):
         for vty in vector_types.values():
-            kernel = make_fancy_creation_kernel(vty)
+            with self.subTest(vty=vty):
+                kernel = make_fancy_creation_kernel(vty)
 
-            expected = np.array([
-                # 1-component vectors
-                1,
-                1,
-                # 2-component vectors
-                2, 3,
-                1, 3,
-                2, 1,
-                1, 1,
-                2, 3,
-                # 3-component vectors
-                2, 3, 1,
-                2, 3, 1,
-                1, 2, 3,
-                1, 2, 3,
-                1, 2, 3,
-                1, 2, 3,
-                1, 1, 3,
-                1, 2, 1,
-                1, 1, 3,
-                1, 1, 1,
-                1, 2, 1,
-                1, 1, 1,
-                2, 3, 1,
-                # 4-component vectors
-                1, 2, 3, 4,
-                1, 2, 3, 4,
-                1, 1, 3, 4,
-                1, 2, 1, 4,
-                1, 2, 3, 1,
-                1, 1, 3, 4,
-                1, 2, 1, 4,
-                1, 2, 3, 1,
-                1, 1, 1, 4,
-                1, 1, 3, 1,
-                1, 2, 1, 1,
-                1, 1, 1, 4,
-                1, 1, 3, 1,
-                1, 2, 1, 1,
-                1, 1, 1, 1,
-                1, 1, 1, 1,
-                2, 3, 2, 3,
-                2, 3, 1, 3,
-                2, 3, 2, 1,
-                2, 3, 1, 1,
-                1, 2, 3, 3,
-                1, 2, 3, 3,
-                1, 2, 3, 1,
-                1, 2, 3, 1,
-                1, 4, 2, 3,
-                1, 4, 2, 3,
-                1, 1, 2, 3,
-                1, 1, 2, 3,
-                2, 3, 2, 3,
-                2, 3, 1, 4,
-                2, 3, 1, 1,
-                4, 2, 3, 1,
-                1, 2, 3, 1,
-                1, 2, 3, 4
-            ])
-            arr = np.zeros(expected.shape)
-            kernel[1, 1](arr)
-            np.testing.assert_almost_equal(arr, expected)
+                expected = np.array([
+                    # 1-component vectors
+                    1,
+                    1,
+                    # 2-component vectors
+                    2, 3,
+                    1, 3,
+                    2, 1,
+                    1, 1,
+                    2, 3,
+                    # 3-component vectors
+                    2, 3, 1,
+                    2, 3, 1,
+                    1, 2, 3,
+                    1, 2, 3,
+                    1, 2, 3,
+                    1, 2, 3,
+                    1, 1, 3,
+                    1, 2, 1,
+                    1, 1, 3,
+                    1, 1, 1,
+                    1, 2, 1,
+                    1, 1, 1,
+                    2, 3, 1,
+                    # 4-component vectors
+                    1, 2, 3, 4,
+                    1, 2, 3, 4,
+                    1, 1, 3, 4,
+                    1, 2, 1, 4,
+                    1, 2, 3, 1,
+                    1, 1, 3, 4,
+                    1, 2, 1, 4,
+                    1, 2, 3, 1,
+                    1, 1, 1, 4,
+                    1, 1, 3, 1,
+                    1, 2, 1, 1,
+                    1, 1, 1, 4,
+                    1, 1, 3, 1,
+                    1, 2, 1, 1,
+                    1, 1, 1, 1,
+                    1, 1, 1, 1,
+                    2, 3, 2, 3,
+                    2, 3, 1, 3,
+                    2, 3, 2, 1,
+                    2, 3, 1, 1,
+                    1, 2, 3, 3,
+                    1, 2, 3, 3,
+                    1, 2, 3, 1,
+                    1, 2, 3, 1,
+                    1, 4, 2, 3,
+                    1, 4, 2, 3,
+                    1, 1, 2, 3,
+                    1, 1, 2, 3,
+                    2, 3, 2, 3,
+                    2, 3, 1, 4,
+                    2, 3, 1, 1,
+                    4, 2, 3, 1,
+                    1, 2, 3, 1,
+                    1, 2, 3, 4
+                ])
+                arr = np.zeros(expected.shape)
+                kernel[1, 1](arr)
+                np.testing.assert_almost_equal(arr, expected)
