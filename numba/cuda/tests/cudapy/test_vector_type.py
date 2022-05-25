@@ -1,4 +1,3 @@
-
 """
 CUDA vector type tests. Note that this test file imports
 `cuda.vector_type` module to programmatically test all the
