@@ -13,6 +13,11 @@ class SimulatedVectorType:
             else:
                 args_flattened.append(arg)
         self._attrs = self.attributes[:len(args_flattened)]
+        if not self.num_elements == len(args_flattened):
+            raise TypeError(
+                f"{self.__name__} expects {self.num_elements}"
+                f" elements, got f{len(args_flattened)}"
+            )
         assert self.num_elements == len(args_flattened), \
             f"{self.num_elements} != {len(args_flattened)}"
 
