@@ -20,7 +20,7 @@ class SimulatedVectorType:
             setattr(self, attr, arg)
 
     @property
-    def num_elelments(self):
+    def num_elements(self):
         raise NotImplementedError()
 
     def as_list(self):
