@@ -15,9 +15,9 @@ reduce = Reduce
 
 # Register simulated vector types as module level variables
 for name, svty in vector_types.items():
-    setattr(sys.modules["numba.cuda"], name, svty)
+    setattr(sys.modules[__name__], name, svty)
     for alias in svty.aliases:
-        setattr(sys.modules["numba.cuda"], alias, svty)
+        setattr(sys.modules[__name__], alias, svty)
 del vector_types, name, svty, alias
 
 # Ensure that any user code attempting to import cudadrv etc. gets the
