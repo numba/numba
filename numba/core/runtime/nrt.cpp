@@ -480,8 +480,7 @@ extern "C" NRT_ExternalAllocator* _nrt_get_sample_external_allocator() {
 /*
  * Debugging printf function used internally
  */
-static
-void nrt_debug_print(char *fmt, ...) {
+void nrt_debug_print(const char *fmt, ...) {
    va_list args;
 
    va_start(args, fmt);
