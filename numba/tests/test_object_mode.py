@@ -115,10 +115,12 @@ class TestObjectMode(TestCase):
 
         @jit(forceobj=True)
         def foo(x):
-            consumer(*x)
+            return consumer(*x)
 
-        got = foo("ijo")
-        expect = foo.py_func("ijo")
+        arg = "ijo"
+        got = foo(arg)
+        expect = foo.py_func(arg)
+        self.assertEqual(got, tuple(arg))
         self.assertEqual(got, expect)
 
 
