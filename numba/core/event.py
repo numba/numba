@@ -24,7 +24,7 @@ The following events are built in:
     - ``"name"``: pass name.
     - ``"qualname"``: qualified name of the function being compiled.
     - ``"module"``: module name of the function being compiled.
-    - ``"flags"``: compile flags.
+    - ``"flags"``: compilation flags.
     - ``"args"``: argument types.
     - ``"return_type"`` return type.
 
