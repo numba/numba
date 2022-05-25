@@ -44,11 +44,8 @@ def _initialize():
         _simulated_vector_types[stub.__name__] = (
             make_simulated_vector_type(num_elements, stub.__name__)
         )
-        for alias in stub.aliases:
-            _simulated_vector_types[alias] = (
-                make_simulated_vector_type(num_elements, alias)
-            )
+        _simulated_vector_types[stub.__name__].aliases = stub.aliases
     return _simulated_vector_types
 
 
-_simulated_vector_types = _initialize()
+vector_types = _initialize()

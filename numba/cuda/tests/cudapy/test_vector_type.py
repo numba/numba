@@ -1,17 +1,3 @@
-import os
-
-import numpy as np
-
-from numba.cuda.testing import CUDATestCase
-
-from numba import cuda
-
-if os.environ.get("NUMBA_ENABLE_CUDASIM", 0):
-    vector_types = cuda.vector_types._simulated_vector_types
-    for svty in vector_types.values():
-        setattr(cuda, svty.name, svty)
-else:
-    from numba.cuda.vector_types import vector_types
 
 """
 CUDA vector type tests. Note that this test file imports
@@ -20,6 +6,18 @@ vector types. However, `vector_type` module is internal
 and should not be imported by user, user should only import the
 corresponding vector type from `cuda` module in kernel to use them.
 """
+
+import numpy as np
+
+from numba.core import config
+from numba.cuda.testing import CUDATestCase
+
+from numba import cuda
+
+if config.ENABLE_CUDASIM:
+    from numba.cuda.simulator.vector_types import vector_types
+else:
+    from numba.cuda.vector_types import vector_types
 
 
 def make_kernel(vtype):
@@ -205,8 +203,8 @@ class TestCudaVectorType(CUDATestCase):
                 )
 
     def test_fancy_creation_readout(self):
-        for name_or_alias, vty in vector_types.items():
-            with self.subTest(name_or_alias=name_or_alias):
+        for vty in vector_types.values():
+            with self.subTest(vty=vty):
                 kernel = make_fancy_creation_kernel(vty)
 
                 expected = np.array([
@@ -272,3 +270,18 @@ class TestCudaVectorType(CUDATestCase):
                 arr = np.zeros(expected.shape)
                 kernel[1, 1](arr)
                 np.testing.assert_almost_equal(arr, expected)
+
+    def test_vector_type_alias(self):
+        """Tests that `cuda.<vector_type.alias>` are importable and
+        that is the same as `cuda.<vector_type.name>`.
+
+        `test_fancy_creation_readout` only test vector types imported
+        with its name. This test makes sure that construction with
+        objects imported with alias should work the same.
+        """
+        for vty in vector_types.values():
+            for alias in vty.user_facing_object.aliases:
+                with self.subTest(vty=vty.name, alias=alias):
+                    self.assertEqual(
+                        id(getattr(cuda, vty.name)), id(getattr(cuda, alias))
+                    )

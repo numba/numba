@@ -12,8 +12,6 @@ import numpy as np
 
 from numba.np import numpy_support
 
-from .vector_types import _simulated_vector_types
-
 
 class Dim3(object):
     '''
@@ -260,10 +258,6 @@ class FakeCUDAModule(object):
         self._const = FakeCUDAConst()
         self._atomic = FakeCUDAAtomic()
         self._fp16 = FakeCUDAFp16()
-        # Fake cuda.vector_types module
-        self.vector_types = type(
-            "vector_types", (), {"vector_types":_simulated_vector_types}
-        )
 
     @property
     def cg(self):
