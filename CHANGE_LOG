@@ -15,7 +15,7 @@ Pull-Requests:
 * PR `#8094 <https://github.com/numba/numba/pull/8094>`_: Backport #8052 Ensure pthread is linked in when building for ppc64le. (`Siu Kwan Lam <https://github.com/sklam>`_)
 * PR `#8098 <https://github.com/numba/numba/pull/8098>`_: Backport #8097: Exclude libopenblas 0.3.20 on osx-arm64 (`esc <https://github.com/esc>`_)
 * PR `#8100 <https://github.com/numba/numba/pull/8100>`_: Backport #7786 for 0.55.2: Remove dependency on intel-openmp for OSX  (`stuartarchibald <https://github.com/stuartarchibald>`_)
-* PR `#8103 <https://github.com/numba/numba/pull/8103>`_: Backport #8102 to fix numpy requirements (`Siu Kwan Lam <https://github.com/sklam>`)
+* PR `#8103 <https://github.com/numba/numba/pull/8103>`_: Backport #8102 to fix numpy requirements (`Siu Kwan Lam <https://github.com/sklam>`_)
 * PR `#8114 <https://github.com/numba/numba/pull/8114>`_: Backport #8109 Pin TBB support with respect to incompatible 2021.6 API. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 
 Total PRs: 12
