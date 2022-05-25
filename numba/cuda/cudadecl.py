@@ -382,8 +382,10 @@ def _genfp16_comparison_operator(l_key):
                 else:
                     convertible = self.context.can_convert(args[0], args[1])
 
+                #print(args, convertible)
                 if (convertible == Conversion.exact) or \
-                        (convertible == Conversion.promote):
+                   (convertible == Conversion.promote) or \
+                   (convertible == Conversion.safe):
                     return signature(types.b1, types.float16, types.float16)
 
 
