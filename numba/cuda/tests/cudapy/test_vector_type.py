@@ -197,8 +197,8 @@ class TestCudaVectorType(CUDATestCase):
                 )
 
     def test_fancy_creation_readout(self):
-        for vty in vector_types.values():
-            with self.subTest(vty=vty):
+        for name_or_alias, vty in vector_types.items():
+            with self.subTest(name_or_alias=name_or_alias):
                 kernel = make_fancy_creation_kernel(vty)
 
                 expected = np.array([
