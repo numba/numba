@@ -3,7 +3,7 @@ Version 0.55.2 (25 May, 2022)
 
 This is a maintenance release to support NumPy 1.22 and Apple M1.
 
-*Pull-Requests:
+Pull-Requests:
 
 * PR `#8067 <https://github.com/numba/numba/pull/8067>`_: Backport #8027: Support for NumPy 1.22 (`esc <https://github.com/esc>`_)
 * PR `#8069 <https://github.com/numba/numba/pull/8069>`_: Install llvmlite 0.38 for Numba 0.55.* (`esc <https://github.com/esc>`_)
