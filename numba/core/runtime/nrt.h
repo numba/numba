@@ -12,6 +12,10 @@ All functions described here are threadsafe.
 
 #include "nrt_external.h"
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 /* Debugging facilities - enabled at compile-time */
 /* #undef NDEBUG */
 #if 0
@@ -226,7 +230,7 @@ VISIBILITY_HIDDEN void *NRT_Reallocate(void *ptr, size_t size);
 /*
  * Debugging printf function used internally
  */
-VISIBILITY_HIDDEN void nrt_debug_print(char *fmt, ...);
+VISIBILITY_HIDDEN void nrt_debug_print(const char *fmt, ...);
 
 /*
  * Get API function table.
@@ -240,4 +244,7 @@ VISIBILITY_HIDDEN const NRT_api_functions* NRT_get_api(void);
  */
 VISIBILITY_HIDDEN NRT_ExternalAllocator* _nrt_get_sample_external_allocator(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif /* NUMBA_NRT_H_ */
