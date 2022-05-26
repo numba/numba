@@ -38,9 +38,10 @@ requirements:
     - llvmlite >=0.39.0dev0,<0.39
     # TBB devel version is to match TBB libs.
     # 2020.3 is the last version with the "old" ABI
+    # NOTE: 2021.1..2021.5 are API compatible for Numba's purposes.
     # NOTE: ppc64le exclusion is temporary until packages are more generally
     #       available.
-    - tbb-devel >=2021       # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
+    - tbb-devel >=2021,<2021.6       # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
   run:
     - python >=3.7
     - numpy >=1.18
