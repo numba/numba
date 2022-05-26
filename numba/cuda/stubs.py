@@ -656,3 +656,83 @@ class fp16(Stub):
         Returns the fp16 result of the absolute value.
 
         """
+
+    class heq(Stub):
+        """heq(a, b)
+
+        Perform fp16 comparison, (a == b). Supported
+        on fp16 operands only.
+
+        Returns True if a and b are equal and False otherwise.
+
+        """
+
+    class hne(Stub):
+        """hne(a, b)
+
+        Perform fp16 comparison, (a != b). Supported
+        on fp16 operands only.
+
+        Returns True if a and b are not equal and False otherwise.
+
+        """
+
+    class hge(Stub):
+        """hge(a, b)
+
+        Perform fp16 comparison, (a >= b). Supported
+        on fp16 operands only.
+
+        Returns True if a is >= b and False otherwise.
+
+        """
+
+    class hgt(Stub):
+        """hgt(a, b)
+
+        Perform fp16 comparison, (a > b). Supported
+        on fp16 operands only.
+
+        Returns True if a is > b and False otherwise.
+
+        """
+
+    class hle(Stub):
+        """hle(a, b)
+
+        Perform fp16 comparison, (a <= b). Supported
+        on fp16 operands only.
+
+        Returns True if a is <= b and False otherwise.
+
+        """
+
+    class hlt(Stub):
+        """hlt(a, b)
+
+        Perform fp16 comparison, (a < b). Supported
+        on fp16 operands only.
+
+        Returns True if a is < b and False otherwise.
+
+        """
+
+    class hmax(Stub):
+        """hmax(a, b)
+
+        Perform fp16 maximum operation, max(a,b) Supported
+        on fp16 operands only.
+
+        Returns a if a is greater than b, returns b otherwise.
+
+        """
+
+    class hmin(Stub):
+        """hmin(a, b)
+
+        Perform fp16 minimum operation, min(a,b). Supported
+        on fp16 operands only.
+
+        Returns a if a is less than b, returns b otherwise.
+
+        """

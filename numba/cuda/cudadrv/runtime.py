@@ -134,3 +134,10 @@ class Runtime:
 
 
 runtime = Runtime()
+
+
+def get_version():
+    """
+    Return the runtime version as a tuple of (major, minor)
+    """
+    return runtime.get_version()

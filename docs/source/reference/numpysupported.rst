@@ -437,6 +437,7 @@ The following top-level functions are supported:
 * :func:`numpy.blackman`
 * :func:`numpy.broadcast_to` (only the 2 first arguments)
 * :func:`numpy.broadcast_arrays` (only the first argument)
+* :func:`numpy.broadcast_shapes`
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate`
 * :func:`numpy.convolve` (only the 2 first arguments)
@@ -509,7 +510,8 @@ The following top-level functions are supported:
   can only contain arrays (unlike Numpy that also accepts tuples).
 * :func:`numpy.shape`
 * :func:`numpy.sinc`
-* :func:`numpy.sort` (no optional arguments)
+* :func:`numpy.sort` (no optional arguments, quicksort accepts
+  multi-dimensional array and sorts its last axis).
 * :func:`numpy.split`
 * :func:`numpy.stack`
 * :func:`numpy.swapaxes`
