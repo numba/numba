@@ -17,9 +17,10 @@ labels: task
 * [ ] Merge change log changes.
     - [ ] "PR with changelog entries".
 * [ ] Create X.Y release branch.
-* [ ] Pin llvmlite to `>=0.A.0rc1,<0.A+1.0`.
-* [ ] Pin NumPy if needed
-* [ ] Pin tbb if needed
+* [ ] Dependency version pinning on release branch
+  * [ ] Pin llvmlite to `>=0.A.0rc1,<0.A+1.0`.
+  * [ ] Pin NumPy if needed
+  * [ ] Pin tbb if needed
 * [ ] Annotated tag X.Y.Zrc1 on release branch (no `v` prefix).
 * [ ] Build and upload conda packages on buildfarm (check "upload").
 * [ ] Build wheels and sdist on the buildfarm (check "upload").
