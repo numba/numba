@@ -22,18 +22,17 @@ labels: task
 * [ ] Pin tbb if needed
 * [ ] Annotated tag X.Y.Zrc1 on release branch.
 * [ ] Build and upload conda packages on buildfarm (check "upload").
-* [ ] Build wheels (`$PYTHON_VERSIONS`) on the buildfarm.
+* [ ] Build wheels and sdist on the buildfarm (check "upload").
 * [ ] Verify packages uploaded to Anaconda Cloud and move to `numba/label/main`.
-* [ ] Build sdist locally using `python setup.py sdist --owner=ci --group=numba` with umask `0022`.
 * [ ] Upload wheels and sdist to PyPI (upload from `ci_artifacts`).
 * [ ] Verify wheels for all platforms arrived on PyPi.
 * [ ] Initialize and verify ReadTheDocs build.
-* [ ] Clean up `ci_artifacts`.
 * [ ] Send RC announcement email / post announcement to discourse group.
 * [ ] Post link to Twitter.
 
 ### Post Release:
 
+* [ ] Clean up `ci_artifacts`.
 * [ ] Tag X.Y+1.0dev0 to start new development cycle on `main`.
 * [ ] Update llvmlite dependency spec to match next version via PR to `main`.
 * [ ] Update release checklist template with any additional bullet points that
