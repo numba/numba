@@ -4,6 +4,7 @@ import shutil
 import unittest
 import warnings
 
+from numba import cuda
 from numba.core.errors import NumbaWarning
 from numba.cuda.testing import CUDATestCase, skip_on_cudasim
 from numba.tests.support import SerialMixin
@@ -188,6 +189,183 @@ class CUDACachingTest(SerialMixin, DispatcherCacheUsecasesTest):
         self.addCleanup(os.chmod, pycache, old_perms)
 
         self._test_pycache_fallback()
+
+
+@skip_on_cudasim('Simulator does not implement caching')
+class CUDAAndCPUCachingTest(SerialMixin, DispatcherCacheUsecasesTest):
+    here = os.path.dirname(__file__)
+    usecases_file = os.path.join(here, "cache_with_cpu_usecases.py")
+    modname = "cuda_and_cpu_caching_test_fodder"
+
+    def setUp(self):
+        DispatcherCacheUsecasesTest.setUp(self)
+        CUDATestCase.setUp(self)
+
+    def tearDown(self):
+        CUDATestCase.tearDown(self)
+        DispatcherCacheUsecasesTest.tearDown(self)
+
+    def test_cpu_and_cuda_targets(self):
+        # The same function jitted for CPU and CUDA targets should maintain
+        # separate caches for each target.
+        self.check_pycache(0)
+        mod = self.import_module()
+        self.check_pycache(0)
+
+        f_cpu = mod.assign_cpu
+        f_cuda = mod.assign_cuda
+        self.assertPreciseEqual(f_cpu(5), 5)
+        self.check_pycache(2)  # 1 index, 1 data
+        self.assertPreciseEqual(f_cuda(5), 5)
+        self.check_pycache(3)  # 1 index, 2 data
+
+        self.check_hits(f_cpu.func, 0, 1)
+        self.check_hits(f_cuda.func, 0, 1)
+
+        self.assertPreciseEqual(f_cpu(5.5), 5.5)
+        self.check_pycache(4)  # 1 index, 3 data
+        self.assertPreciseEqual(f_cuda(5.5), 5.5)
+        self.check_pycache(5)  # 1 index, 4 data
+
+        self.check_hits(f_cpu.func, 0, 2)
+        self.check_hits(f_cuda.func, 0, 2)
+
+    def test_cpu_and_cuda_reuse(self):
+        # Existing cache files for the CPU and CUDA targets are reused.
+        mod = self.import_module()
+        mod.assign_cpu(5)
+        mod.assign_cpu(5.5)
+        mod.assign_cuda(5)
+        mod.assign_cuda(5.5)
+
+        mtimes = self.get_cache_mtimes()
+
+        # Two signatures compiled
+        self.check_hits(mod.assign_cpu.func, 0, 2)
+        self.check_hits(mod.assign_cuda.func, 0, 2)
+
+        mod2 = self.import_module()
+        self.assertIsNot(mod, mod2)
+        f_cpu = mod2.assign_cpu
+        f_cuda = mod2.assign_cuda
+
+        f_cpu(2)
+        self.check_hits(f_cpu.func, 1, 0)
+        f_cpu(2.5)
+        self.check_hits(f_cpu.func, 2, 0)
+        f_cuda(2)
+        self.check_hits(f_cuda.func, 1, 0)
+        f_cuda(2.5)
+        self.check_hits(f_cuda.func, 2, 0)
+
+        # The files haven't changed
+        self.assertEqual(self.get_cache_mtimes(), mtimes)
+
+        self.run_in_separate_process()
+        self.assertEqual(self.get_cache_mtimes(), mtimes)
+
+
+def get_different_cc_gpus():
+    # Find two GPUs with different Compute Capabilities and return them as a
+    # tuple. If two GPUs with distinct Compute Capabilities cannot be found,
+    # then None is returned.
+    first_gpu = cuda.gpus[0]
+    with first_gpu:
+        first_cc = cuda.current_context().device.compute_capability
+
+    for gpu in cuda.gpus[1:]:
+        with gpu:
+            cc = cuda.current_context().device.compute_capability
+            if cc != first_cc:
+                return (first_gpu, gpu)
+
+    return None
+
+
+@skip_on_cudasim('Simulator does not implement caching')
+class TestMultiCCCaching(SerialMixin, DispatcherCacheUsecasesTest):
+    here = os.path.dirname(__file__)
+    usecases_file = os.path.join(here, "cache_usecases.py")
+    modname = "cuda_multi_cc_caching_test_fodder"
+
+    def setUp(self):
+        DispatcherCacheUsecasesTest.setUp(self)
+        CUDATestCase.setUp(self)
+
+    def tearDown(self):
+        CUDATestCase.tearDown(self)
+        DispatcherCacheUsecasesTest.tearDown(self)
+
+    def test_cache(self):
+        gpus = get_different_cc_gpus()
+        if not gpus:
+            self.skipTest('Need two different CCs for multi-CC cache test')
+
+        self.check_pycache(0)
+        mod = self.import_module()
+        self.check_pycache(0)
+
+        # Populate the cache with the first GPU
+        with gpus[0]:
+            f = mod.add_usecase
+            self.assertPreciseEqual(f(2, 3), 6)
+            self.check_pycache(2)  # 1 index, 1 data
+            self.assertPreciseEqual(f(2.5, 3), 6.5)
+            self.check_pycache(3)  # 1 index, 2 data
+            self.check_hits(f.func, 0, 2)
+
+            f = mod.record_return_aligned
+            rec = f(mod.aligned_arr, 1)
+            self.assertPreciseEqual(tuple(rec), (2, 43.5))
+
+            f = mod.record_return_packed
+            rec = f(mod.packed_arr, 1)
+            self.assertPreciseEqual(tuple(rec), (2, 43.5))
+            self.check_pycache(6)  # 2 index, 4 data
+            self.check_hits(f.func, 0, 2)
+
+        # Run with the second GPU - under present behaviour this doesn't
+        # further populate the cache.
+        with gpus[1]:
+            f = mod.add_usecase
+            self.assertPreciseEqual(f(2, 3), 6)
+            self.check_pycache(6)  # cache unchanged
+            self.assertPreciseEqual(f(2.5, 3), 6.5)
+            self.check_pycache(6)  # cache unchanged
+            self.check_hits(f.func, 0, 2)
+
+            f = mod.record_return_aligned
+            rec = f(mod.aligned_arr, 1)
+            self.assertPreciseEqual(tuple(rec), (2, 43.5))
+
+            f = mod.record_return_packed
+            rec = f(mod.packed_arr, 1)
+            self.assertPreciseEqual(tuple(rec), (2, 43.5))
+            self.check_pycache(6)  # cache unchanged
+            self.check_hits(f.func, 0, 2)
+
+        # Run in a separate module with the second GPU - this populates the
+        # cache for the second CC.
+        mod2 = self.import_module()
+        self.assertIsNot(mod, mod2)
+
+        with gpus[1]:
+            f = mod2.add_usecase
+            self.assertPreciseEqual(f(2, 3), 6)
+            self.check_pycache(7)  # 2 index, 5 data
+            self.assertPreciseEqual(f(2.5, 3), 6.5)
+            self.check_pycache(8)  # 2 index, 6 data
+            self.check_hits(f.func, 0, 2)
+
+            f = mod2.record_return_aligned
+            rec = f(mod.aligned_arr, 1)
+            self.assertPreciseEqual(tuple(rec), (2, 43.5))
+
+            f = mod2.record_return_packed
+            rec = f(mod.packed_arr, 1)
+            self.assertPreciseEqual(tuple(rec), (2, 43.5))
+            self.check_pycache(10)  # 2 index, 8 data
+            self.check_hits(f.func, 0, 2)
 
 
 def child_initializer():
