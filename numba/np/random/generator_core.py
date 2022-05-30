@@ -33,6 +33,7 @@ class NumPyRandomGeneratorTypeModel(models.StructModel):
     def __init__(self, dmm, fe_type):
         members = [
             ('bit_generator', _bit_gen_type),
+            ('meminfo', types.MemInfoPointer(types.voidptr)),
             ('parent', types.pyobject)
         ]
         super(

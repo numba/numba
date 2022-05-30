@@ -2,7 +2,7 @@ import numba
 import numpy as np
 
 from numba import types
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, MemoryLeakMixin
 from numba.np.random.generator_methods import _get_proper_func
 from numba.np.random.generator_core import next_uint32, next_uint64, next_double
 from numpy.random import MT19937, Generator
@@ -35,7 +35,7 @@ class TestHelperFuncs(TestCase):
         )
 
 
-class TestRandomGenerators(TestCase):
+class TestRandomGenerators(MemoryLeakMixin, TestCase):
     def check_numpy_parity(self, distribution_func,
                            bitgen_type=None, seed=1,
                            test_sizes=None, test_dtypes=None):

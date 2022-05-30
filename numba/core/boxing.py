@@ -1200,6 +1200,10 @@ def unbox_numpy_random_generator(typ, obj, c):
     bit_gen_inst = c.pyapi.object_getattr_string(obj, 'bit_generator')
     unboxed = c.unbox(_bit_gen_type, bit_gen_inst).value
     struct_ptr.bit_generator = unboxed
+    blank_ptr = cgutils.alloca_once(c.builder, ir.IntType(8))
+    struct_ptr.meminfo = c.pyapi.nrt_meminfo_new_from_pyobject(
+        blank_ptr, obj
+    )
     struct_ptr.parent = obj
     return NativeValue(struct_ptr._getvalue())
 
