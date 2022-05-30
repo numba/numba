@@ -212,6 +212,10 @@ class Record(Type):
 
         return as_struct_dtype(self)
 
+    @property
+    def bitwidth(self):
+        return self.dtype.itemsize * 8
+
     def can_convert_to(self, typingctx, other):
         """
         Convert this Record to the *other*.
@@ -430,6 +434,10 @@ class Array(Buffer):
         if (not aligned or
             (isinstance(dtype, Record) and not dtype.aligned)):
             self.aligned = False
+        if isinstance(dtype, NestedArray):
+            tmp = Array(dtype.dtype, dtype.ndim, 'C')
+            ndim += tmp.ndim
+            dtype = tmp.dtype
         if name is None:
             type_name = "array"
             if not self.mutable:
@@ -556,6 +564,10 @@ class NestedArray(Array):
     """
 
     def __init__(self, dtype, shape):
+        if isinstance(dtype, NestedArray):
+            tmp = Array(dtype.dtype, dtype.ndim, 'C')
+            shape += dtype.shape
+            dtype = tmp.dtype
         assert dtype.bitwidth % 8 == 0, \
             "Dtype bitwidth must be a multiple of bytes"
         self._shape = shape
