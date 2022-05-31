@@ -40,7 +40,7 @@ conda list
 # NOTE: pyyaml is used to ensure that the Azure CI config is valid
 # NOTE: 32 bit linux... do not install NumPy, there's no conda package for >1.15
 # so it has to come from pip later
-if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]]; then
+if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" || "$NUMPY" == "1.23" ]]; then
     conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON pip gitpython pyyaml
 else
     conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
@@ -82,8 +82,8 @@ elif  [[ $(uname) == Darwin ]]; then
 fi
 
 # If on 32bit linux, now pip install NumPy (no conda package), SciPy is broken?!
-if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
-    $PIP_INSTALL numpy==$NUMPY
+if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" || "$NUMPY" == "1.23" ]] ; then
+    $PIP_INSTALL numpy==1.23.0rc3
 fi
 
 # Install latest llvmlite build
