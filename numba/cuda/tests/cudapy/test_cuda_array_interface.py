@@ -17,11 +17,15 @@ class TestCudaArrayInterface(ContextResettingTestCase):
                              int(b.device_ctypes_pointer))
 
     def test_as_cuda_array(self):
+        for iftype in ForeignArray.InterfaceType:
+            self._test_as_cuda_array(iftype)
+
+    def _test_as_cuda_array(self, iftype: ForeignArray.InterfaceType):
         h_arr = np.arange(10)
         self.assertFalse(cuda.is_cuda_array(h_arr))
         d_arr = cuda.to_device(h_arr)
         self.assertTrue(cuda.is_cuda_array(d_arr))
-        my_arr = ForeignArray(d_arr)
+        my_arr = ForeignArray(d_arr, iftype=iftype)
         self.assertTrue(cuda.is_cuda_array(my_arr))
         wrapped = cuda.as_cuda_array(my_arr)
         self.assertTrue(cuda.is_cuda_array(wrapped))

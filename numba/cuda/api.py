@@ -28,6 +28,9 @@ def from_cuda_array_interface(desc, owner=None, sync=True):
     If ``sync`` is ``True``, then the imported stream (if present) will be
     synchronized.
     """
+    # Argument may be a description or callable description provider
+    desc = desc() if callable(desc) else desc
+
     version = desc.get('version')
     # Mask introduced in version 1
     if 1 <= version:

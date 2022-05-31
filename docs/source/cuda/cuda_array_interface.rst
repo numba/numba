@@ -20,8 +20,11 @@ Python Interface Specification
 
 .. note:: Experimental feature.  Specification may change.
 
-The ``__cuda_array_interface__`` attribute returns a dictionary (``dict``)
-that must contain the following entries:
+For providing a CUDA array interface, an object must contain either a
+``__cuda_array_interface__`` dictionary (``dict``) attribute or a method
+named ``__cuda_array_interface__`` that takes no arguments and returns
+a dictionary.
+The dictionary must contain the following entries:
 
 - **shape**: ``(integer, ...)``
 
