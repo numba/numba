@@ -1,6 +1,7 @@
 """
 Define typing templates
 """
+
 from abc import ABC, abstractmethod
 import functools
 import sys
