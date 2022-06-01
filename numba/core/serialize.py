@@ -34,6 +34,7 @@ def _numba_unpickle(address, bytedata, hashed):
     address : int
     bytedata : bytes
     hashed : bytes
+    runtime_value: bytes
 
     Returns
     -------
@@ -58,6 +59,12 @@ def dumps(obj):
         pickled = buf.getvalue()
 
     return pickled
+
+
+def runtime_dumps(tup, bytedata):
+    exc, _, locinfo = cloudpickle.loads(bytedata)
+    obj = (exc, tup, locinfo)
+    return dumps(obj)
 
 
 # Alias to pickle.loads to allow `serialize.loads()`

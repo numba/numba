@@ -7,6 +7,7 @@ from collections.abc import Iterable
 import itertools
 
 from llvmlite import ir
+from numpy import int64
 
 from numba.core import types, cgutils
 from numba.core.base import PYOBJECT, GENERIC_POINTER
@@ -318,7 +319,7 @@ class _MinimalCallHelper(object):
             return SystemError, (msg,)
 
 # The structure type constructed by PythonAPI.serialize_uncached()
-# i.e a {i8* pickle_buf, i32 pickle_bufsz, i8* hash_buf}
+# i.e a {i8* pickle_buf, i32 pickle_bufsz, i8* hash_buf, i8* runtime_msg}
 excinfo_t = ir.LiteralStructType([GENERIC_POINTER, int32_t, GENERIC_POINTER])
 excinfo_ptr_t = ir.PointerType(excinfo_t)
 
@@ -387,6 +388,70 @@ class CPUCallConv(BaseCallConv):
         try_info = getattr(builder, '_in_try_block', False)
         self.set_static_user_exc(builder, exc, exc_args=exc_args,
                                    loc=loc, func_name=func_name)
+        trystatus = self.check_try_status(builder)
+        if try_info:
+            # This is a hack for old-style impl.
+            # We will branch directly to the exception handler.
+            builder.branch(try_info['target'])
+        else:
+            # Return from the current function
+            self._return_errcode_raw(builder, RETCODE_USEREXC, mark_exc=True)
+
+    def set_dynamic_user_exc(self, builder, exc, exc_args, loc=None,
+                             func_name=None):
+        if not issubclass(exc, BaseException):
+            raise TypeError("exc should exception class, got %r"
+                            % (exc,))
+
+        pyapi = self.context.get_python_api(builder)
+        # Build excinfo struct
+        if loc is not None:
+            fname = loc._raw_function_name()
+            if fname is None:
+                # could be exec(<string>) or REPL, try func_name
+                fname = func_name
+
+            locinfo = (fname, loc.filename, loc.line)
+            if None in locinfo:
+                locinfo = None
+        else:
+            locinfo = None
+
+        exc = (exc, None, locinfo)
+
+        excptr = self._get_excinfo_argument(builder.function)
+        struct_gv = pyapi.serialize_object(exc)  # {i8*, i32, i8*}
+
+        tup = pyapi.tuple_pack(exc_args)
+        # cstr = pyapi.string_as_string(exc_args[0])
+        # cgutils.printf(builder, "string: %s\n", cstr)
+        # pyapi.print_object(tup)
+        zero, one, two = int32_t(0), int32_t(1), int32_t(2)
+
+        pybytes = pyapi.bytes_from_string_and_size(
+            builder.load(builder.gep(struct_gv, [zero, zero])),
+            builder.zext(
+                builder.load(builder.gep(struct_gv, [zero, one])), ir.IntType(64)))
+
+        bytesobj = pyapi.serialize(tup, pybytes)
+        # pyapi.print_object(bytesobj)
+        ptr = pyapi.bytes_as_string(bytesobj)
+        sz = pyapi.bytes_size(bytesobj)
+
+        excinfo = builder.alloca(excinfo_t)
+        builder.store(ptr, builder.gep(excinfo, [zero, zero]))
+        builder.store(builder.trunc(sz, int32_t), builder.gep(excinfo, [zero, one]))
+        # ToDo: compute hash at runtime
+        # builder.store(builder.load(builder.gep(struct_gv, [zero, two])), builder.gep(excinfo, [zero, two]))
+        builder.store(pyapi.make_none(), builder.gep(excinfo, [zero, two]))
+        # builder.store(s, builder.gep(excinfo, [zero, three]))
+        builder.store(excinfo, excptr)
+
+    def return_non_const_user_exc(self, builder, exc, exc_args, loc=None,
+                                  func_name=None):
+        try_info = getattr(builder, '_in_try_block', False)
+        self.set_dynamic_user_exc(builder, exc, exc_args,
+                                  loc=loc, func_name=func_name)
         trystatus = self.check_try_status(builder)
         if try_info:
             # This is a hack for old-style impl.

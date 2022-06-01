@@ -68,7 +68,11 @@ class RewriteConstRaises(Rewrite):
         for inst in self.block.body:
             if inst in self.raises:
                 exc_type, exc_args = self.raises[inst]
-                new_inst = ir.StaticRaise(exc_type, exc_args, inst.loc)
+                is_dyn = False
+                if exc_args:
+                    is_dyn = any([isinstance(arg, ir.Var) for arg in exc_args])
+                cls = ir.DynamicRaise if is_dyn else ir.StaticRaise
+                new_inst = cls(exc_type, exc_args, inst.loc)
                 new_block.append(new_inst)
             elif inst in self.tryraises:
                 exc_type, exc_args = self.tryraises[inst]

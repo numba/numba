@@ -1035,14 +1035,40 @@ numba_unpickle(const char *data, int n, const char *hashed)
     addr = PyLong_FromVoidPtr((void*)data);
     if (addr == NULL)
         goto error;
+    // if (hashed_runtime_val == NULL)
+    //     hashed_runtime_val = Py_None;
     obj = PyObject_CallFunctionObjArgs(loads, addr, buf, hashedbuf, NULL);
 error:
     Py_XDECREF(addr);
     Py_XDECREF(hashedbuf);
     Py_DECREF(buf);
+    // Py_XDECREF(hashed_runtime_val);
     return obj;
 }
 #endif
+
+NUMBA_EXPORT_FUNC(PyObject *)
+numba_pickle(PyObject* tup, PyObject* bytes)
+{
+    PyObject *obj = NULL;
+    static PyObject *dumps = NULL;
+
+    /* Caching the pickle.dumps function shaves a couple µs here. */
+    if (dumps == NULL)
+    {
+        PyObject *picklemod;
+        picklemod = PyImport_ImportModule("numba.core.serialize");
+        if (picklemod == NULL)
+            return NULL;
+        dumps = PyObject_GetAttrString(picklemod, "runtime_dumps");
+        Py_DECREF(picklemod);
+        if (dumps == NULL)
+            return NULL;
+    }
+
+    obj = PyObject_CallFunctionObjArgs(dumps, tup, bytes, NULL);
+    return obj;
+}
 
 /*
  * Unicode helpers

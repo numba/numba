@@ -93,8 +93,17 @@ class ConstantInference(object):
         _slice = func in (slice,)
         _exc = isinstance(func, type) and issubclass(func, BaseException)
         if _slice or _exc:
-            args = [self.infer_constant(a.name, loc=expr.loc) for a in
-                    expr.args]
+            args = []
+            for a in expr.args:
+                new_a = None
+                try:
+                    new_a = self.infer_constant(a.name, loc=expr.loc)
+                except ConstantInferenceError as cie:
+                    if _exc:
+                        new_a = a
+                    else:
+                        raise cie
+                args.append(new_a)
             if _slice:
                 return func(*args)
             elif _exc:

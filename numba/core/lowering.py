@@ -166,6 +166,12 @@ class BaseLower(object):
         Called after lowering a block.
         """
 
+    def return_non_const_exception(self, exc_class, exc_args, loc=None):
+        self.call_conv.return_non_const_user_exc(
+            self.builder, exc_class, exc_args,
+            loc=loc, func_name=self.func_ir.func_id.func_name,
+        )
+
     def return_exception(self, exc_class, exc_args=None, loc=None):
         """Propagate exception to the caller.
         """
@@ -585,6 +591,9 @@ class Lower(BaseLower):
         elif isinstance(inst, ir.StaticRaise):
             self.lower_static_raise(inst)
 
+        elif isinstance(inst, ir.DynamicRaise):
+            self.lower_dynamic_raise(inst)
+
         elif isinstance(inst, ir.StaticTryRaise):
             self.lower_static_try_raise(inst)
 
@@ -626,6 +635,33 @@ class Lower(BaseLower):
                                   signature.args[2])
 
         return impl(self.builder, (target, index, value))
+
+    def lower_dynamic_raise(self, inst):
+        exc_args = inst.exc_args
+        pyapi = self.context.get_python_api(self.builder)
+        env_manager = self.context.get_env_manager(self.builder)
+        # _inst = exc_args[0]
+        # ty = self.typeof(_inst.name)
+        # val = self.loadvar(_inst.name)
+        # if self.context.enable_nrt:
+        #     self.context.nrt.incref(self.builder, ty, val)
+        # obj = pyapi.from_native_value(ty, val, env_manager)
+        # pyapi.from_native_value(ty, val, env_manager)
+        args = []
+        for exc_arg in exc_args:
+            if isinstance(exc_arg, ir.Var):
+                ty = self.typeof(exc_arg.name)
+                val = self.loadvar(exc_arg.name)
+                if self.context.enable_nrt:
+                    self.context.nrt.incref(self.builder, ty, val)
+                obj = pyapi.from_native_value(ty, val, env_manager)
+                args.append(obj)
+            # else:
+                # ty = self.typeof()
+                # val = pyapi.from_native_value(ty, val, env_manager)
+
+        self.return_non_const_exception(inst.exc_class, tuple(args),
+                                        loc=self.loc)
 
     def lower_static_raise(self, inst):
         if inst.exc_class is None:

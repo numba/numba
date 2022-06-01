@@ -1073,6 +1073,10 @@ class PythonAPI(object):
         return self.builder.call(fn, (obj, key))
 
     def string_as_string(self, strobj):
+        """
+        Similar to string_as_string_and_size but returns only the buffer
+        The ``buffer`` is a i8* of the output buffer.
+        """
         fnty = ir.FunctionType(self.cstring, [self.pyobj])
         fname = "PyUnicode_AsUTF8"
         fn = self._get_function(fnty, name=fname)
@@ -1151,6 +1155,18 @@ class PythonAPI(object):
         fname = "PyBytes_FromStringAndSize"
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [string, size])
+
+    def bytes_size(self, bytesobj):
+        fnty = ir.FunctionType(self.py_ssize_t, [self.pyobj])
+        fname = "PyBytes_Size"
+        fn = self._get_function(fnty, name=fname)
+        return self.builder.call(fn, [bytesobj])
+
+    def bytes_as_string(self, bytesobj):
+        fnty = ir.FunctionType(self.voidptr, [self.pyobj])
+        fname = "PyBytes_AsString"
+        fn = self._get_function(fnty, name=fname)
+        return self.builder.call(fn, [bytesobj])
 
     def object_hash(self, obj):
         fnty = ir.FunctionType(self.py_hash_t, [self.pyobj, ])
@@ -1328,7 +1344,7 @@ class PythonAPI(object):
     def unserialize(self, structptr):
         """
         Unserialize some data.  *structptr* should be a pointer to
-        a {i8* data, i32 length} structure.
+        a {i8* data, i32 length, i8* hashbuf} structure.
         """
         fnty = ir.FunctionType(self.pyobj,
                              (self.voidptr, ir.IntType(32), self.voidptr))
@@ -1336,7 +1352,16 @@ class PythonAPI(object):
         ptr = self.builder.extract_value(self.builder.load(structptr), 0)
         n = self.builder.extract_value(self.builder.load(structptr), 1)
         hashed = self.builder.extract_value(self.builder.load(structptr), 2)
+        # rv = self.builder.extract_value(self.builder.load(structptr), 3)
         return self.builder.call(fn, (ptr, n, hashed))
+
+    def serialize(self, tup, pybytes):
+        """
+        Serialize some data at runtime.
+        """
+        fnty = ir.FunctionType(self.pyobj, (self.pyobj, self.pyobj))
+        fn = self._get_function(fnty, name="numba_pickle")
+        return self.builder.call(fn, (tup, pybytes))
 
     def serialize_uncached(self, obj):
         """
@@ -1361,13 +1386,14 @@ class PythonAPI(object):
             arr.bitcast(self.voidptr),
             Constant(ir.IntType(32), arr.type.pointee.count),
             hasharr.bitcast(self.voidptr),
+            # self.get_null_object()
             ])
         return struct
 
     def serialize_object(self, obj):
         """
         Serialize the given object in the bitcode, and return it
-        as a pointer to a {i8* data, i32 length}, structure constant
+        as a pointer to a {i8* data, i32 length, i8* hashbuf}, structure constant
         (suitable for passing to unserialize()).
         """
         try:
