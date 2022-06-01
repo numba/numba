@@ -732,7 +732,10 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         try:
             tp = typeof(val, Purpose.argument)
         except ValueError:
-            tp = types.pyobject
+            self.targetctx.refresh()
+            tp = self.typingctx._get_global_type(val)
+            if tp is None:
+                tp = types.pyobject
         else:
             if tp is None:
                 tp = types.pyobject
