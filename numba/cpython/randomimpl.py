@@ -610,6 +610,41 @@ def _gammavariate_impl(_random):
     return _impl
 
 
+@overload(np.random.gamma)
+def gamma_impl(alpha, beta, size):
+    if (isinstance(alpha, types.Float) and isinstance(beta, types.Float) and
+       isinstance(size, types.NoneType)):
+        return lambda alpha, beta, _size: np.random.gamma(alpha, beta)
+    if (isinstance(alpha, types.Float) and isinstance(beta, types.Float) and
+       (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
+                                            and isinstance(size.dtype,
+                                                           types.Integer)))):
+        def _impl(alpha, beta, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.gamma(alpha, beta)
+            return out
+        return _impl
+
+
+@overload(np.random.standard_gamma)
+def standard_gamma_impl(alpha, size):
+    if isinstance(alpha, types.Float) and isinstance(size, types.NoneType):
+        return lambda alpha, _size: np.random.standard_gamma(alpha)
+    if isinstance(alpha, types.Float) and (isinstance(size, types.Integer) or
+       (isinstance(size, types.UniTuple) and isinstance(size.dtype,
+                                                        types.Integer))
+    ):
+        def _impl(alpha, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.standard_gamma(alpha)
+            return out
+        return _impl
+
+
 @overload(random.betavariate)
 def betavariate_impl(alpha, beta):
     if isinstance(alpha, types.Float) and isinstance(beta, types.Float):
@@ -634,6 +669,24 @@ def _betavariate_impl(gamma):
         else:
             return y / (y + gamma(beta, 1.))
     return _impl
+
+
+@overload(np.random.beta)
+def beta_impl(alpha, beta, size):
+    if (isinstance(alpha, types.Float) and isinstance(beta, types.Float) and
+       isinstance(size, types.NoneType)):
+        return lambda alpha, beta, _size: np.random.beta(alpha, beta)
+    if (isinstance(alpha, types.Float) and isinstance(beta, types.Float) and
+       (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
+                                            and isinstance(size.dtype,
+                                                           types.Integer)))):
+        def _impl(alpha, beta, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.beta(alpha, beta)
+            return out
+        return _impl
 
 
 @overload(random.expovariate)
@@ -719,6 +772,24 @@ def np_log_normal_impl2(mu, sigma):
         return _lognormvariate_impl(np.random.normal)
 
 
+@overload(np.random.lognormal)
+def lognormal_impl(mu, sigma, size):
+    if (isinstance(mu, types.Float) and isinstance(sigma, types.Float)
+       and isinstance(size, types.NoneType)):
+        return lambda mu, sigma, _size: np.random.lognormal(mu, sigma)
+    if (isinstance(mu, types.Float) and isinstance(sigma, types.Float) and
+       (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
+                                           and isinstance(size.dtype,
+                                                        types.Integer)))):
+        def _impl(mu, sigma, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.lognormal(mu, sigma)
+            return out
+        return _impl
+
+
 @overload(random.lognormvariate)
 def lognormvariate_impl(mu, sigma):
     if isinstance(mu, types.Float) and isinstance(sigma, types.Float):
@@ -752,6 +823,23 @@ def pareto_impl(alpha):
         return _impl
 
 
+@overload(np.random.pareto)
+def pareto_impl(alpha, size):
+    if isinstance(alpha, types.Float) and isinstance(size, types.NoneType):
+        return lambda alpha, _size: np.random.pareto(alpha)
+    if isinstance(alpha, types.Float) and (isinstance(size, types.Integer) or
+       (isinstance(size, types.UniTuple) and isinstance(size.dtype,
+                                                        types.Integer))
+    ):
+        def _impl(alpha, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.pareto(alpha)
+            return out
+        return _impl
+
+
 @overload(random.weibullvariate)
 def weibullvariate_impl(alpha, beta):
     if isinstance(alpha, types.Float) and isinstance(beta, types.Float):
@@ -775,6 +863,23 @@ def weibull_impl(beta):
         return _impl
 
 
+@overload(np.random.weibull)
+def weibull_impl2(beta, size):
+    if isinstance(beta, types.Float) and isinstance(size, types.NoneType):
+        return lambda beta, _size: np.random.weibull(beta)
+    if isinstance(beta, types.Float) and (isinstance(size, types.Integer) or
+       (isinstance(size, types.UniTuple) and isinstance(size.dtype,
+                                                        types.Integer))
+    ):
+        def _impl(weibull, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.weibull(weibull)
+            return out
+        return _impl
+
+
 @overload(random.vonmisesvariate)
 def vonmisesvariate_impl(mu, kappa):
     if isinstance(mu, types.Float) and isinstance(kappa, types.Float):
@@ -787,7 +892,7 @@ def vonmisesvariate_impl(mu, kappa):
         return _vonmisesvariate_impl(np.random.random)
 
 
-def _vonmisesvariate_impl( _random):
+def _vonmisesvariate_impl(_random):
     def _impl(mu, kappa):
         """Circular data distribution.  Taken from CPython.
         Note the algorithm in Python 2.6 and Numpy is different:
@@ -829,6 +934,24 @@ def _vonmisesvariate_impl( _random):
         return theta
 
     return _impl
+
+
+@overload(np.random.vonmises)
+def vonmises_impl(mu, kappa, size):
+    if (isinstance(mu, types.Float) and isinstance(kappa, types.Float) and
+       isinstance(size, types.NoneType)):
+        return lambda mu, kappa, _size: np.random.vonmises(mu, kappa)
+    if (isinstance(mu, types.Float) and isinstance(kappa, types.Float) and
+       (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
+                                            and isinstance(size.dtype,
+                                                           types.Integer)))):
+        def _impl(mu, kappa, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.vonmises(mu, kappa)
+            return out
+        return _impl
 
 
 @overload(np.random.binomial)
@@ -941,6 +1064,24 @@ def f_impl(num, denom):
         return _impl
 
 
+@overload(np.random.f)
+def f_impl(num, denom, size):
+    if (isinstance(num, types.Number) and isinstance(denom, types.Number) and
+       isinstance(size, types.NoneType)):
+        return lambda num, denom, _size: np.random.f(num, denom)
+    if (isinstance(num, types.Number) and isinstance(denom, types.Number) and
+       (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
+                                            and isinstance(size.dtype,
+                                                           types.Integer)))):
+        def _impl(num, denom, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.f(num, denom)
+            return out
+        return _impl
+
+
 @overload(np.random.geometric)
 def geometric_impl(p):
     if isinstance(p, types.Number):
@@ -962,6 +1103,23 @@ def geometric_impl(p):
                 return math.ceil(math.log(1.0 - np.random.random()) /
                                  math.log(q))
 
+        return _impl
+
+
+@overload(np.random.geometric)
+def geometric_impl(p, size):
+    if isinstance(p, types.Float) and isinstance(size, types.NoneType):
+        return lambda p, _size: np.random.geometric(p)
+    if isinstance(p, types.Float) and (isinstance(size, types.Integer) or
+       (isinstance(size, types.UniTuple) and isinstance(size.dtype,
+                                                        types.Integer))
+    ):
+        def _impl(p, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.geometric(p)
+            return out
         return _impl
 
 
@@ -1013,6 +1171,25 @@ def hypergeometric_impl(ngood, nbad, nsamples):
             else:
                 return Z
 
+        return _impl
+
+
+@overload(np.random.hypergeometric)
+def hypergeometric_impl(ngood, nbad, nsamples, size):
+    if (isinstance(ngood, types.Integer) and isinstance(nbad, types.Integer) and
+       isinstance(nsamples, types.Integer) and isinstance(size, types.NoneType)):
+        return lambda ngood, nbad, nsamples, _size: np.random.hypergeometric(ngood, nbad, nsamples)
+    if (isinstance(ngood, types.Integer) and isinstance(nbad, types.Integer) and
+       isinstance(nsamples, types.Integer) and
+       (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
+                                            and isinstance(size.dtype,
+                                                           types.Integer)))):
+        def _impl(ngood, nbad, nsamples, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.hypergeometric(ngood, nbad, nsamples)
+            return out
         return _impl
 
 
@@ -1467,30 +1644,15 @@ def permutation_impl(x):
 # Array-producing variants of scalar random functions
 
 for typing_key, arity in [
-    ("np.random.beta", 3),
-    ("np.random.binomial", 3),
-    ("np.random.f", 3),
-    ("np.random.gamma", 3),
-    ("np.random.geometric", 2),
-    ("np.random.hypergeometric", 4),
-    ("np.random.laplace", 3),
-    ("np.random.logistic", 3),
-    ("np.random.lognormal", 3),
-    ("np.random.negative_binomial", 3),
     ("np.random.normal", 3),
-    ("np.random.pareto", 2),
     ("np.random.poisson", 2),
     ("np.random.random", 1),
     ("np.random.random_sample", 1),
     ("np.random.ranf", 1),
     ("np.random.sample", 1),
     ("np.random.randint", 3),
-    ("np.random.standard_gamma", 2),
     ("np.random.standard_normal", 1),
     ("np.random.uniform", 3),
-    ("np.random.vonmises", 3),
-    ("np.random.weibull", 2),
-    ("np.random.zipf", 2),
     ]:
 
     @glue_lowering(typing_key, *(types.Any,) * arity)
