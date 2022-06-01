@@ -1,7 +1,6 @@
 """
 Define typing templates
 """
-import threading
 from abc import ABC, abstractmethod
 import functools
 import sys
@@ -1303,12 +1302,10 @@ class BaseRegistryLoader(object):
         self._registrations = dict(
             (name, utils.stream_list(getattr(registry, name)))
             for name in self.registry_items)
-        self.lock = threading.lock()
 
     def new_registrations(self, name):
-        with self.lock:
-            for item in next(self._registrations[name]):
-                yield item
+        for item in next(self._registrations[name]):
+            yield item
 
 
 class RegistryLoader(BaseRegistryLoader):
