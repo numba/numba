@@ -115,17 +115,20 @@ NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPR
 echo "INFO: All discovered tests:"
 python -m numba.runtests -l
 
+python -m numba.runtests -bv -m $TEST_NPROCS numba.tests.test_random
+
 # Now run the Numba test suite with slicing
 # Note that coverage is run from the checkout dir to match the "source"
 # directive in .coveragerc
 echo "INFO: Running slice of discovered tests: ($TEST_START_INDEX,None,$TEST_COUNT)"
-if [ "$RUN_COVERAGE" == "yes" ]; then
-    export PYTHONPATH=.
-    coverage erase
-    $SEGVCATCH coverage run runtests.py -vb -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
-elif [ "$RUN_TYPEGUARD" == "yes" ]; then
-    echo "INFO: Running with typeguard"
-    NUMBA_USE_TYPEGUARD=1 NUMBA_ENABLE_CUDASIM=1 PYTHONWARNINGS="ignore:::typeguard" $SEGVCATCH python runtests.py -vb -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
-else
-    NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -vb -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
-fi
+python -m numba.runtests -vb -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running'  --list
+# if [ "$RUN_COVERAGE" == "yes" ]; then
+#     export PYTHONPATH=.
+#     coverage erase
+#     $SEGVCATCH coverage run runtests.py -vb -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
+# elif [ "$RUN_TYPEGUARD" == "yes" ]; then
+#     echo "INFO: Running with typeguard"
+#     NUMBA_USE_TYPEGUARD=1 NUMBA_ENABLE_CUDASIM=1 PYTHONWARNINGS="ignore:::typeguard" $SEGVCATCH python runtests.py -vb -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
+# else
+#     NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -vb -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
+# fi
