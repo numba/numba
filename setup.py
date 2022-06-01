@@ -76,19 +76,22 @@ numba_be_user_options = [
     ('werror', None, 'Build extensions with -Werror'),
     ('wall', None, 'Build extensions with -Wall'),
     ('noopt', None, 'Build extensions without optimization'),
+    ('debuginfo', None, 'Build extensions with debug symbols'),
 ]
 
 
 class NumbaBuildExt(build_ext):
 
     user_options = build_ext.user_options + numba_be_user_options
-    boolean_options = build_ext.boolean_options + ['werror', 'wall', 'noopt']
+    debug_opts = ['werror', 'wall', 'noopt', 'debuginfo']
+    boolean_options = build_ext.boolean_options + debug_opts
 
     def initialize_options(self):
         super().initialize_options()
         self.werror = 0
         self.wall = 0
         self.noopt = 0
+        self.debuginfo = 0
 
     def run(self):
         extra_compile_args = []
@@ -97,6 +100,9 @@ class NumbaBuildExt(build_ext):
                 extra_compile_args.append('/Od')
             else:
                 extra_compile_args.append('-O0')
+        if self.debuginfo:
+            if sys.platform != 'win32':
+                extra_compile_args.append('-g')
         if self.werror:
             extra_compile_args.append('-Werror')
         if self.wall:
