@@ -120,20 +120,17 @@ echo "INFO: All discovered tests:"
 # Now run the Numba test suite with slicing
 # Note that coverage is run from the checkout dir to match the "source"
 # directive in .coveragerc
-export TEST_PARAM="-vb -j '$TEST_START_INDEX,None,$TEST_COUNT' --exclude-tags='long_running' -m $TEST_NPROCS"
-echo "INFO TEST_PARAM: $TEST_PARAM"
-
 echo "INFO: Running slice of discovered tests: ($TEST_START_INDEX,None,$TEST_COUNT)"
-python -m numba.runtests $TEST_PARAM --list
+python -m numba.runtests -vb -j '$TEST_START_INDEX,None,$TEST_COUNT' --exclude-tags='long_running'  --list
 
 
 if [ "$RUN_COVERAGE" == "yes" ]; then
     export PYTHONPATH=.
     coverage erase
-    $SEGVCATCH coverage run runtests.py $TEST_PARAM
+    $SEGVCATCH coverage run runtests.py -vb -j '$TEST_START_INDEX,None,$TEST_COUNT' --exclude-tags='long_running' -m $TEST_NPROCS
 elif [ "$RUN_TYPEGUARD" == "yes" ]; then
     echo "INFO: Running with typeguard"
-    NUMBA_USE_TYPEGUARD=1 NUMBA_ENABLE_CUDASIM=1 PYTHONWARNINGS="ignore:::typeguard" $SEGVCATCH python runtests.py $TEST_PARAM
+    NUMBA_USE_TYPEGUARD=1 NUMBA_ENABLE_CUDASIM=1 PYTHONWARNINGS="ignore:::typeguard" $SEGVCATCH python runtests.py -vb -j '$TEST_START_INDEX,None,$TEST_COUNT' --exclude-tags='long_running' -m $TEST_NPROCS
 else
-    NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests $TEST_PARAM
+    NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -vb -j '$TEST_START_INDEX,None,$TEST_COUNT' --exclude-tags='long_running' -m $TEST_NPROCS
 fi
