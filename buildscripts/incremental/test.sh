@@ -113,15 +113,16 @@ NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPR
 
 # List the tests found
 echo "INFO: All discovered tests:"
-python -m numba.runtests -l
+# python -m numba.runtests -l
 
-python -m numba.runtests -bv  numba.tests.test_random
+# python -m numba.runtests -bv  numba.tests.test_random
 
 # Now run the Numba test suite with slicing
 # Note that coverage is run from the checkout dir to match the "source"
 # directive in .coveragerc
 echo "INFO: Running slice of discovered tests: ($TEST_START_INDEX,None,$TEST_COUNT)"
-python -m numba.runtests -vb -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running'  --list
+python -m numba.runtests -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running'  --list
+python -m numba.runtests -vb -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running'
 # if [ "$RUN_COVERAGE" == "yes" ]; then
 #     export PYTHONPATH=.
 #     coverage erase
