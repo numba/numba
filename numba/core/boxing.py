@@ -1177,19 +1177,6 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
     wire_in_fnptrs('next_uint64')
     wire_in_fnptrs('next_uint32')
 
-    # This is the same as the `state` member but it's the bit_generator address,
-    # it's probably never needed.
-    interface_bit_generator = c.pyapi.object_getattr_string(
-        ctypes_binding, 'bit_generator')
-    interface_bit_generator_value = c.pyapi.object_getattr_string(
-        interface_bit_generator, 'value')
-    setattr(
-        struct_ptr,
-        'bit_generator',
-        c.unbox(
-            types.uintp,
-            interface_bit_generator_value).value)
-
     return NativeValue(struct_ptr._getvalue())
 
 _bit_gen_type = types.NumPyRandomBitGeneratorType('bit_generator')
@@ -1200,12 +1187,15 @@ def unbox_numpy_random_generator(typ, obj, c):
     bit_gen_inst = c.pyapi.object_getattr_string(obj, 'bit_generator')
     unboxed = c.unbox(_bit_gen_type, bit_gen_inst).value
     struct_ptr.bit_generator = unboxed
-    blank_ptr = cgutils.alloca_once(c.builder, ir.IntType(8))
-    struct_ptr.meminfo = c.pyapi.nrt_meminfo_new_from_pyobject(
-        blank_ptr, obj
-    )
     struct_ptr.parent = obj
-    return NativeValue(struct_ptr._getvalue())
+    NULL = cgutils.voidptr_t(None)
+    struct_ptr.meminfo = c.pyapi.nrt_meminfo_new_from_pyobject(
+        NULL,  # there's no data
+        obj,   # the python object, the call to nrt_meminfo_new_from_pyobject
+               # will py_incref
+    )
+    is_py_error = cgutils.is_not_null(c.builder, c.pyapi.err_occurred())
+    return NativeValue(struct_ptr._getvalue(), is_error=is_py_error)
 
 
 @box(types.NumPyRandomGeneratorType)

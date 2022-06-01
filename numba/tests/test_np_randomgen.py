@@ -95,6 +95,15 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         self._test_bitgen_func_parity("next_uint64", next_uint64)
         self._test_bitgen_func_parity("next_double", next_double)
 
+    def test_randomgen_caching(self):
+        nb_rng = np.random.default_rng(1)
+        np_rng = np.random.default_rng(1)
+
+        numba_func = numba.njit(lambda x: x.random(10), cache=True)
+        self.assertPreciseEqual(np_rng.random(10), numba_func(nb_rng))
+        # Run the function twice to make sure caching doesn't break anything.
+        self.assertPreciseEqual(np_rng.random(10), numba_func(nb_rng))
+
     def test_random(self):
         # Test with no arguments
         dist_func = lambda x, size, dtype:x.random()
