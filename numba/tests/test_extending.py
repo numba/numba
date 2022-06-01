@@ -1551,6 +1551,19 @@ class TestRegisterJitable(unittest.TestCase):
         )
         self.assertIn(msg, str(raises.exception))
 
+    def test_as_njit_argument(self):
+        @register_jitable
+        def g():
+            return 1
+
+        @njit
+        def f(x):
+            return g(), x()
+
+        pv = f.py_func(g)
+        jv = f(g)
+        self.assertEqual(pv, jv)
+
 
 class TestImportCythonFunction(unittest.TestCase):
     @unittest.skipIf(sc is None, "Only run if SciPy >= 0.19 is installed")

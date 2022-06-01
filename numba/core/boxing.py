@@ -1063,6 +1063,11 @@ def box_pyobject(typ, val, c):
     return val
 
 
+@unbox(types.Function)
+def unbox_function(typ, obj, c):
+    return NativeValue(obj)
+
+
 def unbox_unsupported(typ, obj, c):
     c.pyapi.err_set_string("PyExc_TypeError",
                            "can't unbox {!r} type".format(typ))
