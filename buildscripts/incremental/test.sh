@@ -115,7 +115,7 @@ NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPR
 echo "INFO: All discovered tests:"
 python -m numba.runtests -l
 
-python -m numba.runtests -bv -m $TEST_NPROCS numba.tests.test_random
+python -m numba.runtests -bv  numba.tests.test_random
 
 # Now run the Numba test suite with slicing
 # Note that coverage is run from the checkout dir to match the "source"
