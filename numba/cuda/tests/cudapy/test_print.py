@@ -75,16 +75,14 @@ class TestPrint(CUDATestCase):
     # Note that in these tests we generally strip the output to avoid dealing
     # with platform-specific line ending issues, e.g. '\r\n' vs '\n' etc.
 
-    def run_code(self, code, provide_stderr=False):
+    def run_code(self, code):
         """Runs code in a subprocess and returns the captured output"""
         cmd = [sys.executable, "-c", code]
         cp = subprocess.run(cmd, timeout=60, capture_output=True, check=True)
-        if provide_stderr:
-            return cp.stdout.decode(), cp.stderr.decode()
-        return cp.stdout.decode()
+        return cp.stdout.decode(), cp.stderr.decode()
 
     def test_cuhello(self):
-        output = self.run_code(cuhello_usecase)
+        output, _ = self.run_code(cuhello_usecase)
         actual = [line.strip() for line in output.splitlines()]
         expected = ['-42'] * 6 + ['%d 999' % i for i in range(6)]
         # The output of GPU threads is intermingled, but each print()
@@ -92,17 +90,17 @@ class TestPrint(CUDATestCase):
         self.assertEqual(sorted(actual), expected)
 
     def test_printfloat(self):
-        output = self.run_code(printfloat_usecase)
+        output, _ = self.run_code(printfloat_usecase)
         # CUDA and the simulator use different formats for float formatting
         expected_cases = ["0 23 34.750000 321", "0 23 34.75 321"]
         self.assertIn(output.strip(), expected_cases)
 
     def test_printempty(self):
-        output = self.run_code(printempty_usecase)
+        output, _ = self.run_code(printempty_usecase)
         self.assertEqual(output.strip(), "")
 
     def test_string(self):
-        output = self.run_code(printstring_usecase)
+        output, _ = self.run_code(printstring_usecase)
         lines = [line.strip() for line in output.splitlines(True)]
         expected = ['%d hop! 999' % i for i in range(3)]
         self.assertEqual(sorted(lines), expected)
@@ -114,8 +112,7 @@ class TestPrint(CUDATestCase):
         # a limitation in CUDA vprintf, see:
         # https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#limitations
 
-        output, errors = self.run_code(print_too_many_usecase,
-                                       provide_stderr=True)
+        output, errors = self.run_code(print_too_many_usecase)
 
         # Check that the format string was printed instead of formatted garbage
         expected_fmt_string = ' '.join(['%lld' for _ in range(33)])
