@@ -964,7 +964,7 @@ class Int(AbstractTemplate):
             if arg.unit == 'ns':
                 return signature(types.int64, arg)
             else:
-                raise errors.NumbaTypeError(f"Only datetime64[ns] can be converted, but got {arg.unit}")
+                raise errors.NumbaTypeError(f"Only datetime64[ns] can be converted, but got datetime64[{arg.unit}]")
         if isinstance(arg, types.NPTimedelta):
             return signature(types.int64, arg)
 
