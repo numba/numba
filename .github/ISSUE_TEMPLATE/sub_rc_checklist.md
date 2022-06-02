@@ -28,7 +28,7 @@ labels: task
 
 ### Post release
 
-* [ ] Snapshort Build Farm config
+* [ ] Snapshot Build Farm config
 * [ ] Clean up `ci_artifacts` by moving files to subdirectories
 * [ ] Update release checklist template with any additional bullet points that
       may have arisen during the release.
