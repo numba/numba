@@ -86,6 +86,29 @@ class TestFirstLineFinder(TestCase):
         first_def_line = get_func_body_first_lineno(foo)
         self.assert_line_location(first_def_line, 2)
 
+    def test_docstring(self):
+        @njit
+        def foo():
+            """Docstring
+            """
+            pass
+
+        first_def_line = get_func_body_first_lineno(foo)
+        self.assert_line_location(first_def_line, 5)
+
+    def test_docstring_2(self):
+        @njit
+        def foo():
+            """Docstring
+            """
+            """Not Docstring, but a bare string literal
+            """
+            pass
+        # Variation on test_docstring but with a "fake" docstring following
+        # the true docstring.
+        first_def_line = get_func_body_first_lineno(foo)
+        self.assert_line_location(first_def_line, 5)
+
 
 if __name__ == "__main__":
     unittest.main()

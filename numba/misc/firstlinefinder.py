@@ -5,6 +5,8 @@ body.
 
 import ast
 
+from numba.core.utils import PYVERSION
+
 
 class FindDefFirstLine(ast.NodeVisitor):
     """
@@ -47,6 +49,11 @@ class FindDefFirstLine(ast.NodeVisitor):
                 # So, use the first statement line as the first line.
                 if node.body:
                     first_stmt = node.body[0]
+                    if _is_docstring(first_stmt):
+                        # Skip docstring
+                        first_stmt = node.body[1]
+
+                    print(ast.dump(first_stmt))
                     self.first_stmt_line = first_stmt.lineno
                     return
                 else:
@@ -55,6 +62,16 @@ class FindDefFirstLine(ast.NodeVisitor):
                     # A const string for docstring or a `pass`.
                     pass
         self._visit_children(node)
+
+
+def _is_docstring(node):
+    if isinstance(node, ast.Expr):
+        if PYVERSION <= (3, 7):
+            return isinstance(node.value, ast.Str)
+        elif (isinstance(node.value, ast.Constant)
+              and isinstance(node.value.value, str)):
+            return True
+    return False
 
 
 def get_func_body_first_lineno(pyfunc):
