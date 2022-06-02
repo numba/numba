@@ -138,6 +138,88 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                         self.check_numpy_parity(dist_func, _bitgen,
                                                 None, _size, _dtype)
 
+    def test_standard_normal(self):
+        # Test with no arguments
+        dist_func = lambda x, size, dtype:x.standard_normal()
+        # Provide single values so this test would run exactly once
+        self.check_numpy_parity(dist_func, test_sizes=[100],
+                                test_dtypes=[np.float64])
+
+        dist_func = lambda x, size, dtype:\
+            x.standard_normal(size=size, dtype=dtype)
+        self.check_numpy_parity(dist_func)
+        self.check_numpy_parity(dist_func, bitgen_type=MT19937)
+
+    def test_standard_exponential(self):
+        # Test with no arguments
+        dist_func = lambda x, size, dtype:x.standard_exponential()
+        # Provide single values so this test would run exactly once
+        self.check_numpy_parity(dist_func, test_sizes=[100],
+                                test_dtypes=[np.float64])
+
+        dist_func = lambda x, size, dtype:\
+            x.standard_exponential(size=size, dtype=dtype)
+        self.check_numpy_parity(dist_func)
+        self.check_numpy_parity(dist_func, bitgen_type=MT19937)
+
+        dist_func = lambda x, size, dtype:\
+            x.standard_exponential(size=size, dtype=dtype,  method='inv')
+        self.check_numpy_parity(dist_func)
+        self.check_numpy_parity(dist_func, bitgen_type=MT19937)
+
+    def test_standard_gamma(self):
+        dist_func = lambda x, size, dtype: \
+            x.standard_gamma(shape=5.0, size=size, dtype=dtype)
+        self.check_numpy_parity(dist_func)
+        self.check_numpy_parity(dist_func, bitgen_type=MT19937)
+
+    def test_normal(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        # Test with no arguments
+        dist_func = lambda x, size, dtype:x.normal(loc=1.5, scale=3, size=size)
+        # Provide single values so this test would run exactly once
+        self.check_numpy_parity(dist_func, test_sizes=[100],
+                                test_dtypes=[None])
+
+        dist_func = lambda x, size, dtype:x.normal(loc=1.5, scale=3, size=size)
+        self.check_numpy_parity(dist_func, test_dtypes=[None])
+        self.check_numpy_parity(dist_func, bitgen_type=MT19937,
+                                test_dtypes=[None])
+
+    def test_exponential(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        # Test with no arguments
+        dist_func = lambda x, size, dtype:x.exponential(scale=1.5,size=size)
+        # Provide single values so this test would run exactly once
+        self.check_numpy_parity(dist_func, test_sizes=[100],
+                                test_dtypes=[None])
+
+        dist_func = lambda x, size, dtype:x.exponential(scale=1.5,size=size)
+        self.check_numpy_parity(dist_func, test_dtypes=[None])
+        self.check_numpy_parity(dist_func, bitgen_type=MT19937,
+                                test_dtypes=[None])
+
+    def test_gamma(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        # Test with no arguments
+        dist_func = lambda x, size, dtype:x.gamma(shape=5.0, scale=1.5,
+                                                  size=size)
+        # Provide single values so this test would run exactly once
+        self.check_numpy_parity(dist_func, test_sizes=[100],
+                                test_dtypes=[None])
+
+        dist_func = lambda x, size, dtype:x.gamma(shape=5.0, scale=1.5,
+                                                  size=size)
+        self.check_numpy_parity(dist_func, test_dtypes=[None])
+        self.check_numpy_parity(dist_func, bitgen_type=MT19937,
+                                test_dtypes=[None])
+
 
 class TestGeneratorCaching(TestCase, SerialMixin):
     def test_randomgen_caching(self):
