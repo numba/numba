@@ -52,8 +52,6 @@ class FindDefFirstLine(ast.NodeVisitor):
                     if _is_docstring(first_stmt):
                         # Skip docstring
                         first_stmt = node.body[1]
-
-                    print(ast.dump(first_stmt))
                     self.first_stmt_line = first_stmt.lineno
                     return
                 else:
