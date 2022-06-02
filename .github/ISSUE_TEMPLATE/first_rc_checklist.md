@@ -33,7 +33,7 @@ labels: task
 
 ### Post Release:
 
-* [ ] Clean up `ci_artifacts` by moving files to subdirectories
+* [ ] Clean up `ci_artifacts` by moving files to sub-directories
 * [ ] Tag X.Y+1.0dev0 to start new development cycle on `main`.
 * [ ] Update llvmlite dependency spec to match next version via PR to `main`.
 * [ ] Update release checklist template with any additional bullet points that
