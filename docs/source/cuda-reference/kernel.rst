@@ -516,7 +516,6 @@ These functions return a 16-bit floating point result.
 .. function:: numba.cuda.fp16.habs (a)
 
    Perform the absolute value operation ``|a|`` on the 16-bit floating point argument.
-   Maps to the ``abs.f16`` PTX instruction.
 
    Returns the 16-bit floating point result of the absolute value operation.
 
@@ -611,6 +610,54 @@ These functions return a 16-bit floating point result.
    Truncate the input 16-bit floating point argument to nearest integer value.
 
    Returns the 16-bit floating point result of the truncation.
+
+.. function:: numba.cuda.fp16.heq (a, b)
+
+   Perform the comparison operation ``a == b`` on 16-bit floating point arguments.
+
+   Returns a boolean.
+
+.. function:: numba.cuda.fp16.hne (a, b)
+
+   Perform the comparison operation ``a != b`` on 16-bit floating point arguments.
+
+   Returns a boolean.
+
+.. function:: numba.cuda.fp16.hgt (a, b)
+
+   Perform the comparison operation ``a > b`` on 16-bit floating point arguments.
+
+   Returns a boolean.
+
+.. function:: numba.cuda.fp16.hge (a, b)
+
+   Perform the comparison operation ``a >= b`` on 16-bit floating point arguments.
+
+   Returns a boolean.
+
+.. function:: numba.cuda.fp16.hlt (a, b)
+
+   Perform the comparison operation ``a < b`` on 16-bit floating point arguments.
+
+   Returns a boolean.
+
+.. function:: numba.cuda.fp16.hle (a, b)
+
+   Perform the comparison operation ``a <= b`` on 16-bit floating point arguments.
+
+   Returns a boolean.
+
+.. function:: numba.cuda.fp16.hmax (a, b)
+
+   Perform the operation ``a if a > b else b.``
+
+   Returns a 16-bit floating point value.
+
+.. function:: numba.cuda.fp16.hmin (a, b)
+
+   Perform the operation ``a if a < b else b.``
+
+   Returns a 16-bit floating point value.
 
 Control Flow Instructions
 ~~~~~~~~~~~~~~~~~~~~~~~~~

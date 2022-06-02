@@ -25,13 +25,16 @@ from contextlib import contextmanager
 import operator
 from dataclasses import make_dataclass
 
+from llvmlite import ir as lir
+from numba.core.imputils import impl_ret_untracked
 import numba.core.ir
 from numba.core import types, typing, utils, errors, ir, analysis, postproc, rewrites, typeinfer, config, ir_utils
 from numba import prange, pndindex
-from numba.np.numpy_support import as_dtype
+from numba.np.npdatetime_helpers import datetime_minimum, datetime_maximum
+from numba.np.numpy_support import as_dtype, numpy_version
 from numba.core.typing.templates import infer_global, AbstractTemplate
 from numba.stencils.stencilparfor import StencilPass
-from numba.core.extending import register_jitable
+from numba.core.extending import register_jitable, lower_builtin
 
 from numba.core.ir_utils import (
     mk_unique_var,
@@ -122,6 +125,7 @@ class internal_prange(object):
     def __new__(cls, *args):
         return range(*args)
 
+
 def min_parallel_impl(return_type, arg):
     # XXX: use prange for 1D arrays since pndindex returns a 1-tuple instead of
     # integer. This causes type and fusion issues.
@@ -129,13 +133,23 @@ def min_parallel_impl(return_type, arg):
         def min_1(in_arr):
             return in_arr[()]
     elif arg.ndim == 1:
-        def min_1(in_arr):
-            numba.parfors.parfor.init_prange()
-            min_checker(len(in_arr))
-            val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
-            for i in numba.parfors.parfor.internal_prange(len(in_arr)):
-                val = min(val, in_arr[i])
-            return val
+        if isinstance(arg.dtype, (types.NPDatetime, types.NPTimedelta)):
+            # NaT is always returned if it is in the array
+            def min_1(in_arr):
+                numba.parfors.parfor.init_prange()
+                min_checker(len(in_arr))
+                val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
+                for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                    val = datetime_minimum(val, in_arr[i])
+                return val
+        else:
+            def min_1(in_arr):
+                numba.parfors.parfor.init_prange()
+                min_checker(len(in_arr))
+                val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
+                for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                    val = min(val, in_arr[i])
+                return val
     else:
         def min_1(in_arr):
             numba.parfors.parfor.init_prange()
@@ -151,13 +165,23 @@ def max_parallel_impl(return_type, arg):
         def max_1(in_arr):
             return in_arr[()]
     elif arg.ndim == 1:
-        def max_1(in_arr):
-            numba.parfors.parfor.init_prange()
-            max_checker(len(in_arr))
-            val = numba.cpython.builtins.get_type_min_value(in_arr.dtype)
-            for i in numba.parfors.parfor.internal_prange(len(in_arr)):
-                val = max(val, in_arr[i])
-            return val
+        if isinstance(arg.dtype, (types.NPDatetime, types.NPTimedelta)):
+            # NaT is always returned if it is in the array
+            def max_1(in_arr):
+                numba.parfors.parfor.init_prange()
+                max_checker(len(in_arr))
+                val = numba.cpython.builtins.get_type_min_value(in_arr.dtype)
+                for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                    val = datetime_maximum(val, in_arr[i])
+                return val
+        else:
+            def max_1(in_arr):
+                numba.parfors.parfor.init_prange()
+                max_checker(len(in_arr))
+                val = numba.cpython.builtins.get_type_min_value(in_arr.dtype)
+                for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                    val = max(val, in_arr[i])
+                return val
     else:
         def max_1(in_arr):
             numba.parfors.parfor.init_prange()
@@ -3654,7 +3678,12 @@ def supported_reduction(x, func_ir):
         return x.fn in supps
     if x.op == 'call':
         callname = guard(find_callname, func_ir, x)
-        if callname == ('max', 'builtins') or callname == ('min', 'builtins'):
+        if callname in [
+            ('max', 'builtins'),
+            ('min', 'builtins'),
+            ('datetime_minimum', 'numba.np.npdatetime_helpers'),
+            ('datetime_maximum', 'numba.np.npdatetime_helpers'),
+        ]:
             return True
     return False
 
