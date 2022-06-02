@@ -9,7 +9,7 @@ from numba.misc.firstlinefinder import get_func_body_first_lineno
 class TestFirstLineFinder(TestCase):
     """
     The following methods contains tests that are sensitive to the source
-    locations w.r.t. the begining of each method.
+    locations w.r.t. the beginning of each method.
     """
 
     def _get_grandparent_caller_code(self):
@@ -78,6 +78,13 @@ class TestFirstLineFinder(TestCase):
         first_def_line = get_func_body_first_lineno(foo)
         # Cannot determine first line of string evaled functions
         self.assertIsNone(first_def_line)
+
+    def test_single_line_function(self):
+        @njit
+        def foo(): pass   # noqa: E704
+
+        first_def_line = get_func_body_first_lineno(foo)
+        self.assert_line_location(first_def_line, 2)
 
 
 if __name__ == "__main__":
