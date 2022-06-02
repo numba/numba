@@ -1153,21 +1153,21 @@ def gumbel_impl3(loc, scale, size):
 
 @overload(np.random.hypergeometric)
 def hypergeometric_impl(ngood, nbad, nsamples):
-    if (isinstance(ngood, types.Integer) and isinstance(nbad, types.Integer)
-       and isinstance(nsamples, types.Integer)):
+    if (isinstance(ngood, types.Number) and isinstance(nbad, types.Number)
+       and isinstance(nsamples, types.Number)):
         def _impl(ngood, nbad, nsamples):
             """Numpy's algorithm for hypergeometric()."""
-            d1 = nbad + ngood - nsamples
+            d1 = int(nbad) + int(ngood) - int(nsamples)
             d2 = float(min(nbad, ngood))
 
             Y = d2
-            K = nsamples
+            K = int(nsamples)
             while Y > 0.0 and K > 0:
                 Y -= math.floor(np.random.random() + Y / (d1 + K))
                 K -= 1
             Z = int(d2 - Y)
             if ngood > nbad:
-                return nsamples - Z
+                return int(nsamples) - Z
             else:
                 return Z
 
@@ -1176,11 +1176,12 @@ def hypergeometric_impl(ngood, nbad, nsamples):
 
 @overload(np.random.hypergeometric)
 def hypergeometric_impl(ngood, nbad, nsamples, size):
-    if (isinstance(ngood, types.Integer) and isinstance(nbad, types.Integer) and
-       isinstance(nsamples, types.Integer) and isinstance(size, types.NoneType)):
-        return lambda ngood, nbad, nsamples, _size: np.random.hypergeometric(ngood, nbad, nsamples)
-    if (isinstance(ngood, types.Integer) and isinstance(nbad, types.Integer) and
-       isinstance(nsamples, types.Integer) and
+    if (isinstance(ngood, types.Number) and isinstance(nbad, types.Number) and
+       isinstance(nsamples, types.Number) and isinstance(size, types.NoneType)):
+        return lambda ngood, nbad, nsamples, _size:\
+            np.random.hypergeometric(ngood, nbad, nsamples)
+    if (isinstance(ngood, types.Number) and isinstance(nbad, types.Number) and
+       isinstance(nsamples, types.Number) and
        (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                             and isinstance(size.dtype,
                                                            types.Integer)))):
