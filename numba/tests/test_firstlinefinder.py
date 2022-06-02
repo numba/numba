@@ -2,6 +2,7 @@ import unittest
 import inspect
 
 from numba import njit
+from numba.core.utils import PYVERSION
 from numba.tests.support import TestCase
 from numba.misc.firstlinefinder import get_func_body_first_lineno
 
@@ -107,7 +108,11 @@ class TestFirstLineFinder(TestCase):
         # Variation on test_docstring but with a "fake" docstring following
         # the true docstring.
         first_def_line = get_func_body_first_lineno(foo)
-        self.assert_line_location(first_def_line, 5)
+        if PYVERSION == (3, 7):
+            # Python 3.7 oddly uses the last line for string literal AST nodes
+            self.assert_line_location(first_def_line, 6)
+        else:
+            self.assert_line_location(first_def_line, 5)
 
 
 if __name__ == "__main__":
