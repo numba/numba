@@ -742,7 +742,7 @@ class TestDebugInfoEmission(TestCase):
         # and refers to the offending function
         self.assertIn(str(foo.py_func), msg)
 
-    def test_indented_source(self):
+    def test_irregularly_indented_source(self):
 
         @njit(debug=True)
         def foo():
