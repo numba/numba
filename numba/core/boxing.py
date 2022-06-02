@@ -1199,7 +1199,7 @@ def unbox_numpy_random_generator(typ, obj, c):
 
 
 @box(types.NumPyRandomGeneratorType)
-def box_numpy_random_bitgenerator(typ, val, c):
+def box_numpy_random_generator(typ, val, c):
     inst = c.context.make_helper(c.builder, typ, val)
     obj = inst.parent
     res = cgutils.alloca_once_value(c.builder, obj)
