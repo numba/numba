@@ -1,3 +1,8 @@
+"""
+This module provides helper functions to find the first line of the function
+body.
+"""
+
 import ast
 
 
