@@ -1194,7 +1194,8 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
     c.pyapi.decref(ct_cast)
     c.pyapi.decref(ct_voidptr_ty)
 
-    return NativeValue(struct_ptr._getvalue())
+    is_py_error = cgutils.is_not_null(c.builder, c.pyapi.err_occurred())
+    return NativeValue(struct_ptr._getvalue(), is_error=is_py_error)
 
 _bit_gen_type = types.NumPyRandomBitGeneratorType('bit_generator')
 
