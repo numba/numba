@@ -454,6 +454,15 @@ class Literal(Type):
 
         return self._literal_type_cache
 
+    @property
+    def is_mutable(self):
+        """
+            Is the Python type for the literal_value mutable?
+            If so, certain situations like caching objects that
+            are lowered should be avoided.
+        """
+        return False
+
 
 
 class TypeRef(Dummy):
