@@ -1,5 +1,6 @@
 import numba
 import numpy as np
+import sys
 
 from numba import types
 from numba.tests.support import TestCase, MemoryLeakMixin
@@ -98,6 +99,19 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         numba_func = numba.njit(lambda x: x)
         self.assertEqual(rng_instance, numba_func(rng_instance))
         self.assertEqual(id(rng_instance), id(numba_func(rng_instance)))
+
+    def test_npgen_boxing_refcount(self):
+        rng_instance = np.random.default_rng()
+        no_box = numba.njit(lambda x:x.random())
+        do_box = numba.njit(lambda x:x)
+
+        y = do_box(rng_instance)
+        ref_1 = sys.getrefcount(rng_instance)
+        del y
+        no_box(rng_instance)
+        ref_2 = sys.getrefcount(rng_instance)
+
+        self.assertEqual(ref_1, ref_2 + 1)
 
     def test_bitgen_funcs(self):
         self._test_bitgen_func_parity("next_uint32", next_uint32)
