@@ -1106,6 +1106,7 @@ def unbox_typeref(typ, val, c):
 def box_LiteralStrKeyDict(typ, val, c):
     return box_unsupported(typ, val, c)
 
+import sys
 
 # Original implementation at: https://github.com/numba/numba/issues/4499#issuecomment-1063138477
 @unbox(types.NumPyRandomBitGeneratorType)
@@ -1173,9 +1174,25 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
         setattr(struct_ptr, f'fnptr_{name}',
                 c.unbox(types.uintp, interface_next_fn_casted_value).value)
 
+        c.pyapi.decref(ct_voidptr_ty)
+        c.pyapi.decref(ct_voidptr_ty)
+
+        c.pyapi.decref(interface_next_fn)
+        c.pyapi.decref(interface_next_fn)
+
+        c.pyapi.decref(interface_next_fn_casted_value)
+
     wire_in_fnptrs('next_double')
     wire_in_fnptrs('next_uint64')
     wire_in_fnptrs('next_uint32')
+
+    c.pyapi.decref(ctypes_module)
+    c.pyapi.decref(ctypes_binding)
+    c.pyapi.decref(interface_state)
+    c.pyapi.decref(interface_state_address)
+    c.pyapi.decref(interface_state_value)
+    c.pyapi.decref(ct_cast)
+    c.pyapi.decref(ct_voidptr_ty)
 
     return NativeValue(struct_ptr._getvalue())
 
@@ -1194,6 +1211,7 @@ def unbox_numpy_random_generator(typ, obj, c):
         obj,   # the python object, the call to nrt_meminfo_new_from_pyobject
                # will py_incref
     )
+    c.pyapi.decref(bit_gen_inst)
     is_py_error = cgutils.is_not_null(c.builder, c.pyapi.err_occurred())
     return NativeValue(struct_ptr._getvalue(), is_error=is_py_error)
 
