@@ -1109,6 +1109,16 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         )
         check(a, v)
 
+        a = np.array([9, 1, 4, 2, 0, 3, 7, 6, 8])
+        v = np.array(
+            [
+                [5, 10],
+                [10, 5],
+                [-1, 5],
+            ]
+        )
+        check(a, v)
+
     def test_digitize(self):
         pyfunc = digitize
         cfunc = jit(nopython=True)(pyfunc)
