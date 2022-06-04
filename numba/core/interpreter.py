@@ -958,24 +958,25 @@ def peep_hole_delete_with_exit(func_ir):
 
 def peep_hole_fuse_dict_add_updates(func_ir):
     """
-    This rewrite removes d1.update(d2) calls that
-    are between two dictionaries, d1 and d2, in the
-    same basic block. This pattern can appear as a
+    This rewrite removes d1._update_from_bytecode(d2)
+    calls that are between two dictionaries, d1 and d2,
+    in the same basic block. This pattern can appear as a
     result of Python 3.10 bytecode emission changes, which
     prevent large constant literal dictionaries
     (> 15 elements) from being constant. If both dictionaries
     are constant dictionaries defined in the same block and
     neither is used between the update call, then we replace d1
-    with a new definition that combines the two dictionaries.
+    with a new definition that combines the two dictionaries. At
+    the bytecode translation stage we convert DICT_UPDATE into
+    _update_from_bytecode, so we know that _update_from_bytecode
+    always comes from the bytecode change and not user code.
 
-    Python 3.10 may also rewrite an individual dictionary as an empty
-    build_map + many map_add, those expressions are also replaced
-    with a constant build map.
+    Python 3.10 may also rewrite the individual dictionaries
+    as an empty build_map + many map_add. Here we again look
+    that a _update_from_bytecode, and if so we replace these
+    with a single constant dictionary.
 
-    When running this algorithm we do not remove any maps, even if they
-    were fused into an update to protect against strange choices in user
-    code. Here we depend on dead code elimination to run later
-    and remove any unnecessary maps.
+    When running this algorithm we can always safely remove d2.
     """
 
     # This algorithm fuses build_map expressions into the largest
@@ -990,23 +991,23 @@ def peep_hole_fuse_dict_add_updates(func_ir):
     #   $key2 = const("b")
     #   $value2 = const(3)
     #   $d2 = build_map([($key2, $value2)])
-    #   $update_func = getattr($d1, "update")
+    #   $update_func = getattr($d1, "_update_from_bytecode")
     #   $unused2 = call ($update_func, ($d2,))
     #   $othervar = None
     #   $retvar = cast($othervar)
     #   return $retvar
     #
-    # Then the IR is rewritten such that any __setitem__ and update operations are
-    # fused into the original buildmap. The new buildmap is then added to the
+    # Then the IR is rewritten such that any __setitem__ and
+    # _update_from_bytecode operations are fused into the original buildmap.
+    # The new buildmap is then added to the
     # last location where it had previously had encountered a __setitem__,
-    # update, or build_map before any other uses.
+    # _update_from_bytecode, or build_map before any other uses.
     # The new IR would look like:
     #
     #   $key = const("a")
     #   $value = const(2)
     #   $key2 = const("b")
     #   $value2 = const(3)
-    #   $d2 = build_map([($key2, $value2)])
     #   $d1 = build_map([($key, $value), ($key2, $value2)])
     #   $othervar = None
     #   $retvar = cast($othervar)
@@ -1015,25 +1016,24 @@ def peep_hole_fuse_dict_add_updates(func_ir):
     # Note that we don't push $d1 to the bottom of the block. This is because
     # some values may be found below this block (e.g pop_block) that are pattern
     # matched in other locations, such as objmode handling. It should be safe to
-    # move a map to the last location at which there was update or setitem.
+    # move a map to the last location at which there was _update_from_bytecode.
 
     for blk in func_ir.blocks.values():
         new_body = []
-        # literal map var name
-        # -> index of build_map assign in the original block body
-        lit_old_idx = {}
-        # literal map var name
-        # -> index of build_map assign in the new block body.
-        # This dictionary will be used to insert maps into their
-        # final location in the block.
-        lit_new_idx = {}
+        # literal map var name -> block idx of the original build_map
+        lit_map_def_idx = {}
+        # literal map var name -> list(map_uses)
+        # This is the index of every build_map or __setitem__
+        # in the IR that will need to be removed if the map
+        # is updated.
+        lit_map_use_idx = {}
         # literal map var name -> list of key/value items for build map
         map_updates = {}
         blk_changed = False
 
         for i, stmt in enumerate(blk.body):
-            # Should we add the current inst to the output
-            append_inst = True
+            # What instruction should we append
+            new_inst = stmt
             # Name that shoud be skipped when tracking used
             # vars in statement. This is always the lhs with
             # a build_map.
@@ -1044,10 +1044,9 @@ def peep_hole_fuse_dict_add_updates(func_ir):
                     stmt_build_map_out = stmt.target.name
                     # If we encounter a build map add it to the
                     # tracked maps.
-                    lit_old_idx[stmt.target.name] = i
-                    lit_new_idx[stmt.target.name] = i
+                    lit_map_def_idx[stmt.target.name] = i
+                    lit_map_use_idx[stmt.target.name] = [i]
                     map_updates[stmt.target.name] = stmt.value.items.copy()
-                    append_inst = False
                 elif stmt.value.op == "call" and i > 0:
                     # If we encounter a call we may need to replace
                     # the body
@@ -1061,117 +1060,93 @@ def peep_hole_fuse_dict_add_updates(func_ir):
                         and getattr_stmt.target.name == func_name
                         and isinstance(getattr_stmt.value, ir.Expr)
                         and getattr_stmt.value.op == "getattr"
-                        and getattr_stmt.value.value.name in lit_old_idx
+                        and getattr_stmt.value.attr in (
+                            "__setitem__", "_update_from_bytecode"
+                        )
+                        and getattr_stmt.value.value.name in lit_map_use_idx
                     ):
                         update_map_name = getattr_stmt.value.value.name
                         attr = getattr_stmt.value.attr
                         if attr == "__setitem__":
-                            append_inst = False
                             # If we have a setitem, update the lists
                             map_updates[update_map_name].append(args)
-                            # Remove the setitem
-                            new_body[-1] = None
-
-                        elif attr == "update" and args[0].name in lit_old_idx:
-                            append_inst = False
+                            # Update the list of instructions that would
+                            # need to be removed to include the setitem
+                            # and the the getattr
+                            lit_map_use_idx[update_map_name].extend([i - 1, i])
+                        elif ( attr == "_update_from_bytecode"
+                               and args[0].name in lit_map_use_idx):
                             # If we have an update and the arg is also
                             # a literal dictionary, fuse the lists.
+                            d2_map_name = args[0].name
                             map_updates[update_map_name].extend(
-                                map_updates[args[0].name]
+                                map_updates[d2_map_name]
                             )
-                            # Remove the update
-                            new_body[-1] = None
-                        if not append_inst:
-                            # Update the new insert location for
-                            # the original build_map.
-                            lit_new_idx[update_map_name] = i
-                            # Drop the existing definition for this stmt.
+                            # Delete the old IR for d1 and d2
+                            lit_map_use_idx[update_map_name].extend(
+                                lit_map_use_idx[d2_map_name]
+                            )
+                            lit_map_use_idx[update_map_name].append(i - 1)
+                            for line_num in lit_map_use_idx[update_map_name]:
+                                # Drop the existing definition for this stmt.
+                                _remove_assignment_definition(
+                                    blk.body, line_num, func_ir
+                                )
+                                # Delete it from the new block
+                                new_body[line_num] = None
+                            # Delete the maps from dicts
+                            del lit_map_def_idx[d2_map_name]
+                            del lit_map_use_idx[d2_map_name]
+                            del map_updates[d2_map_name]
+                            # Add d1 as the new instruction, removing the
+                            # old definition.
                             _remove_assignment_definition(
-                                blk.body, i - 1, func_ir
+                                blk.body, i, func_ir
                             )
+                            new_inst = _build_new_build_map(
+                                func_ir,
+                                update_map_name,
+                                blk.body,
+                                lit_map_def_idx[update_map_name],
+                                map_updates[update_map_name],
+                            )
+                            # Update d1 in lit_map_use_idx to just the new
+                            # definition.
+                            lit_map_use_idx[update_map_name] = [i]
+                            # Mark that this block has been modified
+                            blk_changed = True
 
             # Check if we need to drop any maps from being tracked.
-            # Skip the setitem/update getattr that will be removed when
-            # handling their call in the next iteration.
+            # Skip the setitem/_update_from_bytecode getattr that
+            # will be removed when handling their call in the next
+            # iteration.
             if not (
                 isinstance(stmt, ir.Assign)
                 and isinstance(stmt.value, ir.Expr)
                 and stmt.value.op == "getattr"
-                and stmt.value.value.name in lit_old_idx
-                and stmt.value.attr in ("__setitem__", "update")
+                and stmt.value.value.name in lit_map_use_idx
+                and stmt.value.attr in ("__setitem__", "_update_from_bytecode")
             ):
                 for var in stmt.list_vars():
-                    # If a map is used it cannot be pushed farther into
-                    # the block. This skips the assign target if
-                    # it is the original build_map.
+                    # If a map is used it cannot be fused later in
+                    # the block. As a result we delete it from
+                    # the dicitonaries
                     if (
-                        var.name in lit_old_idx
+                        var.name in lit_map_use_idx
                         and var.name != stmt_build_map_out
                     ):
-                        _insert_build_map(
-                            func_ir,
-                            var.name,
-                            blk.body,
-                            new_body,
-                            lit_old_idx,
-                            lit_new_idx,
-                            map_updates,
-                        )
-            if append_inst:
-                new_body.append(stmt)
-            else:
-                # Drop the existing definition for this stmt.
-                _remove_assignment_definition(
-                    blk.body, i, func_ir
-                )
-                blk_changed = True
-                # Append None so the number of instructions remains the same.
-                new_body.append(None)
+                        del lit_map_def_idx[var.name]
+                        del lit_map_use_idx[var.name]
+                        del map_updates[var.name]
 
-        # Insert any remaining maps. We make a list of keys because
-        # we modify lit_old_idx in the loop.
-        keys = list(lit_old_idx.keys())
-        for var_name in keys:
-            _insert_build_map(
-                func_ir,
-                var_name,
-                blk.body,
-                new_body,
-                lit_old_idx,
-                lit_new_idx,
-                map_updates,
-            )
+            # Append the instruction to the new block
+            new_body.append(new_inst)
+
         if blk_changed:
             # If the block is changed replace the block body.
             blk.body = [x for x in new_body if x is not None]
 
     return func_ir
-
-
-def _insert_build_map(
-    func_ir, name, old_body, new_body, lit_old_idx, lit_new_idx, map_updates
-):
-    """
-    Inserts an ir.Assign with the given name into the new body using the
-    information from dictionaries:
-        lit_old_idx: name -> index in which the original build_map is found
-        lit_new_idx: name -> index in which to insert
-        map_updates: name -> key/value items for the new build map.
-
-    After inserting into new_body, name is deleted from all of the dictionaries.
-    """
-    old_idx = lit_old_idx[name]
-    new_idx = lit_new_idx[name]
-    items = map_updates[name]
-    # Insert each remaining dictionary to the earliest location it combined
-    # its variables. This is to avoid error prone pattern matching in the IR,
-    # especially with nodes expected to fall at the end of blocks.
-    new_body[new_idx] = _build_new_build_map(
-        func_ir, name, old_body, old_idx, items
-    )
-    del lit_old_idx[name]
-    del lit_new_idx[name]
-    del map_updates[name]
 
 
 def _build_new_build_map(func_ir, name, old_body, old_lineno, new_items):
@@ -2319,7 +2294,14 @@ class Interpreter(object):
     def op_DICT_UPDATE(self, inst, target, value, updatevar, res):
         target = self.get(target)
         value = self.get(value)
-        updateattr = ir.Expr.getattr(target, 'update', loc=self.loc)
+        # We generate _update_from_bytecode instead of update so we can
+        # differentiate between user .update() calls and those from the
+        # bytecode. This is then used to recombine dictionaries in peephole
+        # optimizations. See the dicussion in this PR about why:
+        # https://github.com/numba/numba/pull/7964/files#r868229306
+        updateattr = ir.Expr.getattr(
+            target, '_update_from_bytecode', loc=self.loc
+        )
         self.store(value=updateattr, name=updatevar)
         updateinst = ir.Expr.call(self.get(updatevar), (value,), (),
                                   loc=self.loc)

@@ -715,46 +715,10 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         self.assertEqual(a, b)
 
     @skip_unless_py10
-    def test_usercode_update_heterogeneous_keys(self):
-        """
-        Tests an example using update that mirrors
-        the pattern created by the Python 3.10 bytecode
-        changes. This verifies that additional code can
-        now be supported when applying this optimization.
-        """
-        def const_keys_func(a):
-            """
-            Dictionary update between two constant
-            dictionaries. When applying the optimization
-            it becomes possible to do the update at compile time.
-            """
-            d1 = {
-                "a": 1,
-                "b": 2,
-                "c": 3,
-            }
-            d2 = {
-                "d": 4,
-                "e": a
-            }
-            d1.update(d2)
-            return d1["e"]
-
-        py_func = const_keys_func
-        cfunc = njit()(const_keys_func)
-        value = "efwf"
-        a = py_func(value)
-        b = cfunc(value)
-        self.assertEqual(a, b)
-
-    @skip_unless_py10
     def test_usercode_update_use_d2(self):
         """
-        Tests an example using update that mirrors
-        the pattern created by the Python 3.10 bytecode
-        changes. This verifies that the optimization code
-        supports a use of d2 occuring a in separate basic
-        block.
+        Tests an example using a regular update is
+        not modified by the optimization.
         """
         def const_dict_func():
             """
@@ -784,36 +748,85 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         self.assertEqual(a, b)
 
     @skip_unless_py10
-    def test_usercode_update_key_conflict(self):
+    def test_large_const_dict_inline_controlflow(self):
         """
-        Tests an example using update that mirrors
-        the pattern created by the Python 3.10 bytecode
-        changes. This verifies that replacing update
-        handles a conflicting key properly.
+        Tests generating a large dictionary when one of
+        the inputs requires inline control flow
+        has the change suggested in the error message
+        for inlined control flow.
         """
-        def const_keys_func(a):
-            """
-            Dictionary update between two constant
-            dictionaries with conflicting keys. This
-            should be done correctly so d1["c"] returns
-            a.
-            """
-            d1 = {
-                "a": 1,
-                "b": 2,
-                "c": 3,
+        def inline_func(a, flag):
+            # D is a heterogeneous dictionary
+            # so this code can only compile if
+            # d has constant keys.
+            d = {
+                "A": 1,
+                "B": 1,
+                "C": 1,
+                "D": 1,
+                "E": 1,
+                "F": 1,
+                "G": 1,
+                "H": 1 if flag else 2,
+                "I": 1,
+                "J": 1,
+                "K": 1,
+                "L": 1,
+                "M": 1,
+                "N": 1,
+                "O": 1,
+                "P": 1,
+                "Q": 1,
+                "R": 1,
+                "S": a,
             }
-            d2 = {
-                "d": 4,
-                "c": a
-            }
-            d1.update(d2)
-            # This should return a and not 3.
-            return d1["c"]
+            return d["S"]
 
-        py_func = const_keys_func
-        cfunc = njit()(const_keys_func)
+        with self.assertRaises(UnsupportedError) as raises:
+            njit()(inline_func)("efwf", False)
+        self.assertIn(
+            'You can resolve this issue by moving the control flow out',
+            str(raises.exception)
+        )
+
+    @skip_unless_py10
+    def test_large_const_dict_noninline_controlflow(self):
+        """
+        Tests generating large constant dict when one of the
+        inputs has the change suggested in the error message
+        for inlined control flow.
+        """
+        def non_inline_func(a, flag):
+            # D is a heterogeneous dictionary
+            # so this code can only compile if
+            # d has constant keys.
+            val = 1 if flag else 2
+            d = {
+                "A": 1,
+                "B": 1,
+                "C": 1,
+                "D": 1,
+                "E": 1,
+                "F": 1,
+                "G": 1,
+                "H": val,
+                "I": 1,
+                "J": 1,
+                "K": 1,
+                "L": 1,
+                "M": 1,
+                "N": 1,
+                "O": 1,
+                "P": 1,
+                "Q": 1,
+                "R": 1,
+                "S": a,
+            }
+            return d["S"]
+
+        py_func = non_inline_func
+        cfunc = njit()(non_inline_func)
         value = "efwf"
-        a = py_func(value)
-        b = cfunc(value)
+        a = py_func(value, False)
+        b = cfunc(value, False)
         self.assertEqual(a, b)
