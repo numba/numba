@@ -1018,6 +1018,20 @@ def peep_hole_fuse_dict_add_updates(func_ir):
     # matched in other locations, such as objmode handling. It should be safe to
     # move a map to the last location at which there was _update_from_bytecode.
 
+    errmsg = textwrap.dedent("""
+        DICT_UPDATE encountered that could not be replaced.
+        If you have created a large constant dictionary, this may
+        be an an indication that you are using inlined control
+        flow. You can resolve this issue by moving the control flow out of
+        the dicitonary constructor. For example, if you have
+
+            d = {a: 1 if flag else 0, ...)
+
+        Replace that with:
+
+            a_val = 1 if flag else 0
+            d = {a: a_val, ...)""")
+
     for blk in func_ir.blocks.values():
         new_body = []
         # literal map var name -> block idx of the original build_map
@@ -1063,58 +1077,63 @@ def peep_hole_fuse_dict_add_updates(func_ir):
                         and getattr_stmt.value.attr in (
                             "__setitem__", "_update_from_bytecode"
                         )
-                        and getattr_stmt.value.value.name in lit_map_use_idx
                     ):
                         update_map_name = getattr_stmt.value.value.name
                         attr = getattr_stmt.value.attr
-                        if attr == "__setitem__":
+                        if (attr == "__setitem__"
+                           and update_map_name in lit_map_use_idx):
                             # If we have a setitem, update the lists
                             map_updates[update_map_name].append(args)
                             # Update the list of instructions that would
                             # need to be removed to include the setitem
                             # and the the getattr
                             lit_map_use_idx[update_map_name].extend([i - 1, i])
-                        elif ( attr == "_update_from_bytecode"
-                               and args[0].name in lit_map_use_idx):
-                            # If we have an update and the arg is also
-                            # a literal dictionary, fuse the lists.
+                        elif attr == "_update_from_bytecode":
                             d2_map_name = args[0].name
-                            map_updates[update_map_name].extend(
-                                map_updates[d2_map_name]
-                            )
-                            # Delete the old IR for d1 and d2
-                            lit_map_use_idx[update_map_name].extend(
-                                lit_map_use_idx[d2_map_name]
-                            )
-                            lit_map_use_idx[update_map_name].append(i - 1)
-                            for line_num in lit_map_use_idx[update_map_name]:
-                                # Drop the existing definition for this stmt.
-                                _remove_assignment_definition(
-                                    blk.body, line_num, func_ir
+                            if (update_map_name in lit_map_use_idx
+                               and d2_map_name in lit_map_use_idx):
+                                # If we have an update and the arg is also
+                                # a literal dictionary, fuse the lists.
+                                map_updates[update_map_name].extend(
+                                    map_updates[d2_map_name]
                                 )
-                                # Delete it from the new block
-                                new_body[line_num] = None
-                            # Delete the maps from dicts
-                            del lit_map_def_idx[d2_map_name]
-                            del lit_map_use_idx[d2_map_name]
-                            del map_updates[d2_map_name]
-                            # Add d1 as the new instruction, removing the
-                            # old definition.
-                            _remove_assignment_definition(
-                                blk.body, i, func_ir
-                            )
-                            new_inst = _build_new_build_map(
-                                func_ir,
-                                update_map_name,
-                                blk.body,
-                                lit_map_def_idx[update_map_name],
-                                map_updates[update_map_name],
-                            )
-                            # Update d1 in lit_map_use_idx to just the new
-                            # definition.
-                            lit_map_use_idx[update_map_name] = [i]
-                            # Mark that this block has been modified
-                            blk_changed = True
+                                # Delete the old IR for d1 and d2
+                                lit_map_use_idx[update_map_name].extend(
+                                    lit_map_use_idx[d2_map_name]
+                                )
+                                lit_map_use_idx[update_map_name].append(i - 1)
+                                for linenum in lit_map_use_idx[update_map_name]:
+                                    # Drop the existing definition.
+                                    _remove_assignment_definition(
+                                        blk.body, linenum, func_ir
+                                    )
+                                    # Delete it from the new block
+                                    new_body[linenum] = None
+                                # Delete the maps from dicts
+                                del lit_map_def_idx[d2_map_name]
+                                del lit_map_use_idx[d2_map_name]
+                                del map_updates[d2_map_name]
+                                # Add d1 as the new instruction, removing the
+                                # old definition.
+                                _remove_assignment_definition(
+                                    blk.body, i, func_ir
+                                )
+                                new_inst = _build_new_build_map(
+                                    func_ir,
+                                    update_map_name,
+                                    blk.body,
+                                    lit_map_def_idx[update_map_name],
+                                    map_updates[update_map_name],
+                                )
+                                # Update d1 in lit_map_use_idx to just the new
+                                # definition.
+                                lit_map_use_idx[update_map_name] = [i]
+                                # Mark that this block has been modified
+                                blk_changed = True
+                            else:
+                                # If we cannot remove _update_from_bytecode
+                                # Then raise an error for the user.
+                                raise UnsupportedError(errmsg)
 
             # Check if we need to drop any maps from being tracked.
             # Skip the setitem/_update_from_bytecode getattr that
