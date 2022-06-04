@@ -709,6 +709,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
 
         py_func = const_keys_func
         cfunc = njit()(const_keys_func)
+        # str to make the dictionary heterogeneous.
         value = "efwf"
         a = py_func(value)
         b = cfunc(value)
