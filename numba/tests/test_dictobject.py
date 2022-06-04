@@ -1030,8 +1030,8 @@ class TestDictObject(MemoryLeakMixin, TestCase):
 
         def f2(n):
             """
-            Test update where a 1 dictionary is created
-            as a literal.
+            Test update where one of the dictionaries
+            is created as a Python literal.
             """
             d1 = {
                 1: 2,
