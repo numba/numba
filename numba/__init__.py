@@ -89,6 +89,7 @@ __all__ = """
     set_num_threads
     set_parallel_chunksize
     get_parallel_chunksize
+    parallel_chunksize
     """.split() + types.__all__ + errors.__all__
 
 
