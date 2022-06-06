@@ -705,7 +705,6 @@ class Context(BaseContext):
             listdecl,
             mathdecl,
             npydecl,
-            randomdecl,
             setdecl,
             dictdecl,
         )
@@ -715,6 +714,5 @@ class Context(BaseContext):
         self.install_registry(listdecl.registry)
         self.install_registry(mathdecl.registry)
         self.install_registry(npydecl.registry)
-        self.install_registry(randomdecl.registry)
         self.install_registry(setdecl.registry)
         self.install_registry(dictdecl.registry)

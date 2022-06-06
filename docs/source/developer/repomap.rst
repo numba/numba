@@ -347,7 +347,6 @@ that must be matched during type inference.
 - :ghfile:`numba/core/typing/listdecl.py` - Python lists
 - :ghfile:`numba/core/typing/builtins.py` - Python builtin global functions and
   operators
-- :ghfile:`numba/core/typing/randomdecl.py` - Python and NumPy ``random``
   modules
 - :ghfile:`numba/core/typing/setdecl.py` - Python sets
 - :ghfile:`numba/core/typing/npydecl.py` - NumPy ndarray (and operators), NumPy
