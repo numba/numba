@@ -625,12 +625,12 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
 class TestListExtendInStarArgNonTupleIterable(MemoryLeakMixin, TestCase):
     """Test `fn(pos_arg0, pos_arg1, *args)` where args is a non-tuple iterable.
 
-    Python will generate LIST_EXTEND bytecode to combine the positional
+    Python 3.9+ will generate LIST_EXTEND bytecode to combine the positional
     arguments with the `*args`.
 
     See #8059
 
-    NOTE: At the moment, there are no meaningful test for NoPython because the
+    NOTE: At the moment, there are no meaningful tests for NoPython because the
     lack of support for `tuple(iterable)` for most iterable types.
     """
     def test_list_extend_forceobj(self):

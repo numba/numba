@@ -837,7 +837,7 @@ def peep_hole_list_to_tuple(func_ir):
                                                 loc=expr.loc,
                                             )
                                             tuple_var = arg.scope.redefine(
-                                                "_list_extend_gv_tuple",
+                                                "$_list_extend_gv_tuple",
                                                 loc=expr.loc,
                                             )
                                             new_hole.append(
@@ -1883,13 +1883,13 @@ class Interpreter(object):
                     loc=loc,
                 )
                 tuple_var = self.store(
-                    gv_tuple, "_list_extend_gv_tuple", redefine=True,
+                    gv_tuple, "$_list_extend_gv_tuple", redefine=True,
                 )
                 tuplify_val = ir.Expr.call(
                     tuple_var, (other,), (),
                     loc=loc,
                 )
-                tuplify_var = self.store(tuplify_val, "_tuplify", redefine=True)
+                tuplify_var = self.store(tuplify_val, "$_tuplify", redefine=True)
 
                 out = ir.Expr.binop(
                     fn=operator.add, lhs=first, rhs=self.get(tuplify_var.name),
