@@ -20,8 +20,11 @@ class ChunksizeExamplesTest(unittest.TestCase):
             @njit(parallel=True)
             def func1(n):
                 acc = 0
+                pre_prange_chunksize = get_parallel_chunksize() # Will return 4.
                 for i in prange(n):
+                    in_prange_chunksize = get_parallel_chunksize() # Will return 0.
                     acc += i
+                post_prange_chunksize = get_parallel_chunksize() # Will return 4.
                 return acc
 
             @njit(parallel=True)

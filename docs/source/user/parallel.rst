@@ -128,12 +128,12 @@ The following example demonstrates a product reduction on a two-dimensional arra
           operation producing a floating point result type.
 
 
-Care should be taken, however, when reducing into slices or elements of an array 
-if the elements specified by the slice or index are written to simultaneously by 
+Care should be taken, however, when reducing into slices or elements of an array
+if the elements specified by the slice or index are written to simultaneously by
 multiple parallel threads. The compiler may not detect such cases and then a race condition
 would occur.
 
-The following example demonstrates such a case where a race condition in the execution of the 
+The following example demonstrates such a case where a race condition in the execution of the
 parallel for-loop results in an incorrect return value::
 
     from numba import njit, prange
@@ -647,9 +647,27 @@ whose value must be greater than
 or equal to 0.  A value of 0 is the default value and instructs Numba to use the
 static scheduling approach above.  Values greater than 0 instruct Numba to use that value
 as the chunk size in the dynamic scheduling approach described above.
-The current value of this thread local variable is used by all subsequent parallel regions
-invoked by this thread.
-:func:`numba.set_parallel_chunksize` returns the previous value of the chunksize.
+:func:`numba.set_parallel_chunksize` returns the previous value of the chunk size.
+The current value of this thread local variable is used as the chunk size for all
+subsequent parallel regions invoked by this thread.
+However, upon entering a parallel region, Numba sets the chunk size thread local variable
+for each of the threads executing that parallel region back to the default of 0,
+since it is unlikely
+that any nested parallel regions would require the same chunk size.  If the same thread is
+used to execute a sequential and parallel region then that thread's chunk size
+variable is set to 0 at the beginning of the parallel region and restored to
+its original value upon exiting the parallel region.
+This behavior is demonstrated in ``func1`` in the example below in that the
+reported chunk size inside the ``prange`` parallel region is 0 but is 4 outside
+the parallel region.  Note that if the prange is not executed in parallel for
+any reason (e.g., setting ``parallel=False``) then the chunk size reported inside
+the non-parallel prange would be reported as 4.
+This behavior may initially be counterintuitive to programmers as it differs from
+how thread local variables typically behave in other languages.
+A programmer may use
+the chunk size API described in this section within the threads executing a parallel
+region if the programmer wishes to specify a chunk size for any nested parallel regions
+that may be launched.
 The current value of the parallel chunk size can be obtained by calling
 :func:`numba.get_parallel_chunksize`.
 Both of these functions can be used from standard Python and from within Numba JIT compiled functions
