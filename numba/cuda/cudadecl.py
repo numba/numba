@@ -385,7 +385,8 @@ def _genfp16_binary_operator(l_key):
                     convertible = self.context.can_convert(args[0], args[1])
 
                 if (convertible == Conversion.exact) or \
-                        (convertible == Conversion.promote):
+                   (convertible == Conversion.promote) or \
+                   (convertible == Conversion.safe):
                     return signature(types.float16, types.float16,
                                      types.float16)
 

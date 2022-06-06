@@ -30,6 +30,7 @@ def _init_casting_rules(tm):
     tcr.safe_unsafe(types.uint16, types.int32)
     tcr.safe_unsafe(types.uint32, types.int64)
 
+    tcr.safe_unsafe(types.int8, types.float16)
     tcr.safe_unsafe(types.int16, types.float32)
     tcr.safe_unsafe(types.int32, types.float64)
 
