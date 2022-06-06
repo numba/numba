@@ -1,8 +1,10 @@
 CUDA-Specific Types
 ====================
 
-Note: This page is about types specific to CUDA targets. Many types on CPU targets are also
-available in CUDA target, for information on these types, see :ref:`cuda-built-in-types`.
+.. note::
+
+    This page is about types specific to CUDA targets. Many other types are also
+    available in the CUDA target - see :ref:`cuda-built-in-types`.
 
 Vector Types
 ~~~~~~~~~~~~

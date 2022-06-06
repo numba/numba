@@ -781,7 +781,7 @@ def make_vector_type_stubs():
                         ) for attr_name in attr_names[:nelem]
                     ]),
                     "__doc__": f"A stub for {type_name} to be used in "
-                    "CUDA kernel."
+                    "CUDA kernels."
                 },
                 **{"aliases": []}
             }
