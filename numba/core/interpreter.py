@@ -1889,8 +1889,8 @@ class Interpreter(object):
                     tuple_var, (other,), (),
                     loc=loc,
                 )
-                tuplify_var = self.store(tuplify_val, "$_tuplify", redefine=True)
-
+                tuplify_var = self.store(tuplify_val, "$_tuplify",
+                                         redefine=True)
                 out = ir.Expr.binop(
                     fn=operator.add, lhs=first, rhs=self.get(tuplify_var.name),
                     loc=self.loc,
