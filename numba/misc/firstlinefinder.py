@@ -1,5 +1,5 @@
 """
-This module provides helper functions to find the first line of the function
+This module provides helper functions to find the first line of a function
 body.
 """
 
