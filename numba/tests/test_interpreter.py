@@ -2,6 +2,9 @@
 Test bytecode fixes provided in interpreter.py
 """
 from numba import njit, objmode
+from numba import typeof
+from numba.extending import overload
+from numba.core import types
 from numba.core.errors import UnsupportedError
 from numba.tests.support import TestCase, MemoryLeakMixin, skip_unless_py10
 
@@ -675,6 +678,77 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         self.assertEqual(a, b)
 
     @skip_unless_py10
+    def test_large_heterogeneous_const_keys_initial_values(self):
+        """Check the initial values for a constant dictionary requiring
+        optimizations.
+        """
+
+        def bar(d):
+            ...
+
+        @overload(bar)
+        def ol_bar(d):
+            a = {
+                "A": 1,
+                "B": 1,
+                "C": 1,
+                "D": 1,
+                "E": 1,
+                "F": 1,
+                "G": 1,
+                "H": 1,
+                "I": 1,
+                "J": 1,
+                "K": 1,
+                "L": 1,
+                "M": 1,
+                "N": 1,
+                "O": 1,
+                "P": 1,
+                "Q": 1,
+                "R": 1,
+                "S": 'a',
+            }
+
+            def specific_ty(z):
+                return types.literal(z) if types.maybe_literal(z) else typeof(z)
+            expected = {types.literal(x): specific_ty(y) for x, y in a.items()}
+            self.assertTrue(isinstance(d, types.LiteralStrKeyDict))
+            self.assertEqual(d.literal_value, expected)
+            self.assertEqual(hasattr(d, 'initial_value'), False)
+            return lambda d: d
+
+        @njit
+        def foo():
+            # D is a heterogeneous dictionary
+            # so this code can only compile if
+            # d has the correct initial values.
+            d = {
+                "A": 1,
+                "B": 1,
+                "C": 1,
+                "D": 1,
+                "E": 1,
+                "F": 1,
+                "G": 1,
+                "H": 1,
+                "I": 1,
+                "J": 1,
+                "K": 1,
+                "L": 1,
+                "M": 1,
+                "N": 1,
+                "O": 1,
+                "P": 1,
+                "Q": 1,
+                "R": 1,
+                "S": 'a',
+            }
+            bar(d)
+
+        foo()
+
+    @skip_unless_py10
     def test_large_heterogeneous_const_keys_dict(self):
         """
         Tests that a function with a large heterogeneous constant
@@ -714,6 +788,74 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         a = py_func(value)
         b = cfunc(value)
         self.assertEqual(a, b)
+
+    @skip_unless_py10
+    def test_large_dict_mutation_not_carried(self):
+        """Checks that the optimization for large dictionaries
+        do not incorrect update initial values due ot other
+        mutations.
+        """
+        def bar(d):
+            ...
+
+        @overload(bar)
+        def ol_bar(d):
+            a = {
+                "A": 1,
+                "B": 1,
+                "C": 1,
+                "D": 1,
+                "E": 1,
+                "F": 1,
+                "G": 1,
+                "H": 1,
+                "I": 1,
+                "J": 1,
+                "K": 1,
+                "L": 1,
+                "M": 1,
+                "N": 1,
+                "O": 1,
+                "P": 1,
+                "Q": 1,
+                "R": 1,
+                "S": 7,
+            }
+            if d.initial_value is None:
+                return lambda d: types.literally(d)
+            self.assertTrue(isinstance(d, types.DictType))
+            self.assertEqual(d.initial_value, a)
+            return lambda d: d
+
+        @njit
+        def foo():
+            # This dictionary is mutated, check the initial_value carries
+            # correctly and is not mutated
+            d = {
+                "A": 1,
+                "B": 1,
+                "C": 1,
+                "D": 1,
+                "E": 1,
+                "F": 1,
+                "G": 1,
+                "H": 1,
+                "I": 1,
+                "J": 1,
+                "K": 1,
+                "L": 1,
+                "M": 1,
+                "N": 1,
+                "O": 1,
+                "P": 1,
+                "Q": 1,
+                "R": 1,
+                "S": 7,
+            }
+            d['X'] = 4
+            bar(d)
+
+        foo()
 
     @skip_unless_py10
     def test_usercode_update_use_d2(self):
