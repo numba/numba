@@ -45,6 +45,13 @@ def stencil3_kernel(a):
     return 0.25 * a[-2, 2]
 
 
+@stencil(neighborhood = ((np.int64(-5), np.int64(0)),))
+def stencil4_kernel(a):
+    cum = a[-5]
+    for i in range(-4, 1):
+        cum += a[i]
+    return 0.3 * cum
+
 @stencil
 def stencil_multiple_input_kernel(a, b):
     return 0.25 * (a[0, 1] + a[1, 0] + a[0, -1] + a[-1, 0] +
@@ -279,6 +286,26 @@ class TestStencil(TestStencilBase):
         self.assertTrue(seq_res[0, 0] == 1.0 and seq_res[4, 4] == 1.0)
         self.assertTrue(njit_res[0, 0] == 1.0 and njit_res[4, 4] == 1.0)
         self.assertTrue(par_res[0, 0] == 1.0 and par_res[4, 4] == 1.0)
+
+    @skip_unsupported
+    def test_stencil4(self):
+        """Tests whether the optional neighborhood argument with numpy integers
+        to the stencil decorate works.
+        """
+        def test_seq(n):
+            A = np.arange(n)
+            B = stencil4_kernel(A)
+            return B
+
+        def test_impl_seq(n):
+            A = np.arange(n)
+            B = np.zeros(n)
+            for i in range(5, len(A)):
+                B[i] = 0.3 * sum(A[i - 5:i + 1])
+            return B
+
+        n = 100
+        self.check(test_impl_seq, test_seq, n)
 
     @skip_unsupported
     def test_stencil_standard_indexing_1d(self):
