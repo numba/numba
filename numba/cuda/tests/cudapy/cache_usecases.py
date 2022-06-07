@@ -8,9 +8,9 @@ class UseCase:
     """
     Provide a way to call a kernel as if it were a function.
 
-    This allows the CUDA cache tests to match closely the CPU cache tests, and
+    This allows the CUDA cache tests to closely match the CPU cache tests, and
     also to support calling cache use cases as njitted functions. The class
-    wraps a function that takes and array for the return value and arguments,
+    wraps a function that takes an array for the return value and arguments,
     and provides an interface that accepts arguments, launches the kernel
     appropriately, and returns the stored return value.
 
