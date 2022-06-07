@@ -84,7 +84,7 @@ class StencilFunc(object):
         self._targetctx.refresh()
         self._install_type(self._typingctx)
         neighborhood = self.options.get("neighborhood")
-        self.neighborhood = tuple([tuple(map(int, n)) for n in ]) if neighborhood else None
+        self.neighborhood = tuple([tuple(map(int, n)) for n in neighborhood]) if neighborhood else None
         self._type_cache = {}
         self._lower_me = StencilFuncLowerer(self)
 
