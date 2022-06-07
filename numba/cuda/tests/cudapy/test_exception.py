@@ -91,6 +91,46 @@ class TestException(CUDATestCase):
         """
         self.case_raise_causing_warp_diverge(with_debug_mode=False)
 
+    # The following two cases relate to Issue #7806: Division by zero stops the
+    # kernel. https://github.com/numba/numba/issues/7806.
+
+    def test_no_zero_division_error(self):
+        # When debug is False:
+        # - Zero by division raises no exception
+        # - Execution proceeds after a divide by zero
+        @cuda.jit
+        def f(r, x, y):
+            r[0] = y[0] / x[0]
+            r[1] = y[0]
+
+        r = np.zeros(2)
+        x = np.zeros(1)
+        y = np.ones(1)
+
+        f[1, 1](r, x, y)
+
+        self.assertTrue(np.isinf(r[0]), 'Expected inf from div by zero')
+        self.assertEqual(r[1], y[0], 'Expected execution to continue')
+
+    def test_zero_division_error_in_debug(self):
+        # When debug is True:
+        # - Zero by division raises an exception
+        # - Execution halts at the point of division by zero
+        @cuda.jit(debug=True, opt=False)
+        def f(r, x, y):
+            r[0] = y[0] / x[0]
+            r[1] = y[0]
+
+        r = np.zeros(2)
+        x = np.zeros(1)
+        y = np.ones(1)
+
+        with self.assertRaises(ZeroDivisionError) as raises:
+            f[1, 1](r, x, y)
+
+        self.assertEqual(r[0], 0, 'Expected result to be left unset')
+        self.assertEqual(r[1], 0, 'Expected execution to stop')
+
 
 if __name__ == '__main__':
     unittest.main()
