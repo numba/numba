@@ -45,6 +45,7 @@ class TestException(CUDATestCase):
         divergence.
         """
         with_opt_mode = not with_debug_mode
+
         @cuda.jit(debug=with_debug_mode, opt=with_opt_mode)
         def problematic(x, y):
             tid = cuda.threadIdx.x
@@ -136,7 +137,7 @@ class TestException(CUDATestCase):
         else:
             exc = ZeroDivisionError
 
-        with self.assertRaises(exc) as raises:
+        with self.assertRaises(exc):
             f[1, 1](r, x, y)
 
         self.assertEqual(r[0], 0, 'Expected result to be left unset')
