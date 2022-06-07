@@ -464,7 +464,15 @@ def _prepare_chrome_trace_data(listener: RecordingListener):
         data = rec.data
         cat = str(rec.kind)
         ph = 'B' if rec.is_start else 'E'
-        name = data['name']
+        name = None
+        if data is not None:
+            try:
+                name = data["name"]
+            except KeyError:
+                pass
+        # If name is still None, set it to the event kind
+        if name is None:
+            name = str(rec.kind)
         args = pformat(data)
         ev = dict(
             cat=cat, pid=pid, tid=tid, ts=ts, ph=ph, name=name, args=args,
