@@ -269,7 +269,7 @@ dup_string(PyObject *strobj)
         return NULL;
     /* Using PyObject_Malloc allows this memory to be tracked for
        leaks. */
-    str = PyObject_Malloc(strlen(tmp) + 1);
+    str = (char *) PyObject_Malloc(strlen(tmp) + 1);
     if (str == NULL) {
         PyErr_NoMemory();
         return NULL;

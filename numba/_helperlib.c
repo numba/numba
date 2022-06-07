@@ -266,7 +266,7 @@ numba_extract_record_data(PyObject *recordobj, Py_buffer *pbuf) {
  * by a copy of the memory area pointed to by (pdata, size).
  */
 NUMBA_EXPORT_FUNC(PyObject *)
-numba_recreate_record(void *pdata, int size, PyObject *dtype) {
+numba_recreate_record(char *pdata, int size, PyObject *dtype) {
     PyObject *numpy = NULL;
     PyObject *numpy_record = NULL;
     PyObject *aryobj = NULL;
@@ -620,7 +620,7 @@ numba_extract_np_timedelta(PyObject *td)
 }
 
 NUMBA_EXPORT_FUNC(PyObject *)
-numba_create_np_datetime(npy_int64 value, int unit_code)
+numba_create_np_datetime(npy_int64 value, NPY_DATETIMEUNIT unit_code)
 {
     PyDatetimeScalarObject *obj = (PyDatetimeScalarObject *)
         PyArrayScalar_New(Datetime);
@@ -633,7 +633,7 @@ numba_create_np_datetime(npy_int64 value, int unit_code)
 }
 
 NUMBA_EXPORT_FUNC(PyObject *)
-numba_create_np_timedelta(npy_int64 value, int unit_code)
+numba_create_np_timedelta(npy_int64 value, NPY_DATETIMEUNIT unit_code)
 {
     PyTimedeltaScalarObject *obj = (PyTimedeltaScalarObject *)
         PyArrayScalar_New(Timedelta);

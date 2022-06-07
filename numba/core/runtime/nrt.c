@@ -188,7 +188,7 @@ void NRT_MemInfo_init(NRT_MemInfo *mi,void *data, size_t size,
 NRT_MemInfo *NRT_MemInfo_new(void *data, size_t size,
                              NRT_dtor_function dtor, void *dtor_info)
 {
-    NRT_MemInfo *mi = NRT_Allocate(sizeof(NRT_MemInfo));
+    NRT_MemInfo *mi = (NRT_MemInfo *) NRT_Allocate(sizeof(NRT_MemInfo));
     if (mi != NULL) {
         NRT_Debug(nrt_debug_print("NRT_MemInfo_new mi=%p\n", mi));
         NRT_MemInfo_init(mi, data, size, dtor, dtor_info, NULL);
@@ -216,7 +216,7 @@ static
 void *nrt_allocate_meminfo_and_data(size_t size, NRT_MemInfo **mi_out, NRT_ExternalAllocator *allocator) {
     NRT_MemInfo *mi = NULL;
     NRT_Debug(nrt_debug_print("nrt_allocate_meminfo_and_data %p\n", allocator));
-    char *base = NRT_Allocate_External(sizeof(NRT_MemInfo) + size, allocator);
+    char *base =  (char *) NRT_Allocate_External(sizeof(NRT_MemInfo) + size, allocator);
     if (base == NULL) {
         *mi_out = NULL; /* set meminfo to NULL as allocation failed */
         return NULL; /* return early as allocation failed */
@@ -229,7 +229,7 @@ void *nrt_allocate_meminfo_and_data(size_t size, NRT_MemInfo **mi_out, NRT_Exter
 
 static
 void nrt_internal_custom_dtor_safe(void *ptr, size_t size, void *info) {
-    NRT_dtor_function dtor = info;
+    NRT_dtor_function dtor = (NRT_dtor_function) info;
     NRT_Debug(nrt_debug_print("nrt_internal_custom_dtor_safe %p, %p\n",
                               ptr, info));
     if (dtor) {
@@ -287,7 +287,7 @@ void *nrt_allocate_meminfo_and_data_align(size_t size, unsigned align,
 {
     size_t offset = 0, intptr = 0, remainder = 0;
     NRT_Debug(nrt_debug_print("nrt_allocate_meminfo_and_data_align %p\n", allocator));
-    char *base = nrt_allocate_meminfo_and_data(size + 2 * align, mi, allocator);
+    char *base =  (char *) nrt_allocate_meminfo_and_data(size + 2 * align, mi, allocator);
     if (base == NULL) {
         return NULL; /* return early as allocation failed */
     }
@@ -416,7 +416,7 @@ nrt_varsize_dtor(void *ptr, size_t size, void *info) {
     if (info) {
         /* call element dtor */
         typedef void dtor_fn_t(void *ptr);
-        dtor_fn_t *dtor = info;
+        dtor_fn_t *dtor = (dtor_fn_t *) info;
         dtor(ptr);
     }
     NRT_Free(ptr);

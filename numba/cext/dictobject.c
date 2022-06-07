@@ -514,7 +514,7 @@ numba_dictkeys_new(NB_DictKeys **out, Py_ssize_t size, Py_ssize_t key_size, Py_s
     Py_ssize_t entry_offset = aligned_size(index_size * size);
     Py_ssize_t alloc_size = sizeof(NB_DictKeys) + entry_offset + entry_size * usable;
 
-    NB_DictKeys *dk = malloc(aligned_size(alloc_size));
+    NB_DictKeys *dk = (NB_DictKeys *) malloc(aligned_size(alloc_size));
     if (!dk) return ERR_NO_MEMORY;
 
     assert ( size >= D_MINSIZE );
@@ -546,7 +546,7 @@ numba_dict_new(NB_Dict **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssize_t v
     int status = numba_dictkeys_new(&dk, size, key_size, val_size);
     if (status != OK) return status;
 
-    d = malloc(sizeof(NB_Dict));
+    d = (NB_Dict *) malloc(sizeof(NB_Dict));
     if (!d) {
         numba_dictkeys_free(dk);
         return ERR_NO_MEMORY;

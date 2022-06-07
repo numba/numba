@@ -21,7 +21,7 @@
 static void
 pyobject_dtor(void *ptr, size_t size, void* info) {
     PyGILState_STATE gstate;
-    PyObject *ownerobj = info;
+    PyObject *ownerobj = (PyObject *) info;
 
     gstate = PyGILState_Ensure();   /* ensure the GIL */
     Py_DECREF(ownerobj);            /* release the python object */

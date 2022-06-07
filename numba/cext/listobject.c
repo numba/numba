@@ -164,7 +164,7 @@ numba_list_new(NB_List **out, Py_ssize_t item_size, Py_ssize_t allocated){
     NB_List *lp;
     char *items;
     // allocate memory to hold the struct
-    lp = malloc(aligned_size(sizeof(NB_List)));
+    lp = (NB_List *) malloc(aligned_size(sizeof(NB_List)));
     if (lp == NULL) {
         return LIST_ERR_NO_MEMORY;
     }
@@ -177,7 +177,7 @@ numba_list_new(NB_List **out, Py_ssize_t item_size, Py_ssize_t allocated){
     memset(&lp->methods, 0x00, sizeof(list_type_based_methods_table));
     // allocate memory to hold items, if requested
     if (allocated != 0) {
-        items = malloc(aligned_size(lp->item_size * allocated));
+        items = (char *) malloc(aligned_size(lp->item_size * allocated));
         // allocated was definitely not zero, if malloc returns NULL
         // this is definitely an error
         if (items == NULL) {
@@ -405,7 +405,7 @@ numba_list_resize(NB_List *lp, Py_ssize_t newsize) {
     if (newsize == 0)
         new_allocated = 0;
     num_allocated_bytes = new_allocated * lp->item_size;
-    items = realloc(lp->items, aligned_size(num_allocated_bytes));
+    items = (char *) realloc(lp->items, aligned_size(num_allocated_bytes));
     // realloc may return NULL if requested size is 0
     if (num_allocated_bytes != 0 && items == NULL) {
         return LIST_ERR_NO_MEMORY;
@@ -623,7 +623,7 @@ numba_test_list(void) {
     Py_ssize_t it_count;
     const char *it_item = NULL;
     NB_ListIter iter;
-    char got_item[4] = "\x00\x00\x00\x00";
+    char got_item[4] = {'\x00', '\x00', '\x00', '\x00'};
     const char *test_items_1 = NULL, *test_items_2 = NULL;
     char *test_items_3 = NULL;
     puts("test_list");
