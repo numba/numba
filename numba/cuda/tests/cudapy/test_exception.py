@@ -125,7 +125,17 @@ class TestException(CUDATestCase):
         x = np.zeros(1)
         y = np.ones(1)
 
-        with self.assertRaises(ZeroDivisionError) as raises:
+        # Simulator and device behaviour differs slightly in the exception
+        # raised - in debug mode, the CUDA target uses the Python error model,
+        # which gives a ZeroDivision error. The simulator uses NumPy with the
+        # error mode for division by zero set to raise, which results in a
+        # FloatingPointError instead.
+        if config.ENABLE_CUDASIM:
+            exc = FloatingPointError
+        else:
+            exc = ZeroDivisionError
+
+        with self.assertRaises(exc) as raises:
             f[1, 1](r, x, y)
 
         self.assertEqual(r[0], 0, 'Expected result to be left unset')
