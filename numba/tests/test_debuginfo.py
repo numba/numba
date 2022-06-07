@@ -10,7 +10,7 @@ import warnings
 from numba.tests.support import (TestCase, override_config, needs_subprocess,
                                  ignore_internal_warnings)
 from numba import jit, njit
-from numba.core import types, utils
+from numba.core import types
 from numba.core.datamodel import default_manager
 from numba.core.errors import NumbaDebugInfoWarning
 import llvmlite.binding as llvm
@@ -293,9 +293,10 @@ class TestDebugInfoEmission(TestCase):
                 groups = matched.groups()
                 self.assertEqual(len(groups), 1)
                 dbg_line = int(groups[0])
-                # +1 for the decorator on Python 3.8+, `inspect` changed, also
-                # recall that Numba's DWARF refers to the "def" line
-                defline = pysrc_line_start + (utils.PYVERSION >= (3, 8))
+                # +1 for the decorator.
+                # Recall that Numba's DWARF refers to the "def" line, but
+                # `inspect` uses the decorator as the first line.
+                defline = pysrc_line_start + 1
                 self.assertEqual(dbg_line, defline)
                 break
         else:
@@ -741,7 +742,7 @@ class TestDebugInfoEmission(TestCase):
         # and refers to the offending function
         self.assertIn(str(foo.py_func), msg)
 
-    def test_unparsable_indented_source(self):
+    def test_irregularly_indented_source(self):
 
         @njit(debug=True)
         def foo():
@@ -753,14 +754,13 @@ class TestDebugInfoEmission(TestCase):
             ignore_internal_warnings()
             foo()
 
-        self.assertEqual(len(w), 1)
-        found = w[0]
-        self.assertEqual(found.category, NumbaDebugInfoWarning)
-        msg = str(found.message)
-        # make sure the warning contains the right message
-        self.assertIn('Could not parse the source for function', msg)
-        # and refers to the offending function
-        self.assertIn(str(foo.py_func), msg)
+        # No warnings
+        self.assertEqual(len(w), 0)
+
+        metadata = self._get_metadata(foo, foo.signatures[0])
+        lines = self._get_lines_from_debuginfo(metadata)
+        # Only one line
+        self.assertEqual(len(lines), 1)
 
 
 if __name__ == '__main__':
