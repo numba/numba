@@ -899,6 +899,13 @@ class NestedArrayModel(ArrayModel):
         self._be_type = dmm.lookup(fe_type.dtype).get_data_type()
         super(NestedArrayModel, self).__init__(dmm, fe_type)
 
+    def as_storage_type(self):
+        """Return the LLVM type representation for the storage of
+        the nestedarray.
+        """
+        ret = ir.ArrayType(self._be_type, self._fe_type.nitems)
+        return ret
+
 
 @register_default(types.Optional)
 class OptionalModel(StructModel):
