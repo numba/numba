@@ -16,7 +16,7 @@ class TestException(CUDATestCase):
                 ary.shape[-x]
 
         unsafe_foo = cuda.jit(foo)
-        safe_foo = cuda.jit(debug=True)(foo)
+        safe_foo = cuda.jit(debug=True, opt=False)(foo)
 
         if not config.ENABLE_CUDASIM:
             # Simulator throws exceptions regardless of debug
@@ -28,7 +28,7 @@ class TestException(CUDATestCase):
         self.assertIn("tuple index out of range", str(cm.exception))
 
     def test_user_raise(self):
-        @cuda.jit(debug=True)
+        @cuda.jit(debug=True, opt=False)
         def foo(do_raise):
             if do_raise:
                 raise ValueError
@@ -44,7 +44,8 @@ class TestException(CUDATestCase):
         of unifying branch target and resulting in unexpected warp
         divergence.
         """
-        @cuda.jit(debug=with_debug_mode)
+        with_opt_mode = not with_debug_mode
+        @cuda.jit(debug=with_debug_mode, opt=with_opt_mode)
         def problematic(x, y):
             tid = cuda.threadIdx.x
             ntid = cuda.blockDim.x
