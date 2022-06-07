@@ -116,6 +116,7 @@ build_c_helpers_dict(void)
     /* PRNG support */
     declmethod(get_py_random_state);
     declmethod(get_np_random_state);
+    declmethod(get_internal_random_state);
     declmethod(rnd_shuffle);
     declmethod(rnd_init);
     declmethod(poisson_ptrs);
@@ -149,6 +150,8 @@ build_c_helpers_dict(void)
     declmethod(list_new);
     declmethod(list_set_method_table);
     declmethod(list_free);
+    declmethod(list_base_ptr);
+    declmethod(list_size_address);
     declmethod(list_length);
     declmethod(list_allocated);
     declmethod(list_is_mutable);
@@ -156,7 +159,7 @@ build_c_helpers_dict(void)
     declmethod(list_setitem);
     declmethod(list_getitem);
     declmethod(list_append);
-    declmethod(list_pop);
+    declmethod(list_delitem);
     declmethod(list_delete_slice);
     declmethod(list_iter_sizeof);
     declmethod(list_iter);

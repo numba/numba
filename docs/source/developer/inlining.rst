@@ -76,6 +76,9 @@ The ``inline`` keyword argument can be one of three values:
   In all cases the function should return True to inline and return False to not
   inline, this essentially permitting custom inlining rules (typical use might
   be cost models).
+* Recursive functions with ``inline='always'`` will result in a non-terminating
+  compilation. If you wish to avoid this, supply a function to limit the
+  recursion depth (see below).
 
 .. note:: No guarantee is made about the order in which functions are assessed
           for inlining or about the order in which they are inlined.
@@ -247,3 +250,32 @@ Things to note in the above:
    the argument was an ``Complex`` type instance.
 4. That dead code elimination has not been performed and as a result there are
    superfluous statements present in the IR.
+
+Using a function to limit the inlining depth of a recursive function
+====================================================================
+
+When using recursive inlines, you can terminate the compilation by using
+a cost model.
+
+.. code:: python
+
+    from numba import njit
+    import numpy as np
+
+    class CostModel(object):
+        def __init__(self, max_inlines):
+            self._count = 0
+            self._max_inlines = max_inlines
+
+        def __call__(self, expr, caller, callee):
+            ret = self._count < self._max_inlines
+            self._count += 1
+            return ret
+
+    @njit(inline=CostModel(3))
+    def factorial(n):
+        if n <= 0:
+            return 1
+        return n * factorial(n - 1)
+
+    factorial(5)

@@ -10,7 +10,6 @@ import warnings
 from collections import namedtuple
 
 import llvmlite.binding as ll
-import llvmlite.llvmpy.core as lc
 from llvmlite import ir
 
 from numba.core.extending import (
@@ -18,8 +17,11 @@ from numba.core.extending import (
 from numba.core import errors
 from numba.core import types, utils
 from numba.core.unsafe.bytes import grab_byte, grab_uint64_t
+from numba.cpython.randomimpl import (const_int, get_next_int, get_next_int32,
+                                      get_state_ptr)
 
 _py38_or_later = utils.PYVERSION >= (3, 8)
+_py310_or_later = utils.PYVERSION >= (3, 10)
 
 # This is Py_hash_t, which is a Py_ssize_t, which has sizeof(size_t):
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyport.h#L91-L96    # noqa: E501
@@ -57,9 +59,13 @@ def process_return(val):
         asint = int(-2)
     return asint
 
+
 # This is a translation of CPython's _Py_HashDouble:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L34-L129   # noqa: E501
-
+# NOTE: In Python 3.10 hash of nan is now hash of the pointer to the PyObject
+# containing said nan. Numba cannot replicate this as there is no object, so it
+# elects to replicate the behaviour i.e. hash of nan is something "unique" which
+# satisfies https://bugs.python.org/issue43475.
 
 @register_jitable(locals={'x': _Py_uhash_t,
                           'y': _Py_uhash_t,
@@ -76,7 +82,15 @@ def _Py_HashDouble(v):
             else:
                 return -_PyHASH_INF
         else:
-            return _PyHASH_NAN
+            # Python 3.10 does not use `_PyHASH_NAN`.
+            # https://github.com/python/cpython/blob/2c4792264f9218692a1bd87398a60591f756b171/Python/pyhash.c#L102   # noqa: E501
+            # Numba returns a pseudo-random number to reflect the spirit of the
+            # change.
+            if _py310_or_later:
+                x = _prng_random_hash()
+                return process_return(x)
+            else:
+                return _PyHASH_NAN
 
     m, e = math.frexp(v)
 
@@ -113,9 +127,35 @@ def _Py_HashDouble(v):
 def _fpext(tyctx, val):
     def impl(cgctx, builder, signature, args):
         val = args[0]
-        return builder.fpext(val, lc.Type.double())
+        return builder.fpext(val, ir.DoubleType())
     sig = types.float64(types.float32)
     return sig, impl
+
+
+@intrinsic
+def _prng_random_hash(tyctx):
+
+    def impl(cgctx, builder, signature, args):
+        state_ptr = get_state_ptr(cgctx, builder, "internal")
+        bits = const_int(_hash_width)
+
+        # Why not just use get_next_int() with the correct bitwidth?
+        # get_next_int() always returns an i64, because the bitwidth it is
+        # passed may not be a compile-time constant, so it needs to allocate
+        # the largest unit of storage that may be required. Therefore, if the
+        # hash width is 32, then we need to use get_next_int32() to ensure we
+        # don't return a wider-than-expected hash, even if everything above
+        # the low 32 bits would have been zero.
+        if _hash_width == 32:
+            value = get_next_int32(cgctx, builder, state_ptr)
+        else:
+            value = get_next_int(cgctx, builder, state_ptr, bits, False)
+
+        return value
+
+    sig = _Py_hash_t()
+    return sig, impl
+
 
 # This is a translation of CPython's long_hash, but restricted to the numerical
 # domain reachable by int64/uint64 (i.e. no BigInt like support):
@@ -131,8 +171,7 @@ def _fpext(tyctx, val):
                           'p4': _Py_uhash_t,
                           '_PyHASH_MODULUS': _Py_uhash_t,
                           '_PyHASH_BITS': types.int32,
-                          '_PyLong_SHIFT': types.int32,
-                          'x.1': _Py_uhash_t})
+                          '_PyLong_SHIFT': types.int32,})
 def _long_impl(val):
     # This function assumes val came from a long int repr with val being a
     # uint64_t this means having to split the input into PyLong_SHIFT size
@@ -167,11 +206,16 @@ def _long_impl(val):
 def int_hash(val):
 
     _HASH_I64_MIN = -2 if sys.maxsize <= 2 ** 32 else -4
+    _SIGNED_MIN = types.int64(-0x8000000000000000)
+
+    # Find a suitable type to hold a "big" value, i.e. iinfo(ty).min/max
+    # this is to ensure e.g. int32.min is handled ok as it's abs() is its value
+    _BIG = types.int64 if getattr(val, 'signed', False) else types.uint64
 
     # this is a bit involved due to the CPython repr of ints
     def impl(val):
-        # If the magnitude is under PyHASH_MODULUS, if so just return the
-        # value itval as the has, couple of special cases if val == val:
+        # If the magnitude is under PyHASH_MODULUS, just return the
+        # value val as the hash, couple of special cases if val == val:
         # 1. it's 0, in which case return 0
         # 2. it's signed int minimum value, return the value CPython computes
         # but Numba cannot as there's no type wide enough to hold the shifts.
@@ -179,13 +223,13 @@ def int_hash(val):
         # If the magnitude is greater than PyHASH_MODULUS then... if the value
         # is negative then negate it switch the sign on the hash once computed
         # and use the standard wide unsigned hash implementation
+        val = _BIG(val)
         mag = abs(val)
         if mag < _PyHASH_MODULUS:
-            if val == -val:
-                if val == 0:
-                    ret = 0
-                else:  # int64 min, -0x8000000000000000
-                    ret = _Py_hash_t(_HASH_I64_MIN)
+            if val == 0:
+                ret = 0
+            elif val == _SIGNED_MIN:  # e.g. int64 min, -0x8000000000000000
+                ret = _Py_hash_t(_HASH_I64_MIN)
             else:
                 ret = _Py_hash_t(val)
         else:
@@ -247,6 +291,7 @@ if _py38_or_later:
         _PyHASH_XXPRIME_1 = _Py_uhash_t(11400714785074694791)
         _PyHASH_XXPRIME_2 = _Py_uhash_t(14029467366897019727)
         _PyHASH_XXPRIME_5 = _Py_uhash_t(2870177450012600261)
+
         @register_jitable(locals={'x': types.uint64})
         def _PyHASH_XXROTATE(x):
             # Rotate left 31 bits
@@ -255,10 +300,11 @@ if _py38_or_later:
         _PyHASH_XXPRIME_1 = _Py_uhash_t(2654435761)
         _PyHASH_XXPRIME_2 = _Py_uhash_t(2246822519)
         _PyHASH_XXPRIME_5 = _Py_uhash_t(374761393)
+
         @register_jitable(locals={'x': types.uint64})
         def _PyHASH_XXROTATE(x):
             # Rotate left 13 bits
-            return ((x << types.uint64(13)) | (x >> types.uint64(16)))
+            return ((x << types.uint64(13)) | (x >> types.uint64(19)))
 
     # Python 3.7+ has literal_unroll, this means any homogeneous and
     # heterogeneous tuples can use the same alg and just be unrolled.

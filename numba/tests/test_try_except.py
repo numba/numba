@@ -1,16 +1,18 @@
 import warnings
+import dis
 from itertools import product
 
 import numpy as np
 
 from numba import njit, typed, objmode, prange
+from numba.core.utils import PYVERSION
+from numba.core import ir_utils, ir
 from numba.core.errors import (
     UnsupportedError, CompilerError, NumbaPerformanceWarning, TypingError,
 )
 from numba.tests.support import (
-    TestCase, unittest, captured_stdout, skip_tryexcept_unsupported,
-    skip_tryexcept_supported, MemoryLeakMixin, skip_parfors_unsupported,
-    skip_unless_scipy,
+    TestCase, unittest, captured_stdout, MemoryLeakMixin,
+    skip_parfors_unsupported, skip_unless_scipy,
 )
 
 
@@ -18,7 +20,6 @@ class MyError(Exception):
     pass
 
 
-@skip_tryexcept_unsupported
 class TestTryBareExcept(TestCase):
     """Test the following pattern:
 
@@ -378,7 +379,6 @@ class TestTryBareExcept(TestCase):
         )
 
 
-@skip_tryexcept_unsupported
 class TestTryExceptCaught(TestCase):
     def test_catch_exception(self):
         @njit
@@ -514,7 +514,6 @@ class TestTryExceptCaught(TestCase):
         self.assertEqual(udt(2), 0.5)
 
 
-@skip_tryexcept_unsupported
 class TestTryExceptNested(TestCase):
     "Tests for complicated nesting"
 
@@ -608,38 +607,6 @@ class TestTryExceptNested(TestCase):
             )
 
 
-@skip_tryexcept_supported
-class TestTryExceptUnsupported(TestCase):
-
-    msg_pattern = "'try' block not supported until python3.7 or later"
-
-    def check(self, call, *args):
-        with self.assertRaises(UnsupportedError) as raises:
-            call(*args)
-        self.assertIn(self.msg_pattern, str(raises.exception))
-
-    def test_try_except(self):
-        @njit
-        def foo(x):
-            try:
-                if x:
-                    raise MyError
-            except:   # noqa: E722
-                pass
-        self.check(foo, True)
-
-    def test_try_finally(self):
-        @njit
-        def foo(x):
-            try:
-                if x:
-                    raise MyError
-            finally:
-                pass
-        self.check(foo, True)
-
-
-@skip_tryexcept_unsupported
 class TestTryExceptRefct(MemoryLeakMixin, TestCase):
     def test_list_direct_raise(self):
         @njit
@@ -707,7 +674,6 @@ class TestTryExceptRefct(MemoryLeakMixin, TestCase):
         )
 
 
-@skip_tryexcept_unsupported
 class TestTryExceptOtherControlFlow(TestCase):
     def test_yield(self):
         @njit
@@ -734,8 +700,14 @@ class TestTryExceptOtherControlFlow(TestCase):
 
         with self.assertRaises(CompilerError) as raises:
             udt()
+        if PYVERSION <= (3,7):
+            msg = ("unsupported control flow: due to return statements inside "
+                   "with block")
+        else:
+            msg = ("unsupported control flow: with-context contains branches "
+                   "(i.e. break/return/raise) that can leave the block ")
         self.assertIn(
-            "Does not support with-context that contain branches",
+            msg,
             str(raises.exception),
         )
 
@@ -757,13 +729,47 @@ class TestTryExceptOtherControlFlow(TestCase):
 
         with self.assertRaises(CompilerError) as raises:
             test_objmode()
+        if PYVERSION == (3,7):
+            msg = ("unsupported control flow: due to return statements inside "
+                   "with block")
+        else:
+            msg = ("unsupported control flow: with-context contains branches "
+                   "(i.e. break/return/raise) that can leave the block ")
         self.assertIn(
-            "Does not support with-context that contain branches",
+            msg,
             str(raises.exception),
         )
 
+    @unittest.skipIf(PYVERSION < (3, 9), "Python 3.9+ only")
+    def test_reraise_opcode_unreachable(self):
+        # The opcode RERAISE was added in python 3.9, there should be no
+        # supported way to actually reach it. This test just checks that an
+        # exception is present to deal with if it is reached in a case known
+        # to produce this opcode.
+        def pyfunc():
+            try:
+                raise Exception
+            except Exception:
+                raise ValueError("ERROR")
+        for inst in dis.get_instructions(pyfunc):
+            if inst.opname == 'RERAISE':
+                break
+        else:
+            self.fail("expected RERAISE opcode not found")
+        func_ir = ir_utils.get_ir_of_code({}, pyfunc.__code__)
+        found = False
+        for lbl, blk in func_ir.blocks.items():
+            for stmt in blk.find_insts(ir.StaticRaise):
+                # don't worry about guarding this strongly, if the exec_args[0]
+                # is a string it'll either be "ERROR" or the guard message
+                # saying unreachable has been reached
+                msg = "Unreachable condition reached (op code RERAISE executed)"
+                if stmt.exc_args and msg in stmt.exc_args[0]:
+                    found = True
+        if not found:
+            self.fail("expected RERAISE unreachable message not found")
 
-@skip_tryexcept_unsupported
+
 @skip_parfors_unsupported
 class TestTryExceptParfors(TestCase):
 

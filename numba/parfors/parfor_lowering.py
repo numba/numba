@@ -1,27 +1,42 @@
-import ast
 import copy
-from collections import OrderedDict
-import linecache
-import os
-import sys
 import operator
 
-import numpy as np
 import types as pytypes
 import operator
 import warnings
+from dataclasses import make_dataclass
 
-import llvmlite.llvmpy.core as lc
-import llvmlite.ir.values as liv
+import llvmlite.ir
+import numpy as np
 
 import numba
 from numba.parfors import parfor
-from numba.core import types, ir, config, compiler, lowering, sigutils, cgutils
-from numba.core.ir_utils import add_offset_to_labels, replace_var_names, remove_dels, legalize_names, mk_unique_var, rename_labels, get_name_var_table, visit_vars_inner, get_definition, guard, find_callname, get_call_table, is_pure, get_np_ufunc_typ, get_unused_var_name, find_potential_aliases, is_const_call
-from numba.core.analysis import compute_use_defs, compute_live_map, compute_dead_maps, compute_cfg_from_blocks
+from numba.core import types, ir, config, compiler, sigutils, cgutils
+from numba.core.ir_utils import (
+    add_offset_to_labels,
+    replace_var_names,
+    remove_dels,
+    legalize_names,
+    mk_unique_var,
+    rename_labels,
+    get_name_var_table,
+    visit_vars_inner,
+    get_definition,
+    guard,
+    get_call_table,
+    is_pure,
+    get_np_ufunc_typ,
+    get_unused_var_name,
+    is_const_call,
+    fixup_var_define_in_scope,
+    transfer_scope,
+    find_max_label,
+)
 from numba.core.typing import signature
-from numba.parfors.parfor import print_wrapped, ensure_parallel_support
-from numba.core.errors import NumbaParallelSafetyWarning
+from numba.parfors.parfor import ensure_parallel_support
+from numba.core.errors import (
+    NumbaParallelSafetyWarning, NotDefinedError, CompilerError, InternalError,
+)
 from numba.parfors.parfor_lowering_utils import ParforLoweringBuilder
 
 
@@ -48,6 +63,8 @@ def _lower_parfor_parallel(lowerer, parfor):
     orig_typemap = lowerer.fndesc.typemap
     # replace original typemap with copy and restore the original at the end.
     lowerer.fndesc.typemap = copy.copy(orig_typemap)
+    if config.DEBUG_ARRAY_OPT:
+        print("lowerer.fndesc", lowerer.fndesc, type(lowerer.fndesc))
     typemap = lowerer.fndesc.typemap
     varmap = lowerer.varmap
 
@@ -88,6 +105,9 @@ def _lower_parfor_parallel(lowerer, parfor):
         parfor, parfor.params)
     parfor_redvars, parfor_reddict = numba.parfors.parfor.get_parfor_reductions(
         lowerer.func_ir, parfor, parfor.params, lowerer.fndesc.calltypes)
+    if config.DEBUG_ARRAY_OPT:
+        print("parfor_redvars:", parfor_redvars)
+        print("parfor_reddict:", parfor_reddict)
 
     # init reduction array allocation here.
     nredvars = len(parfor_redvars)
@@ -123,8 +143,8 @@ def _lower_parfor_parallel(lowerer, parfor):
                 ftype=get_np_ufunc_typ(np.empty),
                 args=(
                     types.UniTuple(types.intp, redarrdim),
-                    types.DType(reddtype),
                 ),
+                kws={'dtype': types.DType(reddtype)}
             )
 
             # Create var for outer dimension size of reduction array equal to number of threads.
@@ -133,7 +153,6 @@ def _lower_parfor_parallel(lowerer, parfor):
                 typ=types.intp,
                 name='num_threads',
             )
-
 
             size_var_list = [num_threads_var]
 
@@ -160,8 +179,11 @@ def _lower_parfor_parallel(lowerer, parfor):
                 size_var_list, name='tuple_size_var',
             )
 
+            # Resolve dtype
+            cval = pfbdr._typingctx.resolve_value_type(reddtype)
+            dt = pfbdr.make_const_variable(cval=cval, typ=types.DType(reddtype))
             # Add call to empty passing the size var tuple.
-            empty_call = pfbdr.call(glbl_np_empty, args=[size_var])
+            empty_call = pfbdr.call(glbl_np_empty, args=[size_var, dt])
 
             redarr_var = pfbdr.assign(
                 rhs=empty_call, typ=redarrvar_typ, name="redarr",
@@ -170,7 +192,7 @@ def _lower_parfor_parallel(lowerer, parfor):
             # Remember mapping of original reduction array to the newly created per-worker reduction array.
             redarrs[redvar.name] = redarr_var
 
-            init_val = parfor_reddict[parfor_redvars[i]][0]
+            init_val = parfor_reddict[parfor_redvars[i]].init_val
             if init_val is not None:
                 if isinstance(redvar_typ, types.npytypes.Array):
                     # Create an array of identity values for the reduction.
@@ -181,8 +203,8 @@ def _lower_parfor_parallel(lowerer, parfor):
                         args=(
                             types.UniTuple(types.intp, redvar_typ.ndim),
                             reddtype,
-                            types.DType(reddtype),
                         ),
+                        kws={'dtype': types.DType(reddtype)},
                     )
 
                     # Then create a var with the identify value.
@@ -194,7 +216,7 @@ def _lower_parfor_parallel(lowerer, parfor):
 
                     # Then, call np.full with the shape of the reduction array and the identity value.
                     full_call = pfbdr.call(
-                        full_func_node, args=[redshape_var, init_val_var],
+                        full_func_node, args=[redshape_var, init_val_var, dt],
                     )
 
                     redtoset = pfbdr.assign(
@@ -211,6 +233,25 @@ def _lower_parfor_parallel(lowerer, parfor):
             else:
                 redtoset = redvar
 
+                if config.DEBUG_ARRAY_OPT_RUNTIME:
+                    res_print_str = "res_print1 for redvar " + str(redvar) + ":"
+                    strconsttyp = types.StringLiteral(res_print_str)
+
+                    lhs = pfbdr.make_const_variable(
+                        cval=res_print_str,
+                        typ=strconsttyp,
+                        name="str_const",
+                    )
+
+                    res_print = ir.Print(args=[lhs, redvar],
+                                         vararg=None, loc=loc)
+                    lowerer.fndesc.calltypes[res_print] = signature(types.none,
+                                                             typemap[lhs.name],
+                                                             typemap[redvar.name])
+                    print("res_print_redvar", res_print)
+                    lowerer.lower_inst(res_print)
+
+
             # For each thread, initialize the per-worker reduction array to the current reduction array value.
             for j in range(thread_count):
                 index_var = pfbdr.make_const_variable(
@@ -219,16 +260,21 @@ def _lower_parfor_parallel(lowerer, parfor):
                 pfbdr.setitem(obj=redarr_var, index=index_var, val=redtoset)
 
     # compile parfor body as a separate function to be used with GUFuncWrapper
-    flags = copy.copy(parfor.flags)
-    flags.set('error_model', 'numpy')
-    # Can't get here unless  flags.set('auto_parallel', ParallelOptions(True))
+    flags = parfor.flags.copy()
+    flags.error_model = "numpy"
+    # Can't get here unless  flags.auto_parallel == ParallelOptions(True)
     index_var_typ = typemap[parfor.loop_nests[0].index_variable.name]
     # index variables should have the same type, check rest of indices
     for l in parfor.loop_nests[1:]:
         assert typemap[l.index_variable.name] == index_var_typ
     numba.parfors.parfor.sequential_parfor_lowering = True
     try:
-        func, func_args, func_sig, redargstartdim, func_arg_types = _create_gufunc_for_parfor_body(
+        (func,
+         func_args,
+         func_sig,
+         redargstartdim,
+         func_arg_types,
+         exp_name_to_tuple_var) = _create_gufunc_for_parfor_body(
             lowerer, parfor, typemap, typingctx, targetctx, flags, {},
             bool(alias_map), index_var_typ, parfor.races)
     finally:
@@ -274,147 +320,16 @@ def _lower_parfor_parallel(lowerer, parfor):
         redarrs,
         parfor.init_block,
         index_var_typ,
-        parfor.races)
-    if config.DEBUG_ARRAY_OPT:
-        sys.stdout.flush()
+        parfor.races,
+        exp_name_to_tuple_var)
 
-    if nredvars > 0:
-        # Perform the final reduction across the reduction array created above.
-        thread_count = get_thread_count()
-        scope = parfor.init_block.scope
-        loc = parfor.init_block.loc
+    _parfor_lowering_finalize_reduction(
+        parfor, redarrs, lowerer, parfor_reddict,
+    )
 
-        # For each reduction variable...
-        for i in range(nredvars):
-            name = parfor_redvars[i]
-            redarr = redarrs[name]
-            redvar_typ = lowerer.fndesc.typemap[name]
-            if config.DEBUG_ARRAY_OPT:
-                print("post-gufunc reduction:", name, redarr, redvar_typ)
-
-            if config.DEBUG_ARRAY_OPT_RUNTIME:
-                res_print_str = "res_print"
-                strconsttyp = types.StringLiteral(res_print_str)
-
-                lhs = pfbldr.make_const_variable(
-                    cval=res_print_str,
-                    typ=strconsttyp,
-                    name="str_const",
-                )
-                res_print = ir.Print(args=[lhs, redarr], vararg=None, loc=loc)
-                lowerer.fndesc.calltypes[res_print] = signature(types.none,
-                                                         typemap[lhs.name],
-                                                         typemap[redarr.name])
-                print("res_print", res_print)
-                lowerer.lower_inst(res_print)
-
-            # For each element in the reduction array created above.
-            for j in range(thread_count):
-                # Create index var to access that element.
-                index_var = pfbdr.make_const_variable(
-                    cval=j, typ=types.uintp, name="index_var",
-                )
-
-                # Read that element from the array into oneelem.
-                oneelemgetitem = pfbdr.getitem(
-                    obj=redarr, index=index_var, typ=redvar_typ,
-                )
-                oneelem = pfbdr.assign(
-                    rhs=oneelemgetitem,
-                    typ=redvar_typ,
-                    name="redelem",
-                )
-
-                init_var = pfbdr.assign_inplace(
-                    rhs=oneelem, typ=redvar_typ, name=name + "#init",
-                )
-
-                if config.DEBUG_ARRAY_OPT_RUNTIME:
-                    res_print_str = "res_print1 for thread " + str(j) + ":"
-                    strconsttyp = types.StringLiteral(res_print_str)
-
-                    lhs = pfbdr.make_const_variable(
-                        cval=res_print_str,
-                        typ=strconsttyp,
-                        name="str_const",
-                    )
-
-                    res_print = ir.Print(args=[lhs, index_var, oneelem, init_var, ir.Var(scope, name, loc)],
-                                         vararg=None, loc=loc)
-                    lowerer.fndesc.calltypes[res_print] = signature(types.none,
-                                                             typemap[lhs.name],
-                                                             typemap[index_var.name],
-                                                             typemap[oneelem.name],
-                                                             typemap[init_var.name],
-                                                             typemap[name])
-                    print("res_print1", res_print)
-                    lowerer.lower_inst(res_print)
-
-                # generate code for combining reduction variable with thread output
-                for inst in parfor_reddict[name][1]:
-                    # If we have a case where a parfor body has an array reduction like A += B
-                    # and A and B have different data types then the reduction in the parallel
-                    # region will operate on those differeing types.  However, here, after the
-                    # parallel region, we are summing across the reduction array and that is
-                    # guaranteed to have the same data type so we need to change the reduction
-                    # nodes so that the right-hand sides have a type equal to the reduction-type
-                    # and therefore the left-hand side.
-                    if isinstance(inst, ir.Assign):
-                        rhs = inst.value
-                        # We probably need to generalize this since it only does substitutions in
-                        # inplace_binops.
-                        if (isinstance(rhs, ir.Expr) and rhs.op == 'inplace_binop' and
-                            rhs.rhs.name == init_var.name):
-                            if config.DEBUG_ARRAY_OPT:
-                                print("Adding call to reduction", rhs)
-                            if rhs.fn == operator.isub:
-                                rhs.fn = operator.iadd
-                                rhs.immutable_fn = operator.add
-                            if rhs.fn == operator.itruediv or rhs.fn == operator.ifloordiv:
-                                rhs.fn = operator.imul
-                                rhs.immutable_fn = operator.mul
-                            if config.DEBUG_ARRAY_OPT:
-                                print("After changing sub to add or div to mul", rhs)
-                            # Get calltype of rhs.
-                            ct = lowerer.fndesc.calltypes[rhs]
-                            assert(len(ct.args) == 2)
-                            # Create new arg types replace the second arg type with the reduction var type.
-                            ctargs = (ct.args[0], redvar_typ)
-                            # Update the signature of the call.
-                            ct = ct.replace(args=ctargs)
-                            # Remove so we can re-insert since calltypes is unique dict.
-                            lowerer.fndesc.calltypes.pop(rhs)
-                            # Add calltype back in for the expr with updated signature.
-                            lowerer.fndesc.calltypes[rhs] = ct
-                    lowerer.lower_inst(inst)
-                    if isinstance(inst, ir.Assign) and name == inst.target.name:
-                        break
-
-                    if config.DEBUG_ARRAY_OPT_RUNTIME:
-                        res_print_str = "res_print2 for thread " + str(j) + ":"
-                        strconsttyp = types.StringLiteral(res_print_str)
-
-                        lhs = pfbdr.make_const_variable(
-                            cval=res_print_str,
-                            typ=strconsttyp,
-                            name="str_const",
-                        )
-
-                        res_print = ir.Print(args=[lhs, index_var, oneelem, init_var, ir.Var(scope, name, loc)],
-                                             vararg=None, loc=loc)
-                        lowerer.fndesc.calltypes[res_print] = signature(types.none,
-                                                                 typemap[lhs.name],
-                                                                 typemap[index_var.name],
-                                                                 typemap[oneelem.name],
-                                                                 typemap[init_var.name],
-                                                                 typemap[name])
-                        print("res_print2", res_print)
-                        lowerer.lower_inst(res_print)
-
-
-        # Cleanup reduction variable
-        for v in redarrs.values():
-            lowerer.lower_inst(ir.Del(v.name, loc=loc))
+    # Cleanup reduction variable
+    for v in redarrs.values():
+        lowerer.lower_inst(ir.Del(v.name, loc=loc))
     # Restore the original typemap of the function that was replaced temporarily at the
     # Beginning of this function.
     lowerer.fndesc.typemap = orig_typemap
@@ -422,9 +337,263 @@ def _lower_parfor_parallel(lowerer, parfor):
     if config.DEBUG_ARRAY_OPT:
         print("_lower_parfor_parallel done")
 
-# A work-around to prevent circular imports
-lowering.lower_extensions[parfor.Parfor] = _lower_parfor_parallel
 
+_ReductionInfo = make_dataclass(
+    "_ReductionInfo",
+    [
+        "redvar_info",
+        "redvar_name",
+        "redvar_typ",
+        "redarr_var",
+        "redarr_typ",
+        "init_val",
+    ],
+    frozen=True,
+)
+
+
+def _parfor_lowering_finalize_reduction(
+        parfor,
+        redarrs,
+        lowerer,
+        parfor_reddict,
+    ):
+    """Emit code to finalize the reduction from the intermediate values of
+    each thread.
+    """
+    from numba.np.ufunc.parallel import get_thread_count
+    thread_count = get_thread_count()
+
+    # For each reduction variable
+    for redvar_name, redarr_var in redarrs.items():
+        # Pseudo-code for this loop body:
+        #     tmp = redarr[0]
+        #     for i in range(1, thread_count):
+        #         tmp = reduce_op(redarr[i], tmp)
+        #     reduction_result = tmp
+        redvar_typ = lowerer.fndesc.typemap[redvar_name]
+        redarr_typ = lowerer.fndesc.typemap[redarr_var.name]
+        init_val = lowerer.loadvar(redvar_name)
+
+        reduce_info = _ReductionInfo(
+            redvar_info = parfor_reddict[redvar_name],
+            redvar_name=redvar_name,
+            redvar_typ=redvar_typ,
+            redarr_var=redarr_var,
+            redarr_typ=redarr_typ,
+            init_val=init_val,
+        )
+        # generate code for combining reduction variable with thread output
+        handler = (_lower_trivial_inplace_binops
+                   if reduce_info.redvar_info.redop is not None
+                   else _lower_non_trivial_reduce)
+        handler(parfor, lowerer, thread_count, reduce_info)
+
+
+class ParforsUnexpectedReduceNodeError(InternalError):
+    def __init__(self, inst):
+        super().__init__(f"Unknown reduce instruction node: {inst}")
+
+
+def _lower_trivial_inplace_binops(parfor, lowerer, thread_count, reduce_info):
+    """Lower trivial inplace-binop reduction.
+    """
+    for inst in reduce_info.redvar_info.reduce_nodes:
+        # Var assigns to Var?
+        if _lower_var_to_var_assign(lowerer, inst):
+            pass
+        # Is inplace-binop for the reduction?
+        elif _is_inplace_binop_and_rhs_is_init(inst, reduce_info.redvar_name):
+            fn = inst.value.fn
+            redvar_result = _emit_binop_reduce_call(
+                fn, lowerer, thread_count, reduce_info,
+            )
+            lowerer.storevar(redvar_result, name=inst.target.name)
+        # Otherwise?
+        else:
+            raise ParforsUnexpectedReduceNodeError(inst)
+
+        # XXX: This seems like a hack to stop the loop with this condition.
+        if _fix_redvar_name_ssa_mismatch(parfor, lowerer, inst,
+                                   reduce_info.redvar_name):
+            break
+    if config.DEBUG_ARRAY_OPT_RUNTIME:
+        varname = reduce_info.redvar_name
+        lowerer.print_variable(
+            f"{parfor.loc}: parfor {fn.__name__} reduction {varname} =",
+            varname,
+        )
+
+
+def _lower_non_trivial_reduce(parfor, lowerer, thread_count, reduce_info):
+    """Lower non-trivial reduction such as call to `functools.reduce()`.
+    """
+    ctx = lowerer.context
+    init_name = f"{reduce_info.redvar_name}#init"
+    # The init_name variable is not defined at this point.
+    lowerer.fndesc.typemap.setdefault(init_name, reduce_info.redvar_typ)
+    # Emit a sequence of the reduction operation for each intermediate result
+    # of each thread.
+    for tid in range(thread_count):
+        for inst in reduce_info.redvar_info.reduce_nodes:
+            # Var assigns to Var?
+            if _lower_var_to_var_assign(lowerer, inst):
+                pass
+            # The reduction operation?
+            elif (isinstance(inst, ir.Assign)
+                    and any(var.name == init_name for var in inst.list_vars())):
+                elem = _emit_getitem_call(
+                    ctx.get_constant(types.intp, tid), lowerer, reduce_info,
+                )
+                lowerer.storevar(elem, init_name)
+                lowerer.lower_inst(inst)
+
+            # Otherwise?
+            else:
+                raise ParforsUnexpectedReduceNodeError(inst)
+
+            # XXX: This seems like a hack to stop the loop with this condition.
+            if _fix_redvar_name_ssa_mismatch(parfor, lowerer, inst,
+                                       reduce_info.redvar_name):
+                break
+
+    if config.DEBUG_ARRAY_OPT_RUNTIME:
+        varname = reduce_info.redvar_name
+        lowerer.print_variable(
+            f"{parfor.loc}: parfor non-trivial reduction {varname} =",
+            varname,
+        )
+
+def _lower_var_to_var_assign(lowerer, inst):
+    """Lower Var->Var assignment.
+
+    Returns True if-and-only-if `inst` is a Var->Var assignment.
+    """
+    if isinstance(inst, ir.Assign) and isinstance(inst.value, ir.Var):
+        loaded = lowerer.loadvar(inst.value.name)
+        lowerer.storevar(loaded, name=inst.target.name)
+        return True
+    return False
+
+def _emit_getitem_call(idx, lowerer, reduce_info):
+    """Emit call to ``redarr_var[idx]``
+    """
+    def reducer_getitem(redarr, index):
+        return redarr[index]
+
+    builder = lowerer.builder
+    ctx = lowerer.context
+    redarr_typ = reduce_info.redarr_typ
+    arg_arr = lowerer.loadvar(reduce_info.redarr_var.name)
+    args = (arg_arr, idx)
+    sig = signature(reduce_info.redvar_typ, redarr_typ, types.intp)
+    elem = ctx.compile_internal(builder, reducer_getitem, sig, args)
+    return elem
+
+
+def _emit_binop_reduce_call(binop, lowerer, thread_count, reduce_info):
+    """Emit call to the ``binop`` for the reduction variable.
+    """
+
+    def reduction_add(thread_count, redarr, init):
+        c = init
+        for i in range(thread_count):
+            c += redarr[i]
+        return c
+
+    def reduction_mul(thread_count, redarr, init):
+        c = init
+        for i in range(thread_count):
+            c *= redarr[i]
+        return c
+
+    kernel = {
+        operator.iadd: reduction_add,
+        operator.isub: reduction_add,
+        operator.imul: reduction_mul,
+        operator.ifloordiv: reduction_mul,
+        operator.itruediv: reduction_mul,
+    }[binop]
+
+    ctx = lowerer.context
+    builder = lowerer.builder
+    redarr_typ = reduce_info.redarr_typ
+    arg_arr = lowerer.loadvar(reduce_info.redarr_var.name)
+
+    if config.DEBUG_ARRAY_OPT_RUNTIME:
+        init_var = reduce_info.redarr_var.scope.get(reduce_info.redvar_name)
+        res_print = ir.Print(
+            args=[reduce_info.redarr_var, init_var], vararg=None,
+            loc=lowerer.loc,
+        )
+        typemap = lowerer.fndesc.typemap
+        lowerer.fndesc.calltypes[res_print] = signature(
+            types.none, typemap[reduce_info.redarr_var.name],
+            typemap[init_var.name],
+        )
+        lowerer.lower_inst(res_print)
+
+    arg_thread_count = ctx.get_constant_generic(
+        builder, types.uintp, thread_count,
+    )
+    args = (arg_thread_count, arg_arr, reduce_info.init_val)
+    sig = signature(
+        reduce_info.redvar_typ, types.uintp, redarr_typ, reduce_info.redvar_typ,
+    )
+
+    redvar_result = ctx.compile_internal(builder, kernel, sig, args)
+    return redvar_result
+
+
+def _is_inplace_binop_and_rhs_is_init(inst, redvar_name):
+    """Is ``inst`` an inplace-binop and the RHS is the reduction init?
+    """
+    if not isinstance(inst, ir.Assign):
+        return False
+    rhs = inst.value
+    if not isinstance(rhs, ir.Expr):
+        return False
+    if rhs.op != "inplace_binop":
+        return False
+    if rhs.rhs.name != f"{redvar_name}#init":
+        return False
+    return True
+
+
+def _fix_redvar_name_ssa_mismatch(parfor, lowerer, inst, redvar_name):
+    """Fix reduction variable name mismatch due to SSA.
+    """
+    # Only process reduction statements post-gufunc execution
+    # until we see an assignment with a left-hand side to the
+    # reduction variable's name.  This fixes problems with
+    # cases where there are multiple assignments to the
+    # reduction variable in the parfor.
+    scope = parfor.init_block.scope
+    if isinstance(inst, ir.Assign):
+        try:
+            reduction_var = scope.get_exact(redvar_name)
+        except NotDefinedError:
+            # Ideally, this shouldn't happen. The redvar name
+            # missing from scope indicates an error from
+            # other rewrite passes.
+            is_same_source_var = redvar_name == inst.target.name
+        else:
+            # Because of SSA, the redvar and target var of
+            # the current assignment would be different even
+            # though they refer to the same source-level var.
+            redvar_unver_name = reduction_var.unversioned_name
+            target_unver_name = inst.target.unversioned_name
+            is_same_source_var = redvar_unver_name == target_unver_name
+
+        if is_same_source_var:
+            # If redvar is different from target var, add an
+            # assignment to put target var into redvar.
+            if redvar_name != inst.target.name:
+                val = lowerer.loadvar(inst.target.name)
+                lowerer.storevar(val, name=redvar_name)
+                return True
+
+    return False
 
 def _create_shape_signature(
         get_shape_classes,
@@ -620,7 +789,7 @@ def compute_def_once(loop_body, typemap):
     getattr_taken = {}
     module_assigns = {}
     compute_def_once_internal(loop_body, def_once, def_more, getattr_taken, typemap, module_assigns)
-    return def_once
+    return def_once, def_more
 
 def find_vars(var, varset):
     assert isinstance(var, ir.Var)
@@ -660,7 +829,7 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
 
 def find_setitems_block(setitems, itemsset, block, typemap):
     for inst in block.body:
-        if isinstance(inst, ir.StaticSetItem) or isinstance(inst, ir.SetItem):
+        if isinstance(inst, (ir.StaticSetItem, ir.SetItem)):
             setitems.add(inst.target.name)
             # If we store a non-mutable object into an array then that is safe to hoist.
             # If the stored object is mutable and you hoist then multiple entries in the
@@ -681,13 +850,25 @@ def find_setitems_body(setitems, itemsset, loop_body, typemap):
     for label, block in loop_body.items():
         find_setitems_block(setitems, itemsset, block, typemap)
 
+def empty_container_allocator_hoist(inst, dep_on_param, call_table, hoisted,
+                                    not_hoisted, typemap, stored_arrays):
+    if (isinstance(inst, ir.Assign) and
+        isinstance(inst.value, ir.Expr) and
+        inst.value.op == 'call' and
+        inst.value.func.name in call_table):
+        call_list = call_table[inst.value.func.name]
+        if call_list == ['empty', np]:
+            return _hoist_internal(inst, dep_on_param, call_table, hoisted,
+                                   not_hoisted, typemap, stored_arrays)
+    return False
+
 def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     dep_on_param = copy.copy(parfor_params)
     hoisted = []
     not_hoisted = []
 
     # Compute the set of variable defined exactly once in the loop body.
-    def_once = compute_def_once(loop_body, typemap)
+    def_once, def_more = compute_def_once(loop_body, typemap)
     (call_table, reverse_call_table) = get_call_table(wrapped_blocks)
 
     setitems = set()
@@ -696,11 +877,16 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     dep_on_param = list(set(dep_on_param).difference(setitems))
     if config.DEBUG_ARRAY_OPT >= 1:
         print("hoist - def_once:", def_once, "setitems:", setitems, "itemsset:", itemsset, "dep_on_param:", dep_on_param, "parfor_params:", parfor_params)
+    for si in setitems:
+        add_to_def_once_sets(si, def_once, def_more)
 
     for label, block in loop_body.items():
         new_block = []
         for inst in block.body:
-            if isinstance(inst, ir.Assign) and inst.target.name in def_once:
+            if empty_container_allocator_hoist(inst, dep_on_param, call_table,
+                                   hoisted, not_hoisted, typemap, itemsset):
+                continue
+            elif isinstance(inst, ir.Assign) and inst.target.name in def_once:
                 if _hoist_internal(inst, dep_on_param, call_table,
                                    hoisted, not_hoisted, typemap, itemsset):
                     # don't add this instruction to the block since it is
@@ -712,11 +898,14 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
                     print("parfor")
                     inst.dump()
                 for ib_inst in inst.init_block.body:
-                    if (isinstance(ib_inst, ir.Assign) and
+                    if empty_container_allocator_hoist(ib_inst, dep_on_param,
+                        call_table, hoisted, not_hoisted, typemap, itemsset):
+                        continue
+                    elif (isinstance(ib_inst, ir.Assign) and
                         ib_inst.target.name in def_once):
                         if _hoist_internal(ib_inst, dep_on_param, call_table,
                                            hoisted, not_hoisted, typemap, itemsset):
-                            # don't add this instuction to the block since it is hoisted
+                            # don't add this instruction to the block since it is hoisted
                             continue
                     new_init_block.append(ib_inst)
                 inst.init_block.body = new_init_block
@@ -792,7 +981,6 @@ def _create_gufunc_for_parfor_body(
     The IR is scanned for the sentinel assignment where that basic block is split and the IR
     for the parfor body inserted.
     '''
-
     if config.DEBUG_ARRAY_OPT >= 1:
         print("starting _create_gufunc_for_parfor_body")
 
@@ -829,6 +1017,66 @@ def _create_gufunc_for_parfor_body(
         print("parfor_inputs = ", parfor_inputs, " ", type(parfor_inputs))
         print("parfor_redvars = ", parfor_redvars, " ", type(parfor_redvars))
 
+    # -------------------------------------------------------------------------
+    # Convert tuples to individual parameters.
+    tuple_expanded_parfor_inputs = []
+    tuple_var_to_expanded_names = {}
+    expanded_name_to_tuple_var = {}
+    next_expanded_tuple_var = 0
+    parfor_tuple_params = []
+    # For each input to the parfor.
+    for pi in parfor_inputs:
+        # Get the type of the input.
+        pi_type = typemap[pi]
+        # If it is a UniTuple or Tuple we will do the conversion.
+        if isinstance(pi_type, types.UniTuple) or isinstance(pi_type, types.NamedUniTuple):
+            # Get the size and dtype of the tuple.
+            tuple_count = pi_type.count
+            tuple_dtype = pi_type.dtype
+            # Only do tuples up to config.PARFOR_MAX_TUPLE_SIZE length.
+            assert(tuple_count <= config.PARFOR_MAX_TUPLE_SIZE)
+            this_var_expansion = []
+            for i in range(tuple_count):
+                # Generate a new name for the individual part of the tuple var.
+                expanded_name = "expanded_tuple_var_" + str(next_expanded_tuple_var)
+                # Add that name to the new list of inputs to the gufunc.
+                tuple_expanded_parfor_inputs.append(expanded_name)
+                this_var_expansion.append(expanded_name)
+                # Remember a mapping from new param name to original tuple
+                # var and the index within the tuple.
+                expanded_name_to_tuple_var[expanded_name] = (pi, i)
+                next_expanded_tuple_var += 1
+                # Set the type of the new parameter.
+                typemap[expanded_name] = tuple_dtype
+            # Remember a mapping from the original tuple var to the
+            # individual parts.
+            tuple_var_to_expanded_names[pi] = this_var_expansion
+            parfor_tuple_params.append(pi)
+        elif isinstance(pi_type, types.Tuple) or isinstance(pi_type, types.NamedTuple):
+            # This is the same as above for UniTuple except that each part of
+            # the tuple can have a different type and we fetch that type with
+            # pi_type.types[offset].
+            tuple_count = pi_type.count
+            tuple_types = pi_type.types
+            # Only do tuples up to config.PARFOR_MAX_TUPLE_SIZE length.
+            assert(tuple_count <= config.PARFOR_MAX_TUPLE_SIZE)
+            this_var_expansion = []
+            for i in range(tuple_count):
+                expanded_name = "expanded_tuple_var_" + str(next_expanded_tuple_var)
+                tuple_expanded_parfor_inputs.append(expanded_name)
+                this_var_expansion.append(expanded_name)
+                expanded_name_to_tuple_var[expanded_name] = (pi, i)
+                next_expanded_tuple_var += 1
+                typemap[expanded_name] = tuple_types[i]
+            tuple_var_to_expanded_names[pi] = this_var_expansion
+            parfor_tuple_params.append(pi)
+        else:
+            tuple_expanded_parfor_inputs.append(pi)
+    parfor_inputs = tuple_expanded_parfor_inputs
+    if config.DEBUG_ARRAY_OPT >= 1:
+        print("parfor_inputs post tuple handling = ", parfor_inputs, " ", type(parfor_inputs))
+    # -------------------------------------------------------------------------
+
     races = races.difference(set(parfor_redvars))
     for race in races:
         msg = ("Variable %s used in parallel loop may be written "
@@ -863,7 +1111,7 @@ def _create_gufunc_for_parfor_body(
 
     # Some Var are not legal parameter names so create a dict of potentially illegal
     # param name to guaranteed legal name.
-    param_dict = legalize_names_with_typemap(parfor_params + parfor_redvars, typemap)
+    param_dict = legalize_names_with_typemap(parfor_params + parfor_redvars + parfor_tuple_params, typemap)
     if config.DEBUG_ARRAY_OPT >= 1:
         print(
             "param_dict = ",
@@ -937,6 +1185,71 @@ def _create_gufunc_for_parfor_body(
     gufunc_txt += "def " + gufunc_name + \
         "(sched, " + (", ".join(parfor_params)) + "):\n"
 
+    globls = {"np": np}
+
+    # First thing in the gufunc, we reconstruct tuples from their
+    # individual parts, e.g., orig_tup_name = (part1, part2,).
+    # The rest of the code of the function will use the original tuple name.
+    for tup_var, exp_names in tuple_var_to_expanded_names.items():
+        tup_type = typemap[tup_var]
+        gufunc_txt += "    " + param_dict[tup_var]
+        # Determine if the tuple is a named tuple.
+        if (isinstance(tup_type, types.NamedTuple) or
+            isinstance(tup_type, types.NamedUniTuple)):
+            named_tup = True
+        else:
+            named_tup = False
+
+        if named_tup:
+            # It is a named tuple so try to find the global that defines the
+            # named tuple.
+            func_def = guard(get_definition, lowerer.func_ir, tup_var)
+            named_tuple_def = None
+            if config.DEBUG_ARRAY_OPT:
+                print("func_def:", func_def, type(func_def))
+            if func_def is not None:
+                if (isinstance(func_def, ir.Expr) and
+                    func_def.op == 'call'):
+                    named_tuple_def = guard(get_definition, lowerer.func_ir, func_def.func)
+                    if config.DEBUG_ARRAY_OPT:
+                        print("named_tuple_def:", named_tuple_def, type(named_tuple_def))
+                elif isinstance(func_def, ir.Arg):
+                    named_tuple_def = typemap[func_def.name]
+                    if config.DEBUG_ARRAY_OPT:
+                        print("named_tuple_def:", named_tuple_def,
+                              type(named_tuple_def), named_tuple_def.name)
+            if named_tuple_def is not None:
+                if (isinstance(named_tuple_def, ir.Global) or
+                    isinstance(named_tuple_def, ir.FreeVar)):
+                    gval = named_tuple_def.value
+                    if config.DEBUG_ARRAY_OPT:
+                        print("gval:", gval, type(gval))
+                    globls[named_tuple_def.name] = gval
+                elif isinstance(named_tuple_def, types.containers.BaseNamedTuple):
+                    named_tuple_name = named_tuple_def.name.split('(')[0]
+                    if config.DEBUG_ARRAY_OPT:
+                        print("name:", named_tuple_name,
+                              named_tuple_def.instance_class,
+                              type(named_tuple_def.instance_class))
+                    globls[named_tuple_name] = named_tuple_def.instance_class
+            else:
+                if config.DEBUG_ARRAY_OPT:
+                    print("Didn't find definition of namedtuple for globls.")
+                raise CompilerError("Could not find definition of " + str(tup_var),
+                                     tup_var.loc)
+            gufunc_txt += " = " + tup_type.instance_class.__name__ + "("
+            for name, field_name in zip(exp_names, tup_type.fields):
+                gufunc_txt += field_name + "=" + param_dict[name] + ","
+        else:
+            # Just a regular tuple so use (part0, part1, ...)
+            gufunc_txt += " = (" + ", ".join([param_dict[x] for x in exp_names])
+            if len(exp_names) == 1:
+                # Add comma for tuples with singular values.  We can't unilaterally
+                # add a comma alway because (,) isn't valid.
+                gufunc_txt += ","
+
+        gufunc_txt += ")\n"
+
     for pindex in range(len(parfor_inputs)):
         if ascontig and isinstance(param_types[pindex], types.npytypes.Array):
             gufunc_txt += ("    " + parfor_params_orig[pindex]
@@ -1002,7 +1315,6 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_txt = ", type(gufunc_txt), "\n", gufunc_txt)
     # Force gufunc outline into existence.
-    globls = {"np": np}
     locls = {}
     exec(gufunc_txt, globls, locls)
     gufunc_func = locls[gufunc_name]
@@ -1011,7 +1323,6 @@ def _create_gufunc_for_parfor_body(
         print("gufunc_func = ", type(gufunc_func), "\n", gufunc_func)
     # Get the IR for the gufunc outline.
     gufunc_ir = compiler.run_frontend(gufunc_func)
-
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_ir dump ", type(gufunc_ir))
         gufunc_ir.dump()
@@ -1030,7 +1341,6 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_ir dump after renaming ")
         gufunc_ir.dump()
-
     gufunc_param_types = [types.npytypes.Array(
             index_var_typ, 1, "C")] + param_types
     if config.DEBUG_ARRAY_OPT:
@@ -1040,13 +1350,13 @@ def _create_gufunc_for_parfor_body(
             "\n",
             gufunc_param_types)
 
-    gufunc_stub_last_label = max(gufunc_ir.blocks.keys()) + 1
+    gufunc_stub_last_label = find_max_label(gufunc_ir.blocks) + 1
 
     # Add gufunc stub last label to each parfor.loop_body label to prevent
     # label conflicts.
     loop_body = add_offset_to_labels(loop_body, gufunc_stub_last_label)
     # new label for splitting sentinel block
-    new_label = max(loop_body.keys()) + 1
+    new_label = find_max_label(loop_body) + 1
 
     # If enabled, add a print statement after every assignment.
     if config.DEBUG_ARRAY_OPT_RUNTIME:
@@ -1076,7 +1386,7 @@ def _create_gufunc_for_parfor_body(
                     # Make print node
                     print_node = ir.Print(args=[lhs, inst.target], vararg=None, loc=loc)
                     new_block.append(print_node)
-                    sig = numba.typing.signature(types.none,
+                    sig = numba.core.typing.signature(types.none,
                                            typemap[lhs.name],
                                            typemap[inst.target.name])
                     lowerer.fndesc.calltypes[print_node] = sig
@@ -1126,7 +1436,7 @@ def _create_gufunc_for_parfor_body(
                 # Add all the parfor loop body blocks to the gufunc function's
                 # IR.
                 for (l, b) in loop_body.items():
-                    gufunc_ir.blocks[l] = b
+                    gufunc_ir.blocks[l] = transfer_scope(b, scope)
                 body_last_label = max(loop_body.keys())
                 gufunc_ir.blocks[new_label] = block
                 gufunc_ir.blocks[label] = prev_block
@@ -1157,6 +1467,8 @@ def _create_gufunc_for_parfor_body(
         if config.DEBUG_ARRAY_OPT:
             print("No aliases found so adding noalias flag.")
         flags.noalias = True
+
+    fixup_var_define_in_scope(gufunc_ir.blocks)
     kernel_func = compiler.compile_ir(
         typingctx,
         targetctx,
@@ -1172,7 +1484,7 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT:
         print("finished create_gufunc_for_parfor_body. kernel_sig = ", kernel_sig)
 
-    return kernel_func, parfor_args, kernel_sig, redargstartdim, func_arg_types
+    return kernel_func, parfor_args, kernel_sig, redargstartdim, func_arg_types, expanded_name_to_tuple_var
 
 def replace_var_with_array_in_block(vars, block, typemap, calltypes):
     new_block = []
@@ -1184,7 +1496,10 @@ def replace_var_with_array_in_block(vars, block, typemap, calltypes):
             const_assign = ir.Assign(const_node, const_var, inst.loc)
             new_block.append(const_assign)
 
-            setitem_node = ir.SetItem(inst.target, const_var, inst.value, inst.loc)
+            val_var = ir.Var(inst.target.scope, mk_unique_var("$val"), inst.loc)
+            typemap[val_var.name] = typemap[inst.target.name]
+            new_block.append(ir.Assign(inst.value, val_var, inst.loc))
+            setitem_node = ir.SetItem(inst.target, const_var, val_var, inst.loc)
             calltypes[setitem_node] = signature(
                 types.none, types.npytypes.Array(typemap[inst.target.name], 1, "C"), types.intp, typemap[inst.target.name])
             new_block.append(setitem_node)
@@ -1208,7 +1523,8 @@ def replace_var_with_array(vars, loop_body, typemap, calltypes):
         typemap[v] = types.npytypes.Array(el_typ, 1, "C")
 
 def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr_arg_types,
-                         loop_ranges, redvars, reddict, redarrdict, init_block, index_var_typ, races):
+                         loop_ranges, redvars, reddict, redarrdict, init_block, index_var_typ, races,
+                         exp_name_to_tuple_var):
     '''
     Adds the call to the gufunc function from the main function.
     '''
@@ -1221,7 +1537,6 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
 
     if config.DEBUG_ARRAY_OPT:
         print("make_parallel_loop")
-        print("args = ", expr_args)
         print("outer_sig = ", outer_sig.args, outer_sig.return_type,
               outer_sig.recvr, outer_sig.pysig)
         print("loop_ranges = ", loop_ranges)
@@ -1268,13 +1583,13 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                            start, stop, step)
 
     # Commonly used LLVM types and constants
-    byte_t = lc.Type.int(8)
-    byte_ptr_t = lc.Type.pointer(byte_t)
-    byte_ptr_ptr_t = lc.Type.pointer(byte_ptr_t)
+    byte_t = llvmlite.ir.IntType(8)
+    byte_ptr_t = llvmlite.ir.PointerType(byte_t)
+    byte_ptr_ptr_t = llvmlite.ir.PointerType(byte_ptr_t)
     intp_t = context.get_value_type(types.intp)
     uintp_t = context.get_value_type(types.uintp)
-    intp_ptr_t = lc.Type.pointer(intp_t)
-    uintp_ptr_t = lc.Type.pointer(uintp_t)
+    intp_ptr_t = llvmlite.ir.PointerType(intp_t)
+    uintp_ptr_t = llvmlite.ir.PointerType(uintp_t)
     zero = context.get_constant(types.uintp, 0)
     one = context.get_constant(types.uintp, 1)
     one_type = one.type
@@ -1324,18 +1639,21 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         builder, sched_type, size=context.get_constant(
             types.uintp, sched_size), name="sched")
     debug_flag = 1 if config.DEBUG_ARRAY_OPT else 0
-    scheduling_fnty = lc.Type.function(
+    scheduling_fnty = llvmlite.ir.FunctionType(
         intp_ptr_t, [uintp_t, sched_ptr_type, sched_ptr_type, uintp_t, sched_ptr_type, intp_t])
     if index_var_typ.signed:
-        do_scheduling = builder.module.get_or_insert_function(scheduling_fnty,
-                                                          name="do_scheduling_signed")
+        do_scheduling = cgutils.get_or_insert_function(builder.module,
+                                                       scheduling_fnty,
+                                                       "do_scheduling_signed")
     else:
-        do_scheduling = builder.module.get_or_insert_function(scheduling_fnty,
-                                                          name="do_scheduling_unsigned")
+        do_scheduling = cgutils.get_or_insert_function(builder.module,
+                                                       scheduling_fnty,
+                                                       "do_scheduling_unsigned")
 
-    get_num_threads = builder.module.get_or_insert_function(
-        lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
-        name="get_num_threads")
+    get_num_threads = cgutils.get_or_insert_function(
+        builder.module,
+        llvmlite.ir.FunctionType(llvmlite.ir.IntType(types.intp.bitwidth), []),
+        "get_num_threads")
 
     num_threads = builder.call(get_num_threads, [])
 
@@ -1371,9 +1689,27 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                                     types.intp, i * num_dim * 2 + j)])))
             cgutils.printf(builder, "\n")
 
+    def load_potential_tuple_var(x):
+        """Given a variable name, if that variable is not a new name
+           introduced as the extracted part of a tuple then just return
+           the variable loaded from its name.  However, if the variable
+           does represent part of a tuple, as recognized by the name of
+           the variable being present in the exp_name_to_tuple_var dict,
+           then we load the original tuple var instead that we get from
+           the dict and then extract the corresponding element of the
+           tuple, also stored and returned to use in the dict (i.e., offset).
+        """
+        if x in exp_name_to_tuple_var:
+            orig_tup, offset = exp_name_to_tuple_var[x]
+            tup_var = lowerer.loadvar(orig_tup)
+            res = builder.extract_value(tup_var, offset)
+            return res
+        else:
+            return lowerer.loadvar(x)
+
     # ----------------------------------------------------------------------------
     # Prepare arguments: args, shapes, steps, data
-    all_args = [lowerer.loadvar(x) for x in expr_args[:ninouts]] + redarrs
+    all_args = [load_potential_tuple_var(x) for x in expr_args[:ninouts]] + redarrs
     num_args = len(all_args)
     num_inps = len(sin) + 1
     args = cgutils.alloca_once(
@@ -1406,8 +1742,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
             builder.store(builder.bitcast(ary.data, byte_ptr_t), dst)
         elif isinstance(aty, types.ArrayCompatible):
             if var in races:
-                typ = context.get_data_type(
-                    aty.dtype) if aty.dtype != types.boolean else lc.Type.int(1)
+                typ = (context.get_data_type(aty.dtype)
+                       if aty.dtype != types.boolean
+                       else llvmlite.ir.IntType(1))
 
                 rv_arg = cgutils.alloca_once(builder, typ)
                 builder.store(arg, rv_arg)
@@ -1424,14 +1761,16 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         else:
             if i < num_inps:
                 # Scalar input, need to store the value in an array of size 1
-                typ = context.get_data_type(
-                    aty) if aty != types.boolean else lc.Type.int(1)
+                typ = (context.get_data_type(aty)
+                       if not isinstance(aty, types.Boolean)
+                       else llvmlite.ir.IntType(1))
                 ptr = cgutils.alloca_once(builder, typ)
                 builder.store(arg, ptr)
             else:
                 # Scalar output, must allocate
-                typ = context.get_data_type(
-                    aty) if aty != types.boolean else lc.Type.int(1)
+                typ = (context.get_data_type(aty)
+                       if not isinstance(aty, types.Boolean)
+                       else llvmlite.ir.IntType(1))
                 ptr = cgutils.alloca_once(builder, typ)
             builder.store(builder.bitcast(ptr, byte_ptr_t), dst)
 
@@ -1533,10 +1872,11 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     # prepare data
     data = cgutils.get_null_value(byte_ptr_t)
 
-    fnty = lc.Type.function(lc.Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
-                                             intp_ptr_t, byte_ptr_t])
+    fnty = llvmlite.ir.FunctionType(llvmlite.ir.VoidType(),
+                                    [byte_ptr_ptr_t, intp_ptr_t,
+                                     intp_ptr_t, byte_ptr_t])
 
-    fn = builder.module.get_or_insert_function(fnty, name=wrapper_name)
+    fn = cgutils.get_or_insert_function(builder.module, fnty, wrapper_name)
     context.active_code_library.add_linking_library(info.library)
 
     if config.DEBUG_ARRAY_OPT:

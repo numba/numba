@@ -14,16 +14,15 @@ import os
 import sys
 import warnings
 from threading import RLock as threadRLock
-import multiprocessing
 from ctypes import CFUNCTYPE, c_int, CDLL
 
 import numpy as np
 
-import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
+from llvmlite import ir
 
 from numba.np.numpy_support import as_dtype
-from numba.core import types, config, errors
+from numba.core import types, cgutils, config, errors
 from numba.np.ufunc.wrappers import _wrapper_info
 from numba.np.ufunc import ufuncbuilder
 from numba.extending import overload
@@ -97,26 +96,26 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
     """
     assert isinstance(info, tuple)  # guard against old usage
     # Declare types and function
-    byte_t = lc.Type.int(8)
-    byte_ptr_t = lc.Type.pointer(byte_t)
-    byte_ptr_ptr_t = lc.Type.pointer(byte_ptr_t)
+    byte_t = ir.IntType(8)
+    byte_ptr_t = ir.PointerType(byte_t)
+    byte_ptr_ptr_t = ir.PointerType(byte_ptr_t)
 
     intp_t = ctx.get_value_type(types.intp)
-    intp_ptr_t = lc.Type.pointer(intp_t)
+    intp_ptr_t = ir.PointerType(intp_t)
 
-    fnty = lc.Type.function(lc.Type.void(), [lc.Type.pointer(byte_ptr_t),
-                                             lc.Type.pointer(intp_t),
-                                             lc.Type.pointer(intp_t),
-                                             byte_ptr_t])
+    fnty = ir.FunctionType(ir.VoidType(), [ir.PointerType(byte_ptr_t),
+                                           ir.PointerType(intp_t),
+                                           ir.PointerType(intp_t),
+                                           byte_ptr_t])
     wrapperlib = ctx.codegen().create_library('parallelgufuncwrapper')
     mod = wrapperlib.create_ir_module('parallel.gufunc.wrapper')
     kernel_name = ".kernel.{}_{}".format(id(info.env), info.name)
-    lfunc = mod.add_function(fnty, name=kernel_name)
+    lfunc = ir.Function(mod, fnty, name=kernel_name)
 
     bb_entry = lfunc.append_basic_block('')
 
     # Function body starts
-    builder = lc.Builder(bb_entry)
+    builder = ir.IRBuilder(bb_entry)
 
     args, dimensions, steps, data = lfunc.args
 
@@ -133,24 +132,24 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
     # Array count is input signature plus 1 (due to output array)
     array_count = len(sig.args) + 1
 
-    parallel_for_ty = lc.Type.function(lc.Type.void(),
-                                       [byte_ptr_t] * 5 + [intp_t, ] * 3)
-    parallel_for = mod.get_or_insert_function(parallel_for_ty,
-                                              name='numba_parallel_for')
+    parallel_for_ty = ir.FunctionType(ir.VoidType(),
+                                      [byte_ptr_t] * 5 + [intp_t, ] * 3)
+    parallel_for = cgutils.get_or_insert_function(mod, parallel_for_ty,
+                                                  'numba_parallel_for')
 
     # Reference inner-function and link
-    innerfunc_fnty = lc.Type.function(
-        lc.Type.void(),
+    innerfunc_fnty = ir.FunctionType(
+        ir.VoidType(),
         [byte_ptr_ptr_t, intp_ptr_t, intp_ptr_t, byte_ptr_t],
     )
-    tmp_voidptr = mod.get_or_insert_function(
-        innerfunc_fnty, name=info.name,
-    )
+    tmp_voidptr = cgutils.get_or_insert_function(mod, innerfunc_fnty,
+                                                 info.name,)
     wrapperlib.add_linking_library(info.library)
 
-    get_num_threads = builder.module.get_or_insert_function(
-        lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
-        name="get_num_threads")
+    get_num_threads = cgutils.get_or_insert_function(
+        builder.module,
+        ir.FunctionType(ir.IntType(types.intp.bitwidth), []),
+        "get_num_threads")
 
     num_threads = builder.call(get_num_threads, [])
 
@@ -287,28 +286,39 @@ class _nop(object):
         pass
 
 
-try:
-    # Force the use of an RLock in the case a fork was used to start the
-    # process and thereby the init sequence, some of the threading backend
-    # init sequences are not fork safe. Also, windows global mp locks seem
-    # to be fine.
-    if "fork" in multiprocessing.get_start_method() or _windows:
-        _backend_init_process_lock = multiprocessing.get_context().RLock()
-    else:
+_backend_init_process_lock = None
+
+
+def _set_init_process_lock():
+    global _backend_init_process_lock
+    try:
+        # Force the use of an RLock in the case a fork was used to start the
+        # process and thereby the init sequence, some of the threading backend
+        # init sequences are not fork safe. Also, windows global mp locks seem
+        # to be fine.
+        with _backend_init_thread_lock: # protect part-initialized module access
+            import multiprocessing
+            if "fork" in multiprocessing.get_start_method() or _windows:
+                ctx = multiprocessing.get_context()
+                _backend_init_process_lock = ctx.RLock()
+            else:
+                _backend_init_process_lock = _nop()
+
+    except OSError as e:
+
+        # probably lack of /dev/shm for semaphore writes, warn the user
+        msg = (
+            "Could not obtain multiprocessing lock due to OS level error: %s\n"
+            "A likely cause of this problem is '/dev/shm' is missing or"
+            "read-only such that necessary semaphores cannot be written.\n"
+            "*** The responsibility of ensuring multiprocessing safe access to "
+            "this initialization sequence/module import is deferred to the "
+            "user! ***\n"
+        )
+        warnings.warn(msg % str(e))
+
         _backend_init_process_lock = _nop()
 
-except OSError as e:
-
-    # probably lack of /dev/shm for semaphore writes, warn the user
-    msg = ("Could not obtain multiprocessing lock due to OS level error: %s\n"
-           "A likely cause of this problem is '/dev/shm' is missing or"
-           "read-only such that necessary semaphores cannot be written.\n"
-           "*** The responsibility of ensuring multiprocessing safe access to "
-           "this initialization sequence/module import is deferred to the "
-           "user! ***\n")
-    warnings.warn(msg % str(e))
-
-    _backend_init_process_lock = _nop()
 
 _is_initialized = False
 
@@ -333,11 +343,11 @@ def _check_tbb_version_compatible():
     try:
         # first check that the TBB version is new enough
         if _IS_WINDOWS:
-            libtbb_name = 'tbb'
+            libtbb_name = 'tbb12.dll'
         elif _IS_OSX:
-            libtbb_name = 'libtbb.dylib'
+            libtbb_name = 'libtbb.12.dylib'
         elif _IS_LINUX:
-            libtbb_name = 'libtbb.so.2'
+            libtbb_name = 'libtbb.so.12'
         else:
             raise ValueError("Unknown operating system")
         libtbb = CDLL(libtbb_name)
@@ -345,13 +355,13 @@ def _check_tbb_version_compatible():
         version_func.argtypes = []
         version_func.restype = c_int
         tbb_iface_ver = version_func()
-        if tbb_iface_ver < 11005: # magic number from TBB
+        if tbb_iface_ver < 12010: # magic number from TBB
             msg = ("The TBB threading layer requires TBB "
-                   "version 2019.5 or later i.e., "
-                   "TBB_INTERFACE_VERSION >= 11005. Found "
+                   "version 2021 update 1 or later i.e., "
+                   "TBB_INTERFACE_VERSION >= 12010. Found "
                    "TBB_INTERFACE_VERSION = %s. The TBB "
-                   "threading layer is disabled.")
-            problem = errors.NumbaWarning(msg % tbb_iface_ver)
+                   "threading layer is disabled.") % tbb_iface_ver
+            problem = errors.NumbaWarning(msg)
             warnings.warn(problem)
             raise ImportError("Problem with TBB. Reason: %s" % msg)
     except (ValueError, OSError) as e:
@@ -361,6 +371,9 @@ def _check_tbb_version_compatible():
 
 
 def _launch_threads():
+    if not _backend_init_process_lock:
+        _set_init_process_lock()
+
     with _backend_init_process_lock:
         with _backend_init_thread_lock:
             global _is_initialized
@@ -408,7 +421,15 @@ def _launch_threads():
                 return lib, backend
 
             t = str(config.THREADING_LAYER).lower()
-            namedbackends = ['tbb', 'omp', 'workqueue']
+            namedbackends = config.THREADING_LAYER_PRIORITY
+            if not (len(namedbackends) == 3 and
+                    set(namedbackends) == {'tbb', 'omp', 'workqueue'}):
+                raise ValueError(
+                    "THREADING_LAYER_PRIORITY invalid: %s. "
+                    "It must be a permutation of "
+                    "{'tbb', 'omp', 'workqueue'}"
+                    % namedbackends
+                )
 
             lib = None
             err_helpers = dict()

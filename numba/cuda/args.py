@@ -4,13 +4,10 @@ memory transfers before & after the kernel call.
 """
 import abc
 
-from numba.core.utils import add_metaclass
-
 from numba.core.typing.typeof import typeof, Purpose
 
 
-@add_metaclass(abc.ABCMeta)
-class ArgHint:
+class ArgHint(metaclass=abc.ABCMeta):
     def __init__(self, value):
         self.value = value
 

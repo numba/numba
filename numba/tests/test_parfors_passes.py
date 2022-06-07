@@ -14,13 +14,14 @@ from numba.core import (
     typing,
     rewrites,
     typed_passes,
+    untyped_passes,
     inline_closurecall,
     compiler,
     cpu,
     errors
 )
 from numba.core.registry import cpu_target
-from numba.tests.support import TestCase, is_parfors_unsupported
+from numba.tests.support import (TestCase, is_parfors_unsupported)
 
 
 class MyPipeline(object):
@@ -33,11 +34,12 @@ class MyPipeline(object):
         self.state.typemap = None
         self.state.return_type = None
         self.state.calltypes = None
+        self.state.metadata = {}
 
 
 class BaseTest(TestCase):
     @classmethod
-    def _run_parfor(cls, test_func, args):
+    def _run_parfor(cls, test_func, args, swap_map=None):
         # TODO: refactor this with get_optimized_numba_ir() where this is
         #       copied from
         typingctx = typing.Context()
@@ -58,13 +60,19 @@ class BaseTest(TestCase):
 
             rewrites.rewrite_registry.apply("before-inference", tp.state)
 
+            untyped_passes.ReconstructSSA().run_pass(tp.state)
+
             (
                 tp.state.typemap,
                 tp.state.return_type,
                 tp.state.calltypes,
+                _
             ) = typed_passes.type_inference_stage(
-                tp.state.typingctx, tp.state.func_ir, tp.state.args, None
+                tp.state.typingctx, tp.state.targetctx, tp.state.func_ir,
+                tp.state.args, None
             )
+
+            typed_passes.PreLowerStripPhis().run_pass(tp.state)
 
             diagnostics = numba.parfors.parfor.ParforDiagnostics()
 
@@ -73,8 +81,10 @@ class BaseTest(TestCase):
                 tp.state.typemap,
                 tp.state.calltypes,
                 tp.state.typingctx,
+                tp.state.targetctx,
                 options,
                 swapped=diagnostics.replaced_fns,
+                replace_functions_map=swap_map,
             )
             preparfor_pass.run()
 
@@ -92,8 +102,10 @@ class BaseTest(TestCase):
             tp.state.calltypes,
             tp.state.return_type,
             tp.state.typingctx,
+            tp.state.targetctx,
             options,
             flags,
+            tp.state.metadata,
             diagnostics=diagnostics,
         )
         parfor_pass._pre_run()
@@ -104,9 +116,9 @@ class BaseTest(TestCase):
         return sub_pass
 
     @classmethod
-    def run_parfor_pre_pass(cls, test_func, args):
+    def run_parfor_pre_pass(cls, test_func, args, swap_map=None):
         tp, options, diagnostics, preparfor_pass = cls._run_parfor(
-            test_func, args
+            test_func, args, swap_map
         )
         return preparfor_pass
 
@@ -494,12 +506,15 @@ class TestConvertLoopPass(BaseTest):
             arr = np.ones(n)
             for i in prange(n):
                 i += 1
-                arr[i] = i
+                arr[i - 1] = i
             return arr
 
         with self.assertRaises(errors.UnsupportedRewriteError) as raises:
             self.run_parfor_sub_pass(test_impl, ())
-        self.assertIn("Overwrite of parallel loop index", str(raises.exception))
+        self.assertIn(
+            "Overwrite of parallel loop index",
+            str(raises.exception),
+        )
 
     def test_init_prange(self):
         def test_impl():
@@ -640,6 +655,21 @@ class TestPreParforPass(BaseTest):
 
         pre_pass = self.run_parfor_pre_pass(test_impl, argtypes)
         self.assertEqual(pre_pass.stats["replaced_func"], 1)
+        self.assertEqual(pre_pass.stats["replaced_dtype"], 0)
+        self.run_parallel(test_impl, *args)
+
+    def test_replacement_map(self):
+        def test_impl(a):
+            return np.sum(a)
+
+        arr = np.arange(10)
+        args = (arr,)
+        argtypes = [typeof(x) for x in args]
+
+        swap_map = numba.parfors.parfor.swap_functions_map.copy()
+        swap_map.pop(("sum", "numpy"))
+        pre_pass = self.run_parfor_pre_pass(test_impl, argtypes, swap_map)
+        self.assertEqual(pre_pass.stats["replaced_func"], 0)
         self.assertEqual(pre_pass.stats["replaced_dtype"], 0)
         self.run_parallel(test_impl, *args)
 

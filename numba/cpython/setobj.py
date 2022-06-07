@@ -18,6 +18,7 @@ from numba.core.utils import cached_property
 from numba.misc import quicksort
 from numba.cpython import slicing
 from numba.extending import intrinsic
+from numba.core.errors import NumbaValueError
 
 
 def get_payload_struct(context, builder, set_type, ptr):
@@ -198,8 +199,10 @@ class _SetPayload(object):
 
         mask = self.mask
         dtype = self._ty.dtype
-        eqfn = context.get_function(operator.eq,
-                                    typing.signature(types.boolean, dtype, dtype))
+        tyctx = context.typing_context
+        fnty = tyctx.resolve_value_type(operator.eq)
+        sig = fnty.get_call_type(tyctx, (dtype, dtype), {})
+        eqfn = context.get_function(fnty, sig)
 
         one = ir.Constant(intp_t, 1)
         five = ir.Constant(intp_t, 5)
@@ -415,6 +418,7 @@ class SetInstance(object):
 
         old_hash = entry.hash
         entry.hash = h
+        self.incref_value(item)
         entry.key = item
         # used++
         used = payload.used
@@ -429,7 +433,7 @@ class SetInstance(object):
             self.upsize(used)
         self.set_dirty(True)
 
-    def _add_key(self, payload, item, h, do_resize=True):
+    def _add_key(self, payload, item, h, do_resize=True, do_incref=True):
         context = self._context
         builder = self._builder
 
@@ -441,6 +445,8 @@ class SetInstance(object):
             entry = payload.get_entry(i)
             old_hash = entry.hash
             entry.hash = h
+            if do_incref:
+                self.incref_value(item)
             entry.key = item
             # used++
             used = payload.used
@@ -455,9 +461,11 @@ class SetInstance(object):
                 self.upsize(used)
             self.set_dirty(True)
 
-    def _remove_entry(self, payload, entry, do_resize=True):
+    def _remove_entry(self, payload, entry, do_resize=True, do_decref=True):
         # Mark entry deleted
         entry.hash = ir.Constant(entry.hash.type, DELETED)
+        if do_decref:
+            self.decref_value(entry.key)
         # used--
         used = payload.used
         one = ir.Constant(used.type, 1)
@@ -544,7 +552,8 @@ class SetInstance(object):
         payload = self.payload
         with payload._next_entry() as entry:
             builder.store(entry.key, key)
-            self._remove_entry(payload, entry)
+            # since the value is returned don't decref in _remove_entry()
+            self._remove_entry(payload, entry, do_decref=False)
 
         return builder.load(key)
 
@@ -939,11 +948,12 @@ class SetInstance(object):
                                               (errmsg,))
 
         # Re-insert old entries
+        # No incref since they already were the first time they were inserted
         payload = self.payload
         with old_payload._iterate() as loop:
             entry = loop.entry
             self._add_key(payload, entry.key, entry.hash,
-                          do_resize=False)
+                          do_resize=False, do_incref=False)
 
         self._free_payload(old_payload.ptr)
 
@@ -956,6 +966,11 @@ class SetInstance(object):
         """
         context = self._context
         builder = self._builder
+
+        # decref all of the previous entries
+        with self.payload._iterate() as loop:
+            entry = loop.entry
+            self.decref_value(entry.key)
 
         # Free old payload
         self._free_payload(self.payload.ptr)
@@ -1001,10 +1016,13 @@ class SetInstance(object):
                                                         size=allocsize)
                 alloc_ok = cgutils.is_null(builder, ptr)
             else:
-                meminfo = context.nrt.meminfo_new_varsize(builder, size=allocsize)
+                # create destructor to be called upon set destruction
+                dtor = self._imp_dtor(context, builder.module)
+                meminfo = context.nrt.meminfo_new_varsize_dtor(
+                    builder, allocsize, builder.bitcast(dtor, cgutils.voidptr_t))
                 alloc_ok = cgutils.is_null(builder, meminfo)
 
-            with builder.if_else(cgutils.is_null(builder, meminfo),
+            with builder.if_else(alloc_ok,
                                  likely=False) as (if_error, if_ok):
                 with if_error:
                     builder.store(cgutils.false_bit, ok)
@@ -1064,11 +1082,13 @@ class SetInstance(object):
                                             nentries))
 
         with builder.if_then(builder.load(ok), likely=True):
-            meminfo = context.nrt.meminfo_new_varsize(builder, size=allocsize)
+            # create destructor for new meminfo
+            dtor = self._imp_dtor(context, builder.module)
+            meminfo = context.nrt.meminfo_new_varsize_dtor(
+                builder, allocsize, builder.bitcast(dtor, cgutils.voidptr_t))
             alloc_ok = cgutils.is_null(builder, meminfo)
 
-            with builder.if_else(cgutils.is_null(builder, meminfo),
-                                 likely=False) as (if_error, if_ok):
+            with builder.if_else(alloc_ok, likely=False) as (if_error, if_ok):
                 with if_error:
                     builder.store(cgutils.false_bit, ok)
                 with if_ok:
@@ -1078,9 +1098,17 @@ class SetInstance(object):
                     payload.fill = src_payload.fill
                     payload.finger = zero
                     payload.mask = mask
+
+                    # instead of using `_add_key` for every entry, since the
+                    # size of the new set is the same, we can just copy the
+                    # data directly without having to re-compute the hash
                     cgutils.raw_memcpy(builder, payload.entries,
                                        src_payload.entries, nentries,
                                        entry_size)
+                    # increment the refcounts to simulate `_add_key` for each
+                    # element
+                    with src_payload._iterate() as loop:
+                        self.incref_value(loop.entry.key)
 
                     if DEBUG_ALLOCS:
                         context.printf(builder,
@@ -1088,6 +1116,44 @@ class SetInstance(object):
                                        allocsize, payload.ptr, mask)
 
         return builder.load(ok)
+
+    def _imp_dtor(self, context, module):
+        """Define the dtor for set
+        """
+        llvoidptr = cgutils.voidptr_t
+        llsize_t= context.get_value_type(types.size_t)
+        # create a dtor function that takes (void* set, size_t size, void* dtor_info)
+        fnty = ir.FunctionType(
+            ir.VoidType(),
+            [llvoidptr, llsize_t, llvoidptr],
+        )
+        # create type-specific name
+        fname = f".dtor.set.{self._ty.dtype}"
+    
+        fn = cgutils.get_or_insert_function(module, fnty, name=fname)
+    
+        if fn.is_declaration:
+            # Set linkage
+            fn.linkage = 'linkonce_odr'
+            # Define
+            builder = ir.IRBuilder(fn.append_basic_block())
+            payload = _SetPayload(context, builder, self._ty, fn.args[0])
+            with payload._iterate() as loop:
+                entry = loop.entry
+                context.nrt.decref(builder, self._ty.dtype, entry.key)
+            builder.ret_void()
+    
+        return fn
+
+    def incref_value(self, val):
+        """Incref an element value
+        """
+        self._context.nrt.incref(self._builder, self._ty.dtype, val)
+
+    def decref_value(self, val):
+        """Decref an element value
+        """
+        self._context.nrt.decref(self._builder, self._ty.dtype, val)
 
 
 class SetIterInstance(object):
@@ -1151,15 +1217,17 @@ def build_set(context, builder, set_type, items):
     nitems = len(items)
     inst = SetInstance.allocate(context, builder, set_type, nitems)
 
-    # Populate set.  Inlining the insertion code for each item would be very
-    # costly, instead we create a LLVM array and iterate over it.
-    array = cgutils.pack_array(builder, items)
-    array_ptr = cgutils.alloca_once_value(builder, array)
+    if nitems > 0:
 
-    count = context.get_constant(types.intp, nitems)
-    with cgutils.for_range(builder, count) as loop:
-        item = builder.load(cgutils.gep(builder, array_ptr, 0, loop.index))
-        inst.add(item)
+        # Populate set.  Inlining the insertion code for each item would be very
+        # costly, instead we create a LLVM array and iterate over it.
+        array = cgutils.pack_array(builder, items)
+        array_ptr = cgutils.alloca_once_value(builder, array)
+
+        count = context.get_constant(types.intp, nitems)
+        with cgutils.for_range(builder, count) as loop:
+            item = builder.load(cgutils.gep(builder, array_ptr, 0, loop.index))
+            inst.add(item)
 
     return impl_ret_new_ref(context, builder, set_type, inst.value)
 
@@ -1178,10 +1246,15 @@ def set_constructor(context, builder, sig, args):
 
     # If the argument has a len(), preallocate the set so as to
     # avoid resizes.
+    # `for_iter` increfs each item in the set, so a `decref` is required each
+    # iteration to balance. Because the `incref` from `.add` is dependent on
+    # the item not already existing in the set, just removing its incref is not
+    # enough to guarantee all memory is freed
     n = call_len(context, builder, items_type, items)
     inst = SetInstance.allocate(context, builder, set_type, n)
     with for_iter(context, builder, items_type, items) as loop:
         inst.add(loop.value)
+        context.nrt.decref(builder, set_type.dtype, loop.value)
 
     return impl_ret_new_ref(context, builder, set_type, inst.value)
 
@@ -1309,7 +1382,15 @@ def set_update(context, builder, sig, args):
         inst.upsize(new_size)
 
     with for_iter(context, builder, items_type, items) as loop:
-        inst.add(loop.value)
+        # make sure that the items being added are of the same dtype as the
+        # set instance
+        casted = context.cast(builder, loop.value, items_type.dtype, inst.dtype)
+        inst.add(casted)
+        # decref each item to counter balance the incref from `for_iter`
+        # `.add` will conditionally incref when the item does not already exist
+        # in the set, therefore removing its incref is not enough to guarantee
+        # all memory is freed
+        context.nrt.decref(builder, items_type.dtype, loop.value)
 
     if n is not None:
         # If we pre-grew the set, downsize in case there were many collisions

@@ -1,6 +1,6 @@
 import numpy as np
 
-from numba.cuda.testing import skip_on_cudasim, SerialMixin
+from numba.cuda.testing import skip_on_cudasim, CUDATestCase
 from numba.tests.support import (override_config, captured_stderr,
                                  captured_stdout)
 from numba import cuda, float64
@@ -13,7 +13,7 @@ def simple_cuda(A, B):
 
 
 @skip_on_cudasim('Simulator does not produce debug dumps')
-class TestDebugOutput(SerialMixin, unittest.TestCase):
+class TestDebugOutput(CUDATestCase):
 
     def compile_simple_cuda(self):
         with captured_stderr() as err:

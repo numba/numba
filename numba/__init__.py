@@ -8,17 +8,21 @@ import sys
 import warnings
 
 from ._version import get_versions
+from numba.misc.init_utils import generate_version_info
+
 __version__ = get_versions()['version']
+version_info = generate_version_info(__version__)
 del get_versions
+del generate_version_info
+
 
 from numba.core import config
-from numba.testing import _runtests as runtests
 from numba.core import types, errors
 
 # Re-export typeof
 from numba.misc.special import (
     typeof, prange, pndindex, gdb, gdb_breakpoint, gdb_init,
-    literally, literal_unroll
+    literally, literal_unroll,
 )
 
 # Re-export error classes
@@ -48,12 +52,18 @@ from numba import experimental
 import numba.core.withcontexts
 from numba.core.withcontexts import objmode_context as objmode
 
-# Enable bytes/unicode array support
-import numba.cpython.charseq
+# Initialize target extensions
+import numba.core.target_extension
+
+# Initialize typed containers
+import numba.typed
 
 # Keep this for backward compatibility.
-test = runtests.main
-
+def test(argv, **kwds):
+    # To speed up the import time, avoid importing `unittest` and other test
+    # dependencies unless the user is actually trying to run tests.
+    from numba.testing import _runtests as runtests
+    return runtests.main(argv, **kwds)
 
 __all__ = """
     cfunc
@@ -77,8 +87,8 @@ __all__ = """
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 31, 0)
-_min_llvm_version = (7, 0, 0)
+_min_llvmlite_version = (0, 39, 0)
+_min_llvm_version = (11, 0, 0)
 
 def _ensure_llvm():
     """
@@ -121,11 +131,11 @@ def _ensure_critical_deps():
     from numba.np.numpy_support import numpy_version
     from numba.core.utils import PYVERSION
 
-    if PYVERSION < (3, 6):
-        raise ImportError("Numba needs Python 3.6 or greater")
+    if PYVERSION < (3, 7):
+        raise ImportError("Numba needs Python 3.7 or greater")
 
-    if numpy_version < (1, 15):
-        raise ImportError("Numba needs NumPy 1.15 or greater")
+    if numpy_version < (1, 18):
+        raise ImportError("Numba needs NumPy 1.18 or greater")
 
     try:
         import scipy
@@ -204,6 +214,3 @@ config.USING_SVML = _try_enable_svml()
 # SVML state to "no SVML". See https://github.com/numba/numba/issues/4689 for
 # context.
 # ---------------------- WARNING WARNING WARNING ----------------------------
-
-# Initialize typed containers
-import numba.typed

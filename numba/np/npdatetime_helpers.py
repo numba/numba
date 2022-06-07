@@ -202,3 +202,11 @@ def get_best_unit(unit_a, unit_b):
     if b > a:
         return unit_b
     return unit_a
+
+
+def datetime_minimum(a, b):
+    pass
+
+
+def datetime_maximum(a, b):
+    pass

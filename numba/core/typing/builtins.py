@@ -7,7 +7,6 @@ from numba.core import types, errors
 from numba import prange
 from numba.parfors.parfor import internal_prange
 
-from numba.core.utils import RANGE_ITER_OBJECTS
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          AbstractTemplate, infer_global, infer,
                                          infer_getattr, signature,
@@ -69,6 +68,9 @@ class Slice(ConcreteTemplate):
     ]
 
 
+@infer_global(range, typing_key=range)
+@infer_global(prange, typing_key=prange)
+@infer_global(internal_prange, typing_key=internal_prange)
 class Range(ConcreteTemplate):
     cases = [
         signature(types.range_state32_type, types.int32),
@@ -85,11 +87,6 @@ class Range(ConcreteTemplate):
                   types.uint64),
     ]
 
-for func in RANGE_ITER_OBJECTS:
-    infer_global(func, typing_key=range)(Range)
-
-infer_global(prange, typing_key=prange)(Range)
-infer_global(internal_prange, typing_key=internal_prange)(Range)
 
 @infer
 class GetIter(AbstractTemplate):
@@ -434,11 +431,7 @@ class CmpOpGe(OrderedCmpOp):
     pass
 
 
-@infer_global(operator.eq)
-class CmpOpEq(UnorderedCmpOp):
-    pass
-
-
+# more specific overloads should be registered first
 @infer_global(operator.eq)
 class ConstOpEq(AbstractTemplate):
     def generic(self, args, kws):
@@ -450,6 +443,11 @@ class ConstOpEq(AbstractTemplate):
 
 @infer_global(operator.ne)
 class ConstOpNotEq(ConstOpEq):
+    pass
+
+
+@infer_global(operator.eq)
+class CmpOpEq(UnorderedCmpOp):
     pass
 
 
@@ -606,14 +604,55 @@ class StaticGetItemTuple(AbstractTemplate):
 
     def generic(self, args, kws):
         tup, idx = args
+        ret = None
         if not isinstance(tup, types.BaseTuple):
             return
         if isinstance(idx, int):
-            ret = tup.types[idx]
+            try:
+                ret = tup.types[idx]
+            except IndexError:
+                raise errors.NumbaIndexError("tuple index out of range")
         elif isinstance(idx, slice):
             ret = types.BaseTuple.from_types(tup.types[idx])
-        return signature(ret, *args)
+        if ret is not None:
+            sig = signature(ret, *args)
+            return sig
 
+
+@infer
+class StaticGetItemLiteralList(AbstractTemplate):
+    key = "static_getitem"
+
+    def generic(self, args, kws):
+        tup, idx = args
+        ret = None
+        if not isinstance(tup, types.LiteralList):
+            return
+        if isinstance(idx, int):
+            ret = tup.types[idx]
+        if ret is not None:
+            sig = signature(ret, *args)
+            return sig
+
+
+@infer
+class StaticGetItemLiteralStrKeyDict(AbstractTemplate):
+    key = "static_getitem"
+
+    def generic(self, args, kws):
+        tup, idx = args
+        ret = None
+        if not isinstance(tup, types.LiteralStrKeyDict):
+            return
+        if isinstance(idx, str):
+            if idx in tup.fields:
+                lookup = tup.fields.index(idx)
+            else:
+                raise errors.NumbaKeyError(f"Key '{idx}' is not in dict.")
+            ret = tup.types[lookup]
+        if ret is not None:
+            sig = signature(ret, *args)
+            return sig
 
 # Generic implementation for "not in"
 
@@ -705,6 +744,22 @@ class NumberAttribute(AttributeTemplate):
 
 
 @infer_getattr
+class NPTimedeltaAttribute(AttributeTemplate):
+    key = types.NPTimedelta
+
+    def resolve___class__(self, ty):
+        return types.NumberClass(ty)
+
+
+@infer_getattr
+class NPDatetimeAttribute(AttributeTemplate):
+    key = types.NPDatetime
+
+    def resolve___class__(self, ty):
+        return types.NumberClass(ty)
+
+
+@infer_getattr
 class SliceAttribute(AttributeTemplate):
     key = types.SliceType
 
@@ -721,12 +776,12 @@ class SliceAttribute(AttributeTemplate):
     def resolve_indices(self, ty, args, kws):
         assert not kws
         if len(args) != 1:
-            raise TypeError(
+            raise errors.NumbaTypeError(
                 "indices() takes exactly one argument (%d given)" % len(args)
             )
         typ, = args
         if not isinstance(typ, types.Integer):
-            raise TypeError(
+            raise errors.NumbaTypeError(
                 "'%s' object cannot be interpreted as an integer" % typ
             )
         return signature(types.UniTuple(types.intp, 3), types.intp)
@@ -748,12 +803,34 @@ class NumberClassAttribute(AttributeTemplate):
         def typer(val):
             if isinstance(val, (types.BaseTuple, types.Sequence)):
                 # Array constructor, e.g. np.int32([1, 2])
-                sig = self.context.resolve_function_type(
-                    np.array, (val,), {'dtype': types.DType(ty)})
+                fnty = self.context.resolve_value_type(np.array)
+                sig = fnty.get_call_type(self.context, (val, types.DType(ty)),
+                                         {})
                 return sig.return_type
+            elif isinstance(val, (types.Number, types.Boolean, types.IntEnumMember)):
+                 # Scalar constructor, e.g. np.int32(42)
+                 return ty
+            elif isinstance(val, (types.NPDatetime, types.NPTimedelta)):
+                # Constructor cast from datetime-like, e.g.
+                # > np.int64(np.datetime64("2000-01-01"))
+                if ty.bitwidth == 64:
+                    return ty
+                else:
+                    msg = (f"Cannot cast {val} to {ty} as {ty} is not 64 bits "
+                           "wide.")
+                    raise errors.TypingError(msg)
             else:
-                # Scalar constructor, e.g. np.int32(42)
-                return ty
+                if (isinstance(val, types.Array) and val.ndim == 0 and
+                    val.dtype == ty):
+                    # This is 0d array -> scalar degrading
+                    return ty
+                else:
+                    # unsupported
+                    msg = f"Casting {val} to {ty} directly is unsupported."
+                    if isinstance(val, types.Array):
+                        # array casts are supported a different way.
+                        msg += f" Try doing '<array>.astype(np.{ty})' instead"
+                    raise errors.TypingError(msg)
 
         return types.Function(make_callable_template(key=ty, typer=typer))
 
@@ -782,9 +859,19 @@ class TypeRefAttribute(AttributeTemplate):
             # For example, see numba/typed/typeddict.py
             #   @type_callable(DictType)
             #   def typeddict_call(context):
-            def redirect(*args, **kwargs):
-                return self.context.resolve_function_type(ty, args, kwargs)
-            return types.Function(make_callable_template(key=ty, typer=redirect))
+            class Redirect(object):
+
+                def __init__(self, context):
+                    self.context =  context
+
+                def __call__(self, *args, **kwargs):
+                    result = self.context.resolve_function_type(ty, args, kwargs)
+                    if hasattr(result, "pysig"):
+                        self.pysig = result.pysig
+                    return result
+
+            return types.Function(make_callable_template(key=ty,
+                                                         typer=Redirect(self.context)))
 
 
 #------------------------------------------------------------------------------
@@ -794,7 +881,7 @@ class MinMaxBase(AbstractTemplate):
 
     def _unify_minmax(self, tys):
         for ty in tys:
-            if not isinstance(ty, types.Number):
+            if not isinstance(ty, (types.Number, types.NPDatetime, types.NPTimedelta)):
                 return
         return self.context.unify_types(*tys)
 
@@ -864,7 +951,8 @@ class Bool(AbstractTemplate):
 class Int(AbstractTemplate):
 
     def generic(self, args, kws):
-        assert not kws
+        if kws:
+            raise errors.NumbaAssertionError('kws not supported')
 
         [arg] = args
 
@@ -883,10 +971,10 @@ class Float(AbstractTemplate):
         [arg] = args
 
         if arg not in types.number_domain:
-            raise TypeError("float() only support for numbers")
+            raise errors.NumbaTypeError("float() only support for numbers")
 
         if arg in types.complex_domain:
-            raise TypeError("float() does not support complex")
+            raise errors.NumbaTypeError("float() does not support complex")
 
         if arg in types.integer_domain:
             return signature(types.float64, arg)
@@ -930,8 +1018,8 @@ class Enumerate(AbstractTemplate):
         assert not kws
         it = args[0]
         if len(args) > 1 and not isinstance(args[1], types.Integer):
-            raise TypeError("Only integers supported as start value in "
-                            "enumerate")
+            raise errors.NumbaTypeError("Only integers supported as start "
+                                        "value in enumerate")
         elif len(args) > 2:
             #let python raise its own error
             enumerate(*args)
@@ -982,7 +1070,9 @@ class TypeBuiltin(AbstractTemplate):
         assert not kws
         if len(args) == 1:
             # One-argument type() -> return the __class__
-            classty = self.context.resolve_getattr(args[0], "__class__")
+            # Avoid literal types
+            arg = types.unliteral(args[0])
+            classty = self.context.resolve_getattr(arg, "__class__")
             if classty is not None:
                 return signature(classty, *args)
 
@@ -1013,8 +1103,8 @@ class MinValInfer(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         assert len(args) == 1
-        assert isinstance(args[0], (types.DType, types.NumberClass))
-        return signature(args[0].dtype, *args)
+        if isinstance(args[0], (types.DType, types.NumberClass)):
+            return signature(args[0].dtype, *args)
 
 
 #------------------------------------------------------------------------------

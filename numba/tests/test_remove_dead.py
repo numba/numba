@@ -23,14 +23,15 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, Fixup
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                            NopythonRewrites, PreParforPass, ParforPass,
                            DumpParforDiagnostics, NativeLowering,
-                           IRLegalization, NoPythonBackend)
+                           IRLegalization, NoPythonBackend, NativeLowering)
 import numpy as np
 from numba.tests.support import skip_parfors_unsupported, needs_blas
 import unittest
 
 
 def test_will_propagate(b, z, w):
-    x = 3
+    x1 = 3
+    x = x1
     if b > 0:
         y = z + w
     else:
@@ -62,9 +63,9 @@ class TestRemoveDead(unittest.TestCase):
 
     def compile_parallel(self, func, arg_types):
         fast_pflags = Flags()
-        fast_pflags.set('auto_parallel', cpu.ParallelOptions(True))
-        fast_pflags.set('nrt')
-        fast_pflags.set('fastmath', cpu.FastMathOptions(True))
+        fast_pflags.auto_parallel = cpu.ParallelOptions(True)
+        fast_pflags.nrt = True
+        fast_pflags.fastmath = cpu.FastMathOptions(True)
         return compile_isolated(func, arg_types, flags=fast_pflags).entry_point
 
     def test1(self):
@@ -75,16 +76,7 @@ class TestRemoveDead(unittest.TestCase):
             typingctx.refresh()
             targetctx.refresh()
             args = (types.int64, types.int64, types.int64)
-            typemap, return_type, calltypes = type_inference_stage(typingctx, test_ir, args, None)
-            type_annotation = type_annotations.TypeAnnotation(
-                func_ir=test_ir,
-                typemap=typemap,
-                calltypes=calltypes,
-                lifted=(),
-                lifted_from=None,
-                args=args,
-                return_type=return_type,
-                html_output=config.HTML)
+            typemap, _, calltypes, _ = type_inference_stage(typingctx, targetctx, test_ir, args, None)
             remove_dels(test_ir.blocks)
             in_cps, out_cps = copy_propagate(test_ir.blocks, typemap)
             apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(test_ir.blocks), typemap, calltypes)
@@ -217,6 +209,18 @@ class TestRemoveDead(unittest.TestCase):
             # recover global state
             ir_utils.alias_func_extensions = old_ext_handlers
 
+    def test_rm_dead_rhs_vars(self):
+        """make sure lhs variable of assignment is considered live if used in
+        rhs (test for #6715).
+        """
+        def func():
+            for i in range(3):
+                a = (lambda j: j)(i)
+                a = np.array(a)
+            return a
+
+        self.assertEqual(func(), numba.njit(func)())
+
     @skip_parfors_unsupported
     def test_alias_parfor_extension(self):
         """Make sure aliases are considered in remove dead extension for
@@ -242,12 +246,13 @@ class TestRemoveDead(unittest.TestCase):
             def run_pass(self, state):
                 parfor_pass = numba.parfors.parfor.ParforPass(
                     state.func_ir,
-                    state.type_annotation.typemap,
-                    state.type_annotation.calltypes,
+                    state.typemap,
+                    state.calltypes,
                     state.return_type,
                     state.typingctx,
                     state.flags.auto_parallel,
                     state.flags,
+                    state.metadata,
                     state.parfor_diagnostics
                 )
                 remove_dels(state.func_ir.blocks)
@@ -256,7 +261,7 @@ class TestRemoveDead(unittest.TestCase):
                 remove_dead(state.func_ir.blocks,
                             state.func_ir.arg_names,
                             state.func_ir,
-                            state.type_annotation.typemap)
+                            state.typemap)
                 numba.parfors.parfor.get_parfor_params(state.func_ir.blocks,
                                                 parfor_pass.options.fusion,
                                                 parfor_pass.nested_fusion_info)
@@ -283,9 +288,9 @@ class TestRemoveDead(unittest.TestCase):
                             "inline calls to locally defined closures")
                 # typing
                 pm.add_pass(NopythonTypeInference, "nopython frontend")
-                pm.add_pass(AnnotateTypes, "annotate types")
 
                 # lower
+                pm.add_pass(NativeLowering, "native lowering")
                 pm.add_pass(NoPythonBackend, "nopython mode backend")
                 pm.finalize()
                 return [pm]

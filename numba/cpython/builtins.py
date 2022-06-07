@@ -3,16 +3,23 @@ from functools import reduce
 
 import numpy as np
 import operator
+import warnings
 
 from llvmlite import ir
-from llvmlite.llvmpy.core import Type, Constant
-import llvmlite.llvmpy.core as lc
 
-from numba.core.imputils import lower_builtin, lower_getattr, lower_getattr_generic, lower_cast, lower_constant, iternext_impl, call_getiter, call_iternext, impl_ret_borrowed, impl_ret_untracked, numba_typeref_ctor
+from numba.core.imputils import (lower_builtin, lower_getattr,
+                                 lower_getattr_generic, lower_cast,
+                                 lower_constant, iternext_impl,
+                                 call_getiter, call_iternext, impl_ret_borrowed,
+                                 impl_ret_untracked, numba_typeref_ctor)
 from numba.core import typing, types, utils, cgutils
 from numba.core.extending import overload, intrinsic
 from numba.core.typeconv import Conversion
-from numba.core.errors import TypingError
+from numba.core.errors import (TypingError, LoweringError,
+                               NumbaExperimentalFeatureWarning)
+from numba.misc.special import literal_unroll
+from numba.core.typing.asnumbatype import as_numba_type
+from numba.core.errors import NumbaTypeError
 
 
 @overload(operator.truth)
@@ -42,7 +49,8 @@ def generic_is(context, builder, sig, args):
     if lhs_type == rhs_type:
             # mutable types
             if lhs_type.mutable:
-                raise NotImplementedError('no default `is` implementation')
+                msg = 'no default `is` implementation'
+                raise LoweringError(msg)
             # immutable types
             else:
                 # fallbacks to `==`
@@ -57,6 +65,41 @@ def generic_is(context, builder, sig, args):
         return cgutils.false_bit
 
 
+@lower_builtin(operator.is_, types.Opaque, types.Opaque)
+def opaque_is(context, builder, sig, args):
+    """
+    Implementation for `x is y` for Opaque types.
+    """
+    lhs_type, rhs_type = sig.args
+    # the lhs and rhs have the same type
+    if lhs_type == rhs_type:
+        lhs_ptr = builder.ptrtoint(args[0], cgutils.intp_t)
+        rhs_ptr = builder.ptrtoint(args[1], cgutils.intp_t)
+
+        return builder.icmp_unsigned('==', lhs_ptr, rhs_ptr)
+    else:
+        return cgutils.false_bit
+
+
+@lower_builtin(operator.is_, types.Boolean, types.Boolean)
+def bool_is_impl(context, builder, sig, args):
+    """
+    Implementation for `x is y` for types derived from types.Boolean
+    (e.g. BooleanLiteral), and cross-checks between literal and non-literal
+    booleans, to satisfy Python's behavior preserving identity for bools.
+    """
+    arg1, arg2 = args
+    arg1_type, arg2_type = sig.args
+    _arg1 = context.cast(builder, arg1, arg1_type, types.boolean)
+    _arg2 = context.cast(builder, arg2, arg2_type, types.boolean)
+    eq_impl = context.get_function(
+        operator.eq,
+        typing.signature(types.boolean, types.boolean, types.boolean)
+    )
+    return eq_impl(builder, (_arg1, _arg2))
+
+
+# keep types.IntegerLiteral, as otherwise there's ambiguity between this and int_eq_impl
 @lower_builtin(operator.eq, types.Literal, types.Literal)
 @lower_builtin(operator.eq, types.IntegerLiteral, types.IntegerLiteral)
 def const_eq_impl(context, builder, sig, args):
@@ -68,7 +111,9 @@ def const_eq_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(operator.ne, types.StringLiteral, types.StringLiteral)
+# keep types.IntegerLiteral, as otherwise there's ambiguity between this and int_ne_impl
+@lower_builtin(operator.ne, types.Literal, types.Literal)
+@lower_builtin(operator.ne, types.IntegerLiteral, types.IntegerLiteral)
 def const_ne_impl(context, builder, sig, args):
     arg1, arg2 = sig.args
     val = 0
@@ -197,8 +242,8 @@ def round_impl_unary(context, builder, sig, args):
     fltty = sig.args[0]
     llty = context.get_value_type(fltty)
     module = builder.module
-    fnty = Type.function(llty, [llty])
-    fn = module.get_or_insert_function(fnty, name=_round_intrinsic(fltty))
+    fnty = ir.FunctionType(llty, [llty])
+    fn = cgutils.get_or_insert_function(module, fnty, _round_intrinsic(fltty))
     res = builder.call(fn, args)
     # unary round() returns an int
     res = builder.fptosi(res, context.get_value_type(sig.return_type))
@@ -280,15 +325,17 @@ def complex_impl(context, builder, sig, args):
 
 
 @lower_builtin(types.NumberClass, types.Any)
-@lower_builtin(types.TypeRef, types.Any)
 def number_constructor(context, builder, sig, args):
     """
     Call a number class, e.g. np.int32(...)
     """
     if isinstance(sig.return_type, types.Array):
         # Array constructor
-        impl = context.get_function(np.array, sig)
-        return impl(builder, args)
+        dt = sig.return_type.dtype
+        def foo(*arg_hack):
+            return np.array(arg_hack, dtype=dt)
+        res = context.compile_internal(builder, foo, sig, args)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
     else:
         # Scalar constructor
         [val] = args
@@ -401,34 +448,29 @@ def bool_sequence(x):
         types.UnicodeType,
         types.Set,
     )
-    
+
     if isinstance(x, valid_types):
         def bool_impl(x):
             return len(x) > 0
         return bool_impl
 
+@overload(bool, inline='always')
+def bool_none(x):
+    if isinstance(x, types.NoneType) or x is None:
+        return lambda x: False
+
 # -----------------------------------------------------------------------------
 
 def get_type_max_value(typ):
     if isinstance(typ, types.Float):
-        bw = typ.bitwidth
-        if bw == 32:
-            return np.finfo(np.float32).max
-        if bw == 64:
-            return np.finfo(np.float64).max
-        raise NotImplementedError("Unsupported floating point type")
+        return np.inf
     if isinstance(typ, types.Integer):
         return typ.maxval
     raise NotImplementedError("Unsupported type")
 
 def get_type_min_value(typ):
     if isinstance(typ, types.Float):
-        bw = typ.bitwidth
-        if bw == 32:
-            return np.finfo(np.float32).min
-        if bw == 64:
-            return np.finfo(np.float64).min
-        raise NotImplementedError("Unsupported floating point type")
+        return -np.inf
     if isinstance(typ, types.Integer):
         return typ.minval
     raise NotImplementedError("Unsupported type")
@@ -437,13 +479,14 @@ def get_type_min_value(typ):
 @lower_builtin(get_type_min_value, types.DType)
 def lower_get_type_min_value(context, builder, sig, args):
     typ = sig.args[0].dtype
-    bw = typ.bitwidth
 
     if isinstance(typ, types.Integer):
+        bw = typ.bitwidth
         lty = ir.IntType(bw)
         val = typ.minval
         res = ir.Constant(lty, val)
     elif isinstance(typ, types.Float):
+        bw = typ.bitwidth
         if bw == 32:
             lty = ir.FloatType()
         elif bw == 64:
@@ -451,20 +494,26 @@ def lower_get_type_min_value(context, builder, sig, args):
         else:
             raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
         npty = getattr(np, 'float{}'.format(bw))
-        res = ir.Constant(lty, np.finfo(npty).min)
+        res = ir.Constant(lty, -np.inf)
+    elif isinstance(typ, (types.NPDatetime, types.NPTimedelta)):
+        bw = 64
+        lty = ir.IntType(bw)
+        val = types.int64.minval + 1 # minval is NaT, so minval + 1 is the smallest value
+        res = ir.Constant(lty, val)
     return impl_ret_untracked(context, builder, lty, res)
 
 @lower_builtin(get_type_max_value, types.NumberClass)
 @lower_builtin(get_type_max_value, types.DType)
 def lower_get_type_max_value(context, builder, sig, args):
     typ = sig.args[0].dtype
-    bw = typ.bitwidth
 
     if isinstance(typ, types.Integer):
+        bw = typ.bitwidth
         lty = ir.IntType(bw)
         val = typ.maxval
         res = ir.Constant(lty, val)
     elif isinstance(typ, types.Float):
+        bw = typ.bitwidth
         if bw == 32:
             lty = ir.FloatType()
         elif bw == 64:
@@ -472,7 +521,12 @@ def lower_get_type_max_value(context, builder, sig, args):
         else:
             raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
         npty = getattr(np, 'float{}'.format(bw))
-        res = ir.Constant(lty, np.finfo(npty).max)
+        res = ir.Constant(lty, np.inf)
+    elif isinstance(typ, (types.NPDatetime, types.NPTimedelta)):
+        bw = 64
+        lty = ir.IntType(bw)
+        val = types.int64.maxval
+        res = ir.Constant(lty, val)
     return impl_ret_untracked(context, builder, lty, res)
 
 # -----------------------------------------------------------------------------
@@ -540,10 +594,10 @@ def iterable_max(iterable):
     return min_max_impl(iterable, greater_than)
 
 
-@lower_builtin(types.TypeRef)
+@lower_builtin(types.TypeRef, types.VarArg(types.Any))
 def redirect_type_ctor(context, builder, sig, args):
     """Redirect constructor implementation to `numba_typeref_ctor(cls, *args)`,
-    which should be overloaded by type implementator.
+    which should be overloaded by the type's implementation.
 
     For example:
 
@@ -562,11 +616,51 @@ def redirect_type_ctor(context, builder, sig, args):
     ctor_args = types.Tuple.from_types(sig.args)
     # Make signature T(TypeRef[T], *args) where T is cls
     sig = typing.signature(cls, types.TypeRef(cls), ctor_args)
-
-    args = (context.get_dummy_value(),   # Type object has no runtime repr.
-            context.make_tuple(builder, sig.args[1], args))
+    if len(ctor_args) > 0:
+        args = (context.get_dummy_value(),   # Type object has no runtime repr.
+                context.make_tuple(builder, ctor_args, args))
+    else:
+        args = (context.get_dummy_value(),   # Type object has no runtime repr.
+                context.make_tuple(builder, ctor_args, ()))
 
     return context.compile_internal(builder, call_ctor, sig, args)
+
+
+@overload(sum)
+def ol_sum(iterable, start=0):
+    # Cpython explicitly rejects strings, bytes and bytearrays
+    # https://github.com/python/cpython/blob/3.9/Python/bltinmodule.c#L2310-L2329 # noqa: E501
+    error = None
+    if isinstance(start, types.UnicodeType):
+        error = ('strings', '')
+    elif isinstance(start, types.Bytes):
+        error = ('bytes', 'b')
+    elif isinstance(start, types.ByteArray):
+        error = ('bytearray', 'b')
+
+    if error is not None:
+        msg = "sum() can't sum {} [use {}''.join(seq) instead]".format(*error)
+        raise TypingError(msg)
+
+    # if the container is homogeneous then it's relatively easy to handle.
+    if isinstance(iterable, (types.containers._HomogeneousTuple, types.List,
+                             types.ListType, types.Array, types.RangeType)):
+        iterator = iter
+    elif isinstance(iterable, (types.containers._HeterogeneousTuple)):
+        # if container is heterogeneous then literal unroll and hope for the
+        # best.
+        iterator = literal_unroll
+    else:
+        return None
+
+    def impl(iterable, start=0):
+        acc = start
+        for x in iterator(iterable):
+            # This most likely widens the type, this is expected Numba behaviour
+            acc = acc + x
+        return acc
+    return impl
+
 
 # ------------------------------------------------------------------------------
 # map, filter, reduce
@@ -593,3 +687,103 @@ def ol_filter(func, iterable):
                 if func(x):
                     yield x
     return impl
+
+
+@overload(isinstance)
+def ol_isinstance(var, typs):
+
+    def true_impl(var, typs):
+        return True
+
+    def false_impl(var, typs):
+        return False
+
+    var_ty = as_numba_type(var)
+
+    if isinstance(var_ty, types.Optional):
+        msg = f'isinstance cannot handle optional types. Found: "{var_ty}"'
+        raise NumbaTypeError(msg)
+
+    # NOTE: The current implementation of `isinstance` restricts the type of the
+    # instance variable to types that are well known and in common use. The
+    # danger of unrestricted tyoe comparison is that a "default" of `False` is
+    # required and this means that if there is a bug in the logic of the
+    # comparison tree `isinstance` returns False! It's therefore safer to just
+    # reject the compilation as untypable!
+    supported_var_ty = (types.Number, types.Bytes, types.RangeType,
+                        types.DictType, types.LiteralStrKeyDict, types.List,
+                        types.ListType, types.Tuple, types.UniTuple, types.Set,
+                        types.Function, types.ClassType, types.UnicodeType,
+                        types.ClassInstanceType, types.NoneType, types.Array)
+    if not isinstance(var_ty, supported_var_ty):
+        msg = f'isinstance() does not support variables of type "{var_ty}".'
+        raise NumbaTypeError(msg)
+
+    # Warn about the experimental nature of this feature.
+    msg = "Use of isinstance() detected. This is an experimental feature."
+    warnings.warn(msg, category=NumbaExperimentalFeatureWarning)
+
+    t_typs = typs
+
+    # Check the types that the var can be an instance of, it'll be a scalar,
+    # a unituple or a tuple.
+    if isinstance(t_typs, types.UniTuple):
+        # corner case - all types in isinstance are the same
+        t_typs = (t_typs.key[0])
+
+    if not isinstance(t_typs, types.Tuple):
+        t_typs = (t_typs, )
+
+    for typ in t_typs:
+
+        if isinstance(typ, types.Function):
+            key = typ.key[0]  # functions like int(..), float(..), str(..)
+        elif isinstance(typ, types.ClassType):
+            key = typ  # jitclasses
+        else:
+            key = typ.key
+
+        # corner cases for bytes, range, ...
+        # avoid registering those types on `as_numba_type`
+        types_not_registered = {
+            bytes: types.Bytes,
+            range: types.RangeType,
+            dict: (types.DictType, types.LiteralStrKeyDict),
+            list: types.List,
+            tuple: types.BaseTuple,
+            set: types.Set,
+        }
+        if key in types_not_registered:
+            if isinstance(var_ty, types_not_registered[key]):
+                return true_impl
+            continue
+
+        if isinstance(typ, types.TypeRef):
+            # Use of Numba type classes is in general not supported as they do
+            # not work when the jit is disabled.
+            if key not in (types.ListType, types.DictType):
+                msg = ("Numba type classes (except numba.typed.* container "
+                       "types) are not supported.")
+                raise NumbaTypeError(msg)
+            # Case for TypeRef (i.e. isinstance(var, typed.List))
+            #      var_ty == ListType[int64] (instance)
+            #         typ == types.ListType  (class)
+            return true_impl if type(var_ty) is key else false_impl
+        else:
+            numba_typ = as_numba_type(key)
+            if var_ty == numba_typ:
+                return true_impl
+            elif isinstance(numba_typ, types.ClassType) and \
+                    isinstance(var_ty, types.ClassInstanceType) and \
+                    var_ty.key == numba_typ.instance_type.key:
+                # check for jitclasses
+                return true_impl
+            elif isinstance(numba_typ, types.Container) and \
+                    numba_typ.key[0] == types.undefined:
+                # check for containers (list, tuple, set, ...)
+                if isinstance(var_ty, numba_typ.__class__) or \
+                    (isinstance(var_ty, types.BaseTuple) and \
+                        isinstance(numba_typ, types.BaseTuple)):
+                    return true_impl
+
+    return false_impl

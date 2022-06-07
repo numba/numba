@@ -52,6 +52,28 @@ Pinned memory
    :noindex:
 .. autofunction:: numba.cuda.pinned_array
    :noindex:
+.. autofunction:: numba.cuda.pinned_array_like
+   :noindex:
+
+
+Mapped memory
+=============
+
+.. autofunction:: numba.cuda.mapped
+   :noindex:
+.. autofunction:: numba.cuda.mapped_array
+   :noindex:
+.. autofunction:: numba.cuda.mapped_array_like
+   :noindex:
+
+
+
+Managed memory
+==============
+
+.. autofunction:: numba.cuda.managed_array
+   :noindex:
+
 
 Streams
 =======
@@ -64,6 +86,15 @@ are executed asynchronously.
    :noindex:
 
 .. autofunction:: numba.cuda.default_stream
+   :noindex:
+
+.. autofunction:: numba.cuda.legacy_default_stream
+   :noindex:
+
+.. autofunction:: numba.cuda.per_thread_default_stream
+   :noindex:
+
+.. autofunction:: numba.cuda.external_stream
    :noindex:
 
 CUDA streams have the following methods:
@@ -94,11 +125,20 @@ traditional dynamic memory management.
    This function must be called on the device (i.e. from a kernel or
    device function). *shape* is either an integer or a tuple of integers
    representing the array's dimensions and must be a simple constant
-   expression. *type* is a :ref:`Numba type <numba-types>` of the elements
-   needing to be stored in the array.
+   expression. A "simple constant expression" includes, but is not limited to:
+   
+      #. A literal (e.g. ``10``)
+      #. A local variable whose right-hand side is a literal or a simple constant
+         expression (e.g. ``shape``, where ``shape`` is defined earlier in the function 
+         as ``shape = 10``)
+      #. A global variable that is defined in the jitted function's globals by the time
+         of compilation (e.g. ``shape``, where ``shape`` is defined using any expression
+         at global scope).
 
-   The returned array-like object can be read and written to like any normal
-   device array (e.g. through indexing).
+   The definition must result in a Python ``int`` (i.e. not a NumPy scalar or other
+   scalar / integer-like type). *type* is a :ref:`Numba type <numba-types>` of the
+   elements needing to be stored in the array. The returned array-like object can be
+   read and written to like any normal device array (e.g. through indexing).
 
    A common pattern is to have each thread populate one element in the
    shared array and then wait for all threads to finish using :func:`.syncthreads`.
@@ -131,11 +171,26 @@ unlike traditional dynamic memory management.
 
    Allocate a local array of the given *shape* and *type* on the device.
    *shape* is either an integer or a tuple of integers representing the array's
-   dimensions and must be a simple constant expression. *type* is a
-   :ref:`Numba type <numba-types>` of the elements needing to be stored in the
-   array. The array is private to the current thread. An array-like object is
-   returned which can be read and written to like any standard array
-   (e.g. through indexing).
+   dimensions and must be a simple constant expression. A "simple constant expression" 
+   includes, but is not limited to:
+
+      #. A literal (e.g. ``10``)
+      #. A local variable whose right-hand side is a literal or a simple constant
+         expression (e.g. ``shape``, where ``shape`` is defined earlier in the function
+         as ``shape = 10``)
+      #. A global variable that is defined in the jitted function's globals by the time 
+         of compilation (e.g. ``shape``, where ``shape`` is defined using any expression
+         at global scope).
+
+   The definition must result in a Python ``int`` (i.e. not a NumPy scalar or other
+   scalar / integer-like type). *type* is a :ref:`Numba type <numba-types>`
+   of the elements needing to be stored in the array. The array is private to
+   the current thread. An array-like object is returned which can be read and
+   written to like any standard array (e.g. through indexing).
+
+   .. seealso:: The Local Memory section of `Device Memory Accesses
+      <https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#device-memory-accesses>`_
+      in the CUDA programming guide.
 
 Constant memory
 ===============
@@ -150,8 +205,16 @@ creating an array in constant memory is through the use of:
    Allocate and make accessible an array in constant memory based on array-like
    *arr*.
 
+
+.. _deallocation-behavior:
+
 Deallocation Behavior
 =====================
+
+This section describes the deallocation behaviour of Numba's internal memory
+management. If an External Memory Management Plugin is in use (see
+:ref:`cuda-emm-plugin`), then deallocation behaviour may differ; you may refer to the
+documentation for the EMM Plugin to understand its deallocation behaviour.
 
 Deallocation of all CUDA resources are tracked on a per-context basis.
 When the last reference to a device memory is dropped, the underlying memory

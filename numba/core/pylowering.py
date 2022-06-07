@@ -5,12 +5,13 @@ Lowering implementation for object mode.
 
 import builtins
 import operator
+import inspect
 
-from llvmlite.llvmpy.core import Type, Constant
-import llvmlite.llvmpy.core as lc
+import llvmlite.ir
 
 from numba.core import types, utils, ir, generators, cgutils
-from numba.core.errors import ForbiddenConstruct
+from numba.core.errors import (ForbiddenConstruct, LoweringError,
+                               NumbaNotImplementedError)
 from numba.core.lowering import BaseLower
 
 
@@ -75,10 +76,6 @@ class PyLower(BaseLower):
     def pre_lower(self):
         super(PyLower, self).pre_lower()
         self.init_pyapi()
-        # Pre-computed for later use
-        from numba.core.dispatcher import OmittedArg
-        self.omitted_typobj = self.pyapi.unserialize(
-            self.pyapi.serialize_object(OmittedArg))
 
     def post_lower(self):
         pass
@@ -139,12 +136,12 @@ class PyLower(BaseLower):
 
         elif isinstance(inst, ir.Branch):
             cond = self.loadvar(inst.cond.name)
-            if cond.type == Type.int(1):
+            if cond.type == llvmlite.ir.IntType(1):
                 istrue = cond
             else:
                 istrue = self.pyapi.object_istrue(cond)
-            zero = lc.Constant.null(istrue.type)
-            pred = self.builder.icmp(lc.ICMP_NE, istrue, zero)
+            zero = llvmlite.ir.Constant(istrue.type, None)
+            pred = self.builder.icmp_unsigned('!=', istrue, zero)
             tr = self.blkmap[inst.truebr]
             fl = self.blkmap[inst.falsebr]
             self.builder.cbranch(pred, tr, fl)
@@ -155,6 +152,9 @@ class PyLower(BaseLower):
 
         elif isinstance(inst, ir.Del):
             self.delvar(inst.value)
+
+        elif isinstance(inst, ir.PopBlock):
+            pass # this is just a marker
 
         elif isinstance(inst, ir.Raise):
             if inst.exception is not None:
@@ -168,7 +168,17 @@ class PyLower(BaseLower):
             self.return_exception_raised()
 
         else:
-            raise NotImplementedError(type(inst), inst)
+            msg = f"{type(inst)}, {inst}"
+            raise NumbaNotImplementedError(msg)
+
+    @utils.cached_property
+    def _omitted_typobj(self):
+        """Return a `OmittedArg` type instance as a LLVM value suitable for
+        testing at runtime.
+        """
+        from numba.core.dispatcher import OmittedArg
+        return self.pyapi.unserialize(
+            self.pyapi.serialize_object(OmittedArg))
 
     def lower_assign(self, inst):
         """
@@ -188,21 +198,28 @@ class PyLower(BaseLower):
         elif isinstance(value, ir.Yield):
             return self.lower_yield(value)
         elif isinstance(value, ir.Arg):
+            param = self.func_ir.func_id.pysig.parameters.get(value.name)
+
             obj = self.fnargs[value.index]
-            # When an argument is omitted, the dispatcher hands it as
-            # _OmittedArg(<default value>)
-            typobj = self.pyapi.get_type(obj)
             slot = cgutils.alloca_once_value(self.builder, obj)
-            is_omitted = self.builder.icmp_unsigned('==', typobj,
-                                                    self.omitted_typobj)
-            with self.builder.if_else(is_omitted, likely=False) as (omitted, present):
-                with present:
-                    self.incref(obj)
-                    self.builder.store(obj, slot)
-                with omitted:
-                    # The argument is omitted => get the default value
-                    obj = self.pyapi.object_getattr_string(obj, 'value')
-                    self.builder.store(obj, slot)
+            # Don't check for OmittedArg unless the argument has a default
+            if param is not None and param.default is inspect.Parameter.empty:
+                self.incref(obj)
+                self.builder.store(obj, slot)
+            else:
+                # When an argument is omitted, the dispatcher hands it as
+                # _OmittedArg(<default value>)
+                typobj = self.pyapi.get_type(obj)
+                is_omitted = self.builder.icmp_unsigned('==', typobj,
+                                                        self._omitted_typobj)
+                with self.builder.if_else(is_omitted, likely=False) as (omitted, present):
+                    with present:
+                        self.incref(obj)
+                        self.builder.store(obj, slot)
+                    with omitted:
+                        # The argument is omitted => get the default value
+                        obj = self.pyapi.object_getattr_string(obj, 'value')
+                        self.builder.store(obj, slot)
 
             return self.builder.load(slot)
         else:
@@ -259,9 +276,7 @@ class PyLower(BaseLower):
             elif expr.fn == operator.not_:
                 res = self.pyapi.object_not(value)
                 self.check_int_status(res)
-
-                longval = self.builder.zext(res, self.pyapi.long)
-                res = self.pyapi.bool_from_long(longval)
+                res = self.pyapi.bool_from_bool(res)
             elif expr.fn == operator.invert:
                 res = self.pyapi.number_invert(value)
             else:
@@ -359,7 +374,7 @@ class PyLower(BaseLower):
             # Check tuple size is as expected
             tup_size = self.pyapi.tuple_size(tup)
             expected_size = self.context.get_constant(types.intp, expr.count)
-            has_wrong_size = self.builder.icmp(lc.ICMP_NE,
+            has_wrong_size = self.builder.icmp_unsigned('!=',
                                                tup_size, expected_size)
             with cgutils.if_unlikely(self.builder, has_wrong_size):
                 self.return_exception(ValueError)
@@ -398,6 +413,12 @@ class PyLower(BaseLower):
             val = self.loadvar(expr.value.name)
             self.incref(val)
             return val
+        elif expr.op == 'phi':
+            raise LoweringError("PHI not stripped")
+
+        elif expr.op == 'null':
+            # Make null value
+            return cgutils.get_null_value(self.pyapi.pyobj)
 
         else:
             raise NotImplementedError(expr)
@@ -516,8 +537,8 @@ class PyLower(BaseLower):
         """
         Raise an exception if *num* is smaller than *ok_value*.
         """
-        ok = lc.Constant.int(num.type, ok_value)
-        pred = self.builder.icmp(lc.ICMP_SLT, num, ok)
+        ok = llvmlite.ir.Constant(num.type, ok_value)
+        pred = self.builder.icmp_signed('<', num, ok)
         with cgutils.if_unlikely(self.builder, pred):
             self.return_exception_raised()
 
@@ -607,6 +628,11 @@ class PyLower(BaseLower):
             ptr = self.builder.alloca(ltype, name=name)
             self.builder.store(cgutils.get_null_value(ltype), ptr)
         return ptr
+
+    def _alloca_var(self, name, fetype):
+        # This is here for API compatibility with lowering.py::Lower.
+        # NOTE: fetype is unused
+        return self.alloca(name)
 
     def incref(self, value):
         self.pyapi.incref(value)

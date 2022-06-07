@@ -99,40 +99,51 @@ Structured scalars support attribute getting and setting, as well as
 member lookup using constant strings. Strings stored in a local or global tuple
 are considered constant strings and can be used for member lookup.
 
-.. code:: pycon
 
 
-
-    >>> import numpy as np
-    >>> from numba import njit
-    >>> arr = np.array([1, 2], dtype=[('a1', 'f8'), ('a2', 'f8')])
-    >>> fields_gl = ('a1', 'a2')
-    >>> @njit
-    ... def get_field_sum(rec):
-    ...     fields_lc = ('a1', 'a2')
-    ...     field_name1 = fields_lc[0]
-    ...     field_name2 = fields_gl[1]
-    ...     return rec[field_name1] + rec[field_name2]
-    ...
-    >>> get_field_sum(arr[0])
-    3
+.. literalinclude:: ../../../numba/tests/doc_examples/test_rec_array.py
+   :language: python
+   :start-after: magictoken.ex_rec_arr_const_index.begin
+   :end-before: magictoken.ex_rec_arr_const_index.end
+   :dedent: 8
 
 It is also possible to use local or global tuples together with ``literal_unroll``:
 
+.. literalinclude:: ../../../numba/tests/doc_examples/test_rec_array.py
+   :language: python
+   :start-after: magictoken.ex_rec_arr_lit_unroll_index.begin
+   :end-before: magictoken.ex_rec_arr_lit_unroll_index.end
+   :dedent: 8
 
-    >>> import numpy as np
-    >>> from numba import njit
-    >>> arr = np.array([1, 2], dtype=[('a1', 'f8'), ('a2', 'f8')])
-    >>> fields_gl = ('a1', 'a2')
-    >>> @njit
-    ... def get_field_sum(rec):
-    ...     out = 0
-    ...     for f in literal_unroll(fields_gl):
-    ...        out += rec[f]
-    ...     return out
-    ...
-    >>> get_field_sum(arr[0])
-    3
+
+Record subtyping
+----------------
+.. warning::
+   This is an experimental feature.
+
+Numba allows `width subtyping <https://en.wikipedia.org/wiki/Subtyping#Record_types>`_ of structured scalars.
+For example, ``dtype([('a', 'f8'), ('b', 'i8')])`` will be considered a subtype of ``dtype([('a', 'f8')]``, because
+the second is a strict subset of the first, i.e. field ``a`` is of the same type and is in the same position in both
+types. The subtyping relationship will matter in cases where compilation for a certain input is not allowed, but the
+input is a subtype of another, allowed type.
+
+.. code-block:: python
+
+    import numpy as np
+    from numba import njit, typeof
+    from numba.core import types
+    record1 = np.array([1], dtype=[('a', 'f8')])[0]
+    record2 = np.array([(2,3)], dtype=[('a', 'f8'), ('b', 'f8')])[0]
+
+    @njit(types.float64(typeof(record1)))
+    def foo(rec):
+        return rec['a']
+
+    foo(record1)
+    foo(record2)
+
+Without subtyping the last line would fail. With subtyping, no new compilation will be triggered, but the
+compiled function for ``record1`` will be used for ``record2``.
 
 .. seealso::
    `Numpy scalars <http://docs.scipy.org/doc/numpy/reference/arrays.scalars.html>`_
@@ -157,6 +168,58 @@ advanced index is allowed, and it has to be a one-dimensional array
 .. seealso::
    `Numpy indexing <http://docs.scipy.org/doc/numpy/reference/arrays.indexing.html>`_
    reference.
+
+
+.. _structured-array-access:
+
+Structured array access
+-----------------------
+
+Numba presently supports accessing fields of individual elements in structured
+arrays by attribute as well as by getting and setting. This goes slightly
+beyond the NumPy API, which only allows accessing fields by getting and
+setting. For example:
+
+.. code:: python
+
+   from numba import njit
+   import numpy as np
+
+   record_type = np.dtype([("ival", np.int32), ("fval", np.float64)], align=True)
+
+   def f(rec):
+       value = 2.5
+       rec[0].ival = int(value)
+       rec[0].fval = value
+       return rec
+
+   arr = np.ones(1, dtype=record_type)
+
+   cfunc = njit(f)
+
+   # Works
+   print(cfunc(arr))
+
+   # Does not work
+   print(f(arr))
+
+The above code results in the output:
+
+.. code:: none
+
+   [(2, 2.5)]
+   Traceback (most recent call last):
+     File "repro.py", line 22, in <module>
+       print(f(arr))
+     File "repro.py", line 9, in f
+       rec[0].ival = int(value)
+   AttributeError: 'numpy.void' object has no attribute 'ival'
+
+The Numba-compiled version of the function executes, but the pure Python
+version raises an error because of the unsupported use of attribute access.
+
+.. note::
+   This behavior will eventually be deprecated and removed.
 
 Attributes
 ----------
@@ -211,8 +274,7 @@ The following methods of Numpy arrays are supported in their basic form
 
 * :meth:`~numpy.ndarray.all`
 * :meth:`~numpy.ndarray.any`
-* :meth:`~numpy.ndarray.argmax`
-* :meth:`~numpy.ndarray.argmin`
+* :meth:`~numpy.ndarray.clip`
 * :meth:`~numpy.ndarray.conj`
 * :meth:`~numpy.ndarray.conjugate`
 * :meth:`~numpy.ndarray.cumprod`
@@ -234,6 +296,8 @@ Other methods
 
 The following methods of Numpy arrays are supported:
 
+* :meth:`~numpy.ndarray.argmax` (``axis`` keyword argument supported).
+* :meth:`~numpy.ndarray.argmin` (``axis`` keyword argument supported).
 * :meth:`~numpy.ndarray.argsort` (``kind`` key word argument supported for
   values ``'quicksort'`` and ``'mergesort'``)
 * :meth:`~numpy.ndarray.astype` (only the 1-argument form)
@@ -242,6 +306,7 @@ The following methods of Numpy arrays are supported:
 * :meth:`~numpy.ndarray.flatten` (no order argument; 'C' order only)
 * :meth:`~numpy.ndarray.item` (without arguments)
 * :meth:`~numpy.ndarray.itemset` (only the 1-argument form)
+* :meth:`~numpy.ndarray.ptp` (without arguments)
 * :meth:`~numpy.ndarray.ravel` (no order argument; 'C' order only)
 * :meth:`~numpy.ndarray.repeat` (no axis argument)
 * :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
@@ -269,7 +334,10 @@ The following methods of Numpy arrays are supported:
 
 * :meth:`~numpy.ndarray.transpose`
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
+* :meth:`~numpy.ndarray.__contains__`
 
+Where applicable, the corresponding top-level NumPy functions (such as
+:func:`numpy.argmax`) are similarly supported.
 
 .. warning::
    Sorting may be slightly slower than Numpy's implementation.
@@ -324,30 +392,31 @@ The following reduction functions are supported:
 
 * :func:`numpy.diff` (only the 2 first arguments)
 * :func:`numpy.median` (only the first argument)
-* :func:`numpy.nancumprod` (only the first argument, requires NumPy >= 1.12))
-* :func:`numpy.nancumsum` (only the first argument, requires NumPy >= 1.12))
+* :func:`numpy.nancumprod` (only the first argument)
+* :func:`numpy.nancumsum` (only the first argument)
 * :func:`numpy.nanmax` (only the first argument)
 * :func:`numpy.nanmean` (only the first argument)
 * :func:`numpy.nanmedian` (only the first argument)
 * :func:`numpy.nanmin` (only the first argument)
-* :func:`numpy.nanpercentile` (only the 2 first arguments,
-  requires NumPy >= 1.11, complex dtypes unsupported)
-* :func:`numpy.nanquantile` (only the 2 first arguments, requires NumPy >= 1.15,
-  complex dtypes unsupported)
+* :func:`numpy.nanpercentile` (only the 2 first arguments, complex dtypes
+  unsupported)
+* :func:`numpy.nanquantile` (only the 2 first arguments, complex dtypes
+  unsupported)
 * :func:`numpy.nanprod` (only the first argument)
 * :func:`numpy.nanstd` (only the first argument)
 * :func:`numpy.nansum` (only the first argument)
 * :func:`numpy.nanvar` (only the first argument)
-* :func:`numpy.percentile` (only the 2 first arguments, requires NumPy >= 1.10,
-  complex dtypes unsupported)
-* :func:`numpy.quantile` (only the 2 first arguments, requires NumPy >= 1.15,
-  complex dtypes unsupported)
+* :func:`numpy.percentile` (only the 2 first arguments, complex dtypes
+  unsupported)
+* :func:`numpy.quantile` (only the 2 first arguments, complex dtypes
+  unsupported)
 
 Other functions
 ---------------
 
 The following top-level functions are supported:
 
+* :func:`numpy.allclose`
 * :func:`numpy.append`
 * :func:`numpy.arange`
 * :func:`numpy.argsort` (``kind`` key word argument supported for values
@@ -355,14 +424,20 @@ The following top-level functions are supported:
 * :func:`numpy.argwhere`
 * :func:`numpy.array` (only the 2 first arguments)
 * :func:`numpy.array_equal`
+* :func:`numpy.array_split`
 * :func:`numpy.asarray` (only the 2 first arguments)
+* :func:`numpy.asarray_chkfinite` (only the 2 first arguments)
+* :func:`numpy.asfarray`
 * :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.atleast_1d`
 * :func:`numpy.atleast_2d`
 * :func:`numpy.atleast_3d`
 * :func:`numpy.bartlett`
-* :func:`numpy.bincount` (only the 2 first arguments)
+* :func:`numpy.bincount`
 * :func:`numpy.blackman`
+* :func:`numpy.broadcast_to` (only the 2 first arguments)
+* :func:`numpy.broadcast_arrays` (only the first argument)
+* :func:`numpy.broadcast_shapes`
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate`
 * :func:`numpy.convolve` (only the 2 first arguments)
@@ -403,8 +478,17 @@ The following top-level functions are supported:
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
 * :func:`numpy.kaiser`
-* :func:`numpy.interp` (only the 3 first arguments; requires NumPy >= 1.10)
+* :func:`numpy.iscomplex`
+* :func:`numpy.iscomplexobj`
+* :func:`numpy.isneginf`
+* :func:`numpy.isposinf`
+* :func:`numpy.isreal`
+* :func:`numpy.isrealobj`
+* :func:`numpy.isscalar`
+* :func:`numpy.interp` (only the 3 first arguments)
+* :func:`numpy.intersect1d` (only first 2 arguments, ar1 and ar2)
 * :func:`numpy.linspace` (only the 3-argument form)
+* :func:`numpy.logspace` (only the 3 first arguments)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
 * :class:`numpy.nditer` (only the first argument)
@@ -418,6 +502,7 @@ The following top-level functions are supported:
 * :func:`numpy.roll` (only the 2 first arguments; second argument ``shift``
   must be an integer)
 * :func:`numpy.roots`
+* :func:`numpy.rot90` (only the 2 first arguments)
 * :func:`numpy.round_`
 * :func:`numpy.searchsorted` (only the 3 first arguments)
 * :func:`numpy.select` (only using homogeneous lists or tuples for the first
@@ -425,9 +510,13 @@ The following top-level functions are supported:
   can only contain arrays (unlike Numpy that also accepts tuples).
 * :func:`numpy.shape`
 * :func:`numpy.sinc`
-* :func:`numpy.sort` (no optional arguments)
+* :func:`numpy.sort` (no optional arguments, quicksort accepts
+  multi-dimensional array and sorts its last axis).
+* :func:`numpy.split`
 * :func:`numpy.stack`
+* :func:`numpy.swapaxes`
 * :func:`numpy.take` (only the 2 first arguments)
+* :func:`numpy.take_along_axis` (the axis argument must be a literal value)
 * :func:`numpy.transpose`
 * :func:`numpy.trapz` (only the 3 first arguments)
 * :func:`numpy.tri` (only the 3 first arguments; third argument ``k`` must be an integer)
@@ -509,6 +598,42 @@ Initialization
 
 * :func:`numpy.random.seed`: with an integer argument only
 
+.. warning::
+   Calling :func:`numpy.random.seed` from interpreted code (including from :term:`object mode`
+   code) will seed the NumPy random generator, not the Numba random generator.
+   To seed the Numba random generator, see the example below.
+
+.. code-block:: python
+
+  from numba import njit
+  import numpy as np
+
+  @njit
+  def seed(a):
+      np.random.seed(a)
+
+  @njit
+  def rand():
+      return np.random.rand()
+
+
+  # Incorrect seeding
+  np.random.seed(1234)
+  print(rand())
+
+  np.random.seed(1234)
+  print(rand())
+
+  # Correct seeding
+  seed(1234)
+  print(rand())
+
+  seed(1234)
+  print(rand())
+
+
+
+
 Simple random data
 ''''''''''''''''''
 
@@ -533,11 +658,12 @@ Permutations
 Distributions
 '''''''''''''
 
-.. warning:: The `size` argument is not supported in the following functions.
+The following functions support all arguments.
 
 * :func:`numpy.random.beta`
 * :func:`numpy.random.binomial`
 * :func:`numpy.random.chisquare`
+* :func:`numpy.random.dirichlet`
 * :func:`numpy.random.exponential`
 * :func:`numpy.random.f`
 * :func:`numpy.random.gamma`
@@ -550,6 +676,7 @@ Distributions
 * :func:`numpy.random.logseries`
 * :func:`numpy.random.multinomial`
 * :func:`numpy.random.negative_binomial`
+* :func:`numpy.random.noncentral_chisquare`
 * :func:`numpy.random.normal`
 * :func:`numpy.random.pareto`
 * :func:`numpy.random.poisson`
@@ -623,9 +750,11 @@ Math operations
  floor_divide        Yes          Yes
  negative            Yes          Yes
  power               Yes          Yes
+ float_power         Yes          Yes
  remainder           Yes          Yes
  mod                 Yes          Yes
  fmod                Yes          Yes
+ divmod (*)          Yes          Yes
  abs                 Yes          Yes
  absolute            Yes          Yes
  fabs                Yes          Yes
@@ -641,12 +770,14 @@ Math operations
  log1p               Yes          Yes
  sqrt                Yes          Yes
  square              Yes          Yes
+ cbrt                Yes          Yes
  reciprocal          Yes          Yes
  conjugate           Yes          Yes
  gcd                 Yes          Yes
  lcm                 Yes          Yes
 ==============  =============  ===============
 
+(\*) not supported on timedelta types
 
 Trigonometric functions
 -----------------------
@@ -744,3 +875,15 @@ Floating functions
 ==============  =============  ===============
 
 (\*) not supported on windows 32 bit
+
+
+Datetime functions
+------------------
+
+==============  =============  ===============
+    UFUNC                  MODE
+--------------  ------------------------------
+    name         object mode    nopython mode
+==============  =============  ===============
+ isnat            Yes          Yes
+==============  =============  ===============

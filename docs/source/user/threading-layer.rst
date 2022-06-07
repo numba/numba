@@ -59,6 +59,25 @@ choosing a threading layer, the first is by selecting a threading layer that is
 safe under various forms of parallel execution, the second is through explicit
 selection via the threading layer name (e.g. ``tbb``).
 
+Setting the threading layer selection priority
+----------------------------------------------
+
+By default the threading layers are searched in the order of ``'tbb'``,
+``'omp'``, then ``'workqueue'``. To change this search order whilst
+maintaining the selection of a threading layer based on availability, the
+environment variable :envvar:`NUMBA_THREADING_LAYER_PRIORITY` can be used.
+
+Note that it can also be set via
+:py:data:`numba.config.THREADING_LAYER_PRIORITY`.
+Similar to :py:data:`numba.config.THREADING_LAYER`,
+it must occur logically before any Numba based
+compilation for a parallel target has occurred.
+
+For example, to instruct Numba to choose ``omp`` first if available,
+then ``tbb`` and so on, set the environment variable as
+``NUMBA_THREADING_LAYER_PRIORITY="omp tbb workqueue"``.
+Or programmatically,
+``numba.config.THREADING_LAYER_PRIORITY = ["omp", "tbb", "workqueue"]``.
 
 Selecting a threading layer for safe parallel execution
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -138,8 +157,9 @@ and requirements are as follows:
 |                      | Windows   | MS OpenMP libraries (very likely this will|
 |                      |           | already exist)                            |
 |                      |           |                                           |
-|                      | OSX       | The ``intel-openmp`` package (``$ conda   |
-|                      |           | install intel-openmp``)                   |
+|                      | OSX       | Either the ``intel-openmp`` package or the|
+|                      |           | ``llvm-openmp`` package                   |
+|                      |           | (``conda install`` the package as named). |
 +----------------------+-----------+-------------------------------------------+
 | ``workqueue``        | All       | None                                      |
 +----------------------+-----------+-------------------------------------------+
@@ -163,6 +183,13 @@ system level libraries, some additional things to note:
   program that is using the ``omp`` threading layer, a detection mechanism is
   present that will try and gracefully terminate the forked child and print an
   error message to ``STDERR``.
+* On systems with the ``fork(2)`` system call available, if the TBB backed
+  threading layer is in use and a ``fork`` call is made from a thread other than
+  the thread that launched TBB (typically the main thread) then this results in
+  undefined behaviour and a warning will be displayed on ``STDERR``. As
+  ``spawn`` is essentially ``fork`` followed by ``exec`` it is safe to ``spawn``
+  from a non-main thread, but as this cannot be differentiated from just a
+  ``fork`` call the warning message will still be displayed.
 * On OSX, the ``intel-openmp`` package is required to enable the OpenMP based
   threading layer.
 
@@ -261,10 +288,11 @@ API Reference
 
 .. py:data:: numba.config.NUMBA_DEFAULT_NUM_THREADS
 
-   The number of CPU cores on the system (as determined by
-   ``multiprocessing.cpu_count()``). This is the default value for
-   :obj:`numba.config.NUMBA_NUM_THREADS` unless the
-   :envvar:`NUMBA_NUM_THREADS` environment variable is set.
+   The number of usable CPU cores on the system (as determined by
+   ``len(os.sched_getaffinity(0))``, if supported by the OS, or
+   ``multiprocessing.cpu_count()`` if not).
+   This is the default value for :obj:`numba.config.NUMBA_NUM_THREADS` unless
+   the :envvar:`NUMBA_NUM_THREADS` environment variable is set.
 
 .. autofunction:: numba.set_num_threads
 

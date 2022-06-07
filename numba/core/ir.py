@@ -26,7 +26,7 @@ class Loc(object):
     """Source location
 
     """
-    _defmatcher = re.compile('def\s+(\w+)\(.*')
+    _defmatcher = re.compile(r'def\s+(\w+)\(.*')
 
     def __init__(self, filename, line, col=None, maybe_decorator=False):
         """ Arguments:
@@ -418,12 +418,12 @@ class Expr(Inst):
         return cls(op=op, loc=loc, fn=fn, value=value)
 
     @classmethod
-    def call(cls, func, args, kws, loc, vararg=None):
-        assert isinstance(func, (Var, Intrinsic))
+    def call(cls, func, args, kws, loc, vararg=None, varkwarg=None, target=None):
+        assert isinstance(func, Var)
         assert isinstance(loc, Loc)
         op = 'call'
         return cls(op=op, loc=loc, func=func, args=args, kws=kws,
-                   vararg=vararg)
+                   vararg=vararg, varkwarg=varkwarg, target=target)
 
     @classmethod
     def build_tuple(cls, items, loc):
@@ -444,10 +444,11 @@ class Expr(Inst):
         return cls(op=op, loc=loc, items=items)
 
     @classmethod
-    def build_map(cls, items, size, loc):
+    def build_map(cls, items, size, literal_value, value_indexes, loc):
         assert isinstance(loc, Loc)
         op = 'build_map'
-        return cls(op=op, loc=loc, items=items, size=size)
+        return cls(op=op, loc=loc, items=items, size=size,
+                   literal_value=literal_value, value_indexes=value_indexes)
 
     @classmethod
     def pair_first(cls, value, loc):
@@ -498,7 +499,8 @@ class Expr(Inst):
         assert isinstance(index, Var)
         assert isinstance(loc, Loc)
         op = 'getitem'
-        return cls(op=op, loc=loc, value=value, index=index)
+        fn = operator.getitem
+        return cls(op=op, loc=loc, value=value, index=index, fn=fn)
 
     @classmethod
     def typed_getitem(cls, value, dtype, index, loc):
@@ -514,8 +516,9 @@ class Expr(Inst):
         assert index_var is None or isinstance(index_var, Var)
         assert isinstance(loc, Loc)
         op = 'static_getitem'
+        fn = operator.getitem
         return cls(op=op, loc=loc, value=value, index=index,
-                   index_var=index_var)
+                   index_var=index_var, fn=fn)
 
     @classmethod
     def cast(cls, value, loc):
@@ -528,6 +531,13 @@ class Expr(Inst):
         return cls(op=op, value=value, loc=loc)
 
     @classmethod
+    def phi(cls, loc):
+        """Phi node
+        """
+        assert isinstance(loc, Loc)
+        return cls(op='phi', incoming_values=[], incoming_blocks=[], loc=loc)
+
+    @classmethod
     def make_function(cls, name, code, closure, defaults, loc):
         """
         A node for making a function object.
@@ -535,6 +545,32 @@ class Expr(Inst):
         assert isinstance(loc, Loc)
         op = 'make_function'
         return cls(op=op, name=name, code=code, closure=closure, defaults=defaults, loc=loc)
+
+    @classmethod
+    def null(cls, loc):
+        """
+        A node for null value.
+
+        This node is not handled by type inference. It is only added by
+        post-typing passes.
+        """
+        assert isinstance(loc, Loc)
+        op = 'null'
+        return cls(op=op, loc=loc)
+
+    @classmethod
+    def dummy(cls, op, info, loc):
+        """
+        A node for a dummy value.
+
+        This node is a place holder for carrying information through to a point
+        where it is rewritten into something valid. This node is not handled
+        by type inference or lowering. It's presence outside of the interpreter
+        renders IR as illegal.
+        """
+        assert isinstance(loc, Loc)
+        assert isinstance(op, str)
+        return cls(op=op, info=info, loc=loc)
 
     def __repr__(self):
         if self.op == 'call':
@@ -707,11 +743,11 @@ class StaticRaise(Terminator):
 
     def __str__(self):
         if self.exc_class is None:
-            return "raise"
+            return "<static> raise"
         elif self.exc_args is None:
-            return "raise %s" % (self.exc_class,)
+            return "<static> raise %s" % (self.exc_class,)
         else:
-            return "raise %s(%s)" % (self.exc_class,
+            return "<static> raise %s(%s)" % (self.exc_class,
                                      ", ".join(map(repr, self.exc_args)))
 
     def get_targets(self):
@@ -887,6 +923,16 @@ class EnterWith(Stmt):
         return [self.contextmanager]
 
 
+class PopBlock(Stmt):
+    """Marker statement for a pop block op code"""
+    def __init__(self, loc):
+        assert isinstance(loc, Loc)
+        self.loc = loc
+
+    def __str__(self):
+        return 'pop_block'
+
+
 class Arg(EqualityCheckMixin, AbstractRHS):
     def __init__(self, name, index, loc):
         assert isinstance(name, str)
@@ -916,6 +962,13 @@ class Const(EqualityCheckMixin, AbstractRHS):
 
     def infer_constant(self):
         return self.value
+
+    def __deepcopy__(self, memo):
+        # Override to not copy constant values in code
+        return Const(
+            value=self.value, loc=self.loc,
+            use_literal_type=self.use_literal_type,
+        )
 
 
 class Global(EqualityCheckMixin, AbstractRHS):
@@ -961,6 +1014,12 @@ class FreeVar(EqualityCheckMixin, AbstractRHS):
     def infer_constant(self):
         return self.value
 
+    def __deepcopy__(self, memo):
+        # Override to not copy constant values in code
+        return FreeVar(index=self.index, name=self.name, value=self.value,
+                       loc=self.loc)
+
+
 
 class Var(EqualityCheckMixin, AbstractRHS):
     """
@@ -993,28 +1052,27 @@ class Var(EqualityCheckMixin, AbstractRHS):
     def is_temp(self):
         return self.name.startswith("$")
 
-
-class Intrinsic(EqualityCheckMixin):
-    """
-    A low-level "intrinsic" function.  Suitable as the callable of a "call"
-    expression.
-
-    The given *name* is backend-defined and will be inserted as-is
-    in the generated low-level IR.
-    The *type* is the equivalent Numba signature of calling the intrinsic.
-    """
-
-    def __init__(self, name, type, args, loc=None):
-        self.name = name
-        self.type = type
-        self.loc = loc
-        self.args = args
-
-    def __repr__(self):
-        return 'Intrinsic(%s, %s, %s)' % (self.name, self.type, self.loc)
-
-    def __str__(self):
+    @property
+    def unversioned_name(self):
+        """The unversioned name of this variable, i.e. SSA renaming removed
+        """
+        for k, redef_set in self.scope.var_redefinitions.items():
+            if self.name in redef_set:
+                return k
         return self.name
+
+    @property
+    def versioned_names(self):
+        """Known versioned names for this variable, i.e. known variable names in
+        the scope that have been formed from applying SSA to this variable
+        """
+        return self.scope.get_versions_of(self.unversioned_name)
+
+    @property
+    def all_names(self):
+        """All known versioned and unversioned names for this variable
+        """
+        return self.versioned_names | {self.unversioned_name,}
 
 
 class Scope(EqualityCheckMixin):
@@ -1039,6 +1097,7 @@ class Scope(EqualityCheckMixin):
         self.localvars = VarMap()
         self.loc = loc
         self.redefined = defaultdict(int)
+        self.var_redefinitions = defaultdict(set)
 
     def define(self, name, loc):
         """
@@ -1089,10 +1148,31 @@ class Scope(EqualityCheckMixin):
             # means it could be captured in a closure.
             return self.localvars.get(name)
         else:
-            ct = self.redefined[name]
-            self.redefined[name] = ct + 1
-            newname = "%s.%d" % (name, ct + 1)
-            return self.define(newname, loc)
+            while True:
+                ct = self.redefined[name]
+                self.redefined[name] = ct + 1
+                newname = "%s.%d" % (name, ct + 1)
+                try:
+                    res = self.define(newname, loc)
+                except RedefinedError:
+                    continue
+                else:
+                    self.var_redefinitions[name].add(newname)
+                return res
+
+    def get_versions_of(self, name):
+        """
+        Gets all known versions of a given name
+        """
+        vers = set()
+        def walk(thename):
+            redefs = self.var_redefinitions.get(thename, None)
+            if redefs:
+                for v in redefs:
+                    vers.add(v)
+                    walk(v)
+        walk(name)
+        return vers
 
     def make_temp(self, loc):
         n = len(self.localvars)
@@ -1515,12 +1595,12 @@ class FunctionIR(object):
                 label = sb.getvalue()
             if include_ir:
                 label = ''.join(
-                    ['  {}\l'.format(x) for x in label.splitlines()],
+                    [r'  {}\l'.format(x) for x in label.splitlines()],
                 )
-                label = "block {}\l".format(k) + label
+                label = r"block {}\l".format(k) + label
                 g.node(str(k), label=label, shape='rect')
             else:
-                label = "{}\l".format(k)
+                label = r"{}\l".format(k)
                 g.node(str(k), label=label, shape='circle')
         # Populate the edges
         for src, blk in self.blocks.items():

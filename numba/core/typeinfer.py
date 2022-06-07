@@ -25,9 +25,9 @@ from numba.core import types, utils, typing, ir, config
 from numba.core.typing.templates import Signature
 from numba.core.errors import (TypingError, UntypedAttributeError,
                                new_error_context, termcolor, UnsupportedError,
-                               ForceLiteralArg)
+                               ForceLiteralArg, CompilerError, NumbaValueError)
 from numba.core.funcdesc import qualifying_prefix
-
+from numba.core.typeconv import Conversion
 
 _logger = logging.getLogger(__name__)
 
@@ -81,7 +81,13 @@ class TypeVar(object):
 
     def lock(self, tp, loc, literal_value=NOTSET):
         assert isinstance(tp, types.Type), type(tp)
-        assert not self.locked
+
+        if self.locked:
+            msg = ("Invalid reassignment of a type-variable detected, type "
+                   "variables are locked according to the user provided "
+                   "function signature or from an ir.Const node. This is a "
+                   "bug! Type={}. {}").format(tp, self.type)
+            raise CompilerError(msg, loc)
 
         # If there is already a type, ensure we can convert it to the
         # locked type.
@@ -157,15 +163,23 @@ class ConstraintNetwork(object):
                     )
                     errors.append(utils.chain_exception(new_exc, e))
                 except Exception as e:
-                    _logger.debug("captured error", exc_info=e)
-                    msg = ("Internal error at {con}.\n"
-                           "{err}\nEnable logging at debug level for details.")
-                    new_exc = TypingError(
-                        msg.format(con=constraint, err=str(e)),
-                        loc=constraint.loc,
-                        highlighting=False,
-                    )
-                    errors.append(utils.chain_exception(new_exc, e))
+                    if utils.use_old_style_errors():
+                        _logger.debug("captured error", exc_info=e)
+                        msg = ("Internal error at {con}.\n{err}\n"
+                               "Enable logging at debug level for details.")
+                        new_exc = TypingError(
+                            msg.format(con=constraint, err=str(e)),
+                            loc=constraint.loc,
+                            highlighting=False,
+                        )
+                        errors.append(utils.chain_exception(new_exc, e))
+                    elif utils.use_new_style_errors():
+                        raise e
+                    else:
+                        msg = ("Unknown CAPTURED_ERRORS style: "
+                               f"'{config.CAPTURED_ERRORS}'.")
+                        assert 0, msg
+
         return errors
 
 
@@ -208,7 +222,9 @@ class ArgConstraint(object):
                 return
             ty = src.getone()
             if isinstance(ty, types.Omitted):
-                ty = typeinfer.context.resolve_value_type(ty.value)
+                ty = typeinfer.context.resolve_value_type_prefer_literal(
+                    ty.value,
+                )
             if not ty.is_precise():
                 raise TypingError('non-precise type {}'.format(ty))
             typeinfer.add_type(self.dst, ty, loc=self.loc)
@@ -260,7 +276,38 @@ class _BuildContainerConstraint(object):
 
 
 class BuildListConstraint(_BuildContainerConstraint):
-    container_type = types.List
+
+    def __init__(self, target, items, loc):
+        self.target = target
+        self.items = items
+        self.loc = loc
+
+    def __call__(self, typeinfer):
+        with new_error_context("typing of {0} at {1}",
+                               types.List, self.loc):
+            typevars = typeinfer.typevars
+            tsets = [typevars[i.name].get() for i in self.items]
+            if not tsets:
+                typeinfer.add_type(self.target,
+                                   types.List(types.undefined),
+                                   loc=self.loc)
+            else:
+                for typs in itertools.product(*tsets):
+                    unified = typeinfer.context.unify_types(*typs)
+                    if unified is not None:
+                        # pull out literals if available
+                        islit = [isinstance(x, types.Literal) for x in typs]
+                        iv = None
+                        if all(islit):
+                            iv = [x.literal_value for x in typs]
+                        typeinfer.add_type(self.target,
+                                           types.List(unified,
+                                                      initial_value=iv),
+                                           loc=self.loc)
+                    else:
+                        typeinfer.add_type(self.target,
+                                           types.LiteralList(typs),
+                                           loc=self.loc)
 
 
 class BuildSetConstraint(_BuildContainerConstraint):
@@ -269,26 +316,71 @@ class BuildSetConstraint(_BuildContainerConstraint):
 
 class BuildMapConstraint(object):
 
-    def __init__(self, target, items, loc):
+    def __init__(self, target, items, special_value, value_indexes, loc):
         self.target = target
         self.items = items
+        self.special_value = special_value
+        self.value_indexes = value_indexes
         self.loc = loc
 
     def __call__(self, typeinfer):
+
         with new_error_context("typing of dict at {0}", self.loc):
             typevars = typeinfer.typevars
+
+            # figure out what sort of dict is being dealt with
             tsets = [(typevars[k.name].getone(), typevars[v.name].getone())
                      for k, v in self.items]
+
             if not tsets:
                 typeinfer.add_type(self.target,
                                    types.DictType(types.undefined,
-                                                  types.undefined),
+                                                  types.undefined,
+                                                  self.special_value),
                                    loc=self.loc)
             else:
-                key_type, value_type = tsets[0]
-                typeinfer.add_type(self.target,
-                                   types.DictType(key_type, value_type),
-                                   loc=self.loc)
+                # all the info is known about the dict, if its
+                # str keys -> random heterogeneous values treat as literalstrkey
+                ktys = [x[0] for x in tsets]
+                vtys = [x[1] for x in tsets]
+                strkey = all([isinstance(x, types.StringLiteral) for x in ktys])
+                literalvty = all([isinstance(x, types.Literal) for x in vtys])
+                vt0 = types.unliteral(vtys[0])
+
+                # homogeneous values comes in the form of being able to cast
+                # all the other values in the ctor to the type of the first.
+                # The order is important as `typed.Dict` takes it's type from
+                # the first element.
+                def check(other):
+                    conv = typeinfer.context.can_convert(other, vt0)
+                    return conv is not None and conv < Conversion.unsafe
+                homogeneous = all([check(types.unliteral(x)) for x in vtys])
+
+                # Special cases:
+                # Single key:value in ctor, key is str, value is an otherwise
+                # illegal container type, e.g. LiteralStrKeyDict or
+                # List, there's no way to put this into a typed.Dict, so make it
+                # a LiteralStrKeyDict, same goes for LiteralList.
+                if len(vtys) == 1:
+                    valty = vtys[0]
+                    if isinstance(valty, (types.LiteralStrKeyDict,
+                                          types.List,
+                                          types.LiteralList)):
+                        homogeneous = False
+
+                if strkey and not homogeneous:
+                    resolved_dict = {x: y for x, y in zip(ktys, vtys)}
+                    ty = types.LiteralStrKeyDict(resolved_dict,
+                                                 self.value_indexes)
+                    typeinfer.add_type(self.target, ty, loc=self.loc)
+                else:
+                    init_value = self.special_value if literalvty else None
+                    key_type, value_type = tsets[0]
+                    typeinfer.add_type(self.target,
+                                       types.DictType(key_type,
+                                                      value_type,
+                                                      init_value),
+                                       loc=self.loc)
 
 
 class ExhaustIterConstraint(object):
@@ -310,10 +402,9 @@ class ExhaustIterConstraint(object):
                         typeinfer.add_type(self.target, tp, loc=self.loc)
                         break
                     else:
-                        raise ValueError("wrong tuple length for %r: "
-                                         "expected %d, got %d"
-                                         % (self.iterator.name, self.count,
-                                            len(tp)))
+                        msg = (f"wrong tuple length for {self.iterator.name}: ",
+                               f"expected {self.count}, got {len(tp)}")
+                        raise NumbaValueError(msg)
                 elif isinstance(tp, types.IterableType):
                     tup = types.UniTuple(dtype=tp.iterator_type.yield_type,
                                          count=self.count)
@@ -338,7 +429,8 @@ class PairFirstConstraint(object):
                 if not isinstance(tp, types.Pair):
                     # XXX is this an error?
                     continue
-                assert tp.first_type.is_precise()
+                assert (isinstance(tp.first_type, types.UndefinedFunctionType)
+                        or tp.first_type.is_precise())
                 typeinfer.add_type(self.target, tp.first_type, loc=self.loc)
 
 
@@ -502,6 +594,9 @@ class CallConstraint(object):
                 return
 
         # Resolve call type
+        if isinstance(fnty, types.TypeRef):
+            # Unwrap TypeRef
+            fnty = fnty.instance_type
         try:
             sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
         except ForceLiteralArg as e:
@@ -657,12 +752,18 @@ class SetItemRefinement(object):
         if _is_array_not_precise(targetty):
             typeinfer.add_type(self.target.name, sig.args[0], loc=self.loc)
         # For Dict setitem
-        if isinstance(targetty, types.DictType) and not targetty.is_precise():
-            refined = targetty.refine(idxty, valty)
-            typeinfer.add_type(
-                self.target.name, refined,
-                loc=self.loc,
-            )
+        if isinstance(targetty, types.DictType):
+            if not targetty.is_precise():
+                refined = targetty.refine(idxty, valty)
+                typeinfer.add_type(
+                    self.target.name, refined,
+                    loc=self.loc,
+                )
+            elif isinstance(targetty, types.LiteralStrKeyDict):
+                typeinfer.add_type(
+                    self.target.name, types.DictType(idxty, valty),
+                    loc=self.loc,
+                )
 
 
 class SetItemConstraint(SetItemRefinement):
@@ -907,7 +1008,7 @@ class TypeInferer(object):
 
     def _get_return_vars(self):
         rets = []
-        for blk in utils.itervalues(self.blocks):
+        for blk in self.blocks.values():
             inst = blk.terminator
             if isinstance(inst, ir.Return):
                 rets.append(inst.value)
@@ -933,7 +1034,7 @@ class TypeInferer(object):
             self.lock_type(var.name, typ, loc=None)
 
     def build_constraint(self):
-        for blk in utils.itervalues(self.blocks):
+        for blk in self.blocks.values():
             for inst in blk.body:
                 self.constrain_statement(inst)
 
@@ -1054,7 +1155,7 @@ precise type that can be inferred from the other variables. Whilst sometimes
 the type of empty lists can be inferred, this is not always the case, see this
 documentation for help:
 
-http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-untyped-list-problem
+https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-untyped-list-problem
 """
             if offender is not None:
                 # This block deals with imprecise lists
@@ -1090,6 +1191,10 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                     typdict[var] = types.unknown
                     return
             tp = tv.getone()
+
+            if isinstance(tp, types.UndefinedFunctionType):
+                tp = tp.get_precise()
+
             if not tp.is_precise():
                 offender = find_offender(name, exhaustive=True)
                 msg = ("Cannot infer the type of variable '%s'%s, "
@@ -1124,6 +1229,9 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 raise e
             else:
                 retty = None
+        else:
+            typdict = utils.UniqueDict(
+                typdict, **{v.name: retty for v in self._get_return_vars()})
 
         try:
             fntys = self.get_function_types(typdict)
@@ -1217,6 +1325,10 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
     def _unify_return_types(self, rettypes):
         if rettypes:
             unified = self.context.unify_types(*rettypes)
+            if isinstance(unified, types.FunctionType):
+                # unified is allowed to be UndefinedFunctionType
+                # instance (that is imprecise).
+                return unified
             if unified is None or not unified.is_precise():
                 def check_type(atype):
                     lst = []
@@ -1288,6 +1400,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             pass
         elif isinstance(inst, (ir.StaticRaise, ir.StaticTryRaise)):
             pass
+        elif isinstance(inst, ir.PopBlock):
+            pass # It's a marker statement
         elif type(inst) in typeinfer_extensions:
             # let external calls handle stmt if type matches
             f = typeinfer_extensions[type(inst)]
@@ -1387,8 +1501,7 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
         """
         Ensure that builtins are not modified.
         """
-        if (gvar.name in ('range', 'xrange') and
-                gvar.value not in utils.RANGE_ITER_OBJECTS):
+        if gvar.name == 'range' and gvar.value is not range:
             bad = True
         elif gvar.name == 'slice' and gvar.value is not slice:
             bad = True
@@ -1405,6 +1518,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
         """
         Resolve a call to a given function type.  A signature is returned.
         """
+        if isinstance(fnty, types.FunctionType):
+            return fnty.get_call_type(self, pos_args, kw_args)
         if isinstance(fnty, types.RecursiveCall) and not self._skip_recursion:
             # Recursive call
             disp = fnty.dispatcher_type.dispatcher
@@ -1417,13 +1532,13 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 sig = self.context.resolve_function_type(fnty.dispatcher_type,
                                                          pos_args, kw_args)
                 fndesc = disp.overloads[args].fndesc
-                fnty.overloads[args] = qualifying_prefix(fndesc.modname,
-                                                         fndesc.unique_name)
+                qual = qualifying_prefix(fndesc.modname, fndesc.qualname)
+                fnty.add_overloads(args, qual, fndesc.uid)
                 return sig
 
             fnid = frame.func_id
-            fnty.overloads[args] = qualifying_prefix(fnid.modname,
-                                                     fnid.unique_name)
+            qual = qualifying_prefix(fnid.modname, fnid.func_qualname)
+            fnty.add_overloads(args, qual, fnid.unique_id)
             # Resume propagation in parent frame
             return_type = frame.typeinfer.return_types_from_partial()
             # No known return type
@@ -1449,13 +1564,26 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 # as a global variable
                 typ = types.Dispatcher(_temporary_dispatcher_map[gvar.name])
             else:
+                from numba.misc import special
+
                 nm = gvar.name
-                msg = _termcolor.errmsg("Untyped global name '%s':" % nm)
+                # check if the problem is actually a name error
+                func_glbls = self.func_id.func.__globals__
+                if (nm not in func_glbls.keys() and
+                        nm not in special.__all__ and
+                        nm not in __builtins__.keys() and
+                        nm not in self.func_id.code.co_freevars):
+                    errstr = "NameError: name '%s' is not defined"
+                    msg = _termcolor.errmsg(errstr % nm)
+                    e.patch_message(msg)
+                    raise
+                else:
+                    msg = _termcolor.errmsg("Untyped global name '%s':" % nm)
                 msg += " %s"  # interps the actual error
 
                 # if the untyped global is a numba internal function then add
                 # to the error message asking if it's been imported.
-                from numba.misc import special
+
                 if nm in special.__all__:
                     tmp = ("\n'%s' looks like a Numba internal function, has "
                            "it been imported (i.e. 'from numba import %s')?\n" %
@@ -1480,25 +1608,45 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             typ = typ.copy(readonly=True)
 
         if isinstance(typ, types.BaseAnonymousTuple):
-            types_with_literals = (types.Integer, types.UnicodeType)
-            if all(isinstance(ty, types_with_literals) for ty in typ):
-                typ = types.Tuple([types.literal(val) for val in gvar.value])
+            # if it's a tuple of literal types, swap the type for the more
+            # specific literal version
+            literaled = [types.maybe_literal(x) for x in gvar.value]
+            if all(literaled):
+                typ = types.Tuple(literaled)
+
+            # if any of the items in the tuple are arrays, they need to be
+            # typed as readonly, mutating an array in a global container
+            # is not supported (should be compile time constant etc).
+            def mark_array_ro(tup):
+                newtup = []
+                for item in tup.types:
+                    if isinstance(item, types.Array):
+                        item = item.copy(readonly=True)
+                    elif isinstance(item, types.BaseAnonymousTuple):
+                        item = mark_array_ro(item)
+                    newtup.append(item)
+                return types.BaseTuple.from_types(newtup)
+            typ = mark_array_ro(typ)
 
         self.sentry_modified_builtin(inst, gvar)
         # Setting literal_value for globals because they are handled
         # like const value in numba
         lit = types.maybe_literal(gvar.value)
-        self.lock_type(target.name, lit or typ, loc=inst.loc)
+        # The user may have provided the type for this variable already.
+        # In this case, call add_type() to make sure the value type is
+        # consistent. See numba.tests.test_array_reductions
+        # TestArrayReductions.test_array_cumsum for examples.
+        # Variable type locked by using the locals dict.
+        tv = self.typevars[target.name]
+        if tv.locked:
+            tv.add_type(lit or typ, loc=inst.loc)
+        else:
+            self.lock_type(target.name, lit or typ, loc=inst.loc)
         self.assumed_immutables.add(inst)
 
     def typeof_expr(self, inst, target, expr):
         if expr.op == 'call':
-            if isinstance(expr.func, ir.Intrinsic):
-                sig = expr.func.type
-                self.add_type(target.name, sig.return_type, loc=inst.loc)
-                self.add_calltype(expr, sig)
-            else:
-                self.typeof_call(inst, target, expr)
+            self.typeof_call(inst, target, expr)
         elif expr.op in ('getiter', 'iternext'):
             self.typeof_intrinsic_call(inst, target, expr.op, expr.value)
         elif expr.op == 'exhaust_iter':
@@ -1558,16 +1706,27 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                                             loc=inst.loc)
             self.constraints.append(constraint)
         elif expr.op == 'build_map':
-            constraint = BuildMapConstraint(target.name, items=expr.items,
-                                            loc=inst.loc)
+            constraint = BuildMapConstraint(
+                target.name,
+                items=expr.items,
+                special_value=expr.literal_value,
+                value_indexes=expr.value_indexes,
+                loc=inst.loc)
             self.constraints.append(constraint)
         elif expr.op == 'cast':
             self.constraints.append(Propagate(dst=target.name,
                                               src=expr.value.name,
                                               loc=inst.loc))
+        elif expr.op == 'phi':
+            for iv in expr.incoming_values:
+                if iv is not ir.UNDEFINED:
+                    self.constraints.append(Propagate(dst=target.name,
+                                                      src=iv.name,
+                                                      loc=inst.loc))
         elif expr.op == 'make_function':
             self.lock_type(target.name, types.MakeFunctionLiteral(expr),
                            loc=inst.loc, literal_value=expr)
+
         else:
             msg = "Unsupported op-code encountered: %s" % expr
             raise UnsupportedError(msg, loc=inst.loc)
