@@ -970,9 +970,7 @@ class Float(AbstractTemplate):
 
         [arg] = args
 
-        # Check for float16 separately because it is not part of
-        # number_domain due to the lack of cpu support for float16
-        if arg not in types.number_domain and arg != types.float16:
+        if arg not in types.number_domain:
             raise errors.NumbaTypeError("float() only support for numbers")
 
         if arg in types.complex_domain:
@@ -981,9 +979,7 @@ class Float(AbstractTemplate):
         if arg in types.integer_domain:
             return signature(types.float64, arg)
 
-        # Check for float16 separately because it is not part of
-        # real_domain due to the lack of cpu support for float16
-        elif arg in types.real_domain or arg == types.float16:
+        elif arg in types.real_domain:
             return signature(arg, arg)
 
 
