@@ -9,7 +9,7 @@ from llvmlite import ir
 
 from numba import typed
 from numba.core import cgutils, types, typing
-from numba.core.errors import RequireLiteralValue
+from numba.core.errors import RequireLiteralValue, TypingError
 from numba.core.extending import intrinsic, overload, overload_method
 from numba.core.imputils import (RefType, impl_ret_borrowed,
                                  impl_ret_untracked, iternext_impl,
@@ -436,7 +436,7 @@ def make_tuple(typingctx, size, iterable):
     ------
     RequireLiteralValue
         raised during typing if 'size' parameter is not a constant integer
-    TypeError
+    TypingError
         raised during typing if iterable is of an invalid type
     ValueError
         raised at runtime if `len(iterable) < size`
@@ -446,7 +446,7 @@ def make_tuple(typingctx, size, iterable):
             f"make_tuple: argument 'size' must be a constant integer")
     tuple_size = size.literal_value
     if tuple_size < 0:
-        raise ValueError(
+        raise TypingError(
             f"make_tuple: 'size' may not be negative, got size={tuple_size}")
 
     too_short_msg = "make_tuple: argument 'iterable' is shorter than specified"
@@ -480,11 +480,11 @@ def make_tuple(typingctx, size, iterable):
     # Treat non-tuple inputs
 
     if not isinstance(iterable, (types.IterableType, types.StringLiteral)):
-        raise TypeError(
+        raise TypingError(
             f"make_tuple: argument 'iterable' must be an iterable, got {iterable.name}")
     if isinstance(iterable, types.Array):
         if not iterable.ndim == 1:
-            raise TypeError(
+            raise TypingError(
                 "make_tuple: arrays provided as 'iterable' must be 1d")
     if hasattr(iterable, 'dtype'):
         dtype = iterable.dtype
@@ -499,7 +499,7 @@ def make_tuple(typingctx, size, iterable):
     elif isinstance(iterable, types.UnicodeType):
         dtype = iterable
     else:
-        raise TypeError(
+        raise TypingError(
             "make_tuple: cannot determine dtype of argument 'iterable'"
             f" of type '{iterable}'")
 
