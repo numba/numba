@@ -23,14 +23,18 @@ from functools import reduce
 from collections import defaultdict, OrderedDict, namedtuple
 from contextlib import contextmanager
 import operator
+from dataclasses import make_dataclass
 
+from llvmlite import ir as lir
+from numba.core.imputils import impl_ret_untracked
 import numba.core.ir
 from numba.core import types, typing, utils, errors, ir, analysis, postproc, rewrites, typeinfer, config, ir_utils
 from numba import prange, pndindex
-from numba.np.numpy_support import as_dtype
+from numba.np.npdatetime_helpers import datetime_minimum, datetime_maximum
+from numba.np.numpy_support import as_dtype, numpy_version
 from numba.core.typing.templates import infer_global, AbstractTemplate
 from numba.stencils.stencilparfor import StencilPass
-from numba.core.extending import register_jitable
+from numba.core.extending import register_jitable, lower_builtin
 
 from numba.core.ir_utils import (
     mk_unique_var,
@@ -121,6 +125,7 @@ class internal_prange(object):
     def __new__(cls, *args):
         return range(*args)
 
+
 def min_parallel_impl(return_type, arg):
     # XXX: use prange for 1D arrays since pndindex returns a 1-tuple instead of
     # integer. This causes type and fusion issues.
@@ -128,13 +133,23 @@ def min_parallel_impl(return_type, arg):
         def min_1(in_arr):
             return in_arr[()]
     elif arg.ndim == 1:
-        def min_1(in_arr):
-            numba.parfors.parfor.init_prange()
-            min_checker(len(in_arr))
-            val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
-            for i in numba.parfors.parfor.internal_prange(len(in_arr)):
-                val = min(val, in_arr[i])
-            return val
+        if isinstance(arg.dtype, (types.NPDatetime, types.NPTimedelta)):
+            # NaT is always returned if it is in the array
+            def min_1(in_arr):
+                numba.parfors.parfor.init_prange()
+                min_checker(len(in_arr))
+                val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
+                for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                    val = datetime_minimum(val, in_arr[i])
+                return val
+        else:
+            def min_1(in_arr):
+                numba.parfors.parfor.init_prange()
+                min_checker(len(in_arr))
+                val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
+                for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                    val = min(val, in_arr[i])
+                return val
     else:
         def min_1(in_arr):
             numba.parfors.parfor.init_prange()
@@ -150,13 +165,23 @@ def max_parallel_impl(return_type, arg):
         def max_1(in_arr):
             return in_arr[()]
     elif arg.ndim == 1:
-        def max_1(in_arr):
-            numba.parfors.parfor.init_prange()
-            max_checker(len(in_arr))
-            val = numba.cpython.builtins.get_type_min_value(in_arr.dtype)
-            for i in numba.parfors.parfor.internal_prange(len(in_arr)):
-                val = max(val, in_arr[i])
-            return val
+        if isinstance(arg.dtype, (types.NPDatetime, types.NPTimedelta)):
+            # NaT is always returned if it is in the array
+            def max_1(in_arr):
+                numba.parfors.parfor.init_prange()
+                max_checker(len(in_arr))
+                val = numba.cpython.builtins.get_type_min_value(in_arr.dtype)
+                for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                    val = datetime_maximum(val, in_arr[i])
+                return val
+        else:
+            def max_1(in_arr):
+                numba.parfors.parfor.init_prange()
+                max_checker(len(in_arr))
+                val = numba.cpython.builtins.get_type_min_value(in_arr.dtype)
+                for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                    val = max(val, in_arr[i])
+                return val
     else:
         def max_1(in_arr):
             numba.parfors.parfor.init_prange()
@@ -1763,7 +1788,27 @@ class ConvertSetItemPass:
                         else:
                             # Handle A[:] = x
                             shape = equiv_set.get_shape(instr)
-                            if shape is not None:
+                            # Don't converted broadcasted setitems into parfors.
+                            if isinstance(index_typ, types.BaseTuple):
+                                # The sliced dims are those in the index that
+                                # are made of slices.  Count the numbers of slices
+                                # in the index tuple.
+                                sliced_dims = len(list(filter(
+                                    lambda x: isinstance(x, types.misc.SliceType),
+                                    index_typ.types)))
+                            elif isinstance(index_typ, types.misc.SliceType):
+                                # For singular indices there can be a bare slice
+                                # and if so there is one dimension being set.
+                                sliced_dims = 1
+                            else:
+                                sliced_dims = 0
+
+                            # Only create a parfor for this setitem if we know the
+                            # shape of the output and number of dimensions set is
+                            # equal to the number of dimensions on the right side.
+                            if (shape is not None and
+                                (not isinstance(value_typ, types.npytypes.Array) or
+                                 sliced_dims == value_typ.ndim)):
                                 new_instr = self._setitem_to_parfor(equiv_set,
                                         loc, target, index, value, shape=shape)
                                 self.rewritten.append(
@@ -3488,6 +3533,14 @@ def get_parfor_outputs(parfor, parfor_params):
     outputs = list(set(outputs) & set(parfor_params))
     return sorted(outputs)
 
+
+_RedVarInfo = make_dataclass(
+    "_RedVarInfo",
+    ["init_val", "reduce_nodes", "redop"],
+    frozen=True,
+)
+
+
 def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=None,
         reduce_varnames=None, param_uses=None, param_nodes=None,
         var_to_param=None):
@@ -3562,7 +3615,11 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
                 else:
                     init_val = None
                     redop = None
-                reductions[param_name] = (init_val, reduce_nodes, redop)
+                reductions[param_name] = _RedVarInfo(
+                    init_val=init_val,
+                    reduce_nodes=reduce_nodes,
+                    redop=redop,
+                )
 
     return reduce_varnames, reductions
 
@@ -3598,17 +3655,35 @@ def get_reduction_init(nodes):
     if acc_expr.fn == operator.iadd or acc_expr.fn == operator.isub:
         return 0, acc_expr.fn
     if (  acc_expr.fn == operator.imul
-       or acc_expr.fn == operator.itruediv
-       or acc_expr.fn == operator.ifloordiv ):
+       or acc_expr.fn == operator.itruediv ):
         return 1, acc_expr.fn
     return None, None
 
 def supported_reduction(x, func_ir):
     if x.op == 'inplace_binop' or x.op == 'binop':
-        return True
+        if x.fn == operator.ifloordiv or x.fn == operator.floordiv:
+            raise errors.NumbaValueError(("Parallel floordiv reductions are not supported. "
+                              "If all divisors are integers then a floordiv "
+                              "reduction can in some cases be parallelized as "
+                              "a multiply reduction followed by a floordiv of "
+                              "the resulting product."), x.loc)
+        supps = [operator.iadd,
+                 operator.isub,
+                 operator.imul,
+                 operator.itruediv,
+                 operator.add,
+                 operator.sub,
+                 operator.mul,
+                 operator.truediv]
+        return x.fn in supps
     if x.op == 'call':
         callname = guard(find_callname, func_ir, x)
-        if callname == ('max', 'builtins') or callname == ('min', 'builtins'):
+        if callname in [
+            ('max', 'builtins'),
+            ('min', 'builtins'),
+            ('datetime_minimum', 'numba.np.npdatetime_helpers'),
+            ('datetime_maximum', 'numba.np.npdatetime_helpers'),
+        ]:
             return True
     return False
 

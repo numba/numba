@@ -87,7 +87,7 @@ class TestCudaDebugInfo(CUDATestCase):
             self.assertEqual(len(defines), 1)
 
             wrapper_define = defines[0]
-            self.assertIn('noinline!dbg', wrapper_define)
+            self.assertIn('noinline !dbg', wrapper_define)
         else:
             # NVVM 3.4 subprogram debuginfo refers to the definition.
             # '786478' is a constant referring to a subprogram.

@@ -8,10 +8,10 @@ from collections import namedtuple
 from enum import IntEnum
 from functools import partial
 import operator
+import warnings
 
+import llvmlite.ir
 import numpy as np
-
-import llvmlite.llvmpy.core as lc
 
 from numba import generated_jit
 from numba.core import types, cgutils
@@ -28,7 +28,7 @@ from numba.np.linalg import ensure_blas
 from numba.core.extending import intrinsic
 from numba.core.errors import (RequireLiteralValue, TypingError,
                                NumbaValueError, NumbaNotImplementedError,
-                               NumbaTypeError)
+                               NumbaTypeError, NumbaDeprecationWarning)
 from numba.core.overload_glue import glue_lowering
 from numba.cpython.unsafe.tuple import tuple_setitem
 
@@ -795,7 +795,7 @@ def build_argmax_or_argmin_with_axis_impl(arr, axis, flatten_impl):
     array, return the implementation function.
     """
     check_is_integer(axis, "axis")
-    retty = arr.dtype
+    retty = types.intp
 
     tuple_buffer = tuple(range(arr.ndim))
 
@@ -863,6 +863,100 @@ def np_all(a):
         return True
 
     return flat_all
+
+
+@register_jitable
+def _allclose_scalars(a_v, b_v, rtol=1e-05, atol=1e-08, equal_nan=False):
+    a_v_isnan = np.isnan(a_v)
+    b_v_isnan = np.isnan(b_v)
+
+    # only one of the values is NaN and the
+    # other is not.
+    if ( (not a_v_isnan and b_v_isnan) or
+            (a_v_isnan and not b_v_isnan) ):
+        return False
+
+    # either both of the values are NaN
+    # or both are numbers
+    if a_v_isnan and b_v_isnan:
+        if not equal_nan:
+            return False
+    else:
+        if np.isinf(a_v) or np.isinf(b_v):
+            return a_v == b_v
+
+        if np.abs(a_v - b_v) > atol + rtol * np.abs(b_v * 1.0):
+            return False
+
+    return True
+
+
+@overload(np.allclose)
+@overload_method(types.Array, "allclose")
+def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+
+    if not type_can_asarray(a):
+        raise TypeError('The first argument "a" must be array-like')
+
+    if not type_can_asarray(b):
+        raise TypeError('The second argument "b" must be array-like')
+
+    if not isinstance(rtol, types.Float):
+        raise TypeError('The third argument "rtol" must be a '
+                        'floating point')
+
+    if not isinstance(atol, types.Float):
+        raise TypingError('The fourth argument "atol" must be a '
+                          'floating point')
+
+    if not isinstance(equal_nan, types.Boolean):
+        raise TypeError('The fifth argument "equal_nan" must be a '
+                        'boolean')
+
+    is_a_scalar = isinstance(a, types.Number)
+    is_b_scalar = isinstance(b, types.Number)
+
+    if is_a_scalar and is_b_scalar:
+        def np_allclose_impl_scalar_scalar(a, b, rtol=1e-05, atol=1e-08,
+                                           equal_nan=False):
+            return _allclose_scalars(a, b, rtol=rtol, atol=atol,
+                                     equal_nan=equal_nan)
+        return np_allclose_impl_scalar_scalar
+    elif is_a_scalar and not is_b_scalar:
+        def np_allclose_impl_scalar_array(a, b, rtol=1e-05, atol=1e-08,
+                                          equal_nan=False):
+            b = np.asarray(b)
+            for bv in np.nditer(b):
+                if not _allclose_scalars(a, bv.item(), rtol=rtol, atol=atol,
+                                         equal_nan=equal_nan):
+                    return False
+            return True
+        return np_allclose_impl_scalar_array
+    elif not is_a_scalar and is_b_scalar:
+        def np_allclose_impl_array_scalar(a, b, rtol=1e-05, atol=1e-08,
+                                          equal_nan=False):
+            a = np.asarray(a)
+            for av in np.nditer(a):
+                if not _allclose_scalars(av.item(), b, rtol=rtol, atol=atol,
+                                         equal_nan=equal_nan):
+                    return False
+            return True
+        return np_allclose_impl_array_scalar
+    elif not is_a_scalar and not is_b_scalar:
+        def np_allclose_impl_array_array(a, b, rtol=1e-05, atol=1e-08,
+                                         equal_nan=False):
+            a = np.asarray(a)
+            b = np.asarray(b)
+            a_a, b_b = np.broadcast_arrays(a, b)
+
+            for av, bv in np.nditer((a_a, b_b)):
+                if not _allclose_scalars(av.item(), bv.item(), rtol=rtol,
+                                         atol=atol, equal_nan=equal_nan):
+                    return False
+
+            return True
+
+        return np_allclose_impl_array_array
 
 
 @overload(np.any)
@@ -3159,7 +3253,7 @@ def _np_round_intrinsic(tp):
 def _np_round_float(context, builder, tp, val):
     llty = context.get_value_type(tp)
     module = builder.module
-    fnty = lc.Type.function(llty, [llty])
+    fnty = llvmlite.ir.FunctionType(llty, [llty])
     fn = cgutils.get_or_insert_function(module, fnty, _np_round_intrinsic(tp))
     return builder.call(fn, (val,))
 
@@ -4042,14 +4136,36 @@ _iinfo_supported = ('min', 'max', 'bits',)
 iinfo = namedtuple('iinfo', _iinfo_supported)
 
 
-@overload(np.MachAr)
-def MachAr_impl():
-    f = np.MachAr()
-    _mach_ar_data = tuple([getattr(f, x) for x in _mach_ar_supported])
+# This module is imported under the compiler lock which should deal with the
+# lack of thread safety in the warning filter.
+def _gen_np_machar():
+    np122plus = numpy_version >= (1, 22)
+    w = None
+    with warnings.catch_warnings(record=True) as w:
+        msg = r'`np.MachAr` is deprecated \(NumPy 1.22\)'
+        warnings.filterwarnings("always", message=msg,
+                                category=DeprecationWarning,
+                                module=r'.*numba.*arraymath')
+        np_MachAr = np.MachAr
 
-    def impl():
-        return MachAr(*_mach_ar_data)
-    return impl
+    @overload(np_MachAr)
+    def MachAr_impl():
+        f = np_MachAr()
+        _mach_ar_data = tuple([getattr(f, x) for x in _mach_ar_supported])
+
+        if np122plus and w:
+            wmsg = w[0]
+            warnings.warn_explicit(wmsg.message.args[0],
+                                   NumbaDeprecationWarning,
+                                   wmsg.filename,
+                                   wmsg.lineno)
+
+        def impl():
+            return MachAr(*_mach_ar_data)
+        return impl
+
+
+_gen_np_machar()
 
 
 def generate_xinfo(np_func, container, attr):

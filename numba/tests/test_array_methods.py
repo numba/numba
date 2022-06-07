@@ -596,11 +596,22 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_np_copy(self):
         self.check_layout_dependent_func(np_copy)
 
+    def check_ascontiguousarray_scalar(self, pyfunc):
+        def check_scalar(x):
+            cres = compile_isolated(pyfunc, (typeof(x), ))
+            expected = pyfunc(x)
+            got = cres.entry_point(x)
+            self.assertPreciseEqual(expected, got)
+        for x in [42, 42.0, 42j, np.float32(42), np.float64(42), True]:
+            check_scalar(x)
+
     def test_np_asfortranarray(self):
         self.check_layout_dependent_func(np_asfortranarray)
+        self.check_ascontiguousarray_scalar(np_asfortranarray)
 
     def test_np_ascontiguousarray(self):
         self.check_layout_dependent_func(np_ascontiguousarray)
+        self.check_ascontiguousarray_scalar(np_ascontiguousarray)
 
     def check_np_frombuffer_allocated(self, pyfunc):
         def run(shape):
@@ -1371,6 +1382,16 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         z = x + 1j*y
         np.testing.assert_equal(pyfunc(z), cfunc(z))
 
+    def _lower_clip_result_test_util(self, func, a, a_min, a_max):
+        # verifies that type-inference is working on the return value
+        # this used to trigger issue #3489
+        def lower_clip_result(a):
+            return np.expm1(func(a, a_min, a_max))
+
+        np.testing.assert_almost_equal(
+            lower_clip_result(a),
+            jit(nopython=True)(lower_clip_result)(a))
+
     def test_clip(self):
         has_out = (np_clip, np_clip_kwargs, array_clip, array_clip_kwargs)
         has_no_out = (np_clip_no_out, array_clip_no_out)
@@ -1396,13 +1417,39 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                                             cfunc(a, -5, 5, cout))
                     np.testing.assert_equal(pyout, cout)
 
-                # verifies that type-inference is working on the return value
-                # this used to trigger issue #3489
-                def lower_clip_result(a):
-                    return np.expm1(cfunc(a, -5, 5))
-                np.testing.assert_almost_equal(
-                    lower_clip_result(a),
-                    jit(nopython=True)(lower_clip_result)(a))
+                self._lower_clip_result_test_util(cfunc, a, -5, 5)
+
+    def test_clip_array_min_max(self):
+        has_out = (np_clip, np_clip_kwargs, array_clip, array_clip_kwargs)
+        has_no_out = (np_clip_no_out, array_clip_no_out)
+        # TODO: scalars are not tested (issue #3469)
+        a = np.linspace(-10, 10, 40).reshape(5, 2, 4)
+        a_min_arr = np.arange(-8, 0).astype(a.dtype).reshape(2, 4)
+        a_max_arr = np.arange(0, 8).astype(a.dtype).reshape(2, 4)
+        mins = [0, -5, a_min_arr, None]
+        maxs = [0, 5, a_max_arr, None]
+        for pyfunc in has_out + has_no_out:
+            cfunc = jit(nopython=True)(pyfunc)
+
+            for a_min in mins:
+                for a_max in maxs:
+
+                    if a_min is None and a_max is None:
+                        msg = "array_clip: must set either max or min"
+                        with self.assertRaisesRegex(ValueError, msg):
+                            cfunc(a, None, None)
+                        continue
+
+                    np.testing.assert_equal(pyfunc(a, a_min, a_max), cfunc(a, a_min, a_max))
+
+                    if pyfunc in has_out:
+                        pyout = np.empty_like(a)
+                        cout = np.empty_like(a)
+                        np.testing.assert_equal(pyfunc(a, a_min, a_max, pyout),
+                                                cfunc(a, a_min, a_max, cout))
+                        np.testing.assert_equal(pyout, cout)
+
+                    self._lower_clip_result_test_util(cfunc, a, a_min, a_max)
 
     def test_clip_bad_array(self):
         cfunc = jit(nopython=True)(np_clip)
@@ -1427,6 +1474,20 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         msg = '.*The argument "out" must be an array if it is provided.*'
         with self.assertRaisesRegex(TypingError, msg):
             cfunc(5, 1, 10, out=6)
+
+    def test_clip_no_broadcast(self):
+        self.disable_leak_check()
+        cfunc = jit(nopython=True)(np_clip)
+        msg = ".*shape mismatch: objects cannot be broadcast to a single shape.*"
+        a = np.linspace(-10, 10, 40).reshape(5, 2, 4)
+        a_min_arr = np.arange(-5, 0).astype(a.dtype).reshape(5, 1)
+        a_max_arr = np.arange(0, 5).astype(a.dtype).reshape(5, 1)
+        min_max = [(0, a_max_arr), (-5, a_max_arr),
+                   (a_min_arr, a_max_arr),
+                   (a_min_arr, 0), (a_min_arr, 5)]
+        for a_min, a_max in min_max:
+            with self.assertRaisesRegex(ValueError, msg):
+                cfunc(a, a_min, a_max)
 
     def test_conj(self):
         for pyfunc in [array_conj, array_conjugate]:

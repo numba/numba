@@ -2,6 +2,7 @@ import platform
 import sys
 import os
 import re
+import shutil
 import warnings
 
 # YAML needed to use file based Numba config
@@ -13,6 +14,7 @@ except ImportError:
 
 
 import llvmlite.binding as ll
+
 
 IS_WIN32 = sys.platform.startswith('win32')
 IS_OSX = sys.platform.startswith('darwin')
@@ -135,7 +137,11 @@ class _EnvReloader(object):
                 CUDA_USE_NVIDIA_BINDING = False
 
             if CUDA_PER_THREAD_DEFAULT_STREAM:  # noqa: F821
-                warnings.warn("PTDS is not supported with CUDA Python")
+                warnings.warn("PTDS support is handled by CUDA Python when "
+                              "using the NVIDIA binding. Please set the "
+                              "environment variable "
+                              "CUDA_PYTHON_CUDA_PER_THREAD_DEFAULT_STREAM to 1 "
+                              "instead.")
 
     def process_environ(self, environ):
         def _readenv(name, ctor, default):
@@ -235,6 +241,9 @@ class _EnvReloader(object):
 
         # Enable tracing support
         TRACE = _readenv("NUMBA_TRACE", int, 0)
+
+        # Enable chrome tracing support
+        CHROME_TRACE = _readenv("NUMBA_CHROME_TRACE", str, "")
 
         # Enable debugging of type inference
         DEBUG_TYPEINFER = _readenv("NUMBA_DEBUG_TYPEINFER", int, 0)
@@ -363,7 +372,7 @@ class _EnvReloader(object):
 
         # The default compute capability to target when compiling to PTX.
         CUDA_DEFAULT_PTX_CC = _readenv("NUMBA_CUDA_DEFAULT_PTX_CC", _parse_cc,
-                                       (5, 2))
+                                       (5, 3))
 
         # Disable CUDA support
         DISABLE_CUDA = _readenv("NUMBA_DISABLE_CUDA",
@@ -406,6 +415,21 @@ class _EnvReloader(object):
         # Whether the default stream is the per-thread default stream
         CUDA_PER_THREAD_DEFAULT_STREAM = _readenv(
             "NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM", int, 0)
+
+        # Location of the CUDA include files
+        if IS_WIN32:
+            cuda_path = os.environ.get('CUDA_PATH')
+            if cuda_path:
+                default_cuda_include_path = os.path.join(cuda_path, "include")
+            else:
+                default_cuda_include_path = "cuda_include_not_found"
+        else:
+            default_cuda_include_path = os.path.join(os.sep, 'usr', 'local',
+                                                     'cuda', 'include')
+        CUDA_INCLUDE_PATH = _readenv("NUMBA_CUDA_INCLUDE_PATH", str,
+                                     default_cuda_include_path)
+
+        # Threading settings
 
         # The default number of threads to use.
         def num_threads_default():
@@ -461,7 +485,11 @@ class _EnvReloader(object):
                                              int, 0)
 
         # gdb binary location
-        GDB_BINARY = _readenv("NUMBA_GDB_BINARY", str, '/usr/bin/gdb')
+        def which_gdb(path_or_bin):
+            gdb = shutil.which(path_or_bin)
+            return gdb if gdb is not None else path_or_bin
+
+        GDB_BINARY = _readenv("NUMBA_GDB_BINARY", which_gdb, 'gdb')
 
         # CUDA Memory management
         CUDA_MEMORY_MANAGER = _readenv("NUMBA_CUDA_MEMORY_MANAGER", str,

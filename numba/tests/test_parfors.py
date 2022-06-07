@@ -62,8 +62,9 @@ class TestParforsRunner(TestCase):
 
     _numba_parallel_test_ = False
 
-    # Each test class can run for 30 minutes before time out.
-    _TIMEOUT = 1800
+    # Each test class can run for 30 minutes before time out. Extend this to an
+    # hour on aarch64 (some public CI systems were timing out).
+    _TIMEOUT = 1800 if platform.machine() != 'aarch64' else 3600
 
     """This is the test runner for all the parfors tests, it runs them in
     subprocesses as described above. The convention for the test method naming
@@ -608,16 +609,22 @@ def _count_non_parfor_array_accesses_inner(f_ir, blocks, typemap, parfor_indices
                     f_ir, parfor_blocks, typemap, parfor_indices)
 
             # getitem
-            if (is_getitem(stmt) and isinstance(typemap[stmt.value.value.name],
+            elif (is_getitem(stmt) and isinstance(typemap[stmt.value.value.name],
                         types.ArrayCompatible) and not _uses_indices(
                         f_ir, index_var_of_get_setitem(stmt), parfor_indices)):
                 ret_count += 1
 
             # setitem
-            if (is_setitem(stmt) and isinstance(typemap[stmt.target.name],
+            elif (is_setitem(stmt) and isinstance(typemap[stmt.target.name],
                     types.ArrayCompatible) and not _uses_indices(
                     f_ir, index_var_of_get_setitem(stmt), parfor_indices)):
                 ret_count += 1
+
+            # find parfor_index aliases
+            elif (isinstance(stmt, ir.Assign) and
+                  isinstance(stmt.value, ir.Var) and
+                  stmt.value.name in parfor_indices):
+                parfor_indices.add(stmt.target.name)
 
     return ret_count
 
@@ -1239,6 +1246,15 @@ class TestParforNumPy(TestParforsBase):
             return np.sum(n) + np.prod(n) + np.min(n) + np.max(n) + np.var(n)
         self.check(test_impl, np.array(7), check_scheduling=False)
 
+    def test_real_imag_attr(self):
+        # See issue 8012
+        def test_impl(z):
+            return np.sum(z.real ** 2 + z.imag ** 2)
+
+        z = np.arange(5) * (1 + 1j)
+        self.check(test_impl, z)
+        self.assertEqual(countParfors(test_impl, (types.complex128[::1],)), 1)
+
 
 class TestParforsUnsupported(TestCase):
     """Tests for unsupported use of parfors"""
@@ -1389,6 +1405,35 @@ class TestParfors(TestParforsBase):
             return acc
 
         # checks that invalid use of reduction variable is detected
+        msg = ("Use of reduction variable acc in an unsupported reduction function.")
+        with self.assertRaises(ValueError) as e:
+            pcfunc = self.compile_parallel(test_impl, ())
+        self.assertIn(msg, str(e.exception))
+
+    def test_unsupported_floordiv1(self):
+        def test_impl():
+            acc = 100
+            for i in prange(2):
+                acc //= 2
+            return acc
+
+        # checks that invalid use of ifloordiv reduction operator is detected
+        msg = ("Parallel floordiv reductions are not supported. "
+               "If all divisors are integers then a floordiv "
+               "reduction can in some cases be parallelized as "
+               "a multiply reduction followed by a floordiv of "
+               "the resulting product.")
+        with self.assertRaises(errors.NumbaValueError) as e:
+            pcfunc = self.compile_parallel(test_impl, ())
+        self.assertIn(msg, str(e.exception))
+
+    def test_unsupported_xor1(self):
+        def test_impl():
+            acc = 100
+            for i in prange(2):
+                acc ^= i + 2
+            return acc
+
         msg = ("Use of reduction variable acc in an unsupported reduction function.")
         with self.assertRaises(ValueError) as e:
             pcfunc = self.compile_parallel(test_impl, ())
@@ -1956,6 +2001,63 @@ class TestParfors(TestParforsBase):
             return x
         self.check(test_impl, np.zeros((10, 10)), 3)
 
+    def test_untraced_value_tuple(self):
+        # This is a test for issue #6478.
+        def test_impl():
+            a = (1.2, 1.3)
+            return a[0]
+
+        with self.assertRaises(AssertionError) as raises:
+            self.check(test_impl)
+        self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
+
+    def test_recursive_untraced_value_tuple(self):
+        # This is a test for issue #6478.
+        def test_impl():
+            a = ((1.2, 1.3),)
+            return a[0][0]
+
+        with self.assertRaises(AssertionError) as raises:
+            self.check(test_impl)
+        self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
+
+    def test_untraced_value_parfor(self):
+        # This is a test for issue #6478.
+        def test_impl(arr):
+            a = (1.2, 1.3)
+            n1 = len(arr)
+            arr2 = np.empty(n1, np.float64)
+            for i in prange(n1):
+                arr2[i] = arr[i] * a[0]
+            n2 = len(arr2)
+            arr3 = np.empty(n2, np.float64)
+            for j in prange(n2):
+                arr3[j] = arr2[j] - a[1]
+            total = 0.0
+            n3 = len(arr3)
+            for k in prange(n3):
+                total += arr3[k]
+            return total + a[0]
+
+        arg = (types.Array(types.int64, 1, 'C'), )
+        self.assertEqual(countParfors(test_impl, arg), 1)
+
+        arr = np.arange(10, dtype=np.int64)
+        self.check(test_impl, arr)
+
+    def test_setitem_2d_one_replaced(self):
+        # issue7843
+        def test_impl(x):
+            count = 0
+            for n in range(x.shape[0]):
+                # Useless "if" necessary to trigger bug.
+                if n:
+                    n
+                x[count, :] = 1
+                count += 1
+            return x
+
+        self.check(test_impl, np.zeros((3, 1)))
 
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
@@ -3568,6 +3670,26 @@ class TestPrangeBasic(TestPrangeBase):
 
         self.prange_tester(test_impl, True)
         self.prange_tester(test_impl, False)
+
+    def test_prange30(self):
+        # issue7675: broadcast setitem
+        def test_impl(x, par, numthreads):
+            n_par = par.shape[0]
+            n_x = len(x)
+            result = np.zeros((n_par, n_x), dtype=np.float64)
+            chunklen = (len(x) + numthreads - 1) // numthreads
+
+            for i in range(numthreads):
+                start = i * chunklen
+                stop = (i + 1) * chunklen
+                result[:, start:stop] = x[start:stop] * par[:]
+
+            return result
+
+        x = np.array(np.arange(0, 6, 1.0))
+        par = np.array([1.0, 2.0, 3.0])
+
+        self.prange_tester(test_impl, x, par, 2)
 
 
 @skip_parfors_unsupported
