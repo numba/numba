@@ -25,10 +25,10 @@ from numba.core.ir_utils import (
 )
 from numba.core.analysis import compute_cfg_from_blocks
 from numba.core.typing import npydecl, signature
+from numba.cpython.tupleobj import make_tuple
 import copy
 from numba.core.extending import intrinsic, register_jitable
 import llvmlite
-from numba.np.unsafe.ndarray import to_fixed_tuple
 
 UNKNOWN_CLASS = -1
 CONST_CLASS = 0
@@ -1092,7 +1092,7 @@ def runtime_broadcast_assert_shapes(max_dim, arg0, arg1):
         new_shape.append(sizes[0])
 
     rev = new_shape[::-1]
-    return to_fixed_tuple(rev, max_dim)
+    return make_tuple(max_dim, rev)
 
 
 class ArrayAnalysis(object):

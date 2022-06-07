@@ -18,7 +18,6 @@ from numba import _devicearray
 from numba.cuda.cudadrv import devices
 from numba.cuda.cudadrv import driver as _driver
 from numba.core import types, config
-from numba.np.unsafe.ndarray import to_fixed_tuple
 from numba.misc import dummyarray
 from numba.np import numpy_support
 from numba.cuda.api_util import prepare_shape_strides_dtype
