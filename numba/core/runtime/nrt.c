@@ -229,7 +229,7 @@ void *nrt_allocate_meminfo_and_data(size_t size, NRT_MemInfo **mi_out, NRT_Exter
 
 static
 void nrt_internal_custom_dtor_safe(void *ptr, size_t size, void *info) {
-    NRT_dtor_function dtor = (NRT_dtor_function) info;
+    NRT_dtor_function dtor = info;
     NRT_Debug(nrt_debug_print("nrt_internal_custom_dtor_safe %p, %p\n",
                               ptr, info));
     if (dtor) {
@@ -416,7 +416,7 @@ nrt_varsize_dtor(void *ptr, size_t size, void *info) {
     if (info) {
         /* call element dtor */
         typedef void dtor_fn_t(void *ptr);
-        dtor_fn_t *dtor = (dtor_fn_t *) info;
+        dtor_fn_t *dtor = info;
         dtor(ptr);
     }
     NRT_Free(ptr);
