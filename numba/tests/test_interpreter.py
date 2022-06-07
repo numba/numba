@@ -1,8 +1,7 @@
 """
 Test bytecode fixes provided in interpreter.py
 """
-from numba import njit, objmode
-from numba import typeof
+from numba import njit, objmode, typeof, literally
 from numba.extending import overload
 from numba.core import types
 from numba.core.errors import UnsupportedError
@@ -822,7 +821,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
                 "S": 7,
             }
             if d.initial_value is None:
-                return lambda d: types.literally(d)
+                return lambda d: literally(d)
             self.assertTrue(isinstance(d, types.DictType))
             self.assertEqual(d.initial_value, a)
             return lambda d: d
