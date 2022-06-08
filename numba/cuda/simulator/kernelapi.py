@@ -59,7 +59,8 @@ class FakeCUDALocal(object):
     CUDA Local arrays
     '''
     def array(self, shape, dtype):
-        dtype = numpy_support.as_dtype(dtype)
+        if isinstance(dtype, types.Type):
+            dtype = numpy_support.as_dtype(dtype)
         return np.empty(shape, dtype)
 
 
