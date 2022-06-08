@@ -4,21 +4,21 @@ from copy import deepcopy, copy
 import warnings
 
 from numba.core.compiler_machinery import (FunctionPass, AnalysisPass,
-                                           register_pass)
+                                           SSACompliantMixin, register_pass)
 from numba.core import (errors, types, ir, bytecode, postproc, rewrites, config,
                         transforms)
 from numba.misc.special import literal_unroll
 from numba.core.analysis import (dead_branch_prune, rewrite_semantic_constants,
                                  find_literally_calls, compute_cfg_from_blocks,
                                  compute_use_defs)
-from numba.core.inline_closurecall import (InlineClosureCallPass,
-                                           inline_closure_call)
 from numba.core.ir_utils import (guard, resolve_func_from_module, simplify_CFG,
                                  GuardException, convert_code_obj_to_function,
                                  mk_unique_var, build_definitions,
                                  replace_var_names, get_name_var_table,
                                  compile_to_numba_ir, get_definition,
-                                 find_max_label, rename_labels)
+                                 find_max_label, rename_labels,
+                                 transfer_scope, fixup_var_define_in_scope,
+                                 )
 from numba.core.ssa import reconstruct_ssa
 from numba.core import interpreter
 
@@ -153,7 +153,7 @@ class RewriteSemanticConstants(FunctionPass):
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
-class DeadBranchPrune(FunctionPass):
+class DeadBranchPrune(SSACompliantMixin, FunctionPass):
     _name = "dead_branch_prune"
 
     def __init__(self):
@@ -197,6 +197,7 @@ class InlineClosureLikes(FunctionPass):
         # no ability to resolve certain typed function calls in the array
         # inlining code, use this variable to indicate
         typed_pass = not isinstance(state.return_type, types.misc.PyObject)
+        from numba.core.inline_closurecall import InlineClosureCallPass
         inline_pass = InlineClosureCallPass(
             state.func_ir,
             state.flags.auto_parallel,
@@ -208,10 +209,8 @@ class InlineClosureLikes(FunctionPass):
         post_proc = postproc.PostProcessor(state.func_ir)
         post_proc.run()
 
-        if config.DEBUG or config.DUMP_IR:
-            name = state.func_ir.func_id.func_qualname
-            print(("IR DUMP: %s" % name).center(80, "-"))
-            state.func_ir.dump()
+        fixup_var_define_in_scope(state.func_ir.blocks)
+
         return True
 
 
@@ -592,7 +591,6 @@ class MakeFunctionToJitFunction(FunctionPass):
                                 ok = all([isinstance(getdef(x), ir.Const)
                                           for x in kw_default.items])
                             if not ok:
-                                print("NOT OK")
                                 continue
 
                             pyfunc = convert_code_obj_to_function(node, func_ir)
@@ -617,7 +615,7 @@ class TransformLiteralUnrollConstListToTuple(FunctionPass):
     """
     _name = "transform_literal_unroll_const_list_to_tuple"
 
-    _accepted_types = (types.BaseTuple,)
+    _accepted_types = (types.BaseTuple, types.LiteralList)
 
     def __init__(self):
         FunctionPass.__init__(self)
@@ -740,7 +738,7 @@ class MixedContainerUnroller(FunctionPass):
 
     _DEBUG = False
 
-    _accepted_types = (types.BaseTuple,)
+    _accepted_types = (types.BaseTuple, types.LiteralList)
 
     def __init__(self):
         FunctionPass.__init__(self)
@@ -944,9 +942,51 @@ class MixedContainerUnroller(FunctionPass):
         """
         elif_tplt = "\n\telif PLACEHOLDER_INDEX in (%s,):\n\t\tSENTINEL = None"
 
+        # Note regarding the insertion of the garbage/defeat variables below:
+        # These values have been designed and inserted to defeat a specific
+        # behaviour of the cpython optimizer. The optimization was introduced
+        # in Python 3.10.
+
+        # The URL for the BPO is:
+        # https://bugs.python.org/issue44626
+        # The code for the optimization can be found at:
+        # https://github.com/python/cpython/blob/d41abe8/Python/compile.c#L7533-L7557
+
+        # Essentially the CPython optimizer will inline the exit block under
+        # certain circumstances and thus replace the jump with a return if the
+        # exit block is small enough.  This is an issue for unroller, as it
+        # looks for a jump, not a return, when it inserts the generated switch
+        # table.
+
+        # Part of the condition for this optimization to be applied is that the
+        # exit block not exceed a certain (4 at the time of writing) number of
+        # bytecode instructions. We defeat the optimizer by inserting a
+        # sufficient number of instructions so that the exit block is big
+        # enough. We don't care about this garbage, because the generated exit
+        # block is discarded anyway when we smash the switch table into the
+        # original function and so all the inserted garbage is dropped again.
+
+        # The final lines of the stacktrace w/o this will look like:
+        #
+        #  File "/numba/numba/core/untyped_passes.py", line 830, \
+        #       in inject_loop_body
+        #   sentinel_exits.add(blk.body[-1].target)
+        # AttributeError: Failed in nopython mode pipeline \
+        #       (step: handles literal_unroll)
+        # Failed in literal_unroll_subpipeline mode pipeline \
+        #       (step: performs mixed container unroll)
+        # 'Return' object has no attribute 'target'
+        #
+        # Which indicates that a Return has been found instead of a Jump
+
         b = ('def foo():\n\tif PLACEHOLDER_INDEX in (%s,):\n\t\t'
              'SENTINEL = None\n%s\n\telse:\n\t\t'
-             'raise RuntimeError("Unreachable")')
+             'raise RuntimeError("Unreachable")\n\t'
+             'py310_defeat1 = 1\n\t'
+             'py310_defeat2 = 2\n\t'
+             'py310_defeat3 = 3\n\t'
+             'py310_defeat4 = 4\n\t'
+             )
         keys = [k for k in data.keys()]
 
         elifs = []
@@ -1211,15 +1251,16 @@ class MixedContainerUnroller(FunctionPass):
 
         # 6. Patch in the unrolled body and fix up
         blks = state.func_ir.blocks
+        the_scope = next(iter(blks.values())).scope
         orig_lbl = tuple(this_loop_body)
 
         replace, *delete = orig_lbl
         unroll, header_block = unrolled_body, this_loop.header
         unroll_lbl = [x for x in sorted(unroll.blocks.keys())]
-        blks[replace] = unroll.blocks[unroll_lbl[0]]
+        blks[replace] = transfer_scope(unroll.blocks[unroll_lbl[0]], the_scope)
         [blks.pop(d) for d in delete]
         for k in unroll_lbl[1:]:
-            blks[k] = unroll.blocks[k]
+            blks[k] = transfer_scope(unroll.blocks[k], the_scope)
         # stitch up the loop predicate true -> new loop body jump
         blks[header_block].body[-1].truebr = replace
 
@@ -1264,7 +1305,7 @@ class IterLoopCanonicalization(FunctionPass):
     _DEBUG = False
 
     # if partial typing info is available it will only look at these types
-    _accepted_types = (types.BaseTuple,)
+    _accepted_types = (types.BaseTuple, types.LiteralList)
     _accepted_calls = (literal_unroll,)
 
     def __init__(self):
@@ -1356,6 +1397,7 @@ class IterLoopCanonicalization(FunctionPass):
         entry_block.body[idx + 1].value.value = call_get_range_var
 
         glbls = copy(func_ir.func_id.func.__globals__)
+        from numba.core.inline_closurecall import inline_closure_call
         inline_closure_call(func_ir, glbls, entry_block, idx, get_range,)
         kill = entry_block.body.index(assgn)
         entry_block.body.pop(kill)
@@ -1422,6 +1464,152 @@ class IterLoopCanonicalization(FunctionPass):
         return mutated
 
 
+@register_pass(mutates_CFG=False, analysis_only=False)
+class PropagateLiterals(FunctionPass):
+    """Implement literal propagation based on partial type inference"""
+    _name = "PropagateLiterals"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def get_analysis_usage(self, AU):
+        AU.add_required(ReconstructSSA)
+
+    def run_pass(self, state):
+        func_ir = state.func_ir
+        typemap = state.typemap
+        flags = state.flags
+
+        if not hasattr(func_ir, '_definitions') \
+                and not flags.enable_ssa:
+            func_ir._definitions = build_definitions(func_ir.blocks)
+
+        changed = False
+
+        for block in func_ir.blocks.values():
+            for assign in block.find_insts(ir.Assign):
+                value = assign.value
+                if isinstance(value, (ir.Arg, ir.Const, ir.FreeVar, ir.Global)):
+                    continue
+
+                # 1) Don't change return stmt in the form
+                # $return_xyz = cast(value=ABC)
+                # 2) Don't propagate literal values that are not primitives
+                if isinstance(value, ir.Expr) and \
+                        value.op in ('cast', 'build_map', 'build_list',
+                                     'build_tuple', 'build_set'):
+                    continue
+
+                target = assign.target
+                if not flags.enable_ssa:
+                    # SSA is disabled when doing inlining
+                    if guard(get_definition, func_ir, target.name) is None:  # noqa: E501
+                        continue
+
+                # Numba cannot safely determine if an isinstance call
+                # with a PHI node is True/False. For instance, in
+                # the case below, the partial type inference step can coerce
+                # '$z' to float, so any call to 'isinstance(z, int)' would fail.
+                #
+                #   def fn(x):
+                #       if x > 4:
+                #           z = 1
+                #       else:
+                #           z = 3.14
+                #       if isinstance(z, int):
+                #           print('int')
+                #       else:
+                #           print('float')
+                #
+                # At the moment, one avoid propagating the literal
+                # value if the argument is a PHI node
+
+                if isinstance(value, ir.Expr) and value.op == 'call':
+
+                    fn = guard(get_definition, func_ir, value.func.name)
+                    if fn is None:
+                        continue
+                    if not (isinstance(fn, ir.Global) and fn.name == 'isinstance'):  # noqa: E501
+                        continue
+
+                    for arg in value.args:
+                        # check if any of the args to isinstance is a PHI node
+                        iv = func_ir._definitions[arg.name]
+                        assert len(iv) == 1  # SSA!
+                        if isinstance(iv[0], ir.Expr) and iv[0].op == 'phi':
+                            msg = ('isinstance() cannot determine the '
+                                   f'type of variable "{arg.unversioned_name}" '
+                                   'due to a branch.')
+                            raise errors.NumbaTypeError(msg, loc=assign.loc)
+
+                lit = typemap.get(target.name, None)
+                if lit and isinstance(lit, types.Literal):
+                    # replace assign instruction by ir.Const(lit) iff
+                    # lit is a literal value
+                    rhs = ir.Const(lit.literal_value, assign.loc)
+                    new_assign = ir.Assign(rhs, target, assign.loc)
+
+                    # replace instruction
+                    block.insert_after(new_assign, assign)
+                    block.remove(assign)
+
+                    changed = True
+
+        # reset type inference now we are done with the partial results
+        state.typemap = None
+        state.calltypes = None
+
+        if changed:
+            # Rebuild definitions
+            func_ir._definitions = build_definitions(func_ir.blocks)
+
+        return changed
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class LiteralPropagationSubPipelinePass(FunctionPass):
+    """Implement literal propagation based on partial type inference"""
+    _name = "LiteralPropagation"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        # Determine whether to even attempt this pass... if there's no
+        # `isinstance` as a global or as a freevar then just skip.
+        found = False
+        func_ir = state.func_ir
+        for blk in func_ir.blocks.values():
+            for asgn in blk.find_insts(ir.Assign):
+                if isinstance(asgn.value, (ir.Global, ir.FreeVar)):
+                    if asgn.value.value is isinstance:
+                        found = True
+                        break
+            if found:
+                break
+        if not found:
+            return False
+
+        # run as subpipeline
+        from numba.core.compiler_machinery import PassManager
+        from numba.core.typed_passes import PartialTypeInference
+        pm = PassManager("literal_propagation_subpipeline")
+
+        pm.add_pass(PartialTypeInference, "performs partial type inference")
+        pm.add_pass(PropagateLiterals, "performs propagation of literal values")
+
+        # rewrite consts / dead branch pruning
+        pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
+        pm.add_pass(DeadBranchPrune, "dead branch pruning")
+
+        pm.finalize()
+        pm.run(state)
+        return True
+
+    def get_analysis_usage(self, AU):
+        AU.add_required(ReconstructSSA)
+
+
 @register_pass(mutates_CFG=True, analysis_only=False)
 class LiteralUnroll(FunctionPass):
     """Implement the literal_unroll semantics"""
@@ -1432,7 +1620,7 @@ class LiteralUnroll(FunctionPass):
 
     def run_pass(self, state):
         # Determine whether to even attempt this pass... if there's no
-        # `literal_unroll as a global or as a freevar then just skip.
+        # `literal_unroll` as a global or as a freevar then just skip.
         found = False
         func_ir = state.func_ir
         for blk in func_ir.blocks.values():
@@ -1464,6 +1652,10 @@ class LiteralUnroll(FunctionPass):
         pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
         # do the unroll
         pm.add_pass(MixedContainerUnroller, "performs mixed container unroll")
+        # rewrite dynamic getitem to static getitem as it's possible some more
+        # getitems will now be statically resolvable
+        pm.add_pass(GenericRewrites, "Generic Rewrites")
+        pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
         pm.finalize()
         pm.run(state)
         return True

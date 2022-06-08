@@ -19,6 +19,7 @@ from numba.core import  utils, typing
 from numba.core.ir_utils import (get_call_table, mk_unique_var,
                             compile_to_numba_ir, replace_arg_nodes, guard,
                             find_callname, require, find_const, GuardException)
+from numba.core.errors import NumbaValueError
 from numba.core.utils import OPERATORS_TO_BUILTINS
 
 
@@ -29,12 +30,14 @@ def _compute_last_ind(dim_size, index_const):
         return dim_size
 
 class StencilPass(object):
-    def __init__(self, func_ir, typemap, calltypes, array_analysis, typingctx, flags):
+    def __init__(self, func_ir, typemap, calltypes, array_analysis, typingctx,
+                 targetctx, flags):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
         self.array_analysis = array_analysis
         self.typingctx = typingctx
+        self.targetctx = targetctx
         self.flags = flags
 
     def run(self):
@@ -276,7 +279,7 @@ class StencilPass(object):
                 cval_ty = typing.typeof.typeof(cval)
                 if not self.typingctx.can_convert(cval_ty, return_type.dtype):
                     msg = "cval type does not match stencil return type."
-                    raise ValueError(msg)
+                    raise NumbaValueError(msg)
 
                 # get slice ref
                 slice_var = ir.Var(scope, mk_unique_var("$py_g_var"), loc)
@@ -400,7 +403,8 @@ class StencilPass(object):
         def get_start_ind(s_length):
             return abs(min(s_length, 0))
         f_ir = compile_to_numba_ir(get_start_ind, {}, self.typingctx,
-                                 (types.intp,), self.typemap, self.calltypes)
+                                   self.targetctx, (types.intp,), self.typemap,
+                                   self.calltypes)
         assert len(f_ir.blocks) == 1
         block = f_ir.blocks.popitem()[1]
         replace_arg_nodes(block, [start_length])
@@ -635,8 +639,8 @@ class StencilPass(object):
             slice_type = self.typemap[slice_var.name]
             arg_typs = (slice_type, types.intp,)
         _globals = self.func_ir.func_id.func.__globals__
-        f_ir = compile_to_numba_ir(f, _globals, self.typingctx, arg_typs,
-                                    self.typemap, self.calltypes)
+        f_ir = compile_to_numba_ir(f, _globals, self.typingctx, self.targetctx,
+                                   arg_typs, self.typemap, self.calltypes)
         _, block = f_ir.blocks.popitem()
         replace_arg_nodes(block, args)
         new_index = block.body[-2].value.value
@@ -663,14 +667,16 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
         raise ValueError("Cannot use the reserved word 'out' in stencil kernels.")
 
     # get typed IR with a dummy pipeline (similar to test_parfors.py)
-    targetctx = CPUContext(typingctx)
+    from numba.core.registry import cpu_target
+    targetctx = cpu_target.target_context
     with cpu_target.nested_context(typingctx, targetctx):
         tp = DummyPipeline(typingctx, targetctx, args, stencil_func_ir)
 
         rewrites.rewrite_registry.apply('before-inference', tp.state)
 
-        tp.state.typemap, tp.state.return_type, tp.state.calltypes = type_inference_stage(
-            tp.state.typingctx, tp.state.func_ir, tp.state.args, None)
+        tp.state.typemap, tp.state.return_type, tp.state.calltypes, _ = type_inference_stage(
+            tp.state.typingctx, tp.state.targetctx, tp.state.func_ir,
+            tp.state.args, None)
 
         type_annotations.TypeAnnotation(
             func_ir=tp.state.func_ir,
@@ -687,7 +693,7 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
                                                         ir_utils.next_label())
     min_label = min(stencil_blocks.keys())
     max_label = max(stencil_blocks.keys())
-    ir_utils._max_label = max_label
+    ir_utils._the_max_label.update(max_label)
 
     if config.DEBUG_ARRAY_OPT >= 1:
         print("Initial stencil_blocks")

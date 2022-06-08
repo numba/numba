@@ -5,6 +5,8 @@ import numbers
 import importlib
 import sys
 import re
+import traceback
+import multiprocessing as mp
 from itertools import chain, combinations
 
 import numba
@@ -88,7 +90,7 @@ other_funcs = [f for f, v in svml_funcs.items() if "<built-in" in \
                   [str(p).split(' ')[0] for p in v]]
 
 
-def func_patterns(func, args, res, dtype, mode, vlen, flags, pad=' '*8):
+def func_patterns(func, args, res, dtype, mode, vlen, fastmath, pad=' '*8):
     """
     For a given function and its usage modes,
     returns python code and assembly patterns it should and should not generate
@@ -116,7 +118,7 @@ def func_patterns(func, args, res, dtype, mode, vlen, flags, pad=' '*8):
     f = func+'f' if is_f32 else func
     v = vlen*2 if is_f32 else vlen
     # general expectations
-    prec_suff = '' if getattr(flags, 'fastmath', False) else '_ha'
+    prec_suff = '' if fastmath else '_ha'
     scalar_func = '$_'+f if config.IS_OSX else '$'+f
     svml_func = '__svml_%s%d%s,' % (f, v, prec_suff)
     if mode == "scalar":
@@ -140,16 +142,16 @@ def func_patterns(func, args, res, dtype, mode, vlen, flags, pad=' '*8):
     return body, contains, avoids
 
 
-def usecase_name(dtype, mode, vlen, flags):
+def usecase_name(dtype, mode, vlen, name):
     """ Returns pretty name for given set of modes """
 
-    return "{dtype}_{mode}{vlen}_{flags.__name__}".format(**locals())
+    return f"{dtype}_{mode}{vlen}_{name}"
 
 
-def combo_svml_usecase(dtype, mode, vlen, flags):
+def combo_svml_usecase(dtype, mode, vlen, fastmath, name):
     """ Combine multiple function calls under single umbrella usecase """
 
-    name = usecase_name(dtype, mode, vlen, flags)
+    name = usecase_name(dtype, mode, vlen, name)
     body = """def {name}(n):
         x   = np.empty(n*8, dtype=np.{dtype})
         ret = np.empty_like(x)\n""".format(**locals())
@@ -160,7 +162,7 @@ def combo_svml_usecase(dtype, mode, vlen, flags):
     avoids = set()
     # fill body and expectation patterns
     for f in funcs:
-        b, c, a = func_patterns(f, ['x'], 'ret', dtype, mode, vlen, flags)
+        b, c, a = func_patterns(f, ['x'], 'ret', dtype, mode, vlen, fastmath)
         avoids.update(a)
         body += b
         contains.update(c)
@@ -182,61 +184,92 @@ class TestSVMLGeneration(TestCase):
     asm_filter = re.compile('|'.join(['\$[a-z_]\w+,']+list(svml_funcs)))
 
     @classmethod
+    def mp_runner(cls, testname, outqueue):
+        method = getattr(cls, testname)
+        try:
+            ok, msg = method()
+        except Exception:
+            msg = traceback.format_exc()
+            ok = False
+        outqueue.put({'status': ok, 'msg': msg})
+
+    @classmethod
     def _inject_test(cls, dtype, mode, vlen, flags):
         # unsupported combinations
         if dtype.startswith('complex') and mode != 'numpy':
             return
         # TODO: address skipped tests below
         skipped = dtype.startswith('int') and vlen == 2
-        args = (dtype, mode, vlen, flags)
+        sig = (numba.int64,)
         # unit test body template
-        @unittest.skipUnless(not skipped, "Not implemented")
-        def test_template(self):
-            fn, contains, avoids = combo_svml_usecase(*args)
+        @staticmethod
+        def run_template():
+            fn, contains, avoids = combo_svml_usecase(dtype, mode, vlen,
+                                                      flags['fastmath'],
+                                                      flags['name'])
             # look for specific patters in the asm for a given target
             with override_env_config('NUMBA_CPU_NAME', vlen2cpu[vlen]), \
                  override_env_config('NUMBA_CPU_FEATURES', vlen2cpu_features[vlen]):
                 # recompile for overridden CPU
                 try:
-                    jit = compile_isolated(fn, (numba.int64, ), flags=flags)
+                    jitted_fn = njit(sig, fastmath=flags['fastmath'],
+                                     error_model=flags['error_model'],)(fn)
                 except:
                     raise Exception("raised while compiling "+fn.__doc__)
-            asm = jit.library.get_asm_str()
+            asm = jitted_fn.inspect_asm(sig)
             missed = [pattern for pattern in contains if not pattern in asm]
             found = [pattern for pattern in avoids if pattern in asm]
-            self.assertTrue(not missed and not found,
-                "While expecting %s and no %s,\n"
-                "it contains:\n%s\n"
-                "when compiling %s" % (str(missed), str(found), '\n'.join(
-                    [line for line in asm.split('\n')
-                     if cls.asm_filter.search(line) and not '"' in line]),
-                     fn.__doc__))
+            ok = not missed and not found
+            detail = '\n'.join(
+                [line for line in asm.split('\n')
+                 if cls.asm_filter.search(line) and not '"' in line])
+            msg = (
+                f"While expecting {missed} and not {found},\n"
+                f"it contains:\n{detail}\n"
+                f"when compiling {fn.__doc__}"
+            )
+            return ok, msg
         # inject it into the class
-        setattr(cls, "test_"+usecase_name(*args), test_template)
+        postfix = usecase_name(dtype, mode, vlen, flags['name'])
+        testname = f"run_{postfix}"
+        setattr(cls, testname, run_template)
+
+        @unittest.skipUnless(not skipped, "Not implemented")
+        def test_runner(self):
+            ctx = mp.get_context("spawn")
+            q = ctx.Queue()
+            p = ctx.Process(target=type(self).mp_runner, args=[testname, q])
+            p.start()
+            # timeout to avoid hanging and long enough to avoid bailing too
+            # early. Note: this was timeout=10 but that seemed to caused
+            # intermittent failures on heavily loaded machines.
+            term_or_timeout = p.join(timeout=30)
+            exitcode = p.exitcode
+            if term_or_timeout is None:
+                if exitcode is None:
+                    self.fail("Process timed out.")
+                elif exitcode < 0:
+                    self.fail(f"Process terminated with signal {-exitcode}.")
+            self.assertEqual(exitcode, 0, msg="process ended unexpectedly")
+            out = q.get()
+            status = out['status']
+            msg = out['msg']
+            self.assertTrue(status, msg=msg)
+
+        setattr(cls, f"test_{postfix}", test_runner)
 
     @classmethod
     def autogenerate(cls):
-        test_flags = ['fastmath', ]  # TODO: add 'auto_parallel' ?
-        # generate all the combinations of the flags
-        test_flags = sum([list(combinations(test_flags, x)) for x in range( \
-                                                    len(test_flags)+1)], [])
-        flag_list = []  # create Flag class instances
-        for ft in test_flags:
-            flags = Flags()
-            flags.set('nrt')
-            flags.set('error_model', 'numpy')
-            flags.__name__ = '_'.join(ft+('usecase',))
-            for f in ft:
-                flags.set(f, {
-                    'fastmath': cpu.FastMathOptions(True)
-                }.get(f, True))
-            flag_list.append(flags)
+        flag_list = [{'fastmath':False, 'error_model':'numpy',
+                     'name':'usecase'},
+                     {'fastmath':True, 'error_model':'numpy',
+                     'name':'fastmath_usecase'},]
         # main loop covering all the modes and use-cases
         for dtype in ('complex64', 'float64', 'float32', 'int32', ):
             for vlen in vlen2cpu:
                 for flags in flag_list:
                     for mode in "scalar", "range", "prange", "numpy":
-                        cls._inject_test(dtype, mode, vlen, flags)
+                        cls._inject_test(dtype, mode, vlen, dict(flags))
         # mark important
         for n in ( "test_int32_range4_usecase",  # issue #3016
                     ):
@@ -266,12 +299,12 @@ class TestSVML(TestCase):
 
     def __init__(self, *args):
         self.flags = Flags()
-        self.flags.set('nrt')
+        self.flags.nrt = True
 
         # flags for njit(fastmath=True)
         self.fastflags = Flags()
-        self.fastflags.set('nrt')
-        self.fastflags.set('fastmath', cpu.FastMathOptions(True))
+        self.fastflags.nrt = True
+        self.fastflags.fastmath = cpu.FastMathOptions(True)
         super(TestSVML, self).__init__(*args)
 
     def compile(self, func, *args, **kwargs):
@@ -380,9 +413,9 @@ class TestSVML(TestCase):
                          override_env_config('NUMBA_CPU_FEATURES', ''):
                         sig = (numba.int32,)
                         f = Flags()
-                        f.set('nrt')
+                        f.nrt = True
                         std = compile_isolated(math_sin_loop, sig, flags=f)
-                        f.set('fastmath', cpu.FastMathOptions(True))
+                        f.fastmath = cpu.FastMathOptions(True)
                         fast = compile_isolated(math_sin_loop, sig, flags=f)
                         fns = std, fast
 

@@ -1,4 +1,5 @@
 import collections
+import warnings
 
 from llvmlite import ir
 
@@ -8,6 +9,7 @@ from numba.core.typeconv import Conversion
 from numba.core import utils
 from .misc import UnicodeType
 from .containers import Bytes
+import numpy as np
 
 class CharSeq(Type):
     """
@@ -43,6 +45,10 @@ class UnicodeCharSeq(Type):
     @property
     def key(self):
         return self.count
+
+    def can_convert_to(self, typingctx, other):
+        if isinstance(other, UnicodeCharSeq):
+            return Conversion.safe
 
     def can_convert_from(self, typingctx, other):
         if isinstance(other, UnicodeType):
@@ -88,7 +94,10 @@ class Record(Type):
             if not isinstance(ty, (Number, NestedArray)):
                 msg = "Only Number and NestedArray types are supported, found: {}. "
                 raise TypeError(msg.format(ty))
-            datatype = ctx.get_data_type(ty)
+            if isinstance(ty, NestedArray):
+                datatype = ctx.data_model_manager[ty].as_storage_type()
+            else:
+                datatype = ctx.get_data_type(ty)
             lltypes.append(datatype)
             size = ctx.get_abi_sizeof(datatype)
             align = ctx.get_abi_alignment(datatype)
@@ -202,6 +211,26 @@ class Record(Type):
         from numba.np.numpy_support import as_struct_dtype
 
         return as_struct_dtype(self)
+
+    def can_convert_to(self, typingctx, other):
+        """
+        Convert this Record to the *other*.
+
+        This method only implements width subtyping for records.
+        """
+        from numba.core.errors import NumbaExperimentalFeatureWarning
+
+        if isinstance(other, Record):
+            if len(other.fields) > len(self.fields):
+                return
+            for other_fd, self_fd in zip(other.fields.items(),
+                                         self.fields.items()):
+                if not other_fd == self_fd:
+                    return
+            warnings.warn(f"{self} has been considered a subtype of {other} "
+                          f" This is an experimental feature.",
+                          category=NumbaExperimentalFeatureWarning)
+            return Conversion.safe
 
 
 class DType(DTypeSpec, Opaque):
@@ -463,6 +492,12 @@ class Array(Buffer):
 
     def is_precise(self):
         return self.dtype.is_precise()
+
+    @property
+    def box_type(self):
+        """Returns the Python type to box to.
+        """
+        return np.ndarray
 
 
 class ArrayCTypes(Type):

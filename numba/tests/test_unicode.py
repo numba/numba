@@ -6,9 +6,10 @@ from numba import njit
 from numba.core import types, utils
 import unittest
 from numba.tests.support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
-from numba.core.errors import TypingError
+from numba.core.errors import TypingError, UnsupportedError
 from numba.cpython.unicode import _MAX_UNICODE
 from numba.core.types.functions import _header_lead
+from numba.extending import overload
 
 
 _py37_or_later = utils.PYVERSION >= (3, 7)
@@ -40,6 +41,10 @@ def bool_usecase(x):
 
 def getitem_usecase(x, i):
     return x[i]
+
+
+def getitem_check_kind_usecase(x, i):
+    return hash(x[i])
 
 
 def zfill_usecase(x, y):
@@ -441,6 +446,28 @@ class TestUnicode(BaseTest):
                 self.assertEqual(pyfunc(1, b),
                                  cfunc(1, b), '%s, %s' % (1, b))
 
+    def test_eq_optional(self):
+        # See issue #7474
+        @njit
+        def foo(pred1, pred2):
+            if pred1 > 0:
+                resolved1 = 'concrete'
+            else:
+                resolved1 = None
+            if pred2 < 0:
+                resolved2 = 'concrete'
+            else:
+                resolved2 = None
+
+            # resolved* are Optionals
+            if resolved1 == resolved2:
+                return 10
+            else:
+                return 20
+
+        for (p1, p2) in product(*((-1, 1),) * 2):
+            self.assertEqual(foo(p1, p2), foo.py_func(p1, p2))
+
     def _check_ordering_op(self, usecase):
         pyfunc = usecase
         cfunc = njit(pyfunc)
@@ -503,8 +530,8 @@ class TestUnicode(BaseTest):
             self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
 
     def test_expandtabs_with_tabsize(self):
-        pyfuncs = [expandtabs_with_tabsize_usecase,
-                   expandtabs_with_tabsize_kwarg_usecase]
+        fns = [njit(expandtabs_with_tabsize_usecase),
+               njit(expandtabs_with_tabsize_kwarg_usecase)]
         messages = ['Results of "{}".expandtabs({}) must be equal',
                     'Results of "{}".expandtabs(tabsize={}) must be equal']
 
@@ -513,9 +540,8 @@ class TestUnicode(BaseTest):
 
         for s in cases:
             for tabsize in range(-1, 10):
-                for pyfunc, msg in zip(pyfuncs, messages):
-                    cfunc = njit(pyfunc)
-                    self.assertEqual(pyfunc(s, tabsize), cfunc(s, tabsize),
+                for fn, msg in zip(fns, messages):
+                    self.assertEqual(fn.py_func(s, tabsize), fn(s, tabsize),
                                      msg=msg.format(s, tabsize))
 
     def test_expandtabs_exception_noninteger_tabsize(self):
@@ -1173,7 +1199,20 @@ class TestUnicode(BaseTest):
         cfunc = njit(pyfunc)
 
         for s in UNICODE_EXAMPLES:
-            for i in range(-len(s)):
+            for i in range(-len(s), len(s)):
+                self.assertEqual(pyfunc(s, i),
+                                 cfunc(s, i),
+                                 "'%s'[%d]?" % (s, i))
+
+    def test_getitem_scalar_kind(self):
+        # See issue #6135, make sure that getitem returns a char of the minimal
+        # kind required to represent the "got" item, this is done via the use
+        # of `hash` in the test function as it is sensitive to kind.
+        pyfunc = getitem_check_kind_usecase
+        cfunc = njit(pyfunc)
+        samples = ['a\u1234', '¡着']
+        for s in samples:
+            for i in range(-len(s), len(s)):
                 self.assertEqual(pyfunc(s, i),
                                  cfunc(s, i),
                                  "'%s'[%d]?" % (s, i))
@@ -1217,11 +1256,46 @@ class TestUnicode(BaseTest):
                                      cfunc(s, sl),
                                      "'%s'[%d:%d]?" % (s, i, j))
 
+    def test_getitem_slice2_kind(self):
+        # See issue #6135. Also see note in test_getitem_scalar_kind regarding
+        # testing.
+        pyfunc = getitem_check_kind_usecase
+        cfunc = njit(pyfunc)
+        samples = ['abc\u1234\u1234', '¡¡¡着着着']
+        for s in samples:
+            for i in [-2, -1, 0, 1, 2, len(s), len(s) + 1]:
+                for j in [-2, -1, 0, 1, 2, len(s), len(s) + 1]:
+                    sl = slice(i, j)
+                    self.assertEqual(pyfunc(s, sl),
+                                     cfunc(s, sl),
+                                     "'%s'[%d:%d]?" % (s, i, j))
+
     def test_slice3(self):
         pyfunc = getitem_usecase
         cfunc = njit(pyfunc)
 
         for s in UNICODE_EXAMPLES:
+            for i in range(-len(s), len(s)):
+                for j in range(-len(s), len(s)):
+                    for k in [-2, -1, 1, 2]:
+                        sl = slice(i, j, k)
+                        self.assertEqual(pyfunc(s, sl),
+                                         cfunc(s, sl),
+                                         "'%s'[%d:%d:%d]?" % (s, i, j, k))
+
+    def test_getitem_slice3_kind(self):
+        # See issue #6135. Also see note in test_getitem_scalar_kind regarding
+        # testing.
+        pyfunc = getitem_check_kind_usecase
+        cfunc = njit(pyfunc)
+        samples = ['abc\u1234\u1234',
+                   'a\u1234b\u1234c'
+                   '¡¡¡着着着',
+                   '¡着¡着¡着',
+                   '着a着b着c',
+                   '¡着a¡着b¡着c',
+                   '¡着a着¡c',]
+        for s in samples:
             for i in range(-len(s), len(s)):
                 for j in range(-len(s), len(s)):
                     for k in [-2, -1, 1, 2]:
@@ -1242,6 +1316,18 @@ class TestUnicode(BaseTest):
                         self.assertEqual(pyfunc(s, sl),
                                          cfunc(s, sl),
                                          "'%s'[%d:%d:%d]?" % (s, i, j, k))
+
+    def test_slice_ascii_flag(self):
+        """
+        Make sure ascii flag is False when ascii and non-ascii characters are
+        mixed in output of Unicode slicing.
+        """
+        @njit
+        def f(s):
+            return s[::2]._is_ascii, s[1::2]._is_ascii
+
+        s = "¿abc¡Y tú, quién te cre\t\tes?"
+        self.assertEqual(f(s), (0, 1))
 
     def test_zfill(self):
         pyfunc = zfill_usecase
@@ -2463,6 +2549,66 @@ class TestUnicodeAuxillary(BaseTest):
         with self.assertRaises(TypingError) as raises:
             cfunc('abc')
         self.assertIn(_header_lead, str(raises.exception))
+
+    def test_unicode_type_mro(self):
+        # see issue #5635
+        def bar(x):
+            return True
+
+        @overload(bar)
+        def ol_bar(x):
+            ok = False
+            if isinstance(x, types.UnicodeType):
+                if isinstance(x, types.Hashable):
+                    ok = True
+            return lambda x: ok
+
+        @njit
+        def foo(strinst):
+            return bar(strinst)
+
+        inst = "abc"
+        self.assertEqual(foo.py_func(inst), foo(inst))
+        self.assertIn(types.Hashable, types.unicode_type.__class__.__mro__)
+
+    def test_f_strings(self):
+        """test f-string support, which requires bytecode handling
+        """
+        # requires formatting (FORMAT_VALUE) and concatenation (BUILD_STRINGS)
+        def impl1(a):
+            return f"AA_{a+3}_B"
+
+        # does not require concatenation
+        def impl2(a):
+            return f"{a+2}"
+
+        # no expression
+        def impl3(a):
+            return f"ABC_{a}"
+
+        # format spec not allowed
+        def impl4(a):
+            return f"ABC_{a:0}"
+
+        # corner case: empty string
+        def impl5():
+            return f""  # noqa: F541
+
+        self.assertEqual(impl1(3), njit(impl1)(3))
+        self.assertEqual(impl2(2), njit(impl2)(2))
+        # string input
+        self.assertEqual(impl3("DE"), njit(impl3)("DE"))
+        # check error when input type doesn't have str() implementation
+        with self.assertRaises(TypingError) as raises:
+            njit(impl3)(["A", "B"])
+        msg = "No implementation of function Function(<class 'str'>)"
+        self.assertIn(msg, str(raises.exception))
+        # check error when format spec provided
+        with self.assertRaises(UnsupportedError) as raises:
+            njit(impl4)(["A", "B"])
+        msg = "format spec in f-strings not supported yet"
+        self.assertIn(msg, str(raises.exception))
+        self.assertEqual(impl5(), njit(impl5)())
 
 
 if __name__ == '__main__':

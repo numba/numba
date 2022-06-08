@@ -27,7 +27,13 @@ race conditions.
 /* PThread */
 #include <pthread.h>
 #include <unistd.h>
+
+#if defined(__FreeBSD__)
+#include <stdlib.h>
+#else
 #include <alloca.h>
+#endif
+
 #include <sys/types.h>
 #include <unistd.h>
 #include <signal.h>
@@ -360,22 +366,22 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 
     if(_DEBUG)
     {
-        printf("inner_ndim: %ld\n",inner_ndim);
-        printf("arg_len: %ld\n", arg_len);
-        printf("total: %ld\n", total);
-        printf("count: %ld\n", count);
+        printf("inner_ndim: %zd\n",inner_ndim);
+        printf("arg_len: %zd\n", arg_len);
+        printf("total: %zd\n", total);
+        printf("count: %zd\n", count);
 
         printf("dimensions: ");
         for(j = 0; j < arg_len; j++)
         {
-            printf("%ld, ", ((size_t *)dimensions)[j]);
+            printf("%zd, ", ((size_t *)dimensions)[j]);
         }
         printf("\n");
 
         printf("steps: ");
         for(j = 0; j < array_count; j++)
         {
-            printf("%ld, ", steps[j]);
+            printf("%zd, ", steps[j]);
         }
         printf("\n");
 
@@ -420,7 +426,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
             printf("\ncount_space: ");
             for(j = 0; j < arg_len; j++)
             {
-                printf("%ld, ", count_space[j]);
+                printf("%zd, ", count_space[j]);
             }
             printf("\n");
         }
@@ -436,10 +442,10 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 
             if(_DEBUG)
             {
-                printf("Index %ld\n", j);
+                printf("Index %zd\n", j);
                 printf("-->Got base %p\n", (void *)base);
-                printf("-->Got step %ld\n", step);
-                printf("-->Got offset %ld\n", offset);
+                printf("-->Got step %zd\n", step);
+                printf("-->Got offset %td\n", offset);
                 printf("-->Got addr %p\n", (void *)array_arg_space[j]);
             }
         }
@@ -565,25 +571,16 @@ MOD_INIT(workqueue)
     if (m == NULL)
         return MOD_ERROR_VAL;
 
-    PyObject_SetAttrString(m, "launch_threads",
-                           PyLong_FromVoidPtr(&launch_threads));
-    PyObject_SetAttrString(m, "synchronize",
-                           PyLong_FromVoidPtr(&synchronize));
-    PyObject_SetAttrString(m, "ready",
-                           PyLong_FromVoidPtr(&ready));
-    PyObject_SetAttrString(m, "add_task",
-                           PyLong_FromVoidPtr(&add_task));
-    PyObject_SetAttrString(m, "parallel_for",
-                           PyLong_FromVoidPtr(&parallel_for));
-    PyObject_SetAttrString(m, "do_scheduling_signed",
-                           PyLong_FromVoidPtr(&do_scheduling_signed));
-    PyObject_SetAttrString(m, "do_scheduling_unsigned",
-                           PyLong_FromVoidPtr(&do_scheduling_unsigned));
-    PyObject_SetAttrString(m, "set_num_threads",
-                           PyLong_FromVoidPtr((void*)&set_num_threads));
-    PyObject_SetAttrString(m, "get_num_threads",
-                           PyLong_FromVoidPtr((void*)&get_num_threads));
-    PyObject_SetAttrString(m, "get_thread_id",
-                           PyLong_FromVoidPtr((void*)&get_thread_id));
+    SetAttrStringFromVoidPointer(m, launch_threads);
+    SetAttrStringFromVoidPointer(m, synchronize);
+    SetAttrStringFromVoidPointer(m, ready);
+    SetAttrStringFromVoidPointer(m, add_task);
+    SetAttrStringFromVoidPointer(m, parallel_for);
+    SetAttrStringFromVoidPointer(m, do_scheduling_signed);
+    SetAttrStringFromVoidPointer(m, do_scheduling_unsigned);
+    SetAttrStringFromVoidPointer(m, set_num_threads);
+    SetAttrStringFromVoidPointer(m, get_num_threads);
+    SetAttrStringFromVoidPointer(m, get_thread_id);
+
     return MOD_SUCCESS_VAL(m);
 }

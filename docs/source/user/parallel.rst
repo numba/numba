@@ -79,11 +79,19 @@ support for explicit parallel loops. One can use Numba's ``prange`` instead of
 make sure that the loop does not have cross iteration dependencies except for
 supported reductions.
 
-A reduction is inferred automatically if a variable is updated by a binary
-function/operator using its previous value in the loop body. The initial value
-of the reduction is inferred automatically for the ``+=``, ``-=``,  ``*=``,
-and ``/=`` operators.
-For other functions/operators, the reduction variable should hold the identity
+A reduction is inferred automatically if a variable is updated by a supported binary
+function/operator using its previous value in the loop body.  The following
+functions/operators are supported: ``+=``, ``+``, ``-=``, ``-``, ``*=``,
+``*``, ``/=``, ``/``, ``max()``, ``min()``.
+The initial value of the reduction is inferred automatically for the
+supported operators (i.e., not the ``max`` and ``min`` functions).
+Note that the ``//=`` operator is not supported because
+in the general case the result depends on the order in which the divisors are
+applied.  However, if all divisors are integers then the programmer may be
+able to rewrite the ``//=`` reduction as a ``*=`` reduction followed by
+a single floor division after the parallel region where the divisor is the
+accumulated product.
+For the ``max`` and ``min`` functions, the reduction variable should hold the identity
 value right before entering the ``prange`` loop.  Reductions in this manner
 are supported for scalars and for arrays of arbitrary dimensions.
 
@@ -117,12 +125,23 @@ The following example demonstrates a product reduction on a two-dimensional arra
 
         return result1
 
-Care should be taken, however, when reducing into slices or elements of an array 
-if the elements specified by the slice or index are written to simultaneously by 
+.. note:: When using Python's ``range`` to induce a loop, Numba types the
+          induction variable as a signed integer. This is also the case for
+          Numba's ``prange`` when ``parallel=False``. However, for
+          ``parallel=True``, if the range is identifiable as strictly positive,
+          the type of the induction variable  will be ``uint64``. The impact of
+          a ``uint64`` induction variable is often most noticable when
+          undertaking operations involving it and a signed integer. Under
+          Numba's type coercion rules, such a case will commonly result in the
+          operation producing a floating point result type.
+
+
+Care should be taken, however, when reducing into slices or elements of an array
+if the elements specified by the slice or index are written to simultaneously by
 multiple parallel threads. The compiler may not detect such cases and then a race condition
 would occur.
 
-The following example demonstrates such a case where a race condition in the execution of the 
+The following example demonstrates such a case where a race condition in the execution of the
 parallel for-loop results in an incorrect return value::
 
     from numba import njit, prange
@@ -224,6 +243,45 @@ give an equivalence parallel implementation using :func:`~numba.guvectorize`,
 it would require a pervasive change that rewrites the code to extract kernel
 computation that can be parallelized, which was both tedious and challenging.
 
+Unsupported Operations
+======================
+
+This section contains a non-exhaustive list of commonly encountered but
+currently unsupported features:
+
+#. **Mutating a list is not threadsafe**
+
+   Concurrent write operations on container types (i.e. lists, sets and
+   dictionaries) in a ``prange`` parallel region are not threadsafe e.g.::
+
+    @njit(parallel=True)
+    def invalid():
+        z = []
+        for i in prange(10000):
+            z.append(i)
+        return z
+
+   It is highly likely that the above will result in corruption or an access
+   violation as containers require thread-safety under mutation but this feature
+   is not implemented.
+
+#. **Induction variables are not associated with thread ID**
+
+   The use of the induction variable induced by a ``prange`` based loop in
+   conjunction with ``get_num_threads`` as a method of ensuring safe writes into
+   a pre-sized container is not valid e.g.::
+
+    @njit(parallel=True)
+    def invalid():
+        n = get_num_threads()
+        z = [0 for _ in range(n)]
+        for i in prange(100):
+            z[i % n] += i
+        return z
+
+   The above can on occasion appear to work, but it does so by luck. There's no
+   guarantee about which indexes are assigned to which executing threads or the
+   order in which the loop iterations execute.
 
 .. _numba-parallel-diagnostics:
 

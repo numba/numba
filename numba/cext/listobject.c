@@ -216,6 +216,23 @@ numba_list_free(NB_List *lp) {
     free(lp);
 }
 
+/* Return the base pointer of the list items.
+ */
+char *
+numba_list_base_ptr(NB_List *lp)
+{
+    return lp->items;
+}
+
+/* Return the address of the list size.
+ */
+Py_ssize_t
+numba_list_size_address(NB_List *lp)
+{
+    return (Py_ssize_t)&lp->size;
+}
+
+
 /* Return the length of a list.
  *
  * lp: a list

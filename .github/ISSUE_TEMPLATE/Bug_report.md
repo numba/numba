@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Create a report to help us improve Numba
+about: Report a bug. Not for asking general questions - see below.
 
 ---
 
@@ -22,9 +22,9 @@ Before submitting a bug report please ensure that you can check off these boxes:
 -->
 
 - [ ] I have tried using the latest released version of Numba (most recent is
- visible in the change log (https://github.com/numba/numba/blob/master/CHANGE_LOG).
-- [ ] I have included below a minimal working reproducer (if you are unsure how
- to write one see http://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports).
+ visible in the change log (https://github.com/numba/numba/blob/main/CHANGE_LOG).
+- [ ] I have included a self contained code sample to reproduce the problem.
+  i.e. it's possible to run as 'python bug.py'.
 
 <!--
 

@@ -196,7 +196,6 @@ numba_signbit(npy_double a)
     return npy_signbit(a);
 }
 
-
 /* Unpack any Python complex-like object into a Py_complex structure */
 NUMBA_EXPORT_FUNC(int)
 numba_complex_adaptor(PyObject* obj, Py_complex *out) {
@@ -274,6 +273,12 @@ numba_recreate_record(void *pdata, int size, PyObject *dtype) {
     PyObject *dtypearg = NULL;
     PyObject *record = NULL;
     PyArray_Descr *descr = NULL;
+
+    if (dtype == NULL) {
+        PyErr_Format(PyExc_RuntimeError,
+            "In 'numba_recreate_record', 'dtype' is NULL");
+        return NULL;
+    }
 
     numpy = PyImport_ImportModuleNoBlock("numpy");
     if (!numpy) goto CLEANUP;
@@ -972,6 +977,35 @@ numba_do_raise(PyObject *exc_packed)
     return status;
 }
 
+#ifdef PYCC_COMPILING
+/* AOT avoid the use of `numba.core.serialize` */
+NUMBA_EXPORT_FUNC(PyObject *)
+numba_unpickle(const char *data, int n, const char *hashed)
+{
+    PyObject *buf, *obj;
+    static PyObject *loads;
+
+    /* Caching the pickle.loads function shaves a couple µs here. */
+    if (loads == NULL) {
+        PyObject *picklemod;
+        picklemod = PyImport_ImportModule("pickle");
+        if (picklemod == NULL)
+            return NULL;
+        loads = PyObject_GetAttrString(picklemod, "loads");
+        Py_DECREF(picklemod);
+        if (loads == NULL)
+            return NULL;
+    }
+
+    buf = PyBytes_FromStringAndSize(data, n);
+    if (buf == NULL)
+        return NULL;
+    obj = PyObject_CallFunctionObjArgs(loads, buf, NULL);
+    Py_DECREF(buf);
+    return obj;
+}
+
+#else
 
 NUMBA_EXPORT_FUNC(PyObject *)
 numba_unpickle(const char *data, int n, const char *hashed)
@@ -1008,6 +1042,7 @@ error:
     Py_DECREF(buf);
     return obj;
 }
+#endif
 
 /*
  * Unicode helpers

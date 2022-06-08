@@ -6,15 +6,12 @@ Implement the cmath module functions.
 import cmath
 import math
 
-import llvmlite.llvmpy.core as lc
-from llvmlite.llvmpy.core import Type
-
 from numba.core.imputils import Registry, impl_ret_untracked
 from numba.core import types, cgutils
 from numba.core.typing import signature
 from numba.cpython import builtins, mathimpl
 
-registry = Registry()
+registry = Registry('cmathimpl')
 lower = registry.lower
 
 

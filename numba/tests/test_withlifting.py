@@ -1,4 +1,10 @@
 import copy
+import os
+import signal
+import subprocess
+import sys
+import tempfile
+import threading
 import warnings
 import numpy as np
 
@@ -10,10 +16,13 @@ from numba.core.interpreter import Interpreter
 from numba.core import typing, errors, cpu
 from numba.core.registry import cpu_target
 from numba.core.compiler import compile_ir, DEFAULT_FLAGS
-from numba import njit, typeof, objmode
+from numba import njit, typeof, objmode, types
 from numba.core.extending import overload
 from numba.tests.support import (MemoryLeak, TestCase, captured_stdout,
-                                 skip_unless_scipy)
+                                 skip_unless_scipy, needs_strace, linux_only,
+                                 strace, needs_subprocess)
+from numba.core.utils import PYVERSION
+from numba.experimental import jitclass
 import unittest
 
 
@@ -134,6 +143,16 @@ def liftcall4():
             pass
 
 
+def liftcall5():
+    for i in range(10):
+        with call_context:
+            print(i)
+            if i == 5:
+                print("A")
+                break
+    return i
+
+
 def lift_undefiend():
     with undefined_global_var:
         pass
@@ -147,10 +166,13 @@ def lift_invalid():
         pass
 
 
+gv_type = types.intp
+
+
 class TestWithFinding(TestCase):
     def check_num_of_with(self, func, expect_count):
         the_ir = get_func_ir(func)
-        ct = len(find_setupwiths(the_ir.blocks))
+        ct = len(find_setupwiths(the_ir)[0])
         self.assertEqual(ct, expect_count)
 
     def test_lift1(self):
@@ -253,11 +275,22 @@ class TestLiftCall(BaseTestWithLifting):
         self.check_same_semantic(liftcall3)
 
     def test_liftcall4(self):
-        with self.assertRaises(errors.TypingError) as raises:
+        accept = (errors.TypingError, errors.NumbaRuntimeError,
+                  errors.NumbaValueError, errors.CompilerError)
+        with self.assertRaises(accept) as raises:
             njit(liftcall4)()
         # Known error.  We only support one context manager per function
         # for body that are lifted.
-        self.assertIn("re-entrant", str(raises.exception))
+        msg = ("compiler re-entrant to the same function signature")
+        self.assertIn(msg, str(raises.exception))
+
+    # 3.7 fails to interpret the bytecode for this example
+    @unittest.skipIf(PYVERSION <= (3, 8),
+                     "unsupported on py3.8 and before")
+    def test_liftcall5(self):
+        self.check_extracted_with(liftcall5, expect_count=1,
+                                  expected_stdout="0\n1\n2\n3\n4\n5\nA\n")
+        self.check_same_semantic(liftcall5)
 
 
 def expected_failure_for_list_arg(fn):
@@ -515,22 +548,28 @@ class TestLiftObj(MemoryLeak, TestCase):
         # Check that an error occurred in with-lifting in objmode
         pat = ("During: resolving callee type: "
                "type\(ObjModeLiftedWith\(<.*>\)\)")
-        self.assertRegexpMatches(str(raises.exception), pat)
+        self.assertRegex(str(raises.exception), pat)
 
     def test_case07_mystery_key_error(self):
         # this raises a key error
         def foo(x):
             with objmode_context():
                 t = {'a': x}
-            return x, t
+                u = 3
+            return x, t, u
         x = np.array([1, 2, 3])
         cfoo = njit(foo)
+
         with self.assertRaises(errors.TypingError) as raises:
             cfoo(x)
-        self.assertIn(
-            "missing type annotation on outgoing variables",
-            str(raises.exception),
-            )
+
+        exstr = str(raises.exception)
+        self.assertIn("Missing type annotation on outgoing variable(s): "
+                      "['t', 'u']",
+                      exstr)
+        self.assertIn("Example code: with objmode"
+                      "(t='<add_type_as_string_here>')",
+                      exstr)
 
     def test_case08_raise_from_external(self):
         # this segfaults, expect its because the dict needs to raise as '2' is
@@ -563,7 +602,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         with self.assertRaises(errors.CompilerError) as raises:
             cfoo(x)
         self.assertIn(
-            ('unsupported controlflow due to return/raise statements inside '
+            ('unsupported control flow due to raise statements inside '
              'with block'),
             str(raises.exception),
         )
@@ -649,21 +688,21 @@ class TestLiftObj(MemoryLeak, TestCase):
                              msg='there were warnings in dataflow.py')
 
     def test_case14_return_direct_from_objmode_ctx(self):
-        # fails with:
-        # AssertionError: Failed in nopython mode pipeline (step: Handle with contexts)
-        # ending offset is not a label
         def foo(x):
             with objmode_context(x='int64[:]'):
+                x += 1
                 return x
-        x = np.array([1, 2, 3])
-        cfoo = njit(foo)
-        with self.assertRaises(errors.CompilerError) as raises:
-            cfoo(x)
-        self.assertIn(
-            ('unsupported controlflow due to return/raise statements inside '
-             'with block'),
-            str(raises.exception),
-        )
+
+        if PYVERSION <= (3,8):
+            # 3.8 and below don't support return inside with
+            with self.assertRaises(errors.CompilerError) as raises:
+                cfoo = njit(foo)
+                cfoo(np.array([1, 2, 3]))
+            msg = "unsupported control flow: due to return statements inside with block"
+            self.assertIn(msg, str(raises.exception))
+        else:
+            result = foo(np.array([1, 2, 3]))
+            np.testing.assert_array_equal(np.array([2, 3, 4]), result)
 
     # No easy way to handle this yet.
     @unittest.expectedFailure
@@ -722,11 +761,15 @@ class TestLiftObj(MemoryLeak, TestCase):
                     return 7
             ret = foo(x - 1)
             return ret
-        x = np.array([1, 2, 3])
-        cfoo = njit(foo)
-        with self.assertRaises(errors.CompilerError) as raises:
-            cfoo(x)
-        msg = "Does not support with-context that contain branches"
+        with self.assertRaises((errors.TypingError, errors.CompilerError)) as raises:
+            cfoo = njit(foo)
+            cfoo(np.array([1, 2, 3]))
+        if PYVERSION <= (3, 7):
+            # 3.7 and below can't handle the return
+            msg = "unsupported control flow: due to return statements inside with block"
+        else:
+            # above can't handle the recursion
+            msg = "Untyped global name 'foo'"
         self.assertIn(msg, str(raises.exception))
 
     @unittest.expectedFailure
@@ -789,11 +832,301 @@ class TestLiftObj(MemoryLeak, TestCase):
 
         self.assertEqual(f(), 1 + 3)
 
+    def test_objmode_gv_variable(self):
+        @njit
+        def global_var():
+            with objmode(val=gv_type):
+                val = 12.3
+            return val
+
+        ret = global_var()
+        # the result is truncated because of the intp return-type
+        self.assertIsInstance(ret, int)
+        self.assertEqual(ret, 12)
+
+    def test_objmode_gv_variable_error(self):
+        @njit
+        def global_var():
+            with objmode(val=gv_type2):
+                val = 123
+            return val
+
+        with self.assertRaisesRegex(
+            errors.CompilerError,
+            ("Error handling objmode argument 'val'. "
+             "Global 'gv_type2' is not defined\.")
+        ):
+            global_var()
+
+    def test_objmode_gv_mod_attr(self):
+        @njit
+        def modattr1():
+            with objmode(val=types.intp):
+                val = 12.3
+            return val
+
+        @njit
+        def modattr2():
+            with objmode(val=numba.types.intp):
+                val = 12.3
+            return val
+
+        for fn in (modattr1, modattr2):
+            with self.subTest(fn=str(fn)):
+                ret = fn()
+                # the result is truncated because of the intp return-type
+                self.assertIsInstance(ret, int)
+                self.assertEqual(ret, 12)
+
+    def test_objmode_gv_mod_attr_error(self):
+        @njit
+        def moderror():
+            with objmode(val=types.THIS_DOES_NOT_EXIST):
+                val = 12.3
+            return val
+        with self.assertRaisesRegex(
+            errors.CompilerError,
+            ("Error handling objmode argument 'val'. "
+             "Getattr cannot be resolved at compile-time"),
+        ):
+            moderror()
+
+    def test_objmode_gv_mod_attr_error_multiple(self):
+        @njit
+        def moderror():
+            with objmode(v1=types.intp, v2=types.THIS_DOES_NOT_EXIST,
+                         v3=types.float32):
+                v1 = 12.3
+                v2 = 12.3
+                v3 = 12.3
+            return val
+        with self.assertRaisesRegex(
+            errors.CompilerError,
+            ("Error handling objmode argument 'v2'. "
+             "Getattr cannot be resolved at compile-time"),
+        ):
+            moderror()
+
+    def test_objmode_closure_type_in_overload(self):
+        def foo():
+            pass
+
+        @overload(foo)
+        def foo_overload():
+            shrubbery = types.float64[:]
+            def impl():
+                with objmode(out=shrubbery):
+                    out = np.arange(10).astype(np.float64)
+                return out
+            return impl
+
+        @njit
+        def bar():
+            return foo()
+
+        self.assertPreciseEqual(bar(), np.arange(10).astype(np.float64))
+
+    def test_objmode_closure_type_in_overload_error(self):
+        def foo():
+            pass
+
+        @overload(foo)
+        def foo_overload():
+            shrubbery = types.float64[:]
+            def impl():
+                with objmode(out=shrubbery):
+                    out = np.arange(10).astype(np.float64)
+                return out
+            # Remove closure var.
+            # Otherwise, it will "shrubbery" will be a global
+            del shrubbery
+            return impl
+
+        @njit
+        def bar():
+            return foo()
+
+        with self.assertRaisesRegex(
+            errors.TypingError,
+            ("Error handling objmode argument 'out'. "
+             "Freevar 'shrubbery' is not defined"),
+        ):
+            bar()
+
+    def test_objmode_invalid_use(self):
+        @njit
+        def moderror():
+            with objmode(bad=1 + 1):
+                out = 1
+            return val
+        with self.assertRaisesRegex(
+            errors.CompilerError,
+            ("Error handling objmode argument 'bad'. "
+             "The value must be a compile-time constant either as "
+             "a non-local variable or a getattr expression that "
+             "refers to a Numba type."),
+        ):
+            moderror()
+
+    def test_objmode_multi_type_args(self):
+        array_ty = types.int32[:]
+        @njit
+        def foo():
+            # t1 is a string
+            # t2 is a global type
+            # t3 is a non-local/freevar
+            with objmode(t1="float64", t2=gv_type, t3=array_ty):
+                t1 = 793856.5
+                t2 = t1         # to observe truncation
+                t3 = np.arange(5).astype(np.int32)
+            return t1, t2, t3
+
+        t1, t2, t3 = foo()
+        self.assertPreciseEqual(t1, 793856.5)
+        self.assertPreciseEqual(t2, 793856)
+        self.assertPreciseEqual(t3, np.arange(5).astype(np.int32))
+
+    def test_objmode_jitclass(self):
+        spec = [
+            ('value', types.int32),               # a simple scalar field
+            ('array', types.float32[:]),          # an array field
+        ]
+
+        @jitclass(spec)
+        class Bag(object):
+            def __init__(self, value):
+                self.value = value
+                self.array = np.zeros(value, dtype=np.float32)
+
+            @property
+            def size(self):
+                return self.array.size
+
+            def increment(self, val):
+                for i in range(self.size):
+                    self.array[i] += val
+                return self.array
+
+            @staticmethod
+            def add(x, y):
+                return x + y
+
+        n = 21
+        mybag = Bag(n)
+
+        def foo():
+            pass
+
+        @overload(foo)
+        def foo_overload():
+            shrubbery = mybag._numba_type_
+            def impl():
+                with objmode(out=shrubbery):
+                    out = Bag(123)
+                    out.increment(3)
+                return out
+            return impl
+
+        @njit
+        def bar():
+            return foo()
+
+        z = bar()
+        self.assertIsInstance(z, Bag)
+        self.assertEqual(z.add(2, 3), 2 + 3)
+        exp_array = np.zeros(123, dtype=np.float32) + 3
+        self.assertPreciseEqual(z.array, exp_array)
+
+
     @staticmethod
     def case_objmode_cache(x):
         with objmode(output='float64'):
             output = x / 10
         return output
+
+    def test_objmode_reflected_list(self):
+        ret_type = typeof([1, 2, 3, 4, 5])
+        @njit
+        def test2():
+            with objmode(out=ret_type):
+                out = [1, 2, 3, 4, 5]
+            return out
+
+        with self.assertRaises(errors.CompilerError) as raises:
+            test2()
+        self.assertRegex(
+            str(raises.exception),
+            (r"Objmode context failed. "
+             r"Argument 'out' is declared as an unsupported type: "
+             r"reflected list\(int(32|64)\)<iv=None>. "
+             r"Reflected types are not supported."),
+        )
+
+    def test_objmode_reflected_set(self):
+        ret_type = typeof({1, 2, 3, 4, 5})
+        @njit
+        def test2():
+            with objmode(result=ret_type):
+                result = {1, 2, 3, 4, 5}
+            return result
+
+        with self.assertRaises(errors.CompilerError) as raises:
+            test2()
+        self.assertRegex(
+            str(raises.exception),
+            (r"Objmode context failed. "
+             r"Argument 'result' is declared as an unsupported type: "
+             r"reflected set\(int(32|64)\). "
+             r"Reflected types are not supported."),
+        )
+
+    def test_objmode_typed_dict(self):
+        ret_type = types.DictType(types.unicode_type, types.int64)
+        @njit
+        def test4():
+            with objmode(res=ret_type):
+                res = {'A': 1, 'B': 2}
+            return res
+
+        with self.assertRaises(TypeError) as raises:
+            test4()
+        self.assertIn(
+            ("can't unbox a <class 'dict'> "
+             "as a <class 'numba.typed.typeddict.Dict'>"),
+            str(raises.exception),
+        )
+
+    def test_objmode_typed_list(self):
+        ret_type = types.ListType(types.int64)
+        @njit
+        def test4():
+            with objmode(res=ret_type):
+                res = [1, 2]
+            return res
+
+        with self.assertRaises(TypeError) as raises:
+            test4()
+        # Note: in python3.6, the Generic[T] on typedlist is causing it to
+        #       format differently.
+        self.assertRegex(
+            str(raises.exception),
+            (r"can't unbox a <class 'list'> "
+             r"as a (<class ')?numba.typed.typedlist.List('>)?"),
+        )
+
+    def test_objmode_use_of_view(self):
+        # See issue #7158, npm functionality should only be validated if in
+        # npm.
+        @njit
+        def foo(x):
+            with numba.objmode(y="int64[::1]"):
+                y = x.view("int64")
+            return y
+
+        a = np.ones(1, np.int64).view('float64')
+        expected = foo.py_func(a)
+        got = foo(a)
+        self.assertPreciseEqual(expected, got)
 
 
 def case_inner_pyfunc(x):
@@ -871,6 +1204,59 @@ class TestBogusContext(BaseTestWithLifting):
             "Unsupported context manager in use",
             str(raises.exception),
             )
+
+    def test_with_as_fails_gracefully(self):
+        @njit
+        def foo():
+            with open('') as f:
+                pass
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            foo()
+
+        excstr = str(raises.exception)
+        msg = ("The 'with (context manager) as (variable):' construct is not "
+               "supported.")
+        self.assertIn(msg, excstr)
+
+
+class TestMisc(TestCase):
+    # Tests for miscellaneous objmode issues. Run serially.
+
+    _numba_parallel_test_ = False
+
+    @linux_only
+    @needs_strace
+    @needs_subprocess
+    def test_no_fork_in_compilation_impl(self):
+        # Checks that there is no fork/clone/execve during compilation, see
+        # issue #7881. This needs running in a subprocess as the offending fork
+        # call that triggered #7881 occurs on the first call to uuid1 as it's
+        # part if the initialisation process for that function (gets hardware
+        # address of machine).
+
+        def force_compile():
+            @njit('void()') # force compilation
+            def f():
+                with numba.objmode():
+                    pass
+
+        # capture these syscalls:
+        syscalls = ['fork', 'clone', 'execve']
+
+        # check that compilation does not trigger fork, clone or execve
+        strace_data = strace(force_compile, syscalls)
+        self.assertFalse(strace_data)
+
+    @linux_only
+    @needs_strace
+    def test_no_fork_in_compilation(self):
+        # Runs the test_no_fork_in_compilation_impl test in a subprocess
+        themod = f'numba.tests.test_withlifting'
+        testname = 'test_no_fork_in_compilation_impl'
+        self.subprocess_test_runner(test_module=themod,
+                                    test_class='TestMisc',
+                                    test_name=testname,)
 
 
 if __name__ == '__main__':

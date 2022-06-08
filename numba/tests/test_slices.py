@@ -6,7 +6,7 @@ import sys
 import numpy as np
 
 from numba import jit, typeof, TypingError
-from numba.core import utils
+from numba.core import utils, types
 from numba.tests.support import TestCase, MemoryLeakMixin
 from numba.core.types.functions import _header_lead
 import unittest
@@ -184,6 +184,28 @@ class TestSlices(MemoryLeakMixin, TestCase):
             "'%s' object cannot be interpreted as an integer" % typeof(1.2),
             str(e.exception)
         )
+
+    def test_slice_from_constant(self):
+        test_tuple = (1, 2, 3, 4)
+
+        for ts in itertools.product(
+            [None, 1, 2, 3], [None, 1, 2, 3], [None, 1, 2, -1, -2]
+        ):
+            ts = slice(*ts)
+
+            @jit(nopython=True)
+            def test_fn():
+                return test_tuple[ts]
+
+            self.assertEqual(test_fn(), test_fn.py_func())
+
+    def test_literal_slice_distinct(self):
+        sl1 = types.misc.SliceLiteral(slice(1, None, None))
+        sl2 = types.misc.SliceLiteral(slice(None, None, None))
+        sl3 = types.misc.SliceLiteral(slice(1, None, None))
+
+        self.assertNotEqual(sl1, sl2)
+        self.assertEqual(sl1, sl3)
 
 
 if __name__ == '__main__':

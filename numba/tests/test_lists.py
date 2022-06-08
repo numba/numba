@@ -17,10 +17,10 @@ from numba.core.extending import overload
 
 
 enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
+enable_pyobj_flags.enable_pyobject = True
 
 force_pyobj_flags = Flags()
-force_pyobj_flags.set("force_pyobject")
+force_pyobj_flags.force_pyobject = True
 
 Point = namedtuple('Point', ('a', 'b'))
 
@@ -312,6 +312,10 @@ def list_mul(n, v):
     a = list(range(n))
     return a * v
 
+def list_mul2(n, v):
+    a = list(range(n))
+    return v * a
+
 def list_mul_inplace(n, v):
     a = list(range(n))
     a *= v
@@ -394,21 +398,6 @@ class TestLists(MemoryLeakMixin, TestCase):
                                        types.int32, types.int32, types.int32))
         cfunc = cr.entry_point
         self.assertEqual(cfunc(1, 2, 3, 4, 5, 6), pyfunc(1, 2, 3, 4, 5, 6))
-
-    @testing.allow_interpreter_mode
-    def test_list_comprehension(self):
-        list_tests = [list_comprehension1,
-                      list_comprehension2,
-                      list_comprehension3,
-                      list_comprehension4,
-                      list_comprehension5,
-                      list_comprehension6]
-
-        for test in list_tests:
-            pyfunc = test
-            cr = compile_isolated(pyfunc, ())
-            cfunc = cr.entry_point
-            self.assertEqual(cfunc(), pyfunc())
 
     def check_unary_with_size(self, pyfunc, precise=True):
         cfunc = jit(nopython=True)(pyfunc)
@@ -671,6 +660,9 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_mul(self):
         self.check_mul(list_mul)
 
+    def test_mul2(self):
+        self.check_mul(list_mul2)
+
     def test_mul_inplace(self):
         self.check_mul(list_mul_inplace)
 
@@ -932,6 +924,15 @@ class TestListManagedElements(ManagedListTestCase):
     def test_reflect_popped(self):
         def pyfunc(con):
             con.pop()
+
+        self._check_element_equal(pyfunc)
+
+    def test_reflect_insert(self):
+        """make sure list.insert() doesn't crash for refcounted objects (see #7553)
+        """
+
+        def pyfunc(con):
+            con.insert(1, np.arange(4).astype(np.intp))
 
         self._check_element_equal(pyfunc)
 
@@ -1735,6 +1736,19 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
 
         self.assertEqual(foo.py_func(), foo())
 
+    def test_staticgetitem_slice(self):
+        # this is forbidden by typing as there's no way to serialize a list of
+        # any kind as required by returning a (static) slice of a LiteralList
+        @njit
+        def foo():
+            l = ['a', 'b', 1]
+            return l[:2]
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+        expect = "Cannot __getitem__ on a literal list"
+        self.assertIn(expect, str(raises.exception))
+
     def test_setitem(self):
 
         @njit
@@ -1768,7 +1782,7 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
                 l = ['a', 1, 2j]
             else:
                 l = ['b', 2]
-            return l[0]
+            return l[0], l[1], l[0], l[1] # defeat py310 inliner
 
         with self.assertRaises(errors.TypingError) as raises:
             foo(100)
@@ -1793,6 +1807,25 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
             return l[0], l[1]
 
         self.assertEqual(foo(), foo.py_func())
+
+    def test_tuple_not_in_mro(self):
+        # Related to #6094, make sure that LiteralList does not inherit from
+        # types.BaseTuple as this breaks isinstance checks.
+        def bar(x):
+            pass
+
+        @overload(bar)
+        def ol_bar(x):
+            self.assertFalse(isinstance(x, types.BaseTuple))
+            self.assertTrue(isinstance(x, types.LiteralList))
+            return lambda x: ...
+
+        @njit
+        def foo():
+            l = ['a', 1]
+            bar(l)
+
+        foo()
 
 
 if __name__ == '__main__':

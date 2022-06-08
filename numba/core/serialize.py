@@ -1,32 +1,14 @@
 """
 Serialization support for compiled functions.
 """
-
-from importlib.util import MAGIC_NUMBER as bc_magic
-
+import sys
 import abc
 import io
-import marshal
-import sys
 import copyreg
-from types import FunctionType, ModuleType, CodeType
-
-from numba.core.utils import PYVERSION
 
 
-if PYVERSION >= (3, 8):
-    from types import CellType
-
-    import pickle
-    pickle38 = pickle
-else:
-    try:
-        import pickle5 as pickle38
-    except ImportError:
-        pickle38 = None
-        import pickle
-    else:
-        pickle = pickle38
+import pickle
+from numba import cloudpickle
 
 
 #
@@ -38,99 +20,6 @@ def _rebuild_reduction(cls, *args):
     Global hook to rebuild a given class from its __reduce__ arguments.
     """
     return cls._rebuild(*args)
-
-
-class _ModuleRef(object):
-
-    def __init__(self, name):
-        self.name = name
-
-    def __reduce__(self):
-        return _rebuild_module, (self.name,)
-
-
-def _rebuild_module(name):
-    if name is None:
-        raise ImportError("cannot import None")
-    __import__(name)
-    return sys.modules[name]
-
-
-def _get_function_globals_for_reduction(func):
-    """
-    Analyse *func* and return a dictionary of global values suitable for
-    reduction.
-    """
-    from numba.core import bytecode   # needed here to avoid cyclic import
-
-    func_id = bytecode.FunctionIdentity.from_function(func)
-    bc = bytecode.ByteCode(func_id)
-    globs = bc.get_used_globals()
-    # Remember the module name so that the function gets a proper __module__
-    # when rebuilding.  This is used to recreate the environment.
-    globs['__name__'] = func.__module__
-    return globs
-
-
-def _reduce_function(func, globs):
-    """
-    Reduce a Python function and its globals to picklable components.
-    If there are cell variables (i.e. references to a closure), their
-    values will be frozen.
-    """
-    if func.__closure__:
-        cells = [cell.cell_contents for cell in func.__closure__]
-    else:
-        cells = None
-    return (_reduce_code(func.__code__), globs, func.__name__, cells,
-            func.__defaults__)
-
-
-def _reduce_code(code):
-    """
-    Reduce a code object to picklable components.
-    """
-    return marshal.version, bc_magic, marshal.dumps(code)
-
-
-def _make_cell(x):
-    """
-    A dummy function allowing us to build cell objects because
-    types.CellType doesn't exist until Python3.8.
-    """
-    return (lambda: x).__closure__[0]
-
-
-def _rebuild_function(code_reduced, globals, name, cell_values, defaults):
-    """
-    Rebuild a function from its _reduce_function() results.
-    """
-    if cell_values:
-        cells = tuple(_make_cell(v) for v in cell_values)
-    else:
-        cells = ()
-    code = _rebuild_code(*code_reduced)
-    modname = globals['__name__']
-    try:
-        _rebuild_module(modname)
-    except ImportError:
-        # If the module can't be found, avoid passing it (it would produce
-        # errors when lowering).
-        del globals['__name__']
-    return FunctionType(code, globals, name, defaults, cells)
-
-
-def _rebuild_code(marshal_version, bytecode_magic, marshalled):
-    """
-    Rebuild a code object from its _reduce_code() results.
-    """
-    if marshal.version != marshal_version:
-        raise RuntimeError("incompatible marshal version: "
-                           "interpreter has %r, marshalled code has %r"
-                           % (marshal.version, marshal_version))
-    if bc_magic != bytecode_magic:
-        raise RuntimeError("incompatible bytecode version")
-    return marshal.loads(marshalled)
 
 
 # Keep unpickled object via `numba_unpickle` alive.
@@ -155,7 +44,7 @@ def _numba_unpickle(address, bytedata, hashed):
     try:
         obj = _unpickled_memo[key]
     except KeyError:
-        _unpickled_memo[key] = obj = pickle.loads(bytedata)
+        _unpickled_memo[key] = obj = cloudpickle.loads(bytedata)
     return obj
 
 
@@ -164,7 +53,7 @@ def dumps(obj):
     """
     pickler = NumbaPickler
     with io.BytesIO() as buf:
-        p = pickler(buf)
+        p = pickler(buf, protocol=4)
         p.dump(obj)
         pickled = buf.getvalue()
 
@@ -172,7 +61,7 @@ def dumps(obj):
 
 
 # Alias to pickle.loads to allow `serialize.loads()`
-loads = pickle.loads
+loads = cloudpickle.loads
 
 
 class _CustomPickled:
@@ -271,125 +160,37 @@ def is_serialiable(obj):
             return True
 
 
-class _TracedPicklingError(pickle.PicklingError):
-    """A custom pickling error used internally in NumbaPickler.
+def _no_pickle(obj):
+    raise pickle.PicklingError(f"Pickling of {type(obj)} is unsupported")
+
+
+def disable_pickling(typ):
+    """This is called on a type to disable pickling
     """
-    pass
+    NumbaPickler.disabled_types.add(typ)
+    # The following is needed for Py3.7
+    NumbaPickler.dispatch_table[typ] = _no_pickle
+    # Return `typ` to allow use as a decorator
+    return typ
 
 
-class SlowNumbaPickler(pickle._Pickler):
-    """Extends the pure-python Pickler to support the pickling need in Numba.
-
-    Adds pickling for closure functions, modules.
-    Adds customized pickling for _CustomPickled to avoid invoking a new
-    Pickler instance.
-
-    Note: this is used on Python < 3.8 unless `pickle5` is installed.
-
-    Note: This is good for debugging because the C-pickler hides the traceback
+class NumbaPickler(cloudpickle.CloudPickler):
+    disabled_types = set()
+    """A set of types that pickling cannot is disabled.
     """
 
-    dispatch = pickle._Pickler.dispatch.copy()
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.__trace = []
-        self.__memo = {}
-
-    def save(self, obj):
-        """
-        Overrides parent's `.save()` to provide better error messages.
-        """
-        self.__trace.append(f"{type(obj)}: {id(obj)}" )
-        try:
-            return super().save(obj)
-        except _TracedPicklingError:
-            raise
-        except Exception as e:
-            def perline(items):
-                return '\n'.join(f" [{depth}]: {it}"
-                                 for depth, it in enumerate(items))
-            m = (f"Failed to pickle because of\n  {type(e).__name__}: {e}"
-                 f"\ntracing... \n{perline(self.__trace)}")
-            raise _TracedPicklingError(m)
-        finally:
-            self.__trace.pop()
-
-    def _save_function(self, func):
-        """
-        Override how functions are saved by serializing the bytecode and
-        corresponding globals.
-        """
-        if _is_importable(func):
-            return self.save_global(func)
-        if id(func) in self.__memo:
-            # Detect recursive pickling; i.e. function references itself.
-            # NOTE: this is not ideal, but we prefer the fast pickler which
-            #       does this properly.
-            msg = f"Recursive function reference on {func}"
-            raise pickle.PicklingError(msg)
-        self.__memo[id(func)] = func
-        try:
-            gls = _get_function_globals_for_reduction(func)
-            args = _reduce_function(func, gls)
-            self.save_reduce(_rebuild_function, args, obj=func)
-        finally:
-            self.__memo.pop(id(func))
-
-    # Override the dispatch table for functions
-    dispatch[FunctionType] = _save_function
-
-    def _save_module(self, mod):
-        return self.save_reduce(_rebuild_module, (mod.__name__,))
-
-    # Override the dispatch table for modules
-    dispatch[ModuleType] = _save_module
-
-    def _save_custom_pickled(self, cp):
-        return self.save_reduce(*cp._reduce())
-
-    # Override the dispatch table for _CustomPickled
-    # thus override the copyreg registry
-    dispatch[_CustomPickled] = _save_custom_pickled
-
-
-class FastNumbaPickler(pickle.Pickler):
-    """Faster version of the NumbaPickler through use of Python3.8+ features from
-    the C Pickler, install `pickle5` for similar on older Python versions.
-    """
     def reducer_override(self, obj):
-        if isinstance(obj, FunctionType):
-            return self._custom_reduce_func(obj)
-        elif isinstance(obj, ModuleType):
-            return self._custom_reduce_module(obj)
-        elif isinstance(obj, CodeType):
-            return self._custom_reduce_code(obj)
-        elif isinstance(obj, _CustomPickled):
-            return self._custom_reduce__custompickled(obj)
-        return NotImplemented
-
-    def _custom_reduce_func(self, func):
-        if not _is_importable(func):
-            gls = _get_function_globals_for_reduction(func)
-            args, cells = _reduce_function_no_cells(func, gls)
-            states = {'cells': cells}
-            return (_rebuild_function, args, states, None, None,
-                    _function_setstate)
-        else:
-            return NotImplemented
-
-    def _custom_reduce_module(self, mod):
-        return _rebuild_module, (mod.__name__,)
-
-    def _custom_reduce_code(self, code):
-        return _reduce_code(code)
-
-    def _custom_reduce__custompickled(self, cp):
-        return cp._reduce()
+        # Overridden to disable pickling of certain types
+        if type(obj) in self.disabled_types:
+            _no_pickle(obj)  # noreturn
+        return super().reducer_override(obj)
 
 
-# Pick our preferred pickler
-NumbaPickler = FastNumbaPickler if pickle38 else SlowNumbaPickler
+def _custom_reduce__custompickled(cp):
+    return cp._reduce()
+
+
+NumbaPickler.dispatch_table[_CustomPickled] = _custom_reduce__custompickled
 
 
 class ReduceMixin(abc.ABC):
@@ -417,127 +218,31 @@ class ReduceMixin(abc.ABC):
         return custom_reduce(self._reduce_class(), self._reduce_states())
 
 
-# ----------------------------------------------------------------------------
-# The following code is adapted from cloudpickle as of
-# https://github.com/cloudpipe/cloudpickle/commit/9518ae3cc71b7a6c14478a6881c0db41d73812b8    # noqa: E501
-# Please see LICENSE.third-party file for full copyright information.
+class PickleCallableByPath:
+    """Wrap a callable object to be pickled by path to workaround limitation
+    in pickling due to non-pickleable objects in function non-locals.
 
-def _is_importable(obj):
-    """Check if an object is importable.
+    Note:
+    - Do not use this as a decorator.
+    - Wrapped object must be a global that exist in its parent module and it
+      can be imported by `from the_module import the_object`.
 
-    Parameters
-    ----------
-    obj :
-        Must define `__module__` and `__qualname__`.
+    Usage:
+
+    >>> def my_fn(x):
+    >>>     ...
+    >>> wrapped_fn = PickleCallableByPath(my_fn)
+    >>> # refer to `wrapped_fn` instead of `my_fn`
     """
-    if obj.__module__ in sys.modules:
-        ptr = sys.modules[obj.__module__]
-        # Walk through the attributes
-        parts = obj.__qualname__.split('.')
-        if len(parts) > 1:
-            # can't deal with function insides classes yet
-            return False
-        for p in parts:
-            try:
-                ptr = getattr(ptr, p)
-            except AttributeError:
-                return False
-        return obj is ptr
-    return False
+    def __init__(self, fn):
+        self._fn = fn
 
+    def __call__(self, *args, **kwargs):
+        return self._fn(*args, **kwargs)
 
-def _function_setstate(obj, states):
-    """The setstate function is executed after creating the function instance
-    to add `cells` into it.
-    """
-    cells = states.pop('cells')
-    for i, v in enumerate(cells):
-        _cell_set(obj.__closure__[i], v)
-    return obj
+    def __reduce__(self):
+        return type(self)._rebuild, (self._fn.__module__, self._fn.__name__,)
 
-
-def _reduce_function_no_cells(func, globs):
-    """_reduce_function() but return empty cells instead.
-
-    """
-    if func.__closure__:
-        oldcells = [cell.cell_contents for cell in func.__closure__]
-        cells = [None for _ in range(len(oldcells))] # idea from cloudpickle
-    else:
-        oldcells = ()
-        cells = None
-    rebuild_args = (_reduce_code(func.__code__), globs, func.__name__, cells,
-                    func.__defaults__)
-    return rebuild_args, oldcells
-
-
-def _cell_rebuild(contents):
-    """Rebuild a cell from cell contents
-    """
-    if contents is None:
-        return CellType()
-    else:
-        return CellType(contents)
-
-
-def _cell_reduce(obj):
-    """Reduce a CellType
-    """
-    try:
-        # .cell_contents attr lookup raises the wrong exception?
-        obj.cell_contents
-    except ValueError:
-        # empty cell
-        return _cell_rebuild, (None,)
-    else:
-        # non-empty cell
-        return _cell_rebuild, (obj.cell_contents,)
-
-
-def _cell_set(cell, value):
-    """Set *value* into *cell* because `.cell_contents` is not writable
-    before python 3.7.
-
-    See https://github.com/cloudpipe/cloudpickle/blob/9518ae3cc71b7a6c14478a6881c0db41d73812b8/cloudpickle/cloudpickle.py#L298   # noqa: E501
-    """
-    if PYVERSION >= (3, 7):  # pragma: no branch
-        cell.cell_contents = value
-    else:
-        _cell_set = FunctionType(
-            _cell_set_template_code, {}, '_cell_set', (), (cell,),)
-        _cell_set(value)
-
-
-def _make_cell_set_template_code():
-    """See _cell_set"""
-    def _cell_set_factory(value):
-        lambda: cell
-        cell = value
-
-    co = _cell_set_factory.__code__
-
-    _cell_set_template_code = CodeType(
-        co.co_argcount,
-        co.co_kwonlyargcount,
-        co.co_nlocals,
-        co.co_stacksize,
-        co.co_flags,
-        co.co_code,
-        co.co_consts,
-        co.co_names,
-        co.co_varnames,
-        co.co_filename,
-        co.co_name,
-        co.co_firstlineno,
-        co.co_lnotab,
-        co.co_cellvars,  # co_freevars is initialized with co_cellvars
-        (),  # co_cellvars is made empty
-    )
-    return _cell_set_template_code
-
-
-if PYVERSION < (3, 7):
-    _cell_set_template_code = _make_cell_set_template_code()
-
-# End adapting from cloudpickle
-# ----------------------------------------------------------------------------
+    @classmethod
+    def _rebuild(cls, modname, fn_path):
+        return cls(getattr(sys.modules[modname], fn_path))

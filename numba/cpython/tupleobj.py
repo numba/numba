@@ -2,8 +2,6 @@
 Implementation of tuple objects
 """
 
-from llvmlite import ir
-import llvmlite.llvmpy.core as lc
 import operator
 
 from numba.core.imputils import (lower_builtin, lower_getattr_generic,
@@ -169,7 +167,7 @@ def iternext_unituple(context, builder, sig, args, result):
     idx = builder.load(idxptr)
     count = context.get_constant(types.intp, tupiterty.container.count)
 
-    is_valid = builder.icmp(lc.ICMP_SLT, idx, count)
+    is_valid = builder.icmp_signed('<', idx, count)
     result.set_valid(is_valid)
 
     with builder.if_then(is_valid):
@@ -346,6 +344,8 @@ def getitem_unituple(context, builder, sig, args):
 
 
 @lower_builtin('static_getitem', types.LiteralStrKeyDict, types.StringLiteral)
+@lower_builtin('static_getitem', types.LiteralList, types.IntegerLiteral)
+@lower_builtin('static_getitem', types.LiteralList, types.SliceLiteral)
 @lower_builtin('static_getitem', types.BaseTuple, types.IntegerLiteral)
 @lower_builtin('static_getitem', types.BaseTuple, types.SliceLiteral)
 def static_getitem_tuple(context, builder, sig, args):
@@ -404,3 +404,9 @@ def tuple_index(tup, value):
         raise ValueError("tuple.index(x): x not in tuple")
 
     return tuple_index_impl
+
+
+@overload(operator.contains)
+def in_seq_empty_tuple(x, y):
+    if isinstance(x, types.Tuple) and not x.types:
+        return lambda x, y: False

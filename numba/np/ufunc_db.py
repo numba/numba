@@ -230,9 +230,12 @@ def _fill_ufunc_db(ufunc_db):
         'QQ->Q': npyfuncs.np_int_udiv_impl,
         'ff->f': npyfuncs.np_real_floor_div_impl,
         'dd->d': npyfuncs.np_real_floor_div_impl,
-        'FF->F': npyfuncs.np_complex_floor_div_impl,
-        'DD->D': npyfuncs.np_complex_floor_div_impl,
     }
+    if numpy_version < (1, 22): # removed in 1.22+
+        ufunc_db[np.floor_divide].update({
+            'FF->F': npyfuncs.np_complex_floor_div_impl,
+            'DD->D': npyfuncs.np_complex_floor_div_impl,
+        })
 
     ufunc_db[np.remainder] = {
         'bb->b': npyfuncs.np_int_srem_impl,
@@ -307,6 +310,13 @@ def _fill_ufunc_db(ufunc_db):
         'dd->d': numbers.real_power_impl,
         'FF->F': npyfuncs.np_complex_power_impl,
         'DD->D': npyfuncs.np_complex_power_impl,
+    }
+
+    ufunc_db[np.float_power] = {
+        'ff->f': npyfuncs.real_float_power_impl,
+        'dd->d': npyfuncs.real_float_power_impl,
+        'FF->F': npyfuncs.np_complex_float_power_impl,
+        'DD->D': npyfuncs.np_complex_float_power_impl,
     }
 
     ufunc_db[np.gcd] = {
@@ -430,6 +440,11 @@ def _fill_ufunc_db(ufunc_db):
         'd->d': npyfuncs.np_real_square_impl,
         'F->F': npyfuncs.np_complex_square_impl,
         'D->D': npyfuncs.np_complex_square_impl,
+    }
+
+    ufunc_db[np.cbrt] = {
+        'f->f': npyfuncs.np_real_cbrt_impl,
+        'd->d': npyfuncs.np_real_cbrt_impl,
     }
 
     ufunc_db[np.reciprocal] = {

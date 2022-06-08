@@ -3,7 +3,7 @@ import ctypes
 import struct
 import sys
 
-import llvmlite.llvmpy.core as lc
+import llvmlite.ir as ir
 import numpy as np
 
 import unittest
@@ -12,10 +12,10 @@ from numba.core.compiler_lock import global_compiler_lock
 from numba.tests.support import TestCase
 
 
-machine_int = lc.Type.int(types.intp.bitwidth)
+machine_int = ir.IntType(types.intp.bitwidth)
 
 def machine_const(n):
-    return lc.Constant.int(machine_int, n)
+    return ir.Constant(machine_int, n)
 
 
 class StructureTestCase(TestCase):
@@ -26,16 +26,15 @@ class StructureTestCase(TestCase):
 
     @contextlib.contextmanager
     def compile_function(self, nargs):
-        llvm_fnty = lc.Type.function(machine_int, [machine_int] * nargs)
+        llvm_fnty = ir.FunctionType(machine_int, [machine_int] * nargs)
         ctypes_fnty = ctypes.CFUNCTYPE(ctypes.c_size_t,
                                     * (ctypes.c_size_t,) * nargs)
         module = self.context.create_module("")
 
-        function = module.get_or_insert_function(llvm_fnty,
-                                                name=self.id())
+        function = cgutils.get_or_insert_function(module, llvm_fnty, self.id())
         assert function.is_declaration
         entry_block = function.append_basic_block('entry')
-        builder = lc.Builder(entry_block)
+        builder = ir.IRBuilder(entry_block)
 
         first = [True]
 
@@ -71,12 +70,12 @@ class StructureTestCase(TestCase):
         with self.compile_function(1) as (context, builder, args, call):
             inst = struct_class(context, builder)
             sptr = builder.add(args[0], machine_const(offset))
-            sptr = builder.inttoptr(sptr, lc.Type.pointer(inst._type))
+            sptr = builder.inttoptr(sptr, ir.PointerType(inst._type))
             inst = struct_class(context, builder, ref=sptr)
 
             yield context, builder, args, inst
 
-            builder.ret(lc.Constant.int(machine_int, 0))
+            builder.ret(ir.Constant(machine_int, 0))
         call(self.get_bytearray_addr(buf))
 
     @contextlib.contextmanager
@@ -103,8 +102,8 @@ class StructureTestCase(TestCase):
         fmt = "=iH"
         with self.run_simple_struct_test(S, fmt, (0x12345678, 0xABCD)) \
             as (context, builder, inst):
-            inst.a = lc.Constant.int(lc.Type.int(32), 0x12345678)
-            inst.b = lc.Constant.int(lc.Type.int(16), 0xABCD)
+            inst.a = ir.Constant(ir.IntType(32), 0x12345678)
+            inst.b = ir.Constant(ir.IntType(16), 0xABCD)
 
     def test_float_fields(self):
         class S(cgutils.Structure):
@@ -114,8 +113,8 @@ class StructureTestCase(TestCase):
         fmt = "=df"
         with self.run_simple_struct_test(S, fmt, (1.23, 4.56)) \
             as (context, builder, inst):
-            inst.a = lc.Constant.real(lc.Type.double(), 1.23)
-            inst.b = lc.Constant.real(lc.Type.float(), 4.56)
+            inst.a = ir.Constant(ir.DoubleType(), 1.23)
+            inst.b = ir.Constant(ir.FloatType(), 4.56)
 
 
 if __name__ == '__main__':

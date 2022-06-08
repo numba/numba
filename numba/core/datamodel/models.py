@@ -1,4 +1,5 @@
 from functools import partial
+from collections import deque
 
 from llvmlite import ir
 
@@ -103,11 +104,21 @@ class DataModel(object):
         """
         Recursively list all frontend types involved in this model.
         """
-        return [self._fe_type] + self.inner_types()
+        types = [self._fe_type]
+        queue = deque([self])
+        while len(queue) > 0:
+            dm = queue.popleft()
 
-    def inner_types(self):
+            for i_dm in dm.inner_models():
+                if i_dm._fe_type not in types:
+                    queue.append(i_dm)
+                    types.append(i_dm._fe_type)
+
+        return types
+
+    def inner_models(self):
         """
-        List all *inner* frontend types.
+        List all *inner* models.
         """
         return []
 
@@ -149,8 +160,11 @@ class OmittedArgDataModel(DataModel):
     A data model for omitted arguments.  Only the "argument" representation
     is defined, other representations raise a NotImplementedError.
     """
-    # Omitted arguments don't produce any LLVM function argument.
+    # Omitted arguments are using a dummy value type
+    def get_value_type(self):
+        return ir.LiteralStructType([])
 
+    # Omitted arguments don't produce any LLVM function argument.
     def get_argument_type(self):
         return ()
 
@@ -163,6 +177,7 @@ class OmittedArgDataModel(DataModel):
 
 
 @register_default(types.Boolean)
+@register_default(types.BooleanLiteral)
 class BooleanModel(DataModel):
     _bit_type = ir.IntType(1)
     _byte_type = ir.IntType(8)
@@ -302,7 +317,6 @@ class EnumModel(ProxyModel):
 @register_default(types.Dummy)
 @register_default(types.ExceptionInstance)
 @register_default(types.ExternalFunction)
-@register_default(types.Macro)
 @register_default(types.EnumClass)
 @register_default(types.IntEnumClass)
 @register_default(types.NumberClass)
@@ -326,8 +340,8 @@ class OpaqueModel(PrimitiveModel):
 @register_default(types.MemInfoPointer)
 class MemInfoModel(OpaqueModel):
 
-    def inner_types(self):
-        return self._dmm.lookup(self._fe_type.dtype).traverse_types()
+    def inner_models(self):
+        return [self._dmm.lookup(self._fe_type.dtype)]
 
     def has_nrt_meminfo(self):
         return True
@@ -485,8 +499,8 @@ class UniTupleModel(DataModel):
         return [(self._fe_type.dtype, partial(getter, i))
                 for i in range(self._count)]
 
-    def inner_types(self):
-        return self._elem_model.traverse_types()
+    def inner_models(self):
+        return [self._elem_model]
 
 
 class CompositeModel(DataModel):
@@ -700,11 +714,8 @@ class StructModel(CompositeModel):
 
         return [(self.get_type(k), partial(getter, k)) for k in self._fields]
 
-    def inner_types(self):
-        types = []
-        for dm in self._models:
-            types += dm.traverse_types()
-        return types
+    def inner_models(self):
+        return self._models
 
 
 @register_default(types.Complex)
@@ -888,7 +899,10 @@ class NestedArrayModel(ArrayModel):
         self._be_type = dmm.lookup(fe_type.dtype).get_data_type()
         super(NestedArrayModel, self).__init__(dmm, fe_type)
 
-    def get_data_type(self):
+    def as_storage_type(self):
+        """Return the LLVM type representation for the storage of
+        the nestedarray.
+        """
         ret = ir.ArrayType(self._be_type, self._fe_type.nitems)
         return ret
 
@@ -1069,6 +1083,7 @@ class UniTupleIter(StructModel):
         super(UniTupleIter, self).__init__(dmm, fe_type, members)
 
 
+@register_default(types.misc.SliceLiteral)
 @register_default(types.SliceType)
 class SliceModel(StructModel):
     def __init__(self, dmm, fe_type):

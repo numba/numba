@@ -7,7 +7,7 @@ import numpy as np
 import numpy
 
 from numba.core.compiler import compile_isolated
-from numba import jit
+from numba import jit, typed
 from numba.core import types, utils
 from numba.core.errors import TypingError, LoweringError
 from numba.core.types.functions import _header_lead
@@ -186,12 +186,21 @@ class TestListComprehension(TestCase):
             z = [float(y) if y > 3 else y for y in x]
             return z
 
+        def list25(x):
+            # See issue #6260. Old style inline_closure_call uses get_ir_of_code
+            # for the closure->IR transform, without SSA there's multiply
+            # defined labels, the unary negation is self referent and DCE runs
+            # eliminating the duplicated labels.
+            included = np.array([1, 2, 6, 8])
+            not_included = [i for i in range(10) if i not in list(included)]
+            return not_included
+
         # functions to test that are expected to pass
         f = [list1, list2, list3, list4,
              list6, list7, list8, list9, list10, list11,
              list12, list13, list14, list15,
              list16, list17, list18, list19, list20,
-             list21, list22, list23, list24]
+             list21, list22, list23, list24, list25]
 
         var = [1, 2, 3, 4, 5]
         for ref in f:
@@ -361,6 +370,16 @@ class TestArrayComprehension(unittest.TestCase):
         self.assertIn(_header_lead, str(raises.exception))
         self.assertIn('array(undefined,', str(raises.exception))
 
+    def test_comp_unsupported_iter(self):
+        def comp_unsupported_iter():
+            val = zip([1, 2, 3], [4, 5, 6])
+            return np.array([a for a, b in val])
+        with self.assertRaises(TypingError) as raises:
+            self.check(comp_unsupported_iter)
+        self.assertIn(_header_lead, str(raises.exception))
+        self.assertIn('Unsupported iterator found in array comprehension',
+                      str(raises.exception))
+
     def test_no_array_comp(self):
         def no_array_comp1(n):
             l = [1,2,3,4]
@@ -398,6 +417,10 @@ class TestArrayComprehension(unittest.TestCase):
         self.check(array_comp, l)
         # with array iterator
         self.check(array_comp, np.array(l))
+        # with tuple iterator (issue #7394)
+        self.check(array_comp, tuple(l))
+        # with typed.List iterator (issue #6550)
+        self.check(array_comp, typed.List(l))
 
     def test_array_comp_with_dtype(self):
         def array_comp(n):

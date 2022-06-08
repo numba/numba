@@ -3,7 +3,6 @@ import functools
 import threading
 import numpy as np
 from numba import cuda
-from numba.core import utils
 from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 
 
@@ -17,10 +16,6 @@ def with_asyncio_loop(f):
         finally:
             loop.close()
     return runner
-
-
-asyncio_create_task = asyncio.create_task if utils.PYVERSION >= (3, 7) \
-    else asyncio.ensure_future
 
 
 @skip_on_cudasim('CUDA Driver API unsupported in the simulator')
@@ -47,11 +42,12 @@ class TestCudaStream(CUDATestCase):
             h_src[:] = value_in
             d_ary = cuda.to_device(h_src, stream=stream)
             d_ary.copy_to_host(h_dst, stream=stream)
-            await stream.async_done()
+            done_result = await stream.async_done()
+            self.assertEqual(done_result, stream)
             return h_dst.mean()
 
         values_in = [1, 2, 3, 4]
-        tasks = [asyncio_create_task(async_cuda_fn(v)) for v in values_in]
+        tasks = [asyncio.create_task(async_cuda_fn(v)) for v in values_in]
         values_out = await asyncio.gather(*tasks)
         self.assertTrue(np.allclose(values_in, values_out))
 
@@ -59,7 +55,18 @@ class TestCudaStream(CUDATestCase):
     async def test_multiple_async_done(self):
         stream = cuda.stream()
         done_aws = [stream.async_done() for _ in range(4)]
-        await asyncio.gather(*done_aws)
+        done = await asyncio.gather(*done_aws)
+        for d in done:
+            self.assertEqual(d, stream)
+
+    @with_asyncio_loop
+    async def test_multiple_async_done_multiple_streams(self):
+        streams = [cuda.stream() for _ in range(4)]
+        done_aws = [stream.async_done() for stream in streams]
+        done = await asyncio.gather(*done_aws)
+
+        # Ensure we got the four original streams in done
+        self.assertSetEqual(set(done), set(streams))
 
     @with_asyncio_loop
     async def test_cancelled_future(self):

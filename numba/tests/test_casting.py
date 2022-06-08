@@ -1,5 +1,6 @@
 import numpy as np
 from numba.core.compiler import compile_isolated
+from numba.core.errors import TypingError
 from numba import njit
 from numba.core import types
 import struct
@@ -21,6 +22,9 @@ def float_to_unsigned(x):
 def float_to_complex(x):
     return types.complex128(x)
 
+
+def numpy_scalar_cast_error():
+    np.int32(np.zeros((4,)))
 
 class TestCasting(unittest.TestCase):
     def test_float_to_int(self):
@@ -79,6 +83,39 @@ class TestCasting(unittest.TestCase):
         x = np.array([1234], dtype=np.float64)
         self.assertEqual(driver(x), x[0])
         self.assertEqual(len(inner.overloads), 1)
+
+    def test_0darrayT_to_T(self):
+        @njit
+        def inner(x):
+            return x.dtype.type(x)
+
+        inputs = [
+            (np.bool_, True),
+            (np.float32, 12.3),
+            (np.float64, 12.3),
+            (np.int64, 12),
+            (np.complex64, 2j+3),
+            (np.complex128, 2j+3),
+            (np.timedelta64, np.timedelta64(3, 'h')),
+            (np.datetime64, np.datetime64('2016-01-01')),
+            ('<U3', 'ABC'),
+        ]
+
+        for (T, inp) in inputs:
+            x = np.array(inp, dtype=T)
+            self.assertEqual(inner(x), x[()])
+
+    def test_array_to_scalar(self):
+        """
+        Ensure that a TypingError exception is raised if
+        user tries to convert numpy array to scalar
+        """
+
+        with self.assertRaises(TypingError) as raises:
+            compile_isolated(numpy_scalar_cast_error, ())
+
+        self.assertIn("Casting array(float64, 1d, C) to int32 directly is unsupported.",
+                      str(raises.exception))
 
     def test_optional_to_optional(self):
         """

@@ -357,6 +357,26 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             keys,
         )
 
+    def test_dict_keys_len(self):
+        """
+        Exercise len(dict.keys())
+        """
+        @njit
+        def foo(keys, vals):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            return len(d.keys())
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+
+        self.assertEqual(
+            foo(keys, vals),
+            len(keys),
+        )
+
     def test_dict_values(self):
         """
         Exercise dict.values
@@ -378,6 +398,45 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         self.assertEqual(
             foo(keys, vals),
             vals,
+        )
+
+    def test_dict_values_len(self):
+        """
+        Exercise len(dict.values())
+        """
+        @njit
+        def foo(keys, vals):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            return len(d.values())
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+
+        self.assertEqual(
+            foo(keys, vals),
+            len(vals),
+        )
+
+    def test_dict_items_len(self):
+        """
+        Exercise len(dict.items())
+        """
+        @njit
+        def foo(keys, vals):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            return len(d.items())
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+        self.assertPreciseEqual(
+            foo(keys, vals),
+            len(vals),
         )
 
     def test_dict_iter(self):
@@ -912,6 +971,42 @@ class TestDictObject(MemoryLeakMixin, TestCase):
 
         self.assertEqual(foo(), [1, 2])
 
+    def test_024_unicode_getitem_keys(self):
+        # See issue #6135
+        @njit
+        def foo():
+            s = 'a\u1234'
+            d = {s[0] : 1}
+            return d['a']
+
+        self.assertEqual(foo(), foo.py_func())
+
+        @njit
+        def foo():
+            s = 'abc\u1234'
+            d = {s[:1] : 1}
+            return d['a']
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_issue6570_alignment_padding(self):
+        # Create a key type that is 12-bytes long on a 8-byte aligned system
+        # so that the a 4-byte padding is needed.
+        # If the 4-byte padding is not zero-filled, it will have garbage data
+        # that affects key matching in the lookup.
+        keyty = types.Tuple([types.uint64, types.float32])
+
+        @njit
+        def foo():
+            d = dictobject.new_dict(keyty, float64)
+            t1 = np.array([3], dtype=np.uint64)
+            t2 = np.array([5.67], dtype=np.float32)
+            v1 = np.array([10.23], dtype=np.float32)
+            d[(t1[0], t2[0])] = v1[0]
+            return (t1[0], t2[0]) in d
+
+        self.assertTrue(foo())
+
 
 class TestDictTypeCasting(TestCase):
     def check_good(self, fromty, toty):
@@ -1016,6 +1111,15 @@ class TestTypedDict(MemoryLeakMixin, TestCase):
         d = producer()
         val = consumer(d)
         self.assertEqual(val, 1.23)
+
+    def test_gh7908(self):
+        d = Dict.empty(
+            key_type=types.Tuple([types.uint32,
+                                  types.uint32]),
+            value_type=int64)
+
+        d[(1, 1)] = 12345
+        self.assertEqual(d[(1, 1)], d.get((1, 1)))
 
     def check_stringify(self, strfn, prefix=False):
         nbd = Dict.empty(int32, int32)
@@ -1497,6 +1601,40 @@ class TestDictInferred(TestCase):
                 k2: {k2 + 2: k2 + v},
             },
         )
+
+    def test_comprehension_basic(self):
+        @njit
+        def foo():
+            return {i: 2 * i for i in range(10)}
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_comprehension_basic_mixed_type(self):
+        @njit
+        def foo():
+            return {i: float(j) for i, j in zip(range(10), range(10, 0, -1))}
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_comprehension_involved(self):
+        @njit
+        def foo():
+            a = {0: 'A', 1: 'B', 2: 'C'}
+            return {3 + i: a[i] for i in range(3)}
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_comprehension_fail_mixed_type(self):
+        @njit
+        def foo():
+            a = {0: 'A', 1: 'B', 2: 1j}
+            return {3 + i: a[i] for i in range(3)}
+
+        with self.assertRaises(TypingError) as e:
+            foo()
+
+        excstr = str(e.exception)
+        self.assertIn("Cannot cast complex128 to unicode_type", excstr)
 
 
 class TestNonCompiledInfer(TestCase):
@@ -2052,6 +2190,11 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
                 a = {'BAD_KEY': 2j, 'c': 'd', 'e': np.zeros(4)}
             else:
                 a = {'a': 5j, 'c': 'CAT', 'e': np.zeros((5,))}
+            # prevents inline of return on py310
+            py310_defeat1 = 1  # noqa
+            py310_defeat2 = 2  # noqa
+            py310_defeat3 = 3  # noqa
+            py310_defeat4 = 4  # noqa
             return a['a']
 
         with self.assertRaises(TypingError) as raises:
@@ -2065,6 +2208,11 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
                 a = {'a': 2j, 'c': 'd', 'e': np.zeros((4, 3))}
             else:
                 a = {'a': 5j, 'c': 'CAT', 'e': np.zeros((5,))}
+            # prevents inline of return on py310
+            py310_defeat1 = 1  # noqa
+            py310_defeat2 = 2  # noqa
+            py310_defeat3 = 3  # noqa
+            py310_defeat4 = 4  # noqa
             return a['a']
 
         with self.assertRaises(TypingError) as raises:
@@ -2075,10 +2223,10 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
     def test_dict_value_coercion(self):
         # checks that things coerce or not!
 
-        #    safe convertible: TypedDict
-        p = {(np.int32, np.int32): types.DictType,
-             # unsafe but convertible: TypedDict
-             (np.int8, np.int32): types.DictType,
+        p = {# safe and no conversion: TypedDict
+             (np.int32, np.int32): types.DictType,
+             # safe and convertible: TypedDict
+             (np.int32, np.int8): types.DictType,
              # safe convertible: TypedDict
              (np.complex128, np.int32): types.DictType,
              # unsafe not convertible: LiteralStrKey
@@ -2086,7 +2234,11 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
              # unsafe not convertible: LiteralStrKey
              (np.int32, np.array): types.LiteralStrKeyDict,
              # unsafe not convertible: LiteralStrKey
-             (np.array, np.int32): types.LiteralStrKeyDict,}
+             (np.array, np.int32): types.LiteralStrKeyDict,
+             # unsafe not convertible: LiteralStrKey
+             (np.int8, np.int32): types.LiteralStrKeyDict,
+             # unsafe not convertible: LiteralStrKey (issue #6420 case)
+             (np.int64, np.float64): types.LiteralStrKeyDict,}
 
         def bar(x):
             pass
@@ -2148,6 +2300,66 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
             return e['d']
 
         np.testing.assert_allclose(foo(), np.ones(3) * 10)
+
+    def test_dict_with_single_literallist_value(self):
+        #see issue #6094
+        @njit
+        def foo():
+            z = {"A": [lambda a: 2 * a, "B"]}
+            return z["A"][0](5)
+
+        self.assertPreciseEqual(foo(), foo.py_func())
+
+    def test_tuple_not_in_mro(self):
+        # Related to #6094, make sure that LiteralStrKey does not inherit from
+        # types.BaseTuple as this breaks isinstance checks.
+        def bar(x):
+            pass
+
+        @overload(bar)
+        def ol_bar(x):
+            self.assertFalse(isinstance(x, types.BaseTuple))
+            self.assertTrue(isinstance(x, types.LiteralStrKeyDict))
+            return lambda x: ...
+
+        @njit
+        def foo():
+            d = {'a': 1, 'b': 'c'}
+            bar(d)
+
+        foo()
+
+    def test_const_key_not_in_dict(self):
+
+        @njit
+        def foo():
+            a = {'not_a': 2j, 'c': 'd', 'e': np.zeros(4)}
+            return a['a']
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+
+        self.assertIn("Key 'a' is not in dict.", str(raises.exception))
+
+    def test_uncommon_identifiers(self):
+        # Tests uncommon identifiers like numerical values and operators in
+        # the key fields. See #6518 and #7416.
+
+        # Numerical values in keys
+        @njit
+        def foo():
+            d = {'0': np.ones(5), '1': 4}
+            return len(d)
+
+        self.assertPreciseEqual(foo(), foo.py_func())
+
+        # operators in keys
+        @njit
+        def bar():
+            d = {'+': np.ones(5), 'x--': 4}
+            return len(d)
+
+        self.assertPreciseEqual(bar(), bar.py_func())
 
 
 if __name__ == '__main__':

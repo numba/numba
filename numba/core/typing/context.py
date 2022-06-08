@@ -10,6 +10,7 @@ import numba
 from numba.core import types, errors
 from numba.core.typeconv import Conversion, rules
 from numba.core.typing import templates
+from numba.core.utils import order_by_target_specificity
 from .typeof import typeof, Purpose
 
 from numba.core import utils
@@ -59,13 +60,13 @@ class CallStack(Sequence):
         return len(self._stack)
 
     @contextlib.contextmanager
-    def register(self, typeinfer, func_id, args):
+    def register(self, target, typeinfer, func_id, args):
         # guard compiling the same function with the same signature
         if self.match(func_id.func, args):
             msg = "compiler re-entrant to the same function signature"
-            raise RuntimeError(msg)
+            raise errors.NumbaRuntimeError(msg)
         self._lock.acquire()
-        self._stack.append(CallFrame(typeinfer, func_id, args))
+        self._stack.append(CallFrame(target, typeinfer, func_id, args))
         try:
             yield
         finally:
@@ -104,10 +105,11 @@ class CallFrame(object):
     """
     A compile-time call frame
     """
-    def __init__(self, typeinfer, func_id, args):
+    def __init__(self, target, typeinfer, func_id, args):
         self.typeinfer = typeinfer
         self.func_id = func_id
         self.args = args
+        self.target = target
         self._inferred_retty = set()
 
     def __repr__(self):
@@ -199,7 +201,7 @@ class BaseContext(object):
         else:
             last_exception = None
 
-        # Return early we there's a working user function
+        # Return early we know there's a working user function
         if res is not None:
             return res
 
@@ -283,7 +285,15 @@ class BaseContext(object):
                 return attrty
 
     def find_matching_getattr_template(self, typ, attr):
-        for template in self._get_attribute_templates(typ):
+
+        templates = list(self._get_attribute_templates(typ))
+
+        # get the order in which to try templates
+        from numba.core.target_extension import get_local_target # circular
+        target_hw = get_local_target(self)
+        order = order_by_target_specificity(target_hw, templates, fnkey=attr)
+
+        for template in order:
             return_type = template.resolve(typ, attr)
             if return_type is not None:
                 return {
@@ -353,7 +363,11 @@ class BaseContext(object):
             return typeof(val, Purpose.argument)
         except ValueError:
             if numba.cuda.is_cuda_array(val):
-                return typeof(numba.cuda.as_cuda_array(val), Purpose.argument)
+                # There's no need to synchronize on a stream when we're only
+                # determining typing - synchronization happens at launch time,
+                # so eliding sync here is safe.
+                return typeof(numba.cuda.as_cuda_array(val, sync=False),
+                              Purpose.argument)
             else:
                 raise
 

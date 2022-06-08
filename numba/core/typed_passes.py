@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from copy import copy
 import warnings
 
@@ -16,9 +16,20 @@ from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                                  check_and_legalize_ir, guard,
                                  dead_code_elimination, simplify_CFG,
-                                 get_definition, remove_dels,
-                                 build_definitions, compute_cfg_from_blocks)
+                                 get_definition,
+                                 build_definitions, compute_cfg_from_blocks,
+                                 is_operator_or_getitem)
 from numba.core import postproc
+from llvmlite import binding as llvm
+
+
+# Outputs of type inference pass
+_TypingResults = namedtuple("_TypingResults", [
+    "typemap",
+    "return_type",
+    "calltypes",
+    "typing_errors",
+])
 
 
 @contextmanager
@@ -47,13 +58,14 @@ def fallback_context(state, msg):
             raise
 
 
-def type_inference_stage(typingctx, interp, args, return_type, locals={},
-                         raise_errors=True):
+def type_inference_stage(typingctx, targetctx, interp, args, return_type,
+                         locals={}, raise_errors=True):
     if len(args) != interp.arg_count:
         raise TypeError("Mismatch number of argument types")
     warnings = errors.WarningsFixer(errors.NumbaWarning)
     infer = typeinfer.TypeInferer(typingctx, interp, warnings)
-    with typingctx.callstack.register(infer, interp.func_id, args):
+    with typingctx.callstack.register(targetctx.target, infer, interp.func_id,
+                                      args):
         # Seed argument types
         for index, (name, ty) in enumerate(zip(interp.arg_names, args)):
             infer.seed_argument(name, index, ty)
@@ -67,13 +79,14 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={},
             infer.seed_type(k, v)
 
         infer.build_constraint()
-        infer.propagate(raise_errors=raise_errors)
+        # return errors in case of partial typing
+        errs = infer.propagate(raise_errors=raise_errors)
         typemap, restype, calltypes = infer.unify(raise_errors=raise_errors)
 
     # Output all Numba warnings
     warnings.flush()
 
-    return typemap, restype, calltypes
+    return _TypingResults(typemap, restype, calltypes, errs)
 
 
 class BaseTypeInference(FunctionPass):
@@ -89,14 +102,17 @@ class BaseTypeInference(FunctionPass):
         with fallback_context(state, 'Function "%s" failed type inference'
                               % (state.func_id.func_name,)):
             # Type inference
-            typemap, return_type, calltypes = type_inference_stage(
+            typemap, return_type, calltypes, errs = type_inference_stage(
                 state.typingctx,
+                state.targetctx,
                 state.func_ir,
                 state.args,
                 state.return_type,
                 state.locals,
                 raise_errors=self._raise_errors)
             state.typemap = typemap
+            # save errors in case of partial typing
+            state.typing_errors = errs
             if self._raise_errors:
                 state.return_type = return_type
             state.calltypes = calltypes
@@ -129,15 +145,15 @@ class BaseTypeInference(FunctionPass):
                     cast = caststmts.get(var)
                     if cast is None or cast.value.name not in argvars:
                         if self._raise_errors:
-                            raise TypeError("Only accept returning of array "
-                                            "passed into the function as "
-                                            "argument")
+                            msg = ("Only accept returning of array passed into "
+                                   "the function as argument")
+                            raise errors.NumbaTypeError(msg)
 
             elif (isinstance(return_type, types.Function) or
                     isinstance(return_type, types.Phantom)):
                 if self._raise_errors:
                     msg = "Can't return function object ({}) in nopython mode"
-                    raise TypeError(msg.format(return_type))
+                    raise errors.NumbaTypeError(msg.format(return_type))
 
         with fallback_context(state, 'Function "%s" has invalid return type'
                               % (state.func_id.func_name,)):
@@ -157,23 +173,23 @@ class PartialTypeInference(BaseTypeInference):
     _raise_errors = False
 
 
-@register_pass(mutates_CFG=True, analysis_only=False)
+@register_pass(mutates_CFG=False, analysis_only=False)
 class AnnotateTypes(AnalysisPass):
     _name = "annotate_types"
 
     def __init__(self):
         AnalysisPass.__init__(self)
 
+    def get_analysis_usage(self, AU):
+        AU.add_required(IRLegalization)
+
     def run_pass(self, state):
         """
         Create type annotation after type inference
         """
-        # add back in dels.
-        post_proc = postproc.PostProcessor(state.func_ir)
-        post_proc.run(emit_dels=True)
-
+        func_ir = state.func_ir.copy()
         state.type_annotation = type_annotations.TypeAnnotation(
-            func_ir=state.func_ir.copy(),
+            func_ir=func_ir,
             typemap=state.typemap,
             calltypes=state.calltypes,
             lifted=state.lifted,
@@ -190,8 +206,6 @@ class AnnotateTypes(AnalysisPass):
             with open(config.HTML, 'w') as fout:
                 state.type_annotation.html_annotate(fout)
 
-        # now remove dels
-        post_proc.remove_dels()
         return False
 
 
@@ -244,8 +258,10 @@ class PreParforPass(FunctionPass):
         assert state.func_ir
         preparfor_pass = _parfor_PreParforPass(
             state.func_ir,
-            state.type_annotation.typemap,
-            state.type_annotation.calltypes, state.typingctx,
+            state.typemap,
+            state.calltypes,
+            state.typingctx,
+            state.targetctx,
             state.flags.auto_parallel,
             state.parfor_diagnostics.replaced_fns
         )
@@ -278,16 +294,16 @@ class ParforPass(FunctionPass):
         # Ensure we have an IR and type information.
         assert state.func_ir
         parfor_pass = _parfor_ParforPass(state.func_ir,
-                                         state.type_annotation.typemap,
-                                         state.type_annotation.calltypes,
+                                         state.typemap,
+                                         state.calltypes,
                                          state.return_type,
                                          state.typingctx,
+                                         state.targetctx,
                                          state.flags.auto_parallel,
                                          state.flags,
+                                         state.metadata,
                                          state.parfor_diagnostics)
         parfor_pass.run()
-
-        remove_dels(state.func_ir.blocks)
 
         # check the parfor pass worked and warn if it didn't
         has_parfor = False
@@ -304,7 +320,7 @@ class ParforPass(FunctionPass):
             # parfor calls the compiler chain again with a string
             if not (config.DISABLE_PERFORMANCE_WARNINGS or
                     state.func_ir.loc.filename == '<string>'):
-                url = ("https://numba.pydata.org/numba-doc/latest/user/"
+                url = ("https://numba.readthedocs.io/en/stable/user/"
                        "parallel.html#diagnostics")
                 msg = ("\nThe keyword argument 'parallel=True' was specified "
                        "but no transformation for parallel execution was "
@@ -345,14 +361,22 @@ class NativeLowering(LoweringPass):
         LoweringPass.__init__(self)
 
     def run_pass(self, state):
-        targetctx = state.targetctx
+        if state.library is None:
+            codegen = state.targetctx.codegen()
+            state.library = codegen.create_library(state.func_id.func_qualname)
+            # Enable object caching upfront, so that the library can
+            # be later serialized.
+            state.library.enable_object_caching()
+
         library = state.library
+        targetctx = state.targetctx
         interp = state.func_ir  # why is it called this?!
         typemap = state.typemap
         restype = state.return_type
         calltypes = state.calltypes
         flags = state.flags
         metadata = state.metadata
+        pre_stats = llvm.passmanagers.dump_refprune_stats()
 
         msg = ("Function %s failed at nopython "
                "mode lowering" % (state.func_id.func_name,))
@@ -362,7 +386,7 @@ class NativeLowering(LoweringPass):
                 funcdesc.PythonFunctionDescriptor.from_specialized_function(
                     interp, typemap, restype, calltypes,
                     mangler=targetctx.mangler, inline=flags.forceinline,
-                    noalias=flags.noalias)
+                    noalias=flags.noalias, abi_tags=[flags.get_mangle_string()])
 
             with targetctx.push_code_library(library):
                 lower = lowering.Lower(targetctx, library, fndesc, interp,
@@ -394,13 +418,36 @@ class NativeLowering(LoweringPass):
                                            cfunc=None, env=env)
             else:
                 # Prepare for execution
-                cfunc = targetctx.get_executable(library, fndesc, env)
                 # Insert native function for use by other jitted-functions.
                 # We also register its library to allow for inlining.
+                cfunc = targetctx.get_executable(library, fndesc, env)
                 targetctx.insert_user_function(cfunc, fndesc, [library])
                 state['cr'] = _LowerResult(fndesc, call_helper,
                                            cfunc=cfunc, env=env)
+
+            # capture pruning stats
+            post_stats = llvm.passmanagers.dump_refprune_stats()
+            metadata['prune_stats'] = post_stats - pre_stats
+
+            # Save the LLVM pass timings
+            metadata['llvm_pass_timings'] = library.recorded_timings
         return True
+
+
+@register_pass(mutates_CFG=False, analysis_only=True)
+class NoPythonSupportedFeatureValidation(AnalysisPass):
+    """NoPython Mode check: Validates the IR to ensure that features in use are
+    in a form that is supported"""
+
+    _name = "nopython_supported_feature_validation"
+
+    def __init__(self):
+        AnalysisPass.__init__(self)
+
+    def run_pass(self, state):
+        raise_on_unsupported_feature(state.func_ir, state.typemap)
+        warn_deprecated(state.func_ir, state.typemap)
+        return False
 
 
 @register_pass(mutates_CFG=False, analysis_only=True)
@@ -412,10 +459,8 @@ class IRLegalization(AnalysisPass):
         AnalysisPass.__init__(self)
 
     def run_pass(self, state):
-        raise_on_unsupported_feature(state.func_ir, state.typemap)
-        warn_deprecated(state.func_ir, state.typemap)
         # NOTE: this function call must go last, it checks and fixes invalid IR!
-        check_and_legalize_ir(state.func_ir)
+        check_and_legalize_ir(state.func_ir, flags=state.flags)
         return True
 
 
@@ -431,15 +476,6 @@ class NoPythonBackend(LoweringPass):
         """
         Back-end: Generate LLVM IR from Numba IR, compile to machine code
         """
-        if state.library is None:
-            codegen = state.targetctx.codegen()
-            state.library = codegen.create_library(state.func_id.func_qualname)
-            # Enable object caching upfront, so that the library can
-            # be later serialized.
-            state.library.enable_object_caching()
-
-        # TODO: Pull this out into the pipeline
-        NativeLowering().run_pass(state)
         lowered = state['cr']
         signature = typing.signature(state.return_type, *state.args)
 
@@ -454,7 +490,6 @@ class NoPythonBackend(LoweringPass):
             call_helper=lowered.call_helper,
             signature=signature,
             objectmode=False,
-            interpmode=False,
             lifted=state.lifted,
             fndesc=lowered.fndesc,
             environment=lowered.env,
@@ -508,15 +543,11 @@ class InlineOverloads(FunctionPass):
         while work_list:
             label, block = work_list.pop()
             for i, instr in enumerate(block.body):
+                # TO-DO: other statements (setitem)
                 if isinstance(instr, ir.Assign):
                     expr = instr.value
                     if isinstance(expr, ir.Expr):
-                        if expr.op == 'call':
-                            workfn = self._do_work_call
-                        elif expr.op == 'getattr':
-                            workfn = self._do_work_getattr
-                        else:
-                            continue
+                        workfn = self._do_work_expr
 
                         if guard(workfn, state, work_list, block, i, expr,
                                  inline_worker):
@@ -536,7 +567,7 @@ class InlineOverloads(FunctionPass):
                 del state.func_ir.blocks[dead]
             # clean up blocks
             dead_code_elimination(state.func_ir,
-                                  typemap=state.type_annotation.typemap)
+                                  typemap=state.typemap)
             # clean up unconditional branches that appear due to inlined
             # functions introducing blocks
             state.func_ir.blocks = simplify_CFG(state.func_ir.blocks)
@@ -548,69 +579,73 @@ class InlineOverloads(FunctionPass):
             print(''.center(80, '-'))
         return True
 
-    def _do_work_getattr(self, state, work_list, block, i, expr, inline_worker):
-        recv_type = state.type_annotation.typemap[expr.value.name]
+    def _get_attr_info(self, state, expr):
+        recv_type = state.typemap[expr.value.name]
         recv_type = types.unliteral(recv_type)
         matched = state.typingctx.find_matching_getattr_template(
             recv_type, expr.attr,
         )
         if not matched:
-            return False
+            return None
+
         template = matched['template']
         if getattr(template, 'is_method', False):
             # The attribute template is representing a method.
             # Don't inline the getattr.
-            return False
+            return None
 
-        inline_type = getattr(template, '_inline', None)
-        if inline_type is None:
-            # inline not defined
-            return False
+        templates = [template]
         sig = typing.signature(matched['return_type'], recv_type)
         arg_typs = sig.args
+        is_method = False
 
-        if not inline_type.is_never_inline:
+        return templates, sig, arg_typs, is_method
+
+    def _get_callable_info(self, state, expr):
+
+        def get_func_type(state, expr):
+            func_ty = None
+            if expr.op == 'call':
+                # check this is a known and typed function
+                try:
+                    func_ty = state.typemap[expr.func.name]
+                except KeyError:
+                    # e.g. Calls to CUDA Intrinsic have no mapped type
+                    # so KeyError
+                    return None
+                if not hasattr(func_ty, 'get_call_type'):
+                    return None
+
+            elif is_operator_or_getitem(expr):
+                func_ty = state.typingctx.resolve_value_type(expr.fn)
+            else:
+                return None
+
+            return func_ty
+
+        if expr.op == 'call':
+            # try and get a definition for the call, this isn't always
+            # possible as it might be a eval(str)/part generated
+            # awaiting update etc. (parfors)
+            to_inline = None
             try:
-                impl = template._overload_func(recv_type)
-                if impl is None:
-                    raise Exception  # abort for this template
+                to_inline = state.func_ir.get_definition(expr.func)
             except Exception:
-                return False
-        else:
-            return False
+                return None
 
-        is_method = False
-        return self._run_inliner(
-            state, inline_type, sig, template, arg_typs, expr, i, impl, block,
-            work_list, is_method, inline_worker,
-        )
+            # do not handle closure inlining here, another pass deals with that
+            if getattr(to_inline, 'op', False) == 'make_function':
+                return None
 
-    def _do_work_call(self, state, work_list, block, i, expr, inline_worker):
-        # try and get a definition for the call, this isn't always possible as
-        # it might be a eval(str)/part generated awaiting update etc. (parfors)
-        to_inline = None
-        try:
-            to_inline = state.func_ir.get_definition(expr.func)
-        except Exception:
-            return False
+        func_ty = get_func_type(state, expr)
+        if func_ty is None:
+            return None
 
-        # do not handle closure inlining here, another pass deals with that.
-        if getattr(to_inline, 'op', False) == 'make_function':
-            return False
+        sig = state.calltypes[expr]
+        if not sig:
+            return None
 
-        # check this is a known and typed function
-        try:
-            func_ty = state.type_annotation.typemap[expr.func.name]
-        except KeyError:
-            # e.g. Calls to CUDA Intrinsic have no mapped type so KeyError
-            return False
-        if not hasattr(func_ty, 'get_call_type'):
-            return False
-
-        sig = state.type_annotation.calltypes[expr]
-        is_method = False
-
-        # search the templates for this overload looking for "inline"
+        templates, arg_typs, is_method = None, None, False
         if getattr(func_ty, 'template', None) is not None:
             # @overload_method
             is_method = True
@@ -621,30 +656,53 @@ class InlineOverloads(FunctionPass):
             templates = getattr(func_ty, 'templates', None)
             arg_typs = sig.args
 
-        if templates is None:
-            return False
+        return templates, sig, arg_typs, is_method
 
-        impl = None
-        for template in templates:
-            inline_type = getattr(template, '_inline', None)
-            if inline_type is None:
-                # inline not defined
-                continue
-            if not inline_type.is_never_inline:
-                try:
-                    impl = template._overload_func(*arg_typs)
-                    if impl is None:
-                        raise Exception  # abort for this template
-                    break
-                except Exception:
+    def _do_work_expr(self, state, work_list, block, i, expr, inline_worker):
+
+        def select_template(templates, args):
+            if templates is None:
+                return None
+
+            impl = None
+            for template in templates:
+                inline_type = getattr(template, '_inline', None)
+                if inline_type is None:
+                    # inline not defined
                     continue
+                if args not in template._inline_overloads:
+                    # skip overloads not matching signature
+                    continue
+                if not inline_type.is_never_inline:
+                    try:
+                        impl = template._overload_func(*args)
+                        if impl is None:
+                            raise Exception  # abort for this template
+                        break
+                    except Exception:
+                        continue
+            else:
+                return None
+
+            return template, inline_type, impl
+
+        inlinee_info = None
+        if expr.op == 'getattr':
+            inlinee_info = self._get_attr_info(state, expr)
         else:
+            inlinee_info = self._get_callable_info(state, expr)
+
+        if not inlinee_info:
             return False
 
-        # at this point we know we maybe want to inline something and there's
-        # definitely something that could be inlined.
+        templates, sig, arg_typs, is_method = inlinee_info
+        inlinee = select_template(templates, arg_typs)
+        if inlinee is None:
+            return False
+        template, inlinee_type, impl = inlinee
+
         return self._run_inliner(
-            state, inline_type, sig, template, arg_typs, expr, i, impl, block,
+            state, inlinee_type, sig, template, arg_typs, expr, i, impl, block,
             work_list, is_method, inline_worker,
         )
 
@@ -657,8 +715,8 @@ class InlineOverloads(FunctionPass):
         if not inline_type.is_always_inline:
             from numba.core.typing.templates import _inline_info
             caller_inline_info = _inline_info(state.func_ir,
-                                              state.type_annotation.typemap,
-                                              state.type_annotation.calltypes,
+                                              state.typemap,
+                                              state.calltypes,
                                               sig)
 
             # must be a cost-model function, run the function
@@ -783,13 +841,14 @@ class PreLowerStripPhis(FunctionPass):
             for target, rhs in exporters[label]:
                 # If RHS is undefined
                 if rhs is ir.UNDEFINED:
-                    # Put in a NULL initializer
-                    rhs = ir.Expr.null(loc=target.loc)
+                    # Put in a NULL initializer, set the location to be in what
+                    # will eventually materialize as the prologue.
+                    rhs = ir.Expr.null(loc=func_ir.loc)
 
                 assign = ir.Assign(
                     target=target,
                     value=rhs,
-                    loc=target.loc
+                    loc=rhs.loc
                 )
                 # Insert at the earliest possible location; i.e. after the
                 # last assignment to rhs
