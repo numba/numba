@@ -10,9 +10,9 @@ from numba.cuda.types import Dim3, GridGroup, CUDADispatcher
 class Dim3Model(models.StructModel):
     def __init__(self, dmm, fe_type):
         members = [
-            ('x', types.int32),
-            ('y', types.int32),
-            ('z', types.int32)
+            ('x', types.uint32),
+            ('y', types.uint32),
+            ('z', types.uint32)
         ]
         super().__init__(dmm, fe_type, members)
 
