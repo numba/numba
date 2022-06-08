@@ -16,7 +16,7 @@ from numba import pndindex, literal_unroll
 from numba.core import types, utils, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                     is_fortran, check_is_integer)
-from numba.np.numpy_support import type_can_asarray, is_nonelike
+from numba.np.numpy_support import type_can_asarray, is_nonelike, numpy_version
 from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_getattr_generic,
                                  lower_setattr_generic,
@@ -187,7 +187,19 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
     context = array._context
     builder = array._builder
     datamodel = array._datamodel
-    required_fields = set(datamodel._fields)
+    # doesn't matter what this array type instance is, it's just to get the
+    # fields for the datamodel of the standard array type in this context
+    standard_array = types.Array(types.float64, 1, 'C')
+    standard_array_type_datamodel = context.data_model_manager[standard_array]
+    required_fields = set(standard_array_type_datamodel._fields)
+    datamodel_fields = set(datamodel._fields)
+    # Make sure that the presented array object has a data model that is close
+    # enough to an array for this function to proceed.
+    if (required_fields & datamodel_fields) != required_fields:
+        missing = required_fields - datamodel_fields
+        msg = (f"The datamodel for type {array._fe_type} is missing "
+               f"field{'s' if len(missing) > 1 else ''} {missing}.")
+        raise ValueError(msg)
 
     if meminfo is None:
         meminfo = Constant(context.get_value_type(
@@ -1382,6 +1394,125 @@ def numpy_broadcast_to(array, shape):
     return impl
 
 
+@register_jitable
+def numpy_broadcast_shapes_list(r, m, shape):
+    for i in range(len(shape)):
+        k = m - len(shape) + i
+        tmp = shape[i]
+        if tmp < 0:
+            raise ValueError("negative dimensions are not allowed")
+        if tmp == 1:
+            continue
+        if r[k] == 1:
+            r[k] = tmp
+        elif r[k] != tmp:
+            raise ValueError("shape mismatch: objects"
+                             " cannot be broadcast"
+                             " to a single shape")
+
+
+def ol_numpy_broadcast_shapes(*args):
+    # Based on https://github.com/numpy/numpy/blob/f702b26fff3271ba6a6ba29a021fc19051d1f007/numpy/core/src/multiarray/iterators.c#L1129-L1212  # noqa
+    for idx, arg in enumerate(args):
+        is_int = isinstance(arg, types.Integer)
+        is_int_tuple = isinstance(arg, types.UniTuple) and \
+            isinstance(arg.dtype, types.Integer)
+        is_empty_tuple = isinstance(arg, types.Tuple) and len(arg.types) == 0
+        if not (is_int or is_int_tuple or is_empty_tuple):
+            msg = (f'Argument {idx} must be either an int or tuple[int]. '
+                   f'Got {arg}')
+            raise errors.TypingError(msg)
+
+    # discover the number of dimensions
+    m = 0
+    for arg in args:
+        if isinstance(arg, types.Integer):
+            m = max(m, 1)
+        elif isinstance(arg, types.BaseTuple):
+            m = max(m, len(arg))
+
+    if m == 0:
+        return lambda *args: ()
+    else:
+        tup_init = (1,) * m
+
+        def impl(*args):
+            # propagate args
+            r = [1] * m
+            tup = tup_init
+            for arg in literal_unroll(args):
+                if isinstance(arg, tuple) and len(arg) > 0:
+                    numpy_broadcast_shapes_list(r, m, arg)
+                elif isinstance(arg, int):
+                    numpy_broadcast_shapes_list(r, m, (arg,))
+            for idx, elem in enumerate(r):
+                tup = tuple_setitem(tup, idx, elem)
+            return tup
+        return impl
+
+
+if numpy_version >= (1, 20):
+    overload(np.broadcast_shapes)(ol_numpy_broadcast_shapes)
+
+
+@overload(np.broadcast_arrays)
+def numpy_broadcast_arrays(*args):
+
+    for idx, arg in enumerate(args):
+        if not type_can_asarray(arg):
+            raise errors.TypingError(f'Argument "{idx}" must '
+                                     'be array-like')
+
+    unified_dtype = None
+    dt = None
+    for arg in args:
+        if isinstance(arg, (types.Array, types.BaseTuple)):
+            dt = arg.dtype
+        else:
+            dt = arg
+
+        if unified_dtype is None:
+            unified_dtype = dt
+        elif unified_dtype != dt:
+            raise errors.TypingError('Mismatch of argument types. Numba cannot '
+                                     'broadcast arrays with different types. '
+                                     f'Got {args}')
+
+    # number of dimensions
+    m = 0
+    for idx, arg in enumerate(args):
+        if isinstance(arg, types.ArrayCompatible):
+            m = max(m, arg.ndim)
+        elif isinstance(arg, (types.Number, types.Boolean, types.BaseTuple)):
+            m = max(m, 1)
+        else:
+            raise errors.TypingError(f'Unhandled type {arg}')
+
+    tup_init = (0,) * m
+
+    def impl(*args):
+        # find out the output shape
+        # we can't call np.broadcast_shapes here since args may have arrays
+        # with different shapes and it is not possible to create a list
+        # with those shapes dynamically
+        shape = [1] * m
+        for array in literal_unroll(args):
+            numpy_broadcast_shapes_list(shape, m, np.asarray(array).shape)
+
+        tup = tup_init
+
+        for i in range(m):
+            tup = tuple_setitem(tup, i, shape[i])
+
+        # numpy checks if the input arrays have the same shape as `shape`
+        outs = []
+        for array in literal_unroll(args):
+            outs.append(np.broadcast_to(np.asarray(array), tup))
+        return outs
+
+    return impl
+
+
 def fancy_setslice(context, builder, sig, args, index_types, indices):
     """
     Implement slice assignment for arrays.  This implementation works for
@@ -1897,16 +2028,46 @@ def array_flatten(context, builder, sig, args):
     return res
 
 
+@register_jitable
+def _np_clip_impl(a, a_min, a_max, out):
+    # Both a_min and a_max are numpy arrays
+    ret = np.empty_like(a) if out is None else out
+    a_b, a_min_b, a_max_b = np.broadcast_arrays(a, a_min, a_max)
+    for index in np.ndindex(a_b.shape):
+        val_a = a_b[index]
+        val_a_min = a_min_b[index]
+        val_a_max = a_max_b[index]
+        ret[index] = min(max(val_a, val_a_min), val_a_max)
+
+    return ret
+
+
+@register_jitable
+def _np_clip_impl_none(a, b, use_min, out):
+    for index in np.ndindex(a.shape):
+        val_a = a[index]
+        val_b = b[index]
+        if use_min:
+            out[index] = min(val_a, val_b)
+        else:
+            out[index] = max(val_a, val_b)
+    return out
+
+
 @overload(np.clip)
 def np_clip(a, a_min, a_max, out=None):
     if not type_can_asarray(a):
         raise errors.TypingError('The argument "a" must be array-like')
 
-    if not isinstance(a_min, (types.NoneType, types.Number)):
-        raise errors.TypingError('The argument "a_min" must be a number')
+    if (not isinstance(a_min, types.NoneType) and
+            not type_can_asarray(a_min)):
+        raise errors.TypingError(('The argument "a_min" must be a number '
+                                 'or an array-like'))
 
-    if not isinstance(a_max, (types.NoneType, types.Number)):
-        raise errors.TypingError('The argument "a_max" must be a number')
+    if (not isinstance(a_max, types.NoneType) and
+            not type_can_asarray(a_max)):
+        raise errors.TypingError('The argument "a_max" must be a number '
+                                 'or an array-like')
 
     if not (isinstance(out, types.Array) or is_nonelike(out)):
         msg = 'The argument "out" must be an array if it is provided'
@@ -1916,28 +2077,103 @@ def np_clip(a, a_min, a_max, out=None):
     a_min_is_none = a_min is None or isinstance(a_min, types.NoneType)
     a_max_is_none = a_max is None or isinstance(a_max, types.NoneType)
 
-    def np_clip_impl(a, a_min, a_max, out=None):
-        if a_min_is_none and a_max_is_none:
+    if a_min_is_none and a_max_is_none:
+        # Raises value error when both a_min and a_max are None
+        def np_clip_nn(a, a_min, a_max, out=None):
             raise ValueError("array_clip: must set either max or min")
 
-        ret = np.empty_like(a) if out is None else out
+        return np_clip_nn
 
-        for index, val in np.ndenumerate(a):
-            if a_min_is_none:
-                if val > a_max:
-                    ret[index] = a_max
-                else:
-                    ret[index] = val
-            elif a_max_is_none:
-                if val < a_min:
-                    ret[index] = a_min
-                else:
-                    ret[index] = val
-            else:
-                ret[index] = min(max(val, a_min), a_max)
-        return ret
+    a_min_is_scalar = isinstance(a_min, types.Number)
+    a_max_is_scalar = isinstance(a_max, types.Number)
 
-    return np_clip_impl
+    if a_min_is_scalar and a_max_is_scalar:
+        def np_clip_ss(a, a_min, a_max, out=None):
+            # a_min and a_max are scalars
+            # since their shape will be empty
+            # so broadcasting is not needed at all
+            ret = np.empty_like(a) if out is None else out
+            for index in np.ndindex(a.shape):
+                val_a = a[index]
+                ret[index] = min(max(val_a, a_min), a_max)
+
+            return ret
+
+        return np_clip_ss
+    elif a_min_is_scalar and not a_max_is_scalar:
+        if a_max_is_none:
+            def np_clip_sn(a, a_min, a_max, out=None):
+                # a_min is a scalar
+                # since its shape will be empty
+                # so broadcasting is not needed at all
+                ret = np.empty_like(a) if out is None else out
+                for index in np.ndindex(a.shape):
+                    val_a = a[index]
+                    ret[index] = max(val_a, a_min)
+
+                return ret
+
+            return np_clip_sn
+        else:
+            def np_clip_sa(a, a_min, a_max, out=None):
+                # a_min is a scalar
+                # since its shape will be empty
+                # broadcast it to shape of a
+                # by using np.full_like
+                a_min_full = np.full_like(a, a_min)
+                return _np_clip_impl(a, a_min_full, a_max, out)
+
+            return np_clip_sa
+    elif not a_min_is_scalar and a_max_is_scalar:
+        if a_min_is_none:
+            def np_clip_ns(a, a_min, a_max, out=None):
+                # a_max is a scalar
+                # since its shape will be empty
+                # so broadcasting is not needed at all
+                ret = np.empty_like(a) if out is None else out
+                for index in np.ndindex(a.shape):
+                    val_a = a[index]
+                    ret[index] = min(val_a, a_max)
+
+                return ret
+
+            return np_clip_ns
+        else:
+            def np_clip_as(a, a_min, a_max, out=None):
+                # a_max is a scalar
+                # since its shape will be empty
+                # broadcast it to shape of a
+                # by using np.full_like
+                a_max_full = np.full_like(a, a_max)
+                return _np_clip_impl(a, a_min, a_max_full, out)
+
+            return np_clip_as
+    else:
+        # Case where exactly one of a_min or a_max is None
+        if a_min_is_none:
+            def np_clip_na(a, a_min, a_max, out=None):
+                # a_max is a numpy array but a_min is None
+                ret = np.empty_like(a) if out is None else out
+                a_b, a_max_b = np.broadcast_arrays(a, a_max)
+                return _np_clip_impl_none(a_b, a_max_b, True, ret)
+
+            return np_clip_na
+        elif a_max_is_none:
+            def np_clip_an(a, a_min, a_max, out=None):
+                # a_min is a numpy array but a_max is None
+                ret = np.empty_like(a) if out is None else out
+                a_b, a_min_b = np.broadcast_arrays(a, a_min)
+                return _np_clip_impl_none(a_b, a_min_b, False, ret)
+
+            return np_clip_an
+        else:
+            def np_clip_aa(a, a_min, a_max, out=None):
+                # Both a_min and a_max are clearly arrays
+                # because none of the above branches
+                # returned
+                return _np_clip_impl(a, a_min, a_max, out)
+
+            return np_clip_aa
 
 
 @overload_method(types.Array, 'clip')
@@ -5390,7 +5626,8 @@ def get_sort_func(kind, is_float, is_argsort=False):
         if kind == 'quicksort':
             sort = quicksort.make_jit_quicksort(
                 lt=lt_floats if is_float else None,
-                is_argsort=is_argsort)
+                is_argsort=is_argsort,
+                is_np_array=True)
             func = sort.run_quicksort
         elif kind == 'mergesort':
             sort = mergesort.make_jit_mergesort(

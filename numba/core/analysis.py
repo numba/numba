@@ -627,6 +627,11 @@ def rewrite_semantic_constants(func_ir, called_args):
                     argty = called_args[arg_def.index]
                     if isinstance(argty, types.BaseTuple):
                         rewrite_statement(func_ir, stmt, argty.count)
+                elif (isinstance(arg_def, ir.Expr) and
+                      arg_def.op == 'typed_getitem'):
+                    argty = arg_def.dtype
+                    if isinstance(argty, types.BaseTuple):
+                        rewrite_statement(func_ir, stmt, argty.count)
 
     from numba.core.ir_utils import get_definition, guard
     for blk in func_ir.blocks.values():

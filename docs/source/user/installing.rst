@@ -16,7 +16,7 @@ Our supported platforms are:
 * \*BSD (unofficial support only)
 * NVIDIA GPUs of compute capability 5.3 and later
 
-  * Compute capabilities 3.0 - 5.2 are supported, but deprecated.
+  * Compute capabilities 3.5 - 5.2 are supported, but deprecated.
 * ARMv7 (32-bit little-endian, such as Raspberry Pi 2 and 3)
 * ARMv8 (64-bit little-endian, such as the NVIDIA Jetson)
 
@@ -142,6 +142,7 @@ Source archives of the latest release can also be found on
   * Linux ``ARM``: no conda packages, use the system compiler
   * Mac OSX: ``clang_osx-64`` and ``clangxx_osx-64`` or the system compiler at
     ``/usr/bin/clang`` (Mojave onwards)
+  * Mac OSX (M1): ``clang_osx-arm64`` and ``clangxx_osx-arm64``
   * Windows: a version of Visual Studio appropriate for the Python version in
     use
 
@@ -212,7 +213,7 @@ vary with target operating system and hardware. The following lists them all
   * ``llvm-openmp`` (OSX) - provides headers for compiling OpenMP support into
     Numba's threading backend
   * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support
-    into Numba's threading backend (version >= 2021 required).
+    into Numba's threading backend (2021 <= version < 2021.6 required).
   * ``importlib_metadata`` (for Python versions < 3.9)
 
 * Optional runtime are:
@@ -275,6 +276,8 @@ information.
 +--------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
 | Numba  | Release date | Python                    | NumPy                      | llvmlite                     | LLVM              | TBB                         |
 +========+==============+===========================+============================+==============================+===================+=============================+
+| 0.56.x | TBC          | 3.7.x <= version < 3.11   | 1.18 <= version < 1.23     | 0.39.x                       | 11.x              | 2021.x                      |
++--------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
 | 0.55.x | 2022-01-13   | 3.7.x <= version < 3.11   | 1.18 <= version < 1.22     | 0.38.x                       | 11.x              | 2021.x                      |
 +--------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
 | 0.54.x | 2021-08-19   | 3.6.x <= version < 3.10   | 1.17 <= version < 1.21     | 0.37.x                       | 11.x              | 2021.x                      |

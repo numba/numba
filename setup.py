@@ -385,7 +385,8 @@ metadata = dict(
         # HTML templates for type annotations
         "numba.core.annotations": ["*.html"],
         # Various test data
-        "numba.cuda.tests.cudadrv.data": ["*.ptx"],
+        "numba.cuda.tests.cudadrv.data": ["*.ptx", "*.cu"],
+        "numba.cuda.tests.doc_examples.ffi": ["*.cu"],
         "numba.tests": ["pycc_distutils_usecase/*.py"],
         # Some C files are needed by pycc
         "numba": ["*.c", "*.h"],
@@ -401,7 +402,7 @@ metadata = dict(
     packages=packages,
     setup_requires=build_requires,
     install_requires=install_requires,
-    python_requires=">={},<{}".format(min_python_version, max_python_version),
+    python_requires=">={}".format(min_python_version),
     license="BSD",
     cmdclass=cmdclass,
 )

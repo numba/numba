@@ -32,12 +32,11 @@ def disassemble_cubin(cubin):
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE)
         except FileNotFoundError as e:
-            if e.filename == 'nvdisasm':
-                msg = ("nvdisasm is required for SASS inspection, and has not "
-                       "been found.\n\nYou may need to install the CUDA "
-                       "toolkit and ensure that it is available on your "
-                       "PATH.\n")
-                raise RuntimeError(msg)
+            msg = ("nvdisasm is required for SASS inspection, and has not "
+                   "been found.\n\nYou may need to install the CUDA "
+                   "toolkit and ensure that it is available on your "
+                   "PATH.\n")
+            raise RuntimeError(msg) from e
         return cp.stdout.decode('utf-8')
     finally:
         if fd is not None:
@@ -348,7 +347,7 @@ class JITCUDACodegen(Codegen):
     _library_class = CUDACodeLibrary
 
     def __init__(self, module_name):
-        self._data_layout = nvvm.default_data_layout
+        self._data_layout = nvvm.data_layout
         self._target_data = ll.create_target_data(self._data_layout)
 
     def _create_empty_module(self, name):

@@ -129,8 +129,13 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
     def as_void_ptr(arg):
         return builder.bitcast(arg, byte_ptr_t)
 
-    # Array count is input signature plus 1 (due to output array)
-    array_count = len(sig.args) + 1
+    # Array count depends on whether an "output" array is needed. In the case
+    # of a void return type cf. gufunc it is the number of args, in the case of
+    # a non-void return type cf. ufunc it is the number of args + 1 so as to
+    # account for the output array.
+    array_count = len(sig.args)
+    if not isinstance(sig.return_type, types.NoneType):
+        array_count += 1
 
     parallel_for_ty = ir.FunctionType(ir.VoidType(),
                                       [byte_ptr_t] * 5 + [intp_t, ] * 3)

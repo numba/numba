@@ -355,11 +355,30 @@ def _genfp16_binary(l_key):
     return Cuda_fp16_binary
 
 
+def _genfp16_binary_comparison(l_key):
+    @register
+    class Cuda_fp16_cmp(ConcreteTemplate):
+        key = l_key
+
+        cases = [
+            signature(types.b1, types.float16, types.float16)
+        ]
+    return Cuda_fp16_cmp
+
+
 Cuda_hadd = _genfp16_binary(cuda.fp16.hadd)
 Cuda_hsub = _genfp16_binary(cuda.fp16.hsub)
 Cuda_hmul = _genfp16_binary(cuda.fp16.hmul)
+Cuda_hmax = _genfp16_binary(cuda.fp16.hmax)
+Cuda_hmin = _genfp16_binary(cuda.fp16.hmin)
 Cuda_hneg = _genfp16_unary(cuda.fp16.hneg)
 Cuda_habs = _genfp16_unary(cuda.fp16.habs)
+Cuda_heq = _genfp16_binary_comparison(cuda.fp16.heq)
+Cuda_hne = _genfp16_binary_comparison(cuda.fp16.hne)
+Cuda_hge = _genfp16_binary_comparison(cuda.fp16.hge)
+Cuda_hgt = _genfp16_binary_comparison(cuda.fp16.hgt)
+Cuda_hle = _genfp16_binary_comparison(cuda.fp16.hle)
+Cuda_hlt = _genfp16_binary_comparison(cuda.fp16.hlt)
 
 
 # generate atomic operations
@@ -528,6 +547,30 @@ class CudaFp16Template(AttributeTemplate):
 
     def resolve_hfma(self, mod):
         return types.Function(Cuda_hfma)
+
+    def resolve_heq(self, mod):
+        return types.Function(Cuda_heq)
+
+    def resolve_hne(self, mod):
+        return types.Function(Cuda_hne)
+
+    def resolve_hge(self, mod):
+        return types.Function(Cuda_hge)
+
+    def resolve_hgt(self, mod):
+        return types.Function(Cuda_hgt)
+
+    def resolve_hle(self, mod):
+        return types.Function(Cuda_hle)
+
+    def resolve_hlt(self, mod):
+        return types.Function(Cuda_hlt)
+
+    def resolve_hmax(self, mod):
+        return types.Function(Cuda_hmax)
+
+    def resolve_hmin(self, mod):
+        return types.Function(Cuda_hmin)
 
 
 @register_attr
