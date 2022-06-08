@@ -36,8 +36,9 @@ typedef struct {
     /* Allocates memory using an external allocator but still using Numba's MemInfo.
      *
      * NOTE: An externally provided allocator must behave the same way as C99
-     *       stdlib.h's "malloc" function with respect to return value. i.e. on
-     *       error the allocator must return NULL.
+     *       stdlib.h's "malloc" function with respect to return value
+     *       (including the behaviour that occurs when requesting an allocation
+     *        of size 0 bytes).
      */
     NRT_MemInfo* (*allocate_external)(size_t nbytes, NRT_ExternalAllocator *allocator);
 
