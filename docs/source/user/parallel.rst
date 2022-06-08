@@ -659,7 +659,7 @@ variable is set to 0 at the beginning of the parallel region and restored to
 its original value upon exiting the parallel region.
 This behavior is demonstrated in ``func1`` in the example below in that the
 reported chunk size inside the ``prange`` parallel region is 0 but is 4 outside
-the parallel region.  Note that if the prange is not executed in parallel for
+the parallel region.  Note that if the ``prange`` is not executed in parallel for
 any reason (e.g., setting ``parallel=False``) then the chunk size reported inside
 the non-parallel prange would be reported as 4.
 This behavior may initially be counterintuitive to programmers as it differs from
