@@ -640,25 +640,22 @@ class Lower(BaseLower):
         exc_args = inst.exc_args
         pyapi = self.context.get_python_api(self.builder)
         env_manager = self.context.get_env_manager(self.builder)
-        # _inst = exc_args[0]
-        # ty = self.typeof(_inst.name)
-        # val = self.loadvar(_inst.name)
-        # if self.context.enable_nrt:
-        #     self.context.nrt.incref(self.builder, ty, val)
-        # obj = pyapi.from_native_value(ty, val, env_manager)
-        # pyapi.from_native_value(ty, val, env_manager)
         args = []
         for exc_arg in exc_args:
             if isinstance(exc_arg, ir.Var):
-                ty = self.typeof(exc_arg.name)
+                typ = self.typeof(exc_arg.name)
                 val = self.loadvar(exc_arg.name)
-                if self.context.enable_nrt:
-                    self.context.nrt.incref(self.builder, ty, val)
-                obj = pyapi.from_native_value(ty, val, env_manager)
-                args.append(obj)
-            # else:
-                # ty = self.typeof()
-                # val = pyapi.from_native_value(ty, val, env_manager)
+                self.incref(typ, val)
+                obj = pyapi.from_native_value(typ, val, env_manager)
+            else:
+                # lower constants
+                tyctx = self.context.typing_context
+                typ = tyctx.resolve_value_type(exc_arg)
+                val = self.context.get_constant_generic(
+                    self.builder, typ, exc_arg)
+                self.incref(typ, val)
+                obj = pyapi.from_native_value(typ, val, env_manager)
+            args.append(obj)
 
         self.return_non_const_exception(inst.exc_class, tuple(args),
                                         loc=self.loc)

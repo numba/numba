@@ -84,6 +84,18 @@ def raise_instance(exc, arg):
     return raiser
 
 
+def raise_instance_runtime_args(exc):
+    def raiser(i, arg):
+        if i == 1:
+            raise exc(arg, 1)
+        elif i == 2:
+            raise ValueError(arg, 2)
+        elif i == 3:
+            raise np.linalg.LinAlgError(arg, 3)
+        return i
+    return raiser
+
+
 def reraise():
     raise
 
@@ -102,6 +114,10 @@ def assert_usecase(i):
 
 def ude_bug_usecase():
     raise UDEArgsToSuper()  # oops user forgot args to exception ctor
+
+
+def raise_runtime_value(arg):
+    raise ValueError(arg)
 
 
 class TestRaising(TestCase):
@@ -324,6 +340,45 @@ class TestRaising(TestCase):
 
     def test_user_code_error_traceback_nopython(self):
         self.check_user_code_error_traceback(flags=no_pyobj_flags)
+
+    def check_raise_runtime_value(self, flags):
+        pyfunc = raise_runtime_value
+        cres = compile_isolated(pyfunc, (types.string,), flags=flags)
+        cfunc = cres.entry_point
+        self.check_against_python(flags, pyfunc, cfunc, ValueError, 'hello')
+
+    def test_raise_runtime_value_objmode(self):
+        self.check_raise_runtime_value(flags=force_pyobj_flags)
+
+    def test_raise_runtime_value_nopython(self):
+        no_pyobj_flags.nrt = True
+        self.check_raise_runtime_value(flags=no_pyobj_flags)
+        no_pyobj_flags.nrt = False
+
+    def check_raise_instance_with_runtime_args(self, flags):
+        for clazz in [MyError, UDEArgsToSuper,
+                      UDENoArgSuper]:
+            pyfunc = raise_instance_runtime_args(clazz)
+            cres = compile_isolated(pyfunc, (types.int32, types.string),
+                                    flags=flags)
+            cfunc = cres.entry_point
+            with open('a.ll', 'w') as f:
+                print(cres.library.get_llvm_str(), file=f, flush=True)
+
+            self.assertEqual(cfunc(0, 'test'), 0)
+            self.check_against_python(flags, pyfunc, cfunc, clazz, 1, 'hello')
+            self.check_against_python(flags, pyfunc, cfunc, ValueError, 2,
+                                      'world')
+            self.check_against_python(flags, pyfunc, cfunc,
+                                      np.linalg.linalg.LinAlgError, 3, 'linalg')
+
+    def test_raise_instance_with_runtime_args_objmode(self):
+        self.check_raise_instance_with_runtime_args(flags=force_pyobj_flags)
+
+    def test_raise_instance_with_runtime_args_nopython(self):
+        no_pyobj_flags.nrt = True
+        self.check_raise_instance_with_runtime_args(flags=no_pyobj_flags)
+        no_pyobj_flags.nrt = False
 
 
 if __name__ == '__main__':

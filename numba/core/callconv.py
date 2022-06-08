@@ -319,7 +319,7 @@ class _MinimalCallHelper(object):
             return SystemError, (msg,)
 
 # The structure type constructed by PythonAPI.serialize_uncached()
-# i.e a {i8* pickle_buf, i32 pickle_bufsz, i8* hash_buf, i8* runtime_msg}
+# i.e a {i8* pickle_buf, i32 pickle_bufsz, i8* hash_buf}
 excinfo_t = ir.LiteralStructType([GENERIC_POINTER, int32_t, GENERIC_POINTER])
 excinfo_ptr_t = ir.PointerType(excinfo_t)
 
@@ -423,28 +423,29 @@ class CPUCallConv(BaseCallConv):
         struct_gv = pyapi.serialize_object(exc)  # {i8*, i32, i8*}
 
         tup = pyapi.tuple_pack(exc_args)
-        # cstr = pyapi.string_as_string(exc_args[0])
-        # cgutils.printf(builder, "string: %s\n", cstr)
-        # pyapi.print_object(tup)
         zero, one, two = int32_t(0), int32_t(1), int32_t(2)
 
         pybytes = pyapi.bytes_from_string_and_size(
             builder.load(builder.gep(struct_gv, [zero, zero])),
-            builder.zext(
+            builder.sext(
                 builder.load(builder.gep(struct_gv, [zero, one])), ir.IntType(64)))
 
         bytesobj = pyapi.serialize(tup, pybytes)
-        # pyapi.print_object(bytesobj)
         ptr = pyapi.bytes_as_string(bytesobj)
         sz = pyapi.bytes_size(bytesobj)
 
-        excinfo = builder.alloca(excinfo_t)
+        # ToDo: compute hash at runtime
+        int8_t = ir.IntType(8)
+        alloc_fnty = ir.FunctionType(int8_t.as_pointer(), [int32_t])
+        alloc_fn = cgutils.get_or_insert_function(builder.module, alloc_fnty, name="malloc")
+        struct_size = int32_t(self.context.get_abi_sizeof(excinfo_t))
+        excinfo = builder.bitcast(builder.call(alloc_fn, [struct_size]), excinfo_ptr_t)
+        # bug on NRT not being enabled!?
+        # excinfo = builder.bitcast(self.context.nrt.allocate(builder, struct_size), excinfo_ptr_t)
+
         builder.store(ptr, builder.gep(excinfo, [zero, zero]))
         builder.store(builder.trunc(sz, int32_t), builder.gep(excinfo, [zero, one]))
-        # ToDo: compute hash at runtime
-        # builder.store(builder.load(builder.gep(struct_gv, [zero, two])), builder.gep(excinfo, [zero, two]))
         builder.store(pyapi.make_none(), builder.gep(excinfo, [zero, two]))
-        # builder.store(s, builder.gep(excinfo, [zero, three]))
         builder.store(excinfo, excptr)
 
     def return_non_const_user_exc(self, builder, exc, exc_args, loc=None,

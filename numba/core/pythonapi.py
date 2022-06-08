@@ -1352,7 +1352,6 @@ class PythonAPI(object):
         ptr = self.builder.extract_value(self.builder.load(structptr), 0)
         n = self.builder.extract_value(self.builder.load(structptr), 1)
         hashed = self.builder.extract_value(self.builder.load(structptr), 2)
-        # rv = self.builder.extract_value(self.builder.load(structptr), 3)
         return self.builder.call(fn, (ptr, n, hashed))
 
     def serialize(self, tup, pybytes):
@@ -1386,7 +1385,6 @@ class PythonAPI(object):
             arr.bitcast(self.voidptr),
             Constant(ir.IntType(32), arr.type.pointee.count),
             hasharr.bitcast(self.voidptr),
-            # self.get_null_object()
             ])
         return struct
 
