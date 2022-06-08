@@ -25,6 +25,7 @@ def _init_casting_rules(tm):
 
     tcr.promote_unsafe(types.int32, types.int64)
     tcr.promote_unsafe(types.uint32, types.uint64)
+    tcr.promote_unsafe(types.tid, types.uint64)
 
     tcr.safe_unsafe(types.uint8, types.int16)
     tcr.safe_unsafe(types.uint16, types.int32)

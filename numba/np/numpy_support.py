@@ -128,6 +128,8 @@ def as_dtype(nbtype):
     NotImplementedError is if no correspondence is known.
     """
     nbtype = types.unliteral(nbtype)
+    if nbtype == types.tid:
+        return np.dtype('uint32')
     if isinstance(nbtype, (types.Complex, types.Integer, types.Float)):
         return np.dtype(str(nbtype))
     if nbtype is types.bool_:

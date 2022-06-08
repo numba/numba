@@ -93,10 +93,10 @@ def ptx_sync_group(context, builder, sig, args):
 
 # -----------------------------------------------------------------------------
 
-@lower(cuda.grid, types.uint32)
+@lower(cuda.grid, types.Integer)
 def cuda_grid(context, builder, sig, args):
     restype = sig.return_type
-    if restype == types.uint32:
+    if restype == types.tid:
         return nvvmutils.get_global_id(builder, dim=1)
     elif isinstance(restype, types.UniTuple):
         ids = nvvmutils.get_global_id(builder, dim=restype.count)
@@ -111,12 +111,12 @@ def _nthreads_for_dim(builder, dim):
     return builder.mul(ntid, nctaid)
 
 
-@lower(cuda.gridsize, types.uint32)
+@lower(cuda.gridsize, types.Integer)
 def cuda_gridsize(context, builder, sig, args):
     restype = sig.return_type
     nx = _nthreads_for_dim(builder, 'x')
 
-    if restype == types.uint32:
+    if restype == types.tid:
         return nx
     elif isinstance(restype, types.UniTuple):
         ny = _nthreads_for_dim(builder, 'y')

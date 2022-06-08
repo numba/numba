@@ -23,12 +23,12 @@ class GridFunction(CallableTemplate):
                 raise errors.RequireLiteralValue(ndim)
             val = ndim.literal_value
             if val == 1:
-                restype = types.uint32
+                restype = types.tid
             elif val in (2, 3):
-                restype = types.UniTuple(types.uint32, val)
+                restype = types.UniTuple(types.tid, val)
             else:
                 raise ValueError('argument can only be 1, 2, 3')
-            return signature(restype, types.uint32)
+            return signature(restype, ndim)
         return typer
 
 
@@ -449,13 +449,13 @@ class Dim3_attrs(AttributeTemplate):
     key = dim3
 
     def resolve_x(self, mod):
-        return types.uint32
+        return types.tid
 
     def resolve_y(self, mod):
-        return types.uint32
+        return types.tid
 
     def resolve_z(self, mod):
-        return types.uint32
+        return types.tid
 
 
 @register_attr
@@ -599,10 +599,10 @@ class CudaModuleTemplate(AttributeTemplate):
         return dim3
 
     def resolve_warpsize(self, mod):
-        return types.uint32
+        return types.tid
 
     def resolve_laneid(self, mod):
-        return types.uint32
+        return types.tid
 
     def resolve_shared(self, mod):
         return types.Module(cuda.shared)

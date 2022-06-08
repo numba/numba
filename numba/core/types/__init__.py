@@ -40,6 +40,8 @@ uint16 = Integer('uint16')
 uint32 = Integer('uint32')
 uint64 = Integer('uint64')
 
+tid = Integer('thread_idx', 32, signed=False)
+
 int8 = Integer('int8')
 int16 = Integer('int16')
 int32 = Integer('int32')
