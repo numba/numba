@@ -1,3 +1,5 @@
+import functools
+
 from llvmlite import ir
 
 from numba.core import types, cgutils, errors
@@ -17,6 +19,7 @@ class NRTContext(object):
             raise errors.NumbaRuntimeError("NRT required but not enabled")
 
     def _check_null_result(func):
+        @functools.wraps(func)
         def wrap(self, builder, *args, **kwargs):
             memptr = func(self, builder, *args, **kwargs)
             msg = "Allocation failed (probably too large)."
