@@ -31,6 +31,11 @@ def get_none():
 def div(x, y):
     return x / y
 
+# Test fastmath
+@cc.export('tanh', 'f8(f8)', fastmath=True)
+def tanh(x):    
+  return 2/(1+np.exp(-2*x)) - 1
+
 _two = 2
 
 # This one can't be compiled by the legacy API as it doesn't execute

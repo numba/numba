@@ -68,10 +68,11 @@ class ExportEntry(object):
     A simple record for exporting symbols.
     """
 
-    def __init__(self, symbol, signature, function):
+    def __init__(self, symbol, signature, function, fastmath=False):
         self.symbol = symbol
         self.signature = signature
         self.function = function
+        self.fastmath = fastmath
 
     def __repr__(self):
         return "ExportEntry(%r, %r)" % (self.symbol, self.signature)
@@ -150,6 +151,8 @@ class _ModuleCompiler(object):
             library.add_ir_module(nrt_module)
 
         for entry in self.export_entries:
+            if entry.fastmath:
+                flags_aux.set('fastmath', value=cpu.FastMathOptions(True))
             cres = compile_extra(self.typing_context, self.context,
                                 entry.function,
                                 entry.signature.args,
