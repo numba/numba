@@ -71,11 +71,11 @@ class ExportEntry(object):
     def __init__(self, symbol, signature, function, fastmath=False):
         self.symbol = symbol
         self.signature = signature
-        self.function = function
         self.fastmath = fastmath
+        self.function = function
 
     def __repr__(self):
-        return "ExportEntry(%r, %r)" % (self.symbol, self.signature)
+        return "ExportEntry(%r, %r, %r)" % (self.symbol, self.signature, self.fastmath)
 
 
 class _ModuleCompiler(object):

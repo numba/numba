@@ -129,7 +129,7 @@ class CC(object):
     def verbose(self, value):
         self._verbose = value
 
-    def export(self, exported_name, sig):
+    def export(self, exported_name, sig, fastmath=False):
         """
         Mark a function for exporting in the extension module.
         """
@@ -139,7 +139,7 @@ class CC(object):
             raise KeyError("duplicated export symbol %s" % (exported_name))
 
         def decorator(func):
-            entry = ExportEntry(exported_name, sig, func)
+            entry = ExportEntry(exported_name, sig, func, fastmath=fastmath)
             self._exported_functions[exported_name] = entry
             return func
 
