@@ -5,6 +5,7 @@ import sys
 import abc
 import io
 import copyreg
+import hashlib
 
 
 import pickle
@@ -69,7 +70,12 @@ def runtime_dumps(runtime_args, bytedata):
     real_args = [static_args[i] if runtime_arg is None else runtime_arg
                  for i, runtime_arg in enumerate(runtime_args)]
     obj = (exc, tuple(real_args), locinfo)
-    return dumps(obj)
+    data = dumps(obj)
+    # Does it worth computing the hash?
+    # The "address" arg in _numba_unpickle will be a different value at
+    # every call and a cache hit will never happen in _unpickled_memo
+    _hash = hashlib.sha1(data).digest()
+    return (data, _hash)
 
 
 # Alias to pickle.loads to allow `serialize.loads()`

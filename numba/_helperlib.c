@@ -1035,14 +1035,11 @@ numba_unpickle(const char *data, int n, const char *hashed)
     addr = PyLong_FromVoidPtr((void*)data);
     if (addr == NULL)
         goto error;
-    // if (hashed_runtime_val == NULL)
-    //     hashed_runtime_val = Py_None;
     obj = PyObject_CallFunctionObjArgs(loads, addr, buf, hashedbuf, NULL);
 error:
     Py_XDECREF(addr);
     Py_XDECREF(hashedbuf);
     Py_DECREF(buf);
-    // Py_XDECREF(hashed_runtime_val);
     return obj;
 }
 #endif

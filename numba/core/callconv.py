@@ -417,15 +417,13 @@ class CPUCallConv(BaseCallConv):
         else:
             locinfo = None
 
-        exc_args, dyn_args = list(zip(*exc_args))
-
         exc = (exc, exc_args, locinfo)
         excptr = self._get_excinfo_argument(builder.function)
         struct_gv = pyapi.serialize_object(exc)  # {i8*, i32, i8*}
 
         # serialize constant arguments as None
         none = pyapi.make_none()
-        exc_args = [exc_args[i] if dyn_args[i] else none for i in range(len(dyn_args))]
+        exc_args = [e if isinstance(e, ir.Instruction) else none for e in exc_args]
 
         tup = pyapi.tuple_pack(exc_args)
         zero, one, two = int32_t(0), int32_t(1), int32_t(2)
@@ -435,24 +433,29 @@ class CPUCallConv(BaseCallConv):
             builder.sext(
                 builder.load(builder.gep(struct_gv, [zero, one])), ir.IntType(64)))
 
-        bytesobj = pyapi.serialize(tup, pybytes)
-        ptr = pyapi.bytes_as_string(bytesobj)
-        sz = pyapi.bytes_size(bytesobj)
+        # serialize returns a pair (data, hash)
+        pair = pyapi.serialize(tup, pybytes)
+        data, _hash = pyapi.tuple_getitem(pair, 0), pyapi.tuple_getitem(pair, 1)
+        ptr = pyapi.bytes_as_string(data)
+        sz = pyapi.bytes_size(data)
 
-        # ToDo: compute hash at runtime
         int8_t = ir.IntType(8)
         alloc_fnty = ir.FunctionType(int8_t.as_pointer(), [int32_t])
         alloc_fn = cgutils.get_or_insert_function(builder.module, alloc_fnty, name="malloc")
         struct_size = int32_t(self.context.get_abi_sizeof(excinfo_t))
         excinfo = builder.bitcast(builder.call(alloc_fn, [struct_size]), excinfo_ptr_t)
+
         # bug on NRT not being enabled!?
-        # _get_code_point(a, i) disables NRT
+        # RE: No! _get_code_point(a, i) disables NRT and we cannot use nrt.allocate here
+        # when NRT is disabled.
+        #
         # struct_size = ir.IntType(64)(self.context.get_abi_sizeof(excinfo_t))
         # excinfo = builder.bitcast(self.context.nrt.allocate(builder, struct_size), excinfo_ptr_t)
 
+        # hash is computed at runtime, after all arguments are known
         builder.store(ptr, builder.gep(excinfo, [zero, zero]))
         builder.store(builder.trunc(sz, int32_t), builder.gep(excinfo, [zero, one]))
-        builder.store(pyapi.make_none(), builder.gep(excinfo, [zero, two]))
+        builder.store(pyapi.bytes_as_string(_hash), builder.gep(excinfo, [zero, two]))
         builder.store(excinfo, excptr)
 
     def return_non_const_user_exc(self, builder, exc, exc_args, loc=None,

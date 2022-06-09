@@ -39,7 +39,7 @@ def foo(i, a):
 
 @njit('string(string)', no_cfunc_wrapper=True)
 def baz(a):
-    raise ValueError(a, baz)
+    raise ValueError(a)
 
 
 call(bar)
@@ -47,7 +47,6 @@ call(baz, "hello")
 for i in range(3):
     call(foo, i, 'hello')
 
-try:
-    bar()
-except Exception as e:
-    print(e)
+call(baz, "hello")
+call(baz, "hello")
+call(baz, "hello")

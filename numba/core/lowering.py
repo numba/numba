@@ -643,15 +643,15 @@ class Lower(BaseLower):
         args = []
         for exc_arg in exc_args:
             if isinstance(exc_arg, ir.Var):
+                # dynamic values
                 typ = self.typeof(exc_arg.name)
                 val = self.loadvar(exc_arg.name)
                 self.incref(typ, val)
                 obj = pyapi.from_native_value(typ, val, env_manager)
-                args.append((obj, True))
             else:
-                # lower constants
+                # constants
                 obj = exc_arg
-                args.append((obj, False))
+            args.append(obj)
 
         self.return_non_const_exception(inst.exc_class, tuple(args),
                                         loc=self.loc)
