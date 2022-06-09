@@ -152,7 +152,7 @@ class _ModuleCompiler(object):
 
         for entry in self.export_entries:
             if entry.fastmath:
-                flags_aux.set('fastmath', value=cpu.FastMathOptions(True))
+                flags.set('fastmath', value=cpu.FastMathOptions(True))
             cres = compile_extra(self.typing_context, self.context,
                                 entry.function,
                                 entry.signature.args,
