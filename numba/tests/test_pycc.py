@@ -221,7 +221,7 @@ class TestCC(BasePYCCTest):
             res = lib.square(5)
             self.assertPreciseEqual(res, 25)
             res = lib.tanh(0.7)
-            self.assertPreciseEqual(res, np.tanh(0.7))
+            self.assertEqual(res, np.tanh(0.7))
             self.assertIs(lib.get_none(), None)
             with self.assertRaises(ZeroDivisionError):
                 lib.div(1, 0)
