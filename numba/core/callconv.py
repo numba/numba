@@ -417,10 +417,15 @@ class CPUCallConv(BaseCallConv):
         else:
             locinfo = None
 
-        exc = (exc, None, locinfo)
+        exc_args, dyn_args = list(zip(*exc_args))
 
+        exc = (exc, exc_args, locinfo)
         excptr = self._get_excinfo_argument(builder.function)
         struct_gv = pyapi.serialize_object(exc)  # {i8*, i32, i8*}
+
+        # serialize constant arguments as None
+        none = pyapi.make_none()
+        exc_args = [exc_args[i] if dyn_args[i] else none for i in range(len(dyn_args))]
 
         tup = pyapi.tuple_pack(exc_args)
         zero, one, two = int32_t(0), int32_t(1), int32_t(2)
@@ -441,6 +446,8 @@ class CPUCallConv(BaseCallConv):
         struct_size = int32_t(self.context.get_abi_sizeof(excinfo_t))
         excinfo = builder.bitcast(builder.call(alloc_fn, [struct_size]), excinfo_ptr_t)
         # bug on NRT not being enabled!?
+        # _get_code_point(a, i) disables NRT
+        # struct_size = ir.IntType(64)(self.context.get_abi_sizeof(excinfo_t))
         # excinfo = builder.bitcast(self.context.nrt.allocate(builder, struct_size), excinfo_ptr_t)
 
         builder.store(ptr, builder.gep(excinfo, [zero, zero]))

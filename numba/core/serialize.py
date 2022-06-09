@@ -61,9 +61,14 @@ def dumps(obj):
     return pickled
 
 
-def runtime_dumps(tup, bytedata):
-    exc, _, locinfo = cloudpickle.loads(bytedata)
-    obj = (exc, tup, locinfo)
+def runtime_dumps(runtime_args, bytedata):
+    exc, static_args, locinfo = cloudpickle.loads(bytedata)
+    real_args = []
+    # for each "None" argument in tup, use the one that was
+    # statically serialized
+    real_args = [static_args[i] if runtime_arg is None else runtime_arg
+                 for i, runtime_arg in enumerate(runtime_args)]
+    obj = (exc, tuple(real_args), locinfo)
     return dumps(obj)
 
 

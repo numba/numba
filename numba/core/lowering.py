@@ -647,15 +647,11 @@ class Lower(BaseLower):
                 val = self.loadvar(exc_arg.name)
                 self.incref(typ, val)
                 obj = pyapi.from_native_value(typ, val, env_manager)
+                args.append((obj, True))
             else:
                 # lower constants
-                tyctx = self.context.typing_context
-                typ = tyctx.resolve_value_type(exc_arg)
-                val = self.context.get_constant_generic(
-                    self.builder, typ, exc_arg)
-                self.incref(typ, val)
-                obj = pyapi.from_native_value(typ, val, env_manager)
-            args.append(obj)
+                obj = exc_arg
+                args.append((obj, False))
 
         self.return_non_const_exception(inst.exc_class, tuple(args),
                                         loc=self.loc)
