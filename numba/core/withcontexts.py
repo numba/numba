@@ -491,15 +491,15 @@ class _ParallelChunksize(WithContext):
         restore_state = []
 
         # global for Numba itself
-        gvar = scope.define(ir_utils.mk_unique_var("$ngvar"), loc)
+        gvar = scope.redefine("$ngvar", loc)
         set_state.append(ir.Assign(ir.Global('numba', numba, loc), gvar, loc))
         # getattr for set chunksize function in Numba
         spcattr = ir.Expr.getattr(gvar, 'set_parallel_chunksize', loc)
-        spcvar = scope.define(ir_utils.mk_unique_var("$spc"), loc)
+        spcvar = scope.redefine("$spc", loc)
         set_state.append(ir.Assign(spcattr, spcvar, loc))
         # call set_parallel_chunksize
-        orig_pc_var = scope.define(ir_utils.mk_unique_var("$save_pc"), loc)
-        cs_var = scope.define(ir_utils.mk_unique_var("$cs_var"), loc)
+        orig_pc_var = scope.redefine("$save_pc", loc)
+        cs_var = scope.redefine("$cs_var", loc)
         set_state.append(ir.Assign(arg, cs_var, loc))
         spc_call = ir.Expr.call(spcvar, [cs_var], (), loc)
         set_state.append(ir.Assign(spc_call, orig_pc_var, loc))

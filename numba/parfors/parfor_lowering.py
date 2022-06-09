@@ -284,8 +284,7 @@ def _lower_parfor_parallel(lowerer, parfor):
             # Associate this LLVM variable to a Numba IR variable so that
             # we can use setitem IR builder.
             # Create a Numba IR variable.
-            numba_ir_loop_index_var = scope.define(
-                                          mk_unique_var("$loop_index"), loc)
+            numba_ir_loop_index_var = scope.redefine("$loop_index", loc)
             # Give that variable the right type.
             typemap[numba_ir_loop_index_var.name] = num_thread_type
             # Associate this Numba variable to the LLVM variable in the
