@@ -10,6 +10,8 @@ from numba.core.errors import NumbaNotImplementedError
 
 from numba.cpython import setobj, listobj
 from numba.np import numpy_support
+from contextlib import contextmanager, ExitStack
+
 
 #
 # Scalar types
@@ -1106,7 +1108,18 @@ def unbox_typeref(typ, val, c):
 def box_LiteralStrKeyDict(typ, val, c):
     return box_unsupported(typ, val, c)
 
-import sys
+
+@contextmanager
+def early_exit_if(builder, stack: ExitStack, cond):
+    then, otherwise = stack.enter_context(builder.if_else(cond, likely=False))
+    with then:
+        yield
+    stack.enter_context(otherwise)
+
+
+def early_exit_if_null(builder, stack, obj):
+    return early_exit_if(builder, stack, cgutils.is_null(builder, obj))
+
 
 # Original implementation at: https://github.com/numba/numba/issues/4499#issuecomment-1063138477
 @unbox(types.NumPyRandomBitGeneratorType)
@@ -1120,101 +1133,138 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
     # * next_double (ctypes.CFunctionType instance)
     # * bit_generator (ctypes.c_void_p)
 
-    struct_ptr = cgutils.create_struct_proxy(typ)(c.context, c.builder)
-    struct_ptr.parent = obj
+    is_error_ptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
+    extra_refs = []
 
-    # Get the .ctypes attr
-    ctypes_binding = c.pyapi.object_getattr_string(obj, 'ctypes')
+    def clear_extra_refs():
+        for _ref in extra_refs:
+            c.pyapi.decref(_ref)
 
-    # Look up the "state_address" member and wire it into the struct
-    interface_state_address = c.pyapi.object_getattr_string(
-        ctypes_binding, 'state_address')
-    setattr(struct_ptr, 'state_address',
-            c.unbox(types.uintp, interface_state_address).value)
+    def handle_failure():
+        c.builder.store(cgutils.true_bit, is_error_ptr)
+        clear_extra_refs()
 
-    # Look up the "state" member and wire it into the struct
-    interface_state = c.pyapi.object_getattr_string(ctypes_binding, 'state')
-    interface_state_value = c.pyapi.object_getattr_string(
-        interface_state, 'value')
-    setattr(
-        struct_ptr,
-        'state',
-        c.unbox(
-            types.uintp,
-            interface_state_value).value)
+    with ExitStack() as stack:
 
-    # Want to store callable function pointers to these CFunctionTypes, so
-    # import ctypes and use it to cast the CFunctionTypes to c_void_p and
-    # store the results.
-    # First find ctypes.cast, and ctypes.c_void_p
-    ctypes_name = c.context.insert_const_string(c.builder.module, 'ctypes')
-    ctypes_module = c.pyapi.import_module_noblock(ctypes_name)
-    ct_cast = c.pyapi.object_getattr_string(ctypes_module, 'cast')
-    ct_voidptr_ty = c.pyapi.object_getattr_string(ctypes_module, 'c_void_p')
+        def object_getattr_safely(obj, attr):
+            attr_obj = c.pyapi.object_getattr_string(obj, attr)
+            extra_refs.append(attr_obj)
+            return attr_obj
 
-    # This wires in the fnptrs refered to by name
-    def wire_in_fnptrs(name):
-        # Find the CFunctionType function
-        interface_next_fn = c.pyapi.object_getattr_string(
-            ctypes_binding, name)
+        struct_ptr = cgutils.create_struct_proxy(typ)(c.context, c.builder)
+        struct_ptr.parent = obj
 
-        # Want to do ctypes.cast(CFunctionType, ctypes.c_void_p), create an
-        # args tuple for that.
-        args = c.pyapi.tuple_pack([interface_next_fn, ct_voidptr_ty])
+        # Get the .ctypes attr
+        ctypes_binding = object_getattr_safely(obj, 'ctypes')
+        with early_exit_if_null(c.builder, stack, ctypes_binding):
+            handle_failure()
 
-        # Call ctypes.cast()
-        interface_next_fn_casted = c.pyapi.call(ct_cast, args)
+        # Look up the "state_address" member and wire it into the struct
+        interface_state_address = object_getattr_safely(
+            ctypes_binding, 'state_address')
+        with early_exit_if_null(c.builder, stack, interface_state_address):
+            handle_failure()
 
-        # Fetch the .value attr on the resulting ctypes.c_void_p for storage
-        # in the function pointer slot.
-        interface_next_fn_casted_value = c.pyapi.object_getattr_string(
-            interface_next_fn_casted, 'value')
+        setattr(struct_ptr, 'state_address',
+                c.unbox(types.uintp, interface_state_address).value)
 
-        # Wire up
-        setattr(struct_ptr, f'fnptr_{name}',
-                c.unbox(types.uintp, interface_next_fn_casted_value).value)
+        # Look up the "state" member and wire it into the struct
+        interface_state = object_getattr_safely(ctypes_binding, 'state')
+        with early_exit_if_null(c.builder, stack, interface_state):
+            handle_failure()
+    
+        interface_state_value = object_getattr_safely(
+            interface_state, 'value')
+        with early_exit_if_null(c.builder, stack, interface_state_value):
+            handle_failure()
+        setattr(
+            struct_ptr,
+            'state',
+            c.unbox(
+                types.uintp,
+                interface_state_value).value)
 
-        c.pyapi.decref(ct_voidptr_ty)
-        c.pyapi.decref(ct_voidptr_ty)
+        # Want to store callable function pointers to these CFunctionTypes, so
+        # import ctypes and use it to cast the CFunctionTypes to c_void_p and
+        # store the results.
+        # First find ctypes.cast, and ctypes.c_void_p
+        ctypes_name = c.context.insert_const_string(c.builder.module, 'ctypes')
+        ctypes_module = c.pyapi.import_module_noblock(ctypes_name)
+        extra_refs.append(ctypes_module)
+        with early_exit_if_null(c.builder, stack, ctypes_module):
+            handle_failure()
 
-        c.pyapi.decref(interface_next_fn)
-        c.pyapi.decref(interface_next_fn)
+        ct_cast = object_getattr_safely(ctypes_module, 'cast')
+        with early_exit_if_null(c.builder, stack, ct_cast):
+            handle_failure()
 
-        c.pyapi.decref(interface_next_fn_casted_value)
+        ct_voidptr_ty = object_getattr_safely(ctypes_module, 'c_void_p')
+        with early_exit_if_null(c.builder, stack, ct_voidptr_ty):
+            handle_failure()
 
-    wire_in_fnptrs('next_double')
-    wire_in_fnptrs('next_uint64')
-    wire_in_fnptrs('next_uint32')
+        # This wires in the fnptrs refered to by name
+        def wire_in_fnptrs(name):
+            # Find the CFunctionType function
+            interface_next_fn = c.pyapi.object_getattr_string(
+                ctypes_binding, name)
 
-    c.pyapi.decref(ctypes_module)
-    c.pyapi.decref(ctypes_binding)
-    c.pyapi.decref(interface_state)
-    c.pyapi.decref(interface_state_address)
-    c.pyapi.decref(interface_state_value)
-    c.pyapi.decref(ct_cast)
-    c.pyapi.decref(ct_voidptr_ty)
+            extra_refs.append(interface_next_fn)
+            with early_exit_if_null(c.builder, stack, interface_next_fn):
+                handle_failure()
 
-    is_py_error = cgutils.is_not_null(c.builder, c.pyapi.err_occurred())
-    return NativeValue(struct_ptr._getvalue(), is_error=is_py_error)
+            # Want to do ctypes.cast(CFunctionType, ctypes.c_void_p), create an
+            # args tuple for that.
+            extra_refs.append(ct_voidptr_ty)
+            args = c.pyapi.tuple_pack([interface_next_fn, ct_voidptr_ty])
+            extra_refs.append(ct_voidptr_ty)
+
+            # Call ctypes.cast()
+            interface_next_fn_casted = c.pyapi.call(ct_cast, args)
+
+            # Fetch the .value attr on the resulting ctypes.c_void_p for storage
+            # in the function pointer slot.
+            interface_next_fn_casted_value = object_getattr_safely(
+                interface_next_fn_casted, 'value')
+            with early_exit_if_null(c.builder, stack, interface_next_fn_casted_value):
+                handle_failure()
+
+            # Wire up
+            setattr(struct_ptr, f'fnptr_{name}',
+                    c.unbox(types.uintp, interface_next_fn_casted_value).value)
+
+
+        wire_in_fnptrs('next_double')
+        wire_in_fnptrs('next_uint64')
+        wire_in_fnptrs('next_uint32')
+
+        clear_extra_refs()
+
+    return NativeValue(struct_ptr._getvalue(), is_error=c.builder.load(is_error_ptr))
 
 _bit_gen_type = types.NumPyRandomBitGeneratorType('bit_generator')
 
 @unbox(types.NumPyRandomGeneratorType)
 def unbox_numpy_random_generator(typ, obj, c):
-    struct_ptr = cgutils.create_struct_proxy(typ)(c.context, c.builder)
-    bit_gen_inst = c.pyapi.object_getattr_string(obj, 'bit_generator')
-    unboxed = c.unbox(_bit_gen_type, bit_gen_inst).value
-    struct_ptr.bit_generator = unboxed
-    struct_ptr.parent = obj
-    NULL = cgutils.voidptr_t(None)
-    struct_ptr.meminfo = c.pyapi.nrt_meminfo_new_from_pyobject(
-        NULL,  # there's no data
-        obj,   # the python object, the call to nrt_meminfo_new_from_pyobject
-               # will py_incref
-    )
-    c.pyapi.decref(bit_gen_inst)
-    is_py_error = cgutils.is_not_null(c.builder, c.pyapi.err_occurred())
-    return NativeValue(struct_ptr._getvalue(), is_error=is_py_error)
+    is_error_ptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
+    fail_obj = c.context.get_constant_null(typ)
+
+    with ExitStack() as stack:
+        struct_ptr = cgutils.create_struct_proxy(typ)(c.context, c.builder)
+        bit_gen_inst = c.pyapi.object_getattr_string(obj, 'bit_generator')
+        with early_exit_if_null(c.builder, stack, bit_gen_inst):
+            c.builder.store(cgutils.true_bit, is_error_ptr)
+        unboxed = c.unbox(_bit_gen_type, bit_gen_inst).value
+        struct_ptr.bit_generator = unboxed
+        struct_ptr.parent = obj
+        NULL = cgutils.voidptr_t(None)
+        struct_ptr.meminfo = c.pyapi.nrt_meminfo_new_from_pyobject(
+            NULL,  # there's no data
+            obj,   # the python object, the call to nrt_meminfo_new_from_pyobject
+                # will py_incref
+        )
+        c.pyapi.decref(bit_gen_inst)
+
+    return NativeValue(struct_ptr._getvalue(), is_error=c.builder.load(is_error_ptr))
 
 
 @box(types.NumPyRandomGeneratorType)
