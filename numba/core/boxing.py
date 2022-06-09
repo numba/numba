@@ -1216,6 +1216,8 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
             # args tuple for that.
             extra_refs.append(ct_voidptr_ty)
             args = c.pyapi.tuple_pack([interface_next_fn, ct_voidptr_ty])
+            with early_exit_if_null(c.builder, stack, args):
+                handle_failure()
             extra_refs.append(ct_voidptr_ty)
 
             # Call ctypes.cast()
