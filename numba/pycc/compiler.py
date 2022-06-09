@@ -14,8 +14,7 @@ from numba.core.compiler_lock import global_compiler_lock
 
 from numba.core.registry import cpu_target
 from numba.core.runtime import nrtdynmod
-from numba.core import cgutils
-
+from numba.core import cgutils, cpu
 
 logger = logging.getLogger(__name__)
 
