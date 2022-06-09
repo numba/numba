@@ -380,7 +380,7 @@ std::vector<RangeActual> create_schedule(const RangeActual &full_space, uintp nu
  *   Print the calculated schedule when in debug mode.
  */
 void print_schedule(const std::vector<RangeActual> &vra) {
-    unsigned i;
+    size_t i;
     for (i = 0; i < vra.size(); ++i) {
         printf("sched[%d] = ", i);
         vra[i].print();
