@@ -90,7 +90,7 @@ public:
     }
 
     void print() const {
-        unsigned i;
+        size_t i;
         for(i = 0; i < start.size(); ++i) {
             printf("%td ", start[i]);
         }
