@@ -83,7 +83,7 @@ public:
     uintp total_size() const {
         std::vector<intp> per_dim = iters_per_dim();
         uintp res = 1;
-        for (unsigned i = 0; i < per_dim.size(); ++i) {
+        for (size_t i = 0; i < per_dim.size(); ++i) {
             res *= per_dim[i];
         }
         return res;
