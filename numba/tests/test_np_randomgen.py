@@ -47,10 +47,12 @@ def test_generator_caching():
 
 class TestRandomGenerators(MemoryLeakMixin, TestCase):
     def check_numpy_parity(self, distribution_func,
-                           bitgen_type=None, seed=1,
-                           test_sizes=None, test_dtypes=None):
+                           bitgen_type=None, seed=None,
+                           test_size=None, test_dtype=None):
 
         distribution_func = numba.njit(distribution_func)
+        if seed is None:
+            seed = 1
         if bitgen_type is None:
             numba_rng_instance = np.random.default_rng(seed=seed)
             numpy_rng_instance = np.random.default_rng(seed=seed)
@@ -58,20 +60,13 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             numba_rng_instance = Generator(bitgen_type(seed))
             numpy_rng_instance = Generator(bitgen_type(seed))
 
-        if test_sizes is None:
-            test_sizes = [None, (), (100,), (10, 20, 30)]
-        if test_dtypes is None:
-            test_dtypes = [np.float32, np.float64]
-
         # Check parity for different size cases
-        for size in test_sizes:
-            for dtype in test_dtypes:
-                numba_res = distribution_func(numba_rng_instance,
-                                              size, dtype)
-                numpy_res = distribution_func.py_func(numpy_rng_instance,
-                                                      size, dtype)
+        numba_res = distribution_func(numba_rng_instance,
+                                      test_size, test_dtype)
+        numpy_res = distribution_func.py_func(numpy_rng_instance,
+                                              test_size, test_dtype)
 
-                self.assertPreciseEqual(numba_res, numpy_res)
+        self.assertPreciseEqual(numba_res, numpy_res)
 
         # Check if the end state of both BitGenerators is same
         # after drawing the distributions
@@ -114,21 +109,34 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         self.assertEqual(ref_1, ref_2 + 1)
 
     def test_bitgen_funcs(self):
-        self._test_bitgen_func_parity("next_uint32", next_uint32)
-        self._test_bitgen_func_parity("next_uint64", next_uint64)
-        self._test_bitgen_func_parity("next_double", next_double)
+        func_names = ["next_uint32", "next_uint64", "next_double"]
+        funcs = [next_uint32, next_uint64, next_double]
+
+        for _func, _func_name in zip(funcs, func_names):
+            with self.subTest(_func=_func, _func_name=_func_name):
+                self._test_bitgen_func_parity(_func_name, _func)
 
     def test_random(self):
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        test_dtypes = [np.float32, np.float64]
+        bitgen_types = [None, MT19937]
+
         # Test with no arguments
         dist_func = lambda x, size, dtype:x.random()
-        # Provide single values so this test would run exactly once
-        self.check_numpy_parity(dist_func, test_sizes=[100],
-                                test_dtypes=[np.float64])
-        self.check_numpy_parity(dist_func, bitgen_type=MT19937)
+        with self.subTest():
+            # Provide single values so this test would run exactly once
+            self.check_numpy_parity(dist_func, test_size=100,
+                                    test_dtype=np.float64)
 
         dist_func = lambda x, size, dtype:x.random(size=size, dtype=dtype)
-        self.check_numpy_parity(dist_func)
-        self.check_numpy_parity(dist_func, bitgen_type=MT19937)
+
+        for _size in test_sizes:
+            for _dtype in test_dtypes:
+                for _bitgen in bitgen_types:
+                    with self.subTest(_size=_size, _dtype=_dtype,
+                                      _bitgen=_bitgen):
+                        self.check_numpy_parity(dist_func, _bitgen,
+                                                None, _size, _dtype)
 
 
 class TestGeneratorCaching(TestCase, SerialMixin):
