@@ -382,7 +382,7 @@ std::vector<RangeActual> create_schedule(const RangeActual &full_space, uintp nu
 void print_schedule(const std::vector<RangeActual> &vra) {
     size_t i;
     for (i = 0; i < vra.size(); ++i) {
-        printf("sched[%d] = ", i);
+        printf("sched[%td] = ", i);
         vra[i].print();
         printf("\n");
     }
