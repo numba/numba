@@ -84,8 +84,8 @@ Note that only type annotations on the class will be used to infer spec
 elements.  Method type annotations (e.g. those of ``__init__`` above) are
 ignored.
 
-Numba requires knowing the dtype and rank of numpy arrays, which cannot
-currently be expressed with type annotations. Because of this, numpy arrays need
+Numba requires knowing the dtype and rank of NumPy arrays, which cannot
+currently be expressed with type annotations. Because of this, NumPy arrays need
 to be included in the ``spec`` explicitly.
 
 
