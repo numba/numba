@@ -1974,7 +1974,7 @@ class ConvertNumpyPass:
         topo_order = find_topo_order(blocks)
         # variables available in the program so far (used for finding map
         # functions in array_expr lowering)
-        avail_vars = []
+        avail_vars = set()
         for label in topo_order:
             block = blocks[label]
             new_body = []
@@ -1997,13 +1997,14 @@ class ConvertNumpyPass:
                         elif isinstance(expr, ir.Expr) and expr.op == 'arrayexpr':
                             new_instr = self._arrayexpr_to_parfor(
                                 equiv_set, lhs, expr, avail_vars)
-                            self.rewritten.append(dict(
-                                old=instr,
-                                new=new_instr,
-                                reason='arrayexpr',
-                            ))
-                            instr = new_instr
-                    avail_vars.append(lhs.name)
+                            if new_instr is not None:
+                                self.rewritten.append(dict(
+                                    old=instr,
+                                    new=new_instr,
+                                    reason='arrayexpr',
+                                ))
+                                instr = new_instr
+                    avail_vars.add(lhs.name)
                 new_body.append(instr)
             block.body = new_body
 
@@ -2042,6 +2043,8 @@ class ConvertNumpyPass:
 
         # generate loopnests and size variables from lhs correlations
         size_vars = equiv_set.get_shape(lhs)
+        if any([size_var.name not in avail_vars for size_var in size_vars]):
+            return None
         index_vars, loopnests = _mk_parfor_loops(pass_states.typemap, size_vars, scope, loc)
 
         # generate init block and body

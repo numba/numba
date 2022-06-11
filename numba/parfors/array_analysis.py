@@ -3052,6 +3052,8 @@ class ArrayAnalysis(object):
             return self._broadcast_assert_shapes(
                 scope, equiv_set, loc, shapes, names
             )
+        elif len(arrs) == 1:
+            return None
         else:
             return self._insert_runtime_broadcast_call(
                 scope, loc, arrs, max_dim
