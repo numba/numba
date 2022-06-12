@@ -8,8 +8,8 @@ import unittest
 class TestSelfRecursion(CUDATestCase):
 
     def setUp(self):
-        # Avoid importing this module at toplevel, as it triggers compilation
-        # and can therefore fail
+        # Avoid importing this module at the top level, as it triggers
+        # compilation and can therefore fail
         from numba.cuda.tests.cudapy import recursion_usecases
         self.mod = recursion_usecases
         super().setUp()
