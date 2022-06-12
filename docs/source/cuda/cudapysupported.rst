@@ -72,7 +72,7 @@ the function. For example, the following form of recursion is supported:
            return n
        return fib(n - 1) + fib(n - 2)
 
-(the ``fib`` function always has an ``int64`` argument), wherease the following
+(the ``fib`` function always has an ``int64`` argument), whereas the following
 is unsupported:
 
 .. code:: python
@@ -93,6 +93,16 @@ unsupported.
 Mutual recursion between functions (e.g. where a function ``func1()`` calls
 ``func2()`` which again calls ``func1()``) is unsupported.
 
+.. note::
+
+   The call stack in CUDA is typically quite limited in size, so it is easier
+   to overflow it with recursive calls on CUDA devices than it is on CPUs.
+
+   Stack overflow will result in an Unspecified Launch Failure (ULF) during
+   kernel execution.  In order to identify whether a ULF is due to stack
+   overflow, programs can be run under `Compute Sanitizer
+   <https://docs.nvidia.com/compute-sanitizer/ComputeSanitizer/index.html>`_,
+   which explicitly states when stack overflow has occurred.
 
 Built-in types
 ===============
