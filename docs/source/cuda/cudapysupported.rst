@@ -61,8 +61,8 @@ Recursion
 ---------
 
 Self-recursive device functions are supported, with the constraint that
-recursive calls must all have similar argument types. For example, the following
-form of recursion is supported:
+recursive calls must have the same argument types as the initial call to
+the function. For example, the following form of recursion is supported:
 
 .. code:: python
 
