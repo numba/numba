@@ -91,12 +91,14 @@ class TestSelfRecursion(CUDATestCase):
                 res = 999
             r[0] = res
 
+        def cpu_kernel(x):
+            res = pfunc(x)
+            if res is None:
+                res = 999
+            return res
+
         for arg in (0, 5, 10, 15):
-
-            expected = pfunc(arg)
-            if expected is None:
-                expected = 999
-
+            expected = cpu_kernel(arg)
             x = np.asarray([arg], dtype=np.int64)
             r = np.zeros_like(x)
             kernel[1, 1](r, x)
