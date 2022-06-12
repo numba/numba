@@ -98,7 +98,7 @@ class TestException(CUDATestCase):
 
     def test_no_zero_division_error(self):
         # When debug is False:
-        # - Zero by division raises no exception
+        # - Division by zero raises no exception
         # - Execution proceeds after a divide by zero
         @cuda.jit
         def f(r, x, y):
