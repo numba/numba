@@ -1124,14 +1124,16 @@ def early_exit_if_null(builder, stack, obj):
 # Original implementation at: https://github.com/numba/numba/issues/4499#issuecomment-1063138477
 @unbox(types.NumPyRandomBitGeneratorType)
 def unbox_numpy_random_bitgenerator(typ, obj, c):
-    # The bit_generator instance has a `.ctypes` attr which is a namedtuple
-    # with the following members (types):
-    # * state_address (Python int)
-    # * state (ctypes.c_void_p)
-    # * next_uint64 (ctypes.CFunctionType instance)
-    # * next_uint32 (ctypes.CFunctionType instance)
-    # * next_double (ctypes.CFunctionType instance)
-    # * bit_generator (ctypes.c_void_p)
+    """
+    The bit_generator instance has a `.ctypes` attr which is a namedtuple
+    with the following members (types):
+    * state_address (Python int)
+    * state (ctypes.c_void_p)
+    * next_uint64 (ctypes.CFunctionType instance)
+    * next_uint32 (ctypes.CFunctionType instance)
+    * next_double (ctypes.CFunctionType instance)
+    * bit_generator (ctypes.c_void_p)
+    """
 
     is_error_ptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
     extra_refs = []
@@ -1247,6 +1249,16 @@ _bit_gen_type = types.NumPyRandomBitGeneratorType('bit_generator')
 
 @unbox(types.NumPyRandomGeneratorType)
 def unbox_numpy_random_generator(typ, obj, c):
+    """
+    Here we're creating a NumPyRandomGeneratorType StructModel with following fields:
+    * ('bit_generator', _bit_gen_type): The unboxed BitGenerator associated with
+                                        this Generator object instance.
+    * ('parent', types.pyobject): Pointer to the original Generator PyObject.
+    * ('meminfo', types.MemInfoPointer(types.voidptr)): The information about the memory
+        stored at the pointer (to the original Generator PyObject). This is useful for
+        keeping track of reference counts within the Python runtime. Helps prevent cases
+        where deletion happens in Python runtime without NRT being awareness of it. 
+    """
     is_error_ptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
     fail_obj = c.context.get_constant_null(typ)
 
