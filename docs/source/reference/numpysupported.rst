@@ -585,7 +585,7 @@ Modules
 
 Generator Objects
 '''''''''''''''''
-Numba supports ``numpy.random.Generator()`` objects. Users can now pass
+Numba supports ``numpy.random.Generator()`` objects. As of version 0.56, users can pass
 individual Numpy ``Generator`` objects into Numba functions and use their
 methods inside the functions. The same algorithms are used as Numpy for
 random number generation hence maintaining parity between the random
@@ -598,8 +598,8 @@ execution logic.
 .. note::
   Numpy's ``Generator`` objects rely on ``BitGenerator`` to manage state
   and generate the random bits, which are then transformed into random
-  values from useful distributions. Numba ``unbox``es the ``Generator`` objects
-  and maintians a reference to the underlying ``BitGenerator`` objects using Numpy's
+  values from useful distributions. Numba will ``unbox`` the ``Generator`` objects
+  and will maintain a reference to the underlying ``BitGenerator`` objects using Numpy's
   ``ctypes`` interface bindings. Hence ``Generator`` objects can cross the JIT boundary
   and their functions be used within Numba-Jit code. Note that since only references
   to ``BitGenerator`` objects are maintained, any change to the state of a particular
