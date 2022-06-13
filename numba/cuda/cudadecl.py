@@ -366,6 +366,7 @@ class Float(AbstractTemplate):
         if arg == types.float16:
             return signature(arg, arg)
 
+
 def _genfp16_binary_comparison(l_key):
     @register
     class Cuda_fp16_cmp(ConcreteTemplate):
