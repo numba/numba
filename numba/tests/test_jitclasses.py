@@ -15,6 +15,7 @@ from numba.core import errors, types
 from numba.core.dispatcher import Dispatcher
 from numba.core.errors import LoweringError, TypingError
 from numba.core.runtime.nrt import MemInfo
+from numba.core.utils import PYVERSION
 from numba.experimental import jitclass
 from numba.experimental.jitclass import _box
 from numba.experimental.jitclass.base import JitClassType
@@ -1114,7 +1115,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertDictEqual(JitTest2.class_type.struct, spec)
 
 
-class TestJitClassOverloads(TestCase, MemoryLeakMixin):
+class TestJitClassOverloads(MemoryLeakMixin, TestCase):
 
     class PyList:
         def __init__(self):
@@ -1413,7 +1414,7 @@ class TestJitClassOverloads(TestCase, MemoryLeakMixin):
 
         obj = IndexClass()
 
-        if sys.version[:3] >= "3.8":
+        if PYVERSION >= (3, 8):
             self.assertSame(py_c(obj), complex(1))
             self.assertSame(jit_c(obj), complex(1))
             self.assertSame(py_f(obj), 1.)

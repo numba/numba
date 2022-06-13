@@ -9,6 +9,7 @@ import sys
 
 from numba.core.extending import overload
 from numba.core.types import ClassInstanceType
+from numba.core.utils import PYVERSION
 
 
 def _get_args(n_args):
@@ -120,7 +121,7 @@ def class_float(x):
     options = [try_call_method(x, "__float__")]
 
     if (
-        (sys.version_info.major, sys.version_info.minor) >= (3, 8)
+        PYVERSION >= (3, 8)
         and "__index__" in x.jit_methods
     ):
         options.append(lambda x: float(x.__index__()))
@@ -132,7 +133,7 @@ def class_float(x):
 def class_int(x):
     options = [try_call_method(x, "__int__")]
 
-    if (sys.version_info.major, sys.version_info.minor) >= (3, 8):
+    if PYVERSION >= (3, 8):
         options.append(try_call_method(x, "__index__"))
 
     return take_first(*options)
