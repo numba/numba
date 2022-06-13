@@ -54,6 +54,8 @@ This is due to a general limitation in CUDA printing, as outlined in the
 <https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#limitations>`_
 in the CUDA C++ Programming Guide.
 
+.. _cuda-built-in-types:
+
 Built-in types
 ===============
 
