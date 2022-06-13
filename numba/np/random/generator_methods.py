@@ -12,11 +12,14 @@ from numba.core.errors import TypingError
 from numba.core.types.containers import Tuple, UniTuple
 
 
-# Most of the standard NumPy distributions only support either
-# np.float32 or np.float64 as dtype arguments. This is a helper
-# function that helps Numba select the proper underlying
-# implementation according to provided dtype.
 def _get_proper_func(func_32, func_64, dtype, dist_name="the given"):
+    """
+        Most of the standard NumPy distributions that accept dtype argument
+        only support either np.float32 or np.float64 as dtypes.
+
+        This is a helper function that helps Numba select the proper underlying
+        implementation according to provided dtype.
+    """
     if isinstance(dtype, types.Omitted):
         dtype = dtype.value
 

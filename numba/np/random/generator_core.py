@@ -51,8 +51,10 @@ make_attribute_wrapper(
     'bit_generator')
 
 
-# Generate the overloads for "next_(some type)" functions
 def _generate_next_binding(overloadable_function, return_type):
+    """
+        Generate the overloads for "next_(some type)" functions.
+    """
     @intrinsic
     def intrin_NumPyRandomBitGeneratorType_next_ty(tyctx, inst):
         sig = return_type(inst)
