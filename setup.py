@@ -66,9 +66,11 @@ versioneer.parentdir_prefix = 'numba-'
 cmdclass = versioneer.get_cmdclass()
 cmdclass['build_doc'] = build_doc
 
-install_name_tool_fixer = []
+extra_link_args = []
 if sys.platform == 'darwin':
-    install_name_tool_fixer += ['-headerpad_max_install_names']
+    extra_link_args += ['-headerpad_max_install_names']
+elif platform.machine() == 'ppc64le':
+    extra_link_args = ['-pthread']
 
 build_ext = cmdclass.get('build_ext', build_ext)
 
@@ -172,7 +174,7 @@ def get_ext_modules():
                                        "numba/cext/dictobject.c",
                                        "numba/cext/listobject.c",
                                        ],
-                              extra_link_args=install_name_tool_fixer,
+                              extra_link_args=extra_link_args,
                               depends=["numba/_pymodule.h",
                                        "numba/_helperlib.c",
                                        "numba/_lapack.c",
@@ -323,7 +325,7 @@ def get_ext_modules():
     ext_np_ufunc_backends.append(ext_np_ufunc_workqueue_backend)
 
     ext_mviewbuf = Extension(name='numba.mviewbuf',
-                             extra_link_args=install_name_tool_fixer,
+                             extra_link_args=extra_link_args,
                              sources=['numba/mviewbuf.c'])
 
     ext_nrt_python = Extension(name='numba.core.runtime._nrt_python',
