@@ -35,7 +35,6 @@ def _numba_unpickle(address, bytedata, hashed):
     address : int
     bytedata : bytes
     hashed : bytes
-    runtime_value: bytes
 
     Returns
     -------
@@ -65,7 +64,7 @@ def dumps(obj):
 def runtime_dumps(runtime_args, bytedata):
     exc, static_args, locinfo = cloudpickle.loads(bytedata)
     real_args = []
-    # for each "None" argument in tup, use the one that was
+    # for each "None" argument in runtime_args, use the one that was
     # statically serialized
     real_args = [static_args[i] if runtime_arg is None else runtime_arg
                  for i, runtime_arg in enumerate(runtime_args)]

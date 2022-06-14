@@ -1045,7 +1045,7 @@ error:
 #endif
 
 NUMBA_EXPORT_FUNC(PyObject *)
-numba_pickle(PyObject* tup, PyObject* bytes)
+numba_pickle(PyObject* pytuple, PyObject* pybytes)
 {
     PyObject *obj = NULL;
     static PyObject *dumps = NULL;
@@ -1063,7 +1063,7 @@ numba_pickle(PyObject* tup, PyObject* bytes)
             return NULL;
     }
 
-    obj = PyObject_CallFunctionObjArgs(dumps, tup, bytes, NULL);
+    obj = PyObject_CallFunctionObjArgs(dumps, pytuple, pybytes, NULL);
     return obj;
 }
 

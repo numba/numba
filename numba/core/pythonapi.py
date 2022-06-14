@@ -1073,10 +1073,6 @@ class PythonAPI(object):
         return self.builder.call(fn, (obj, key))
 
     def string_as_string(self, strobj):
-        """
-        Similar to string_as_string_and_size but returns only the buffer
-        The ``buffer`` is a i8* of the output buffer.
-        """
         fnty = ir.FunctionType(self.cstring, [self.pyobj])
         fname = "PyUnicode_AsUTF8"
         fn = self._get_function(fnty, name=fname)
@@ -1360,13 +1356,15 @@ class PythonAPI(object):
         hashed = self.builder.extract_value(self.builder.load(structptr), 2)
         return self.builder.call(fn, (ptr, n, hashed))
 
-    def serialize(self, tup, pybytes):
+    def serialize(self, pytuple, pybytes):
         """
-        Serialize some data at runtime.
+        Serialize some data at runtime. Returns a pointer to a python tuple
+        (bytesdata, hashsed) where the first element is the serialized data as
+        bytes and the second its hash.
         """
         fnty = ir.FunctionType(self.pyobj, (self.pyobj, self.pyobj))
         fn = self._get_function(fnty, name="numba_pickle")
-        return self.builder.call(fn, (tup, pybytes))
+        return self.builder.call(fn, (pytuple, pybytes))
 
     def serialize_uncached(self, obj):
         """
