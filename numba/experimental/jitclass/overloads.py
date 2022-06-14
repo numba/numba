@@ -94,11 +94,17 @@ def take_first(*options):
 
 @class_instance_overload(bool)
 def class_bool(x):
-    return take_first(
-        try_call_method(x, "__bool__"),
-        try_call_method(x, "__len__"),
-        lambda x: True,
-    )
+    using_bool_impl = try_call_method(x, "__bool__")
+
+    if '__len__' in x.jit_methods:
+        def using_len_impl(x):
+            return bool(len(x))
+    else:
+        using_len_impl = None
+
+    always_true_impl = lambda x: True
+
+    return take_first(using_bool_impl, using_len_impl, always_true_impl)
 
 
 @class_instance_overload(complex)
