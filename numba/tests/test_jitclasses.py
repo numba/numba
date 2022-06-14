@@ -1745,6 +1745,29 @@ def f(x, y):
         self.assertEqual(type(py_class_0_bool), type(jitted_class_0_bool))
         self.assertEqual(type(py_class_2_bool), type(jitted_class_2_bool))
 
+    def test_bool_fallback_default(self):
+        # Similar to test_bool_fallback, but checks the case where there is no
+        # __bool__() or __len__() defined, so the object should always be True.
+
+        class NoBoolNoLen:
+            def __init__(self):
+                pass
+
+            def get_bool(self):
+                return bool(self)
+
+        py_class = NoBoolNoLen
+        jitted_class = jitclass([])(py_class)
+
+        py_class_bool = py_class().get_bool()
+        jitted_class_bool = jitted_class().get_bool()
+
+        # Truth values from bool(obj) should be equal
+        self.assertEqual(py_class_bool, jitted_class_bool)
+
+        # Truth values from bool(obj) should be the same type
+        self.assertEqual(type(py_class_bool), type(jitted_class_bool))
+
 
 if __name__ == "__main__":
     unittest.main()
