@@ -2076,6 +2076,38 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, arr, True, True)
         self.check(test_impl, arr, False, False)
 
+    def test_2array_1_control_flow(self):
+        # issue8146
+        def test_impl(arr, l, flag):
+            inv1 = np.arange(arr.size)
+            inv2 = np.arange(l, arr.size + l)
+            if flag:
+                ret = inv1[inv1]
+            else:
+                ret = inv1[inv1 - 1]
+            return ret / inv2
+
+        arr = np.arange(100)
+        self.check(test_impl, arr, 10, True)
+        self.check(test_impl, arr, 10, False)
+
+    def test_2array_2_control_flow(self):
+        # issue8146
+        def test_impl(arr, l, flag):
+            inv1 = np.arange(arr.size)
+            inv2 = np.arange(l, arr.size + l)
+            if flag:
+                ret1 = inv1[inv1]
+                ret2 = inv2[inv1]
+            else:
+                ret1 = inv1[inv1 - 1]
+                ret2 = inv2[inv1 - 1]
+            return ret1 / ret2
+
+        arr = np.arange(100)
+        self.check(test_impl, arr, 10, True)
+        self.check(test_impl, arr, 10, False)
+
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
