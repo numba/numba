@@ -1157,12 +1157,18 @@ class PythonAPI(object):
         return self.builder.call(fn, [string, size])
 
     def bytes_size(self, bytesobj):
+        """
+        Return the length of the bytes in bytes object.
+        """
         fnty = ir.FunctionType(self.py_ssize_t, [self.pyobj])
         fname = "PyBytes_Size"
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [bytesobj])
 
     def bytes_as_string(self, bytesobj):
+        """
+        Return a pointer to the contents of the bytes object.
+        """
         fnty = ir.FunctionType(self.voidptr, [self.pyobj])
         fname = "PyBytes_AsString"
         fn = self._get_function(fnty, name=fname)

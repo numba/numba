@@ -419,21 +419,19 @@ class CPUCallConv(BaseCallConv):
 
         exc = (exc, exc_args, locinfo)
         excptr = self._get_excinfo_argument(builder.function)
-        struct_gv = pyapi.serialize_object(exc)  # {i8*, i32, i8*}
+        struct_gv_ptr = pyapi.serialize_object(exc)  # {i8*, i32, i8*}*
 
         # serialize constant arguments as None
         none = pyapi.make_none()
         exc_args = [e if isinstance(e, ir.Instruction) else none for e in exc_args]
 
-        tup = pyapi.tuple_pack(exc_args)
-        zero, one, two = int32_t(0), int32_t(1), int32_t(2)
-
+        v = builder.extract_value(builder.load(struct_gv_ptr), 0)
+        _len = builder.extract_value(builder.load(struct_gv_ptr), 1)
         pybytes = pyapi.bytes_from_string_and_size(
-            builder.load(builder.gep(struct_gv, [zero, zero])),
-            builder.sext(
-                builder.load(builder.gep(struct_gv, [zero, one])), ir.IntType(64)))
+            v, builder.sext(_len, pyapi.py_ssize_t))
 
         # serialize returns a pair (data, hash)
+        tup = pyapi.tuple_pack(exc_args)
         pair = pyapi.serialize(tup, pybytes)
         data, _hash = pyapi.tuple_getitem(pair, 0), pyapi.tuple_getitem(pair, 1)
         ptr = pyapi.bytes_as_string(data)
@@ -464,6 +462,7 @@ class CPUCallConv(BaseCallConv):
         # excinfo = builder.bitcast(self.context.nrt.allocate(builder, struct_size), excinfo_ptr_t)
 
         # hash is computed at runtime, after all arguments are known
+        zero, one, two = int32_t(0), int32_t(1), int32_t(2)
         builder.store(ptr, builder.gep(excinfo, [zero, zero]))
         builder.store(builder.trunc(sz, int32_t), builder.gep(excinfo, [zero, one]))
         builder.store(pyapi.bytes_as_string(_hash), builder.gep(excinfo, [zero, two]))
