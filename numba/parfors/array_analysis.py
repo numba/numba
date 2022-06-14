@@ -3053,7 +3053,16 @@ class ArrayAnalysis(object):
                 scope, equiv_set, loc, shapes, names
             )
         elif len(arrs) == 1:
-            return None
+            lhs = arrs[0]
+            typ = self.typemap[lhs.name]
+            pre = []
+            shape = self._gen_shape_call(
+                equiv_set, lhs, typ.ndim, None, pre
+            )
+            return ArrayAnalysis.AnalyzeResult(
+                shape=shape,
+                pre=pre
+            )
         else:
             return self._insert_runtime_broadcast_call(
                 scope, loc, arrs, max_dim
