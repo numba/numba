@@ -2,7 +2,6 @@ import ctypes
 import itertools
 import pickle
 import random
-import sys
 import typing as pt
 import unittest
 
@@ -1702,7 +1701,7 @@ def f(x, y):
                     base_cls(x) != base_cls(y),
                 )
 
-    def test_bool_fallback(self):
+    def test_bool_fallback_len(self):
         # Check that the fallback to using len(obj) to determine truth of an
         # object is implemented correctly as per
         # https://docs.python.org/3/library/stdtypes.html#truth-value-testing
