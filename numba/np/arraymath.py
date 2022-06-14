@@ -8,6 +8,7 @@ from collections import namedtuple
 from enum import IntEnum
 from functools import partial
 import operator
+import warnings
 
 import llvmlite.ir
 import numpy as np
@@ -27,7 +28,7 @@ from numba.np.linalg import ensure_blas
 from numba.core.extending import intrinsic
 from numba.core.errors import (RequireLiteralValue, TypingError,
                                NumbaValueError, NumbaNotImplementedError,
-                               NumbaTypeError)
+                               NumbaTypeError, NumbaDeprecationWarning)
 from numba.core.overload_glue import glue_lowering
 from numba.cpython.unsafe.tuple import tuple_setitem
 
@@ -3833,8 +3834,29 @@ def np_bincount(a, weights=None, minlength=0):
 
 
 def _searchsorted(func):
-    def searchsorted_inner(a, v):
-        n = len(a)
+    def searchsorted_inner(a, v, v_last, lo, hi, n):
+        """Perform inner loop of searchsorted (i.e. a binary search).
+
+        This is loosely based on the NumPy implementation in [1]_.
+
+        Parameters
+        ----------
+        a: 1-D array_like
+            The input array.
+        v: array_like
+            The current value to insert into `a`.
+        v_last: array_like
+            The previous value inserted into `a`.
+        lo: int
+            The initial/previous "low" value of the binary search.
+        hi: int
+            The initial/previous "high" value of the binary search.
+        n: int
+            The length of `a`.
+
+
+        .. [1] https://github.com/numpy/numpy/blob/809e8d26b03f549fd0b812a17b8a166bcd966889/numpy/core/src/npysort/binsearch.cpp#L173
+        """  # noqa: E501
         if np.isnan(v):
             # Find the first nan (i.e. the last from the end of a,
             # since there shouldn't be many of them in practice)
@@ -3842,8 +3864,13 @@ def _searchsorted(func):
                 if not np.isnan(a[i - 1]):
                     return i
             return 0
-        lo = 0
-        hi = n
+
+        if v_last < v:
+            hi = n
+        else:
+            lo = 0
+            hi = hi + 1 if hi < n else n
+
         while hi > lo:
             mid = (lo + hi) >> 1
             if func(a[mid], (v)):
@@ -3875,24 +3902,36 @@ def searchsorted(a, v, side='left'):
     if isinstance(v, types.Array):
         # N-d array and output
         def searchsorted_impl(a, v, side='left'):
+            n = len(a)
+            lo = 0
+            hi = n
             out = np.empty(v.shape, np.intp)
+            v_last = v.flat[0]
             for view, outview in np.nditer((v, out)):
-                index = loop_impl(a, view.item())
-                outview.itemset(index)
+                lo = loop_impl(a, view.item(), v_last, lo, hi, n)
+                v_last = view.item()
+                outview.itemset(lo)
             return out
 
     elif isinstance(v, types.Sequence):
         # 1-d sequence and output
         def searchsorted_impl(a, v, side='left'):
+            n = len(a)
+            lo = 0
+            hi = n
             out = np.empty(len(v), np.intp)
+            v_last = v[0]
             for i in range(len(v)):
-                out[i] = loop_impl(a, v[i])
+                lo = loop_impl(a, v[i], v_last, lo, hi, n)
+                out[i] = lo
+                v_last = v[i]
             return out
     else:
         # Scalar value and output
         # Note: NaNs come last in Numpy-sorted arrays
         def searchsorted_impl(a, v, side='left'):
-            return loop_impl(a, v)
+            n = len(a)
+            return loop_impl(a, v, v, 0, n, n)
 
     return searchsorted_impl
 
@@ -4135,14 +4174,36 @@ _iinfo_supported = ('min', 'max', 'bits',)
 iinfo = namedtuple('iinfo', _iinfo_supported)
 
 
-@overload(np.MachAr)
-def MachAr_impl():
-    f = np.MachAr()
-    _mach_ar_data = tuple([getattr(f, x) for x in _mach_ar_supported])
+# This module is imported under the compiler lock which should deal with the
+# lack of thread safety in the warning filter.
+def _gen_np_machar():
+    np122plus = numpy_version >= (1, 22)
+    w = None
+    with warnings.catch_warnings(record=True) as w:
+        msg = r'`np.MachAr` is deprecated \(NumPy 1.22\)'
+        warnings.filterwarnings("always", message=msg,
+                                category=DeprecationWarning,
+                                module=r'.*numba.*arraymath')
+        np_MachAr = np.MachAr
 
-    def impl():
-        return MachAr(*_mach_ar_data)
-    return impl
+    @overload(np_MachAr)
+    def MachAr_impl():
+        f = np_MachAr()
+        _mach_ar_data = tuple([getattr(f, x) for x in _mach_ar_supported])
+
+        if np122plus and w:
+            wmsg = w[0]
+            warnings.warn_explicit(wmsg.message.args[0],
+                                   NumbaDeprecationWarning,
+                                   wmsg.filename,
+                                   wmsg.lineno)
+
+        def impl():
+            return MachAr(*_mach_ar_data)
+        return impl
+
+
+_gen_np_machar()
 
 
 def generate_xinfo(np_func, container, attr):

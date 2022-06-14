@@ -2420,6 +2420,12 @@ def integer_str(n):
         return impl
 
 
+@overload(str)
+def boolean_str(b):
+    if isinstance(b, types.Boolean):
+        return lambda b: "True" if b else "False"
+
+
 # ------------------------------------------------------------------------------
 # iteration
 # ------------------------------------------------------------------------------

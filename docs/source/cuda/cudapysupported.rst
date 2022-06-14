@@ -104,6 +104,8 @@ Mutual recursion between functions (e.g. where a function ``func1()`` calls
    <https://docs.nvidia.com/compute-sanitizer/ComputeSanitizer/index.html>`_,
    which explicitly states when stack overflow has occurred.
 
+.. _cuda-built-in-types:
+
 Built-in types
 ===============
 

@@ -44,7 +44,7 @@ def declare_device(*args, **kwargs):
 def detect():
     print('Found 1 CUDA devices')
     print('id %d    %20s %40s' % (0, 'SIMULATOR', '[SUPPORTED]'))
-    print('%40s: 5.2' % 'compute capability')
+    print('%40s: 5.3' % 'compute capability')
 
 
 def list_devices():

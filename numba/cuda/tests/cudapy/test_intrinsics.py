@@ -1,5 +1,6 @@
 import itertools
 import numpy as np
+import operator
 import re
 from numba import cuda, int64
 from numba.cuda import compile_ptx
@@ -116,6 +117,73 @@ def simple_habs(ary, a):
 
 def simple_habs_scalar(ary, a):
     ary[0] = cuda.fp16.habs(a)
+
+
+def simple_heq_scalar(ary, a, b):
+    ary[0] = cuda.fp16.heq(a, b)
+
+
+def simple_hne_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hne(a, b)
+
+
+def simple_hge_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hge(a, b)
+
+
+def simple_hgt_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hgt(a, b)
+
+
+def simple_hle_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hle(a, b)
+
+
+def simple_hlt_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hlt(a, b)
+
+
+@cuda.jit(device=True)
+def hlt_func_1(x, y):
+    return cuda.fp16.hlt(x, y)
+
+
+@cuda.jit(device=True)
+def hlt_func_2(x, y):
+    return cuda.fp16.hlt(x, y)
+
+
+def test_multiple_hcmp_1(r, a, b, c):
+    # float16 predicates used in two separate functions
+    r[0] = hlt_func_1(a, b) and hlt_func_2(b, c)
+
+
+def test_multiple_hcmp_2(r, a, b, c):
+    # The same float16 predicate used in the caller and callee
+    r[0] = hlt_func_1(a, b) and cuda.fp16.hlt(b, c)
+
+
+def test_multiple_hcmp_3(r, a, b, c):
+    # Different float16 predicates used in the caller and callee
+    r[0] = hlt_func_1(a, b) and cuda.fp16.hge(c, b)
+
+
+def test_multiple_hcmp_4(r, a, b, c):
+    # The same float16 predicates used twice in a function
+    r[0] = cuda.fp16.hlt(a, b) and cuda.fp16.hlt(b, c)
+
+
+def test_multiple_hcmp_5(r, a, b, c):
+    # Different float16 predicates used in a function
+    r[0] = cuda.fp16.hlt(a, b) and cuda.fp16.hge(c, b)
+
+
+def simple_hmax_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hmax(a, b)
+
+
+def simple_hmin_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hmin(a, b)
 
 
 def simple_cbrt(ary, a):
@@ -493,6 +561,79 @@ class TestCudaIntrinsic(CUDATestCase):
             self.assertRegex(ptx, r'and\.b16.*0x7FFF;')
         else:
             self.assertIn('abs.f16', ptx)
+
+    @skip_unless_cc_53
+    def test_fp16_comparison(self):
+        fns = (simple_heq_scalar, simple_hne_scalar, simple_hge_scalar,
+               simple_hgt_scalar, simple_hle_scalar, simple_hlt_scalar)
+        ops = (operator.eq, operator.ne, operator.ge,
+               operator.gt, operator.le, operator.lt)
+
+        for fn, op in zip(fns, ops):
+            with self.subTest(op=op):
+                kernel = cuda.jit("void(b1[:], f2, f2)")(fn)
+
+                expected = np.zeros(1, dtype=np.bool8)
+                got = np.zeros(1, dtype=np.bool8)
+                arg2 = np.float16(2)
+                arg3 = np.float16(3)
+                arg4 = np.float16(4)
+
+                # Check with equal arguments
+                kernel[1, 1](got, arg3, arg3)
+                expected = op(arg3, arg3)
+                self.assertEqual(expected, got[0])
+
+                # Check with LHS < RHS
+                kernel[1, 1](got, arg3, arg4)
+                expected = op(arg3, arg4)
+                self.assertEqual(expected, got[0])
+
+                # Check with LHS > RHS
+                kernel[1, 1](got, arg3, arg2)
+                expected = op(arg3, arg2)
+                self.assertEqual(expected, got[0])
+
+    @skip_unless_cc_53
+    def test_multiple_float16_comparisons(self):
+        functions = (test_multiple_hcmp_1,
+                     test_multiple_hcmp_2,
+                     test_multiple_hcmp_3,
+                     test_multiple_hcmp_4,
+                     test_multiple_hcmp_5)
+        for fn in functions:
+            with self.subTest(fn=fn):
+                compiled = cuda.jit("void(b1[:], f2, f2, f2)")(fn)
+                ary = np.zeros(1, dtype=np.bool8)
+                arg1 = np.float16(2.)
+                arg2 = np.float16(3.)
+                arg3 = np.float16(4.)
+                compiled[1, 1](ary, arg1, arg2, arg3)
+                self.assertTrue(ary[0])
+
+    @skip_unless_cc_53
+    def test_hmax(self):
+        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hmax_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(3.)
+        arg2 = np.float16(4.)
+        compiled[1, 1](ary, arg1, arg2)
+        np.testing.assert_allclose(ary[0], arg2)
+        arg1 = np.float(5.)
+        compiled[1, 1](ary, arg1, arg2)
+        np.testing.assert_allclose(ary[0], arg1)
+
+    @skip_unless_cc_53
+    def test_hmin(self):
+        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hmin_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(3.)
+        arg2 = np.float16(4.)
+        compiled[1, 1](ary, arg1, arg2)
+        np.testing.assert_allclose(ary[0], arg1)
+        arg1 = np.float(5.)
+        compiled[1, 1](ary, arg1, arg2)
+        np.testing.assert_allclose(ary[0], arg2)
 
     def test_cbrt_f32(self):
         compiled = cuda.jit("void(float32[:], float32)")(simple_cbrt)
