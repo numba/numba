@@ -100,6 +100,7 @@ class ConstantInference(object):
                     new_a = self.infer_constant(a.name, loc=expr.loc)
                 except ConstantInferenceError as cie:
                     if _exc:
+                        # handle non-constant arguments
                         new_a = a
                     else:
                         raise cie

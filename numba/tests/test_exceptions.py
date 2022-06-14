@@ -362,8 +362,6 @@ class TestRaising(TestCase):
             cres = compile_isolated(pyfunc, (types.int32, types.string),
                                     flags=flags)
             cfunc = cres.entry_point
-            with open('a.ll', 'w') as f:
-                print(cres.library.get_llvm_str(), file=f, flush=True)
 
             self.assertEqual(cfunc(0, 'test'), 0)
             self.check_against_python(flags, pyfunc, cfunc, clazz, 1, 'hello')

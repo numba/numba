@@ -400,7 +400,7 @@ class CPUCallConv(BaseCallConv):
     def set_dynamic_user_exc(self, builder, exc, exc_args, loc=None,
                              func_name=None):
         if not issubclass(exc, BaseException):
-            raise TypeError("exc should exception class, got %r"
+            raise TypeError("exc should be an exception class, got %r"
                             % (exc,))
 
         pyapi = self.context.get_python_api(builder)
@@ -441,12 +441,23 @@ class CPUCallConv(BaseCallConv):
 
         int8_t = ir.IntType(8)
         alloc_fnty = ir.FunctionType(int8_t.as_pointer(), [int32_t])
-        alloc_fn = cgutils.get_or_insert_function(builder.module, alloc_fnty, name="malloc")
+        malloc_fn = cgutils.get_or_insert_function(builder.module, alloc_fnty, name="malloc")
         struct_size = int32_t(self.context.get_abi_sizeof(excinfo_t))
-        excinfo = builder.bitcast(builder.call(alloc_fn, [struct_size]), excinfo_ptr_t)
+        ret = builder.call(malloc_fn, [struct_size])
+
+        # check if the malloc was successful
+        with builder.if_then(builder.icmp_signed('==', ret, pyapi.get_null_object()), likely=False):
+            # is there a better way to raise an exception?
+            self.return_user_exc(
+                builder,
+                RuntimeError,
+                (f'malloc({struct_size}) return NULL',),
+                None)
+
+        excinfo = builder.bitcast(ret, excinfo_ptr_t)
 
         # bug on NRT not being enabled!?
-        # RE: No! _get_code_point(a, i) disables NRT and we cannot use nrt.allocate here
+        # RE: No! _get_code_point(a, i) disables NRT and we cannot use nrt.allocate
         # when NRT is disabled.
         #
         # struct_size = ir.IntType(64)(self.context.get_abi_sizeof(excinfo_t))
