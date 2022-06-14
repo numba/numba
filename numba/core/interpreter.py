@@ -977,6 +977,10 @@ def peep_hole_fuse_dict_add_updates(func_ir):
     with a single constant dictionary.
 
     When running this algorithm we can always safely remove d2.
+
+    This is the relevant section of the CPython 3.10 that causes
+    this bytecode change:
+    https://github.com/python/cpython/blob/3.10/Python/compile.c#L4048
     """
 
     # This algorithm fuses build_map expressions into the largest
