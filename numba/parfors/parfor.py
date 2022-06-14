@@ -1997,13 +1997,12 @@ class ConvertNumpyPass:
                         elif isinstance(expr, ir.Expr) and expr.op == 'arrayexpr':
                             new_instr = self._arrayexpr_to_parfor(
                                 equiv_set, lhs, expr, avail_vars)
-                            if new_instr is not None:
-                                self.rewritten.append(dict(
-                                    old=instr,
-                                    new=new_instr,
-                                    reason='arrayexpr',
-                                ))
-                                instr = new_instr
+                            self.rewritten.append(dict(
+                                old=instr,
+                                new=new_instr,
+                                reason='arrayexpr',
+                            ))
+                            instr = new_instr
                     avail_vars.add(lhs.name)
                 new_body.append(instr)
             block.body = new_body
@@ -2043,8 +2042,27 @@ class ConvertNumpyPass:
 
         # generate loopnests and size variables from lhs correlations
         size_vars = equiv_set.get_shape(lhs)
-        if any([size_var.name not in avail_vars for size_var in size_vars]):
-            return None
+        for size_var in size_vars:
+            if size_var.name not in avail_vars:
+                # If the size variable are not available generate them.
+                import pdb; pdb.set_trace()
+                # TODO: Is there a safer check to generate?
+                if "_size" in size_var.name:
+                    orig_var_name = "_size".join(size_var.name.split("_size")[:-1])
+                elif "_shape" in size_var.name:
+                    orig_var_name = "_shape".join(size_var.name.split("_shape")[:-1])
+                # TODO: Get the actual ir.Var?
+                orig_var = ir.Var(scope, orig_var_name, loc)
+                typ = pass_states.typemap[orig_var_name]
+                if isinstance(typ, types.ArrayCompatible):
+                    ndim = typ.ndim
+                else:
+                    ndim = len(typ)
+                post = []
+                shape = self.pass_states.array_analysis._gen_shape_call(
+                    equiv_set, orig_var, ndim, (size_var.name,), post
+                )
+
         index_vars, loopnests = _mk_parfor_loops(pass_states.typemap, size_vars, scope, loc)
 
         # generate init block and body
