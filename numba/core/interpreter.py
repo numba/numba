@@ -973,7 +973,7 @@ def peep_hole_fuse_dict_add_updates(func_ir):
 
     Python 3.10 may also rewrite the individual dictionaries
     as an empty build_map + many map_add. Here we again look
-    that a _update_from_bytecode, and if so we replace these
+    for an _update_from_bytecode, and if so we replace these
     with a single constant dictionary.
 
     When running this algorithm we can always safely remove d2.
