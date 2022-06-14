@@ -208,10 +208,8 @@ class TestSlices(MemoryLeakMixin, TestCase):
         self.assertEqual(sl1, sl3)
 
     def test_literal_slice_boxing(self):
-        """
-            Tests that a literal slice can be used
-            as an argument to a JIT function.
-        """
+        # Tests that a literal slice can be
+        # returned from a JIT function.
         @njit
         def f(x):
             return literally(x)
@@ -226,6 +224,18 @@ class TestSlices(MemoryLeakMixin, TestCase):
         )
         for sl in slices:
             self.assertEqual(sl, f(sl))
+
+
+    def test_literal_slice_freevar(self):
+        # Tests passing a literal slice as a freevar
+        # in a closure.
+        z = slice(1, 2, 3)
+        @njit
+        def foo():
+            return z
+
+        self.assertEqual(z, foo())
+
 
 
 if __name__ == '__main__':
