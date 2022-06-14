@@ -26,9 +26,14 @@ For details please consult the
 Floating Point Error Model
 --------------------------
 
-By default, CUDA Python kernels execute with the NumPy error model. In this model, division by zero raises no exception and instead produces a result of ``inf`` / ``-inf`` or ``nan``. This differs from the normal Python error model, in which divisions by zero raise a ``ZeroDivisionError``.
+By default, CUDA Python kernels execute with the NumPy error model. In this
+model, division by zero raises no exception and instead produces a result of
+``inf``, ``-inf`` or ``nan``. This differs from the normal Python error model,
+in which division by zero raises a ``ZeroDivisionError``.
 
-When debug is enabled (by passing ``debug=True`` to the :func:`@cuda.jit <numba.cuda.jit>` decorator), the Python error model is used. This allows division-by-zero errors during kernel execution to be identified.
+When debug is enabled (by passing ``debug=True`` to the
+:func:`@cuda.jit <numba.cuda.jit>` decorator), the Python error model is used.
+This allows division-by-zero errors during kernel execution to be identified.
 
 Constructs
 ----------
