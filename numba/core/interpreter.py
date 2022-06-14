@@ -831,7 +831,26 @@ def peep_hole_list_to_tuple(func_ir):
                                             bt = ir.Expr.build_tuple([arg,],
                                                                      expr.loc)
                                         else:
-                                            bt = arg
+                                            # Extend as tuple
+                                            gv_tuple = ir.Global(
+                                                name="tuple", value=tuple,
+                                                loc=expr.loc,
+                                            )
+                                            tuple_var = arg.scope.redefine(
+                                                "$_list_extend_gv_tuple",
+                                                loc=expr.loc,
+                                            )
+                                            new_hole.append(
+                                                ir.Assign(
+                                                    target=tuple_var,
+                                                    value=gv_tuple,
+                                                    loc=expr.loc,
+                                                ),
+                                            )
+                                            bt = ir.Expr.call(
+                                                tuple_var, (arg,), (),
+                                                loc=expr.loc,
+                                            )
                                         var = ir.Var(arg.scope, tmp_name,
                                                      expr.loc)
                                         asgn = ir.Assign(bt, var, expr.loc)
@@ -1856,9 +1875,26 @@ class Interpreter(object):
                                loc=self.loc,)
             self.store(exc, temps[0])
         else:
+            loc = self.loc
             for other, tmp in zip(map(self.get, tuples[1:]), temps):
-                out = ir.Expr.binop(fn=operator.add, lhs=first, rhs=other,
-                                    loc=self.loc)
+                # Emit as `first + tuple(other)`
+                gv_tuple = ir.Global(
+                    name="tuple", value=tuple,
+                    loc=loc,
+                )
+                tuple_var = self.store(
+                    gv_tuple, "$_list_extend_gv_tuple", redefine=True,
+                )
+                tuplify_val = ir.Expr.call(
+                    tuple_var, (other,), (),
+                    loc=loc,
+                )
+                tuplify_var = self.store(tuplify_val, "$_tuplify",
+                                         redefine=True)
+                out = ir.Expr.binop(
+                    fn=operator.add, lhs=first, rhs=self.get(tuplify_var.name),
+                    loc=self.loc,
+                )
                 self.store(out, tmp)
                 first = self.get(tmp)
 
