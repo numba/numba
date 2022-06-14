@@ -1702,6 +1702,49 @@ def f(x, y):
                     base_cls(x) != base_cls(y),
                 )
 
+    def test_bool_fallback(self):
+        # Check that the fallback to using len(obj) to determine truth of an
+        # object is implemented correctly as per
+        # https://docs.python.org/3/library/stdtypes.html#truth-value-testing
+        #
+        # Relevant points:
+        #
+        # "By default, an object is considered true unless its class defines
+        # either a __bool__() method that returns False or a __len__() method
+        # that returns zero, when called with the object."
+        #
+        # and:
+        #
+        # "Operations and built-in functions that have a Boolean result always
+        # return 0 or False for false and 1 or True for true, unless otherwise
+        # stated."
+
+        class NoBoolHasLen:
+            def __init__(self, val):
+                self.val = val
+
+            def __len__(self):
+                return self.val
+
+            def get_bool(self):
+                return bool(self)
+
+        py_class = NoBoolHasLen
+        jitted_class = jitclass([('val', types.int64)])(py_class)
+
+        py_class_0_bool = py_class(0).get_bool()
+        py_class_2_bool = py_class(2).get_bool()
+        jitted_class_0_bool = jitted_class(0).get_bool()
+        jitted_class_2_bool = jitted_class(2).get_bool()
+
+        # Truth values from bool(obj) should be equal
+        self.assertEqual(py_class_0_bool, jitted_class_0_bool)
+        self.assertEqual(py_class_2_bool, jitted_class_2_bool)
+
+        # Truth values from bool(obj) should be the same type
+        self.assertEqual(type(py_class_0_bool), type(jitted_class_0_bool))
+        self.assertEqual(type(py_class_2_bool), type(jitted_class_2_bool))
+
 
 if __name__ == "__main__":
     unittest.main()
