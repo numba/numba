@@ -459,14 +459,19 @@ class _LaunchConfiguration:
         self.sharedmem = sharedmem
 
         if config.CUDA_LOW_OCCUPANCY_WARNINGS:
-            ctx = get_context()
-            smcount = ctx.device.MULTIPROCESSOR_COUNT
+            # Warn when the grid has fewer than 128 blocks. This number is
+            # chosen somewhat heuristically - ideally the minimum is 2 times
+            # the number of SMs, but the number of SMs varies between devices -
+            # some very small GPUs might only have 4 SMs, but an H100-SXM5 has
+            # 132. In general kernels should be launched with large grids
+            # (hundreds or thousands of blocks), so warning when fewer than 128
+            # blocks are used will likely catch most beginner errors, where the
+            # grid tends to be very small (single-digit or low tens of blocks).
+            min_grid_size = 128
             grid_size = griddim[0] * griddim[1] * griddim[2]
-            if grid_size < 2 * smcount:
-                msg = ("Grid size ({grid}) < 2 * SM count ({sm}) "
-                       "will likely result in GPU under utilization due "
-                       "to low occupancy.")
-                msg = msg.format(grid=grid_size, sm=2 * smcount)
+            if grid_size < min_grid_size:
+                msg = (f"Grid size {grid_size} will likely result in GPU"
+                       "under-utilization due to low occupancy.")
                 warn(NumbaPerformanceWarning(msg))
 
     def __call__(self, *args):
