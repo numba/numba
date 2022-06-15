@@ -1038,11 +1038,11 @@ def strace(work, syscalls, timeout=10):
         strace_binary = shutil.which('strace')
         if strace_binary is None:
             raise ValueError("No valid 'strace' binary could be found")
-        cmd = ['strace', # strace
-            '-q', # quietly (no attach/detach print out)
-            '-p', str(parent_pid), # this PID
-            '-e', ','.join(syscalls), # these syscalls
-            '-o', ntf.name] # put output into this file
+        cmd = [strace_binary, # strace
+               '-q', # quietly (no attach/detach print out)
+               '-p', str(parent_pid), # this PID
+               '-e', ','.join(syscalls), # these syscalls
+               '-o', ntf.name] # put output into this file
 
         # redirect stdout, stderr is handled by the `-o` flag to strace.
         popen = subprocess.Popen(cmd, stdout=subprocess.PIPE,)
@@ -1091,6 +1091,12 @@ def strace(work, syscalls, timeout=10):
 
 def _strace_supported():
     """Checks if strace is supported and working"""
+
+    # Only support this on linux where the `strace` binary is likely to be the
+    # strace needed.
+    if not sys.platform.startswith('linux'):
+        return False
+
     def force_clone(): # subprocess triggers a clone
         subprocess.run([sys.executable, '-c', 'exit()'])
 
