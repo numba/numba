@@ -1,7 +1,7 @@
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import unittest, xfail_unless_cudasim, CUDATestCase
 from numba.core import config
 
 
@@ -90,6 +90,26 @@ class TestException(CUDATestCase):
         """Test case for issue #2655.
         """
         self.case_raise_causing_warp_diverge(with_debug_mode=False)
+
+    @xfail_unless_cudasim
+    def test_raise_in_device_function(self):
+        # This is an expected failure because reporting of exceptions raised in
+        # device functions does not work correctly - see Issue #8036:
+        # https://github.com/numba/numba/issues/8036
+        msg = 'Device Function Error'
+
+        @cuda.jit(device=True)
+        def f():
+            raise ValueError(msg)
+
+        @cuda.jit(debug=True)
+        def kernel():
+            f()
+
+        with self.assertRaises(ValueError) as raises:
+            kernel[1, 1]()
+
+        self.assertIn(msg, str(raises.exception))
 
 
 if __name__ == '__main__':

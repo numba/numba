@@ -33,12 +33,14 @@ The following Python constructs are not supported:
 * Comprehensions (either list, dict, set or generator comprehensions)
 * Generator (any ``yield`` statements)
 
-The ``raise`` statement is supported.
+The ``raise`` and ``assert`` statements are supported, with the following
+constraints:
 
-The ``assert`` statement is supported, but only has an effect when
-``debug=True`` is passed to the :func:`numba.cuda.jit` decorator. This is
-similar to the behavior of the ``assert`` keyword in CUDA C/C++, which is
-ignored unless compiling with device debug turned on.
+- They can only be used in kernels, not in device functions.
+- They only have an effect when ``debug=True`` is passed to the
+  :func:`@cuda.jit <numba.cuda.jit>` decorator. This is similar to the behavior
+  of the ``assert`` keyword in CUDA C/C++, which is ignored unless compiling
+  with device debug turned on.
 
 
 Printing of strings, integers, and floats is supported, but printing is an
@@ -53,6 +55,54 @@ This is due to a general limitation in CUDA printing, as outlined in the
 `section on limitations in printing
 <https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#limitations>`_
 in the CUDA C++ Programming Guide.
+
+
+Recursion
+---------
+
+Self-recursive device functions are supported, with the constraint that
+recursive calls must have the same argument types as the initial call to
+the function. For example, the following form of recursion is supported:
+
+.. code:: python
+
+   @cuda.jit("int64(int64)", device=True)
+   def fib(n):
+       if n < 2:
+           return n
+       return fib(n - 1) + fib(n - 2)
+
+(the ``fib`` function always has an ``int64`` argument), whereas the following
+is unsupported:
+
+.. code:: python
+
+   # Called with x := int64, y := float64
+   @cuda.jit
+   def type_change_self(x, y):
+       if x > 1 and y > 0:
+           return x + type_change_self(x - y, y)
+       else:
+           return y
+
+The outer call to ``type_change_self`` provides ``(int64, float64)`` arguments,
+but the inner call uses ``(float64, float64)`` arguments (because ``x - y`` /
+``int64 - float64`` results in a ``float64`` type). Therefore, this function is
+unsupported.
+
+Mutual recursion between functions (e.g. where a function ``func1()`` calls
+``func2()`` which again calls ``func1()``) is unsupported.
+
+.. note::
+
+   The call stack in CUDA is typically quite limited in size, so it is easier
+   to overflow it with recursive calls on CUDA devices than it is on CPUs.
+
+   Stack overflow will result in an Unspecified Launch Failure (ULF) during
+   kernel execution.  In order to identify whether a ULF is due to stack
+   overflow, programs can be run under `Compute Sanitizer
+   <https://docs.nvidia.com/compute-sanitizer/ComputeSanitizer/index.html>`_,
+   which explicitly states when stack overflow has occurred.
 
 .. _cuda-built-in-types:
 
