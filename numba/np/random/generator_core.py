@@ -113,6 +113,7 @@ _generate_next_binding(next_uint32, types.uint32)
 _generate_next_binding(next_uint64, types.uint64)
 
 
+# This is for keeping parity with: https://github.com/numpy/numpy/pull/20314
 if numpy_version >= (1, 22):
     @register_jitable
     def next_float(bitgen):

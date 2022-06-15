@@ -586,20 +586,20 @@ Modules
 Generator Objects
 '''''''''''''''''
 Numba supports :py:class:`numpy.random.Generator()` objects. As of version 0.56, users can pass
-individual Numpy :py:class:`Generator` objects into Numba functions and use their
-methods inside the functions. The same algorithms are used as Numpy for
+individual NumPy :py:class:`Generator` objects into Numba functions and use their
+methods inside the functions. The same algorithms are used as NumPy for
 random number generation hence maintaining parity between the random
-number generated using Numpy and Numba under identical arguments 
-(also the same documentation notes as Numpy :py:class:`Generator` methods apply).
+number generated using NumPy and Numba under identical arguments 
+(also the same documentation notes as NumPy :py:class:`Generator` methods apply).
 The current Numba support for :py:class:`Generator` is not thread-safe, hence we
 do not recommend using :py:class:`Generator` methods in methods with parallel
 execution logic.
 
 .. note::
-  Numpy's :py:class:`Generator` objects rely on :py:class:`BitGenerator` to manage state
+  NumPy's :py:class:`Generator` objects rely on :py:class:`BitGenerator` to manage state
   and generate the random bits, which are then transformed into random
   values from useful distributions. Numba will ``unbox`` the :py:class:`Generator` objects
-  and will maintain a reference to the underlying :py:class:`BitGenerator` objects using Numpy's
+  and will maintain a reference to the underlying :py:class:`BitGenerator` objects using NumPy's
   ``ctypes`` interface bindings. Hence :py:class:`Generator` objects can cross the JIT boundary
   and their functions be used within Numba-Jit code. Note that since only references
   to :py:class:`BitGenerator` objects are maintained, any change to the state of a particular

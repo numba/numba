@@ -1260,7 +1260,6 @@ def unbox_numpy_random_generator(typ, obj, c):
         where deletion happens in Python runtime without NRT being awareness of it. 
     """
     is_error_ptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
-    fail_obj = c.context.get_constant_null(typ)
 
     with ExitStack() as stack:
         struct_ptr = cgutils.create_struct_proxy(typ)(c.context, c.builder)
