@@ -88,7 +88,7 @@ class FunctionDescriptor(object):
         """
         Return the module in which this function is supposed to exist.
         This may be a dummy module if the function was dynamically
-        generated. Raise exception if the module can't be found.
+        generated or the module can't be found.
         """
         if self.modname == _dynamic_modname:
             return _dynamic_module
@@ -97,9 +97,7 @@ class FunctionDescriptor(object):
                 # ensure module exist
                 return importlib.import_module(self.modname)
             except ImportError:
-                raise ModuleNotFoundError(
-                    f"can't compile {self.qualname}: "
-                    f"import of module {self.modname} failed") from None
+                return _dynamic_module
 
     def lookup_function(self):
         """

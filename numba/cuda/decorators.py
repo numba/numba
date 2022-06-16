@@ -108,7 +108,9 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                 disp.enable_caching()
 
             if device:
-                disp.compile_device(argtypes)
+                from numba.core import typeinfer
+                with typeinfer.register_dispatcher(disp):
+                    disp.compile_device(argtypes)
             else:
                 disp.compile(argtypes)
 

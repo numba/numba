@@ -150,7 +150,6 @@ exclude =
     numba/tests/test_numberctor.py
     numba/tests/test_globals.py
     numba/tests/test_typingerror.py
-    numba/tests/test_object_mode.py
     numba/tests/test_copy_propagate.py
     numba/tests/test_ctypes.py
     numba/tests/test_typeof.py

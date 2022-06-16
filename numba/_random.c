@@ -141,8 +141,11 @@ rnd_seed_with_bytes(rnd_state_t *state, Py_buffer *buf)
      * constraints.
      */
     for (i = 0; i < nkeys; i++, bytes += 4) {
-        keys[i] = (bytes[3] << 24) + (bytes[2] << 16) +
-                  (bytes[1] << 8) + (bytes[0] << 0);
+        keys[i] =
+            ((unsigned int)bytes[3] << 24) +
+            ((unsigned int)bytes[2] << 16) +
+            ((unsigned int)bytes[1] << 8) +
+            ((unsigned int)bytes[0] << 0);
     }
     PyBuffer_Release(buf);
     rnd_init_by_array(state, keys, nkeys);
