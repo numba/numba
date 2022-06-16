@@ -60,7 +60,7 @@ prototype:
      float* return_value,
      float x,
      float y
-   )
+   );
 
 .. rubric:: Notes
 
