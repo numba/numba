@@ -3,12 +3,13 @@ import os
 import cffi
 
 from numba import cuda, types
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 
 parent_dir = os.path.dirname(os.path.dirname(__file__))
 data_dir = os.path.join(parent_dir, 'data')
 
 
+@skip_on_cudasim('Simulator does not support linking')
 class TestCFFI(CUDATestCase):
     def test_from_buffer(self):
         ffi = cffi.FFI()
