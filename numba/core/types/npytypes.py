@@ -94,7 +94,10 @@ class Record(Type):
             if not isinstance(ty, (Number, NestedArray)):
                 msg = "Only Number and NestedArray types are supported, found: {}. "
                 raise TypeError(msg.format(ty))
-            datatype = ctx.get_data_type(ty)
+            if isinstance(ty, NestedArray):
+                datatype = ctx.data_model_manager[ty].as_storage_type()
+            else:
+                datatype = ctx.get_data_type(ty)
             lltypes.append(datatype)
             size = ctx.get_abi_sizeof(datatype)
             align = ctx.get_abi_alignment(datatype)

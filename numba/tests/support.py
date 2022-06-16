@@ -83,6 +83,8 @@ skip_unless_py10 = unittest.skipUnless(
     "needs Python 3.10"
 )
 
+skip_if_32bit = unittest.skipIf(_32bit, "Not supported on 32 bit")
+
 _msg = "SciPy needed for test"
 skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
 

@@ -1,7 +1,9 @@
 """
 Test bytecode fixes provided in interpreter.py
 """
-from numba import njit, objmode
+import unittest
+
+from numba import jit, njit, objmode
 from numba.core.errors import UnsupportedError
 from numba.tests.support import TestCase, MemoryLeakMixin, skip_unless_py10
 
@@ -107,7 +109,7 @@ def sum_jit_func(
     )
 
 
-class TestCallFunctionExPeepHole(TestCase, MemoryLeakMixin):
+class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
     """
     gh #7812
 
@@ -618,3 +620,32 @@ class TestCallFunctionExPeepHole(TestCase, MemoryLeakMixin):
         a = py_func(False)
         b = cfunc(False)
         self.assertEqual(a, b)
+
+
+class TestListExtendInStarArgNonTupleIterable(MemoryLeakMixin, TestCase):
+    """Test `fn(pos_arg0, pos_arg1, *args)` where args is a non-tuple iterable.
+
+    Python 3.9+ will generate LIST_EXTEND bytecode to combine the positional
+    arguments with the `*args`.
+
+    See #8059
+
+    NOTE: At the moment, there are no meaningful tests for NoPython because the
+    lack of support for `tuple(iterable)` for most iterable types.
+    """
+    def test_list_extend_forceobj(self):
+        def consumer(*x):
+            return x
+
+        @jit(forceobj=True)
+        def foo(x):
+            return consumer(1, 2, *x)
+
+        got = foo("ijo")
+        expect = foo.py_func("ijo")
+        self.assertEqual(got, (1, 2, "i", "j", "o"))
+        self.assertEqual(got, expect)
+
+
+if __name__ == "__main__":
+    unittest.main()
