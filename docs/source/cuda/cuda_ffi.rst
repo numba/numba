@@ -87,6 +87,51 @@ For example, when:
 is declared, calling ``mul(a, b)`` inside a kernel will translate into a call to
 ``mul_f32_f32(a, b)`` in the compiled code.
 
+Passing pointers
+----------------
+
+Numba's calling convention requires multiple values to be passed for array
+arguments. These include the data pointer along with shape, stride, and other
+information. This is incompatible with the expectations of most C/C++ functions,
+which generally only expect a pointer to the data. To align the calling
+conventions between C device code and Python kernels it is necessary to declare
+array arguments using C pointer types.
+
+For example, a function with the following prototype:
+
+.. code:: C
+
+   extern "C"
+   __device__ int
+   sum_reduce(
+     float* return_value,
+     float* array,
+     int n
+   );
+
+
+would be declared as follows:
+
+.. code::
+
+   signature = 'float32(CPointer(float32), int32)'
+   sum_reduce = cuda.declare_device('sum_reduce', signature)
+
+To obtain a pointer to array data for passing to C functions, use the
+``from_buffer()`` method of a ``cffi.FFI`` instance. For example, a kernel using
+the ``sum_reduce`` function could be defined as:
+
+.. code::
+
+   import cffi
+   ffi = cffi.FFI()
+
+   @cuda.jit
+   def reduction_caller(result, array):
+       array_ptr = ffi.from_buffer(array)
+       result[0] = sum_reduce(array, len(array))
+
+where ``result`` and ``array`` are both arrays of ``float32`` data.
 
 Linking and Calling functions
 -----------------------------
