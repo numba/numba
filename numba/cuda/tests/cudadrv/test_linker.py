@@ -60,6 +60,10 @@ def func_with_lots_of_registers(x, a, b, c, d, e, f):
     x[cuda.grid(1)] += d1 + d2 + d3 + d4 + d5
 
 
+parent_dir = os.path.dirname(os.path.dirname(__file__))
+data_dir = os.path.join(parent_dir, 'data')
+
+
 @skip_on_cudasim('Linking unsupported in the simulator')
 class TestLinker(CUDATestCase):
 
@@ -74,7 +78,7 @@ class TestLinker(CUDATestCase):
         global bar  # must be a global; other it is recognized as a freevar
         bar = cuda.declare_device('bar', 'int32(int32)')
 
-        link = os.path.join(os.path.dirname(__file__), 'data', 'jitlink.ptx')
+        link = os.path.join(data_dir, 'jitlink.ptx')
 
         if eager:
             args = ['void(int32[:], int32[:])']
@@ -103,7 +107,7 @@ class TestLinker(CUDATestCase):
     def test_linking_cu(self):
         bar = cuda.declare_device('bar', 'int32(int32)')
 
-        link = os.path.join(os.path.dirname(__file__), 'data', 'jitlink.cu')
+        link = os.path.join(data_dir, 'jitlink.cu')
 
         @cuda.jit(link=[link])
         def kernel(r, x):
@@ -125,7 +129,7 @@ class TestLinker(CUDATestCase):
     def test_linking_cu_log_warning(self):
         bar = cuda.declare_device('bar', 'int32(int32)')
 
-        link = os.path.join(os.path.dirname(__file__), 'data', 'warn.cu')
+        link = os.path.join(data_dir, 'warn.cu')
 
         with warnings.catch_warnings(record=True) as w:
             ignore_internal_warnings()
@@ -144,7 +148,7 @@ class TestLinker(CUDATestCase):
     def test_linking_cu_error(self):
         bar = cuda.declare_device('bar', 'int32(int32)')
 
-        link = os.path.join(os.path.dirname(__file__), 'data', 'error.cu')
+        link = os.path.join(data_dir, 'error.cu')
 
         with self.assertRaises(NvrtcError) as e:
             @cuda.jit('void(int32)', link=[link])
@@ -185,8 +189,7 @@ class TestLinker(CUDATestCase):
     @skip_if_cuda_includes_missing
     @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_linking_cu_cuda_include(self):
-        link = os.path.join(os.path.dirname(__file__), 'data',
-                            'cuda_include.cu')
+        link = os.path.join(data_dir, 'cuda_include.cu')
 
         # An exception will be raised when linking this kernel due to the
         # compile failure if CUDA includes cannot be found by Nvrtc.
