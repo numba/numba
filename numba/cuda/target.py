@@ -20,9 +20,10 @@ from numba.cuda import codegen, nvvmutils
 class CUDATypingContext(typing.BaseContext):
     def load_additional_registries(self):
         from . import cudadecl, cudamath, libdevicedecl, vector_types
-        from numba.core.typing import enumdecl
+        from numba.core.typing import enumdecl, cffi_utils
 
         self.install_registry(cudadecl.registry)
+        self.install_registry(cffi_utils.registry)
         self.install_registry(cudamath.registry)
         self.install_registry(cmathdecl.registry)
         self.install_registry(libdevicedecl.registry)
@@ -95,6 +96,7 @@ class CUDATargetContext(BaseContext):
         from numba.cpython import rangeobj, iterators, enumimpl # noqa: F401
         from numba.cpython import unicode, charseq # noqa: F401
         from numba.cpython import cmathimpl
+        from numba.misc import cffiimpl
         from numba.np import arrayobj # noqa: F401
         from numba.np import npdatetime # noqa: F401
         from . import (
@@ -102,6 +104,7 @@ class CUDATargetContext(BaseContext):
         )
 
         self.install_registry(cudaimpl.registry)
+        self.install_registry(cffiimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(libdeviceimpl.registry)
         self.install_registry(cmathimpl.registry)
