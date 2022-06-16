@@ -74,7 +74,7 @@ def random_standard_normal_f(bitgen):
         idx = r & 0xff
         sign = (r >> 8) & 0x1
         rabs = (r >> 9) & 0x0007fffff
-        x = float32(rabs * wi_float[idx])
+        x = float32(float32(rabs) * wi_float[idx])
         if (sign & 0x1):
             x = -x
         if (rabs < ki_float[idx]):
@@ -91,7 +91,7 @@ def random_standard_normal_f(bitgen):
                         return float32(ziggurat_nor_r_f + xx)
         else:
             if (((fi_float[idx - 1] - fi_float[idx]) * next_float(bitgen) +
-                 fi_float[idx]) < float32(np.exp(float32(-0.5 * x * x)))):
+                 fi_float[idx]) < float32(np.exp(-float32(0.5) * x * x))):
                 return x
 
 
@@ -120,7 +120,7 @@ def random_standard_exponential_f(bitgen):
         ri >>= 1
         idx = ri & 0xFF
         ri >>= 8
-        x = float32(ri * we_float[idx])
+        x = float32(float32(ri) * we_float[idx])
         if (ri < ke_float[idx]):
             return x
         else:
@@ -182,16 +182,17 @@ def random_standard_gamma(bitgen, shape):
 
 @register_jitable
 def random_standard_gamma_f(bitgen, shape):
-    f32_one = np.float32(1.0)
-    if (shape == 1.0):
+    f32_one = float32(1.0)
+    shape = float32(shape)
+    if (shape == f32_one):
         return random_standard_exponential_f(bitgen)
-    elif (shape == 0.0):
+    elif (shape == float32(0.0)):
         return 0.0
-    elif (shape < 1.0):
+    elif (shape < f32_one):
         while 1:
             U = next_float(bitgen)
             V = random_standard_exponential_f(bitgen)
-            if (U <= 1.0 - shape):
+            if (U <= f32_one - shape):
                 X = float32(pow(U, float32(f32_one / shape)))
                 if (X <= V):
                     return X
@@ -202,21 +203,21 @@ def random_standard_gamma_f(bitgen, shape):
                 if (X <= (V + Y)):
                     return X
     else:
-        b = float32(shape - float32(1.0 / 3.0))
-        c = float32(f32_one / float32(np.sqrt(9.0 * b)))
+        b = shape - f32_one / float32(3.0)
+        c = float32(f32_one / float32(np.sqrt(float32(9.0) * b)))
         while 1:
             while 1:
                 X = float32(random_standard_normal_f(bitgen))
                 V = float32(f32_one + c * X)
-                if (V > 0.0):
+                if (V > float32(0.0)):
                     break
 
             V = float32(V * V * V)
             U = next_float(bitgen)
-            if (U < f32_one - np.float32(0.0331) * (X * X) * (X * X)):
+            if (U < f32_one - float32(0.0331) * (X * X) * (X * X)):
                 return float32(b * V)
 
-            if (np.log(U) < np.float32(0.5) * X * X + b *
+            if (np.log(U) < float32(0.5) * X * X + b *
                     (f32_one - V + np.log(V))):
                 return float32(b * V)
 

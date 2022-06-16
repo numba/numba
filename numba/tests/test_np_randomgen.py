@@ -124,9 +124,8 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         # Test with no arguments
         dist_func = lambda x, size, dtype:x.random()
         with self.subTest():
-            # Provide single values so this test would run exactly once
-            self.check_numpy_parity(dist_func, test_size=100,
-                                    test_dtype=np.float64)
+            self.check_numpy_parity(dist_func, test_size=None,
+                                    test_dtype=None)
 
         dist_func = lambda x, size, dtype:x.random(size=size, dtype=dtype)
 
@@ -139,86 +138,133 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                                                 None, _size, _dtype)
 
     def test_standard_normal(self):
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        test_dtypes = [np.float32, np.float64]
+        bitgen_types = [None, MT19937]
+
         # Test with no arguments
         dist_func = lambda x, size, dtype:x.standard_normal()
-        # Provide single values so this test would run exactly once
-        self.check_numpy_parity(dist_func, test_sizes=[100],
-                                test_dtypes=[np.float64])
+        with self.subTest():
+            self.check_numpy_parity(dist_func, test_size=None,
+                                    test_dtype=None)
 
         dist_func = lambda x, size, dtype:\
             x.standard_normal(size=size, dtype=dtype)
-        self.check_numpy_parity(dist_func)
-        self.check_numpy_parity(dist_func, bitgen_type=MT19937)
+
+        for _size in test_sizes:
+            for _dtype in test_dtypes:
+                for _bitgen in bitgen_types:
+                    with self.subTest(_size=_size, _dtype=_dtype,
+                                      _bitgen=_bitgen):
+                        self.check_numpy_parity(dist_func, _bitgen,
+                                                None, _size, _dtype)
 
     def test_standard_exponential(self):
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        test_dtypes = [np.float32, np.float64]
+        bitgen_types = [None, MT19937]
+
         # Test with no arguments
         dist_func = lambda x, size, dtype:x.standard_exponential()
-        # Provide single values so this test would run exactly once
-        self.check_numpy_parity(dist_func, test_sizes=[100],
-                                test_dtypes=[np.float64])
+        with self.subTest():
+            self.check_numpy_parity(dist_func, test_size=None,
+                                    test_dtype=None)
 
         dist_func = lambda x, size, dtype:\
             x.standard_exponential(size=size, dtype=dtype)
-        self.check_numpy_parity(dist_func)
-        self.check_numpy_parity(dist_func, bitgen_type=MT19937)
+
+        for _size in test_sizes:
+            for _dtype in test_dtypes:
+                for _bitgen in bitgen_types:
+                    with self.subTest(_size=_size, _dtype=_dtype,
+                                      _bitgen=_bitgen):
+                        self.check_numpy_parity(dist_func, _bitgen,
+                                                None, _size, _dtype)
+
+    def test_standard_exponential_inv(self):
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        test_dtypes = [np.float32, np.float64]
+        bitgen_types = [None, MT19937]
 
         dist_func = lambda x, size, dtype:\
             x.standard_exponential(size=size, dtype=dtype,  method='inv')
-        self.check_numpy_parity(dist_func)
-        self.check_numpy_parity(dist_func, bitgen_type=MT19937)
+        for _size in test_sizes:
+            for _dtype in test_dtypes:
+                for _bitgen in bitgen_types:
+                    with self.subTest(_size=_size, _dtype=_dtype,
+                                      _bitgen=_bitgen):
+                        self.check_numpy_parity(dist_func, _bitgen,
+                                                None, _size, _dtype)
 
     def test_standard_gamma(self):
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        test_dtypes = [np.float32, np.float64]
+        bitgen_types = [None, MT19937]
+
         dist_func = lambda x, size, dtype: \
             x.standard_gamma(shape=5.0, size=size, dtype=dtype)
-        self.check_numpy_parity(dist_func)
-        self.check_numpy_parity(dist_func, bitgen_type=MT19937)
+        for _size in test_sizes:
+            for _dtype in test_dtypes:
+                for _bitgen in bitgen_types:
+                    with self.subTest(_size=_size, _dtype=_dtype,
+                                      _bitgen=_bitgen):
+                        self.check_numpy_parity(dist_func, _bitgen,
+                                                None, _size, _dtype)
 
     def test_normal(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
         # to make sure it runs only once with default system type.
 
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
         # Test with no arguments
-        dist_func = lambda x, size, dtype:x.normal(loc=1.5, scale=3, size=size)
-        # Provide single values so this test would run exactly once
-        self.check_numpy_parity(dist_func, test_sizes=[100],
-                                test_dtypes=[None])
+        dist_func = lambda x, size, dtype:x.normal()
+        with self.subTest():
+            self.check_numpy_parity(dist_func, test_size=None,
+                                    test_dtype=None)
 
         dist_func = lambda x, size, dtype:x.normal(loc=1.5, scale=3, size=size)
-        self.check_numpy_parity(dist_func, test_dtypes=[None])
-        self.check_numpy_parity(dist_func, bitgen_type=MT19937,
-                                test_dtypes=[None])
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None)
 
     def test_exponential(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
         # to make sure it runs only once with default system type.
 
-        # Test with no arguments
-        dist_func = lambda x, size, dtype:x.exponential(scale=1.5,size=size)
-        # Provide single values so this test would run exactly once
-        self.check_numpy_parity(dist_func, test_sizes=[100],
-                                test_dtypes=[None])
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
 
-        dist_func = lambda x, size, dtype:x.exponential(scale=1.5,size=size)
-        self.check_numpy_parity(dist_func, test_dtypes=[None])
-        self.check_numpy_parity(dist_func, bitgen_type=MT19937,
-                                test_dtypes=[None])
+        # Test with no arguments
+        dist_func = lambda x, size, dtype:x.exponential()
+        with self.subTest():
+            self.check_numpy_parity(dist_func, test_size=None,
+                                    test_dtype=None)
+
+        dist_func = lambda x, size, dtype:x.exponential(scale=1.5, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None)
 
     def test_gamma(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
         # to make sure it runs only once with default system type.
 
-        # Test with no arguments
-        dist_func = lambda x, size, dtype:x.gamma(shape=5.0, scale=1.5,
-                                                  size=size)
-        # Provide single values so this test would run exactly once
-        self.check_numpy_parity(dist_func, test_sizes=[100],
-                                test_dtypes=[None])
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
 
         dist_func = lambda x, size, dtype:x.gamma(shape=5.0, scale=1.5,
                                                   size=size)
-        self.check_numpy_parity(dist_func, test_dtypes=[None])
-        self.check_numpy_parity(dist_func, bitgen_type=MT19937,
-                                test_dtypes=[None])
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None)
 
 
 class TestGeneratorCaching(TestCase, SerialMixin):
