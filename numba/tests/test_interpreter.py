@@ -628,7 +628,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
 
     Tests that check a peephole optimization for constant
     dictionaries in Python 3.10. The bytecode changes when
-    number elements > 15, which splits the constant dictionary
+    number of elements > 15, which splits the constant dictionary
     into multiple dictionaries that are joined by a update()
     call.
 
@@ -783,7 +783,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         py_func = const_keys_func
         cfunc = njit()(const_keys_func)
         # str to make the dictionary heterogeneous.
-        value = "efwf"
+        value = "a_string"
         a = py_func(value)
         b = cfunc(value)
         self.assertEqual(a, b)
@@ -791,7 +791,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
     @skip_unless_py10
     def test_large_dict_mutation_not_carried(self):
         """Checks that the optimization for large dictionaries
-        do not incorrect update initial values due ot other
+        do not incorrectly update initial values due to other
         mutations.
         """
         def bar(d):
@@ -925,7 +925,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
             return d["S"]
 
         with self.assertRaises(UnsupportedError) as raises:
-            njit()(inline_func)("efwf", False)
+            njit()(inline_func)("a_string", False)
         self.assertIn(
             'You can resolve this issue by moving the control flow out',
             str(raises.exception)
@@ -968,7 +968,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
 
         py_func = non_inline_func
         cfunc = njit()(non_inline_func)
-        value = "efwf"
+        value = "a_string"
         a = py_func(value, False)
         b = cfunc(value, False)
         self.assertEqual(a, b)

@@ -1023,7 +1023,7 @@ def peep_hole_fuse_dict_add_updates(func_ir):
     # move a map to the last location at which there was _update_from_bytecode.
 
     errmsg = textwrap.dedent("""
-        DICT_UPDATE encountered that could not be replaced.
+        A DICT_UPDATE op-code was encountered that could not be replaced.
         If you have created a large constant dictionary, this may
         be an an indication that you are using inlined control
         flow. You can resolve this issue by moving the control flow out of
@@ -1052,7 +1052,7 @@ def peep_hole_fuse_dict_add_updates(func_ir):
         for i, stmt in enumerate(blk.body):
             # What instruction should we append
             new_inst = stmt
-            # Name that shoud be skipped when tracking used
+            # Name that should be skipped when tracking used
             # vars in statement. This is always the lhs with
             # a build_map.
             stmt_build_map_out = None
