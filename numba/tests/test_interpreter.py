@@ -877,6 +877,9 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         @overload(check_before, prefer_literal=True)
         def ol_check_before(d):
             nonlocal checked_before
+            # Typing iteration from d1.update(d2)
+            # may reset the initial values to None,
+            # so we only check on the first iteration.
             if not checked_before:
                 checked_before = True
                 a = {
@@ -892,6 +895,9 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         @overload(check_after, prefer_literal=True)
         def ol_check_after(d):
             nonlocal checked_after
+            # Typing iteration from d1.update(d2)
+            # may reset the initial values to None,
+            # so we only check on the first iteration.
             if not checked_after:
                 checked_after = True
                 self.assertTrue(isinstance(d, types.DictType))
