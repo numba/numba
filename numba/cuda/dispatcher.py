@@ -6,6 +6,7 @@ import functools
 import warnings
 
 from numba.core import config, serialize, sigutils, types, typing, utils
+from numba.core.caching import Cache, CacheImpl
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.dispatcher import Dispatcher
 from numba.core.errors import NumbaPerformanceWarning, NumbaDeprecationWarning
@@ -106,13 +107,39 @@ class _Kernel(serialize.ReduceMixin):
         self._codelibrary = lib
         self.call_helper = cres.call_helper
 
+        # The following are referred to by the cache implementation. Note:
+        # - There are no referenced environments in CUDA.
+        # - Kernels don't have lifted code.
+        # - reload_init is only for parfors.
+        self.target_context = tgt_ctx
+        self.fndesc = cres.fndesc
+        self.environment = cres.environment
+        self._referenced_environments = []
+        self.lifted = []
+        self.reload_init = []
+
+    @property
+    def library(self):
+        return self._codelibrary
+
+    @property
+    def type_annotation(self):
+        return self._type_annotation
+
+    def _find_referenced_environments(self):
+        return self._referenced_environments
+
+    @property
+    def codegen(self):
+        return self.target_context.codegen()
+
     @property
     def argument_types(self):
         return tuple(self.signature.args)
 
     @classmethod
-    def _rebuild(cls, cooperative, name, argtypes, codelibrary, link, debug,
-                 lineinfo, call_helper, extensions):
+    def _rebuild(cls, cooperative, name, signature, codelibrary,
+                 debug, lineinfo, call_helper, extensions):
         """
         Rebuild an instance.
         """
@@ -120,9 +147,10 @@ class _Kernel(serialize.ReduceMixin):
         # invoke parent constructor
         super(cls, instance).__init__()
         # populate members
+        instance.entry_point = None
         instance.cooperative = cooperative
         instance.entry_name = name
-        instance.argument_types = tuple(argtypes)
+        instance.signature = signature
         instance._type_annotation = None
         instance._codelibrary = codelibrary
         instance.debug = debug
@@ -140,7 +168,7 @@ class _Kernel(serialize.ReduceMixin):
         Stream information is discarded.
         """
         return dict(cooperative=self.cooperative, name=self.entry_name,
-                    argtypes=self.argtypes, codelibrary=self.codelibrary,
+                    signature=self.signature, codelibrary=self._codelibrary,
                     debug=self.debug, lineinfo=self.lineinfo,
                     call_helper=self.call_helper, extensions=self.extensions)
 
@@ -479,6 +507,31 @@ class _LaunchConfiguration:
                                     self.stream, self.sharedmem)
 
 
+class CUDACacheImpl(CacheImpl):
+    def reduce(self, kernel):
+        return kernel._reduce_states()
+
+    def rebuild(self, target_context, payload):
+        return _Kernel._rebuild(**payload)
+
+    def check_cachable(self, cres):
+        # CUDA Kernels are always cachable - the reasons for an entity not to
+        # be cachable are:
+        #
+        # - The presence of lifted loops, or
+        # - The presence of dynamic globals.
+        #
+        # neither of which apply to CUDA kernels.
+        return True
+
+
+class CUDACache(Cache):
+    """
+    Implements a cache that saves and loads CUDA kernels and compile results.
+    """
+    _impl_class = CUDACacheImpl
+
+
 class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
     '''
     CUDA Dispatcher object. When configured and called, the dispatcher will
@@ -516,6 +569,9 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
     @property
     def _numba_type_(self):
         return cuda_types.CUDADispatcher(self)
+
+    def enable_caching(self):
+        self._cache = CUDACache(self.py_func)
 
     @functools.lru_cache(maxsize=128)
     def configure(self, griddim, blockdim, stream=0, sharedmem=0):
@@ -718,6 +774,11 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
         return cres
 
+    def add_overload(self, kernel, argtypes):
+        c_sig = [a._code for a in argtypes]
+        self._insert(c_sig, kernel, cuda=True)
+        self.overloads[argtypes] = kernel
+
     def compile(self, sig):
         '''
         Compile and bind to the current context a version of this kernel
@@ -725,23 +786,33 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         '''
         argtypes, return_type = sigutils.normalize_signature(sig)
         assert return_type is None or return_type == types.none
+
+        # Do we already have an in-memory compiled kernel?
         if self.specialized:
             return next(iter(self.overloads.values()))
         else:
             kernel = self.overloads.get(argtypes)
-        if kernel is None:
+            if kernel is not None:
+                return kernel
+
+        # Can we load from the disk cache?
+        kernel = self._cache.load_overload(sig, self.targetctx)
+
+        if kernel is not None:
+            self._cache_hits[sig] += 1
+        else:
+            # We need to compile a new kernel
+            self._cache_misses[sig] += 1
             if not self._can_compile:
                 raise RuntimeError("Compilation disabled")
-            kernel = _Kernel(self.py_func, argtypes,
-                             **self.targetoptions)
-            # Inspired by _DispatcherBase.add_overload, but differs slightly
-            # because we're inserting a _Kernel object instead of a compiled
-            # function.
-            c_sig = [a._code for a in argtypes]
-            self._insert(c_sig, kernel, cuda=True)
-            self.overloads[argtypes] = kernel
 
+            kernel = _Kernel(self.py_func, argtypes, **self.targetoptions)
+            # We call bind to force codegen, so that there is a cubin to cache
             kernel.bind()
+            self._cache.save_overload(sig, kernel)
+
+        self.add_overload(kernel, argtypes)
+
         return kernel
 
     def inspect_llvm(self, signature=None):

@@ -12,7 +12,7 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
 
 
 def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
-        opt=True, **kws):
+        opt=True, cache=False, **kws):
     """
     JIT compile a python function conforming to the CUDA Python specification.
     If a signature is supplied, then a function is returned that takes a
@@ -49,6 +49,8 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
        assembly code. This enables inspection of the source code in NVIDIA
        profiling tools and correlation with program counter sampling.
     :type lineinfo: bool
+    :param cache: If True, enables the file-based cache for this function.
+    :type cache: bool
     """
 
     if link and config.ENABLE_CUDASIM:
@@ -102,6 +104,9 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
 
             disp = CUDADispatcher(func, targetoptions=targetoptions)
 
+            if cache:
+                disp.enable_caching()
+
             if device:
                 from numba.core import typeinfer
                 with typeinfer.register_dispatcher(disp):
@@ -124,7 +129,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             else:
                 def autojitwrapper(func):
                     return jit(func, device=device, debug=debug, opt=opt,
-                               link=link, **kws)
+                               link=link, cache=cache, **kws)
 
             return autojitwrapper
         # func_or_sig is a function
@@ -140,7 +145,12 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                 targetoptions['fastmath'] = fastmath
                 targetoptions['device'] = device
                 targetoptions['extensions'] = extensions
-                return CUDADispatcher(func_or_sig, targetoptions=targetoptions)
+                disp = CUDADispatcher(func_or_sig, targetoptions=targetoptions)
+
+                if cache:
+                    disp.enable_caching()
+
+                return disp
 
 
 def declare_device(name, sig):

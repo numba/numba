@@ -5,7 +5,7 @@ from warnings import warn
 from numba.core import config, serialize
 from numba.core.codegen import Codegen, CodeLibrary
 from numba.core.errors import NumbaInvalidConfigWarning
-from .cudadrv import devices, driver, nvvm
+from .cudadrv import devices, driver, nvvm, runtime
 
 import ctypes
 import numpy as np
@@ -302,7 +302,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
                    'libraries to link against')
             raise RuntimeError(msg)
         return dict(
-            codegen=self._codegen,
+            codegen=None,
             name=self.name,
             entry_name=self._entry_name,
             module=self._module,
@@ -337,6 +337,8 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         instance._max_registers = max_registers
         instance._nvvm_options = nvvm_options
 
+        return instance
+
 
 class JITCUDACodegen(Codegen):
     """
@@ -360,3 +362,11 @@ class JITCUDACodegen(Codegen):
 
     def _add_module(self, module):
         pass
+
+    def magic_tuple(self):
+        """
+        Return a tuple unambiguously describing the codegen behaviour.
+        """
+        ctx = devices.get_context()
+        cc = ctx.device.compute_capability
+        return (runtime.runtime.get_version(), cc)
