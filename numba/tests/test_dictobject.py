@@ -2402,6 +2402,28 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
 
         self.assertPreciseEqual(bar(), bar.py_func())
 
+    def test_update_error(self):
+        # Tests that dict.update produces a reasonable
+        # error with a LiteralStrKeyDict input.
+        @njit
+        def foo():
+
+            d1 = {
+                'a': 2,
+                'b': 4,
+                'c': 'a'
+            }
+            d1.update({'x': 3})
+            return d1
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+
+        self.assertIn(
+            "Cannot mutate a literal dictionary",
+            str(raises.exception)
+        )
+
 
 if __name__ == '__main__':
     unittest.main()

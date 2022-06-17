@@ -1312,6 +1312,7 @@ def literalstrkeydict_banned_impl_delitem(d, k):
 @overload_method(types.LiteralStrKeyDict, 'pop')
 @overload_method(types.LiteralStrKeyDict, 'clear')
 @overload_method(types.LiteralStrKeyDict, 'setdefault')
+@overload_method(types.LiteralStrKeyDict, 'update')
 def literalstrkeydict_banned_impl_mutators(d, *args):
     if not isinstance(d, types.LiteralStrKeyDict):
         return

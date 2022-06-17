@@ -81,21 +81,24 @@ class Assigner(object):
         return None
 
 
-def _remove_assignment_definition(old_body, idx, func_ir):
+def _remove_assignment_definition(old_body, idx, func_ir, ignore_missing=False):
     """
     Deletes the definition defined for old_body at index idx
     from func_ir. We assume this stmt will be deleted from
     new_body.
+
+    We pass ignore_missing if we may attempt to delete the
+    same definition multiple times.
     """
     lhs = old_body[idx].target.name
     rhs = old_body[idx].value
     if rhs in func_ir._definitions[lhs]:
         func_ir._definitions[lhs].remove(rhs)
-    else:
+    elif not ignore_missing:
         raise UnsupportedError(
             "Inconsistency found in the definitions while executing"
-            " peep_hole_call_function_ex_to_call_function_kw. This suggests"
-            " an internal error or inconsistency elsewhere in the compiler."
+            " a peephole optimization. This suggests an internal"
+            " error or inconsistency elsewhere in the compiler."
         )
 
 
@@ -686,7 +689,8 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
             new_body.append(stmt)
         # Replace the block body if we changed the IR
         if blk_changed:
-            blk.body = [x for x in new_body if x is not None]
+            blk.body.clear()
+            blk.body.extend([x for x in new_body if x is not None])
     return func_ir
 
 
@@ -1032,7 +1036,7 @@ def peep_hole_fuse_dict_add_updates(func_ir):
         # This is the index of every build_map or __setitem__
         # in the IR that will need to be removed if the map
         # is updated.
-        lit_map_use_idx = {}
+        lit_map_use_idx = collections.defaultdict(list)
         # literal map var name -> list of key/value items for build map
         map_updates = {}
         blk_changed = False
@@ -1097,7 +1101,10 @@ def peep_hole_fuse_dict_add_updates(func_ir):
                                 for linenum in lit_map_use_idx[update_map_name]:
                                     # Drop the existing definition.
                                     _remove_assignment_definition(
-                                        blk.body, linenum, func_ir
+                                        blk.body,
+                                        linenum,
+                                        func_ir,
+                                        ignore_missing=True
                                     )
                                     # Delete it from the new block
                                     new_body[linenum] = None
@@ -1108,7 +1115,7 @@ def peep_hole_fuse_dict_add_updates(func_ir):
                                 # Add d1 as the new instruction, removing the
                                 # old definition.
                                 _remove_assignment_definition(
-                                    blk.body, i, func_ir
+                                    blk.body, i, func_ir, ignore_missing=True
                                 )
                                 new_inst = _build_new_build_map(
                                     func_ir,
@@ -1155,7 +1162,8 @@ def peep_hole_fuse_dict_add_updates(func_ir):
 
         if blk_changed:
             # If the block is changed replace the block body.
-            blk.body = [x for x in new_body if x is not None]
+            blk.body.clear()
+            blk.body.extend([x for x in new_body if x is not None])
 
     return func_ir
 

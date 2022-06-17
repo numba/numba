@@ -630,12 +630,13 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
     Tests that check a peephole optimization for constant
     dictionaries in Python 3.10. The bytecode changes when
     number elements > 15, which splits the constant dictionary
-    into multiple dictionaries that are joined by a update()
-    call.
+    into multiple dictionaries that are joined by a DICT_UPDATE
+    bytecode instruction.
 
     This optimization modifies the IR to rejoin dictionaries
-    and remove the update() calls. This then allows code that
-    depends on literal dictionaries or literal keys to succeed.
+    and remove the DICT_UPDATE generated code. This then allows
+    code that depends on literal dictionaries or literal keys
+    to succeed.
     """
 
     @skip_unless_py10
@@ -678,9 +679,9 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         self.assertEqual(a, b)
 
     @skip_unless_py10
-    def test_large_heterogeneous_const_keys_initial_values(self):
-        """Check the initial values for a constant dictionary requiring
-        optimizations.
+    def test_large_heterogenous_LiteralStrKeyDict_initial_values(self):
+        """Check the initial values for a LiteralStrKeyDict requiring
+        optimizations because it is heterogenous.
         """
 
         def bar(d):
@@ -973,6 +974,108 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         a = py_func(value, False)
         b = cfunc(value, False)
         self.assertEqual(a, b)
+
+    @skip_unless_py10
+    def test_fuse_twice_literal_values(self):
+        """
+        Tests that the correct literal values are generated
+        for a dictionary that produces two DICT_UPDATE
+        bytecode entries for the same dictionary.
+        """
+        def bar(d):
+            ...
+
+        @overload(bar)
+        def ol_bar(d):
+            a = {
+                "a1" : 1,
+                "a2" : 2,
+                "a3" : 3,
+                "a4" : 4,
+                "a5" : 5,
+                "a6" : 6,
+                "a7" : 7,
+                "a8" : 8,
+                "a9" : 9,
+                "a10" : 10,
+                "a11" : 11,
+                "a12" : 12,
+                "a13" : 13,
+                "a14" : 14,
+                "a15" : 15,
+                "a16" : 16,
+                "a17" : 17,
+                "a18" : 18,
+                "a19" : 19,
+                "a20" : 20,
+                "a21" : 21,
+                "a22" : 22,
+                "a23" : 23,
+                "a24" : 24,
+                "a25" : 25,
+                "a26" : 26,
+                "a27" : 27,
+                "a28" : 28,
+                "a29" : 29,
+                "a30" : 30,
+                "a31" : 31,
+                "a32" : 32,
+                "a33" : 33,
+                "a34" : 34, # 34 items is the limit of
+                            # (LOAD_CONST + MAP_ADD)^n + DICT_UPDATE
+                "a35" : 35, # 35 Generates an additional BUILD_MAP + DICT_UPDATE
+            }
+            if d.initial_value is None:
+                return lambda d: literally(d)
+            self.assertTrue(isinstance(d, types.DictType))
+            self.assertEqual(d.initial_value, a)
+            return lambda d: d
+
+        @njit
+        def foo():
+            # This dictionary is mutated, check the initial_value carries
+            # correctly and is not mutated
+            d = {
+                "a1" : 1,
+                "a2" : 2,
+                "a3" : 3,
+                "a4" : 4,
+                "a5" : 5,
+                "a6" : 6,
+                "a7" : 7,
+                "a8" : 8,
+                "a9" : 9,
+                "a10" : 10,
+                "a11" : 11,
+                "a12" : 12,
+                "a13" : 13,
+                "a14" : 14,
+                "a15" : 15,
+                "a16" : 16,
+                "a17" : 17,
+                "a18" : 18,
+                "a19" : 19,
+                "a20" : 20,
+                "a21" : 21,
+                "a22" : 22,
+                "a23" : 23,
+                "a24" : 24,
+                "a25" : 25,
+                "a26" : 26,
+                "a27" : 27,
+                "a28" : 28,
+                "a29" : 29,
+                "a30" : 30,
+                "a31" : 31,
+                "a32" : 32,
+                "a33" : 33,
+                "a34" : 34, # 34 items is the limit of
+                            # (LOAD_CONST + MAP_ADD)^n + DICT_UPDATE
+                "a35" : 35, # 35 Generates an additional BUILD_MAP + DICT_UPDATE
+            }
+            bar(d)
+
+        foo()
 
 
 class TestListExtendInStarArgNonTupleIterable(MemoryLeakMixin, TestCase):
