@@ -165,6 +165,7 @@ def class_ne(x, y):
         lambda x, y: not (x == y),
     )
 
+
 def register_reflected_overload(func, meth_forward, meth_reflected):
     def class_lt(x, y):
         normal_impl = try_call_method(x, meth_forward, 2)
@@ -178,7 +179,6 @@ def register_reflected_overload(func, meth_forward, meth_reflected):
         return take_first(normal_impl, reflected_impl)
 
     class_instance_overload(func)(class_lt)
-
 
 
 register_simple_overload(abs, "abs")
