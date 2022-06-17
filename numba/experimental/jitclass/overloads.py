@@ -152,14 +152,11 @@ def class_str(x):
     )
 
 
-@class_instance_overload(operator.eq)
-def class_eq(x, y):
-    # TODO: Fallback to x is y.
-    return try_call_method(x, "__eq__", 2)
-
-
 @class_instance_overload(operator.ne)
 def class_ne(x, y):
+    # This doesn't use register_reflected_overload like the other operators
+    # because it falls back to inverting __eq__ rather than reflecting its
+    # arguments (as per the definition of the Python data model).
     return take_first(
         try_call_method(x, "__ne__", 2),
         lambda x, y: not (x == y),
@@ -190,6 +187,10 @@ register_reflected_overload(operator.ge, "ge", "le")
 register_reflected_overload(operator.gt, "gt", "lt")
 register_reflected_overload(operator.le, "le", "ge")
 register_reflected_overload(operator.lt, "lt", "gt")
+
+# Note that eq is missing support for fallback to `x is y`, but `is` and
+# `operator.is` are presently unsupported in general.
+register_reflected_overload(operator.eq, "eq", "eq")
 
 # Arithmetic operators.
 register_simple_overload(operator.add, "add", n_args=2)

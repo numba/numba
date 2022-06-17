@@ -1808,6 +1808,59 @@ def f(x, y):
         # Truth values from bool(obj) should be the same type
         self.assertEqual(type(py_class_bool), type(jitted_class_bool))
 
+    def test_operator_reflection(self):
+        class OperatorsDefined:
+            def __init__(self, x):
+                self.x = x
+
+            def __eq__(self, other):
+                return self.x == other.x
+
+            def __hash__(self):
+                # FIXME: This should not be needed fix for #5877!
+                return None
+
+            def __le__(self, other):
+                return self.x <= other.x
+
+            def __lt__(self, other):
+                return self.x < other.x
+
+            def __ge__(self, other):
+                return self.x >= other.x
+
+            def __gt__(self, other):
+                return self.x > other.x
+
+        class NoOperatorsDefined:
+            def __init__(self, x):
+                self.x = x
+
+        spec = [('x', types.int32)]
+        JitOperatorsDefined = jitclass(spec)(OperatorsDefined)
+        JitNoOperatorsDefined = jitclass(spec)(NoOperatorsDefined)
+
+        py_ops_defined = OperatorsDefined(2)
+        py_ops_not_defined = NoOperatorsDefined(3)
+
+        jit_ops_defined = JitOperatorsDefined(2)
+        jit_ops_not_defined = JitNoOperatorsDefined(3)
+
+        self.assertEqual(py_ops_not_defined == py_ops_defined,
+                         jit_ops_not_defined == jit_ops_defined)
+
+        self.assertEqual(py_ops_not_defined <= py_ops_defined,
+                         jit_ops_not_defined <= jit_ops_defined)
+
+        self.assertEqual(py_ops_not_defined < py_ops_defined,
+                         jit_ops_not_defined < jit_ops_defined)
+
+        self.assertEqual(py_ops_not_defined >= py_ops_defined,
+                         jit_ops_not_defined >= jit_ops_defined)
+
+        self.assertEqual(py_ops_not_defined > py_ops_defined,
+                         jit_ops_not_defined > jit_ops_defined)
+
 
 if __name__ == "__main__":
     unittest.main()
