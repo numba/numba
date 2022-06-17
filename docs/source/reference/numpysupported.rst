@@ -583,6 +583,42 @@ Modules
 ``random``
 ----------
 
+Generator Objects
+'''''''''''''''''
+Numba supports :py:class:`numpy.random.Generator()` objects. As of version 0.56, users can pass
+individual NumPy :py:class:`Generator` objects into Numba functions and use their
+methods inside the functions. The same algorithms are used as NumPy for
+random number generation hence maintaining parity between the random
+number generated using NumPy and Numba under identical arguments 
+(also the same documentation notes as NumPy :py:class:`Generator` methods apply).
+The current Numba support for :py:class:`Generator` is not thread-safe, hence we
+do not recommend using :py:class:`Generator` methods in methods with parallel
+execution logic.
+
+.. note::
+  NumPy's :py:class:`Generator` objects rely on :py:class:`BitGenerator` to manage state
+  and generate the random bits, which are then transformed into random
+  values from useful distributions. Numba will ``unbox`` the :py:class:`Generator` objects
+  and will maintain a reference to the underlying :py:class:`BitGenerator` objects using NumPy's
+  ``ctypes`` interface bindings. Hence :py:class:`Generator` objects can cross the JIT boundary
+  and their functions be used within Numba-Jit code. Note that since only references
+  to :py:class:`BitGenerator` objects are maintained, any change to the state of a particular
+  :py:class:`Generator` object outside Numba code would affect the state of :py:class:`Generator`
+  inside the Numba code.
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_numpy_generators.py
+   :language: python
+   :start-after: magictoken.npgen_usage.begin
+   :end-before: magictoken.npgen_usage.end
+   :dedent: 8
+
+The following :py:class:`Generator` methods are supported:
+
+* :func:`numpy.random.Generator().random()`
+
+RandomState and legacy Random number generation
+'''''''''''''''''''''''''''''''''''''''''''''''
+
 Numba supports top-level functions from the
 `numpy.random <http://docs.scipy.org/doc/numpy/reference/routines.random.html>`_
 module, but does not allow you to create individual RandomState instances.
