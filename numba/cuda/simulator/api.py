@@ -91,9 +91,10 @@ def jit(func_or_sig=None, device=False, debug=False, argtypes=None,
         def jitwrapper(fn):
             return FakeCUDAKernel(fn,
                                   device=device,
-                                  fastmath=fastmath)
+                                  fastmath=fastmath,
+                                  debug=debug)
         return jitwrapper
-    return FakeCUDAKernel(func_or_sig, device=device)
+    return FakeCUDAKernel(func_or_sig, device=device, debug=debug)
 
 
 @contextmanager
