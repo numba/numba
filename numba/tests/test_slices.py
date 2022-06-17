@@ -220,7 +220,9 @@ class TestSlices(MemoryLeakMixin, TestCase):
             slice(1),
             slice(None, 1, 1),
             slice(1, None, 1),
-            slice(None, None, 1)
+            slice(None, None, 1),
+            slice(None),
+            slice(None, None, None)
         )
         for sl in slices:
             self.assertEqual(sl, f(sl))
