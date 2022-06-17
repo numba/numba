@@ -1072,6 +1072,7 @@ class TestCFuncCache(BaseCacheTest):
         self.run_in_separate_process()
 
 
+@skip_parfors_unsupported
 class TestParforCache(BaseCacheTest):
 
     here = os.path.dirname(__file__)

@@ -1112,12 +1112,15 @@ class TestParforNumPy(TestParforsBase):
         A = np.array([1., 0., 3., 2., 3.])
         B = np.random.randint(10, size=n).astype(np.int32)
         C = np.random.ranf((n, n))  # test multi-dimensional array
+        D = np.array([1., 0., np.nan, 2., 3.])
         self.check(test_impl1, A)
         self.check(test_impl1, B)
         self.check(test_impl1, C)
+        self.check(test_impl1, D)
         self.check(test_impl2, A)
         self.check(test_impl2, B)
         self.check(test_impl2, C)
+        self.check(test_impl2, D)
 
         # checks that 0d array input raises
         msg = 'attempt to get argmax of an empty sequence'
@@ -1145,12 +1148,15 @@ class TestParforNumPy(TestParforsBase):
         A = np.array([1., 0., 2., 0., 3.])
         B = np.random.randint(10, size=n).astype(np.int32)
         C = np.random.ranf((n, n))  # test multi-dimensional array
+        D = np.array([1., 0., np.nan, 0., 3.])
         self.check(test_impl1, A)
         self.check(test_impl1, B)
         self.check(test_impl1, C)
+        self.check(test_impl1, D)
         self.check(test_impl2, A)
         self.check(test_impl2, B)
         self.check(test_impl2, C)
+        self.check(test_impl2, D)
 
         # checks that 0d array input raises
         msg = 'attempt to get argmin of an empty sequence'
