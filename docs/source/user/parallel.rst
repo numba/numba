@@ -619,9 +619,19 @@ sized chunks and gives one such chunk to each configured thread.
 (See :ref:`setting_the_number_of_threads`).
 This scheduling approach is equivalent to OpenMP's static schedule with no specified
 chunk size and is appropriate when the work required for each iteration is nearly constant.
+Conversely, if the work required per iteration, as shown in the ``prange`` loop below,
+varies significantly then this static
+scheduling approach can lead to load imbalances and longer execution times.
 
-Conversely, if the work required per iteration varies significantly then this static
-scheduling approach can lead to load imbalances and longer execution times.  In such cases,
+.. literalinclude:: ../../../numba/tests/doc_examples/test_parallel_chunksize.py
+   :language: python
+   :caption: from ``test_unbalanced_example`` of ``numba/tests/doc_examples/test_parallel_chunksize.py``
+   :start-after: magictoken.ex_unbalanced.begin
+   :end-before: magictoken.ex_unbalanced.end
+   :dedent: 12
+   :linenos:
+
+In such cases,
 Numba provides a mechanism to control how many iterations of a parallel region
 (i.e., the chunk size) go into each chunk.
 Numba then computes the number of required chunks which is
@@ -633,20 +643,8 @@ available chunk.  This scheduling approach is similar to OpenMP's dynamic schedu
 option with the specified chunk size.  To minimize execution time, the programmer must
 pick a chunk size that strikes a balance between greater load balancing with smaller
 chunk sizes and less scheduling overhead with larger chunk sizes.
-
-There are some cases in which the actual chunk sizes may differ from the requested
-chunk size.  First, if the number of required chunks based on the specified chunk size
-is less than the number of configured threads then Numba will use all of the configured
-threads to execute the parallel region.  In this case, the actual chunk size will be
-less than the requested chunk size.  Second, due to truncation, in cases where the
-iteration count is slightly less than a multiple of the chunk size
-(e.g., 14 iterations and a specified chunk size of 5), the actual chunk size will be
-larger than the specified chunk size.  As in the given example, the number of chunks
-would be 2 and the actual chunk size would be 7 (i.e., 14 / 2).  Lastly, since Numba
-divides an N-dimensional iteration space into N-dimensional (hyper)rectangular chunks,
-it may be the case there are not N integer factors whose product is equal to the chunk
-size.  In this case, some chunks will have an area/volume larger than the chunk size
-whereas others will be less than the specified chunk size.
+See :ref:`chunk-details-label` for additional details on the internal implementation
+of chunk sizes.
 
 The number of iterations of a parallel region in a chunk is stored as a thread-local
 variable and can be set using

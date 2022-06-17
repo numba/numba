@@ -8,6 +8,32 @@ from numba.tests.support import captured_stdout, skip_parfors_unsupported
 @skip_parfors_unsupported
 class ChunksizeExamplesTest(unittest.TestCase):
 
+    def test_unbalanced_example(self):
+        with captured_stdout():
+            # magictoken.ex_unbalanced.begin
+            from numba import (njit,
+                               prange,
+                               )
+
+            @njit(parallel=True)
+            def func1():
+                n = 100
+                vals = np.empty(n)
+                # The work in each iteration of the following prange
+                # loop is proportional to its index.
+                for i in prange(n):
+                    cur = i
+                    for j in range(i):
+                        if cur % 2 == 0:
+                            cur //= 2
+                        else:
+                            cur = cur * 3 + 1
+                    vals[i] = cur
+                return vals
+
+            func1()
+            # magictoken.ex_unbalanced.end
+
     def test_chunksize_manual(self):
         with captured_stdout():
             # magictoken.ex_chunksize_manual.begin
