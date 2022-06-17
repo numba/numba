@@ -393,7 +393,7 @@ def box_slice_literal(typ, val, c):
                 raise ValueError((
                     f"Unable to create literal slice. "
                     f"Error encountered with {field_name} "
-                    f"attribute: {str(e)}")
+                    f"attribute. {str(e)}")
                 )
 
     py_ctor, py_args = typ.literal_value.__reduce__()
