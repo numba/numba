@@ -1816,10 +1816,6 @@ def f(x, y):
             def __eq__(self, other):
                 return self.x == other.x
 
-            def __hash__(self):
-                # FIXME: This should not be needed fix for #5877!
-                return None
-
             def __le__(self, other):
                 return self.x <= other.x
 
@@ -1861,6 +1857,21 @@ def f(x, y):
         self.assertEqual(py_ops_not_defined > py_ops_defined,
                          jit_ops_not_defined > jit_ops_defined)
 
+    def test_implicit_hash_compiles(self):
+        # Ensure that classes with __hash__ implicitly defined as None due to
+        # the presence of __eq__ are correctly handled by ignoring the __hash__
+        # class member.
+        class ImplicitHash:
+            def __init__(self):
+                pass
+
+            def __eq__(self, other):
+                return False
+
+        jitted = jitclass([])(ImplicitHash)
+        instance = jitted()
+
+        self.assertFalse(instance == instance)
 
 if __name__ == "__main__":
     unittest.main()
