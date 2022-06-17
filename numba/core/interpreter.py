@@ -1055,7 +1055,7 @@ def peep_hole_fuse_dict_add_updates(func_ir):
                     # If we encounter a build map add it to the
                     # tracked maps.
                     lit_map_def_idx[stmt.target.name] = i
-                    lit_map_use_idx[stmt.target.name] = [i]
+                    lit_map_use_idx[stmt.target.name].append(i)
                     map_updates[stmt.target.name] = stmt.value.items.copy()
                 elif stmt.value.op == "call" and i > 0:
                     # If we encounter a call we may need to replace
@@ -1125,8 +1125,9 @@ def peep_hole_fuse_dict_add_updates(func_ir):
                                     map_updates[update_map_name],
                                 )
                                 # Update d1 in lit_map_use_idx to just the new
-                                # definition.
-                                lit_map_use_idx[update_map_name] = [i]
+                                # definition and clear the previous list.
+                                lit_map_use_idx[update_map_name].clear()
+                                lit_map_use_idx[update_map_name].append(i)
                                 # Mark that this block has been modified
                                 blk_changed = True
                             else:

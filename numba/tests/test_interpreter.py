@@ -871,28 +871,33 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         def check_after(x):
             pass
 
+        checked_before = False
+        checked_after = False
+
         @overload(check_before, prefer_literal=True)
         def ol_check_before(d):
-            a = {
-                "a": 1,
-                "b": 2,
-                "c": 3,
-            }
-            self.assertTrue(isinstance(d, types.DictType))
-            self.assertEqual(d.initial_value, a)
+            nonlocal checked_before
+            if not checked_before:
+                checked_before = True
+                a = {
+                    "a": 1,
+                    "b": 2,
+                    "c": 3,
+                }
+                self.assertTrue(isinstance(d, types.DictType))
+                self.assertEqual(d.initial_value, a)
 
-            def impl(d):
-                pass
-            return impl
+            return lambda d: None
 
         @overload(check_after, prefer_literal=True)
         def ol_check_after(d):
-            self.assertTrue(isinstance(d, types.DictType))
-            self.assertTrue(d.initial_value is None)
+            nonlocal checked_after
+            if not checked_after:
+                checked_after = True
+                self.assertTrue(isinstance(d, types.DictType))
+                self.assertTrue(d.initial_value is None)
 
-            def impl(d):
-                pass
-            return impl
+            return lambda d: None
 
         def const_dict_func():
             """
