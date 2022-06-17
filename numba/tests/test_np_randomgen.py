@@ -67,9 +67,9 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                                               test_size, test_dtype)
 
         if test_dtype == np.float32:
-            self.assertPreciseEqual(numba_res, numpy_res, prec='single')
+            self.assertPreciseEqual(numba_res, numpy_res, abs_tol=2**(-21))
         else:
-            self.assertPreciseEqual(numba_res, numpy_res, prec='double')
+            self.assertPreciseEqual(numba_res, numpy_res, abs_tol=2**(-51))
 
         # Check if the end state of both BitGenerators is same
         # after drawing the distributions
