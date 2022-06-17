@@ -168,9 +168,9 @@ def class_ne(x, y):
 
 def register_reflected_overload(func, meth_forward, meth_reflected):
     def class_lt(x, y):
-        normal_impl = try_call_method(x, meth_forward, 2)
+        normal_impl = try_call_method(x, f"__{meth_forward}__", 2)
 
-        if meth_reflected in y.jit_methods:
+        if f"__{meth_reflected}__" in y.jit_methods:
             def reflected_impl(x, y):
                 return y > x
         else:
@@ -186,10 +186,10 @@ register_simple_overload(len, "len")
 register_simple_overload(hash, "hash")
 
 # Comparison operators.
-register_reflected_overload(operator.ge, "__ge__", "__le__")
-register_reflected_overload(operator.gt, "__gt__", "__lt__")
-register_reflected_overload(operator.le, "__le__", "__ge__")
-register_reflected_overload(operator.lt, "__lt__", "__gt__")
+register_reflected_overload(operator.ge, "ge", "le")
+register_reflected_overload(operator.gt, "gt", "lt")
+register_reflected_overload(operator.le, "le", "ge")
+register_reflected_overload(operator.lt, "lt", "gt")
 
 # Arithmetic operators.
 register_simple_overload(operator.add, "add", n_args=2)
