@@ -498,7 +498,7 @@ class _LaunchConfiguration:
             min_grid_size = 128
             grid_size = griddim[0] * griddim[1] * griddim[2]
             if grid_size < min_grid_size:
-                msg = (f"Grid size {grid_size} will likely result in GPU"
+                msg = (f"Grid size {grid_size} will likely result in GPU "
                        "under-utilization due to low occupancy.")
                 warn(NumbaPerformanceWarning(msg))
 
