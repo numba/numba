@@ -1873,5 +1873,6 @@ def f(x, y):
 
         self.assertFalse(instance == instance)
 
+
 if __name__ == "__main__":
     unittest.main()
