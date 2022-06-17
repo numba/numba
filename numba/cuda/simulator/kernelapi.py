@@ -12,6 +12,8 @@ import numpy as np
 
 from numba.np import numpy_support
 
+from .vector_types import vector_types
+
 
 class Dim3(object):
     '''
@@ -237,6 +239,30 @@ class FakeCUDAFp16(object):
     def habs(self, a):
         return abs(a)
 
+    def heq(self, a, b):
+        return a == b
+
+    def hne(self, a, b):
+        return a != b
+
+    def hge(self, a, b):
+        return a >= b
+
+    def hgt(self, a, b):
+        return a > b
+
+    def hle(self, a, b):
+        return a <= b
+
+    def hlt(self, a, b):
+        return a < b
+
+    def hmax(self, a, b):
+        return max(a, b)
+
+    def hmin(self, a, b):
+        return min(a, b)
+
 
 class FakeCUDAModule(object):
     '''
@@ -258,6 +284,15 @@ class FakeCUDAModule(object):
         self._const = FakeCUDAConst()
         self._atomic = FakeCUDAAtomic()
         self._fp16 = FakeCUDAFp16()
+        # Insert the vector types into the kernel context
+        # Note that we need to do this in addition to exposing them as module
+        # variables in `simulator.__init__.py`, because the test cases need
+        # to access the actual cuda module as well as the fake cuda module
+        # for vector types.
+        for name, svty in vector_types.items():
+            setattr(self, name, svty)
+            for alias in svty.aliases:
+                setattr(self, alias, svty)
 
     @property
     def cg(self):

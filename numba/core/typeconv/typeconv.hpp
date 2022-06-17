@@ -36,12 +36,13 @@ class TCCMap {
 public:
     TCCMap();
 
-    unsigned int hash(const TypePair &key) const;
     void insert(const TypePair &key, TypeCompatibleCode val);
     TypeCompatibleCode find(const TypePair &key) const;
 private:
+    size_t hash(const TypePair &key) const;
+
     /* Must be a power of two */
-    static const int TCCMAP_SIZE = 512;
+    static const size_t TCCMAP_SIZE = 512;
     TCCMapBin records[TCCMAP_SIZE];
     int nb_records;
 };

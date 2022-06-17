@@ -15,7 +15,6 @@ from numba import cfunc, carray, farray, njit
 from numba.core import types, typing, utils
 import numba.core.typing.cffi_utils as cffi_support
 from numba.tests.support import TestCase, tag, captured_stderr
-from numba.tests.test_dispatcher import BaseCacheTest
 import unittest
 from numba.np import numpy_support
 
@@ -178,63 +177,6 @@ class TestCFunc(TestCase):
         with self.assertTypingError() as raises:
             cfunc(add_sig)(objmode_usecase)
         self.assertIn("Untyped global name 'object'", str(raises.exception))
-
-
-class TestCFuncCache(BaseCacheTest):
-
-    here = os.path.dirname(__file__)
-    usecases_file = os.path.join(here, "cfunc_cache_usecases.py")
-    modname = "cfunc_caching_test_fodder"
-
-    def run_in_separate_process(self):
-        # Cached functions can be run from a distinct process.
-        code = """if 1:
-            import sys
-
-            sys.path.insert(0, %(tempdir)r)
-            mod = __import__(%(modname)r)
-            mod.self_test()
-
-            f = mod.add_usecase
-            assert f.cache_hits == 1
-            f = mod.outer
-            assert f.cache_hits == 1
-            f = mod.div_usecase
-            assert f.cache_hits == 1
-            """ % dict(tempdir=self.tempdir, modname=self.modname)
-
-        popen = subprocess.Popen([sys.executable, "-c", code],
-                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        out, err = popen.communicate()
-        if popen.returncode != 0:
-            raise AssertionError("process failed with code %s: stderr follows\n%s\n"
-                                 % (popen.returncode, err.decode()))
-
-    def check_module(self, mod):
-        mod.self_test()
-
-    def test_caching(self):
-        self.check_pycache(0)
-        mod = self.import_module()
-        self.check_pycache(6)  # 3 index, 3 data
-
-        self.assertEqual(mod.add_usecase.cache_hits, 0)
-        self.assertEqual(mod.outer.cache_hits, 0)
-        self.assertEqual(mod.add_nocache_usecase.cache_hits, 0)
-        self.assertEqual(mod.div_usecase.cache_hits, 0)
-        self.check_module(mod)
-
-        # Reload module to hit the cache
-        mod = self.import_module()
-        self.check_pycache(6)  # 3 index, 3 data
-
-        self.assertEqual(mod.add_usecase.cache_hits, 1)
-        self.assertEqual(mod.outer.cache_hits, 1)
-        self.assertEqual(mod.add_nocache_usecase.cache_hits, 0)
-        self.assertEqual(mod.div_usecase.cache_hits, 1)
-        self.check_module(mod)
-
-        self.run_in_separate_process()
 
 
 class TestCArray(TestCase):

@@ -91,19 +91,6 @@ def _remove_assignment_definition(old_body, idx, func_ir):
     rhs = old_body[idx].value
     if rhs in func_ir._definitions[lhs]:
         func_ir._definitions[lhs].remove(rhs)
-    elif len(func_ir._definitions[lhs]) == 1:
-        # There appears to be an issue where the RHS of the
-        # definitions doesn't match after the list -> tuple
-        # conversion.
-        # For example the statement is:
-        #
-        #   172list_to_tuple.116 = $170list_append.115
-        #
-        # but the definition is:
-        #
-        #   list_to_tuple(info=('$4build_list.1',))
-        #
-        func_ir._definitions[lhs].clear()
     else:
         raise UnsupportedError(
             "Inconsistency found in the definitions while executing"
@@ -685,32 +672,14 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                 # if the list -> tuple conversion failed and if so
                 # throw an error.
                 call = stmt.value
-                args = call.args
-                vararg = call.vararg
-                if args:
-                    # If we have vararg then args is expected to
-                    # be an empty list.
-                    raise UnsupportedError(errmsg)
-                vararg_loc = i - 1
-                args_def = None
-                found = False
-                while vararg_loc >= 0 and not found:
-                    args_def = blk.body[vararg_loc]
-                    if (
-                        isinstance(args_def, ir.Assign)
-                        and args_def.target.name == vararg.name
-                    ):
-                        found = True
-                    else:
-                        vararg_loc -= 1
-                if not found:
-                    # If we couldn't find where the args are created
-                    # then we can't handle this format.
-                    raise UnsupportedError(errmsg)
-                else:
+                vararg_name = call.vararg.name
+                if (
+                    vararg_name in func_ir._definitions
+                    and len(func_ir._definitions[vararg_name]) == 1
+                ):
                     # If this value is still a list to tuple raise the
                     # exception.
-                    expr = blk.body[vararg_loc].value
+                    expr = func_ir._definitions[vararg_name][0]
                     if isinstance(expr, ir.Expr) and expr.op == "list_to_tuple":
                         raise UnsupportedError(errmsg)
 
@@ -863,7 +832,26 @@ def peep_hole_list_to_tuple(func_ir):
                                             bt = ir.Expr.build_tuple([arg,],
                                                                      expr.loc)
                                         else:
-                                            bt = arg
+                                            # Extend as tuple
+                                            gv_tuple = ir.Global(
+                                                name="tuple", value=tuple,
+                                                loc=expr.loc,
+                                            )
+                                            tuple_var = arg.scope.redefine(
+                                                "$_list_extend_gv_tuple",
+                                                loc=expr.loc,
+                                            )
+                                            new_hole.append(
+                                                ir.Assign(
+                                                    target=tuple_var,
+                                                    value=gv_tuple,
+                                                    loc=expr.loc,
+                                                ),
+                                            )
+                                            bt = ir.Expr.call(
+                                                tuple_var, (arg,), (),
+                                                loc=expr.loc,
+                                            )
                                         var = ir.Var(arg.scope, tmp_name,
                                                      expr.loc)
                                         asgn = ir.Assign(bt, var, expr.loc)
@@ -898,8 +886,8 @@ def peep_hole_list_to_tuple(func_ir):
                         new_hole.append(x)
                 # Finally write the result back into the original build list as
                 # everything refers to it.
-                new_hole.append(ir.Assign(acc, t2l_agn.target,
-                                          the_build_list.loc))
+                append_and_fix(ir.Assign(acc, t2l_agn.target,
+                                         the_build_list.loc))
                 if _DEBUG:
                     print("\nNEW HOLE:")
                     for x in new_hole:
@@ -2158,9 +2146,26 @@ class Interpreter(object):
                                loc=self.loc,)
             self.store(exc, temps[0])
         else:
+            loc = self.loc
             for other, tmp in zip(map(self.get, tuples[1:]), temps):
-                out = ir.Expr.binop(fn=operator.add, lhs=first, rhs=other,
-                                    loc=self.loc)
+                # Emit as `first + tuple(other)`
+                gv_tuple = ir.Global(
+                    name="tuple", value=tuple,
+                    loc=loc,
+                )
+                tuple_var = self.store(
+                    gv_tuple, "$_list_extend_gv_tuple", redefine=True,
+                )
+                tuplify_val = ir.Expr.call(
+                    tuple_var, (other,), (),
+                    loc=loc,
+                )
+                tuplify_var = self.store(tuplify_val, "$_tuplify",
+                                         redefine=True)
+                out = ir.Expr.binop(
+                    fn=operator.add, lhs=first, rhs=self.get(tuplify_var.name),
+                    loc=self.loc,
+                )
                 self.store(out, tmp)
                 first = self.get(tmp)
 

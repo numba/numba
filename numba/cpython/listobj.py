@@ -255,7 +255,7 @@ class ListInstance(_ListPayloadMixin):
             builder.store(cgutils.false_bit, ok)
 
         with builder.if_then(builder.load(ok), likely=True):
-            meminfo = context.nrt.meminfo_new_varsize_dtor(
+            meminfo = context.nrt.meminfo_new_varsize_dtor_unchecked(
                 builder, size=allocsize, dtor=self.get_dtor())
             with builder.if_else(cgutils.is_null(builder, meminfo),
                                  likely=False) as (if_error, if_ok):
@@ -358,8 +358,9 @@ class ListInstance(_ListPayloadMixin):
                 context.call_conv.return_user_exc(builder, MemoryError,
                                                   ("cannot resize list",))
 
-            ptr = context.nrt.meminfo_varsize_realloc(builder, self._list.meminfo,
-                                                      size=allocsize)
+            ptr = context.nrt.meminfo_varsize_realloc_unchecked(builder,
+                                                                self._list.meminfo,
+                                                                size=allocsize)
             cgutils.guard_memory_error(context, builder, ptr,
                                        "cannot resize list")
             self._payload.allocated = new_allocated

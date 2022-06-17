@@ -1655,6 +1655,7 @@ class LiteralUnroll(FunctionPass):
         # rewrite dynamic getitem to static getitem as it's possible some more
         # getitems will now be statically resolvable
         pm.add_pass(GenericRewrites, "Generic Rewrites")
+        pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
         pm.finalize()
         pm.run(state)
         return True

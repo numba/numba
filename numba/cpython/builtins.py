@@ -436,7 +436,7 @@ def lower_empty_tuple(context, builder, sig, args):
 @lower_builtin(tuple, types.BaseTuple)
 def lower_tuple(context, builder, sig, args):
     val, = args
-    return impl_ret_untracked(context, builder, sig.return_type, val)
+    return impl_ret_borrowed(context, builder, sig.return_type, val)
 
 @overload(bool)
 def bool_sequence(x):
@@ -479,13 +479,14 @@ def get_type_min_value(typ):
 @lower_builtin(get_type_min_value, types.DType)
 def lower_get_type_min_value(context, builder, sig, args):
     typ = sig.args[0].dtype
-    bw = typ.bitwidth
 
     if isinstance(typ, types.Integer):
+        bw = typ.bitwidth
         lty = ir.IntType(bw)
         val = typ.minval
         res = ir.Constant(lty, val)
     elif isinstance(typ, types.Float):
+        bw = typ.bitwidth
         if bw == 32:
             lty = ir.FloatType()
         elif bw == 64:
@@ -494,19 +495,25 @@ def lower_get_type_min_value(context, builder, sig, args):
             raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
         npty = getattr(np, 'float{}'.format(bw))
         res = ir.Constant(lty, -np.inf)
+    elif isinstance(typ, (types.NPDatetime, types.NPTimedelta)):
+        bw = 64
+        lty = ir.IntType(bw)
+        val = types.int64.minval + 1 # minval is NaT, so minval + 1 is the smallest value
+        res = ir.Constant(lty, val)
     return impl_ret_untracked(context, builder, lty, res)
 
 @lower_builtin(get_type_max_value, types.NumberClass)
 @lower_builtin(get_type_max_value, types.DType)
 def lower_get_type_max_value(context, builder, sig, args):
     typ = sig.args[0].dtype
-    bw = typ.bitwidth
 
     if isinstance(typ, types.Integer):
+        bw = typ.bitwidth
         lty = ir.IntType(bw)
         val = typ.maxval
         res = ir.Constant(lty, val)
     elif isinstance(typ, types.Float):
+        bw = typ.bitwidth
         if bw == 32:
             lty = ir.FloatType()
         elif bw == 64:
@@ -515,6 +522,11 @@ def lower_get_type_max_value(context, builder, sig, args):
             raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
         npty = getattr(np, 'float{}'.format(bw))
         res = ir.Constant(lty, np.inf)
+    elif isinstance(typ, (types.NPDatetime, types.NPTimedelta)):
+        bw = 64
+        lty = ir.IntType(bw)
+        val = types.int64.maxval
+        res = ir.Constant(lty, val)
     return impl_ret_untracked(context, builder, lty, res)
 
 # -----------------------------------------------------------------------------
@@ -585,7 +597,7 @@ def iterable_max(iterable):
 @lower_builtin(types.TypeRef, types.VarArg(types.Any))
 def redirect_type_ctor(context, builder, sig, args):
     """Redirect constructor implementation to `numba_typeref_ctor(cls, *args)`,
-    which should be overloaded by type implementator.
+    which should be overloaded by the type's implementation.
 
     For example:
 

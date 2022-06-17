@@ -2,8 +2,8 @@ import numpy as np
 from textwrap import dedent
 
 from numba import cuda, uint32, uint64, float32, float64
-from numba.cuda.testing import (unittest, CUDATestCase, skip_unless_cc_32,
-                                skip_unless_cc_50, cc_X_or_above)
+from numba.cuda.testing import (unittest, CUDATestCase, skip_unless_cc_50,
+                                cc_X_or_above)
 from numba.core import config
 
 
@@ -1110,11 +1110,9 @@ class TestCudaAtomics(CUDATestCase):
     def test_atomic_max_uint32(self):
         self.check_atomic_max(dtype=np.uint32, lo=0, hi=65535)
 
-    @skip_unless_cc_32
     def test_atomic_max_int64(self):
         self.check_atomic_max(dtype=np.int64, lo=-65535, hi=65535)
 
-    @skip_unless_cc_32
     def test_atomic_max_uint64(self):
         self.check_atomic_max(dtype=np.uint64, lo=0, hi=65535)
 
@@ -1159,11 +1157,9 @@ class TestCudaAtomics(CUDATestCase):
     def test_atomic_min_uint32(self):
         self.check_atomic_min(dtype=np.uint32, lo=0, hi=65535)
 
-    @skip_unless_cc_32
     def test_atomic_min_int64(self):
         self.check_atomic_min(dtype=np.int64, lo=-65535, hi=65535)
 
-    @skip_unless_cc_32
     def test_atomic_min_uint64(self):
         self.check_atomic_min(dtype=np.uint64, lo=0, hi=65535)
 
@@ -1394,12 +1390,10 @@ class TestCudaAtomics(CUDATestCase):
         self.check_atomic_nanmax(dtype=np.uint32, lo=0, hi=65535,
                                  init_val=0)
 
-    @skip_unless_cc_32
     def test_atomic_nanmax_int64(self):
         self.check_atomic_nanmax(dtype=np.int64, lo=-65535, hi=65535,
                                  init_val=0)
 
-    @skip_unless_cc_32
     def test_atomic_nanmax_uint64(self):
         self.check_atomic_nanmax(dtype=np.uint64, lo=0, hi=65535,
                                  init_val=0)
@@ -1453,12 +1447,10 @@ class TestCudaAtomics(CUDATestCase):
         self.check_atomic_nanmin(dtype=np.uint32, lo=0, hi=65535,
                                  init_val=0)
 
-    @skip_unless_cc_32
     def test_atomic_nanmin_int64(self):
         self.check_atomic_nanmin(dtype=np.int64, lo=-65535, hi=65535,
                                  init_val=0)
 
-    @skip_unless_cc_32
     def test_atomic_nanmin_uint64(self):
         self.check_atomic_nanmin(dtype=np.uint64, lo=0, hi=65535,
                                  init_val=0)
