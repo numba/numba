@@ -236,6 +236,21 @@ class TestSlices(MemoryLeakMixin, TestCase):
 
         self.assertEqual(z, foo())
 
+    def test_literal_slice_maxint(self):
+        # Tests that passing a slice with an integer
+        # that exceeds the maxint size throws a reasonable
+        # error message.
+        @njit()
+        def foo(z):
+            return literally(z)
+
+        maxval = int(2**63)
+        with self.assertRaises(ValueError) as e:
+            foo(slice(None, None, -maxval-1))
+        self.assertIn(
+            "Int value is too large",
+            str(e.exception)
+        )
 
 
 if __name__ == '__main__':

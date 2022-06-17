@@ -7,6 +7,7 @@ from llvmlite import ir
 from numba.core import types, cgutils
 from numba.core.pythonapi import box, unbox, reflect, NativeValue
 from numba.core.errors import NumbaNotImplementedError
+from numba.core.typing.typeof import typeof, Purpose
 
 from numba.cpython import setobj, listobj
 from numba.np import numpy_support
@@ -381,22 +382,25 @@ def unbox_slice(typ, obj, c):
 
 @box(types.SliceLiteral)
 def box_slice_literal(typ, val, c):
+    # Check for integer overflows at compile time.
     slice_lit = typ.literal_value
-    slice_fields = []
     for field_name in ("start", "stop", "step"):
         field_obj = getattr(slice_lit, field_name)
-        field_val = (
-            c.pyapi.make_none()
-            if field_obj is None
-            else c.pyapi.from_native_value(
-                types.literal(field_obj), field_obj, c.env_manager
-            )
-        )
-        slice_fields.append(field_val)
-    slice_val = c.pyapi.slice_new(*slice_fields)
-    for field_obj in slice_fields:
-        c.pyapi.decref(field_obj)
-    return slice_val
+        if isinstance(field_obj, int):
+            try:
+                typeof(field_obj, Purpose)
+            except ValueError as e:
+                raise ValueError(f"Unable to create literal slice. Error encountered with {field_name} attribute: {str(e)}")
+
+    py_ctor, py_args = typ.literal_value.__reduce__()
+    serialized_ctor = c.pyapi.serialize_object(py_ctor)
+    serialized_args = c.pyapi.serialize_object(py_args)
+    ctor = c.pyapi.unserialize(serialized_ctor)
+    args = c.pyapi.unserialize(serialized_args)
+    obj = c.pyapi.call(ctor, args)
+    c.pyapi.decref(ctor)
+    c.pyapi.decref(args)
+    return obj
 
 @unbox(types.StringLiteral)
 def unbox_string_literal(typ, obj, c):
