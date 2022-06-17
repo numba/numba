@@ -119,9 +119,9 @@ if numpy_version >= (1, 22):
     @register_jitable
     def next_float(bitgen):
         return float32(float32(next_uint32(bitgen) >> 8)
-                       * float32(1.0 / 16777216.0))
+                       * float32(1.0) / float32(16777216.0))
 else:
     @register_jitable
     def next_float(bitgen):
         return float32(float32(next_uint32(bitgen) >> 9)
-                       * float32(1.0 / 8388608.0))
+                       * float32(1.0) / float32(8388608.0))
