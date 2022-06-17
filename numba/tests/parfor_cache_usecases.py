@@ -9,6 +9,7 @@ import sys
 
 from numba import njit
 from numba.tests.support import TestCase
+import numpy as np
 
 
 @njit(parallel=True, cache=True)

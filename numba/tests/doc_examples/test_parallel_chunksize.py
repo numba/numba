@@ -14,6 +14,7 @@ class ChunksizeExamplesTest(unittest.TestCase):
             from numba import (njit,
                                prange,
                                )
+            import numpy as np
 
             @njit(parallel=True)
             def func1():
