@@ -864,6 +864,36 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         Tests an example using a regular update is
         not modified by the optimization.
         """
+
+        def check_before(x):
+            pass
+
+        def check_after(x):
+            pass
+
+        @overload(check_before, prefer_literal=True)
+        def ol_check_before(d):
+            a = {
+                "a": 1,
+                "b": 2,
+                "c": 3,
+            }
+            self.assertTrue(isinstance(d, types.DictType))
+            self.assertEqual(d.initial_value, a)
+
+            def impl(d):
+                pass
+            return impl
+
+        @overload(check_after, prefer_literal=True)
+        def ol_check_after(d):
+            self.assertTrue(isinstance(d, types.DictType))
+            self.assertTrue(d.initial_value is None)
+
+            def impl(d):
+                pass
+            return impl
+
         def const_dict_func():
             """
             Dictionary update between two constant
@@ -879,7 +909,9 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
                 "d": 4,
                 "e": 4
             }
+            check_before(d1)
             d1.update(d2)
+            check_after(d1)
             # Create a use of d2 in a new block.
             if len(d1) > 4:
                 return d2
