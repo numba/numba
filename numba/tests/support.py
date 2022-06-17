@@ -4,15 +4,18 @@ Assorted utilities for use in tests.
 
 import cmath
 import contextlib
+from collections import defaultdict
 import enum
 import gc
 import math
 import platform
 import os
+import signal
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import io
 import ctypes
@@ -28,7 +31,11 @@ import numpy as np
 
 from numba import testing
 from numba.core import errors, typing, utils, config, cpu
-from numba.core.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
+from numba.core.compiler import (compile_extra, compile_isolated, Flags,
+                                 DEFAULT_FLAGS, CompilerBase,
+                                 DefaultPassBuilder)
+from numba.core.typed_passes import IRLegalization
+from numba.core.untyped_passes import PreserveIR
 import unittest
 from numba.core.runtime import rtsys
 from numba.np import numpy_support
@@ -66,11 +73,26 @@ skip_py38_or_later = unittest.skipIf(
     "unsupported on py3.8 or later"
 )
 
+skip_unless_py10_or_later = unittest.skipUnless(
+    utils.PYVERSION >= (3, 10),
+    "needs Python 3.10 or later"
+)
+
+skip_unless_py10 = unittest.skipUnless(
+    utils.PYVERSION == (3, 10),
+    "needs Python 3.10"
+)
+
+skip_if_32bit = unittest.skipIf(_32bit, "Not supported on 32 bit")
+
 _msg = "SciPy needed for test"
 skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
 
 _lnx_reason = 'linux only test'
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
+
+_win_reason = 'Windows-only test'
+windows_only = unittest.skipIf(not sys.platform.startswith('win'), _win_reason)
 
 _is_armv7l = platform.machine() == 'armv7l'
 
@@ -97,6 +119,13 @@ skip_ppc64le_issue6465 = unittest.skipIf(platform.machine() == 'ppc64le',
                                          ("Hits: 'mismatch in size of "
                                           "parameter area' in "
                                           "LowerCall_64SVR4"))
+
+# fenv.h on M1 may have various issues:
+# https://github.com/numba/numba/issues/7822#issuecomment-1065356758
+_uname = platform.uname()
+IS_OSX_ARM64 = _uname.system == 'Darwin' and _uname.machine == 'arm64'
+skip_m1_fenv_errors = unittest.skipIf(IS_OSX_ARM64,
+    "fenv.h-like functionality unreliable on OSX arm64")
 
 try:
     import scipy.linalg.cython_lapack
@@ -996,3 +1025,150 @@ def run_in_subprocess(code, flags=None, env=None, timeout=30):
         msg = "process failed with code %s: stderr follows\n%s\n"
         raise AssertionError(msg % (popen.returncode, err.decode()))
     return out, err
+
+
+def strace(work, syscalls, timeout=10):
+    """Runs strace whilst executing the function work() in the current process,
+    captures the listed syscalls (list of strings). Takes an optional timeout in
+    seconds, default is 10, if this is exceeded the process will be sent a
+    SIGKILL. Returns a list of lines that are output by strace.
+    """
+
+    # Open a tmpfile for strace to write into.
+    with tempfile.NamedTemporaryFile('w+t') as ntf:
+
+        parent_pid = os.getpid()
+        strace_binary = shutil.which('strace')
+        if strace_binary is None:
+            raise ValueError("No valid 'strace' binary could be found")
+        cmd = ['strace', # strace
+            '-q', # quietly (no attach/detach print out)
+            '-p', str(parent_pid), # this PID
+            '-e', ','.join(syscalls), # these syscalls
+            '-o', ntf.name] # put output into this file
+
+        # redirect stdout, stderr is handled by the `-o` flag to strace.
+        popen = subprocess.Popen(cmd, stdout=subprocess.PIPE,)
+        strace_pid = popen.pid
+        thread_timeout = threading.Timer(timeout, popen.kill)
+        thread_timeout.start()
+
+        def check_return(problem=''):
+            ret = popen.returncode
+            if ret != 0:
+                msg = ("strace exited non-zero, process return code was:"
+                       f"{ret}. {problem}")
+                raise RuntimeError(msg)
+        try:
+            # push the communication onto a thread so it doesn't block.
+            # start comms thread
+            thread_comms = threading.Thread(target=popen.communicate)
+            thread_comms.start()
+
+            # do work
+            work()
+            # Flush the output buffer file
+            ntf.flush()
+            # interrupt the strace process to stop it if it's still running
+            if popen.poll() is None:
+                os.kill(strace_pid, signal.SIGINT)
+            else:
+                # it's not running, probably an issue, raise
+                problem="If this is SIGKILL, increase the timeout?"
+                check_return(problem)
+            # Make sure the return code is 0, SIGINT to detach is considered
+            # a successful exit.
+            popen.wait()
+            check_return()
+            # collect the data
+            strace_data = ntf.readlines()
+        finally:
+            # join communication, should be stopped now as process has
+            # exited
+            thread_comms.join()
+            # should be stopped already
+            thread_timeout.cancel()
+
+    return strace_data
+
+
+def _strace_supported():
+    """Checks if strace is supported and working"""
+    def force_clone(): # subprocess triggers a clone
+        subprocess.run([sys.executable, '-c', 'exit()'])
+
+    syscall = 'clone'
+    try:
+        trace = strace(force_clone, [syscall,])
+    except Exception:
+        return False
+    return syscall in ''.join(trace)
+
+
+_HAVE_STRACE = _strace_supported()
+
+
+needs_strace = unittest.skipUnless(_HAVE_STRACE, "needs working strace")
+
+
+class IRPreservingTestPipeline(CompilerBase):
+    """ Same as the standard pipeline, but preserves the func_ir into the
+    metadata store after legalisation, useful for testing IR changes"""
+
+    def define_pipelines(self):
+        pipeline = DefaultPassBuilder.define_nopython_pipeline(
+            self.state, "ir_preserving_custom_pipe")
+        # mangle the default pipeline and inject DCE and IR preservation ahead
+        # of legalisation
+
+        # TODO: add a way to not do this! un-finalizing is not a good idea
+        pipeline._finalized = False
+        pipeline.add_pass_after(PreserveIR, IRLegalization)
+
+        pipeline.finalize()
+        return [pipeline]
+
+
+def print_azure_matrix():
+    """This is a utility function that prints out the map of NumPy to Python
+    versions and how many of that combination are being tested across all the
+    declared config for azure-pipelines. It is useful to run when updating the
+    azure-pipelines config to be able to quickly see what the coverage is."""
+    import yaml
+    from yaml import Loader
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    azure_pipe = os.path.join(base_path, '..', '..', 'azure-pipelines.yml')
+    if not os.path.isfile(azure_pipe):
+        self.skipTest("'azure-pipelines.yml' is not available")
+    with open(os.path.abspath(azure_pipe), 'rt') as f:
+        data = f.read()
+    pipe_yml = yaml.load(data, Loader=Loader)
+
+    templates = pipe_yml['jobs']
+    # first look at the items in the first two templates, this is osx/linux
+    py2np_map = defaultdict(lambda: defaultdict(int))
+    for tmplt in templates[:2]:
+        matrix = tmplt['parameters']['matrix']
+        for setup in matrix.values():
+            py2np_map[setup['NUMPY']][setup['PYTHON']]+=1
+
+    # next look at the items in the windows only template
+    winpath = ['..', '..', 'buildscripts', 'azure', 'azure-windows.yml']
+    azure_windows = os.path.join(base_path, *winpath)
+    if not os.path.isfile(azure_windows):
+        self.skipTest("'azure-windows.yml' is not available")
+    with open(os.path.abspath(azure_windows), 'rt') as f:
+        data = f.read()
+    windows_yml = yaml.load(data, Loader=Loader)
+
+    # There's only one template in windows and its keyed differently to the
+    # above, get its matrix.
+    matrix = windows_yml['jobs'][0]['strategy']['matrix']
+    for setup in matrix.values():
+        py2np_map[setup['NUMPY']][setup['PYTHON']]+=1
+
+    print("NumPy | Python | Count")
+    print("-----------------------")
+    for npver, pys in sorted(py2np_map.items()):
+        for pyver, count in pys.items():
+            print(f" {npver} |  {pyver:<4}  |   {count}")

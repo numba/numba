@@ -53,6 +53,20 @@ def callee_ir_validator(func_ir):
                 raise errors.UnsupportedError(msg, loc=stmt.loc)
 
 
+def _created_inlined_var_name(function_name, var_name):
+    """Creates a name for an inlined variable based on the function name and the
+    variable name. It does this "safely" to avoid the use of characters that are
+    illegal in python variable names as there are occasions when function
+    generation needs valid python name tokens."""
+    inlined_name = f'{function_name}.{var_name}'
+    # Replace angle brackets, e.g. "<locals>" is replaced with "_locals_"
+    new_name = inlined_name.replace('<', '_').replace('>', '_')
+    # The version "version" of the closure function e.g. foo$2 (id 2) is
+    # rewritten as "foo_v2". Further "." is also replaced with "_".
+    new_name = new_name.replace('.', '_').replace('$', '_v')
+    return new_name
+
+
 class InlineClosureCallPass(object):
     """InlineClosureCallPass class looks for direct calls to locally defined
     closures, and inlines the body of the closure function to the call site.
@@ -367,7 +381,7 @@ class InlineWorker(object):
             self.validator(callee_ir)
 
         # save an unmutated copy of the callee_ir to return
-        callee_ir_original = callee_ir.copy()
+        callee_ir_original = copy_ir(callee_ir)
         scope = block.scope
         instr = block.body[i]
         call_expr = instr.value
@@ -393,9 +407,17 @@ class InlineWorker(object):
         assert(len(callee_scopes) == 1)
         callee_scope = callee_scopes[0]
         var_dict = {}
-        for var in callee_scope.localvars._con.values():
+        for var in tuple(callee_scope.localvars._con.values()):
             if not (var.name in callee_freevars):
-                new_var = scope.redefine(var.name, loc=var.loc)
+                inlined_name = _created_inlined_var_name(
+                    callee_ir.func_id.unique_name, var.name)
+                # Update the caller scope with the new names
+                new_var = scope.redefine(inlined_name, loc=var.loc)
+                # Also update the callee scope with the new names. Should the
+                # type and call maps need updating (which requires SSA form) the
+                # transformation to SSA is valid as the IR object is internally
+                # consistent.
+                callee_scope.redefine(inlined_name, loc=var.loc)
                 var_dict[var.name] = new_var
         self.debug_print("var_dict = ", var_dict)
         replace_vars(callee_blocks, var_dict)
@@ -599,7 +621,9 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     var_dict = {}
     for var in callee_scope.localvars._con.values():
         if not (var.name in callee_code.co_freevars):
-            new_var = scope.redefine(mk_unique_var(var.name), loc=var.loc)
+            inlined_name = _created_inlined_var_name(
+                callee_ir.func_id.unique_name, var.name)
+            new_var = scope.redefine(inlined_name, loc=var.loc)
             var_dict[var.name] = new_var
     debug_print("var_dict = ", var_dict)
     replace_vars(callee_blocks, var_dict)
@@ -1068,10 +1092,12 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
         # this doesn't work in objmode as it's effectively untyped
         if typed:
             len_func_var = ir.Var(scope, mk_unique_var("len_func"), loc)
-            from numba.cpython.rangeobj import range_iter_len
+            from numba.cpython.rangeobj import length_of_iterator
             stmts.append(_new_definition(func_ir, len_func_var,
-                        ir.Global('range_iter_len', range_iter_len, loc=loc),
-                        loc))
+                                         ir.Global('length_of_iterator',
+                                                   length_of_iterator,
+                                                   loc=loc),
+                                         loc))
             size_val = ir.Expr.call(len_func_var, (iter_var,), (), loc=loc)
         else:
             raise GuardException

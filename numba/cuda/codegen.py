@@ -5,7 +5,7 @@ from warnings import warn
 from numba.core import config, serialize
 from numba.core.codegen import Codegen, CodeLibrary
 from numba.core.errors import NumbaInvalidConfigWarning
-from .cudadrv import devices, driver, nvvm
+from .cudadrv import devices, driver, nvvm, runtime
 
 import ctypes
 import numpy as np
@@ -32,12 +32,11 @@ def disassemble_cubin(cubin):
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE)
         except FileNotFoundError as e:
-            if e.filename == 'nvdisasm':
-                msg = ("nvdisasm is required for SASS inspection, and has not "
-                       "been found.\n\nYou may need to install the CUDA "
-                       "toolkit and ensure that it is available on your "
-                       "PATH.\n")
-                raise RuntimeError(msg)
+            msg = ("nvdisasm is required for SASS inspection, and has not "
+                   "been found.\n\nYou may need to install the CUDA "
+                   "toolkit and ensure that it is available on your "
+                   "PATH.\n")
+            raise RuntimeError(msg) from e
         return cp.stdout.decode('utf-8')
     finally:
         if fd is not None:
@@ -167,7 +166,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         if cubin:
             return cubin
 
-        linker = driver.Linker(max_registers=self._max_registers, cc=cc)
+        linker = driver.Linker.new(max_registers=self._max_registers, cc=cc)
 
         ptxes = self._get_ptxes(cc=cc)
         for ptx in ptxes:
@@ -303,7 +302,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
                    'libraries to link against')
             raise RuntimeError(msg)
         return dict(
-            codegen=self._codegen,
+            codegen=None,
             name=self.name,
             entry_name=self._entry_name,
             module=self._module,
@@ -338,6 +337,8 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         instance._max_registers = max_registers
         instance._nvvm_options = nvvm_options
 
+        return instance
+
 
 class JITCUDACodegen(Codegen):
     """
@@ -348,7 +349,7 @@ class JITCUDACodegen(Codegen):
     _library_class = CUDACodeLibrary
 
     def __init__(self, module_name):
-        self._data_layout = nvvm.default_data_layout
+        self._data_layout = nvvm.data_layout
         self._target_data = ll.create_target_data(self._data_layout)
 
     def _create_empty_module(self, name):
@@ -361,3 +362,11 @@ class JITCUDACodegen(Codegen):
 
     def _add_module(self, module):
         pass
+
+    def magic_tuple(self):
+        """
+        Return a tuple unambiguously describing the codegen behaviour.
+        """
+        ctx = devices.get_context()
+        cc = ctx.device.compute_capability
+        return (runtime.runtime.get_version(), cc)

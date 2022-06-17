@@ -785,7 +785,8 @@ class TraceRunner(object):
         blk = state.pop_block()
         if blk['kind'] == BlockKind('TRY'):
             state.append(inst, kind='try')
-        # Forces a new block
+        elif blk['kind'] == BlockKind('WITH'):
+            state.append(inst, kind='with')
         state.fork(pc=inst.next)
 
     def op_BINARY_SUBSCR(self, state, inst):
@@ -826,13 +827,17 @@ class TraceRunner(object):
         state.push(res)
 
     def op_CALL_FUNCTION_EX(self, state, inst):
-        if inst.arg & 1:
+        if inst.arg & 1 and PYVERSION != (3, 10):
             errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
             raise UnsupportedError(errmsg)
+        if inst.arg & 1:
+            varkwarg = state.pop()
+        else:
+            varkwarg = None
         vararg = state.pop()
         func = state.pop()
         res = state.make_temp()
-        state.append(inst, func=func, vararg=vararg, res=res)
+        state.append(inst, func=func, vararg=vararg, varkwarg=varkwarg, res=res)
         state.push(res)
 
     def _dup_topx(self, state, inst, count):
@@ -1020,6 +1025,17 @@ class TraceRunner(object):
         end = inst.get_jump_target()
         state.fork(pc=end, npop=2)
         state.fork(pc=inst.next)
+
+    def op_GEN_START(self, state, inst):
+        """Pops TOS. If TOS was not None, raises an exception. The kind
+        operand corresponds to the type of generator or coroutine and
+        determines the error message. The legal kinds are 0 for generator,
+        1 for coroutine, and 2 for async generator.
+
+        New in version 3.10.
+        """
+        # no-op in Numba
+        pass
 
     def _unaryop(self, state, inst):
         val = state.pop()

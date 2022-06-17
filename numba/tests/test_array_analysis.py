@@ -98,8 +98,7 @@ class ArrayAnalysisPass(FunctionPass):
 
     def run_pass(self, state):
         state.array_analysis = ArrayAnalysis(state.typingctx, state.func_ir,
-                                             state.type_annotation.typemap,
-                                             state.type_annotation.calltypes)
+                                             state.typemap, state.calltypes)
         state.array_analysis.run(state.func_ir.blocks)
         post_proc = postproc.PostProcessor(state.func_ir)
         post_proc.run()
@@ -151,7 +150,6 @@ class ArrayAnalysisTester(Compiler):
                     "inline calls to locally defined closures")
         # typing
         pm.add_pass(NopythonTypeInference, "nopython frontend")
-        pm.add_pass(AnnotateTypes, "annotate types")
 
         if not state.flags.no_rewrites:
             pm.add_pass(NopythonRewrites, "nopython rewrites")
@@ -163,6 +161,7 @@ class ArrayAnalysisTester(Compiler):
             pm.add_pass(ArrayAnalysisPass, "idempotence array analysis")
         # legalise
         pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
+        pm.add_pass(AnnotateTypes, "annotate types")
 
         # partial compile
         pm.finalize()
@@ -742,6 +741,17 @@ class TestArrayAnalysis(TestCase):
                                        self.with_equiv('dt', ('k', 'm', 'n')),
                                        self.with_equiv('e', ('m', 'k', 'n')),
                                        self.with_equiv('et', ('m', 'k', 'n'))])
+
+        def test_real_imag_attr(m, n):
+            a = np.ones((m, n))
+            b = a.real
+            c = a.imag
+
+        self._compile_and_test(test_real_imag_attr, (types.intp, types.intp),
+                               equivs=[self.with_equiv('a', ('m', 'n')),
+                                       self.with_equiv('b', ('m', 'n')),
+                                       self.with_equiv('c', ('m', 'n')),
+                                       ])
 
         def test_random(n):
             a0 = np.random.rand(n)

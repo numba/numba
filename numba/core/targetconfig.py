@@ -2,6 +2,7 @@
 This module contains utils for manipulating target configurations such as
 compiler flags.
 """
+import re
 import zlib
 import base64
 
@@ -41,6 +42,44 @@ class Option:
     @property
     def doc(self):
         return self._doc
+
+
+class _FlagsStack(utils.ThreadLocalStack, stack_name="flags"):
+    pass
+
+
+class ConfigStack:
+    """A stack for tracking target configurations in the compiler.
+
+    It stores the stack in a thread-local class attribute. All instances in the
+    same thread will see the same stack.
+    """
+    @classmethod
+    def top_or_none(cls):
+        """Get the TOS or return None if no config is set.
+        """
+        self = cls()
+        if self:
+            flags = self.top()
+        else:
+            # Note: should this be the default flag for the target instead?
+            flags = None
+        return flags
+
+    def __init__(self):
+        self._stk = _FlagsStack()
+
+    def top(self):
+        return self._stk.top()
+
+    def __len__(self):
+        return len(self._stk)
+
+    def enter(self, flags):
+        """Returns a contextmanager that performs ``push(flags)`` on enter and
+        ``pop()`` on exit.
+        """
+        return self._stk.enter(flags)
 
 
 class _MetaTargetConfig(type):
@@ -187,7 +226,7 @@ class TargetConfig(metaclass=_MetaTargetConfig):
         """
         self._guard_option(name)
         if not self.is_set(name):
-            cstk = utils.ConfigStack()
+            cstk = ConfigStack()
             if cstk:
                 # inherit
                 top = cstk.top()
@@ -230,13 +269,20 @@ class TargetConfig(metaclass=_MetaTargetConfig):
                     args.append(v)
         return args
 
-    def _make_compression_dictionary(self) -> bytes:
+    @classmethod
+    def _make_compression_dictionary(cls) -> bytes:
         """Returns a ``bytes`` object suitable for use as a dictionary for
         compression.
         """
         buf = []
-        buf.append(self.__class__.__name__)
-        for k, opt in self.options.items():
+        # include package name
+        buf.append("numba")
+        # include class name
+        buf.append(cls.__class__.__name__)
+        # include common values
+        buf.extend(["True", "False"])
+        # include all options name and their default value
+        for k, opt in cls.options.items():
             buf.append(k)
             buf.append(str(opt.default))
         return ''.join(buf).encode()
@@ -254,16 +300,22 @@ class TargetConfig(metaclass=_MetaTargetConfig):
         buf.append(comp.flush())
         return base64.b64encode(b''.join(buf)).decode()
 
-    def demangle(self, mangled: str) -> str:
+    @classmethod
+    def demangle(cls, mangled: str) -> str:
         """Returns the demangled result from ``.get_mangle_string()``
         """
-        raw = base64.b64decode(mangled)
-
-        zdict = self._make_compression_dictionary()
-        dc = zlib.decompressobj(zdict=zdict, **self._ZLIB_CONFIG)
+        # unescape _XX sequence
+        def repl(x):
+            return chr(int('0x' + x.group(0)[1:], 16))
+        unescaped = re.sub(r"_[a-zA-Z0-9][a-zA-Z0-9]", repl, mangled)
+        # decode base64
+        raw = base64.b64decode(unescaped)
+        # decompress
+        zdict = cls._make_compression_dictionary()
+        dc = zlib.decompressobj(zdict=zdict, **cls._ZLIB_CONFIG)
         buf = []
         while raw:
             buf.append(dc.decompress(raw))
             raw = dc.unconsumed_tail
         buf.append(dc.flush())
-        return b''.join(buf)
+        return b''.join(buf).decode()

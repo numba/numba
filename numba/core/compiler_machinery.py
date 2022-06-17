@@ -2,11 +2,15 @@ import timeit
 from abc import abstractmethod, ABCMeta
 from collections import namedtuple, OrderedDict
 import inspect
+from pprint import pformat
+
+
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core import errors, config, transforms, utils
 from numba.core.tracing import event
 from numba.core.postproc import PostProcessor
 from numba.core.ir_utils import enforce_no_dels, legalize_single_scope
+import numba.core.event as ev
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -101,6 +105,13 @@ class CompilerPass(metaclass=ABCMeta):
         Gets the analysis from a given pass
         """
         return self._analysis[pass_name]
+
+
+class SSACompliantMixin(object):
+    """ Mixin to indicate a pass is SSA form compliant. Nothing is asserted
+    about this condition at present.
+    """
+    pass
 
 
 class FunctionPass(CompilerPass):
@@ -283,12 +294,23 @@ class PassManager(object):
         # wire in the analysis info so it's accessible
         pss.analysis = self._analysis
 
-        with SimpleTimer() as init_time:
-            mutated |= check(pss.run_initialization, internal_state)
-        with SimpleTimer() as pass_time:
-            mutated |= check(pss.run_pass, internal_state)
-        with SimpleTimer() as finalize_time:
-            mutated |= check(pss.run_finalizer, internal_state)
+        qualname = internal_state.func_id.func_qualname
+
+        ev_details = dict(
+            name=f"{pss.name()} [{qualname}]",
+            qualname=qualname,
+            module=internal_state.func_id.modname,
+            flags=pformat(internal_state.flags.values()),
+            args=str(internal_state.args),
+            return_type=str(internal_state.return_type),
+        )
+        with ev.trigger_event("numba:run_pass", data=ev_details):
+            with SimpleTimer() as init_time:
+                mutated |= check(pss.run_initialization, internal_state)
+            with SimpleTimer() as pass_time:
+                mutated |= check(pss.run_pass, internal_state)
+            with SimpleTimer() as finalize_time:
+                mutated |= check(pss.run_finalizer, internal_state)
 
         # Check that if the pass is an instance of a FunctionPass that it hasn't
         # emitted ir.Dels.
@@ -362,7 +384,7 @@ class PassManager(object):
 
         def resolve_requires(key, rmap):
             def walk(lkey, rmap):
-                dep_set = set(rmap[lkey])
+                dep_set = rmap[lkey] if lkey in rmap else set()
                 if dep_set:
                     for x in dep_set:
                         dep_set |= (walk(x, rmap))

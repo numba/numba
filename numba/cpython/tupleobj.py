@@ -2,8 +2,6 @@
 Implementation of tuple objects
 """
 
-from llvmlite import ir
-import llvmlite.llvmpy.core as lc
 import operator
 
 from numba.core.imputils import (lower_builtin, lower_getattr_generic,
@@ -169,7 +167,7 @@ def iternext_unituple(context, builder, sig, args, result):
     idx = builder.load(idxptr)
     count = context.get_constant(types.intp, tupiterty.container.count)
 
-    is_valid = builder.icmp(lc.ICMP_SLT, idx, count)
+    is_valid = builder.icmp_signed('<', idx, count)
     result.set_valid(is_valid)
 
     with builder.if_then(is_valid):

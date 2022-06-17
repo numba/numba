@@ -27,8 +27,8 @@ Implement parallel vectorize workqueue on top of Intel TBB.
  * from here:
  * https://github.com/intel/tbb/blob/2019_U5/include/tbb/tbb_stddef.h#L29
  */
-#if TBB_INTERFACE_VERSION < 12010
-#error "TBB version is too old, 2021 update 1, i.e. TBB_INTERFACE_VERSION >= 12010 required"
+#if (TBB_INTERFACE_VERSION >= 12060) || (TBB_INTERFACE_VERSION < 12010)
+#error "TBB version is incompatible, 2021.1 through to 2021.5 required, i.e. 12010 <= TBB_INTERFACE_VERSION < 12060"
 #endif
 
 #define _DEBUG 0
@@ -324,26 +324,17 @@ MOD_INIT(tbbpool)
     {
         md->m_free = (freefunc)unload_tbb;
     }
-    PyObject_SetAttrString(m, "launch_threads",
-                           PyLong_FromVoidPtr((void*)&launch_threads));
-    PyObject_SetAttrString(m, "synchronize",
-                           PyLong_FromVoidPtr((void*)&synchronize));
-    PyObject_SetAttrString(m, "ready",
-                           PyLong_FromVoidPtr((void*)&ready));
-    PyObject_SetAttrString(m, "add_task",
-                           PyLong_FromVoidPtr((void*)&add_task));
-    PyObject_SetAttrString(m, "parallel_for",
-                           PyLong_FromVoidPtr((void*)&parallel_for));
-    PyObject_SetAttrString(m, "do_scheduling_signed",
-                           PyLong_FromVoidPtr((void*)&do_scheduling_signed));
-    PyObject_SetAttrString(m, "do_scheduling_unsigned",
-                           PyLong_FromVoidPtr((void*)&do_scheduling_unsigned));
-    PyObject_SetAttrString(m, "set_num_threads",
-                           PyLong_FromVoidPtr((void*)&set_num_threads));
-    PyObject_SetAttrString(m, "get_num_threads",
-                           PyLong_FromVoidPtr((void*)&get_num_threads));
-    PyObject_SetAttrString(m, "get_thread_id",
-                           PyLong_FromVoidPtr((void*)&get_thread_id));
+    SetAttrStringFromVoidPointer(m, launch_threads);
+    SetAttrStringFromVoidPointer(m, synchronize);
+    SetAttrStringFromVoidPointer(m, ready);
+    SetAttrStringFromVoidPointer(m, add_task);
+    SetAttrStringFromVoidPointer(m, parallel_for);
+    SetAttrStringFromVoidPointer(m, do_scheduling_signed);
+    SetAttrStringFromVoidPointer(m, do_scheduling_unsigned);
+    SetAttrStringFromVoidPointer(m, set_num_threads);
+    SetAttrStringFromVoidPointer(m, get_num_threads);
+    SetAttrStringFromVoidPointer(m, get_thread_id);
+
 
     return MOD_SUCCESS_VAL(m);
 }

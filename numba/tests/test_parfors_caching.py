@@ -3,11 +3,11 @@ import os.path
 import numpy as np
 
 from numba.tests.support import skip_parfors_unsupported
-from .test_dispatcher import BaseCacheUsecasesTest
+from .test_caching import DispatcherCacheUsecasesTest
 
 
 @skip_parfors_unsupported
-class TestParForsCache(BaseCacheUsecasesTest):
+class TestParForsCache(DispatcherCacheUsecasesTest):
     here = os.path.dirname(__file__)
     usecases_file = os.path.join(here, "parfors_cache_usecases.py")
     modname = "parfors_caching_test_fodder"

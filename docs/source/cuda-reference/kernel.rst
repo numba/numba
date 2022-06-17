@@ -56,7 +56,7 @@ This is similar to launch configuration in CUDA C/C++:
 Dispatcher objects also provide several utility methods for inspection and
 creating a specialized instance:
 
-.. autoclass:: numba.cuda.compiler.Dispatcher
+.. autoclass:: numba.cuda.dispatcher.CUDADispatcher
    :members: inspect_asm, inspect_llvm, inspect_sass, inspect_types,
              get_regs_per_thread, specialize, specialized, extensions, forall
 
@@ -463,6 +463,102 @@ precision parts of the CUDA Toolkit documentation.
    ``cbrt`` and ``cbrtf`` in the C api. Supports float32, and float64 arguments
    only.
 
+16-bit Floating Point Intrinsics
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The following functions are used to operate on 16-bit floating point operands.
+These functions return a 16-bit floating point result.
+
+
+.. function:: numba.cuda.fp16.hfma (a, b, c)
+
+   Perform the fused multiply-add operation ``(a * b) + c`` on 16-bit
+   floating point arguments in round to nearest mode. Maps to the ``fma.rn.f16``
+   PTX instruction.
+
+   Returns the 16-bit floating point result of the fused multiply-add.
+
+.. function:: numba.cuda.fp16.hadd (a, b)
+
+   Perform the add operation ``a + b`` on 16-bit floating point arguments in
+   round to nearest mode. Maps to the ``add.f16`` PTX instruction.
+
+   Returns the 16-bit floating point result of the addition.
+
+.. function:: numba.cuda.fp16.hsub (a, b)
+
+   Perform the subtract operation ``a - b`` on 16-bit floating point arguments in
+   round to nearest mode. Maps to the ``sub.f16`` PTX instruction.
+
+   Returns the 16-bit floating point result of the subtraction.
+
+.. function:: numba.cuda.fp16.hmul (a, b)
+
+   Perform the multiply operation ``a * b`` on 16-bit floating point arguments in
+   round to nearest mode. Maps to the ``mul.f16`` PTX instruction.
+
+   Returns the 16-bit floating point result of the multiplication.
+
+.. function:: numba.cuda.fp16.hneg (a)
+
+   Perform the negation operation ``-a`` on the 16-bit floating point argument.
+   Maps to the ``neg.f16`` PTX instruction.
+
+   Returns the 16-bit floating point result of the negation.
+
+.. function:: numba.cuda.fp16.habs (a)
+
+   Perform the absolute value operation ``|a|`` on the 16-bit floating point argument.
+
+   Returns the 16-bit floating point result of the absolute value operation.
+
+.. function:: numba.cuda.fp16.heq (a, b)
+
+   Perform the comparison operation ``a == b`` on 16-bit floating point arguments.
+
+   Returns a boolean.
+
+.. function:: numba.cuda.fp16.hne (a, b)
+
+   Perform the comparison operation ``a != b`` on 16-bit floating point arguments.
+
+   Returns a boolean.
+
+.. function:: numba.cuda.fp16.hgt (a, b)
+
+   Perform the comparison operation ``a > b`` on 16-bit floating point arguments.
+
+   Returns a boolean.
+
+.. function:: numba.cuda.fp16.hge (a, b)
+
+   Perform the comparison operation ``a >= b`` on 16-bit floating point arguments.
+
+   Returns a boolean.
+
+.. function:: numba.cuda.fp16.hlt (a, b)
+
+   Perform the comparison operation ``a < b`` on 16-bit floating point arguments.
+
+   Returns a boolean.
+
+.. function:: numba.cuda.fp16.hle (a, b)
+
+   Perform the comparison operation ``a <= b`` on 16-bit floating point arguments.
+
+   Returns a boolean.
+
+.. function:: numba.cuda.fp16.hmax (a, b)
+
+   Perform the operation ``a if a > b else b.``
+
+   Returns a 16-bit floating point value.
+
+.. function:: numba.cuda.fp16.hmin (a, b)
+
+   Perform the operation ``a if a < b else b.``
+
+   Returns a 16-bit floating point value.
 
 Control Flow Instructions
 ~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -18,7 +18,7 @@ Out of the box Numba works with the following:
   support on M1/Arm64.
 * GPUs: Nvidia CUDA.
 * CPython
-* NumPy 1.17 - latest
+* NumPy 1.18 - latest
 
 How do I get it?
 ----------------
@@ -138,21 +138,21 @@ For example::
         return a + trace
 
     # DO NOT REPORT THIS... COMPILATION TIME IS INCLUDED IN THE EXECUTION TIME!
-    start = time.time()
+    start = time.perf_counter()
     go_fast(x)
-    end = time.time()
-    print("Elapsed (with compilation) = %s" % (end - start))
+    end = time.perf_counter()
+    print("Elapsed (with compilation) = {}s".format((end - start)))
 
     # NOW THE FUNCTION IS COMPILED, RE-TIME IT EXECUTING FROM CACHE
-    start = time.time()
+    start = time.perf_counter()
     go_fast(x)
-    end = time.time()
-    print("Elapsed (after compilation) = %s" % (end - start))
+    end = time.perf_counter()
+    print("Elapsed (after compilation) = {}s".format((end - start)))
 
 This, for example prints::
 
-    Elapsed (with compilation) = 0.33030009269714355
-    Elapsed (after compilation) = 6.67572021484375e-06
+    Elapsed (with compilation) = 0.33030009269714355s
+    Elapsed (after compilation) = 6.67572021484375e-06s
 
 A good way to measure the impact Numba JIT has on your code is to time execution
 using the `timeit <https://docs.python.org/3/library/timeit.html>`_ module

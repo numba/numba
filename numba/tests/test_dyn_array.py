@@ -9,7 +9,7 @@ import gc
 from numba.core.errors import TypingError
 from numba import njit
 from numba.core import types, utils, config
-from numba.tests.support import MemoryLeakMixin, TestCase, tag
+from numba.tests.support import MemoryLeakMixin, TestCase, tag, skip_if_32bit
 import unittest
 
 
@@ -415,6 +415,21 @@ class TestDynArray(NrtRefCtTest, TestCase):
         del outputs, workers
         # The following checks can discover a reference count error
         self.assertEqual(expected_refct, sys.getrefcount(input))
+
+    @skip_if_32bit
+    def test_invalid_size_array(self):
+
+        @njit
+        def foo(x):
+            np.empty(x)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertRaises(MemoryError) as raises:
+            foo(types.size_t.maxval // 8 // 2)
+
+        self.assertIn("Allocation failed", str(raises.exception))
 
     def test_swap(self):
 
@@ -1241,7 +1256,7 @@ class TestLinspace(BaseTest):
             return np.linspace(n, m)
         self.check_outputs(pyfunc,
                            [(0, 4), (1, 100), (-3.5, 2.5), (-3j, 2+3j),
-                            (2, 1), (1+0.5j, 1.5j)], exact=False)
+                            (2, 1), (1+0.5j, 1.5j)])
 
     def test_linspace_3(self):
         def pyfunc(n, m, p):
@@ -1249,8 +1264,7 @@ class TestLinspace(BaseTest):
         self.check_outputs(pyfunc,
                            [(0, 4, 9), (1, 4, 3), (-3.5, 2.5, 8),
                             (-3j, 2+3j, 7), (2, 1, 0),
-                            (1+0.5j, 1.5j, 5), (1, 1e100, 1)],
-                           exact=False)
+                            (1+0.5j, 1.5j, 5), (1, 1e100, 1)])
 
     def test_linspace_accuracy(self):
         # Checking linspace reasonably replicates NumPy's algorithm

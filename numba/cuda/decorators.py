@@ -1,10 +1,9 @@
 from warnings import warn
 from numba.core import types, config, sigutils
-from numba.core.errors import (DeprecationError, NumbaDeprecationWarning,
-                               NumbaInvalidConfigWarning)
-from .compiler import (compile_device, declare_device_function, Dispatcher,
-                       compile_device_dispatcher)
-from .simulator.kernel import FakeCUDAKernel
+from numba.core.errors import DeprecationError, NumbaInvalidConfigWarning
+from numba.cuda.compiler import declare_device_function
+from numba.cuda.dispatcher import CUDADispatcher
+from numba.cuda.simulator.kernel import FakeCUDAKernel
 
 
 _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
@@ -12,20 +11,8 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "positional argument.")
 
 
-def jitdevice(func, link=[], debug=None, inline=False, opt=True,
-              no_cpython_wrapper=None):
-    """Wrapper for device-jit.
-    """
-    # We ignore  the no_cpython_wrapper kwarg - it is passed by the callee when
-    # using overloads, but there is never a CPython wrapper for CUDA anyway.
-    debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
-    if link:
-        raise ValueError("link keyword invalid for device function")
-    return compile_device_dispatcher(func, debug=debug, inline=inline, opt=opt)
-
-
 def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
-        opt=True, **kws):
+        opt=True, cache=False, **kws):
     """
     JIT compile a python function conforming to the CUDA Python specification.
     If a signature is supplied, then a function is returned that takes a
@@ -62,6 +49,8 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
        assembly code. This enables inspection of the source code in NVIDIA
        profiling tools and correlation with program counter sampling.
     :type lineinfo: bool
+    :param cache: If True, enables the file-based cache for this function.
+    :type cache: bool
     """
 
     if link and config.ENABLE_CUDASIM:
@@ -82,12 +71,16 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
 
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
     fastmath = kws.get('fastmath', False)
+    extensions = kws.get('extensions', [])
 
     if debug and opt:
         msg = ("debug=True with opt=True (the default) "
                "is not supported by CUDA. This may result in a crash"
                " - set debug=False or opt=False.")
         warn(NumbaInvalidConfigWarning(msg))
+
+    if device and kws.get('link'):
+        raise ValueError("link keyword invalid for device function")
 
     if sigutils.is_signature(func_or_sig):
         if config.ENABLE_CUDASIM:
@@ -100,25 +93,33 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
         if restype and not device and restype != types.void:
             raise TypeError("CUDA kernel must have void return type.")
 
-        def kernel_jit(func):
+        def _jit(func):
             targetoptions = kws.copy()
             targetoptions['debug'] = debug
             targetoptions['link'] = link
             targetoptions['opt'] = opt
             targetoptions['fastmath'] = fastmath
-            return Dispatcher(func, [func_or_sig], targetoptions=targetoptions)
+            targetoptions['device'] = device
+            targetoptions['extensions'] = extensions
 
-        def device_jit(func):
-            return compile_device(func, restype, argtypes, inline=inline,
-                                  debug=debug)
+            disp = CUDADispatcher(func, targetoptions=targetoptions)
 
-        if device:
-            msg = ("Eager compilation of device functions is deprecated "
-                   "(this occurs when a signature is provided)")
-            warn(NumbaDeprecationWarning(msg))
-            return device_jit
-        else:
-            return kernel_jit
+            if cache:
+                disp.enable_caching()
+
+            if device:
+                from numba.core import typeinfer
+                with typeinfer.register_dispatcher(disp):
+                    disp.compile_device(argtypes)
+            else:
+                disp.compile(argtypes)
+
+            disp._specialized = True
+            disp.disable_compile()
+
+            return disp
+
+        return _jit
     else:
         if func_or_sig is None:
             if config.ENABLE_CUDASIM:
@@ -127,7 +128,8 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                                           fastmath=fastmath)
             else:
                 def autojitwrapper(func):
-                    return jit(func, device=device, debug=debug, opt=opt, **kws)
+                    return jit(func, device=device, debug=debug, opt=opt,
+                               link=link, cache=cache, **kws)
 
             return autojitwrapper
         # func_or_sig is a function
@@ -135,19 +137,34 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             if config.ENABLE_CUDASIM:
                 return FakeCUDAKernel(func_or_sig, device=device,
                                       fastmath=fastmath)
-            elif device:
-                return jitdevice(func_or_sig, debug=debug, opt=opt, **kws)
             else:
                 targetoptions = kws.copy()
                 targetoptions['debug'] = debug
                 targetoptions['opt'] = opt
                 targetoptions['link'] = link
                 targetoptions['fastmath'] = fastmath
-                sigs = None
-                return Dispatcher(func_or_sig, sigs,
-                                  targetoptions=targetoptions)
+                targetoptions['device'] = device
+                targetoptions['extensions'] = extensions
+                disp = CUDADispatcher(func_or_sig, targetoptions=targetoptions)
+
+                if cache:
+                    disp.enable_caching()
+
+                return disp
 
 
 def declare_device(name, sig):
+    """
+    Declare the signature of a foreign function. Returns a descriptor that can
+    be used to call the function from a Python kernel.
+
+    :param name: The name of the foreign function.
+    :type name: str
+    :param sig: The Numba signature of the function.
+    """
     argtypes, restype = sigutils.normalize_signature(sig)
+    if restype is None:
+        msg = 'Return type must be provided for device declarations'
+        raise TypeError(msg)
+
     return declare_device_function(name, restype, argtypes)

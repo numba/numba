@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from types import MethodType, FunctionType
 
 import numba
-from numba.core import types, utils
+from numba.core import types, utils, targetconfig
 from numba.core.errors import (
     TypingError,
     InternalError,
@@ -701,7 +701,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         Returning a Dispatcher object.  The Dispatcher object is cached
         internally in `self._impl_cache`.
         """
-        flags = utils.ConfigStack.top_or_none()
+        flags = targetconfig.ConfigStack.top_or_none()
         cache_key = self.context, tuple(args), tuple(kws.items()), flags
         try:
             impl, args = self._impl_cache[cache_key]
@@ -809,7 +809,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
         # Check type of pyfunc
         if not isinstance(pyfunc, FunctionType):
-            msg = ("Implementator function returned by `@overload` "
+            msg = ("Implementation function returned by `@overload` "
                    "has an unexpected type.  Got {}")
             raise AssertionError(msg.format(pyfunc))
 

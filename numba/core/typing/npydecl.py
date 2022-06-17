@@ -455,7 +455,8 @@ def parse_shape(shape):
     if isinstance(shape, types.Integer):
         ndim = 1
     elif isinstance(shape, (types.Tuple, types.UniTuple)):
-        if all(isinstance(s, types.Integer) for s in shape):
+        int_tys = (types.Integer, types.IntEnumMember)
+        if all(isinstance(s, int_tys) for s in shape):
             ndim = len(shape)
     return ndim
 
@@ -692,7 +693,7 @@ class NdSort(CallableTemplate):
 
     def generic(self):
         def typer(a):
-            if isinstance(a, types.Array) and a.ndim == 1:
+            if isinstance(a, types.Array):
                 return a
 
         return typer
@@ -1253,7 +1254,7 @@ class NumbaCArray(CallableTemplate):
     def generic(self):
         func_name = self.key.__name__
 
-        def typer(ptr, shape, dtype=types.none):
+        def typer(ptr, shape, dtype=None):
             if ptr is types.voidptr:
                 ptr_dtype = None
             elif isinstance(ptr, types.CPointer):
@@ -1262,7 +1263,7 @@ class NumbaCArray(CallableTemplate):
                 raise NumbaTypeError("%s(): pointer argument expected, got '%s'"
                                      % (func_name, ptr))
 
-            if dtype is types.none:
+            if dtype is None:
                 if ptr_dtype is None:
                     raise NumbaTypeError("%s(): explicit dtype required for void* argument"
                                          % (func_name,))

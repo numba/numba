@@ -37,25 +37,65 @@ Requirements
 Supported GPUs
 --------------
 
-Numba supports CUDA-enabled GPU with compute capability 3.0 or above with an
-up-to-data Nvidia driver.
+Numba supports CUDA-enabled GPUs with Compute Capability 3.5 or greater.
+Support for devices with Compute Capability less than 5.3 is deprecated, and
+will be removed in a future Numba release.
+
+Devices with Compute Capability 5.3 or greater include (but are not limited to):
+
+- Embedded platforms: NVIDIA Jetson Nano, TX1, TX2, Xavier NX, AGX Xavier, AGX
+  Orin.
+- Desktop / Server GPUs: All GPUs with Pascal microarchitecture or later. E.g.
+  GTX 10 / 16 series, RTX 20 / 30 series, Quadro P / V / RTX series, RTX A
+  series, H100.
+- Laptop GPUs: All GPUs with Pascal microarchitecture or later. E.g. MX series,
+  Quadro P / T series (mobile), RTX 20 / 30 series (mobile), RTX A series (mobile).
 
 Software
 --------
 
-Numba aims to support CUDA Toolkit versions released within the last 3 years. At
-the present time, you will need the CUDA toolkit version 9.2 or later installed.
+Numba aims to support CUDA Toolkit versions released within the last 3 years.
+An NVIDIA driver sufficient for the toolkit version is also required.
+Presently:
 
-CUDA is supported on 64-bit Linux and Windows. 32-bit platforms, and macOS are
-unsupported.
+* 10.2 is the minimum required toolkit version.
+* 11.2 or later is recommended, as it uses an NVVM version based on LLVM 7 (as
+  opposed to 3.4 in earlier releases).
+
+CUDA is supported on 64-bit Linux and Windows.
 
 If you are using Conda, you can install the CUDA toolkit with::
 
    $ conda install cudatoolkit
 
 If you are not using Conda or if you want to use a different version of CUDA
-toolkit, the following describe how Numba searches for a CUDA toolkit
+toolkit, the following describes how Numba searches for a CUDA toolkit
 installation.
+
+.. _cuda-bindings:
+
+CUDA Bindings
+~~~~~~~~~~~~~
+
+Numba supports interacting with the CUDA Driver API via the `NVIDIA CUDA Python
+bindings <https://nvidia.github.io/cuda-python/>`_ and its own ctypes-based
+bindings. Functionality is equivalent between the two bindings. The
+ctypes-based bindings are presently the default, but the NVIDIA bindings will
+be used by default (if they are available in the environment) in a future Numba
+release.
+
+You can install the NVIDIA bindings with::
+
+   $ conda install nvidia::cuda-python
+
+if you are using Conda, or::
+
+   $ pip install cuda-python
+
+if you are using pip.
+
+The use of the NVIDIA bindings is enabled by setting the environment variable
+:envvar:`NUMBA_CUDA_USE_NVIDIA_BINDING` to ``"1"``.
 
 .. _cudatoolkit-lookup:
 

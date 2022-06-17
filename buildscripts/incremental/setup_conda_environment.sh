@@ -52,9 +52,14 @@ source activate $CONDA_ENV
 set -v
 
 # Install optional packages into activated env
+echo "PYTHON=$PYTHON"
+echo "VANILLA_INSTALL=$VANILLA_INSTALL"
 if [ "${VANILLA_INSTALL}" != "yes" ]; then
-    # Scipy, CFFI, jinja2, IPython and pygments are optional dependencies, but exercised in the test suite
-    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython pygments
+    # Scipy, CFFI, jinja2, IPython and pygments are optional
+    # dependencies, but exercised in the test suite
+    # pexpect is used to run the gdb tests.
+    # ipykernel is used for testing ipython behaviours.
+    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel pygments pexpect
     # Only install scipy on 64bit, else it'll pull in NumPy, 32bit linux needs
     # to get scipy from pip
     if [[ "$CONDA_SUBDIR" != "linux-32" && "$BITS32" != "yes" ]] ; then
@@ -71,20 +76,24 @@ if [[ $(uname) == Linux ]]; then
     fi
 elif  [[ $(uname) == Darwin ]]; then
     $CONDA_INSTALL clang_osx-64 clangxx_osx-64
-    # Install llvm-openmp and intel-openmp on OSX too
-    $CONDA_INSTALL llvm-openmp intel-openmp
+    # Install llvm-openmp on OSX for headers during build and runtime during
+    # testing
+    $CONDA_INSTALL llvm-openmp
 fi
 
-# If on 32bit linux, now pip install NumPy and SciPy (no conda package)
+# If on 32bit linux, now pip install NumPy (no conda package), SciPy is broken?!
 if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
-    $PIP_INSTALL numpy==$NUMPY scipy
+    $PIP_INSTALL numpy==$NUMPY
 fi
 
 # Install latest llvmlite build
 $CONDA_INSTALL -c numba/label/dev llvmlite
 
+# Install importlib-metadata for Python < 3.9
+if [ $PYTHON \< "3.9" ]; then $CONDA_INSTALL importlib_metadata; fi
+
 # Install dependencies for building the documentation
-if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx=2.4.4 sphinx_rtd_theme pygments numpydoc; fi
+if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx=2.4.4 docutils=0.17 sphinx_rtd_theme pygments numpydoc; fi
 if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL rstcheck; fi
 # Install dependencies for code coverage (codecov.io)
 if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi

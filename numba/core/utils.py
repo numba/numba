@@ -195,49 +195,63 @@ def use_old_style_errors():
     return config.CAPTURED_ERRORS == 'old_style'
 
 
-class ConfigStack:
-    """A stack for tracking target configurations in the compiler.
+class ThreadLocalStack:
+    """A TLS stack container.
 
-    It stores the stack in a thread-local class attribute. All instances in the
-    same thread will see the same stack.
+    Uses the BORG pattern and stores states in threadlocal storage.
     """
-    tls = threading.local()
+    _tls = threading.local()
+    stack_name: str
+    _registered = {}
 
-    @classmethod
-    def top_or_none(cls):
-        """Get the TOS or return None if no config is set.
-        """
-        self = cls()
-        if self:
-            flags = self.top()
-        else:
-            # Note: should this be the default flag for the target instead?
-            flags = None
-        return flags
+    def __init_subclass__(cls, *, stack_name, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # Register stack_name mapping to the new subclass
+        assert stack_name not in cls._registered, \
+            f"stack_name: '{stack_name}' already in use"
+        cls.stack_name = stack_name
+        cls._registered[stack_name] = cls
 
     def __init__(self):
-        tls = self.tls
+        # This class must not be used directly.
+        assert type(self) is not ThreadLocalStack
+        tls = self._tls
+        attr = f"stack_{self.stack_name}"
         try:
-            stk = tls.stack
+            tls_stack = getattr(tls, attr)
         except AttributeError:
-            tls.stack = stk = []
-        self._stk = stk
+            tls_stack = list()
+            setattr(tls, attr, tls_stack)
 
-    def push(self, data):
-        self._stk.append(data)
+        self._stack = tls_stack
+
+    def push(self, state):
+        """Push to the stack
+        """
+        self._stack.append(state)
 
     def pop(self):
-        return self._stk.pop()
+        """Pop from the stack
+        """
+        return self._stack.pop()
 
     def top(self):
-        return self._stk[-1]
+        """Get the top item on the stack.
+
+        Raises IndexError if the stack is empty. Users should check the size
+        of the stack beforehand.
+        """
+        return self._stack[-1]
 
     def __len__(self):
-        return len(self._stk)
+        return len(self._stack)
 
     @contextlib.contextmanager
-    def enter(self, flags):
-        self.push(flags)
+    def enter(self, state):
+        """A contextmanager that pushes ``state`` for the duration of the
+        context.
+        """
+        self.push(state)
         try:
             yield
         finally:
@@ -690,3 +704,19 @@ class _RedirectSubpackage(ModuleType):
     def __reduce__(self):
         args = (self.__old_module_states, self.__new_module)
         return _RedirectSubpackage, args
+
+
+def get_hashable_key(value):
+    """
+        Given a value, returns a key that can be used
+        as a hash. If the value is hashable, we return
+        the value, otherwise we return id(value).
+
+        See discussion in gh #6957
+    """
+    try:
+        hash(value)
+    except TypeError:
+        return id(value)
+    else:
+        return value
