@@ -139,7 +139,7 @@ def random_standard_exponential_inv(bitgen):
 
 @register_jitable
 def random_standard_exponential_inv_f(bitgen):
-    return -np_log1p(-next_float(bitgen))
+    return -np.log(1.0 - next_float(bitgen))
 
 
 @register_jitable
