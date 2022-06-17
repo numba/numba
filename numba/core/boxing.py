@@ -390,7 +390,11 @@ def box_slice_literal(typ, val, c):
             try:
                 typeof(field_obj, Purpose)
             except ValueError as e:
-                raise ValueError(f"Unable to create literal slice. Error encountered with {field_name} attribute: {str(e)}")
+                raise ValueError((
+                    f"Unable to create literal slice. "
+                    f"Error encountered with {field_name} "
+                    f"attribute: {str(e)}")
+                )
 
     py_ctor, py_args = typ.literal_value.__reduce__()
     serialized_ctor = c.pyapi.serialize_object(py_ctor)
