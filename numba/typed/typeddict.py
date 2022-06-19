@@ -19,8 +19,12 @@ from numba.core.typing import signature
 
 
 @njit
-def _make_dict(keyty, valty):
-    return dictobject._as_meminfo(dictobject.new_dict(keyty, valty))
+def _make_dict(keyty, valty, n_keys=None):
+    if n_keys is None:
+        return dictobject._as_meminfo(dictobject.new_dict_minsize(keyty, valty))
+    else:
+        return dictobject._as_meminfo(dictobject.new_dict_noresize(keyty, valty, 
+                                                                   n_keys=n_keys))
 
 
 @njit
@@ -84,21 +88,22 @@ class Dict(MutableMapping):
     Implements the MutableMapping interface.
     """
 
-    def __new__(cls, dcttype=None, meminfo=None):
+    def __new__(cls, dcttype=None, meminfo=None, n_keys=None):
         if config.DISABLE_JIT:
             return dict.__new__(dict)
         else:
             return object.__new__(cls)
 
     @classmethod
-    def empty(cls, key_type, value_type):
+    def empty(cls, key_type, value_type, n_keys=None):
         """Create a new empty Dict with *key_type* and *value_type*
         as the types for the keys and values of the dictionary respectively.
         """
         if config.DISABLE_JIT:
             return dict()
         else:
-            return cls(dcttype=DictType(key_type, value_type))
+            return cls(dcttype=DictType(key_type, value_type), 
+                       n_keys=n_keys)
 
     def __init__(self, **kwargs):
         """
@@ -117,14 +122,15 @@ class Dict(MutableMapping):
         else:
             self._dict_type = None
 
-    def _parse_arg(self, dcttype, meminfo=None):
+    def _parse_arg(self, dcttype, meminfo=None, n_keys=None):
         if not isinstance(dcttype, DictType):
             raise TypeError('*dcttype* must be a DictType')
 
         if meminfo is not None:
             opaque = meminfo
         else:
-            opaque = _make_dict(dcttype.key_type, dcttype.value_type)
+            opaque = _make_dict(dcttype.key_type, dcttype.value_type, 
+                                n_keys=n_keys)
         return dcttype, opaque
 
     @property
@@ -209,12 +215,16 @@ class Dict(MutableMapping):
 
 
 @overload_classmethod(types.DictType, 'empty')
-def typeddict_empty(cls, key_type, value_type):
+def typeddict_empty(cls, key_type, value_type, n_keys=None):
     if cls.instance_type is not DictType:
         return
-
-    def impl(cls, key_type, value_type):
-        return dictobject.new_dict(key_type, value_type)
+    
+    def impl(cls, key_type, value_type, n_keys=None):
+        if n_keys is None:
+            return dictobject.new_dict_minsize(key_type, value_type)
+        else:
+            return dictobject.new_dict_noresize(key_type, value_type, 
+                                                n_keys=n_keys)
 
     return impl
 

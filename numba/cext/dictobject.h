@@ -91,6 +91,20 @@ Parameters
 NUMBA_EXPORT_FUNC(int)
 numba_dict_new(NB_Dict **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssize_t val_size);
 
+/* Allocate a new dict with enough space to hold n_keys without resizing.
+Parameters
+- NB_Dict **out
+    Output for the new dictionary.
+- Py_ssize_t n_keys
+    The number of keys to fit without needing resize.
+- Py_ssize_t key_size
+    Size of a key entry.
+- Py_ssize_t val_size
+    Size of a value entry.
+*/
+NUMBA_EXPORT_FUNC(int)
+numba_dict_new_noresize(NB_Dict** out, Py_ssize_t n_keys, Py_ssize_t key_size, Py_ssize_t val_size);
+
 /* Free a dict */
 NUMBA_EXPORT_FUNC(void)
 numba_dict_free(NB_Dict *d);

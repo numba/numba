@@ -368,6 +368,7 @@ set_index(NB_DictKeys *dk, Py_ssize_t i, Py_ssize_t ix)
  * USABLE_FRACTION should be quick to calculate.
  * Fractions around 1/2 to 2/3 seem to work well in practice.
  */
+
 #define USABLE_FRACTION(n) (((n) << 1)/3)
 
 /* Alternative fraction that is otherwise close enough to 2n/3 to make
@@ -540,9 +541,9 @@ numba_dictkeys_new(NB_DictKeys **out, Py_ssize_t size, Py_ssize_t key_size, Py_s
 
 /* Allocate new dictionary */
 int
-numba_dict_new(NB_Dict **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssize_t val_size) {
+numba_dict_new(NB_Dict** out, Py_ssize_t size, Py_ssize_t key_size, Py_ssize_t val_size) {
     NB_DictKeys* dk;
-    NB_Dict *d;
+    NB_Dict* d;
     int status = numba_dictkeys_new(&dk, size, key_size, val_size);
     if (status != OK) return status;
 
@@ -557,6 +558,28 @@ numba_dict_new(NB_Dict **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssize_t v
     *out = d;
     return OK;
 }
+
+
+/* Allocate a new dictionary with enough space to hold n_keys without resizes */
+int
+numba_dict_new_noresize(NB_Dict** out, Py_ssize_t n_keys, Py_ssize_t key_size, Py_ssize_t val_size) {
+    Py_ssize_t size;
+
+    size = n_keys + (n_keys >> 1); // Relies on a load factor of 2/3.
+
+    /* Round up to the nearest power of 2.
+       Overflows when result is 2^(8*sizeof(Py_ssize_t)-1) due to signed Py_ssize_t.
+       Could pose a real problem on 32-bit systems. */
+    size--;
+    uint32_t shift;
+    for (shift = 1; shift < sizeof(Py_ssize_t) * CHAR_BIT; shift <<= 1) {
+        size |= (size >> shift);
+    }
+    size++;
+
+    return numba_dict_new(out, size, key_size, val_size);
+}
+
 
 /*
 Adapted from CPython lookdict_index().

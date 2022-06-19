@@ -69,13 +69,27 @@ class Status(IntEnum):
     ERR_CMP_FAILED = -5
 
 
-def new_dict(key, value):
-    """Construct a new dict.
+def new_dict_minsize(key, value):
+    """Construct a new dict with minimum size.
 
     Parameters
     ----------
     key, value : TypeRef
         Key type and value type of the new dict.
+    """
+    # With JIT disabled, ignore all arguments and return a Python dict.
+    return dict()
+
+
+def new_dict_noresize(key, value, n_keys):
+    """Construct a new dict with enough space for n_keys without a resize.
+
+    Parameters
+    ----------
+    key, value : TypeRef
+        Key type and value type of the new dict.
+    n_keys : int
+        Number of keys to insert without needing a resize.
     """
     # With JIT disabled, ignore all arguments and return a Python dict.
     return dict()
@@ -242,6 +256,49 @@ def _dict_new_minsize(typingctx, keyty, valty):
         status = builder.call(
             fn,
             [refdp, ll_ssize_t(sz_key), ll_ssize_t(sz_val)],
+        )
+        _raise_if_error(
+            context, builder, status,
+            msg="Failed to allocate dictionary",
+        )
+        dp = builder.load(refdp)
+        return dp
+
+    return sig, codegen
+
+
+@intrinsic
+def _dict_new_noresize(typingctx, keyty, valty, n_keys):
+    """Wrap numba_dict_new_noresize.
+
+    Allocate a new dictionary object with enough space to hold n_keys
+    keys without needing a resize.
+
+    Parameters
+    ----------
+    keyty, valty: Type
+        Type of the key and value, respectively.
+    n_keys: int
+        Number of keys to insert without needing a resize.
+    """
+    resty = types.voidptr
+    sig = resty(keyty, valty, n_keys)
+
+    def codegen(context, builder, sig, args):
+        fnty = ir.FunctionType(
+            ll_status,
+            [ll_dict_type.as_pointer(), ll_ssize_t, ll_ssize_t, ll_ssize_t],
+        )
+        fn = ir.Function(builder.module, fnty, 'numba_dict_new_noresize')
+        # Determine sizeof key and value types
+        ll_key = context.get_data_type(keyty.instance_type)
+        ll_val = context.get_data_type(valty.instance_type)
+        sz_key = context.get_abi_sizeof(ll_key)
+        sz_val = context.get_abi_sizeof(ll_val)
+        refdp = cgutils.alloca_once(builder, ll_dict_type, zfill=True)
+        status = builder.call(
+            fn,
+            [refdp, args[2], ll_ssize_t(sz_key), ll_ssize_t(sz_val)],
         )
         _raise_if_error(
             context, builder, status,
@@ -643,10 +700,11 @@ def _make_dict(typingctx, keyty, valty, ptr):
     return sig, codegen
 
 
-@overload(new_dict)
-def impl_new_dict(key, value):
+@overload(new_dict_minsize)
+def impl_new_dict_minsize(key, value):
     """Creates a new dictionary with *key* and *value* as the type
-    of the dictionary key and value, respectively.
+    of the dictionary key and value, respectively. The number of buckets
+    initialized is defined in /cext/dictobject.c as D_MINSIZE.
     """
     if any([
         not isinstance(key, Type),
@@ -662,6 +720,31 @@ def impl_new_dict(key, value):
         d = _make_dict(keyty, valty, dp)
         return d
 
+    return imp
+
+
+@overload(new_dict_noresize)
+def impl_new_dict_noresize(key, value, n_keys):
+    """Creates a new dictionary with *key* and *value* as the type
+    of the dictionary key and value, respectively. n_keys is the
+    number of keys to hold without needing a resize.
+    """
+    if any([
+        not isinstance(key, Type),
+        not isinstance(value, Type),
+    ]):
+        raise TypeError("expecting *key* and *value* to be a numba Type")
+
+    keyty, valty = key, value
+    
+    def imp(key, value, n_keys):
+        if n_keys < 0:
+            raise RuntimeError("expecting *n_keys* to be >= 0")
+        dp = _dict_new_noresize(keyty, valty, n_keys)
+        _dict_set_method_table(dp, keyty, valty)
+        d = _make_dict(keyty, valty, dp)
+        return d
+        
     return imp
 
 
@@ -857,7 +940,7 @@ def impl_copy(d):
     key_type, val_type = d.key_type, d.value_type
 
     def impl(d):
-        newd = new_dict(key_type, val_type)
+        newd = new_dict_minsize(key_type, val_type)
         for k, v in d.items():
             newd[k] = v
         return newd
