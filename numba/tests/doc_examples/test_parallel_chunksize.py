@@ -23,7 +23,7 @@ class ChunksizeExamplesTest(unittest.TestCase):
                 # The work in each iteration of the following prange
                 # loop is proportional to its index.
                 for i in prange(n):
-                    cur = i
+                    cur = i + 1
                     for j in range(i):
                         if cur % 2 == 0:
                             cur //= 2
