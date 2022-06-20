@@ -1086,11 +1086,13 @@ def runtime_broadcast_assert_shapes(max_dim, arg0, arg1):
             if i < len(shape):
                 size = shape[len(shape) - 1 - i]
                 if size != 1:
-                    sizes.append(size)  # non-1 size to front
+                    if len(sizes) == 0:
+                        sizes.append(size)  # non-1 size to front
+                    else:
+                        # Actually assert the shapes match.
+                        assert sizes[0] == size
         if len(sizes) == 0:
             sizes.append(1)
-        # TODO: Shouldn't there be an assert somewhere in here if
-        # the sizes don't match?
         new_shape[max_dim - 1 - i] = sizes[0]
 
     return to_fixed_tuple(new_shape, max_dim)
