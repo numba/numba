@@ -81,20 +81,23 @@ class Assigner(object):
         return None
 
 
-def _remove_assignment_definition(old_body, idx, func_ir, ignore_missing=False):
+def _remove_assignment_definition(old_body, idx, func_ir, already_deleted_defs):
     """
     Deletes the definition defined for old_body at index idx
     from func_ir. We assume this stmt will be deleted from
     new_body.
 
-    We pass ignore_missing if we may attempt to delete the
-    same definition multiple times.
+    In some optimizations we may update the same variable multiple times.
+    In this situation, we only need to delete a particular definition once,
+    so we deleted_vars, which is a default dict for each assignment name
+    to the set of values that have already been deleted.
     """
     lhs = old_body[idx].target.name
     rhs = old_body[idx].value
     if rhs in func_ir._definitions[lhs]:
         func_ir._definitions[lhs].remove(rhs)
-    elif not ignore_missing:
+        already_deleted_defs[lhs].add(rhs)
+    elif rhs not in already_deleted_defs[lhs]:
         raise UnsupportedError(
             "Inconsistency found in the definitions while executing"
             " a peephole optimization. This suggests an internal"
@@ -103,7 +106,12 @@ def _remove_assignment_definition(old_body, idx, func_ir, ignore_missing=False):
 
 
 def _call_function_ex_replace_kws_small(
-    old_body, keyword_expr, new_body, buildmap_idx, func_ir
+    old_body,
+    keyword_expr,
+    new_body,
+    buildmap_idx,
+    func_ir,
+    already_deleted_defs
 ):
     """
     Extracts the kws args passed as varkwarg
@@ -132,12 +140,21 @@ def _call_function_ex_replace_kws_small(
     # index to None. Nones will be removed later.
     new_body[buildmap_idx] = None
     # Remove the definition.
-    _remove_assignment_definition(old_body, buildmap_idx, func_ir)
+    _remove_assignment_definition(
+        old_body, buildmap_idx, func_ir, already_deleted_defs
+    )
     return kws
 
 
 def _call_function_ex_replace_kws_large(
-    old_body, buildmap_name, buildmap_idx, search_end, new_body, func_ir, errmsg
+    old_body,
+    buildmap_name,
+    buildmap_idx,
+    search_end,
+    new_body,
+    func_ir,
+    errmsg,
+    already_deleted_defs
 ):
     """
     Extracts the kws args passed as varkwarg
@@ -170,7 +187,9 @@ def _call_function_ex_replace_kws_large(
     # Remove the build_map from the body.
     new_body[buildmap_idx] = None
     # Remove the definition.
-    _remove_assignment_definition(old_body, buildmap_idx, func_ir)
+    _remove_assignment_definition(
+        old_body, buildmap_idx, func_ir, already_deleted_defs
+    )
     kws = []
     search_start = buildmap_idx + 1
     while search_start <= search_end:
@@ -256,14 +275,23 @@ def _call_function_ex_replace_kws_large(
         new_body[search_start] = None
         new_body[search_start + 1] = None
         # Remove the definitions.
-        _remove_assignment_definition(old_body, search_start, func_ir)
-        _remove_assignment_definition(old_body, search_start + 1, func_ir)
+        _remove_assignment_definition(
+            old_body, search_start, func_ir, already_deleted_defs
+        )
+        _remove_assignment_definition(
+            old_body, search_start + 1, func_ir, already_deleted_defs
+        )
         search_start += 2
     return kws
 
 
 def _call_function_ex_replace_args_small(
-    old_body, tuple_expr, new_body, buildtuple_idx, func_ir
+    old_body,
+    tuple_expr,
+    new_body,
+    buildtuple_idx,
+    func_ir,
+    already_deleted_defs
 ):
     """
     Extracts the args passed as vararg
@@ -285,13 +313,21 @@ def _call_function_ex_replace_args_small(
     # Delete the build tuple
     new_body[buildtuple_idx] = None
     # Remove the definition.
-    _remove_assignment_definition(old_body, buildtuple_idx, func_ir)
+    _remove_assignment_definition(
+        old_body, buildtuple_idx, func_ir, already_deleted_defs
+    )
     # Return the args.
     return tuple_expr.items
 
 
 def _call_function_ex_replace_args_large(
-    old_body, vararg_stmt, new_body, search_end, func_ir, errmsg
+    old_body,
+    vararg_stmt,
+    new_body,
+    search_end,
+    func_ir,
+    errmsg,
+    already_deleted_defs
 ):
     """
     Extracts the args passed as vararg
@@ -332,7 +368,9 @@ def _call_function_ex_replace_args_large(
         # If there is an initial assignment, delete it
         new_body[search_end] = None
         # Remove the definition.
-        _remove_assignment_definition(old_body, search_end, func_ir)
+        _remove_assignment_definition(
+            old_body, search_end, func_ir, already_deleted_defs
+        )
         search_end -= 1
     else:
         # There must always be an initial assignement
@@ -352,7 +390,9 @@ def _call_function_ex_replace_args_large(
         ):
             new_body[search_end] = None
             # Remove the definition.
-            _remove_assignment_definition(old_body, search_end, func_ir)
+            _remove_assignment_definition(
+                old_body, search_end, func_ir, already_deleted_defs
+            )
             # If we have reached the build_tuple we exit.
             break
         else:
@@ -404,8 +444,12 @@ def _call_function_ex_replace_args_large(
             new_body[search_end] = None
             new_body[search_end - 1] = None
             # Remove the definitions.
-            _remove_assignment_definition(old_body, search_end, func_ir)
-            _remove_assignment_definition(old_body, search_end - 1, func_ir)
+            _remove_assignment_definition(
+                old_body, search_end, func_ir, already_deleted_defs
+            )
+            _remove_assignment_definition(
+                old_body, search_end - 1, func_ir, already_deleted_defs
+            )
             search_end -= 2
             # Avoid any space between appends
             keep_looking = True
@@ -481,6 +525,9 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
 
             a_val = 1 if flag else 0
             f(a=a_val, ...)""")
+
+    # Track which definitions have already been deleted
+    already_deleted_defs = collections.defaultdict(set)
     for blk in func_ir.blocks.values():
         blk_changed = False
         new_body = []
@@ -550,6 +597,7 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                         new_body,
                         varkwarg_loc,
                         func_ir,
+                        already_deleted_defs,
                     )
                 else:
                     # n_kws > 15 case.
@@ -572,6 +620,7 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                         new_body,
                         func_ir,
                         errmsg,
+                        already_deleted_defs,
                     )
                 start_search = varkwarg_loc
                 # Vararg isn't required to be provided.
@@ -615,6 +664,7 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                             new_body,
                             vararg_loc,
                             func_ir,
+                            already_deleted_defs,
                         )
                     elif (
                         isinstance(args_def.value, ir.Expr)
@@ -654,13 +704,16 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                             vararg_loc,
                             func_ir,
                             errmsg,
+                            already_deleted_defs,
                         )
                 # Create a new call updating the args and kws
                 new_call = ir.Expr.call(
                     call.func, args, kws, call.loc, target=call.target
                 )
                 # Drop the existing definition for this stmt.
-                _remove_assignment_definition(blk.body, i, func_ir)
+                _remove_assignment_definition(
+                    blk.body, i, func_ir, already_deleted_defs
+                )
                 # Update the statement
                 stmt = ir.Assign(new_call, stmt.target, stmt.loc)
                 # Update the definition
@@ -1028,6 +1081,7 @@ def peep_hole_fuse_dict_add_updates(func_ir):
             a_val = 1 if flag else 0
             d = {a: a_val, ...)""")
 
+    already_deleted_defs = collections.defaultdict(set)
     for blk in func_ir.blocks.values():
         new_body = []
         # literal map var name -> block idx of the original build_map
@@ -1104,7 +1158,7 @@ def peep_hole_fuse_dict_add_updates(func_ir):
                                         blk.body,
                                         linenum,
                                         func_ir,
-                                        ignore_missing=True
+                                        already_deleted_defs,
                                     )
                                     # Delete it from the new block
                                     new_body[linenum] = None
@@ -1115,7 +1169,7 @@ def peep_hole_fuse_dict_add_updates(func_ir):
                                 # Add d1 as the new instruction, removing the
                                 # old definition.
                                 _remove_assignment_definition(
-                                    blk.body, i, func_ir, ignore_missing=True
+                                    blk.body, i, func_ir, already_deleted_defs
                                 )
                                 new_inst = _build_new_build_map(
                                     func_ir,
