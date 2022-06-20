@@ -679,9 +679,9 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         self.assertEqual(a, b)
 
     @skip_unless_py10
-    def test_large_heterogenous_LiteralStrKeyDict_initial_values(self):
-        """Check the initial values for a LiteralStrKeyDict requiring
-        optimizations because it is heterogenous.
+    def test_large_heterogeneous_LiteralStrKeyDict_literal_values(self):
+        """Check the literal values for a LiteralStrKeyDict requiring
+        optimizations because it is heterogeneous.
         """
 
         def bar(d):
@@ -723,7 +723,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         def foo():
             # D is a heterogeneous dictionary
             # so this code can only compile if
-            # d has the correct initial values.
+            # d has the correct literal values.
             d = {
                 "A": 1,
                 "B": 1,
