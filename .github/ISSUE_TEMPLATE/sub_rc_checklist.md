@@ -16,9 +16,9 @@ labels: task
 * [ ] Review, merge and check execution of release notebook. (FINAL ONLY)
 * [ ] Annotated tag X.Y.Z on release branch (no `v` prefix).
 * [ ] Build and upload conda packages on buildfarm (check `upload`).
+* [ ] Build wheels and sdist on the buildfarm (check "upload").
 * [ ] Verify packages uploaded to Anaconda Cloud and move to
   `numba/label/main`.
-* [ ] Build wheels and sdist on the buildfarm (check "upload").
 * [ ] Upload wheels and sdist to PyPI (upload from `ci_artifacts`).
 * [ ] Verify wheels for all platforms arrived on PyPi.
 * [ ] Verify ReadTheDocs build.
