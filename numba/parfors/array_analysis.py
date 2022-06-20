@@ -1383,7 +1383,7 @@ class ArrayAnalysis(object):
                     shape is not None
                     and isinstance(shape, ir.Var)
                     and isinstance(
-                        self.typemap[shape.name], types.containers.Tuple
+                        self.typemap[shape.name], types.containers.BaseTuple
                     )
                 ):
                     pass
@@ -2954,7 +2954,9 @@ class ArrayAnalysis(object):
         require(len(args) >= 1)
         return ArrayAnalysis.AnalyzeResult(shape=equiv_set._get_shape(args[0]))
 
-    def _insert_runtime_broadcast_call(self, scope, loc, arrs, max_dim):
+    def _insert_runtime_broadcast_call(
+        self, scope, equiv_set, loc, arrs, max_dim
+    ):
         pre = []
 
         typs = [self.typemap[x.name] for x in arrs]
@@ -2977,14 +2979,17 @@ class ArrayAnalysis(object):
             ir.Assign(value=func_def, target=func_var, loc=loc)
         )
         func_fnty = get_global_func_typ(runtime_broadcast_assert_shapes)
-        print("func_fnty:", func_fnty)
+        if config.DEBUG_ARRAY_OPT >= 2:
+            print("func_fnty:", func_fnty)
         self.typemap[func_var.name] = func_fnty
         fargs = [types.literal(max_dim)] + typs
-        print("typs:", typs)
-        print("dims:", dims, max_dim)
-        print("fargs:", fargs)
+        if config.DEBUG_ARRAY_OPT >= 2:
+            print("typs:", typs)
+            print("dims:", dims, max_dim)
+            print("fargs:", fargs)
         func_sig = self.context.resolve_function_type(func_fnty, fargs, {})
-        print("func_sig:", func_sig)
+        if config.DEBUG_ARRAY_OPT >= 2:
+            print("func_sig:", func_sig)
 
         max_dim_var = ir.Var(scope, mk_unique_var("max_dim"), loc)
         max_dim_val = ir.Const(max_dim, loc)
@@ -3000,6 +3005,18 @@ class ArrayAnalysis(object):
         pre.append(
             ir.Assign(value=func_call, target=runtime_broadcast_shape, loc=loc)
         )
+
+        # Define the output in the equiv_set for the left hand side.
+        # These should be considered equivalent because we produced a
+        # runtime check that verifies this.
+        needs_define = equiv_set.insert_equiv(runtime_broadcast_shape, *arrs)
+        if needs_define:
+            equiv_set.define(
+                runtime_broadcast_shape,
+                set(),
+                self.func_ir,
+                runtime_broadcast_type
+            )
 
         return ArrayAnalysis.AnalyzeResult(
             shape=runtime_broadcast_shape,
@@ -3069,7 +3086,7 @@ class ArrayAnalysis(object):
             )
         else:
             return self._insert_runtime_broadcast_call(
-                scope, loc, arrs, max_dim
+                scope, equiv_set, loc, arrs, max_dim
             )
 
     def _broadcast_assert_shapes(self, scope, equiv_set, loc, shapes, names):
