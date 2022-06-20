@@ -195,10 +195,10 @@ The general pattern for using ``get_num_threads`` in code generation is
 
 .. code:: python
 
-   import llvmlite.llvmpy.core as lc
+   from llvmlite import ir as llvmir
 
    get_num_threads = cgutils.get_or_insert_function(builder.module
-       lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
+       llvmir.FunctionType(llvmir.IntType(types.intp.bitwidth), []),
        name="get_num_threads")
 
    num_threads = builder.call(get_num_threads, [])
