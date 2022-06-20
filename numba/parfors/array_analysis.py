@@ -1076,7 +1076,7 @@ class WrapIndexMeta(object):
 
 @register_jitable
 def runtime_broadcast_assert_shapes(max_dim, arg0, arg1):
-    new_shape = []
+    new_shape = numpy.empty(max_dim, numpy.int64)
     shapes = []
     shapes.append(list(arg0.shape))
     shapes.append(list(arg1.shape))
@@ -1089,10 +1089,11 @@ def runtime_broadcast_assert_shapes(max_dim, arg0, arg1):
                     sizes.append(size)  # non-1 size to front
         if len(sizes) == 0:
             sizes.append(1)
-        new_shape.append(sizes[0])
+        # TODO: Shouldn't there be an assert somewhere in here if
+        # the sizes don't match?
+        new_shape[max_dim - 1 - i] = sizes[0]
 
-    rev = new_shape[::-1]
-    return to_fixed_tuple(rev, max_dim)
+    return to_fixed_tuple(new_shape, max_dim)
 
 
 class ArrayAnalysis(object):
@@ -2960,7 +2961,7 @@ class ArrayAnalysis(object):
         runtime_broadcast_shape = ir.Var(
             scope, mk_unique_var("runtime_broadcast_shape"), loc
         )
-        runtime_broadcast_type = types.containers.List(types.intp)
+        runtime_broadcast_type = types.Tuple([types.int64] * max_dim)
         self.typemap[runtime_broadcast_shape.name] = runtime_broadcast_type
 
         func_var = ir.Var(scope, mk_unique_var("runtime_broadcast_call"), loc)
@@ -2999,7 +3000,7 @@ class ArrayAnalysis(object):
 
         return ArrayAnalysis.AnalyzeResult(
             shape=runtime_broadcast_shape,
-            pre=pre
+            pre=pre,
         )
 
     def _analyze_broadcast(self, scope, equiv_set, loc, args, fn):
@@ -3053,11 +3054,11 @@ class ArrayAnalysis(object):
                 scope, equiv_set, loc, shapes, names
             )
         elif len(arrs) == 1:
-            lhs = arrs[0]
-            typ = self.typemap[lhs.name]
+            var = arrs[0]
+            typ = self.typemap[var.name]
             pre = []
             shape = self._gen_shape_call(
-                equiv_set, lhs, typ.ndim, None, pre
+                equiv_set, var, typ.ndim, None, pre
             )
             return ArrayAnalysis.AnalyzeResult(
                 shape=shape,
