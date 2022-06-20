@@ -53,8 +53,8 @@ def random_standard_normal(bitgen):
             return x
         if idx == 0:
             while 1:
-                xx = -ziggurat_nor_inv_r * np_log1p(-next_double(bitgen))
-                yy = -np_log1p(-next_double(bitgen))
+                xx = -ziggurat_nor_inv_r * np.log1p(-next_double(bitgen))
+                yy = -np.log1p(-next_double(bitgen))
                 if (yy + yy > xx * xx):
                     if ((rabs >> 8) & 0x1):
                         return -(ziggurat_nor_r + xx)
