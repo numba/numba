@@ -1090,7 +1090,8 @@ def runtime_broadcast_assert_shapes(max_dim, arg0, arg1):
                         sizes.append(size)  # non-1 size to front
                     else:
                         # Actually assert the shapes match.
-                        assert sizes[0] == size
+                        assert sizes[0] == size, \
+                            "Cannot broadcast between mismatched shapes"
         if len(sizes) == 0:
             sizes.append(1)
         new_shape[max_dim - 1 - i] = sizes[0]
