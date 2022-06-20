@@ -89,8 +89,9 @@ def _remove_assignment_definition(old_body, idx, func_ir, already_deleted_defs):
 
     In some optimizations we may update the same variable multiple times.
     In this situation, we only need to delete a particular definition once,
-    so we deleted_vars, which is a default dict for each assignment name
-    to the set of values that have already been deleted.
+    this is tracked in already_deleted_def, which is a map from
+    assignment name to the set of values that have already been
+    deleted.
     """
     lhs = old_body[idx].target.name
     rhs = old_body[idx].value
