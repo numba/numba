@@ -8,7 +8,15 @@ from numba.tests.support import TestCase
 
 
 @skip_parfors_unsupported
-class ChunksizeExamplesTest(unittest.TestCase):
+class ChunksizeExamplesTest(TestCase):
+
+    _numba_parallel_test_ = False
+
+    def setUp(self):
+        set_parallel_chunksize(0)
+
+    def tearDown(self):
+        set_parallel_chunksize(0)
 
     def test_unbalanced_example(self):
         with captured_stdout():
