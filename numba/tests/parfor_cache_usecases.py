@@ -2,7 +2,7 @@
 This file will be copied to a temporary directory in order to
 exercise caching parfors functionality.
 
-See test_cfunc.py.
+See test_caching.py.
 """
 
 import sys
