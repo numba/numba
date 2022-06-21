@@ -4541,7 +4541,7 @@ def _as_layout_array(context, builder, sig, args, output_layout):
 
     else:
         if aryty.layout == 'A':
-            # There's stilll chance the array is in contiguous layout,
+            # There's still chance the array is in contiguous layout,
             # just that we don't know at compile time.
             # We can do a runtime check.
 
