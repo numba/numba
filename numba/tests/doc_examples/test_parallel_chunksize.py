@@ -71,11 +71,14 @@ class ChunksizeExamplesTest(unittest.TestCase):
             # This version saves the previous chunksize as returned
             # by set_parallel_chunksize.
             old_chunksize = set_parallel_chunksize(4)
-            func1(12)
-            func2(12)
-            func1(12)
+            result1 = func1(12)
+            result2 = func2(12)
+            result3 = func1(12)
             set_parallel_chunksize(old_chunksize)
             # magictoken.ex_chunksize_manual.end
+            self.assertPreciseEqual(result1, func1.py_func())
+            self.assertPreciseEqual(result2, func2.py_func())
+            self.assertPreciseEqual(result3, func1.py_func())
 
     def test_chunksize_with(self):
         with captured_stdout():
