@@ -31,10 +31,6 @@ class _TestModule(TestCase):
         b = np.ones(100)
         f(a, b)
 
-    # For 2.x
-    def runTest(self):
-        raise NotImplementedError
-
 
 def self_test():
     mod = sys.modules[__name__]

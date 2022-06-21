@@ -45,10 +45,6 @@ class _TestModule(TestCase):
             msg="At least one dispatcher has used the cache",
         )
 
-    # For 2.x
-    def runTest(self):
-        raise NotImplementedError
-
 
 def self_test():
     mod = sys.modules[__name__]
