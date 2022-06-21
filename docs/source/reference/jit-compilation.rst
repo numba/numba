@@ -74,7 +74,7 @@ JIT functions
    .. _jit-decorator-parallel:
 
    If true, *parallel* enables the automatic parallelization of a number of
-   common Numpy constructs as well as the fusion of adjacent parallel
+   common NumPy constructs as well as the fusion of adjacent parallel
    operations to maximize cache locality.
 
    The *error_model* option controls the divide-by-zero behavior.
@@ -294,7 +294,7 @@ Vectorized functions (ufuncs and DUFuncs)
 
 .. decorator:: numba.vectorize(*, signatures=[], identity=None, nopython=True, target='cpu', forceobj=False, cache=False, locals={})
 
-   Compile the decorated function and wrap it either as a `Numpy
+   Compile the decorated function and wrap it either as a `NumPy
    ufunc`_ or a Numba :class:`~numba.DUFunc`.  The optional
    *nopython*, *forceobj* and *locals* arguments have the same meaning
    as in :func:`numba.jit`.
@@ -302,10 +302,10 @@ Vectorized functions (ufuncs and DUFuncs)
    *signatures* is an optional list of signatures expressed in the
    same form as in the :func:`numba.jit` *signature* argument.  If
    *signatures* is non-empty, then the decorator will compile the user
-   Python function into a Numpy ufunc.  If no *signatures* are given,
+   Python function into a NumPy ufunc.  If no *signatures* are given,
    then the decorator will wrap the user Python function in a
    :class:`~numba.DUFunc` instance, which will compile the user
-   function at call time whenever Numpy can not find a matching loop
+   function at call time whenever NumPy can not find a matching loop
    for the input arguments.  *signatures* is required if *target* is
    ``"parallel"``.
 
@@ -317,7 +317,7 @@ Vectorized functions (ufuncs and DUFuncs)
    axes can be reordered.
 
    If there are several *signatures*, they must be ordered from the more
-   specific to the least specific.  Otherwise, Numpy's type-based
+   specific to the least specific.  Otherwise, NumPy's type-based
    dispatching may not work as expected.  For example, the following is
    wrong::
 
@@ -354,7 +354,7 @@ Vectorized functions (ufuncs and DUFuncs)
    :func:`numba.vectorize` will produce a simple ufunc whose core
    functionality (the function you are decorating) operates on scalar
    operands and returns a scalar value, :func:`numba.guvectorize`
-   allows you to create a `Numpy ufunc`_ whose core function takes array
+   allows you to create a `NumPy ufunc`_ whose core function takes array
    arguments of various dimensions.
 
    The additional argument *layout* is a string specifying, in symbolic
@@ -387,27 +387,27 @@ Vectorized functions (ufuncs and DUFuncs)
 
    .. seealso::
       Specification of the `layout string <https://numpy.org/doc/stable/reference/c-api/generalized-ufuncs.html#details-of-signature>`_
-      as supported by Numpy.  Note that Numpy uses the term "signature",
+      as supported by NumPy.  Note that NumPy uses the term "signature",
       which we unfortunately use for something else.
 
    The compiled function can be cached to reduce future compilation time.
    It is enabled by setting *cache* to True. Only the "cpu" and "parallel"
    targets support caching.
 
-.. _Numpy ufunc: http://docs.scipy.org/doc/numpy/reference/ufuncs.html
+.. _NumPy ufunc: http://docs.scipy.org/doc/numpy/reference/ufuncs.html
 
 .. class:: numba.DUFunc
 
    The class of objects created by calling :func:`numba.vectorize`
    with no signatures.
 
-   DUFunc instances should behave similarly to Numpy
+   DUFunc instances should behave similarly to NumPy
    :class:`~numpy.ufunc` objects with one important difference:
-   call-time loop generation.  When calling a ufunc, Numpy looks at
+   call-time loop generation.  When calling a ufunc, NumPy looks at
    the existing loops registered for that ufunc, and will raise a
    :class:`~python.TypeError` if it cannot find a loop that it cannot
    safely cast the inputs to suit.  When calling a DUFunc, Numba
-   delegates the call to Numpy.  If the Numpy ufunc call fails, then
+   delegates the call to NumPy.  If the NumPy ufunc call fails, then
    Numba attempts to build a new loop for the given input types, and
    calls the ufunc again.  If this second call attempt fails or a
    compilation error occurs, then DUFunc passes along the exception to
@@ -422,7 +422,7 @@ Vectorized functions (ufuncs and DUFuncs)
 
    .. attribute:: ufunc
 
-      The actual Numpy :class:`~numpy.ufunc` object being built by the
+      The actual NumPy :class:`~numpy.ufunc` object being built by the
       :class:`~numba.DUFunc` instance.  Note that the
       :class:`~numba.DUFunc` object maintains several important data
       structures required for proper ufunc functionality (specifically
@@ -482,7 +482,7 @@ Vectorized functions (ufuncs and DUFuncs)
    .. method:: at(A, indices, *, B)
 
       Performs unbuffered in place operation on operand *A* for
-      elements specified by *indices*.  If you are using Numpy 1.7 or
+      elements specified by *indices*.  If you are using NumPy 1.7 or
       earlier, this method will not be present.  See `ufunc.at`_.
 
 
