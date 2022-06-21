@@ -3,6 +3,8 @@
 
 import unittest
 from numba.tests.support import captured_stdout, skip_parfors_unsupported
+from numba import set_parallel_chunksize
+from numba.tests.support import TestCase
 
 
 @skip_parfors_unsupported
