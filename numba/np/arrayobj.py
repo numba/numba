@@ -2982,7 +2982,7 @@ def _increment_indices(context, builder, ndim, shape, indices, end_flag=None,
         count = shape[dim]
         in_bounds = builder.icmp_signed('<', idx, count)
         with cgutils.if_likely(builder, in_bounds):
-            # New index is stilll in bounds
+            # New index is still in bounds
             builder.store(idx, idxptr)
             if loop_continue is not None:
                 loop_continue(dim)
