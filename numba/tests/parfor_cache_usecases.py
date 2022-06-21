@@ -1,6 +1,6 @@
 """
 This file will be copied to a temporary directory in order to
-exercise caching compiled C callbacks.
+exercise caching parfors functionality.
 
 See test_cfunc.py.
 """
