@@ -32,8 +32,9 @@ class ChunksizeExamplesTest(unittest.TestCase):
                     vals[i] = cur
                 return vals
 
-            func1()
+            result = func1()
             # magictoken.ex_unbalanced.end
+            self.assertPreciseEqual(result, func1.py_func())
 
     def test_chunksize_manual(self):
         with captured_stdout():
