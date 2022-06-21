@@ -182,7 +182,7 @@ class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
     def build(self, cres, sig):
         _launch_threads()
 
-        # Buider wrapper for ufunc entry point
+        # Builder wrapper for ufunc entry point
         ctx = cres.target_context
         signature = cres.signature
         library = cres.library

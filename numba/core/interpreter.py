@@ -374,11 +374,11 @@ def _call_function_ex_replace_args_large(
         )
         search_end -= 1
     else:
-        # There must always be an initial assignement
+        # There must always be an initial assignment
         # https://github.com/numba/numba/blob/59fa2e335be68148b3bd72a29de3ff011430038d/numba/core/interpreter.py#L259-L260
         # If this changes we may need to support this branch.
         raise AssertionError("unreachable")
-    # Traverse backwards to find all concatentations
+    # Traverse backwards to find all concatenations
     # until eventually reaching the original empty tuple.
     while search_end >= search_start:
         concat_stmt = old_body[search_end]
@@ -415,7 +415,7 @@ def _call_function_ex_replace_args_large(
                 raise UnsupportedError(errmsg)
             lhs_name = concat_stmt.value.lhs.name
             rhs_name = concat_stmt.value.rhs.name
-            # The previous statment should be a
+            # The previous statement should be a
             # build_tuple containing the arg.
             arg_tuple_stmt = old_body[search_end - 1]
             if not (

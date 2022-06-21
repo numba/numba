@@ -1245,7 +1245,7 @@ def _create_gufunc_for_parfor_body(
             gufunc_txt += " = (" + ", ".join([param_dict[x] for x in exp_names])
             if len(exp_names) == 1:
                 # Add comma for tuples with singular values.  We can't unilaterally
-                # add a comma alway because (,) isn't valid.
+                # add a comma always because (,) isn't valid.
                 gufunc_txt += ","
 
         gufunc_txt += ")\n"

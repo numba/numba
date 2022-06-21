@@ -1790,7 +1790,7 @@ def unicode_replace(s, old_str, new_str, count=-1):
         thety = count.type
 
     if not isinstance(thety, (int, types.Integer)):
-        raise TypingError('Unsupported parameters. The parametrs '
+        raise TypingError('Unsupported parameters. The parameters '
                           'must be Integer. Given count: {}'.format(count))
 
     if not isinstance(old_str, (types.UnicodeType, types.NoneType)):

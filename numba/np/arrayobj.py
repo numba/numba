@@ -1098,7 +1098,7 @@ def offset_bounds_from_strides(context, builder, arrty, arr, shapes, strides):
     Compute a half-open range [lower, upper) of byte offsets from the
     array's data pointer, that bound the in-memory extent of the array.
 
-    This mimicks offset_bounds_from_strides() from
+    This mimics offset_bounds_from_strides() from
     numpy/core/src/private/mem_overlap.c
     """
     itemsize = arr.itemsize
@@ -1617,7 +1617,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     source_indices = tuple(c for c in counts if c is not None)
     val = src_getitem(source_indices)
 
-    # Cast to the destination dtype (cross-dtype slice assignement is allowed)
+    # Cast to the destination dtype (cross-dtype slice assignment is allowed)
     val = context.cast(builder, val, src_dtype, aryty.dtype)
 
     # No need to check for wraparound, as the indexers all ensure
@@ -2588,7 +2588,7 @@ def array_flags(context, builder, typ, value):
 @lower_getattr(types.ArrayFlags, "c_contiguous")
 def array_flags_c_contiguous(context, builder, typ, value):
     if typ.array_type.layout != 'C':
-        # any layout can stil be contiguous
+        # any layout can still be contiguous
         flagsobj = context.make_helper(builder, typ, value=value)
         res = _call_contiguous_check(is_contiguous, context, builder,
                                      typ.array_type, flagsobj.parent)
@@ -2601,7 +2601,7 @@ def array_flags_c_contiguous(context, builder, typ, value):
 @lower_getattr(types.ArrayFlags, "f_contiguous")
 def array_flags_f_contiguous(context, builder, typ, value):
     if typ.array_type.layout != 'F':
-        # any layout can stil be contiguous
+        # any layout can still be contiguous
         flagsobj = context.make_helper(builder, typ, value=value)
         res = _call_contiguous_check(is_fortran, context, builder,
                                      typ.array_type, flagsobj.parent)
@@ -2982,7 +2982,7 @@ def _increment_indices(context, builder, ndim, shape, indices, end_flag=None,
         count = shape[dim]
         in_bounds = builder.icmp_signed('<', idx, count)
         with cgutils.if_likely(builder, in_bounds):
-            # New index is still in bounds
+            # New index is stilll in bounds
             builder.store(idx, idxptr)
             if loop_continue is not None:
                 loop_continue(dim)
@@ -4541,7 +4541,7 @@ def _as_layout_array(context, builder, sig, args, output_layout):
 
     else:
         if aryty.layout == 'A':
-            # There's still chance the array is in contiguous layout,
+            # There's stilll chance the array is in contiguous layout,
             # just that we don't know at compile time.
             # We can do a runtime check.
 
