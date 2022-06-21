@@ -282,7 +282,7 @@ GPU Programming
 ===============
 
 How do I work around the ``CUDA initialized before forking`` error?
-------------------------------------------------------------------
+-------------------------------------------------------------------
 
 On Linux, the ``multiprocessing`` module in the Python standard library
 defaults to using the ``fork`` method for creating new processes.  Because of
