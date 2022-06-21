@@ -7,8 +7,6 @@ from numba.core.codegen import Codegen, CodeLibrary
 from numba.core.errors import NumbaInvalidConfigWarning
 from .cudadrv import devices, driver, nvvm, runtime
 
-import ctypes
-import numpy as np
 import os
 import subprocess
 import tempfile
@@ -174,11 +172,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         for path in self._linking_files:
             linker.add_file_guess_ext(path)
 
-        cubin_buf, size = linker.complete()
-
-        # We take a copy of the cubin because it's owned by the linker
-        cubin_ptr = ctypes.cast(cubin_buf, ctypes.POINTER(ctypes.c_char))
-        cubin = bytes(np.ctypeslib.as_array(cubin_ptr, shape=(size,)))
+        cubin = linker.complete()
         self._cubin_cache[cc] = cubin
         self._linkerinfo_cache[cc] = linker.info_log
 

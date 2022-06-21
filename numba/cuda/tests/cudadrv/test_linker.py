@@ -67,7 +67,7 @@ class TestLinker(CUDATestCase):
     def test_linker_basic(self):
         '''Simply go through the constructor and destructor
         '''
-        linker = Linker.new()
+        linker = Linker.new(cc=(5, 3))
         del linker
 
     def _test_linking(self, eager):
