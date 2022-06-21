@@ -2976,6 +2976,8 @@ class ArrayAnalysis(object):
             )
         pre = []
         if None in shapes:
+            # There is at least 1 shape that we don't know,
+            # so we need to generate that shape now.
             new_shapes = []
             for i, s in enumerate(shapes):
                 if s is None:
@@ -2993,6 +2995,8 @@ class ArrayAnalysis(object):
             scope, equiv_set, loc, shapes, names
         )
         if pre:
+            # If we had to generate a shape we have to insert
+            # that code before the broadcast assertion.
             if 'pre' in result.kwargs:
                 prev_pre = result.kwargs['pre']
             else:
