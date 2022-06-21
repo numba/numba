@@ -1102,6 +1102,7 @@ class TestParforCache(BaseCacheTest):
         mod.self_test()
 
     def test_caching(self):
+        # NOTE: This test is checking issue #7518
         self.run_in_separate_process(1)
         self.run_in_separate_process(2)
 
