@@ -639,8 +639,16 @@ equal to the number of iterations divided by the chunk size, truncated to the ne
 integer.  All of these chunks are then approximately, equally sized.
 Numba then gives one such chunk to each configured
 thread as above and when a thread finishes a chunk, Numba gives that thread the next
-available chunk.  This scheduling approach is similar to OpenMP's dynamic scheduling
-option with the specified chunk size.  To minimize execution time, the programmer must
+available chunk.
+This scheduling approach is similar to OpenMP's dynamic scheduling
+option with the specified chunk size.
+(Note that Numba is only capable of supporting this dynamic scheduling
+of parallel regions if the underlying Numba threading backend,
+:ref:`numba-threading-layer`, is also capable of dynamic scheduling.
+At the moment, only the ``tbb`` backend is capable of dynamic
+scheduling and so is required if any performance
+benefit is to be achieved from this chunk size selection mechanism.)
+To minimize execution time, the programmer must
 pick a chunk size that strikes a balance between greater load balancing with smaller
 chunk sizes and less scheduling overhead with larger chunk sizes.
 See :ref:`chunk-details-label` for additional details on the internal implementation
