@@ -4440,7 +4440,7 @@ class TestParforsVectorizer(TestPrangeBase):
 
 @skip_parfors_unsupported
 class TestParforReductionSetNumThreads(TestCase):
-    """Test exceution correctness on reductions with set_num_threads.
+    """Test execution correctness on reductions with set_num_threads.
     """
     def test_add(self):
         N = config.NUMBA_NUM_THREADS
