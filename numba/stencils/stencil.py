@@ -602,18 +602,25 @@ class StencilFunc(object):
         if result is None:
             return_type_name = numpy_support.as_dtype(
                                return_type.dtype).type.__name__
+            out_init ="{} = np.empty({}, dtype=np.{})\n".format(
+                        out_name, shape_name, return_type_name)
+
             if "cval" in self.options:
                 cval = self.options["cval"]
-                if return_type.dtype != typing.typeof.typeof(cval):
+                cval_ty = typing.typeof.typeof(cval)
+                if not self._typingctx.can_convert(cval_ty, return_type.dtype):
                     msg = "cval type does not match stencil return type."
                     raise NumbaValueError(msg)
-                out_init ="{} = np.full({}, {}, dtype=np.{})\n".format(
-                            out_name, shape_name, cval_as_str(cval),
-                            return_type_name)
             else:
-                out_init ="{} = np.zeros({}, dtype=np.{})\n".format(
-                            out_name, shape_name, return_type_name)
+                 cval = 0
             func_text += "    " + out_init
+            for dim in range(the_array.ndim):
+                start_items = [":"] * the_array.ndim
+                end_items = [":"] * the_array.ndim
+                start_items[dim] = ":-{}".format(self.neighborhood[dim][0])
+                end_items[dim] = "-{}:".format(self.neighborhood[dim][1])
+                func_text += "    " + "{}[{}] = {}\n".format(out_name, ",".join(start_items), cval_as_str(cval))
+                func_text += "    " + "{}[{}] = {}\n".format(out_name, ",".join(end_items), cval_as_str(cval))
         else: # result is present, if cval is set then use it
             if "cval" in self.options:
                 cval = self.options["cval"]
