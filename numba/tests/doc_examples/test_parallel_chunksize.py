@@ -109,10 +109,13 @@ class ChunksizeExamplesTest(TestCase):
                 return acc
 
             with parallel_chunksize(4):
-                func1(12)
-                func2(12)
-                func1(12)
+                result1 = func1(12)
+                result2 = func2(12)
+                result3 = func1(12)
             # magictoken.ex_chunksize_with.end
+            self.assertPreciseEqual(result1, func1.py_func(12))
+            self.assertPreciseEqual(result2, func2.py_func(12))
+            self.assertPreciseEqual(result3, func1.py_func(12))
 
 
 if __name__ == '__main__':
