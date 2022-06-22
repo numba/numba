@@ -1007,6 +1007,47 @@ class TestDictObject(MemoryLeakMixin, TestCase):
 
         self.assertTrue(foo())
 
+    def test_dict_update(self):
+        """
+        Tests dict.update works with various dictionaries.
+        """
+        n = 10
+
+        def f1(n):
+            """
+            Test update with a regular dictionary.
+            """
+            d1 = {i: i + 1 for i in range(n)}
+            d2 = {3 * i: i for i in range(n)}
+            d1.update(d2)
+            return d1
+
+        py_func = f1
+        cfunc = njit()(f1)
+        a = py_func(n)
+        b = cfunc(n)
+        self.assertEqual(a, b)
+
+        def f2(n):
+            """
+            Test update where one of the dictionaries
+            is created as a Python literal.
+            """
+            d1 = {
+                1: 2,
+                3: 4,
+                5: 6
+            }
+            d2 = {3 * i: i for i in range(n)}
+            d1.update(d2)
+            return d1
+
+        py_func = f2
+        cfunc = njit()(f2)
+        a = py_func(n)
+        b = cfunc(n)
+        self.assertEqual(a, b)
+
 
 class TestDictTypeCasting(TestCase):
     def check_good(self, fromty, toty):
@@ -2360,6 +2401,28 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
             return len(d)
 
         self.assertPreciseEqual(bar(), bar.py_func())
+
+    def test_update_error(self):
+        # Tests that dict.update produces a reasonable
+        # error with a LiteralStrKeyDict input.
+        @njit
+        def foo():
+
+            d1 = {
+                'a': 2,
+                'b': 4,
+                'c': 'a'
+            }
+            d1.update({'x': 3})
+            return d1
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+
+        self.assertIn(
+            "Cannot mutate a literal dictionary",
+            str(raises.exception)
+        )
 
 
 if __name__ == '__main__':

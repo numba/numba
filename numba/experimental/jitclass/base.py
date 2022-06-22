@@ -293,6 +293,12 @@ def _drop_ignored_attrs(dct):
         elif getattr(v, '__objclass__', None) is object:
             drop.add(k)
 
+    # If a class defines __eq__ but not __hash__, __hash__ is implicitly set to
+    # None. This is a class member, and class members are not presently
+    # supported.
+    if '__hash__' in dct and dct['__hash__'] is None:
+        drop.add('__hash__')
+
     for k in drop:
         del dct[k]
 

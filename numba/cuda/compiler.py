@@ -196,6 +196,9 @@ def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
         # later want to overload some other behavior on the debug flag.
         # In particular, -opt=3 is not supported with -g.
         flags.debuginfo = True
+        flags.error_model = 'python'
+    else:
+        flags.error_model = 'numpy'
     if inline:
         flags.forceinline = True
     if fastmath:

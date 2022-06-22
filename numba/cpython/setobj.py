@@ -1012,13 +1012,14 @@ class SetInstance(object):
         with builder.if_then(builder.load(ok), likely=True):
             if realloc:
                 meminfo = self._set.meminfo
-                ptr = context.nrt.meminfo_varsize_alloc(builder, meminfo,
+                ptr = context.nrt.meminfo_varsize_alloc_unchecked(builder,
+                                                                  meminfo,
                                                         size=allocsize)
                 alloc_ok = cgutils.is_null(builder, ptr)
             else:
                 # create destructor to be called upon set destruction
                 dtor = self._imp_dtor(context, builder.module)
-                meminfo = context.nrt.meminfo_new_varsize_dtor(
+                meminfo = context.nrt.meminfo_new_varsize_dtor_unchecked(
                     builder, allocsize, builder.bitcast(dtor, cgutils.voidptr_t))
                 alloc_ok = cgutils.is_null(builder, meminfo)
 
@@ -1084,7 +1085,7 @@ class SetInstance(object):
         with builder.if_then(builder.load(ok), likely=True):
             # create destructor for new meminfo
             dtor = self._imp_dtor(context, builder.module)
-            meminfo = context.nrt.meminfo_new_varsize_dtor(
+            meminfo = context.nrt.meminfo_new_varsize_dtor_unchecked(
                 builder, allocsize, builder.bitcast(dtor, cgutils.voidptr_t))
             alloc_ok = cgutils.is_null(builder, meminfo)
 
