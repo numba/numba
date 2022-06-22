@@ -2589,16 +2589,13 @@ def ol_array_real(arr):
 
 @intrinsic
 def _force_readonly(tyctx, arr):
-    """Takes an array, and returns it with the readonly bit set in both typing
-    and lowering."""
+    """Takes an array, and returns it with the readonly bit set through
+    typing"""
     sig = arr.copy(readonly=True)(arr)
 
     def impl(cgctx, builder, sig, llargs):
         arrayty = make_array(arr)
         array = arrayty(cgctx, builder, llargs[0])
-        # make readonly hack
-        parent = array._datamodel.get_type('parent')
-        setattr(array, 'parent', Constant(cgctx.get_value_type(parent), None))
         return impl_ret_borrowed(cgctx, builder, sig.return_type,
                                  array._getvalue())
     return sig, impl
