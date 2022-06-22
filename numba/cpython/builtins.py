@@ -550,10 +550,8 @@ def indval_min(indval1, indval2):
     if isinstance(indval1, IndexValueType) and \
        isinstance(indval2, IndexValueType):
         def min_impl(indval1, indval2):
-            # nan check
-            if indval1.value != indval1.value:
-                # nan check
-                if indval2.value != indval2.value:
+            if np.isnan(indval1.value):
+                if np.isnan(indval2.value):
                     # both indval1 and indval2 are nans so order by index
                     if indval1.index < indval2.index:
                         return indval1
@@ -562,8 +560,7 @@ def indval_min(indval1, indval2):
                 else:
                     # comparing against one nan always considered less
                     return indval1
-            # nan check
-            elif indval2.value != indval2.value:
+            elif np.isnan(indval2.value):
                 # indval1 not a nan but indval2 is so consider indval2 less
                 return indval2
             elif indval1.value > indval2.value:
@@ -582,10 +579,8 @@ def indval_max(indval1, indval2):
     if isinstance(indval1, IndexValueType) and \
        isinstance(indval2, IndexValueType):
         def max_impl(indval1, indval2):
-            # nan check
-            if indval1.value != indval1.value:
-                # nan check
-                if indval2.value != indval2.value:
+            if np.isnan(indval1.value):
+                if np.isnan(indval2.value):
                     # both indval1 and indval2 are nans so order by index
                     if indval1.index < indval2.index:
                         return indval1
@@ -594,8 +589,7 @@ def indval_max(indval1, indval2):
                 else:
                     # comparing against one nan always considered larger
                     return indval1
-            # nan check
-            elif indval2.value != indval2.value:
+            elif np.isnan(indval2.value):
                 # indval1 not a nan but indval2 is so consider indval2 larger
                 return indval2
             elif indval2.value > indval1.value:

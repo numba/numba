@@ -4463,7 +4463,9 @@ class TestParforReductionSetNumThreads(TestCase):
         self.assertPreciseEqual(expect, got)
 
     def test_mul(self):
-        N = config.NUMBA_NUM_THREADS
+        # This min will prevent larger thread counts from generating
+        # overflow in the loop below.
+        N = min(4, config.NUMBA_NUM_THREADS)
         M = 2 * N
         mask = N - 1
 
