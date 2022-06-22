@@ -614,7 +614,7 @@ class LoweringError(NumbaError):
 
 class UnsupportedParforsError(NumbaError):
     """
-    An error ocurrred because parfors is not supported on the platform.
+    An error occurred because parfors is not supported on the platform.
     """
     pass
 
