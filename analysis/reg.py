@@ -47,7 +47,7 @@ def read_files():
     before_df = read_file('log_without_tid.txt', 'before')
     after_df = read_file('log_with_tid.txt', 'after')
 
-    return before_df, after_df
+    return pd.merge(before_df, after_df, how='outer', on='name')
 
 
 if __name__ == '__main__':
