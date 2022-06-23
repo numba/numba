@@ -187,7 +187,7 @@ def NumPyRandomGeneratorType_normal(inst, loc=0.0, scale=1.0,
         check_size(size)
 
         def impl(inst, loc=0.0, scale=1.0, size=None):
-            out = np.empty(size)
+            out = np.empty(size, dtype=np.float64)
             for i in np.ndindex(size):
                 out[i] = random_normal(inst.bit_generator, loc, scale)
             return out
@@ -209,7 +209,7 @@ def NumPyRandomGeneratorType_exponential(inst, scale=1.0, size=None):
         check_size(size)
 
         def impl(inst, scale=1.0, size=None):
-            out = np.empty(size)
+            out = np.empty(size, dtype=np.float64)
             for i in np.ndindex(size):
                 out[i] = random_exponential(inst.bit_generator, scale)
             return out
@@ -231,7 +231,7 @@ def NumPyRandomGeneratorType_gamma(inst, shape, scale=1.0, size=None):
         check_size(size)
 
         def impl(inst, shape, scale=1.0, size=None):
-            out = np.empty(size)
+            out = np.empty(size, dtype=np.float64)
             for i in np.ndindex(size):
                 out[i] = random_gamma(inst.bit_generator, shape, scale)
             return out

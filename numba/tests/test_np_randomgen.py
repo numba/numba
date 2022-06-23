@@ -67,7 +67,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                                               test_size, test_dtype)
 
         np.testing.assert_array_max_ulp(numpy_res, numba_res,
-                                        maxulp=9, dtype=test_dtype)
+                                        maxulp=5, dtype=test_dtype)
 
         # Check if the end state of both BitGenerators is same
         # after drawing the distributions
