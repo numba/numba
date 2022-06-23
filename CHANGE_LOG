@@ -1,3 +1,33 @@
+Version 0.55.2 (25 May, 2022)
+-----------------------------
+
+This is a maintenance release to support NumPy 1.22 and Apple M1.
+
+Pull-Requests:
+
+* PR `#8067 <https://github.com/numba/numba/pull/8067>`_: Backport #8027: Support for NumPy 1.22 (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8069 <https://github.com/numba/numba/pull/8069>`_: Install llvmlite 0.38 for Numba 0.55.* (`esc <https://github.com/esc>`_)
+* PR `#8075 <https://github.com/numba/numba/pull/8075>`_: update max NumPy for 0.55.2 (`esc <https://github.com/esc>`_)
+* PR `#8078 <https://github.com/numba/numba/pull/8078>`_: Backport #7804: update local references from master -> main (`esc <https://github.com/esc>`_)
+* PR `#8082 <https://github.com/numba/numba/pull/8082>`_: Backport #8080: fix windows failure due to timeout (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#8084 <https://github.com/numba/numba/pull/8084>`_: Pin meta.yaml to llvmlite 0.38 series (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#8093 <https://github.com/numba/numba/pull/8093>`_: Backport #7904: Support m1 (`esc <https://github.com/esc>`_)
+* PR `#8094 <https://github.com/numba/numba/pull/8094>`_: Backport #8052 Ensure pthread is linked in when building for ppc64le. (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#8098 <https://github.com/numba/numba/pull/8098>`_: Backport #8097: Exclude libopenblas 0.3.20 on osx-arm64 (`esc <https://github.com/esc>`_)
+* PR `#8100 <https://github.com/numba/numba/pull/8100>`_: Backport #7786 for 0.55.2: Remove dependency on intel-openmp for OSX  (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8103 <https://github.com/numba/numba/pull/8103>`_: Backport #8102 to fix numpy requirements (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#8114 <https://github.com/numba/numba/pull/8114>`_: Backport #8109 Pin TBB support with respect to incompatible 2021.6 API. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+
+Total PRs: 12
+
+Authors:
+
+* `esc <https://github.com/esc>`_
+* `Siu Kwan Lam <https://github.com/sklam>`_
+* `stuartarchibald <https://github.com/stuartarchibald>`_
+
+Total authors: 3
+
 Version 0.55.1 (27 January, 2022)
 ---------------------------------
 
