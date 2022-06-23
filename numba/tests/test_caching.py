@@ -1072,40 +1072,5 @@ class TestCFuncCache(BaseCacheTest):
         self.run_in_separate_process()
 
 
-@skip_parfors_unsupported
-class TestParforCache(BaseCacheTest):
-
-    here = os.path.dirname(__file__)
-    usecases_file = os.path.join(here, "parfor_cache_usecases.py")
-    modname = "parfor_caching_test_fodder"
-
-    def run_in_separate_process(self, thread_count):
-        # Cached functions can be run from a distinct process.
-        code = """if 1:
-            import sys
-
-            sys.path.insert(0, %(tempdir)r)
-            mod = __import__(%(modname)r)
-            mod.self_test()
-            """ % dict(tempdir=self.tempdir, modname=self.modname)
-
-        new_env = {**os.environ, "NUMBA_NUM_THREADS" : str(thread_count)}
-        popen = subprocess.Popen([sys.executable, "-c", code],
-                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                 env=new_env)
-        out, err = popen.communicate()
-        if popen.returncode != 0:
-            raise AssertionError(f"process failed with code {popen.returncode}:"
-                                 f"stderr follows\n{err.decode()}\n")
-
-    def check_module(self, mod):
-        mod.self_test()
-
-    def test_caching(self):
-        # NOTE: This test is checking issue #7518
-        self.run_in_separate_process(1)
-        self.run_in_separate_process(2)
-
-
 if __name__ == '__main__':
     unittest.main()
