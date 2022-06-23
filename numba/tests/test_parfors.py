@@ -1020,6 +1020,7 @@ class TestParforNumPy(TestParforsBase):
 
     def test_stararg(self):
         def test_impl(n):
+            np.random.seed(0)
             A = np.random.randn(*n)
             B = np.sum(A)
             return B - B
