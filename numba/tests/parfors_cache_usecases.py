@@ -45,7 +45,22 @@ class _TestModule(TestCase):
             msg="At least one dispatcher has used the cache",
         )
 
+    def run_module(self, mod):
+        # This just executes the module's functionality without asserting
+        # anything about the cache, it's used in tests that ensure that
+        # properties such as thread count aren't baked in to the cached object.
+        for fn in [mod.arrayexprs_case, mod.prange_case, mod.caller_case]:
+            arr = np.ones(20)
+            self.assertPreciseEqual(
+                fn(arr), fn.py_func(arr),
+            )
+
 
 def self_test():
     mod = sys.modules[__name__]
     _TestModule().check_module(mod)
+
+
+def self_run():
+    mod = sys.modules[__name__]
+    _TestModule().run_module(mod)
