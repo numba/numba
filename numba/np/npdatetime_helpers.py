@@ -45,7 +45,7 @@ def same_kind(src, dest):
 
 
 def can_cast_timedelta_units(src, dest):
-    # Mimic numpy's "safe" casting and promotion
+    # Mimic NumPy's "safe" casting and promotion
     # `dest` must be more precise than `src` and they must be compatible
     # for conversion.
     # XXX should we switch to enforcing "same-kind" for Numpy 1.10+ ?
