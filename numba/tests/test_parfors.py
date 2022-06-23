@@ -1036,7 +1036,7 @@ class TestParforNumPy(TestParforsBase):
             return B - B
 
         n = 10
-        self.check(test_impl, (n,n), n)
+        self.check(test_impl, (n, n), n)
 
     def test_min(self):
         def test_impl1(A):
