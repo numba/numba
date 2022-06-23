@@ -252,7 +252,7 @@ class TestRandom(BaseTest):
         """
         Check seed()- and random()-like functions.
         """
-        # Our seed() mimics Numpy's.
+        # Our seed() mimics NumPy's.
         r = np.random.RandomState()
         for i in [0, 1, 125, 2**32 - 1]:
             # Need to cast to a C-sized int (for Numpy <= 1.7)
