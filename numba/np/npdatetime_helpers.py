@@ -89,7 +89,7 @@ def _get_conversion_multiplier(big_unit_code, small_unit_code):
     None is returned if the conversion is not possible through a
     simple integer multiplication.
     """
-    # Mimics get_datetime_units_factor() in numpy's datetime.c,
+    # Mimics get_datetime_units_factor() in NumPy's datetime.c,
     # with a twist to allow no-op conversion from generic units.
     if big_unit_code == 14:
         return 1
