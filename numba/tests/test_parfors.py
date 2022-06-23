@@ -1026,7 +1026,7 @@ class TestParforNumPy(TestParforsBase):
             return B - B
 
         n = 10
-        self.check(test_impl, (n,n))
+        self.check(test_impl, (n, n))
 
     def test_stararg_mix(self):
         def test_impl(n, r):
