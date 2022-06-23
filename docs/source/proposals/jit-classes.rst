@@ -69,7 +69,7 @@ C structure::
         complex64 field2;
     };
 
-This will also be compatible with an aligned numpy structure dtype.
+This will also be compatible with an aligned NumPy structure dtype.
 
 
 Methods
