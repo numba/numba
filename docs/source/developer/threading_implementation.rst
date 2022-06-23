@@ -241,7 +241,7 @@ less than the requested chunk size.  Second, due to truncation, in cases where t
 iteration count is slightly less than a multiple of the chunk size
 (e.g., 14 iterations and a specified chunk size of 5), the actual chunk size will be
 larger than the specified chunk size.  As in the given example, the number of chunks
-would be 2 and the actual chunk size would be 7 (i.e., 14 / 2).  Lastly, since Numba
+would be 2 and the actual chunk size would be 7 (i.e. 14 / 2).  Lastly, since Numba
 divides an N-dimensional iteration space into N-dimensional (hyper)rectangular chunks,
 it may be the case there are not N integer factors whose product is equal to the chunk
 size.  In this case, some chunks will have an area/volume larger than the chunk size
