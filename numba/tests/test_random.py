@@ -274,7 +274,7 @@ class TestRandom(BaseTest):
         self._check_random_seed(numpy_seed, jit_nullary("np.random.rand"))
 
     def _check_random_sized(self, seedfunc, randomfunc):
-        # Our seed() mimics Numpy's.
+        # Our seed() mimics NumPy's.
         r = np.random.RandomState()
         for i in [0, 1, 125, 2**32 - 1]:
             # Need to cast to a C-sized int (for Numpy <= 1.7)
