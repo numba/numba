@@ -35,7 +35,7 @@ class _TestModule(TestCase):
         total_cache_hits = 0
         for fn in [mod.arrayexprs_case, mod.prange_case, mod.caller_case]:
             arr = np.ones(20)
-            self.assertPreciseEqual(
+            np.testing.assert_allclose(
                 fn(arr), fn.py_func(arr),
             )
             # Accumulate cache hits
@@ -51,7 +51,7 @@ class _TestModule(TestCase):
         # properties such as thread count aren't baked in to the cached object.
         for fn in [mod.arrayexprs_case, mod.prange_case, mod.caller_case]:
             arr = np.ones(20)
-            self.assertPreciseEqual(
+            np.testing.assert_allclose(
                 fn(arr), fn.py_func(arr),
             )
 
