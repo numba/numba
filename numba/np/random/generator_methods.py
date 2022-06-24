@@ -87,38 +87,45 @@ def NumPyRandomGeneratorType_random(inst, size=None, dtype=np.float64):
 @overload_method(types.NumPyRandomGeneratorType, 'standard_exponential')
 def NumPyRandomGeneratorType_standard_exponential(inst, size=None,
                                                   dtype=np.float64,
-                                                  method=None):
+                                                  method='zig'):
     if isinstance(method, types.Omitted):
         method = method.value
 
-    # TODO: This way of selecting methods works practically but is
-    # extremely hackish. we should try doing the default
-    # method==inv comparision over here if possible
-    if method:
-        dist_func, nb_dt = _get_proper_func(
-            random_standard_exponential_inv_f,
-            random_standard_exponential_inv,
-            dtype
-        )
-    else:
-        dist_func, nb_dt = _get_proper_func(random_standard_exponential_f,
-                                            random_standard_exponential,
-                                            dtype)
+    dist_func_inv, nb_dt = _get_proper_func(
+        random_standard_exponential_inv_f,
+        random_standard_exponential_inv,
+        dtype
+    )
+
+    dist_func, nb_dt = _get_proper_func(random_standard_exponential_f,
+                                        random_standard_exponential,
+                                        dtype)
 
     if isinstance(size, types.Omitted):
         size = size.value
 
     if is_nonelike(size):
-        def impl(inst, size=None, dtype=np.float64, method=None):
-            return nb_dt(dist_func(inst.bit_generator))
+        def impl(inst, size=None, dtype=np.float64, method='zig'):
+            if method == 'zig':
+                return nb_dt(dist_func(inst.bit_generator))
+            elif method == 'inv':
+                return nb_dt(dist_func_inv(inst.bit_generator))
+            else:
+                raise ValueError("Method must be either 'zig' or 'inv'")
         return impl
     else:
         check_size(size)
 
-        def impl(inst, size=None, dtype=np.float64, method=None):
+        def impl(inst, size=None, dtype=np.float64, method='zig'):
             out = np.empty(size, dtype=dtype)
-            for i in np.ndindex(size):
-                out[i] = dist_func(inst.bit_generator)
+            if method == 'zig':
+                for i in np.ndindex(size):
+                    out[i] = dist_func(inst.bit_generator)
+            elif method == 'inv':
+                for i in np.ndindex(size):
+                    out[i] = dist_func_inv(inst.bit_generator)
+            else:
+                raise ValueError("Method must be either 'zig' or 'inv'")
             return out
         return impl
 
