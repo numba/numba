@@ -88,8 +88,6 @@ def NumPyRandomGeneratorType_random(inst, size=None, dtype=np.float64):
 def NumPyRandomGeneratorType_standard_exponential(inst, size=None,
                                                   dtype=np.float64,
                                                   method='zig'):
-    if isinstance(method, types.Omitted):
-        method = method.value
 
     dist_func_inv, nb_dt = _get_proper_func(
         random_standard_exponential_inv_f,

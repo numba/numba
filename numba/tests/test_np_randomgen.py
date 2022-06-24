@@ -1,6 +1,7 @@
 import numba
 import numpy as np
 import sys
+import platform
 
 from numba import types
 from numba.tests.support import TestCase, MemoryLeakMixin
@@ -9,6 +10,14 @@ from numba.np.random.generator_core import next_uint32, next_uint64, next_double
 from numpy.random import MT19937, Generator
 from numba.core.errors import TypingError
 from numba.tests.support import run_in_new_process_caching, SerialMixin
+
+
+# The following logic is to mitigate:
+# https://github.com/numba/numba/pull/8038#issuecomment-1165571368
+if platform.system() == 'Linux' and platform.machine() != 'x86_64':
+    ulp_prec = 10
+else:
+    ulp_prec = 5
 
 
 class TestHelperFuncs(TestCase):
@@ -67,7 +76,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                                               test_size, test_dtype)
 
         np.testing.assert_array_max_ulp(numpy_res, numba_res,
-                                        maxulp=5, dtype=test_dtype)
+                                        maxulp=ulp_prec, dtype=test_dtype)
 
         # Check if the end state of both BitGenerators is same
         # after drawing the distributions
