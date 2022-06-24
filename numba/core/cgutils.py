@@ -377,7 +377,7 @@ def alloca_once(builder, ty, size=None, name='', zfill=False):
         with builder.goto_entry_block():
             ptr = builder.alloca(ty, size=size, name=name)
             # Always zero-fill at init-site.  This is safe.
-            builder.store(ptr.type.pointee(None), ptr)
+            builder.store(ty(None), ptr)
         # Also zero-fill at the use-site
         if zfill:
             builder.store(ptr.type.pointee(None), ptr)

@@ -24,7 +24,9 @@ from itertools import cycle, chain
 import subprocess as subp
 
 import numba.parfors.parfor
-from numba import njit, prange, set_num_threads, get_num_threads, typeof
+from numba import (njit, prange, parallel_chunksize,
+                   get_parallel_chunksize, set_parallel_chunksize,
+                   set_num_threads, get_num_threads, typeof)
 from numba.core import (types, utils, typing, errors, ir, rewrites,
                         typed_passes, inline_closurecall, config, compiler, cpu)
 from numba.extending import (overload_method, register_model,
@@ -1110,12 +1112,15 @@ class TestParforNumPy(TestParforsBase):
         A = np.array([1., 0., 3., 2., 3.])
         B = np.random.randint(10, size=n).astype(np.int32)
         C = np.random.ranf((n, n))  # test multi-dimensional array
+        D = np.array([1., 0., np.nan, 2., 3.])
         self.check(test_impl1, A)
         self.check(test_impl1, B)
         self.check(test_impl1, C)
+        self.check(test_impl1, D)
         self.check(test_impl2, A)
         self.check(test_impl2, B)
         self.check(test_impl2, C)
+        self.check(test_impl2, D)
 
         # checks that 0d array input raises
         msg = 'attempt to get argmax of an empty sequence'
@@ -1143,12 +1148,15 @@ class TestParforNumPy(TestParforsBase):
         A = np.array([1., 0., 2., 0., 3.])
         B = np.random.randint(10, size=n).astype(np.int32)
         C = np.random.ranf((n, n))  # test multi-dimensional array
+        D = np.array([1., 0., np.nan, 0., 3.])
         self.check(test_impl1, A)
         self.check(test_impl1, B)
         self.check(test_impl1, C)
+        self.check(test_impl1, D)
         self.check(test_impl2, A)
         self.check(test_impl2, B)
         self.check(test_impl2, C)
+        self.check(test_impl2, D)
 
         # checks that 0d array input raises
         msg = 'attempt to get argmin of an empty sequence'
@@ -4103,6 +4111,129 @@ class TestPrangeSpecific(TestPrangeBase):
 
 
 @skip_parfors_unsupported
+class TestParforChunksizing(TestCase):
+    """
+    Tests chunksize handling in ParallelAccelerator.
+    """
+    _numba_parallel_test_ = False
+
+    def setUp(self):
+        set_parallel_chunksize(0)
+
+    def tearDown(self):
+        set_parallel_chunksize(0)
+
+    def test_python_parallel_chunksize_basic(self):
+        # Test basic chunksize operations outside njit.
+        self.assertEqual(get_parallel_chunksize(), 0)
+        set_parallel_chunksize(8)
+        self.assertEqual(get_parallel_chunksize(), 8)
+        set_parallel_chunksize(0)
+        self.assertEqual(get_parallel_chunksize(), 0)
+
+    def test_python_with_chunksize(self):
+        # Test "with parallel_chunksize" outside njit.
+        self.assertEqual(get_parallel_chunksize(), 0)
+        with parallel_chunksize(8):
+            self.assertEqual(get_parallel_chunksize(), 8)
+        self.assertEqual(get_parallel_chunksize(), 0)
+
+    def test_njit_parallel_chunksize_basic(self):
+        # Test basic chunksize operations inside njit.
+        @njit
+        def get_cs():
+            return get_parallel_chunksize()
+
+        @njit
+        def set_cs(x):
+            return set_parallel_chunksize(x)
+
+        self.assertEqual(get_cs(), 0)
+        set_cs(8)
+        self.assertEqual(get_cs(), 8)
+        set_cs(0)
+        self.assertEqual(get_cs(), 0)
+
+    def test_njit_with_chunksize(self):
+        # Test "with parallel_chunksize" inside njit.
+        @njit
+        def test_impl(x):
+            cs1 = get_parallel_chunksize()
+            with parallel_chunksize(8):
+                cs2 = get_parallel_chunksize()
+            cs3 = get_parallel_chunksize()
+            return cs1, cs2, cs3
+
+        cs1, cs2, cs3 = test_impl(8)
+
+        self.assertEqual(cs1, 0)
+        self.assertEqual(cs2, 8)
+        self.assertEqual(cs3, 0)
+
+    def test_all_iterations_reset_chunksize(self):
+        """ Test that all the iterations get run if you set the
+            chunksize.  Also check that the chunksize that each
+            worker thread sees has been reset to 0. """
+
+        @njit(parallel=True)
+        def test_impl(cs, n):
+            res = np.zeros(n)
+            inner_cs = np.full(n, -13)
+            with numba.parallel_chunksize(cs):
+                for i in numba.prange(n):
+                    inner_cs[i] = numba.get_parallel_chunksize()
+                    res[i] = 13
+            return res, inner_cs
+
+        # Test a variety of array and chunk sizes.
+        # 1000 is a round number, 997 is prime, 943 is product of two
+        # primes, 961 is square of a prime.
+        for j in [1000, 997, 943, 961]:
+            for i in range(15):
+                res, inner_cs = test_impl(i+1, j)
+                self.assertTrue(np.all(res == 13))
+                self.assertTrue(np.all(inner_cs == 0))
+
+    def test_njit_parallel_chunksize_negative(self):
+        # Test negative set_parallel_chunksize inside njit.
+        with self.assertRaises(ValueError) as raised:
+            @njit
+            def neg_test():
+                set_parallel_chunksize(-1)
+
+            neg_test()
+
+        msg = "chunksize must be greater than or equal to zero"
+        self.assertIn(msg, str(raised.exception))
+
+    def test_python_parallel_chunksize_negative(self):
+        # Test negative set_parallel_chunksize outside njit.
+        with self.assertRaises(ValueError) as raised:
+            set_parallel_chunksize(-1)
+
+        msg = "chunksize must be greater than or equal to zero"
+        self.assertIn(msg, str(raised.exception))
+
+    def test_njit_parallel_chunksize_invalid_type(self):
+        with self.assertRaises(errors.TypingError) as raised:
+            @njit
+            def impl():
+                set_parallel_chunksize('invalid_type')
+
+            impl()
+
+        msg = "The parallel chunksize must be an integer"
+        self.assertIn(msg, str(raised.exception))
+
+    def test_python_parallel_chunksize_invalid_type(self):
+        with self.assertRaises(TypeError) as raised:
+            set_parallel_chunksize('invalid_type')
+
+        msg = "The parallel chunksize must be an integer"
+        self.assertIn(msg, str(raised.exception))
+
+
+@skip_parfors_unsupported
 @x86_only
 class TestParforsVectorizer(TestPrangeBase):
 
@@ -4305,6 +4436,73 @@ class TestParforsVectorizer(TestPrangeBase):
                 for op in ops:
                     if op[0] == 'insert':
                         self.assertEqual(b[op[-2]:op[-1]], 'u')
+
+
+@skip_parfors_unsupported
+class TestParforReductionSetNumThreads(TestCase):
+    """Test execution correctness on reductions with set_num_threads.
+    """
+    def test_add(self):
+        N = config.NUMBA_NUM_THREADS
+        M = 2 * N
+        mask = N - 1
+
+        @njit(parallel=True)
+        def udt(nthreads):
+            acc = 0
+            set_num_threads(nthreads)
+            for i in prange(M):
+                local_mask = 1 + i % mask
+                set_num_threads(local_mask)
+                gnt = get_num_threads()
+                acc += gnt
+            return acc
+
+        expect = udt.py_func(mask)
+        got = udt(mask)
+        self.assertPreciseEqual(expect, got)
+
+    def test_mul(self):
+        # This min will prevent larger thread counts from generating
+        # overflow in the loop below.
+        N = min(4, config.NUMBA_NUM_THREADS)
+        M = 2 * N
+        mask = N - 1
+
+        @njit(parallel=True)
+        def udt(nthreads):
+            acc = 1
+            set_num_threads(nthreads)
+            for i in prange(M):
+                local_mask = 1 + i % mask
+                set_num_threads(local_mask)
+                gnt = get_num_threads()
+                acc *= gnt
+            return acc
+
+        expect = udt.py_func(mask)
+        got = udt(mask)
+        self.assertPreciseEqual(expect, got)
+
+    def test_max(self):
+        N = config.NUMBA_NUM_THREADS
+        M = 2 * N
+        mask = N - 1
+
+        @njit(parallel=True)
+        def udt(nthreads):
+            acc = 1
+            set_num_threads(nthreads)
+            for i in prange(M):
+                local_mask = 1 + i % mask
+                set_num_threads(local_mask)
+                gnt = get_num_threads()
+                acc = max(acc, gnt)
+            return acc
+
+        expect = udt.py_func(mask)
+        got = udt(mask)
+        self.assertPreciseEqual(expect, got)
 
 
 if __name__ == "__main__":

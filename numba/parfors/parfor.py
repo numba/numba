@@ -581,6 +581,8 @@ class Parfor(ir.Expr, ir.Stmt):
         # sequential lowering option
         self.no_sequential_lowering = no_sequential_lowering
         self.races = races
+        self.redvars = []
+        self.reddict = {}
         if config.DEBUG_ARRAY_OPT_STATS:
             fmt = 'Parallel for-loop #{} is produced from pattern \'{}\' at {}'
             print(fmt.format(
@@ -2968,7 +2970,7 @@ class ParforPass(ParforPassStates):
 
             # Validate reduction in parfors.
             for p in parfors:
-                get_parfor_reductions(self.func_ir, p, p.params, self.calltypes)
+                p.redvars, p.reddict = get_parfor_reductions(self.func_ir, p, p.params, self.calltypes)
 
             # Validate parameters:
             for p in parfors:
@@ -3840,6 +3842,22 @@ def parfor_defs(parfor, use_set=None, def_set=None):
 
 
 analysis.ir_extension_usedefs[Parfor] = parfor_defs
+
+
+def _parfor_use_alloca(parfor, alloca_set):
+    """
+    Reduction variables for parfors and the reduction variables within
+    nested parfors must be stack allocated.
+    """
+    alloca_set |= set(parfor.redvars)
+
+    blocks = wrap_parfor_blocks(parfor)
+    alloca_set |= analysis.must_use_alloca(blocks)
+
+    unwrap_parfor_blocks(parfor)
+
+
+analysis.ir_extension_use_alloca[Parfor] = _parfor_use_alloca
 
 
 def parfor_insert_dels(parfor, curr_dead_set):

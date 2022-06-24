@@ -62,8 +62,13 @@ static int _nesting_level = 0;
    free the task-queue, too. */
 static void reset_after_fork(void);
 
+static void
+add_task_internal(void *fn, void *args, void *dims, void *steps, void *data, int tid);
+
 /* PThread */
 #ifdef NUMBA_PTHREAD
+
+static pthread_key_t tidkey;
 
 typedef struct
 {
@@ -137,13 +142,27 @@ numba_new_thread(void *worker, void *arg)
 static int
 get_thread_id(void)
 {
-    return (int)pthread_self();
+    return (int)(intptr_t)pthread_getspecific(tidkey);
+}
+
+static void
+set_thread_id(int tid)
+{
+    pthread_setspecific(tidkey, (void*)(intptr_t)tid);
+}
+
+static void
+platform_launch(void)
+{
+    pthread_key_create(&tidkey, NULL);
 }
 
 #endif
 
 /* Win Thread */
 #ifdef NUMBA_WINTHREAD
+
+DWORD tidkey;
 
 typedef struct
 {
@@ -228,7 +247,19 @@ numba_new_thread(void *worker, void *arg)
 static int
 get_thread_id(void)
 {
-    return GetCurrentThreadId();
+    return (int)(intptr_t)TlsGetValue(tidkey);
+}
+
+static void
+set_thread_id(int tid)
+{
+    TlsSetValue(tidkey, (void*)(intptr_t)tid);
+}
+
+static void
+platform_launch(void)
+{
+    tidkey = TlsAlloc();
 }
 
 #endif
@@ -237,6 +268,7 @@ typedef struct Task
 {
     void (*func)(void *args, void *dims, void *steps, void *data);
     void *args, *dims, *steps, *data;
+    int tid;
 } Task;
 
 typedef struct
@@ -396,7 +428,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     // threads will end up running.
     for (i = 0; i < NUM_THREADS; i++)
     {
-        add_task(sync_tls, (void *)(&num_threads), NULL, NULL, NULL);
+        add_task_internal(sync_tls, (void *)(&num_threads), NULL, NULL, NULL, i);
     }
     ready();
     synchronize();
@@ -458,7 +490,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
                 printf("%p, ", (void *)array_arg_space[j]);
             }
         }
-        add_task(fn, (void *)array_arg_space, (void *)count_space, steps, data);
+        add_task_internal(fn, (void *)array_arg_space, (void *)count_space, steps, data, i);
     }
 
     ready();
@@ -470,7 +502,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 }
 
 static void
-add_task(void *fn, void *args, void *dims, void *steps, void *data)
+add_task_internal(void *fn, void *args, void *dims, void *steps, void *data, int tid)
 {
     void (*func)(void *args, void *dims, void *steps, void *data) = fn;
 
@@ -482,12 +514,19 @@ add_task(void *fn, void *args, void *dims, void *steps, void *data)
     task->dims = dims;
     task->steps = steps;
     task->data = data;
+    task->tid = tid;
 
     /* Move pivot */
     if ( ++queue_pivot == queue_count )
     {
         queue_pivot = 0;
     }
+}
+
+static void
+add_task(void *fn, void *args, void *dims, void *steps, void *data)
+{
+    add_task_internal(fn, args, dims, steps, data, 0);
 }
 
 static
@@ -504,6 +543,7 @@ void thread_worker(void *arg)
         queue_state_wait(queue, READY, RUNNING);
 
         task = &queue->task;
+        set_thread_id(task->tid);
         task->func(task->args, task->dims, task->steps, task->data);
 
         /* Task is done. */
@@ -515,6 +555,8 @@ static void launch_threads(int count)
 {
     if (!queues)
     {
+        platform_launch();
+
         /* If queues are not yet allocated,
            create them, one for each thread. */
         int i;
@@ -581,6 +623,9 @@ MOD_INIT(workqueue)
     SetAttrStringFromVoidPointer(m, set_num_threads);
     SetAttrStringFromVoidPointer(m, get_num_threads);
     SetAttrStringFromVoidPointer(m, get_thread_id);
+    SetAttrStringFromVoidPointer(m, set_parallel_chunksize);
+    SetAttrStringFromVoidPointer(m, get_parallel_chunksize);
+    SetAttrStringFromVoidPointer(m, get_sched_size);
 
     return MOD_SUCCESS_VAL(m);
 }
