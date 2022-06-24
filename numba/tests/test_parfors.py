@@ -2032,6 +2032,26 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countParfors(test_impl, cptypes), 2)
         self.check(test_impl, a, size)
 
+    def test_prange_parfor_index_tuple1(self):
+        # Testing if accessing a tuple with prange index
+        # and later with a constant will not prevent fusion.
+        def test_impl(a, c, size):
+            b = 0
+            for i in numba.prange(size):
+                a[i] = i + c[i]
+            for i in numba.prange(size):
+                b += a[i] + c[1]
+            return b
+
+        size = 10
+        a = np.zeros(size)
+        b = tuple(a)
+        cptypes = (numba.float64[:],
+                   types.containers.UniTuple(types.int64, size),
+                   types.int64)
+        self.assertEqual(countParfors(test_impl, cptypes), 1)
+        self.check(test_impl, a, b, size)
+
     def test_prange_non_parfor_index_then_opposite(self):
         # Testing if accessing an array first without a parfor index then
         # with will prevent fusion.
