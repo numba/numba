@@ -1,3 +1,94 @@
+Version 0.56.0 (TBC June, 2022)
+-------------------------------
+
+This release includes a significant number of new features and a large number of
+bug fixes.
+
+Python language support enhancements:
+
+* Previously missing support for large in-line dictionaries and internal calls
+  to functions with large numbers of keyword arguments in Python 3.10 has been
+  added.
+* ``operator.mul`` now works for ``list`` s.
+* Literal slices, e.g. ``slice(1, 10, 2)`` can be returned from ``nopython``
+  mode functions.
+* The ``len`` function now works on ``dict_keys``, ``dict_values`` and
+  ``dict_items`` .
+* Numba's ``set`` implementation now supports reference counted items e.g.
+  strings.
+
+Numba specific feature enhancements:
+
+* The experimental ``jitclass`` feature gains support for a large number of
+  ``builtin`` methods e.g. declaring ``__hash__`` or ``__getitem__`` for a
+  ``jitclass`` type.
+* It's now possible to use ``@vectorize`` on an already ``@jit`` family
+  decorated function.
+* Name mangling has been updated to emit compiled function names that exactly
+  match the function name in Python. This means debuggers, like GDB, can be set
+  to break directly on Python function names.
+* A GDB "pretty printing" support module has been added, when loaded into GDB
+  Numba's internal representations of Python/NumPy types are rendered inside GDB
+  as they would be in Python.
+* An experimental option is added to the ``@jit`` family decorators to entirely
+  turn off LLVM's optimisation passes for a given function (see
+  ``_dbg_optnone`` kwarg in the ``@jit`` decorator family).
+* A new environment variable is added ``NUMBA_EXTEND_VARIABLE_LIFETIMES``, which
+  if set will extend the lifetime of variables to the end of their basic block,
+  this to permit a debugging experience in GDB similar to that found in compiled
+  C/C++/Fortran code.
+
+NumPy features/enhancements:
+
+* Initial support for passing, using and returning ``numpy.random.Generator``
+  instances has been added, this includes some commonly used distributions.
+* The broadcasting functions ``np.broadcast_shapes`` and ``np.broadcast_arrays``
+  are now supported.
+* The ``min`` and ``max`` functions now work with ``np.timedelta64`` and
+  ``np.datetime64`` types.
+* Sorting multi-dimensional arrays along the last axis is now supported in
+  ``np.sort()``.
+* The ``np.clip`` function is updated to accept NumPy arrays for the ``a_min``
+  and ``a_max`` arguments.
+* The NumPy allocation routines (``np.empty`` , ``np.ones`` etc.) support shape
+  arguments specified using members of ``enum.IntEnum`` s.
+* The function ``np.random.noncentral_chisquare`` is now supported.
+* The performance of functions ``np.full`` and ``np.ones`` has been improved.
+
+Parallel Accelerator enhancements:
+
+* The ``parallel=True`` functionality is enhanced through the addition of the
+  functions ``numba.set_parallel_chunksize`` and
+  ``numba.get_parallel_chunksize`` to permit a more fine grained scheduling of
+  work defined in a parallel region. There is also support for adjusting the
+  ``chunksize`` via a context manager.
+* The ``ID`` of a thread is now defined to be predictable and within a known
+  range, it is available through calling the function ``numba.get_thread_id``.
+* The performance of ``@stencil`` s has been improved in both serial and
+  parallel execution.
+
+CUDA:
+
+TBC
+
+Docs:
+
+* Numba now has an official "mission statement".
+* There's now a "version support table" in the documentation to act as an easy
+  to use, single reference point, for looking up information about Numba
+  releases and their required/supported dependencies.
+
+General Enhancements:
+
+* Numba imports more quickly in environments with large numbers of packages as
+  it now uses ``importlib-metadata`` for querying other packages.
+* Emission of chrome tracing output is now supported for the internal
+  compilation event handling system.
+* This release is tested and known to work when using the Pyston python
+  interpreter.
+
+Authors: TBC
+
 Version 0.55.2 (25 May, 2022)
 -----------------------------
 
