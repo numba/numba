@@ -132,6 +132,7 @@ class _OverloadWrapper(object):
         from numba.core.extending import overload, intrinsic
 
         if self._built:
+            # Avoid generating new overload
             return
         self._built = True
 

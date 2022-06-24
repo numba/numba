@@ -289,34 +289,33 @@ class BaseFunction(Callable):
                                        depth=self._depth)
         self._depth += 1
         try:
+            # List all matching templates
             matched = list(self._iter_matching_templates(context, args, kws,
                                                          order, failures))
             if not matched:
+                # Raise the errors if no match
                 failures.raise_error()
-
+            # Check if any template define specializes to a typeclass
             order_by_typeclass = any(getattr(temp, "use_impl_for", False)
                                      for temp, _ in matched)
             if not order_by_typeclass:
-                temp, sig = matched[0]
+                # Not specializing. Old-logic returns first match
+                _temp, sig = matched[0]
             else:
-                # print(f"---- matched {len(matched)}")
-                # for num, (temp, sig) in enumerate(matched):
-                #     specialized = sig.impl_for
-                #     # print(f"{num:3} -- {temp} {sig} !!! {specialized}")
-                temp, sig = self._select_best_versions(matched)
-
-            self._impl_keys[sig.args] = temp.get_impl_key(sig)
+                # Specializing. New-logic select the best match.
+                _temp, sig = self._select_best_impl_for(matched)
             return sig
         finally:
             self._depth -= 1
 
-    def _select_best_versions(self, matched):
+    def _select_best_impl_for(self, matched):
         # Prefer versions with a specialized signature
         specialized = [
             (temp, sig) for temp, sig in matched
             if sig.impl_for is not None
         ]
         if len(specialized) == 1:
+            # Only one specialized version. Return it.
             return specialized[0]
         elif len(specialized) > 1:
             # Select the most specific implementation
@@ -331,7 +330,9 @@ class BaseFunction(Callable):
                            f" common `impl_for` ancestry in {self}.")
                     raise errors.CompilerError(msg)
 
-            # Score each signature
+            # Score each signature.
+            # Add score to typeclass that is appears in others MRO.
+            # The lowest scoring one is the most specific.
             scores = [0] * len(spec_types)
             for i, this in enumerate(spec_types):
                 for that in spec_types:
@@ -339,17 +340,20 @@ class BaseFunction(Callable):
                         if this in that.__mro__:
                             scores[i] += 1
             ranked = sorted(zip(scores, range(len(spec_types))))
+            # Check that the first two do not have the same score.
             [first, second, *_] = ranked
             if first[0] != second[0]:
                 return specialized[first[1]]
             else:
+                # Ambiguous case
                 msg = f"ambiguous with specialized versions: {specialized}"
                 raise TypeError(msg)
 
-        # Pick without specialized signature
+        # Pick without specialized signature.
         if len(matched) == 1:
             return matched[0]
         elif len(matched) > 1:
+            # Complain about ambigous open versions
             raise TypeError(f"ambiguous open versions: {matched}")
 
     def _iter_matching_templates(self, context, args, kws, order, failures):
@@ -384,8 +388,9 @@ class BaseFunction(Callable):
                         failures.add_error(temp, False, e, uselit)
                 else:
                     if sig is not None:
+                        self._impl_keys[sig.args] = temp.get_impl_key(sig)
                         yield temp, sig
-                        # Found a working variant (literal vs  nonliteral).
+                        # Found a working variant in literal vs  nonliteral.
                         # Stop searching.
                         break
                     else:

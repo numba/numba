@@ -492,12 +492,12 @@ class ConcreteTemplate(FunctionTemplate):
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        import inspect
         try:
             frame = inspect.stack()[1].frame
             self._ctor_caller_file = inspect.getmodule(frame).__file__
             self._ctor_caller_lineno = frame.f_lineno
         except Exception:
+            # Needed for issue python/cpython#89726 in py3.10
             self._ctor_caller_file = "unknown"
             self._ctor_caller_lineno = 0
 
