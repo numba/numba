@@ -121,10 +121,12 @@ def _get_code_impl(a):
 
 
 def _same_kind(a, b):
+    seqtys = (types.CharSeq, types.UnicodeCharSeq)
     for t in [(types.CharSeq, types.Bytes),
               (types.UnicodeCharSeq, types.UnicodeType)]:
         if isinstance(a, t) and isinstance(b, t):
-            return True
+            if isinstance(a, seqtys) or isinstance(b, seqtys):
+                return True
     return False
 
 
