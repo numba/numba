@@ -615,6 +615,12 @@ execution logic.
 The following :py:class:`Generator` methods are supported:
 
 * :func:`numpy.random.Generator().random()`
+* :func:`numpy.random.Generator().standard_normal()`
+* :func:`numpy.random.Generator().standard_exponential()`
+* :func:`numpy.random.Generator().standard_gamma()`
+* :func:`numpy.random.Generator().normal()`
+* :func:`numpy.random.Generator().exponential()`
+* :func:`numpy.random.Generator().gamma()`
 
 RandomState and legacy Random number generation
 '''''''''''''''''''''''''''''''''''''''''''''''
