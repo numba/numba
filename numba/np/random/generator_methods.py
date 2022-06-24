@@ -13,7 +13,7 @@ from numba.core.types.containers import Tuple, UniTuple
 from numba.np.random.distributions import \
     (random_standard_exponential_inv_f, random_standard_exponential_inv,
      random_standard_exponential, random_standard_normal_f,
-     random_standard_gamma, random_standard_normal,
+     random_standard_gamma, random_standard_normal, random_uniform,
      random_standard_exponential_f, random_standard_gamma_f, random_normal,
      random_exponential, random_gamma)
 
@@ -190,6 +190,28 @@ def NumPyRandomGeneratorType_normal(inst, loc=0.0, scale=1.0,
             out = np.empty(size, dtype=np.float64)
             for i in np.ndindex(size):
                 out[i] = random_normal(inst.bit_generator, loc, scale)
+            return out
+        return impl
+
+
+# Overload the Generator().uniform() method
+@overload_method(types.NumPyRandomGeneratorType, 'uniform')
+def NumPyRandomGeneratorType_uniform(inst, low=0.0, high=1.0,
+                                     size=None):
+    if isinstance(size, types.Omitted):
+        size = size.value
+
+    if is_nonelike(size):
+        def impl(inst, low=0.0, high=1.0, size=None):
+            return random_uniform(inst.bit_generator, low, high)
+        return impl
+    else:
+        check_size(size)
+
+        def impl(inst, low=0.0, high=1.0, size=None):
+            out = np.empty(size, dtype=np.float64)
+            for i in np.ndindex(size):
+                out[i] = random_uniform(inst.bit_generator, low, high)
             return out
         return impl
 

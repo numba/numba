@@ -232,6 +232,26 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                     self.check_numpy_parity(dist_func, _bitgen,
                                             None, _size, None)
 
+    def test_uniform(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        # Test with no arguments
+        dist_func = lambda x, size, dtype:x.uniform()
+        with self.subTest():
+            self.check_numpy_parity(dist_func, test_size=None,
+                                    test_dtype=None)
+
+        dist_func = lambda x, size, dtype:x.uniform(low=1.5, high=3, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None)
+
     def test_exponential(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
         # to make sure it runs only once with default system type.

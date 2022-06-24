@@ -224,12 +224,14 @@ def random_standard_gamma_f(bitgen, shape):
 
 @register_jitable
 def random_normal(bitgen, loc, scale):
-    return loc + scale * random_standard_normal(bitgen)
+    scaled_normal = scale * random_standard_normal(bitgen)
+    return loc + scaled_normal
 
 
 @register_jitable
 def random_normal_f(bitgen, loc, scale):
-    return float32(loc + scale * random_standard_normal_f(bitgen))
+    scaled_normal = float32(scale * random_standard_normal_f(bitgen))
+    return float32(loc + scaled_normal)
 
 
 @register_jitable
@@ -244,12 +246,8 @@ def random_exponential_f(bitgen, scale):
 
 @register_jitable
 def random_uniform(bitgen, lower, range):
-    return lower + range * next_double(bitgen)
-
-
-@register_jitable
-def random_uniform_f(bitgen, lower, range):
-    return float32(lower + range * next_float(bitgen))
+    scaled_uniform = range * next_double(bitgen)
+    return lower + scaled_uniform
 
 
 @register_jitable
