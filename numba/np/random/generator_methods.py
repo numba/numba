@@ -52,12 +52,12 @@ def _get_proper_func(func_32, func_64, dtype, dist_name="the given"):
 
 
 def check_size(size):
-    assert any([isinstance(size, UniTuple) and
+    if not any([isinstance(size, UniTuple) and
                 isinstance(size.dtype, types.Integer),
                 isinstance(size, Tuple) and size.count == 0,
-                isinstance(size, types.Integer)]
-               ), "Size argument either of None,"\
-        + " an integer, an empty tuple or a tuple of integers"
+                isinstance(size, types.Integer)]):
+        raise TypingError("Size argument either of None," +
+                          " an integer, an empty tuple or a tuple of integers")
 
 
 # Overload the Generator().random()
@@ -203,7 +203,7 @@ def NumPyRandomGeneratorType_uniform(inst, low=0.0, high=1.0,
 
     if is_nonelike(size):
         def impl(inst, low=0.0, high=1.0, size=None):
-            return random_uniform(inst.bit_generator, low, high)
+            return random_uniform(inst.bit_generator, low, high - low)
         return impl
     else:
         check_size(size)
@@ -211,7 +211,7 @@ def NumPyRandomGeneratorType_uniform(inst, low=0.0, high=1.0,
         def impl(inst, low=0.0, high=1.0, size=None):
             out = np.empty(size, dtype=np.float64)
             for i in np.ndindex(size):
-                out[i] = random_uniform(inst.bit_generator, low, high)
+                out[i] = random_uniform(inst.bit_generator, low, high - low)
             return out
         return impl
 

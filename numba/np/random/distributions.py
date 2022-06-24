@@ -1,3 +1,7 @@
+"""
+Algorithmic implementations for generating different types
+of random distributions.
+"""
 
 import numpy as np
 from numba.core.extending import register_jitable
@@ -15,7 +19,7 @@ from numba.np.random.generator_core import (next_double, next_float,
                                             next_uint32, next_uint64)
 from numba import float32
 from numba.np.numpy_support import numpy_version
-# All following implementations are direct translations from:
+# All of the following implementations are direct translations from:
 # https://github.com/numpy/numpy/blob/7cfef93c77599bd387ecc6a15d186c5a46024dac/numpy/random/src/distributions/distributions.c
 
 
@@ -139,7 +143,7 @@ def random_standard_exponential_inv(bitgen):
 
 @register_jitable
 def random_standard_exponential_inv_f(bitgen):
-    return -np.log(1.0 - next_float(bitgen))
+    return -np.log(float32(1.0) - next_float(bitgen))
 
 
 @register_jitable
@@ -187,7 +191,7 @@ def random_standard_gamma_f(bitgen, shape):
     if (shape == f32_one):
         return random_standard_exponential_f(bitgen)
     elif (shape == float32(0.0)):
-        return 0.0
+        return float32(0.0)
     elif (shape < f32_one):
         while 1:
             U = next_float(bitgen)
@@ -237,11 +241,6 @@ def random_normal_f(bitgen, loc, scale):
 @register_jitable
 def random_exponential(bitgen, scale):
     return scale * random_standard_exponential(bitgen)
-
-
-@register_jitable
-def random_exponential_f(bitgen, scale):
-    return float32(scale * random_standard_exponential_f(bitgen))
 
 
 @register_jitable
