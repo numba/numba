@@ -4,6 +4,7 @@ import sys
 import platform
 
 from numba import types
+from numba.core.config import IS_32BITS
 from numba.tests.support import TestCase, MemoryLeakMixin
 from numba.np.random.generator_methods import _get_proper_func
 from numba.np.random.generator_core import next_uint32, next_uint64, next_double
@@ -14,7 +15,7 @@ from numba.tests.support import run_in_new_process_caching, SerialMixin
 
 # The following logic is to mitigate:
 # https://github.com/numba/numba/pull/8038#issuecomment-1165571368
-if platform.system() == 'Linux' and platform.machine() != 'x86_64':
+if IS_32BITS or platform.machine() in ['ppc64le', 'aarch64']:
     ulp_prec = 10
 else:
     ulp_prec = 5
