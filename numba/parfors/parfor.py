@@ -455,7 +455,7 @@ swap_functions_map = {
 }
 
 def fill_parallel_impl(return_type, arr, val):
-    """Parallel implemention of ndarray.fill.  The array on
+    """Parallel implementation of ndarray.fill.  The array on
        which to operate is retrieved from get_call_name and
        is passed along with the value to fill.
     """
@@ -2775,7 +2775,7 @@ class ConvertLoopPass:
                 if isinstance(stmt, Parfor):
                     self._replace_loop_access_indices(stmt.loop_body, index_set, new_index)
 
-        # remove added indices for currect recursive parfor handling
+        # remove added indices for correct recursive parfor handling
         index_set -= added_indices
         return
 

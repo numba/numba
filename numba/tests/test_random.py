@@ -252,7 +252,7 @@ class TestRandom(BaseTest):
         """
         Check seed()- and random()-like functions.
         """
-        # Our seed() mimicks Numpy's.
+        # Our seed() mimics NumPy's.
         r = np.random.RandomState()
         for i in [0, 1, 125, 2**32 - 1]:
             # Need to cast to a C-sized int (for Numpy <= 1.7)
@@ -274,7 +274,7 @@ class TestRandom(BaseTest):
         self._check_random_seed(numpy_seed, jit_nullary("np.random.rand"))
 
     def _check_random_sized(self, seedfunc, randomfunc):
-        # Our seed() mimicks Numpy's.
+        # Our seed() mimics NumPy's.
         r = np.random.RandomState()
         for i in [0, 1, 125, 2**32 - 1]:
             # Need to cast to a C-sized int (for Numpy <= 1.7)
@@ -1511,7 +1511,7 @@ class ConcurrencyBaseTest(TestCase):
 
     def check_several_outputs(self, results, same_expected):
         # Outputs should have the expected statistical properties
-        # (an unitialized PRNG or a PRNG whose internal state was
+        # (an uninitialized PRNG or a PRNG whose internal state was
         #  corrupted by a race condition could produce bogus randomness)
         for out in results:
             self.check_output(out)

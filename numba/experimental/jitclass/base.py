@@ -332,7 +332,7 @@ class ClassBuilder(object):
         Register method implementations.
         This simply registers that the method names are valid methods.  Inside
         of imp() below we retrieve the actual method to run from the type of
-        the reciever argument (i.e. self).
+        the receiver argument (i.e. self).
         """
         to_register = list(instance_type.jit_methods) + \
             list(instance_type.jit_static_methods)

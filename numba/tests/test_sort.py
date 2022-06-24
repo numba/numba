@@ -402,7 +402,7 @@ class BaseTimsortTest(BaseSortingTest):
         # First check with i == len(stack) - 2
         keys = self.array_factory(orig_keys)
         ms = self.merge_init(keys)
-        # Push sentinel on stack, to check it was't touched
+        # Push sentinel on stack, to check it wasn't touched
         ms = self.timsort.merge_append(ms, stack_sentinel)
         i = ms.n
         ms = self.timsort.merge_append(ms, MergeRun(ssa, na))
@@ -413,7 +413,7 @@ class BaseTimsortTest(BaseSortingTest):
         # Now check with i == len(stack) - 3
         keys = self.array_factory(orig_keys)
         ms = self.merge_init(keys)
-        # Push sentinel on stack, to check it was't touched
+        # Push sentinel on stack, to check it wasn't touched
         ms = self.timsort.merge_append(ms, stack_sentinel)
         i = ms.n
         ms = self.timsort.merge_append(ms, MergeRun(ssa, na))

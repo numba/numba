@@ -1283,7 +1283,7 @@ def _create_gufunc_for_parfor_body(
             gufunc_txt += " = (" + ", ".join([param_dict[x] for x in exp_names])
             if len(exp_names) == 1:
                 # Add comma for tuples with singular values.  We can't unilaterally
-                # add a comma alway because (,) isn't valid.
+                # add a comma always because (,) isn't valid.
                 gufunc_txt += ","
 
         gufunc_txt += ")\n"
@@ -1820,8 +1820,8 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     # ----------------------------------------------------------------------------
     # Next, we prepare the individual dimension info recorded in gu_signature
     sig_dim_dict = {}
-    occurances = []
-    occurances = [sched_sig[0]]
+    occurrences = []
+    occurrences = [sched_sig[0]]
     sig_dim_dict[sched_sig[0]] = context.get_constant(types.intp, 2 * num_dim)
     assert len(expr_args) == len(all_args)
     assert len(expr_args) == len(expr_arg_types)
@@ -1846,11 +1846,11 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                 shapes = cgutils.unpack_tuple(builder, ary.shape, aty.ndim)
                 sig_dim_dict[dim_sym] = shapes[i]
 
-            if not (dim_sym in occurances):
+            if not (dim_sym in occurrences):
                 if config.DEBUG_ARRAY_OPT:
                     print("dim_sym = ", dim_sym, ", i = ", i)
                     cgutils.printf(builder, dim_sym + " = %d\n", sig_dim_dict[dim_sym])
-                occurances.append(dim_sym)
+                occurrences.append(dim_sym)
             i = i + 1
 
     # ----------------------------------------------------------------------------
@@ -1862,7 +1862,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     builder.store(num_divisions, shapes)
     # Individual shape variables go next
     i = 1
-    for dim_sym in occurances:
+    for dim_sym in occurrences:
         if config.DEBUG_ARRAY_OPT:
             cgutils.printf(builder, dim_sym + " = %d\n", sig_dim_dict[dim_sym])
         builder.store(

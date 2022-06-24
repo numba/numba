@@ -818,7 +818,7 @@ def np_real_reciprocal_impl(context, builder, sig, args):
 def np_complex_reciprocal_impl(context, builder, sig, args):
     # based on the implementation in loops.c.src
     # Basically the same Smith method used for division, but with
-    # the numerator substitued by 1.0
+    # the numerator substituted by 1.0
     _check_arity_and_homogeneity(sig, args, 1)
 
     ty = sig.args[0]

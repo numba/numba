@@ -361,7 +361,7 @@ class Structure(object):
 
 def alloca_once(builder, ty, size=None, name='', zfill=False):
     """Allocate stack memory at the entry block of the current function
-    pointed by ``builder`` withe llvm type ``ty``.  The optional ``size`` arg
+    pointed by ``builder`` with llvm type ``ty``.  The optional ``size`` arg
     set the number of element to allocate.  The default is 1.  The optional
     ``name`` arg set the symbol name inside the llvm IR for debugging.
     If ``zfill`` is set, fill the memory with zeros at the current

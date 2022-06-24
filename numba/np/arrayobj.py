@@ -1100,7 +1100,7 @@ def offset_bounds_from_strides(context, builder, arrty, arr, shapes, strides):
     Compute a half-open range [lower, upper) of byte offsets from the
     array's data pointer, that bound the in-memory extent of the array.
 
-    This mimicks offset_bounds_from_strides() from
+    This mimics offset_bounds_from_strides() from
     numpy/core/src/private/mem_overlap.c
     """
     itemsize = arr.itemsize
@@ -1619,7 +1619,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     source_indices = tuple(c for c in counts if c is not None)
     val = src_getitem(source_indices)
 
-    # Cast to the destination dtype (cross-dtype slice assignement is allowed)
+    # Cast to the destination dtype (cross-dtype slice assignment is allowed)
     val = context.cast(builder, val, src_dtype, aryty.dtype)
 
     # No need to check for wraparound, as the indexers all ensure
@@ -2590,7 +2590,7 @@ def array_flags(context, builder, typ, value):
 @lower_getattr(types.ArrayFlags, "c_contiguous")
 def array_flags_c_contiguous(context, builder, typ, value):
     if typ.array_type.layout != 'C':
-        # any layout can stil be contiguous
+        # any layout can still be contiguous
         flagsobj = context.make_helper(builder, typ, value=value)
         res = _call_contiguous_check(is_contiguous, context, builder,
                                      typ.array_type, flagsobj.parent)
@@ -2603,7 +2603,7 @@ def array_flags_c_contiguous(context, builder, typ, value):
 @lower_getattr(types.ArrayFlags, "f_contiguous")
 def array_flags_f_contiguous(context, builder, typ, value):
     if typ.array_type.layout != 'F':
-        # any layout can stil be contiguous
+        # any layout can still be contiguous
         flagsobj = context.make_helper(builder, typ, value=value)
         res = _call_contiguous_check(is_fortran, context, builder,
                                      typ.array_type, flagsobj.parent)

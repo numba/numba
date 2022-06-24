@@ -954,7 +954,7 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
         # trigger a standard compilation of the function and the thread pools
         # won't have started yet as the parallelisation compiler passes for
         # `work` won't yet have run. This mitigates the fork() call from 1.
-        # occuring after 2. The result of this is that 3. can be tested using
+        # occurring after 2. The result of this is that 3. can be tested using
         # the threading etc herein with the state being known as the above
         # described, i.e. the TBB threading layer has not experienced a fork().
 

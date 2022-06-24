@@ -1920,7 +1920,7 @@ def is_namedtuple_class(c):
 
 def fill_block_with_call(newblock, callee, label_next, inputs, outputs):
     """Fill *newblock* to call *callee* with arguments listed in *inputs*.
-    The returned values are unwraped into variables in *outputs*.
+    The returned values are unwrapped into variables in *outputs*.
     The block would then jump to *label_next*.
     """
     scope = newblock.scope
