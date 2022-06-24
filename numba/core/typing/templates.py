@@ -493,9 +493,13 @@ class ConcreteTemplate(FunctionTemplate):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         import inspect
-        frame = inspect.stack()[1].frame
-        self._ctor_caller_file = inspect.getmodule(frame).__file__
-        self._ctor_caller_lineno = frame.f_lineno
+        try:
+            frame = inspect.stack()[1].frame
+            self._ctor_caller_file = inspect.getmodule(frame).__file__
+            self._ctor_caller_lineno = frame.f_lineno
+        except Exception:
+            self._ctor_caller_file = "unknown"
+            self._ctor_caller_lineno = 0
 
     def apply(self, args, kws):
         cases = getattr(self, 'cases')
