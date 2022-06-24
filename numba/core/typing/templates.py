@@ -846,11 +846,13 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         if impl_for is not None:
             disp.impl_for = impl_for
 
+        # Save the dispatcher early to avoid regenerating the dispatcher due
+        # to recursively callgraphs.
+        if cache_key is not None:
+            self._impl_cache[cache_key] = disp, args
         # Make sure that the implementation can be fully compiled
         disp_type = types.Dispatcher(disp)
         disp_type.get_call_type(self.context, args, kws)
-        if cache_key is not None:
-            self._impl_cache[cache_key] = disp, args
         return disp, args
 
     def get_impl_key(self, sig):

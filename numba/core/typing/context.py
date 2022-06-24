@@ -64,7 +64,7 @@ class CallStack(Sequence):
         # guard compiling the same function with the same signature
         if self.match(func_id.func, args):
             msg = "compiler re-entrant to the same function signature"
-            raise errors.NumbaRuntimeError(msg)
+            raise errors.NumbaRecursiveCallGraphError(msg)
         self._lock.acquire()
         self._stack.append(CallFrame(target, typeinfer, func_id, args))
         try:

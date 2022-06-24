@@ -792,6 +792,10 @@ class NumbaRuntimeError(NumbaError):
     pass
 
 
+class NumbaRecursiveCallGraphError(NumbaRuntimeError):
+    pass
+
+
 def _format_msg(fmt, args, kwargs):
     return fmt.format(*args, **kwargs)
 

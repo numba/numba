@@ -372,6 +372,9 @@ class BaseFunction(Callable):
                         if nolitargs == args and nolitkws == kws:
                             continue
                         sig = temp.apply(nolitargs, nolitkws)
+                except errors.NumbaRecursiveCallGraphError:
+                    # Fail due to recursive callgraph
+                    raise
                 except Exception as e:
                     if (utils.use_new_style_errors() and not
                             isinstance(e, errors.NumbaError)):
