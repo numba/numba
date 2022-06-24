@@ -281,7 +281,7 @@ class TestLiftCall(BaseTestWithLifting):
             njit(liftcall4)()
         # Known error.  We only support one context manager per function
         # for body that are lifted.
-        msg = ("compiler re-entrant to the same function signature")
+        msg = ("compiler reentrant to the same function signature")
         self.assertIn(msg, str(raises.exception))
 
     # 3.7 fails to interpret the bytecode for this example
