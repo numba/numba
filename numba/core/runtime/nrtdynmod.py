@@ -184,7 +184,7 @@ def create_nrt_module(ctx):
     A (IR module, library) tuple is returned.
     """
     codegen = ctx.codegen()
-    library = codegen.create_library("nrt")
+    library = codegen.create_library("nrt", opt_info=ctx.opt_info)
 
     # Implement LLVM module with atomic ops
     ir_mod = library.create_ir_module("nrt_module")

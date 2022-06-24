@@ -91,6 +91,7 @@ class DefaultOptions:
     forceinline = _mapping("forceinline")
 
     target_backend = _mapping("target_backend")
+    opt_info = _mapping("opt_info")
 
     _dbg_extend_lifetimes = _mapping("dbg_extend_lifetimes")
     _dbg_optnone = _mapping("dbg_optnone")

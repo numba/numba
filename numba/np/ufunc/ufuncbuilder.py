@@ -24,6 +24,7 @@ _options_mixin = include_default_options(
     "forceobj",
     "boundscheck",
     "fastmath",
+    "opt_info",
     "target_backend",
 )
 

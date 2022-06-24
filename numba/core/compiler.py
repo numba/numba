@@ -158,6 +158,12 @@ detail""",
              "Equivalent to adding optnone attribute in the LLVM Function.")
     )
 
+    opt_info = Option(
+        type=list,
+        default=(),
+        doc=("Add optimization processors to produce performance advice.")
+    )
+
 
 DEFAULT_FLAGS = Flags()
 DEFAULT_FLAGS.nrt = True
@@ -392,6 +398,7 @@ def _make_subtarget(targetctx, flags):
         subtargetoptions['fastmath'] = flags.fastmath
     error_model = callconv.create_error_model(flags.error_model, targetctx)
     subtargetoptions['error_model'] = error_model
+    subtargetoptions['opt_info'] = flags.opt_info
 
     return targetctx.subtarget(**subtargetoptions)
 

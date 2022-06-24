@@ -273,6 +273,7 @@ _options_mixin = include_default_options(
     "error_model",
     "inline",
     "forceinline",
+    "opt_info",
     # Add "target_backend" as a accepted option for the CPU in @jit(...)
     "target_backend",
     "_dbg_extend_lifetimes",

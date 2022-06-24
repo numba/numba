@@ -1,3 +1,4 @@
+import os
 import warnings
 import functools
 import locale
@@ -5,6 +6,7 @@ import weakref
 import ctypes
 import html
 import textwrap
+from tempfile import mkstemp
 
 import llvmlite.binding as ll
 import llvmlite.ir as llvmir
@@ -16,6 +18,7 @@ from numba.core.runtime.nrtopt import remove_redundant_nrt_refct
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import require_global_compiler_lock
 from numba.core.errors import NumbaInvalidConfigWarning
+from numba.core.opt_info import global_processors, Missed, Passed
 from numba.misc.inspection import disassemble_elf_to_cfg
 from numba.misc.llvm_pass_timings import PassTimingsCollection
 
@@ -533,6 +536,7 @@ class CodeLibrary(metaclass=ABCMeta):
         self._recorded_timings = PassTimingsCollection(ptc_name)
         # Track names of the dynamic globals
         self._dynamic_globals = []
+        self.opt_info = None
 
     @property
     def has_dynamic_globals(self):
@@ -640,13 +644,14 @@ class CodeLibrary(metaclass=ABCMeta):
 
 class CPUCodeLibrary(CodeLibrary):
 
-    def __init__(self, codegen, name):
+    def __init__(self, codegen, name, opt_info=()):
         super().__init__(codegen, name)
         self._linking_libraries = []   # maintain insertion order
         self._final_module = ll.parse_assembly(
             str(self._codegen._create_empty_module(self.name)))
         self._final_module.name = cgutils.normalize_ir_text(self.name)
         self._shared_module = None
+        self._opt_info = opt_info
 
     def _optimize_functions(self, ll_module):
         """
@@ -655,8 +660,8 @@ class CPUCodeLibrary(CodeLibrary):
         # Enforce data layout to enable layout-specific optimizations
         ll_module.data_layout = self._codegen._data_layout
         with self._codegen._function_pass_manager(ll_module) as fpm:
-            # Run function-level optimizations to reduce memory usage and improve
-            # module-level optimization.
+            # Run function-level optimizations to reduce memory usage and
+            # improve module-level optimization.
             for func in ll_module.functions:
                 k = f"Function passes on {func.name!r}"
                 with self._recorded_timings.record(k):
@@ -668,18 +673,58 @@ class CPUCodeLibrary(CodeLibrary):
         """
         Internal: optimize this library's final module.
         """
-        cheap_name = "Module passes (cheap optimization for refprune)"
-        with self._recorded_timings.record(cheap_name):
-            # A cheaper optimisation pass is run first to try and get as many
-            # refops into the same function as possible via inlining
-            self._codegen._mpm_cheap.run(self._final_module)
-        # Refop pruning is then run on the heavily inlined function
-        if not config.LLVM_REFPRUNE_PASS:
-            self._final_module = remove_redundant_nrt_refct(self._final_module)
-        full_name = "Module passes (full optimization)"
-        with self._recorded_timings.record(full_name):
-            # The full optimisation suite is then run on the refop pruned IR
-            self._codegen._mpm_full.run(self._final_module)
+        optimization_processors = {p for c in (global_processors(),
+                                               self._opt_info)
+                                   for p in c}
+        remarks_filter = None
+        remarks_file = None
+        remarks_data = []
+        try:
+            if optimization_processors:
+                remarks_filter = "|".join("(%s)" % f for p in
+                                          optimization_processors for f in
+                                          p.filters())
+                remarkdesc, remarks_file = mkstemp()
+                # Close file
+                with os.fdopen(remarkdesc, 'r'):
+                    pass
+
+            cheap_name = "Module passes (cheap optimization for refprune)"
+            with self._recorded_timings.record(cheap_name):
+
+                # A cheaper optimisation pass is run first to try and get as
+                # many refops into the same function as possible via inlining
+                self._codegen._mpm_cheap.run(self._final_module,
+                                             remarks_file=remarks_file,
+                                             remarks_filter=remarks_filter)
+            if remarks_file:
+                import yaml
+                with open(remarks_file, 'rt') as f:
+                    remarks_data.append([*yaml.load_all(f,
+                                                        Loader=_llvm_yaml())])
+            # Refop pruning is then run on the heavily inlined function
+            if not config.LLVM_REFPRUNE_PASS:
+                self._final_module = remove_redundant_nrt_refct(self._final_module)
+            full_name = "Module passes (full optimization)"
+            with self._recorded_timings.record(full_name):
+                # The full optimisation suite is then run on the refop pruned IR
+                self._codegen._mpm_full.run(self._final_module,
+                                            remarks_file=remarks_file,
+                                            remarks_filter=remarks_filter)
+            if remarks_file:
+                import yaml
+                with open(remarks_file, 'rt') as f:
+                    remarks_data.append([*yaml.load_all(f,
+                                                        Loader=_llvm_yaml())])
+
+            if remarks_file:
+                self.opt_info = {k: v for p in optimization_processors for
+                                 (k, v) in p.process(remarks_data, self.name)}
+            else:
+                self.opt_info = None
+        finally:
+            if remarks_file:
+                os.unlink(remarks_file)
 
     def _get_module_for_linking(self):
         """
@@ -757,7 +802,7 @@ class CPUCodeLibrary(CodeLibrary):
                     library._get_module_for_linking(), preserve=True,
                 )
 
-        # Optimize the module after all dependences are linked in above,
+        # Optimize the module after all dependencies are linked in above,
         # to allow for inlining.
         self._optimize_final_module()
 
@@ -1435,3 +1480,22 @@ def get_host_cpu_features():
 
         # Set feature attributes
         return features.flatten()
+
+
+def _llvm_yaml():
+    if hasattr(_llvm_yaml, 'loader'):
+        return _llvm_yaml.loader
+
+    import yaml
+
+    class Loader(yaml.SafeLoader):
+        pass
+
+    Loader.add_constructor("!Missed",
+                           lambda loader, node: Missed(
+                               info=loader.construct_mapping(node)))
+    Loader.add_constructor("!Passed",
+                           lambda loader, node: Passed(
+                               info=loader.construct_mapping(node)))
+    setattr(_llvm_yaml, 'loader', Loader)
+    return Loader
