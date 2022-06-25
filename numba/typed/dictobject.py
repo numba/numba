@@ -69,19 +69,7 @@ class Status(IntEnum):
     ERR_CMP_FAILED = -5
 
 
-def new_dict_minsize(key, value):
-    """Construct a new dict with minimum size.
-
-    Parameters
-    ----------
-    key, value : TypeRef
-        Key type and value type of the new dict.
-    """
-    # With JIT disabled, ignore all arguments and return a Python dict.
-    return dict()
-
-
-def new_dict_noresize(key, value, n_keys):
+def new_dict(key, value, n_keys=0):
     """Construct a new dict with enough space for n_keys without a resize.
 
     Parameters
@@ -226,50 +214,8 @@ def _imp_dtor(context, module):
 
 
 @intrinsic
-def _dict_new_minsize(typingctx, keyty, valty):
-    """Wrap numba_dict_new_minsize.
-
-    Allocate a new dictionary object with the minimum capacity.
-
-    Parameters
-    ----------
-    keyty, valty: Type
-        Type of the key and value, respectively.
-
-    """
-    resty = types.voidptr
-    sig = resty(keyty, valty)
-
-    def codegen(context, builder, sig, args):
-        fnty = ir.FunctionType(
-            ll_status,
-            [ll_dict_type.as_pointer(), ll_ssize_t, ll_ssize_t],
-        )
-        fn = cgutils.get_or_insert_function(builder.module, fnty,
-                                            'numba_dict_new_minsize')
-        # Determine sizeof key and value types
-        ll_key = context.get_data_type(keyty.instance_type)
-        ll_val = context.get_data_type(valty.instance_type)
-        sz_key = context.get_abi_sizeof(ll_key)
-        sz_val = context.get_abi_sizeof(ll_val)
-        refdp = cgutils.alloca_once(builder, ll_dict_type, zfill=True)
-        status = builder.call(
-            fn,
-            [refdp, ll_ssize_t(sz_key), ll_ssize_t(sz_val)],
-        )
-        _raise_if_error(
-            context, builder, status,
-            msg="Failed to allocate dictionary",
-        )
-        dp = builder.load(refdp)
-        return dp
-
-    return sig, codegen
-
-
-@intrinsic
-def _dict_new_noresize(typingctx, keyty, valty, n_keys):
-    """Wrap numba_dict_new_noresize.
+def _dict_new(typingctx, keyty, valty, n_keys):
+    """Wrap numba_dict_new_sized.
 
     Allocate a new dictionary object with enough space to hold n_keys
     keys without needing a resize.
@@ -289,7 +235,7 @@ def _dict_new_noresize(typingctx, keyty, valty, n_keys):
             ll_status,
             [ll_dict_type.as_pointer(), ll_ssize_t, ll_ssize_t, ll_ssize_t],
         )
-        fn = ir.Function(builder.module, fnty, 'numba_dict_new_noresize')
+        fn = ir.Function(builder.module, fnty, 'numba_dict_new_sized')
         # Determine sizeof key and value types
         ll_key = context.get_data_type(keyty.instance_type)
         ll_val = context.get_data_type(valty.instance_type)
@@ -700,31 +646,8 @@ def _make_dict(typingctx, keyty, valty, ptr):
     return sig, codegen
 
 
-@overload(new_dict_minsize)
-def impl_new_dict_minsize(key, value):
-    """Creates a new dictionary with *key* and *value* as the type
-    of the dictionary key and value, respectively. The number of buckets
-    initialized is defined in /cext/dictobject.c as D_MINSIZE.
-    """
-    if any([
-        not isinstance(key, Type),
-        not isinstance(value, Type),
-    ]):
-        raise TypeError("expecting *key* and *value* to be a numba Type")
-
-    keyty, valty = key, value
-
-    def imp(key, value):
-        dp = _dict_new_minsize(keyty, valty)
-        _dict_set_method_table(dp, keyty, valty)
-        d = _make_dict(keyty, valty, dp)
-        return d
-
-    return imp
-
-
-@overload(new_dict_noresize)
-def impl_new_dict_noresize(key, value, n_keys):
+@overload(new_dict)
+def impl_new_dict(key, value, n_keys=0):
     """Creates a new dictionary with *key* and *value* as the type
     of the dictionary key and value, respectively. n_keys is the
     number of keys to hold without needing a resize.
@@ -737,10 +660,10 @@ def impl_new_dict_noresize(key, value, n_keys):
 
     keyty, valty = key, value
     
-    def imp(key, value, n_keys):
+    def imp(key, value, n_keys=0):
         if n_keys < 0:
             raise RuntimeError("expecting *n_keys* to be >= 0")
-        dp = _dict_new_noresize(keyty, valty, n_keys)
+        dp = _dict_new(keyty, valty, n_keys)
         _dict_set_method_table(dp, keyty, valty)
         d = _make_dict(keyty, valty, dp)
         return d
@@ -940,7 +863,7 @@ def impl_copy(d):
     key_type, val_type = d.key_type, d.value_type
 
     def impl(d):
-        newd = new_dict_minsize(key_type, val_type)
+        newd = new_dict(key_type, val_type)
         for k, v in d.items():
             newd[k] = v
         return newd

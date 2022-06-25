@@ -103,7 +103,7 @@ Parameters
     Size of a value entry.
 */
 NUMBA_EXPORT_FUNC(int)
-numba_dict_new_noresize(NB_Dict** out, Py_ssize_t n_keys, Py_ssize_t key_size, Py_ssize_t val_size);
+numba_dict_new_sized(NB_Dict** out, Py_ssize_t n_keys, Py_ssize_t key_size, Py_ssize_t val_size);
 
 /* Free a dict */
 NUMBA_EXPORT_FUNC(void)
