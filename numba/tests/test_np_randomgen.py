@@ -16,7 +16,7 @@ from numba.tests.support import run_in_new_process_caching, SerialMixin
 # The following logic is to mitigate:
 # https://github.com/numba/numba/pull/8038#issuecomment-1165571368
 if IS_32BITS or platform.machine() in ['ppc64le', 'aarch64']:
-    ulp_prec = 100
+    ulp_prec = 2048
 else:
     ulp_prec = 5
 
