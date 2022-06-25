@@ -20,7 +20,7 @@ from numba.core.typing import signature
 
 @njit
 def _make_dict(keyty, valty, n_keys=0):
-    return dictobject._as_meminfo(dictobject.new_dict(keyty, valty, 
+    return dictobject._as_meminfo(dictobject.new_dict(keyty, valty,
                                                       n_keys=n_keys))
 
 
@@ -95,6 +95,9 @@ class Dict(MutableMapping):
     def empty(cls, key_type, value_type, n_keys=0):
         """Create a new empty Dict with *key_type* and *value_type*
         as the types for the keys and values of the dictionary respectively.
+
+        Optionally, allocate enough memory to hold *n_keys* without requiring
+        resizes. The default value of 0 returns a dict with minimum size.
         """
         if config.DISABLE_JIT:
             return dict()
@@ -125,7 +128,7 @@ class Dict(MutableMapping):
         if meminfo is not None:
             opaque = meminfo
         else:
-            opaque = _make_dict(dcttype.key_type, dcttype.value_type, 
+            opaque = _make_dict(dcttype.key_type, dcttype.value_type,
                                 n_keys=n_keys)
         return dcttype, opaque
 
@@ -214,7 +217,7 @@ class Dict(MutableMapping):
 def typeddict_empty(cls, key_type, value_type, n_keys=0):
     if cls.instance_type is not DictType:
         return
-    
+
     def impl(cls, key_type, value_type, n_keys=0):
         return dictobject.new_dict(key_type, value_type, n_keys=n_keys)
 
@@ -282,7 +285,7 @@ def unbox_dicttype(typ, val, c):
             sig = signature(typ, *argtypes)
             nil_typeref = context.get_constant_null(argtypes[1])
             args = (mi, nil_typeref)
-            is_error, dctobj = c.pyapi.call_jit_code(convert , sig, args)
+            is_error, dctobj = c.pyapi.call_jit_code(convert, sig, args)
             # decref here because we are stealing a reference.
             c.context.nrt.decref(c.builder, typ, dctobj)
 

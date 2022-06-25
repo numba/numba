@@ -70,14 +70,15 @@ class Status(IntEnum):
 
 
 def new_dict(key, value, n_keys=0):
-    """Construct a new dict with enough space for n_keys without a resize.
+    """Construct a new dict with enough space for *n_keys* without a resize.
 
     Parameters
     ----------
     key, value : TypeRef
         Key type and value type of the new dict.
-    n_keys : int
-        Number of keys to insert without needing a resize.
+    n_keys : int, default 0
+        The number of keys to insert without needing a resize.
+        A value of 0 creates a dict with minimum size.
     """
     # With JIT disabled, ignore all arguments and return a Python dict.
     return dict()
@@ -217,15 +218,16 @@ def _imp_dtor(context, module):
 def _dict_new(typingctx, keyty, valty, n_keys):
     """Wrap numba_dict_new_sized.
 
-    Allocate a new dictionary object with enough space to hold n_keys
-    keys without needing a resize.
+    Allocate a new dictionary object with enough space to hold
+    *n_keys* keys without needing a resize.
 
     Parameters
     ----------
     keyty, valty: Type
         Type of the key and value, respectively.
     n_keys: int
-        Number of keys to insert without needing a resize.
+        The number of keys to insert without needing a resize.
+        A value of 0 creates a dict with minimum size.
     """
     resty = types.voidptr
     sig = resty(keyty, valty, n_keys)
@@ -649,8 +651,9 @@ def _make_dict(typingctx, keyty, valty, ptr):
 @overload(new_dict)
 def impl_new_dict(key, value, n_keys=0):
     """Creates a new dictionary with *key* and *value* as the type
-    of the dictionary key and value, respectively. n_keys is the
-    number of keys to hold without needing a resize.
+    of the dictionary key and value, respectively. *n_keys* is the
+    number of keys to insert without requiring a resize, where a
+    value of 0 creates a dictionary with minimum size.
     """
     if any([
         not isinstance(key, Type),
@@ -659,7 +662,7 @@ def impl_new_dict(key, value, n_keys=0):
         raise TypeError("expecting *key* and *value* to be a numba Type")
 
     keyty, valty = key, value
-    
+
     def imp(key, value, n_keys=0):
         if n_keys < 0:
             raise RuntimeError("expecting *n_keys* to be >= 0")
@@ -667,7 +670,7 @@ def impl_new_dict(key, value, n_keys=0):
         _dict_set_method_table(dp, keyty, valty)
         d = _make_dict(keyty, valty, dp)
         return d
-        
+
     return imp
 
 
@@ -811,7 +814,7 @@ def impl_pop(dct, key, default=None):
         elif ix < DKIX.EMPTY:
             raise AssertionError("internal dict error during lookup")
         else:
-            status = _dict_delitem(dct,hashed, ix)
+            status = _dict_delitem(dct, hashed, ix)
             if status != Status.OK:
                 raise AssertionError("internal dict error during delitem")
             return val
@@ -863,7 +866,7 @@ def impl_copy(d):
     key_type, val_type = d.key_type, d.value_type
 
     def impl(d):
-        newd = new_dict(key_type, val_type)
+        newd = new_dict(key_type, val_type, n_keys=len(d))
         for k, v in d.items():
             newd[k] = v
         return newd
@@ -1333,7 +1336,7 @@ def cast_LiteralStrKeyDict_LiteralStrKeyDict(context, builder, fromty, toty,
                                   toty.literal_value.items()):
         # these checks are just guards, typing should have picked up any
         # problems
-        if k1 != k2: # keys must be same
+        if k1 != k2:  # keys must be same
             msg = "LiteralDictionary keys are not the same {} != {}"
             raise LoweringError(msg.format(k1, k2))
         # values must be same ty
