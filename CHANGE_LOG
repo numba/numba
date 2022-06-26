@@ -69,7 +69,19 @@ Parallel Accelerator enhancements:
 
 CUDA:
 
-TBC
+* New functionality:
+  * Self-recursive device functions.
+  * Vector type support (``float4``, ``int2``, etc.).
+  * Shared / local arrays of extension types can now be created.
+  * Support for linking CUDA C / C++ device functions into Python kernels.
+  * PTX generation for Compute Capabilities 8.6 and 8.7 - e.g. RTX A series,
+   GTX 3000 series.
+  * Comparison operations for ``float16`` types.
+* Performance improvements:
+  * Context queries are no longer made during launch configuration.
+  * Launch configurations are now LRU cached.
+  * On-disk caching of CUDA kernels is now supported.
+* Documentation: many new examples added.
 
 Docs:
 
