@@ -2032,7 +2032,7 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countParfors(test_impl, cptypes), 2)
         self.check(test_impl, a, size)
 
-    def test_prange_parfor_index_tuple1(self):
+    def test_prange_parfor_index_const_tuple_fusion(self):
         # Testing if accessing a tuple with prange index
         # and later with a constant will not prevent fusion.
         def test_impl(a, c, size):
