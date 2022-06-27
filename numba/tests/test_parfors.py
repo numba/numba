@@ -2035,13 +2035,13 @@ class TestParfors(TestParforsBase):
     def test_prange_parfor_index_const_tuple_fusion(self):
         # Testing if accessing a tuple with prange index
         # and later with a constant will not prevent fusion.
-        def test_impl(a, c, size):
-            b = 0
+        def test_impl(a, tup, size):
+            acc = 0
             for i in numba.prange(size):
-                a[i] = i + c[i]
+                a[i] = i + tup[i]
             for i in numba.prange(size):
-                b += a[i] + c[1]
-            return b
+                acc += a[i] + tup[1]
+            return acc
 
         size = 10
         a = np.zeros(size)
