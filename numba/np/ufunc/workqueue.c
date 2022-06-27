@@ -157,7 +157,7 @@ platform_launch(void)
     pthread_key_create(&tidkey, NULL);
 }
 
-#endif
+#endif /* pthread threading */
 
 /* Win Thread */
 #ifdef NUMBA_WINTHREAD
@@ -262,7 +262,7 @@ platform_launch(void)
     tidkey = TlsAlloc();
 }
 
-#endif
+#endif /* Windows threading */
 
 typedef struct Task
 {
@@ -321,12 +321,20 @@ static THREAD_LOCAL(int) _TLS_num_threads = 0;
 static void
 set_num_threads(int count)
 {
+    if (!queues)
+    {
+        launch_threads(NUM_THREADS);
+    }
     _TLS_num_threads = count;
 }
 
 static int
 get_num_threads(void)
 {
+    if (!queues)
+    {
+        launch_threads(NUM_THREADS);
+    }
     // This is purely to permit the implementation to survive to the point
     // where it can exit cleanly as multiple threads cannot be used with this
     // backend
@@ -506,6 +514,11 @@ add_task_internal(void *fn, void *args, void *dims, void *steps, void *data, int
 {
     void (*func)(void *args, void *dims, void *steps, void *data) = fn;
 
+    if (!queues)
+    {
+        launch_threads(NUM_THREADS);
+    }
+
     Queue *queue = &queues[queue_pivot];
 
     Task *task = &queue->task;
@@ -581,6 +594,11 @@ static void launch_threads(int count)
 
 static void synchronize(void)
 {
+    // This probably isn't needed, but is put in as a guard
+    if (!queues)
+    {
+        launch_threads(NUM_THREADS);
+    }
     int i;
     for (i = 0; i < queue_count; ++i)
     {
@@ -590,6 +608,11 @@ static void synchronize(void)
 
 static void ready(void)
 {
+    // This probably isn't needed, but is put in as a guard
+    if (!queues)
+    {
+        launch_threads(NUM_THREADS);
+    }
     int i;
     for (i = 0; i < queue_count; ++i)
     {
@@ -601,8 +624,10 @@ static void reset_after_fork(void)
 {
     free(queues);
     queues = NULL;
-    NUM_THREADS = -1;
-    _INIT_NUM_THREADS = -1;
+    if (_INIT_NUM_THREADS != -1)
+    {
+        NUM_THREADS = _INIT_NUM_THREADS;
+    }
     _nesting_level = 0;
 }
 
