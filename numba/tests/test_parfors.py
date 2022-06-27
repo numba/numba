@@ -47,6 +47,7 @@ from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       skip_parfors_unsupported, _32bit, needs_blas,
                       needs_lapack, disabled_test, skip_unless_scipy,
                       needs_subprocess)
+from numba.core.extending import register_jitable
 import cmath
 import unittest
 
@@ -1286,7 +1287,6 @@ class TestParforsUnsupported(TestCase):
                "hardware")
         self.assertIn(msg, str(raised.exception))
 
-
 @skip_parfors_unsupported
 class TestParfors(TestParforsBase):
     """ Tests cpython, reduction and various parfors features"""
@@ -2008,6 +2008,120 @@ class TestParfors(TestParforsBase):
                 x[i] = 1
             return x
         self.check(test_impl, np.zeros((10, 10)), 3)
+
+    def test_prange_unknown_call1(self):
+        @register_jitable
+        def issue7854_proc(u, i, even, size):
+            for j in range((even + i + 1) % 2 + 1, size - 1, 2):
+                u[i, j] = u[i + 1, j] + 1
+
+        # issue7854
+        # Forbid fusion in unanalyzable call inside prange.
+        def test_impl(u, size):
+            for i in numba.prange(1, size - 1):
+                issue7854_proc(u, i, 0, size)
+            for i in numba.prange(1, size - 1):
+                issue7854_proc(u, i, 1, size)
+            return u
+
+        size = 4
+        u = np.zeros((size, size))
+        cptypes = (numba.float64[:, ::1], types.int64)
+        self.assertEqual(countParfors(test_impl, cptypes), 2)
+        self.check(test_impl, u, size)
+
+    def test_prange_index_calc1(self):
+        # Should forbid fusion due to cross-iteration dependency as
+        # detected by loop index calcuation (i+1) as array index.
+        def test_impl(u, size):
+            for i in numba.prange(1, size - 1):
+                for j in range((i + 1) % 2 + 1, size - 1, 2):
+                    u[i, j] = u[i + 1, j] + 1
+            for i in numba.prange(1, size - 1):
+                for j in range(i % 2 + 1, size - 1, 2):
+                    u[i, j] = u[i + 1, j] + 1
+            return u
+
+        size = 4
+        u = np.zeros((size, size))
+        cptypes = (numba.float64[:, ::1], types.int64)
+        self.assertEqual(countParfors(test_impl, cptypes), 2)
+        self.check(test_impl, u, size)
+
+    def test_prange_reverse_order1(self):
+        # Testing if reversed loop index usage as array index
+        # prevents fusion.
+        def test_impl(a, b, size):
+            for i in numba.prange(size):
+                for j in range(size):
+                    a[i, j] = b[i, j] + 1
+            for i in numba.prange(size):
+                for j in range(size):
+                    b[j, i] = 3
+            return a[0, 0] + b[0, 0]
+
+        size = 10
+        a = np.zeros((size, size))
+        b = np.zeros((size, size))
+        cptypes = (numba.float64[:, ::1], numba.float64[:, ::1], types.int64)
+        self.assertEqual(countParfors(test_impl, cptypes), 2)
+        self.check(test_impl, a, b, size)
+
+    def test_prange_parfor_index_then_not(self):
+        # Testing if accessing an array first with a parfor index then
+        # without will prevent fusion.
+        def test_impl(a, size):
+            b = 0
+            for i in numba.prange(size):
+                a[i] = i
+            for i in numba.prange(size):
+                b += a[5]
+            return b
+
+        size = 10
+        a = np.zeros(size)
+        cptypes = (numba.float64[:], types.int64)
+        self.assertEqual(countParfors(test_impl, cptypes), 2)
+        self.check(test_impl, a, size)
+
+    def test_prange_parfor_index_const_tuple_fusion(self):
+        # Testing if accessing a tuple with prange index
+        # and later with a constant will not prevent fusion.
+        def test_impl(a, tup, size):
+            acc = 0
+            for i in numba.prange(size):
+                a[i] = i + tup[i]
+            for i in numba.prange(size):
+                acc += a[i] + tup[1]
+            return acc
+
+        size = 10
+        a = np.zeros(size)
+        b = tuple(a)
+        cptypes = (numba.float64[:],
+                   types.containers.UniTuple(types.float64, size),
+                   types.intp)
+        self.assertEqual(countParfors(test_impl, cptypes), 1)
+        self.check(test_impl, a, b, size)
+
+    def test_prange_non_parfor_index_then_opposite(self):
+        # Testing if accessing an array first without a parfor index then
+        # with will prevent fusion.
+        def test_impl(a, b, size):
+            for i in numba.prange(size):
+                b[i] = a[5]
+            for i in numba.prange(size):
+                a[i] = i
+            # Need this to stop previous prange from being optimized away.
+            b[0] += a[0]
+            return b
+
+        size = 10
+        a = np.zeros(size)
+        b = np.zeros(size)
+        cptypes = (numba.float64[:], numba.float64[:], types.int64)
+        self.assertEqual(countParfors(test_impl, cptypes), 2)
+        self.check(test_impl, a, b, size)
 
     def test_untraced_value_tuple(self):
         # This is a test for issue #6478.
