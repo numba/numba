@@ -1018,24 +1018,24 @@ numba_dict_new_minsize(NB_Dict **out, Py_ssize_t key_size, Py_ssize_t val_size)
 int
 numba_dict_new_sized(NB_Dict** out, Py_ssize_t n_keys, Py_ssize_t key_size, Py_ssize_t val_size) {
 
+    /* Respect D_MINSIZE */
     if (n_keys <= USABLE_FRACTION(D_MINSIZE)) {
         return numba_dict_new_minsize(out, key_size, val_size);
     }
 
-    Py_ssize_t size;
+    /*  Adjust for a load factor of 2/3. */
+    Py_ssize_t size = n_keys + (n_keys >> 1); 
 
-    size = n_keys + (n_keys >> 1); // Relies on a load factor of 2/3.
-
-    /* Round up to the nearest power of 2.
-       Overflows when result is 2^(8*sizeof(Py_ssize_t)-1) due to signed Py_ssize_t.
-       Could be problematic on 32-bit systems. */
-
-    uint32_t shift;
-    for (shift = 1; shift < sizeof(Py_ssize_t) * CHAR_BIT; shift <<= 1) {
+    /* Round up size to the nearest power of 2. */
+    for (int shift = 1; shift < sizeof(Py_ssize_t) * CHAR_BIT; shift <<= 1) {
         size |= (size >> shift);
     }
-
     size++;
+
+    /* Handle overflows */
+    if (size <= 0) {
+        return ERR_NO_MEMORY;
+    }
 
     return numba_dict_new(out, size, key_size, val_size);
 }

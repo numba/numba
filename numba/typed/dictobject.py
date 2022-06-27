@@ -215,7 +215,7 @@ def _imp_dtor(context, module):
 
 
 @intrinsic
-def _dict_new(typingctx, keyty, valty, n_keys):
+def _dict_new_sized(typingctx, keyty, valty, n_keys):
     """Wrap numba_dict_new_sized.
 
     Allocate a new dictionary object with enough space to hold
@@ -666,7 +666,7 @@ def impl_new_dict(key, value, n_keys=0):
     def imp(key, value, n_keys=0):
         if n_keys < 0:
             raise RuntimeError("expecting *n_keys* to be >= 0")
-        dp = _dict_new(keyty, valty, n_keys)
+        dp = _dict_new_sized(keyty, valty, n_keys)
         _dict_set_method_table(dp, keyty, valty)
         d = _make_dict(keyty, valty, dp)
         return d
