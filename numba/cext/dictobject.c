@@ -1027,7 +1027,7 @@ numba_dict_new_sized(NB_Dict** out, Py_ssize_t n_keys, Py_ssize_t key_size, Py_s
     Py_ssize_t size = n_keys + (n_keys >> 1); 
 
     /* Round up size to the nearest power of 2. */
-    for (int shift = 1; shift < sizeof(Py_ssize_t) * CHAR_BIT; shift <<= 1) {
+    for (unsigned int shift = 1; shift < sizeof(Py_ssize_t) * CHAR_BIT; shift <<= 1) {
         size |= (size >> shift);
     }
     size++;
