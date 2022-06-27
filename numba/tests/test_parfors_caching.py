@@ -19,7 +19,9 @@ class TestParforsCache(DispatcherCacheUsecasesTest):
         self.check_pycache(0)
         f = getattr(mod, fname)
         ary = np.ones(10)
-        self.assertPreciseEqual(f(ary), f.py_func(ary))
+        # The result of these functions is derived from e.g. out of order
+        # accumulation so allclose should be fine.
+        np.testing.assert_allclose(f(ary), f.py_func(ary))
 
         dynamic_globals = [cres.library.has_dynamic_globals
                            for cres in f.overloads.values()]
