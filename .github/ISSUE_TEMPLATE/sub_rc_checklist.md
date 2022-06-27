@@ -10,6 +10,10 @@ labels: task
 ## numba X.Y.Z
 
 * [ ] Cherry-pick items from the X.Y.Z milestone into a PR.
+* [ ] Update the "version support table" in the documentation with the final
+  release date (FINAL ONLY).
+  * [ ] Make, approve and merge PR against `main`.
+  * [ ] Cherry-pick PR to X.Y release branch.
 * [ ] Approve change log modifications and cherry-pick.
 * [ ] Merge change log modifications and cherry-picks to X.Y release branch.
   * [ ] https://github.com/numba/numba/pull/XXXX
