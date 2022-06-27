@@ -2047,8 +2047,8 @@ class TestParfors(TestParforsBase):
         a = np.zeros(size)
         b = tuple(a)
         cptypes = (numba.float64[:],
-                   types.containers.UniTuple(types.int64, size),
-                   types.int64)
+                   types.containers.UniTuple(types.float64, size),
+                   types.intp)
         self.assertEqual(countParfors(test_impl, cptypes), 1)
         self.check(test_impl, a, b, size)
 
