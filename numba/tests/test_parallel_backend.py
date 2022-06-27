@@ -690,6 +690,7 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
             self.assertIn("Terminating: Nested parallel kernel launch detected",
                           e_msg)
 
+    @unittest.skipUnless(_HAVE_OS_FORK, "Test needs fork(2)")
     def test_workqueue_handles_fork_from_non_main_thread(self):
         # For context see #7872, but essentially the multiprocessing pool
         # implementation has a number of Python threads for handling the worker
@@ -702,6 +703,8 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
             import multiprocessing
 
             if __name__ == "__main__":
+                # Need for force fork context (OSX default is "spawn")
+                multiprocessing.set_start_method('fork')
 
                 @njit(parallel=True)
                 def func(x):
@@ -718,6 +721,8 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
                     result = p.map(func, [arr])
                 np.testing.assert_allclose(result,
                                            func.py_func(np.expand_dims(arr, 0)))
+
+                assert threading_layer() == "workqueue"
         """
         cmdline = [sys.executable, '-c', runme]
         env = os.environ.copy()
