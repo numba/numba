@@ -1088,6 +1088,42 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             # Sequence values
             check(a, list(values))
 
+        # Third with unichr (no NaNs)
+        unicode_a = 97
+        alphabet_size = 26
+        string_length = 8
+
+        np.random.seed(42)
+        bins_unicode = np.random.choice(
+            np.arange(
+                unicode_a,
+                unicode_a + alphabet_size,
+                dtype=np.uint32,
+            ),
+            size=(5, string_length),
+        )
+        bins_unsorted = bins_unicode.view(f"<U{string_length}").reshape(-1)
+        bins = np.sort(bins_unsorted)
+        values_unicode = np.random.choice(
+            np.arange(
+                unicode_a,
+                unicode_a + alphabet_size,
+                dtype=np.uint32,
+            ),
+            size=(20, string_length),
+        )
+        values = values_unicode.view(f"<U{string_length}").reshape(-1)
+
+        for a in (bins, list(bins)):
+            # Scalar values
+            for v in values:
+                check(a, v)
+            # Array values
+            for v in (values, values.reshape((4, 5))):
+                check(a, v)
+            # Sequence values
+            check(a, list(values))
+
         # nonsense value for 'side' raises TypingError
         def bad_side(a, v):
             return np.searchsorted(a, v, side='nonsense')
