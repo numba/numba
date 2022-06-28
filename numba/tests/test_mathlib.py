@@ -717,7 +717,7 @@ class TestMathLib(TestCase):
 
     def test_isclose_optional(self):
         pyfunc = isclose
-        cfunc = jit(nopython=True)(isclose)
+        cfunc = njit(isclose)
         # Examples using floats, integers, inf, and NaN
         args = [
             # Test relative tolerance
@@ -750,7 +750,7 @@ class TestMathLib(TestCase):
 
     def test_isclose_exceptions(self):
         pyfunc = isclose
-        cfunc = jit(nopython=True)(pyfunc)
+        cfunc = njit(pyfunc)
 
         # Verify that every argument must be a scalar
         with self.assertRaises(TypingError) as raises:
@@ -759,7 +759,7 @@ class TestMathLib(TestCase):
                 1.0
             )
         self.assertIn(
-            "All arguments must be scalars.",
+            "must be a floating point number or integer",
             str(raises.exception)
         )
 
@@ -769,7 +769,7 @@ class TestMathLib(TestCase):
                 (1.0,)
             )
         self.assertIn(
-            "All arguments must be scalars.",
+            "must be a floating point number or integer",
             str(raises.exception)
         )
 
@@ -780,7 +780,7 @@ class TestMathLib(TestCase):
                 rel_tol=(1.0,)
             )
         self.assertIn(
-            "All arguments must be scalars.",
+            "must be a floating point number or integer",
             str(raises.exception)
         )
 
@@ -791,7 +791,18 @@ class TestMathLib(TestCase):
                 abs_tol=(1.0,)
             )
         self.assertIn(
-            "All arguments must be scalars.",
+            "must be a floating point number or integer",
+            str(raises.exception)
+        )
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(
+                1.0,
+                1.0,
+                abs_tol=-1.1
+            )
+        self.assertIn(
+            "tolerances must be non-negative",
             str(raises.exception)
         )
 
