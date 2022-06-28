@@ -750,7 +750,8 @@ def ol_isinstance(var, typs):
                         types.DictType, types.LiteralStrKeyDict, types.List,
                         types.ListType, types.Tuple, types.UniTuple, types.Set,
                         types.Function, types.ClassType, types.UnicodeType,
-                        types.ClassInstanceType, types.NoneType, types.Array)
+                        types.ClassInstanceType, types.NoneType, types.Array,
+                        types.UnicodeCharSeq)
     if not isinstance(var_ty, supported_var_ty):
         msg = f'isinstance() does not support variables of type "{var_ty}".'
         raise NumbaTypeError(msg)
