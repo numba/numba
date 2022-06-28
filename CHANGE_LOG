@@ -270,6 +270,7 @@ Pull-Requests:
 * PR `#8197 <https://github.com/numba/numba/pull/8197>`_: Fix `isinstance` warning check test. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8203 <https://github.com/numba/numba/pull/8203>`_: pin llvmlite 0.39 for public CI builds (`esc <https://github.com/esc>`_)
 * PR `#8192 <https://github.com/numba/numba/pull/8192>`_:  Update CHANGE_LOG for 0.56.0 (`stuartarchibald <https://github.com/stuartarchibald>`_ `esc <https://github.com/esc>`_ `Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#8205 <https://github.com/numba/numba/pull/8205>`_:  Pin llvmlite and NumPy on release branch.(`esc <https://github.com/esc>`_ `Siu Kwan Lam <https://github.com/sklam>`_)
 
 Authors:
 
