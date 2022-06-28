@@ -3857,13 +3857,15 @@ def _searchsorted(func):
 
         .. [1] https://github.com/numpy/numpy/blob/809e8d26b03f549fd0b812a17b8a166bcd966889/numpy/core/src/npysort/binsearch.cpp#L173
         """  # noqa: E501
-        if np.isnan(v):
-            # Find the first nan (i.e. the last from the end of a,
-            # since there shouldn't be many of them in practice)
-            for i in range(n, 0, -1):
-                if not np.isnan(a[i - 1]):
-                    return i
-            return 0
+        # handle NaN where appropriate
+        if isinstance(v, (float, complex)):
+            if np.isnan(v):
+                # Find the first nan (i.e. the last from the end of a,
+                # since there shouldn't be many of them in practice)
+                for i in range(n, 0, -1):
+                    if not np.isnan(a[i - 1]):
+                        return i
+                return 0
 
         if v_last < v:
             hi = n
