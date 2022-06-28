@@ -42,7 +42,8 @@ Numba specific feature enhancements:
 NumPy features/enhancements:
 
 * Initial support for passing, using and returning ``numpy.random.Generator``
-  instances has been added, this includes some commonly used distributions.
+  instances has been added, this currently includes support for the ``random``
+  distribution.
 * The broadcasting functions ``np.broadcast_shapes`` and ``np.broadcast_arrays``
   are now supported.
 * The ``min`` and ``max`` functions now work with ``np.timedelta64`` and
