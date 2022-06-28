@@ -11,6 +11,8 @@ from numba.core.config import IS_WIN32, IS_32BITS
 from numba.tests.support import TestCase, CompilationCache, tag
 import unittest
 from numba.np import numpy_support
+from numba import njit
+from numba.core.errors import TypingError
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.enable_pyobject = True
@@ -171,6 +173,8 @@ def ldexp(x, e):
 def get_constants():
     return math.pi, math.e
 
+def isclose(a, b, rel_tol=1e-09, abs_tol=0.0):
+    return math.isclose(a, b, rel_tol=rel_tol, abs_tol=abs_tol)
 
 class TestMathLib(TestCase):
 
@@ -649,6 +653,147 @@ class TestMathLib(TestCase):
 
     def test_ldexp_npm(self):
         self.test_ldexp(flags=no_pyobj_flags)
+
+    def test_isclose(self):
+        pyfunc = isclose
+        cfunc = njit(pyfunc)
+        # Examples using floats, integers, inf, and NaN
+        pairs = [
+            # Two integers
+            (
+                4,
+                4
+            ),
+            (
+                4,
+                3
+            ),
+            # One integer and one float
+            (
+                3.0,
+                4
+            ),
+            (
+                4,
+                4.0 - 1e-09,
+            ),
+            # Two floats
+            (
+                3.99,
+                4.0
+            ),
+            (
+                4.0,
+                4.0 - 1e-09,
+            ),
+            # Test NaN
+            (
+                math.nan,
+                math.nan
+            ),
+            (
+                math.nan,
+                0.0
+            ),
+            # Test inf
+            (
+                math.inf,
+                math.inf
+            ),
+            (
+                -math.inf,
+                -math.inf
+            ),
+            (
+                math.inf,
+                math.nan
+            )
+        ]
+
+        for a, b in pairs:
+            expected = pyfunc(a, b)
+            got = cfunc(a, b)
+            self.assertPreciseEqual(expected, got)
+
+    def test_isclose_optional(self):
+        pyfunc = isclose
+        cfunc = jit(nopython=True)(isclose)
+        # Examples using floats, integers, inf, and NaN
+        args = [
+            # Test relative tolerance
+            (
+                4,
+                3,
+                0.5,
+                0.0
+            ),
+            # Test absolute tolerance
+            (
+                3.0,
+                4,
+                0.0,
+                1.0,
+            ),
+            # Test both set to 0
+            (
+                4.0,
+                4.0 - 1e-09,
+                0.0,
+                0.0
+            )
+        ]
+
+        for a, b, rel_tol, abs_tol in args:
+            expected = pyfunc(a, b, rel_tol, abs_tol)
+            got = cfunc(a, b, rel_tol, abs_tol)
+            self.assertPreciseEqual(expected, got)
+
+    def test_isclose_exceptions(self):
+        pyfunc = isclose
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Verify that every argument must be a scalar
+        with self.assertRaises(TypingError) as raises:
+            cfunc(
+                (1.0,),
+                1.0
+            )
+        self.assertIn(
+            "All arguments must be scalars.",
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(
+                1.0,
+                (1.0,)
+            )
+        self.assertIn(
+            "All arguments must be scalars.",
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(
+                1.0,
+                1.0,
+                rel_tol=(1.0,)
+            )
+        self.assertIn(
+            "All arguments must be scalars.",
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(
+                1.0,
+                1.0,
+                abs_tol=(1.0,)
+            )
+        self.assertIn(
+            "All arguments must be scalars.",
+            str(raises.exception)
+        )
 
 
 if __name__ == '__main__':
