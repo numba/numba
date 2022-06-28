@@ -16,6 +16,7 @@ from numba.core import types, utils, config, cgutils
 from numba.core.extending import overload
 from numba.core.typing import signature
 from numba.cpython.unsafe.numbers import trailing_zeros
+from numba.core.errors import TypingError
 
 
 registry = Registry('mathimpl')
@@ -451,3 +452,50 @@ def gcd_impl(context, builder, sig, args):
 
 
 lower(math.gcd, types.Integer, types.Integer)(gcd_impl)
+
+
+@overload(math.isclose)
+def math_isclose(a, b, rel_tol=1e-09, abs_tol=0.0):
+
+    if not isinstance(a, (types.Float, types.Integer)):
+        raise TypingError(
+            "math.isclose(): a must be a floating point number or integer"
+        )
+
+    if not isinstance(b, (types.Float, types.Integer)):
+        raise TypingError(
+            "math.isclose(): b must be a floating point number or integer"
+        )
+
+    # Include float because overload can be inconsistent
+    # about omitted arguments
+    if not isinstance(rel_tol, (types.Float, types.Integer, types.Omitted, float)):
+        raise TypingError(
+            "math.isclose(): rel_tol must be a floating point number or integer"
+        )
+
+    # Include float because overload can be inconsistent
+    # about omitted arguments
+    if not isinstance(abs_tol, (types.Float, types.Integer, types.Omitted, float)):
+        raise TypingError(
+            "math.isclose(): abs_tol must be a floating point number or integer"
+        )
+
+    def impl(a, b, rel_tol=1e-09, abs_tol=0.0):
+
+        if rel_tol < 0.0 or abs_tol < 0.0:
+            raise ValueError("tolerances must be non-negative")
+
+        if a == b:
+            # Short circuit exact equality + handle
+            # infinities
+            return True
+
+        if math.isinf(a) or math.isinf(b):
+            return False
+
+        diff = math.fabs(b - a)
+
+        return (((diff <= math.fabs(rel_tol * b)) or (diff <= math.fabs(rel_tol * a))) or (diff <= abs_tol))
+
+    return impl
