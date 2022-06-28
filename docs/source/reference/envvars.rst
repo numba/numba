@@ -86,7 +86,7 @@ These variables influence what is printed out during compilation of
 
     - ``"old_style"`` (default): this is the exception handling behaviour that
       is present in Numba versions <= 0.54.x. Numba will capture and wrap all
-      errors occuring in compilation and depending on the compilation phase they
+      errors occurring in compilation and depending on the compilation phase they
       will likely materialize as part of the message in a ``TypingError`` or a
       ``LoweringError``.
     - ``"new_style"`` this will treat any exception that does not inherit from

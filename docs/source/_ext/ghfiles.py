@@ -61,7 +61,7 @@ def ghfile_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
         node = nodes.reference(rawtext, text, refuri=make_ref(text), **options)
         my_nodes.append(node)
 
-    # insert seperators if needed
+    # insert separators if needed
     if len(my_nodes) > 1:
         my_nodes = intersperse(my_nodes, nodes.Text(" | "))
     return my_nodes, []

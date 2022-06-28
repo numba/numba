@@ -491,7 +491,7 @@ def _parse_nested_sequence(context, typ):
         return n + 1, dtype
     elif isinstance(typ, (types.BaseTuple,)):
         if typ.count == 0:
-            # Mimick Numpy's behaviour
+            # Mimic Numpy's behaviour
             return 1, types.float64
         n, dtype = _parse_nested_sequence(context, typ[0])
         dtypes = [dtype]

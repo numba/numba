@@ -648,7 +648,7 @@ class TestDebugInfoEmission(TestCase):
             must_not_have_attrs=set(),
         )
         expected_info[foo_debug_optnone_inline] = dict(
-            # optnone=True is overriden by forceinline, so this looks like the
+            # optnone=True is overridden by forceinline, so this looks like the
             # foo_debug version
             lines={0, firstline + 5},
             must_have_attrs=set([b"alwaysinline"]),

@@ -2368,7 +2368,7 @@ class TestUnicode(BaseTest):
 
         with self.assertRaises(TypingError) as raises:
             cfunc('ababababab', 'ba', 'qqq', 3.5)
-        msg = 'Unsupported parameters. The parametrs must be Integer.'
+        msg = 'Unsupported parameters. The parameters must be Integer.'
         self.assertIn(msg, str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:

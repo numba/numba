@@ -734,7 +734,7 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
         width = types.intp.bitwidth
         def gen_func(shape, dtype):
             return lambda : pyfunc(shape, dtype)
-        # Under these values numba will segfault, but thats another issue
+        # Under these values numba will segfault, but that's another issue
         self.check_alloc_size(gen_func(1 << width - 2, np.intp))
         self.check_alloc_size(gen_func((1 << width - 8, 64), np.intp))
 
@@ -859,7 +859,7 @@ class TestNdFull(ConstructorBaseTest, TestCase):
         width = types.intp.bitwidth
         def gen_func(shape, value):
             return lambda : np.full(shape, value)
-        # Under these values numba will segfault, but thats another issue
+        # Under these values numba will segfault, but that's another issue
         self.check_alloc_size(gen_func(1 << width - 2, 1))
         self.check_alloc_size(gen_func((1 << width - 8, 64), 1))
 
