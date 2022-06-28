@@ -266,8 +266,6 @@ Pull-Requests:
 * PR `#8196 <https://github.com/numba/numba/pull/8196>`_: Fix numerical tolerance in parfors caching test. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8197 <https://github.com/numba/numba/pull/8197>`_: Fix `isinstance` warning check test. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 
-Total PRs: 159
-
 Authors:
 
 * `Andre Masella <https://github.com/apmasell>`_
@@ -304,8 +302,6 @@ Authors:
 * `Stepan Rakitin <https://github.com/svrakitin>`_
 * `Michael Collison <https://github.com/testhound>`_
 * `Tingkai Liu <https://github.com/TK-21st>`_
-
-Total authors: 34
 
 Version 0.55.2 (25 May, 2022)
 -----------------------------
