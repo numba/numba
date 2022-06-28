@@ -140,6 +140,12 @@ VISIBILITY_HIDDEN
 NRT_MemInfo* NRT_MemInfo_alloc_dtor_safe(size_t size, NRT_dtor_function dtor);
 
 /*
+ * Similar to NRT_MemInfo_alloc but with a custom dtor.
+ */
+VISIBILITY_HIDDEN
+NRT_MemInfo* NRT_MemInfo_alloc_dtor(size_t size, NRT_dtor_function dtor);
+
+/*
  * Aligned versions of the NRT_MemInfo_alloc and NRT_MemInfo_alloc_safe.
  * These take an additional argument `align` for number of bytes to align to.
  */
