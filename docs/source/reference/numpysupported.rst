@@ -615,13 +615,22 @@ execution logic.
 The following :py:class:`Generator` methods are supported:
 
 * :func:`numpy.random.Generator().exponential()`
-* :func:`numpy.random.Generator().gamma()`
-* :func:`numpy.random.Generator().normal()`
+* :func:`numpy.random.Generator().gamma()`*
+* :func:`numpy.random.Generator().normal()`*
 * :func:`numpy.random.Generator().random()`
 * :func:`numpy.random.Generator().standard_normal()`
 * :func:`numpy.random.Generator().standard_exponential()`
-* :func:`numpy.random.Generator().standard_gamma()`
-* :func:`numpy.random.Generator().uniform()`
+* :func:`numpy.random.Generator().standard_gamma()`*
+* :func:`numpy.random.Generator().uniform()`*
+
+.. note::
+  Users can expect Numba to be bit accurate with Numpy within
+  the last few (at max 5) ULPs for Linux, Windows and macOS.
+
+  For distributions marked above with `*`: Due to certain compiler
+  technicalities, there might be discrepanies of order of 1000 ULPs
+  on 32-bit, Aarch and ppc64le distributions for Linux.
+  For more details, `see the comment here <https://github.com/numba/numba/pull/8038#issuecomment-1165571368>`
 
 RandomState and legacy Random number generation
 '''''''''''''''''''''''''''''''''''''''''''''''

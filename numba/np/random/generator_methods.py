@@ -60,6 +60,22 @@ def check_size(size):
                           " an integer, an empty tuple or a tuple of integers")
 
 
+def check_types(obj, type_list, arg_name):
+    """
+    Check if given object is one of the provided types.
+    If not raises an TypeError
+    """
+    if isinstance(obj, types.Omitted):
+        obj = obj.value
+
+    if not isinstance(type_list, (list, tuple)):
+        type_list = [type_list]
+
+    if not any([isinstance(obj, _type) for _type in type_list]):
+        raise TypingError(f"Argument {arg_name} is not one of the" +
+                          f" expected type(s): {type_list}")
+
+
 # Overload the Generator().random()
 @overload_method(types.NumPyRandomGeneratorType, 'random')
 def NumPyRandomGeneratorType_random(inst, size=None, dtype=np.float64):
@@ -88,7 +104,7 @@ def NumPyRandomGeneratorType_random(inst, size=None, dtype=np.float64):
 def NumPyRandomGeneratorType_standard_exponential(inst, size=None,
                                                   dtype=np.float64,
                                                   method='zig'):
-
+    check_types(method, [types.UnicodeType, str], 'method')
     dist_func_inv, nb_dt = _get_proper_func(
         random_standard_exponential_inv_f,
         random_standard_exponential_inv,
@@ -156,6 +172,7 @@ def NumPyRandomGeneratorType_standard_normal(inst, size=None, dtype=np.float64):
 @overload_method(types.NumPyRandomGeneratorType, 'standard_gamma')
 def NumPyRandomGeneratorType_standard_gamma(inst, shape, size=None,
                                             dtype=np.float64):
+    check_types(shape, [types.Float, types.Integer, int, float], 'shape')
     dist_func, nb_dt = _get_proper_func(random_standard_gamma_f,
                                         random_standard_gamma,
                                         dtype)
@@ -181,6 +198,8 @@ def NumPyRandomGeneratorType_standard_gamma(inst, shape, size=None,
 @overload_method(types.NumPyRandomGeneratorType, 'normal')
 def NumPyRandomGeneratorType_normal(inst, loc=0.0, scale=1.0,
                                     size=None):
+    check_types(loc, [types.Float, types.Integer, int, float], 'loc')
+    check_types(scale, [types.Float, types.Integer, int, float], 'scale')
     if isinstance(size, types.Omitted):
         size = size.value
 
@@ -203,6 +222,8 @@ def NumPyRandomGeneratorType_normal(inst, loc=0.0, scale=1.0,
 @overload_method(types.NumPyRandomGeneratorType, 'uniform')
 def NumPyRandomGeneratorType_uniform(inst, low=0.0, high=1.0,
                                      size=None):
+    check_types(low, [types.Float, types.Integer, int, float], 'low')
+    check_types(high, [types.Float, types.Integer, int, float], 'high')
     if isinstance(size, types.Omitted):
         size = size.value
 
@@ -224,7 +245,7 @@ def NumPyRandomGeneratorType_uniform(inst, low=0.0, high=1.0,
 # Overload the Generator().exponential() method
 @overload_method(types.NumPyRandomGeneratorType, 'exponential')
 def NumPyRandomGeneratorType_exponential(inst, scale=1.0, size=None):
-
+    check_types(scale, [types.Float, types.Integer, int, float], 'scale')
     if isinstance(size, types.Omitted):
         size = size.value
 
@@ -246,7 +267,8 @@ def NumPyRandomGeneratorType_exponential(inst, scale=1.0, size=None):
 # Overload the Generator().gamma() method
 @overload_method(types.NumPyRandomGeneratorType, 'gamma')
 def NumPyRandomGeneratorType_gamma(inst, shape, scale=1.0, size=None):
-
+    check_types(shape, [types.Float, types.Integer, int, float], 'shape')
+    check_types(scale, [types.Float, types.Integer, int, float], 'scale')
     if isinstance(size, types.Omitted):
         size = size.value
 

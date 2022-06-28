@@ -16,9 +16,9 @@ from numba.tests.support import run_in_new_process_caching, SerialMixin
 # The following logic is to mitigate:
 # https://github.com/numba/numba/pull/8038#issuecomment-1165571368
 if IS_32BITS or platform.machine() in ['ppc64le', 'aarch64']:
-    ulp_prec = 2048
+    adjusted_ulp_prec = 2048
 else:
-    ulp_prec = 5
+    adjusted_ulp_prec = 5
 
 
 class TestHelperFuncs(TestCase):
@@ -38,11 +38,25 @@ class TestHelperFuncs(TestCase):
         self.assertEqual(_get_proper_func(test_32bit_func, test_64bit_func,
                          types.float32)[0](), 32)
 
-        # With any other datatype it should return a TypeError
+        # With any other datatype it should return a TypingError
         with self.assertRaises(TypingError) as raises:
             _get_proper_func(test_32bit_func, test_64bit_func, np.int32)
         self.assertIn(
             'Unsupported dtype int32 for the given distribution',
+            str(raises.exception)
+        )
+
+    def test_check_types(self):
+        rng = np.random.default_rng(1)
+        py_func = lambda x: x.normal(loc=(0,))
+        numba_func = numba.njit(cache=True)(py_func)
+        with self.assertRaises(TypingError) as raises:
+            numba_func(rng)
+        self.assertIn(
+            'Argument loc is not one of the expected type(s): '
+            + '[<class \'numba.core.types.scalars.Float\'>, '
+            + '<class \'numba.core.types.scalars.Integer\'>, '
+            + '<class \'int\'>, <class \'float\'>]',
             str(raises.exception)
         )
 
@@ -58,7 +72,8 @@ def test_generator_caching():
 class TestRandomGenerators(MemoryLeakMixin, TestCase):
     def check_numpy_parity(self, distribution_func,
                            bitgen_type=None, seed=None,
-                           test_size=None, test_dtype=None):
+                           test_size=None, test_dtype=None,
+                           ulp_prec=5):
 
         distribution_func = numba.njit(distribution_func)
         if seed is None:
@@ -220,7 +235,8 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                     with self.subTest(_size=_size, _dtype=_dtype,
                                       _bitgen=_bitgen):
                         self.check_numpy_parity(dist_func, _bitgen,
-                                                None, _size, _dtype)
+                                                None, _size, _dtype,
+                                                adjusted_ulp_prec)
 
     def test_normal(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
@@ -233,14 +249,16 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         dist_func = lambda x, size, dtype:x.normal()
         with self.subTest():
             self.check_numpy_parity(dist_func, test_size=None,
-                                    test_dtype=None)
+                                    test_dtype=None,
+                                    ulp_prec=adjusted_ulp_prec)
 
         dist_func = lambda x, size, dtype:x.normal(loc=1.5, scale=3, size=size)
         for _size in test_sizes:
             for _bitgen in bitgen_types:
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
-                                            None, _size, None)
+                                            None, _size, None,
+                                            adjusted_ulp_prec)
 
     def test_uniform(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
@@ -253,14 +271,16 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         dist_func = lambda x, size, dtype:x.uniform()
         with self.subTest():
             self.check_numpy_parity(dist_func, test_size=None,
-                                    test_dtype=None)
+                                    test_dtype=None,
+                                    ulp_prec=adjusted_ulp_prec)
 
         dist_func = lambda x, size, dtype:x.uniform(low=1.5, high=3, size=size)
         for _size in test_sizes:
             for _bitgen in bitgen_types:
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
-                                            None, _size, None)
+                                            None, _size, None,
+                                            adjusted_ulp_prec)
 
     def test_exponential(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
@@ -295,7 +315,8 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             for _bitgen in bitgen_types:
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
-                                            None, _size, None)
+                                            None, _size, None,
+                                            adjusted_ulp_prec)
 
 
 class TestGeneratorCaching(TestCase, SerialMixin):
