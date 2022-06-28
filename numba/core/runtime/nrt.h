@@ -49,6 +49,13 @@ VISIBILITY_HIDDEN
 void NRT_MemSys_set_allocator(NRT_malloc_func, NRT_realloc_func, NRT_free_func);
 
 /*
+ * Enable the internal statistics counters.
+ */
+VISIBILITY_HIDDEN
+void NRT_MemSys_enable_stats(void);
+
+
+/*
  * The following functions get internal statistics of the memory subsystem.
  */
 VISIBILITY_HIDDEN

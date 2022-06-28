@@ -16,6 +16,8 @@ set NUMBA_DEVELOPER_MODE=1
 set PYTHONFAULTHANDLER=1
 @rem enable new style error handling
 set NUMBA_CAPTURED_ERRORS=new_style
+@rem switch on NRT stats
+set NUMBA_NRT_STATS=1
 
 @rem First check that the test discovery works
 python -m numba.tests.test_runtests

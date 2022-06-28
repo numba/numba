@@ -24,7 +24,8 @@ import numba.core.typing.cffi_utils as cffi_support
 from numba.core.unsafe.nrt import NRT_get_api
 
 from numba.tests.support import (MemoryLeakMixin, TestCase, temp_directory,
-                                 import_dynamic, skip_if_32bit)
+                                 import_dynamic, skip_if_32bit,
+                                 run_in_subprocess)
 from numba.core.registry import cpu_target
 import unittest
 
@@ -690,6 +691,49 @@ NRT_MemInfo* test_nrt_api(NRT_api_functions *nrt, size_t n) {
         expect = int(ffi.cast('size_t', self.get_nrt_api_table()))
         got = test_nrt_api()
         self.assertEqual(expect, got)
+
+
+class TestNrtStatistics(MemoryLeakMixin, TestCase):
+
+    def check_stats(self, stats_on):
+
+        _DISABLED_STATS_VALUE = 0x41414141 # see nrt.cpp, must be kept in sync
+
+        src = f"""if 1:
+        from numba import njit
+        import numpy as np
+        from numba.core.runtime import rtsys
+
+        @njit
+        def foo():
+            return np.arange(10)[0]
+
+        orig_stats = rtsys.get_allocation_stats()
+        foo()
+        new_stats = rtsys.get_allocation_stats()
+        total_alloc = new_stats.alloc - orig_stats.alloc
+        total_free = new_stats.free - orig_stats.free
+        total_mi_alloc = new_stats.mi_alloc - orig_stats.mi_alloc
+        total_mi_free = new_stats.mi_free - orig_stats.mi_free
+
+        expected = int({stats_on})
+        assert total_alloc == expected
+        assert total_free == expected
+        assert total_mi_alloc == expected
+        assert total_mi_free == expected
+        if not {stats_on}: # if stats are off, check default values persist
+            assert new_stats.alloc == {_DISABLED_STATS_VALUE}
+            assert new_stats.mi_alloc == {_DISABLED_STATS_VALUE}
+        """
+        env = os.environ.copy()
+        env['NUMBA_NRT_STATS'] = str(int(stats_on))
+        run_in_subprocess(src, env=env)
+
+    def test_stats_on(self):
+        self.check_stats(True)
+
+    def test_stats_off(self):
+        self.check_stats(False)
 
 
 if __name__ == '__main__':

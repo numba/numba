@@ -5,6 +5,7 @@ set -e
 export NUMBA_DEVELOPER_MODE=1
 export NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING=1
 export NUMBA_CAPTURED_ERRORS="new_style"
+export NUMBA_NRT_STATS=1
 export PYTHONFAULTHANDLER=1
 
 # Disable NumPy dispatching to AVX512_SKX feature extensions if the chip is
