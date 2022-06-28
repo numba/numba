@@ -265,6 +265,7 @@ Pull-Requests:
 * PR `#8195 <https://github.com/numba/numba/pull/8195>`_: Make the workqueue threading backend once again fork safe. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8196 <https://github.com/numba/numba/pull/8196>`_: Fix numerical tolerance in parfors caching test. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8197 <https://github.com/numba/numba/pull/8197>`_: Fix `isinstance` warning check test. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8203 <https://github.com/numba/numba/pull/8203>`_: pin llvmlite 0.39 for public CI builds (`esc <https://github.com/esc>`_)
 
 Authors:
 
