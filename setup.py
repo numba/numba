@@ -106,6 +106,11 @@ class NumbaBuildExt(build_ext):
 
         super().run()
 
+    def build_extensions(self):
+        if not sys.platform.startswith('win'):
+            self.compiler.compiler_cxx.append('-std=c++11')
+        super().build_extensions()
+
 
 cmdclass['build_ext'] = NumbaBuildExt
 
@@ -148,7 +153,6 @@ def get_ext_modules():
                                 depends=['numba/_pymodule.h',
                                          'numba/_devicearray.h'],
                                 include_dirs=['numba'],
-                                extra_compile_args=['-std=c++11'],
                                 )
 
     ext_dynfunc = Extension(name='numba._dynfunc',
@@ -235,11 +239,9 @@ def get_ext_modules():
     # Set various flags for use in TBB and openmp. On OSX, also find OpenMP!
     have_openmp = True
     if sys.platform.startswith('win'):
-        cpp11flags = []
         ompcompileflags = ['-openmp']
         omplinkflags = []
     elif sys.platform.startswith('darwin'):
-        cpp11flags = ['-std=c++11']
         # This is a bit unusual but necessary...
         # llvm (clang) OpenMP is used for headers etc at compile time
         # Intel OpenMP (libiomp5) provides the link library.
@@ -251,7 +253,6 @@ def get_ext_modules():
         omppath = ['lib', 'clang', '*', 'include', 'omp.h']
         have_openmp = check_file_at_path(omppath)
     else:
-        cpp11flags = ['-std=c++11']
         ompcompileflags = ['-fopenmp']
         if platform.machine() == 'ppc64le':
             omplinkflags = ['-fopenmp']
@@ -277,7 +278,6 @@ def get_ext_modules():
                 ],
                 depends=['numba/np/ufunc/workqueue.h'],
                 include_dirs=[os.path.join(tbb_root, 'include')],
-                extra_compile_args=cpp11flags,
                 libraries=['tbb'],  # TODO: if --debug or -g, use 'tbb_debug'
                 library_dirs=[
                     # for Linux
@@ -305,7 +305,7 @@ def get_ext_modules():
                 'numba/np/ufunc/gufunc_scheduler.cpp',
             ],
             depends=['numba/np/ufunc/workqueue.h'],
-            extra_compile_args=ompcompileflags + cpp11flags,
+            extra_compile_args=ompcompileflags,
             extra_link_args=omplinkflags,
         )
 
