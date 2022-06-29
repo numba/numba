@@ -6,6 +6,13 @@ We welcome people who want to make contributions to Numba, big or small!
 Even simple documentation improvements are encouraged.  If you have
 questions, don't hesitate to ask them (see below).
 
+Quick links for how you can help with the Numba project...
+
+* Contribute a patch (see: :ref:`getting set up <getting_set_up>`).
+* Review a patch (see:
+  :ref:`reviewing pull requests <reviewing_pull_requests>`).
+* Answer questions for other users on the discussion forum (see:
+  :ref:`Numba's discussion forum <discourse_forum>`).
 
 Communication
 -------------
@@ -27,6 +34,8 @@ developers to keep up with.
 
 Note that the Github issue tracker is the best place to report bugs.  Bug
 reports in chat are difficult to track and likely to be lost.
+
+.. _discourse_forum:
 
 Forum
 .....
@@ -61,6 +70,9 @@ please include specifics:
   results you are getting;
 * as far as possible, a code snippet that allows full reproduction of your
   problem.
+
+
+.. _getting_set_up:
 
 Getting set up
 --------------
@@ -240,8 +252,8 @@ Development rules
 Code reviews
 ''''''''''''
 
-Any non-trivial change should go through a code review by one or several of
-the core developers.  The recommended process is to submit a pull request
+All changes will go through a code review undertaken by the Numba community,
+including core developers. The recommended process is to submit a pull request
 on github.
 
 A code review should try to assess the following criteria:
@@ -251,6 +263,11 @@ A code review should try to assess the following criteria:
 * coding conventions
 * docstrings, comments
 * test coverage
+
+Some standard check lists for reviewing code are available
+:ref:`here <reviewing_pull_requests>`, consider developing your patch with the
+review criteria in mind!
+
 
 Coding conventions
 ''''''''''''''''''
@@ -421,6 +438,145 @@ as to free up core developer time. Examples of ways to help:
   and/or `gitter.im <https://gitter.im/numba/numba>`_.
 
 The core developers thank everyone for their understanding with the above!
+
+.. _reviewing_pull_requests:
+
+Reviewing Pull Requests
+-----------------------
+
+Help with reviewing pull requests is welcomed. There are time-effort categorised
+review tasks available on this project board: **TODO: ADD LINK**.
+
+Below are some check lists to help with reviewing pull requests that are adding,
+or altering, an implementation of some functionality e.g. adding a new NumPy
+function or updating some Python built-in. Consider selecting the check list
+appropriate to your use case and copying it into the issue as a comment, you can
+then check off the boxes as you go. Note that these check lists are a guide,
+are not exhaustive, and some parts may not always be applicable!
+
+NumPy addition/change review check list::
+
+    I have checked that:
+
+    * [ ] There is no other Pull Request proposing the same change. (If there is
+          please highlight this and one of the core developers will pick it up.)
+    * [ ] The proposed additional NumPy functionality is not deprecated by
+          NumPy.
+    * [ ] Public CI is passing.
+    * [ ] The patch does not touch files in `numba.core`.
+    * [ ] The patch is implemented using the high-level extension API only
+          (https://numba.readthedocs.io/en/stable/extending/high-level.html).
+    * [ ] The patch updates the documentation to reflect the new functionality.
+          (https://github.com/numba/numba/blob/main/docs/source/reference/numpysupported.rst)
+    * [ ] The patch is line wrapped to 80 characters.
+    * [ ] Changes to Python source in the patch are `flake8` compliant.
+    * [ ] The implementation of the NumPy function reflects that present in the
+        NumPy implementation itself (look in the NumPy repository:
+          https://github.com/numpy/numpy)...
+        * [ ] The implementation has references to the region of the NumPy code
+              base that provides the same functionality. The references are URLs
+              of the form:
+              `https://github.com/numpy/numpy/tree/<SHA>/path/to/file.py:#<lines>`
+        * [ ] The code "looks" reasonably similar to the NumPy implementation.
+        * [ ] The code uses the same algorithm as the NumPy implementation, if
+              it does not it explains why and this justification is reasonable.
+        * [ ] The type inference part of the Numba implementation restricts the
+              types to those declared in the NumPy docs (or if not present, what
+              is accepted in the NumPy implementation itself).
+        * [ ] The Numba implementation uses the same variable names for
+              arguments as in the NumPy implementation.
+        * [ ] The Numba code has commentary present for anything not-obvious by
+              inspection.
+        * [ ] The Numba code accommodates differences that might occur across
+              different NumPy versions in a clear fashion and uses
+              `numba.np.numpy_support.numpy_version` to separate the difference
+              in implementations.
+    * [ ] The unit tests for the implementation:
+        * [ ] Use the same test inputs as the NumPy unit tests for the same
+              functionality. If this is not the case there are comments which
+              explain why and this justification is reasonable.
+        * [ ] The NumPy unit test inputs have reference URLs associated with
+              them to track their origin. The references are URLs of the form:
+              `https://github.com/numpy/numpy/tree/<SHA>/path/to/file.py:#<lines>`
+        * [ ] Use `unittest` style assertions (not pytest style!).
+        * [ ] Check that unsupported/invalid input types are handled as expected
+              using the `with self.assertRaises()` pattern.
+        * [ ] Explicitly check custom error messages are raised appropriately.
+        * [ ] Hit all the branches of the proprosed change (both at type
+              inference and run time).
+        * [ ] Check that numerically awkward values work as expected e.g.
+              `NaN`, `+/-Inf`, `0`, `INT_MAX`, `INT_MIN` etc.
+        * [ ] Check that types which can be converted to arrays (assuming NumPy
+              accepts this behaviour) work as expected.
+        * [ ] Check that passing empty versions of containers e.g. empty tuple
+              or 0d array works as expected.
+    * [ ] The patch works in a simple manual test in my local checkout.
+    * [ ] I cannot break the code in the patch in my local checkout after
+          trying to do so for a minimum of 10 minutes. The error messages seem
+          reasonable and there are no "incorrect" results.
+    * [ ] I think the code introduced in this change is easy to maintain.
+    * [ ] I understand all the code in this PR.
+
+Python support addition/change review check list::
+
+    I have checked that:
+
+    * [ ] There is no other Pull Request proposing the same change. (If there is
+          please highlight this and one of the core developers will pick it up.)
+    * [ ] The proposed additional Python functionality is not deprecated by
+          Python.
+    * [ ] Public CI is passing.
+    * [ ] The patch does not touch files in `numba.core`.
+    * [ ] The patch is implemented using the high-level extension API only
+          (https://numba.readthedocs.io/en/stable/extending/high-level.html).
+    * [ ] The patch updates the documentation to reflect the new functionality.
+          (https://github.com/numba/numba/blob/main/docs/source/reference/pysupported.rst)
+    * [ ] The patch is line wrapped to 80 characters.
+    * [ ] Changes to Python source in the patch are `flake8` compliant.
+    * [ ] The implementation of the Python function reflects that present in the
+          Python implementation itself (look in the Python repository:
+          https://github.com/python/cpython)...
+        * [ ] The implementation has references to the region of the Python code
+              base that provides the same functionality. The references are URLs
+              of the form:
+              `https://github.com/python/cpython/tree/<SHA>/path/to/file.py:#<lines>`
+        * [ ] The code "looks" reasonably similar to the Python implementation.
+        * [ ] The code uses the same algorithm as the Python implementation, if
+              it does not it explains why and this justification is reasonable.
+        * [ ] The type inference part of the Numba implementation restricts the
+              types to those declared in the Python docs (or if not present,
+              what is accepted in the Python implementation itself).
+        * [ ] The Numba implementation uses the same variable names for
+              arguments as in the Python implementation.
+        * [ ] The Numba code has commentary present for anything not-obvious by
+              inspection.
+        * [ ] The Numba code accommodates differences that might occur across
+              different Python versions in a clear fashion and uses
+              `numba.core.utils.PYVERSION` to separate the difference in
+              implementations.
+    * [ ] The unit tests for the implementation:
+        * [ ] Use the same test inputs as the Python unit tests for the same
+              functionality. If this is not the case there are comments which
+              explain why and this justification is reasonable.
+        * [ ] The Python unit test inputs have reference URLs associated with
+              them to track their origin. The references are URLs of the form:
+              `https://github.com/python/cpython/tree/<SHA>/path/to/file.py:#<lines>`
+        * [ ] Use `unittest` style assertions (not pytest style!).
+        * [ ] Check that unsupported/invalid input types are handled as expected
+              using the `with self.assertRaises()` pattern.
+        * [ ] Explicitly check custom error messages are raised appropriately.
+        * [ ] Hit all the branches of the proprosed change (both at type
+              inference and run time).
+        * [ ] Check that numerically awkward values work as expected e.g.
+              `NaN`, `+/-Inf`, `0`, `INT_MAX`, `INT_MIN` etc.
+        * [ ] Check that passing empty versions of containers e.g. empty tuple
+              or 0d array works as expected.
+    * [ ] The patch works in a simple manual test in my local checkout.
+    * [ ] I cannot break the code in the patch in my local checkout after
+          trying to do so for a minimum of 10 minutes. The error messages seem
+          reasonable and there are no "incorrect" results.
+    * [ ] I think the code introduced in this change is easy to maintain.
+    * [ ] I understand all the code in this PR.
 
 Documentation
 -------------
