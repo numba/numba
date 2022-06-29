@@ -300,7 +300,8 @@ class BaseFunction(Callable):
                                      for temp, _ in matched)
             if not order_by_typeclass:
                 # Not specializing. Old-logic returns first match
-                _temp, sig = matched[0]
+                temp, sig = matched[0]
+                self._impl_keys[sig.args] = temp.get_impl_key(sig)
             else:
                 # Specializing. New-logic select the best match.
                 _temp, sig = self._select_best_impl_for(matched)
