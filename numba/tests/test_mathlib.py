@@ -1,4 +1,3 @@
-from functools import cached_property
 import itertools
 import math
 import sys
@@ -810,8 +809,9 @@ class TestMathLib(TestCase):
 
 class IsCloseTests(TestCase):
     # Tests for math.isclose that are copied from CPython
+    # https://github.com/python/cpython/blob/56310136170ef6653cb050f58dd2d32538997f59/Lib/test/test_math.py#L2122-L2242
 
-    @cached_property
+    @property
     def isclose(self):
         return njit(isclose)
 

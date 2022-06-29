@@ -456,6 +456,8 @@ lower(math.gcd, types.Integer, types.Integer)(gcd_impl)
 
 @overload(math.isclose)
 def math_isclose(a, b, rel_tol=1e-09, abs_tol=0.0):
+    # Implementation is derived from CPython
+    # https://github.com/python/cpython/blob/6485c3c7267eeb4095530af474c43f1244cb492b/Modules/mathmodule.c#L3023
 
     if not isinstance(a, (types.Float, types.Integer)):
         raise TypingError(

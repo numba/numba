@@ -1067,6 +1067,7 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.gamma`
 * :func:`math.gcd`
 * :func:`math.hypot`
+* :func:`math.isclose`
 * :func:`math.isfinite`
 * :func:`math.isinf`
 * :func:`math.isnan`
