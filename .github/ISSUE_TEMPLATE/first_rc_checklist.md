@@ -34,7 +34,7 @@ labels: task
 ### Post Release:
 
 * [ ] Clean up `ci_artifacts` by moving files to sub-directories
-* [ ] Tag X.Y+1.0dev0 to start new development cycle on `main`.
+* [ ] Tag `X.Y+1.0dev0` to start new development cycle on `main`.
 * [ ] Update llvmlite dependency via PR to `main`, PR includes version updates
       to:
   * [ ] `setup.py`
