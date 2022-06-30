@@ -323,7 +323,7 @@ class BaseFunction(Callable):
             spec_types = [sig.impl_for for _, sig in specialized]
             # Validate the signatures. All impl_for must have a common ancestry.
             _, shortest_mro = min(zip(map(lambda x: len(x.__mro__), spec_types),
-                                  spec_types))
+                                  spec_types), key=lambda x: x[0])
             common_ancestry = shortest_mro.__mro__
             for spec_ty in spec_types:
                 if spec_ty.__mro__[-len(common_ancestry):] != common_ancestry:
