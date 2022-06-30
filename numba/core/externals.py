@@ -51,7 +51,7 @@ def compile_multi3(context):
     bb = fn.append_basic_block()
     builder = ir.IRBuilder(bb)
 
-    # This implementation mimicks compiler-rt's.
+    # This implementation mimics compiler-rt's.
     al = builder.trunc(a, i64)
     bl = builder.trunc(b, i64)
     ah = builder.trunc(builder.ashr(a, _64), i64)

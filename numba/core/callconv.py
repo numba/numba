@@ -297,6 +297,9 @@ class _MinimalCallHelper(object):
 
     def _add_exception(self, exc, exc_args, locinfo):
         """
+        Add a new user exception to this helper. Returns an integer that can be
+        used to refer to the added exception in future.
+
         Parameters
         ----------
         exc :
@@ -311,11 +314,23 @@ class _MinimalCallHelper(object):
         return exc_id
 
     def get_exception(self, exc_id):
+        """
+        Get information about a user exception. Returns a tuple of
+        (exception type, exception args, location information).
+
+        Parameters
+        ----------
+        id : integer
+            The ID of the exception to look up
+        """
         try:
             return self.exceptions[exc_id]
         except KeyError:
             msg = "unknown error %d in native function" % exc_id
-            return SystemError, (msg,)
+            exc = SystemError
+            exc_args = (msg,)
+            locinfo = None
+            return exc, exc_args, locinfo
 
 # The structure type constructed by PythonAPI.serialize_uncached()
 # i.e a {i8* pickle_buf, i32 pickle_bufsz, i8* hash_buf}

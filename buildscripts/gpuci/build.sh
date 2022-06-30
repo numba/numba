@@ -16,8 +16,8 @@ cd "$WORKSPACE"
 # Determine CUDA release version
 export CUDA_REL=${CUDA_VERSION%.*}
 
-# Test with NVIDIA Bindings on CUDA 11.4
-if [ $CUDA_TOOLKIT_VER == "11.4" ]
+# Test with NVIDIA Bindings on CUDA 11.5
+if [ $CUDA_TOOLKIT_VER == "11.5" ]
 then
   export NUMBA_CUDA_USE_NVIDIA_BINDING=1;
 else

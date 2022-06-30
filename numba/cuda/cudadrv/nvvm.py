@@ -132,19 +132,7 @@ class NVVM(object):
 
                 # Find & populate functions
                 for name, proto in inst._PROTOTYPES.items():
-                    try:
-                        func = getattr(inst.driver, name)
-                    except AttributeError:
-                        # CUDA 9.2 has no nvvmLazyAddModuleToProgram, but
-                        # nvvmAddModuleToProgram fulfils the same function,
-                        # just less efficiently, so we work around this here.
-                        # This workaround to be removed once support for CUDA
-                        # 9.2 is dropped.
-                        if name == 'nvvmLazyAddModuleToProgram':
-                            func = getattr(inst.driver,
-                                           'nvvmAddModuleToProgram')
-                        else:
-                            raise
+                    func = getattr(inst.driver, name)
                     func.restype = proto[0]
                     func.argtypes = proto[1:]
                     setattr(inst, name, func)
@@ -329,13 +317,11 @@ class CompilationUnit(object):
         return ''
 
 
-data_layout = {
-    32: ('e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-'
-         'f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64'),
-    64: ('e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-'
-         'f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64')}
+data_layout = (
+    'e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-'
+    'f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64'
+)
 
-default_data_layout = data_layout[tuple.__itemsize__ * 8]
 
 _supported_cc = None
 
@@ -348,35 +334,44 @@ def get_supported_ccs():
 
     try:
         from numba.cuda.cudadrv.runtime import runtime
-        cudart_version_major, cudart_version_minor = runtime.get_version()
+        cudart_version = runtime.get_version()
     except: # noqa: E722
         # The CUDA Runtime may not be present
-        cudart_version_major = 0
-        cudart_version_minor = 0
+        cudart_version = (0, 0)
 
-    ctk_ver = f"{cudart_version_major}.{cudart_version_minor}"
+    ctk_ver = f"{cudart_version[0]}.{cudart_version[1]}"
     unsupported_ver = f"CUDA Toolkit {ctk_ver} is unsupported by Numba - " \
-                      + "9.2 is the minimum required version."
+                      + "10.2 is the minimum required version."
 
     # List of supported compute capability in sorted order
-    if cudart_version_major == 0:
+    if cudart_version == (0, 0):
         _supported_cc = ()
-    elif cudart_version_major < 9:
+    elif cudart_version == (10, 2):
+        _supported_cc = ((3, 5), (3, 7),
+                         (5, 0), (5, 2), (5, 3),
+                         (6, 0), (6, 1), (6, 2),
+                         (7, 0), (7, 2), (7, 5))
+    elif cudart_version == (11, 0):
+        _supported_cc = ((3, 5), (3, 7),
+                         (5, 0), (5, 2), (5, 3),
+                         (6, 0), (6, 1), (6, 2),
+                         (7, 0), (7, 2), (7, 5),
+                         (8, 0))
+    elif cudart_version > (11, 0):
+        _supported_cc = ((3, 5), (3, 7),
+                         (5, 0), (5, 2), (5, 3),
+                         (6, 0), (6, 1), (6, 2),
+                         (7, 0), (7, 2), (7, 5),
+                         (8, 0), (8, 6))
+    elif cudart_version > (11, 4):
+        _supported_cc = ((3, 5), (3, 7),
+                         (5, 0), (5, 2), (5, 3),
+                         (6, 0), (6, 1), (6, 2),
+                         (7, 0), (7, 2), (7, 5),
+                         (8, 0), (8, 6), (8, 7))
+    else:
         _supported_cc = ()
         warnings.warn(unsupported_ver)
-    elif cudart_version_major == 9:
-        if cudart_version_minor != 2:
-            _supported_cc = ()
-            warnings.warn(unsupported_ver)
-        else:
-            # CUDA 9.2
-            _supported_cc = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0) # noqa: E501
-    elif cudart_version_major == 10:
-        # CUDA 10.x
-        _supported_cc = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5) # noqa: E501
-    else:
-        # CUDA 11.0 and later
-        _supported_cc = (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5), (8, 0) # noqa: E501
 
     return _supported_cc
 
@@ -425,8 +420,8 @@ def get_arch_option(major, minor):
     return 'compute_%d%d' % arch
 
 
-MISSING_LIBDEVICE_FILE_MSG = '''Missing libdevice file for {arch}.
-Please ensure you have package cudatoolkit >= 9.
+MISSING_LIBDEVICE_FILE_MSG = '''Missing libdevice file.
+Please ensure you have package cudatoolkit >= 10.2
 Install package by:
 
     conda install cudatoolkit
@@ -434,33 +429,15 @@ Install package by:
 
 
 class LibDevice(object):
-    _cache_ = {}
-    _known_arch = [
-        "compute_20",
-        "compute_30",
-        "compute_35",
-        "compute_50",
-    ]
+    _cache_ = None
 
-    def __init__(self, arch):
-        """
-        arch --- must be result from get_arch_option()
-        """
-        if arch not in self._cache_:
-            arch = self._get_closest_arch(arch)
-            if get_libdevice(arch) is None:
-                raise RuntimeError(MISSING_LIBDEVICE_FILE_MSG.format(arch=arch))
-            self._cache_[arch] = open_libdevice(arch)
+    def __init__(self):
+        if self._cache_ is None:
+            if get_libdevice() is None:
+                raise RuntimeError(MISSING_LIBDEVICE_FILE_MSG)
+            self._cache_ = open_libdevice()
 
-        self.arch = arch
-        self.bc = self._cache_[arch]
-
-    def _get_closest_arch(self, arch):
-        res = self._known_arch[0]
-        for potential in self._known_arch:
-            if arch >= potential:
-                res = potential
-        return res
+        self.bc = self._cache_
 
     def get(self):
         return self.bc
@@ -614,7 +591,7 @@ def _replace_datalayout(llvmir):
     for i, ln in enumerate(lines):
         if ln.startswith("target datalayout"):
             tmp = 'target datalayout = "{0}"'
-            lines[i] = tmp.format(default_data_layout)
+            lines[i] = tmp.format(data_layout)
             break
     return '\n'.join(lines)
 
@@ -701,7 +678,7 @@ def llvm_to_ptx(llvmir, **opts):
         })
 
     cu = CompilationUnit()
-    libdevice = LibDevice(arch=opts.get('arch', 'compute_20'))
+    libdevice = LibDevice()
 
     for mod in llvmir:
         mod = llvm_replace(mod)
@@ -924,4 +901,4 @@ def add_ir_version(mod):
 
 
 def fix_data_layout(module):
-    module.data_layout = default_data_layout
+    module.data_layout = data_layout

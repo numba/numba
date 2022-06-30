@@ -384,7 +384,7 @@ class ShapeEquivSet(EquivSet):
         self.typemap = typemap
         # defs maps variable name to an int, where
         # 1 means the variable is defined only once, and numbers greater
-        # than 1 means defined more than onces.
+        # than 1 means defined more than once.
         self.defs = defs if defs else {}
         # ind_to_var maps index number to a list of variables (of ir.Var type).
         # It is used to retrieve defined shape variables given an equivalence
@@ -768,7 +768,7 @@ class SymbolicEquivSet(ShapeEquivSet):
         # means A is defined as: A = B + i, where A,B are variable names,
         # and i is an integer constants.
         self.def_by = def_by if def_by else {}
-        # A "refered-by" table that maps A to a list of [(B, i), (C, j) ...],
+        # A "referred-by" table that maps A to a list of [(B, i), (C, j) ...],
         # which implies a sequence of definitions: B = A - i, C = A - j, and
         # so on, where A,B,C,... are variable names, and i,j,... are
         # integer constants.
@@ -1579,6 +1579,10 @@ class ArrayAnalysis(object):
         elif expr.attr == "shape":
             shape = equiv_set.get_shape(expr.value)
             return ArrayAnalysis.AnalyzeResult(shape=shape)
+        elif expr.attr in ("real", "imag") and self._isarray(expr.value.name):
+            # Shape of real or imag attr is the same as the shape of the array
+            # itself.
+            return ArrayAnalysis.AnalyzeResult(shape=expr.value)
         elif self._isarray(lhs.name):
             canonical_value = get_canonical_alias(
                 expr.value.name, self.alias_map
@@ -1784,7 +1788,7 @@ class ArrayAnalysis(object):
         The computation takes care of negative values used in the slice
         with respect to the given dimensional size ("dsize").
 
-        Extra statments required to produce the result are appended
+        Extra statements required to produce the result are appended
         to parent function's stmts list.
         """
         loc = index.loc

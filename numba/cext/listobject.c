@@ -509,7 +509,7 @@ numba_list_delete_slice(NB_List *lp,
                 lp->methods.item_decref(loc);
             }
         }
-        // memove items into place
+        // memmove items into place
         leftover_bytes = (lp->size - stop) * lp->item_size;
         loc = lp->items + lp->item_size * start;
         new_loc = lp->items + lp->item_size * stop;
@@ -538,7 +538,7 @@ numba_list_delete_slice(NB_List *lp,
             // decref item being removed
             loc = lp->items + lp->item_size * cur;
             list_decref_item(lp, loc);
-            /* memmove the aforementiond step-1 (or less) items
+            /* memmove the aforementioned step-1 (or less) items
              * dst : index of deleted item minus total deleted sofar
              * src : index of deleted item plus one (next item)
              */

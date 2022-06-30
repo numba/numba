@@ -8,7 +8,7 @@ Notes on Literal Types
           some limitations of the compilation mechanism relating to types.
 
 Some features need to specialize based on the literal value during
-compliation to produce type stable code necessary for successful compilation in
+compilation to produce type stable code necessary for successful compilation in
 Numba. This can be achieved by propagating the literal value through the type
 system. Numba recognizes inline literal values as :class:`numba.types.Literal`.
 For example::

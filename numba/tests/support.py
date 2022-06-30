@@ -4,6 +4,7 @@ Assorted utilities for use in tests.
 
 import cmath
 import contextlib
+from collections import defaultdict
 import enum
 import gc
 import math
@@ -77,11 +78,21 @@ skip_unless_py10_or_later = unittest.skipUnless(
     "needs Python 3.10 or later"
 )
 
+skip_unless_py10 = unittest.skipUnless(
+    utils.PYVERSION == (3, 10),
+    "needs Python 3.10"
+)
+
+skip_if_32bit = unittest.skipIf(_32bit, "Not supported on 32 bit")
+
 _msg = "SciPy needed for test"
 skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
 
 _lnx_reason = 'linux only test'
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
+
+_win_reason = 'Windows-only test'
+windows_only = unittest.skipIf(not sys.platform.startswith('win'), _win_reason)
 
 _is_armv7l = platform.machine() == 'armv7l'
 
@@ -1030,11 +1041,11 @@ def strace(work, syscalls, timeout=10):
         strace_binary = shutil.which('strace')
         if strace_binary is None:
             raise ValueError("No valid 'strace' binary could be found")
-        cmd = ['strace', # strace
-            '-q', # quietly (no attach/detach print out)
-            '-p', str(parent_pid), # this PID
-            '-e', ','.join(syscalls), # these syscalls
-            '-o', ntf.name] # put output into this file
+        cmd = [strace_binary, # strace
+               '-q', # quietly (no attach/detach print out)
+               '-p', str(parent_pid), # this PID
+               '-e', ','.join(syscalls), # these syscalls
+               '-o', ntf.name] # put output into this file
 
         # redirect stdout, stderr is handled by the `-o` flag to strace.
         popen = subprocess.Popen(cmd, stdout=subprocess.PIPE,)
@@ -1083,6 +1094,12 @@ def strace(work, syscalls, timeout=10):
 
 def _strace_supported():
     """Checks if strace is supported and working"""
+
+    # Only support this on linux where the `strace` binary is likely to be the
+    # strace needed.
+    if not sys.platform.startswith('linux'):
+        return False
+
     def force_clone(): # subprocess triggers a clone
         subprocess.run([sys.executable, '-c', 'exit()'])
 
@@ -1116,3 +1133,48 @@ class IRPreservingTestPipeline(CompilerBase):
 
         pipeline.finalize()
         return [pipeline]
+
+
+def print_azure_matrix():
+    """This is a utility function that prints out the map of NumPy to Python
+    versions and how many of that combination are being tested across all the
+    declared config for azure-pipelines. It is useful to run when updating the
+    azure-pipelines config to be able to quickly see what the coverage is."""
+    import yaml
+    from yaml import Loader
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    azure_pipe = os.path.join(base_path, '..', '..', 'azure-pipelines.yml')
+    if not os.path.isfile(azure_pipe):
+        self.skipTest("'azure-pipelines.yml' is not available")
+    with open(os.path.abspath(azure_pipe), 'rt') as f:
+        data = f.read()
+    pipe_yml = yaml.load(data, Loader=Loader)
+
+    templates = pipe_yml['jobs']
+    # first look at the items in the first two templates, this is osx/linux
+    py2np_map = defaultdict(lambda: defaultdict(int))
+    for tmplt in templates[:2]:
+        matrix = tmplt['parameters']['matrix']
+        for setup in matrix.values():
+            py2np_map[setup['NUMPY']][setup['PYTHON']]+=1
+
+    # next look at the items in the windows only template
+    winpath = ['..', '..', 'buildscripts', 'azure', 'azure-windows.yml']
+    azure_windows = os.path.join(base_path, *winpath)
+    if not os.path.isfile(azure_windows):
+        self.skipTest("'azure-windows.yml' is not available")
+    with open(os.path.abspath(azure_windows), 'rt') as f:
+        data = f.read()
+    windows_yml = yaml.load(data, Loader=Loader)
+
+    # There's only one template in windows and its keyed differently to the
+    # above, get its matrix.
+    matrix = windows_yml['jobs'][0]['strategy']['matrix']
+    for setup in matrix.values():
+        py2np_map[setup['NUMPY']][setup['PYTHON']]+=1
+
+    print("NumPy | Python | Count")
+    print("-----------------------")
+    for npver, pys in sorted(py2np_map.items()):
+        for pyver, count in pys.items():
+            print(f" {npver} |  {pyver:<4}  |   {count}")

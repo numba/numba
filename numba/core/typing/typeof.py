@@ -7,9 +7,16 @@ import numpy as np
 
 from numba.core import types, utils, errors
 from numba.np import numpy_support
-
+from numba.np.numpy_support import numpy_version
 # terminal color markup
 _termcolor = errors.termcolor()
+
+# Note that the BitGenerator class exists in _bit_generator.pxd in
+# NumPy 1.18 (has underscore) and then bit_generator.pxd in NumPy 1.19
+if numpy_version < (1, 19):
+    from numpy.random._bit_generator import BitGenerator
+else:
+    from numpy.random.bit_generator import BitGenerator
 
 
 class Purpose(enum.Enum):
@@ -265,3 +272,13 @@ def _typeof_nb_type(val, c):
         return types.NumberClass(val)
     else:
         return types.TypeRef(val)
+
+
+@typeof_impl.register(BitGenerator)
+def typeof_numpy_random_bitgen(val, c):
+    return types.NumPyRandomBitGeneratorType(val)
+
+
+@typeof_impl.register(np.random.Generator)
+def typeof_random_generator(val, c):
+    return types.NumPyRandomGeneratorType(val)

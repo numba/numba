@@ -606,14 +606,14 @@ class CallConstraint(object):
                             else self.args)
             folded = e.fold_arguments(folding_args, self.kws)
             requested = set()
-            unsatisified = set()
+            unsatisfied = set()
             for idx in e.requested_args:
                 maybe_arg = typeinfer.func_ir.get_definition(folded[idx])
                 if isinstance(maybe_arg, ir.Arg):
                     requested.add(maybe_arg.index)
                 else:
-                    unsatisified.add(idx)
-            if unsatisified:
+                    unsatisfied.add(idx)
+            if unsatisfied:
                 raise TypingError("Cannot request literal type.", loc=self.loc)
             elif requested:
                 raise ForceLiteralArg(requested, loc=self.loc)

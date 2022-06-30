@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from numba.core import config, targetconfig
 from numba.core.decorators import jit
 from numba.core.descriptors import TargetDescriptor
+from numba.core.extending import is_jitted
 from numba.core.options import TargetOptions, include_default_options
 from numba.core.registry import cpu_target
 from numba.core.target_extension import dispatcher_registry, target_registry
@@ -254,6 +255,8 @@ class _BaseUFuncBuilder(object):
 class UFuncBuilder(_BaseUFuncBuilder):
 
     def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
+        if is_jitted(py_func):
+            py_func = py_func.py_func
         self.py_func = py_func
         self.identity = parse_identity(identity)
         self.nb_func = jit(_target='npyufunc',
@@ -371,7 +374,7 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         """
         Returns (dtype numbers, function ptr, EnvironmentObject)
         """
-        # Buider wrapper for ufunc entry point
+        # Builder wrapper for ufunc entry point
         signature = cres.signature
         info = build_gufunc_wrapper(
             self.py_func, cres, self.sin, self.sout,

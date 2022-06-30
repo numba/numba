@@ -86,7 +86,7 @@ These variables influence what is printed out during compilation of
 
     - ``"old_style"`` (default): this is the exception handling behaviour that
       is present in Numba versions <= 0.54.x. Numba will capture and wrap all
-      errors occuring in compilation and depending on the compilation phase they
+      errors occurring in compilation and depending on the compilation phase they
       will likely materialize as part of the message in a ``TypingError`` or a
       ``LoweringError``.
     - ``"new_style"`` this will treat any exception that does not inherit from
@@ -177,6 +177,14 @@ These variables influence what is printed out during compilation of
 
    If set to non-zero, trace certain function calls (function entry and exit
    events, including arguments and return values).
+
+.. envvar:: NUMBA_CHROME_TRACE
+
+   If defined, chrome tracing is enabled and this variable specifies the filepath
+   of the chrome tracing json file output. The emitted file can be opened by
+   a Chromium-based browser using the profile viewer at `chrome://tracing/`.
+
+   .. warning:: This feature is not supported in multi-process applications. 
 
 .. envvar:: NUMBA_DUMP_BYTECODE
 
@@ -524,6 +532,15 @@ GPU support
    instead of using its own ctypes binding. This defaults to 0 (off), as the
    NVIDIA binding is currently missing support for Per-Thread Default
    Streams and the profiler APIs.
+
+.. envvar:: NUMBA_CUDA_INCLUDE_PATH
+
+   The location of the CUDA include files. This is used when linking CUDA C/C++
+   sources to Python kernels, and needs to be correctly set for CUDA includes to
+   be available to linked C/C++ sources. On Linux, it defaults to
+   ``/usr/local/cuda/include``. On Windows, the default is
+   ``$env:CUDA_PATH\include``.
+
 
 Threading Control
 -----------------
