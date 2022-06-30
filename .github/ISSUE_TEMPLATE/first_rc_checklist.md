@@ -21,7 +21,7 @@ labels: task
   * [ ] Pin llvmlite to `>=0.A.0rc1,<0.A+1.0`.
   * [ ] Pin NumPy if needed
   * [ ] Pin TBB if needed
-* [ ] Annotated tag X.Y.Zrc1 on release branch (no `v` prefix).
+* [ ] Annotated tag `X.Y.Zrc1` on release branch (no `v` prefix).
 * [ ] Build and upload conda packages on buildfarm (check "upload").
 * [ ] Build wheels and sdist on the buildfarm (check "upload").
 * [ ] Verify packages uploaded to Anaconda Cloud and move to `numba/label/main`.
@@ -34,8 +34,15 @@ labels: task
 ### Post Release:
 
 * [ ] Clean up `ci_artifacts` by moving files to sub-directories
-* [ ] Tag X.Y+1.0dev0 to start new development cycle on `main`.
-* [ ] Update llvmlite dependency spec to match next version via PR to `main`.
+* [ ] Tag `X.Y+1.0dev0` to start new development cycle on `main`.
+* [ ] Update llvmlite dependency via PR to `main`, PR includes version updates
+      to:
+  * [ ] `setup.py`
+  * [ ] `numba/__init__.py`
+  * [ ] `docs/environment.yml`
+  * [ ] `buildscripts/incremental/setup_conda_environment.sh`
+  * [ ] `buildscripts/incremental/setup_conda_environment.cmd`
+  * [ ] `buildscripts/condarecipe.local/meta.yaml`
 * [ ] Update release checklist template with any additional bullet points that
       may have arisen during the release.
 * [ ] Close milestone (and then close this release issue).

@@ -7,6 +7,7 @@ from llvmlite import ir
 from numba.core import types, cgutils
 from numba.core.pythonapi import box, unbox, reflect, NativeValue
 from numba.core.errors import NumbaNotImplementedError
+from numba.core.typing.typeof import typeof, Purpose
 
 from numba.cpython import setobj, listobj
 from numba.np import numpy_support
@@ -381,6 +382,31 @@ def unbox_slice(typ, obj, c):
     sli.step = step
     return NativeValue(sli._getvalue(), is_error=c.builder.not_(ok))
 
+@box(types.SliceLiteral)
+def box_slice_literal(typ, val, c):
+    # Check for integer overflows at compile time.
+    slice_lit = typ.literal_value
+    for field_name in ("start", "stop", "step"):
+        field_obj = getattr(slice_lit, field_name)
+        if isinstance(field_obj, int):
+            try:
+                typeof(field_obj, Purpose)
+            except ValueError as e:
+                raise ValueError((
+                    f"Unable to create literal slice. "
+                    f"Error encountered with {field_name} "
+                    f"attribute. {str(e)}")
+                )
+
+    py_ctor, py_args = typ.literal_value.__reduce__()
+    serialized_ctor = c.pyapi.serialize_object(py_ctor)
+    serialized_args = c.pyapi.serialize_object(py_args)
+    ctor = c.pyapi.unserialize(serialized_ctor)
+    args = c.pyapi.unserialize(serialized_args)
+    obj = c.pyapi.call(ctor, args)
+    c.pyapi.decref(ctor)
+    c.pyapi.decref(args)
+    return obj
 
 @unbox(types.StringLiteral)
 def unbox_string_literal(typ, obj, c):
@@ -1204,7 +1230,7 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
         with early_exit_if_null(c.builder, stack, ct_voidptr_ty):
             handle_failure()
 
-        # This wires in the fnptrs refered to by name
+        # This wires in the fnptrs referred to by name
         def wire_in_fnptrs(name):
             # Find the CFunctionType function
             interface_next_fn = c.pyapi.object_getattr_string(

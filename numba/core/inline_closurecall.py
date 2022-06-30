@@ -1400,7 +1400,7 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
                  ir.Expr.build_tuple(items=[size_var], loc=loc), loc))
 
         # The general approach is to create an empty array and then fill
-        # the elements in one-by-one from their specificiation.
+        # the elements in one-by-one from their specification.
 
         # Get the numpy type to pass to empty.
         nptype = types.DType(dtype)

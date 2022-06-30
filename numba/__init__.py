@@ -40,7 +40,9 @@ from numba.core.decorators import (cfunc, generated_jit, jit, njit, stencil,
 
 # Re-export vectorize decorators and the thread layer querying function
 from numba.np.ufunc import (vectorize, guvectorize, threading_layer,
-                            get_num_threads, set_num_threads)
+                            get_num_threads, set_num_threads,
+                            set_parallel_chunksize, get_parallel_chunksize,
+                            get_thread_id)
 
 # Re-export Numpy helpers
 from numba.np.numpy_support import carray, farray, from_dtype
@@ -51,6 +53,7 @@ from numba import experimental
 # Initialize withcontexts
 import numba.core.withcontexts
 from numba.core.withcontexts import objmode_context as objmode
+from numba.core.withcontexts import parallel_chunksize
 
 # Initialize target extensions
 import numba.core.target_extension
@@ -84,10 +87,13 @@ __all__ = """
     literal_unroll
     get_num_threads
     set_num_threads
+    set_parallel_chunksize
+    get_parallel_chunksize
+    parallel_chunksize
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 39, 0)
+_min_llvmlite_version = (0, 40, 0)
 _min_llvm_version = (11, 0, 0)
 
 def _ensure_llvm():

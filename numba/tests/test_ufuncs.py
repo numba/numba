@@ -9,7 +9,7 @@ import operator
 import numpy as np
 
 import unittest
-from numba import typeof, njit
+from numba import typeof, njit, guvectorize
 from numba.core import types, typing, utils
 from numba.core.compiler import compile_isolated, Flags, DEFAULT_FLAGS
 from numba.np.numpy_support import from_dtype
@@ -1806,6 +1806,25 @@ class TestUfuncOnContext(TestCase):
             str(raises.exception),
             r"<numba\..*\.BaseContext object at .*> does not support ufunc",
         )
+
+
+class TestUfuncWriteInput(TestCase):
+    def test_write_input_arg(self):
+        @guvectorize(["void(float64[:], uint8[:])"], "(n)->(n)", nopython=True)
+        def func(x, out):
+
+            for i in range(x.size):
+                # set every fourth element to 1
+                if i % 4 == 0:
+                    out[i] = 1
+
+        x = np.random.rand(10, 5)
+        out = np.zeros_like(x, dtype=np.int8)
+
+        func(x, out)
+        np.testing.assert_array_equal(
+            np.array([True, False, False, False, True], dtype=np.bool_),
+            out.any(axis=0))
 
 
 if __name__ == '__main__':
