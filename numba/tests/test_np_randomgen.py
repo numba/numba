@@ -115,6 +115,21 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
 
         self.assertPreciseEqual(numba_res, numpy_res)
 
+    def _check_invalid_types(self, dist_func, arg_list,
+                             valid_args, invalid_args):
+        rng = np.random.default_rng()
+        for idx, _arg in enumerate(arg_list):
+            curr_args = valid_args.copy()
+            curr_args[idx] = invalid_args[idx]
+            curr_args = [rng] + curr_args
+            nb_dist_func = numba.njit(dist_func)
+            with self.assertRaises(TypingError) as raises:
+                nb_dist_func(*curr_args)
+            self.assertIn(
+                f'Argument {_arg} is not one of the expected type(s):',
+                str(raises.exception)
+            )
+
     def test_npgen_boxing_unboxing(self):
         rng_instance = np.random.default_rng()
         numba_func = numba.njit(lambda x: x)
@@ -207,6 +222,10 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                         self.check_numpy_parity(dist_func, _bitgen,
                                                 None, _size, _dtype)
 
+        dist_func = lambda x, method:\
+            x.standard_exponential(method=method)
+        self._check_invalid_types(dist_func, ['method'], ['zig'], [0])
+
     def test_standard_exponential_inv(self):
         test_sizes = [None, (), (100,), (10, 20, 30)]
         test_dtypes = [np.float32, np.float64]
@@ -237,6 +256,9 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                         self.check_numpy_parity(dist_func, _bitgen,
                                                 None, _size, _dtype,
                                                 adjusted_ulp_prec)
+        dist_func = lambda x, shape:\
+            x.standard_gamma(shape=shape)
+        self._check_invalid_types(dist_func, ['shape'], [5.0], ['x'])
 
     def test_normal(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
@@ -259,6 +281,10 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                     self.check_numpy_parity(dist_func, _bitgen,
                                             None, _size, None,
                                             adjusted_ulp_prec)
+        dist_func = lambda x, loc, scale:\
+            x.normal(loc=loc, scale=scale)
+        self._check_invalid_types(dist_func, ['loc', 'scale'],
+                                  [1.5, 3], ['x', 'x'])
 
     def test_uniform(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
@@ -281,6 +307,10 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                     self.check_numpy_parity(dist_func, _bitgen,
                                             None, _size, None,
                                             adjusted_ulp_prec)
+        dist_func = lambda x, low, high:\
+            x.uniform(low=low, high=high)
+        self._check_invalid_types(dist_func, ['low', 'high'],
+                                  [1.5, 3], ['x', 'x'])
 
     def test_exponential(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
@@ -301,6 +331,9 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
                                             None, _size, None)
+        dist_func = lambda x, scale:\
+            x.exponential(scale=scale)
+        self._check_invalid_types(dist_func, ['scale'], [1.5], ['x'])
 
     def test_gamma(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
@@ -317,6 +350,10 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                     self.check_numpy_parity(dist_func, _bitgen,
                                             None, _size, None,
                                             adjusted_ulp_prec)
+        dist_func = lambda x, shape, scale:\
+            x.gamma(shape=shape, scale=scale)
+        self._check_invalid_types(dist_func, ['shape', 'scale'],
+                                  [5.0, 1.5], ['x', 'x'])
 
 
 class TestGeneratorCaching(TestCase, SerialMixin):
