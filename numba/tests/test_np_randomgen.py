@@ -177,6 +177,9 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                                       _bitgen=_bitgen):
                         self.check_numpy_parity(dist_func, _bitgen,
                                                 None, _size, _dtype)
+        dist_func = lambda x, size:\
+            x.random(size=size)
+        self._check_invalid_types(dist_func, ['size'], [(1,)], [('x',)])
 
     def test_standard_normal(self):
         test_sizes = [None, (), (100,), (10, 20, 30)]
@@ -199,6 +202,9 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                                       _bitgen=_bitgen):
                         self.check_numpy_parity(dist_func, _bitgen,
                                                 None, _size, _dtype)
+        dist_func = lambda x, size:\
+            x.standard_normal(size=size)
+        self._check_invalid_types(dist_func, ['size'], [(1,)], [('x',)])
 
     def test_standard_exponential(self):
         test_sizes = [None, (), (100,), (10, 20, 30)]
@@ -222,9 +228,10 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                         self.check_numpy_parity(dist_func, _bitgen,
                                                 None, _size, _dtype)
 
-        dist_func = lambda x, method:\
-            x.standard_exponential(method=method)
-        self._check_invalid_types(dist_func, ['method'], ['zig'], [0])
+        dist_func = lambda x, method, size:\
+            x.standard_exponential(method=method, size=size)
+        self._check_invalid_types(dist_func, ['method', 'size'],
+                                  ['zig', (1,)], [0, ('x',)])
 
     def test_standard_exponential_inv(self):
         test_sizes = [None, (), (100,), (10, 20, 30)]
@@ -256,9 +263,10 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                         self.check_numpy_parity(dist_func, _bitgen,
                                                 None, _size, _dtype,
                                                 adjusted_ulp_prec)
-        dist_func = lambda x, shape:\
-            x.standard_gamma(shape=shape)
-        self._check_invalid_types(dist_func, ['shape'], [5.0], ['x'])
+        dist_func = lambda x, shape, size:\
+            x.standard_gamma(shape=shape, size=size)
+        self._check_invalid_types(dist_func, ['shape', 'size'],
+                                  [5.0, (1,)], ['x', ('x',)])
 
     def test_normal(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
@@ -281,10 +289,10 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                     self.check_numpy_parity(dist_func, _bitgen,
                                             None, _size, None,
                                             adjusted_ulp_prec)
-        dist_func = lambda x, loc, scale:\
-            x.normal(loc=loc, scale=scale)
-        self._check_invalid_types(dist_func, ['loc', 'scale'],
-                                  [1.5, 3], ['x', 'x'])
+        dist_func = lambda x, loc, scale, size:\
+            x.normal(loc=loc, scale=scale, size=size)
+        self._check_invalid_types(dist_func, ['loc', 'scale', 'size'],
+                                  [1.5, 3, (1,)], ['x', 'x', ('x',)])
 
     def test_uniform(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
@@ -307,10 +315,10 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                     self.check_numpy_parity(dist_func, _bitgen,
                                             None, _size, None,
                                             adjusted_ulp_prec)
-        dist_func = lambda x, low, high:\
-            x.uniform(low=low, high=high)
-        self._check_invalid_types(dist_func, ['low', 'high'],
-                                  [1.5, 3], ['x', 'x'])
+        dist_func = lambda x, low, high, size:\
+            x.uniform(low=low, high=high, size=size)
+        self._check_invalid_types(dist_func, ['low', 'high', 'size'],
+                                  [1.5, 3, (1,)], ['x', 'x', ('x',)])
 
     def test_exponential(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
@@ -331,9 +339,10 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
                                             None, _size, None)
-        dist_func = lambda x, scale:\
-            x.exponential(scale=scale)
-        self._check_invalid_types(dist_func, ['scale'], [1.5], ['x'])
+        dist_func = lambda x, scale, size:\
+            x.exponential(scale=scale, size=size)
+        self._check_invalid_types(dist_func, ['scale', 'size'],
+                                  [1.5, (1,)], ['x', ('x',)])
 
     def test_gamma(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
@@ -350,10 +359,10 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                     self.check_numpy_parity(dist_func, _bitgen,
                                             None, _size, None,
                                             adjusted_ulp_prec)
-        dist_func = lambda x, shape, scale:\
-            x.gamma(shape=shape, scale=scale)
-        self._check_invalid_types(dist_func, ['shape', 'scale'],
-                                  [5.0, 1.5], ['x', 'x'])
+        dist_func = lambda x, shape, scale, size:\
+            x.gamma(shape=shape, scale=scale, size=size)
+        self._check_invalid_types(dist_func, ['shape', 'scale', 'size'],
+                                  [5.0, 1.5, (1,)], ['x', 'x', ('x',)])
 
 
 class TestGeneratorCaching(TestCase, SerialMixin):

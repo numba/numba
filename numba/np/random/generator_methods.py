@@ -56,7 +56,8 @@ def check_size(size):
                 isinstance(size.dtype, types.Integer),
                 isinstance(size, Tuple) and size.count == 0,
                 isinstance(size, types.Integer)]):
-        raise TypingError("Size argument must be one of None," +
+        raise TypingError(f"Argument size is not one of the" +
+                          f" expected type(s): " +
                           " an integer, an empty tuple or a tuple of integers")
 
 
