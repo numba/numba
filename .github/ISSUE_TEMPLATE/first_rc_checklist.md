@@ -35,7 +35,14 @@ labels: task
 
 * [ ] Clean up `ci_artifacts` by moving files to sub-directories
 * [ ] Tag X.Y+1.0dev0 to start new development cycle on `main`.
-* [ ] Update llvmlite dependency spec to match next version via PR to `main`.
+* [ ] Update llvmlite dependency via PR to `main`, PR includes version updates
+      to:
+  * [ ] `setup.py`
+  * [ ] `numba/__init__.py`
+  * [ ] `docs/environment.yml`
+  * [ ] `buildscripts/incremental/setup_conda_environment.sh`
+  * [ ] `buildscripts/incremental/setup_conda_environment.cmd`
+  * [ ] `buildscripts/condarecipe.local/meta.yaml`
 * [ ] Update release checklist template with any additional bullet points that
       may have arisen during the release.
 * [ ] Close milestone (and then close this release issue).
