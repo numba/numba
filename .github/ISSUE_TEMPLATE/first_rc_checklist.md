@@ -28,7 +28,8 @@ labels: task
 * [ ] Upload wheels and sdist to PyPI (upload from `ci_artifacts`).
 * [ ] Verify wheels for all platforms arrived on PyPi.
 * [ ] Initialize and verify ReadTheDocs build.
-* [ ] Send RC announcement email / post announcement to discourse group.
+* [ ] Post announcement to discourse group and ping the release testers group
+  using `@RC_Testers`.
 * [ ] Post link to Twitter.
 
 ### Post Release:
