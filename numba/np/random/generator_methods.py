@@ -29,24 +29,22 @@ def _get_proper_func(func_32, func_64, dtype, dist_name="the given"):
     if isinstance(dtype, types.Omitted):
         dtype = dtype.value
 
-    if not isinstance(dtype, types.Type):
-        dt = np.dtype(dtype)
-        nb_dt = from_dtype(dt)
-        np_dt = dtype
-    else:
+    np_dt = dtype
+    if isinstance(dtype, type):
+        nb_dt = from_dtype(np.dtype(dtype))
+    elif isinstance(dtype, types.NumberClass):
         nb_dt = dtype
         np_dt = as_dtype(nb_dt)
 
-    np_dt = np.dtype(np_dt)
+    if np_dt not in [np.float32, np.float64]:
+        raise TypingError("Argument dtype is not one of the" +
+                          " expected type(s): " +
+                          " np.float32 or np.float64")
 
     if np_dt == np.float32:
         next_func = func_32
-    elif np_dt == np.float64:
-        next_func = func_64
     else:
-        raise TypingError(
-            f"Unsupported dtype {np_dt} for {dist_name} distribution"
-        )
+        next_func = func_64
 
     return next_func, nb_dt
 
@@ -56,8 +54,8 @@ def check_size(size):
                 isinstance(size.dtype, types.Integer),
                 isinstance(size, Tuple) and size.count == 0,
                 isinstance(size, types.Integer)]):
-        raise TypingError(f"Argument size is not one of the" +
-                          f" expected type(s): " +
+        raise TypingError("Argument size is not one of the" +
+                          " expected type(s): " +
                           " an integer, an empty tuple or a tuple of integers")
 
 

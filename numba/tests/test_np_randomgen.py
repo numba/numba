@@ -33,16 +33,18 @@ class TestHelperFuncs(TestCase):
                          np.float64)[0](), 64)
         self.assertEqual(_get_proper_func(test_32bit_func, test_64bit_func,
                          np.float32)[0](), 32)
-        self.assertEqual(_get_proper_func(test_32bit_func, test_64bit_func,
-                         types.float64)[0](), 64)
-        self.assertEqual(_get_proper_func(test_32bit_func, test_64bit_func,
-                         types.float32)[0](), 32)
 
         # With any other datatype it should return a TypingError
         with self.assertRaises(TypingError) as raises:
             _get_proper_func(test_32bit_func, test_64bit_func, np.int32)
         self.assertIn(
-            'Unsupported dtype int32 for the given distribution',
+            'Argument dtype is not one of the expected type(s)',
+            str(raises.exception)
+        )
+        with self.assertRaises(TypingError) as raises:
+            _get_proper_func(test_32bit_func, test_64bit_func, types.float64)
+        self.assertIn(
+            'Argument dtype is not one of the expected type(s)',
             str(raises.exception)
         )
 
@@ -177,9 +179,10 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                                       _bitgen=_bitgen):
                         self.check_numpy_parity(dist_func, _bitgen,
                                                 None, _size, _dtype)
-        dist_func = lambda x, size:\
-            x.random(size=size)
-        self._check_invalid_types(dist_func, ['size'], [(1,)], [('x',)])
+        dist_func = lambda x, size, dtype:\
+            x.random(size=size, dtype=dtype)
+        self._check_invalid_types(dist_func, ['size', 'dtype'],
+                                  [(1,), np.float64], [('x',), 0.])
 
     def test_standard_normal(self):
         test_sizes = [None, (), (100,), (10, 20, 30)]
@@ -202,9 +205,10 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                                       _bitgen=_bitgen):
                         self.check_numpy_parity(dist_func, _bitgen,
                                                 None, _size, _dtype)
-        dist_func = lambda x, size:\
-            x.standard_normal(size=size)
-        self._check_invalid_types(dist_func, ['size'], [(1,)], [('x',)])
+        dist_func = lambda x, size, dtype:\
+            x.standard_normal(size=size, dtype=dtype)
+        self._check_invalid_types(dist_func, ['size', 'dtype'],
+                                  [(1,), np.float32], [('x',), 0])
 
     def test_standard_exponential(self):
         test_sizes = [None, (), (100,), (10, 20, 30)]
@@ -228,10 +232,10 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                         self.check_numpy_parity(dist_func, _bitgen,
                                                 None, _size, _dtype)
 
-        dist_func = lambda x, method, size:\
-            x.standard_exponential(method=method, size=size)
-        self._check_invalid_types(dist_func, ['method', 'size'],
-                                  ['zig', (1,)], [0, ('x',)])
+        dist_func = lambda x, method, size, dtype:\
+            x.standard_exponential(method=method, size=size, dtype=dtype)
+        self._check_invalid_types(dist_func, ['method', 'size', 'dtype'],
+                                  ['zig', (1,), np.float32], [0, ('x',), 0])
 
     def test_standard_exponential_inv(self):
         test_sizes = [None, (), (100,), (10, 20, 30)]
@@ -263,10 +267,10 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                         self.check_numpy_parity(dist_func, _bitgen,
                                                 None, _size, _dtype,
                                                 adjusted_ulp_prec)
-        dist_func = lambda x, shape, size:\
-            x.standard_gamma(shape=shape, size=size)
-        self._check_invalid_types(dist_func, ['shape', 'size'],
-                                  [5.0, (1,)], ['x', ('x',)])
+        dist_func = lambda x, shape, size, dtype:\
+            x.standard_gamma(shape=shape, size=size, dtype=dtype)
+        self._check_invalid_types(dist_func, ['shape', 'size', 'dtype'],
+                                  [5.0, (1,), np.float32], ['x', ('x',), 0])
 
     def test_normal(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
