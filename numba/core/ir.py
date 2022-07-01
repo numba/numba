@@ -1,4 +1,5 @@
 from collections import defaultdict
+from collections.abc import Sequence
 import copy
 import itertools
 import os
@@ -1190,28 +1191,49 @@ class Scope(EqualityCheckMixin):
                                                           self.loc)
 
 
+class BlockBodyView(Sequence):
+    def __init__(self, lst):
+        self.__lst = lst
+
+    def __getitem__(self, idx):
+        return self.__lst[idx]
+
+    def __len__(self):
+        return len(self.__lst)
+
+    def copy(self):
+        return self.__lst.copy()
+
+
 class Block(EqualityCheckMixin):
     """A code block
-
     """
-
     def __init__(self, scope, loc):
         assert isinstance(scope, Scope)
         assert isinstance(loc, Loc)
         self.scope = scope
-        self.body = []
+        self.__body = []
         self.loc = loc
+
+    @property
+    def body(self) -> BlockBodyView:
+        return BlockBodyView(self.__body)
+
+    def replace_body(self, new_body):
+        """Replace the body of the Block.
+        """
+        self.__body[:] = new_body
 
     def copy(self):
         block = Block(self.scope, self.loc)
-        block.body = self.body[:]
+        block.__body = self.__body[:]
         return block
 
     def find_exprs(self, op=None):
         """
         Iterate over exprs of the given *op* in this block.
         """
-        for inst in self.body:
+        for inst in self.__body:
             if isinstance(inst, Assign):
                 expr = inst.value
                 if isinstance(expr, Expr):
@@ -1222,7 +1244,7 @@ class Block(EqualityCheckMixin):
         """
         Iterate over insts of the given class in this block.
         """
-        for inst in self.body:
+        for inst in self.__body:
             if isinstance(inst, cls):
                 yield inst
 
@@ -1238,23 +1260,35 @@ class Block(EqualityCheckMixin):
 
     def prepend(self, inst):
         assert isinstance(inst, Stmt)
-        self.body.insert(0, inst)
+        self.__body.insert(0, inst)
 
     def append(self, inst):
         assert isinstance(inst, Stmt)
-        self.body.append(inst)
+        self.__body.append(inst)
+
+    def extend(self, body):
+        self.__body.extend(body)
+
+    def insert(self, idx, inst):
+        self.__body.insert(idx, inst)
+
+    def replace_at(self, idx, inst):
+        self.__body[idx] = inst
 
     def remove(self, inst):
         assert isinstance(inst, Stmt)
-        del self.body[self.body.index(inst)]
+        del self.__body[self.__body.index(inst)]
+
+    def pop(self, idx=-1):
+        return self.__body.pop(idx)
 
     def clear(self):
-        del self.body[:]
+        del self.__body[:]
 
     def dump(self, file=None):
         # Avoid early bind of sys.stdout as default value
         file = file or sys.stdout
-        for inst in self.body:
+        for inst in self.__body:
             if hasattr(inst, 'dump'):
                 inst.dump(file)
             else:
@@ -1263,17 +1297,17 @@ class Block(EqualityCheckMixin):
 
     @property
     def terminator(self):
-        return self.body[-1]
+        return self.__body[-1]
 
     @property
     def is_terminated(self):
-        return self.body and self.body[-1].is_terminator
+        return self.__body and self.__body[-1].is_terminator
 
     def verify(self):
         if not self.is_terminated:
             raise VerificationError("Missing block terminator")
             # Only the last instruction can be a terminator
-        for inst in self.body[:-1]:
+        for inst in self.__body[:-1]:
             if inst.is_terminator:
                 raise VerificationError("Terminator before the last "
                                         "instruction")
@@ -1282,13 +1316,13 @@ class Block(EqualityCheckMixin):
         """
         Insert *stmt* after *other*.
         """
-        index = self.body.index(other)
-        self.body.insert(index + 1, stmt)
+        index = self.__body.index(other)
+        self.__body.insert(index + 1, stmt)
 
     def insert_before_terminator(self, stmt):
         assert isinstance(stmt, Stmt)
         assert self.is_terminated
-        self.body.insert(-1, stmt)
+        self.__body.insert(-1, stmt)
 
     def __repr__(self):
         return "<ir.Block at %s>" % (self.loc,)

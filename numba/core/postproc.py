@@ -224,7 +224,7 @@ class PostProcessor(object):
             if extend_lifetimes:
                 body.extend(del_store)
             body.append(ir_block.body[-1])  # terminator
-            ir_block.body = body
+            ir_block.replace_body(body)
 
             # vars to delete at the start
             escape_dead_set = escaping_dead_map[offset]

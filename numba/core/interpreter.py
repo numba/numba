@@ -956,8 +956,7 @@ def peep_hole_list_to_tuple(func_ir):
                 head = cpy[:region[1][0]]
                 tail = blk.body[region[0][0] + 1:]
                 tmp = head + new_hole + tail
-                blk.body.clear()
-                blk.body.extend(tmp)
+                blk.replace_body(tmp)
 
                 if _DEBUG:
                     print("\nDUMP post hole:")
@@ -996,8 +995,7 @@ def peep_hole_delete_with_exit(func_ir):
             # Skip any statements that uses anyone of the dead variable.
             if not (set(stmt.list_vars()) & dead_vars):
                 new_body.append(stmt)
-        blk.body.clear()
-        blk.body.extend(new_body)
+        blk.replace_body(new_body)
 
     return func_ir
 
@@ -1564,7 +1562,7 @@ class Interpreter(object):
 
             new_body.append(inst)
 
-        self.current_block.body = new_body
+        self.current_block.replace_body(new_body)
 
     def _var_used_in_binop(self, varname, expr):
         """return True if 'expr' is a binary expression and 'varname' is used
@@ -2831,10 +2829,10 @@ class Interpreter(object):
         if ok and build_empty_list is None:
             raise errors.UnsupportedError(msg)
         if ok:
-            stmts = self.current_block.body
-            build_tuple_asgn = self.current_block.body[-1]
+            curblk = self.current_block
+            build_tuple_asgn = curblk.body[-1]
             # move build list to last issued statement
-            stmts.append(stmts.pop(stmts.index(build_empty_list)))
+            curblk.append(curblk.pop(curblk.body.index(build_empty_list)))
             # fix the build list
             build_tuple = build_tuple_asgn.value
             build_list = build_empty_list.value

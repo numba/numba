@@ -528,10 +528,10 @@ class CanonicalizeLoopEntry(FunctionPass):
 
         splitpt = entry_block.body.index(startpt)
         new_block = entry_block.copy()
-        new_block.body = new_block.body[splitpt:]
+        new_block.replace_body(new_block.body[splitpt:])
         new_block.loc = new_block.body[0].loc
         new_label = find_max_label(fir.blocks) + 1
-        entry_block.body = entry_block.body[:splitpt]
+        entry_block.replace_body(entry_block.body[:splitpt])
         entry_block.append(ir.Jump(new_label, loc=new_block.loc))
 
         fir.blocks[new_label] = new_block
@@ -767,7 +767,7 @@ class MixedContainerUnroller(FunctionPass):
                 term = b.body[-1]
             if isinstance(term, ir.Jump):
                 if term.target not in ignore:
-                    b.body[-1] = ir.Jump(term.target + offset, term.loc)
+                    b.replace_at(-1, ir.Jump(term.target + offset, term.loc))
             if isinstance(term, ir.Branch):
                 if term.truebr not in ignore:
                     new_true = term.truebr + offset
@@ -778,7 +778,10 @@ class MixedContainerUnroller(FunctionPass):
                     new_false = term.falsebr + offset
                 else:
                     new_false = term.falsebr
-                b.body[-1] = ir.Branch(term.cond, new_true, new_false, term.loc)
+                b.replace_at(
+                    -1,
+                    ir.Branch(term.cond, new_true, new_false, term.loc),
+                )
             new_blocks[l + offset] = b
         return new_blocks
 
@@ -890,7 +893,7 @@ class MixedContainerUnroller(FunctionPass):
                             new_body.append(stmt)
                     else:
                         new_body.append(stmt)
-                blk.body = new_body
+                blk.replace_body(new_body)
 
             # rename
             var_table = get_name_var_table(loop_blocks)
@@ -1371,7 +1374,7 @@ class IterLoopCanonicalization(FunctionPass):
 
         loop_entry = tuple(loop.entries)[0]
         entry_block = func_ir.blocks[loop_entry]
-        entry_block.body.insert(0, assgn)
+        entry_block.prepend(assgn)
 
         iterarg = guard(get_definition, func_ir,  iternext.value)
         if iterarg is not None:
@@ -1393,14 +1396,14 @@ class IterLoopCanonicalization(FunctionPass):
                                     tokenise('call_get_range'), LOC)
         make_call = ir.Expr.call(get_range_var, (stmt.value.value,), (), LOC)
         assgn_call = ir.Assign(make_call, call_get_range_var, LOC)
-        entry_block.body.insert(idx, assgn_call)
+        entry_block.insert(idx, assgn_call)
         entry_block.body[idx + 1].value.value = call_get_range_var
 
         glbls = copy(func_ir.func_id.func.__globals__)
         from numba.core.inline_closurecall import inline_closure_call
         inline_closure_call(func_ir, glbls, entry_block, idx, get_range,)
         kill = entry_block.body.index(assgn)
-        entry_block.body.pop(kill)
+        entry_block.pop(kill)
 
         # find the induction variable + references in the loop header
         # fixed point iter to do this, it's a bit clunky

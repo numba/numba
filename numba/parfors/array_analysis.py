@@ -1211,7 +1211,7 @@ class ArrayAnalysis(object):
             new_body.append(inst)
             for instr in post:
                 new_body.append(instr)
-        block.body = new_body
+        block.replace_body(new_body)
 
     def _determine_transform(self, cfg, block, label, scope, init_equiv_set):
         """Determine the transformation for each instruction in the block

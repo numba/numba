@@ -366,10 +366,10 @@ class InlineWorker(object):
             kernel_copy.blocks = {}
             for block_label, block in the_ir.blocks.items():
                 new_block = copy.deepcopy(the_ir.blocks[block_label])
-                new_block.body = []
+                new_block.replace_body([])
                 for stmt in the_ir.blocks[block_label].body:
                     scopy = copy.deepcopy(stmt)
-                    new_block.body.append(scopy)
+                    new_block.append(scopy)
                 kernel_copy.blocks[block_label] = new_block
             return kernel_copy
 
@@ -444,12 +444,12 @@ class InlineWorker(object):
         # 5. split caller blocks into two
         new_blocks = []
         new_block = ir.Block(scope, block.loc)
-        new_block.body = block.body[i + 1:]
+        new_block.replace_body(block.body[i + 1:])
         new_label = next_label()
         caller_ir.blocks[new_label] = new_block
         new_blocks.append((new_label, new_block))
-        block.body = block.body[:i]
-        block.body.append(ir.Jump(min_label, instr.loc))
+        block.replace_body(block.body[:i])
+        block.append(ir.Jump(min_label, instr.loc))
 
         # 6. replace Return with assignment to LHS
         topo_order = find_topo_order(callee_blocks)
@@ -679,12 +679,12 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     # 5. split caller blocks into two
     new_blocks = []
     new_block = ir.Block(scope, block.loc)
-    new_block.body = block.body[i + 1:]
+    new_block.replace_body(block.body[i + 1:])
     new_label = next_label()
     func_ir.blocks[new_label] = new_block
     new_blocks.append((new_label, new_block))
-    block.body = block.body[:i]
-    block.body.append(ir.Jump(min_label, instr.loc))
+    block.replace_body(block.body[:i])
+    block.append(ir.Jump(min_label, instr.loc))
 
     # 6. replace Return with assignment to LHS
     topo_order = find_topo_order(callee_blocks)
@@ -842,8 +842,8 @@ def _replace_returns(blocks, target, return_label):
             stmt = block.body[i]
             if isinstance(stmt, ir.Return):
                 assert(i + 1 == len(block.body))
-                block.body[i] = ir.Assign(stmt.value, target, stmt.loc)
-                block.body.append(ir.Jump(return_label, stmt.loc))
+                block.replace_at(i, ir.Assign(stmt.value, target, stmt.loc))
+                block.append(ir.Jump(return_label, stmt.loc))
                 # remove cast of the returned value
                 for cast in casts:
                     if cast.target.name == stmt.value.name:
@@ -1144,7 +1144,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
     # Add back terminator
     stmts.append(terminator)
     # Modify loop_entry
-    loop_entry.body = stmts
+    loop_entry.replace_body(stmts)
 
     if range_def:
         if range_def[0] != 0:
@@ -1156,10 +1156,14 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
             block_id = terminator.truebr
             blk = func_ir.blocks[block_id]
             loc = blk.loc
-            blk.body.insert(0, _new_definition(func_ir, index_var,
-                ir.Expr.binop(fn=operator.sub, lhs=iter_first_var,
-                                      rhs=range_def[0], loc=loc),
-                loc))
+            blk.prepend(
+                _new_definition(
+                    func_ir, index_var,
+                    ir.Expr.binop(fn=operator.sub, lhs=iter_first_var,
+                                  rhs=range_def[0], loc=loc),
+                    loc
+                )
+            )
     else:
         # Insert index_var increment to the end of loop header
         loc = loop_header.loc
@@ -1176,14 +1180,20 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
         # index_var = next_index_var
         stmts.append(_new_definition(func_ir, index_var, next_index_var, loc))
         stmts.append(terminator)
-        loop_header.body = stmts
+        loop_header.replace_body(stmts)
 
     # In append_block, change list_append into array assign
     for i in range(len(append_block.body)):
         if append_block.body[i] is append_stmt:
             debug_print("Replace append with SetItem")
-            append_block.body[i] = ir.SetItem(target=array_var, index=index_var,
-                                              value=append_stmt.value.args[0], loc=append_stmt.loc)
+            append_block.replace_at(
+                i,
+                ir.SetItem(
+                    target=array_var, index=index_var,
+                    value=append_stmt.value.args[0],
+                    loc=append_stmt.loc,
+                )
+            )
 
     # replace array call, by changing "a = array(b)" to "a = b"
     stmt = func_ir.blocks[exit_block].body[array_call_index]
@@ -1266,7 +1276,7 @@ def _fix_nested_array(func_ir):
                                     new_body.extend(body[:i])
                                     new_body.append(new_vardef)
                                     new_body.extend(body[i:])
-                                    block.body = new_body
+                                    block.replace_body(new_body)
                                     new_varlist.append(new_var)
                                 else:
                                     raise GuardException
@@ -1324,7 +1334,7 @@ def _fix_nested_array(func_ir):
         block = func_ir.blocks[label]
         for stmt in block.body:
             if guard(fix_array_assign, stmt):
-                block.body.remove(stmt)
+                block.remove(stmt)
 
 def _new_definition(func_ir, var, value, loc):
     func_ir._definitions[var.name] = [value]
@@ -1349,7 +1359,7 @@ class RewriteArrayOfConsts(rewrites.Rewrite):
         return self.new_body is not None
 
     def apply(self):
-        self.crnt_block.body = self.new_body
+        self.crnt_block.replace_body(self.new_body)
         return self.crnt_block
 
 

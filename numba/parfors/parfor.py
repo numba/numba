@@ -1563,10 +1563,10 @@ class PreParforPass(object):
                             # The original A.dtype rhs is replaced with result of this call.
                             instr.value = dtype_var
                             # Add statements to body of the code.
-                            block.body.insert(0, dtype_assign)
-                            block.body.insert(0, dtype_attr_assign)
-                            block.body.insert(0, typ_var_assign)
-                            block.body.insert(0, g_np_assign)
+                            block.prepend(dtype_assign)
+                            block.prepend(dtype_attr_assign)
+                            block.prepend(typ_var_assign)
+                            block.prepend(g_np_assign)
                             self.stats['replaced_dtype'] += 1
                             break
 
@@ -1653,7 +1653,7 @@ class ConvertInplaceBinop:
                     new_body.extend(instr)
                 else:
                     new_body.append(instr)
-            block.body = new_body
+            block.replace_body(new_body)
 
     def _inplace_binop_to_parfor(self, equiv_set, loc, op, target, value):
         """generate parfor from setitem node with a boolean or slice array indices.
@@ -1684,7 +1684,7 @@ class ConvertInplaceBinop:
         getitem_call = ir.Expr.getitem(value, index_var, loc)
         pass_states.calltypes[getitem_call] = signature(
             value_typ.dtype, value_typ, index_var_typ)
-        body_block.body.append(ir.Assign(getitem_call, value_var, loc))
+        body_block.append(ir.Assign(getitem_call, value_var, loc))
 
         # Read target
         target_var = ir.Var(scope, mk_unique_var("$target_var"), loc)
@@ -1692,7 +1692,7 @@ class ConvertInplaceBinop:
         getitem_call = ir.Expr.getitem(target, index_var, loc)
         pass_states.calltypes[getitem_call] = signature(
             el_typ, arr_typ, index_var_typ)
-        body_block.body.append(ir.Assign(getitem_call, target_var, loc))
+        body_block.append(ir.Assign(getitem_call, target_var, loc))
 
         # Create temp to hold result.
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
@@ -1700,7 +1700,7 @@ class ConvertInplaceBinop:
 
         # Create binop and assign result to temporary.
         binop_expr = ir.Expr.binop(op, target_var, value_var, loc)
-        body_block.body.append(ir.Assign(binop_expr, expr_out_var, loc))
+        body_block.append(ir.Assign(binop_expr, expr_out_var, loc))
         unified_type = self.pass_states.typingctx.unify_pairs(el_typ, value_typ.dtype)
         pass_states.calltypes[binop_expr] = signature(
             unified_type, unified_type, unified_type)
@@ -1709,7 +1709,7 @@ class ConvertInplaceBinop:
         setitem_node = ir.SetItem(target, index_var, expr_out_var, loc)
         pass_states.calltypes[setitem_node] = signature(
             types.none, arr_typ, index_var_typ, el_typ)
-        body_block.body.append(setitem_node)
+        body_block.append(setitem_node)
 
         parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
                         ('inplace_binop', ''), pass_states.flags)
@@ -1820,7 +1820,7 @@ class ConvertSetItemPass:
                                 )
                                 instr = new_instr
                 new_body.append(instr)
-            block.body = new_body
+            block.replace_body(new_body)
 
     def _setitem_to_parfor(self, equiv_set, loc, target, index, value, shape=None):
         """generate parfor from setitem node with a boolean or slice array indices.
@@ -1889,7 +1889,7 @@ class ConvertSetItemPass:
             mask_var = ir.Var(scope, mk_unique_var("$mask_var"), loc)
             pass_states.typemap[mask_var.name] = bool_typ
             mask_val = ir.Expr.getitem(index, index_var, loc)
-            body_block.body.extend([
+            body_block.extend([
                ir.Assign(mask_val, mask_var, loc),
                ir.Branch(mask_var, true_label, end_label, loc)
             ])
@@ -1901,15 +1901,15 @@ class ConvertSetItemPass:
             getitem_call = ir.Expr.getitem(value, index_var, loc)
             pass_states.calltypes[getitem_call] = signature(
                 value_typ.dtype, value_typ, index_var_typ)
-            true_block.body.append(ir.Assign(getitem_call, value_var, loc))
+            true_block.append(ir.Assign(getitem_call, value_var, loc))
         else:
             value_var = value
         setitem_node = ir.SetItem(target, index_var, value_var, loc)
         pass_states.calltypes[setitem_node] = signature(
             types.none, pass_states.typemap[target.name], index_var_typ, el_typ)
-        true_block.body.append(setitem_node)
+        true_block.append(setitem_node)
         if end_label:
-            true_block.body.append(ir.Jump(end_label, loc))
+            true_block.append(ir.Jump(end_label, loc))
 
         if config.DEBUG_ARRAY_OPT >= 1:
             print("parfor from setitem")
@@ -1939,7 +1939,7 @@ def _make_index_var(typemap, scope, index_vars, body_block, force_tuple=False):
             types.uintp, ndims)
         tuple_call = ir.Expr.build_tuple(list(index_vars), loc)
         tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
-        body_block.body.append(tuple_assign)
+        body_block.append(tuple_assign)
         return tuple_var, types.containers.UniTuple(types.uintp, ndims)
     elif ndims == 1:
         return index_vars[0], types.uintp
@@ -2008,7 +2008,7 @@ class ConvertNumpyPass:
                             instr = new_instr
                     avail_vars.append(lhs.name)
                 new_body.append(instr)
-            block.body = new_body
+            block.replace_body(new_body)
 
     def _is_C_order(self, arr_name):
         if isinstance(arr_name, types.npytypes.Array):
@@ -2049,11 +2049,14 @@ class ConvertNumpyPass:
 
         # generate init block and body
         init_block = ir.Block(scope, loc)
-        init_block.body = mk_alloc(
-            pass_states.typingctx,
-            pass_states.typemap, pass_states.calltypes, lhs,
-            tuple(size_vars), el_typ, scope, loc,
-            pass_states.typemap[lhs.name])
+        init_block.replace_body(
+            mk_alloc(
+                pass_states.typingctx,
+                pass_states.typemap, pass_states.calltypes, lhs,
+                tuple(size_vars), el_typ, scope, loc,
+                pass_states.typemap[lhs.name],
+            )
+        )
         body_label = next_label()
         body_block = ir.Block(scope, loc)
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
@@ -2062,7 +2065,7 @@ class ConvertNumpyPass:
         index_var, index_var_typ = _make_index_var(
             pass_states.typemap, scope, index_vars, body_block)
 
-        body_block.body.extend(
+        body_block.extend(
             _arrayexpr_tree_to_ir(
                 pass_states.func_ir,
                 pass_states.typingctx,
@@ -2083,7 +2086,7 @@ class ConvertNumpyPass:
         setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
         pass_states.calltypes[setitem_node] = signature(
             types.none, pass_states.typemap[lhs.name], index_var_typ, el_typ)
-        body_block.body.append(setitem_node)
+        body_block.append(setitem_node)
         parfor.loop_body = {body_label: body_block}
         if config.DEBUG_ARRAY_OPT >= 1:
             print("parfor from arrayexpr")
@@ -2135,11 +2138,14 @@ class ConvertNumpyPass:
 
         # generate init block and body
         init_block = ir.Block(scope, loc)
-        init_block.body = mk_alloc(
-            pass_states.typingctx,
-            pass_states.typemap, pass_states.calltypes, lhs,
-            tuple(size_vars), el_typ, scope, loc,
-            pass_states.typemap[lhs.name])
+        init_block.replace_body(
+            mk_alloc(
+                pass_states.typingctx,
+                pass_states.typemap, pass_states.calltypes, lhs,
+                tuple(size_vars), el_typ, scope, loc,
+                pass_states.typemap[lhs.name]
+            )
+        )
         body_label = next_label()
         body_block = ir.Block(scope, loc)
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
@@ -2167,12 +2173,12 @@ class ConvertNumpyPass:
                 "Map of numpy.{} to parfor is not implemented".format(call_name))
 
         value_assign = ir.Assign(value, expr_out_var, loc)
-        body_block.body.append(value_assign)
+        body_block.append(value_assign)
 
         setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
         pass_states.calltypes[setitem_node] = signature(
             types.none, pass_states.typemap[lhs.name], index_var_typ, el_typ)
-        body_block.body.append(setitem_node)
+        body_block.append(setitem_node)
 
         parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
                         ('{} function'.format(call_name,), 'NumPy mapping'),
@@ -2220,7 +2226,7 @@ class ConvertReducePass:
                         ))
                         instr = parfor
                 new_body.append(instr)
-            block.body = new_body
+            block.replace_body(new_body)
         return
 
     def _reduce_to_parfor(self, equiv_set, lhs, args, loc):
@@ -2258,7 +2264,7 @@ class ConvertReducePass:
 
         # init block has to init the reduction variable
         init_block = ir.Block(scope, loc)
-        init_block.body.append(ir.Assign(init_val, acc_var, loc))
+        init_block.append(ir.Assign(init_val, acc_var, loc))
 
         # produce loop body
         body_label = next_label()
@@ -2277,7 +2283,7 @@ class ConvertReducePass:
             mask = ir.Var(scope, mk_unique_var("$mask_val"), loc)
             pass_states.typemap[mask.name] = mask_typ
             mask_val = ir.Expr.getitem(mask_var, index_var, loc)
-            body_block.body.extend([
+            body_block.extend([
                ir.Assign(mask_val, mask, loc),
                ir.Branch(mask, true_label, false_label, loc)
             ])
@@ -2327,8 +2333,8 @@ class ConvertReducePass:
         loop_body[end_label] = end_block
         first_reduce_label = min(reduce_f_ir.blocks.keys())
         first_reduce_block = reduce_f_ir.blocks[first_reduce_label]
-        body_block.body.extend(first_reduce_block.body)
-        first_reduce_block.body = body_block.body
+        body_block.extend(first_reduce_block.body)
+        first_reduce_block.replace_body(body_block.body)
         replace_arg_nodes(first_reduce_block, [acc_var, tmp_var])
         replace_returns(loop_body, acc_var, end_label)
         return index_var, loop_body
@@ -2404,8 +2410,10 @@ class ConvertLoopPass:
                     loc = inst.loc
                     equiv_set = pass_states.array_analysis.get_equiv_set(loop.header)
                     init_block = ir.Block(scope, loc)
-                    init_block.body = self._get_prange_init_block(blocks[entry],
-                                                            call_table, args)
+                    init_block.replace_body(
+                        self._get_prange_init_block(
+                            blocks[entry], call_table, args)
+                    )
                     loop_body = {l: blocks[l] for l in body_labels}
                     # Add an empty block to the end of loop body
                     end_label = next_label()
@@ -2529,8 +2537,8 @@ class ConvertLoopPass:
                             pass_states.typemap, scope, index_vars, body_block,
                             force_tuple=True
                         )
-                        body = body_block.body + first_body_block.body
-                        first_body_block.body = body
+                        body = [*body_block.body, *first_body_block.body]
+                        first_body_block.replace_body(body)
                         if mask_indices:
                             orig_index_var = orig_index[0]
                         else:
@@ -2601,7 +2609,9 @@ class ConvertLoopPass:
                         # So we just add the header to the first loop body block (minus the
                         # branch) and let dead code elimination remove the unnecessary parts.
                         first_body_label = min(loop_body.keys())
-                        loop_body[first_body_label].body = header_body + loop_body[first_body_label].body
+                        loop_body[first_body_label].replace_body(
+                            [*header_body, *loop_body[first_body_label].body],
+                        )
 
                     index_var_map = {v: index_var for v in loop_index_vars}
                     replace_vars(loop_body, index_var_map)
@@ -2616,13 +2626,13 @@ class ConvertLoopPass:
                                     ("prange", loop_kind, loop_replacing),
                                     pass_states.flags, races=races)
 
-                    blocks[loop.header].body = [parfor]
+                    blocks[loop.header].replace_body([parfor])
                     # We have to insert the header_body after the parfor because in
                     # a Numba loop this will be executed one more times before the
                     # branch and may contain instructions such as variable renamings
                     # that are relied upon later.
-                    blocks[loop.header].body.extend(header_body)
-                    blocks[loop.header].body.append(ir.Jump(list(loop.exits)[0], loc))
+                    blocks[loop.header].extend(header_body)
+                    blocks[loop.header].append(ir.Jump(list(loop.exits)[0], loc))
                     self.rewritten.append(dict(
                         old_loop=loop,
                         new=parfor,
@@ -2699,8 +2709,11 @@ class ConvertLoopPass:
 
             init_body.reverse()
             saved_nodes.reverse()
-            entry_block.body = (entry_block.body[:init_call_ind]
-                        + saved_nodes + entry_block.body[prange_call_ind+1:])
+            entry_block.replace_body(
+                [*entry_block.body[:init_call_ind],
+                 *saved_nodes,
+                 *entry_block.body[prange_call_ind+1:]],
+            )
 
         return init_body
 
@@ -2959,7 +2972,7 @@ class ParforPass(ParforPassStates):
                             ir_print = ir.Print([lhs], None, loc)
                             self.calltypes[ir_print] = signature(types.none, lhs_typ)
                             new_block.append(ir_print)
-                block.body = new_block
+                block.replace_body(new_block)
 
         if self.func_ir.is_generator:
             fix_generator_types(self.func_ir.generator_info, self.return_type,
@@ -3044,7 +3057,7 @@ class ParforPass(ParforPassStates):
                         self.fuse_recursive_parfor(stmt, equiv_set, func_ir, typemap)
                     i += 1
                 new_body.append(block.body[-1])
-                block.body = new_body
+                block.replace_body(new_body)
         return
 
     def fuse_recursive_parfor(self, parfor, equiv_set, func_ir, typemap):
@@ -3278,7 +3291,7 @@ def _gen_arrayexpr_getitem(
         ravel_typ = types.npytypes.Array(dtype=var_typ.dtype, ndim=1, layout='C')
         typemap[ravel_var.name] = ravel_typ
         stmts = ir_utils.gen_np_call('ravel', numpy.ravel, ravel_var, [var], typingctx, typemap, calltypes)
-        init_block.body.extend(stmts)
+        init_block.extend(stmts)
         var = ravel_var
         # Const(0)
         const_node = ir.Const(0, var.loc)
@@ -3371,11 +3384,11 @@ def _lower_parfor_sequential_block(
         loc = inst.init_block.loc
         # split block across parfor
         prev_block = ir.Block(scope, loc)
-        prev_block.body = block.body[:i]
-        block.body = block.body[i + 1:]
+        prev_block.replace_body(block.body[:i])
+        block.replace_body(block.body[i + 1:])
         # previous block jump to parfor init block
         init_label = next_label()
-        prev_block.body.append(ir.Jump(init_label, loc))
+        prev_block.append(ir.Jump(init_label, loc))
         new_blocks[init_label] = transfer_scope(inst.init_block, scope)
         new_blocks[block_label] = prev_block
         block_label = next_label()
@@ -3403,7 +3416,7 @@ def _lower_parfor_sequential_block(
             new_blocks[header_label] = header_block
             # jump to this new inner loop
             if i == 0:
-                inst.init_block.body.append(ir.Jump(range_label, loc))
+                inst.init_block.append(ir.Jump(range_label, loc))
                 header_block.body[-1].falsebr = block_label
             else:
                 new_blocks[prev_header_label].body[-1].truebr = range_label
@@ -3412,7 +3425,7 @@ def _lower_parfor_sequential_block(
 
         # last body block jump to inner most header
         body_last_label = max(inst.loop_body.keys())
-        inst.loop_body[body_last_label].body.append(
+        inst.loop_body[body_last_label].append(
             ir.Jump(header_label, loc))
         # inner most header jumps to first body block
         body_first_label = min(inst.loop_body.keys())
@@ -3453,7 +3466,7 @@ def get_parfor_params(blocks, options_fusion, fusion_info):
         for i, parfor in _find_parfors(block.body):
             # find variable defs before the parfor in the same block
             dummy_block = ir.Block(block.scope, block.loc)
-            dummy_block.body = block.body[:i]
+            dummy_block.replace_body(block.body[:i])
             before_defs = compute_use_defs({0: dummy_block}).defmap[0]
             pre_defs |= before_defs
             params = get_parfor_params_inner(
@@ -3954,8 +3967,8 @@ def maximize_fusion_inner(func_ir, block, call_table, alias_map,
                         if up_direction else _can_reorder_stmts(next_stmt, stmt,
                         func_ir, call_table, alias_map, arg_aliases))
         if can_reorder:
-            block.body[i] = next_stmt
-            block.body[i+1] = stmt
+            block.replace_at(i, next_stmt)
+            block.replace_at(i + 1, stmt)
             order_changed = True
         i += 1
     return order_changed
@@ -4111,14 +4124,14 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
 def fuse_parfors_inner(parfor1, parfor2):
     # fuse parfor2 into parfor1
     # append parfor2's init block on parfor1's
-    parfor1.init_block.body.extend(parfor2.init_block.body)
+    parfor1.init_block.extend(parfor2.init_block.body)
 
     # append parfor2's first block to parfor1's last block
     parfor2_first_label = min(parfor2.loop_body.keys())
     parfor2_first_block = parfor2.loop_body[parfor2_first_label].body
     parfor1_first_label = min(parfor1.loop_body.keys())
     parfor1_last_label = max(parfor1.loop_body.keys())
-    parfor1.loop_body[parfor1_last_label].body.extend(parfor2_first_block)
+    parfor1.loop_body[parfor1_last_label].extend(parfor2_first_block)
 
     # add parfor2 body blocks to parfor1's except first
     parfor1.loop_body.update(parfor2.loop_body)
@@ -4167,7 +4180,7 @@ def remove_duplicate_definitions(blocks, nameset):
                         continue
                     defined.add(name)
             new_body.append(inst)
-        block.body = new_body
+        block.replace_body(new_body)
     return
 
 
@@ -4474,7 +4487,7 @@ def remove_dead_parfor(parfor, lives, lives_n_aliases, arg_aliases, alias_map, f
     return_label, tuple_var = _add_liveness_return_block(blocks, lives_n_aliases, typemap)
     # jump to return label
     jump = ir.Jump(return_label, ir.Loc("parfors_dummy", -1))
-    blocks[last_label].body.append(jump)
+    blocks[last_label].append(jump)
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
@@ -4499,10 +4512,10 @@ def remove_dead_parfor(parfor, lives, lives_n_aliases, arg_aliases, alias_map, f
             in_lives |= {v.name for v in stmt.list_vars()}
             new_body.append(stmt)
         new_body.reverse()
-        block.body = new_body
+        block.replace_body(new_body)
 
     typemap.pop(tuple_var.name)  # remove dummy tuple type
-    blocks[last_label].body.pop()  # remove jump
+    blocks[last_label].pop()  # remove jump
 
     """
       Process parfor body recursively.
@@ -4588,17 +4601,17 @@ def remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map,
     typemap[branchcond.name] = types.boolean
 
     branch = ir.Branch(branchcond, first_body_block, return_label, ir.Loc("parfors_dummy", -1))
-    blocks[last_label].body.append(branch)
+    blocks[last_label].append(branch)
 
     # add dummy jump in init_block for CFG to work
     blocks[0] = parfor.init_block
-    blocks[0].body.append(ir.Jump(first_body_block, ir.Loc("parfors_dummy", -1)))
+    blocks[0].append(ir.Jump(first_body_block, ir.Loc("parfors_dummy", -1)))
 
     # args var including aliases is ok
     remove_dead(blocks, arg_aliases, func_ir, typemap, alias_map, arg_aliases)
     typemap.pop(tuple_var.name)  # remove dummy tuple type
-    blocks[0].body.pop()  # remove dummy jump
-    blocks[last_label].body.pop()  # remove branch
+    blocks[0].pop()  # remove dummy jump
+    blocks[last_label].pop()  # remove branch
     return
 
 def _add_liveness_return_block(blocks, lives, typemap):
@@ -4616,8 +4629,8 @@ def _add_liveness_return_block(blocks, lives, typemap):
         types.uintp, 2)
     live_vars = [ir.Var(scope, v, loc) for v in lives]
     tuple_call = ir.Expr.build_tuple(live_vars, loc)
-    blocks[return_label].body.append(ir.Assign(tuple_call, tuple_var, loc))
-    blocks[return_label].body.append(ir.Return(tuple_var, loc))
+    blocks[return_label].append(ir.Assign(tuple_call, tuple_var, loc))
+    blocks[return_label].append(ir.Return(tuple_var, loc))
     return return_label, tuple_var
 
 
@@ -4644,11 +4657,11 @@ def simplify_parfor_body_CFG(blocks):
                 scope = last_block.scope
                 loc = ir.Loc("parfors_dummy", -1)
                 const = ir.Var(scope, mk_unique_var("$const"), loc)
-                last_block.body.append(ir.Assign(ir.Const(0, loc), const, loc))
-                last_block.body.append(ir.Return(const, loc))
+                last_block.append(ir.Assign(ir.Const(0, loc), const, loc))
+                last_block.append(ir.Return(const, loc))
                 parfor.loop_body = simplify_CFG(parfor.loop_body)
                 last_block = parfor.loop_body[max(parfor.loop_body.keys())]
-                last_block.body.pop()
+                last_block.pop()
                 # call on body recursively
                 simplify_parfor_body_CFG(parfor.loop_body)
     return n_parfors
@@ -4663,10 +4676,10 @@ def wrap_parfor_blocks(parfor, entry_label = None):
 
     # add dummy jump in init_block for CFG to work
     blocks[0] = parfor.init_block
-    blocks[0].body.append(ir.Jump(entry_label, blocks[0].loc))
+    blocks[0].append(ir.Jump(entry_label, blocks[0].loc))
     for block in blocks.values():
         if len(block.body) == 0 or (not block.body[-1].is_terminator):
-            block.body.append(ir.Jump(entry_label, block.loc))
+            block.append(ir.Jump(entry_label, block.loc))
     return blocks
 
 
@@ -4687,14 +4700,14 @@ def unwrap_parfor_blocks(parfor, blocks=None):
     assert isinstance(parfor.init_block.body[-1], ir.Jump)
 
     # remove dummy jump to loop body
-    parfor.init_block.body.pop()
+    parfor.init_block.pop()
 
     # make sure dummy jump back to loop body isn't altered
     for block in parfor.loop_body.values():
         if (isinstance(block.body[-1], ir.Jump) and
             block.body[-1].target == first_body_label):
             # remove dummy jump back to loop
-            block.body.pop()
+            block.pop()
     return
 
 
@@ -4747,13 +4760,13 @@ def apply_copies_parfor(parfor, var_dict, name_var_table,
     for lhs_name, rhs in var_dict.items():
         assign_list.append(ir.Assign(rhs, name_var_table[lhs_name],
                                      ir.Loc("dummy", -1)))
-    blocks[0].body = assign_list + blocks[0].body
+    blocks[0].replace_body([*assign_list, *blocks[0].body])
     in_copies_parfor, out_copies_parfor = copy_propagate(blocks, typemap)
     apply_copy_propagate(blocks, in_copies_parfor, name_var_table, typemap,
                          calltypes, save_copies)
     unwrap_parfor_blocks(parfor)
     # remove dummy assignments
-    blocks[0].body = blocks[0].body[len(assign_list):]
+    blocks[0].replace_body(blocks[0].body[len(assign_list):])
     return
 
 
@@ -4803,7 +4816,7 @@ def push_call_vars(blocks, saved_globals, saved_getattrs, typemap, nested=False)
                 new_body += _get_saved_call_nodes(v.name, saved_globals,
                                                   saved_getattrs, block_defs, rename_dict)
             new_body.append(stmt)
-        block.body = new_body
+        block.replace_body(new_body)
         # If there is anything to rename then apply the renaming here.
         if len(rename_dict) > 0:
             # Fix-up the typing for the renamed vars.
@@ -4959,12 +4972,12 @@ def parfor_typeinfer(parfor, typeinferer):
     loc = blocks[first_block].loc
     # XXX
     index_assigns = [ir.Assign(ir.Const(1, loc=loc, use_literal_type=False), v, loc) for v in index_vars]
-    save_first_block_body = blocks[first_block].body
-    blocks[first_block].body = index_assigns + blocks[first_block].body
+    save_first_block_body = blocks[first_block].body.copy()
+    blocks[first_block].replace_body([*index_assigns, *blocks[first_block].body])
     typeinferer.blocks = blocks
     typeinferer.build_constraint()
     typeinferer.blocks = save_blocks
-    blocks[first_block].body = save_first_block_body
+    blocks[first_block].replace_body(save_first_block_body)
     unwrap_parfor_blocks(parfor)
 
 
@@ -4991,11 +5004,11 @@ def dummy_return_in_loop_body(loop_body):
     last_label = max(loop_body.keys())
     scope = loop_body[last_label].scope
     const = ir.Var(scope, mk_unique_var("$const"), ir.Loc("parfors_dummy", -1))
-    loop_body[last_label].body.append(
+    loop_body[last_label].append(
         ir.Return(const, ir.Loc("parfors_dummy", -1)))
     yield
     # remove dummy return
-    loop_body[last_label].body.pop()
+    loop_body[last_label].pop()
 
 @infer_global(reduce)
 class ReduceInfer(AbstractTemplate):

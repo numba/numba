@@ -334,8 +334,8 @@ def canonicalize_cfg_single_backedge(blocks):
             if header in blk.terminator.get_targets():
                 newblk = blk.copy()
                 # rewrite backedge into jumps to new tail block
-                newblk.body[-1] = replace_target(blk.terminator, header,
-                                                 tailkey)
+                newblk.replace_at(-1, replace_target(blk.terminator, header,
+                                                     tailkey))
                 newblocks[blkkey] = newblk
         # create new tail block
         entryblk = newblocks[header]
@@ -722,11 +722,9 @@ def _rewrite_return(func_ir, target_block_label):
     # get the contents of the return block
     return_body = func_ir.blocks[target_block_successor_label].body
     # finally, re-assign all blocks
-    new_block.body.extend(return_body)
-    target_block_successor.body.clear()
-    target_block_successor.body.extend(bottom_body)
-    target_block.body.clear()
-    target_block.body.extend(top_body)
+    new_block.extend(return_body)
+    target_block_successor.replace_body(bottom_body)
+    target_block.replace_body(top_body)
 
     # finally, append the new return block and rebuild the IR properties
     func_ir.blocks[new_label] = new_block
@@ -853,23 +851,23 @@ def _fix_multi_exit_blocks(func_ir, exit_nodes, *, split_condition=None):
         remainings.append(after)
 
         # Add control-point variable to mark which exit block this is.
-        blk.body = before
+        blk.replace_body(before)
         loc = blk.loc
-        blk.body.append(
+        blk.append(
             ir.Assign(value=ir.Const(i, loc=loc),
                       target=scope.get_or_define("$cp", loc=loc),
                       loc=loc)
         )
         # Replace terminator with a jump to the common block
         assert not blk.is_terminated
-        blk.body.append(ir.Jump(common_label, loc=ir.unknown_loc))
+        blk.append(ir.Jump(common_label, loc=ir.unknown_loc))
 
     if split_condition is not None:
         # Move the splitting statement to the common block
-        common_block.body.append(remainings[0][0])
+        common_block.append(remainings[0][0])
     assert not common_block.is_terminated
     # Append jump from common block to post block
-    common_block.body.append(ir.Jump(post_label, loc=loc))
+    common_block.append(ir.Jump(post_label, loc=loc))
 
     # Make if-else tree to jump to target
     remain_blocks = []
@@ -884,7 +882,7 @@ def _fix_multi_exit_blocks(func_ir, exit_nodes, *, split_condition=None):
         match_rhs = scope.redefine("$cp_rhs", loc=loc)
 
         # Do comparison to match control-point variable to the exit block
-        switch_block.body.append(
+        switch_block.append(
             ir.Assign(
                 value=ir.Const(i, loc=loc),
                 target=match_rhs,
@@ -893,7 +891,7 @@ def _fix_multi_exit_blocks(func_ir, exit_nodes, *, split_condition=None):
         )
 
         # Add assignment for the comparison
-        switch_block.body.append(
+        switch_block.append(
             ir.Assign(
                 value=ir.Expr.binop(
                     fn=operator.eq, lhs=scope.get("$cp"), rhs=match_rhs,
@@ -906,13 +904,13 @@ def _fix_multi_exit_blocks(func_ir, exit_nodes, *, split_condition=None):
 
         # Insert jump to the next case
         [jump_target] = remain[-1].get_targets()
-        switch_block.body.append(
+        switch_block.append(
             ir.Branch(match_expr, jump_target, remain_blocks[i], loc=loc),
         )
         switch_block = ir.Block(scope=scope, loc=loc)
         blocks[remain_blocks[i]] = switch_block
 
     # Add the final jump
-    switch_block.body.append(ir.Jump(jump_target, loc=loc))
+    switch_block.append(ir.Jump(jump_target, loc=loc))
 
     return func_ir, common_label

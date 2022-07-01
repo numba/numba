@@ -715,12 +715,12 @@ def wrap_loop_body(loop_body):
     first_label = min(blocks.keys())
     last_label = max(blocks.keys())
     loc = blocks[last_label].loc
-    blocks[last_label].body.append(ir.Jump(first_label, loc))
+    blocks[last_label].append(ir.Jump(first_label, loc))
     return blocks
 
 def unwrap_loop_body(loop_body):
     last_label = max(loop_body.keys())
-    loop_body[last_label].body = loop_body[last_label].body[:-1]
+    loop_body[last_label].replace_body(loop_body[last_label].body[:-1])
 
 def add_to_def_once_sets(a_def, def_once, def_more):
     '''If the variable is already defined more than once, do nothing.
@@ -945,10 +945,10 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
                             # don't add this instruction to the block since it is hoisted
                             continue
                     new_init_block.append(ib_inst)
-                inst.init_block.body = new_init_block
+                inst.init_block.replace_body(new_init_block)
 
             new_block.append(inst)
-        block.body = new_block
+        block.replace_body(new_block)
     return hoisted, not_hoisted
 
 def redtyp_is_scalar(redtype):
@@ -1436,7 +1436,9 @@ def _create_gufunc_for_parfor_body(
     wrapped_blocks = wrap_loop_body(loop_body)
     hoisted, not_hoisted = hoist(parfor_params, loop_body, typemap, wrapped_blocks)
     start_block = gufunc_ir.blocks[min(gufunc_ir.blocks.keys())]
-    start_block.body = start_block.body[:-1] + hoisted + [start_block.body[-1]]
+    start_block.replace_body(
+        start_block.body[:-1] + hoisted + [start_block.body[-1]]
+    )
     unwrap_loop_body(loop_body)
 
     # store hoisted into diagnostics
@@ -1461,9 +1463,9 @@ def _create_gufunc_for_parfor_body(
                 # A new block is allocated for the statements prior to the sentinel
                 # but the new block maintains the current block label.
                 prev_block = ir.Block(scope, loc)
-                prev_block.body = block.body[:i]
+                prev_block.replace_body(block.body[:i])
                 # The current block is used for statements after the sentinel.
-                block.body = block.body[i + 1:]
+                block.replace_body(block.body[i + 1:])
                 # But the current block gets a new label.
                 body_first_label = min(loop_body.keys())
 
@@ -1550,7 +1552,9 @@ def replace_var_with_array_in_block(vars, block, typemap, calltypes):
 
 def replace_var_with_array_internal(vars, loop_body, typemap, calltypes):
     for label, block in loop_body.items():
-        block.body = replace_var_with_array_in_block(vars, block, typemap, calltypes)
+        block.replace_body(
+            replace_var_with_array_in_block(vars, block, typemap, calltypes)
+        )
 
 def replace_var_with_array(vars, loop_body, typemap, calltypes):
     replace_var_with_array_internal(vars, loop_body, typemap, calltypes)

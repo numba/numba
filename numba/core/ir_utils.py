@@ -219,8 +219,10 @@ def mk_range_block(typemap, start, stop, step, calltypes, scope, loc):
     # jump to header
     jump_header = ir.Jump(-1, loc)
     range_block = ir.Block(scope, loc)
-    range_block.body = arg_nodes + [g_range_assign, range_call_assign,
-                                    iter_call_assign, phi_assign, jump_header]
+    range_block.replace_body(
+        [*arg_nodes, g_range_assign, range_call_assign,
+         iter_call_assign, phi_assign, jump_header]
+    )
     return range_block
 
 
@@ -303,8 +305,10 @@ def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
     # branch pair_second_var body_block out_block
     branch = ir.Branch(pair_second_var, -1, -1, loc)
     header_block = ir.Block(scope, loc)
-    header_block.body = [iternext_assign, pair_first_assign,
-                         pair_second_assign, phi_b_assign, branch]
+    header_block.replace_body(
+        [iternext_assign, pair_first_assign, pair_second_assign, phi_b_assign,
+         branch]
+    )
     return header_block
 
 
@@ -476,10 +480,10 @@ def add_offset_to_labels(blocks, offset):
                     if isinstance(inst, T):
                         f_max = f(inst, offset)
         if isinstance(term, ir.Jump):
-            b.body[-1] = ir.Jump(term.target + offset, term.loc)
+            b.replace_at(-1, ir.Jump(term.target + offset, term.loc))
         if isinstance(term, ir.Branch):
-            b.body[-1] = ir.Branch(term.cond, term.truebr + offset,
-                                   term.falsebr + offset, term.loc)
+            b.replace_at(-1, ir.Branch(term.cond, term.truebr + offset,
+                                            term.falsebr + offset, term.loc))
         new_blocks[l + offset] = b
     return new_blocks
 
@@ -525,10 +529,10 @@ def flatten_labels(blocks):
         if b.body:
             term = b.body[-1]
         if isinstance(term, ir.Jump):
-            b.body[-1] = ir.Jump(l_map[term.target], term.loc)
+            b.replace_at(-1, ir.Jump(l_map[term.target], term.loc))
         if isinstance(term, ir.Branch):
-            b.body[-1] = ir.Branch(term.cond, l_map[term.truebr],
-                                   l_map[term.falsebr], term.loc)
+            b.replace_at(-1, ir.Branch(term.cond, l_map[term.truebr],
+                                        l_map[term.falsebr], term.loc))
         new_blocks[l_map[t_node]] = b
     return new_blocks
 
@@ -540,7 +544,7 @@ def remove_dels(blocks):
         for stmt in block.body:
             if not isinstance(stmt, ir.Del):
                 new_body.append(stmt)
-        block.body = new_body
+        block.replace_body(new_body)
     return
 
 
@@ -552,7 +556,7 @@ def remove_args(blocks):
             if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Arg):
                 continue
             new_body.append(stmt)
-        block.body = new_body
+        block.replace_body(new_body)
     return
 
 
@@ -697,7 +701,7 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
 
         new_body.append(stmt)
     new_body.reverse()
-    block.body = new_body
+    block.replace_body(new_body)
     return removed
 
 # list of functions
@@ -1312,7 +1316,7 @@ def simplify_CFG(blocks):
         for (p, q) in predecessors:
             block = blocks[p]
             if isinstance(block.body[-1], ir.Jump):
-                block.body[-1] = copy.copy(inst)
+                block.replace_at(-1, copy.copy(inst))
             else:
                 delete_block = False
         if delete_block:
@@ -1378,7 +1382,7 @@ def canonicalize_array_math(func_ir, typemap, calltypes, typingctx):
                     rhs.args = [arr] + rhs.args
 
             new_body.append(stmt)
-        block.body = new_body
+        block.replace_body(new_body)
     return
 
 
@@ -1450,8 +1454,8 @@ def merge_adjacent_blocks(blocks):
             # if block.scope != next_block.scope:
             #     break
             # merge
-            block.body.pop()  # remove Jump
-            block.body += next_block.body
+            block.pop()  # remove Jump
+            block.extend(next_block.body)
             del blocks[next_label]
             removed.add(next_label)
             label = next_label
@@ -1809,13 +1813,13 @@ def replace_returns(blocks, target, return_label):
             continue
         stmt = block.terminator
         if isinstance(stmt, ir.Return):
-            block.body.pop()  # remove return
-            cast_stmt = block.body.pop()
+            block.pop()  # remove return
+            cast_stmt = block.pop()
             assert (isinstance(cast_stmt, ir.Assign)
                 and isinstance(cast_stmt.value, ir.Expr)
                 and cast_stmt.value.op == 'cast'), "invalid return cast"
-            block.body.append(ir.Assign(cast_stmt.value.value, target, stmt.loc))
-            block.body.append(ir.Jump(return_label, stmt.loc))
+            block.append(ir.Assign(cast_stmt.value.value, target, stmt.loc))
+            block.append(ir.Jump(return_label, stmt.loc))
 
 
 def gen_np_call(func_as_str, func, lhs, args, typingctx, typemap, calltypes):

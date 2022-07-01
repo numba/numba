@@ -442,7 +442,10 @@ class TestIRCompounds(CheckEquality):
                 b = blk.body
                 change_set.add(str(b[idx + 1]))
                 change_set.add(str(b[idx]))
-                b[idx], b[idx + 1] = b[idx + 1], b[idx]
+                first = b[idx]
+                second = b[idx + 1]
+                blk.replace_at(idx, second)
+                blk.replace_at(idx + 1, first)
                 break
 
         # ensure that a mutation occurred.
