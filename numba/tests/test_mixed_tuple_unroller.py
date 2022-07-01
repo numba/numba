@@ -1,6 +1,8 @@
 from collections import namedtuple
+import types as pytypes
 import numpy as np
 
+import numba
 from numba.tests.support import (TestCase, MemoryLeakMixin,
                                  skip_parfors_unsupported, captured_stdout)
 from numba import njit, typed, literal_unroll, prange
@@ -21,6 +23,11 @@ from numba.core.ir_utils import (compute_cfg_from_blocks, flatten_labels)
 from numba.core.types.functions import _header_lead
 
 _X_GLOBAL = (10, 11)
+
+
+# This is a fake numba module, like numba, has literal_unroll, but is not numba
+_fake_numba = pytypes.ModuleType('fake_numba')
+_fake_numba.__dict__['literal_unroll'] = literal_unroll
 
 
 class TestLiteralTupleInterpretation(MemoryLeakMixin, TestCase):
@@ -302,20 +309,12 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
             range_inst = canonicalise_loops_fndesc.calltypes[x].args[0]
             self.assertTrue(isinstance(range_inst, types.RangeType))
 
-    def test_influence_of_typed_transform_literal_unroll(self):
+    def _check_influence_of_typed_transform_literal_unroll(self, func):
         """ This heavily checks a typed transformation only impacts loops with
         literal_unroll marker"""
 
         def get_info(pipeline):
-            @njit(pipeline_class=pipeline)
-            def foo(tup):
-                acc = 0
-                for i in range(4):
-                    for y in literal_unroll(tup):
-                        for j in range(3):
-                            acc += 1
-                return acc
-
+            foo = njit(pipeline_class=pipeline)(func)
             x = (1, 2, 3)
             self.assertEqual(foo(x), foo.py_func(x))
             cres = foo.overloads[foo.signatures[0]]
@@ -363,6 +362,44 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
         for x in cl_getiters:
             range_inst = canonicalise_loops_fndesc.calltypes[x].args[0]
             self.assertTrue(isinstance(range_inst, types.RangeType))
+
+    def test_influence_of_typed_transform_literal_unroll(self):
+        def func(tup):
+            acc = 0
+            for i in range(4):
+                for y in literal_unroll(tup):
+                    for j in range(3):
+                        acc += 1
+            return acc
+        self._check_influence_of_typed_transform_literal_unroll(func)
+
+    def test_influence_of_typed_transform_numba_literal_unroll(self):
+        # as above test_influence_of_typed_transform_literal_unroll, but using
+        # numba.literal_unroll
+        def func(tup):
+            acc = 0
+            for i in range(4):
+                for y in numba.literal_unroll(tup):
+                    for j in range(3):
+                        acc += 1
+            return acc
+        self._check_influence_of_typed_transform_literal_unroll(func)
+
+    def test_influence_of_typed_transform_fake_numba_literal_unroll(self):
+        # as above test_influence_of_typed_transform_literal_unroll, but using
+        # _fake_numba.literal_unroll
+
+        def func(tup):
+            acc = 0
+            for i in range(4):
+                for y in _fake_numba.literal_unroll(tup):
+                    for j in range(3):
+                        acc += 1
+            return acc
+        # This should just fail, fake_numba isn't permissible as a token for
+        # transform.
+        with self.assertRaises(AssertionError):
+            self._check_influence_of_typed_transform_literal_unroll(func)
 
     @unittest.skip("Waiting for pass to be enabled for all tuples")
     def test_lots_of_loops(self):
@@ -1231,8 +1268,51 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         self.assertIn("found multiple definitions of variable",
                       str(raises.exception))
 
+    def test_35(self):
+        # same as test_02 but with numba.literal_unroll opposed to just calling
+        # literal_unroll
+
+        @njit
+        def foo(idx, z):
+            x = (12, 12.7, 3j, 4, z, 2 * z)
+            acc = 0
+            for a in numba.literal_unroll(x):
+                acc += a
+                if acc.real < 26:
+                    acc -= 1
+                else:
+                    break
+            return acc
+
+        f = 9
+        k = f
+
+        self.assertEqual(foo(2, k), foo.py_func(2, k))
+
+
+# This is a stub for implementing a check that a const-list has been converted
+# to a tuple in `TestConstListUnroll` tests.
+def _check_is_tuple(x):
+    pass
+
 
 class TestConstListUnroll(MemoryLeakMixin, TestCase):
+
+    @overload(_check_is_tuple, prefer_literal=True)
+    def ol_check_is_tuple(x):
+        # Require that the const-list to tuple transform has occurred. Typing
+        # will try a list first, then once the transform occurs, it should be
+        # a tuple.
+        if isinstance(x, types.List):
+            msg = ('raising a typing error on list type to trigger transform '
+                   'to const-list i.e. tuple')
+            raise errors.TypingError(msg)
+        if not isinstance(x, types.Tuple):
+            raise AssertionError("type must be Tuple")
+
+        def impl(x):
+            pass
+        return impl
 
     def test_01(self):
 
@@ -1246,6 +1326,7 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
                     acc -= 1
                 else:
                     break
+            _check_is_tuple(a)
             return acc
 
         self.assertEqual(foo(), foo.py_func())
@@ -1263,6 +1344,7 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
                     acc -= 1
                 else:
                     break
+            _check_is_tuple(x)
             return acc
 
         self.assertEqual(foo(), foo.py_func())
@@ -1282,6 +1364,7 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
                     for t in literal_unroll(y):
                         acc += t is False
                     break
+            _check_is_tuple(x)
             return acc
 
         self.assertEqual(foo(), foo.py_func())
@@ -1301,6 +1384,7 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
                     for t in literal_unroll(y):
                         acc += t is False
                     break
+            _check_is_tuple(x)
             return acc
 
         self.assertEqual(foo(), foo.py_func())
@@ -1402,6 +1486,7 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
                     x.append(t)
                 elif t == "banana":
                     x.append("2.0")
+            _check_is_tuple(z)
             return x
 
         self.assertEqual(foo(), foo.py_func())
@@ -1422,6 +1507,7 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
                     break
             if a[0] < 23:
                 acc += 2
+            _check_is_tuple(a)
             return acc
 
         f = 9
@@ -1472,8 +1558,8 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
             acc = 0
             for a in literal_unroll(x):
                 acc += a
+            _check_is_tuple(x)
             return a
-
         self.assertEqual(foo(), foo.py_func())
 
     def test_12(self):
@@ -1524,6 +1610,46 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
 
         self.assertIn("Unknown attribute 'append' of type Tuple",
                       str(raises.exception))
+
+    def test_15(self):
+        # same as test_02 but with numba.literal_unroll opposed to just calling
+        # literal_unroll
+        @njit
+        def foo():
+            x = [12, 12.7, 3j, 4]
+            acc = 0
+            for a in numba.literal_unroll(x):
+                acc += a
+                if acc.real < 26:
+                    acc -= 1
+                else:
+                    break
+            _check_is_tuple(x)
+            return acc
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_16(self):
+        # same as test_15 but with fake_numba.literal_unroll, this is not
+        # supported as it's not the "numba" module.
+        @njit
+        def foo():
+            x = [12, 12.7, 3j, 4]
+            acc = 0
+            for a in _fake_numba.literal_unroll(x):
+                acc += a
+                if acc.real < 26:
+                    acc -= 1
+                else:
+                    break
+            _check_is_tuple(x)
+            return acc
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+
+        msg = "raising a typing error on list type"
+        self.assertIn(msg, str(raises.exception))
 
 
 class TestMore(TestCase):
@@ -1906,6 +2032,31 @@ class TestLiteralUnrollPassTriggering(TestCase):
         foo()
         cres = foo.overloads[foo.signatures[0]]
         self.assertTrue(cres.metadata['mutation_results'][LiteralUnroll])
+
+    def test_literal_unroll_is_invoked_via_getattr_on_numba(self):
+        @njit(pipeline_class=CapturingCompiler)
+        def foo():
+            acc = 0
+            for i in numba.literal_unroll((1, 2, 3)):
+                acc += i
+            return acc
+
+        foo()
+        cres = foo.overloads[foo.signatures[0]]
+        self.assertTrue(cres.metadata['mutation_results'][LiteralUnroll])
+
+    def test_literal_unroll_is_not_invoked_from_fake_numba(self):
+
+        @njit(pipeline_class=CapturingCompiler)
+        def foo():
+            acc = 0
+            for i in _fake_numba.literal_unroll((1, 2, 3)):
+                acc += i
+            return acc
+
+        foo()
+        cres = foo.overloads[foo.signatures[0]]
+        self.assertFalse(cres.metadata['mutation_results'][LiteralUnroll])
 
     def test_literal_unroll_assess_empty_function(self):
         @njit(pipeline_class=CapturingCompiler)

@@ -21,6 +21,7 @@ from numba.core.ir_utils import (guard, resolve_func_from_module, simplify_CFG,
                                  )
 from numba.core.ssa import reconstruct_ssa
 from numba.core import interpreter
+import numba # Need this to check for attributes on the Numba module itself.
 
 
 @contextmanager
@@ -626,109 +627,123 @@ class TransformLiteralUnrollConstListToTuple(FunctionPass):
         for label, blk in func_ir.blocks.items():
             calls = [_ for _ in blk.find_exprs('call')]
             for call in calls:
-                glbl = guard(get_definition, func_ir, call.func)
-                if glbl and isinstance(glbl, (ir.Global, ir.FreeVar)):
-                    # find a literal_unroll
-                    if glbl.value is literal_unroll:
-                        if len(call.args) > 1:
-                            msg = "literal_unroll takes one argument, found %s"
-                            raise errors.UnsupportedError(msg % len(call.args),
-                                                          call.loc)
-                        # get the arg, make sure its a build_list
-                        unroll_var = call.args[0]
-                        to_unroll = guard(get_definition, func_ir, unroll_var)
-                        if (isinstance(to_unroll, ir.Expr) and
-                                to_unroll.op == "build_list"):
-                            # make sure they are all const items in the list
-                            for i, item in enumerate(to_unroll.items):
-                                val = guard(get_definition, func_ir, item)
-                                if not val:
-                                    msg = ("multiple definitions for variable "
-                                           "%s, cannot resolve constant")
-                                    raise errors.UnsupportedError(msg % item,
-                                                                  to_unroll.loc)
-                                if not isinstance(val, ir.Const):
-                                    msg = ("Found non-constant value at "
-                                           "position %s in a list argument to "
-                                           "literal_unroll" % i)
-                                    raise errors.UnsupportedError(msg,
-                                                                  to_unroll.loc)
-                            # The above appears ok, now swap the build_list for
-                            # a built tuple.
+                glbl = None
+                glbl_tmp = guard(get_definition, func_ir, call.func)
+                if isinstance(glbl_tmp, ir.Expr) and glbl_tmp.op == "getattr":
+                    if glbl_tmp.attr == "literal_unroll":
+                        # resolve the getattr, make sure it's getting
+                        # attr "literal_unroll" from the numba module.
+                        got_attr = guard(get_definition, func_ir,
+                                         glbl_tmp.value)
+                        if isinstance(got_attr, (ir.Global, ir.FreeVar)):
+                            if got_attr.value == numba:
+                                glbl = literal_unroll
+                else:
+                    if isinstance(glbl_tmp, (ir.Global, ir.FreeVar)):
+                        glbl = glbl_tmp.value
 
-                            # find the assignment for the unroll target
-                            to_unroll_lhs = guard(get_definition, func_ir,
-                                                  unroll_var, lhs_only=True)
+                # find a literal_unroll
+                if glbl is literal_unroll:
 
-                            if to_unroll_lhs is None:
+                    if len(call.args) > 1:
+                        msg = "literal_unroll takes one argument, found %s"
+                        raise errors.UnsupportedError(msg % len(call.args),
+                                                      call.loc)
+                    # get the arg, make sure its a build_list
+                    unroll_var = call.args[0]
+                    to_unroll = guard(get_definition, func_ir, unroll_var)
+                    if (isinstance(to_unroll, ir.Expr) and
+                            to_unroll.op == "build_list"):
+                        # make sure they are all const items in the list
+                        for i, item in enumerate(to_unroll.items):
+                            val = guard(get_definition, func_ir, item)
+                            if not val:
                                 msg = ("multiple definitions for variable "
                                        "%s, cannot resolve constant")
-                                raise errors.UnsupportedError(msg % unroll_var,
+                                raise errors.UnsupportedError(msg % item,
                                                               to_unroll.loc)
-                            # scan all blocks looking for the LHS
-                            for b in func_ir.blocks.values():
-                                asgn = b.find_variable_assignment(
-                                    to_unroll_lhs.name)
-                                if asgn is not None:
-                                    break
-                            else:
-                                msg = ("Cannot find assignment for known "
-                                       "variable %s") % to_unroll_lhs.name
-                                raise errors.CompilerError(msg, to_unroll.loc)
-
-                            # Create a tuple with the list items as contents
-                            tup = ir.Expr.build_tuple(to_unroll.items,
-                                                      to_unroll.loc)
-
-                            # swap the list for the tuple
-                            asgn.value = tup
-                            mutated = True
-                        elif (isinstance(to_unroll, ir.Expr) and
-                              to_unroll.op == "build_tuple"):
-                            # this is fine, do nothing
-                            pass
-                        elif (isinstance(to_unroll, (ir.Global, ir.FreeVar)) and
-                              isinstance(to_unroll.value, tuple)):
-                            # this is fine, do nothing
-                            pass
-                        elif isinstance(to_unroll, ir.Arg):
-                            # this is only fine if the arg is a tuple
-                            ty = state.typemap[to_unroll.name]
-                            if not isinstance(ty, self._accepted_types):
-                                msg = ("Invalid use of literal_unroll with a "
-                                       "function argument, only tuples are "
-                                       "supported as function arguments, found "
-                                       "%s") % ty
+                            if not isinstance(val, ir.Const):
+                                msg = ("Found non-constant value at "
+                                       "position %s in a list argument to "
+                                       "literal_unroll" % i)
                                 raise errors.UnsupportedError(msg,
                                                               to_unroll.loc)
-                        else:
-                            extra = None
-                            if isinstance(to_unroll, ir.Expr):
-                                # probably a slice
-                                if to_unroll.op == "getitem":
-                                    ty = state.typemap[to_unroll.value.name]
-                                    # check if this is a tuple slice
-                                    if not isinstance(ty, self._accepted_types):
-                                        extra = "operation %s" % to_unroll.op
-                                        loc = to_unroll.loc
-                            elif isinstance(to_unroll, ir.Arg):
-                                extra = "non-const argument %s" % to_unroll.name
-                                loc = to_unroll.loc
-                            else:
-                                if to_unroll is None:
-                                    extra = ('multiple definitions of '
-                                             'variable "%s".' % unroll_var.name)
-                                    loc = unroll_var.loc
-                                else:
-                                    loc = to_unroll.loc
-                                    extra = "unknown problem"
+                        # The above appears ok, now swap the build_list for
+                        # a built tuple.
 
-                            if extra:
-                                msg = ("Invalid use of literal_unroll, "
-                                       "argument should be a tuple or a list "
-                                       "of constant values. Failure reason: "
-                                       "found %s" % extra)
-                                raise errors.UnsupportedError(msg, loc)
+                        # find the assignment for the unroll target
+                        to_unroll_lhs = guard(get_definition, func_ir,
+                                              unroll_var, lhs_only=True)
+
+                        if to_unroll_lhs is None:
+                            msg = ("multiple definitions for variable "
+                                   "%s, cannot resolve constant")
+                            raise errors.UnsupportedError(msg % unroll_var,
+                                                          to_unroll.loc)
+                        # scan all blocks looking for the LHS
+                        for b in func_ir.blocks.values():
+                            asgn = b.find_variable_assignment(
+                                to_unroll_lhs.name)
+                            if asgn is not None:
+                                break
+                        else:
+                            msg = ("Cannot find assignment for known "
+                                   "variable %s") % to_unroll_lhs.name
+                            raise errors.CompilerError(msg, to_unroll.loc)
+
+                        # Create a tuple with the list items as contents
+                        tup = ir.Expr.build_tuple(to_unroll.items,
+                                                  to_unroll.loc)
+
+                        # swap the list for the tuple
+                        asgn.value = tup
+                        mutated = True
+                    elif (isinstance(to_unroll, ir.Expr) and
+                            to_unroll.op == "build_tuple"):
+                        # this is fine, do nothing
+                        pass
+                    elif (isinstance(to_unroll, (ir.Global, ir.FreeVar)) and
+                            isinstance(to_unroll.value, tuple)):
+                        # this is fine, do nothing
+                        pass
+                    elif isinstance(to_unroll, ir.Arg):
+                        # this is only fine if the arg is a tuple
+                        ty = state.typemap[to_unroll.name]
+                        if not isinstance(ty, self._accepted_types):
+                            msg = ("Invalid use of literal_unroll with a "
+                                   "function argument, only tuples are "
+                                   "supported as function arguments, found "
+                                   "%s") % ty
+                            raise errors.UnsupportedError(msg,
+                                                          to_unroll.loc)
+                    else:
+                        extra = None
+                        if isinstance(to_unroll, ir.Expr):
+                            # probably a slice
+                            if to_unroll.op == "getitem":
+                                ty = state.typemap[to_unroll.value.name]
+                                # check if this is a tuple slice
+                                if not isinstance(ty, self._accepted_types):
+                                    extra = "operation %s" % to_unroll.op
+                                    loc = to_unroll.loc
+                        elif isinstance(to_unroll, ir.Arg):
+                            extra = "non-const argument %s" % to_unroll.name
+                            loc = to_unroll.loc
+                        else:
+                            if to_unroll is None:
+                                extra = ('multiple definitions of '
+                                         'variable "%s".' % unroll_var.name)
+                                loc = unroll_var.loc
+                            else:
+                                loc = to_unroll.loc
+                                extra = "unknown problem"
+
+                        if extra:
+                            msg = ("Invalid use of literal_unroll, "
+                                   "argument should be a tuple or a list "
+                                   "of constant values. Failure reason: "
+                                   "found %s" % extra)
+                            raise errors.UnsupportedError(msg, loc)
         return mutated
 
 
@@ -1079,7 +1094,17 @@ class MixedContainerUnroller(FunctionPass):
                                   literal_unroll_call.func)
                 if call_func is None:
                     continue
-                call_func = call_func.value
+                if isinstance(call_func, ir.Expr) and call_func.op == "getattr":
+                    if call_func.attr == "literal_unroll":
+                        # resolve the getattr, make sure it's getting
+                        # attr "literal_unroll" from the numba module.
+                        got_attr = guard(get_definition, func_ir,
+                                         call_func.value)
+                        if isinstance(got_attr, (ir.Global, ir.FreeVar)):
+                            if got_attr.value == numba:
+                                call_func = literal_unroll
+                else:
+                    call_func = call_func.value
 
                 if call_func is literal_unroll:
                     assert len(literal_unroll_call.args) == 1
@@ -1340,13 +1365,20 @@ class IterLoopCanonicalization(FunctionPass):
                         return False
                     func_var = guard(get_definition, func_ir,  call.func)
                     func = guard(get_definition, func_ir,  func_var)
-                    if func is None or not isinstance(func,
-                                                      (ir.Global, ir.FreeVar)):
+                    if func is None:
                         return False
-                    if (func.value is None or
-                            func.value not in self._accepted_calls):
-                        return False
-
+                    if (isinstance(func, ir.Expr) and func.op == 'getattr'
+                            and func.attr == 'literal_unroll'):
+                        # make sure it's numba.literal_unroll
+                        got_attr = guard(get_definition, func_ir,
+                                         func.value)
+                        if isinstance(got_attr, (ir.Global, ir.FreeVar)):
+                            if got_attr.value != numba:
+                                return False
+                    if isinstance(func, (ir.Global, ir.FreeVar)):
+                        if (func.value is None or
+                                func.value not in self._accepted_calls):
+                            return False
                     # now check the type is supported
                     ty = partial_typemap.get(call.args[0].name, None)
                     if ty and isinstance(ty, self._accepted_types):
@@ -1629,8 +1661,15 @@ class LiteralUnroll(FunctionPass):
                     if asgn.value.value is literal_unroll:
                         found = True
                         break
-            if found:
-                break
+                if isinstance(asgn.value, ir.Expr):
+                    if (opgetattr := asgn.value).op == 'getattr':
+                        maybe_numba = guard(get_definition, func_ir,
+                                            opgetattr.value)
+                        if isinstance(maybe_numba, (ir.Global, ir.FreeVar)):
+                            if (opgetattr.attr == 'literal_unroll' and
+                                    maybe_numba.value == numba):
+                                found = True
+                                break
         if not found:
             return False
 
