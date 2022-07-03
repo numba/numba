@@ -369,14 +369,31 @@ set_index(NB_DictKeys *dk, Py_ssize_t i, Py_ssize_t ix)
  * Fractions around 1/2 to 2/3 seem to work well in practice.
  */
 
-#define USABLE_FRACTION(n) (((n) << 1)/3)
+#define USABLE_FRACTION(n) (((n) << 1)/3)  // ratio: 2/3
 
 /* Alternative fraction that is otherwise close enough to 2n/3 to make
  * little difference. 8 * 2/3 == 8 * 5/8 == 5. 16 * 2/3 == 16 * 5/8 == 10.
  * 32 * 2/3 = 21, 32 * 5/8 = 20.
  * Its advantage is that it is faster to compute on machines with slow division.
- * #define USABLE_FRACTION(n) (((n) >> 1) + ((n) >> 2) - ((n) >> 3))
+ * #define USABLE_FRACTION(n) (((n) >> 1) + ((n) >> 2) - ((n) >> 3))  // ratio: 5/8
  */
+
+
+/* INV_USABLE_FRACTION gives the inverse of USABLE_FRACTION.
+ * Used for sizing a new dictionary to a specified number of keys.
+ * 
+ * NOTE: If the denominator of the USABLE_FRACTION ratio is not a power
+ * of 2, must add 1 to the result of the inverse for correct sizing.
+ * 
+ * For example, when USABLE_FRACTION ratio = 5/8 (8 is a power of 2):
+ * #define INV_USABLE_FRACTION(n) (((n) << 3)/5)  // inv_ratio: 8/5
+ * 
+ * When USABLE_FRACTION ratio = 5/7 (7 is not a power of 2):
+ * #define INV_USABLE_FRACTION(n) ((7*(n))/5 + 1)  // inv_ratio: 7/5
+ */
+
+#define INV_USABLE_FRACTION(n) ((n) + ((n) >> 1) + 1)  // inv_ratio: 3/2
+
 
 /* GROWTH_RATE. Growth rate upon hitting maximum load.
  * Currently set to used*3.
@@ -541,7 +558,7 @@ numba_dictkeys_new(NB_DictKeys **out, Py_ssize_t size, Py_ssize_t key_size, Py_s
 
 /* Allocate new dictionary */
 int
-numba_dict_new(NB_Dict** out, Py_ssize_t size, Py_ssize_t key_size, Py_ssize_t val_size) {
+numba_dict_new(NB_Dict **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssize_t val_size) {
     NB_DictKeys* dk;
     NB_Dict* d;
     int status = numba_dictkeys_new(&dk, size, key_size, val_size);
@@ -1016,15 +1033,15 @@ numba_dict_new_minsize(NB_Dict **out, Py_ssize_t key_size, Py_ssize_t val_size)
 
 /* Allocate a new dictionary with enough space to hold n_keys without resizes */
 int
-numba_dict_new_sized(NB_Dict** out, Py_ssize_t n_keys, Py_ssize_t key_size, Py_ssize_t val_size) {
+numba_dict_new_sized(NB_Dict **out, Py_ssize_t n_keys, Py_ssize_t key_size, Py_ssize_t val_size) {
 
     /* Respect D_MINSIZE */
     if (n_keys <= USABLE_FRACTION(D_MINSIZE)) {
         return numba_dict_new_minsize(out, key_size, val_size);
     }
 
-    /*  Adjust for a load factor of 2/3. */
-    Py_ssize_t size = n_keys + (n_keys >> 1); 
+    /*  Adjust for load factor */
+    Py_ssize_t size = INV_USABLE_FRACTION(n_keys) - 1;
 
     /* Round up size to the nearest power of 2. */
     for (unsigned int shift = 1; shift < sizeof(Py_ssize_t) * CHAR_BIT; shift <<= 1) {
@@ -1214,6 +1231,39 @@ numba_test_dict(void) {
     CHECK(d->used == it_count);
 
     numba_dict_free(d);
+
+    /* numba_dict_new_sized() */
+
+    Py_ssize_t target_size;
+    Py_ssize_t n_keys;
+
+    // Test if minsize dict returned with n_keys=0
+    target_size = D_MINSIZE;
+    n_keys = 0;
+
+    numba_dict_new_sized(&d, n_keys, 1, 1);
+    CHECK(d->keys->size == target_size);
+    CHECK(d->keys->usable == USABLE_FRACTION(target_size));
+    numba_dict_free(d);
+
+    // Test sizing at power of 2 boundary
+    target_size = D_MINSIZE * 2;
+    n_keys = USABLE_FRACTION(target_size);
+
+    numba_dict_new_sized(&d, n_keys, 1, 1);
+    CHECK(d->keys->size == target_size);
+    CHECK(d->keys->usable == n_keys);
+    numba_dict_free(d);
+
+    target_size *= 2;
+    n_keys++;
+
+    numba_dict_new_sized(&d, n_keys, 1, 1);
+    CHECK(d->keys->size == target_size);
+    CHECK(d->keys->usable > n_keys);
+    CHECK(d->keys->usable == USABLE_FRACTION(target_size));
+    numba_dict_free(d);
+
     return 0;
 
 }

@@ -132,7 +132,6 @@ build_c_helpers_dict(void)
     /* for dictionary support */
     declmethod(test_dict);
     declmethod(dict_new_sized);
-    declmethod(dict_new_minsize);
     declmethod(dict_set_method_table);
     declmethod(dict_free);
     declmethod(dict_length);
