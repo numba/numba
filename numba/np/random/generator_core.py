@@ -8,6 +8,7 @@ from numba.core.extending import (intrinsic, make_attribute_wrapper, models,
                                   overload, register_jitable,
                                   register_model)
 from numba.np.numpy_support import numpy_version
+from numba import float32
 
 
 @register_model(types.NumPyRandomBitGeneratorType)
@@ -117,8 +118,10 @@ _generate_next_binding(next_uint64, types.uint64)
 if numpy_version >= (1, 22):
     @register_jitable
     def next_float(bitgen):
-        return (next_uint32(bitgen) >> 8) * (1.0 / 16777216.0)
+        return float32(float32(next_uint32(bitgen) >> 8)
+                       * float32(1.0) / float32(16777216.0))
 else:
     @register_jitable
     def next_float(bitgen):
-        return (next_uint32(bitgen) >> 9) * (1.0 / 8388608.0)
+        return float32(float32(next_uint32(bitgen) >> 9)
+                       * float32(1.0) / float32(8388608.0))
