@@ -624,7 +624,7 @@ The following :py:class:`Generator` methods are supported:
 * :func:`numpy.random.Generator().uniform()` (*)
 
 .. note::
-  Users can expect Numba replicate NumPy's results to within
+  Users can expect Numba to replicate NumPy's results to within
   the last few (at max 5) ULPs for Linux-x86_64, Windows-x86_64 and macOS.
 
   For distributions marked above with `(*)`: Due to instruction selection
