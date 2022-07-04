@@ -93,7 +93,7 @@ __all__ = """
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 39, 0)
+_min_llvmlite_version = (0, 40, 0)
 _min_llvm_version = (11, 0, 0)
 
 def _ensure_llvm():
