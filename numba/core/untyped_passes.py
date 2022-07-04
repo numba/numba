@@ -1662,7 +1662,8 @@ class LiteralUnroll(FunctionPass):
                         found = True
                         break
                 if isinstance(asgn.value, ir.Expr):
-                    if (opgetattr := asgn.value).op == 'getattr':
+                    opgetattr = asgn.value
+                    if opgetattr.op == 'getattr':
                         maybe_numba = guard(get_definition, func_ir,
                                             opgetattr.value)
                         if isinstance(maybe_numba, (ir.Global, ir.FreeVar)):
