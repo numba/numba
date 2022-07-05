@@ -10,6 +10,10 @@ labels: task
 ## numba X.Y.Z
 
 * [ ] Cherry-pick items from the X.Y.Z milestone into a PR.
+* [ ] Update the "version support table" in the documentation with the final
+  release date (FINAL ONLY).
+  * [ ] Make, approve and merge PR against the X.Y release branch.
+  * [ ] Create a cherry-pick PR of the above against `main`.
 * [ ] Approve change log modifications and cherry-pick.
 * [ ] Merge change log modifications and cherry-picks to X.Y release branch.
   * [ ] https://github.com/numba/numba/pull/XXXX
@@ -22,8 +26,9 @@ labels: task
 * [ ] Upload wheels and sdist to PyPI (upload from `ci_artifacts`).
 * [ ] Verify wheels for all platforms arrived on PyPi.
 * [ ] Verify ReadTheDocs build.
-* [ ] Send RC/FINAL announcement email / post announcement to discourse group.
 * [ ] Post link to Twitter.
+* [ ] Post announcement to discourse group and ping the release testers group
+  using `@RC_Testers` (RC ONLY).
 * [ ] Post link to python-announce-list@python.org.
 
 ### Post release

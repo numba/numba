@@ -614,7 +614,26 @@ execution logic.
 
 The following :py:class:`Generator` methods are supported:
 
+* :func:`numpy.random.Generator().exponential()`
+* :func:`numpy.random.Generator().gamma()` (*)
+* :func:`numpy.random.Generator().normal()` (*)
 * :func:`numpy.random.Generator().random()`
+* :func:`numpy.random.Generator().standard_normal()`
+* :func:`numpy.random.Generator().standard_exponential()`
+* :func:`numpy.random.Generator().standard_gamma()` (*)
+* :func:`numpy.random.Generator().uniform()` (*)
+
+.. note::
+  Users can expect Numba to replicate NumPy's results to within
+  the last few (at max 5) ULPs for Linux-x86_64, Windows-x86_64 and macOS.
+
+  For distributions marked above with `(*)`: Due to instruction selection
+  differences across compilers, there may be discrepancies in the order of
+  1000s of ULPs on 32-bit architectures as well as linux-aarch64 and
+  linux-ppc64le platforms. The differences are unlikely to impact the "quality"
+  of the random number generation as they occur through changes in
+  rounding that happen when fused-multiply-add is used instead of multiplication
+  followed by addition.
 
 RandomState and legacy Random number generation
 '''''''''''''''''''''''''''''''''''''''''''''''
