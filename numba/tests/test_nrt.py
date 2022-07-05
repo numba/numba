@@ -24,7 +24,7 @@ import numba.core.typing.cffi_utils as cffi_support
 from numba.core.unsafe.nrt import NRT_get_api
 
 from numba.tests.support import (MemoryLeakMixin, TestCase, temp_directory,
-                                 import_dynamic)
+                                 import_dynamic, skip_if_32bit)
 from numba.core.registry import cpu_target
 import unittest
 
@@ -218,6 +218,26 @@ class TestNrtMemInfo(unittest.TestCase):
         # At this point the memory is zero filled
         # We can't check this deterministically because the memory could be
         # consumed by another thread.
+
+    @skip_if_32bit
+    def test_allocate_invalid_size(self):
+        # Checks that attempting to allocate too big a region fails gracefully.
+        size = types.size_t.maxval // 8 // 2
+        for pred in (True, False):
+            with self.assertRaises(MemoryError) as raises:
+                rtsys.meminfo_alloc(size, safe=pred)
+            self.assertIn(f"Requested allocation of {size} bytes failed.",
+                          str(raises.exception))
+
+    def test_allocate_negative_size(self):
+        # Checks that attempting to allocate negative number of bytes fails
+        # gracefully.
+        size = -10
+        for pred in (True, False):
+            with self.assertRaises(ValueError) as raises:
+                rtsys.meminfo_alloc(size, safe=pred)
+            msg = f"Cannot allocate a negative number of bytes: {size}."
+            self.assertIn(msg, str(raises.exception))
 
 
 class TestTracemalloc(unittest.TestCase):
@@ -610,7 +630,7 @@ NRT_MemInfo* test_nrt_api(NRT_api_functions *nrt) {
         """
         cdef = """
 void* test_nrt_api(void *nrt);
-int status;
+extern int status;
         """
 
         ffi, mod = self.compile_cffi_module(name, source, cdef)

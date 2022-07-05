@@ -1,7 +1,4 @@
 from collections import namedtuple, defaultdict
-import ast
-import inspect
-import textwrap
 import operator
 import warnings
 from functools import partial
@@ -17,7 +14,8 @@ from numba.core.errors import (LoweringError, new_error_context, TypingError,
                                NumbaDebugInfoWarning)
 from numba.core.funcdesc import default_mangler
 from numba.core.environment import Environment
-from numba.core.analysis import compute_use_defs
+from numba.core.analysis import compute_use_defs, must_use_alloca
+from numba.misc.firstlinefinder import get_func_body_first_lineno
 
 
 _VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
@@ -97,43 +95,16 @@ class BaseLower(object):
         defn_loc = self.func_ir.loc.with_lineno(self.func_ir.loc.line + 1)
         if self.context.enable_debuginfo:
             fn = self.func_ir.func_id.func
-            try:
-                raw_source_str, _ = inspect.getsourcelines(fn)
-            except OSError:
+            optional_lno = get_func_body_first_lineno(fn)
+            if optional_lno is not None:
+                # -1 as lines start at 1 and this is an offset.
+                offset = optional_lno - 1
+                defn_loc = self.func_ir.loc.with_lineno(offset)
+            else:
                 msg = ("Could not find source for function: "
                        f"{self.func_ir.func_id.func}. Debug line information "
                        "may be inaccurate.")
                 warnings.warn(NumbaDebugInfoWarning(msg))
-            else:
-                # Parse the source and find the line with `def <func>` in it, it
-                # is assumed that if the compilation has made it this far that
-                # the source is at least legal and has valid syntax.
-
-                # Join the source as a block and dedent it.
-                source_str = textwrap.dedent(''.join(raw_source_str))
-                # Deal with unparsable source (see #7730), this can be caused
-                # by continuation lines/comments at indent levels that are
-                # invalid when the just function source is parsed in isolation.
-                src_ast = None
-                try:
-                    src_ast = ast.parse(source_str)
-                except IndentationError:
-                    msg = ("Could not parse the source for function: "
-                           f"{self.func_ir.func_id.func}. Debug line "
-                           "information may be inaccurate. This is often "
-                           "caused by comments/docstrings/line continuation "
-                           "that is at a lesser indent level than the source.")
-                    warnings.warn(NumbaDebugInfoWarning(msg))
-                # pull the definition out of the AST, only if it seems valid
-                # i.e. one thing in the body
-                if src_ast is not None and len(src_ast.body) == 1:
-                    pydef = src_ast.body.pop()
-                    # -1 as lines start at 1 and this is an offset.
-                    pydef_offset = pydef.lineno - 1
-
-                    func_ir_loc = self.func_ir.loc
-                    defn_line = func_ir_loc.line + pydef_offset
-                    defn_loc = func_ir_loc.with_lineno(defn_line)
         return defn_loc
 
     def pre_lower(self):
@@ -383,6 +354,7 @@ class Lower(BaseLower):
 
         if not self.func_ir.func_id.is_generator:
             use_defs = compute_use_defs(blocks)
+            alloca_vars = must_use_alloca(blocks)
 
             # Compute where variables are defined
             var_assign_map = defaultdict(set)
@@ -398,11 +370,11 @@ class Lower(BaseLower):
 
             # Keep only variables that are defined locally and used locally
             for var in var_assign_map:
-                if len(var_assign_map[var]) == 1:
+                if var not in alloca_vars and len(var_assign_map[var]) == 1:
                     # Usemap does not keep locally defined variables.
                     if len(var_use_map[var]) == 0:
                         # Ensure that the variable is not defined multiple times
-                        # the the block
+                        # in the block
                         [defblk] = var_assign_map[var]
                         assign_stmts = self.blocks[defblk].find_insts(ir.Assign)
                         assigns = [stmt for stmt in assign_stmts

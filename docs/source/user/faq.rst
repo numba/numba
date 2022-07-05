@@ -281,8 +281,8 @@ A more radical alternative is :ref:`ahead-of-time compilation <pycc>`.
 GPU Programming
 ===============
 
-How do I work around the ``CUDA intialized before forking`` error?
-------------------------------------------------------------------
+How do I work around the ``CUDA initialized before forking`` error?
+-------------------------------------------------------------------
 
 On Linux, the ``multiprocessing`` module in the Python standard library
 defaults to using the ``fork`` method for creating new processes.  Because of
@@ -298,7 +298,7 @@ available GPUs before starting the process pool.  In Python 3, you can change
 the process start method, as described in the `multiprocessing documentation
 <https://docs.python.org/3.9/library/multiprocessing.html#contexts-and-start-methods>`_.
 Switching from ``fork`` to ``spawn`` or ``forkserver`` will avoid the CUDA
-initalization issue, although the child processes will not inherit any global
+initialization issue, although the child processes will not inherit any global
 variables from their parent.
 
 

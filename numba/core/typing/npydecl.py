@@ -491,7 +491,7 @@ def _parse_nested_sequence(context, typ):
         return n + 1, dtype
     elif isinstance(typ, (types.BaseTuple,)):
         if typ.count == 0:
-            # Mimick Numpy's behaviour
+            # Mimic Numpy's behaviour
             return 1, types.float64
         n, dtype = _parse_nested_sequence(context, typ[0])
         dtypes = [dtype]
@@ -529,59 +529,6 @@ class NpArray(CallableTemplate):
             return types.Array(dtype, ndim, 'C')
 
         return typer
-
-
-@glue_typing(np.empty)
-@glue_typing(np.zeros)
-@glue_typing(np.ones)
-class NdConstructor(CallableTemplate):
-    """
-    Typing template for np.empty(), .zeros(), .ones().
-    """
-
-    def generic(self):
-        def typer(shape, dtype=None):
-            if dtype is None:
-                nb_dtype = types.double
-            else:
-                nb_dtype = parse_dtype(dtype)
-
-            ndim = parse_shape(shape)
-            if nb_dtype is not None and ndim is not None:
-                return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
-
-        return typer
-
-
-@glue_typing(np.empty_like)
-@glue_typing(np.zeros_like)
-@glue_typing(np.ones_like)
-class NdConstructorLike(CallableTemplate):
-    """
-    Typing template for np.empty_like(), .zeros_like(), .ones_like().
-    """
-
-    def generic(self):
-        """
-        np.empty_like(array) -> empty array of the same shape and layout
-        np.empty_like(scalar) -> empty 0-d array of the scalar type
-        """
-        def typer(arg, dtype=None):
-            if dtype is not None:
-                nb_dtype = parse_dtype(dtype)
-            elif isinstance(arg, types.Array):
-                nb_dtype = arg.dtype
-            else:
-                nb_dtype = arg
-            if nb_dtype is not None:
-                if isinstance(arg, types.Array):
-                    layout = arg.layout if arg.layout != 'A' else 'C'
-                    return arg.copy(dtype=nb_dtype, layout=layout, readonly=False)
-                else:
-                    return types.Array(nb_dtype, 0, 'C')
-
-        return typer
-
 
 @glue_typing(np.full)
 class NdFull(CallableTemplate):

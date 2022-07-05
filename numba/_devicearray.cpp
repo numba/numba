@@ -124,7 +124,9 @@ MOD_INIT(_devicearray) {
         goto error_occurred;
 
     error = PyDict_SetItemString(d, "_DEVICEARRAY_API", c_api);
-    Py_DECREF(c_api);
+    /* Decref and set c_api to NULL, Py_XDECREF in error_occurred will have no
+     * effect. */
+    Py_CLEAR(c_api);
 
     if (error)
         goto error_occurred;

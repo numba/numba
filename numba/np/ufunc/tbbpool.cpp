@@ -27,8 +27,8 @@ Implement parallel vectorize workqueue on top of Intel TBB.
  * from here:
  * https://github.com/intel/tbb/blob/2019_U5/include/tbb/tbb_stddef.h#L29
  */
-#if TBB_INTERFACE_VERSION < 12010
-#error "TBB version is too old, 2021 update 1, i.e. TBB_INTERFACE_VERSION >= 12010 required"
+#if (TBB_INTERFACE_VERSION >= 12060) || (TBB_INTERFACE_VERSION < 12010)
+#error "TBB version is incompatible, 2021.1 through to 2021.5 required, i.e. 12010 <= TBB_INTERFACE_VERSION < 12060"
 #endif
 
 #define _DEBUG 0
@@ -76,7 +76,16 @@ get_num_threads(void)
 static int
 get_thread_id(void)
 {
-    return tbb::this_task_arena::current_thread_index();
+    int tid = tbb::this_task_arena::current_thread_index();
+    // This function may be called from pure python or from a sequential JIT
+    // region, in either case, the task_arena may not be initialised. This
+    // condition is intercepted and a thread ID of 0 is returned.
+    if (tid == tbb::task_arena::not_initialized)
+    {
+        return 0;
+    } else {
+        return tid;
+    }
 }
 
 // watch the arena, if it decides to create more threads/add threads into the
@@ -324,6 +333,7 @@ MOD_INIT(tbbpool)
     {
         md->m_free = (freefunc)unload_tbb;
     }
+
     SetAttrStringFromVoidPointer(m, launch_threads);
     SetAttrStringFromVoidPointer(m, synchronize);
     SetAttrStringFromVoidPointer(m, ready);
@@ -334,7 +344,9 @@ MOD_INIT(tbbpool)
     SetAttrStringFromVoidPointer(m, set_num_threads);
     SetAttrStringFromVoidPointer(m, get_num_threads);
     SetAttrStringFromVoidPointer(m, get_thread_id);
-
+    SetAttrStringFromVoidPointer(m, set_parallel_chunksize);
+    SetAttrStringFromVoidPointer(m, get_parallel_chunksize);
+    SetAttrStringFromVoidPointer(m, get_sched_size);
 
     return MOD_SUCCESS_VAL(m);
 }

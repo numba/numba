@@ -614,7 +614,7 @@ class LoweringError(NumbaError):
 
 class UnsupportedParforsError(NumbaError):
     """
-    An error ocurred because parfors is not supported on the platform.
+    An error occurred because parfors is not supported on the platform.
     """
     pass
 
@@ -673,7 +673,7 @@ class ConstantInferenceError(NumbaError):
 
 class InternalError(NumbaError):
     """
-    For wrapping internal error occured within the compiler
+    For wrapping internal error occurred within the compiler
     """
 
     def __init__(self, exception):
