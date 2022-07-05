@@ -3,10 +3,6 @@
 #include "nrt.h"
 #include "assert.h"
 
-#if !defined MIN
-#define MIN(a, b) ((a) < (b)) ? (a) : (b)
-#endif
-
 
 typedef int (*atomic_meminfo_cas_func)(void **ptr, void *cmp,
                                        void *repl, void **oldptr);
@@ -209,7 +205,8 @@ static
 void nrt_internal_dtor_safe(void *ptr, size_t size, void *info) {
     NRT_Debug(nrt_debug_print("nrt_internal_dtor_safe %p, %p\n", ptr, info));
     /* See NRT_MemInfo_alloc_safe() */
-    memset(ptr, 0xDE, MIN(size, 256));
+    /* Fill region with debug markers */
+    memset(ptr, 0xDE, size);
 }
 
 static
@@ -281,9 +278,8 @@ NRT_MemInfo* NRT_MemInfo_alloc_dtor_safe(size_t size, NRT_dtor_function dtor) {
     if (data == NULL) {
         return NULL; /* return early as allocation failed */
     }
-    /* Only fill up a couple cachelines with debug markers, to minimize
-       overhead. */
-    memset(data, 0xCB, MIN(size, 256));
+    /* Fill region with debug markers */
+    memset(data, 0xCB, size);
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_dtor_safe %p %zu\n", data, size));
     NRT_MemInfo_init(mi, data, size, nrt_internal_custom_dtor_safe, dtor, NULL);
     return mi;
@@ -348,9 +344,8 @@ NRT_MemInfo *NRT_MemInfo_alloc_safe_aligned(size_t size, unsigned align) {
     if (data == NULL) {
         return NULL; /* return early as allocation failed */
     }
-    /* Only fill up a couple cachelines with debug markers, to minimize
-       overhead. */
-    memset(data, 0xCB, MIN(size, 256));
+    /* Fill region with debug markers */
+    memset(data, 0xCB, size);
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe_aligned %p %zu\n",
                               data, size));
     NRT_MemInfo_init(mi, data, size, nrt_internal_dtor_safe, (void*)size, NULL);
@@ -364,9 +359,8 @@ NRT_MemInfo *NRT_MemInfo_alloc_safe_aligned_external(size_t size, unsigned align
     if (data == NULL) {
         return NULL; /* return early as allocation failed */
     }
-    /* Only fill up a couple cachelines with debug markers, to minimize
-       overhead. */
-    memset(data, 0xCB, MIN(size, 256));
+    /* Fill region with debug markers */
+    memset(data, 0xCB, size);
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe_aligned %p %zu\n",
                               data, size));
     NRT_MemInfo_init(mi, data, size, nrt_internal_dtor_safe, (void*)size, allocator);
